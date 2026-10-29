@@ -244,10 +244,52 @@ class Run:
                 (folder/(name+'.error')).write_text(str(error)+'\n')
 
 
+def trial_plan(source, candidate_source, baseline, candidate, precheck):
+    """Never change a checkout's SHA: preserve each variant's build state."""
+    order = [('A1', 'baseline', baseline, source),
+             ('B1', 'candidate', candidate, candidate_source),
+             ('B2', 'candidate', candidate, candidate_source),
+             ('A2', 'baseline', baseline, source)]
+    if precheck:
+        order.insert(0, ('P0', 'precheck', baseline, source))
+    return order
+
+
+def preserve_apk_mismatch(source, trial, actual, expected, message, phase):
+    """Retain the rebuilt bytes, not merely the original accepted variant APKs."""
+    folder = trial/('apk-mismatch-'+phase)
+    folder.mkdir()
+    write_json(folder/'hashes.json', {'actual': actual, 'expected': expected, 'reason': message})
+    for relative in APKS:
+        shutil.copyfile(source/relative, folder/Path(relative).name)
+    require({p: digest(folder/Path(p).name) for p in APKS} == actual, 'Mismatch evidence changed while copying')
+    raise ValueError(message)
+
+
+def check_input_apks(source, trial, sha, apk_by_sha):
+    actual = {p: digest(source/p) for p in APKS}
+    write_json(trial/'input-apks.json', actual)  # Must exist even when a gate rejects.
+    if sha in apk_by_sha and actual != apk_by_sha[sha]:
+        preserve_apk_mismatch(source, trial, actual, apk_by_sha[sha],
+                              'APK changed across same-source repeated trials', 'input')
+    if apk_by_sha:
+        previous = next(iter(apk_by_sha.values()))
+        if actual[APKS[0]] != previous[APKS[0]]:
+            preserve_apk_mismatch(source, trial, actual, previous,
+                                  'Production app APK differs between variants', 'input')
+    apk_by_sha[sha] = actual
+    return actual
+
+
 def run(args):
     source = args.source.resolve()
+    candidate_source = args.candidate_source.resolve()
     output = args.output.resolve()
-    require(source.is_dir() and source != output and source not in output.parents, 'Evidence must be outside source checkout')
+    require(source != candidate_source and source not in candidate_source.parents and candidate_source not in source.parents,
+            'Require independent non-nested source checkouts')
+    for checkout in (source, candidate_source):
+        require(checkout.is_dir() and checkout != output and checkout not in output.parents
+                and output not in checkout.parents, 'Evidence must be outside both source checkouts')
     require(not output.exists() and not output.is_symlink(), 'Refusing stale evidence directory')
     config = json.loads(args.config.read_text())
     label, cls = config['label'], config['class']
@@ -267,39 +309,44 @@ def run(args):
     output.mkdir(parents=True)
     write_json(output/'config.json',config)
     runner = Run(source,output)
-    runner.clean(baseline)
-    for relative in OUTPUTS:
-        require(not (source/relative).exists() and not (source/relative).is_symlink(), 'Stale initial native output: '+relative)
+    for checkout, pinned_sha in ((source, baseline), (candidate_source, candidate)):
+        runner.source = checkout
+        runner.clean(pinned_sha)
+        for relative in OUTPUTS:
+            require(not (checkout/relative).exists() and not (checkout/relative).is_symlink(), 'Stale initial native output: '+relative)
+    runner.source = source
     changed = runner.command(['git','diff','--name-only',baseline,candidate]).splitlines()
     require(set(changed) == set(config['changed_paths']), 'Unexpected candidate source diff')
     require(changed and all(p.startswith('app/src/androidTest/') for p in changed), 'Only test-source candidate changes permitted')
     helper_paths = ['.github/prepare-device-tests.sh','.github/test-evidence/source_methods.py',
                     '.github/test-evidence/observe.py','.github/test-evidence/supervise.py','.github/test-evidence/publish.mjs']
     helpers = {p:digest(source/p) for p in helper_paths}
+    require({p:digest(candidate_source/p) for p in helper_paths} == helpers, 'Candidate monitoring/guard helpers differ')
     write_json(output/'helper-sha256.json',helpers)
-    order = [('A1','baseline',baseline),('B1','candidate',candidate),('B2','candidate',candidate),('A2','baseline',baseline)]
+    write_json(output/'source-roots.json', {'baseline': str(source), 'candidate': str(candidate_source),
+                                          'baseline_sha': baseline, 'candidate_sha': candidate})
     precheck = config.get('precheck_class')
     if precheck:
         require(CLASS.fullmatch(precheck), 'Invalid precheck class')
-        order.insert(0,('P0','precheck',baseline))
+    order = trial_plan(source, candidate_source, baseline, candidate, precheck)
     expected = None
     apk_by_sha = {}
     rows = []
-    for index,(trial_name,variant,sha) in enumerate(order,1):
+    for index,(trial_name,variant,sha,trial_source) in enumerate(order,1):
+        runner.source = trial_source
         trial=output/trial_name
         trial_cls = precheck if variant == 'precheck' else cls
         expected_count = 1 if variant == 'precheck' else 3
         trial.mkdir()
         write_json(trial/'identity.json',{'trial':trial_name,'variant':variant,'sha':sha,'api':args.api,'class':trial_cls,
                                          'label':label,'order':index,'run_id':os.environ['GITHUB_RUN_ID'],
-                                         'attempt':os.environ['GITHUB_RUN_ATTEMPT'],'release_certified':False})
+                                         'attempt':os.environ['GITHUB_RUN_ATTEMPT'],'source_root':str(trial_source),'release_certified':False})
         status = 0
         try:
-            runner.command(['git','checkout','--detach',sha])
             runner.clean(sha)
-            require({p:digest(source/p) for p in helper_paths} == helpers,'Monitoring/guard source changed')
+            require({p:digest(trial_source/p) for p in helper_paths} == helpers,'Monitoring/guard source changed')
             for relative in OUTPUTS:
-                require(not (source/relative).exists() and not (source/relative).is_symlink(),'Stale trial output')
+                require(not (trial_source/relative).exists() and not (trial_source/relative).is_symlink(),'Stale trial output')
             status,build_seconds=runner.command(['./gradlew','assembleDebug','assembleDebugAndroidTest','--no-daemon','--max-workers=2'],log=trial/'compile.log')
             write_json(trial/'build.json',{'exit':status,'wall_seconds':build_seconds})
             require(status == 0,'Compilation failed')
@@ -312,17 +359,11 @@ def run(args):
                 if expected is None:
                     expected=trial_expected
                 require(trial_expected==expected,'Candidate identity change')
-            apks={p:digest(source/p) for p in APKS}
-            if sha in apk_by_sha:
-                require(apks==apk_by_sha[sha],'APK changed across same-source repeated trials')
-            if apk_by_sha:
-                require(apks[APKS[0]] == next(iter(apk_by_sha.values()))[APKS[0]], 'Production app APK differs between variants')
-            apk_by_sha[sha]=apks
-            write_json(trial/'input-apks.json',apks)
+            apks=check_input_apks(trial_source, trial, sha, apk_by_sha)
             # Preserve immutable inputs once per variant, even if native later fails.
             if not (output/('apks-'+variant)).exists():
                 folder=output/('apks-'+variant);folder.mkdir()
-                for p in APKS:shutil.copyfile(source/p,folder/Path(p).name)
+                for p in APKS:shutil.copyfile(trial_source/p,folder/Path(p).name)
             # Reset only the two owned app packages on this verified disposable
             # emulator. AGP may have uninstalled them; absent is already fresh.
             reset = []
@@ -351,7 +392,10 @@ def run(args):
             # Archive before validating so every terminal failure retains original XML.
             runner.archive(trial)
             require(status == 0,'Native/monitor invocation failed')
-            require({p:digest(source/p) for p in APKS}==apks,'APK changed during native run')
+            output_apks = {p:digest(trial_source/p) for p in APKS}
+            write_json(trial/'output-apks.json', output_apks)
+            if output_apks != apks:
+                preserve_apk_mismatch(trial_source, trial, output_apks, apks, 'APK changed during native run', 'output')
             runner.clean(sha)
             monitored=check_monitor(trial/'live',sha,args.api,lane,argv)
             result=parse_xml(trial/'raw/app/build/outputs/androidTest-results',trial_expected)
@@ -392,6 +436,7 @@ def run(args):
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--source',type=Path,required=True)
+    parser.add_argument('--candidate-source',type=Path,required=True)
     parser.add_argument('--config',type=Path,required=True)
     parser.add_argument('--output',type=Path,required=True)
     parser.add_argument('--api',required=True)

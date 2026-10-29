@@ -33,6 +33,19 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           path: harness
+      - name: Resolve immutable candidate configuration
+        id: config
+        run: |
+          python3 - <<'PYCONFIG' >> "$GITHUB_OUTPUT"
+          import json
+          from pathlib import Path
+          config = json.loads(Path('harness/.github/suite-cost/configs/${{ matrix.candidate }}.json').read_text())
+          print('candidate_sha=' + config['candidate_sha'])
+          PYCONFIG
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ steps.config.outputs.candidate_sha }}
+          path: candidate-source
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           ref: 5f0f1d000afcf89767447e4ad516b5d09b66b014
@@ -47,7 +60,9 @@ jobs:
         with:
           node-version: '24'
       - name: Install unchanged supervised evidence publisher
-        run: npm ci --prefix source/.github/test-evidence --ignore-scripts --no-audit --no-fund
+        run: |
+          npm ci --prefix source/.github/test-evidence --ignore-scripts --no-audit --no-fund
+          npm ci --prefix candidate-source/.github/test-evidence --ignore-scripts --no-audit --no-fund
       - name: Record runner and toolchain identity
         run: |
           mkdir runner-evidence
@@ -76,7 +91,7 @@ jobs:
             adb shell wm density ${{ matrix.api == 36 && '280' || 'reset' }}
             sleep 60
             (cd source && bash .github/test-evidence/environment.sh) >> runner-evidence/environment.txt
-            bash harness/.github/suite-cost/run-paired.sh "$PWD/source" "$PWD/harness/.github/suite-cost/configs/${{ matrix.candidate }}.json" "$PWD/paired-evidence" "${{ matrix.api }}"
+            bash harness/.github/suite-cost/run-paired.sh "$PWD/source" "$PWD/harness/.github/suite-cost/configs/${{ matrix.candidate }}.json" "$PWD/paired-evidence" "${{ matrix.api }}" "$PWD/candidate-source"
       - name: Preserve paired timing and all native evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -89,3 +104,6 @@ jobs:
             source/app/build/outputs/androidTest-results/
             source/app/build/outputs/connected_android_test_additional_output/
             source/app/build/reports/androidTests/
+            candidate-source/app/build/outputs/androidTest-results/
+            candidate-source/app/build/outputs/connected_android_test_additional_output/
+            candidate-source/app/build/reports/androidTests/

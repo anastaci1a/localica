@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # One disposable hosted emulator, owned package restoration, no whole-suite run.
 set -euo pipefail
-[[ $# == 4 ]] || { echo 'Usage: run-paired.sh SOURCE CONFIG OUTPUT API' >&2; exit 2; }
+[[ $# == 5 ]] || { echo 'Usage: run-paired.sh SOURCE CONFIG OUTPUT API CANDIDATE_SOURCE' >&2; exit 2; }
 source_root=$(realpath "$1")
+candidate_root=$(realpath "$5")
 config=$(realpath "$2")
 output=$(realpath -m "$3")
 export TEST_API=$4
@@ -29,7 +30,7 @@ stop_child() {
 trap 'stop_child TERM 143' TERM
 trap 'stop_child INT 130' INT
 set +e
-python3 "$runner" --source "$source_root" --config "$config" --output "$output" --api "$TEST_API" &
+python3 "$runner" --source "$source_root" --candidate-source "$candidate_root" --config "$config" --output "$output" --api "$TEST_API" &
 child=$!
 wait "$child"
 result=$?

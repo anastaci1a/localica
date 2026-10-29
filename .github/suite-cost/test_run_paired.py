@@ -1,6 +1,7 @@
 import importlib.util
 import json
 import os
+import subprocess
 from pathlib import Path
 import tempfile
 import unittest
@@ -150,8 +151,62 @@ class ReconcileTests(unittest.TestCase):
         with self.assertRaises(ValueError):runner.archive(trial)
     def test_stale_evidence_rejected_before_source_commands(self):
         from types import SimpleNamespace
-        source=self.root/'source';source.mkdir();output=self.root/'evidence';output.mkdir()
+        source=self.root/'source';source.mkdir();candidate=self.root/'candidate';candidate.mkdir();output=self.root/'evidence';output.mkdir()
         with self.assertRaisesRegex(ValueError,'stale evidence'):
-            paired.run(SimpleNamespace(source=source,output=output,config=self.root/'missing',api='26'))
+            paired.run(SimpleNamespace(source=source,candidate_source=candidate,output=output,config=self.root/'missing',api='26'))
+
+    def test_abba_uses_two_real_immutable_checkouts(self):
+        source, candidate = self.root/'source', self.root/'candidate'
+        shas=[]
+        for checkout, content in ((source, 'baseline'),(candidate, 'candidate')):
+            checkout.mkdir()
+            subprocess.run(['git','init','-q',str(checkout)],check=True)
+            (checkout/'variant').write_text(content)
+            subprocess.run(['git','-C',str(checkout),'add','variant'],check=True)
+            subprocess.run(['git','-C',str(checkout),'-c','user.name=Test','-c','user.email=test@example.invalid',
+                            'commit','-qm',content],check=True)
+            shas.append(subprocess.check_output(['git','-C',str(checkout),'rev-parse','HEAD'],text=True).strip())
+        for precheck in (None,'Equivalence'):
+            order=paired.trial_plan(source,candidate,*shas,precheck)
+            self.assertEqual(['P0','A1','B1','B2','A2'] if precheck else ['A1','B1','B2','A2'],[r[0] for r in order])
+            runner=object.__new__(paired.Run);runner.cancelled=None
+            for name,variant,sha,checkout in order:
+                runner.source=checkout
+                runner.clean(sha)
+                self.assertEqual('candidate' if name.startswith('B') else 'baseline',runner.command(['cat','variant']))
+                self.assertEqual(candidate if name.startswith('B') else source,checkout)
+        self.assertEqual(shas,[subprocess.check_output(['git','-C',str(c),'rev-parse','HEAD'],text=True).strip()
+                               for c in (source,candidate)])
+    def test_repeated_apk_mismatch_retains_hashes_and_rebuilt_bytes(self):
+        source=self.root/'source';source.mkdir()
+        for p in paired.APKS:
+            path=source/p;path.parent.mkdir(parents=True,exist_ok=True);path.write_bytes(p.encode())
+        first=self.root/'A1';first.mkdir();history={}
+        original=paired.check_input_apks(source,first,'a'*40,history)
+        (source/paired.APKS[1]).write_bytes(b'rebuilt changed test apk')
+        repeat=self.root/'A2';repeat.mkdir()
+        with self.assertRaisesRegex(ValueError,'same-source'):
+            paired.check_input_apks(source,repeat,'a'*40,history)
+        actual=json.loads((repeat/'input-apks.json').read_text())
+        receipt=json.loads((repeat/'apk-mismatch-input/hashes.json').read_text())
+        self.assertEqual(original,receipt['expected']);self.assertEqual(actual,receipt['actual'])
+        self.assertEqual(original,history['a'*40])
+        for p in paired.APKS:
+            archived=repeat/'apk-mismatch-input'/Path(p).name
+            self.assertEqual((source/p).read_bytes(),archived.read_bytes())
+            self.assertEqual(actual[p],paired.digest(archived))
+    def test_cross_variant_app_identity_gate_is_not_relaxed(self):
+        source=self.root/'source';source.mkdir()
+        for p in paired.APKS:
+            path=source/p;path.parent.mkdir(parents=True,exist_ok=True);path.write_bytes(b'initial')
+        first=self.root/'A1';first.mkdir();history={}
+        paired.check_input_apks(source,first,'a'*40,history)
+        (source/paired.APKS[0]).write_bytes(b'different production app')
+        trial=self.root/'B1';trial.mkdir()
+        with self.assertRaisesRegex(ValueError,'Production app APK differs'):
+            paired.check_input_apks(source,trial,'b'*40,history)
+        self.assertTrue((trial/'input-apks.json').exists())
+        self.assertTrue((trial/'apk-mismatch-input/app-debug.apk').exists())
+        self.assertNotIn('b'*40,history)
 
 if __name__=='__main__':unittest.main()

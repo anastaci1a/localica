@@ -1,19 +1,26 @@
 # Isolated paired native suite-cost comparison
 
-Not a prototype, complete product test run, or release gate. No source mutation is
-made except checking out the two immutable supplied test-only commits in an owned
-disposable checkout. The active project/dev77 branch is never updated.
+Not a prototype, complete product test run, or release gate. No source checkout mutation is
+made: two independent owned disposable checkouts stay at their supplied immutable
+test-only commits throughout the experiment. The active project/dev77 branch is never updated.
 
 Invocation, from a separate harness checkout:
 
 ```
-bash .github/suite-cost/run-paired.sh /absolute/source /absolute/config.json /absolute/evidence 26
+bash .github/suite-cost/run-paired.sh /absolute/source /absolute/config.json /absolute/evidence 26 /absolute/candidate-source
 ```
 
-The source checkout must initially be at baseline and contain no tracked changes,
-untracked app source, or previous native result directories. Evidence must be fresh
-and outside the source checkout. Both commits must be locally fetched. Install the
-pinned Node publisher dependencies in the source `.github/test-evidence` first.
+The source checkout must stay at baseline; candidate-source must stay at candidate.
+Both must contain no tracked changes, untracked app source, or previous native
+result directories. Use separate non-nested paths and independent per-checkout
+build directories/caches (do not symlink/share app/build or .gradle between roots).
+Evidence must be fresh and outside both checkouts. Both commits must be fetched
+in baseline for source diff verification. Install pinned Node publisher dependencies
+in **both** checkouts at `.github/test-evidence` first. Python requires
+`--source SOURCE --candidate-source CANDIDATE_SOURCE --config CONFIG --output OUTPUT --api API`.
+The wrapper adds CANDIDATE_SOURCE as its fifth positional argument.
+A1/A2 and optional P0 use only baseline; B1/B2 use only candidate-source.
+The original baseline package guard is still sourced exactly once.
 
 Example config (replace both SHAs with real immutable commits):
 
@@ -84,3 +91,19 @@ probe checking. `diagnostic-failed.json` explicitly disallows a savings conclusi
 on missing/invalid diagnostic evidence. Raw XML/logs are always retained; no next
 trial or `comparison.json` follows a diagnostic failure. Offline contracts are not
 native execution evidence.
+
+### Independent checkout correction and APK drift evidence
+
+The source-root change addresses cross-SHA incremental build state observed in
+run 40831186292; it does **not** waive APK identity or claim the native rerun passed.
+`source-roots.json` and each trial identity bind its actual checkout path. No
+`git checkout` is performed by the harness. Both initial pinned SHA/clean states
+and identical helper bytes are checked before trials; the active checkout is
+rechecked on every trial.
+
+`input-apks.json` is written before identity gates. Any same-SHA repeat drift or
+cross-variant production APK drift retains the actual rebuilt APK bytes plus
+expected/actual hashes under `apk-mismatch-input/`, then stops. Native-output APK
+drift similarly retains `output-apks.json` and `apk-mismatch-output/`. Original
+accepted variant APKs are not overwritten. The strict failure means no next trial
+and no complete comparison/savings conclusion.
