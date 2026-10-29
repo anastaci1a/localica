@@ -8,6 +8,7 @@ import android.os.Looper
 import android.os.Process
 import android.os.SystemClock
 import android.system.Os
+import android.system.ErrnoException
 import android.system.OsConstants
 import android.util.Log
 import androidx.test.platform.app.InstrumentationRegistry
@@ -93,6 +94,10 @@ class NavigationRandomOwnedSession : AndroidJUnitRunner() {
             requireOwnedDirectory(root)
             writeReceipt(root, "started.json", receipt("STARTED", sessionId, started))
             syncDirectory(files)
+            // Instrumentation startup revokes transient grants. Host offers them only after STARTED,
+            // then atomically publishes this session-bound private declaration before continuing.
+            awaitHostReady(root, sessionId)
+            writeReceipt(root, "host-ready-accepted.json", receipt("HOST_READY_DECLARATION_ACCEPTED", sessionId, started))
             InstrumentationRegistry.registerInstance(this, args)
             NavigationRandomCorpusOwnedTargetTest().verifyOwnedCorpusAndPersistQueue()
             writeReceipt(root, "operation.json", receipt("OPERATION_RETURNED", sessionId, started).apply {
@@ -125,6 +130,48 @@ class NavigationRandomOwnedSession : AndroidJUnitRunner() {
                 })
             } catch (failure: Throwable) { Log.e("LocalicaOwnedSession", boundedFailure(failure)) }
         }
+    }
+
+    private fun awaitHostReady(root: File, sessionId: String) {
+        val file = File(root, NavigationRandomOwnedSessionProtocol.HOST_READY_FILE)
+        val deadline = SystemClock.uptimeMillis() + NavigationRandomOwnedSessionProtocol.HOST_READY_TIMEOUT_MS
+        while (SystemClock.uptimeMillis() < deadline) {
+            requireOwnedDirectory(root)
+            val stat = try { Os.lstat(file.path) } catch (failure: ErrnoException) {
+                if (failure.errno != OsConstants.ENOENT) throw failure
+                Thread.sleep(100)
+                continue
+            }
+            require(OsConstants.S_ISREG(stat.st_mode) && stat.st_uid == Process.myUid() &&
+                stat.st_gid == Process.myUid() && stat.st_nlink == 1L && stat.st_size == 36L &&
+                (stat.st_mode and 4095) == 384) { "Unsafe host-ready declaration" }
+            val fd = Os.open(file.path, OsConstants.O_RDONLY or OsConstants.O_NOFOLLOW or
+                OsConstants.O_NONBLOCK or OsConstants.O_CLOEXEC, 0)
+            withOwnedDescriptor(fd) {
+                fun unchanged() {
+                    for (current in listOf(Os.fstat(fd), Os.lstat(file.path))) {
+                        require(current.st_dev == stat.st_dev && current.st_ino == stat.st_ino &&
+                            current.st_mode == stat.st_mode && current.st_uid == stat.st_uid &&
+                            current.st_gid == stat.st_gid && current.st_nlink == stat.st_nlink &&
+                            current.st_size == stat.st_size && current.st_mtime == stat.st_mtime &&
+                            current.st_ctime == stat.st_ctime) { "Host-ready declaration changed" }
+                    }
+                }
+                unchanged()
+                val bytes = ByteArray(37)
+                var count = 0
+                while (count < bytes.size) {
+                    val n = Os.read(fd, bytes, count, bytes.size - count)
+                    if (n == 0) break
+                    check(n > 0)
+                    count += n
+                }
+                unchanged()
+                NavigationRandomOwnedSessionProtocol.validateHostReady(bytes.copyOf(count), sessionId)
+            }
+            return
+        }
+        error("Host-ready deadline elapsed; session remains resident, no operation or retry")
     }
 
     private fun argumentValues(args: Bundle): Map<String, String> {
