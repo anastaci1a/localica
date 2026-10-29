@@ -63,6 +63,8 @@ fun LocalicaScreen(
     val browseSorts = rememberBrowseSortSnapshot()
     val preferences = remember(context) { io.github.anastaci1a.localica.navigation.InterfacePreferences(context) }
     var settings by remember { mutableStateOf(preferences.read()) }
+    val glassRenderer = LocalGlassRendererRuntime.current
+    SideEffect { glassRenderer?.request(settings.glass.renderer) }
     val libraryFilterPreferences = remember(context) { io.github.anastaci1a.localica.browse.LibraryFilterPreferences(context) }
     var libraryFilters by remember { mutableStateOf(libraryFilterPreferences.read()) }
     val pinPreferences = remember(context) { PinPreferences(context) }

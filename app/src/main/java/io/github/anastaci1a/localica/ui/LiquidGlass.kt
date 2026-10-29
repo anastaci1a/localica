@@ -174,13 +174,14 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
     contactPresentation: (() -> GlassShape)? = null,
     contactAdmission: () -> Boolean = { true },
     content: (@Composable BoxScope.() -> Unit)? = null) {
+    val renderer = currentGlassRendererGeneration()
     val drawObserver = LocalGlassSurfaceDrawObserver.current
     val samplingObserver = LocalBackdropSamplingObserver.current
     // Do not create diagnostic state, closures, geometry or modifiers for ordinary/null callers.
     val observedShadowGroup = if (drawObserver == null) null else LocalSurfaceShadows.current
     val observedShadowAppearance = if (drawObserver == null) null else LocalGlassAppearance.current
     val visible = LocalGlassVisible.current
-    if (visible && Build.VERSION.SDK_INT < 33) { BackdropLease(source); BackdropLease(homeSource?.takeUnless { it === source }) }
+    if (visible && renderer.backend == GlassBackend.Legacy) { BackdropLease(source); BackdropLease(homeSource?.takeUnless { it === source }) }
     val location = remember { BackdropLocation() }
     var surfaceSize by remember { mutableStateOf(androidx.compose.ui.unit.IntSize.Zero) }
     val view = LocalView.current
@@ -217,7 +218,7 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
             else Modifier.surfaceGlassShadow(cornerRadius, anchor))
         .clip(surfaceClip)
         .backdropLocation(location).onGloballyPositioned { surfaceSize = it.size }, propagateMinConstraints = true) {
-        if (visible && source != null && Build.VERSION.SDK_INT >= 33) {
+        if (visible && source != null && renderer.backend == GlassBackend.Modern && Build.VERSION.SDK_INT >= 33) {
             val density = androidx.compose.ui.platform.LocalDensity.current
             val blur = with(density) { 22.dp.toPx() } * (appearance.blur + (1f - appearance.blur) * frost)
             val padding = with(density) { 32.dp.toPx() }
@@ -227,7 +228,7 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
             val scattering = ((blur - 1f) / 5f).coerceIn(0f, 1f)
             val resolution = 1f - .5f * scattering * scattering * (3f - 2f * scattering)
             FilteredBackdrop(Modifier.matchParentSize(), source, location, resolution, padding,
-                homeSource, homeWeight, MaterialAverageStyle(appearance.whiteTint * (1f - panel), tone), homeBounds, homeFootprint) { extent, resolution, flatWeight ->
+                homeSource?.takeIf { it.recorded }, homeWeight, MaterialAverageStyle(appearance.whiteTint * (1f - panel), tone), homeBounds, homeFootprint) { extent, resolution, flatWeight ->
                 val pad = padding * resolution
                 val radius = (cornerRadius?.let { with(density) { it.toPx() } }?.times(resolution)
                     ?: ((extent.minDimension - 2 * pad) / 2)).coerceAtLeast(0f)
@@ -247,7 +248,7 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
             }
         }
 
-        if (visible && Build.VERSION.SDK_INT < 33) {
+        if (visible && renderer.backend == GlassBackend.Legacy) {
         val endpointTone = GlassTone(appearance.contrast, appearance.contrastWeight, dark)
         @Composable fun prepared(backing: FrostedBackdrop?): List<ImageBitmap?> {
             val clear = backing?.glassFallback ?: backing?.snapshot
@@ -259,8 +260,9 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
                 rememberToneSnapshot(frosted, endpointTone),
                 rememberToneSnapshot((backing?.lensFrostSnapshot ?: frosted).takeIf { frost > 0f && panel < 1f }, endpointTone))
         }
-        val sourceImages = prepared(source)
-        val homeImages = prepared(homeSource)
+        // A coalesced Legacy→Modern→Legacy switch must not reuse the prior epoch's tone result.
+        // Only disposable preparation is keyed; contact and surface motion stay mounted.
+        val (sourceImages, homeImages) = key(renderer) { prepared(source) to prepared(homeSource) }
         Canvas(Modifier.matchParentSize()) {
             val outline = silhouette?.frame(size)
             val shape = outline?.geometry ?: LensGeometry(androidx.compose.ui.geometry.Rect(Offset.Zero, size),
