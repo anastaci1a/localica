@@ -20,6 +20,13 @@ internal class NativeImeOwnershipWitness(
     val prepared = mutableSetOf<Int>()
     val started = mutableSetOf<Int>()
     val ended = mutableSetOf<Int>()
+    // Fixture readiness only, separate from the shadow's ownership receipt.
+    // A real redundant visible->visible completion may settle the window without
+    // granting the shadow a new hidden->visible receipt.
+    private val pendingTargets = mutableMapOf<Int, Boolean?>()
+    private var completedVisible = false
+    val hasSettledVisibleAnimation: Boolean get() = completedVisible && pendingTargets.isEmpty() &&
+        host.isAttachedToWindow && host.hasWindowFocus() && host.rootWindowInsets?.isVisible(type) == true
     private fun emit(phase: String, animation: WindowInsetsAnimation? = null, insets: WindowInsets? = null) {
         val native = host.rootWindowInsets
         record("${SystemClock.uptimeMillis()} ownership phase=$phase view=${System.identityHashCode(host)} " +
@@ -30,11 +37,17 @@ internal class NativeImeOwnershipWitness(
     }
     private val probe = object : View(host.context) {
         override fun onApplyWindowInsets(insets: WindowInsets): WindowInsets {
+            if (!insets.isVisible(type)) completedVisible = false
             emit("apply", insets = insets); shadow.insets(insets.isVisible(type)); return insets
         }
         override fun onWindowFocusChanged(hasWindowFocus: Boolean) {
+            if (!hasWindowFocus) { completedVisible = false; pendingTargets.clear() }
             super.onWindowFocusChanged(hasWindowFocus); emit("focus=$hasWindowFocus")
             shadow.availability(hasWindowFocus)
+        }
+        override fun onDetachedFromWindow() {
+            completedVisible = false; pendingTargets.clear()
+            super.onDetachedFromWindow()
         }
     }.apply {
         isFocusable = false; isClickable = false
@@ -42,6 +55,8 @@ internal class NativeImeOwnershipWitness(
         setWindowInsetsAnimationCallback(object : WindowInsetsAnimation.Callback(DISPATCH_MODE_CONTINUE_ON_SUBTREE) {
             override fun onPrepare(animation: WindowInsetsAnimation) {
                 if (animation.typeMask and type == 0) return
+                completedVisible = false
+                pendingTargets[System.identityHashCode(animation)] = null
                 prepared += System.identityHashCode(animation)
                 emit("prepare", animation)
                 shadow.prepare(System.identityHashCode(animation), host.rootWindowInsets?.isVisible(type), SystemClock.uptimeMillis())
@@ -49,6 +64,9 @@ internal class NativeImeOwnershipWitness(
             }
             override fun onStart(animation: WindowInsetsAnimation, bounds: WindowInsetsAnimation.Bounds): WindowInsetsAnimation.Bounds {
                 if (animation.typeMask and type != 0) { started += System.identityHashCode(animation); emit("start", animation)
+                    if (pendingTargets.containsKey(System.identityHashCode(animation))) {
+                        pendingTargets[System.identityHashCode(animation)] = host.rootWindowInsets?.isVisible(type)
+                    }
                     shadow.start(System.identityHashCode(animation), host.rootWindowInsets?.isVisible(type)) }
                 return bounds
             }
@@ -58,12 +76,20 @@ internal class NativeImeOwnershipWitness(
             }
             override fun onEnd(animation: WindowInsetsAnimation) {
                 if (animation.typeMask and type != 0) { ended += System.identityHashCode(animation); emit("end", animation)
+                    val id = System.identityHashCode(animation)
+                    val observed = pendingTargets.containsKey(id)
+                    val visibleTarget = pendingTargets.remove(id)
+                    if (observed) completedVisible = id in started && visibleTarget == true &&
+                        animation.fraction == 1f && pendingTargets.isEmpty() &&
+                        host.isAttachedToWindow && host.hasWindowFocus() && host.rootWindowInsets?.isVisible(type) == true
+                    record("${SystemClock.uptimeMillis()} native-readiness settled=$completedVisible pending=${pendingTargets.size} animation=$id")
                     shadow.end(System.identityHashCode(animation), animation.fraction, host.rootWindowInsets?.isVisible(type), SystemClock.uptimeMillis()) }
             }
         })
     }
     private val controller = root.windowInsetsController
     private val control = WindowInsetsController.OnControllableInsetsChangedListener { _, types ->
+        if (types and type == 0) { completedVisible = false; pendingTargets.clear() }
         emit("control=$types"); shadow.availability(host.hasWindowFocus(), types and type != 0)
     }
     init {
@@ -77,6 +103,7 @@ internal class NativeImeOwnershipWitness(
     }
     fun snapshot(label: String) { emit("snapshot-$label"); shadow.snapshot(label) }
     fun dispose() {
+        completedVisible = false; pendingTargets.clear()
         controller?.removeOnControllableInsetsChangedListener(control)
         probe.setWindowInsetsAnimationCallback(null); root.removeView(probe)
         shadow.dispose()

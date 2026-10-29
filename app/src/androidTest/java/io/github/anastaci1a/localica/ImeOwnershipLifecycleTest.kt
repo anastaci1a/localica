@@ -1,6 +1,7 @@
 package io.github.anastaci1a.localica
 
 import android.os.Build
+import android.graphics.Bitmap
 import android.os.ParcelFileDescriptor
 import android.os.SystemClock
 import android.view.KeyEvent
@@ -13,6 +14,13 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
@@ -25,9 +33,11 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TestName
 import java.io.File
+import java.util.concurrent.atomic.AtomicInteger
 
 /** Diagnostic cases with real native event witnesses; NOT a product correction. */
 class ImeOwnershipLifecycleTest {
+    companion object { private val captureGeneration = AtomicInteger() }
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
     @get:Rule val name = TestName()
     private val events = mutableListOf<String>()
@@ -37,6 +47,8 @@ class ImeOwnershipLifecycleTest {
     private var screenshotSequence = 0
     private var cancelBeforeDraw: Pair<ViewTreeObserver, ViewTreeObserver.OnPreDrawListener>? = null
     private var retainBackHost: OnBackPressedCallback? = null
+    private var captureMarker by mutableStateOf(Color.Transparent)
+    private var markerCenterInRoot: Offset? = null
     private fun output(): File {
         val extra = InstrumentationRegistry.getArguments().getString("additionalTestOutputDir")
         val root = extra?.takeIf { it.isNotBlank() }?.let(::File) ?: requireNotNull(compose.activity.getExternalFilesDir(null))
@@ -51,19 +63,74 @@ class ImeOwnershipLifecycleTest {
         host?.hasWindowFocus() == true && i?.isVisible(NativeInsets.Type.ime()) == true &&
             i.getInsets(NativeInsets.Type.ime()).bottom > 0
     }
-    private fun awaitShown() {
-        compose.waitUntil(10000) { shown() }
+    private fun awaitShown(editorTag: String) {
+        // Target insets and input-view flags become true BEFORE native show end.
+        // Preserve the original readiness budget, but require an actual completed
+        // visible-target animation, independently of the shadow ownership model.
+        compose.waitUntil(10000) {
+            shown() && compose.runOnUiThread { witness?.hasSettledVisibleAnimation == true }
+        }
+        val evidenceDeadline = SystemClock.uptimeMillis() + 5000
+        fun remaining(): Long = (evidenceDeadline - SystemClock.uptimeMillis()).also {
+            check(it > 0) { "Native evidence/capture exceeded existing 5s budget" }
+        }
+        compose.onNodeWithTag(editorTag).assertIsFocused()
         var dump = ""
-        compose.waitUntil(5000) {
+        compose.waitUntil(remaining()) {
             dump = shell("dumpsys -t 2 input_method")
             nativeImeWindowVisible(dump) == true &&
                 Regex("\\bmIsInputViewShown=(true|false)\\b").find(dump)?.groupValues?.get(1) == "true"
         }
         File(output(), "${name.methodName}-${++screenshotSequence}-input-method.txt").writeText(dump)
-        val bitmap = requireNotNull(InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot())
-        try { File(output(), "${name.methodName}-$screenshotSequence.png").outputStream().use {
-            bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
-        } } finally { bitmap.recycle() }
+        val generation = captureGeneration.incrementAndGet()
+        check(generation <= 255) { "Do not reuse screenshot marker generations" }
+        val marker = Color(0xff000000.toInt() or ((((generation ushr 4) * 16) + 8) shl 16) or
+            ((((generation and 15) * 16) + 8) shl 8) or 0xc4)
+        compose.runOnUiThread { captureMarker = marker }
+        // This marker is drawn in the same Compose draw pass as the editors. Its
+        // presence proves a post-focus host frame reached this display capture;
+        // it is NOT proof that the separate IME surface is freshly presented.
+        compose.waitForIdle()
+        val point = compose.runOnUiThread {
+            val location = IntArray(2); requireNotNull(host).getLocationOnScreen(location)
+            requireNotNull(markerCenterInRoot) + Offset(location[0].toFloat(), location[1].toFloat())
+        }
+        var accepted: Bitmap? = null
+        var rejected = 0
+        try {
+            compose.waitUntil(remaining()) {
+                val bitmap = requireNotNull(InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot())
+                var retained = false
+                try {
+                    val x = point.x.toInt(); val y = point.y.toInt()
+                    val fresh = x in 1 until bitmap.width - 1 && y in 1 until bitmap.height - 1 &&
+                        (-1..1).all { dx -> (-1..1).all { dy ->
+                            val actual = bitmap.getPixel(x + dx, y + dy)
+                            listOf(0, 8, 16, 24).all { shift ->
+                                kotlin.math.abs(((actual ushr shift) and 255) - ((marker.toArgb() ushr shift) and 255)) <= 1
+                            }
+                        } }
+                    if (fresh) { accepted = bitmap; retained = true } else {
+                        if (rejected++ == 0) File(output(), "${name.methodName}-$screenshotSequence-first-stale.png").outputStream().use {
+                            assertTrue("Retain first stale screenshot", bitmap.compress(Bitmap.CompressFormat.PNG, 100, it))
+                        }
+                    }
+                    fresh
+                } finally { if (!retained) bitmap.recycle() }
+            }
+            remaining()
+            compose.onNodeWithTag(editorTag).assertIsFocused()
+            assertTrue("Native show remains settled through capture", shown() && compose.runOnUiThread {
+                witness?.hasSettledVisibleAnimation == true
+            })
+            remaining()
+            File(output(), "${name.methodName}-$screenshotSequence.png").outputStream().use {
+                assertTrue("Retain fresh screenshot", requireNotNull(accepted).compress(Bitmap.CompressFormat.PNG, 100, it))
+            }
+            compose.runOnUiThread {
+                log("fresh-host-capture editor=$editorTag generation=$generation marker=${marker.toArgb()} x=${point.x} y=${point.y} rejected=$rejected")
+            }
+        } finally { accepted?.recycle() }
         compose.runOnUiThread { witness?.snapshot("visible") }
     }
     private fun hide() = compose.runOnUiThread {
@@ -80,7 +147,12 @@ class ImeOwnershipLifecycleTest {
             SideEffect { host = view }
             if (installed) CompositionLocalProvider(LocalTextEditingObservation provides { log("input $it"); witness?.inputEvent(it) }) {
                 TextEditingFocusHost {
-                    Column(Modifier.fillMaxSize().padding(24.dp)) {
+                    Column(Modifier.fillMaxSize().padding(24.dp)
+                        .onGloballyPositioned { markerCenterInRoot = it.positionInRoot() + Offset(it.size.width - 8f, 8f) }
+                        .drawWithContent {
+                            drawContent()
+                            drawRect(captureMarker, Offset(size.width - 16f, 0f), Size(16f, 16f))
+                        }) {
                         BasicTextField("First", {}, Modifier.testTag("first").clearTextFocusOnBack().padding(24.dp))
                         BasicTextField("Second", {}, Modifier.testTag("second").clearTextFocusOnBack().padding(24.dp))
                     }
@@ -145,11 +217,11 @@ class ImeOwnershipLifecycleTest {
         }
     }
     private fun transfer() {
-        fixture(); compose.onNodeWithTag("first").performClick(); awaitShown()
+        fixture(); compose.onNodeWithTag("first").performClick(); awaitShown("first")
         val confirmedBeforeTransfer = compose.runOnUiThread {
             requireNotNull(witness).shadow.confirms.also { assertTrue("First show must have completed before transfer", it > 0) }
         }
-        compose.onNodeWithTag("second").performClick(); awaitShown()
+        compose.onNodeWithTag("second").performClick(); awaitShown("second")
         compose.onNodeWithTag("second").assertIsFocused()
         compose.runOnUiThread { witness?.snapshot("transferred")
             assertEquals("Already-visible transfer supplies no new show completion", confirmedBeforeTransfer, requireNotNull(witness).shadow.confirms)
@@ -190,7 +262,7 @@ class ImeOwnershipLifecycleTest {
         assertFalse("Coverage requires actual prepare cancellation, not a completed show",
             compose.runOnUiThread { requireNotNull(canceled) in requireNotNull(witness).started })
         val beforeReopen = compose.runOnUiThread { events.count { "endEditing reason=" in it } }
-        compose.onNodeWithTag("second").performClick(); awaitShown()
+        compose.onNodeWithTag("second").performClick(); awaitShown("second")
         compose.onNodeWithTag("second").assertIsFocused()
         assertEquals("Cancelled opening must not donate an editing end to the reopened editor", beforeReopen,
             compose.runOnUiThread { events.count { "endEditing reason=" in it } })
@@ -230,7 +302,7 @@ class ImeOwnershipLifecycleTest {
         assertFalse("Back must leave diagnostic Activity alive", compose.activity.isFinishing)
         assertEquals("The actual editor, not the retaining callback, must handle Back once", 1,
             compose.runOnUiThread { events.count { "endEditing reason=backKey" in it } })
-        compose.onNodeWithTag("second").performClick(); awaitShown()
+        compose.onNodeWithTag("second").performClick(); awaitShown("second")
         compose.onNodeWithTag("second").assertIsFocused()
         hide(); awaitUnfocused()
     }
