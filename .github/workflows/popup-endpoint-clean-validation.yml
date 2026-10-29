@@ -1,0 +1,102 @@
+name: Isolated clean popup endpoint validation (not release)
+'on':
+  push:
+    branches: [test/popup-endpoint-clean-validation-20261029]
+permissions:
+  contents: read
+concurrency:
+  group: popup-endpoint-clean-validation-20261029
+  cancel-in-progress: false
+jobs:
+  contracts:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          path: controller
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: e3ac4f31ed506b55f39e9fa806010106ea0965bd
+          path: reviewed-harness
+      - name: Validate clean-run contracts
+        env:
+          REVIEWED_HARNESS: ${{ github.workspace }}/reviewed-harness
+        run: |
+          set -euo pipefail
+          python3 -m unittest discover -s controller/.github/endpoint-clean -p 'test_*.py' -v
+          python3 -m unittest discover -s reviewed-harness/.github/suite-cost -p 'test_run_paired.py' -v
+          bash -n controller/.github/endpoint-clean/run-clean.sh
+  native:
+    needs: contracts
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        api: [26, 36]
+    env:
+      TEST_API: ${{ matrix.api }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          path: controller
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: e3ac4f31ed506b55f39e9fa806010106ea0965bd
+          path: reviewed-harness
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: afebeba6d459e97743e6e2dd0bb14f91510db2ca
+          path: source
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+      - name: Install unchanged supervised evidence publisher
+        run: npm ci --prefix source/.github/test-evidence --ignore-scripts --no-audit --no-fund
+      - name: Record runner and toolchain identity
+        run: |
+          mkdir runner-evidence
+          (cd source && bash .github/test-evidence/environment.sh) > runner-evidence/environment.txt
+          cp source/gradle/libs.versions.toml runner-evidence/
+          cp source/gradle/wrapper/gradle-wrapper.properties runner-evidence/
+          (cd source && git rev-parse HEAD && sha256sum app/src/androidTest/java/io/github/anastaci1a/localica/PopupShadowContinuityTest.kt) > runner-evidence/source.txt
+      - name: Enable emulator acceleration
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Compile exact clean instrumentation before emulator startup
+        working-directory: source
+        run: ./gradlew assembleDebug assembleDebugAndroidTest --no-daemon --max-workers=2
+      - uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
+        with:
+          api-level: ${{ matrix.api }}
+          target: ${{ matrix.api == 36 && 'default' || 'google_apis' }}
+          arch: x86_64
+          profile: pixel_2
+          emulator-options: -no-window -gpu ${{ matrix.api == 36 && 'lavapipe' || 'swiftshader_indirect' }} -no-snapshot -noaudio -no-boot-anim -memory 3072
+          disable-animations: ${{ matrix.api < 36 }}
+          script: |
+            adb shell wm size ${{ matrix.api == 36 && '720x1280' || 'reset' }}
+            adb shell wm density ${{ matrix.api == 36 && '280' || 'reset' }}
+            sleep 60
+            (cd source && bash .github/test-evidence/environment.sh) >> runner-evidence/environment.txt
+            bash controller/.github/endpoint-clean/run-clean.sh "$PWD/source" "$PWD/reviewed-harness" "$PWD/clean-evidence" "${{ matrix.api }}"
+      - name: Preserve original native evidence and immutable APKs
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: popup-endpoint-clean-api-${{ matrix.api }}
+          if-no-files-found: error
+          path: |
+            clean-evidence/
+            runner-evidence/
+            source/app/build/outputs/androidTest-results/
+            source/app/build/outputs/connected_android_test_additional_output/
+            source/app/build/reports/androidTests/
