@@ -262,8 +262,10 @@ class PopupShadowContinuityTest {
         // This strip and its unshadowed reference are over the same flat scene:
         // white beside the utility, or the flat content inside the enclosing panel.
         // The clock stays frozen, including the last frame before window disposal.
+        val exports = PopupShadowFrameExports(output, PopupShadowFrameExports.enabled(
+            InstrumentationRegistry.getArguments().getString("popupShadowFrameExports")))
         val on = screenshot()
-        try {
+        exports.verify(on, name, { if (sweptBounds == Rect.Zero) screen else sweptBounds }) {
             var maximumError = 0f
             var expectedTotal = 0f
             var actualTotal = 0f
@@ -340,9 +342,7 @@ class PopupShadowContinuityTest {
             val fullTop = sweptBounds.top.roundToInt().coerceIn(0, on.height-1)
             val fullWidth = (sweptBounds.right.roundToInt()-fullLeft).coerceIn(1, on.width-fullLeft)
             val fullHeight = (sweptBounds.bottom.roundToInt()-fullTop).coerceIn(1, on.height-fullTop)
-            val fullCrop = Bitmap.createBitmap(on, fullLeft, fullTop, fullWidth, fullHeight)
-            try { File(output, "$name-field.png").outputStream().use { fullCrop.compress(Bitmap.CompressFormat.PNG, 100, it) } }
-            finally { fullCrop.recycle() }
+            exports.success(on, "$name-field", fullLeft, fullTop, fullWidth, fullHeight)
             assertTrue("$name must not leave an old shadow or material silhouette anywhere outside the current outline: max=$exteriorMaximum mean=${exteriorError/exteriorCount}",
                 exteriorMaximum < .055f && exteriorError/exteriorCount < .015f)
             // Keep a complete perpendicular shadow profile as well.
@@ -350,13 +350,11 @@ class PopupShadowContinuityTest {
             val top = (screen.center.y - 8*d*sy).roundToInt().coerceIn(0, on.height - 1)
             val width = (38*d*sx).roundToInt().coerceIn(1, on.width - left)
             val height = (16*d*sy).roundToInt().coerceIn(1, on.height - top)
-            val crop = Bitmap.createBitmap(on, left, top, width, height)
-            try { File(output, "$name.png").outputStream().use { crop.compress(Bitmap.CompressFormat.PNG, 100, it) } }
-            finally { crop.recycle() }
+            exports.success(on, name, left, top, width, height)
             File(output, "profiles.txt").appendText("$name progress=$p scale=$sx,$sy expected=${expectedTotal/count} actual=${actualTotal/count} maximumError=$maximumError\n")
             assertTrue("$name must retain one complete shadow field: expected=${expectedTotal/count}, actual=${actualTotal/count}, max=$maximumError",
                 maximumError < .035f && abs(actualTotal - expectedTotal) / count < .015f)
-        } finally { on.recycle() }
+        }
     }
 
     private class FrameMarker : Drawable() {
@@ -366,5 +364,191 @@ class PopupShadowContinuityTest {
         override fun setAlpha(alpha: Int) { paint.alpha = alpha }
         override fun setColorFilter(colorFilter: ColorFilter?) { paint.colorFilter = colorFilter }
         @Deprecated("Deprecated in Android") override fun getOpacity() = PixelFormat.OPAQUE
+    }
+}
+
+/** Native bitmap/file contracts only; no Compose rule, window or screenshot is needed. */
+class PopupShadowFrameExportTest {
+    @Test fun successfulExportsRequireExplicitOptInAndKeepTheCapturedBitmapUsable() = withOutput { output ->
+        for (argument in listOf(null, "false", "TRUE", "1")) {
+            assertFalse(PopupShadowFrameExports.enabled(argument))
+        }
+        assertTrue(PopupShadowFrameExports.enabled("true"))
+        // An immutable whole-image crop may alias its source. Exporting it must
+        // not recycle the captured frame before the remaining assertions/profile.
+        val bitmap = fixture()
+        val expected = pixels(bitmap)
+        var disabledEncodes = 0
+        val disabled = PopupShadowFrameExports(output, false) { _, _ -> disabledEncodes++; true }
+        val enabled = PopupShadowFrameExports(output, PopupShadowFrameExports.enabled("true"))
+        enabled.verify(bitmap, "opt-in", { Rect.Zero }) {
+            disabled.success(bitmap, "disabled", 0, 0, bitmap.width, bitmap.height)
+            assertEquals(0, disabledEncodes)
+            assertTrue(requireNotNull(output.listFiles()).isEmpty())
+            enabled.success(bitmap, "opt-in-field", 0, 0, bitmap.width, bitmap.height)
+            assertFalse(bitmap.isRecycled)
+            assertArrayEquals(expected, pixels(bitmap))
+            enabled.success(bitmap, "opt-in", 2, 1, 3, 2)
+            assertFalse(bitmap.isRecycled)
+        }
+        assertTrue(bitmap.isRecycled)
+        assertEquals(setOf("opt-in-field.png", "opt-in.png"), requireNotNull(output.list()).toSet())
+        assertPng(File(output, "opt-in-field.png"), 8, 6, expected)
+        assertPng(File(output, "opt-in.png"), 3, 2,
+            intArrayOf(expected[10], expected[11], expected[12], expected[18], expected[19], expected[20]))
+    }
+
+    @Test fun failureExportsOnlyTheBoundedRegionOfTheSameCapturedBitmap() = withOutput { output ->
+        val bitmap = fixture()
+        val expected = pixels(bitmap)
+        val primary = AssertionError("original optical assertion")
+        val exports = PopupShadowFrameExports(output, false)
+        val caught = runCatching {
+            exports.verify(bitmap, "failed-frame", { Rect(-2f, 1f, 3f, 20f) }) { throw primary }
+        }.exceptionOrNull()
+        assertSame(primary, caught)
+        assertTrue(primary.suppressed.isEmpty())
+        assertTrue(bitmap.isRecycled)
+        assertEquals(setOf("failed-frame-failure-field.png"), requireNotNull(output.list()).toSet())
+        assertPng(File(output, "failed-frame-failure-field.png"), 3, 5,
+            IntArray(15) { index -> expected[(index / 3 + 1) * 8 + index % 3] })
+    }
+
+    @Test fun failedEvidenceEncodingCannotReplaceTheOriginalAssertion() = withOutput { output ->
+        for (throws in listOf(false, true)) {
+            val bitmap = fixture()
+            val primary = AssertionError("original optical assertion")
+            val encoderFailure = java.io.IOException("synthetic encoder failure")
+            var encoded: Bitmap? = null
+            var encodes = 0
+            val exports = PopupShadowFrameExports(output, false) { crop, _ ->
+                encoded = crop; encodes++
+                if (throws) throw encoderFailure else false
+            }
+            val caught = runCatching {
+                exports.verify(bitmap, "encoder-$throws", { Rect(1f, 1f, 4f, 3f) }) { throw primary }
+            }.exceptionOrNull()
+            assertSame(primary, caught)
+            assertEquals(1, encodes)
+            assertEquals(1, primary.suppressed.size)
+            if (throws) assertSame(encoderFailure, primary.suppressed.single())
+            else assertTrue(primary.suppressed.single() is IllegalStateException)
+            assertTrue(requireNotNull(encoded).isRecycled)
+            assertTrue(bitmap.isRecycled)
+        }
+    }
+
+    @Test fun repeatedEncoderExceptionDoesNotSelfSuppressOrReplaceThePrimaryFailure() = withOutput { output ->
+        val bitmap = fixture()
+        val primary = java.io.IOException("same encoder exception instance")
+        val crops = mutableListOf<Bitmap>()
+        val exports = PopupShadowFrameExports(output, true) { crop, _ -> crops += crop; throw primary }
+        val caught = runCatching {
+            exports.verify(bitmap, "repeat-error", { Rect(1f, 1f, 4f, 3f) }) {
+                exports.success(bitmap, "repeat-error", 2, 1, 3, 2)
+            }
+        }.exceptionOrNull()
+        assertSame(primary, caught)
+        assertTrue(primary.suppressed.isEmpty())
+        assertEquals(2, crops.size)
+        assertTrue(crops.all { it.isRecycled })
+        assertTrue(bitmap.isRecycled)
+    }
+
+    @Test fun evidenceFileOpenFailureCannotReplaceTheOriginalAssertion() = withOutput { output ->
+        val notDirectory = File(output, "not-a-directory").apply { writeText("occupied") }
+        val bitmap = fixture()
+        val primary = AssertionError("original optical assertion")
+        var encodes = 0
+        val exports = PopupShadowFrameExports(notDirectory, false) { _, _ -> encodes++; true }
+        val caught = runCatching {
+            exports.verify(bitmap, "file-error", { Rect(1f, 1f, 4f, 3f) }) { throw primary }
+        }.exceptionOrNull()
+        assertSame(primary, caught)
+        assertEquals(0, encodes)
+        assertEquals(1, primary.suppressed.size)
+        assertTrue(primary.suppressed.single() is java.io.IOException)
+        assertTrue(bitmap.isRecycled)
+        assertEquals("occupied", notDirectory.readText())
+    }
+
+    private fun fixture(): Bitmap {
+        val mutable = Bitmap.createBitmap(8, 6, Bitmap.Config.ARGB_8888)
+        return try {
+            mutable.setPixels(IntArray(48) { index ->
+                AndroidColor.rgb(index % 8 * 31, index / 8 * 41, index * 5)
+            }, 0, 8, 0, 0, 8, 6)
+            requireNotNull(mutable.copy(Bitmap.Config.ARGB_8888, false))
+        } finally { mutable.recycle() }
+    }
+
+    private fun pixels(bitmap: Bitmap): IntArray = IntArray(bitmap.width * bitmap.height).also {
+        bitmap.getPixels(it, 0, bitmap.width, 0, 0, bitmap.width, bitmap.height)
+    }
+
+    private fun assertPng(file: File, width: Int, height: Int, expected: IntArray) {
+        val decoded = requireNotNull(android.graphics.BitmapFactory.decodeFile(file.path))
+        try {
+            assertEquals(width, decoded.width)
+            assertEquals(height, decoded.height)
+            assertArrayEquals(expected, pixels(decoded))
+        } finally { decoded.recycle() }
+    }
+
+    private fun withOutput(block: (File) -> Unit) {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val output = File.createTempFile("popup-shadow-exports-", ".tmp", context.cacheDir)
+        try {
+            assertTrue(output.delete() && output.mkdir())
+            block(output)
+        } finally { output.deleteRecursively() }
+    }
+}
+
+/** Export from the owned capture only: never acquire or advance a frame here. */
+private class PopupShadowFrameExports(
+    private val output: File,
+    private val successfulFrames: Boolean,
+    private val encode: (Bitmap, java.io.OutputStream) -> Boolean = { bitmap, stream ->
+        bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream)
+    }
+) {
+    companion object {
+        fun enabled(argument: String?): Boolean = argument == "true"
+    }
+
+    fun verify(bitmap: Bitmap, name: String, failureRegion: () -> Rect, assertions: () -> Unit) {
+        try {
+            assertions()
+        } catch (failure: Throwable) {
+            try {
+                val region = failureRegion()
+                val left = region.left.roundToInt().coerceIn(0, bitmap.width - 1)
+                val top = region.top.roundToInt().coerceIn(0, bitmap.height - 1)
+                val width = (region.right.roundToInt() - left).coerceIn(1, bitmap.width - left)
+                val height = (region.bottom.roundToInt() - top).coerceIn(1, bitmap.height - top)
+                write(bitmap, "$name-failure-field", left, top, width, height)
+            } catch (evidenceFailure: Throwable) {
+                if (evidenceFailure !== failure) failure.addSuppressed(evidenceFailure)
+            }
+            throw failure
+        } finally { bitmap.recycle() }
+    }
+
+    fun success(bitmap: Bitmap, name: String, left: Int, top: Int, width: Int, height: Int) {
+        if (successfulFrames) write(bitmap, name, left, top, width, height)
+    }
+
+    private fun write(bitmap: Bitmap, name: String, left: Int, top: Int, width: Int, height: Int) {
+        val crop = Bitmap.createBitmap(bitmap, left, top, width, height)
+        try {
+            File(output, "$name.png").outputStream().use {
+                check(encode(crop, it)) { "Unable to encode $name evidence" }
+            }
+        } finally {
+            // Android may return the immutable source for a whole-frame crop.
+            // Its owner is verify(), including when an opt-in export succeeds.
+            if (crop !== bitmap) crop.recycle()
+        }
     }
 }
