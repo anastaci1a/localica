@@ -33,19 +33,35 @@ def checked_apk_bytes(archive, expected_digest):
     return apk, match.group(1)
 
 
-def inspect_apk(apk, build_tools, *, version, certificate):
-    """Use the SDK's verifier; comparing a printed certificate alone is insufficient."""
+def inspect_apk(apk, build_tools, *, version, version_code, certificate):
+    """Verify the intended identity with the SDK; this alone never authorizes reuse.
+
+    The development release policy has one signer, not merely an expected signer
+    somewhere in a larger set. APK bytes/provenance must be bound by the caller.
+    """
+    if (not isinstance(version, str) or not version or
+            type(version_code) is not int or not 0 < version_code < 2 ** 31 or
+            not isinstance(certificate, str) or not re.fullmatch(r"[0-9a-f]{64}", certificate)):
+        raise ValueError("Missing or invalid expected APK identity")
     signature = subprocess.run(
         [str(Path(build_tools) / "apksigner"), "verify", "--print-certs", str(apk)],
         check=True, capture_output=True, text=True,
     ).stdout
-    certificates = re.findall(r"^Signer #1 certificate SHA-256 digest: ([0-9a-f]{64})$", signature, re.M)
-    if certificates != [certificate]:
-        raise ValueError("APK does not have the expected development signing certificate")
+    signer_numbers = set(re.findall(r"^Signer #([^ ]+) ", signature, re.M))
+    certificate_lines = [line for line in signature.splitlines()
+                         if line.startswith("Signer #") and "certificate SHA-256" in line]
+    counts = re.findall(r"^Number of signers: (.*)$", signature, re.M)
+    if (signer_numbers != {"1"} or
+            certificate_lines != ["Signer #1 certificate SHA-256 digest: " + certificate] or
+            (counts and counts != ["1"])):
+        raise ValueError("APK does not have exactly the expected development signer")
     badging = subprocess.run([str(Path(build_tools) / "aapt"), "dump", "badging", str(apk)],
                              check=True, capture_output=True, text=True).stdout
-    package = re.search(r"^package: name='([^']+)' versionCode='([0-9]+)' versionName='([^']+)'", badging, re.M)
-    if package is None or package.group(1) != "io.github.anastaci1a.localica.debug" or package.group(3) != version:
+    records = [line for line in badging.splitlines() if line.startswith("package:")]
+    package = re.match(r"^package: name='([^']+)' versionCode='([0-9]+)' versionName='([^']+)'(?: |$)",
+                       records[0]) if len(records) == 1 else None
+    if (package is None or package.group(1) != "io.github.anastaci1a.localica.debug" or
+            int(package.group(2)) != version_code or package.group(3) != version):
         raise ValueError("APK package/version does not match the intended development release")
     return {"package": package.group(1), "version_code": int(package.group(2)),
-            "version_name": package.group(3), "certificate_sha256": certificates[0]}
+            "version_name": package.group(3), "signer_certificates_sha256": [certificate]}
