@@ -105,7 +105,18 @@ class DragReorderTest {
                 ForegroundSongDragOverlay(host)
                 }
             } }
-            compose.waitUntil(5000) { compose.onAllNodesWithTag("media-${playlist.entries[4].id}").fetchSemanticsNodes().isNotEmpty() }
+            try {
+                compose.waitUntil(5000) { compose.onAllNodesWithTag("media-${playlist.entries[4].id}").fetchSemanticsNodes().isNotEmpty() }
+            } catch (failure: Throwable) {
+                // Failure-only, post-timeout semantics context; no passing-value polling.
+                val context = runCatching {
+                    "fifth=media-${playlist.entries[4].id} gallery=$gallery filtered=$filtered " +
+                        "\n" + compose.onRoot(useUnmergedTree = true).printToString(maxDepth = 4)
+                }.getOrElse { "setup context unavailable: ${it.javaClass.name}" }
+                android.util.Log.e("DragFixtureSetup", context)
+                failure.addSuppressed(AssertionError(context))
+                throw failure
+            }
             test(controller, playlist)
         } finally { queries.release(); scope.cancel(); db.close() }
     }
