@@ -26,6 +26,12 @@ import java.util.UUID
 class ArtistAlbumFilterRangeTest {
     @get:Rule val compose = createComposeRule()
     private inner class Fixture {
+        // Paired comparison control; ordinary invocations retain the original explicit idle.
+        private val settleIdleMode = when (val mode = InstrumentationRegistry.getArguments()
+            .getString("artistRangeSettleIdle") ?: "original") {
+            "original", "deduplicated" -> mode
+            else -> error("artistRangeSettleIdle must be original or deduplicated, was '$mode'")
+        }
         private var observedFrame = 0
         private fun phase(value: String) {
             android.util.Log.i("ArtistRangeFixture", "phase=$value uptime=${android.os.SystemClock.uptimeMillis()}")
@@ -40,6 +46,7 @@ class ArtistAlbumFilterRangeTest {
         val route = BrowseRoute(MainTab.Artists, MediaRef(MediaKind.Artist, artist.id), name)
         val preferences = BrowsePreferences(InstrumentationRegistry.getInstrumentation().targetContext)
         init {
+            phase("settle-idle-mode-$settleIdleMode")
             phase("preferences")
             preferences.write(route, BrowseStyle(presentation = Presentation.List, listSize = ListSize.Normal,
                 sort = TrackSort.Title, ascending = true), true)
@@ -62,16 +69,23 @@ class ArtistAlbumFilterRangeTest {
         }
         fun top() = compose.onNodeWithTag("browse-full-span").getUnclippedBoundsInRoot().top.value -
             compose.onNodeWithTag("browser-list").getUnclippedBoundsInRoot().top.value
-        fun frame(): Float {
+        fun frame(): Float = frame(explicitIdle = true)
+        private fun frame(explicitIdle: Boolean): Float {
             val index = ++observedFrame
             phase("frame-$index-advance")
             compose.mainClock.advanceTimeByFrame()
-            phase("frame-$index-idle")
-            compose.waitForIdle()
-            phase("frame-$index-bounds")
+            if (explicitIdle) {
+                phase("frame-$index-idle")
+                compose.waitForIdle()
+                phase("frame-$index-bounds")
+            } else {
+                phase("frame-$index-explicit-idle-omitted")
+                // Both bounds getters still synchronize. Their interval now includes that wait.
+                phase("frame-$index-bounds-including-idle")
+            }
             return top().also { phase("frame-$index-complete") }
         }
-        fun settle() { repeat(40) { frame() } }
+        fun settle() { repeat(40) { frame(explicitIdle = settleIdleMode == "original") } }
         private fun SemanticsNodeInteraction.unclippedPixels(): Rect = getUnclippedBoundsInRoot().let {
             Rect(it.left.value * density, it.top.value * density, it.right.value * density, it.bottom.value * density)
         }
