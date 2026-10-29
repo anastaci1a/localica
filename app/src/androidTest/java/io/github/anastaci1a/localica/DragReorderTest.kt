@@ -111,7 +111,7 @@ class DragReorderTest {
                 // measuring drag geometry, rather than assuming five rows start onscreen.
                 var sourceReady = false
                 compose.runOnUiThread {
-                    sourceReady = fixtureDragHost.state?.items?.any { it.key == playlist.entries.first().id } == true
+                    sourceReady = selection.visible.any { it.id == playlist.entries.first().id }
                 }
                 if (!arranged && sourceReady) {
                     compose.onNodeWithTag("browser-list").performScrollToKey(playlist.entries.first().id)
