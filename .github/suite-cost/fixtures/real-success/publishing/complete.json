@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "command_id": "3e187079-4564-4ddc-8097-12119a265253",
+  "sha": "48b379e94324f4f6f85f8e7985029513ec04553d",
+  "api": "26",
+  "lane": "native",
+  "started_utc": "2026-10-29T02:05:59.031Z",
+  "ended_utc": "2026-10-29T02:06:20.797Z",
+  "status": "monitoring_complete",
+  "observed_failure_lines": 0,
+  "observer_status": "completed",
+  "uploaded_packets": 0,
+  "observed_failures": 0,
+  "read_offset": 0
+}

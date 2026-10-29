@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "command_id": "3e187079-4564-4ddc-8097-12119a265253",
+  "sha": "48b379e94324f4f6f85f8e7985029513ec04553d",
+  "api": "26",
+  "lane": "native",
+  "argv": [
+    "./gradlew",
+    "connectedDebugAndroidTest",
+    "--no-daemon",
+    "--max-workers=2",
+    "-Pandroid.testInstrumentationRunnerArguments.notClass=io.github.anastaci1a.localica.PreflightRiskOneTest,io.github.anastaci1a.localica.PreflightRiskTwoTest"
+  ],
+  "started_utc": "2026-10-29T02:05:59.031Z",
+  "ended_utc": "2026-10-29T02:06:20.797Z",
+  "status": "completed",
+  "child_returncode": 0,
+  "observer_exit_status": 0,
+  "observed_failure_lines": 0,
+  "first_failure_utc": null,
+  "observations_provisional": true,
+  "authoritative_xml": {
+    "status": "not_collected",
+    "counts": null
+  },
+  "test_verdict": "not_determined",
+  "observer_error": null,
+  "cancel_signal": null,
+  "oversize_lines_not_parsed": 0
+}

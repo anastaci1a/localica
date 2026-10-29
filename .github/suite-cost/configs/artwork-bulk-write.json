@@ -1,0 +1,10 @@
+{
+  "label": "artwork-bulk-write",
+  "class": "io.github.anastaci1a.localica.ArtworkEditRestorationTest",
+  "baseline_sha": "5f0f1d000afcf89767447e4ad516b5d09b66b014",
+  "candidate_sha": "e62e3a76c8094dd9ec4a7f751dbf1514db07419c",
+  "changed_paths": [
+    "app/src/androidTest/java/io/github/anastaci1a/localica/ArtworkEditRestorationTest.kt"
+  ],
+  "precheck_class": "io.github.anastaci1a.localica.NativeSuiteCostEquivalenceTest"
+}

@@ -1,0 +1,9 @@
+{
+  "label": "popup-success-exports",
+  "class": "io.github.anastaci1a.localica.PopupShadowContinuityTest",
+  "baseline_sha": "5f0f1d000afcf89767447e4ad516b5d09b66b014",
+  "candidate_sha": "82573e74a62c30ec7bb8ba3a8fb5d3969bf1f65b",
+  "changed_paths": [
+    "app/src/androidTest/java/io/github/anastaci1a/localica/PopupShadowContinuityTest.kt"
+  ]
+}

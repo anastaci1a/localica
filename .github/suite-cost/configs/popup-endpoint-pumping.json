@@ -1,0 +1,9 @@
+{
+  "label": "popup-endpoint-pumping",
+  "class": "io.github.anastaci1a.localica.PopupShadowContinuityTest",
+  "baseline_sha": "5f0f1d000afcf89767447e4ad516b5d09b66b014",
+  "candidate_sha": "7cc1a7cc592e1ae71d515f92b9f5109596e4e278",
+  "changed_paths": [
+    "app/src/androidTest/java/io/github/anastaci1a/localica/PopupShadowContinuityTest.kt"
+  ]
+}

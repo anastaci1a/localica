@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "sha": "48b379e94324f4f6f85f8e7985029513ec04553d",
+  "api": "26",
+  "observer_exit": 0,
+  "publisher_exit": 0,
+  "monitoring_complete": true,
+  "supervisor_error": null,
+  "ended_unix": 1793239581.0182793,
+  "test_verdict": "requires_final_XML"
+}
