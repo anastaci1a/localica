@@ -19,6 +19,7 @@ import androidx.media3.exoplayer.analytics.AnalyticsListener
 import androidx.media3.exoplayer.audio.AudioSink
 import androidx.media3.exoplayer.audio.AudioOutput
 import androidx.media3.exoplayer.audio.AudioOutputProvider
+import androidx.media3.exoplayer.audio.AudioTrackAudioOutput
 import androidx.media3.exoplayer.audio.AudioTrackAudioOutputProvider
 import androidx.media3.exoplayer.audio.DefaultAudioSink
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
@@ -117,7 +118,8 @@ class QueueContinuousPlaybackTest {
         val db = Room.inMemoryDatabaseBuilder(context, QueueDatabase::class.java).build()
         val readers = NativeReaders()
         val capture = ContinuityCapture()
-        val probe = ContinuityEvents()
+        val startup = ContinuityStartupDiagnostics(encodedFixture, throughQueue)
+        val probe = ContinuityEvents(startup.id)
         val files = mutableListOf<File>()
         var player: ExoPlayer? = null
         var queues: QueueController? = null
@@ -162,7 +164,7 @@ class QueueContinuousPlaybackTest {
                 val renderers = object : DefaultRenderersFactory(context) {
                     override fun buildAudioSink(context: Context, enableFloatOutput: Boolean,
                         enableAudioOutputPlaybackParams: Boolean): AudioSink = MediaEditAudioSink(DefaultAudioSink.Builder(context)
-                        .setAudioOutputProvider(ContinuityOutputProvider(context))
+                        .setAudioOutputProvider(ContinuityOutputProvider(context, startup))
                         .setAudioProcessors(arrayOf(capture)).build())
                 }
                 // Match PlaybackService's source ownership and audio attributes. Test seams are
@@ -183,17 +185,29 @@ class QueueContinuousPlaybackTest {
                 if (throughQueue) {
                     queues = QueueController(db.queues(), preferences,
                         (context.applicationContext as LocalicaApplication).library, scope, readers)
+                    startup.request("attach.begin")
                     queues!!.attach(engine)
+                    startup.request("attach.return")
                 } else {
                     engine.setPreloadConfiguration(ExoPlayer.PreloadConfiguration(5_000_000L))
+                    startup.request("setMediaItems.begin")
                     engine.setMediaItems(tracks.mapIndexed { index, track -> queueMediaItem("control-$index", track) })
+                    startup.request("setMediaItems.return")
+                    startup.request("prepare.begin")
                     engine.prepare()
+                    startup.request("prepare.return")
+                    startup.request("play.begin")
                     engine.play()
+                    startup.request("play.return")
                 }
             }
             if (throughQueue) {
                 awaitMain { !queues!!.state.value.loading }
-                instrumentation.runOnMainSync { queues!!.tap(tracks, 0, sourceName = "Continuous PCM") }
+                instrumentation.runOnMainSync {
+                    startup.request("tap.begin")
+                    queues!!.tap(tracks, 0, sourceName = "Continuous PCM")
+                    startup.request("tap.return")
+                }
             }
             // Let all three tracks play from their beginnings. No seek-to-end shortcuts.
             awaitMain { probe.ended }
@@ -239,6 +253,11 @@ class QueueContinuousPlaybackTest {
                     engine.release()
                 }
                 job.cancel()
+            }
+            // New verbose diagnostics are deferred until the player has been released.
+            try { startup.dump() } catch (failure: RuntimeException) {
+                // Diagnostic formatting must not mask an assertion or skip owned cleanup.
+                Log.w("ContinuityStartup", "Diagnostic dump unavailable", failure)
             }
             runBlocking { job.join() }
             db.close()
@@ -308,17 +327,26 @@ class QueueContinuousPlaybackTest {
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 private class ContinuityOutputProvider(
     context: Context,
+    private val startup: ContinuityStartupDiagnostics,
     private val native: AudioOutputProvider = AudioTrackAudioOutputProvider.Builder(context).build(),
 ) : AudioOutputProvider by native {
+    override fun getOutputConfig(formatConfig: AudioOutputProvider.FormatConfig): AudioOutputProvider.OutputConfig {
+        val beginNs = SystemClock.elapsedRealtimeNanos()
+        val config = native.getOutputConfig(formatConfig)
+        startup.configuration(formatConfig, config, beginNs, SystemClock.elapsedRealtimeNanos())
+        return config
+    }
     override fun getAudioOutput(config: AudioOutputProvider.OutputConfig): AudioOutput {
+        val beginNs = SystemClock.elapsedRealtimeNanos()
         val output = native.getAudioOutput(config)
+        val createdNs = SystemClock.elapsedRealtimeNanos()
+        val diagnostic = ContinuityOutputDiagnostics(output, config, beginNs, createdNs).also(startup::output)
         return object : AudioOutput by output {
             private val identity = System.identityHashCode(output)
             private val frameSize = Util.getPcmFrameSize(config.encoding, Integer.bitCount(config.channelMask))
             private var writtenBytes = 0L
-            private val writes = ArrayDeque<String>()
             private fun trace(detail: String) {
-                Log.i("ContinuityOutput", "timeNs=${SystemClock.elapsedRealtimeNanos()} output=$identity $detail")
+                Log.i("ContinuityOutput", "timeNs=${SystemClock.elapsedRealtimeNanos()} association=${startup.id} output=$identity $detail")
             }
             init {
                 trace("created rate=${config.sampleRate} encoding=${config.encoding} " +
@@ -327,8 +355,9 @@ private class ContinuityOutputProvider(
                     override fun onUnderrun() {
                         // Called from the native output's counter poll, before the next write.
                         // Position is Media3's output position, not a raw hardware-head reading.
+                        diagnostic.underrun(writtenBytes / frameSize)
                         trace("underrun writtenFrames=${writtenBytes / frameSize} " +
-                            "outputPositionUs=${output.positionUs} recentWrites=$writes")
+                            "outputPositionUs=${output.positionUs} recentWrites=deferred")
                     }
                     override fun onPositionAdvancing(playoutStartSystemTimeMs: Long) {
                         trace("positionAdvancing startSystemMs=$playoutStartSystemTimeMs")
@@ -340,24 +369,207 @@ private class ContinuityOutputProvider(
             }
             override fun write(buffer: ByteBuffer, encodedAccessUnitCount: Int, presentationTimeUs: Long): Boolean {
                 val before = buffer.position()
-                val timeNs = SystemClock.elapsedRealtimeNanos()
-                val result = output.write(buffer, encodedAccessUnitCount, presentationTimeUs)
-                val accepted = buffer.position() - before
-                writtenBytes += accepted
-                if (writes.size == 16) writes.removeFirst()
-                writes.addLast("ns=$timeNs pts=$presentationTimeUs accepted=$accepted totalFrames=${writtenBytes / frameSize}")
-                return result
+                val sequence = diagnostic.beginWrite(buffer.remaining(), presentationTimeUs, encodedAccessUnitCount,
+                    writtenBytes / frameSize)
+                var handled = -1L
+                try {
+                    val result = output.write(buffer, encodedAccessUnitCount, presentationTimeUs)
+                    handled = if (result) 1L else 0L
+                    return result
+                } finally {
+                    val returnNs = SystemClock.elapsedRealtimeNanos()
+                    val accepted = buffer.position() - before
+                    writtenBytes += accepted
+                    diagnostic.endWrite(sequence, returnNs, accepted, writtenBytes / frameSize, handled)
+                }
             }
-            override fun play() { trace("play writtenFrames=${writtenBytes / frameSize}"); output.play() }
-            override fun stop() { trace("stop writtenFrames=${writtenBytes / frameSize}"); output.stop() }
+            override fun play() {
+                trace("play writtenFrames=${writtenBytes / frameSize}")
+                diagnostic.event("play.begin", writtenBytes / frameSize)
+                output.play()
+                diagnostic.event("play.return", writtenBytes / frameSize)
+            }
+            override fun stop() {
+                trace("stop writtenFrames=${writtenBytes / frameSize}")
+                diagnostic.event("stop.begin", writtenBytes / frameSize)
+                output.stop()
+                diagnostic.event("stop.return", writtenBytes / frameSize)
+            }
             override fun flush() {
                 trace("flush writtenFrames=${writtenBytes / frameSize}")
+                diagnostic.event("flush.begin", writtenBytes / frameSize)
                 output.flush()
                 writtenBytes = 0
-                writes.clear()
+                diagnostic.event("flush.return", 0)
             }
         }
     }
+}
+
+/** Bounded observations only: no new wait, native command, buffer policy or PCM transformation. */
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+private class ContinuityStartupDiagnostics(fixture: String?, throughQueue: Boolean) {
+    val id = SystemClock.elapsedRealtimeNanos()
+    private val label = "association=$id fixture=$fixture queue=$throughQueue"
+    // Request return means caller return, not queue-actor completion/acceptance.
+    // Requests are Main-owned; configurations/outputs are playback-thread-owned. Dump only
+    // after ExoPlayer.release returns, never format new per-write strings during feeding.
+    // Publish completed slots last: a release timeout must not expose a half-filled record.
+    private val requestNames = arrayOfNulls<String>(16)
+    private val requestTimes = LongArray(16)
+    private var requestCount = 0
+    private val formats = arrayOfNulls<AudioOutputProvider.FormatConfig>(16)
+    private val configs = arrayOfNulls<AudioOutputProvider.OutputConfig>(16)
+    private val configTimes = LongArray(32)
+    @Volatile private var configCount = 0
+    private val outputs = arrayOfNulls<ContinuityOutputDiagnostics>(8)
+    @Volatile private var outputCount = 0
+
+    fun request(name: String) {
+        val index = requestCount++
+        if (index >= requestNames.size) return
+        requestTimes[index] = SystemClock.elapsedRealtimeNanos()
+        requestNames[index] = name
+    }
+    fun configuration(format: AudioOutputProvider.FormatConfig, config: AudioOutputProvider.OutputConfig,
+        beginNs: Long, returnNs: Long) {
+        val index = configCount
+        if (index < configs.size) {
+            formats[index] = format; configs[index] = config
+            configTimes[index * 2] = beginNs; configTimes[index * 2 + 1] = returnNs
+        }
+        configCount = index + 1
+    }
+    fun output(diagnostic: ContinuityOutputDiagnostics) {
+        val index = outputCount
+        if (index < outputs.size) outputs[index] = diagnostic
+        outputCount = index + 1
+    }
+    fun dump() {
+        Log.i("ContinuityStartup", "$label requests=$requestCount configs=$configCount outputs=$outputCount " +
+            "limits=request16/config16/output8/write32/event64/underrun4x16 " +
+            "nativeReads=sequential-not-atomic observerCostIsNonzero counterPollIsNotStarvationOnset " +
+            "headIsUnsigned32NotAcousticProof dumpAfterReleaseReturn=true")
+        repeat(minOf(requestCount, requestNames.size)) { index ->
+            Log.i("ContinuityStartup", "$label request=${requestNames[index]} timeNs=${requestTimes[index]}")
+        }
+        repeat(minOf(configCount, configs.size)) { index ->
+            val request = formats[index] ?: return@repeat
+            val format = request.format
+            val config = configs[index] ?: return@repeat
+            Log.i("ContinuityStartup", "$label config=$index beginNs=${configTimes[index * 2]} " +
+                "returnNs=${configTimes[index * 2 + 1]} inputRate=${format.sampleRate} channels=${format.channelCount} " +
+                "pcmEncoding=${format.pcmEncoding} delay=${format.encoderDelay} padding=${format.encoderPadding} " +
+                "preferredBytes=${request.preferredBufferSize} rate=${config.sampleRate} " +
+                "encoding=${config.encoding} channelMask=${config.channelMask} capacityBytes=${config.bufferSize}")
+        }
+        repeat(minOf(outputCount, outputs.size)) { outputs[it]?.dump(label) }
+    }
+}
+
+/** Public Media3 1.10.1 AudioTrackAudioOutput.getAudioTrack(); no reflection or replacement output. */
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+private class ContinuityOutputDiagnostics(output: AudioOutput, private val config: AudioOutputProvider.OutputConfig,
+    private val createBeginNs: Long, private val createReturnNs: Long) {
+    private val identity = System.identityHashCode(output)
+    private val track = (output as? AudioTrackAudioOutput)?.audioTrack
+    private val first = LongArray(32 * WIDTH)
+    private val recent = LongArray(16 * WIDTH)
+    @Volatile private var writeCount = 0
+    @Volatile private var completedWrites = 0
+    private val eventNames = arrayOfNulls<String>(64)
+    private val events = LongArray(64 * 6)
+    @Volatile private var eventCount = 0
+    private val underrunHistory = LongArray(4 * 16 * WIDTH)
+    private val underrunWriteCounts = IntArray(4)
+    @Volatile private var underrunCount = 0
+
+    // -1: not exposed by this output; -2: public getter failed; -3: outside startup sample.
+    // Getter failure is diagnostic data, never a reason to change native control flow.
+    private fun underruns(): Long = try { track?.underrunCount?.toLong() ?: -1L } catch (_: RuntimeException) { -2L }
+    private fun head(): Long = try { track?.playbackHeadPosition?.toLong()?.and(0xffffffffL) ?: -1L } catch (_: RuntimeException) { -2L }
+    init { event("created", 0) }
+
+    fun event(name: String, writtenFrames: Long) {
+        val index = eventCount
+        if (index < eventNames.size) {
+            eventNames[index] = name
+            val offset = index * 6
+            events[offset] = SystemClock.elapsedRealtimeNanos()
+            events[offset + 1] = writtenFrames
+            events[offset + 2] = writeCount.toLong()
+            events[offset + 3] = underruns()
+            events[offset + 4] = head()
+            events[offset + 5] = SystemClock.elapsedRealtimeNanos()
+        }
+        eventCount = index + 1
+    }
+    fun underrun(writtenFrames: Long) {
+        event("underrun", writtenFrames)
+        val index = underrunCount
+        if (index < underrunWriteCounts.size) {
+            underrunWriteCounts[index] = writeCount
+            val start = maxOf(0, writeCount - 16)
+            for (sequence in start until writeCount) {
+                val from = (sequence % 16) * WIDTH
+                recent.copyInto(underrunHistory, (index * 16 + sequence - start) * WIDTH, from, from + WIDTH)
+            }
+        }
+        underrunCount = index + 1
+    }
+    fun beginWrite(requested: Int, pts: Long, units: Int, writtenFrames: Long): Int {
+        val sequence = writeCount++
+        val offset = (sequence % 16) * WIDTH
+        java.util.Arrays.fill(recent, offset, offset + WIDTH, -1L)
+        recent[offset] = sequence.toLong()
+        recent[offset + 1] = SystemClock.elapsedRealtimeNanos()
+        recent[offset + 5] = pts
+        recent[offset + 6] = requested.toLong()
+        recent[offset + 10] = if (sequence < 32) underruns() else -3L
+        recent[offset + 11] = if (sequence < 32) head() else -3L
+        recent[offset + 14] = writtenFrames
+        recent[offset + 15] = units.toLong()
+        recent[offset + 2] = SystemClock.elapsedRealtimeNanos()
+        return sequence
+    }
+    fun endWrite(sequence: Int, returnNs: Long, accepted: Int, writtenFrames: Long, handled: Long) {
+        val offset = (sequence % 16) * WIDTH
+        recent[offset + 3] = returnNs
+        recent[offset + 7] = accepted.toLong()
+        recent[offset + 8] = writtenFrames
+        recent[offset + 9] = handled
+        recent[offset + 12] = if (sequence < 32) underruns() else -3L
+        recent[offset + 13] = if (sequence < 32) head() else -3L
+        recent[offset + 4] = SystemClock.elapsedRealtimeNanos()
+        if (sequence < 32) recent.copyInto(first, sequence * WIDTH, offset, offset + WIDTH)
+        completedWrites = sequence + 1
+    }
+    fun dump(label: String) {
+        val prefix = "$label output=$identity"
+        Log.i("ContinuityStartup", "$prefix createBeginNs=$createBeginNs createReturnNs=$createReturnNs " +
+            "rawAudioTrackAvailable=${track != null} rate=${config.sampleRate} capacityBytes=${config.bufferSize} " +
+            "writes=$writeCount completedWrites=$completedWrites events=$eventCount underruns=$underrunCount")
+        Log.i("ContinuityStartup", "$prefix writeColumns=sequence,sampleBeginNs,callNs,returnNs,sampleEndNs," +
+            "ptsUs,requestedBytes,acceptedBytes,totalFrames,handled,underrunsBefore,headBefore," +
+            "underrunsAfter,headAfter,framesBefore,accessUnits")
+        repeat(minOf(completedWrites, 32)) { index ->
+            Log.i("ContinuityStartup", "$prefix write=" + first.sliceArray(index * WIDTH until (index + 1) * WIDTH).joinToString(","))
+        }
+        // Snapshots include the in-flight write at the native counter poll; its return
+        // columns are -1, not an invented zero-byte write or a known hardware-event time.
+        repeat(minOf(underrunCount, underrunWriteCounts.size)) { index ->
+            repeat(minOf(underrunWriteCounts[index], 16)) { row ->
+                val offset = (index * 16 + row) * WIDTH
+                Log.i("ContinuityStartup", "$prefix underrunSnapshot=$index write=" +
+                    underrunHistory.sliceArray(offset until offset + WIDTH).joinToString(","))
+            }
+        }
+        Log.i("ContinuityStartup", "$prefix eventColumns=sampleBeginNs,writtenFrames,writeCalls,underruns,head,sampleEndNs")
+        repeat(minOf(eventCount, eventNames.size)) { index ->
+            Log.i("ContinuityStartup", "$prefix event=${eventNames[index]} " + events.sliceArray(index * 6 until (index + 1) * 6).joinToString(","))
+        }
+    }
+    private companion object { const val WIDTH = 16 }
 }
 
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
@@ -376,11 +588,12 @@ private class ContinuityCapture : BaseAudioProcessor() {
 
 /** Player and analytics callbacks, and assertions reading these fields, all run on Main. */
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
-private class ContinuityEvents : Player.Listener, AnalyticsListener {
+private class ContinuityEvents(private val association: Long) : Player.Listener, AnalyticsListener {
     private val startedMs = SystemClock.elapsedRealtime()
     private var playbackState = Player.STATE_IDLE
     private fun trace(detail: String) {
-        Log.i("QueueContinuityEvent", "elapsedMs=${SystemClock.elapsedRealtime() - startedMs} $detail")
+        Log.i("QueueContinuityEvent", "association=$association timeNs=${SystemClock.elapsedRealtimeNanos()} " +
+            "elapsedMs=${SystemClock.elapsedRealtime() - startedMs} $detail")
     }
     var error: PlaybackException? = null
     var ended = false
