@@ -94,7 +94,7 @@ class NavigationRandomCorpusDocumentsProviderTest {
         assertTrue(provider.onCreate())
         provider.queryRoots(null).use { assertEquals(0, it.count) }
         missing { provider.queryDocument(rootId, null) }
-        missing { provider.queryChildDocuments(rootId, null, null) }
+        missing { provider.queryChildDocuments(rootId, null, sortOrder = null) }
         missing { provider.openDocument("${NavigationScaleCatalog.NAMESPACE}:track:0", "r", null) }
         assertFalse(provider.isChildDocument(rootId, "${NavigationScaleCatalog.NAMESPACE}:track:0"))
     }
@@ -239,7 +239,7 @@ class NavigationRandomCorpusDocumentsProviderTest {
                 assertEquals(track.documentId, cursor.getString(idColumn))
             }
         }
-        provider.queryChildDocuments(overlapId, null, null).use { assertEquals(100, it.count) }
+        provider.queryChildDocuments(overlapId, null, sortOrder = null).use { assertEquals(100, it.count) }
         provider.queryDocument(rootId, null).use {
             assertEquals(5, it.columnCount)
             assertTrue(it.moveToFirst())
