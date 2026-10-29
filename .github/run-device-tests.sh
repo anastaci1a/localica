@@ -127,7 +127,12 @@ done
 [[ $(adb shell getprop ro.kernel.qemu | tr -d '\r') == 1 ]] || { echo 'Preflight requires an emulator' >&2; exit 2; }
 source .github/prepare-device-tests.sh
 install_live_signals
-mkdir -p "$reports"
+[[ ! -e "$reports" && ! -L "$reports" ]] || { echo 'Refusing stale preflight reports' >&2; exit 2; }
+[[ ${GITHUB_SHA:-} =~ ^[0-9a-f]{40}$ && $(git rev-parse HEAD) == "$GITHUB_SHA" ]] || { echo 'Partition requires the exact checkout SHA' >&2; exit 2; }
+[[ ! -e app/build/outputs/androidTest-results && ! -L app/build/outputs/androidTest-results ]] || { echo 'Refusing stale instrumentation results before preflight' >&2; exit 2; }
+mkdir "$reports"
+sha256sum app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk > "$reports/test-input-apks.sha256"
+python3 .github/test-evidence/full_partition.py plan --root "$PWD" --risk-classes "$classes" --sha "$GITHUB_SHA" --api "$TEST_API" --run-id "$GITHUB_RUN_ID" --attempt "$GITHUB_RUN_ATTEMPT" --plan "$reports/partition.json"
 printf 'sha=%s\napi=%s\nclasses=%s\n' "${GITHUB_SHA:-unknown}" "${TEST_API:-unknown}" "$classes" > "$reports/plan.txt"
 printf 'preflight=running\nfull=not-started\n' > "$reports/status.txt"
 set +e
@@ -149,7 +154,13 @@ archive_result=0
 for path in app/build/reports/androidTests app/build/outputs/androidTest-results app/build/outputs/connected_android_test_additional_output; do
   if [[ -d "$path" ]]; then
     if mkdir -p "$reports/$(dirname "$path")"; then
-      cp -a "$path" "$reports/$path" || archive_result=$?
+      if [[ "$path" == app/build/outputs/androidTest-results ]]; then
+        # Preserve original XML/logs while requiring fresh results from the next
+        # invocation; an exit-zero/no-output runner cannot reuse preflight XML.
+        mv "$path" "$reports/$path" || archive_result=$?
+      else
+        cp -a "$path" "$reports/$path" || archive_result=$?
+      fi
     else
       archive_result=$?
     fi
@@ -159,6 +170,9 @@ printf 'preflight_exit=%s\nfull=not-started\n' "$result" > "$reports/status.txt"
 [[ "$result" == 0 ]] || exit "$result"
 [[ "$log_result" == 0 && "$archive_result" == 0 ]] || { echo "Failed to preserve preflight evidence" >&2; exit 3; }
 if [[ "$live" == true ]]; then verify_empty_preflight; fi
+# Admit exact source methods before excluding their classes from the remainder.
+sha256sum --check --status "$reports/test-input-apks.sha256"
+python3 .github/test-evidence/full_partition.py preflight --root "$PWD" --plan "$reports/partition.json" --preflight "$reports/app/build/outputs/androidTest-results" --output "$reports/preflight-reconciled.json"
 # Restore fresh-install app state before the complete suite; never touch other packages.
 for package in io.github.anastaci1a.localica.debug io.github.anastaci1a.localica.debug.test; do
   # AGP may already uninstall a test APK after instrumentation; absent is fresh.
@@ -167,12 +181,17 @@ for package in io.github.anastaci1a.localica.debug io.github.anastaci1a.localica
     [[ $(adb shell pm clear "$package" | tr -d '\r') == Success ]] || { echo "Unable to reset $package" >&2; exit 3; }
   fi
 done
+[[ ! -e app/build/outputs/androidTest-results && ! -L app/build/outputs/androidTest-results ]] || { echo 'Unexpected instrumentation results before remainder' >&2; exit 2; }
 printf 'preflight=passed\nfull=running\n' > "$reports/status.txt"
 set +e
-run_native full ./gradlew connectedDebugAndroidTest --no-daemon --max-workers=2
+run_native full ./gradlew connectedDebugAndroidTest --no-daemon --max-workers=2 "-Pandroid.testInstrumentationRunnerArguments.notClass=$classes"
 result=$?
 set -e
 status_result=0
 printf 'preflight=passed\nfull_exit=%s\n' "$result" > "$reports/status.txt" || status_result=$?
 [[ "$result" == 0 ]] || exit "$result"
-exit "$status_result"
+[[ "$status_result" == 0 ]] || exit "$status_result"
+# Both phase outcomes and their disjoint union must reconcile before green.
+sha256sum --check --status "$reports/test-input-apks.sha256"
+python3 .github/test-evidence/full_partition.py complete --root "$PWD" --plan "$reports/partition.json" --preflight "$reports/app/build/outputs/androidTest-results" --remaining "$PWD/app/build/outputs/androidTest-results" --output "$reports/complete-union.json"
+
