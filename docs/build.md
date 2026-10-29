@@ -32,7 +32,7 @@ Mandatory native regressions retain presented-pixel, lifecycle, first/reopened-f
 
 Build-report artifacts include raw JVM XML under `jvm-xml/<run>/testDebugUnitTest`, including when tests fail.
 
-Select the API 26 or 36 emulator explicitly with `ANDROID_SERIAL`. Match the [emulator configuration](#ci-and-signing). Physical-device review supplements automation. Installable development APK: `app/build/outputs/apk/debug/app-debug.apk`. The production release variant is unsigned. Test-only fixtures never ship in the app.
+Select the API 26 or 36 emulator explicitly with `ANDROID_SERIAL`. Match the [emulator configuration](#ci-and-signing). Physical-device review supplements automation. Installable development APK: `app/build/outputs/apk/debug/app-debug.apk`. The production release variant is unsigned. Test-only fixtures never ship in the app. Standalone test-package components cannot rely on the target app classloader: the test APK packages identical bytes from the app’s resolved Kotlin standard library. Its coordinate and SHA256 are retained in `app/build/generated/standalone-test-runtime/binding.txt`. `NavigationStandaloneRuntimeTest` checks linkage in the separate provider process; ordinary instrumentation alone does not cover that path.
 
 ### Coordinated local and hosted comparison
 
