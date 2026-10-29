@@ -1,0 +1,192 @@
+package io.github.anastaci1a.localica
+
+import android.app.Instrumentation
+import android.app.Activity
+import android.app.Application
+import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.os.Process
+import android.os.SystemClock
+import android.system.Os
+import android.system.OsConstants
+import android.util.Log
+import androidx.test.platform.app.InstrumentationRegistry
+import java.io.File
+import java.io.FileDescriptor
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
+import org.json.JSONObject
+
+/**
+ * Resident admission session, deliberately NOT a terminal AndroidJUnitRunner invocation.
+ * Platform finish force-stops the target on API 26. This entry point never calls it, never
+ * finishes Activities and never reports terminal instrumentation success. The bounded operation
+ * writes its own completion receipt; the ordinary app looper and instrumentation remain alive.
+ * Host must prove a fresh, never-launched target before startup (which itself force-stops targets).
+ * No retry, recovery, uninstall or process-lifetime guarantee is provided here.
+ */
+class NavigationRandomOwnedSession : Instrumentation() {
+    private var supplied: Bundle? = null
+    @Volatile private var claimedRoot: File? = null
+    private val finishRefused = AtomicBoolean(false)
+    private val resumed = mutableSetOf<Activity>()
+
+    override fun callApplicationOnCreate(app: Application) {
+        app.registerActivityLifecycleCallbacks(object : Application.ActivityLifecycleCallbacks {
+            override fun onActivityResumed(activity: Activity) { resumed += activity }
+            override fun onActivityPaused(activity: Activity) { resumed -= activity }
+            override fun onActivityDestroyed(activity: Activity) { resumed -= activity }
+            override fun onActivityCreated(activity: Activity, state: Bundle?) = Unit
+            override fun onActivityStarted(activity: Activity) = Unit
+            override fun onActivityStopped(activity: Activity) = Unit
+            override fun onActivitySaveInstanceState(activity: Activity, state: Bundle) = Unit
+        })
+        super.callApplicationOnCreate(app)
+    }
+
+    internal fun hasResumedMainActivity(): Boolean {
+        check(Looper.myLooper() == Looper.getMainLooper())
+        return resumed.size == 1 && resumed.single() is MainActivity
+    }
+
+    override fun onCreate(arguments: Bundle?) {
+        super.onCreate(arguments)
+        supplied = arguments?.let(::Bundle)
+        start()
+    }
+
+    override fun onStart() {
+        var directory: File? = null
+        var sessionId: String? = null
+        val started = SystemClock.uptimeMillis()
+        try {
+            val args = requireNotNull(supplied) { "Missing resident-session arguments" }
+            require(args.keySet() == NavigationRandomOwnedSessionProtocol.keys) { "Unexpected argument keys" }
+            val values = args.keySet().associateWith { key ->
+                val value = args.get(key)
+                require(value is String) { "Session arguments must be strings" }
+                value
+            }
+            sessionId = NavigationRandomOwnedSessionProtocol.validate(values)
+            val ready = CountDownLatch(1)
+            check(Handler(Looper.getMainLooper()).post { ready.countDown() }) { "Main looper rejected readiness barrier" }
+            check(ready.await(30, TimeUnit.SECONDS)) { "Application initialization did not reach main-looper barrier" }
+            check(targetContext.packageName == "io.github.anastaci1a.localica.debug") { "Wrong target package" }
+            check(targetContext.applicationInfo.uid == Process.myUid()) { "Not executing as target UID" }
+            check(targetContext.applicationContext is LocalicaApplication) { "Wrong target application" }
+            // Canonicalize the framework-provided base once: /data/user/0 may alias /data/data.
+            val files = targetContext.filesDir.canonicalFile
+            requireOwnedDirectory(files)
+            val root = File(files, NavigationRandomOwnedSessionProtocol.DIRECTORY)
+            // mkdir is the exclusive one-shot claim. EEXIST refuses reuse, including partial failure.
+            Os.mkdir(root.path, 448) // 0700; intentionally private, not shared-workspace permissions.
+            directory = root
+            claimedRoot = root
+            requireOwnedDirectory(root)
+            writeReceipt(root, "started.json", receipt("STARTED", sessionId, started))
+            syncDirectory(files)
+            InstrumentationRegistry.registerInstance(this, args)
+            NavigationRandomCorpusOwnedTargetTest().verifyOwnedCorpusAndPersistQueue()
+            writeReceipt(root, "operation.json", receipt("OPERATION_RETURNED", sessionId, started).apply {
+                put("operationAssertionsReturned", true)
+                put("phaseEvidenceRequiresIndependentReconciliation", true)
+            })
+        } catch (failure: Throwable) {
+            val error = boundedFailure(failure)
+            Log.e("LocalicaOwnedSession", error)
+            directory?.let { root ->
+                try {
+                    writeReceipt(root, "failure.json", receipt("FAILED", sessionId, started).put("error", error))
+                } catch (receiptFailure: Throwable) {
+                    Log.e("LocalicaOwnedSession", "Failure receipt unavailable: " + boundedFailure(receiptFailure))
+                }
+            }
+        }
+        // Returning from onStart ends only this worker. Do not call finish or install a watchdog kill.
+    }
+
+    override fun finish(resultCode: Int, results: Bundle?) {
+        // Defensive refusal: terminal instrumentation finish would kill the admitted application.
+        Log.e("LocalicaOwnedSession", "Terminal finish refused in resident session; code=$resultCode")
+        if (finishRefused.compareAndSet(false, true)) claimedRoot?.let { root ->
+            try {
+                writeReceipt(root, "terminal-finish-refused.json", JSONObject().apply {
+                    put("schema", 1); put("state", "PROTOCOL_VIOLATION")
+                    put("resultCode", resultCode); put("instrumentationFinished", false)
+                })
+            } catch (failure: Throwable) { Log.e("LocalicaOwnedSession", boundedFailure(failure)) }
+        }
+    }
+
+    private fun receipt(state: String, id: String?, started: Long) = JSONObject().apply {
+        put("schema", 1)
+        put("state", state)
+        put("sessionId", id ?: JSONObject.NULL)
+        put("pid", Process.myPid())
+        put("uid", Process.myUid())
+        put("startedUptimeMs", started)
+        put("observedUptimeMs", SystemClock.uptimeMillis())
+        put("instrumentationFinished", false)
+        put("processSurvivalProven", false)
+        put("terminalJUnitResult", false)
+    }
+
+    private fun requireOwnedDirectory(file: File) {
+        val stat = Os.lstat(file.path)
+        require(OsConstants.S_ISDIR(stat.st_mode) && stat.st_uid == Process.myUid()) { "Require target-owned directory" }
+        require(file.canonicalPath == file.absolutePath) { "Directory alias is not permitted" }
+    }
+
+    private fun writeReceipt(root: File, name: String, value: JSONObject) {
+        requireOwnedDirectory(root)
+        val bytes = (value.toString() + "\n").toByteArray(Charsets.UTF_8)
+        require(bytes.size <= NavigationRandomOwnedSessionProtocol.MAX_RECEIPT_BYTES)
+        val fd = Os.open(File(root, name).path,
+            OsConstants.O_WRONLY or OsConstants.O_CREAT or OsConstants.O_EXCL or
+                OsConstants.O_NOFOLLOW or OsConstants.O_CLOEXEC, 384) // 0600
+        withOwnedDescriptor(fd) {
+            var offset = 0
+            while (offset < bytes.size) {
+                val written = Os.write(fd, bytes, offset, bytes.size - offset)
+                check(written > 0) { "Receipt write made no progress" }
+                offset += written
+            }
+            Os.fsync(fd)
+        }
+        syncDirectory(root)
+    }
+
+    private fun syncDirectory(directory: File) {
+        val fd = Os.open(directory.path, OsConstants.O_RDONLY or OsConstants.O_NOFOLLOW or
+            OsConstants.O_CLOEXEC or OsConstants.O_NONBLOCK, 0)
+        withOwnedDescriptor(fd) {
+            require(OsConstants.S_ISDIR(Os.fstat(fd).st_mode))
+            Os.fsync(fd)
+        }
+    }
+
+    private inline fun withOwnedDescriptor(fd: FileDescriptor, body: () -> Unit) {
+        var primary: Throwable? = null
+        try { body() } catch (failure: Throwable) { primary = failure; throw failure }
+        finally {
+            try { Os.close(fd) } catch (failure: Throwable) {
+                if (primary == null) throw failure
+                if (primary !== failure) primary.addSuppressed(failure)
+            }
+        }
+    }
+
+    private fun boundedFailure(failure: Throwable): String {
+        val output = StringBuilder()
+        var current: Throwable? = failure
+        repeat(8) {
+            val item = current ?: return@repeat
+            output.append(item.javaClass.name).append(": ").append(item.message?.take(1024)).append('\n')
+            item.stackTrace.take(24).forEach { frame -> output.append(frame.toString().take(256)).append('\n') }
+            current = item.cause?.takeIf { it !== item }
+        }
+        return output.toString().take(16000)
+    }
+}
