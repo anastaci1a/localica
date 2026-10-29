@@ -1,0 +1,31 @@
+name: Navigation random corpus binding host contracts (not delivery)
+'on':
+  push:
+    branches: [test/navigation-random-binding-validation-20261029]
+permissions:
+  contents: read
+jobs:
+  host_contracts:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+    - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3
+      with:
+        distribution: temurin
+        java-version: '17'
+    - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a
+    - name: Record runner and toolchain identity
+      run: bash .github/test-evidence/environment.sh > random-binding-host-environment.txt
+    - name: Run only new manifest shape contracts
+      run: ./gradlew testDebugUnitTest --tests io.github.anastaci1a.localica.NavigationRandomCorpusBindingTest --no-daemon --max-workers=2
+    - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      if: always()
+      with:
+        name: navigation-random-binding-host
+        path: |
+          app/build/test-results/testDebugUnitTest/
+          app/build/reports/tests/testDebugUnitTest/
+          random-binding-host-environment.txt
+        if-no-files-found: error
+        retention-days: 14
