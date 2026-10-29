@@ -134,7 +134,7 @@ private fun ObserveTextEditingInput(content: @Composable () -> Unit) {
     val keyboardTarget = WindowInsets.imeAnimationTarget.getBottom(density)
     val windowFocused = androidx.compose.ui.platform.LocalWindowInfo.current.isWindowFocused
     val nativeCorroboration = android.os.Build.VERSION.SDK_INT >= 30
-    val nativeReader = LocalNativeImeVisibilityReader.current
+    val nativeReader = LocalNativeZeroHeightImeReader.current
     val nativeHost = if (nativeCorroboration)
         rememberNativeImeHostReady(view, imeSession::invalidateZeroHeightExposure) else NativeImeHostState(false)
     val zeroHeightCandidate = focused && windowFocused && keyboardVisible &&

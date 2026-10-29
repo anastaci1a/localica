@@ -220,4 +220,97 @@ class TextEditingNativeImeTest {
             })
         } finally { compose.mainClock.autoAdvance = true }
     }
+
+    @Test fun nativeInsetsClassifierPreservesPlatformSupportAndZeroHeightContract() {
+        assertNull(nativeZeroHeightImeExposure(null))
+        if (android.os.Build.VERSION.SDK_INT < 30) {
+            // Legacy API has no native visibility contract; its model keeps baseline policy.
+            @Suppress("DEPRECATION")
+            val legacy = android.view.WindowInsets(android.graphics.Rect(0, 0, 0, 600))
+            assertNull(nativeZeroHeightImeExposure(legacy))
+            return
+        }
+        val type = android.view.WindowInsets.Type.ime()
+        fun snapshot(visible: Boolean, bottom: Int) = android.view.WindowInsets.Builder()
+            .setInsets(type, android.graphics.Insets.of(0, 0, 0, bottom))
+            .setVisible(type, visible).build()
+        for (visible in listOf(false, true)) for (bottom in listOf(0, 600)) {
+            val insets = snapshot(visible, bottom)
+            assertEquals(visible, insets.isVisible(type))
+            // Invisibility rejects the snapshot regardless of its retained inset geometry.
+            if (visible) assertEquals(bottom, insets.getInsets(type).bottom)
+            assertEquals(visible && bottom == 0, nativeZeroHeightImeExposure(insets))
+        }
+    }
+
+    @Test fun nativeHeightOnlyChangeWakesFreshFloatingDecisionWithoutInputRestart() {
+        val bottom = AtomicInteger(600)
+        val visible = AtomicReference(true)
+        val reads = AtomicInteger()
+        val events = Collections.synchronizedList(mutableListOf<String>())
+        fun eventSnapshot(): List<String> = synchronized(events) { events.toList() }
+        var hostReady = false
+        var confirmed = false
+        var revisionSeen = -1L
+        var composeVisible by mutableStateOf(true)
+        var endCount = 0
+        val session = TextEditingImeSession()
+        try {
+            compose.setContent {
+                CompositionLocalProvider(LocalTextEditingObservation provides { events += it }) {
+                    TextEditingFocusHost {
+                        val view = LocalView.current
+                        val focus = remember { FocusRequester() }
+                        BasicTextField("height-only", {}, Modifier.focusRequester(focus))
+                        LaunchedEffect(Unit) { focus.requestFocus() }
+                        val host = rememberNativeImeHostReady(view, session::invalidateZeroHeightExposure)
+                        val reader = remember { { _: android.view.View ->
+                            reads.incrementAndGet()
+                            // Exercise exact production classifier with real platform snapshots on API30+.
+                            if (android.os.Build.VERSION.SDK_INT >= 30) {
+                                val type = android.view.WindowInsets.Type.ime()
+                                nativeZeroHeightImeExposure(android.view.WindowInsets.Builder()
+                                    .setInsets(type, android.graphics.Insets.of(0, 0, 0, bottom.get()))
+                                    .setVisible(type, visible.get()).build())
+                            } else visible.get() && bottom.get() == 0 // Inject the bridge contract on legacy API.
+                        } }
+                        val revision = rememberNativeImeRevision(view, host.ready && composeVisible, host.generation, reader)
+                        SideEffect { hostReady = host.ready }
+                        LaunchedEffect(host, revision, composeVisible) {
+                            revisionSeen = revision
+                            confirmed = host.ready && confirmedNativeZeroHeightIme(view, reader)
+                            if (session.shouldEnd(true, true, composeVisible, 0, 0, 0, false,
+                                    zeroHeightConfirmed = confirmed)) endCount++
+                        }
+                    }
+                }
+            }
+            compose.waitUntil(5000) { compose.runOnUiThread { hostReady && revisionSeen >= 0 } &&
+                eventSnapshot().any { "phase=create" in it } }
+            compose.waitForIdle()
+            assertFalse("Visible docked native600 does not corroborate Compose zero", compose.runOnUiThread { confirmed })
+            val starts = eventSnapshot().filter { "phase=start" in it }
+            val creates = eventSnapshot().filter { "phase=create" in it }
+            compose.mainClock.autoAdvance = false
+            val priorRevision = compose.runOnUiThread { revisionSeen }
+            val priorReads = reads.get()
+            bottom.set(0) // Visibility stays true; no Compose state, layout or draw invalidation.
+            nativeFrames()
+            assertTrue(reads.get() > priorReads)
+            compose.waitUntil(5000) {
+                compose.mainClock.advanceTimeByFrame()
+                compose.runOnUiThread { revisionSeen > priorRevision && confirmed }
+            }
+            assertEquals(starts, eventSnapshot().filter { "phase=start" in it })
+            assertEquals(creates, eventSnapshot().filter { "phase=create" in it })
+            visible.set(false)
+            compose.runOnUiThread { composeVisible = false }
+            compose.waitUntil(5000) {
+                compose.mainClock.advanceTimeByFrame()
+                compose.runOnUiThread { endCount == 1 }
+            }
+            compose.mainClock.advanceTimeByFrame(); compose.waitForIdle()
+            assertEquals("A confirmed genuine floating exposure still ends once", 1, compose.runOnUiThread { endCount })
+        } finally { compose.mainClock.autoAdvance = true }
+    }
 }

@@ -7,11 +7,17 @@ import android.view.ViewTreeObserver
 import android.view.WindowInsets
 import androidx.compose.runtime.*
 
-/** Test observation seam; production never replaces a View's insets listener. */
-internal val LocalNativeImeVisibilityReader = staticCompositionLocalOf<(View) -> Boolean?> {
+/** Same-snapshot visible-zero-height evidence; visibility alone may describe a docked opening. */
+internal fun nativeZeroHeightImeExposure(insets: WindowInsets?): Boolean? =
+    if (Build.VERSION.SDK_INT >= 30) insets?.let {
+        it.isVisible(WindowInsets.Type.ime()) && it.getInsets(WindowInsets.Type.ime()).bottom == 0
+    } else null
+
+/** Test seam returning zero-height corroboration, not visibility alone. */
+internal val LocalNativeZeroHeightImeReader = staticCompositionLocalOf<(View) -> Boolean?> {
     { view ->
         if (Build.VERSION.SDK_INT >= 30 && view.isAttachedToWindow && view.hasWindowFocus())
-            view.rootWindowInsets?.isVisible(WindowInsets.Type.ime())
+            nativeZeroHeightImeExposure(view.rootWindowInsets)
         else null
     }
 }
@@ -56,12 +62,13 @@ internal fun rememberNativeImeHostReady(view: View, invalidate: () -> Unit): Nat
 }
 
 /**
- * Native-only visibility changes may not redraw or change Compose's zero insets.
+ * Native-only exposure changes may not redraw or change Compose's zero insets.
  * A scoped native Choreographer callback observes those changes without requesting layout/draw or
  * taking over Compose's native listeners. It runs only for a visible zero-height
  * focused editor; a floating IME keeps this small polling cost until that scope ends.
  * The revision is merely a wakeup. Callers must query native visibility fresh when
- * deciding, never use a previous frame's true observation as confirmation.
+ * deciding, never use a previous frame's true observation as confirmation. A native
+ * docked-to-floating height change also changes this reader's Boolean result.
  */
 @Composable
 internal fun rememberNativeImeRevision(view: View, active: Boolean, hostGeneration: Long,

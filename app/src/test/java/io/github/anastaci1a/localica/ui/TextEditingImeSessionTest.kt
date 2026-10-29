@@ -275,4 +275,36 @@ class TextEditingImeSessionTest {
             assertFalse(session.zeroFrame(false, false, empty))
         }
     }
+
+    @Test fun sampledScopedRefocusZeroHeightDoesNotArmWithoutNativeConfirmation() {
+        val session = TextEditingImeSession()
+        // Reproduced scoped-refocus trace: focused hidden, visible/allzero, hidden.
+        for (visible in listOf(false, true, false))
+            assertFalse(session.shouldEnd(true, true, visible, 0, 0, 0, false,
+                zeroHeightConfirmed = false))
+    }
+
+    @Test fun intermediateDockedNativeExposureMustNotBecomeFloatingHistory() {
+        val session = TextEditingImeSession()
+        // The refined native adapter rejects a same-snapshot visible/600 sample.
+        for (confirmed in listOf(false, false, false))
+            assertFalse(session.shouldEnd(true, true, true, 0, 0, 0, false,
+                zeroHeightConfirmed = confirmed))
+        assertFalse(session.shouldEnd(true, true, false, 0, 0, 0, false,
+            zeroHeightConfirmed = false))
+    }
+
+    @Test fun genuineIntermediateFloatingExposureStillEndsEditingExactlyOnce() {
+        for (empty in listOf(false, true)) {
+            val session = TextEditingImeSession()
+            assertFalse(session.shouldEnd(true, true, true, 0, 0, 0, empty,
+                zeroHeightConfirmed = false))
+            assertFalse(session.shouldEnd(true, true, true, 0, 0, 0, empty,
+                zeroHeightConfirmed = true))
+            assertTrue(session.shouldEnd(true, true, false, 0, 0, 0, empty,
+                zeroHeightConfirmed = false))
+            assertFalse(session.shouldEnd(true, true, false, 0, 0, 0, empty,
+                zeroHeightConfirmed = false))
+        }
+    }
 }
