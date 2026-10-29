@@ -62,6 +62,7 @@ def plan(root, risks, api, sha, run_id='0', attempt='0'):
     sdk_contracts = {
         'ScopedSearchOpticsTest': ('searchLensRedrawsWhenItsListBackdropArrivesLater', 33),
         'FloatingImeLifecycleTest': ('actualFloatingWindowPreservesEditingAndEndsOnceAcrossFocusAndReopen', 30),
+        'GlassRendererSwitchingTest': ('modernSwitchingDoesNotReplaceAnUnavailableRequestedHomeWithThePrimary', 33),
     }
     for path in inv['all_source_sha256']:
         text = (root/path).read_text()
