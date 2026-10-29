@@ -85,6 +85,8 @@ fun Float.normalizedGrayTone() = if (isFinite()) coerceIn(0f, 1f) else .4f
 
 enum class TabLensStyle(val label: String) { Adjustable("Adjustable glass"), Overlay("Clear overlay lens"), Classic("Classic gray pill") }
 
+enum class GlassRendererMode(val label: String) { Automatic("Automatic"), Modern("Modern"), Legacy("Legacy") }
+
 data class GlassAppearance(
     val blur: Float = .2f,
     val whiteTint: Float = .06f,
@@ -101,6 +103,7 @@ data class GlassAppearance(
     val controlExpansion: Float = 1.75f,
     val overlayDarkening: Float = 0f,
     val overlayForeground: Boolean = false,
+    val renderer: GlassRendererMode = GlassRendererMode.Automatic,
 ) {
     fun normalized() = GlassAppearance(blur.unit(.2f), whiteTint.unit(.06f),
         shadowStrength.unit(.12f), shadowSpread.unit(.6f), contrast.unit(.25f).coerceAtMost(.5f), tabStyle,
@@ -110,7 +113,7 @@ data class GlassAppearance(
         if (contrastWeight.isFinite()) contrastWeight.coerceIn(1f, 2f) else 2f,
         classicOpacity.unit(.1f),
         if (controlExpansion.isFinite()) controlExpansion.coerceIn(1f, 2f) else 1.75f,
-        overlayDarkening.unit(0f).coerceAtMost(.5f), overlayForeground)
+        overlayDarkening.unit(0f).coerceAtMost(.5f), overlayForeground, renderer)
     private fun Float.unit(fallback: Float) = if (isFinite()) coerceIn(0f, 1f) else fallback
 }
 
