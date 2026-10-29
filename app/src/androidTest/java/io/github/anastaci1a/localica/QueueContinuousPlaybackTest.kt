@@ -345,6 +345,7 @@ private class ContinuityOutputProvider(
             private val identity = System.identityHashCode(output)
             private val frameSize = Util.getPcmFrameSize(config.encoding, Integer.bitCount(config.channelMask))
             private var writtenBytes = 0L
+            private val writes = ArrayDeque<String>()
             private fun trace(detail: String) {
                 Log.i("ContinuityOutput", "timeNs=${SystemClock.elapsedRealtimeNanos()} association=${startup.id} output=$identity $detail")
             }
@@ -357,7 +358,7 @@ private class ContinuityOutputProvider(
                         // Position is Media3's output position, not a raw hardware-head reading.
                         diagnostic.underrun(writtenBytes / frameSize)
                         trace("underrun writtenFrames=${writtenBytes / frameSize} " +
-                            "outputPositionUs=${output.positionUs} recentWrites=deferred")
+                            "outputPositionUs=${output.positionUs} recentWrites=$writes")
                     }
                     override fun onPositionAdvancing(playoutStartSystemTimeMs: Long) {
                         trace("positionAdvancing startSystemMs=$playoutStartSystemTimeMs")
@@ -369,6 +370,7 @@ private class ContinuityOutputProvider(
             }
             override fun write(buffer: ByteBuffer, encodedAccessUnitCount: Int, presentationTimeUs: Long): Boolean {
                 val before = buffer.position()
+                val timeNs = SystemClock.elapsedRealtimeNanos()
                 val sequence = diagnostic.beginWrite(buffer.remaining(), presentationTimeUs, encodedAccessUnitCount,
                     writtenBytes / frameSize)
                 var handled = -1L
@@ -380,6 +382,8 @@ private class ContinuityOutputProvider(
                     val returnNs = SystemClock.elapsedRealtimeNanos()
                     val accepted = buffer.position() - before
                     writtenBytes += accepted
+                    if (writes.size == 16) writes.removeFirst()
+                    writes.addLast("ns=$timeNs pts=$presentationTimeUs accepted=$accepted totalFrames=${writtenBytes / frameSize}")
                     diagnostic.endWrite(sequence, returnNs, accepted, writtenBytes / frameSize, handled)
                 }
             }
@@ -400,6 +404,7 @@ private class ContinuityOutputProvider(
                 diagnostic.event("flush.begin", writtenBytes / frameSize)
                 output.flush()
                 writtenBytes = 0
+                writes.clear()
                 diagnostic.event("flush.return", 0)
             }
         }

@@ -1,7 +1,7 @@
-name: Audio startup instrumented comparison (not delivery)
+name: Audio startup original-write-cost diagnostics (not delivery)
 'on':
   push:
-    branches: [test/audio-startup-instrumented-20261029]
+    branches: [test/audio-startup-fidelity-20261029]
 permissions:
   contents: read
 jobs:
@@ -73,7 +73,7 @@ jobs:
     - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
       if: always()
       with:
-        name: audio-startup-instrumented-api-26
+        name: audio-startup-fidelity-api-26
         path: 'app/build/reports/
 
           app/build/test-results/
@@ -156,7 +156,7 @@ jobs:
     - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
       if: always()
       with:
-        name: audio-startup-instrumented-api-36
+        name: audio-startup-fidelity-api-36
         path: 'app/build/reports/
 
           app/build/test-results/

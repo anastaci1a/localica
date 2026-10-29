@@ -36,7 +36,11 @@ from pathlib import Path
 root,selector,code=Path(sys.argv[1]),sys.argv[2],int(sys.argv[3])
 monitor=json.loads((root/'selection-evidence/native/supervision.json').read_text())
 assert monitor['monitoring_complete'] is True and monitor['supervisor_error'] is None
-assert monitor['observer_exit']==monitor['publisher_exit']==0
+assert monitor['publisher_exit']==0 and monitor['observer_exit']==code
+observed=json.loads((root/'selection-evidence/native/observed/manifest.json').read_text())
+assert observed['child_returncode']==observed['observer_exit_status']==code
+assert observed['observer_error'] is None and observed['cancel_signal'] is None
+assert observed['status']==('failed' if code else 'completed')
 cases=[c for p in (root/'app/build/outputs/androidTest-results').rglob('*.xml') for c in E.parse(p).getroot().iter('testcase')]
 assert len(cases)==1
 c=cases[0]
