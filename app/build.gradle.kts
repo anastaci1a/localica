@@ -87,3 +87,35 @@ val archiveDebugUnitXml = tasks.register<org.gradle.api.tasks.Copy>("archiveDebu
 tasks.withType<org.gradle.api.tasks.testing.Test>().configureEach {
     if (name == "testDebugUnitTest") finalizedBy(archiveDebugUnitXml)
 }
+
+// Standalone test components cannot use the target APK's classloader. AGP subtracts
+// shared module artifacts; retain the exact resolved stdlib as a runtime file (#488).
+val standaloneStdlib = providers.provider {
+    configurations.getByName("debugRuntimeClasspath").resolvedConfiguration.resolvedArtifacts.single {
+        it.moduleVersion.id.group == "org.jetbrains.kotlin" && it.name == "kotlin-stdlib"
+    }
+}
+val standaloneRuntimeDirectory = layout.buildDirectory.dir("generated/standalone-test-runtime")
+val prepareStandaloneTestRuntime = tasks.register<Copy>("prepareStandaloneTestRuntime") {
+    from(standaloneStdlib.map { it.file })
+    into(standaloneRuntimeDirectory)
+    rename { "kotlin-stdlib-standalone.jar" }
+    inputs.property("resolvedCoordinate", standaloneStdlib.map { it.moduleVersion.id.toString() })
+    outputs.file(standaloneRuntimeDirectory.map { it.file("binding.txt") })
+    doLast {
+        val artifact = standaloneStdlib.get()
+        val copied = standaloneRuntimeDirectory.get().file("kotlin-stdlib-standalone.jar").asFile
+        fun digest(file: java.io.File): String = java.security.MessageDigest.getInstance("SHA-256")
+            .digest(file.readBytes()).joinToString("") { "%02x".format(it) }
+        val originalHash = digest(artifact.file)
+        check(digest(copied) == originalHash) { "Standalone stdlib bytes differ from target runtime" }
+        standaloneRuntimeDirectory.get().file("binding.txt").asFile.writeText(
+            "coordinate=${artifact.moduleVersion.id}\nsha256=$originalHash\n"
+        )
+    }
+}
+dependencies {
+    androidTestRuntimeOnly(files(standaloneRuntimeDirectory.map {
+        it.file("kotlin-stdlib-standalone.jar")
+    }).builtBy(prepareStandaloneTestRuntime))
+}

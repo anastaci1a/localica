@@ -64,5 +64,10 @@
             android:noHistory="true" android:excludeFromRecents="true"
             android:theme="@android:style/Theme.Translucent.NoTitleBar"
             android:process=":navigation_random" />
+        <activity android:name="io.github.anastaci1a.localica.NavigationStandaloneRuntimeActivity"
+            android:exported="true" android:permission="android.permission.DUMP"
+            android:noHistory="true" android:excludeFromRecents="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            android:process=":navigation_random" />
     </application>
 </manifest>

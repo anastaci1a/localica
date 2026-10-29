@@ -1,7 +1,7 @@
 name: Navigation random corpus resident target contracts (not delivery)
 'on':
   push:
-    branches: [test/navigation-random-owned-session-20261029]
+    branches: [test/navigation-random-standalone-runtime-20261029]
 permissions:
   contents: read
 jobs:
@@ -9,7 +9,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     env:
-      SELECTORS: io.github.anastaci1a.localica.NavigationRandomCorpusTargetProbeTest,io.github.anastaci1a.localica.NavigationRandomOwnedSessionProtocolTest
+      SELECTORS: io.github.anastaci1a.localica.NavigationRandomCorpusTargetProbeTest,io.github.anastaci1a.localica.NavigationRandomOwnedSessionProtocolTest,io.github.anastaci1a.localica.NavigationStandaloneRuntimeTest
       TEST_API: '26'
     steps:
     - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -93,6 +93,8 @@ jobs:
 
           prototype-runner-environment.txt
 
+          app/build/generated/standalone-test-runtime/binding.txt
+
           monitor-dependency.txt
 
           resident-instrumentation-manifest.txt'
@@ -116,7 +118,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     env:
-      SELECTORS: io.github.anastaci1a.localica.NavigationRandomCorpusTargetProbeTest,io.github.anastaci1a.localica.NavigationRandomOwnedSessionProtocolTest
+      SELECTORS: io.github.anastaci1a.localica.NavigationRandomCorpusTargetProbeTest,io.github.anastaci1a.localica.NavigationRandomOwnedSessionProtocolTest,io.github.anastaci1a.localica.NavigationStandaloneRuntimeTest
       TEST_API: '36'
     steps:
     - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -199,6 +201,8 @@ jobs:
           selection-evidence/
 
           prototype-runner-environment.txt
+
+          app/build/generated/standalone-test-runtime/binding.txt
 
           monitor-dependency.txt
 
