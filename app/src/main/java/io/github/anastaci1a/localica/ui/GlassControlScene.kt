@@ -23,15 +23,17 @@ internal fun GlassControlScene(modifier: Modifier, horizontalPadding: Dp = 20.dp
     active: () -> Float = { 1f }, face: () -> Color = { Color.Transparent },
     prepare: () -> Boolean = { false },
     scene: DrawScope.() -> Unit) {
+    val renderer = currentGlassRendererGeneration()
+    val modern = renderer.backend == GlassBackend.Modern && Build.VERSION.SDK_INT >= 33
     val currentActive by rememberUpdatedState(active)
     val optical by remember { derivedStateOf { currentActive() > 0f } }
     val currentPrepare by rememberUpdatedState(prepare)
     val sampled by remember { derivedStateOf { currentActive() > 0f || currentPrepare() } }
     if (sampled) BackdropLease(source)
     val location = remember { BackdropLocation() }
-    val renderer = remember { lazy { if (Build.VERSION.SDK_INT >= 33) LensRenderer() else null } }
+    val lens = remember { lazy { if (Build.VERSION.SDK_INT >= 33) LensRenderer() else null } }
     val mesh = remember { lazy { LensMeshRenderer() } }
-    val layer = if (optical && Build.VERSION.SDK_INT >= 33) rememberGraphicsLayer() else null
+    val layer = if (optical && modern) rememberGraphicsLayer() else null
     val onLensDraw = LocalControlLensDraw.current
     Canvas(modifier.backdropLocation(location)) {
         val shape = geometry()
@@ -54,7 +56,7 @@ internal fun GlassControlScene(modifier: Modifier, horizontalPadding: Dp = 20.dp
             val backing = source
             if (backing != null) {
                 val delta = backing.origin - location.position() - origin
-                if (Build.VERSION.SDK_INT >= 33 && backing.recorded && !backing.layer.isReleased) {
+                if (modern && backing.recorded && !backing.layer.isReleased) {
                     translate(delta.x, delta.y) { drawLayer(backing.layer) }
                 } else backing.snapshot?.let { image -> translate(delta.x, delta.y) { drawImage(image, dstSize = backing.size) } }
             }
@@ -64,8 +66,8 @@ internal fun GlassControlScene(modifier: Modifier, horizontalPadding: Dp = 20.dp
         }
         clipPath(silhouette, ClipOp.Difference) { scene() }
         onLensDraw?.invoke()
-        if (layer != null && Build.VERSION.SDK_INT >= 33) {
-            layer.renderEffect = renderer.value?.effect(shifted, 0f, 1.35f * thickness, flattening = flattening)
+        if (layer != null && modern) {
+            layer.renderEffect = lens.value?.effect(shifted, 0f, 1.35f * thickness, flattening = flattening)
             layer.record(Density(density, fontScale), layoutDirection, extent) { recordScene() }
             clipPath(silhouette) { translate(origin.x, origin.y) { drawLayer(layer) } }
         } else {

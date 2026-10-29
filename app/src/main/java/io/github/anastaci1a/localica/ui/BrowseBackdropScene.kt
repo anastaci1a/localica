@@ -1,6 +1,5 @@
 package io.github.anastaci1a.localica.ui
 
-import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import androidx.compose.foundation.Canvas
@@ -29,7 +28,7 @@ internal class BrowseBackdropScene(val source: FrostedBackdrop, contentKey: () -
     val layers = mutableStateListOf<BrowseBackdropLayer>()
     var compositeDraws: Map<Any, BackdropProducerDraws> = emptyMap()
     val readback = BackdropReadback({ Snapshot.withoutReadObservation {
-        BackdropReadbackScene(listOf(contentKey(), source.size, source.location.placement),
+        BackdropReadbackScene(listOf(contentKey(), source.size, source.location.placement, source.rendererGeneration),
             layers.associate { layer -> layer to BackdropReadbackProducer(
                 listOf(layer.source.size, layer.source.location.placement), layer.masked) })
     } }, schedule)
@@ -46,6 +45,7 @@ internal val LocalBrowseBackdropObserver = staticCompositionLocalOf<((BrowseBack
 @Composable
 internal fun rememberBrowseBackdropScene(source: FrostedBackdrop, backing: FrostedBackdrop?,
     contentKey: Any?, scrolling: Boolean): BrowseBackdropScene {
+    val renderer = currentGlassRendererGeneration()
     val currentKey by rememberUpdatedState(contentKey)
     val handler = remember { Handler(Looper.getMainLooper()) }
     val scene = remember(source) { BrowseBackdropScene(source, { currentKey }) { delay, action ->
@@ -69,15 +69,15 @@ internal fun rememberBrowseBackdropScene(source: FrostedBackdrop, backing: Frost
     // Invalidate obsolete geometry immediately. Scroll offsets are deliberately not a
     // structural generation: a moving list must be allowed to finish a coherent draw.
     LaunchedEffect(scene) {
-        snapshotFlow { listOf(currentKey, source.size, source.location.placement,
+        snapshotFlow { listOf(currentKey, source.size, source.location.placement, source.rendererGeneration,
             scene.layers.map { listOf(it.source.size, it.source.location.placement) }) }
             .collectLatest { scene.readback.sceneChanged() }
     }
     // Coalesce movement using the existing 150ms refresh delay plus the adapter’s
     // 500ms settled interval. Never schedule a CPU readback for each scroll frame.
     // The adapter still owns both attempts and their safe completion lifetime.
-    LaunchedEffect(scene, contentKey, scrolling) {
-        if (Build.VERSION.SDK_INT < 33) {
+    LaunchedEffect(scene, contentKey, scrolling, renderer) {
+        if (renderer.backend == GlassBackend.Legacy) {
             delay(150)
             source.refresh()
             while (scrolling) {
