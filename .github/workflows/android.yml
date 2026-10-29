@@ -76,7 +76,7 @@ jobs:
     runs-on: ubuntu-24.04
     # Allow native suites plus SDK/build/emulator startup without cutting coverage.
     # Keep every test and its assertion timeout unchanged.
-    timeout-minutes: 90
+    timeout-minutes: 110
     env:
       RISK_CLASSES: ${{ github.event_name == 'workflow_dispatch' && inputs.risk_classes || '' }}
       TEST_API: ${{ matrix.api }}
