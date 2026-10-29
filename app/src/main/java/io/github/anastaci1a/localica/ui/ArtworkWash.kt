@@ -68,9 +68,7 @@ internal object ArtworkWash {
         val output = IntArray(pixels.size) { i ->
             val x = (i % WIDTH + 0.5f) / WIDTH
             val y = (i / WIDTH + 0.5f) / WIDTH + TOP
-            val sweep = y + 0.035f * sin(x * PI.toFloat() * 2f + 0.6f)
-            val depth = if (y < 0.2f) 1f + 2f * smooth((0.2f - y) / 0.45f)
-                else 4f * smooth((sweep - 0.45f) / 1.25f)
+            val depth = blurDepth(x, y)
             val low = depth.toInt().coerceIn(0, 4)
             val high = min(4, low + 1)
             val t = depth - low
@@ -81,6 +79,16 @@ internal object ArtworkWash {
                 channel(Color.blue(c1), Color.blue(c2)))
         }
         return Bitmap.createBitmap(output, WIDTH, HEIGHT, Bitmap.Config.ARGB_8888)
+    }
+
+    /** Resolve the top continuation smoothly into sharp artwork. The previous branch at
+     * y=.2 jumped from blur level1 directly to0, producing a horizontal crease on cover borders.
+     * Keep the existing upper/lower treatment; only add the missing .2..4 reveal transition. */
+    internal fun blurDepth(x: Float, y: Float): Float {
+        val sweep = y + 0.035f * sin(x * PI.toFloat() * 2f + 0.6f)
+        val top = if (y < .2f) 1f + 2f * smooth((.2f - y) / .45f)
+            else 1f - smooth((y - .2f) / .2f)
+        return max(top, 4f * smooth((sweep - .45f) / 1.25f))
     }
 
     /** Preserve browsing collection treatment; player contrast is applied at display time. */
@@ -100,3 +108,4 @@ internal object ArtworkWash {
     private fun smooth(value: Float): Float = value.coerceIn(0f, 1f).let { it * it * (3f - 2f * it) }
 
 }
+

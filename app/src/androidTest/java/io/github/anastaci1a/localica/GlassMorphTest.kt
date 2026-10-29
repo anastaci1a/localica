@@ -11,6 +11,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalView
+import androidx.test.platform.app.InstrumentationRegistry
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.graphics.graphicsLayer
@@ -52,6 +55,230 @@ internal fun ComposeTestRule.advanceMorphOpening(
 
 class GlassMorphTest {
     @get:Rule val compose = createComposeRule()
+
+    @Test fun openingAndLateReversalKeepOneSurfaceAndProducePresentedOriginEvidence() {
+        var open by mutableStateOf(false)
+        lateinit var anchor: GlassAnchor
+        var popupView: android.view.View? = null
+        val markerColors = listOf(Color.Red, Color.Green, Color.Blue, Color.Yellow, Color.Magenta, Color.Cyan)
+        compose.setContent { LocalicaTheme {
+            CompositionLocalProvider(LocalReducedMotion provides false) {
+                Box(Modifier.fillMaxSize().background(Color(0xFF808080))) {
+                    anchor = rememberGlassAnchor()
+                    Box(Modifier.align(Alignment.BottomEnd)
+                        .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom + WindowInsetsSides.End))
+                        .padding(32.dp).size(64.dp).glassAnchor(anchor).background(Color(0xFF808080)))
+                    GlassMorphPopup(open, anchor, { open = false }, GlassPlacement.Center) {
+                        popupView = LocalView.current
+                        Box(Modifier.fillMaxWidth().height(180.dp)) {
+                            Text("Synthetic animated origin", Modifier.align(Alignment.TopCenter))
+                        }
+                    }
+                }
+            }
+        } }
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val automation = instrumentation.uiAutomation
+        val directory = nativeEvidenceDirectory("popup-origin-well-motion", instrumentation.targetContext.getExternalFilesDir(null))
+        fun frame() { compose.mainClock.advanceTimeByFrame(); compose.waitForIdle() }
+        fun capture(stage: String, colorIndex: Int) {
+            val location = IntArray(2)
+            val expected = markerColors[colorIndex]
+            val marker = android.graphics.drawable.ColorDrawable(expected.toArgb())
+            val root = requireNotNull(popupView).rootView
+            val visible = android.graphics.Rect()
+            var x = 0
+            var y = 0
+            compose.runOnUiThread {
+                root.getLocationOnScreen(location)
+                root.getWindowVisibleDisplayFrame(visible)
+                check(visible.intersect(location[0], location[1], location[0] + root.width, location[1] + root.height))
+                check(visible.width() >= 32 && visible.height() >= 16)
+                // Fullscreen Dialog decor can extend under status/navigation bars.
+                // Use the visible native window's vertical midpoint, not its top edge.
+                x = visible.left + 16
+                y = visible.centerY()
+                marker.setBounds(x - location[0] - 4, y - location[1] - 4,
+                    x - location[0] + 4, y - location[1] + 4)
+                root.overlay.add(marker)
+            }
+            var captured: android.graphics.Bitmap? = null
+            // Clock is frozen: this waits for SurfaceFlinger presentation, not for an
+            // easier pose. A tiny native-root overlay heartbeat avoids changing the
+            // product tree, opacity, semantics or geometry during the sample. It
+            // proves native presentation, not the correctness of the well mask.
+            try {
+                compose.waitUntil(5000) {
+                    val image = requireNotNull(automation.takeScreenshot())
+                    var retained = false
+                    try {
+                        check(x in 0 until image.width && y in 0 until image.height)
+                        val pixel = image.getPixel(x, y)
+                        val matches = kotlin.math.abs(android.graphics.Color.red(pixel)/255f - expected.red) < .08f &&
+                            kotlin.math.abs(android.graphics.Color.green(pixel)/255f - expected.green) < .08f &&
+                            kotlin.math.abs(android.graphics.Color.blue(pixel)/255f - expected.blue) < .08f
+                        if (matches) { captured = image; retained = true }
+                        matches
+                    } finally { if (!retained) image.recycle() }
+                }
+            val image = requireNotNull(captured)
+            try {
+                java.io.File(directory,"$stage.png").outputStream().use {
+                    assertTrue(image.compress(android.graphics.Bitmap.CompressFormat.PNG,100,it))
+                }
+                java.io.File(directory,"$stage.txt").writeText(
+                    "clock=${compose.mainClock.currentTime}\nprogress=${anchor.contact.expansion.value}\nhome=${anchor.bounds}\n" +
+                    "surface=${compose.onNodeWithTag("glass-morph-surface").fetchSemanticsNode().boundsInRoot}\n" +
+                    "nativeWindowOrigin=${location.joinToString()}\nvisibleFrame=$visible\nmarkerScreen=$x,$y\nhidden=${anchor.hidden}\n")
+            } finally { image.recycle() }
+            } finally { compose.runOnUiThread { root.overlay.remove(marker) } }
+            compose.onAllNodesWithTag("glass-morph-surface").assertCountEquals(1)
+            assertTrue("No duplicate physical trigger during motion",anchor.hidden)
+        }
+        compose.waitForIdle()
+        compose.mainClock.autoAdvance = false
+        try {
+            compose.runOnUiThread { open = true }
+            repeat(11) { if (!anchor.hidden) frame() }
+            assertTrue("Native popup preparation must admit the source",anchor.hidden)
+            repeat(2) { frame() }
+            assertTrue("Opening sample must be intermediate", anchor.contact.expansion.value > 0f && anchor.contact.expansion.value < 1f)
+            capture("opening-early",0)
+            repeat(4) { frame() }
+            capture("opening-later",1)
+            compose.mainClock.advanceTimeBy(1500); compose.waitForIdle()
+            capture("settled",2)
+            compose.runOnUiThread { open = false }
+            repeat(90) {
+                if (anchor.contact.expansion.value >= .25f || !anchor.contact.expansion.isRunning) frame()
+            }
+            assertTrue("Capture a live late return, not an already restored source",
+                anchor.hidden && anchor.contact.expansion.value > 0f && anchor.contact.expansion.value < .25f)
+            capture("return-late",3)
+            val retainedView = popupView
+            compose.runOnUiThread { open = true }
+            repeat(4) { frame() }
+            assertSame("Reversal retains the same native popup",retainedView,popupView)
+            capture("reversed",4)
+            compose.runOnUiThread { open = false }
+            compose.mainClock.advanceTimeBy(2000); compose.waitForIdle()
+            compose.onAllNodesWithTag("glass-morph-surface").assertCountEquals(0)
+            assertFalse(anchor.hidden)
+            assertFalse(anchor.modalPresent)
+        } finally { compose.mainClock.autoAdvance = true }
+    }
+
+    @Test fun realPopupLeavesOneOriginWellThenRestoresTheTriggerWithoutResidue() {
+        var open by mutableStateOf(false)
+        lateinit var anchor: GlassAnchor
+        compose.setContent { LocalicaTheme {
+            CompositionLocalProvider(LocalReducedMotion provides true, LocalGlassAppearance provides
+                io.github.anastaci1a.localica.navigation.GlassAppearance(shadowStrength = 1f)) {
+                Box(Modifier.fillMaxSize().background(Color(0xFF808080))) {
+                    anchor = rememberGlassAnchor()
+                    Box(Modifier.align(Alignment.BottomEnd)
+                        .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom + WindowInsetsSides.End))
+                        .padding(32.dp).size(64.dp).glassAnchor(anchor).background(Color(0xFF808080)))
+                    GlassMorphPopup(open, anchor, { open = false }, GlassPlacement.Center) {
+                        Box(Modifier.fillMaxWidth().height(180.dp)) { Text("Synthetic origin receiver") }
+                    }
+                }
+            }
+        } }
+        val automation = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().uiAutomation
+        var lastCenter = -1
+        var lastOutside = -1
+        var referenceCenter = -1
+        fun centerRed(): Int {
+            val image = requireNotNull(automation.takeScreenshot())
+            try { return android.graphics.Color.red(image.getPixel(anchor.bounds.center.x.toInt(),anchor.bounds.center.y.toInt())).also { lastCenter = it } }
+            finally { image.recycle() }
+        }
+        fun shadeDelta(): Int {
+            val image = requireNotNull(automation.takeScreenshot())
+            try {
+                val y = anchor.bounds.center.y.toInt()
+                val center = android.graphics.Color.red(image.getPixel(anchor.bounds.center.x.toInt(),y))
+                val outside = android.graphics.Color.red(image.getPixel((anchor.bounds.left-16).toInt(),y))
+                lastCenter = center; lastOutside = outside
+                return outside-center // Cancel the modal scrim, measuring only local shading.
+            } finally { image.recycle() }
+        }
+        fun saveReceiver(stage: String) {
+            val instrumentation = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation()
+            val screenshot = requireNotNull(automation.takeScreenshot())
+            try {
+                val file = java.io.File(nativeEvidenceDirectory("popup-origin-well",
+                    instrumentation.targetContext.getExternalFilesDir(null)), "$stage.png")
+                file.outputStream().use { assertTrue(screenshot.compress(android.graphics.Bitmap.CompressFormat.PNG,100,it)) }
+            } finally { screenshot.recycle() }
+        }
+        fun awaitReceiver(stage: String, predicate: () -> Boolean) {
+            android.util.Log.i("GlassWellProbe", "begin=$stage clock=${compose.mainClock.currentTime}")
+            try { compose.waitUntil(5000, predicate) }
+            catch (failure: Throwable) {
+                val state = "stage=$stage hidden=${anchor.hidden} modal=${anchor.modalPresent} " +
+                    "progress=${anchor.contact.expansion.value} running=${anchor.contact.expansion.isRunning} " +
+                    "bounds=${anchor.bounds} reference=$referenceCenter center=$lastCenter outside=$lastOutside " +
+                    "clock=${compose.mainClock.currentTime}"
+                android.util.Log.e("GlassWellProbe", state, failure)
+                try {
+                    saveReceiver("failure-$stage")
+                    val instrumentation = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation()
+                    java.io.File(nativeEvidenceDirectory("popup-origin-well", instrumentation.targetContext.getExternalFilesDir(null)),
+                        "failure-$stage.txt").writeText(state)
+                } catch (captureFailure: Throwable) { failure.addSuppressed(captureFailure) }
+                throw failure
+            }
+            android.util.Log.i("GlassWellProbe", "end=$stage clock=${compose.mainClock.currentTime} center=$lastCenter outside=$lastOutside")
+        }
+        compose.waitForIdle()
+        // Compose idleness is not a native presentation receipt. Verify the
+        // explicitly opaque fixture gray, then retain THAT SAME sampled frame.
+        // This strengthens initial readiness; restoration tolerances stay exact.
+        var baseline: android.graphics.Bitmap? = null
+        try {
+            compose.waitUntil(5000) {
+                val image = requireNotNull(automation.takeScreenshot())
+                var retained = false
+                try {
+                    val bounds = anchor.bounds
+                    val y = bounds.center.y.toInt()
+                    val center = image.getPixel(bounds.center.x.toInt(), y)
+                    val outside = image.getPixel((bounds.left - 16).toInt(), y)
+                    if (center == android.graphics.Color.rgb(128, 128, 128) && outside == center) {
+                        referenceCenter = android.graphics.Color.red(center)
+                        baseline = image
+                        retained = true
+                        true
+                    } else false
+                } finally { if (!retained) image.recycle() }
+            }
+            val image = requireNotNull(baseline)
+            val instrumentation = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation()
+            java.io.File(nativeEvidenceDirectory("popup-origin-well", instrumentation.targetContext.getExternalFilesDir(null)),
+                "closed.png").outputStream().use {
+                    assertTrue(image.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it))
+                }
+        } finally { baseline?.recycle() }
+        val original = referenceCenter
+        compose.runOnIdle { open = true }
+        awaitReceiver("first-visible-shade") { anchor.hidden && anchor.modalPresent && shadeDelta() > 2 }
+        awaitReceiver("first-settled") { anchor.contact.expansion.value == 1f && !anchor.contact.expansion.isRunning }
+        val firstShade = shadeDelta()
+        saveReceiver("open")
+        compose.runOnIdle { open = false }
+        awaitReceiver("first-restored") { !anchor.hidden && !anchor.modalPresent && kotlin.math.abs(centerRed()-original) <= 1 }
+        // A second modal lifecycle must reuse the same physical origin, not stack receivers.
+        compose.runOnIdle { open = true }
+        awaitReceiver("second-visible-shade") { anchor.hidden && anchor.modalPresent && shadeDelta() > 2 }
+        awaitReceiver("second-settled") { anchor.contact.expansion.value == 1f && !anchor.contact.expansion.isRunning }
+        val second = shadeDelta()
+        assertTrue("A single subtle receiver, not cumulative darkening: first=$firstShade second=$second",
+            second <= 12 && kotlin.math.abs(second-firstShade) <= 2)
+        compose.runOnIdle { open = false }
+        awaitReceiver("second-restored") { !anchor.hidden && !anchor.modalPresent && kotlin.math.abs(centerRed()-original) <= 1 }
+    }
 
     @Test fun cancelledShapeClockRetainsItsBodyUntilANewOwnerFinishesNormally() {
         val state = GlassBodyState()
