@@ -357,9 +357,13 @@ internal object NavigationRandomCorpusOwnedRoot {
         } catch (failure: Throwable) { primary = failure; throw failure }
         finally { try { Os.close(fd) } catch (closing: Throwable) { if (primary == null) throw closing else primary.addSuppressed(closing) } }
         // The consumed filename must be durable before any publication/grant can follow it.
-        val directoryFd = Os.open(requireNotNull(file.parentFile).path, OsConstants.O_RDONLY or OsConstants.O_DIRECTORY or OsConstants.O_NOFOLLOW or OsConstants.O_CLOEXEC, 0)
+        val directoryFd = Os.open(requireNotNull(file.parentFile).path, OsConstants.O_RDONLY or OsConstants.O_NOFOLLOW or OsConstants.O_CLOEXEC or OsConstants.O_NONBLOCK, 0)
         primary = null
-        try { Os.fsync(directoryFd) }
+        try {
+            if (!OsConstants.S_ISDIR(Os.fstat(directoryFd).st_mode))
+                reject(Category.UnsafePrivatePath, "Opened record parent is not a directory")
+            Os.fsync(directoryFd)
+        }
         catch (failure: Throwable) { primary = failure; throw failure }
         finally { try { Os.close(directoryFd) } catch (closing: Throwable) { if (primary == null) throw closing else primary.addSuppressed(closing) } }
     }
