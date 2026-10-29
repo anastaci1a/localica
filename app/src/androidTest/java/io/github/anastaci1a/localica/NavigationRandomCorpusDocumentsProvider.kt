@@ -17,8 +17,8 @@ import java.io.IOException
 import java.util.Collections
 
 /**
- * Unregistered, same-process provider prototype. There is no call/Intent activation IPC, grant or
- * installation receipt. The caller must own and maintain an immutable private root and its ancestor
+ * Test-only provider, closed on creation. The separate protected bridge owns fixed-root requests;
+ * there is no provider call/Intent activation IPC. The caller must maintain an immutable root and its ancestor
  * binding; preparation does not establish that prerequisite, a peak budget or target-UID access.
  * A future serving test-APK UID cannot infer access from today's targetContext fixture directory.
  *
@@ -30,7 +30,7 @@ import java.util.Collections
  * separate, and none of these direct-instance contracts proves framework permission enforcement.
  */
 class NavigationRandomCorpusDocumentsProvider : DocumentsProvider() {
-    private data class Published(val graph: Graph, val files: ReadOnlyFiles)
+    private data class Published(val graph: Graph, val files: ReadOnlyFiles, val rootPath: String, val manifestSha256: String)
     @Volatile private var published: Published? = null
 
     /** Same-process source contract only. No supplied Result/graph can bypass full verification. */
@@ -41,7 +41,14 @@ class NavigationRandomCorpusDocumentsProvider : DocumentsProvider() {
         val files = ReadOnlyFiles.observe(root, binding.tracks.associate { it.relativeMp3Path to it.declaredFileBytes })
         NavigationRandomCorpusFiles.verify(root, binding)
         files.requireUnchanged()
-        published = Published(graph, files)
+        published = Published(graph, files, root.path, binding.declaredManifestSha256)
+    }
+
+    /** Narrow local status only, never a host-ownership or target-permission receipt. */
+    internal fun verifyReadyPhysicalBinding(root: File, manifestSha256: String) {
+        val state = ready()
+        check(state.rootPath == root.path && state.manifestSha256 == manifestSha256) { "Published corpus pin differs" }
+        state.files.requireUnchanged()
     }
 
     override fun onCreate(): Boolean = true
