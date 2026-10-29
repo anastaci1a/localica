@@ -225,8 +225,13 @@ class TextEditingNativeImeTest {
         assertNull(nativeZeroHeightImeExposure(null))
         if (android.os.Build.VERSION.SDK_INT < 30) {
             // Legacy API has no native visibility contract; its model keeps baseline policy.
-            @Suppress("DEPRECATION")
-            val legacy = android.view.WindowInsets(android.graphics.Rect(0, 0, 0, 600))
+            compose.setContent { BasicTextField("legacy", {}) }
+            compose.waitUntil(5000) { compose.runOnUiThread {
+                compose.activity.window.decorView.rootWindowInsets != null
+            } }
+            val legacy = compose.runOnUiThread {
+                requireNotNull(compose.activity.window.decorView.rootWindowInsets)
+            }
             assertNull(nativeZeroHeightImeExposure(legacy))
             return
         }
