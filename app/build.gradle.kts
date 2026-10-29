@@ -14,7 +14,7 @@ android {
         targetSdk = 36
         versionCode = 78
         versionName = "0.29.1-dev78"
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        testInstrumentationRunner = "io.github.anastaci1a.localica.NavigationRandomOwnedSession"
     }
     signingConfigs {
         getByName("debug") {

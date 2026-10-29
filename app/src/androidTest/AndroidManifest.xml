@@ -1,8 +1,4 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- Separate resident operation; standard connected tests keep their configured JUnit runner. -->
-    <instrumentation android:name="io.github.anastaci1a.localica.NavigationRandomOwnedSession"
-        android:targetPackage="io.github.anastaci1a.localica.debug"
-        android:handleProfiling="false" android:functionalTest="false" />
     <queries>
         <package android:name="io.github.anastaci1a.localica.debug" />
     </queries>
