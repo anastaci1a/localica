@@ -274,7 +274,15 @@ class DragReorderTest {
                 compose.mainClock.autoAdvance = true
                 try { reportDrop("after-up") } catch (_: Throwable) { /* Diagnostic only. */ }
                 try {
-                    compose.waitUntil(5000) { owner.drag == null }
+                    compose.waitUntil(5000) {
+                        // No contact or intermediate placement oracle remains after UP.
+                        // Batch at most four ordinary frames for this lifecycle endpoint;
+                        // the original wall deadline and exact retirement condition stay.
+                        compose.runOnUiThread {
+                            repeat(4) { if (owner.drag != null) compose.mainClock.advanceTimeByFrame() }
+                        }
+                        owner.drag == null
+                    }
                 } catch (failure: Throwable) {
                     try { reportDrop("retirement-failure") } catch (diagnostic: Throwable) { failure.addSuppressed(diagnostic) }
                     throw failure
