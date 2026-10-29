@@ -150,7 +150,9 @@ private fun BackgroundSampleRole.paintReady(geometry: PlayerBackgroundGeometry, 
         !validBackgroundGeometry(geometry) -> PlayerBackgroundUnavailable.InvalidGeometry
         frame.frozenVisible -> PlayerBackgroundUnavailable.FrozenSampleUnavailable
         frame.liveBlur -> PlayerBackgroundUnavailable.NativeBlurSampleUnavailable
-        frame.transitioning -> PlayerBackgroundUnavailable.Transitioning
+        // A live crossfade has the same owned images and reveal weights as the
+        // painter. Mix those prepared samples even before the successor settles.
+        // Frozen captures and native blur remain explicitly unavailable above.
         frame.roles.any { owner.backdrops[it.identity] == null } -> PlayerBackgroundUnavailable.MissingRole
         frame.roles.any { role -> owner.backdrops[role.identity]?.tone != requestedTone } -> PlayerBackgroundUnavailable.Preparing
         else -> null

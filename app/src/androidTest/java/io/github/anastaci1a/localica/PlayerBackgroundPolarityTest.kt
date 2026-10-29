@@ -268,17 +268,29 @@ class PlayerBackgroundPolarityTest {
         assertTrue((0 until image.height).any { y -> (0 until image.width).any { x -> image[x, y].red < .2f } })
     }
 
-    @Test fun opacityTransitionIsUnavailableUntilTheSuccessorIsSettled() {
+    @Test fun opacityTransitionUsesDisplayedRolesBeforeTheSuccessorSettles() {
         lyrics = true // Real opacity transition, not the perspective-moving carousel.
         val black = cover(false); val white = cover(true)
         mount(black)
         assertTrue(owner.decision.lightInk)
         compose.mainClock.autoAdvance = false
-        compose.runOnIdle { visual = white; visit = "settled-only-white" }
+        compose.runOnIdle { visual = white; visit = "live-white" }
         frames(4)
-        await { owner.frame?.transitioning == true && owner.decision.unavailable == PlayerBackgroundUnavailable.Transitioning }
-        assertEquals(PlayerBackgroundConfidence.Stale, owner.decision.confidence)
-        assertTrue("A transition does not publish the target ink", owner.decision.lightInk)
+        current()
+        val early = requireNotNull(owner.frame)
+        assertTrue("Preparation must finish during the real transition", early.transitioning)
+        assertTrue(early.roles.any { it.visual.contentKey == black.contentKey && it.weight > .65f })
+        assertTrue("The requested white successor must not choose ink before it is revealed", owner.decision.lightInk)
+        assertRenderedInk(true)
+        assertTrue("The displayed transport backing is still predominantly black", sampleBackgroundAtTransport() < .35f)
+        frames(14)
+        current()
+        val late = requireNotNull(owner.frame)
+        assertTrue("Contrast must change before the transition settles", late.transitioning)
+        assertTrue(late.roles.any { it.visual.contentKey == white.contentKey && it.weight > .55f && it.weight < 1f })
+        assertFalse("The displayed white contribution now needs dark ink", owner.decision.lightInk)
+        assertRenderedInk(false)
+        assertTrue("The same live transport backing has become light", sampleBackgroundAtTransport() > .55f)
         frames(32); current()
         assertFalse(owner.decision.lightInk)
         assertRenderedInk(false)
