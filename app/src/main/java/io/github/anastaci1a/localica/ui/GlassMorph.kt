@@ -25,6 +25,8 @@ import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -189,6 +191,11 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
     originPreparation: GlassOriginPreparation? = null, searchDismissOnImeBack: Boolean = false,
     content: @Composable () -> Unit) {
     val reduced = LocalReducedMotion.current
+    val originWell = remember { GlassOriginWell() }
+    val receiverField = remember { GlassShadowReceiverField() }
+    val shadowReceiver = remember { arrayOfNulls<GlassShadowReceiver>(1) }
+    val wellCoordinates = remember { arrayOfNulls<LayoutCoordinates>(1) }
+    val wellStrength = LocalGlassAppearance.current.shadowStrength
     val speed = LocalMotionSpeed.current
     val progress = anchor.contact.expansion
     val continuousOrigin = originPreparation.takeUnless { placement == GlassPlacement.Search }
@@ -737,13 +744,30 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                                 slotFraction = slotFraction, slotTravel = slotTravel, slotReturnFrom = slotReturnFrom,
                                 openingOwnedBounds = searchOpeningShape.value.takeIf { visible && searchShapeStarted && flight?.opening == true }))
                         }
-                    }.drawWithContent {
+                    }.onPlaced { wellCoordinates[0] = it }.drawWithContent {
                         // Match the trigger's draw-space deformation. A layout-layer
                         // scale changes global sampling coordinates, causing a small
                         // optical jump when the same body returns to its trigger.
                         val pose = if (continuousOrigin != null) anchor.originPresentation?.invoke(startHeight) else null
                         val shape = if (page || reduced && pose == null) GlassShape() else pose?.shape ?: body.value
                         val vertical = pose?.vertical ?: anchor.contact.vertical
+                        // Draw in this native window outside the sampled panel/backdrop.
+                        // Read placed coordinates in the same draw, not a previous-frame
+                        // globally-positioned state handoff. The original trigger restores
+                        // before this decoration relinquishes its covered footprint.
+                        val coordinates = wellCoordinates[0]
+                        shadowReceiver[0] = null
+                        if (wellStrength > 0f && !page && !detached && !anchor.contextual && placement != GlassPlacement.Search &&
+                            anchor.hidden && admittedDraw && surfaceOpacity() == 1f &&
+                            coordinates?.isAttached == true) {
+                            val home = anchor.bounds.translate(-coordinates.backdropPosition(view))
+                            val caster = glassWellCaster(size, radius.toPx(), shape.scaleX(vertical),
+                                shape.scaleY(vertical), pose?.horizontalShift ?: 0f)
+                            with(originWell) { draw(home, homeRadius.toPx(), caster, wellStrength) }
+                            shadowReceiver[0] = receiverField.receiver(home,homeRadius.toPx(),size,
+                                shape.scaleX(vertical),shape.scaleY(vertical),pose?.horizontalShift ?: 0f,
+                                physicalSize = anchor.bounds.size)
+                        }
                         // Source pivot compensation precedes body scaling too.
                         translate(left = pose?.horizontalShift ?: 0f) {
                             scale(shape.scaleX(vertical), shape.scaleY(vertical)) {
@@ -757,9 +781,9 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                             // legacy Android and changes it when the trigger takes over.
                             surfaceOpacity()
                         }
-                        .clearGlassShadow(LocalGlassAppearance.current.shadowStrength *
+                        .clearGlassReceiverShadow(LocalGlassAppearance.current.shadowStrength *
                             (if (anchor.quiet) (p / .14f).coerceIn(0f, 1f) else if (detached) p else 1f),
-                            LocalGlassAppearance.current.shadowSpread, radius)
+                            LocalGlassAppearance.current.shadowSpread, radius, receiver = { shadowReceiver[0] })
                         .clip(RoundedCornerShape(radius)).recordFrostedBackdrop(completePanel).testTag("glass-morph-surface")
                         .pointerInput(Unit) { detectTapGestures { } }, content = {
                         Box(Modifier.graphicsLayer {
@@ -844,3 +868,4 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
         }
     } } }
 }
+

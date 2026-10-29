@@ -284,7 +284,9 @@ class PlayerExpansionMotionTest {
                 assertEquals("Actual artwork top supplies the curve: $context", source.artworkTop, (art.top - host.top).value, 1f)
                 assertEquals("Actual title top supplies the curve: $context", source.titleTop, (title.top - host.top).value, 1f)
                 assertEquals("Measured title height supplies the band: $context", source.titleBottom, (title.bottom - host.top).value, 1f)
-                assertEquals("Use title RIGHT, never title-left: $context", source.titleRight, (title.right - host.left).value, 1f)
+                assertEquals("Measured title right: $context", source.titleRight, (title.right - host.left).value, 1f)
+                assertEquals("Measured title left supplies corner contact: $context", source.titleLeft,
+                    (title.left - host.left).value, 1f)
                 val q = playerArtworkSizeProgress(p, observed.curve)
                 val expectedWidth = 32f + (observed.fullWidth - 32f) * q
                 val expectedHeight = minOf(backgroundHeight, 32f + (observed.fullHeight - 32f) * q)
@@ -298,9 +300,14 @@ class PlayerExpansionMotionTest {
                         assertTrue("Observable height begins before settling: $context", art.height > 32.dp)
                 }
                 if (observed.curve.constrained) {
-                    assertEquals("Explicit unsupported geometry uses ordinary immediate ease", p * p, q, .0001f)
+                    assertFalse("Unsupported geometry never claims corner exclusion", observed.curve.cornerAligned)
+                    assertTrue("Best effort stays within the bounded immediate family", q >= p * p * p * p - .0001f && q <= p + .0001f)
                 } else {
                     val rawBottom = source.artworkTop + 32f + (observed.fullHeight - 32f) * q
+                    if (observed.curve.cornerAligned && rawBottom > source.titleTop + 1f &&
+                        source.artworkTop < source.titleBottom) {
+                        assertTrue("Aligned artwork never overlays the title: $context", art.right <= title.left + 1.dp)
+                    }
                     if (rawBottom in source.titleTop..source.titleBottom) {
                         assertTrue("Corner remains inside title-right envelope: $context", art.right <= title.right + 1.dp)
                         assertTrue("Corner respects the fixed artwork-left reference: $context", (art.right - host.left).value >= 15f)
@@ -312,6 +319,169 @@ class PlayerExpansionMotionTest {
             }
         }
         assertTrue("Native matrix must exercise admitted geometry rather than only fallback", admitted > 0)
+    }
+
+    @Test fun tallArtworkActuallyMeetsTheTitleCornerAndRetracesDuringHeldReversal() =
+        verifyCornerContactAndHeldReversal(960.dp)
+
+    @Test fun compactArtworkActuallyMeetsTheTitleCornerAndRetracesDuringHeldReversal() =
+        verifyCornerContactAndHeldReversal(600.dp)
+
+    private fun verifyCornerContactAndHeldReversal(height: Dp) {
+        val progress = Animatable(0f)
+        var growth: PlayerArtworkGrowthPresentation? = null
+        lateinit var scope: CoroutineScope
+        compose.setContent {
+            LocalicaTheme { CompositionLocalProvider(LocalPlayerArtworkGrowthObserver provides { growth = it }) {
+                // Logical compact/tall fixtures must exercise admission on either emulator size.
+                BoxWithConstraints(Modifier.requiredSize(412.dp, height)) {
+                    scope = rememberCoroutineScope()
+                    PlayerSurface(state, false, {}, InterfaceSettings(artworkLayout = ArtworkLayout.Floating),
+                        progress, {}, {}, {}, {}, {}, {}, visual = visual)
+                }
+            } }
+        }
+        compose.waitForIdle()
+        val initial = requireNotNull(growth)
+        assertTrue("$height fixture must use corner-aligned curve", initial.curve.cornerAligned)
+        compose.mainClock.autoAdvance = false
+        fun gap(p: Float): Float {
+            val points = initial.trajectory
+            val index = (p * (points.size - 1)).toInt().coerceIn(0, points.size - 2)
+            val a = points[index]; val b = points[index + 1]
+            val t = (p - a.expansion) / (b.expansion - a.expansion)
+            val top = a.artworkTop + (b.artworkTop - a.artworkTop) * t
+            val title = a.titleTop + (b.titleTop - a.titleTop) * t
+            return top + 32f + (initial.fullHeight - 32f) * playerArtworkSizeProgress(p, initial.curve) - title
+        }
+        var lo = 0f; var hi = .5f
+        assertTrue(gap(lo) > 0f && gap(hi) < 0f)
+        repeat(24) { val mid = (lo + hi) / 2f; if (gap(mid) > 0f) lo = mid else hi = mid }
+        val contact = (lo + hi) / 2f
+        val snapshots = mutableMapOf<Float, DpRect>()
+        val samples = listOf(0f, .001f, .03f, contact - .003f, contact, contact + .003f, .2f, .4f, .8f, 1f).sorted()
+        for (p in samples + samples.dropLast(1).asReversed()) {
+            compose.runOnIdle {
+                val snap = scope.launch(start = CoroutineStart.UNDISPATCHED) { progress.snapTo(p) }
+                assertTrue("Held progress snap completes synchronously", snap.isCompleted)
+            }
+            compose.mainClock.advanceTimeByFrame()
+            compose.waitForIdle()
+            assertEquals("Sample must not be displaced by a settling animation", p, requireNotNull(growth).expansion, 0f)
+            assertEquals("Finger movement does not change its geometry-derived curve", initial.curve, requireNotNull(growth).curve)
+            val artwork = compose.onNodeWithTag("player-artwork", true).getUnclippedBoundsInRoot()
+            val coordinates = compose.onNodeWithTag("player-title", true).fetchSemanticsNode().layoutInfo.coordinates
+            val title = compose.runOnUiThread {
+                val bounds = coordinates.findRootCoordinates().localBoundingBoxOf(coordinates, clipBounds = false)
+                with(compose.density) { DpRect(bounds.left.toDp(), bounds.top.toDp(), bounds.right.toDp(), bounds.bottom.toDp()) }
+            }
+            if (p == contact) {
+                assertEquals("Vertical corner contact", title.top.value, artwork.bottom.value, 1.5f)
+                assertEquals("Horizontal corner contact", title.left.value, artwork.right.value, 1.5f)
+            }
+            if (artwork.bottom > title.top + 1.dp && artwork.top < title.bottom)
+                assertTrue("Artwork must remain left of title before clearing it", artwork.right <= title.left + 1.dp)
+            snapshots[p]?.let { assertEquals("Native reversal retraces the held artwork", it, artwork) }
+            snapshots[p] = artwork
+        }
+    }
+
+    @Test fun animatedArtworkLayoutRetainsBestEffortAcrossAdmissionChanges() {
+        val progress = Animatable(0f)
+        var growth: PlayerArtworkGrowthPresentation? = null
+        var layout by mutableStateOf(ArtworkLayout.Floating)
+        lateinit var scope: CoroutineScope
+        compose.setContent {
+            LocalicaTheme { CompositionLocalProvider(LocalPlayerArtworkGrowthObserver provides { growth = it }) {
+                BoxWithConstraints(Modifier.requiredSize(412.dp, 600.dp)) {
+                    scope = rememberCoroutineScope()
+                    PlayerSurface(state, false, {}, InterfaceSettings(artworkLayout = layout),
+                        progress, {}, {}, {}, {}, {}, {}, visual = visual)
+                }
+            } }
+        }
+        compose.waitForIdle()
+        assertTrue("Compact fixture must start with admitted contact", requireNotNull(growth).curve.cornerAligned)
+        compose.mainClock.autoAdvance = false
+        compose.runOnIdle { scope.launch(start = CoroutineStart.UNDISPATCHED) { progress.snapTo(.5f) } }
+        compose.mainClock.advanceTimeByFrame()
+        compose.waitForIdle()
+        var previous = requireNotNull(growth).curve
+        var admissionChanges = 0
+        for ((target, frames) in listOf(ArtworkLayout.FullBackground to 8, ArtworkLayout.Floating to 32,
+            ArtworkLayout.FullBackground to 32, ArtworkLayout.Floating to 32,
+            ArtworkLayout.FullBackground to 32, ArtworkLayout.Floating to 32)) {
+            compose.runOnIdle { layout = target }
+            repeat(frames) {
+                compose.mainClock.advanceTimeByFrame()
+                compose.waitForIdle()
+                val observed = requireNotNull(growth)
+                assertEquals("Layout changes do not steal held finger progress", .5f, observed.expansion, 0f)
+                if (previous.cornerAligned != observed.curve.cornerAligned) admissionChanges++
+                val q = playerArtworkSizeProgress(.5f, observed.curve)
+                assertEquals("An admission change must not replace the fitted curve with p squared",
+                    playerArtworkSizeProgress(.5f, previous), q, .08f)
+                val artwork = compose.onNodeWithTag("player-artwork", true).getUnclippedBoundsInRoot()
+                assertEquals("The native frame uses this geometry's full curve, without a stale curvature tween",
+                    32f + (observed.fullWidth - 32f) * q, artwork.width.value, 1f)
+                val coordinates = compose.onNodeWithTag("player-title", true).fetchSemanticsNode().layoutInfo.coordinates
+                val title = compose.runOnUiThread {
+                    val bounds = coordinates.findRootCoordinates().localBoundingBoxOf(coordinates, clipBounds = false)
+                    with(compose.density) { DpRect(bounds.left.toDp(), bounds.top.toDp(), bounds.right.toDp(), bounds.bottom.toDp()) }
+                }
+                if (observed.curve.cornerAligned && artwork.bottom > title.top + 1.dp && artwork.top < title.bottom)
+                    assertTrue("Admitted intermediate layout must not cover the actual title", artwork.right <= title.left + 1.dp)
+                previous = observed.curve
+            }
+        }
+        assertTrue("Native animation must actually cross the admission boundary in both directions", admissionChanges >= 4)
+        assertTrue("Repeated and interrupted layout changes restore the admitted floating endpoint", requireNotNull(growth).curve.cornerAligned)
+    }
+
+    @Test fun animatedArtworkAspectCrossesMiniHeightWithoutAFallbackJump() {
+        val progress = Animatable(0f)
+        var growth: PlayerArtworkGrowthPresentation? = null
+        var selectedVisual by mutableStateOf(visual)
+        lateinit var scope: CoroutineScope
+        compose.setContent {
+            LocalicaTheme { CompositionLocalProvider(LocalPlayerArtworkGrowthObserver provides { growth = it }) {
+                BoxWithConstraints(Modifier.requiredSize(320.dp, 600.dp)) {
+                    scope = rememberCoroutineScope()
+                    PlayerSurface(state, false, {}, InterfaceSettings(artworkLayout = ArtworkLayout.Floating),
+                        progress, {}, {}, {}, {}, {}, {}, visual = selectedVisual)
+                }
+            } }
+        }
+        compose.waitForIdle()
+        // Derive the actual threshold rather than assuming emulator status/navigation insets.
+        val aspectAtMiniHeight = requireNotNull(growth).fullWidth / 32f
+        compose.runOnIdle { selectedVisual = visual.copy(palette = visual.palette.copy(aspect = aspectAtMiniHeight * .95f)) }
+        compose.waitForIdle()
+        assertTrue("Start above the mini height", requireNotNull(growth).fullHeight > 32f)
+        compose.mainClock.autoAdvance = false
+        compose.runOnIdle { scope.launch(start = CoroutineStart.UNDISPATCHED) { progress.snapTo(.5f) } }
+        compose.mainClock.advanceTimeByFrame()
+        compose.waitForIdle()
+        var previous = playerArtworkSizeProgress(.5f, requireNotNull(growth).curve)
+        var crossedBelow = false
+        for (factor in listOf(1.05f, .95f, 1.05f, .95f)) {
+            compose.runOnIdle { selectedVisual = visual.copy(palette = visual.palette.copy(aspect = aspectAtMiniHeight * factor)) }
+            repeat(40) {
+                compose.mainClock.advanceTimeByFrame()
+                compose.waitForIdle()
+                val observed = requireNotNull(growth)
+                val q = playerArtworkSizeProgress(.5f, observed.curve)
+                assertEquals("Aspect animation cannot switch to quadratic at a 32 dp dimension", previous, q, .05f)
+                assertEquals("Aspect animation preserves held finger progress", .5f, observed.expansion, 0f)
+                val artwork = compose.onNodeWithTag("player-artwork", true).getUnclippedBoundsInRoot()
+                assertEquals("Native width uses the continuous extreme-aspect curve", 32f + (observed.fullWidth - 32f) * q, artwork.width.value, 1f)
+                assertEquals("Native height may shrink continuously below mini size", 32f + (observed.fullHeight - 32f) * q, artwork.height.value, 1f)
+                crossedBelow = crossedBelow || observed.fullHeight < 32f
+                previous = q
+            }
+        }
+        assertTrue("Native fixture must actually cross the degeneracy", crossedBelow)
+        assertTrue("Reversal restores the other side of mini height", requireNotNull(growth).fullHeight > 32f)
     }
 
     private fun playerMotionOutputDirectory(): File {
