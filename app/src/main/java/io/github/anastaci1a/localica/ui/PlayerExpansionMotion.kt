@@ -4,6 +4,8 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.ScaleFactor
 import androidx.compose.runtime.staticCompositionLocalOf
+import kotlin.math.abs
+import kotlin.math.pow
 
 /** Selected mode is independent of the expanded target, which only changes on release. */
 internal data class PlayerLyricsMotion(val layout: Float, val contentAlpha: Float, val artworkAlpha: Float)
@@ -61,15 +63,20 @@ internal fun playerArtworkClearance(fullArtworkTop: Float, fullArtworkHeight: Fl
 }
 
 /** One sample of the existing trajectories, all in the same coordinate system and units.
- * The bound is the title's RIGHT edge while the artwork's bottom-right is inside its vertical
- * band; it is not title-left/whole-rectangle exclusion. The fixed left reference is separate. */
+ * A measured titleLeft enables corner-contact calibration with rectangle exclusion. Legacy
+ * callers without it retain the older title-right-band contract and fixed left reference. */
 internal data class PlayerArtworkTrajectorySample(val expansion: Float, val artworkLeft: Float,
-    val artworkTop: Float, val titleTop: Float, val titleBottom: Float, val titleRight: Float)
+    val artworkTop: Float, val titleTop: Float, val titleBottom: Float, val titleRight: Float,
+    val titleLeft: Float = Float.NaN)
 
 /** Constrained means unsupported input or no accepted curve under these sampled guards.
- * It does not prove that every other curve is impossible. Its explicit fallback is the ordinary
- * quadratic ease, not a claim of collision avoidance. */
-internal data class PlayerArtworkGrowthCurve(val curvature: Float, val constrained: Boolean)
+ * It does not prove that every other curve is impossible. Measured callers keep the bounded
+ * best-effort curve even when contact cannot be admitted, avoiding a jump as layout animates.
+ * Invalid input uses ordinary quadratic fallback; unreachable measured contact clamps to
+ * the slowest bounded member. Legacy unmeasured callers retain their title-right solver.
+ * None of these constrained cases guarantees rectangle exclusion. */
+internal data class PlayerArtworkGrowthCurve(val curvature: Float, val constrained: Boolean,
+    val cornerAligned: Boolean = false, val power: Float? = null)
 
 internal data class PlayerArtworkGrowthPresentation(val expansion: Float,
     val curve: PlayerArtworkGrowthCurve, val trajectory: List<PlayerArtworkTrajectorySample>,
@@ -96,12 +103,21 @@ internal fun playerArtworkGrowthCurve(miniArtworkSize: Float, fullArtworkWidth: 
     val fallback = PlayerArtworkGrowthCurve(0f, constrained = true)
     if (!miniArtworkSize.isFinite() || !fullArtworkWidth.isFinite() || !fullArtworkHeight.isFinite() ||
         !fixedLeftReference.isFinite() || miniArtworkSize <= 0f ||
-        fullArtworkWidth < miniArtworkSize || fullArtworkHeight < miniArtworkSize ||
+        fullArtworkWidth <= 0f || fullArtworkHeight <= 0f ||
         trajectory.none { it.expansion == 0f } || trajectory.none { it.expansion == 1f }) return fallback
     if (trajectory.any { !it.expansion.isFinite() || it.expansion !in 0f..1f ||
             !it.artworkLeft.isFinite() || !it.artworkTop.isFinite() || !it.titleTop.isFinite() ||
             !it.titleBottom.isFinite() || !it.titleRight.isFinite() || it.titleBottom < it.titleTop ||
             it.titleRight < fixedLeftReference }) return fallback
+    // Measured callers must not silently downgrade to the weaker title-right contract.
+    // Missing/invalid measured geometry and infeasible contact remain explicitly constrained.
+    if (trajectory.any { !it.titleLeft.isNaN() }) {
+        if (trajectory.any { !it.titleLeft.isFinite() || it.titleLeft > it.titleRight }) return fallback
+        return playerArtworkCornerCurve(miniArtworkSize, fullArtworkWidth, fullArtworkHeight, trajectory) ?: fallback
+    }
+    // Preserve the older solver's contract; measured corner fitting also supports a
+    // narrow dimension shrinking through mini size as an extreme aspect ratio animates.
+    if (fullArtworkWidth < miniArtworkSize || fullArtworkHeight < miniArtworkSize) return fallback
     val widthGrowth = fullArtworkWidth - miniArtworkSize
     val heightGrowth = fullArtworkHeight - miniArtworkSize
     val ordered = trajectory.sortedBy { it.expansion }
@@ -159,17 +175,101 @@ internal fun playerArtworkGrowthCurve(miniArtworkSize: Float, fullArtworkWidth: 
     return fallback
 }
 
+/** Fit a single immediate ease to the point where the artwork's bottom-right clears the
+ * title's top-left. The contact equation is geometric and independent of the chosen easing.
+ * Interpolate the caller's densely sampled geometry. Admit exclusion only when the bounded
+ * curve meets contact and clears the title; otherwise retain its best effort, marked constrained.
+ * This also covers artwork intentionally behind text without an admission-boundary size jump.
+ * Prefer the quadratic rational ease for noticeable early growth. Compact layouts extend
+ * the same family continuously: increase its power while reducing curvature by the same
+ * amount, keeping endpoint slope at four without a hold, jump, or extra animation clock.
+ * No new animation clock, delay, or phase boundary is introduced. */
+private fun playerArtworkCornerCurve(mini: Float, width: Float, height: Float,
+    trajectory: List<PlayerArtworkTrajectorySample>): PlayerArtworkGrowthCurve? {
+    val dw = width - mini
+    val dh = height - mini
+    if (dw == 0f && dh == 0f) return PlayerArtworkGrowthCurve(0f, constrained = true)
+    val ordered = trajectory.sortedBy { it.expansion }
+    fun horizontal(s: PlayerArtworkTrajectorySample) = s.titleLeft - s.artworkLeft - mini
+    fun vertical(s: PlayerArtworkTrajectorySample) = s.titleTop - s.artworkTop - mini
+    // Cross-multiplication avoids a singularity when either dimension passes mini size.
+    // Use the larger-changing axis to recover growth without dividing by a near-zero delta.
+    fun growth(s: PlayerArtworkTrajectorySample) = if (abs(dw) >= abs(dh)) horizontal(s) / dw else vertical(s) / dh
+    fun distance(s: PlayerArtworkTrajectorySample) = dh * horizontal(s) - dw * vertical(s)
+    fun interpolate(a: PlayerArtworkTrajectorySample, b: PlayerArtworkTrajectorySample, t: Float): PlayerArtworkTrajectorySample {
+        fun mix(x: Float, y: Float) = x + (y - x) * t
+        return PlayerArtworkTrajectorySample(mix(a.expansion, b.expansion), mix(a.artworkLeft, b.artworkLeft),
+            mix(a.artworkTop, b.artworkTop), mix(a.titleTop, b.titleTop), mix(a.titleBottom, b.titleBottom),
+            mix(a.titleRight, b.titleRight), mix(a.titleLeft, b.titleLeft))
+    }
+    for (index in 1 until ordered.size) {
+        val a = ordered[index - 1]
+        val b = ordered[index]
+        val da = distance(a)
+        val db = distance(b)
+        if ((da > 0f && db > 0f) || (da < 0f && db < 0f) || da == db || a.expansion == b.expansion) continue
+        val contact = interpolate(a, b, da / (da - db))
+        val p = contact.expansion
+        val g = growth(contact)
+        if (p <= 0f || p >= 1f) continue
+        fun safe(curve: PlayerArtworkGrowthCurve): Boolean {
+            // Check the complete sampled trajectory, including sub-samples at the corner.
+            for (segment in 1 until ordered.size) {
+                val first = ordered[segment - 1]
+                val last = ordered[segment]
+                for (step in 0..8) {
+                    val t = step / 8f
+                    fun mix(x: Float, y: Float) = x + (y - x) * t
+                    val size = playerArtworkSizeProgress(mix(first.expansion, last.expansion), curve)
+                    val top = mix(first.artworkTop, last.artworkTop)
+                    val right = mix(first.artworkLeft, last.artworkLeft) + mini + dw * size
+                    val bottom = top + mini + dh * size
+                    if (bottom > mix(first.titleTop, last.titleTop) + .02f && top < mix(first.titleBottom, last.titleBottom) &&
+                        right > mix(first.titleLeft, last.titleLeft) + .02f) return false
+                }
+            }
+            return true
+        }
+        val bend = if (g <= 0f) Float.POSITIVE_INFINITY else (p * p / g - 1f) / (1f - p)
+        val curve = if (bend <= 2f) {
+            PlayerArtworkGrowthCurve(bend.coerceAtLeast(-.95f), constrained = true)
+        } else {
+            // This extends curvature=2 continuously, then clamps to p^4 if even that is
+            // too large. Do not switch back to p^2 when contact becomes infeasible.
+            var low = 2f
+            var high = 4f
+            repeat(24) {
+                val power = (low + high) / 2f
+                val size = p.pow(power) / (1f + (4f - power) * (1f - p))
+                if (size > g) low = power else high = power
+            }
+            val power = (low + high) / 2f
+            PlayerArtworkGrowthCurve(4f - power, constrained = true, power = power)
+        }
+        val contactError = playerArtworkSizeProgress(p, curve) - g
+        val admitted = ordered.last().artworkTop + height <= ordered.last().titleTop &&
+            abs(contactError * dw) <= .02f && abs(contactError * dh) <= .02f && safe(curve)
+        return curve.copy(constrained = !admitted, cornerAligned = admitted)
+    }
+    // For valid but unreachable contact, stay at the slowest bounded member. Actual
+    // extreme aspect trajectories approach this clamp before their root disappears.
+    return PlayerArtworkGrowthCurve(0f, constrained = true, power = 4f)
+}
+
 /** Immediate, reversible growth with no hold, threshold splice or independent clock.
- * Curvature 0..2 keeps growth >= p²/3 and the normalized slope <= 4, including at the endpoint;
+ * Curvature -.95..2 keeps growth >= p²/3 and the normalized slope <= 4, including at the endpoint;
  * unsupported geometry must not turn into a practical hold followed by an endpoint jump. */
 internal fun playerArtworkSizeProgress(expansion: Float, curvature: Float): Float {
     val p = if (expansion.isNaN()) 0f else expansion.coerceIn(0f, 1f)
-    val bend = if (curvature.isNaN()) 0f else curvature.coerceIn(0f, 2f)
+    val bend = if (curvature.isNaN()) 0f else curvature.coerceIn(-.95f, 2f)
     return p * p / (1f + bend * (1f - p))
 }
 
-internal fun playerArtworkSizeProgress(expansion: Float, curve: PlayerArtworkGrowthCurve): Float =
-    playerArtworkSizeProgress(expansion, curve.curvature)
+internal fun playerArtworkSizeProgress(expansion: Float, curve: PlayerArtworkGrowthCurve): Float {
+    val power = curve.power ?: return playerArtworkSizeProgress(expansion, curve.curvature)
+    val p = if (expansion.isNaN()) 0f else expansion.coerceIn(0f, 1f)
+    return p.pow(power.coerceIn(2f, 4f)) / (1f + curve.curvature * (1f - p))
+}
 
 // Compatibility for callers still using the vertical crop-retention reference: it now bends
 // the immediate ease instead of delaying growth. Only measured trajectory input admits bounds.

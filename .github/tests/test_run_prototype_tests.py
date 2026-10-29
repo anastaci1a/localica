@@ -179,8 +179,8 @@ p=pathlib.Path(sys.argv[sys.argv.index('--state-dir')+1]);p.mkdir();(p/'complete
         args=json.loads((self.root/'argv.json').read_text())
         self.assertEqual(set(classes)|{REQUIRED,FOCUS,CONTRAST},set(args[-1].split('=',1)[1].split(',')))
 
-    def test_seventy_distinct_affected_classes_are_rejected_before_instrumentation(self):
-        classes = self.distinct_affected_sources(70)
+    def test_seventy_four_distinct_affected_classes_are_rejected_before_instrumentation(self):
+        classes = self.distinct_affected_sources(74)
         self.run_case(2,AFFECTED_CLASSES=','.join(classes))
         self.assertFalse((self.root/'argv.json').exists())
 
@@ -246,6 +246,18 @@ p=pathlib.Path(sys.argv[sys.argv.index('--state-dir')+1]);p.mkdir();(p/'complete
 
     def test_sixty_nine_distinct_affected_classes_keep_every_method_and_sentinel(self):
         classes = self.distinct_affected_sources(69)
+        self.run_case(AFFECTED_CLASSES=','.join(classes))
+        evidence=json.loads((self.root/'prototype-evidence/reconciled-tests.json').read_text())
+        expected=set(classes)|{REQUIRED,FOCUS,CONTRAST}
+        self.assertEqual(expected,set(evidence['counts']))
+        self.assertEqual({c+'#regression' for c in expected},set(evidence['methods']))
+        self.assertEqual({REQUIRED,FOCUS,CONTRAST},set(evidence['required_selectors']))
+        self.assertTrue(all(outcome == 'passed' for outcome in evidence['methods'].values()))
+        args=json.loads((self.root/'argv.json').read_text())
+        self.assertEqual(expected,set(args[-1].split('=',1)[1].split(',')))
+
+    def test_seventy_three_distinct_affected_classes_keep_every_method_and_sentinel(self):
+        classes = self.distinct_affected_sources(73)
         self.run_case(AFFECTED_CLASSES=','.join(classes))
         evidence=json.loads((self.root/'prototype-evidence/reconciled-tests.json').read_text())
         expected=set(classes)|{REQUIRED,FOCUS,CONTRAST}
@@ -412,7 +424,7 @@ p=pathlib.Path(sys.argv[sys.argv.index('--state-dir')+1]);p.mkdir();(p/'complete
     def test_optimized_python_cannot_disable_reconciliation(self):
         self.run_case(1,PYTHONOPTIMIZE='1')
 
-    def test_too_many(self): self.run_case(2,AFFECTED_CLASSES=','.join([AFFECTED]*70))
+    def test_too_many(self): self.run_case(2,AFFECTED_CLASSES=','.join([AFFECTED]*74))
     def test_too_long(self): self.run_case(2,AFFECTED_CLASSES='x'*4097)
     def test_missing_source(self):
         (self.root/('app/src/androidTest/java/'+AFFECTED.replace('.','/')+'.kt')).unlink()
@@ -723,6 +735,32 @@ class InsertedWorkflowContract(unittest.TestCase):
         self.assertIn('uses: ./.github/workflows/prototype.yml', text)
         self.assertNotIn('continue-on-error:', text)
         self.assertNotIn('|| true', text)
+
+    def test_dev77_preserves_dev76_and_exact_complete_crease_classes(self):
+        import re
+        workflow = ROOT/'.github/workflows'
+        before = (workflow/'prototype-dev76-next-insertion.yml').read_text()
+        text = (workflow/'prototype-dev77-artwork-receiver.yml').read_text()
+        previous = re.findall(r'^      affected_classes: (.+)$', before, re.MULTILINE)[0].split(',')
+        actual = re.findall(r'^      affected_classes: (.+)$', text, re.MULTILINE)[0].split(',')
+        added = {'io.github.anastaci1a.localica.' + name for name in (
+            'ArtworkWashBorderTest', 'ArtworkWashDetailTest', 'ArtworkWashTest', 'PlayerBackdropTest')}
+        self.assertEqual(69, len(previous))
+        self.assertEqual(73, len(actual))
+        self.assertEqual(73, len(set(actual)))
+        self.assertEqual(set(previous) | added, set(actual))
+        self.assertFalse({REQUIRED, FOCUS, CONTRAST}.intersection(actual))
+        self.assertTrue(set(actual).issubset((ROOT/'.github/prototype-risk-classes.txt').read_text().splitlines()))
+        self.assertEqual(4022, len(','.join(sorted(set(actual) | {REQUIRED, FOCUS, CONTRAST}))))
+        self.assertLessEqual(len(','.join(sorted(set(actual) | {REQUIRED, FOCUS, CONTRAST}))), 4096)
+        self.assertIn('branches: [test/dev77-artwork-receiver-20261029]', text)
+        self.assertIn('needs: protocol_contracts', text)
+        self.assertIn('uses: ./.github/workflows/prototype.yml', text)
+        self.assertNotIn('continue-on-error:', text)
+        self.assertNotIn('|| true', text)
+        self.assertEqual(before.split('jobs:', 1)[1].split('  prototype:', 1)[0],
+                         text.split('jobs:', 1)[1].split('  prototype:', 1)[0])
+        self.assertEqual(before.split('    secrets:', 1)[1], text.split('    secrets:', 1)[1])
 
     def test_historical_dev71_workflow_remains_byte_identical(self):
         import hashlib

@@ -48,6 +48,7 @@ fun FolderSettings(state: LibraryUiState, onDismiss: () -> Unit, onChooseFolder:
     var search by rememberSaveable { mutableStateOf("") }
     var folderUri by rememberSaveable { mutableStateOf<String?>(null) }
     var removing by remember { mutableStateOf<FolderSelection?>(null) }
+    val removeOrigin = rememberGlassAnchor()
     val folderLabels = remember(state.snapshot.folders) { scanFolderLabels(state.snapshot.folders) }
     val page = path.lastOrNull()
     val holder = rememberSaveableStateHolder()
@@ -102,17 +103,17 @@ fun FolderSettings(state: LibraryUiState, onDismiss: () -> Unit, onChooseFolder:
                         Text(folderLabels.getValue(folder.uri), style = MaterialTheme.typography.titleMedium)
                         Text("Removing a folder only removes it from Localica. Audio files are kept.")
                         ExcludedFoldersPreference(folder, preferences, !state.scanning && !state.updatingFolders)
-                        ActionTextButton(onClick = { removing = folder }, enabled = !state.scanning && !state.updatingFolders) { Text("Remove folder") }
+                        SettingsLink("Remove folder", anchor = removeOrigin, enabled = !state.scanning && !state.updatingFolders) { removing = folder }
                     }
                     "Scanner" -> ScannerConfiguration(preferences, state, onFullScan, onQuickScan) { path = path + "Metadata read failures" }
                 }
             }
         } }
     }
-    removing?.let { folder -> GlassAlertDialog(onDismissRequest = { removing = null }, title = { Text("Remove ${folderLabels[folder.uri] ?: folder.name}?") },
+    removing?.let { folder -> CompositionLocalProvider(LocalGlassOrigin provides removeOrigin) { GlassAlertDialog(onDismissRequest = { removing = null }, title = { Text("Remove ${folderLabels[folder.uri] ?: folder.name}?") },
         text = { Text("Audio files are kept. Queues and playlists keep their references to these songs.") },
         confirmButton = { ActionTextButton(onClick = { onRemove(folder.uri); removing = null; back() }) { Text("Remove") } },
-        dismissButton = { ActionTextButton(onClick = { removing = null }) { Text("Cancel") } }) }
+        dismissButton = { ActionTextButton(onClick = { removing = null }) { Text("Cancel") } }) } }
 }
 
 @Composable
@@ -122,17 +123,18 @@ private fun ScannerConfiguration(preferences: ScanPreferences, state: LibraryUiS
     var onLaunch by remember { mutableStateOf(preferences.scanOnLaunch) }
     var fullOnLaunch by remember { mutableStateOf(preferences.fullScanOnLaunch) }
     var durationOpen by remember { mutableStateOf(false) }
+    val durationOrigin = rememberGlassAnchor()
     ScannerActions(state, onFullScan, onQuickScan)
     SettingsLink("Metadata read failures", "${state.snapshot.metadataFailures.map { it.trackId }.distinct().size} songs", onClick = failures)
     SettingsHeading("Music library")
     BooleanPreference("Include subfolders", options.includeSubfolders) { options = options.copy(includeSubfolders = it); preferences.write(options) }
-    SettingsLink("Exclude short files", if (options.minimumDurationSeconds == 0) "Off" else "Shorter than ${options.minimumDurationSeconds} seconds") { durationOpen = true }
+    SettingsLink("Exclude short files", if (options.minimumDurationSeconds == 0) "Off" else "Shorter than ${options.minimumDurationSeconds} seconds", anchor = durationOrigin) { durationOpen = true }
     Text("Unknown durations are kept. Use Scan music to apply changed rules to indexed songs.", style = MaterialTheme.typography.bodySmall)
     SettingsHeading("On launch")
     BooleanPreference("Quick scan", onLaunch) { onLaunch = it; preferences.scanOnLaunch = it }
     BooleanPreference("Full scan", fullOnLaunch) { fullOnLaunch = it; preferences.fullScanOnLaunch = it }
     Text("Both are off by default. Quick scan finds new songs; full scan also refreshes tags and removes missing files. Enable both to run quick scan first, then full scan.", style = MaterialTheme.typography.bodySmall)
-    if (durationOpen) {
+    if (durationOpen) CompositionLocalProvider(LocalGlassOrigin provides durationOrigin) {
         var input by remember { mutableStateOf(options.minimumDurationSeconds.toString()) }
         val seconds = input.toIntOrNull()
         GlassAlertDialog(onDismissRequest = { durationOpen = false }, title = { Text("Exclude short files") }, text = {
@@ -149,8 +151,9 @@ private fun ScannerConfiguration(preferences: ScanPreferences, state: LibraryUiS
 private fun ExcludedFoldersPreference(folder: FolderSelection, preferences: ScanPreferences, enabled: Boolean) {
     var paths by remember(folder.uri) { mutableStateOf(preferences.read(folder.uri).excludedPaths) }
     var open by remember { mutableStateOf(false) }
-    SettingsLink("Excluded subfolders", if (paths.isEmpty()) "None" else paths.joinToString(", "), enabled = enabled) { open = true }
-    if (open) {
+    val exclusionsOrigin = rememberGlassAnchor()
+    SettingsLink("Excluded subfolders", if (paths.isEmpty()) "None" else paths.joinToString(", "), enabled = enabled, anchor = exclusionsOrigin) { open = true }
+    if (open) CompositionLocalProvider(LocalGlassOrigin provides exclusionsOrigin) {
         var input by remember { mutableStateOf(paths.joinToString("\n")) }
         val lines = input.lineSequence().map { it.trim().replace('\\', '/').trimEnd('/') }.filter { it.isNotBlank() }.toSet()
         val valid = lines.all { !it.startsWith('/') && it.split('/').none { part -> part in setOf("", ".", "..") } }
@@ -163,4 +166,5 @@ private fun ExcludedFoldersPreference(folder: FolderSelection, preferences: Scan
             dismissButton = { ActionTextButton(onClick = { open = false }) { Text("Cancel") } })
     }
 }
+
 

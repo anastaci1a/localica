@@ -1,0 +1,99 @@
+name: Dev77 artwork receiver prototype (not release certified)
+'on':
+  push:
+    branches: [test/dev77-artwork-receiver-20261029]
+permissions:
+  contents: read
+jobs:
+  protocol_contracts:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+      - name: Strict selector and live evidence protocol contracts
+        run: |
+          python3 -m unittest discover -s .github/tests -p test_run_prototype_tests.py
+          python3 -m unittest discover -s .github/tests -p test_observe_test_evidence.py
+          python3 -m unittest discover -s .github/tests -p test_failure_context.py
+          node --test .github/tests/test_publish_test_evidence.mjs
+  prototype:
+    needs: protocol_contracts
+    uses: ./.github/workflows/prototype.yml
+    with:
+      affected_classes: io.github.anastaci1a.localica.ActionStripDrawingTest,io.github.anastaci1a.localica.AdvancedRepeatTest,io.github.anastaci1a.localica.ArtistAlbumFilterRangeTest,io.github.anastaci1a.localica.ArtistAlbumSelectionTest,io.github.anastaci1a.localica.ArtistCollectionActionsTest,io.github.anastaci1a.localica.ArtistSelectionPlacementTest,io.github.anastaci1a.localica.ArtworkCropLoadingTest,io.github.anastaci1a.localica.ArtworkOccurrenceTransitionTest,io.github.anastaci1a.localica.ArtworkSwipeTest,io.github.anastaci1a.localica.ArtworkWashBorderTest,io.github.anastaci1a.localica.ArtworkWashDetailTest,io.github.anastaci1a.localica.ArtworkWashTest,io.github.anastaci1a.localica.BrowseOrderViewportTest,io.github.anastaci1a.localica.ButtonGestureTest,io.github.anastaci1a.localica.CollectionControlsBackdropTest,io.github.anastaci1a.localica.CollectionDetailTest,io.github.anastaci1a.localica.CollectionHeaderPinchFrameTest,io.github.anastaci1a.localica.CompactCollectionArtworkTest,io.github.anastaci1a.localica.DialogChromeLayoutTest,io.github.anastaci1a.localica.GlassActionRowTest,io.github.anastaci1a.localica.GlassDialogLateReopenTest,io.github.anastaci1a.localica.GlassDialogReopenTest,io.github.anastaci1a.localica.GlassDialogsTest,io.github.anastaci1a.localica.GlassMenuContentTest,io.github.anastaci1a.localica.GlassMenuViewportTouchTest,io.github.anastaci1a.localica.GlassMorphTest,io.github.anastaci1a.localica.GlassOriginPreparationTest,io.github.anastaci1a.localica.GlassShadowTest,io.github.anastaci1a.localica.IncompleteScanTest,io.github.anastaci1a.localica.InterfaceNavigationTest,io.github.anastaci1a.localica.LargeQueueTransportTest,io.github.anastaci1a.localica.LibraryDatabaseTest,io.github.anastaci1a.localica.LibraryPlaybackReadTest,io.github.anastaci1a.localica.ListBackTest,io.github.anastaci1a.localica.ListReturnControlsTest,io.github.anastaci1a.localica.ListTopFadeTest,io.github.anastaci1a.localica.LoadingMaterialOpacityTest,io.github.anastaci1a.localica.LyricsHeaderActionsTest,io.github.anastaci1a.localica.LyricsPlayerReopenTest,io.github.anastaci1a.localica.LyricsReturnBackdropTest,io.github.anastaci1a.localica.LyricsViewportMotionTest,io.github.anastaci1a.localica.PinchReadbackLifetimeTest,io.github.anastaci1a.localica.PinchReleaseHandoffTest,io.github.anastaci1a.localica.PlaybackIntentTest,io.github.anastaci1a.localica.PlayerBackdropTest,io.github.anastaci1a.localica.PlayerBackgroundPolarityTest,io.github.anastaci1a.localica.PlayerExpansionMotionTest,io.github.anastaci1a.localica.PlayerPausedSkipTest,io.github.anastaci1a.localica.PlaylistCoverActionTest,io.github.anastaci1a.localica.PlaylistDetailPresentationTest,io.github.anastaci1a.localica.PlaylistSelectionPlacementTest,io.github.anastaci1a.localica.PreparedPlayerVisualCacheTest,io.github.anastaci1a.localica.PreviousPlaybackTest,io.github.anastaci1a.localica.QueueDragAnchorTest,io.github.anastaci1a.localica.QueueFileEditTest,io.github.anastaci1a.localica.QueueFollowingTest,io.github.anastaci1a.localica.QueueInitialSaveWorkTest,io.github.anastaci1a.localica.QueueJourneyPersistenceTest,io.github.anastaci1a.localica.QueueOrderActionAdmissionTest,io.github.anastaci1a.localica.QueuePersistenceTest,io.github.anastaci1a.localica.QueueRecoveryTest,io.github.anastaci1a.localica.QueueRestoreTest,io.github.anastaci1a.localica.QueueSaveOriginTest,io.github.anastaci1a.localica.QueueSelectionPlacementTest,io.github.anastaci1a.localica.RepeatOptionsEnvelopeTest,io.github.anastaci1a.localica.RetainedLayerReadbackTest,io.github.anastaci1a.localica.ScopedSearchHistoryTest,io.github.anastaci1a.localica.SelectionLensTest,io.github.anastaci1a.localica.SettingsOptionsTest,io.github.anastaci1a.localica.SongInformationTest,io.github.anastaci1a.localica.StartupMergeTest,io.github.anastaci1a.localica.TagEditorChromeLayoutTest,io.github.anastaci1a.localica.TagEditorThemeInheritanceTest
+      coverage_reason: >-
+        Complete dev76 coverage is preserved. This candidate integrates exact
+        receiver/settings source from f4ece32c, the isolated green top-crease fix
+        from dc493d87, and corner-aligned artwork growth with reversible layout,
+        lyrics and aspect transitions. All four additional crease classes run in
+        full; existing GlassMorph, GlassShadow, SettingsOptions and PlayerExpansion
+        classes retain every earlier method and include their new regressions.
+        Frozen source inventory is 471 methods across 76 classes: 73 affected plus
+        all three mandatory SearchImeMotion, ListSearch and FrostedSurface classes.
+        Regeneration and exact method reconciliation are required on each API.
+        The 4022-character union fits the unchanged 4096 limit. A finite 73-class
+        cap retains earlier 60/69 acceptance and rejects 74 before instrumentation.
+        Protocol contracts, build/JVM/lint/signature, both preserved-data
+        compatibility chains and live failure monitoring remain mandatory.
+        This is a selected native gate, never a complete native release pass.
+      known_issues: >-
+        Receiver and crease isolated passes do not certify their combination with
+        new artwork growth. Growth cannot guarantee no overlap for infeasible
+        geometry such as 480x600 square artwork while existing trajectories stay
+        fixed. Physical-device optical and performance acceptance remain open.
+        Intermediate prototype, not complete latest feedback or a prerelease.
+        Skip source 9df48e7 passed isolated run40750142858:106 native methods
+        on each API and895 JVM; combined source still requires fresh gates.
+        Combined source requires fresh native evidence; isolated scanner/player
+        passes do not certify this integration. Eco remains a synthetic backing
+        fixture, not exact S26 phone proof. Paused glyph tests inject playback
+        state, not a complete Media3 pause/skip integration. Player foreground
+        interpolation during artwork transition is not implemented in this slice.
+        IME189 native corroboration and its floating fixture remain isolated,
+        not integrated. Scoped result sizing does not claim a new Galaxy keyboard
+        trajectory or unavailable initial target prediction.
+        Lyrics continuous phase has real native readiness holds and explicit
+        unadmitted-boundary safety settling; no universal optical or spatial-C1
+        continuity claim. IME189 false zero-height exposure occurred in an earlier
+        candidate and prior baseline; it is not fixed or waived by this candidate.
+        Failure-context follow-on is sanitized first-failure diagnostics only,
+        not a verdict; free-form assertions still require original XML or logs.
+        Quick Scan is additive new-file discovery only; edits and removals still
+        require full scan (manual or independently enabled at startup). New behavior passed isolated APIs26/36,
+        not physical-library performance or every service cancel/restart race.
+        Earlier synthetic grant timeout remains unexplained; passive lifecycle
+        diagnostics preserve primary failures and unchanged time budgets. Earlier
+        IME native failures remain preserved; no production IME fix is claimed by
+        the separately validated ListSearch fixture pumping correction.
+        All original hosted/native failures remain preserved, including the earlier
+        player RenderThread/ART fatals. Equivalent shadow representation and rooted
+        read ownership are narrow mitigations, not universal native-cause proof.
+        The20-item ledger remains qualified:474 phone pinch closure is deferred;
+        Header466 now has a scoped live Play/Shuffle presentation validated with
+        actual sampling-registration, input and retained-atlas checks on API26/36.
+        Artist carousel material remains frozen; device optical/shadow parity is
+        unverified. The intact fallback duplicates a header atlas region: observed
+        API26 artist offscreen ARGB estimate grows27.19 to35.70MiB, inverse31.33
+        to40.08MiB; these are not process-RAM measurements. Prior failed experiments
+        remain preserved, and no universal466 closure is claimed. Equivalent horizontal selection outlines are
+        repaired; arbitrary-shape optical parity and369 popup bands remain open.
+        The469 continuous Queue material repair is integrated with focused checks,
+        not universal optical/phone proof. Popup-family and header-shadow original
+        captures remain qualified diagnostic evidence, not acceptance tests. Future
+        dependent changes require a dependent coverage review before source freeze.
+        Queue timings use synthetic
+        13000-track/100-entry data, not phone-latency or acoustic proof. Intermittent
+        current-occurrence and busy-feedback phone reports are not closed by these
+        contracts.473 settled single-backing sampling leaves artwork-transitioning,
+        frozen/native-blurred/moving/partial backgrounds unavailable; atomic
+        ink/image presentation is unproven. Font2 profile
+        receipts are separate from unconfigured normal-suite assumptions. No blanket
+        optical parity, universal fix, release clearance or full native pass is claimed.
+        Every selected identity and mandatory sentinel must satisfy strict final
+        evidence rules; known issues never waive failures, missing methods or unknown
+        assumptions. Version, final source identity and delivery remain Lead-owned.
+    secrets:
+      ANDROID_DEBUG_KEYSTORE: ${{ secrets.ANDROID_DEBUG_KEYSTORE }}

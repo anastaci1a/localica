@@ -214,17 +214,17 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
                 16f + (((windowWidth - fullArt) / 2).value - 16f) * t * t,
                 miniArtY.value + (fullArtY - miniArtY).value * t - 48f * t * (1f - t) - 24f * lyricVisibility * t,
                 titleTop, titleTop + fullTitleHeight * (miniTitleScale + (1f - miniTitleScale) * t),
-                58f + miniTextWidth.value + (-26f + (contentWidth - miniTextWidth).value) * t)
+                58f + miniTextWidth.value + (-26f + (contentWidth - miniTextWidth).value) * t,
+                titleLeft = 58f - 26f * t)
         }
     }
     val growthCurve = remember(artTrajectory, fullArt, fullArtHeight) {
         playerArtworkGrowthCurve(MiniArtworkSize.value, fullArt.value, fullArtHeight.value, artTrajectory)
     }
-    // Only geometry changes ease their curvature; the finger always owns progress.
-    val artCurvature by animateFloatAsState(growthCurve.curvature,
-        tween(settings.motionDuration(300)), label = "Artwork growth curvature")
+    // Layout/lyrics geometry already animates above. Do not independently tween a constraint
+    // computed for an older geometry: that can push artwork through the moving title.
     LocalPlayerArtworkGrowthObserver.current?.let { observer ->
-        SideEffect { observer(PlayerArtworkGrowthPresentation(p, growthCurve.copy(curvature = artCurvature),
+        SideEffect { observer(PlayerArtworkGrowthPresentation(p, growthCurve,
             artTrajectory, fullArt.value, fullArtHeight.value)) }
     }
     // Crop compatibility remains independent of immediate frame growth.
@@ -235,7 +235,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     val artCropRetention by animateFloatAsState(if (clearanceTarget > 0f) 1f else 0f,
         tween(settings.motionDuration(300)), label = "Artwork crop retention")
     val artContentScale = playerArtworkContentScale(with(density) { MiniArtworkSize.toPx() }, artCropRetention, p == 0f)
-    val artProgress = playerArtworkSizeProgress(p, artCurvature)
+    val artProgress = playerArtworkSizeProgress(p, growthCurve)
     val artWidth = MiniArtworkSize + (fullArt - MiniArtworkSize) * artProgress
     val artHeight = MiniArtworkSize + (fullArtHeight - MiniArtworkSize) * artProgress
     val normalTransport = ordinarySeekY + 184.dp + extraActions

@@ -32,6 +32,107 @@ import kotlin.math.roundToInt
 class GlassShadowTest {
     @get:Rule val compose = createComposeRule()
 
+    @Test fun receiverWeightPreservesExteriorAndRetainedParityWithoutMotionRasterization() {
+        var mode by mutableIntStateOf(0)
+        var retainedMode by mutableStateOf(false)
+        var shift by mutableFloatStateOf(0f)
+        val field = GlassShadowReceiverField()
+        lateinit var retained: RetainedGlassShadow
+        compose.setContent {
+            val scope = rememberCoroutineScope()
+            retained = remember { RetainedGlassShadow(scope) }
+            val geometry = remember { GlassShadowGeometry() }
+            Box(Modifier.size(240.dp,180.dp).background(Color.White).testTag("weighted-shadow")
+                .drawBehind {
+                    val body = RoundRect(80.dp.toPx(),50.dp.toPx(),140.dp.toPx(),110.dp.toPx(),CornerRadius(16.dp.toPx()))
+                    val home = androidx.compose.ui.geometry.Rect(120.dp.toPx(),80.dp.toPx(),180.dp.toPx(),140.dp.toPx())
+                    val receiver = if (mode == 0) null else field.receiver(
+                        if (mode == 2) home.translate(androidx.compose.ui.geometry.Offset(400.dp.toPx(),0f)) else home,
+                        30.dp.toPx(),size,1f,1f,shift,physicalSize=home.size)
+                    if (retainedMode) with(retained) { draw(listOf(body to 1f),1f,.6f,receiver) }
+                    else glassShadows(listOf(body to 1f),1f,.6f,geometry,receiver=receiver)
+                })
+        }
+        val baseline = compose.onNodeWithTag("weighted-shadow").captureToImage().toPixelMap()
+        compose.runOnIdle { mode = 1 }
+        val weighted = compose.onNodeWithTag("weighted-shadow").captureToImage().toPixelMap()
+        val d = weighted.width/240f
+        var outsideMax = 0f
+        for (y in 0 until weighted.height) for (x in 0 until weighted.width) {
+            if (x < 118*d || x > 182*d || y < 78*d || y > 142*d)
+                outsideMax=maxOf(outsideMax,abs(weighted[x,y].red-baseline[x,y].red))
+            assertTrue("Receiver must not add a second shadow",weighted[x,y].red+2f/255 >= baseline[x,y].red)
+        }
+        assertTrue("Ordinary exterior unchanged: $outsideMax",outsideMax <= 2f/255)
+        assertTrue("Basin attenuates the moving caster",weighted[(145*d).toInt(),(105*d).toInt()].red >
+            baseline[(145*d).toInt(),(105*d).toInt()].red+.005f)
+        compose.runOnIdle { mode = 2 }
+        val disjoint = compose.onNodeWithTag("weighted-shadow").captureToImage().toPixelMap()
+        for (y in 0 until disjoint.height) for (x in 0 until disjoint.width)
+            assertTrue("Disjoint receiver keeps original path",abs(disjoint[x,y].red-baseline[x,y].red)<=1f/255)
+        compose.runOnIdle { mode=1; retainedMode=true }
+        compose.waitUntil(5000) { retained.rasterizations > 0 }
+        val cached = compose.onNodeWithTag("weighted-shadow").captureToImage().toPixelMap()
+        var difference = 0f; var maximum = 0f
+        for (y in 0 until cached.height) for (x in 0 until cached.width) {
+            val delta=abs(cached[x,y].red-weighted[x,y].red);difference+=delta;maximum=maxOf(maximum,delta)
+        }
+        assertTrue("Weighted retained/direct parity: max=$maximum",maximum<.04f && difference/(cached.width*cached.height)<.003f)
+        val maskCount = field.rasterizations
+        for (motion in listOf(-13f,7f,19f,0f)) {
+            compose.runOnIdle { shift=motion }
+            compose.onNodeWithTag("weighted-shadow").captureToImage()
+        }
+        org.junit.Assert.assertEquals("Motion only remaps immutable receiver",maskCount,field.rasterizations)
+        compose.runOnIdle {
+            val home=androidx.compose.ui.geometry.Rect(100f,200f,1300f,230f)
+            val first=requireNotNull(field.receiver(home,15f,androidx.compose.ui.geometry.Size(180f,90f),1f,1f,0f))
+            val count=field.rasterizations
+            assertTrue("Total padded mask budget",first.mask.width<=96 && first.mask.height<=96)
+            assertTrue("Narrow home retains enough cross-section samples",first.mask.height>=21)
+            val mask=first.mask.toPixelMap()
+            for (x in 0 until mask.width) {
+                org.junit.Assert.assertEquals(1f,mask[x,0].alpha,0f)
+                org.junit.Assert.assertEquals(1f,mask[x,2].alpha,0f)
+                org.junit.Assert.assertEquals(1f,mask[x,mask.height-1].alpha,0f)
+            }
+            for (sx in listOf(.7f,1f,1.3f)) for (sy in listOf(.8f,1f,1.2f)) for (dx in listOf(-13f,0f,19f)) {
+                val next=requireNotNull(field.receiver(home.translate(androidx.compose.ui.geometry.Offset(dx,0f)),15f,
+                    androidx.compose.ui.geometry.Size(180f,90f),sx,sy,dx,physicalSize=home.size))
+                org.junit.Assert.assertSame("Caster motion reuses mask",first.mask,next.mask)
+            }
+            org.junit.Assert.assertEquals("27 transformed samples do not rasterize",count,field.rasterizations)
+        }
+    }
+
+    @Test fun originWellIsMaskedByActualCasterWithoutFadingAndReusesStationaryRaster() {
+        var casterX by mutableFloatStateOf(0f)
+        val well = GlassOriginWell()
+        compose.setContent {
+            Box(Modifier.size(220.dp, 120.dp).background(Color(0xFF808080)).testTag("origin-well")
+                .drawBehind {
+                    val home = androidx.compose.ui.geometry.Rect(30.dp.toPx(),30.dp.toPx(),150.dp.toPx(),78.dp.toPx())
+                    val caster = RoundRect(home.translate(androidx.compose.ui.geometry.Offset(casterX.dp.toPx(),0f)),
+                        androidx.compose.ui.geometry.CornerRadius(24.dp.toPx()))
+                    with(well) { draw(home,24.dp.toPx(),caster,1f) }
+                })
+        }
+        val closed = compose.onNodeWithTag("origin-well").captureToImage().toPixelMap()
+        compose.runOnIdle { casterX = 140f }
+        val open = compose.onNodeWithTag("origin-well").captureToImage().toPixelMap()
+        val d = open.width / 220f
+        val x = (90*d).toInt(); val y = (54*d).toInt()
+        assertTrue("Vacant basin shades its receiver",open[x,y].red < closed[x,y].red-.01f)
+        val count = compose.runOnIdle { well.rasterizations }
+        for (position in listOf(70f,20f,100f,0f)) {
+            compose.runOnIdle { casterX = position }
+            compose.onNodeWithTag("origin-well").captureToImage()
+        }
+        val restored = compose.onNodeWithTag("origin-well").captureToImage().toPixelMap()
+        assertTrue("Covered receiver has no shadow residue",abs(restored[x,y].red-closed[x,y].red) < .001f)
+        compose.runOnIdle { org.junit.Assert.assertEquals("Moving caster must not rerasterize",count,well.rasterizations) }
+    }
+
     @Test fun singleBodyPrimitivePreservesTheExistingPathShadowAtTheSameNativeOrigin() {
         var reference by mutableStateOf(true)
         var sample by mutableIntStateOf(0)
