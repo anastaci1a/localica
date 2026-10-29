@@ -114,7 +114,7 @@ Buttons and autoplay default to a symmetric blur-through: soften the outgoing co
 
 Each playback visit animates, including identical decoded covers; cached pixels may be shared without skipping the transition. Use matching cached artwork immediately, retain the ready frame while its replacement loads, and show only the shared gradient on a cold start, without a music icon or white backing. Prepare up to four visits in each direction from actual queue traversal, including shuffle/history, within the bounded prepared-artwork cache.
 
-Full-background covers feather into their blended color continuation; floating covers keep separate edges while their backdrops crossfade. Reduced motion uses a short fade without blur or travel.
+Full-background covers feather into their blended color continuation; floating covers keep separate edges while their backdrops crossfade. Reduced motion uses a short fade without blur or travel. Player ink follows the displayed live crossfade contributions, not the requested successor alone. Unsampleable frozen captures and native blur retain the last verified ink; they do not establish current contrast.
 
 Lyrics remain open across songs and crossfade their documents; missing local lyrics show an unobtrusive empty indicator. Loading never exposes a white backing surface, blanks the player or replaces artwork prematurely. No routine loading/connection status text. Genuine playback failures use a rounded dismissible dialog with plain-language guidance and relevant Retry/Skip actions.
 
