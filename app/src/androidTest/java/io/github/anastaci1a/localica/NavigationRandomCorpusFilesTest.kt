@@ -97,8 +97,13 @@ class NavigationRandomCorpusFilesTest {
         val fifo = File(root, "pipe")
         Os.mkfifo(fifo.absolutePath, 384) // 0600, owned temporary FIFO; must not be opened for hashing.
         assertTrue(OsConstants.S_ISFIFO(Os.lstat(fifo.absolutePath).st_mode))
-        expectFailure { NavigationRandomCorpusFiles.observeFiles(root, mapOf("first.bin" to expected(file),
-            "pipe" to NavigationRandomCorpusFiles.ExpectedFile(digest(byteArrayOf())))) }
+        try {
+            NavigationRandomCorpusFiles.observeFiles(root, mapOf("first.bin" to expected(file),
+                "pipe" to NavigationRandomCorpusFiles.ExpectedFile(digest(byteArrayOf()))))
+            fail("Expected FIFO inventory rejection, not a returned inventory")
+        } catch (failure: IllegalArgumentException) {
+            assertEquals("Symlink or special filesystem node: pipe", failure.message)
+        }
     }
 
     @Test
