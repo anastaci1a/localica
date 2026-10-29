@@ -27,11 +27,11 @@ class TabResetTest {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         context.getSharedPreferences("interface", 0).edit().clear().commit()
         context.getSharedPreferences("browse-style", 0).edit().clear().commit()
-        InterfacePreferences(context).write(InterfaceSettings(tabs = listOf(MainTab.Library)))
+        InterfacePreferences(context).write(InterfaceSettings(tabs = listOf(MainTab.Library), glass = GlassAppearance(renderer = rendererCostMode())))
         val tracks = (0..99).map { n -> Track("song:$n", "Song $n", album = "Album " + n.toString().padStart(3, '0'),
             fileName = "$n.mp3", relativePath = "$n.mp3") }
         try {
-            compose.fixtureCostPhase("TabReset.mount") { compose.setContent { LocalicaTheme { LocalicaScreen(LibraryUiState(LibrarySnapshot(tracks = tracks), loading = false),
+            compose.fixtureCostPhase("TabReset.mount") { compose.setContent { RendererCostTheme { LocalicaScreen(LibraryUiState(LibrarySnapshot(tracks = tracks), loading = false),
                 PlaybackState(connected = true), {}, {}, {}, {}, {}, {},
                 playlist = PlaylistState(loading = false)) } } }
             val list = compose.onNodeWithTag("browser-list")

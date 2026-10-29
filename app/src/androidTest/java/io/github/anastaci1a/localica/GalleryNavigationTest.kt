@@ -20,14 +20,14 @@ class GalleryNavigationTest {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         context.getSharedPreferences("interface", 0).edit().clear().commit()
         context.getSharedPreferences("browse-style", 0).edit().clear().commit()
-        InterfacePreferences(context).write(InterfaceSettings(tabs = listOf(MainTab.Library)))
+        InterfacePreferences(context).write(InterfaceSettings(tabs = listOf(MainTab.Library), glass = GlassAppearance(renderer = rendererCostMode())))
         BrowsePreferences(context).write(BrowseRoute(MainTab.Library), BrowseStyle(presentation = Presentation.Standard), false)
         val tracks = (0..80).map { n ->
             val name = n.toString().padStart(3, '0')
             Track("song:$n", "Visible song $name", album = "Album $name", fileName = "$n.mp3", relativePath = "$n.mp3")
         }
         try {
-            compose.fixtureCostPhase("Gallery.mount") { compose.setContent { LocalicaTheme {
+            compose.fixtureCostPhase("Gallery.mount") { compose.setContent { RendererCostTheme {
                 LocalicaScreen(LibraryUiState(LibrarySnapshot(tracks = tracks), loading = false),
                     PlaybackState(connected = true), {}, {}, {}, {}, {}, {},
                     playlist = PlaylistState(loading = false))
