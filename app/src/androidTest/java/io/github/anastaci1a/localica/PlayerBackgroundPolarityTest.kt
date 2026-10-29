@@ -269,6 +269,21 @@ class PlayerBackgroundPolarityTest {
     }
 
     @Test fun opacityTransitionUsesDisplayedRolesBeforeTheSuccessorSettles() {
+        fun presentedFrame(): ArtworkBackgroundFrame {
+            await {
+                val observed = inkComposition
+                val sampled = owner.sampleDiagnostic
+                // During motion, snapshotFlow can publish the next frame after
+                // composition. Bind ink to the frame actually sampled/composed,
+                // not to a later observer notification as endpoint current() does.
+                observed != null && observed.frame != null && sampled != null &&
+                    observed.decision === owner.decision &&
+                    observed.decision.confidence == PlayerBackgroundConfidence.Current &&
+                    sampled.decision == System.identityHashCode(observed.decision) &&
+                    sampled.frame == System.identityHashCode(observed.frame)
+            }
+            return requireNotNull(inkComposition?.frame)
+        }
         lyrics = true // Real opacity transition, not the perspective-moving carousel.
         val black = cover(false); val white = cover(true)
         mount(black)
@@ -276,17 +291,15 @@ class PlayerBackgroundPolarityTest {
         compose.mainClock.autoAdvance = false
         compose.runOnIdle { visual = white; visit = "live-white" }
         frames(4)
-        current()
-        val early = requireNotNull(owner.frame)
-        assertTrue("Preparation must finish during the real transition", early.transitioning)
+        val early = presentedFrame()
+        assertTrue("Preparation must finish during the real transition: ${jointInkContext()}", early.transitioning)
         assertTrue(early.roles.any { it.visual.contentKey == black.contentKey && it.weight > .65f })
         assertTrue("The requested white successor must not choose ink before it is revealed", owner.decision.lightInk)
         assertRenderedInk(true)
         assertTrue("The displayed transport backing is still predominantly black", sampleBackgroundAtTransport() < .35f)
-        frames(14)
-        current()
-        val late = requireNotNull(owner.frame)
-        assertTrue("Contrast must change before the transition settles", late.transitioning)
+        frames(18)
+        val late = presentedFrame()
+        assertTrue("Contrast must change before the transition settles: ${jointInkContext()}", late.transitioning)
         assertTrue(late.roles.any { it.visual.contentKey == white.contentKey && it.weight > .55f && it.weight < 1f })
         assertFalse("The displayed white contribution now needs dark ink", owner.decision.lightInk)
         assertRenderedInk(false)
