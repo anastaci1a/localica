@@ -13,6 +13,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.navigation.GlassAppearance
+import io.github.anastaci1a.localica.navigation.GlassRendererMode
 import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 import androidx.compose.ui.graphics.graphicsLayer
@@ -22,6 +23,7 @@ internal val LocalGlassAppearance = compositionLocalOf { GlassAppearance() }
 @Composable
 internal fun GlassSettingsControls(value: GlassAppearance, onChange: (GlassAppearance) -> Unit) {
     Text("Tune floating glass and the navigation selector.")
+    GlassRendererPreference(value.renderer) { onChange(value.copy(renderer = it)) }
     var previewLightInk by remember { mutableStateOf(false) }
     CompositionLocalProvider(LocalGlassAppearance provides value) {
         Box(Modifier.fillMaxWidth().height(180.dp), contentAlignment = Alignment.Center) {
@@ -77,6 +79,22 @@ internal fun GlassSettingsControls(value: GlassAppearance, onChange: (GlassAppea
         { onChange(value.copy(controlExpansion = it)) }, Modifier.semantics { contentDescription = "Control expansion" },
         valueRange = 1f..2f, steps = 19, low = "1×", high = "2×")
     ActionTextButton(onClick = { onChange(GlassAppearance()) }) { Text("Reset glass appearance") }
+}
+
+@Composable
+internal fun GlassRendererPreference(value: GlassRendererMode, onChange: (GlassRendererMode) -> Unit) {
+    val modernAvailable = android.os.Build.VERSION.SDK_INT >= 33
+    val choices = if (modernAvailable) GlassRendererMode.entries else
+        listOf(GlassRendererMode.Automatic, GlassRendererMode.Legacy)
+    ChoicePreference("Glass renderer", value, choices, { it.label }, popup = true, onSelect = onChange)
+    val explanation = when {
+        value == GlassRendererMode.Modern && !modernAvailable ->
+            "Modern is saved, but this Android version uses Legacy. Modern requires Android 13 or later."
+        value == GlassRendererMode.Automatic ->
+            "Automatic uses ${effectiveGlassBackend(value, android.os.Build.VERSION.SDK_INT).name} on this device."
+        else -> "Using ${value.label} on this device."
+    }
+    Text(explanation, style = MaterialTheme.typography.bodySmall)
 }
 
 @Composable
