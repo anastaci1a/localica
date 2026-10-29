@@ -4,9 +4,34 @@ import android.graphics.Bitmap
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.unit.IntSize
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlin.math.roundToInt
+
+/** A readback is not necessarily CPU-readable on modern Android. Normalize once
+ * at the Legacy publication boundary, including completely clear/untinted glass.
+ * This is not blur: retain sharp pixels, alpha and the exact logical source extent.
+ * The input may be shared with a native lease/cache and is never recycled here. */
+internal suspend fun softwareGlassSnapshot(image: ImageBitmap, size: IntSize): ImageBitmap {
+    require(size.width > 0 && size.height > 0 && size.width <= image.width && size.height <= image.height)
+    val context = currentCoroutineContext()
+    context.ensureActive()
+    val software = checkNotNull(image.asAndroidBitmap().copy(Bitmap.Config.ARGB_8888, false))
+    var result: Bitmap? = null
+    try {
+        result = if (software.width == size.width && software.height == size.height) software
+            else Bitmap.createBitmap(software, 0, 0, size.width, size.height)
+        context.ensureActive()
+        return result.asImageBitmap()
+    } catch (failure: Throwable) {
+        if (result !== software) result?.recycle()
+        software.recycle()
+        throw failure
+    } finally {
+        if (result != null && result !== software && !software.isRecycled) software.recycle()
+    }
+}
 
 /** Android 8–11 fallback: shared, bounded, off-main blur with premultiplied alpha. */
 internal suspend fun blurGlassSnapshot(image: ImageBitmap, radius: Float): ImageBitmap {
