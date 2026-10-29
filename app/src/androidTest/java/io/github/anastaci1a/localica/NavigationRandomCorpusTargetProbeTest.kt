@@ -2,9 +2,12 @@ package io.github.anastaci1a.localica
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Test
 import org.junit.runner.RunWith
+import io.github.anastaci1a.localica.scanner.ScanState
 
 /** Ordinary gate/declaration contracts only. These tests never activate or validate a real corpus. */
 @RunWith(AndroidJUnit4::class)
@@ -159,6 +162,91 @@ class NavigationRandomCorpusTargetProbeTest {
             }
         }
     }
+
+    @Test
+    fun scanObserverAcceptsOnlyOneFreshCompleteObservedCycle() {
+        val monitor = freshScanMonitor()
+        monitor.observe(ScanState(running = true))
+        monitor.observe(ScanState(running = true, folder = "root", totalFolders = 2))
+        monitor.observe(ScanState(running = true, folder = "overlap", count = 100, completedFolders = 1, totalFolders = 2))
+        monitor.observe(scanTerminal())
+        val observed = monitor.snapshot()
+        assertEquals(setOf("root", "overlap"), observed.roots)
+        assertEquals(scanTerminal(), observed.terminal)
+        assertFalse(observed.accepts(101)) // A separate current-state observation is still mandatory.
+        assertTrue(observed.copy(currentMatchesTerminal = true).accepts(101))
+        assertFalse(observed.copy(currentMatchesTerminal = true).accepts(102))
+    }
+
+    @Test
+    fun scanObserverRejectsPreexistingOrRearmedScanState() {
+        for (state in listOf(ScanState(running = true), scanTerminal(), ScanState(message = "interrupted"))) {
+            illegalState("Scan state is not fresh idle immediately before start") {
+                NavigationRandomCorpusTargetProbe.ScanMonitor(setOf("root", "overlap")).arm(state)
+            }
+        }
+        val monitor = freshScanMonitor()
+        illegalState("Scan observer already armed or wrong roots") { monitor.arm(ScanState()) }
+    }
+
+    @Test
+    fun scanObserverInvalidatesEarlierTerminalOnLaterRunningCycle() {
+        val monitor = freshScanMonitor()
+        monitor.observe(ScanState(running = true, folder = "root"))
+        monitor.observe(ScanState(running = true, folder = "overlap"))
+        monitor.observe(scanTerminal())
+        val earlier = monitor.snapshot()
+        monitor.observe(ScanState(running = true, folder = "root"))
+        val later = monitor.snapshot()
+        assertEquals("later running cycle observed", later.invalidReason)
+        assertEquals(null, later.terminal)
+        assertFalse(later.copy(currentMatchesTerminal = true).accepts(101))
+        assertEquals(scanTerminal(), earlier.terminal) // Earlier observation remains an immutable historical value.
+    }
+
+    @Test
+    fun scanObserverDoesNotUnionRootsAcrossCycles() {
+        val monitor = freshScanMonitor()
+        monitor.observe(ScanState(running = true, folder = "root"))
+        monitor.observe(scanTerminal())
+        monitor.observe(ScanState(running = true, folder = "overlap"))
+        monitor.observe(scanTerminal())
+        val observed = monitor.snapshot()
+        assertEquals(setOf("root"), observed.roots)
+        assertEquals("later running cycle observed", observed.invalidReason)
+        assertFalse(observed.copy(currentMatchesTerminal = true).accepts(101))
+    }
+
+    @Test
+    fun scanObserverRejectsChangedTerminalAndUnexpectedRoots() {
+        val changed = freshScanMonitor()
+        changed.observe(ScanState(running = true, folder = "root"))
+        changed.observe(scanTerminal())
+        changed.observe(scanTerminal().copy(count = 102))
+        assertEquals("terminal state changed", changed.snapshot().invalidReason)
+        val foreign = freshScanMonitor()
+        foreign.observe(ScanState(running = true, folder = "foreign"))
+        foreign.observe(scanTerminal())
+        assertEquals("unexpected root observed", foreign.snapshot().invalidReason)
+        assertFalse(foreign.snapshot().copy(currentMatchesTerminal = true).accepts(101))
+    }
+
+    @Test
+    fun scanObserverRequiresCurrentTerminalAndBothRoots() {
+        val monitor = freshScanMonitor()
+        monitor.observe(ScanState(running = true, folder = "root"))
+        monitor.observe(scanTerminal())
+        assertFalse(monitor.snapshot().copy(currentMatchesTerminal = true).accepts(101))
+        val complete = NavigationRandomCorpusTargetProbe.ScanObservation(true, setOf("root", "overlap"),
+            setOf("root", "overlap"), scanTerminal(), scanTerminal(), null, true)
+        assertTrue(complete.accepts(101))
+        assertFalse(complete.copy(currentMatchesTerminal = false).accepts(101))
+        assertFalse(complete.copy(terminal = scanTerminal().copy(message = "Couldn’t scan 1 folder(s)." )).accepts(101))
+        assertFalse(complete.copy(terminal = scanTerminal().copy(totalFolders = 3)).accepts(101))
+    }
+
+    private fun freshScanMonitor() = NavigationRandomCorpusTargetProbe.ScanMonitor(setOf("root", "overlap")).apply { arm(ScanState()) }
+    private fun scanTerminal() = ScanState(count = 101, completedFolders = 2, totalFolders = 2, message = "Scan complete.")
 
     private fun illegalArgument(message: String, block: () -> Unit) {
         try {
