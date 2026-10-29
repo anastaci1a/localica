@@ -1,6 +1,5 @@
 package io.github.anastaci1a.localica
 
-import android.app.Instrumentation
 import android.app.Activity
 import android.app.Application
 import android.os.Bundle
@@ -12,6 +11,7 @@ import android.system.Os
 import android.system.OsConstants
 import android.util.Log
 import androidx.test.platform.app.InstrumentationRegistry
+import androidx.test.runner.AndroidJUnitRunner
 import java.io.File
 import java.io.FileDescriptor
 import java.util.concurrent.CountDownLatch
@@ -20,21 +20,24 @@ import java.util.concurrent.atomic.AtomicBoolean
 import org.json.JSONObject
 
 /**
- * Resident admission session, deliberately NOT a terminal AndroidJUnitRunner invocation.
- * Platform finish force-stops the target on API 26. This entry point never calls it, never
- * finishes Activities and never reports terminal instrumentation success. The bounded operation
+ * Ordinary invocations delegate unchanged to AndroidJUnitRunner. Only an explicit resident
+ * opt-in selects the separate admission operation. Platform finish force-stops the target on
+ * API 26; the resident path never calls it, finishes Activities, or reports terminal success.
+ * The bounded operation
  * writes its own completion receipt; the ordinary app looper and instrumentation remain alive.
  * Host must prove a fresh, never-launched target before startup (which itself force-stops targets).
  * No retry, recovery, uninstall or process-lifetime guarantee is provided here.
  */
-class NavigationRandomOwnedSession : Instrumentation() {
+class NavigationRandomOwnedSession : AndroidJUnitRunner() {
     private var supplied: Bundle? = null
+    private var residentMode = false
+    internal val isResidentInvocation: Boolean get() = residentMode
     @Volatile private var claimedRoot: File? = null
     private val finishRefused = AtomicBoolean(false)
     private val resumed = mutableSetOf<Activity>()
 
     override fun callApplicationOnCreate(app: Application) {
-        app.registerActivityLifecycleCallbacks(object : Application.ActivityLifecycleCallbacks {
+        if (residentMode) app.registerActivityLifecycleCallbacks(object : Application.ActivityLifecycleCallbacks {
             override fun onActivityResumed(activity: Activity) { resumed += activity }
             override fun onActivityPaused(activity: Activity) { resumed -= activity }
             override fun onActivityDestroyed(activity: Activity) { resumed -= activity }
@@ -52,23 +55,26 @@ class NavigationRandomOwnedSession : Instrumentation() {
     }
 
     override fun onCreate(arguments: Bundle?) {
-        super.onCreate(arguments)
         supplied = arguments?.let(::Bundle)
-        start()
+        residentMode = arguments?.containsKey("localicaOwnedSession") == true
+        if (residentMode) {
+            // Reject extra listener/debug/orchestrator arguments before AndroidJUnitRunner parses them.
+            // Invalid resident input still takes only our refusing worker, never the ordinary path.
+            try { NavigationRandomOwnedSessionProtocol.validate(argumentValues(requireNotNull(supplied))) }
+            catch (_: Exception) { start(); return }
+        }
+        // The pinned parent registers monitoring and starts exactly one instrumentation worker.
+        super.onCreate(arguments ?: Bundle())
     }
 
     override fun onStart() {
+        if (!residentMode) { super.onStart(); return }
         var directory: File? = null
         var sessionId: String? = null
         val started = SystemClock.uptimeMillis()
         try {
             val args = requireNotNull(supplied) { "Missing resident-session arguments" }
-            require(args.keySet() == NavigationRandomOwnedSessionProtocol.keys) { "Unexpected argument keys" }
-            val values = args.keySet().associateWith { key ->
-                val value = args.get(key)
-                require(value is String) { "Session arguments must be strings" }
-                value
-            }
+            val values = argumentValues(args)
             sessionId = NavigationRandomOwnedSessionProtocol.validate(values)
             val ready = CountDownLatch(1)
             check(Handler(Looper.getMainLooper()).post { ready.countDown() }) { "Main looper rejected readiness barrier" }
@@ -108,6 +114,7 @@ class NavigationRandomOwnedSession : Instrumentation() {
     }
 
     override fun finish(resultCode: Int, results: Bundle?) {
+        if (!residentMode) { super.finish(resultCode, results); return }
         // Defensive refusal: terminal instrumentation finish would kill the admitted application.
         Log.e("LocalicaOwnedSession", "Terminal finish refused in resident session; code=$resultCode")
         if (finishRefused.compareAndSet(false, true)) claimedRoot?.let { root ->
@@ -117,6 +124,15 @@ class NavigationRandomOwnedSession : Instrumentation() {
                     put("resultCode", resultCode); put("instrumentationFinished", false)
                 })
             } catch (failure: Throwable) { Log.e("LocalicaOwnedSession", boundedFailure(failure)) }
+        }
+    }
+
+    private fun argumentValues(args: Bundle): Map<String, String> {
+        require(args.keySet() == NavigationRandomOwnedSessionProtocol.keys) { "Unexpected argument keys" }
+        return args.keySet().associateWith { key ->
+            val value = args.get(key)
+            require(value is String) { "Session arguments must be strings" }
+            value
         }
     }
 

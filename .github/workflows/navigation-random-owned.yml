@@ -44,6 +44,10 @@ jobs:
     - name: Compile instrumentation APKs before starting emulator
       run: |
         ./gradlew assembleDebug assembleDebugAndroidTest --no-daemon --max-workers=2
+        "$ANDROID_HOME/build-tools/35.0.0/aapt" dump xmltree app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk AndroidManifest.xml > resident-instrumentation-manifest.txt
+        test "$(grep -c "E: instrumentation" resident-instrumentation-manifest.txt)" = 1
+        grep -Fq 'android:name(0x01010003)="io.github.anastaci1a.localica.NavigationRandomOwnedSession"' resident-instrumentation-manifest.txt
+        grep -Fq 'android:targetPackage(0x01010021)="io.github.anastaci1a.localica.debug"' resident-instrumentation-manifest.txt
         ./gradlew :app:dependencyInsight --configuration debugAndroidTestRuntimeClasspath --dependency androidx.test:monitor --no-daemon --max-workers=2 > monitor-dependency.txt
     - uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
       with:
@@ -89,7 +93,9 @@ jobs:
 
           prototype-runner-environment.txt
 
-          monitor-dependency.txt'
+          monitor-dependency.txt
+
+          resident-instrumentation-manifest.txt'
         if-no-files-found: error
         retention-days: 14
     - name: Retain exact validated APK pair for owned installation review
@@ -102,6 +108,7 @@ jobs:
           app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
           selection-evidence/input-apks.sha256
           selection-evidence/identity.txt
+          resident-instrumentation-manifest.txt
         if-no-files-found: error
         retention-days: 14
     name: Navigation random corpus owned bridge API 26 (required, not release)
@@ -144,6 +151,10 @@ jobs:
     - name: Compile instrumentation APKs before starting emulator
       run: |
         ./gradlew assembleDebug assembleDebugAndroidTest --no-daemon --max-workers=2
+        "$ANDROID_HOME/build-tools/35.0.0/aapt" dump xmltree app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk AndroidManifest.xml > resident-instrumentation-manifest.txt
+        test "$(grep -c "E: instrumentation" resident-instrumentation-manifest.txt)" = 1
+        grep -Fq 'android:name(0x01010003)="io.github.anastaci1a.localica.NavigationRandomOwnedSession"' resident-instrumentation-manifest.txt
+        grep -Fq 'android:targetPackage(0x01010021)="io.github.anastaci1a.localica.debug"' resident-instrumentation-manifest.txt
         ./gradlew :app:dependencyInsight --configuration debugAndroidTestRuntimeClasspath --dependency androidx.test:monitor --no-daemon --max-workers=2 > monitor-dependency.txt
     - uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
       with:
@@ -189,7 +200,9 @@ jobs:
 
           prototype-runner-environment.txt
 
-          monitor-dependency.txt'
+          monitor-dependency.txt
+
+          resident-instrumentation-manifest.txt'
         if-no-files-found: error
         retention-days: 14
     name: Navigation random corpus owned bridge API 36 (required, not release)
