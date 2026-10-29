@@ -31,6 +31,16 @@ if os.environ.get('MOCK_BLOCK')=='true':
     while True:signal.pause()
 for folder in ('app/build/reports/androidTests','app/build/outputs/androidTest-results','app/build/outputs/connected_android_test_additional_output'):
     path=root/folder;path.mkdir(parents=True,exist_ok=True);(path/'stub.txt').write_text('owned stub evidence')
+import xml.etree.ElementTree as ET
+classes=['io.github.anastaci1a.localica.SelectedTest','io.github.anastaci1a.localica.OtherTest']
+if any('Arguments.class=' in a for a in sys.argv):classes=classes[:1]
+if any('Arguments.notClass=' in a for a in sys.argv) and os.environ.get('MOCK_IGNORE_EXCLUSION')!='true':classes=classes[1:]
+if any('Arguments.class=' in a for a in sys.argv) and os.environ.get('MOCK_EMPTY_PREFLIGHT')=='true':classes=[]
+if os.environ.get('MOCK_CHANGE_APK')=='true':(root/'app/build/outputs/apk/debug/app-debug.apk').write_bytes(b'changed stub apk')
+suite=ET.Element('testsuite',tests=str(len(classes)),failures='0',errors='0',skipped='0')
+for name in classes:ET.SubElement(suite,'testcase',classname=name,name='actualTest',time='0.1')
+omit=(any('Arguments.class=' in a for a in sys.argv) and os.environ.get('MOCK_NO_PREFLIGHT_XML')=='true') or (any('Arguments.notClass=' in a for a in sys.argv) and os.environ.get('MOCK_NO_REMAINDER_XML')=='true')
+if not omit:ET.ElementTree(suite).write(root/'app/build/outputs/androidTest-results/TEST.xml')
 code=s['gradleExits'][min(s['gradle']-1,len(s['gradleExits'])-1)]
 if code or os.environ.get('MOCK_OBSERVED_FAILURE')=='true':print('io.github.anastaci1a.localica.SelectedTest > actualFailure[owned-device] FAILED',flush=True)
 sys.exit(code)
@@ -90,7 +100,10 @@ if a==['get-serialno']:""")
             path.chmod(0o755)
         source = self.root/'app/src/androidTest/java/io/github/anastaci1a/localica/SelectedTest.kt'
         source.parent.mkdir(parents=True)
-        source.write_text('class SelectedTest')
+        source.write_text('package io.github.anastaci1a.localica\nimport org.junit.Test\nclass SelectedTest { @Test fun actualTest() {} }')
+        source.with_name('OtherTest.kt').write_text('package io.github.anastaci1a.localica\nimport org.junit.Test\nclass OtherTest { @Test fun actualTest() {} }')
+        for apk in ('app/build/outputs/apk/debug/app-debug.apk','app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk'):
+            path=self.root/apk;path.parent.mkdir(parents=True,exist_ok=True);path.write_bytes(b'unchanged stub apk')
         self.state = dict(api='26', qemu='1', sdkExit=0, packages=f'package:{guard_fixture.PACKAGE}\n', enabled=0,
                           token='', boot='mock-boot', mutations=0, gradle=0, gradleExit=0, disableExit=0,
                           restoreExit=0, drift='', gradleExits=[0])
@@ -178,9 +191,10 @@ if a==['get-serialno']:""")
         self.run_runner(3)
         self.assertTrue(self.state['token'])
 
-    def test_passing_preflight_preserves_selector_then_runs_unfiltered_full(self):
+    def test_passing_preflight_then_disjoint_remaining_reconciles_complete_union(self):
         self.run_runner(RISK_CLASSES=SELECTED)
-        self.assertEqual([FULL_ARGS+['-Pandroid.testInstrumentationRunnerArguments.class='+SELECTED],FULL_ARGS],self.state['gradleArgs'])
+        self.assertEqual([FULL_ARGS+['-Pandroid.testInstrumentationRunnerArguments.class='+SELECTED],FULL_ARGS+['-Pandroid.testInstrumentationRunnerArguments.notClass='+SELECTED]],self.state['gradleArgs'])
+        self.assertEqual('complete_union',json.loads((self.root/'preflight-reports/complete-union.json').read_text())['status'])
         self.assertEqual('preflight',self.manifest('preflight')['lane'])
         self.assertEqual('native',self.manifest()['lane'])
         preflight=json.loads((self.root/'native-live-evidence/preflight/publishing/complete.json').read_text())
@@ -193,6 +207,42 @@ if a==['get-serialno']:""")
         self.assertTrue((self.root/'preflight-reports/app/build/outputs/androidTest-results/stub.txt').exists())
         self.assertEqual((self.root/'preflight-reports/gradle.log').read_bytes(),(self.root/'native-live-evidence/preflight/observed/command.log').read_bytes())
         self.assert_restored()
+
+    def test_zero_exit_with_empty_preflight_cannot_exclude_unexecuted_classes(self):
+        self.run_runner(2,RISK_CLASSES=SELECTED,MOCK_EMPTY_PREFLIGHT='true')
+        self.assertEqual(1,self.state['gradle'])
+        self.assertNotIn('clears',self.state)
+        self.assertFalse((self.root/'native-live-evidence/full').exists())
+        self.assert_restored()
+
+    def test_ignored_exclusion_cannot_report_green_duplicate_union(self):
+        self.run_runner(2,RISK_CLASSES=SELECTED,MOCK_IGNORE_EXCLUSION='true')
+        self.assertEqual(2,self.state['gradle'])
+        self.assertFalse((self.root/'preflight-reports/complete-union.json').exists())
+        self.assert_restored()
+
+    def test_changed_apk_cannot_admit_second_phase(self):
+        self.run_runner(1,RISK_CLASSES=SELECTED,MOCK_CHANGE_APK='true')
+        self.assertEqual(1,self.state['gradle'])
+        self.assertNotIn('clears',self.state)
+        self.assert_restored()
+
+    def test_stale_native_report_refuses_before_test_execution(self):
+        folder=self.root/'app/build/outputs/androidTest-results';folder.mkdir(parents=True)
+        (folder/'TEST.xml').write_text('old native results')
+        self.run_runner(2,RISK_CLASSES=SELECTED)
+        self.assertEqual(0,self.state['gradle'])
+        self.assertEqual('old native results',(folder/'TEST.xml').read_text())
+        self.assert_restored()
+
+    def test_exit_zero_without_fresh_phase_xml_cannot_pass(self):
+        for phase in ('PREFLIGHT','REMAINDER'):
+            with self.subTest(phase=phase):
+                if phase=='REMAINDER':self.setUp()
+                self.run_runner(2,RISK_CLASSES=SELECTED,**{'MOCK_NO_'+phase+'_XML':'true'})
+                self.assertEqual(1 if phase=='PREFLIGHT' else 2,self.state['gradle'])
+                self.assertFalse((self.root/'preflight-reports/complete-union.json').exists())
+                self.assert_restored()
 
     def test_failed_preflight_never_clears_or_starts_full(self):
         self.state['gradleExits']=[19]
