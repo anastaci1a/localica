@@ -1,0 +1,89 @@
+name: Preflight dedup native smoke
+on:
+  push:
+    branches: [dot/full-preflight-dedup-20261028]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: preflight-dedup-native-smoke-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  contracts:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Run exact offline protocol contracts
+        run: |
+          set -euo pipefail
+          python3 -m unittest discover -s .github/tests -p 'test_full_partition.py' -v
+          python3 -m unittest discover -s .github/tests -p 'test_full_live_evidence.py' -v
+          python3 -m unittest discover -s .github/tests -p 'test_prepare_device_tests.py' -v
+          bash -n .github/run-device-tests.sh .github/prepare-device-tests.sh .github/tests/run_preflight_native_fixture.sh
+  native-smoke:
+    needs: contracts
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        api: [26, 36]
+    env:
+      TEST_API: ${{ matrix.api }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+      - name: Prepare complete three-class fixture without product sources
+        run: |
+          set -euo pipefail
+          npm ci --prefix .github/test-evidence --ignore-scripts --no-audit --no-fund
+          cp -a .github/tests/preflight-native-fixture preflight-native-fixture
+          cp gradlew settings.gradle.kts preflight-native-fixture/
+          cp -a gradle preflight-native-fixture/
+          mkdir preflight-native-fixture/.github
+          cp .github/run-device-tests.sh .github/prepare-device-tests.sh preflight-native-fixture/.github/
+          cp -a .github/test-evidence preflight-native-fixture/.github/
+          sha256sum .github/run-device-tests.sh .github/prepare-device-tests.sh .github/test-evidence/*.py .github/test-evidence/publish.mjs gradle/libs.versions.toml gradle/wrapper/gradle-wrapper.properties > preflight-native-fixture/source-provenance.sha256
+          cd preflight-native-fixture
+          ./gradlew assembleDebug assembleDebugAndroidTest --no-daemon --max-workers=2
+          ./gradlew :app:dependencies --configuration debugAndroidTestRuntimeClasspath --no-daemon --max-workers=2 > resolved-test-dependencies.txt
+      - name: Enable emulator acceleration
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
+        with:
+          api-level: ${{ matrix.api }}
+          target: ${{ matrix.api == 36 && 'default' || 'google_apis' }}
+          arch: x86_64
+          profile: pixel_2
+          emulator-options: -no-window -gpu ${{ matrix.api == 36 && 'lavapipe' || 'swiftshader_indirect' }} -no-snapshot -noaudio -no-boot-anim -memory 3072
+          disable-animations: ${{ matrix.api < 36 }}
+          script: bash .github/tests/run_preflight_native_fixture.sh
+      - name: Preserve native protocol proof, including failures
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: preflight-dedup-native-smoke-api-${{ matrix.api }}
+          if-no-files-found: error
+          path: |
+            preflight-native-fixture/option-evidence/
+            preflight-native-fixture/preflight-reports/
+            preflight-native-fixture/native-live-evidence/
+            preflight-native-fixture/app/build/outputs/androidTest-results/
+            preflight-native-fixture/app/build/reports/androidTests/
+            preflight-native-fixture/resolved-test-dependencies.txt
+            preflight-native-fixture/source-provenance.sha256
+            preflight-native-fixture/gradle/libs.versions.toml
+            preflight-native-fixture/gradle/wrapper/gradle-wrapper.properties
+            preflight-native-fixture/native-fixture-verified.json
+            preflight-native-fixture/app/build/outputs/apk/
