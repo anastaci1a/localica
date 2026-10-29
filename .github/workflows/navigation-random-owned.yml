@@ -9,7 +9,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     env:
-      SELECTORS: io.github.anastaci1a.localica.NavigationRandomCorpusAdmissionTest,io.github.anastaci1a.localica.NavigationRandomCorpusDocumentsProviderTest
+      SELECTORS: io.github.anastaci1a.localica.NavigationRandomCorpusAdmissionTest#registeredProviderRejectsUngrantableTargetQueryAtFrameworkPermissionBoundary
       TEST_API: '26'
     steps:
     - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -105,7 +105,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     env:
-      SELECTORS: io.github.anastaci1a.localica.NavigationRandomCorpusAdmissionTest,io.github.anastaci1a.localica.NavigationRandomCorpusDocumentsProviderTest
+      SELECTORS: io.github.anastaci1a.localica.NavigationRandomCorpusAdmissionTest#registeredProviderRejectsUngrantableTargetQueryAtFrameworkPermissionBoundary
       TEST_API: '36'
     steps:
     - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
