@@ -51,7 +51,7 @@ class TreeScanner(private val source: DocumentSource) {
                     }
                     metadataReads++
                     val metadata = try {
-                        source.metadata(document.uri, document.name)
+                        source.metadata(document.uri, document.name, document.modifiedAt)
                     } catch (cancelled: CancellationException) {
                         throw cancelled
                     } catch (_: Exception) {

@@ -60,4 +60,26 @@ class EmbeddedTagsTest {
         assertNull(ArtworkReader(context).read("file:///missing.mp3"))
         assertNull(decodeArtwork(byteArrayOf(1, 2, 3, 4)))
     }
+    @Test fun listedModificationTimePreservesTagsAndUnknownHintsReadTheFile() = runBlocking {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val context = instrumentation.targetContext
+        val file = File(context.cacheDir, "listed-time-${java.util.UUID.randomUUID()}.mp3")
+        try {
+            instrumentation.context.assets.open("tagged.mp3").use { input -> file.outputStream().use(input::copyTo) }
+            val uri = Uri.fromFile(file).toString()
+            val documents = AndroidDocuments(context)
+            val currentModifiedAt = file.lastModified()
+            assertTrue(currentModifiedAt > 0)
+            val metadata = documents.metadata(uri, file.name)
+            assertEquals(currentModifiedAt, metadata.modifiedAt)
+            val listed = 111L
+            assertNotEquals(listed, currentModifiedAt)
+            assertEquals(metadata.copy(modifiedAt = listed), documents.metadata(uri, file.name, listed))
+            for (unknown in listOf(null, 0L, -1L)) {
+                assertEquals(metadata, documents.metadata(uri, file.name, unknown))
+            }
+            assertEquals(metadata, documents.metadata(uri))
+        } finally { file.delete() }
+    }
+
 }

@@ -67,8 +67,12 @@ interface DocumentSource {
     fun root(treeUri: String): ScanDocument
     fun children(treeUri: String, documentId: String): List<ScanDocument>
     suspend fun metadata(uri: String): AudioMetadata
-    suspend fun metadata(uri: String, fileName: String): AudioMetadata = metadata(uri)
+    suspend fun metadata(uri: String, fileName: String, listedModifiedAt: Long? = null): AudioMetadata = metadata(uri)
 }
+
+/** A listing hint belongs only to this read; unknown dates still consult the source. */
+internal inline fun listedModifiedAtOrRead(listedModifiedAt: Long?, readFresh: () -> Long?): Long? =
+    listedModifiedAt?.takeIf { it > 0 } ?: readFresh()
 
 data class ScanResult(val folder: FolderSelection, val tracks: List<Track>, val metadataFailures: Int,
     val failedMetadataIds: Set<String> = emptySet(), val metrics: ScanMetrics = ScanMetrics())
