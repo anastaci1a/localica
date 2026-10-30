@@ -60,7 +60,7 @@ object BrowseQueries {
         occurrenceId: String): BrowseResult? {
         if (route.search || route.globalSearch || route.text.isNotBlank() || route.filter != null ||
             route.collection != MediaRef(MediaKind.Queue, queue.id) || queue.entries.none { it.id == occurrenceId }) return null
-        val rows = queueRows(queue, snapshot, snapshot.tracks.associateBy { it.id })
+        val rows = queueRows(queue, snapshot, snapshot.tracksById)
         return BrowseResult(rows.map { row -> BrowserItem(MediaRef(MediaKind.Song, row.track.id),
             row.track.title, row.track.artist ?: row.track.albumArtist, listOf(row), row) }, scope(route))
     }
@@ -147,7 +147,7 @@ object BrowseQueries {
         query: LibraryQuery, queues: List<ListeningQueue>, allCollections: Set<MediaKind>, sorts: BrowseSortSnapshot, checkActive: () -> Unit): BrowseResult {
         val effective = query.copy(text = route.text)
         val collection = route.collection.takeUnless { route.globalSearch }
-        val currentTracks by lazy { snapshot.tracks.associateBy { it.id } }
+        val currentTracks by lazy { snapshot.tracksById }
         fun songItems(rows: List<SongRow>) = rows.map { BrowserItem(MediaRef(MediaKind.Song, it.track.id),
             it.track.title, it.track.artist ?: it.track.albumArtist, listOf(it), it) }
         fun groups(kind: MediaKind): List<BrowserItem> {
