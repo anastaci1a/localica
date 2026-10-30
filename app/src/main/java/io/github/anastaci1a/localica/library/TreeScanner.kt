@@ -82,12 +82,11 @@ class TreeScanner(private val source: DocumentSource) {
         }
         currentCoroutineContext().ensureActive()
         onProgress(inspected)
-        return ScanResult(FolderSelection(treeUri, root.name), tracks.values.sortedWith(trackOrder), failedMetadataIds.size,
+        return ScanResult(FolderSelection(treeUri, root.name), tracks.values.inCanonicalOrder(), failedMetadataIds.size,
             failedMetadataIds, ScanMetrics(directoryQueries, metadataReads, System.nanoTime() - started))
     }
 }
 
-internal val trackOrder = compareBy<Track> { it.title.lowercase(Locale.ROOT) }.thenBy { it.relativePath }.thenBy { it.uri }
 private fun String?.clean() = this?.trim()?.takeIf { it.isNotEmpty() && it != "<unknown>" }
 
 object AudioFiles {
