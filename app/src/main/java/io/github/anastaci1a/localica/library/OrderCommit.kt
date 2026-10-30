@@ -9,4 +9,18 @@ data class OrderCommit(
     val changed: Boolean,
     /** Present only when the command's target is the active queue at completion. */
     val currentEntryId: String? = null,
-)
+) {
+    companion object {
+        /** Compare ordering only; unchanged published identity needs no occurrence traversal. */
+        internal inline fun <T> hasChanged(
+            beforeOrder: SavedOrder,
+            afterOrder: SavedOrder,
+            beforeEntries: List<T>,
+            afterEntries: List<T>,
+            occurrenceId: (T) -> String,
+        ): Boolean = beforeOrder != afterOrder || beforeEntries !== afterEntries &&
+            (beforeEntries.size != afterEntries.size || beforeEntries.indices.any {
+                occurrenceId(beforeEntries[it]) != occurrenceId(afterEntries[it])
+            })
+    }
+}
