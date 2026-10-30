@@ -155,6 +155,10 @@ internal fun Modifier.glassDepthScale(): Float = foldIn(1f) { depth, element ->
 
 internal enum class GlassPlacement { Search, Menu, Center, Sheet, Page }
 internal val LocalGlassPanelReady = compositionLocalOf { true }
+
+/** Optional committed-scope observations; no progress subscription or behavior switch. */
+internal val LocalGlassMorphWorkObserver =
+    staticCompositionLocalOf<((String, android.view.Window?, Float?) -> Unit)?> { null }
 // Only separate modal windows may read this scene. Inline lenses must keep using
 // LocalFrostedBackdrop, whose recordings exclude their own foreground controls.
 internal val LocalModalBackdrop = staticCompositionLocalOf<FrostedBackdrop?> { null }
@@ -495,6 +499,8 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
     Dialog(onDismissRequest = { if (continuousOrigin == null || originAdmitted) dismissNow() }, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) { ModalGestureWindow(gestures) { TextEditingFocusHost {
         val view = LocalView.current
         val window = (view.parent as? DialogWindowProvider)?.window
+        val workObserver = LocalGlassMorphWorkObserver.current
+        if (workObserver != null) SideEffect { workObserver("dialog", window, null) }
         if (placement == GlassPlacement.Search) PreserveSearchImeState(window)
         val reportSearchOpening = remember(window, searchOpeningGeneration) {
             val generation = searchOpeningGeneration
@@ -569,6 +575,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                 // Window/input ownership above does not subscribe to the animation clock.
                 val p = progress.value.coerceIn(0f, 1f)
                 val geometry = glassMorphGeometryProgress(p, anchor.quiet)
+                if (workObserver != null) SideEffect { workObserver("geometry", window, p) }
                 val density = LocalDensity.current
                 var windowOrigin by remember { mutableStateOf(Offset.Zero) }
                 var targetHeight by remember { mutableIntStateOf(0) }
