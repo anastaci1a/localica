@@ -27,7 +27,7 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
                       private val library: LibraryRepository,
                       private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
                       private val readers: NativeReaders = NativeReaders(),
-                      private val sortSnapshot: suspend () -> io.github.anastaci1a.localica.library.LibrarySnapshot = { library.snapshots.first() },
+                      private val sortSnapshot: suspend () -> io.github.anastaci1a.localica.library.LibrarySnapshot = { library.sortSnapshots.first() },
                       private val mediaItemFactory: (String, Track, String?) -> MediaItem = ::queueMediaItem,
                       diagnoseOrders: Boolean = false) {
     /** Debug diagnostics only; the sink runs off the actor after its terminal callback. */

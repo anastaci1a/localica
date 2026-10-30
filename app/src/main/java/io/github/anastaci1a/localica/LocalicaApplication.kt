@@ -1,7 +1,7 @@
 package io.github.anastaci1a.localica
 
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.combine
+import io.github.anastaci1a.localica.statistics.withListeningStatistics
 
 import android.app.Application
 import kotlinx.coroutines.*
@@ -48,9 +48,8 @@ class LocalicaApplication : Application() {
             QueuePreferences(this), library, readers = nativeReaders, sortSnapshot = ::liveSortSnapshot,
             diagnoseOrders = applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0)
     }
-    private suspend fun liveSortSnapshot() = withContext(Dispatchers.Default) {
-        combine(library.snapshots, statistics.counts) { snapshot, counts -> counts.applyTo(snapshot) }.first()
-    }
+    private suspend fun liveSortSnapshot() =
+        library.sortSnapshots.withListeningStatistics(statistics.counts).first()
 
     val library by lazy {
         val database = Room.databaseBuilder(this, LibraryDatabase::class.java, "library.db").addMigrations(LibraryDatabase.MIGRATION_1_2, LibraryDatabase.MIGRATION_2_3, LibraryDatabase.MIGRATION_3_4, LibraryDatabase.MIGRATION_4_5, LibraryDatabase.MIGRATION_5_6).build()
