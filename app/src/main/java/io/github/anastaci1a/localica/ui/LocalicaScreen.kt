@@ -164,11 +164,9 @@ fun LocalicaScreen(
         else if (settings.confirmExit) exitPrompt = true else exit()
     }
     androidx.activity.compose.BackHandler { back() }
-    val currentTrack = queues.library.active?.let { queue ->
-        queue.entries.firstOrNull { it.id == queue.currentEntryId }?.track
-    }
-    val indexedTrack = currentTrack?.let { saved -> library.snapshot.tracks.firstOrNull { it.id == saved.id }
-        ?: saved.copy(playCount = library.snapshot.trackPlays[saved.id] ?: 0) }
+    val playerTracks = rememberPlayerTrackProjection(queues.library, library.snapshot)
+    val currentTrack = playerTracks.current
+    val indexedTrack = playerTracks.indexed
     // The lyrics page is available even without local sources and stays open
     // across song changes; source discovery belongs to the page itself.
     fun openCollection(item: io.github.anastaci1a.localica.browse.BrowserItem) {
@@ -362,7 +360,7 @@ fun LocalicaScreen(
         } }
         if (hasPlayer) PlayerSurface(player, expanded, { expanded = it }, settings, progress,
             onToggle, onSeek, onPrevious, onNext, ::openQueue, { expanded = false },
-            lyricsOpen, { lyricsOpen = it }, currentTrack?.let { track -> library.snapshot.tracks.firstOrNull { it.id == track.id } ?: track },
+            lyricsOpen, { lyricsOpen = it }, playerTracks.lyrics,
             { settings = it; preferences.write(it) }, actionRows = if (playerActions.twoRows) 2 else 1, queueProgress = queueProgress, frostedBackdrop = playerBackdrop, glassBackdrop = browseBackdrop, visual = playerVisual,
             onSeekRequest = onSeekRequest, backgroundPolarity = playerBackgroundPolarity, artworkVisit = journey?.current?.token, previousArtwork = previousArtwork, nextArtwork = nextArtwork,
             bottomChrome = bottomChrome, miniForeground = miniInk, onArtworkVisit = queueController?.let { controller -> { token, complete -> controller.swipeTo(token, complete) } }) {
