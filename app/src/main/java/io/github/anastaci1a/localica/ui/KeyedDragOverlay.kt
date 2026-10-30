@@ -1,7 +1,6 @@
 package io.github.anastaci1a.localica.ui
 
 import androidx.compose.animation.core.*
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.*
@@ -29,7 +28,7 @@ internal fun <T : Any, P> BoxScope.KeyedDragOverlay(state: KeyedDragState<T, P>,
     countDescription: (Int) -> String, cancelBottomMargin: Dp = 20.dp, content: @Composable BoxScope.(T, P) -> Unit) {
     val drag = state.drag ?: return
     val density = LocalDensity.current
-    val view = LocalView.current
+    val haptics = rememberControlHaptics()
     val cancelMotion = key(drag) { rememberFloatingControlMotion(!drag.dropping, reducedMotion) }
     DisposableEffect(drag, cancelMotion) {
         drag.cancelMotion = cancelMotion
@@ -44,8 +43,8 @@ internal fun <T : Any, P> BoxScope.KeyedDragOverlay(state: KeyedDragState<T, P>,
         state.cancelRadius = cancelSize / 2f
         state.cancelMargin = with(density) { cancelBottomMargin.toPx() }
         state.cancelRise = with(density) { FloatingControlRise.toPx() }
-        state.onCancelHover = { entering -> view.performHapticFeedback(if (entering)
-            android.view.HapticFeedbackConstants.LONG_PRESS else android.view.HapticFeedbackConstants.CLOCK_TICK) }
+        state.onCancelHover = { entering -> haptics.emit(if (entering)
+            ControlHaptic.Strong else ControlHaptic.Weak) }
     }
     val offset = with(density) { 7.dp.toPx() }
     val margin = with(density) { 8.dp.toPx() }
