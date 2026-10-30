@@ -15,7 +15,10 @@ import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.unit.IntSize
 import kotlin.math.*
 
-/** Android 8–12 execution adapter for the same new lens model. It warps a shared
+/** Optional work counters describe explicit allocations, not platform-internal memory. */
+internal enum class LensAllocation { CaptureBitmap, BitmapShader, SoftwareRaster }
+
+/** Legacy execution adapter for the same new lens model. It warps a shared
  * prepared scene through a bounded mesh; it does not retain the old edge-only style. */
 internal class LensMeshRenderer {
     private var geometryKey: List<Any> = emptyList()
@@ -39,8 +42,9 @@ internal class LensMeshRenderer {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<ImageBitmap, BitmapShader>) = size > 4
     }
     // drawVertices is hardware-supported only from API 29. Older devices execute
-    // the same mesh into a retained raster, then composite it normally. Never turn
-    // off hardware acceleration for the whole app or retain another optical style.
+    // the same mesh into a software raster, then composite it normally. Immutable
+    // sources can retain rasters; mutable captures always produce independent output.
+    // Never turn off hardware acceleration or retain another optical style.
     private data class RasterKey(val generation: Int, val image: ImageBitmap?,
         val sampling: BackdropSampleMapping, val lighting: Boolean)
     private val rasters = object : LinkedHashMap<RasterKey, Bitmap>(4, .75f, true) {
@@ -51,7 +55,11 @@ internal class LensMeshRenderer {
         sourceOffset: Offset, depth: Float, power: Float = 1f, alpha: Float = 1f,
         field: ((Offset) -> LensField)? = null, fieldKey: Any? = null, lighting: Boolean = true, additive: Boolean = false,
         flattening: Float = 0f, tone: GlassTone = GlassTone(), outlines: List<RoundRect>? = null,
-        registration: BackdropRegistration? = null) {
+        registration: BackdropRegistration? = null, mutableSoftwareSnapshot: Boolean = false,
+        onAllocation: ((LensAllocation) -> Unit)? = null) {
+        require(!mutableSoftwareSnapshot || Build.VERSION.SDK_INT < 29) {
+            "Mutable snapshots require synchronous software rasterization"
+        }
         val next = listOf(shape, density, fieldKey ?: Unit, outlines ?: Unit)
         val geometryChanged = geometryKey != next
         if (geometryChanged) {
@@ -80,52 +88,63 @@ internal class LensMeshRenderer {
                 highlights[i] = lensReflectionColor(ray, tone, power)
             }
         }
-        scenePaint.shader = snapshot?.let { shaders.getOrPut(it) {
-            BitmapShader(it.asAndroidBitmap(), Shader.TileMode.CLAMP, Shader.TileMode.CLAMP)
-        } }
-        val sampling = BackdropSampleMapping(sourceSize,
-            if (snapshot == null || registration != null) Offset.Zero else sourceOffset,
-            registration.takeIf { snapshot != null })
-        if (snapshot != null) {
-            val imageSize = IntSize(snapshot.width, snapshot.height)
-            for (i in texture.indices step 2) {
-                val sample = sampling.texture(Offset(vertices[i] + rays[i], vertices[i + 1] + rays[i + 1]), imageSize)
-                texture[i] = sample.x
-                texture[i + 1] = sample.y
+        try {
+            fun shader(image: ImageBitmap) =
+                BitmapShader(image.asAndroidBitmap(), Shader.TileMode.CLAMP, Shader.TileMode.CLAMP).also {
+                    onAllocation?.invoke(LensAllocation.BitmapShader)
+                }
+            scenePaint.shader = snapshot?.let {
+                if (mutableSoftwareSnapshot) shader(it) else shaders.getOrPut(it) { shader(it) }
             }
-        }
-        fun render(canvas: android.graphics.Canvas, opacity: Float, textureIndices: ShortArray = indices) {
+            val sampling = BackdropSampleMapping(sourceSize,
+                if (snapshot == null || registration != null) Offset.Zero else sourceOffset,
+                registration.takeIf { snapshot != null })
             if (snapshot != null) {
-                scenePaint.alpha = (255 * opacity).toInt().coerceIn(0, 255)
-                canvas.drawVertices(android.graphics.Canvas.VertexMode.TRIANGLES, vertices.size,
-                    vertices, 0, texture, 0, null, 0, textureIndices, 0, textureIndices.size, scenePaint)
+                val imageSize = IntSize(snapshot.width, snapshot.height)
+                for (i in texture.indices step 2) {
+                    val sample = sampling.texture(Offset(vertices[i] + rays[i], vertices[i + 1] + rays[i + 1]), imageSize)
+                    texture[i] = sample.x
+                    texture[i + 1] = sample.y
+                }
             }
-            if (lighting) {
-                lightPaint.alpha = (255 * opacity).toInt().coerceIn(0, 255)
-                canvas.drawVertices(android.graphics.Canvas.VertexMode.TRIANGLES, vertices.size,
-                    vertices, 0, null, 0, highlights, 0, indices, 0, indices.size, lightPaint)
+            fun render(canvas: android.graphics.Canvas, opacity: Float, textureIndices: ShortArray = indices) {
+                if (snapshot != null) {
+                    scenePaint.alpha = (255 * opacity).toInt().coerceIn(0, 255)
+                    canvas.drawVertices(android.graphics.Canvas.VertexMode.TRIANGLES, vertices.size,
+                        vertices, 0, texture, 0, null, 0, textureIndices, 0, textureIndices.size, scenePaint)
+                }
+                if (lighting) {
+                    lightPaint.alpha = (255 * opacity).toInt().coerceIn(0, 255)
+                    canvas.drawVertices(android.graphics.Canvas.VertexMode.TRIANGLES, vertices.size,
+                        vertices, 0, null, 0, highlights, 0, indices, 0, indices.size, lightPaint)
+                }
             }
-        }
-        drawIntoCanvas { canvas ->
-            if (Build.VERSION.SDK_INT >= 29) {
-                scenePaint.xfermode = if (additive) addition else null
-                render(canvas.nativeCanvas, alpha)
-            }
-            else {
-                val key = RasterKey(generation, snapshot, sampling, lighting)
-                val image = rasters.getOrPut(key) {
-                    Bitmap.createBitmap(ceil(shape.bounds.width).toInt().coerceAtLeast(1),
+            drawIntoCanvas { canvas ->
+                if (Build.VERSION.SDK_INT >= 29) {
+                    scenePaint.xfermode = if (additive) addition else null
+                    render(canvas.nativeCanvas, alpha)
+                }
+                else {
+                    fun rasterize() = Bitmap.createBitmap(ceil(shape.bounds.width).toInt().coerceAtLeast(1),
                         ceil(shape.bounds.height).toInt().coerceAtLeast(1), Bitmap.Config.ARGB_8888).also {
+                        onAllocation?.invoke(LensAllocation.SoftwareRaster)
                         if (snapshot != null) conditionLensTextureTriangles(vertices, texture, indices, conditionedIndices)
                         val target = android.graphics.Canvas(it)
                         target.translate(-shape.bounds.left, -shape.bounds.top)
                         render(target, 1f, conditionedIndices)
                     }
+                    // Mutable capture pixels are consumed now; only the new independent
+                    // raster reaches the display canvas. Neither cache retains that input.
+                    val image = if (mutableSoftwareSnapshot) rasterize()
+                        else rasters.getOrPut(RasterKey(generation, snapshot, sampling, lighting)) { rasterize() }
+                    bitmapPaint.alpha = (255 * alpha).toInt().coerceIn(0, 255)
+                    bitmapPaint.xfermode = if (additive) addition else null
+                    canvas.nativeCanvas.drawBitmap(image, shape.bounds.left, shape.bounds.top, bitmapPaint)
                 }
-                bitmapPaint.alpha = (255 * alpha).toInt().coerceIn(0, 255)
-                bitmapPaint.xfermode = if (additive) addition else null
-                canvas.nativeCanvas.drawBitmap(image, shape.bounds.left, shape.bounds.top, bitmapPaint)
             }
+        } finally {
+            // Paint also retains its shader, independently of both cache maps.
+            if (mutableSoftwareSnapshot) scenePaint.shader = null
         }
     }
 }
