@@ -1,7 +1,7 @@
-name: Audit cover decode (not release)
+name: Audit queue header (not release)
 'on':
   push:
-    branches: [dev/audit-cover-decode-gate-20261030]
+    branches: [dev/audit-queue-header-gate-20261030]
 permissions:
   contents: read
 jobs:
@@ -27,12 +27,12 @@ jobs:
             display: compact
     env:
       TEST_API: ${{ matrix.api }}
-      SELECTORS: io.github.anastaci1a.localica.CoverDecodeTest,io.github.anastaci1a.localica.CoverImagesTest,io.github.anastaci1a.localica.ArtworkCropTest,io.github.anastaci1a.localica.ArtworkCropLoadingTest,io.github.anastaci1a.localica.ArtworkReviewReadinessTest,io.github.anastaci1a.localica.ImageChooserTest,io.github.anastaci1a.localica.ArtworkGrantsTest,io.github.anastaci1a.localica.ArtworkEditRestorationTest,io.github.anastaci1a.localica.PlaylistArtworkRestorationTest,io.github.anastaci1a.localica.TagEditorThemeInheritanceTest,io.github.anastaci1a.localica.ImeClosingObservationTest
+      SELECTORS: io.github.anastaci1a.localica.QueueHeaderSummaryTest,io.github.anastaci1a.localica.QueueBrowsingTest,io.github.anastaci1a.localica.QueueSaveOriginTest,io.github.anastaci1a.localica.QueueHeaderMaterialBoundaryTest,io.github.anastaci1a.localica.InterfaceNavigationTest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - uses: ./.github/actions/focused-android-setup
       - name: Compile instrumentation and verify focused JVM contracts
-        run: ./gradlew testDebugUnitTest --tests io.github.anastaci1a.localica.editing.ArtworkGrantsTest assembleDebug assembleDebugAndroidTest --no-daemon --max-workers=2
+        run: ./gradlew testDebugUnitTest --tests io.github.anastaci1a.localica.queue.QueueEditsTest --tests io.github.anastaci1a.localica.queue.QueueEquivalenceTest --tests io.github.anastaci1a.localica.queue.QueueCursorCaptureTest assembleDebug assembleDebugAndroidTest --no-daemon --max-workers=2
       - uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
         with:
           api-level: ${{ matrix.api }}
@@ -55,7 +55,7 @@ jobs:
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
-          name: audit-cover-decode-gate-api-${{ matrix.api }}
+          name: audit-queue-header-gate-api-${{ matrix.api }}
           path: |
             app/build/reports/
             app/build/test-results/
