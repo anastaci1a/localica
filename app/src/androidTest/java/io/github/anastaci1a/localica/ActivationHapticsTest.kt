@@ -185,8 +185,8 @@ class ActivationHapticsTest {
                 useUnmergedTree = true).assertCountEquals(1)
             val nativeBounds = reference.getUnclippedBoundsInRoot()
             val sharedBounds = shared.getUnclippedBoundsInRoot()
-            assertEquals(nativeBounds.width.value, sharedBounds.width.value, .001f)
-            assertEquals(nativeBounds.height.value, sharedBounds.height.value, .001f)
+            assertEquals((nativeBounds.right - nativeBounds.left).value, (sharedBounds.right - sharedBounds.left).value, .001f)
+            assertEquals((nativeBounds.bottom - nativeBounds.top).value, (sharedBounds.bottom - sharedBounds.top).value, .001f)
             compose.runOnIdle { assertEquals(requireNotNull(nativeInk), requireNotNull(sharedInk)) }
             val nativePixels = reference.captureToImage().toPixelMap()
             val sharedPixels = shared.captureToImage().toPixelMap()
