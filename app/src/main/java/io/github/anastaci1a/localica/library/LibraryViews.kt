@@ -17,9 +17,23 @@ object LibraryViews {
         SongListView.Playlists -> TrackSort.Manual
         else -> TrackSort.Title
     })
-    fun groups(snapshot: LibrarySnapshot, view: SongListView, query: LibraryQuery, checkActive: () -> Unit = {}): List<LibraryGroup> {
+    fun groups(snapshot: LibrarySnapshot, view: SongListView, query: LibraryQuery, checkActive: () -> Unit = {}): List<LibraryGroup> =
+        groups(snapshot, view, query, { LibraryQueries.tracks(snapshot, query, checkActive) }, checkActive)
+
+    /** One evaluation owns this preparation; it never crosses snapshot or request boundaries. */
+    internal class Preparation(private val snapshot: LibrarySnapshot, private val checkActive: () -> Unit) {
+        private val ordered = mutableMapOf<LibraryQuery, List<Track>>()
+        fun groups(view: SongListView, query: LibraryQuery): List<LibraryGroup> =
+            LibraryViews.groups(snapshot, view, query, {
+                checkActive()
+                ordered.getOrPut(query) { LibraryQueries.tracks(snapshot, query, checkActive) }
+            }, checkActive)
+    }
+
+    private fun groups(snapshot: LibrarySnapshot, view: SongListView, query: LibraryQuery,
+        ordered: () -> List<Track>, checkActive: () -> Unit): List<LibraryGroup> {
         if (view == SongListView.Songs || view == SongListView.Playlists || view == SongListView.Search) return emptyList()
-        val tracks = LibraryQueries.tracks(snapshot, query, checkActive)
+        val tracks = ordered()
         fun key(text: String?) = text?.trim()?.takeIf { it.isNotEmpty() }?.lowercase(Locale.ROOT)
         val buckets = linkedMapOf<List<String?>, MutableList<Track>>()
         val labels = mutableMapOf<List<String?>, Pair<String, String?>>()
