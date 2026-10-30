@@ -22,13 +22,15 @@ object LibraryViews {
 
     /** Count-dependent orders stay request-local; metadata-only plans belong to their source. */
     internal class Preparation(private val snapshot: LibrarySnapshot, private val checkActive: () -> Unit) {
-        private val ordered = mutableMapOf<LibraryQuery, List<Track>>()
+        private val ordered = mutableMapOf<LibraryQuery, List<SongRow>>()
         fun groups(view: SongListView, query: LibraryQuery): List<LibraryGroup> =
             if (query.sort != TrackSort.MostPlayed) snapshot.groupingSource.groupPlans.groups(snapshot, view, query, checkActive)
-            else LibraryViews.groups(snapshot, view, query, {
+            else groupRows(snapshot, view, query, {
                 checkActive()
-                ordered.getOrPut(query) { LibraryQueries.tracks(snapshot, query, checkActive) }
-            }, checkActive)
+                ordered.getOrPut(query) {
+                    LibraryQueries.tracks(snapshot, query, checkActive).map { SongRow(it.id, it) }
+                }
+            }, checkActive).map { LibraryGroup(it.id, it.title, it.subtitle, it.rows.map { row -> row.track }) }
     }
 
     /** Only explicit count overlays share this source-owned, bounded preparation. */
