@@ -201,7 +201,7 @@ internal class LensRenderer {
             return half4(half3(color * alpha + reflected * reflectedTone), half(alpha + reflected));
         }
     """.trimIndent())
-    private var last: List<Float> = emptyList()
+    private var last = floatArrayOf()
     private var fieldBitmap: Bitmap? = null
     private var cached: RenderEffect? = null
     private var blurAmount = Float.NaN
@@ -216,7 +216,7 @@ internal class LensRenderer {
         tone: GlassTone = GlassTone(), fieldWeight: Float = 1f,
         circles: Pair<Offset, Offset>? = null, splitInner: Float? = null): RenderEffect {
         val r = geometry.bounds
-        val state = listOf(r.left, r.top, r.right, r.bottom, geometry.corner, geometry.span, blur,
+        val state = floatArrayOf(r.left, r.top, r.right, r.bottom, geometry.corner, geometry.span, blur,
             depth.coerceIn(.05f, 4f), power, whiteTint, illumination, origin.x, origin.y,
             map?.scale ?: 1f, map?.range ?: 1f, atlas?.foregroundY ?: 0f,
             atlas?.output?.width ?: 0f, atlas?.output?.height ?: 0f,
@@ -226,7 +226,7 @@ internal class LensRenderer {
             fieldWeight.coerceIn(0f, 1f), if (circles == null) 0f else 1f,
             circles?.first?.x ?: 0f, circles?.first?.y ?: 0f,
             circles?.second?.x ?: 0f, circles?.second?.y ?: 0f, splitInner ?: -1f)
-        if (state == last && fieldBitmap === map?.bitmap) return requireNotNull(cached)
+        if (state.contentEquals(last) && fieldBitmap === map?.bitmap) return requireNotNull(cached)
         last = state
         shader.setFloatUniform("bounds", r.left, r.top, r.right, r.bottom)
         shader.setFloatUniform("corner", geometry.corner.coerceIn(0f, geometry.span))
