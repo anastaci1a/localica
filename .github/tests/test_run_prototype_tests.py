@@ -795,4 +795,97 @@ class InsertedWorkflowContract(unittest.TestCase):
         self.assertEqual('a6b884a815d2703532aa8679678cc2d7e4b67a1a322a7e66f0a29b6e17e3b542',hashlib.sha256((ROOT/'.github/workflows/prototype-dev71-apk1.yml').read_bytes()).hexdigest())
 
 
+class CompatibilityRunnerContract(unittest.TestCase):
+    def module(self):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location('compatibility_runner', ROOT/'.github/compatibility/instrumentation_runner.py')
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+
+    def test_archived_runner_is_explicit_reviewed_and_required_in_provenance(self):
+        module = self.module()
+        for runner in sorted(module.SUPPORTED):
+            self.assertEqual(runner, module.from_source('        testInstrumentationRunner = "'+runner+'"\n'))
+        for text in ['', 'testInstrumentationRunner = provider()',
+                     'testInstrumentationRunner = "unknown.Runner"',
+                     'testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"\n'*2]:
+            with self.assertRaises(ValueError): module.from_source(text)
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder)/'provenance.json'
+            for value in [None, '', 'unknown.Runner', ['androidx.test.runner.AndroidJUnitRunner']]:
+                path.write_text(json.dumps({'instrumentation_runner': value}))
+                with self.assertRaises(ValueError): module.from_provenance(path)
+            path.write_text('{}')
+            with self.assertRaises(KeyError): module.from_provenance(path)
+
+    def test_apk_requires_one_exact_candidate_runner_and_target(self):
+        import sys
+        package = 'io.github.anastaci1a.localica.debug'
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder); badging = root/'badging.txt'; manifest = root/'manifest.txt'
+            badging.write_text("package: name='"+package+".test' versionCode='0'\n")
+            def check(expected, actual, target=package, copies=1):
+                block = ('E: instrumentation (line=1)\n'
+                         '  A: android:name(0x01010003)="'+actual+'"\n'
+                         '  A: android:targetPackage(0x01010021)="'+target+'"\n')
+                manifest.write_text(block*copies)
+                return subprocess.run([sys.executable, str(ROOT/'.github/compatibility/check-apk.py'),
+                    str(badging), 'test', '1900000001', str(manifest), expected], capture_output=True).returncode
+            runners = sorted(self.module().SUPPORTED)
+            for runner in runners:
+                self.assertEqual(0, check(runner, runner))
+                self.assertNotEqual(0, check(runner, next(x for x in runners if x != runner)))
+                self.assertNotEqual(0, check(runner, runner, target='wrong.package'))
+                self.assertNotEqual(0, check(runner, runner, copies=0))
+                self.assertNotEqual(0, check(runner, runner, copies=2))
+            self.assertNotEqual(0, check('unknown.Runner', 'unknown.Runner'))
+            badging.write_text("package: name='wrong.package.test' versionCode='0'\n")
+            self.assertNotEqual(0, check(runners[0], runners[0]))
+
+    def test_every_compatibility_invocation_uses_verified_runner_without_resident_opt_in(self):
+        import hashlib
+        import sys
+        for runner in sorted(self.module().SUPPORTED):
+            with self.subTest(runner=runner), tempfile.TemporaryDirectory() as folder:
+                root = Path(folder); output = root/'shuffle-compatibility'; reports = output/'reports'
+                reports.mkdir(parents=True); binary = root/'bin'; binary.mkdir()
+                variants = {phase: {'version_code': 1900000001+i} for i, phase in enumerate(('seed','bridge','verify'))}
+                (reports/'provenance.json').write_text(json.dumps({'instrumentation_runner':runner,'variants':variants}))
+                for phase in variants:
+                    target = output/'apks'/phase; target.mkdir(parents=True)
+                    for kind in ('app','test'):
+                        apk = target/f'compatibility-{phase}-{kind}.apk'; apk.write_bytes(b'fixture')
+                        apk.with_suffix('.apk.sha256').write_text(hashlib.sha256(b'fixture').hexdigest()+'  '+apk.name+'\n')
+                adb = binary/'adb'
+                adb.write_text('#!'+sys.executable+'\n'+r'''
+import json, os, pathlib, sys
+root=pathlib.Path(os.environ['MOCK_COMPAT_ROOT']); args=sys.argv[1:]
+if args[0]=='install':
+    phase=pathlib.Path(args[-1]).parent.name
+    (root/'phase').write_text(phase); print('Success')
+elif args[:3]==['shell','dumpsys','package']:
+    print('versionCode='+str(1900000001+['seed','bridge','verify'].index((root/'phase').read_text())))
+elif args[:3]==['shell','pm','path']: print('package:/fixture/base.apk')
+elif args[:3]==['shell','am','instrument']:
+    assert args[-1]=='io.github.anastaci1a.localica.debug.test/'+os.environ['EXPECTED_RUNNER']
+    assert not any('localicaOwnedSession' in arg for arg in args)
+    with (root/'commands.jsonl').open('a') as out: out.write(json.dumps(args)+'\n')
+    selector=args[args.index('class')+1]
+    count=2 if selector.endswith('LegacyJourneyCompatibilityTest') else 6 if selector.endswith('MetadataRefreshJournalTest') else 1
+    for _ in range(count): print('INSTRUMENTATION_STATUS_CODE: 1\nINSTRUMENTATION_STATUS_CODE: 0')
+    print('INSTRUMENTATION_CODE: -1\nOK (%d tests)'%count)
+else: raise SystemExit('Unexpected fixture adb command: '+repr(args))
+''')
+                adb.chmod(0o755)
+                env = dict(os.environ, RUNNER_TEMP=str(root), GITHUB_WORKSPACE=str(ROOT),
+                    MOCK_COMPAT_ROOT=str(root), EXPECTED_RUNNER=runner, PATH=str(binary)+os.pathsep+os.environ['PATH'])
+                result = subprocess.run(['bash', str(ROOT/'.github/compatibility/run.sh')], env=env,
+                    capture_output=True, text=True, timeout=30)
+                self.assertEqual(0, result.returncode, result.stdout+result.stderr)
+                commands = [json.loads(line) for line in (root/'commands.jsonl').read_text().splitlines()]
+                self.assertEqual(12, len(commands))
+                self.assertTrue(all(command[-1].endswith('/'+runner) for command in commands))
+
+
 if __name__=='__main__':unittest.main()
