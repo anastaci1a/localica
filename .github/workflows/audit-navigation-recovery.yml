@@ -1,7 +1,7 @@
-name: Audit real switch candidate work (not release)
+name: Audit popup composition candidate (not release)
 'on':
   push:
-    branches: [dev/audit-real-switch-work-gate-20261030]
+    branches: [test/audit-popup-composition-candidate-gate-20261030]
 permissions:
   contents: read
 jobs:
@@ -27,11 +27,11 @@ jobs:
             display: compact
     env:
       TEST_API: ${{ matrix.api }}
-      SELECTORS: io.github.anastaci1a.localica.SwitchTapOpticsTest
+      SELECTORS: io.github.anastaci1a.localica.GlassMorphTest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - uses: ./.github/actions/focused-android-setup
-      - name: Compile capture instrumentation
+      - name: Compile popup instrumentation
         run: ./gradlew assembleDebug assembleDebugAndroidTest --no-daemon --max-workers=2
       - uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
         with:
@@ -55,7 +55,7 @@ jobs:
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
-          name: audit-real-switch-candidate-api-${{ matrix.api }}
+          name: audit-popup-composition-candidate-api-${{ matrix.api }}
           path: |
             app/build/reports/
             app/build/test-results/
