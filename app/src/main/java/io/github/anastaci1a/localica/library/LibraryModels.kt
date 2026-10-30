@@ -33,6 +33,27 @@ data class LibrarySnapshot(val folders: List<FolderSelection> = emptyList(), val
     val playlistPlays: Map<String, Long> = emptyMap(), val trackPlays: Map<String, Long> = emptyMap(),
     /** Preserved by statistics copies; source identity separately invalidates ordering/results. */
     val searchIndex: LibrarySearchIndex? = null) {
+    // Body properties deliberately reset on arbitrary data-class copy, unlike constructor fields.
+    internal var groupingSource: LibrarySnapshot = this
+        private set
+    internal val groupPlans by lazy { LibraryViews.GroupPlans(this) }
+
+    /** Only this count overlay may carry metadata preparation into another immutable snapshot. */
+    internal fun withPlayCounts(counts: Map<String, Long>, playlists: Map<String, Long>): LibrarySnapshot {
+        var changed: MutableList<Track>? = null
+        tracks.forEachIndexed { index, track ->
+            val count = counts[track.id] ?: 0
+            if (track.playCount != count) {
+                val updated = changed ?: tracks.toMutableList().also { changed = it }
+                updated[index] = track.copy(playCount = count)
+            }
+        }
+        if (changed == null && playlistPlays == playlists && trackPlays == counts) return this
+        return copy(tracks = changed ?: tracks, playlistPlays = playlists, trackPlays = counts).also {
+            it.groupingSource = groupingSource
+        }
+    }
+
     /** One current-metadata lookup per immutable snapshot; copies own a fresh lookup. */
     internal val tracksById: Map<String, Track> by lazy { tracks.associateBy { it.id } }
 }
