@@ -29,11 +29,18 @@ internal fun assertControlCapturePixels(actual: ImageBitmap, expected: ImageBitm
                 fail("$label at $x,$y: expected $bc, actual $ac")
         }
     } catch (failure: AssertionError) {
+        preserveControlCaptureFailure(failure, listOf("actual" to actual, "reference" to expected), label, variant)
+        throw failure
+    }
+}
+
+/** Export only already-captured inputs; never replace the original assertion. */
+internal fun preserveControlCaptureFailure(failure: AssertionError, images: List<Pair<String, ImageBitmap>>,
+    label: String, variant: String) {
         try {
             val context = InstrumentationRegistry.getInstrumentation().targetContext
             val directory = nativeEvidenceDirectory("control-capture-failures", context.cacheDir)
             val prefix = (variant + "-" + label).replace(Regex("[^A-Za-z0-9._-]+"), "_")
-            val images = listOf("actual" to actual, "reference" to expected)
             images.forEach { (name, image) ->
                 File(directory, "${prefix}-${name}.png").outputStream().use {
                     check(image.asAndroidBitmap().compress(Bitmap.CompressFormat.PNG, 100, it))
@@ -51,6 +58,4 @@ internal fun assertControlCapturePixels(actual: ImageBitmap, expected: ImageBitm
         } catch (diagnosticFailure: Throwable) {
             if (diagnosticFailure !== failure) failure.addSuppressed(diagnosticFailure)
         }
-        throw failure
-    }
 }
