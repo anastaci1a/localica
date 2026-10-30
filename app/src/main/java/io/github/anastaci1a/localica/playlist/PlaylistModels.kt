@@ -56,7 +56,7 @@ object PlaylistEdits {
     }
     /** A rescan updates available metadata without losing unavailable references or occurrence IDs. */
     fun rows(playlist: ManualPlaylist, snapshot: LibrarySnapshot, query: LibraryQuery,
-        tracks: Map<String, Track> = snapshot.tracks.associateBy { it.id }): List<SongRow> {
+        tracks: Map<String, Track> = snapshot.tracksById): List<SongRow> {
         return LibraryQueries.rows(playlist.entries.map { it.copy(track = tracks[it.track.id] ?: it.track.copy(playCount = snapshot.trackPlays[it.track.id] ?: 0), sourcePlaylistId = playlist.id) }, query)
     }
 }

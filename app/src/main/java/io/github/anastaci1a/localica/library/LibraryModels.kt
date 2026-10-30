@@ -32,7 +32,10 @@ data class LibrarySnapshot(val folders: List<FolderSelection> = emptyList(), val
     val metadataFailures: List<MetadataFailure> = emptyList(),
     val playlistPlays: Map<String, Long> = emptyMap(), val trackPlays: Map<String, Long> = emptyMap(),
     /** Preserved by statistics copies; source identity separately invalidates ordering/results. */
-    val searchIndex: LibrarySearchIndex? = null)
+    val searchIndex: LibrarySearchIndex? = null) {
+    /** One current-metadata lookup per immutable snapshot; copies own a fresh lookup. */
+    internal val tracksById: Map<String, Track> by lazy { tracks.associateBy { it.id } }
+}
 
 data class AudioMetadata(
     val composer: String? = null,
