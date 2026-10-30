@@ -21,7 +21,7 @@ class GlobalPlaybackModesTest {
         val previousSettings = preferences.read()
         preferences.write(QueueSettings(switching = QueueSwitch.Paused))
         val file = File(context.cacheDir, "mode-tone.mp3")
-        instrumentation.context.assets.open("queue-tone.mp3").use { input -> file.outputStream().use(input::copyTo) }
+        copyTestAsset(instrumentation.context.assets, "queue-tone.mp3", file)
         val tracks = (0..7).map { Track(file.toURI().toString(), "Track $it", fileName = file.name, relativePath = file.name, id = "track:$it") }
         val first = QueueEdits.create(tracks, 2, "First")
         val second = QueueEdits.create(tracks.reversed(), 1, "Second")
