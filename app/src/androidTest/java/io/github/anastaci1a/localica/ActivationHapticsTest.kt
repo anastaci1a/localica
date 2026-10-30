@@ -1,17 +1,22 @@
 package io.github.anastaci1a.localica
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toPixelMap
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.ui.*
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 
@@ -145,4 +150,102 @@ class ActivationHapticsTest {
             assertEquals(List(6) { ControlHaptic.Weak }, pulses)
         }
     }
+    @Test fun filledActionRetainsMaterialGeometryInkAndButtonSemantics() {
+        var dark by mutableStateOf(false)
+        var nativeInk: Color? = null
+        var sharedInk: Color? = null
+        compose.setContent { LocalicaTheme { GlassPanelTheme(dark) {
+            CompositionLocalProvider(LocalReducedMotion provides true) {
+                Column(Modifier.width(280.dp).background(Color.Magenta).padding(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    androidx.compose.material3.Button({}, Modifier.fillMaxWidth().heightIn(min = 48.dp)
+                        .testTag("filled-reference"), enabled = enabled) {
+                        nativeInk = androidx.compose.material3.LocalContentColor.current
+                        Text("Filled action")
+                    }
+                    ActionButton({}, Modifier.fillMaxWidth().heightIn(min = 48.dp)
+                        .testTag("filled-shared"), enabled = enabled) {
+                        sharedInk = androidx.compose.material3.LocalContentColor.current
+                        Text("Filled action")
+                    }
+                }
+            }
+        } } }
+        for (darkMode in listOf(false, true)) for (available in listOf(true, false)) {
+            compose.runOnIdle { dark = darkMode; enabled = available }
+            val reference = compose.onNodeWithTag("filled-reference")
+            val shared = compose.onNodeWithTag("filled-shared")
+            for (node in listOf(reference, shared)) {
+                node.assertHasClickAction().assert(SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Button))
+                if (available) node.assertIsEnabled() else node.assertIsNotEnabled()
+                node.assertHeightIsAtLeast(48.dp)
+            }
+            compose.onAllNodes(hasClickAction() and
+                (hasTestTag("filled-shared") or hasAnyAncestor(hasTestTag("filled-shared"))),
+                useUnmergedTree = true).assertCountEquals(1)
+            val nativeBounds = reference.getUnclippedBoundsInRoot()
+            val sharedBounds = shared.getUnclippedBoundsInRoot()
+            assertEquals(nativeBounds.width.value, sharedBounds.width.value, .001f)
+            assertEquals(nativeBounds.height.value, sharedBounds.height.value, .001f)
+            compose.runOnIdle { assertEquals(requireNotNull(nativeInk), requireNotNull(sharedInk)) }
+            val nativePixels = reference.captureToImage().toPixelMap()
+            val sharedPixels = shared.captureToImage().toPixelMap()
+            assertEquals(nativePixels.width, sharedPixels.width)
+            assertEquals(nativePixels.height, sharedPixels.height)
+            // Sample the filled face inside its top/bottom center, away from the label.
+            for (y in listOf(4, nativePixels.height - 5)) {
+                val expected = nativePixels[nativePixels.width / 2, y]
+                val actual = sharedPixels[sharedPixels.width / 2, y]
+                assertTrue("The native reference has a filled face, not the parent background", expected != Color.Magenta)
+                assertEquals(expected.red, actual.red, .01f)
+                assertEquals(expected.green, actual.green, .01f)
+                assertEquals(expected.blue, actual.blue, .01f)
+                assertEquals(expected.alpha, actual.alpha, .01f)
+            }
+        }
+    }
+
+    @Test fun filledActionUsesCurrentCallbackAndKeepsDisabledCancelledAndScrollContactsSilent() {
+        lateinit var scroll: androidx.compose.foundation.ScrollState
+        var version by mutableIntStateOf(0)
+        val events = mutableListOf<String>()
+        compose.setContent { LocalicaTheme {
+            CompositionLocalProvider(LocalControlHaptics provides ControlHaptics { events += it.name }) {
+                scroll = androidx.compose.foundation.rememberScrollState()
+                Column(Modifier.height(450.dp).controlVerticalScroll(scroll)) {
+                    Spacer(Modifier.height(100.dp))
+                    val versionAtComposition = version
+                    ActionButton({ events += "callback-$versionAtComposition" },
+                        Modifier.testTag("filled-action"), enabled) { Text("Filled action") }
+                    Spacer(Modifier.height(900.dp))
+                }
+            }
+        } }
+        val node = compose.onNodeWithTag("filled-action")
+        node.performTouchInput { down(center) }
+        compose.runOnIdle { assertTrue(events.isEmpty()); version = 1 }
+        node.performTouchInput { up() }
+        node.performClick()
+        compose.runOnIdle {
+            assertEquals(listOf("Weak", "callback-1", "Weak", "callback-1"), events)
+            events.clear()
+        }
+        node.performTouchInput { down(center) }
+        compose.runOnIdle { enabled = false }
+        node.performTouchInput { up(); click() }
+        node.performClick()
+        compose.runOnIdle { assertTrue(events.isEmpty()); enabled = true }
+        node.performTouchInput { down(center); cancel() }
+        node.performTouchInput { down(center); moveBy(Offset(0f, -160f)); up() }
+        compose.runOnIdle { assertTrue(events.isEmpty()); scroll.dispatchRawDelta(-scroll.value.toFloat()) }
+        node.performTouchInput { swipe(center, center + Offset(0f, -160f), 120) }
+        compose.runOnIdle {
+            assertTrue("Fast intent reaches the parent", scroll.value > 0)
+            assertTrue("Parent scrolling cannot activate or pulse", events.isEmpty())
+            scroll.dispatchRawDelta(-scroll.value.toFloat())
+        }
+        node.performTouchInput { click() }
+        compose.runOnIdle { assertEquals(listOf("Weak", "callback-1"), events) }
+    }
+
 }

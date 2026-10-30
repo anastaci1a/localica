@@ -86,8 +86,8 @@ internal fun ArtworkCrop(uri: String, onDismiss: () -> Unit, onCropped: (String)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 ActionTextButton(onClick = onDismiss, enabled = !saving) { Text("Cancel") }
                 ActionTextButton(onClick = { zoom = 1f; centerX = .5f; centerY = .5f }, enabled = !saving) { Text("Reset crop") }
-                Button(enabled = bitmap != null && !saving, onClick = {
-                    val image = bitmap ?: return@Button
+                ActionButton(enabled = bitmap != null && !saving, onClick = {
+                    val image = bitmap ?: return@ActionButton
                     saving = true; failure = null
                     scope.launch {
                         try {

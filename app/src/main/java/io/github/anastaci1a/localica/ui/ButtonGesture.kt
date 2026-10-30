@@ -39,6 +39,19 @@ internal fun Modifier.ownButtonDrag(enabled: Boolean = true, pass: PointerEventP
 }
 
 @androidx.compose.runtime.Composable
+internal fun ActionButton(onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true,
+    content: @androidx.compose.runtime.Composable androidx.compose.foundation.layout.RowScope.() -> Unit) {
+    val defaults = ButtonDefaults.buttonColors()
+    val container = controlStateColor(enabled, defaults.containerColor, defaults.disabledContainerColor,
+        "Action button container availability")
+    val foreground = controlStateColor(enabled, defaults.contentColor, defaults.disabledContentColor,
+        "Action button ink availability")
+    androidx.compose.material3.Button(controlActivation(enabled, onClick), modifier.ownButtonDrag(enabled), enabled = enabled,
+        colors = defaults.copy(containerColor = container, contentColor = foreground,
+            disabledContainerColor = container, disabledContentColor = foreground), content = content)
+}
+
+@androidx.compose.runtime.Composable
 internal fun ActionTextButton(onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true,
     content: @androidx.compose.runtime.Composable androidx.compose.foundation.layout.RowScope.() -> Unit) {
     val defaults = ButtonDefaults.textButtonColors()

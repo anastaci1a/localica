@@ -166,7 +166,7 @@ internal fun TagEditorDialog(state: TagEditorState, controller: TagEditingContro
                         ActionTextButton(onClick = controller::stopAfterCurrent,
                             modifier = Modifier.heightIn(min = 48.dp)) { Text("Stop after current file") }
                     }
-                    Button(enabled = canReview, onClick = { confirming = true },
+                    ActionButton(enabled = canReview, onClick = { confirming = true },
                         modifier = Modifier.heightIn(min = 48.dp)) { Text("Review changes") }
                 }
             }
