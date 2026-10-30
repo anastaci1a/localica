@@ -13,6 +13,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
@@ -555,17 +556,19 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
         }
         val keyboard = LocalSoftwareKeyboardController.current
         LaunchedEffect(visible) { if (!visible) keyboard?.hide() }
-        val p = progress.value.coerceIn(0f, 1f)
-        val geometry = glassMorphGeometryProgress(p, anchor.quiet)
         val admittedDraw = continuousOrigin == null || originAdmitted && readyWindow === window
         Box(Modifier.fillMaxSize()
             .then(if (continuousOrigin != null) Modifier
                 .drawWithContent { if (admittedDraw) drawContent() }
                 .then(if (!admittedDraw) Modifier.clearAndSetSemantics { } else Modifier)
                 else Modifier)
-            .background(Color.Black.copy(alpha = .16f * p))
+            .drawBehind { drawRect(Color.Black.copy(alpha = .16f * progress.value.coerceIn(0f, 1f))) }
             .pointerInput(visible, admittedDraw) { detectTapGestures { if (visible && admittedDraw) dismissNow() } }) {
             BoxWithConstraints(Modifier.fillMaxSize().then(if (placement == GlassPlacement.Page) Modifier else Modifier.safeDrawingPadding().imePadding())) {
+                // Geometry still observes every sample in its own layout-content scope.
+                // Window/input ownership above does not subscribe to the animation clock.
+                val p = progress.value.coerceIn(0f, 1f)
+                val geometry = glassMorphGeometryProgress(p, anchor.quiet)
                 val density = LocalDensity.current
                 var windowOrigin by remember { mutableStateOf(Offset.Zero) }
                 var targetHeight by remember { mutableIntStateOf(0) }
