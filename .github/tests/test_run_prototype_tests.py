@@ -584,12 +584,24 @@ class WorkflowContract(unittest.TestCase):
             self.assertEqual('always()',upload['if'])
             self.assertEqual('error',upload['with']['if-no-files-found'])
             paths=upload['with']['path'].splitlines()
-            self.assertIn('app/build/outputs/connected_android_test_additional_output/**/menu-viewport-touch/**',paths)
+            self.assertIn('app/build/outputs/connected_android_test_additional_output/',paths)
             self.assertIn('app/build/outputs/androidTest-results/',paths)
             self.assertIn('prototype-evidence/',paths)
             self.assertEqual(60,jobs[f'compatibility_{api}']['timeout-minutes'])
         self.assertEqual(20,jobs['build']['timeout-minutes'])
         self.assertEqual(10,jobs['evidence']['timeout-minutes'])
+
+    def test_android_full_gate_retains_complete_additional_output_and_xml(self):
+        import yaml
+        workflow = yaml.safe_load((ROOT/'.github/workflows/android.yml').read_text())
+        steps = workflow['jobs']['device-tests']['steps']
+        upload = next(step for step in steps
+                      if step.get('with', {}).get('name') == 'device-reports-api-${{ matrix.api }}')
+        self.assertEqual('always()', upload['if'])
+        paths = upload['with']['path'].splitlines()
+        self.assertIn('app/build/outputs/connected_android_test_additional_output/', paths)
+        self.assertIn('app/build/outputs/androidTest-results/', paths)
+        self.assertIn('app/build/reports/androidTests/', paths)
 
     def test_opt_in_only_and_five_required_jobs(self):
         import yaml

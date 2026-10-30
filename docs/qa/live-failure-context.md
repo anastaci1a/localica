@@ -40,10 +40,28 @@ org.junit.Assert.fail(Assert.java:89), not its expected/actual color values.
 
 ## Offline verification
 
-Run `python -m unittest discover -s .github/tests -p 'test_*py'` and
-`node --test .github/tests/test_publish_test_evidence.mjs` for this isolated fixture.
-There are 33 Python and 22 Node tests, including a real subprocess handshake that
-withholds diagnostics until upload1, then withholds exit7 until upload2. This proves
+The [host tooling workflow](../../.github/workflows/tooling-contracts.yml) runs all
+seven Python contract files and the Node publisher contracts on changes to their
+helpers, workflows or inspected Android test sources. It keeps source hashes,
+per-command status and raw unittest/TAP logs; it does not run Android tests.
+
+With CPython 3.12 on Linux x86_64 and Node 24, install the pinned dependencies,
+then run the offline checks:
+
+```sh
+python3.12 -m venv /tmp/localica-tooling-contract-python
+. /tmp/localica-tooling-contract-python/bin/activate
+python3 -m pip install --require-hashes --only-binary=:all: --no-deps -r .github/tests/requirements.txt
+npm ci --prefix .github/test-evidence --ignore-scripts --no-audit --no-fund
+unset LOCALICA_OBSERVER_TEST_SOURCE
+python3 -m unittest discover -s .github/tests -p 'test_*.py'
+node --test .github/tests/test_publish_test_evidence.mjs
+```
+
+Runner contracts use temporary ADB/Gradle/publisher mocks; no live device is needed.
+The separate Kotlin compatibility contract is outside this host job. A real
+subprocess handshake withholds diagnostics until upload1, then exit7 until upload2.
+This proves
 live ordering without timing sleeps, preserves the nonzero exit, and confirms the
 secret-bearing exception message stays local. Additional tests cover timeout, EOF,
 line/byte caps, stream isolation, oversized source lines, duplicate/malformed events,
