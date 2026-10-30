@@ -32,6 +32,52 @@ import kotlin.math.roundToInt
 class GlassShadowTest {
     @get:Rule val compose = createComposeRule()
 
+    @Test fun deferredRingPathsMaterializeForTheCurrentGeometryOnly() {
+        val cache = GlassShadowGeometry()
+        val bodies = listOf(RoundRect(20f, 20f, 80f, 60f, CornerRadius(8f)))
+        cache.update(bodies, 12f, 2f, needRings = false)
+        val body = cache.body
+        assertTrue(cache.rings.isEmpty())
+        cache.update(bodies, 12f, 2f)
+        org.junit.Assert.assertSame(body, cache.body)
+        org.junit.Assert.assertEquals(16, cache.rings.size)
+        val rings = cache.rings
+        cache.update(bodies, 12f, 2f, needRings = false)
+        cache.update(bodies, 12f, 2f)
+        org.junit.Assert.assertSame(rings, cache.rings)
+        val moved = listOf(RoundRect(25f, 30f, 85f, 70f, CornerRadius(8f)))
+        cache.update(moved, 20f, 3f, needRings = false)
+        assertTrue(cache.rings.isEmpty())
+        org.junit.Assert.assertNotSame(body, cache.body)
+        cache.update(moved, 20f, 3f)
+        val fresh = GlassShadowGeometry().also { it.update(moved, 20f, 3f) }
+        org.junit.Assert.assertEquals(fresh.body.getBounds(), cache.body.getBounds())
+        org.junit.Assert.assertEquals(fresh.rings.map { it.getBounds() }, cache.rings.map { it.getBounds() })
+    }
+
+    @Test fun uniformDrawingSkipsRingPathsAndGenericDrawingStillBuildsThem() {
+        val cache = GlassShadowGeometry()
+        fun render(body: RoundRect): androidx.compose.ui.graphics.ImageBitmap {
+            val image = androidx.compose.ui.graphics.ImageBitmap(120, 100)
+            androidx.compose.ui.graphics.drawscope.CanvasDrawScope().draw(
+                androidx.compose.ui.unit.Density(1f), LayoutDirection.Ltr,
+                androidx.compose.ui.graphics.Canvas(image), androidx.compose.ui.geometry.Size(120f, 100f)) {
+                glassShadows(listOf(body to 1f), .8f, .6f, cache)
+            }
+            return image
+        }
+        val uniform = RoundRect(30f, 30f, 90f, 70f, CornerRadius(8f))
+        val image = render(uniform).toPixelMap()
+        assertTrue("Primitive path must omit unused ring paths", cache.rings.isEmpty())
+        assertTrue("Omitting paths must not omit the exterior shadow", image[28, 50].alpha > 0f)
+        val asymmetric = RoundRect(30f, 30f, 90f, 70f, CornerRadius(8f), CornerRadius(12f),
+            CornerRadius(6f), CornerRadius(10f))
+        render(asymmetric)
+        org.junit.Assert.assertEquals(16, cache.rings.size)
+        render(uniform)
+        assertTrue("New uniform geometry must discard obsolete ring paths", cache.rings.isEmpty())
+    }
+
     @Test fun receiverWeightPreservesExteriorAndRetainedParityWithoutMotionRasterization() {
         var mode by mutableIntStateOf(0)
         var retainedMode by mutableStateOf(false)
