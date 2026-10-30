@@ -41,12 +41,37 @@ class CoverImages(private val context: Context) {
         (device + remembered()).distinct().take(20)
     }
     suspend fun read(uri: String, edge: Int = 2048): CoverImage = withContext(Dispatchers.IO) {
+        val image = decodeOwned(uri, edge) {}
+        try {
+            val alpha = image.hasAlpha()
+            val output = ByteArrayOutputStream()
+            image.compress(if (alpha) Bitmap.CompressFormat.PNG else Bitmap.CompressFormat.JPEG, 92, output)
+            CoverImage(output.toByteArray(), if (alpha) "image/png" else "image/jpeg", image.width, image.height)
+        } finally { image.recycle() }
+    }
+
+    /** Fresh oriented pixels owned by the caller; previews do not need an encoded round trip.
+     * Cancellation during dispatcher handoff retires an image that could not be delivered. */
+    internal suspend fun decode(uri: String, edge: Int, onDecode: () -> Unit = {}): Bitmap {
+        var owned: Bitmap? = null
+        try {
+            return withContext(Dispatchers.IO) {
+                decodeOwned(uri, edge, onDecode).also { owned = it }
+            }
+        } catch (failure: Throwable) {
+            owned?.recycle()
+            throw failure
+        }
+    }
+
+    private fun decodeOwned(uri: String, edge: Int, onDecode: () -> Unit): Bitmap {
         val bytes = retain(uri).use { context.contentResolver.openInputStream(Uri.parse(uri))?.use { input ->
             val output = ByteArrayOutputStream(); val buffer = ByteArray(16384)
             while (true) { val n = input.read(buffer); if (n < 0) break
                 require(output.size() + n <= 24 * 1024 * 1024) { "Choose an image smaller than 24 MB." }; output.write(buffer, 0, n) }
             output.toByteArray()
         } ?: error("Image is unavailable. Choose it again.") }
+        onDecode()
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
         require(bounds.outWidth > 0 && bounds.outHeight > 0) { "This image format is not supported." }
@@ -55,17 +80,18 @@ class CoverImages(private val context: Context) {
         val decoded = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, BitmapFactory.Options().apply { inSampleSize = sample })
             ?: error("Couldn’t decode the image.")
         val orientation = runCatching { ExifInterface(ByteArrayInputStream(bytes)).getAttributeInt(ExifInterface.TAG_ORIENTATION, 1) }.getOrDefault(1)
-        val matrix = Matrix().apply { when (orientation) {
-            2 -> setScale(-1f, 1f); 3 -> setRotate(180f); 4 -> setScale(1f, -1f)
-            5 -> { setRotate(90f); postScale(-1f, 1f) }; 6 -> setRotate(90f)
-            7 -> { setRotate(-90f); postScale(-1f, 1f) }; 8 -> setRotate(-90f)
-        } }
-        val image = Bitmap.createBitmap(decoded, 0, 0, decoded.width, decoded.height, matrix, true)
-        val alpha = image.hasAlpha()
-        val output = ByteArrayOutputStream()
-        image.compress(if (alpha) Bitmap.CompressFormat.PNG else Bitmap.CompressFormat.JPEG, 92, output)
-        CoverImage(output.toByteArray(), if (alpha) "image/png" else "image/jpeg", image.width, image.height).also {
-            if (image !== decoded) image.recycle(); decoded.recycle()
+        try {
+            val matrix = Matrix().apply { when (orientation) {
+                2 -> setScale(-1f, 1f); 3 -> setRotate(180f); 4 -> setScale(1f, -1f)
+                5 -> { setRotate(90f); postScale(-1f, 1f) }; 6 -> setRotate(90f)
+                7 -> { setRotate(-90f); postScale(-1f, 1f) }; 8 -> setRotate(-90f)
+            } }
+            val image = Bitmap.createBitmap(decoded, 0, 0, decoded.width, decoded.height, matrix, true)
+            if (image !== decoded) decoded.recycle()
+            return image
+        } catch (failure: Throwable) {
+            decoded.recycle()
+            throw failure
         }
     }
     companion object {

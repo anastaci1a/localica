@@ -1,7 +1,6 @@
 package io.github.anastaci1a.localica.ui
 
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.*
@@ -140,12 +139,8 @@ private fun rememberCropImage(uri: String): CropImageState {
     val context = LocalContext.current
     val loader = LocalCropImageLoader.current ?: remember(context) {
         CropImageLoader { source, phase ->
-            withContext(Dispatchers.IO) {
-                phase(CropLoadPhase.Reading)
-                val bytes = CoverImages(context).read(source, 4096).bytes
-                phase(CropLoadPhase.Decoding)
-                BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-            }
+            phase(CropLoadPhase.Reading)
+            CoverImages(context).decode(source, 4096) { phase(CropLoadPhase.Decoding) }
         }
     }
     val observer = LocalCropLoadObserver.current

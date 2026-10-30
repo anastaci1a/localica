@@ -1,7 +1,6 @@
 package io.github.anastaci1a.localica.ui
 
 import android.Manifest
-import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -59,7 +58,7 @@ internal fun ImageChooser(workflow: ArtworkWorkflow, onDismiss: () -> Unit, onCh
                 horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(recent) { uri ->
                     val cover by produceState<android.graphics.Bitmap?>(null, uri, recent, revision) {
-                        value = try { images.read(uri, 512).bytes.let { BitmapFactory.decodeByteArray(it, 0, it.size) } }
+                        value = try { images.decode(uri, 512) }
                         catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
                         catch (_: Exception) { null }
                         if (value == null) unavailableRecent = true
