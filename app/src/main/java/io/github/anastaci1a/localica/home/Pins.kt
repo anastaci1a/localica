@@ -2,6 +2,7 @@ package io.github.anastaci1a.localica.home
 
 import android.content.Context
 import io.github.anastaci1a.localica.navigation.*
+import io.github.anastaci1a.localica.library.enumNameOrNull
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -23,7 +24,7 @@ class PinPreferences(context: Context) {
     fun read(): List<MediaRef> {
         val array = JSONArray(store.getString("items", "[]"))
         return (0 until array.length()).mapNotNull { index -> array.getJSONObject(index).run {
-            MediaKind.entries.firstOrNull { it.name == optString("kind") && it in PinEdits.supported }
+            enumNameOrNull<MediaKind>(optString("kind"))?.takeIf { it in PinEdits.supported }
                 ?.let { MediaRef(it, getString("id")) }
         } }.distinct()
     }
