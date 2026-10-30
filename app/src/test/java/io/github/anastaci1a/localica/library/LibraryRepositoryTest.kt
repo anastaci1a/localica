@@ -21,7 +21,7 @@ class LibraryRepositoryTest {
         val release = CompletableDeferred<Unit>()
         var hold = true
         val source = object : DocumentSource by files {
-            override suspend fun metadata(uri: String, fileName: String): AudioMetadata {
+            override suspend fun metadata(uri: String, fileName: String, listedModifiedAt: Long?): AudioMetadata {
                 if (hold) { hold = false; entered.complete(Unit); release.await() }
                 return files.metadata(uri)
             }

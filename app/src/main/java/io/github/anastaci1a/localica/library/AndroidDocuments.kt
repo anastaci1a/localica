@@ -63,7 +63,7 @@ class AndroidDocuments(private val context: Context) : DocumentSource {
     }
 
     override suspend fun metadata(uri: String): AudioMetadata = metadata(uri, Uri.parse(uri).lastPathSegment.orEmpty())
-    override suspend fun metadata(uri: String, fileName: String): AudioMetadata {
+    override suspend fun metadata(uri: String, fileName: String, listedModifiedAt: Long?): AudioMetadata {
         val wav = runCatching { ContainerTags.read(context, uri, fileName) }.getOrNull()
         fun wavText(key: org.jaudiotagger.tag.FieldKey) = wav?.let { SemanticTagFields.read(it, key) }
         val extra = try { embeddedTags(context, uri) }
@@ -75,13 +75,15 @@ class AndroidDocuments(private val context: Context) : DocumentSource {
             return AudioMetadata(
                 composer = wavText(org.jaudiotagger.tag.FieldKey.COMPOSER) ?: retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_COMPOSER) ?: extra?.metadata?.composer?.toString(),
                 lyricist = wavText(org.jaudiotagger.tag.FieldKey.LYRICIST),
-                modifiedAt = runCatching {
-                    val parsed = Uri.parse(uri)
-                    if (parsed.scheme == "file") java.io.File(requireNotNull(parsed.path)).lastModified().takeIf { it > 0 }
-                    else resolver.query(parsed, arrayOf(DocumentsContract.Document.COLUMN_LAST_MODIFIED), null, null, null)?.use {
-                        if (it.moveToFirst() && !it.isNull(0)) it.getLong(0).takeIf { value -> value > 0 } else null
-                    }
-                }.getOrNull(),
+                modifiedAt = listedModifiedAtOrRead(listedModifiedAt) {
+                    runCatching {
+                        val parsed = Uri.parse(uri)
+                        if (parsed.scheme == "file") java.io.File(requireNotNull(parsed.path)).lastModified().takeIf { it > 0 }
+                        else resolver.query(parsed, arrayOf(DocumentsContract.Document.COLUMN_LAST_MODIFIED), null, null, null)?.use {
+                            if (it.moveToFirst() && !it.isNull(0)) it.getLong(0).takeIf { value -> value > 0 } else null
+                        }
+                    }.getOrNull()
+                },
                 title = wavText(org.jaudiotagger.tag.FieldKey.TITLE) ?: retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE) ?: extra?.metadata?.title?.toString(),
                 artist = wavText(org.jaudiotagger.tag.FieldKey.ARTIST) ?: retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST) ?: extra?.metadata?.artist?.toString(),
                 album = wavText(org.jaudiotagger.tag.FieldKey.ALBUM) ?: retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUM) ?: extra?.metadata?.albumTitle?.toString(),

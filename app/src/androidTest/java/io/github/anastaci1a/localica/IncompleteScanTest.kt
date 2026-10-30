@@ -320,7 +320,7 @@ class IncompleteScanTest {
                 if (treeUri == unavailableRoot) throw IOException("Fixture root unavailable")
                 return documents.root(treeUri)
             }
-            override suspend fun metadata(uri: String, fileName: String): AudioMetadata {
+            override suspend fun metadata(uri: String, fileName: String, listedModifiedAt: Long?): AudioMetadata {
                 metadataReads++
                 beforeMetadata?.invoke()
                 if (cancelMetadata) throw CancellationException("Fixture cancellation")
