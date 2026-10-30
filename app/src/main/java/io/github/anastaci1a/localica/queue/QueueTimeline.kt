@@ -15,6 +15,12 @@ internal class QueueTimeline {
     private var templates = emptyMap<String, MediaItem>()
     private val decorated = mutableMapOf<String, MediaItem>()
 
+    fun clear() {
+        queueId = null
+        templates = emptyMap()
+        decorated.clear()
+    }
+
     fun resolve(id: String, items: List<MediaItem>) {
         val next = items.associateBy { it.mediaId }
         if (queueId != id) decorated.clear()
