@@ -50,6 +50,10 @@ class GlassTonePixelBufferTest {
             }
         }
         val hardware = requireNotNull(software.copy(Bitmap.Config.HARDWARE, false))
+        val immutable = requireNotNull(software.copy(Bitmap.Config.ARGB_8888, false))
+        assertFalse(immutable.isMutable)
+        assertTrue(immutable.isPremultiplied)
+        assertTrue(immutable.colorSpace?.isSrgb == true)
         val tones = listOf(GlassTone(.001f, 1f, false), GlassTone(.25f, 1.5f, true),
             GlassTone(.5f, 2f, false), GlassTone(.5f, 2f, true))
         var request by mutableStateOf(Request(software.asImageBitmap(), GlassTone()))
@@ -69,7 +73,7 @@ class GlassTonePixelBufferTest {
             }
             return compose.runOnIdle { requireNotNull(published?.output) }
         }
-        for (bitmap in listOf(software, hardware)) {
+        for (bitmap in listOf(software, hardware, immutable)) {
             val image = bitmap.asImageBitmap()
             assertSame(image, await(Request(image, GlassTone())))
             for (tone in tones) {
