@@ -106,10 +106,8 @@ class PlaylistController(private val dao: PlaylistDao,
             complete(if (success && previous != null && after != null) OrderCommit(
                 revision = after.entries,
                 order = after.order,
-                changed = previous.order != after.order || previous.entries !== after.entries &&
-                    (previous.entries.size != after.entries.size || previous.entries.indices.any {
-                        previous.entries[it].id != after.entries[it].id
-                    }),
+                changed = OrderCommit.hasChanged(previous.order, after.order,
+                    previous.entries, after.entries) { it.id },
             ) else null)
         }) { current -> before = current; change(current) }
     }

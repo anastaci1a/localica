@@ -545,10 +545,8 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
             complete(if (success && previous != null && after != null) OrderCommit(
                 revision = after.entries,
                 order = after.order,
-                changed = previous.order != after.order || previous.entries !== after.entries &&
-                    (previous.entries.size != after.entries.size || previous.entries.indices.any {
-                        previous.entries[it].id != after.entries[it].id
-                    }),
+                changed = OrderCommit.hasChanged(previous.order, after.order,
+                    previous.entries, after.entries) { it.id },
                 currentEntryId = after.currentEntryId.takeIf { after.id == library.activeId },
             ) else null)
         }) { current -> before = current; edit(current) }
