@@ -1,4 +1,5 @@
 import java.security.MessageDigest
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
     alias(libs.plugins.android.application)
@@ -36,7 +37,6 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    kotlinOptions { jvmTarget = "17" }
     buildFeatures { compose = true }
     // Platform-free helpers are test-only, shared by host contracts and device callers.
     sourceSets.getByName("test").java.srcDir("src/sharedTest/java")
@@ -44,6 +44,8 @@ android {
     sourceSets.getByName("androidTest").assets.srcDir("$projectDir/schemas")
     packaging { resources.excludes += "/META-INF/{AL2.0,LGPL2.1}" }
 }
+
+kotlin { compilerOptions { jvmTarget.set(JvmTarget.JVM_17) } }
 
 ksp { arg("room.schemaLocation", "$projectDir/schemas") }
 
