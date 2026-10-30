@@ -33,15 +33,15 @@ internal fun glassMotionSpeedChange(previous: Float, current: Float): Float {
 }
 
 /** Position is owned by the gesture; acceleration, contact and pressure drive its shape. */
-internal class GlassMomentum(var damping: Float = 8f) {
+internal class GlassMomentum(var damping: Float = GlassSpringParameters.DEFAULT_DAMPING) {
     private class Spring {
         var value = 0f
         var velocity = 0f
         var target = 0f
-        val settled get() = abs(value - target) < .0003f && abs(velocity) < .003f
+        val settled get() = abs(value - target) < GlassSpringParameters.SETTLED_DISPLACEMENT && abs(velocity) < GlassSpringParameters.SETTLED_VELOCITY
         fun advance(dt: Float, damping: Float, held: Boolean = false) {
             val before = value
-            velocity += (380f * (target - value) - damping * velocity) * dt
+            velocity += (GlassSpringParameters.STIFFNESS * (target - value) - damping * velocity) * dt
             value += velocity * dt
             // A held finger constrains the surface: it stores strain, never rings.
             if (held) {
@@ -107,7 +107,7 @@ internal class GlassMomentum(var damping: Float = 8f) {
         this.pressure.target = if (pressure.isFinite()) pressure.coerceIn(-.22f, .12f) else 0f
         val held = contact.isFinite() && contact > 0f || abs(this.pressure.target) > .0001f
         depth.target = -.24f * (if (contact.isFinite()) contact.coerceIn(0f, 1f) else 0f) - abs(this.pressure.target) * .3f
-        val drag = if (damping.isFinite()) damping.coerceIn(2f, 40f) else 8f
+        val drag = if (damping.isFinite()) damping.coerceIn(GlassSpringParameters.MIN_DAMPING, GlassSpringParameters.MAX_DAMPING) else GlassSpringParameters.DEFAULT_DAMPING
         var remaining = seconds.coerceAtMost(.1f)
         while (remaining > 0f) {
             val dt = minOf(remaining, 1f / 240f)
