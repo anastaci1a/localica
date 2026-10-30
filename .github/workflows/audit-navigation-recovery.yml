@@ -1,7 +1,7 @@
-name: Audit control silhouette and native window copy (not release)
+name: Audit sort choice readiness (not release)
 'on':
   push:
-    branches: [dev/audit-control-copy-gate-20261030]
+    branches: [dev/audit-sort-choice-readiness-20261030]
 permissions:
   contents: read
 jobs:
@@ -27,12 +27,12 @@ jobs:
             display: compact
     env:
       TEST_API: ${{ matrix.api }}
-      SELECTORS: io.github.anastaci1a.localica.GlassRimCacheTest,io.github.anastaci1a.localica.GlassRendererSwitchingTest,io.github.anastaci1a.localica.InterfaceControlsTest,io.github.anastaci1a.localica.SwitchTapOpticsTest,io.github.anastaci1a.localica.GlassMenuViewportTouchTest,io.github.anastaci1a.localica.ListTopFadeTest,io.github.anastaci1a.localica.LoadingMaterialOpacityTest,io.github.anastaci1a.localica.QueueHeaderMaterialBoundaryTest,io.github.anastaci1a.localica.PopupFamilyPresentationTest
+      SELECTORS: io.github.anastaci1a.localica.BrowseArtworkTest,io.github.anastaci1a.localica.NavigationTest,io.github.anastaci1a.localica.NavigationSettingsTest,io.github.anastaci1a.localica.ListBackTest,io.github.anastaci1a.localica.CollectionNavigationTest,io.github.anastaci1a.localica.QueueFollowingTest,io.github.anastaci1a.localica.QueueBrowsingTest,io.github.anastaci1a.localica.DragReorderTest,io.github.anastaci1a.localica.QueueReorderCommandTest,io.github.anastaci1a.localica.BrowseOrderViewportTest,io.github.anastaci1a.localica.InterfaceNavigationTest,io.github.anastaci1a.localica.BrowsePositionTest,io.github.anastaci1a.localica.GalleryNavigationTest,io.github.anastaci1a.localica.ListSearchTest,io.github.anastaci1a.localica.TabResetTest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - uses: ./.github/actions/focused-android-setup
       - name: Compile instrumentation and verify focused JVM contracts
-        run: ./gradlew testDebugUnitTest --tests io.github.anastaci1a.localica.ui.LensGeometryTest --tests io.github.anastaci1a.localica.ui.SelectorTrackGeometryTest --tests io.github.anastaci1a.localica.ui.SelectorTrackContourTest --tests io.github.anastaci1a.localica.ui.SelectorSceneGeometryTest --tests io.github.anastaci1a.localica.ui.SelectionMotionTest --tests io.github.anastaci1a.localica.ui.SelectionDistanceFieldTest assembleDebug assembleDebugAndroidTest --no-daemon --max-workers=2
+        run: ./gradlew testDebugUnitTest --tests io.github.anastaci1a.localica.navigation.NavigationStateTest --tests io.github.anastaci1a.localica.ui.QueuePlaybackFollowTest --tests io.github.anastaci1a.localica.ui.QueueOpeningPresentationTest --tests io.github.anastaci1a.localica.queue.OrderCheckpointTest --tests io.github.anastaci1a.localica.library.OccurrenceMovesTest assembleDebug assembleDebugAndroidTest --no-daemon --max-workers=2
       - uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
         with:
           api-level: ${{ matrix.api }}
@@ -55,7 +55,7 @@ jobs:
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
-          name: audit-control-copy-gate-api-${{ matrix.api }}
+          name: audit-sort-choice-readiness-api-${{ matrix.api }}
           path: |
             app/build/reports/
             app/build/test-results/
