@@ -85,9 +85,9 @@ internal class GlassShadowGeometry {
     private var previousShift = Float.NaN
     var body = Path(); private set
     var rings = emptyList<Path>(); private set
-    fun update(bodies: List<RoundRect>, reach: Float, shift: Float) {
-        if (bodies == previous && reach == previousReach && shift == previousShift) return
-        previous = bodies; previousReach = reach; previousShift = shift
+    fun update(bodies: List<RoundRect>, reach: Float, shift: Float, needRings: Boolean = true) {
+        val changed = bodies != previous || reach != previousReach || shift != previousShift
+        if (!changed && (!needRings || rings.isNotEmpty())) return
         fun outline(expansion: Float, y: Float = 0f): Path = Path().apply {
             // Non-zero winding fills overlapping clockwise silhouettes once. A
             // Boolean path union has the same coverage but rebuilds intersections
@@ -100,8 +100,13 @@ internal class GlassShadowGeometry {
                     expand(r.bottomRightCornerRadius), expand(r.bottomLeftCornerRadius)))
             }
         }
-        body = outline(0f)
-        rings = (16 downTo 1).map { outline(reach * it / 16f, shift) }
+        if (changed) {
+            previous = bodies; previousReach = reach; previousShift = shift
+            body = outline(0f)
+            rings = emptyList()
+        }
+        // Uniform shadows draw primitives; materialize paths only for a path consumer.
+        if (needRings) rings = (16 downTo 1).map { outline(reach * it / 16f, shift) }
     }
 }
 
@@ -113,7 +118,6 @@ internal fun DrawScope.glassShadows(bodies: List<Pair<RoundRect, Float>>, streng
     val reach = (4f + spread * 28f).dp.toPx()
     val shift = 2.dp.toPx()
     val outlines = bodies.map { it.first }
-    cache.update(outlines, reach, shift)
     val response = receiver?.takeIf { glassReceiverTouchesShadow(it,outlines,reach,shift) }
     val brush = response?.let { cache.receiverBrush(it) }
     // One uniform, already-valid outline needs no generic path fill. Keep the
@@ -130,13 +134,15 @@ internal fun DrawScope.glassShadows(bodies: List<Pair<RoundRect, Float>>, streng
             r.width > 0f && r.height > 0f && reach >= 0f &&
             corner.x >= 0f && corner.y >= 0f && corner.x <= r.width / 2f && corner.y <= r.height / 2f
     }
+    cache.update(outlines, reach, shift, needRings = uniform == null)
     fun DrawScope.rings() {
-        cache.rings.forEachIndexed { index, ring ->
+        repeat(16) { index ->
             val t = (16 - index) / 16f
             val alpha = strength * opacity * .07f * (1f - t).pow(2)
             if (alpha > 0f) {
                 val color = Color.Black.copy(alpha = alpha)
                 if (uniform == null) {
+                    val ring = cache.rings[index]
                     if (brush == null) drawPath(ring, color) else drawPath(ring, brush, alpha = alpha)
                 } else {
                     val expansion = reach * (16 - index) / 16f
