@@ -1,7 +1,7 @@
-name: Audit immutable pixel reads (not release)
+name: Audit pre-change Home selection control (not release)
 'on':
   push:
-    branches: [dev/audit-immutable-pixel-read-20261030]
+    branches: [test/audit-home-selection-control-20261030]
 permissions:
   contents: read
 jobs:
@@ -15,11 +15,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - api: 26
-            target: google_apis
-            gpu: swiftshader_indirect
-            disable_animations: true
-            display: reset
           - api: 36
             target: default
             gpu: lavapipe
@@ -27,12 +22,12 @@ jobs:
             display: compact
     env:
       TEST_API: ${{ matrix.api }}
-      SELECTORS: io.github.anastaci1a.localica.GlassPixelReadReuseTest,io.github.anastaci1a.localica.GlassPixelBufferTest,io.github.anastaci1a.localica.GlassTonePixelBufferTest,io.github.anastaci1a.localica.GlassSnapshotSoftwareTest,io.github.anastaci1a.localica.ToneSnapshotContinuityTest,io.github.anastaci1a.localica.FrostedSurfaceTest,io.github.anastaci1a.localica.LiquidGlassTest,io.github.anastaci1a.localica.GlassOpticsTest,io.github.anastaci1a.localica.SelectionLensTest,io.github.anastaci1a.localica.PlayerBackgroundPolarityTest,io.github.anastaci1a.localica.GalleryNavigationTest,io.github.anastaci1a.localica.TagEditorThemeInheritanceTest
+      SELECTORS: io.github.anastaci1a.localica.HomeSelectionTest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - uses: ./.github/actions/focused-android-setup
-      - name: Verify pixel transforms and compile immutable-read contracts
-        run: ./gradlew testDebugUnitTest --tests io.github.anastaci1a.localica.ui.BoxBlurTest --tests io.github.anastaci1a.localica.ui.GlassToneTest --tests io.github.anastaci1a.localica.ui.PlayerContrastTest --tests io.github.anastaci1a.localica.ui.PlayerBackgroundJointContrastTest assembleDebug assembleDebugAndroidTest --no-daemon --max-workers=2
+      - name: Compile original Home selection control
+        run: ./gradlew assembleDebug assembleDebugAndroidTest --no-daemon --max-workers=2
       - uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
         with:
           api-level: ${{ matrix.api }}
@@ -55,7 +50,7 @@ jobs:
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
-          name: audit-immutable-pixel-read-api-${{ matrix.api }}
+          name: audit-home-selection-control-api-${{ matrix.api }}
           path: |
             app/build/reports/
             app/build/test-results/
