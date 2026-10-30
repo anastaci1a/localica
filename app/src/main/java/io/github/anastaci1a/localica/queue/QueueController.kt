@@ -1034,18 +1034,16 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
             val queue = result.queues.firstOrNull { it.id == arrival.queueId } ?: continue
             if (readers.recovery() != RecoveryAdmission.Clear &&
                 blocksVisit(queue, queue.journey?.window()?.firstOrNull { it.token == arrival.token })) continue
-            val arrived = queue.journey?.arrive(arrival.token, queue.entries.map { it.id }) ?: continue
-            if (arrived.current?.token != arrival.token) continue
-            result = result.update(queue.copy(journey = arrived, currentEntryId = arrived.current?.entryId, positionMs = 0))
+            val captured = queue.captureVisit(arrival.token) { 0 } ?: continue
+            if (captured !== queue) result = result.update(captured)
         }
         val queue = result.active ?: return result
         val item = source?.currentMediaItem ?: return result
         if (item.listeningQueue != queue.id || queue.entries.none { it.id == item.mediaId }) return result
-        val arrived = queue.journey?.arrive(item.queueVisit ?: return result, queue.entries.map { it.id }) ?: return result
         // A removed/branched visit must never overwrite a newer explicit selection.
-        if (arrived.current?.token != item.queueVisit) return result
-        return result.update(queue.copy(journey = arrived, currentEntryId = arrived.current?.entryId,
-            positionMs = source.currentPosition.coerceAtLeast(0)))
+        val captured = queue.captureVisit(item.queueVisit ?: return result) {
+            source.currentPosition.coerceAtLeast(0) } ?: return result
+        return if (captured === queue) result else result.update(captured)
     }
     private fun captureNativeState() {
         mutable.update { it.copy(library = capturedLibrary(player)) }
