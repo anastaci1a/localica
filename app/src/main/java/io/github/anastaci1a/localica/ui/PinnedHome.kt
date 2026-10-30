@@ -24,6 +24,8 @@ import io.github.anastaci1a.localica.library.SongRow
 import io.github.anastaci1a.localica.navigation.*
 import io.github.anastaci1a.localica.playlist.PlaylistState
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 
 @Composable
@@ -39,7 +41,10 @@ internal fun PinnedHome(library: LibraryUiState, playlists: PlaylistState, pins:
     val cached = remember(library.snapshot, playlists.playlists, pins, cache, sorts) { cache?.home(library.snapshot, playlists.playlists, pins, sorts) }
     val presented by produceState(sorts to cached.orEmpty(), library.snapshot, playlists.playlists, pins, sorts) {
         if (cached != null) { value = sorts to cached; return@produceState }
-        val result = withContext(queryDispatcher) {
+        val result = if (pins.isEmpty()) {
+            currentCoroutineContext().ensureActive()
+            emptyList()
+        } else withContext(queryDispatcher) {
             val catalog = BrowseQueries.evaluate(library.snapshot, playlists.playlists,
                 BrowseRoute(MainTab.Home, globalSearch = true), sorts = sorts).items.associateBy { it.ref }
             pins.mapNotNull { catalog[it] }
