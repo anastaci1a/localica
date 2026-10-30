@@ -1,0 +1,109 @@
+# Host tooling contracts only; no Android jobs.
+name: Evidence tooling contracts
+'on':
+  push:
+    paths:
+      - '.github/workflows/**'
+      - 'app/src/androidTest/java/**'
+      - '.github/tests/**'
+      - '.github/test-evidence/**'
+      - '.github/run-device-tests.sh'
+      - '.github/prepare-device-tests.sh'
+      - '.github/run-prototype-tests.sh'
+      - '.github/prototype-risk-classes.txt'
+  pull_request:
+    paths:
+      - '.github/workflows/**'
+      - 'app/src/androidTest/java/**'
+      - '.github/tests/**'
+      - '.github/test-evidence/**'
+      - '.github/run-device-tests.sh'
+      - '.github/prepare-device-tests.sh'
+      - '.github/run-prototype-tests.sh'
+      - '.github/prototype-risk-classes.txt'
+  workflow_dispatch:
+permissions:
+  contents: read
+# No concurrency/cancellation policy: do not cancel another invocation.
+jobs:
+  contracts:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+      PYTHONUNBUFFERED: '1'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+      - name: Bind source and prepare runner Python
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir tooling-contract-reports
+          git rev-parse HEAD > tooling-contract-reports/source-sha.txt
+          git ls-files -z .github/tests .github/test-evidence .github/workflows app/src/androidTest/java .github/run-device-tests.sh .github/prepare-device-tests.sh .github/run-prototype-tests.sh .github/prototype-risk-classes.txt .github/workflows/tooling-contracts.yml | xargs -0 sha256sum > tooling-contract-reports/source-files.sha256
+          # Pin the interpreter ABI to the reviewed PyYAML wheel; refuse runner drift.
+          python3.12 -c 'import platform, sys; assert sys.version_info[:2] == (3, 12) and sys.implementation.name == "cpython" and sys.platform == "linux" and platform.machine() == "x86_64"'
+          python3.12 -m venv "$RUNNER_TEMP/tooling-contract-python"
+          echo "$RUNNER_TEMP/tooling-contract-python/bin" >> "$GITHUB_PATH"
+          python3.12 --version > tooling-contract-reports/python-version.txt
+          node --version > tooling-contract-reports/node-version.txt
+          npm --version > tooling-contract-reports/npm-version.txt
+      - name: Install pinned Python contract dependency
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --disable-pip-version-check --require-hashes --only-binary=:all: --no-deps -r .github/tests/requirements.txt 2>&1 | tee tooling-contract-reports/pip-install.log
+          python3 -c 'import yaml; assert yaml.__version__ == "6.0.2"; print(yaml.__version__, yaml.__file__)' > tooling-contract-reports/pyyaml-version.txt
+          python3 -m pip freeze --all > tooling-contract-reports/python-packages.txt
+      - name: Install existing pinned publisher dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci --prefix .github/test-evidence --ignore-scripts --no-audit --no-fund 2>&1 | tee tooling-contract-reports/npm-ci.log
+      - name: Run eight offline contracts and retain every status
+        shell: bash
+        run: |
+          set -euo pipefail
+          unset LOCALICA_OBSERVER_TEST_SOURCE
+          python3 - <<'PY'
+          import hashlib, json, pathlib, subprocess, sys, time
+          root = pathlib.Path('tooling-contract-reports')
+          names = [
+              'test_source_methods.py', 'test_full_partition.py',
+              'test_prepare_device_tests.py', 'test_full_live_evidence.py',
+              'test_run_prototype_tests.py', 'test_observe_test_evidence.py',
+              'test_failure_context.py',
+          ]
+          for name in names:
+              if not pathlib.Path('.github/tests', name).is_file():
+                  raise RuntimeError('Missing required contract file: ' + name)
+          commands = [[sys.executable, '-m', 'unittest', 'discover', '-v', '-s', '.github/tests', '-p', name] for name in names]
+          commands.append(['node', '--test', '--test-reporter=tap', '.github/tests/test_publish_test_evidence.mjs'])
+          results = []
+          for index, argv in enumerate(commands):
+              log = root / ('contract-%02d.log' % index)
+              start = time.time()
+              with log.open('wb') as output:
+                  result = subprocess.run(argv, stdout=output, stderr=subprocess.STDOUT)
+              results.append({'argv': argv, 'returncode': result.returncode,
+                              'startedUnix': start, 'endedUnix': time.time(),
+                              'log': log.name, 'logSha256': hashlib.sha256(log.read_bytes()).hexdigest()})
+              (root / 'results.json').write_text(json.dumps({
+                  'source': (root / 'source-sha.txt').read_text().strip(),
+                  'sourceHashesSha256': hashlib.sha256((root / 'source-files.sha256').read_bytes()).hexdigest(),
+                  'python': sys.version, 'contracts': results,
+                  'complete': len(results) == 8,
+                  'scope': 'Host tooling contracts with temporary subprocess/device/upload mocks; no Android runtime verdict',
+              }, indent=2) + '\n')
+          sys.exit(1 if any(r['returncode'] != 0 for r in results) else 0)
+          PY
+      - name: Preserve host contract logs and source identity
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: evidence-tooling-contracts-${{ github.run_id }}-${{ github.run_attempt }}
+          path: tooling-contract-reports/
+          if-no-files-found: error
