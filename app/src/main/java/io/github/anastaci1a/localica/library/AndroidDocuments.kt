@@ -103,11 +103,16 @@ class AndroidDocuments(private val context: Context) : DocumentSource {
 
 interface FolderPermissions {
     fun hasReadAccess(uri: String): Boolean
+    fun readable(uris: Set<String>): Set<String> = uris.filterTo(mutableSetOf(), ::hasReadAccess)
     fun acquire(uri: String)
     fun release(uri: String)
 }
 
 class PersistedFolderPermissions(private val resolver: ContentResolver) : FolderPermissions {
+    override fun readable(uris: Set<String>): Set<String> = if (uris.isEmpty()) emptySet() else
+        resolver.persistedUriPermissions.asSequence().filter { it.isReadPermission }
+            .map { it.uri.toString() }.filter { it in uris }.toSet()
+
     override fun hasReadAccess(uri: String) = resolver.persistedUriPermissions.any {
         it.uri.toString() == uri && it.isReadPermission
     }

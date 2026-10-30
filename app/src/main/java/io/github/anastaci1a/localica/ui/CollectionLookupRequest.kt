@@ -8,32 +8,6 @@ import io.github.anastaci1a.localica.library.Track
 import io.github.anastaci1a.localica.playlist.ManualPlaylist
 import kotlinx.coroutines.*
 
-/** Owned by one UI lifetime; submission, cancellation and publication stay on its scope thread. */
-internal class CollectionLookupRequests {
-    private var current: Any? = null
-    private var job: Job? = null
-
-    fun cancel() {
-        current = null
-        job?.cancel()
-        job = null
-    }
-
-    fun <T : Any> submit(scope: CoroutineScope, dispatcher: CoroutineDispatcher,
-        stillCurrent: () -> Boolean, query: suspend () -> T?, publish: (T) -> Unit): Job {
-        cancel()
-        val request = Any()
-        current = request
-        val submitted = scope.launch {
-            val result = withContext(dispatcher) { query() }
-            ensureActive()
-            if (result != null && current === request && stillCurrent()) publish(result)
-        }
-        job = submitted
-        return submitted
-    }
-}
-
 /** Identity freshness avoids comparing entire library or playlist contents on the UI thread. */
 internal class CollectionLookupSource(val snapshot: LibrarySnapshot, val playlists: List<ManualPlaylist>,
     val sorts: BrowseSortSnapshot) {
@@ -50,7 +24,7 @@ internal fun rememberCollectionLookup(snapshot: LibrarySnapshot, playlists: List
     sorts: BrowseSortSnapshot, dispatcher: CoroutineDispatcher = Dispatchers.Default,
     onOpen: (BrowserItem) -> Unit): CollectionLookupHandle {
     val scope = rememberCoroutineScope { Dispatchers.Main.immediate }
-    val requests = remember { CollectionLookupRequests() }
+    val requests = remember { LatestUiRequest() }
     val source = CollectionLookupSource(snapshot, playlists, sorts)
     val latestSource = rememberUpdatedState(source)
     val latestOpen = rememberUpdatedState(onOpen)

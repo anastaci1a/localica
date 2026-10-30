@@ -175,6 +175,34 @@ class LibraryRepositoryTest {
         assertEquals("other-song", repository.playableTrack(track).uri)
         assertEquals(track.id, repository.playableTrack(track).id)
     }
+    @Test fun folderAvailabilityUsesOneBatchWithUniqueExactUris() {
+        var calls = 0
+        var requested: Set<String>? = null
+        val permissions = object : FolderPermissions {
+            override fun hasReadAccess(uri: String): Boolean = error("Batch must not probe each root")
+            override fun readable(uris: Set<String>): Set<String> {
+                calls++; requested = uris; return setOf("root", "unrequested")
+            }
+            override fun acquire(uri: String) = Unit
+            override fun release(uri: String) = Unit
+        }
+        val repository = LibraryRepository(MemoryStore(previous), TreeScanner(FakeDocuments()), permissions)
+        val missing = repository.unavailableFolders(listOf(FolderSelection("root", "One"),
+            FolderSelection("root", "Alias"), FolderSelection("root/child", "Child"), FolderSelection("other", "Other")))
+        assertEquals(1, calls)
+        assertEquals(setOf("root", "root/child", "other"), requested)
+        assertEquals(setOf("root/child", "other"), missing)
+    }
+
+    @Test fun defaultPermissionBatchRetainsLiveExactReadChecks() {
+        val permissions = FakePermissions("root")
+        val repository = LibraryRepository(MemoryStore(previous), TreeScanner(FakeDocuments()), permissions)
+        val folders = listOf(FolderSelection("root", "Root"), FolderSelection("root/child", "Child"))
+        assertEquals(setOf("root/child"), repository.unavailableFolders(folders))
+        permissions.release("root"); permissions.acquire("root/child")
+        assertEquals(setOf("root"), repository.unavailableFolders(folders))
+        assertTrue(repository.unavailableFolders(emptyList()).isEmpty())
+    }
 }
 
 private class MemoryStore(initial: LibrarySnapshot) : LibraryStore {
