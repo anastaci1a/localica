@@ -17,6 +17,7 @@ internal fun LegacySelectorLens(modifier: Modifier, source: FrostedBackdrop?, in
     val visible = LocalGlassVisible.current
     if (visible) { BackdropLease(source); BackdropLease(ink) }
     val renderer = remember { SelectorSceneMesh() }
+    val rim = remember { GlassRimCache() }
     val contour = remember(frame) { frame.contour() }
     val location = remember { BackdropLocation() }
     val tone = GlassTone(appearance.contrast, appearance.contrastWeight, false)
@@ -40,7 +41,7 @@ internal fun LegacySelectorLens(modifier: Modifier, source: FrostedBackdrop?, in
                         normalInk.toArgb(), selectedInk.toArgb(), tone)
                 }
                 drawRect(Color.Black.copy(alpha = appearance.overlayDarkening), frame.bounds.topLeft, frame.bounds.size)
-                drawGlassRim(frame.bounds, frame.corner)
+                drawGlassRim(frame.bounds, frame.corner, cache = rim)
             }
         }
     }
