@@ -131,4 +131,104 @@ class CollectionLookupLifecycleTest {
         } finally { tracks.release.countDown() }
     }
 
+    @Test fun newerInformationOpenedAndCanceledCannotReviveAcceptedLookup() {
+        val tracks = HeldTracks(List(500, ::track))
+        val snapshot = LibrarySnapshot(tracks = tracks)
+        var information by mutableStateOf<String?>("A")
+        lateinit var handle: CollectionLookupHandle
+        var opened = 0
+        var publishedOnMain = false
+        var accepted: Job? = null
+        var fresh: Job? = null
+        compose.setContent {
+            handle = rememberCollectionLookup(snapshot, emptyList(), BrowseSortSnapshot.Default) {
+                opened++; publishedOnMain = Looper.myLooper() == Looper.getMainLooper()
+            }
+            // Drive owner callbacks with a lightweight subtree; the real dialog ordering is tested above.
+            information?.let { androidx.compose.foundation.text.BasicText("Information $it") }
+        }
+        try {
+            compose.runOnIdle {
+                assertEquals("A", information)
+                handle.cancel(); information = null // A dismisses before its accepted link is submitted.
+                accepted = handle.open(PlayerAction.Album, tracks.values[0]) { information == null }
+            }
+            assertTrue(tracks.started.await(5, TimeUnit.SECONDS))
+            compose.runOnIdle {
+                assertEquals(0, opened)
+                handle.cancel(); information = "B" // Opening newer information invalidates A immediately.
+                assertTrue(requireNotNull(accepted).isCancelled)
+            }
+            compose.onNodeWithText("Information B").assertExists()
+            compose.runOnIdle { handle.cancel(); information = null }
+            compose.onNodeWithText("Information B").assertDoesNotExist()
+            compose.runOnIdle {
+                assertNull(information) // A's admission predicate is true again; cancellation must still win.
+                assertTrue(requireNotNull(accepted).isCancelled)
+            }
+            tracks.release.countDown(); await(requireNotNull(accepted))
+            compose.runOnIdle {
+                assertEquals(0, opened)
+                fresh = handle.open(PlayerAction.Album, tracks.values[1]) { information == null }
+            }
+            await(requireNotNull(fresh))
+            compose.runOnIdle { assertEquals(1, opened); assertTrue(publishedOnMain) }
+            assertFalse(requireNotNull(fresh).isCancelled)
+            assertEquals(0, tracks.mainReads.get())
+        } finally {
+            tracks.release.countDown()
+            val jobs = listOfNotNull(accepted, fresh)
+            jobs.forEach { it.cancel() }
+            jobs.forEach { await(it) }
+        }
+    }
+
+    @Test fun keyedOwnerReplacementCancelsHeldLookupAndAdmitsFreshWork() {
+        val tracks = HeldTracks(List(500, ::track))
+        val snapshot = LibrarySnapshot(tracks = tracks)
+        var owner by mutableStateOf(Any())
+        lateinit var handle: CollectionLookupHandle
+        lateinit var originalHandle: CollectionLookupHandle
+        var opened = 0
+        var publishedOnMain = false
+        var accepted: Job? = null
+        var fresh: Job? = null
+        compose.setContent {
+            handle = key(owner) {
+                rememberCollectionLookup(snapshot, emptyList(), BrowseSortSnapshot.Default) {
+                    opened++; publishedOnMain = Looper.myLooper() == Looper.getMainLooper()
+                }
+            }
+        }
+        try {
+            compose.runOnIdle {
+                originalHandle = handle
+                // Always true deliberately isolates key disposal, not a changing admission predicate.
+                accepted = originalHandle.open(PlayerAction.Album, tracks.values[0]) { true }
+            }
+            assertTrue(tracks.started.await(5, TimeUnit.SECONDS))
+            compose.runOnIdle { owner = Any() }
+            compose.waitForIdle()
+            compose.runOnIdle {
+                assertNotSame(originalHandle, handle)
+                assertTrue(requireNotNull(accepted).isCancelled)
+                assertEquals(0, opened)
+            }
+            tracks.release.countDown(); await(requireNotNull(accepted))
+            compose.runOnIdle {
+                assertEquals(0, opened)
+                fresh = handle.open(PlayerAction.Album, tracks.values[1]) { true }
+            }
+            await(requireNotNull(fresh))
+            compose.runOnIdle { assertEquals(1, opened); assertTrue(publishedOnMain) }
+            assertFalse(requireNotNull(fresh).isCancelled)
+            assertEquals(0, tracks.mainReads.get())
+        } finally {
+            tracks.release.countDown()
+            val jobs = listOfNotNull(accepted, fresh)
+            jobs.forEach { it.cancel() }
+            jobs.forEach { await(it) }
+        }
+    }
+
 }
