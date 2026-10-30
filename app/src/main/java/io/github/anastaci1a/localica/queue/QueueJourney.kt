@@ -124,19 +124,19 @@ data class QueueJourney(
         reconciliation?.let { previous ->
             if (previous.currentEntryId == currentEntryId && previous.modes == requested && previous.ids == ids) return this
         }
-        return reconcileUnprepared(ids, currentEntryId, requested, random).also { result ->
+        val valid = ids.toSet()
+        return reconcileUnprepared(ids, currentEntryId, requested, random, valid).also { result ->
             // Duplicate occurrences/plans can change future-token ownership on another repair pass.
             // Preserve that repair rather than treating malformed data as a reusable fixed point.
-            if (ids.toSet().size == ids.size && result.plans.values.all { it.toSet().size == it.size }) {
+            if (valid.size == ids.size && result.plans.values.all { it.toSet().size == it.size }) {
                 result.reconciliation = Reconciliation(ids.toList(), currentEntryId, requested)
             }
         }
     }
 
     private fun reconcileUnprepared(ids: List<String>, currentEntryId: String?, requested: JourneyModes,
-        random: Random): QueueJourney {
+        random: Random, valid: Set<String>): QueueJourney {
         if (ids.isEmpty()) return QueueJourney(modes = requested)
-        val valid = ids.toSet()
         val selected = currentEntryId?.takeIf { it in valid } ?: ids.first()
         var kept = history.filter { it.entryId in valid }
         var position = history.take(cursor + 1).count { it.entryId in valid } - 1
