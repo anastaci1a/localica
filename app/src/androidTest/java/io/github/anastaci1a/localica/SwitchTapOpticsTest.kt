@@ -18,6 +18,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.IntOffset
 import io.github.anastaci1a.localica.ui.*
+import io.github.anastaci1a.localica.navigation.GlassRendererMode
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.*
 import org.junit.Rule
@@ -308,4 +309,150 @@ class SwitchTapOpticsTest {
             }
         } finally { bitmap.recycle() }
     }
+    @Test fun warmedLegacyShortTapAndReversalRetainPixelsAndReportObservedCaptureWork() {
+        var checked by mutableStateOf(false)
+        val callbacks = mutableListOf<Boolean>()
+        val allocations = IntArray(LensAllocation.entries.size)
+        var draws = 0
+        val drawObserver: () -> Unit = { draws++ }
+        val allocationObserver: (LensAllocation) -> Unit = { allocations[it.ordinal]++ }
+        val runtime = GlassRendererRuntime(GlassRendererMode.Legacy)
+        val tag = "capture-work"
+        compose.setContent {
+            CompositionLocalProvider(LocalGlassRendererRuntime provides runtime) {
+                LocalicaTheme {
+                    view = LocalView.current
+                    pixelDensity = LocalDensity.current.density
+                    CompositionLocalProvider(LocalMotionSpeed provides (4f / 3f), LocalReducedMotion provides false,
+                        LocalControlLensDraw provides drawObserver, LocalControlLensAllocation provides allocationObserver) {
+                        Box(Modifier.width(280.dp)) {
+                            Sample(tag, checked) { callbacks += it; checked = it }
+                        }
+                    }
+                }
+            }
+        }
+        val row = compose.onNodeWithText("$tag switch")
+        val switch = compose.onNodeWithTag("settings-switch", useUnmergedTree = true)
+        // Reuse the original presentation witness without optional review export/pacing.
+        fun sample(label: String): Triple<Int, Int, Int> {
+            compose.runOnIdle { stage = stage % 30 + 1 }
+            val host = compose.onNodeWithTag(tag).fetchSemanticsNode().boundsInRoot
+            val pixels = capturePresentedPopupPixels(compose, compose.onNodeWithTag(tag), stage, IntOffset(2, 2)) { view }
+            lastFrame = label to pixels
+            val control = switch.fetchSemanticsNode().boundsInRoot
+            val centerY = control.center.y - host.top
+            val halfTrack = 16f * pixelDensity
+            val left = (control.left - host.left - control.height / 4).toInt().coerceAtLeast(0)
+            val right = (control.right - host.left + control.height / 4).toInt().coerceAtMost(pixels.width)
+            var green = 0; var outsideGreen = 0; var white = 0
+            for (y in 0 until pixels.height) for (x in left until right) {
+                val c = pixels[x, y]
+                if (c.green > .45f && c.blue < .25f) {
+                    green++
+                    if (kotlin.math.abs(y - centerY) > halfTrack) outsideGreen++
+                }
+                if (c.red > .85f && c.green > .85f && c.blue > .85f) white++
+            }
+            return Triple(green, outsideGreen, white)
+        }
+        fun phase(name: String, pixels: Triple<Int, Int, Int>? = null) = compose.runOnIdle {
+            val source = backings.getValue(tag)
+            android.util.Log.i("SwitchCaptureWork", "phase=$name api=${android.os.Build.VERSION.SDK_INT} " +
+                "clock=${compose.mainClock.currentTime} checked=$checked callbacks=$callbacks " +
+                "capture=${allocations[LensAllocation.CaptureBitmap.ordinal]} " +
+                "shader=${allocations[LensAllocation.BitmapShader.ordinal]} " +
+                "raster=${allocations[LensAllocation.SoftwareRaster.ordinal]} draws=$draws " +
+                "rawReady=${source.snapshot != null} recorded=${source.recorded} consumers=${source.consumers} " +
+                "green=${pixels?.first} outsideTrackGreen=${pixels?.second} white=${pixels?.third} " +
+                "markerReadbacksIncluded=true")
+        }
+        fun settled(label: String) {
+            val pixels = sample(label)
+            assertEquals("Settled controls stop exposing the backing", 0, pixels.first)
+            assertTrue("Settled switch thumb returns to white", pixels.third > 10)
+            phase(label, pixels)
+        }
+        var held = false
+        val originalAutoAdvance = compose.mainClock.autoAdvance
+        var primary: Throwable? = null
+        try {
+            compose.waitForIdle()
+            row.assertIsOff()
+            phase("initial-rest")
+            compose.runOnIdle { assertEquals(0, draws) }
+            compose.mainClock.autoAdvance = false
+            held = true
+            switch.performTouchInput { down(center) }
+            awaitRecording(tag)
+            // Explicit Legacy needs the raw image even on APIs with a recorded layer.
+            compose.waitUntil(10_000) {
+                compose.mainClock.advanceTimeByFrame()
+                val source = backings[tag]
+                source != null && source.recorded && !source.layer.isReleased && source.snapshot != null
+            }
+            compose.mainClock.advanceTimeBy(320)
+            val primed = sample("work-priming-held")
+            assertTrue("Held lens must visibly sample its green backing", primed.first > 10)
+            phase("priming-held", primed)
+            switch.performTouchInput { up() }
+            held = false
+            compose.mainClock.advanceTimeBy(1200)
+            compose.runOnIdle { assertTrue(checked); assertEquals(listOf(true), callbacks) }
+            row.assertIsOn()
+            settled("settled-priming-on")
+            row.performClick()
+            compose.mainClock.advanceTimeBy(1200)
+            compose.runOnIdle {
+                assertFalse(checked)
+                assertEquals(listOf(true, false), callbacks)
+                assertNotNull("Warmed source remains sampleable", backings.getValue(tag).snapshot)
+            }
+            row.assertIsOff()
+            settled("settled-warmed-off")
+            held = true
+            switch.performTouchInput { down(center); advanceEventTime(8); up() }
+            held = false
+            var elapsed = 0L
+            for (at in listOf(16L, 48L, 96L, 160L, 240L)) {
+                compose.mainClock.advanceTimeBy(at - elapsed); elapsed = at
+                val pixels = sample("work-tap-$at")
+                if (at == 160L) assertTrue("Automatic travel must retain a refracted backdrop band", pixels.second > 10)
+                phase("tap-sample-$at", pixels)
+            }
+            compose.runOnIdle { assertTrue(checked); assertEquals(listOf(true, false, true), callbacks) }
+            row.assertIsOn()
+            val beforeReversal = compose.runOnIdle { draws }
+            row.performClick()
+            compose.mainClock.advanceTimeBy(48)
+            val reversed = sample("work-reversal-48")
+            compose.runOnIdle {
+                assertFalse(checked)
+                assertEquals(listOf(true, false, true, false), callbacks)
+                assertTrue("Reversal still draws the live optical control", draws > beforeReversal)
+            }
+            assertTrue("Reversal samples the actual recorded backdrop", reversed.first > 10)
+            phase("reversal-observed-48", reversed)
+            compose.mainClock.advanceTimeBy(112)
+            phase("return-sample-160", sample("work-return-160"))
+            compose.mainClock.advanceTimeBy(1040)
+            row.assertIsOff()
+            compose.runOnIdle {
+                assertFalse(checked)
+                assertEquals(listOf(true, false, true, false), callbacks)
+                assertEquals("Settling releases the prewarm lease", 0, backings.getValue(tag).consumers)
+            }
+            settled("settled-work-off")
+            val stopped = compose.runOnIdle { allocations.toList() to draws }
+            compose.mainClock.advanceTimeBy(500)
+            compose.runOnIdle { assertEquals("Rest adds no optical draw or explicit lens allocation", stopped, allocations.toList() to draws) }
+            phase("final-idle")
+        } catch (failure: Throwable) { primary = failure; throw failure }
+        finally {
+            try { if (held) switch.performTouchInput { cancel() } }
+            catch (cleanup: Throwable) { if (primary != null) primary.addSuppressed(cleanup) else throw cleanup }
+            finally { compose.mainClock.autoAdvance = originalAutoAdvance }
+        }
+    }
+
 }
