@@ -250,7 +250,7 @@ class UtilityPopupRenderDiagnosticTest {
     }
 
     @Composable private fun Fixture(scene: Scene) {
-        LocalicaTheme {
+        ExplicitLegacyPopupTheme {
             val appearance = GlassAppearance(shapeDamping = 2f, shadowStrength = strength)
             CompositionLocalProvider(LocalGlassAppearance provides appearance, LocalReducedMotion provides false,
                 LocalContentColor provides if (scene.dark) androidx.compose.ui.graphics.Color.White else androidx.compose.ui.graphics.Color.Black) {

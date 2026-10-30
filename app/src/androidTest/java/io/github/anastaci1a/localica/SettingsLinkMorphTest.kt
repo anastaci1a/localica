@@ -34,7 +34,7 @@ class SettingsLinkMorphTest {
     @Test fun rectangularForegroundFadesDuringReturnAndSurvivesInterruptedReopen() {
         var open by mutableStateOf(false)
         lateinit var anchor: GlassAnchor
-        compose.setContent { LocalicaTheme {
+        compose.setContent { ExplicitLegacyPopupTheme {
             MaterialTheme(colorScheme = MaterialTheme.colorScheme.copy(onSurface = Color.Red, onSurfaceVariant = Color.Red)) {
                 anchor = rememberGlassAnchor()
                 Column(Modifier.fillMaxSize().background(Color.White).padding(24.dp)) {
@@ -77,7 +77,7 @@ class SettingsLinkMorphTest {
         var parentView: android.view.View? = null
         lateinit var parent: GlassAnchor
         lateinit var child: GlassAnchor
-        compose.setContent { LocalicaTheme {
+        compose.setContent { ExplicitLegacyPopupTheme {
             parent = rememberGlassAnchor()
             SettingsLink("Settings", anchor = parent) { parentOpen = true }
             GlassMorphPopup(parentOpen, parent, { parentOpen = false }) {

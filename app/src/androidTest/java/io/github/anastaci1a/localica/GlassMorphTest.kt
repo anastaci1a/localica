@@ -64,7 +64,7 @@ class GlassMorphTest {
             lateinit var anchor: GlassAnchor
             var popupView: android.view.View? = null
             val markerColors = listOf(Color.Red, Color.Green, Color.Blue, Color.Yellow, Color.Magenta, Color.Cyan)
-            compose.setContent { LocalicaTheme {
+            compose.setContent { ExplicitLegacyPopupTheme {
                 CompositionLocalProvider(LocalReducedMotion provides false, LocalGlassMorphWorkObserver provides work.observer) {
                     Box(Modifier.fillMaxSize().background(Color(0xFF808080))) {
                         anchor = rememberGlassAnchor()
@@ -186,7 +186,7 @@ class GlassMorphTest {
         try {
             var open by mutableStateOf(false)
             lateinit var anchor: GlassAnchor
-            compose.setContent { LocalicaTheme {
+            compose.setContent { ExplicitLegacyPopupTheme {
                 CompositionLocalProvider(LocalReducedMotion provides true, LocalGlassMorphWorkObserver provides work.observer, LocalGlassAppearance provides
                     io.github.anastaci1a.localica.navigation.GlassAppearance(shadowStrength = 1f)) {
                     Box(Modifier.fillMaxSize().background(Color(0xFF808080))) {
@@ -310,7 +310,7 @@ class GlassMorphTest {
         var present by mutableStateOf(true)
         var contact by mutableFloatStateOf(1f)
         compose.mainClock.autoAdvance = false
-        compose.setContent { LocalicaTheme {
+        compose.setContent { ExplicitLegacyPopupTheme {
             if (present) rememberGlassBody({ 0f }, contact = { contact }, state = state)
         } }
         try {
@@ -338,7 +338,7 @@ class GlassMorphTest {
         var visible by mutableStateOf(true)
         lateinit var popupView: android.view.View
         val outsideShadows = GlassShadowGroup()
-        compose.setContent { LocalicaTheme {
+        compose.setContent { ExplicitLegacyPopupTheme {
             CompositionLocalProvider(LocalGlassAppearance provides
                 io.github.anastaci1a.localica.navigation.GlassAppearance(shadowStrength = 1f),
                 LocalSurfaceShadows provides outsideShadows, LocalBottomShadows provides outsideShadows) {
@@ -392,7 +392,7 @@ class GlassMorphTest {
         var presses = 0
         lateinit var anchor: GlassAnchor
         lateinit var modalWindow: android.view.Window
-        compose.setContent { LocalicaTheme { Box(Modifier.fillMaxSize()) {
+        compose.setContent { ExplicitLegacyPopupTheme { Box(Modifier.fillMaxSize()) {
             anchor = rememberGlassAnchor()
             Box(Modifier.align(Alignment.BottomEnd).padding(24.dp).size(CompactControlSize)
                 .glassAnchor(anchor).testTag("input-trigger"))
@@ -437,7 +437,7 @@ class GlassMorphTest {
         var open by mutableStateOf(false)
         lateinit var anchor: GlassAnchor
         var popupView: android.view.View? = null
-        compose.setContent { LocalicaTheme {
+        compose.setContent { ExplicitLegacyPopupTheme {
             CompositionLocalProvider(LocalGlassAppearance provides
                 io.github.anastaci1a.localica.navigation.GlassAppearance(shapeDamping = 2f)) {
                 Box(Modifier.fillMaxSize()) {
@@ -485,7 +485,7 @@ class GlassMorphTest {
         var open by mutableStateOf(false)
         var presses = 0
         lateinit var anchor: GlassAnchor
-        compose.setContent { LocalicaTheme {
+        compose.setContent { ExplicitLegacyPopupTheme {
             val recorded = rememberFrostedBackdrop(Unit, dark = false)
             Box(Modifier.fillMaxSize().recordFrostedBackdrop(recorded)) {
                 anchor = rememberGlassAnchor()
@@ -565,7 +565,7 @@ class GlassMorphTest {
     @Test fun oneSurfaceExpandsFromTheTriggerAndReturnsBeforeRestoringIt() {
         var open by mutableStateOf(false)
         lateinit var anchor: GlassAnchor
-        compose.setContent { LocalicaTheme { Box(Modifier.fillMaxSize()) {
+        compose.setContent { ExplicitLegacyPopupTheme { Box(Modifier.fillMaxSize()) {
             anchor = rememberGlassAnchor()
             val source = rememberFrostedBackdrop(Unit, dark = false)
             Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(source)) { drawRect(Color(0xFFB4D8C8)) }
@@ -627,7 +627,7 @@ class GlassMorphTest {
             val hidden: Boolean, val shadowOwned: Boolean, val expansion: Float)
         val mounts = mutableListOf<Mount>()
         val disposed = mutableListOf<android.view.Window>()
-        compose.setContent { LocalicaTheme { CompositionLocalProvider(LocalReducedMotion provides true) {
+        compose.setContent { ExplicitLegacyPopupTheme { CompositionLocalProvider(LocalReducedMotion provides true) {
             Box(Modifier.fillMaxSize()) {
                 anchor = rememberGlassAnchor()
                 Box(Modifier.align(Alignment.BottomEnd).padding(24.dp).size(CompactControlSize)
@@ -727,7 +727,7 @@ class GlassMorphTest {
         var open by mutableStateOf(false)
         lateinit var anchor: GlassAnchor
         var popupView: android.view.View? = null
-        compose.setContent { LocalicaTheme { Box(Modifier.fillMaxSize()) {
+        compose.setContent { ExplicitLegacyPopupTheme { Box(Modifier.fillMaxSize()) {
             anchor = rememberGlassAnchor()
             Box(Modifier.align(Alignment.BottomEnd).padding(20.dp).size(CompactControlSize).glassAnchor(anchor).testTag("reversal-trigger"))
             GlassMorphPopup(open, anchor, { open = false }) {
@@ -758,7 +758,7 @@ class GlassMorphTest {
         var open by mutableStateOf(false)
         lateinit var source: FrostedBackdrop
         lateinit var material: FrostedBackdrop
-        compose.setContent { LocalicaTheme { CompositionLocalProvider(LocalReducedMotion provides true) {
+        compose.setContent { ExplicitLegacyPopupTheme { CompositionLocalProvider(LocalReducedMotion provides true) {
             Box(Modifier.fillMaxSize()) {
                 val anchor = rememberGlassAnchor()
                 source = rememberFrostedBackdrop(Unit, dark = true)

@@ -153,7 +153,7 @@ class PopupShadowContinuityTest {
     }
 
     @Composable private fun Fixture(nested: Boolean) {
-        LocalicaTheme {
+        ExplicitLegacyPopupTheme {
             val page = LocalView.current
             DisposableEffect(page) {
                 val next = FrameMarker()
