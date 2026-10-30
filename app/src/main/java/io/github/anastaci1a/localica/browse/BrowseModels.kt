@@ -148,6 +148,7 @@ object BrowseQueries {
         val effective = query.copy(text = route.text)
         val collection = route.collection.takeUnless { route.globalSearch }
         val currentTracks by lazy { snapshot.tracksById }
+        val groupPreparation = LibraryViews.Preparation(snapshot, checkActive)
         fun songItems(rows: List<SongRow>) = rows.map { BrowserItem(MediaRef(MediaKind.Song, it.track.id),
             it.track.title, it.track.artist ?: it.track.albumArtist, listOf(it), it) }
         fun groups(kind: MediaKind): List<BrowserItem> {
@@ -158,7 +159,7 @@ object BrowseQueries {
                 MediaKind.Folder -> SongListView.Folders
                 else -> return emptyList()
             }
-            return LibraryViews.groups(snapshot, view, LibraryViews.defaults(view), checkActive).map { group ->
+            return groupPreparation.groups(view, LibraryViews.defaults(view)).map { group ->
                 val ref = MediaRef(kind, group.id)
                 val rows = group.tracks.map { SongRow(it.id, it) }
                 BrowserItem(ref, group.title, group.subtitle ?: songCountLabel(group.tracks.size),
