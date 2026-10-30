@@ -36,7 +36,7 @@ internal object SavedOrderCodec {
         val json = org.json.JSONObject(value)
         val manual = json.getJSONArray("manual")
         SavedOrder((0 until manual.length()).map { manual.getString(it) },
-            TrackSort.entries.firstOrNull { it.name == json.optString("sort") } ?: TrackSort.Manual,
+            enumNameOrNull<TrackSort>(json.optString("sort")) ?: TrackSort.Manual,
             json.optBoolean("ascending", true)).reconcile(ids)
     }
 }
