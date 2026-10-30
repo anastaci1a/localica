@@ -170,4 +170,89 @@ class SlidingTabsTest {
         val lens = compose.onNodeWithTag("tab-selector", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
         assertTrue("The label stays inside the curved selector", text.left > lens.left && text.right < lens.right)
     }
+
+    @Test fun delayedPageSamplesRespectTapRequestAndPendingContactThenCancelToLatestPage() {
+        val tabs = listOf(MainTab.Home, MainTab.Library, MainTab.Songs)
+        var active by mutableStateOf(MainTab.Home)
+        var page by mutableFloatStateOf(0f)
+        var pageDragging by mutableStateOf(false)
+        val selections = mutableListOf<MainTab>()
+        val reselections = mutableListOf<MainTab>()
+        compose.setContent { LocalicaTheme {
+            CompositionLocalProvider(LocalReducedMotion provides true,
+                LocalGlassAppearance provides GlassAppearance(tabStyle = TabLensStyle.Classic)) {
+                Box(Modifier.size(300.dp, 64.dp).testTag("page-ownership-tabs")) {
+                    SlidingTabs(tabs, active, { page }, pageDragging = pageDragging,
+                        onReselect = { reselections += it }) { selections += it; active = it }
+                }
+            }
+        } }
+        fun assertAt(index: Int) {
+            val selector = compose.onNodeWithTag("tab-selector").fetchSemanticsNode().boundsInRoot
+            val option = compose.onNodeWithTag("tab-option-$index").fetchSemanticsNode().boundsInRoot
+            assertEquals("Selector follows the intended option", option.center.x, selector.center.x, 1.1f)
+        }
+        fun assertOnlyOriginalSelection() = compose.runOnIdle {
+            assertEquals(listOf(MainTab.Songs), selections)
+            assertTrue(reselections.isEmpty())
+        }
+        var held = false
+        var failure: Throwable? = null
+        compose.mainClock.autoAdvance = false
+        try {
+            compose.onNodeWithTag("tab-option-2").performClick()
+            compose.mainClock.advanceTimeBy(64)
+            assertAt(2)
+            assertOnlyOriginalSelection()
+            // Target-page selection and fractional pager delivery are independent.
+            for (sample in listOf(.25f, 1.5f)) {
+                compose.runOnIdle { page = sample }
+                compose.mainClock.advanceTimeByFrame()
+                assertAt(2)
+                assertOnlyOriginalSelection()
+            }
+            compose.onNodeWithTag("tab-selector").performTouchInput { down(center); held = true }
+            compose.mainClock.advanceTimeByFrame()
+            assertAt(2)
+            compose.runOnIdle { page = 1.25f }
+            compose.mainClock.advanceTimeByFrame()
+            assertAt(2)
+            // A real pager takeover retires the old tap request while this contact
+            // remains pending. Advance only frames, not the long-press pickup delay.
+            compose.runOnIdle { active = MainTab.Library; pageDragging = true; page = .75f }
+            compose.mainClock.advanceTimeByFrame()
+            assertAt(2)
+            assertOnlyOriginalSelection()
+            compose.runOnIdle { page = 1f; pageDragging = false }
+            compose.mainClock.advanceTimeByFrame()
+            assertAt(2)
+            compose.onNodeWithTag("page-ownership-tabs").performTouchInput { cancel(); held = false }
+            compose.mainClock.advanceTimeBy(64)
+            compose.waitUntil(5000) {
+                val selector = compose.onNodeWithTag("tab-selector").fetchSemanticsNode().boundsInRoot
+                val latest = compose.onNodeWithTag("tab-option-1").fetchSemanticsNode().boundsInRoot
+                kotlin.math.abs(selector.center.x - latest.center.x) <= 1.1f
+            }
+            assertAt(1)
+            compose.onNodeWithTag("tab-option-1").assertIsSelected()
+            assertOnlyOriginalSelection()
+            compose.onNodeWithTag("tab-option-1").performClick()
+            compose.runOnIdle {
+                assertEquals(listOf(MainTab.Songs), selections)
+                assertEquals(listOf(MainTab.Library), reselections)
+            }
+        } catch (error: Throwable) {
+            failure = error
+            throw error
+        } finally {
+            try {
+                if (held) try {
+                    compose.onNodeWithTag("page-ownership-tabs").performTouchInput { cancel() }
+                } catch (cleanup: Throwable) {
+                    if (failure != null) failure.addSuppressed(cleanup) else throw cleanup
+                }
+            } finally { compose.mainClock.autoAdvance = true }
+        }
+    }
+
 }
