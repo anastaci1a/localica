@@ -1,7 +1,7 @@
-name: Audit popup composition candidate (not release)
+name: Audit popup frame candidate (not release)
 'on':
   push:
-    branches: [test/audit-popup-composition-candidate-gate-20261030]
+    branches: [test/audit-popup-frame-candidate-gate-20261030]
 permissions:
   contents: read
 jobs:
@@ -55,7 +55,7 @@ jobs:
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
-          name: audit-popup-composition-candidate-api-${{ matrix.api }}
+          name: audit-popup-frame-candidate-api-${{ matrix.api }}
           path: |
             app/build/reports/
             app/build/test-results/
