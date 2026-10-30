@@ -133,11 +133,8 @@ internal fun PinnedHome(library: LibraryUiState, playlists: PlaylistState, pins:
     info?.let { request -> TagEditorPresentationScope(request.presentation) {
     val track = request.track
     SongInformation(track, { info = null }, folders = library.snapshot.folders) { action ->
-        val tab = when (action) { PlayerAction.Album -> MainTab.Albums; PlayerAction.Artist -> MainTab.Artists
-            PlayerAction.AlbumArtist -> MainTab.AlbumArtists; else -> MainTab.Folders }
-        BrowseQueries.evaluate(library.snapshot, playlists.playlists, BrowseRoute(tab), sorts = sorts).items
-            .firstOrNull { item -> item.songs.any { it.track.id == track.id &&
-                (action != PlayerAction.Folder || io.github.anastaci1a.localica.library.sameSongInformationLocation(it.track, track)) } }?.let { info = null; onOpen(it, it.songs) }
+        collectionItemForTrack(action, track, library.snapshot, playlists.playlists, sorts)
+            ?.let { info = null; onOpen(it, it.songs) }
     } } }
 
 }

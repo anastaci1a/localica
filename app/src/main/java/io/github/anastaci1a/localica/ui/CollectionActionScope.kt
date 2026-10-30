@@ -3,6 +3,14 @@ package io.github.anastaci1a.localica.ui
 import io.github.anastaci1a.localica.browse.BrowseResult
 import io.github.anastaci1a.localica.browse.BrowserItem
 import io.github.anastaci1a.localica.navigation.MediaRef
+import io.github.anastaci1a.localica.navigation.BrowseRoute
+import io.github.anastaci1a.localica.navigation.MainTab
+import io.github.anastaci1a.localica.browse.BrowseQueries
+import io.github.anastaci1a.localica.browse.BrowseSortSnapshot
+import io.github.anastaci1a.localica.library.LibrarySnapshot
+import io.github.anastaci1a.localica.library.Track
+import io.github.anastaci1a.localica.library.sameSongInformationLocation
+import io.github.anastaci1a.localica.playlist.ManualPlaylist
 
 /** All collection actions consume the same currently displayed ordered occurrence snapshot. */
 internal fun collectionActionTarget(ref: MediaRef, title: String, displayed: BrowseResult,
@@ -28,3 +36,17 @@ internal object ArtistAlbumSelection {
     }
 }
 
+
+/** Resolve the same ordered collection and access location for every song-information action. */
+internal fun collectionItemForTrack(action: PlayerAction, track: Track, snapshot: LibrarySnapshot,
+    playlists: List<ManualPlaylist>, sorts: BrowseSortSnapshot, checkActive: () -> Unit = {}): BrowserItem? {
+    val tab = when (action) {
+        PlayerAction.Album -> MainTab.Albums
+        PlayerAction.Artist -> MainTab.Artists
+        PlayerAction.AlbumArtist -> MainTab.AlbumArtists
+        else -> MainTab.Folders
+    }
+    return BrowseQueries.evaluate(snapshot, playlists, BrowseRoute(tab), sorts = sorts, checkActive = checkActive).items
+        .firstOrNull { item -> item.songs.any { it.track.id == track.id &&
+            (action != PlayerAction.Folder || sameSongInformationLocation(it.track, track)) } }
+}
