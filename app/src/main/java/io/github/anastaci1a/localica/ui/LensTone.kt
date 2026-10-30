@@ -6,10 +6,10 @@ import androidx.compose.ui.graphics.asImageBitmap
 
 /** Same ordered shadow-lift curve as the lens shader, prepared once per shared
  * Android 8–12 source/setting change rather than once per control or gesture frame. */
-internal fun tintLensSnapshot(image: ImageBitmap, amount: Float): ImageBitmap {
+internal fun tintLensSnapshot(image: ImageBitmap, amount: Float, onReadCopy: ((Int) -> Unit)? = null): ImageBitmap {
     val tint = amount.coerceIn(0f, 1f)
     if (tint == 0f) return image
-    val source = readGlassPixels(image, 1)
+    val source = readGlassPixels(image, 1, onReadCopy)
     val pixels = source.pixels
     for (i in pixels.indices) {
         val c = pixels[i]

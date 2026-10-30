@@ -34,9 +34,9 @@ internal suspend fun softwareGlassSnapshot(image: ImageBitmap, size: IntSize): I
 }
 
 /** Android 8–11 fallback: shared, bounded, off-main blur with premultiplied alpha. */
-internal suspend fun blurGlassSnapshot(image: ImageBitmap, radius: Float): ImageBitmap {
+internal suspend fun blurGlassSnapshot(image: ImageBitmap, radius: Float, onReadCopy: ((Int) -> Unit)? = null): ImageBitmap {
     val scale = if (radius < 4f) 1 else 4
-    val source = readGlassPixels(image, scale)
+    val source = readGlassPixels(image, scale, onReadCopy)
     val w = source.width
     val h = source.height
     var pixels = source.pixels

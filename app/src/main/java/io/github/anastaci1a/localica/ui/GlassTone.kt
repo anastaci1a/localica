@@ -32,10 +32,15 @@ private object ToneImages {
         override fun sizeOf(key: Key, value: ImageBitmap) = value.width * value.height * 4
     }
     val mutex = Mutex()
-    suspend fun get(image: ImageBitmap, tone: GlassTone): ImageBitmap = mutex.withLock {
+    suspend fun get(image: ImageBitmap, tone: GlassTone, observer: GlassPreparationWorkObserver?): ImageBitmap = mutex.withLock {
         val key = Key(image, tone)
-        images.get(key)?.let { return@withLock it }
-        val source = readGlassPixels(image, 1)
+        val cached = images.get(key)
+        if (observer != null) observer.glassPreparationEvent(if (cached == null) "tone-locked-miss" else "tone-locked-hit",
+            listOf(image, cached), parameter = tone.trim, cacheBytes = images.size(),
+            cacheHits = images.hitCount(), cacheMisses = images.missCount(), cacheEvictions = images.evictionCount())
+        cached?.let { return@withLock it }
+        val started = if (observer == null) 0L else System.nanoTime()
+        val source = readGlassPixels(image, 1, observer.glassReadCopyObserver("tone-read-copy", image))
         val pixels = source.pixels
         val lut = IntArray(256) { tone.byteChannel(it) }
         for (i in pixels.indices) {
@@ -44,7 +49,13 @@ private object ToneImages {
                 (lut[c ushr 8 and 255] shl 8) or lut[c and 255]
         }
         Bitmap.createBitmap(pixels, source.width, source.height, Bitmap.Config.ARGB_8888)
-            .asImageBitmap().also { images.put(key, it) }
+            .asImageBitmap().also {
+                images.put(key, it)
+                val ended = if (observer == null) 0L else System.nanoTime()
+                if (observer != null) observer.glassPreparationEvent("tone-completed", listOf(image, it),
+                    startedNs = started, endedNs = ended, parameter = tone.trim, cacheBytes = images.size(),
+                    cacheHits = images.hitCount(), cacheMisses = images.missCount(), cacheEvictions = images.evictionCount())
+            }
     }
 }
 
@@ -84,8 +95,16 @@ private class ToneSnapshotCompletion {
     prepare: (suspend (ImageBitmap, GlassTone) -> ImageBitmap)? = null,
     onProvenance: ((ToneSnapshotProvenance) -> Unit)? = null,
     onReceipt: ((ToneSnapshotReceipt<Bitmap>?) -> Unit)? = null): ImageBitmap? {
+    val workObserver = LocalGlassPreparationWorkObserver.current
     val cached = remember(image, tone, prepare) {
-        image?.takeIf { tone.trim > 0f && prepare == null }?.let { ToneImages.images.get(ToneImages.Key(it, tone)) }
+        image?.takeIf { tone.trim > 0f && prepare == null }?.let { input ->
+            ToneImages.images.get(ToneImages.Key(input, tone)).also { output ->
+                if (workObserver != null) workObserver.glassPreparationEvent(
+                    if (output == null) "tone-composition-miss" else "tone-composition-hit", listOf(input, output),
+                    parameter = tone.trim, cacheBytes = ToneImages.images.size(), cacheHits = ToneImages.images.hitCount(),
+                    cacheMisses = ToneImages.images.missCount(), cacheEvictions = ToneImages.images.evictionCount())
+            }
+        }
     }
     var result by remember { mutableStateOf<ImageBitmap?>(null) }
     // Non-observable metadata follows the existing result publication, without another effect,
@@ -95,7 +114,7 @@ private class ToneSnapshotCompletion {
     LaunchedEffect(image, tone, prepare) {
         val replacement = if (image == null || tone.trim == 0f) image
             else if (prepare != null) prepare(image, tone)
-            else withContext(Dispatchers.Default) { ToneImages.get(image, tone) }
+            else withContext(Dispatchers.Default) { ToneImages.get(image, tone, workObserver) }
         // A suspended preparer may finish non-cancellable owned work after replacement.
         // Its retired effect must never publish into the retained result.
         currentCoroutineContext().ensureActive()

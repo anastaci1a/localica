@@ -208,6 +208,7 @@ internal fun rememberFrostedBackdrop(key: Any?, enabled: Boolean = true, dark: B
     val runtime = LocalGlassRendererRuntime.current
     val renderer = currentGlassRendererGeneration()
     val source = remember(layer, runtime) { FrostedBackdrop(layer, dark, runtime) }
+    val workObserver = LocalGlassPreparationWorkObserver.current
     val graphicsContext = LocalGraphicsContext.current
     val currentDensity by rememberUpdatedState(LocalDensity.current)
     val currentDirection by rememberUpdatedState(LocalLayoutDirection.current)
@@ -256,13 +257,21 @@ internal fun rememberFrostedBackdrop(key: Any?, enabled: Boolean = true, dark: B
                     val native = source.captureCurrent(graphicsContext, currentDensity, currentDirection, ::current) ?: return false
                     if (!current()) return false
                     val (snapshot, fallback) = withContext(Dispatchers.Default) {
-                        val software = softwareGlassSnapshot(native, size)
-                        software to scatterSnapshot(software)
+                        val owner = if (workObserver == null) 0 else System.identityHashCode(source)
+                        val software = measuredGlassPreparation(workObserver, "software-normalization", native, owner, renderer.epoch) {
+                            softwareGlassSnapshot(native, size)
+                        }
+                        val scattered = measuredGlassPreparation(workObserver, "scatter", software, owner, renderer.epoch) {
+                            scatterSnapshot(software, workObserver.glassReadCopyObserver("scatter-read-copy", software, owner, renderer.epoch))
+                        }
+                        software to scattered
                     }
                     currentCoroutineContext().ensureActive()
                     if (!current()) return false
                     // Publish one completed generation, never a new snapshot with an old fallback.
                     if (!source.publish(renderer, snapshot, fallback, request, draws)) return false
+                    if (workObserver != null) workObserver.glassPreparationEvent("capture-published", listOf(snapshot, fallback),
+                        System.identityHashCode(source), renderer.epoch, parameter = request.toFloat())
                     source.lastReadbackAbort = null
                     return true
                 } finally {
@@ -275,7 +284,11 @@ internal fun rememberFrostedBackdrop(key: Any?, enabled: Boolean = true, dark: B
             // Artwork/lyrics may still be easing when the new scene key is published.
             // Refresh its settled appearance once, without readback on every animation frame.
             kotlinx.coroutines.delay(500)
-            if (capture()) captured = captureKey
+            if (capture()) {
+                captured = captureKey
+                if (workObserver != null) workObserver.glassPreparationEvent("capture-settled", listOf(source.snapshot, source.fallback),
+                    System.identityHashCode(source), renderer.epoch)
+            }
         }
     }
     val blurRadius = with(LocalDensity.current) { 22.dp.toPx() } * glassBlur.coerceIn(0f, 1f)
@@ -285,13 +298,25 @@ internal fun rememberFrostedBackdrop(key: Any?, enabled: Boolean = true, dark: B
             val snapshot = capturedPixels.snapshot
             // Coalesce slider movement; each recorded source shares one prepared bitmap.
             kotlinx.coroutines.delay(32)
-            val blurred = if (blurRadius == 0f) snapshot else withContext(Dispatchers.Default) { blurGlassSnapshot(snapshot, blurRadius) }
+            val blurred = if (blurRadius == 0f) snapshot else withContext(Dispatchers.Default) {
+                measuredGlassPreparation(workObserver, "blur", snapshot, if (workObserver == null) 0 else System.identityHashCode(source), renderer.epoch, blurRadius) {
+                    blurGlassSnapshot(snapshot, blurRadius, workObserver.glassReadCopyObserver("blur-read-copy", snapshot, if (workObserver == null) 0 else System.identityHashCode(source), renderer.epoch))
+                }
+            }
             val frosted = capturedPixels.fallback
             val tinted = withContext(Dispatchers.Default) {
-                tintLensSnapshot(blurred, whiteTint) to tintLensSnapshot(frosted, whiteTint)
+                val owner = if (workObserver == null) 0 else System.identityHashCode(source)
+                measuredGlassPreparation(workObserver, "tint-clear", blurred, owner, renderer.epoch, whiteTint) {
+                    tintLensSnapshot(blurred, whiteTint, workObserver.glassReadCopyObserver("tint-clear-read-copy", blurred, owner, renderer.epoch))
+                } to measuredGlassPreparation(workObserver, "tint-frost", frosted, owner, renderer.epoch, whiteTint) {
+                    tintLensSnapshot(frosted, whiteTint, workObserver.glassReadCopyObserver("tint-frost-read-copy", frosted, owner, renderer.epoch))
+                }
             }
             currentCoroutineContext().ensureActive()
             source.prepare(capturedPixels, blurred.takeIf { blurRadius > 0f }, tinted.first, tinted.second)
+            if (workObserver != null) workObserver.glassPreparationEvent("appearance-completed",
+                listOf(snapshot, frosted, blurred.takeIf { blurRadius > 0f }, tinted.first, tinted.second),
+                System.identityHashCode(source), renderer.epoch, parameter = if (source.capture === capturedPixels) 1f else 0f)
         }
     }
     return source
@@ -427,8 +452,8 @@ private val frostGrain: ImageBitmap by lazy {
     }.asImageBitmap()
 }
 
-private fun scatterSnapshot(image: ImageBitmap): ImageBitmap {
-    val source = readGlassPixels(image, 8)
+private fun scatterSnapshot(image: ImageBitmap, onReadCopy: ((Int) -> Unit)? = null): ImageBitmap {
+    val source = readGlassPixels(image, 8, onReadCopy)
     val w = source.width
     val h = source.height
     var pixels = source.pixels

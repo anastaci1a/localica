@@ -252,6 +252,7 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
         if (visible && renderer.backend == GlassBackend.Legacy) {
         val endpointTone = GlassTone(appearance.contrast, appearance.contrastWeight, dark)
         @Composable fun prepared(backing: FrostedBackdrop?): List<ImageBitmap?> {
+            val workObserver = LocalGlassPreparationWorkObserver.current
             val clear = backing?.glassFallback ?: backing?.snapshot
             val frosted = backing?.fallback ?: clear
             // Morphs blend fixed prepared endpoints; progress must never schedule
@@ -259,7 +260,10 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
             return listOf(rememberToneSnapshot(clear, endpointTone),
                 rememberToneSnapshot((backing?.lensSnapshot ?: clear).takeIf { frost < 1f && panel < 1f }, endpointTone),
                 rememberToneSnapshot(frosted, endpointTone),
-                rememberToneSnapshot((backing?.lensFrostSnapshot ?: frosted).takeIf { frost > 0f && panel < 1f }, endpointTone))
+                rememberToneSnapshot((backing?.lensFrostSnapshot ?: frosted).takeIf { frost > 0f && panel < 1f }, endpointTone)).also { outputs ->
+                if (workObserver != null) workObserver.glassPreparationEvent("tone-output-endpoints", outputs,
+                    System.identityHashCode(backing), renderer.epoch, parameter = endpointTone.trim)
+            }
         }
         // A coalesced Legacy→Modern→Legacy switch must not reuse the prior epoch's tone result.
         // Only disposable preparation is keyed; contact and surface motion stay mounted.
