@@ -1,7 +1,7 @@
-name: Audit software control capture (not release)
+name: Audit exact capture pixel units (not release)
 'on':
   push:
-    branches: [dev/audit-legacy-capture-gate-20261030]
+    branches: [dev/audit-capture-pixel-units-20261030]
 permissions:
   contents: read
 jobs:
@@ -27,12 +27,12 @@ jobs:
             display: compact
     env:
       TEST_API: ${{ matrix.api }}
-      SELECTORS: io.github.anastaci1a.localica.SoftwareControlCaptureTest,io.github.anastaci1a.localica.SwitchTapOpticsTest,io.github.anastaci1a.localica.SelectorSceneRasterTest,io.github.anastaci1a.localica.InterfaceControlsTest,io.github.anastaci1a.localica.GlassRendererSwitchingTest,io.github.anastaci1a.localica.SelectionLensTest,io.github.anastaci1a.localica.LiquidGlassTest
+      SELECTORS: io.github.anastaci1a.localica.SoftwareControlCaptureTest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - uses: ./.github/actions/focused-android-setup
-      - name: Verify optical contracts and compile instrumentation
-        run: ./gradlew testDebugUnitTest --tests io.github.anastaci1a.localica.ui.LensMeshGeometryTest --tests io.github.anastaci1a.localica.ui.LensMeshConditioningTest --tests io.github.anastaci1a.localica.ui.LensGeometryTest --tests io.github.anastaci1a.localica.ui.GlassRendererGenerationTest assembleDebug assembleDebugAndroidTest --no-daemon --max-workers=2
+      - name: Compile capture instrumentation
+        run: ./gradlew assembleDebug assembleDebugAndroidTest --no-daemon --max-workers=2
       - uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
         with:
           api-level: ${{ matrix.api }}
@@ -55,7 +55,7 @@ jobs:
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
-          name: audit-legacy-capture-api-${{ matrix.api }}
+          name: audit-capture-pixel-units-api-${{ matrix.api }}
           path: |
             app/build/reports/
             app/build/test-results/
