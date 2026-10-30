@@ -54,7 +54,7 @@ internal data class SelectorReturnLimits(val extension: Float, val inset: Float,
 
 internal fun selectorCriticalResidual(seconds: Float): Float {
     require(seconds.isFinite() && seconds >= 0f)
-    val omega = sqrt(380f)
+    val omega = sqrt(GlassSpringParameters.STIFFNESS)
     return (1f + omega * seconds) * exp(-omega * seconds)
 }
 
@@ -63,9 +63,9 @@ internal data class SelectorDampedMode(val value: Float, val velocity: Float = 0
     fun advance(seconds: Float, damping: Float): SelectorDampedMode {
         require(seconds.isFinite() && seconds >= 0f)
         if (seconds == 0f) return this
-        val drag = (damping.takeIf { it.isFinite() } ?: 8f).coerceIn(2f, 40f)
+        val drag = (damping.takeIf { it.isFinite() } ?: GlassSpringParameters.DEFAULT_DAMPING).coerceIn(GlassSpringParameters.MIN_DAMPING, GlassSpringParameters.MAX_DAMPING)
         val decay = drag / 2f
-        val discriminant = 380f - decay * decay
+        val discriminant = GlassSpringParameters.STIFFNESS - decay * decay
         if (abs(discriminant) < .001f) {
             val b = velocity + decay * value
             val envelope = exp(-decay * seconds)
@@ -115,7 +115,7 @@ internal class SelectorCrossReturn(
     private var elapsed = 0f
     private var finished = false
     val settled get() = finished
-    private val quiet get() = abs(mode.value) < .0003f && abs(mode.velocity) < .003f &&
+    private val quiet get() = abs(mode.value) < GlassSpringParameters.SETTLED_DISPLACEMENT && abs(mode.velocity) < GlassSpringParameters.SETTLED_VELOCITY &&
         selectorCriticalResidual(elapsed) < .0003f
     internal var physicalScale = 1f
         private set
@@ -171,7 +171,7 @@ internal class SelectorCrossReturn(
         return output
     }
 
-    fun advance(seconds: Float, damping: Float = 8f): SelectorReturnFrame {
+    fun advance(seconds: Float, damping: Float = GlassSpringParameters.DEFAULT_DAMPING): SelectorReturnFrame {
         require(seconds.isFinite() && seconds >= 0f)
         if (finished) return rest
         elapsed += seconds
