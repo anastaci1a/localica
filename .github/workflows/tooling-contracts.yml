@@ -22,6 +22,7 @@ name: Evidence tooling contracts
       - '.github/run-prototype-tests.sh'
       - '.github/prototype-risk-classes.txt'
   workflow_dispatch:
+  workflow_call:
 permissions:
   contents: read
 # No concurrency/cancellation policy: do not cancel another invocation.
