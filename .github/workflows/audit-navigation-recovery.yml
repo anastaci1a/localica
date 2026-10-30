@@ -1,7 +1,7 @@
-name: Audit exact capture pixel units (not release)
+name: Audit capture scene controls (not release)
 'on':
   push:
-    branches: [dev/audit-capture-pixel-units-20261030]
+    branches: [dev/audit-capture-scene-control-gate-20261030]
 permissions:
   contents: read
 jobs:
@@ -20,14 +20,9 @@ jobs:
             gpu: swiftshader_indirect
             disable_animations: true
             display: reset
-          - api: 36
-            target: default
-            gpu: lavapipe
-            disable_animations: false
-            display: compact
     env:
       TEST_API: ${{ matrix.api }}
-      SELECTORS: io.github.anastaci1a.localica.SoftwareControlCaptureTest
+      SELECTORS: io.github.anastaci1a.localica.SoftwareControlCaptureTest,io.github.anastaci1a.localica.ControlCaptureSceneControlTest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - uses: ./.github/actions/focused-android-setup
@@ -55,7 +50,7 @@ jobs:
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
-          name: audit-capture-pixel-units-api-${{ matrix.api }}
+          name: audit-capture-scene-control-api-${{ matrix.api }}
           path: |
             app/build/reports/
             app/build/test-results/
