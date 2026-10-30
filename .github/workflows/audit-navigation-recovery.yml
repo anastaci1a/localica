@@ -1,7 +1,7 @@
-name: Audit coincident capture oracle (not release)
+name: Audit real switch control work (not release)
 'on':
   push:
-    branches: [dev/audit-capture-coincident-oracle-gate-20261030]
+    branches: [test/audit-real-switch-fresh-control-gate-20261030]
 permissions:
   contents: read
 jobs:
@@ -27,7 +27,7 @@ jobs:
             display: compact
     env:
       TEST_API: ${{ matrix.api }}
-      SELECTORS: io.github.anastaci1a.localica.SoftwareControlCaptureTest,io.github.anastaci1a.localica.ControlCaptureSceneControlTest
+      SELECTORS: io.github.anastaci1a.localica.SwitchTapOpticsTest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - uses: ./.github/actions/focused-android-setup
@@ -55,7 +55,7 @@ jobs:
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
-          name: audit-capture-coincident-api-${{ matrix.api }}
+          name: audit-real-switch-control-api-${{ matrix.api }}
           path: |
             app/build/reports/
             app/build/test-results/

@@ -36,8 +36,6 @@ internal fun GlassControlScene(modifier: Modifier, horizontalPadding: Dp = 20.dp
     val mesh = remember { lazy { LensMeshRenderer() } }
     val rim = remember { GlassRimCache() }
     val layer = if (optical && modern) rememberGraphicsLayer() else null
-    val softwareCapture = if (optical && !modern && Build.VERSION.SDK_INT < 29)
-        remember { SoftwareControlCapture() } else null
     val onLensDraw = LocalControlLensDraw.current
     val onAllocation = LocalControlLensAllocation.current
     Canvas(modifier.backdropLocation(location)) {
@@ -76,22 +74,12 @@ internal fun GlassControlScene(modifier: Modifier, horizontalPadding: Dp = 20.dp
             layer.record(Density(density, fontScale), layoutDirection, extent) { recordScene() }
             clipPath(silhouette) { translate(origin.x, origin.y) { drawLayer(layer) } }
         } else {
-            fun drawCapture(image: ImageBitmap, mutable: Boolean) {
-                clipPath(silhouette) {
-                    with(mesh.value) { draw(shape, image, extent, -origin, 1.35f * thickness,
-                        flattening = flattening, mutableSoftwareSnapshot = mutable, onAllocation = onAllocation) }
-                }
-            }
-            if (softwareCapture != null) {
-                softwareCapture.withScene(extent, Density(density, fontScale), layoutDirection, onAllocation,
-                    record = { recordScene() }, consume = { drawCapture(it, true) })
-            } else {
-                // Hardware mesh drawing can retain shader input beyond this call.
-                val image = ImageBitmap(extent.width, extent.height)
-                onAllocation?.invoke(LensAllocation.CaptureBitmap)
-                CanvasDrawScope().draw(Density(density, fontScale), layoutDirection, Canvas(image),
-                    Size(extent.width.toFloat(), extent.height.toFloat())) { recordScene() }
-                drawCapture(image, false)
+            val image = ImageBitmap(extent.width, extent.height)
+            onAllocation?.invoke(LensAllocation.CaptureBitmap)
+            CanvasDrawScope().draw(Density(density, fontScale), layoutDirection, Canvas(image),
+                Size(extent.width.toFloat(), extent.height.toFloat())) { recordScene() }
+            clipPath(silhouette) {
+                with(mesh.value) { draw(shape, image, extent, -origin, 1.35f * thickness, flattening = flattening, onAllocation = onAllocation) }
             }
         }
         drawRoundRect(face(), shape.bounds.topLeft, shape.bounds.size, CornerRadius(shape.corner))
