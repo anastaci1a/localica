@@ -1172,11 +1172,8 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     info?.let { request -> TagEditorPresentationScope(request.presentation) {
     val song = request.track
     SongInformation(song, { info = null }, folders = library.snapshot.folders) { action ->
-        val tab = when (action) { PlayerAction.Album -> MainTab.Albums; PlayerAction.Artist -> MainTab.Artists
-            PlayerAction.AlbumArtist -> MainTab.AlbumArtists; else -> MainTab.Folders }
-        BrowseQueries.evaluate(library.snapshot, playlists.playlists, BrowseRoute(tab), sorts = sorts).items
-            .firstOrNull { item -> item.songs.any { it.track.id == song.id &&
-                (action != PlayerAction.Folder || io.github.anastaci1a.localica.library.sameSongInformationLocation(it.track, song)) } }?.let { info = null; onOpen(it) }
+        collectionItemForTrack(action, song, library.snapshot, playlists.playlists, sorts)
+            ?.let { info = null; onOpen(it) }
     } } }
     if (sorting) CompositionLocalProvider(LocalGlassOrigin provides sortOrigin) { sortingPanel(initialView = presentationOnly) }
 }
