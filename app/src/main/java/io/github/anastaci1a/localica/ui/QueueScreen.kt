@@ -57,8 +57,12 @@ fun QueueScreen(state: QueueUiState, controller: QueueController?, library: Libr
         }
     }
     SideEffect { selectorAnchor.face = { SelectorFace() } }
-    val position = active?.let { "${it.entries.indexOfFirst { entry -> entry.id == it.currentEntryId } + 1} / ${it.entries.size}" }
-    val duration = active?.let { formatTime(it.entries.mapNotNull { entry -> entry.track.durationMs }.takeIf { it.isNotEmpty() }?.sum()) }
+    val position = remember(active?.entries, active?.currentEntryId) {
+        active?.let { "${it.entries.indexOfFirst { entry -> entry.id == it.currentEntryId } + 1} / ${it.entries.size}" }
+    }
+    val duration = remember(active?.entries) {
+        active?.let { formatTime(it.entries.mapNotNull { entry -> entry.track.durationMs }.takeIf { it.isNotEmpty() }?.sum()) }
+    }
     var browsing by rememberSaveable(active?.id, saver = navigationStateSaver { state -> state.takeIf { it.active == MainTab.Queues } }) {
         mutableStateOf(NavigationState(MainTab.Queues, mapOf(MainTab.Queues to listOf(BrowseRoute(MainTab.Queues,
             MediaRef(MediaKind.Queue, active?.id.orEmpty()), active?.name ?: "Queue")))))
