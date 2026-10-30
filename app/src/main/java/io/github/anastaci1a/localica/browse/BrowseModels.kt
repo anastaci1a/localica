@@ -178,7 +178,16 @@ object BrowseQueries {
             else -> groups(kind)
         }
         if (collection != null) {
-            val source = catalog(collection.kind).firstOrNull { it.ref == collection }?.songs.orEmpty()
+            // Detail routes need only this collection's occurrences, not every saved queue/playlist.
+            val source = when (collection.kind) {
+                MediaKind.Playlist -> playlists.firstOrNull { it.id == collection.id }?.let {
+                    PlaylistEdits.rows(it, snapshot, LibraryQuery(sort = TrackSort.Manual), currentTracks)
+                }.orEmpty()
+                MediaKind.Queue -> queues.firstOrNull { it.id == collection.id }?.let {
+                    queueRows(it, snapshot, currentTracks)
+                }.orEmpty()
+                else -> catalog(collection.kind).firstOrNull { it.ref == collection }?.songs.orEmpty()
+            }
             val order = if (collection.kind in setOf(MediaKind.Queue, MediaKind.Playlist)) effective.copy(sort = TrackSort.Manual, ascending = true) else effective
             if (collection.kind in setOf(MediaKind.Artist, MediaKind.AlbumArtist)) {
                 val grouped = orderedArtistAlbums(source, order, checkActive)
