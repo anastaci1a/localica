@@ -13,6 +13,7 @@ import kotlin.math.ceil
 
 /** Optional instrumentation; no snapshot writes or work when no observer is installed. */
 internal val LocalControlLensDraw = staticCompositionLocalOf<(() -> Unit)?> { null }
+internal val LocalControlLensAllocation = staticCompositionLocalOf<((LensAllocation) -> Unit)?> { null }
 
 /** Draw the track once. Only the lens replaces pixels with the sampled track/backdrop.
  * A settled white thumb has no recording, backdrop subscription or optical renderer. */
@@ -35,7 +36,10 @@ internal fun GlassControlScene(modifier: Modifier, horizontalPadding: Dp = 20.dp
     val mesh = remember { lazy { LensMeshRenderer() } }
     val rim = remember { GlassRimCache() }
     val layer = if (optical && modern) rememberGraphicsLayer() else null
+    val softwareCapture = if (optical && !modern && Build.VERSION.SDK_INT < 29)
+        remember { SoftwareControlCapture() } else null
     val onLensDraw = LocalControlLensDraw.current
+    val onAllocation = LocalControlLensAllocation.current
     Canvas(modifier.backdropLocation(location)) {
         val shape = geometry()
         if (!optical) {
@@ -72,11 +76,22 @@ internal fun GlassControlScene(modifier: Modifier, horizontalPadding: Dp = 20.dp
             layer.record(Density(density, fontScale), layoutDirection, extent) { recordScene() }
             clipPath(silhouette) { translate(origin.x, origin.y) { drawLayer(layer) } }
         } else {
-            val image = ImageBitmap(extent.width, extent.height)
-            CanvasDrawScope().draw(Density(density, fontScale), layoutDirection, Canvas(image),
-                Size(extent.width.toFloat(), extent.height.toFloat())) { recordScene() }
-            clipPath(silhouette) {
-                with(mesh.value) { draw(shape, image, extent, -origin, 1.35f * thickness, flattening = flattening) }
+            fun drawCapture(image: ImageBitmap, mutable: Boolean) {
+                clipPath(silhouette) {
+                    with(mesh.value) { draw(shape, image, extent, -origin, 1.35f * thickness,
+                        flattening = flattening, mutableSoftwareSnapshot = mutable, onAllocation = onAllocation) }
+                }
+            }
+            if (softwareCapture != null) {
+                softwareCapture.withScene(extent, Density(density, fontScale), layoutDirection, onAllocation,
+                    record = { recordScene() }, consume = { drawCapture(it, true) })
+            } else {
+                // Hardware mesh drawing can retain shader input beyond this call.
+                val image = ImageBitmap(extent.width, extent.height)
+                onAllocation?.invoke(LensAllocation.CaptureBitmap)
+                CanvasDrawScope().draw(Density(density, fontScale), layoutDirection, Canvas(image),
+                    Size(extent.width.toFloat(), extent.height.toFloat())) { recordScene() }
+                drawCapture(image, false)
             }
         }
         drawRoundRect(face(), shape.bounds.topLeft, shape.bounds.size, CornerRadius(shape.corner))
