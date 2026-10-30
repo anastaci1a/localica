@@ -84,7 +84,7 @@ class QueueJourneyPreparationTest {
     }
 
     @Test fun preparationOwnsItsInputIdsAndLegitimateRepeatedTracksKeepDistinctOccurrences() {
-        val track = Track("content://same", "Same")
+        val track = Track("content://same", "Same", fileName = "same.mp3", relativePath = "same.mp3")
         val entries = listOf(QueueEntry("occurrence-A", track), QueueEntry("occurrence-B", track))
         val ids = entries.mapTo(mutableListOf()) { it.id }
         val prepared = QueueJourney.start(ids, ids.first(), JourneyModes())
