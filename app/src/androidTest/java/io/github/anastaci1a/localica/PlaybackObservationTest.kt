@@ -6,8 +6,13 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.SemanticsProperties
-import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.test.platform.app.InstrumentationRegistry
+import io.github.anastaci1a.localica.library.*
+import io.github.anastaci1a.localica.queue.*
+import io.github.anastaci1a.localica.navigation.InterfacePreferences
+import io.github.anastaci1a.localica.navigation.MainTab
 import io.github.anastaci1a.localica.navigation.InterfaceSettings
 import io.github.anastaci1a.localica.playback.*
 import io.github.anastaci1a.localica.ui.*
@@ -115,5 +120,62 @@ class PlaybackObservationTest {
         }
         compose.waitForIdle()
         assertEquals(5000f, value(), 1f)
+    }
+
+    @Test fun actualScreenRelativeSeekActionsReadLatestRawSamplesDuringPendingQueueDisplay() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val interfacePreferences = InterfacePreferences(context)
+        val actionPreferences = PlayerActionPreferences(context)
+        val savedInterface = interfacePreferences.read()
+        val savedActions = actionPreferences.read()
+        try {
+            interfacePreferences.write(InterfaceSettings(tabs = listOf(MainTab.Home), reducedMotion = true))
+            actionPreferences.write(PlayerActionSettings(slots = mapOf(
+                ActionSlot(0, 0) to PlayerAction.BackTen, ActionSlot(0, 1) to PlayerAction.ForwardTen)))
+            val queued = Track("missing-queued-sample", "Queued sample", fileName = "queued.mp3",
+                relativePath = "queued.mp3", id = "queued-song", durationMs = 90000)
+            val queue = QueueEdits.create(listOf(queued), 0, "Sample queue")
+            val library = LibraryUiState(LibrarySnapshot(tracks = listOf(queued)), loading = false)
+            val queues = QueueUiState(QueueLibrary(listOf(queue), queue.id), loading = false)
+            val source = mutableStateOf(PlaybackState(connected = true, trackId = "native-song",
+                trackUri = "missing-native-sample", title = "Native sample", positionMs = 12000,
+                sampledAtMs = 1000, durationMs = 90000, playbackVisit = "native-visit"))
+            val callbacks = mutableListOf<Long>()
+            compose.setContent {
+                val observation = rememberPlaybackObservation(source)
+                LocalicaTheme {
+                    LocalicaScreen(library, observation.screen.value, {}, {}, { callbacks += it }, {}, {}, {},
+                        queues = queues, playbackSample = observation.sample)
+                }
+            }
+            compose.onNodeWithText("Queued sample").performClick()
+            compose.waitUntil(5000) {
+                compose.onAllNodesWithContentDescription("Back 10 seconds").fetchSemanticsNodes().isNotEmpty() &&
+                    compose.onAllNodesWithContentDescription("Forward 10 seconds").fetchSemanticsNodes().isNotEmpty()
+            }
+            fun seekValue() = compose.onNodeWithContentDescription("Seek").fetchSemanticsNode()
+                .config[SemanticsProperties.ProgressBarRangeInfo].current
+            assertEquals("Pending queue display still starts at zero", 0f, seekValue(), 1f)
+            val cases = listOf(Triple(25000L, "Back 10 seconds", 15000L),
+                Triple(32000L, "Forward 10 seconds", 42000L), Triple(6000L, "Back 10 seconds", 0L))
+            cases.forEachIndexed { index, (position, action, expected) ->
+                compose.runOnIdle {
+                    source.value = source.value.copy(positionMs = position, sampledAtMs = 2000L + index)
+                }
+                compose.waitForIdle()
+                compose.onNodeWithText("Queued sample").assertIsDisplayed()
+                compose.onNodeWithText("Native sample").assertDoesNotExist()
+                assertEquals("Live native position must not replace pending-song zero", 0f, seekValue(), 1f)
+                compose.onNodeWithContentDescription(action).assertIsDisplayed().performClick()
+                compose.runOnIdle {
+                    assertEquals("Exactly one callback per actual action", index + 1, callbacks.size)
+                    assertEquals("Relative action uses latest native sample, not normalized/pending zero", expected, callbacks.last())
+                }
+            }
+            compose.runOnIdle { assertEquals(listOf(15000L, 42000L, 0L), callbacks) }
+        } finally {
+            try { actionPreferences.write(savedActions) }
+            finally { interfacePreferences.write(savedInterface) }
+        }
     }
 }
