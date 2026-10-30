@@ -51,6 +51,13 @@ internal fun PinnedHome(library: LibraryUiState, playlists: PlaylistState, pins:
     val songs = items.mapNotNull { it.row }
     BindSelectionScope(session, null, songs, selectionVisible)
     var info by remember { mutableStateOf<SongInformationRequest?>(null) }
+    val informationLookupOwner = remember(selectionVisible, playerOpen) { Any() }
+    val currentInformationLookupOwner by rememberUpdatedState(informationLookupOwner)
+    val collectionLookup = key(informationLookupOwner) {
+        rememberCollectionLookup(library.snapshot, playlists.playlists, sorts, queryDispatcher) { item ->
+            onOpen(item, item.songs)
+        }
+    }
     var menu by remember { mutableStateOf<MediaRef?>(null) }
     val scroll = androidx.compose.foundation.lazy.rememberLazyListState()
     val artworkTransit = remember { ArtworkTransit() }
@@ -110,7 +117,7 @@ internal fun PinnedHome(library: LibraryUiState, playlists: PlaylistState, pins:
                     Text(item.ref.kind.label, style = MaterialTheme.typography.bodySmall)
                 }
                 CollectionActions(currentOrder && menu == item.ref, anchor, item, playlists, playlistController, queues, pins, onPin, { menu = null },
-                    onInformationPresented = { track, presentation -> info = SongInformationRequest(track, presentation) }, extra = {
+                    onInformationPresented = { track, presentation -> collectionLookup.cancel(); info = SongInformationRequest(track, presentation) }, extra = {
                     ActionMenuItem("Move earlier", enabled = pins.indexOf(item.ref) > 0,
                         onClick = { onMove(item.ref, -1); menu = null })
                     ActionMenuItem("Move later", enabled = pins.indexOf(item.ref) < pins.lastIndex,
@@ -132,11 +139,10 @@ internal fun PinnedHome(library: LibraryUiState, playlists: PlaylistState, pins:
     }
     info?.let { request -> TagEditorPresentationScope(request.presentation) {
     val track = request.track
-    val collectionLookup = rememberCollectionLookup(library.snapshot, playlists.playlists, sorts, queryDispatcher) { item ->
-        info = null; onOpen(item, item.songs)
-    }
     SongInformation(track, { collectionLookup.cancel(); info = null }, folders = library.snapshot.folders) { action ->
-        collectionLookup.open(action, track) { info === request }
+        // SongInformation intentionally dismisses before invoking this accepted action.
+        val owner = informationLookupOwner
+        collectionLookup.open(action, track) { info == null && currentInformationLookupOwner === owner }
     } } }
 
 }
