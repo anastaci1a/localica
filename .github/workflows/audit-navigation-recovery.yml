@@ -1,7 +1,7 @@
-name: Audit IME closing observation (not release)
+name: Audit IME observer fixture (not release)
 'on':
   push:
-    branches: [dev/audit-ime-closing-observation-20261030]
+    branches: [dev/audit-ime-observer-fixture-20261030]
 permissions:
   contents: read
 jobs:
@@ -55,7 +55,7 @@ jobs:
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
-          name: audit-ime-closing-observation-api-${{ matrix.api }}
+          name: audit-ime-observer-fixture-api-${{ matrix.api }}
           path: |
             app/build/reports/
             app/build/test-results/
