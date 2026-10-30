@@ -275,7 +275,9 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     val mutableQueue = queueState.library.queues.firstOrNull { route.collection?.kind == MediaKind.Queue && it.id == route.collection.id }
     val mutablePlaylist = playlists.playlists.firstOrNull { route.collection?.kind == MediaKind.Playlist && it.id == route.collection.id }
     val savedOrder = mutableQueue?.order ?: mutablePlaylist?.order
-    val physicalOrder = mutableQueue?.entries?.map { it.id } ?: mutablePlaylist?.entries?.map { it.id }
+    val physicalOrder = remember(mutableQueue?.entries, mutablePlaylist?.entries) {
+        mutableQueue?.entries?.map { it.id } ?: mutablePlaylist?.entries?.map { it.id }
+    }
     val mutablePositions = remember(physicalOrder) { physicalOrder.orEmpty().withIndex().associate { it.value to it.index + 1 } }
     fun commitStyle(value: BrowseStyle) {
         orderScroll.cancel()
@@ -599,11 +601,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     LaunchedEffect(reorder.drag) { if (reorder.drag != null) reorder.autoScroll(edge) }
     // Only this collection's canonical occurrence order owns the drag lifetime. A
     // playback checkpoint can refresh all browse presentations without changing it.
-    val dragSourceOrder = remember(queueState.library.queues, playlists.playlists, route.collection) { when (route.collection?.kind) {
-        MediaKind.Queue -> queueState.library.queues.firstOrNull { it.id == route.collection.id }?.entries?.map { it.id }
-        MediaKind.Playlist -> playlists.playlists.firstOrNull { it.id == route.collection.id }?.entries?.map { it.id }
-        else -> null
-    } }
+    val dragSourceOrder = physicalOrder
     // Keep attachment separate from viewport visibility. Takeovers consume their
     // occurrence changes rather than queueing work to surprise the returning owner.
     // Statistics/metadata and unrelated playlist refreshes may arrive during a
@@ -1058,7 +1056,9 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                 localSearch = freshSearch(); localFocusRequest++; localSearchOpen = true
             }, Modifier.align(Alignment.TopCenter).padding(horizontal = 12.dp, vertical = ListPillVerticalInset), anchor = searchAnchor)
             if (dragHost == null) SongDragOverlay(reorder, reducedMotion)
-            val playingIndex = result.items.indexOfFirst { it.row?.id == playingEntryId }.takeIf { playingEntryId != null && it >= 0 }?.plus(1)
+            val playingIndex = remember(result.items, playingEntryId) {
+                result.items.indexOfFirst { it.row?.id == playingEntryId }.takeIf { playingEntryId != null && it >= 0 }?.plus(1)
+            }
             val visibleTop = with(density) { (if (showSearchPill || showFilters) pillSlotHeight else 0.dp).toPx() }
             val hiddenBottom = with(density) { obscuredInset.toPx() }
             val returnDirection by remember(playingIndex, visibleTop, hiddenBottom) { derivedStateOf {
