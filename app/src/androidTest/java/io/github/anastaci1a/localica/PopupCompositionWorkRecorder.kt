@@ -12,6 +12,7 @@ internal class PopupCompositionWorkRecorder(private val testId: String) {
     private data class Event(val sequence: Long, val nanos: Long, val kind: String,
         val scope: String?, val windowId: Int, val progress: Float?, val phase: String?)
     private data class WindowIdentity(val id: Int, val identityHash: Int, val type: String)
+    private val frameWork = PopupFrameWorkRecorder(testId)
     private val gate = Any()
     private val capacity = 8192
     private val windowCapacity = 64
@@ -50,15 +51,19 @@ internal class PopupCompositionWorkRecorder(private val testId: String) {
                 append("commit", scopes[scopeIndex], identity, progress, null)
             }
         }
+        frameWork.publish(window)
     }
 
     init { phase("method-start") }
 
-    fun phase(label: String) = synchronized(gate) {
-        if (!recordingSealed) {
-            phaseRecords++
-            append("phase", null, 0, null, label)
+    fun phase(label: String) {
+        synchronized(gate) {
+            if (!recordingSealed) {
+                phaseRecords++
+                append("phase", null, 0, null, label)
+            }
         }
+        frameWork.checkpoint(label)
     }
 
     /** Called under gate, no Snapshot reads/writes, control callbacks or log/file IO. */
@@ -70,6 +75,16 @@ internal class PopupCompositionWorkRecorder(private val testId: String) {
     }
 
     fun finish(primary: Throwable?) {
+        var combined = primary
+        try { finishComposition(primary) } catch (error: Throwable) {
+            combined = NavigationFrameMetricsRecorder.mergeFailure(combined, error)
+        } finally {
+            frameWork.finish(combined)
+        }
+        if (primary == null) combined?.let { throw it }
+    }
+
+    private fun finishComposition(primary: Throwable?) {
         try {
             val document = synchronized(gate) {
                 check(!recordingSealed) { "Composition recorder is exported once" }
