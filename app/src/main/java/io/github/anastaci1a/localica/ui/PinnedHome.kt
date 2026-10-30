@@ -132,9 +132,11 @@ internal fun PinnedHome(library: LibraryUiState, playlists: PlaylistState, pins:
     }
     info?.let { request -> TagEditorPresentationScope(request.presentation) {
     val track = request.track
-    SongInformation(track, { info = null }, folders = library.snapshot.folders) { action ->
-        collectionItemForTrack(action, track, library.snapshot, playlists.playlists, sorts)
-            ?.let { info = null; onOpen(it, it.songs) }
+    val collectionLookup = rememberCollectionLookup(library.snapshot, playlists.playlists, sorts, queryDispatcher) { item ->
+        info = null; onOpen(item, item.songs)
+    }
+    SongInformation(track, { collectionLookup.cancel(); info = null }, folders = library.snapshot.folders) { action ->
+        collectionLookup.open(action, track) { info === request }
     } } }
 
 }
