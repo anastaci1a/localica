@@ -6,14 +6,6 @@ import kotlin.math.exp
 import kotlin.math.sin
 import kotlin.math.sqrt
 
-/** Cross-axis view used by contour/placement checks. The return owns the complete frame below. */
-internal data class SelectorCrossFrame(val shell: Float, val lens: Float, val corner: Float = 0f, val outerCorner: Float = 0f) {
-    init {
-        require(shell.isFinite() && lens.isFinite() && shell > 0f && lens > 0f && lens <= shell)
-        require(corner.isFinite() && outerCorner.isFinite() && corner >= 0f && outerCorner >= 0f)
-    }
-}
-
 /** Physical displayed dimensions, before orientation and live selection-position placement. */
 internal data class SelectorReturnFrame(
     val shellTravel: Float, val shellCross: Float,
