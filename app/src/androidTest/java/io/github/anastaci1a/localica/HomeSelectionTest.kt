@@ -190,12 +190,15 @@ class HomeSelectionTest {
         val session = SessionSelection()
         var active by mutableStateOf(true)
         var playerOpen by mutableStateOf(false)
-        compose.setContent { LocalicaTheme {
+        compose.setContent {
+            val homeActive = active
+            val homePlayerOpen = playerOpen
+            LocalicaTheme {
             CompositionLocalProvider(LocalSessionSelection provides session) {
                 Box(Modifier.size(320.dp, 240.dp)) {
                     PinnedHome(LibraryUiState(snapshot, loading = false), PlaylistState(loading = false), pins,
                         {}, {}, { _, _ -> }, {}, { _, _ -> }, reducedMotion = true,
-                        selectionVisible = active, playerOpen = playerOpen)
+                        selectionVisible = homeActive, playerOpen = homePlayerOpen)
                 }
             }
         } }
