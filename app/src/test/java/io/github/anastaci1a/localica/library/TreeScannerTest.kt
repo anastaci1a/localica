@@ -141,6 +141,83 @@ class TreeScannerTest {
         assertEquals(setOf("short", "unknown"), TreeScanner(source).scan("tree", ScanOptions(includeSubfolders = false)).tracks.map { it.id }.toSet())
         assertEquals(listOf("root"), source.queried)
     }
+    @Test fun forwardsCurrentListingTimestampWithoutChangingOtherMetadata() = runTest {
+        val source = FakeDocuments().apply {
+            entries["root"] = listOf(audio("one", "listed.mp3").copy(identity = "stable", modifiedAt = 111L),
+                audio("alias", "alias.mp3").copy(identity = "stable", modifiedAt = 222L))
+            tags["one"] = AudioMetadata(title = " Metadata title ", artist = " Artist ", album = " Album ",
+                albumArtist = " Album artist ", durationMs = 12_000L, trackNumber = 3, discNumber = 2,
+                year = 2024, genre = " Jazz ", comment = " Notes ", composer = " Composer ",
+                lyricist = " Lyricist ", modifiedAt = 999L)
+        }
+        val result = TreeScanner(source).scan("tree")
+        assertEquals(listOf(Triple("one", "listed.mp3", 111L)), source.metadataRequests)
+        assertEquals(Track(uri = "one", id = "stable", title = "Metadata title", artist = "Artist",
+            album = "Album", albumArtist = "Album artist", durationMs = 12_000L, trackNumber = 3,
+            discNumber = 2, year = 2024, genre = "Jazz", comment = "Notes", composer = "Composer",
+            lyricist = "Lyricist", modifiedAt = 111L, fileName = "listed.mp3", relativePath = "listed.mp3"),
+            result.tracks.single())
+        assertEquals(0, result.metadataFailures)
+    }
+
+    @Test fun unknownAndNonpositiveHintsKeepExistingScannerTimestampPrecedence() = runTest {
+        for (listed in listOf(null, 0L, -1L)) {
+            val source = FakeDocuments().apply {
+                entries["root"] = listOf(audio("one", "one.mp3").copy(modifiedAt = listed))
+                tags["one"] = AudioMetadata(modifiedAt = 555L)
+            }
+            val result = TreeScanner(source).scan("tree")
+            assertEquals(listOf(Triple("one", "one.mp3", listed)), source.metadataRequests)
+            // Android normalizes nonpositive listing dates; arbitrary sources retain their old semantics.
+            assertEquals(listed ?: 555L, result.tracks.single().modifiedAt)
+        }
+    }
+
+    @Test fun positiveListingTimeDoesNotHideMetadataFailureOrCancellation() = runTest {
+        val source = FakeDocuments().apply {
+            entries["root"] = listOf(audio("broken", "broken.mp3").copy(modifiedAt = 111L))
+            metadataFailure = IOException("Bad tags")
+            failureUri = "broken"
+        }
+        val failed = TreeScanner(source).scan("tree")
+        assertEquals("broken", failed.tracks.single().title)
+        assertEquals(111L, failed.tracks.single().modifiedAt)
+        assertEquals(1, failed.metadataFailures)
+        assertEquals(setOf("broken"), failed.failedMetadataIds)
+        source.metadataFailure = CancellationException("Cancelled")
+        try {
+            TreeScanner(source).scan("tree")
+            fail("A known listing date must not bypass canceled metadata")
+        } catch (_: CancellationException) { }
+    }
+
+    @Test fun positiveListingTimeIsLazyWhileUnknownHintsReadFresh() {
+        assertEquals(111L, listedModifiedAtOrRead(111L) { error("Known date must not query the source") })
+        for (listed in listOf(null, 0L, -1L)) {
+            var reads = 0
+            assertEquals(555L, listedModifiedAtOrRead(listed) { reads++; 555L })
+            assertEquals(1, reads)
+            assertNull(listedModifiedAtOrRead(listed) { null })
+        }
+    }
+
+    @Test fun oneArgumentSourcesStillReceiveFilenameAwareScanRequests() = runTest {
+        var readUri: String? = null
+        val source = object : DocumentSource {
+            override fun root(treeUri: String) = directory("root")
+            override fun children(treeUri: String, documentId: String) =
+                listOf(audio("one", "one.mp3").copy(modifiedAt = 111L))
+            override suspend fun metadata(uri: String): AudioMetadata {
+                readUri = uri
+                return AudioMetadata(title = "One-argument tags", modifiedAt = 555L)
+            }
+        }
+        val result = TreeScanner(source).scan("tree")
+        assertEquals("one", readUri)
+        assertEquals("One-argument tags", result.tracks.single().title)
+        assertEquals(111L, result.tracks.single().modifiedAt)
+    }
+
 }
 
 internal fun directory(id: String) = ScanDocument(id, id, id, "directory", true)
@@ -151,6 +228,7 @@ internal class FakeDocuments : DocumentSource {
     val tags = mutableMapOf<String, AudioMetadata>()
     val queried = mutableListOf<String>()
     var metadataReads = 0
+    val metadataRequests = mutableListOf<Triple<String, String, Long?>>()
     var metadataFailure: Exception? = null
     var failureUri: String? = null
     var directoryFailure: Exception? = null
@@ -159,6 +237,10 @@ internal class FakeDocuments : DocumentSource {
         queried.add(documentId)
         directoryFailure?.let { throw it }
         return entries[documentId].orEmpty()
+    }
+    override suspend fun metadata(uri: String, fileName: String, listedModifiedAt: Long?): AudioMetadata {
+        metadataRequests += Triple(uri, fileName, listedModifiedAt)
+        return metadata(uri)
     }
     override suspend fun metadata(uri: String): AudioMetadata {
         metadataReads++
