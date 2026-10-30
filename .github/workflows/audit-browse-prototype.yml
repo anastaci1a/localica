@@ -1,7 +1,7 @@
 name: Audit integration prototype (not release certified)
 'on':
   push:
-    branches: [dev/audit-integration-20261030]
+    branches: [dev/audit-next-20261030]
 permissions:
   contents: read
 jobs:
@@ -11,8 +11,8 @@ jobs:
     needs: protocol_contracts
     uses: ./.github/workflows/prototype.yml
     with:
-      affected_classes: io.github.anastaci1a.localica.ArtistAlbumFilterRangeTest,io.github.anastaci1a.localica.BrowseOptionsFaceContractTest,io.github.anastaci1a.localica.BrowsePinchLayersTest,io.github.anastaci1a.localica.QueueBrowsingTest,io.github.anastaci1a.localica.QueueFollowingTest,io.github.anastaci1a.localica.PlayerTrackProjectionTest,io.github.anastaci1a.localica.OrderCommitPersistenceTest
-      coverage_reason: Browse/player projection reuse, retained pinch index reuse, order receipt contracts, fixture defaults and candidate-runner compatibility; exact occurrence following, source freshness and pixel ownership coverage.
+      affected_classes: io.github.anastaci1a.localica.ArtistAlbumFilterRangeTest,io.github.anastaci1a.localica.BrowseOptionsFaceContractTest,io.github.anastaci1a.localica.BrowsePinchLayersTest,io.github.anastaci1a.localica.QueueBrowsingTest,io.github.anastaci1a.localica.QueueFollowingTest,io.github.anastaci1a.localica.PlayerTrackProjectionTest,io.github.anastaci1a.localica.OrderCommitPersistenceTest,io.github.anastaci1a.localica.CollectionLookupLifecycleTest,io.github.anastaci1a.localica.SongInformationTest,io.github.anastaci1a.localica.InterfaceNavigationTest,io.github.anastaci1a.localica.EnumDecodingTest,io.github.anastaci1a.localica.QueuePersistenceTest,io.github.anastaci1a.localica.SelectorCrossMotionTest
+      coverage_reason: Shared off-Main collection lookup and lifetime guards, collection sort keys, enum fallback contracts and test-only fixture relocation, retaining prior browse/player/order and compatibility coverage.
       known_issues: Development prototype only. No full-suite, release or measured speedup claim. Legacy SnapshotStateObserver issue 475 and phone pinch issue 474 remain unresolved.
     secrets:
       ANDROID_DEBUG_KEYSTORE: ${{ secrets.ANDROID_DEBUG_KEYSTORE }}
