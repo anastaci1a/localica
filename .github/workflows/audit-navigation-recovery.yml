@@ -1,7 +1,7 @@
-name: Audit snapshot preparation work (not release)
+name: Audit snapshot preparation control profile (not release)
 'on':
   push:
-    branches: [test/audit-snapshot-preparation-observers-20261030]
+    branches: [test/audit-snapshot-work-control-20261030]
 permissions:
   contents: read
 jobs:
@@ -27,7 +27,7 @@ jobs:
             display: compact
     env:
       TEST_API: ${{ matrix.api }}
-      SELECTORS: io.github.anastaci1a.localica.GlassPreparationProfileTest,io.github.anastaci1a.localica.GlassPixelReadReuseTest,io.github.anastaci1a.localica.GlassTonePixelBufferTest,io.github.anastaci1a.localica.GlassSnapshotSoftwareTest,io.github.anastaci1a.localica.ToneSnapshotContinuityTest,io.github.anastaci1a.localica.FrostedSurfaceTest,io.github.anastaci1a.localica.LiquidGlassTest
+      SELECTORS: io.github.anastaci1a.localica.GlassPreparationProfileTest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - uses: ./.github/actions/focused-android-setup
@@ -55,7 +55,7 @@ jobs:
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
-          name: audit-snapshot-preparation-work-api-${{ matrix.api }}
+          name: audit-snapshot-work-control-api-${{ matrix.api }}
           path: |
             app/build/reports/
             app/build/test-results/
