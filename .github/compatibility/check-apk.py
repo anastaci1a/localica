@@ -2,6 +2,8 @@
 import re
 import sys
 from pathlib import Path
+from instrumentation_runner import validate
+runner = validate(sys.argv[5])
 badging = Path(sys.argv[1]).read_text()
 kind, code = sys.argv[2:4]
 package = re.search(r"^package: name='([^']+)' versionCode='([^']*)'", badging, re.M)
@@ -11,7 +13,7 @@ if kind == 'app':
     assert package[2] == code
 else:
     manifest = Path(sys.argv[4]).read_text()
-    block = re.search(r"E: instrumentation.*?(?=\n\s*E:|\Z)", manifest, re.S)
-    assert block, manifest
-    assert re.search(r'android:name\([^)]*\)="androidx.test.runner.AndroidJUnitRunner"', block[0])
-    assert re.search(r'android:targetPackage\([^)]*\)="io.github.anastaci1a.localica.debug"', block[0])
+    blocks = re.findall(r"E: instrumentation.*?(?=\n\s*E:|\Z)", manifest, re.S)
+    assert len(blocks) == 1, manifest
+    assert re.findall(r'android:name\([^)]*\)="([^"]+)"', blocks[0]) == [runner]
+    assert re.findall(r'android:targetPackage\([^)]*\)="([^"]+)"', blocks[0]) == ['io.github.anastaci1a.localica.debug']
