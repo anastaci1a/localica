@@ -76,75 +76,84 @@ internal class PopupCompositionWorkRecorder(private val testId: String) {
 
     fun finish(primary: Throwable?) {
         var combined = primary
-        try { finishComposition(primary) } catch (error: Throwable) {
+        var document: JSONObject? = null
+        try { document = sealComposition(primary) } catch (error: Throwable) {
             combined = NavigationFrameMetricsRecorder.mergeFailure(combined, error)
-        } finally {
-            frameWork.finish(combined)
+        }
+        // Cleanup is independent of successful composition sealing and precedes all receipt IO.
+        try {
+            frameWork.finalizeRecording()?.let {
+                combined = NavigationFrameMetricsRecorder.mergeFailure(combined, it)
+            }
+        } catch (error: Throwable) {
+            combined = NavigationFrameMetricsRecorder.mergeFailure(combined, error)
+        }
+        try { document?.let { exportComposition(it) } } catch (error: Throwable) {
+            combined = NavigationFrameMetricsRecorder.mergeFailure(combined, error)
+        }
+        try { frameWork.export(primary) } catch (error: Throwable) {
+            combined = NavigationFrameMetricsRecorder.mergeFailure(combined, error)
         }
         if (primary == null) combined?.let { throw it }
     }
 
-    private fun finishComposition(primary: Throwable?) {
-        try {
-            val document = synchronized(gate) {
-                check(!recordingSealed) { "Composition recorder is exported once" }
-                recordingSealed = true
-                val endedNanos = System.nanoTime()
-                fun progress(value: Float?): Any = when {
-                    value == null -> JSONObject.NULL
-                    value.isFinite() -> value
-                    else -> "NONFINITE:$value"
-                }
-                val aggregate = JSONArray()
-                counts.forEachIndexed { window, values ->
-                    values.forEachIndexed { scope, count ->
-                        if (count != 0L) aggregate.put(JSONObject().put("windowId", window)
-                            .put("scope", scopes[scope]).put("committedExecutions", count))
-                    }
-                }
-                JSONObject().put("schema", 1).put("testId", testId)
-                    .put("bodyOutcome", if (primary == null) "returned" else "failed")
-                    .put("primaryFailure", primary?.let { "${it.javaClass.name}: ${it.message}" } ?: JSONObject.NULL)
-                    .put("startedNanos", startedNanos).put("endedNanos", endedNanos)
-                    .put("clock", "System.nanoTime; not Compose virtual time or presentation timestamps")
-                    .put("rawCapacity", capacity).put("windowIdentityCapacity", windowCapacity)
-                    .put("totalRecordAttempts", sequence).put("totalCommittedExecutions", totalCommits)
-                    .put("phaseRecordCount", phaseRecords).put("retainedRecords", events.size)
-                    .put("droppedRecords", droppedRecords).put("nullWindowCommits", nullWindowCommits)
-                    .put("unassignedWindowCommits", unassignedWindowCommits)
-                    .put("rawRecordsComplete", droppedRecords == 0L)
-                    .put("perWindowIdentityComplete", unassignedWindowCommits == 0L && nullWindowCommits == 0L)
-                    .put("nullWindowId", 0).put("identityOverflowId", windowCapacity + 1)
-                    .put("aggregateCounts", aggregate)
-                    .put("windows", JSONArray(windowIdentities.map {
-                        JSONObject().put("windowId", it.id).put("identityHash", it.identityHash).put("class", it.type)
-                    }))
-                    .put("records", JSONArray(events.map {
-                        JSONObject().put("sequence", it.sequence).put("nanos", it.nanos)
-                            .put("kind", it.kind).put("scope", it.scope ?: JSONObject.NULL)
-                            .put("windowId", it.windowId).put("geometryProgress", progress(it.progress))
-                            .put("phase", it.phase ?: JSONObject.NULL)
-                    }))
-                    .put("limits", JSONArray(listOf(
-                        "Committed SideEffect executions only, not attempts/frames/draws/CPU/allocations.",
-                        "Child skipping and observer synchronization/recording perturb the measured composition work.",
-                        "Phase labels bound existing helper calls; not atomic presentation or frame boundaries.",
-                        "Only existing geometry p is supplied; Dialog/content callbacks never read progress state.",
-                        "Window IDs use object identity within this recorder; null and identity overflow stay explicit.",
-                        "Measurement seals before file export; later callbacks are outside this recording window.",
-                        "No Search/IME/nested-window/general performance or complete-tail claim."
-                    )))
-            }
-            val context = InstrumentationRegistry.getInstrumentation().targetContext
-            val directory = nativeEvidenceDirectory("popup-composition-work", context.getExternalFilesDir(null))
-            val safe = testId.replace(Regex("[^A-Za-z0-9._-]+"), "_")
-            val target = File(directory, "$safe-$startedNanos.json")
-            val partial = File(directory, "${target.name}.partial")
-            partial.writeText(document.toString(2) + "\n")
-            check(partial.renameTo(target)) { "Could not publish composition evidence: $target" }
-        } catch (exportFailure: Throwable) {
-            if (primary == null) throw exportFailure
-            if (exportFailure !== primary) primary.addSuppressed(exportFailure)
+    private fun sealComposition(primary: Throwable?): JSONObject = synchronized(gate) {
+        check(!recordingSealed) { "Composition recorder is exported once" }
+        recordingSealed = true
+        val endedNanos = System.nanoTime()
+        fun progress(value: Float?): Any = when {
+            value == null -> JSONObject.NULL
+            value.isFinite() -> value
+            else -> "NONFINITE:$value"
         }
+        val aggregate = JSONArray()
+        counts.forEachIndexed { window, values ->
+            values.forEachIndexed { scope, count ->
+                if (count != 0L) aggregate.put(JSONObject().put("windowId", window)
+                    .put("scope", scopes[scope]).put("committedExecutions", count))
+            }
+        }
+        JSONObject().put("schema", 1).put("testId", testId)
+            .put("bodyOutcome", if (primary == null) "returned" else "failed")
+            .put("primaryFailure", primary?.let { "${it.javaClass.name}: ${it.message}" } ?: JSONObject.NULL)
+            .put("startedNanos", startedNanos).put("endedNanos", endedNanos)
+            .put("clock", "System.nanoTime; not Compose virtual time or presentation timestamps")
+            .put("rawCapacity", capacity).put("windowIdentityCapacity", windowCapacity)
+            .put("totalRecordAttempts", sequence).put("totalCommittedExecutions", totalCommits)
+            .put("phaseRecordCount", phaseRecords).put("retainedRecords", events.size)
+            .put("droppedRecords", droppedRecords).put("nullWindowCommits", nullWindowCommits)
+            .put("unassignedWindowCommits", unassignedWindowCommits)
+            .put("rawRecordsComplete", droppedRecords == 0L)
+            .put("perWindowIdentityComplete", unassignedWindowCommits == 0L && nullWindowCommits == 0L)
+            .put("nullWindowId", 0).put("identityOverflowId", windowCapacity + 1)
+            .put("aggregateCounts", aggregate)
+            .put("windows", JSONArray(windowIdentities.map {
+                JSONObject().put("windowId", it.id).put("identityHash", it.identityHash).put("class", it.type)
+            }))
+            .put("records", JSONArray(events.map {
+                JSONObject().put("sequence", it.sequence).put("nanos", it.nanos)
+                    .put("kind", it.kind).put("scope", it.scope ?: JSONObject.NULL)
+                    .put("windowId", it.windowId).put("geometryProgress", progress(it.progress))
+                    .put("phase", it.phase ?: JSONObject.NULL)
+            }))
+            .put("limits", JSONArray(listOf(
+                "Committed SideEffect executions only, not attempts/frames/draws/CPU/allocations.",
+                "Child skipping and observer synchronization/recording perturb the measured composition work.",
+                "Phase labels bound existing helper calls; not atomic presentation or frame boundaries.",
+                "Only existing geometry p is supplied; Dialog/content callbacks never read progress state.",
+                "Window IDs use object identity within this recorder; null and identity overflow stay explicit.",
+                "Measurement seals before file export; later callbacks are outside this recording window.",
+                "No Search/IME/nested-window/general performance or complete-tail claim."
+            )))
+    }
+
+    private fun exportComposition(document: JSONObject) {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val directory = nativeEvidenceDirectory("popup-composition-work", context.getExternalFilesDir(null))
+        val safe = testId.replace(Regex("[^A-Za-z0-9._-]+"), "_")
+        val target = File(directory, "$safe-$startedNanos.json")
+        val partial = File(directory, "${target.name}.partial")
+        partial.writeText(document.toString(2) + "\n")
+        check(partial.renameTo(target)) { "Could not publish composition evidence: $target" }
     }
 }
