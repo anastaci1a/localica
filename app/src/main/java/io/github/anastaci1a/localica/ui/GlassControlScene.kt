@@ -33,6 +33,7 @@ internal fun GlassControlScene(modifier: Modifier, horizontalPadding: Dp = 20.dp
     val location = remember { BackdropLocation() }
     val lens = remember { lazy { if (Build.VERSION.SDK_INT >= 33) LensRenderer() else null } }
     val mesh = remember { lazy { LensMeshRenderer() } }
+    val rim = remember { GlassRimCache() }
     val layer = if (optical && modern) rememberGraphicsLayer() else null
     val onLensDraw = LocalControlLensDraw.current
     Canvas(modifier.backdropLocation(location)) {
@@ -79,6 +80,6 @@ internal fun GlassControlScene(modifier: Modifier, horizontalPadding: Dp = 20.dp
             }
         }
         drawRoundRect(face(), shape.bounds.topLeft, shape.bounds.size, CornerRadius(shape.corner))
-        drawGlassRim(shape.bounds, shape.corner, opacity = active())
+        drawGlassRim(shape.bounds, shape.corner, path = silhouette, opacity = active(), cache = rim)
     }
 }

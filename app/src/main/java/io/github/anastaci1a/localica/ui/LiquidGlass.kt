@@ -207,6 +207,7 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
     } }
     val lens = remember { lazy { if (Build.VERSION.SDK_INT >= 33) LensRenderer() else null } }
     val mesh = remember { lazy { LensMeshRenderer() } }
+    val rim = remember { GlassRimCache() }
     // Transform the surface and its shadow together in the draw pass; a legacy
     // ViewLayer would clip the shadow outside its bounds even with clipping disabled.
     Box(modifier.then(if (pressFeedback) Modifier.glassPress(contact, contactShape,
@@ -316,7 +317,7 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
             val outline = silhouette?.frame(size)
             val splitRim = outline?.description?.rimSplit ?: 0f
             drawGlassRim(androidx.compose.ui.geometry.Rect(Offset.Zero, size), cornerRadius?.toPx() ?: size.minDimension / 2f,
-                path = outline?.path, tone = tone, opacity = 1f - splitRim)
+                path = outline?.path, tone = tone, opacity = 1f - splitRim, cache = rim)
             if (outline != null && splitRim > 0f) outline.bodies.forEach { part ->
                 clipRect(part.left, part.top, part.right, part.bottom) {
                     drawGlassRim(androidx.compose.ui.geometry.Rect(part.left, part.top, part.right, part.bottom),
@@ -365,23 +366,9 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
 /** A restrained ambient reflection on the silhouette, never a plate across the face.
  * Shared by live/mesh controls and connected selections at the final display resolution. */
 internal fun androidx.compose.ui.graphics.drawscope.DrawScope.drawGlassRim(
-    bounds: androidx.compose.ui.geometry.Rect, radius: Float, path: Path? = null, tone: GlassTone = GlassTone(), opacity: Float = 1f) {
-    val white = tone.color(Color.White)
-    val black = tone.color(Color.Black)
-    // Diagonally opposed highlights taper into quiet, slightly shaded corners.
-    // The silhouette clips both strokes inward; neither changes the hit geometry.
-    val shine = Brush.sweepGradient(
-        0f to white.copy(alpha = .025f), .125f to white.copy(alpha = .32f),
-        .25f to white.copy(alpha = .025f), .375f to Color.Transparent,
-        .5f to white.copy(alpha = .025f), .625f to white.copy(alpha = .32f),
-        .75f to white.copy(alpha = .025f), .875f to Color.Transparent,
-        1f to white.copy(alpha = .025f), center = bounds.center)
-    val shade = Brush.sweepGradient(
-        0f to Color.Transparent, .125f to Color.Transparent, .25f to Color.Transparent,
-        .375f to black.copy(alpha = .11f), .5f to Color.Transparent,
-        .625f to Color.Transparent, .75f to Color.Transparent, .875f to black.copy(alpha = .11f),
-        1f to Color.Transparent, center = bounds.center)
-    val silhouette = path ?: Path().apply { addRoundRect(RoundRect(bounds, CornerRadius(radius))) }
+    bounds: androidx.compose.ui.geometry.Rect, radius: Float, path: Path? = null, tone: GlassTone = GlassTone(), opacity: Float = 1f, cache: GlassRimCache? = null) {
+    val (shine, shade) = cache?.brushes(bounds.center, tone) ?: glassRimBrushes(bounds.center, tone)
+    val silhouette = path ?: cache?.roundedPath(bounds, radius) ?: Path().apply { addRoundRect(RoundRect(bounds, CornerRadius(radius))) }
     clipPath(silhouette) {
         drawPath(silhouette, shine, alpha = opacity, style = Stroke(2.6.dp.toPx()))
         drawPath(silhouette, shade, alpha = opacity, style = Stroke(1.4.dp.toPx()))

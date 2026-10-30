@@ -204,7 +204,7 @@ internal fun ConnectedSelectionHost(modifier: Modifier = Modifier, contentDrawin
                 }
                 frames.forEach { frame ->
                     translate(frame.absolute.x, frame.absolute.y) {
-                        drawGlassRim(frame.bounds, (MediaSelectionGap * 1.5f).toPx(), frame.path)
+                        drawGlassRim(frame.bounds, (MediaSelectionGap * 1.5f).toPx(), frame.path, cache = frame.renderer.rim)
                     }
                 }
             }
@@ -242,6 +242,7 @@ private data class SelectionGroupFrame(val renderer: SelectionGroupRenderer,
 
 private class SelectionGroupRenderer(val output: androidx.compose.ui.graphics.layer.GraphicsLayer) {
     val path = SelectionPathCache()
+    val rim = GlassRimCache()
     val mesh = LensMeshRenderer()
     val shape = LensSelectionShape()
     // Capability is stable; lazy initialization also supports a Legacy-first mount.
