@@ -30,8 +30,23 @@ class CoverDecodeTest {
                 val orientations = if (format == Bitmap.CompressFormat.JPEG) 1..8 else 1..1
                 for (orientation in orientations) {
                     file.outputStream().use { assertTrue(source.compress(format, 90, it)) }
-                    if (format == Bitmap.CompressFormat.JPEG) ExifInterface(file.path).apply {
-                        setAttribute(ExifInterface.TAG_ORIENTATION, orientation.toString()); saveAttributes()
+                    if (format == Bitmap.CompressFormat.JPEG) {
+                        // Android 8 ExifInterface requires a 5000-byte format probe. A valid
+                        // JPEG comment keeps this tiny fixture above it without changing pixels.
+                        val jpeg = file.readBytes()
+                        assertEquals(0xff, jpeg[0].toInt() and 0xff)
+                        assertEquals(0xd8, jpeg[1].toInt() and 0xff)
+                        file.outputStream().use { output ->
+                            output.write(jpeg, 0, 2)
+                            output.write(byteArrayOf(0xff.toByte(), 0xfe.toByte(), 0x13, 0x8a.toByte()))
+                            output.write(ByteArray(5000)) // COM length 5002 includes its two length bytes.
+                            output.write(jpeg, 2, jpeg.size - 2)
+                        }
+                        ExifInterface(file.path).apply {
+                            setAttribute(ExifInterface.TAG_ORIENTATION, orientation.toString()); saveAttributes()
+                        }
+                        assertEquals(orientation, ExifInterface(java.io.ByteArrayInputStream(file.readBytes()))
+                            .getAttributeInt(ExifInterface.TAG_ORIENTATION, 0))
                     }
                     val bytes = file.readBytes()
                     val uri = Uri.fromFile(file).toString()
@@ -78,7 +93,9 @@ class CoverDecodeTest {
             assertNotSame(one, two)
             assertArrayEquals(pixels(one), pixels(two))
             val untouched = pixels(two)
-            one.eraseColor(Color.MAGENTA)
+            one.recycle()
+            assertTrue(one.isRecycled)
+            assertFalse(two.isRecycled)
             assertArrayEquals(untouched, pixels(two))
             assertArrayEquals(original, file.readBytes())
         } finally { first?.recycle(); second?.recycle(); source.recycle(); file.delete() }
