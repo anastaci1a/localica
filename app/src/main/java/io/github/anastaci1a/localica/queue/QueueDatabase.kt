@@ -3,6 +3,7 @@ package io.github.anastaci1a.localica.queue
 import androidx.room.*
 import io.github.anastaci1a.localica.library.TrackSnapshot
 import io.github.anastaci1a.localica.library.SavedOrderCodec
+import io.github.anastaci1a.localica.library.enumNameOrNull
 
 @Entity(tableName = "queues")
 data class QueueRecord(@PrimaryKey val id: String, val name: String, val createdAt: Long,
@@ -58,7 +59,7 @@ abstract class QueueDao {
         val queues = readQueues().map { stored -> stored.queue.let { q ->
             ListeningQueue(q.id, q.name, q.createdAt, stored.entries.sortedBy { it.ordinal }.map {
                 QueueEntry(it.id, TrackSnapshot.decode(it.track), it.sourcePlaylistId) }, q.currentEntryId, q.positionMs, q.shuffle,
-                QueueRepeat.entries.firstOrNull { it.name == q.repeat } ?: QueueRepeat.Off, q.lastActivatedAt,
+                enumNameOrNull<QueueRepeat>(q.repeat) ?: QueueRepeat.Off, q.lastActivatedAt,
                 stored.journeys.singleOrNull()?.restore(stored.visits, stored.cycleMembers),
                 SavedOrderCodec.decode(q.orderState, stored.entries.sortedBy { it.ordinal }.map { it.id }))
         } }
