@@ -70,7 +70,7 @@ jobs:
         run: |
           set -euo pipefail
           npm ci --prefix .github/test-evidence --ignore-scripts --no-audit --no-fund 2>&1 | tee tooling-contract-reports/npm-ci.log
-      - name: Run eight offline contracts and retain every status
+      - name: Run nine offline contracts and retain every status
         shell: bash
         run: |
           set -euo pipefail
@@ -82,7 +82,7 @@ jobs:
               'test_source_methods.py', 'test_full_partition.py',
               'test_prepare_device_tests.py', 'test_full_live_evidence.py',
               'test_run_prototype_tests.py', 'test_observe_test_evidence.py',
-              'test_failure_context.py',
+              'test_failure_context.py', 'test_focused_workflows.py',
           ]
           for name in names:
               if not pathlib.Path('.github/tests', name).is_file():
@@ -102,7 +102,7 @@ jobs:
                   'source': (root / 'source-sha.txt').read_text().strip(),
                   'sourceHashesSha256': hashlib.sha256((root / 'source-files.sha256').read_bytes()).hexdigest(),
                   'python': sys.version, 'contracts': results,
-                  'complete': len(results) == 8,
+                  'complete': len(results) == 9,
                   'scope': 'Host tooling contracts with temporary subprocess/device/upload mocks; no Android runtime verdict',
               }, indent=2) + '\n')
           sys.exit(1 if any(r['returncode'] != 0 for r in results) else 0)
