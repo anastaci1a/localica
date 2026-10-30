@@ -586,14 +586,22 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     BindSelectionScope(session, route.collection, result.rows, selectionVisible && !localSearchOpen)
     val reorder = remember(route.key) { SongDragState(gridState, scrollScope) }
     val dragHost = LocalSongDragHost.current
+    val floatingControlClearance = if (route.collection?.kind == MediaKind.Queue) 12.dp else 0.dp
     SideEffect {
         if (reorder.drag != null) {
+            dragHost?.cancelBottomMargin = floatingControlClearance
             dragHost?.source = if (needsListBackdrop) listBackdrop else if (artDetail) collectionSource else surroundingBackdrop
             dragHost?.state = reorder; dragHost?.reducedMotion = reducedMotion
         }
-        else if (dragHost?.state === reorder) dragHost.state = null
+        else if (dragHost?.state === reorder) {
+            dragHost.state = null
+            dragHost.cancelBottomMargin = 0.dp
+        }
     }
-    DisposableEffect(reorder, dragHost) { onDispose { if (dragHost?.state === reorder) dragHost.state = null } }
+    DisposableEffect(reorder, dragHost) { onDispose { if (dragHost?.state === reorder) {
+        dragHost.state = null
+        dragHost.cancelBottomMargin = 0.dp
+    } } }
     val editableOrder = route.text.isBlank() &&
         route.collection?.kind in setOf(MediaKind.Queue, MediaKind.Playlist)
     SideEffect { reorder.reconcile(result.items); reorder.obscuredBottom = with(density) { obscuredInset.toPx() } }
@@ -1096,8 +1104,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                     label = if (playbackReturn) "Current song" else "Return to top",
                     visible = showReturn, reducedMotion = reducedMotion,
                     returning = returning,
-                    modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = obscuredInset +
-                        if (route.collection?.kind == MediaKind.Queue) 12.dp else 0.dp)) {
+                    modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = obscuredInset + floatingControlClearance)) {
                     if (!playbackReturn) returnToList(if (artDetail) ListReturnAction.ScrollSongs else ListReturnAction.ScrollTop)
                     else {
                         orderScroll.cancel()
