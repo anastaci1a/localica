@@ -230,7 +230,9 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
         if (artistDetail && selectedTrackIds.isNotEmpty()) sourceResult.copy(items = sourceResult.items.filter { it.row?.track?.id in selectedTrackIds }) else sourceResult
     }
     val itemIndices = remember(result.items) { result.items.withIndex().associate { it.value.key to it.index } }
-    val itemKeys = remember(result.items) { result.items.map { it.key } }
+    val pinchIndices = remember(result.items, itemIndices) {
+        retainedPinchItemIndices(result.items, itemIndices) { it.key }
+    }
     // The artist page displays songs beneath album-filter chips; its hero follows that displayed list.
     // Entry artwork is only a loading seed, never a permanent override of a newly sorted result.
     val heroUri = if (playlistDetail) remember(detailPlaylist, library.snapshot, playlists.loading, seededCollection) {
@@ -850,7 +852,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                 } else Modifier)
                 .then(if (maskedBackdrop && viewportBackdrop != null) Modifier.browseBackdropMaskWitness(backdropScene, viewportBackdrop) else Modifier),
                 contentDrawing = Modifier.onPlaced { pinchHeader?.viewport = it }
-                    .collectionPinchOverlay(pinchHeader).pinchRetainedOverlay(pinchMotion, gridState, itemKeys)) { overscroll ->
+                    .collectionPinchOverlay(pinchHeader).pinchRetainedOverlay(pinchMotion, gridState, pinchIndices)) { overscroll ->
             LazyVerticalGrid(state = gridState, overscrollEffect = overscroll, columns = GridCells.Fixed(columns), modifier = (if (popupDismiss != null) Modifier.fillMaxWidth() else Modifier.fillMaxSize())
                 .then(if (showSearchPill) searchSlotGridLayout else Modifier)
                 .controlScrollParent(gridState, ControlScrollAxis.Vertical)
