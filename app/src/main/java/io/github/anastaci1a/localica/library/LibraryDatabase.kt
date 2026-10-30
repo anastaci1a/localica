@@ -196,6 +196,8 @@ internal fun documentIdentity(uri: String): String = try {
 
 interface LibraryStore {
     val snapshots: Flow<LibrarySnapshot>
+    /** Fresh metadata for explicit ordering; stores without a separate projection retain their usual source. */
+    val sortSnapshots: Flow<LibrarySnapshot> get() = snapshots
     suspend fun current(): LibrarySnapshot
     suspend fun playbackSnapshot(trackIds: Set<String>): LibraryPlaybackRead {
         val full = snapshots.first()
@@ -210,9 +212,10 @@ interface LibraryStore {
 
 class RoomLibraryStore(private val dao: LibraryDao) : LibraryStore {
     private val searchIndex = LibrarySearchIndexBuilder()
-    override val snapshots = dao.observe().map {
+    override val sortSnapshots = dao.observe().map { it.toSnapshot() }.flowOn(Dispatchers.Default)
+    override val snapshots = sortSnapshots.map {
         val context = currentCoroutineContext()
-        searchIndex.prepare(it.toSnapshot()) { context.ensureActive() }
+        searchIndex.prepare(it) { context.ensureActive() }
     }.flowOn(Dispatchers.Default)
     override suspend fun current() = dao.read().toSnapshot()
     override suspend fun playbackSnapshot(trackIds: Set<String>) = dao.playbackSnapshot(trackIds)

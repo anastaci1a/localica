@@ -16,6 +16,7 @@ class LibraryRepository(
     private val io: CoroutineDispatcher = Dispatchers.IO,
 ) {
     val snapshots = store.snapshots
+    val sortSnapshots = store.sortSnapshots
     suspend fun playbackSnapshot(trackIds: Set<String>): LibraryPlaybackRead = store.playbackSnapshot(trackIds)
     private val scanLock = Mutex()
     suspend fun <T> withExclusiveFiles(block: suspend () -> T): T = withContext(io) { scanLock.withLock { block() } }

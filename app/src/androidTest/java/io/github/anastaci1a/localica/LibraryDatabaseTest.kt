@@ -6,6 +6,10 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import io.github.anastaci1a.localica.library.*
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.MutableStateFlow
+import io.github.anastaci1a.localica.statistics.ListeningStatistics
+import io.github.anastaci1a.localica.statistics.withListeningStatistics
 import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -97,4 +101,62 @@ class LibraryDatabaseTest {
             assertEquals(song.addedAt, store.current().tracks.single().addedAt)
         } finally { database.close(); context.deleteDatabase(name) }
     }
+    @Test fun sortSourceRetainsFreshCanonicalRowsWithoutSearchIndexPreparation() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val database = Room.inMemoryDatabaseBuilder(context, LibraryDatabase::class.java).build()
+        try {
+            val store = RoomLibraryStore(database.libraryDao())
+            val first = Track("parent/song", "Original", artist = "Artist", album = "Album", durationMs = 1234,
+                fileName = "song.mp3", relativePath = "nested/song.mp3", id = "document:song", modifiedAt = 40)
+            store.replaceRoot(ScanResult(FolderSelection("parent", "Music"), listOf(first), 0))
+            store.replaceRoot(ScanResult(FolderSelection("child", "Nested"),
+                listOf(first.copy(uri = "child/song", relativePath = "song.mp3")), 0))
+            val sorts = store.sortSnapshots // Holding the cold flow must not freeze its first read.
+            val before = sorts.first()
+            assertNull(before.searchIndex)
+            assertEquals(store.current(), before)
+            assertEquals(2, before.tracks.single().locations.size)
+            val indexed = store.snapshots.first()
+            assertNotNull(indexed.searchIndex)
+            assertEquals(before, indexed.copy(searchIndex = null))
+            store.updateMetadata(first.copy(title = "Fresh", durationMs = 5678, modifiedAt = 90))
+            val after = sorts.first()
+            assertEquals("Fresh", after.tracks.single().title)
+            assertEquals(5678L, after.tracks.single().durationMs)
+            assertEquals(90L, after.tracks.single().modifiedAt)
+            assertEquals(before.tracks.single().locations, after.tracks.single().locations)
+            assertNull(after.searchIndex)
+            assertEquals(store.current(), after)
+            assertEquals(after, store.snapshots.first().copy(searchIndex = null))
+        } finally { database.close() }
+    }
+
+    @Test fun repositorySortSourceOverlaysCurrentCountsWithoutReplayingPriorRows() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val database = Room.inMemoryDatabaseBuilder(context, LibraryDatabase::class.java).build()
+        try {
+            val store = RoomLibraryStore(database.libraryDao())
+            val repository = LibraryRepository(store, TreeScanner(AndroidDocuments(context)),
+                PersistedFolderPermissions(context.contentResolver))
+            val a = Track("a", "A", fileName = "a.mp3", relativePath = "a.mp3")
+            val b = Track("b", "B", fileName = "b.mp3", relativePath = "b.mp3")
+            store.replaceRoot(ScanResult(FolderSelection("root", "Music"), listOf(a, b), 0))
+            val counts = MutableStateFlow(ListeningStatistics(mapOf("a" to 3L)))
+            val source = repository.sortSnapshots.withListeningStatistics(counts)
+            val query = LibraryQuery(sort = TrackSort.MostPlayed, ascending = false)
+            val before = source.first()
+            assertEquals(listOf("a", "b"), LibraryQueries.tracks(before, query).map { it.id })
+            counts.value = ListeningStatistics(mapOf("b" to 8L), mapOf("playlist" to 4L))
+            store.updateMetadata(b.copy(title = "Updated B"))
+            val after = source.first()
+            assertNull(after.searchIndex)
+            assertEquals(listOf("b", "a"), LibraryQueries.tracks(after, query).map { it.id })
+            assertEquals("Updated B", after.tracks.single { it.id == "b" }.title)
+            assertEquals(8L, after.tracks.single { it.id == "b" }.playCount)
+            assertEquals(0L, after.tracks.single { it.id == "a" }.playCount)
+            assertEquals(mapOf("playlist" to 4L), after.playlistPlays)
+            assertEquals(mapOf("b" to 8L), after.trackPlays)
+        } finally { database.close() }
+    }
+
 }
