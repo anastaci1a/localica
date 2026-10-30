@@ -54,6 +54,8 @@ internal data class PlayerInkComposition(val decision: PlayerBackgroundDecision,
     val frame: ArtworkBackgroundFrame?, val contentColor: Color)
 internal val LocalPlayerInkCompositionObserver = staticCompositionLocalOf<((PlayerInkComposition) -> Unit)?> { null }
 
+internal val LocalPlayerWorkObserver = staticCompositionLocalOf<((String, Float?) -> Unit)?> { null }
+
 /** The surface, gesture owner, artwork, metadata and transport retain identity at every progress value. */
 @Composable
 internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expanded: Boolean, onExpanded: (Boolean) -> Unit,
@@ -225,6 +227,8 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     }
     // Layout/lyrics geometry already animates above. Do not independently tween a constraint
     // computed for an older geometry: that can push artwork through the moving title.
+    val workObserver = LocalPlayerWorkObserver.current
+    if (workObserver != null) SideEffect { workObserver("root", p) }
     LocalPlayerArtworkGrowthObserver.current?.let { observer ->
         SideEffect { observer(PlayerArtworkGrowthPresentation(p, growthCurve,
             artTrajectory, fullArt.value, fullArtHeight.value)) }
@@ -326,6 +330,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
         // is insufficient: an asynchronous capture can still see the previous recording.
         .then(if (frostedBackdrop != null) Modifier.recordFrostedBackdrop(frostedBackdrop, enabled = p >= .99f) else Modifier),
         shape = surfaceFrame.shape, color = Color.Transparent, contentColor = foreground) {
+        if (workObserver != null) SideEffect { workObserver("surface-content", null) }
         if (inkObserver != null) {
             // Read inside Surface's actual provider, including when the actions row is absent.
             val observed = PlayerInkComposition(inkDecision, inkFrame, LocalContentColor.current)

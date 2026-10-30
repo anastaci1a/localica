@@ -56,147 +56,159 @@ class PlayerExpansionMotionTest {
     }
 
     private fun exerciseHeldLyrics(track: Track, contentTag: String) {
-        val progress = Animatable(0f)
-        var expanded by mutableStateOf(false)
-        var layout by mutableStateOf(ArtworkLayout.FullBackground)
-        var reducedMotion by mutableStateOf(false)
-        lateinit var scope: CoroutineScope
-        var fingerDown = false
-        compose.setContent { LocalicaTheme { BoxWithConstraints(Modifier.fillMaxSize()) {
-            DisposableEffect(Unit) {
-                trace("composition-enter:$contentTag")
-                onDispose { trace("composition-dispose:$contentTag") }
-            }
-            scope = rememberCoroutineScope()
-            PlayerSurface(state.copy(trackId = track.id, trackUri = track.uri), expanded, { expanded = it },
-                InterfaceSettings(artworkLayout = layout, reducedMotion = reducedMotion), progress, {}, {}, {}, {}, {}, {},
-                lyricsOpen = true, track = track, visual = visual) { Text("Album-only action") }
-        } } }
-        try {
-            for (artworkLayout in ArtworkLayout.entries) {
-                trace("layout-begin:$contentTag:$artworkLayout")
-                compose.mainClock.autoAdvance = true
-                compose.runOnIdle { layout = artworkLayout; reducedMotion = false; expanded = false; scope.launch { progress.snapTo(0f) } }
-                compose.waitForIdle()
-                val mini = compose.onNodeWithTag("player-surface").fetchSemanticsNode().boundsInRoot
-                compose.mainClock.autoAdvance = false
-                val start = Offset(mini.left + mini.width / 2, mini.center.y)
-                // Keep the same contact down through full expansion and its reversal.
-                fingerDown = true
-                compose.onRoot().performTouchInput {
-                    down(start)
-                    repeat(40) { index -> moveTo(Offset(start.x, start.y * (1f - (index + 1) / 40f)), delayMillis = 32) }
-                }
-                compose.mainClock.advanceTimeByFrame()
-                compose.runOnIdle {
-                    assertEquals("Held endpoint is fully expanded in $artworkLayout", 1f, progress.value, .0001f)
-                    assertFalse("No release event has changed expanded", expanded)
-                }
-                compose.waitUntil(10000) {
-                    compose.mainClock.advanceTimeByFrame()
-                    compose.onAllNodesWithTag(contentTag, true).fetchSemanticsNodes().isNotEmpty()
-                }
-                // Let an asynchronously loaded document finish its own crossfade while still held.
-                compose.mainClock.advanceTimeBy(400)
-                trace("capture-content-begin:$contentTag:$artworkLayout")
-                val content = compose.onNodeWithTag(contentTag, true).captureToImage().toPixelMap()
-                trace("capture-content-end:$contentTag:$artworkLayout")
-                var brightest = 0f
-                for (y in 0 until content.height step 2) for (x in 0 until content.width step 2)
-                    brightest = maxOf(brightest, content[x, y].red)
-                assertTrue("Lyrics/empty ink is physically visible before release: $brightest", brightest > .28f)
-                recordSemantics(artworkLayout, "held-$contentTag")
-                // While held, the collapsed player remains a clickable semantics merger.
-                // Inspect physical child geometry in the same unmerged tree before/after release.
-                val player = compose.onNodeWithTag("player-surface").fetchSemanticsNode().boundsInRoot
-                val title = compose.onNodeWithTag("player-title", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
-                val seek = compose.onNodeWithTag("player-seek-row", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
-                val transport = compose.onNodeWithContentDescription("Play").fetchSemanticsNode().boundsInRoot
-                val panel = compose.onNodeWithTag("lyrics-panel", useUnmergedTree = true).assertIsDisplayed().fetchSemanticsNode().boundsInRoot
-                compose.onNodeWithTag(contentTag, true).assertIsDisplayed()
-                compose.onNodeWithText("Album-only action", useUnmergedTree = true).assertDoesNotExist()
-                // Inspect actual player pixels, not a potentially transparent cover layer capture.
-                trace("capture-player-begin:$contentTag:$artworkLayout")
-                val pixels = compose.onNodeWithTag("player-surface").captureToImage().toPixelMap()
-                trace("capture-player-end:$contentTag:$artworkLayout")
-                val cover = compose.onNodeWithTag("player-artwork", true).fetchSemanticsNode().boundsInRoot
-                for (fy in listOf(.3f, .5f, .7f)) for (fx in listOf(.3f, .5f, .7f)) {
-                    val x = (cover.left - player.left + cover.width * fx).toInt().coerceIn(0, pixels.width - 1)
-                    val y = (cover.top - player.top + cover.height * fy).toInt().coerceIn(0, pixels.height - 1)
-                    val color = pixels[x, y]
-                    assertTrue("Red cover is gone from the player before release: $color", color.red < color.blue + .1f)
-                }
-
-                val fullContent = compose.onNodeWithTag(contentTag, true).getUnclippedBoundsInRoot()
-                // DpRect.height subtracts two independently converted Float coordinates.
-                // Compare the actual integer-pixel measurement, which must stay identical.
-                val fullContentSize = compose.onNodeWithTag(contentTag, true).fetchSemanticsNode().size
-                compose.onRoot().performTouchInput { moveBy(Offset(0f, mini.top * .14f), delayMillis = 160) }
-                compose.mainClock.advanceTimeByFrame()
-                compose.onNodeWithText("Album-only action", useUnmergedTree = true).assertDoesNotExist()
-                val movingContent = compose.onNodeWithTag(contentTag, true).getUnclippedBoundsInRoot()
-                assertEquals("Inner lyric geometry does not reflow during held collapse", fullContentSize,
-                    compose.onNodeWithTag(contentTag, true).fetchSemanticsNode().size)
-                val contentTravel = (movingContent.top - fullContent.top).value
-                val playerTravel = (compose.onNodeWithTag("player-surface", true).getUnclippedBoundsInRoot().top -
-                    compose.onRoot().getUnclippedBoundsInRoot().top).value
-                assertTrue("Content must move slower than its enclosing player: $contentTravel vs $playerTravel",
-                    contentTravel >= 0f && contentTravel < playerTravel * .5f)
-                val heldBounds = listOf("lyrics-panel", "player-title", "player-seek-row").map {
-                    compose.onNodeWithTag(it, true).fetchSemanticsNode().boundsInRoot
-                }
-                compose.runOnIdle { reducedMotion = true }
-                compose.mainClock.advanceTimeByFrame()
-                assertEquals("Reduced motion cannot change held direct-manipulation geometry", heldBounds,
-                    listOf("lyrics-panel", "player-title", "player-seek-row").map {
-                        compose.onNodeWithTag(it, true).fetchSemanticsNode().boundsInRoot
-                    })
-                compose.onRoot().performTouchInput { moveTo(Offset(start.x, 0f), delayMillis = 160) }
-                compose.mainClock.advanceTimeByFrame()
-                assertEquals("Held reversal restores the exact seek target", seek,
-                    compose.onNodeWithTag("player-seek-row", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot)
-                compose.onRoot().performTouchInput { advanceEventTime(200); up() }
-                fingerDown = false
-                compose.mainClock.autoAdvance = true
-                compose.waitForIdle()
-                assertTrue(expanded)
-                recordSemantics(artworkLayout, "released-$contentTag")
-                assertEquals("Release cannot change lyrics geometry", panel, compose.onNodeWithTag("lyrics-panel", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot)
-                assertEquals(title, compose.onNodeWithTag("player-title", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot)
-                assertEquals(seek, compose.onNodeWithTag("player-seek-row", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot)
-                assertEquals(transport, compose.onNodeWithContentDescription("Play").fetchSemanticsNode().boundsInRoot)
-                assertEquals(player, compose.onNodeWithTag("player-surface").fetchSemanticsNode().boundsInRoot)
-
-                trace("release-equalities-end:$contentTag:$artworkLayout")
-                // Sample both directions, including the former low-opacity action ghost window.
-                for (p in listOf(.99f, .96f, .92f, .86f, .8f, .78f, .5f, .78f, .8f, .86f, .92f, .96f, .99f, 1f)) {
-                    trace("sweep-begin:$contentTag:$artworkLayout:$p")
-                    compose.runOnIdle { scope.launch { progress.snapTo(p) } }
-                    compose.onNodeWithTag("player-actions-row", true).assertDoesNotExist()
-                    compose.onNodeWithText("Album-only action", useUnmergedTree = true).assertDoesNotExist()
-                    if (p <= .78f) compose.onNodeWithTag("lyrics-panel", useUnmergedTree = true).assertIsNotDisplayed()
-                    else {
-                        compose.onNodeWithTag(contentTag, true).assertExists()
-                        val movingPanel = compose.onNodeWithTag("lyrics-panel", true).fetchSemanticsNode().boundsInRoot
-                        val movingTitle = compose.onNodeWithTag("player-title", true).fetchSemanticsNode().boundsInRoot
-                        val movingPlayer = compose.onNodeWithTag("player-surface", true).fetchSemanticsNode().boundsInRoot
-                        assertEquals("The upper clip no longer rides down with the whole player",
-                            maxOf(panel.top, movingPlayer.top), movingPanel.top, 1.5f)
-                        assertEquals("The bottom clip follows the presented title with its normal gap",
-                            title.top - panel.bottom, movingTitle.top - movingPanel.bottom, 1.5f)
-                        assertEquals("Real and missing lyrics share the same visible clip", movingPanel,
-                            compose.onNodeWithTag("lyrics-viewport", true).fetchSemanticsNode().boundsInRoot)
-                    }
-                    trace("sweep-end:$contentTag:$artworkLayout:$p")
-                }
-                trace("layout-end:$contentTag:$artworkLayout")
-            }
-        } finally {
-            trace("finally-begin:$contentTag:fingerDown=$fingerDown")
-            if (fingerDown) runCatching { compose.onRoot().performTouchInput { cancel() } }
-            compose.mainClock.autoAdvance = true
-            trace("finally-end:$contentTag")
+        val method = when (contentTag) {
+            "lyric-lines" -> "heldExpansionAlreadyShowsRealLyricsInBothArtworkLayouts"
+            "empty-lyrics" -> "heldExpansionAlreadyShowsMissingLyricsInBothArtworkLayouts"
+            else -> error("Unknown held-lyrics measurement identity: $contentTag")
         }
+        val work = PlayerCompositionWorkRecorder("io.github.anastaci1a.localica.PlayerExpansionMotionTest#$method")
+        var workFailure: Throwable? = null
+        try {
+            val progress = Animatable(0f)
+            var expanded by mutableStateOf(false)
+            var layout by mutableStateOf(ArtworkLayout.FullBackground)
+            var reducedMotion by mutableStateOf(false)
+            lateinit var scope: CoroutineScope
+            var fingerDown = false
+            compose.setContent { LocalicaTheme { CompositionLocalProvider(LocalPlayerWorkObserver provides work.observer) { BoxWithConstraints(Modifier.fillMaxSize()) {
+                DisposableEffect(Unit) {
+                    work.phase("composition-enter:$contentTag"); trace("composition-enter:$contentTag")
+                    onDispose { work.phase("composition-dispose:$contentTag"); trace("composition-dispose:$contentTag") }
+                }
+                scope = rememberCoroutineScope()
+                PlayerSurface(state.copy(trackId = track.id, trackUri = track.uri), expanded, { expanded = it },
+                    InterfaceSettings(artworkLayout = layout, reducedMotion = reducedMotion), progress, {}, {}, {}, {}, {}, {},
+                    lyricsOpen = true, track = track, visual = visual) { Text("Album-only action") }
+            } } } }
+            try {
+                for (artworkLayout in ArtworkLayout.entries) {
+                    work.phase("layout-begin:$contentTag:$artworkLayout"); trace("layout-begin:$contentTag:$artworkLayout")
+                    compose.mainClock.autoAdvance = true
+                    compose.runOnIdle { layout = artworkLayout; reducedMotion = false; expanded = false; scope.launch { progress.snapTo(0f) } }
+                    compose.waitForIdle()
+                    val mini = compose.onNodeWithTag("player-surface").fetchSemanticsNode().boundsInRoot
+                    compose.mainClock.autoAdvance = false
+                    val start = Offset(mini.left + mini.width / 2, mini.center.y)
+                    // Keep the same contact down through full expansion and its reversal.
+                    fingerDown = true
+                    compose.onRoot().performTouchInput {
+                        down(start)
+                        repeat(40) { index -> moveTo(Offset(start.x, start.y * (1f - (index + 1) / 40f)), delayMillis = 32) }
+                    }
+                    compose.mainClock.advanceTimeByFrame()
+                    compose.runOnIdle {
+                        assertEquals("Held endpoint is fully expanded in $artworkLayout", 1f, progress.value, .0001f)
+                        assertFalse("No release event has changed expanded", expanded)
+                    }
+                    compose.waitUntil(10000) {
+                        compose.mainClock.advanceTimeByFrame()
+                        compose.onAllNodesWithTag(contentTag, true).fetchSemanticsNodes().isNotEmpty()
+                    }
+                    // Let an asynchronously loaded document finish its own crossfade while still held.
+                    compose.mainClock.advanceTimeBy(400)
+                    work.phase("capture-content-begin:$contentTag:$artworkLayout"); trace("capture-content-begin:$contentTag:$artworkLayout")
+                    val content = compose.onNodeWithTag(contentTag, true).captureToImage().toPixelMap()
+                    work.phase("capture-content-end:$contentTag:$artworkLayout"); trace("capture-content-end:$contentTag:$artworkLayout")
+                    var brightest = 0f
+                    for (y in 0 until content.height step 2) for (x in 0 until content.width step 2)
+                        brightest = maxOf(brightest, content[x, y].red)
+                    assertTrue("Lyrics/empty ink is physically visible before release: $brightest", brightest > .28f)
+                    recordSemantics(artworkLayout, "held-$contentTag")
+                    // While held, the collapsed player remains a clickable semantics merger.
+                    // Inspect physical child geometry in the same unmerged tree before/after release.
+                    val player = compose.onNodeWithTag("player-surface").fetchSemanticsNode().boundsInRoot
+                    val title = compose.onNodeWithTag("player-title", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+                    val seek = compose.onNodeWithTag("player-seek-row", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+                    val transport = compose.onNodeWithContentDescription("Play").fetchSemanticsNode().boundsInRoot
+                    val panel = compose.onNodeWithTag("lyrics-panel", useUnmergedTree = true).assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+                    compose.onNodeWithTag(contentTag, true).assertIsDisplayed()
+                    compose.onNodeWithText("Album-only action", useUnmergedTree = true).assertDoesNotExist()
+                    // Inspect actual player pixels, not a potentially transparent cover layer capture.
+                    work.phase("capture-player-begin:$contentTag:$artworkLayout"); trace("capture-player-begin:$contentTag:$artworkLayout")
+                    val pixels = compose.onNodeWithTag("player-surface").captureToImage().toPixelMap()
+                    work.phase("capture-player-end:$contentTag:$artworkLayout"); trace("capture-player-end:$contentTag:$artworkLayout")
+                    val cover = compose.onNodeWithTag("player-artwork", true).fetchSemanticsNode().boundsInRoot
+                    for (fy in listOf(.3f, .5f, .7f)) for (fx in listOf(.3f, .5f, .7f)) {
+                        val x = (cover.left - player.left + cover.width * fx).toInt().coerceIn(0, pixels.width - 1)
+                        val y = (cover.top - player.top + cover.height * fy).toInt().coerceIn(0, pixels.height - 1)
+                        val color = pixels[x, y]
+                        assertTrue("Red cover is gone from the player before release: $color", color.red < color.blue + .1f)
+                    }
+
+                    val fullContent = compose.onNodeWithTag(contentTag, true).getUnclippedBoundsInRoot()
+                    // DpRect.height subtracts two independently converted Float coordinates.
+                    // Compare the actual integer-pixel measurement, which must stay identical.
+                    val fullContentSize = compose.onNodeWithTag(contentTag, true).fetchSemanticsNode().size
+                    compose.onRoot().performTouchInput { moveBy(Offset(0f, mini.top * .14f), delayMillis = 160) }
+                    compose.mainClock.advanceTimeByFrame()
+                    compose.onNodeWithText("Album-only action", useUnmergedTree = true).assertDoesNotExist()
+                    val movingContent = compose.onNodeWithTag(contentTag, true).getUnclippedBoundsInRoot()
+                    assertEquals("Inner lyric geometry does not reflow during held collapse", fullContentSize,
+                        compose.onNodeWithTag(contentTag, true).fetchSemanticsNode().size)
+                    val contentTravel = (movingContent.top - fullContent.top).value
+                    val playerTravel = (compose.onNodeWithTag("player-surface", true).getUnclippedBoundsInRoot().top -
+                        compose.onRoot().getUnclippedBoundsInRoot().top).value
+                    assertTrue("Content must move slower than its enclosing player: $contentTravel vs $playerTravel",
+                        contentTravel >= 0f && contentTravel < playerTravel * .5f)
+                    val heldBounds = listOf("lyrics-panel", "player-title", "player-seek-row").map {
+                        compose.onNodeWithTag(it, true).fetchSemanticsNode().boundsInRoot
+                    }
+                    compose.runOnIdle { reducedMotion = true }
+                    compose.mainClock.advanceTimeByFrame()
+                    assertEquals("Reduced motion cannot change held direct-manipulation geometry", heldBounds,
+                        listOf("lyrics-panel", "player-title", "player-seek-row").map {
+                            compose.onNodeWithTag(it, true).fetchSemanticsNode().boundsInRoot
+                        })
+                    compose.onRoot().performTouchInput { moveTo(Offset(start.x, 0f), delayMillis = 160) }
+                    compose.mainClock.advanceTimeByFrame()
+                    assertEquals("Held reversal restores the exact seek target", seek,
+                        compose.onNodeWithTag("player-seek-row", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot)
+                    compose.onRoot().performTouchInput { advanceEventTime(200); up() }
+                    fingerDown = false
+                    compose.mainClock.autoAdvance = true
+                    compose.waitForIdle()
+                    assertTrue(expanded)
+                    recordSemantics(artworkLayout, "released-$contentTag")
+                    assertEquals("Release cannot change lyrics geometry", panel, compose.onNodeWithTag("lyrics-panel", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot)
+                    assertEquals(title, compose.onNodeWithTag("player-title", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot)
+                    assertEquals(seek, compose.onNodeWithTag("player-seek-row", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot)
+                    assertEquals(transport, compose.onNodeWithContentDescription("Play").fetchSemanticsNode().boundsInRoot)
+                    assertEquals(player, compose.onNodeWithTag("player-surface").fetchSemanticsNode().boundsInRoot)
+
+                    work.phase("release-equalities-end:$contentTag:$artworkLayout"); trace("release-equalities-end:$contentTag:$artworkLayout")
+                    // Sample both directions, including the former low-opacity action ghost window.
+                    for (p in listOf(.99f, .96f, .92f, .86f, .8f, .78f, .5f, .78f, .8f, .86f, .92f, .96f, .99f, 1f)) {
+                        work.phase("sweep-begin:$contentTag:$artworkLayout:$p"); trace("sweep-begin:$contentTag:$artworkLayout:$p")
+                        compose.runOnIdle { scope.launch { progress.snapTo(p) } }
+                        compose.onNodeWithTag("player-actions-row", true).assertDoesNotExist()
+                        compose.onNodeWithText("Album-only action", useUnmergedTree = true).assertDoesNotExist()
+                        if (p <= .78f) compose.onNodeWithTag("lyrics-panel", useUnmergedTree = true).assertIsNotDisplayed()
+                        else {
+                            compose.onNodeWithTag(contentTag, true).assertExists()
+                            val movingPanel = compose.onNodeWithTag("lyrics-panel", true).fetchSemanticsNode().boundsInRoot
+                            val movingTitle = compose.onNodeWithTag("player-title", true).fetchSemanticsNode().boundsInRoot
+                            val movingPlayer = compose.onNodeWithTag("player-surface", true).fetchSemanticsNode().boundsInRoot
+                            assertEquals("The upper clip no longer rides down with the whole player",
+                                maxOf(panel.top, movingPlayer.top), movingPanel.top, 1.5f)
+                            assertEquals("The bottom clip follows the presented title with its normal gap",
+                                title.top - panel.bottom, movingTitle.top - movingPanel.bottom, 1.5f)
+                            assertEquals("Real and missing lyrics share the same visible clip", movingPanel,
+                                compose.onNodeWithTag("lyrics-viewport", true).fetchSemanticsNode().boundsInRoot)
+                        }
+                        work.phase("sweep-end:$contentTag:$artworkLayout:$p"); trace("sweep-end:$contentTag:$artworkLayout:$p")
+                    }
+                    work.phase("layout-end:$contentTag:$artworkLayout"); trace("layout-end:$contentTag:$artworkLayout")
+                }
+            } finally {
+                work.phase("finally-begin:$contentTag:fingerDown=$fingerDown"); trace("finally-begin:$contentTag:fingerDown=$fingerDown")
+                if (fingerDown) runCatching { compose.onRoot().performTouchInput { cancel() } }
+                compose.mainClock.autoAdvance = true
+                work.phase("finally-end:$contentTag"); trace("finally-end:$contentTag")
+            }
+        } catch (failure: Throwable) {
+            workFailure = failure
+            throw failure
+        } finally { work.finish(workFailure) }
     }
 
     @Test fun artworkImmediatelyEasesAlongItsCornerEnvelopeAndCollapseRetracesSizing() {
