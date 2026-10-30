@@ -22,7 +22,7 @@ jobs:
             display: compact
     env:
       TEST_API: ${{ matrix.api }}
-      SELECTORS: io.github.anastaci1a.localica.HomeSelectionTest
+      SELECTORS: io.github.anastaci1a.localica.HomeSelectionTest#scrolledHomeReturnHidesForInactivePlayerAndSelectionOwnership
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - uses: ./.github/actions/focused-android-setup

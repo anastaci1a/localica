@@ -218,6 +218,9 @@ class HomeSelectionTest {
             val committed = committedPolicy.get()
             try {
                 android.util.Log.i("HomeReturnPolicy", "requestedActive=false lastCommitted=$committed commits=${policyCommits.get()}")
+                compose.mainClock.advanceTimeByFrame()
+                val afterFrame = compose.onAllNodesWithContentDescription("Return to top").fetchSemanticsNodes()
+                android.util.Log.i("HomeReturnPolicy", "afterOneFailureFrame nodes=${afterFrame.size} lastCommitted=${committedPolicy.get()} commits=${policyCommits.get()}")
             } catch (diagnostic: Throwable) {
                 if (diagnostic !== failure) failure.addSuppressed(diagnostic)
             }
