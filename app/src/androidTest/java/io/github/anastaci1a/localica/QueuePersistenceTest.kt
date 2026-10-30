@@ -73,4 +73,33 @@ class QueuePersistenceTest {
             assertEquals(retried, db.queues().read())
         } finally { db.close() }
     }
+
+    @Test fun unknownRepeatDefaultsToOffWithoutChangingSavedQueue() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val db = Room.inMemoryDatabaseBuilder(context, QueueDatabase::class.java).build()
+        val track = Track("content://song", "Song", fileName = "song.mp3", relativePath = "song.mp3")
+        val seed = QueueEdits.create(listOf(track, track), 1, "Repeated",
+            playlistOrigins = listOf("source-a", "source-b"))
+        val ids = seed.entries.map { it.id }
+        val queue = seed.copy(positionMs = 1234, shuffle = true, repeat = QueueRepeat.All,
+            journey = QueueJourney.start(ids, ids.last(), JourneyModes()),
+            order = io.github.anastaci1a.localica.library.SavedOrder(ids.reversed(),
+                io.github.anastaci1a.localica.library.TrackSort.Title, false))
+        val saved = QueueLibrary(listOf(queue), queue.id)
+        try {
+            db.queues().save(QueueLibrary(), saved)
+            assertEquals(saved, db.queues().read())
+            val cases = QueueRepeat.entries.map { it.name to it } +
+                listOf("FutureRepeat" to QueueRepeat.Off, "" to QueueRepeat.Off,
+                    "all" to QueueRepeat.Off, "All " to QueueRepeat.Off)
+            for ((name, expected) in cases) {
+                db.openHelper.writableDatabase.execSQL("UPDATE queues SET repeat = ? WHERE id = ?", arrayOf(name, queue.id))
+                assertEquals(saved.update(queue.copy(repeat = expected)), db.queues().read())
+                db.openHelper.readableDatabase.query("SELECT repeat FROM queues WHERE id = ?", arrayOf(queue.id)).use {
+                    assertTrue(it.moveToFirst())
+                    assertEquals("Read must not rewrite stored names", name, it.getString(0))
+                }
+            }
+        } finally { db.close() }
+    }
 }
