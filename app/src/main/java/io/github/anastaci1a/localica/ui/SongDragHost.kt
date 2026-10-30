@@ -18,6 +18,7 @@ internal class SongDragHost {
     var state by mutableStateOf<SongDragState?>(null)
     var reducedMotion by mutableStateOf(false)
     var source by mutableStateOf<FrostedBackdrop?>(null)
+    var cancelBottomMargin by mutableStateOf(0.dp)
 }
 internal val LocalSongDragHost = staticCompositionLocalOf<SongDragHost?> { null }
 
@@ -33,9 +34,8 @@ internal fun ForegroundSongDragOverlay(host: SongDragHost) {
             Box(Modifier.offset { IntOffset(offset.x.roundToInt(), offset.y.roundToInt()) }
                 .size(with(density) { state.viewportWidth.toDp() }, with(density) { state.viewportHeight.toDp() })) {
                 CompositionLocalProvider(LocalFrostedBackdrop provides host.source) {
-                    // The source inset already positions the shared bottom control row.
-                    // Extra standalone-overlay padding would lift X above collection actions.
-                    SongDragOverlay(state, host.reducedMotion, cancelBottomMargin = 0.dp)
+                    // The source owner supplies the same clearance as its return control.
+                    SongDragOverlay(state, host.reducedMotion, cancelBottomMargin = host.cancelBottomMargin)
                 }
             }
         }
