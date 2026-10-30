@@ -91,9 +91,9 @@ fun QueueScreen(state: QueueUiState, controller: QueueController?, library: Libr
                         Box {
                             ActionIcon(R.drawable.ic_more, "Queue actions", anchor = menuAnchor) { menu = true }
                             GlassMenu(menu, menuAnchor, { menu = false }) {
-                                ActionMenuItem("Rename", enabled = active != null, onClick = { menu = false; renameId = active?.id })
-                                ActionMenuItem("Delete", enabled = active != null, onClick = { menu = false; deleting = setOfNotNull(active?.id) })
-                                if (state.library.queues.size > 1) ActionMenuItem("Remove others",
+                                ActionMenuItem("Rename", icon = R.drawable.ic_edit, enabled = active != null, onClick = { menu = false; renameId = active?.id })
+                                ActionMenuItem("Delete", icon = R.drawable.ic_trash, enabled = active != null, onClick = { menu = false; deleting = setOfNotNull(active?.id) })
+                                if (state.library.queues.size > 1) ActionMenuItem("Remove others", icon = R.drawable.ic_trash,
                                     onClick = { menu = false; deleting = state.library.queues.filterNot { it.id == active?.id }.map { it.id }.toSet() })
                             }
                         }
