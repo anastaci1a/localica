@@ -1,0 +1,30 @@
+{
+  "source": "1888c9a990363cdce3a6b48790d680c09454e002",
+  "extraction": "1a523385bd411a0ad23785988c9ad9085f93a9b8",
+  "fixtures": [
+    {
+      "name": "glass-renderer-settings.yml",
+      "source": ".github/workflows/glass-renderer-settings.yml",
+      "blob": "3c3357d4b4e93c645268a78596084f9e8f5485e5",
+      "sha256": "5e4bdbdc450df7c455fa36ab209d5cec958f6a90b9b28b22128405ef9d03d52e"
+    },
+    {
+      "name": "player-live-transition-contrast.yml",
+      "source": ".github/workflows/player-live-transition-contrast.yml",
+      "blob": "e0115e2fb67fc1f118a7a3a6c8a1edc9cdc006d9",
+      "sha256": "192c3c4b74c3682849c18f8f983367f5b5649934ce9ca7d8f8912b2a7af2ccf7"
+    },
+    {
+      "name": "renderer-next-preparation.yml",
+      "source": ".github/workflows/renderer-next-preparation.yml",
+      "blob": "8d5674ac77560877176225ac3374a90e15e6907d",
+      "sha256": "5859bf57d196fd4c8703ccbee33a70e9bae5664efccf45bda7f199a49eecfc52"
+    },
+    {
+      "name": "font-profile-gates.yml",
+      "source": ".github/workflows/font-profile-gates.yml",
+      "blob": "03e1bace0f3a83d3cfb3007689eee22a8e0df56e",
+      "sha256": "48c850797cef5c02586745c32bc0ba5669c5bd5a967a8dba0c5477bb79214958"
+    }
+  ]
+}
