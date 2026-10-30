@@ -1,7 +1,7 @@
-name: Audit filled controls and player measured bounds (not release)
+name: Audit filled controls and player measured bounds correction (not release)
 'on':
   push:
-    branches: [dev/audit-filled-bounds-20261030]
+    branches: [dev/audit-filled-bounds-correction-20261030]
 permissions:
   contents: read
 jobs:
@@ -55,7 +55,7 @@ jobs:
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
-          name: audit-filled-bounds-api-${{ matrix.api }}
+          name: audit-filled-bounds-correction-api-${{ matrix.api }}
           path: |
             app/build/reports/
             app/build/test-results/
