@@ -243,11 +243,13 @@ class SoftwareControlCaptureTest {
         for (y in 0 until a.height) for (x in 0 until a.width) {
             // At most one 8-bit channel quantization step; no geometric or perceptual tolerance.
             val ac = a[x, y]; val bc = b[x, y]
-            val tolerance = 1f / 255f
-            if (!(kotlin.math.abs(ac.red - bc.red) <= tolerance &&
-                kotlin.math.abs(ac.green - bc.green) <= tolerance &&
-                kotlin.math.abs(ac.blue - bc.blue) <= tolerance &&
-                kotlin.math.abs(ac.alpha - bc.alpha) <= tolerance))
+            // Compare ARGB8 units directly: adjacent normalized Float channels can
+            // subtract to slightly more than 1f / 255f (for example, 16 and 15).
+            val argb = ac.toArgb(); val expectedArgb = bc.toArgb()
+            if (!(kotlin.math.abs((argb ushr 24) - (expectedArgb ushr 24)) <= 1 &&
+                kotlin.math.abs(((argb ushr 16) and 255) - ((expectedArgb ushr 16) and 255)) <= 1 &&
+                kotlin.math.abs(((argb ushr 8) and 255) - ((expectedArgb ushr 8) and 255)) <= 1 &&
+                kotlin.math.abs((argb and 255) - (expectedArgb and 255)) <= 1))
                 fail("$label at $x,$y: expected $bc, actual $ac")
         }
     }
