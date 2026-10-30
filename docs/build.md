@@ -10,6 +10,8 @@ The Localica lead runs effective tests and test setup without separate user appr
 
 Select tests for migrations and failed operations; occurrence/cursor/metadata preservation; navigation restoration and gestures; playback/lyrics/artwork boundaries; accessibility, short/landscape screens, large fonts and reduced motion.
 
+For repeated compilation-only checks, use `./gradlew compileDebugAndroidTestKotlin --configuration-cache --no-daemon --max-workers=2`; run the selected tests separately. Configuration caching remains opt-in for this task graph.
+
 If full validation fails, preserve its first evidence. Repair failures with affected focused tests. Once all repairs are ready, freeze the new candidate and rerun full validation. Investigate every observed failure, including one from a slower parallel run.
 
 One verified complete equivalent pass counts for the exact candidate. A duplicate local and GitHub pass is not routinely required. Changes to code, tests or build inputs require fresh affected checks; final validation applies to the frozen candidate.
