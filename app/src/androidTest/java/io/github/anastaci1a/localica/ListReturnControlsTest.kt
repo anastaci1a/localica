@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.SemanticsProperties
@@ -55,24 +56,30 @@ class ListReturnControlsTest {
         var ordinaryBack = 0
         var topRequest by mutableIntStateOf(0)
         var insetPx = 0f
+        var dragHost: SongDragHost? = null
     }
 
     private fun fixture(route: BrowseRoute, songs: List<Track> = tracks,
         playlists: PlaylistState = PlaylistState(loading = false),
         queues: QueueUiState = QueueUiState(loading = false), playing: String? = null,
-        inset: Dp = 0.dp, reducedMotion: Boolean = true, listBackEnabled: Boolean = false): Fixture {
+        inset: Dp = 0.dp, reducedMotion: Boolean = true, listBackEnabled: Boolean = false,
+        foregroundDrag: Boolean = false): Fixture {
         val fixture = Fixture(route, playing, queues)
         val library = LibraryUiState(LibrarySnapshot(tracks = songs), loading = false)
         compose.setContent { LocalicaTheme {
             if (listBackEnabled) BackHandler { fixture.ordinaryBack++ }
             fixture.insetPx = with(LocalDensity.current) { inset.toPx() }
-            CompositionLocalProvider(LocalSessionSelection provides fixture.selection, LocalBrowseObscuredInset provides inset) {
+            val dragHost = if (foregroundDrag) remember { SongDragHost() } else LocalSongDragHost.current
+            fixture.dragHost = dragHost
+            CompositionLocalProvider(LocalSessionSelection provides fixture.selection, LocalBrowseObscuredInset provides inset,
+                LocalSongDragHost provides dragHost) {
                 Box(Modifier.fillMaxSize().testTag("return-host")) {
                     key(fixture.route.key) { BrowserScreen(library, playlists,
                         fixture.route, { fixture.routeChanges++; fixture.route = it }, {}, {}, { _, _, _ -> fixture.playCalls++ }, null, null,
                         true, fixture.playerOpen, queueState = fixture.queues, playingEntryId = fixture.playing,
                         selectionVisible = fixture.active, reducedMotion = reducedMotion,
                         scrollToTopRequest = fixture.topRequest, listBackEnabled = listBackEnabled) }
+                    if (foregroundDrag) ForegroundSongDragOverlay(requireNotNull(dragHost))
                 }
             }
         } }
@@ -471,4 +478,66 @@ class ListReturnControlsTest {
         } finally { compose.mainClock.autoAdvance = true }
     }
 
+    @Test fun queueCurrentReturnAndForegroundDragCancelShareTheirSettledHostGeometry() {
+        val queue = repeatedQueue()
+        val originalQueues = QueueUiState(QueueLibrary(listOf(queue), queue.id), loading = false)
+        val fixture = fixture(BrowseRoute(MainTab.Queues, MediaRef(MediaKind.Queue, queue.id)),
+            songs = queue.entries.map { it.track }.distinctBy { it.id }, queues = originalQueues,
+            playing = queue.currentEntryId, inset = 88.dp, foregroundDrag = true)
+        awaitRow(queue.currentEntryId!!)
+        list.performScrollToIndex(30)
+        val heldEntry = queue.entries[30]
+        awaitRow(heldEntry.id)
+        val returned = compose.onNodeWithContentDescription("Current song").assertIsDisplayed()
+            .fetchSemanticsNode().boundsInRoot
+        val host = compose.onNodeWithTag("return-host").fetchSemanticsNode().boundsInRoot
+        val queueClearance = with(compose.density) { 12.dp.toPx() }
+        assertEquals("Keep Queue's existing return clearance", host.bottom - fixture.insetPx - queueClearance,
+            returned.bottom, 1.1f)
+        var held = false
+        var failure: Throwable? = null
+        try {
+            row(heldEntry.id).performTouchInput {
+                down(center); held = true; advanceEventTime(650)
+                moveBy(Offset(70f, 0f)); advanceEventTime(32)
+            }
+            compose.waitUntil(5000) { fixture.dragHost?.state?.drag != null }
+            compose.onNodeWithTag("drag-foreground").assertExists()
+            compose.onNodeWithTag("floating-return-control").assertDoesNotExist()
+            compose.waitUntil(5000) { fixture.dragHost?.state?.drag?.cancelMotion?.progress == 1f }
+            val cancel = compose.onNodeWithTag("cancel-drag").assertIsDisplayed()
+                .fetchSemanticsNode().boundsInRoot
+            assertEquals("The same source host remains in place", host,
+                compose.onNodeWithTag("return-host").fetchSemanticsNode().boundsInRoot)
+            assertEquals("Queue return and drag X share their settled bottom", returned.bottom, cancel.bottom, 1.1f)
+            assertEquals("Queue return and drag X share their settled center", returned.center.y, cancel.center.y, 1.1f)
+            assertEquals(returned.center.x, cancel.center.x, 1.1f)
+            val listBounds = list.fetchSemanticsNode().boundsInRoot
+            val target = cancel.center - listBounds.topLeft
+            list.performTouchInput { moveTo(target); advanceEventTime(32) }
+            compose.onNodeWithTag("cancel-drag").assert(SemanticsMatcher.expectValue(
+                SemanticsProperties.StateDescription, "Cancel move"))
+            list.performTouchInput { up(); held = false }
+            compose.waitUntil(5000) { fixture.dragHost?.state?.drag == null }
+            compose.onNodeWithTag("cancel-drag").assertDoesNotExist()
+            compose.onNodeWithTag("drag-stack").assertDoesNotExist()
+            compose.runOnIdle {
+                assertEquals(originalQueues, fixture.queues)
+                assertEquals(queue.currentEntryId, fixture.playing)
+                assertEquals(0, fixture.playCalls)
+                assertEquals(0, fixture.routeChanges)
+                assertTrue("Cancelling keeps the selected occurrence", fixture.selection.active)
+                assertEquals(listOf(heldEntry.id), fixture.selection.entries.map { it.row.id })
+            }
+        } catch (error: Throwable) {
+            failure = error
+            throw error
+        } finally {
+            if (held) try {
+                list.performTouchInput { cancel() }
+            } catch (cleanup: Throwable) {
+                if (failure != null) failure.addSuppressed(cleanup) else throw cleanup
+            }
+        }
+    }
 }
