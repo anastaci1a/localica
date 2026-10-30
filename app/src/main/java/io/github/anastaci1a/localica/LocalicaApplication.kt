@@ -22,8 +22,9 @@ class LocalicaApplication : Application() {
             // The registry starts fail-closed before any service can create/open a source.
             // The writer publishes a useful Unknown state if inspection fails.
             runCatching { tagWriter.initialize() }
+            runCatching { io.github.anastaci1a.localica.library.TagViewFiles.sweep(java.io.File(cacheDir, "tag-views")) }
+                .onFailure { android.util.Log.w("TagViewFiles", "Could not sweep leftover metadata mirrors", it) }
         }
-        java.io.File(cacheDir, "tag-views").listFiles()?.forEach { it.delete() }
     }
     val statistics by lazy {
         io.github.anastaci1a.localica.statistics.StatisticsRepository(Room.databaseBuilder(this,

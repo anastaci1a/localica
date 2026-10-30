@@ -13,12 +13,10 @@ import java.nio.channels.FileChannel
 internal object TagFileView {
     private const val LIMIT = 16 * 1024 * 1024L
     fun <T> read(context: Context, input: FileChannel, extension: String, reader: (File) -> T): T {
-        val directory = File(context.cacheDir, "tag-views").apply { mkdirs() }
-        val file = File.createTempFile("metadata-", ".$extension", directory)
-        try {
+        return TagViewFiles.use(File(context.cacheDir, "tag-views"), extension) { file ->
             RandomAccessFile(file, "rw").use { output -> copyMetadata(input, output, extension) }
-            return reader(file)
-        } finally { file.delete() }
+            reader(file)
+        }
     }
     internal fun copyMetadata(input: FileChannel, output: RandomAccessFile, extension: String) {
         val length = input.size()
