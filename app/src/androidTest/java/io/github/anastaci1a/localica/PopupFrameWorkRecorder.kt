@@ -39,6 +39,9 @@ internal class PopupFrameWorkRecorder(private val testId: String) {
     private var overflowHandoffs = 0L
     private var sealed = false
     private var failure: Throwable? = null // Control thread only; deferred until body cleanup.
+    private var finalizedOwners: List<Owner>? = null
+    private var finalizedEnd: Long? = null
+    private var exportAttempted = false
 
     /** No blocking lifecycle, Snapshot access, file IO or control-thread work while holding gate. */
     fun publish(window: Window?) = synchronized(gate) {
@@ -124,7 +127,8 @@ internal class PopupFrameWorkRecorder(private val testId: String) {
         }
     }
 
-    fun finish(primary: Throwable?) {
+    /** Seal handoffs and finish every owner before either receipt performs file IO. */
+    fun finalizeRecording(): Throwable? {
         checkControl()
         val retained = synchronized(gate) {
             check(!sealed)
@@ -132,48 +136,57 @@ internal class PopupFrameWorkRecorder(private val testId: String) {
             sealed = true
             owners.toList()
         }
+        finalizedOwners = retained
         // Never hold gate across Main registration/removal or worker joins.
-        retained.forEach { finishOwner(it, "method-finally-retirement-unknown") }
-        val ended = NavigationFrameMetricsRecorder.markNanos()
-        var combined = primary
-        failure?.let { combined = NavigationFrameMetricsRecorder.mergeFailure(combined, it) }
-        try {
-            val document = JSONObject().put("schema", 1)
-                .put("protocol", "existing-popup-transition-window-received-subset-v1")
-                .put("testId", testId).put("api", Build.VERSION.SDK_INT)
-                .put("implementationBase", "c32c0ef1b55c04ef37fa6f576c88d05bb5a7833f")
-                .put("measurementStatus", if (retained.isEmpty()) "unavailable-no-window" else "incomplete-or-unavailable-per-window")
-                .put("sourceAssociation", "Pinned test/helper bytes and Git SHA supplied by runner evidence")
-                .put("clock", "System.nanoTime / FrameMetrics.VSYNC_TIMESTAMP; never Compose virtual time")
-                .put("startedNanos", started).put("endedNanos", ended)
-                .put("bodyOutcome", if (primary == null) "returned" else "failed")
-                .put("primaryFailure", primary?.stackTraceToString() ?: JSONObject.NULL)
-                .put("lifecycleFailure", failure?.stackTraceToString() ?: JSONObject.NULL)
-                .put("sealed", true).put("completeWindowMeasurement", false).put("tailStatus", "INCOMPLETE")
-                .put("identityCapacity", identityCapacity).put("eventCapacity", eventCapacity)
-                .put("eventAttempts", attempts).put("droppedEvents", droppedEvents)
-                .put("nullHandoffs", nullHandoffs).put("overflowHandoffs", overflowHandoffs)
-                .put("events", JSONArray(events)).put("windows", JSONArray(retained.map { ownerJson(it) }))
-                .put("limits", JSONArray(listOf(
-                    "Opening before registration is unobserved; reduced opening may entirely precede registration.",
-                    "Registration request/return brackets completion; no exact Main registration stamp is exposed.",
-                    "Registration at existing checkpoints adds blocking scheduling perturbation; no extra draws/readiness/waiters.",
-                    "Retirement/detachment is not observed: old owners finish on observed replacement or finally; gaps remain unknown.",
-                    "Missing, detached, unregistered and empty subsets are unavailable, never zero-frame success.",
-                    "Original captures, marker/readback work and idle time remain in observed intervals; phases are not presentation boundaries.",
-                    "No fixed-eight-draw admission, full population, complete delivery tail, input-to-present or performance claim."
-                )))
-            val context = InstrumentationRegistry.getInstrumentation().targetContext
-            val directory = nativeEvidenceDirectory("popup-frame-work", context.getExternalFilesDir(null))
-            val safe = testId.replace(Regex("[^A-Za-z0-9._-]+"), "_")
-            val target = File.createTempFile("$safe-$started-", ".json", directory)
-            val partial = File(directory, "${target.name}.partial")
-            // Reserve a unique final name, then publish only the sealed document.
-            check(target.delete()) { "Cannot release reserved frame receipt: $target" }
-            partial.writeText(document.toString(2) + "\n")
-            check(partial.renameTo(target)) { "Cannot publish frame receipt: $target" }
-        } catch (error: Throwable) { combined = NavigationFrameMetricsRecorder.mergeFailure(combined, error) }
-        if (primary == null) combined?.let { throw it }
+        retained.forEach { owner ->
+            try { finishOwner(owner, "method-finally-retirement-unknown") }
+            catch (error: Throwable) { recordFailure(owner, error) }
+        }
+        finalizedEnd = NavigationFrameMetricsRecorder.markNanos()
+        return failure
+    }
+
+    /** primary is the original test-body error only; export errors propagate separately. */
+    fun export(primary: Throwable?) {
+        checkControl()
+        check(!exportAttempted) { "Frame receipt is exported once" }
+        exportAttempted = true
+        val retained = checkNotNull(finalizedOwners) { "Frame owners must be finalized before export" }
+        val ended = checkNotNull(finalizedEnd)
+        val document = JSONObject().put("schema", 1)
+            .put("protocol", "existing-popup-transition-window-received-subset-v1")
+            .put("testId", testId).put("api", Build.VERSION.SDK_INT)
+            .put("implementationBase", "c32c0ef1b55c04ef37fa6f576c88d05bb5a7833f")
+            .put("measurementStatus", if (retained.isEmpty()) "unavailable-no-window" else "incomplete-or-unavailable-per-window")
+            .put("sourceAssociation", "Pinned test/helper bytes and Git SHA supplied by runner evidence")
+            .put("clock", "System.nanoTime / FrameMetrics.VSYNC_TIMESTAMP; never Compose virtual time")
+            .put("startedNanos", started).put("endedNanos", ended)
+            .put("bodyOutcome", if (primary == null) "returned" else "failed")
+            .put("primaryFailure", primary?.stackTraceToString() ?: JSONObject.NULL)
+            .put("lifecycleFailure", failure?.stackTraceToString() ?: JSONObject.NULL)
+            .put("sealed", true).put("completeWindowMeasurement", false).put("tailStatus", "INCOMPLETE")
+            .put("identityCapacity", identityCapacity).put("eventCapacity", eventCapacity)
+            .put("eventAttempts", attempts).put("droppedEvents", droppedEvents)
+            .put("nullHandoffs", nullHandoffs).put("overflowHandoffs", overflowHandoffs)
+            .put("events", JSONArray(events)).put("windows", JSONArray(retained.map { ownerJson(it) }))
+            .put("limits", JSONArray(listOf(
+                "Opening before registration is unobserved; reduced opening may entirely precede registration.",
+                "Registration request/return brackets completion; no exact Main registration stamp is exposed.",
+                "Registration at existing checkpoints adds blocking scheduling perturbation; no extra draws/readiness/waiters.",
+                "Retirement/detachment is not observed: old owners finish on observed replacement or finally; gaps remain unknown.",
+                "Missing, detached, unregistered and empty subsets are unavailable, never zero-frame success.",
+                "Original captures, marker/readback work and idle time remain in observed intervals; phases are not presentation boundaries.",
+                "No fixed-eight-draw admission, full population, complete delivery tail, input-to-present or performance claim."
+            )))
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val directory = nativeEvidenceDirectory("popup-frame-work", context.getExternalFilesDir(null))
+        val safe = testId.replace(Regex("[^A-Za-z0-9._-]+"), "_")
+        val target = File.createTempFile("$safe-$started-", ".json", directory)
+        val partial = File(directory, "${target.name}.partial")
+        // Reserve a unique final name, then publish only the sealed document.
+        check(target.delete()) { "Cannot release reserved frame receipt: $target" }
+        partial.writeText(document.toString(2) + "\n")
+        check(partial.renameTo(target)) { "Cannot publish frame receipt: $target" }
     }
 
     private fun ownerJson(owner: Owner): JSONObject {
