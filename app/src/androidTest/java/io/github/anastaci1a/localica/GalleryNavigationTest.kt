@@ -52,7 +52,12 @@ class GalleryNavigationTest {
                 song.assertIsDisplayed()
                 // Hit targets alone previously passed while the actual pixels remained stale.
                 val image = song.captureToImage().toPixelMap()
-                val colors = buildSet { for (y in 0 until image.height) for (x in 0 until image.width) add(image[x, y]) }
+                val colors = buildSet {
+                    for (y in 0 until image.height) for (x in 0 until image.width) {
+                        add(image[x, y])
+                        if (size > 8) return@buildSet
+                    }
+                }
                 assertTrue("Song text must actually render for $n", colors.size > 8)
                 compose.onNodeWithContentDescription("Back").performTouchInput { click() }
                 compose.waitUntil(5000) { runCatching {

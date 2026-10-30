@@ -111,11 +111,19 @@ class TagEditorThemeInheritanceTest {
         val icon = compose.onNodeWithContentDescription("Choose artwork").performScrollTo().assertIsDisplayed()
         val view = (icon.fetchSemanticsNode().root as ViewRootForTest).view
         val pixels = capturePopupPixels(compose, icon) { view }
-        val inkPixels = (0 until pixels.height).sumOf { y -> (0 until pixels.width).count { x ->
-            val c = pixels[x, y]
-            if (lightInk) c.red > .85f && c.green > .85f && c.blue > .85f
-            else c.red < .2f && c.green < .2f && c.blue < .2f
-        } }
+        val inkPixels = run {
+            var count = 0
+            for (y in 0 until pixels.height) for (x in 0 until pixels.width) {
+                val c = pixels[x, y]
+                val matches = if (lightInk) c.red > .85f && c.green > .85f && c.blue > .85f
+                    else c.red < .2f && c.green < .2f && c.blue < .2f
+                if (matches) {
+                    count++
+                    if (count > 12) return@run count
+                }
+            }
+            count
+        }
         assertTrue("Artwork action has actual foreground pixels in the requested polarity", inkPixels > 12)
     }
 
