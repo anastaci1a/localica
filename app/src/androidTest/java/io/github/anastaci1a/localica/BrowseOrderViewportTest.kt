@@ -354,6 +354,10 @@ class BrowseOrderViewportTest {
     }
     private fun chooseTitle() {
         compose.onNodeWithText("Sort by").performScrollTo().performClick()
+        // The child choice popup admits its own semantics after its entry transition.
+        compose.waitUntil(5000) {
+            compose.onAllNodesWithText("Title").fetchSemanticsNodes().size == 1
+        }
         compose.onNodeWithText("Title").performScrollTo().performClick()
         compose.onNodeWithText("Select", substring = false).performClick()
     }
