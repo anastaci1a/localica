@@ -20,7 +20,7 @@ class AdvancedRepeatTest {
         val saved = preferences.read()
         preferences.write(QueueSettings())
         val file = File(context.cacheDir, "repeat-tone.mp3")
-        instrumentation.context.assets.open("queue-tone.mp3").use { input -> file.outputStream().use(input::copyTo) }
+        copyTestAsset(instrumentation.context.assets, "queue-tone.mp3", file)
         val tracks = (0..2).map { Track(file.toURI().toString(), "Track $it", fileName = file.name, relativePath = file.name, id = "repeat:$it") }
         val first = QueueEdits.create(tracks, 0, "First")
         val second = QueueEdits.create(tracks, 1, "Second").copy(positionMs = 1000)
