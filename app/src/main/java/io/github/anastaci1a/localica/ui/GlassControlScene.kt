@@ -43,7 +43,7 @@ internal fun GlassControlScene(modifier: Modifier, horizontalPadding: Dp = 20.dp
             drawRoundRect(face(), shape.bounds.topLeft, shape.bounds.size, CornerRadius(shape.corner))
             return@Canvas
         }
-        val silhouette = Path().apply { addRoundRect(RoundRect(shape.bounds, CornerRadius(shape.corner))) }
+        val silhouette = rim.roundedPath(shape.bounds, shape.corner)
         // The capture is limited to the thumb, including reachable refraction pixels.
         val pad = horizontalPadding.toPx()
         val origin = shape.bounds.topLeft - Offset(pad, pad)
