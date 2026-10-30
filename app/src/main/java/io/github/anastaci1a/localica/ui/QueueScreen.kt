@@ -59,8 +59,8 @@ fun QueueScreen(state: QueueUiState, controller: QueueController?, library: Libr
     SideEffect { selectorAnchor.face = { SelectorFace() } }
     val position = active?.let { "${it.entries.indexOfFirst { entry -> entry.id == it.currentEntryId } + 1} / ${it.entries.size}" }
     val duration = active?.let { formatTime(it.entries.mapNotNull { entry -> entry.track.durationMs }.takeIf { it.isNotEmpty() }?.sum()) }
-    var browsing by rememberSaveable(active?.id, stateSaver = androidx.compose.runtime.saveable.Saver<NavigationState, String>(
-        save = { NavigationCodec.encode(it) }, restore = { NavigationCodec.decodeOrNull(it)?.takeIf { state -> state.active == MainTab.Queues } })) {
+    var browsing by rememberSaveable(active?.id, saver = androidx.compose.runtime.saveable.Saver<androidx.compose.runtime.MutableState<NavigationState>, String>(
+        save = { NavigationCodec.encode(it.value) }, restore = { NavigationCodec.decodeOrNull(it)?.takeIf { state -> state.active == MainTab.Queues }?.let { state -> mutableStateOf(state) } })) {
         mutableStateOf(NavigationState(MainTab.Queues, mapOf(MainTab.Queues to listOf(BrowseRoute(MainTab.Queues,
             MediaRef(MediaKind.Queue, active?.id.orEmpty()), active?.name ?: "Queue")))))
     }
