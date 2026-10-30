@@ -1,5 +1,7 @@
 package io.github.anastaci1a.localica.ui
 
+import io.github.anastaci1a.localica.R
+
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
@@ -35,7 +37,7 @@ internal fun LibraryFilterBubbles(filters: List<LibraryFilter>, selected: MediaK
         tag = { "filter-${it.name}" }, onSelect = { onSelect(it.kind.takeUnless { kind -> kind == selected }) },
         onLongClick = { menu = it }) { filter, anchor ->
         GlassMenu(menu == filter, anchor, { menu = null }) {
-            ActionMenuItem("Edit library filters and order", onClick = { menu = null; onConfigure() })
+            ActionMenuItem("Edit library filters and order", icon = R.drawable.ic_edit, onClick = { menu = null; onConfigure() })
         }
     }
 }

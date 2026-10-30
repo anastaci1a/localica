@@ -1,5 +1,7 @@
 package io.github.anastaci1a.localica.ui
 
+import io.github.anastaci1a.localica.R
+
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -118,9 +120,9 @@ internal fun PinnedHome(library: LibraryUiState, playlists: PlaylistState, pins:
                 }
                 CollectionActions(currentOrder && menu == item.ref, anchor, item, playlists, playlistController, queues, pins, onPin, { menu = null },
                     onInformationPresented = { track, presentation -> collectionLookup.cancel(); info = SongInformationRequest(track, presentation) }, extra = {
-                    ActionMenuItem("Move earlier", enabled = pins.indexOf(item.ref) > 0,
+                    ActionMenuItem("Move earlier", icon = R.drawable.ic_drag, enabled = pins.indexOf(item.ref) > 0,
                         onClick = { onMove(item.ref, -1); menu = null })
-                    ActionMenuItem("Move later", enabled = pins.indexOf(item.ref) < pins.lastIndex,
+                    ActionMenuItem("Move later", icon = R.drawable.ic_drag, enabled = pins.indexOf(item.ref) < pins.lastIndex,
                         onClick = { onMove(item.ref, 1); menu = null })
                 })
             } }
