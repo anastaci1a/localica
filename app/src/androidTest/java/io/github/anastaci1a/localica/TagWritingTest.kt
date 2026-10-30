@@ -30,9 +30,15 @@ class TagWritingTest {
     private fun edits(name: String) = fixture(name) { file ->
         val fields = mapOf(EditField.Title to "Edited café", EditField.Album to "Album", EditField.Artist to "Artist",
             EditField.AlbumArtist to "Album artist", EditField.Year to "2025", EditField.Disc to "2", EditField.TrackNumber to "3", EditField.Comment to "Keep my comment", EditField.Composer to "Composer", EditField.Lyricist to "Lyricist", EditField.Genre to "Ambient")
+        val documents = io.github.anastaci1a.localica.library.AndroidDocuments(context)
+        val uri = android.net.Uri.fromFile(file).toString()
+        val listed = 111L
+        assertNotEquals(listed, file.lastModified())
+        assertEquals(listed, runBlocking { documents.metadata(uri, file.name, listed) }.modifiedAt)
         TagCodec.edit(file, TagPatch(fields))
         fields.forEach { (field, value) -> assertEquals(name + field.name, value, AudioFileIO.read(file).tag.getFirst(field.key)) }
-        val metadata = runBlocking { io.github.anastaci1a.localica.library.AndroidDocuments(context).metadata(android.net.Uri.fromFile(file).toString(), file.name) }
+        // A prior hinted read on this instance must not supply the timestamp after editing.
+        val metadata = runBlocking { documents.metadata(uri, file.name) }
         assertEquals(name, "Edited café", metadata.title)
         assertEquals(name, "Album artist", metadata.albumArtist)
         assertEquals(name, 2, metadata.discNumber)
@@ -41,6 +47,7 @@ class TagWritingTest {
         assertEquals(name, "Lyricist", metadata.lyricist)
         assertEquals(name, "Ambient", metadata.genre)
         assertNotNull(metadata.modifiedAt)
+        assertEquals(file.lastModified(), metadata.modifiedAt)
         val bitmap = Bitmap.createBitmap(32, 32, Bitmap.Config.ARGB_8888).apply { eraseColor(android.graphics.Color.MAGENTA) }
         val output = ByteArrayOutputStream().apply { bitmap.compress(Bitmap.CompressFormat.PNG, 100, this) }
         TagCodec.edit(file, TagPatch(artwork = ArtworkChange.Replace(CoverImage(output.toByteArray(), "image/png", 32, 32))))
