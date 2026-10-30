@@ -93,7 +93,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     fun freshSearch() = NavigationState(route.tab, mapOf(route.tab to listOf(route.copy(search = true,
         text = "", queryCommitted = false, key = java.util.UUID.randomUUID().toString()))))
     var localSearch by androidx.compose.runtime.saveable.rememberSaveable(stateSaver = androidx.compose.runtime.saveable.Saver<NavigationState, String>(
-        save = { NavigationCodec.encode(it) }, restore = { NavigationCodec.decode(it) })) {
+        save = { NavigationCodec.encode(it) }, restore = { NavigationCodec.decodeOrNull(it)?.takeIf { state -> state.active == route.tab } })) {
         mutableStateOf(freshSearch())
     }
     var localFocusRequest by androidx.compose.runtime.saveable.rememberSaveable { mutableIntStateOf(0) }
