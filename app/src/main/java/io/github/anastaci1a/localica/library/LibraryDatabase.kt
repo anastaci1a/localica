@@ -256,4 +256,4 @@ private fun List<TrackInFolder>.canonicalTracks(): List<Track> =
         Track(location.uri, record.title, record.artist, record.album, record.durationMs, record.fileName,
             location.relativePath, record.id, record.albumArtist, record.trackNumber, record.discNumber, record.year,
             record.genre, record.comment, locations, record.composer, record.lyricist, record.modifiedAt, record.addedAt)
-    }.sortedWith(trackOrder)
+    }.inCanonicalOrder()
