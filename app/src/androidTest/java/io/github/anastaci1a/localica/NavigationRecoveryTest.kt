@@ -1,5 +1,6 @@
 package io.github.anastaci1a.localica
 
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -85,8 +86,8 @@ class NavigationRecoveryTest {
                 BrowseRoute(MainTab.Queues, MediaRef(MediaKind.Queue, "current-queue"), key = "queue-root")))))
         restoration.setContent {
             roots.forEachIndexed { index, root ->
-                val state = rememberSaveable(stateSaver = Saver<NavigationState, String>(
-                    save = { "{broken" }, restore = { NavigationCodec.decodeOrNull(it) })) {
+                val state = rememberSaveable(saver = Saver<MutableState<NavigationState>, String>(
+                    save = { "{broken" }, restore = { NavigationCodec.decodeOrNull(it)?.let { state -> mutableStateOf(state) } })) {
                     initializers[index]++
                     mutableStateOf(root)
                 }
