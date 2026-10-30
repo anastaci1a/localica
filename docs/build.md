@@ -34,6 +34,12 @@ Build-report artifacts include raw JVM XML under `jvm-xml/<run>/testDebugUnitTes
 
 Select the API 26 or 36 emulator explicitly with `ANDROID_SERIAL`. Match the [emulator configuration](#ci-and-signing). Physical-device review supplements automation. Installable development APK: `app/build/outputs/apk/debug/app-debug.apk`. The production release variant is unsigned. Test-only fixtures never ship in the app. Standalone test-package components cannot rely on the target app classloader: the test APK packages identical bytes from the app’s resolved Kotlin standard library. Its coordinate and SHA256 are retained in `app/build/generated/standalone-test-runtime/binding.txt`. `NavigationStandaloneRuntimeTest` checks linkage in the separate provider process; ordinary instrumentation alone does not cover that path.
 
+### Evidence tooling prerequisites
+
+The [host contract workflow](../.github/workflows/tooling-contracts.yml) runs the Python selection/observer contracts and Node publisher mocks without an Android device. Its pinned Python dependency targets CPython 3.12 on Linux x86-64; use the hash-locked [requirements](../.github/tests/requirements.txt) in an isolated environment. Node 24 installs the publisher dependencies with `npm ci --prefix .github/test-evidence --ignore-scripts --no-audit --no-fund`; the committed lockfile owns their versions. The workflow owns the exact contract commands and records each result, log hash and tested source.
+
+These are evidence-tooling prerequisites, separate from the Gradle/JDK/SDK setup above. The [focused Android setup action](../.github/actions/focused-android-setup/action.yml) prepares hosted native jobs; its runner disk cleanup and KVM configuration are hosted-machine setup, not general local installation instructions. Offline contract passes validate mocks and protocol handling, not Android outcomes or live artifact delivery.
+
 ### Coordinated local and hosted comparison
 
 For the next two final candidates, coordinate equivalent local and GitHub full checks in parallel to measure duration. Freeze the branch while either run is active. Record the full SHA, commands, toolchain/image identities, signing certificate, environment, start/end times, durations, outcomes and artifact hashes.
