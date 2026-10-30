@@ -133,14 +133,20 @@ internal fun ConnectedSelectionHost(modifier: Modifier = Modifier, contentDrawin
                         translate(-origin.x, -origin.y) { drawLayer(contentLayer) }
                     } }
                 }
-                components.forEachIndexed { index, component ->
+                // All passes in this draw use the same normalized component geometry.
+                // Keep it local to the draw so placement and membership remain live.
+                val frames = components.mapIndexed { index, component ->
                     val renderer = groups[index]
                     val groupOrigin = component.first().bounds.topLeft
                     val groupRegions = localLensRegions(component, groupOrigin)
                     val groupPath = renderer.path.path(groupRegions, MediaSelectionGap.toPx())
                     val absolute = origin + groupOrigin
-                    val crop = groupPath.getBounds().translate(absolute).inflate(2f).intersect(Rect(Offset.Zero, size))
-                    if (crop.isEmpty) return@forEachIndexed
+                    SelectionGroupFrame(renderer, groupRegions, groupPath, groupPath.getBounds(), absolute)
+                }
+                frames.forEach { frame ->
+                    val (renderer, groupRegions, groupPath, bounds, absolute) = frame
+                    val crop = bounds.translate(absolute).inflate(2f).intersect(Rect(Offset.Zero, size))
+                    if (crop.isEmpty) return@forEach
                     if (modern) {
                         val at = Offset(floor(crop.left), floor(crop.top))
                         val visible = Size(ceil(crop.right - at.x), ceil(crop.bottom - at.y))
@@ -148,7 +154,7 @@ internal fun ConnectedSelectionHost(modifier: Modifier = Modifier, contentDrawin
                         val sourceOffset = at + host.backdropPosition(view) - (source?.origin ?: Offset.Zero)
                         // Only upload pixels this lens can reach. The ray model's bounded
                         // entry/exit projection is below 2.1 spans, including maximum depth.
-                        val reach = groupPath.getBounds().size.minDimension * 1.05f + 2f
+                        val reach = bounds.size.minDimension * 1.05f + 2f
                         val sampled = if (source == null) Rect.Zero else Rect(sourceOffset, visible).inflate(reach)
                             .intersect(Rect(Offset.Zero, Size(source.size.width.toFloat(), source.size.height.toFloat())))
                             .takeUnless { it.isEmpty } ?: Rect.Zero
@@ -174,7 +180,7 @@ internal fun ConnectedSelectionHost(modifier: Modifier = Modifier, contentDrawin
                         } }
                     } else {
                         renderer.shape.update(groupRegions, groupPath, MediaSelectionGap.toPx())
-                        val shape = renderer.shape.geometry ?: return@forEachIndexed
+                        val shape = renderer.shape.geometry ?: return@forEach
                         val source = backing
                         val image = source?.snapshot
                         if (image != null) translate(absolute.x, absolute.y) { clipPath(groupPath) {
@@ -185,21 +191,21 @@ internal fun ConnectedSelectionHost(modifier: Modifier = Modifier, contentDrawin
                 }
                 if (!modern) {
                     if (recordContent) drawLayer(contentLayer) else this@drawWithContent.drawContent()
-                    components.forEachIndexed { index, component ->
-                        val renderer = groups[index]
-                        val shape = renderer.shape.geometry ?: return@forEachIndexed
-                        val absolute = origin + component.first().bounds.topLeft
-                        val groupPath = renderer.path.path(localLensRegions(component, component.first().bounds.topLeft), MediaSelectionGap.toPx())
+                    frames.forEach { frame ->
+                        val renderer = frame.renderer
+                        val shape = renderer.shape.geometry ?: return@forEach
+                        val absolute = frame.absolute
+                        val groupPath = frame.path
                         translate(absolute.x, absolute.y) { clipPath(groupPath) {
                             with(renderer.mesh) { draw(shape, null, androidx.compose.ui.unit.IntSize.Zero, Offset.Zero, depth,
                                 field = renderer.shape.map?.let { map -> { point -> map.sample(point) } }, fieldKey = renderer.shape.map) }
                         } }
                     }
                 }
-                components.forEachIndexed { index, component ->
-                    val offset = origin + component.first().bounds.topLeft
-                    val groupPath = groups[index].path.path(localLensRegions(component, component.first().bounds.topLeft), MediaSelectionGap.toPx())
-                    translate(offset.x, offset.y) { drawGlassRim(groupPath.getBounds(), (MediaSelectionGap * 1.5f).toPx(), groupPath) }
+                frames.forEach { frame ->
+                    translate(frame.absolute.x, frame.absolute.y) {
+                        drawGlassRim(frame.bounds, (MediaSelectionGap * 1.5f).toPx(), frame.path)
+                    }
                 }
             }
             if (!transitioning) selectedScene() else {
@@ -230,6 +236,9 @@ private class SelectionComponentCache {
         return result
     }
 }
+
+private data class SelectionGroupFrame(val renderer: SelectionGroupRenderer,
+    val regions: List<SelectionRegion>, val path: Path, val bounds: Rect, val absolute: Offset)
 
 private class SelectionGroupRenderer(val output: androidx.compose.ui.graphics.layer.GraphicsLayer) {
     val path = SelectionPathCache()
