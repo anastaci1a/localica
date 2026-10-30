@@ -11,7 +11,7 @@ import org.junit.Test
 @OptIn(ExperimentalCoroutinesApi::class)
 class CollectionLookupRequestTest {
     @Test fun laterRequestWinsEvenWhenCanceledWorkFinishesAfterIt() = runTest {
-        val requests = CollectionLookupRequests()
+        val requests = LatestUiRequest()
         val dispatcher = StandardTestDispatcher(testScheduler)
         val oldStarted = CompletableDeferred<Unit>()
         val releaseOld = CompletableDeferred<Unit>()
@@ -28,7 +28,7 @@ class CollectionLookupRequestTest {
         assertEquals(listOf("new"), published)
     }
     @Test fun explicitCancellationBeforeDispatchDoesNotEvaluateOrPublish() = runTest {
-        val requests = CollectionLookupRequests()
+        val requests = LatestUiRequest()
         var evaluated = false
         var published = false
         requests.submit(this, StandardTestDispatcher(testScheduler), { true }, { evaluated = true; "value" }, { published = true })
@@ -37,7 +37,7 @@ class CollectionLookupRequestTest {
     }
     @Test fun dismissalOrSourceReplacementRejectsAnOtherwiseSuccessfulCompletion() = runTest {
         for (reason in listOf("dismissal", "source", "route", "occurrence")) {
-            val requests = CollectionLookupRequests()
+            val requests = LatestUiRequest()
             val release = CompletableDeferred<Unit>()
             var owner = Any()
             val requestedOwner = owner
@@ -49,7 +49,7 @@ class CollectionLookupRequestTest {
     }
     @Test fun parentDisposalAndExplicitCancellationRejectNonCooperativeLateResults() = runTest {
         for (dispose in listOf(false, true)) {
-            val requests = CollectionLookupRequests()
+            val requests = LatestUiRequest()
             val parent = Job(coroutineContext[Job])
             val scope = CoroutineScope(coroutineContext + parent)
             val release = CompletableDeferred<Unit>()
@@ -64,7 +64,7 @@ class CollectionLookupRequestTest {
         }
     }
     @Test fun noMatchIsSilentAndAnAcceptedOwnerPublishesOnlyOnce() = runTest {
-        val requests = CollectionLookupRequests()
+        val requests = LatestUiRequest()
         val published = mutableListOf<String>()
         val dispatcher = StandardTestDispatcher(testScheduler)
         requests.submit<String>(this, dispatcher, { true }, { null }, published::add)
@@ -79,7 +79,7 @@ class CollectionLookupRequestTest {
         val parent = SupervisorJob(coroutineContext[Job])
         val scope = CoroutineScope(coroutineContext + parent + CoroutineExceptionHandler { _, error -> received += error })
         var published = false
-        CollectionLookupRequests().submit<String>(scope, StandardTestDispatcher(testScheduler), { true }, { throw failure }, { published = true })
+        LatestUiRequest().submit<String>(scope, StandardTestDispatcher(testScheduler), { true }, { throw failure }, { published = true })
         advanceUntilIdle()
         assertEquals(1, received.size)
         val forwarded = received.single()
