@@ -1,7 +1,7 @@
-name: Audit IME closing observation (not release)
+name: Audit cover decode (not release)
 'on':
   push:
-    branches: [dev/audit-ime-closing-observation-20261030]
+    branches: [dev/audit-cover-decode-gate-20261030]
 permissions:
   contents: read
 jobs:
@@ -27,12 +27,12 @@ jobs:
             display: compact
     env:
       TEST_API: ${{ matrix.api }}
-      SELECTORS: io.github.anastaci1a.localica.ImeClosingObservationTest,io.github.anastaci1a.localica.ListSearchTest,io.github.anastaci1a.localica.ScopedSearchHistoryTest,io.github.anastaci1a.localica.SearchImeMotionTest,io.github.anastaci1a.localica.SearchImeHandoffObservationTest,io.github.anastaci1a.localica.TextEditingNativeImeTest,io.github.anastaci1a.localica.SearchHistoryTest
+      SELECTORS: io.github.anastaci1a.localica.CoverDecodeTest,io.github.anastaci1a.localica.CoverImagesTest,io.github.anastaci1a.localica.ArtworkCropTest,io.github.anastaci1a.localica.ArtworkCropLoadingTest,io.github.anastaci1a.localica.ArtworkReviewReadinessTest,io.github.anastaci1a.localica.ImageChooserTest,io.github.anastaci1a.localica.ArtworkGrantsTest,io.github.anastaci1a.localica.ArtworkEditRestorationTest,io.github.anastaci1a.localica.PlaylistArtworkRestorationTest,io.github.anastaci1a.localica.TagEditorThemeInheritanceTest,io.github.anastaci1a.localica.ImeClosingObservationTest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - uses: ./.github/actions/focused-android-setup
       - name: Compile instrumentation and verify focused JVM contracts
-        run: ./gradlew testDebugUnitTest --tests io.github.anastaci1a.localica.ui.SearchImeWindowPolicyTest --tests io.github.anastaci1a.localica.ui.SearchMorphMotionTest --tests io.github.anastaci1a.localica.ui.SearchSlotVacancyTest assembleDebug assembleDebugAndroidTest --no-daemon --max-workers=2
+        run: ./gradlew testDebugUnitTest --tests io.github.anastaci1a.localica.editing.ArtworkGrantsTest assembleDebug assembleDebugAndroidTest --no-daemon --max-workers=2
       - uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
         with:
           api-level: ${{ matrix.api }}
@@ -55,7 +55,7 @@ jobs:
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
-          name: audit-ime-closing-observation-api-${{ matrix.api }}
+          name: audit-cover-decode-gate-api-${{ matrix.api }}
           path: |
             app/build/reports/
             app/build/test-results/
