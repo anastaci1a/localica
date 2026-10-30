@@ -3,6 +3,7 @@ package io.github.anastaci1a.localica.navigation
 import io.github.anastaci1a.localica.library.enumValue
 import io.github.anastaci1a.localica.library.enumNameOrNull
 import android.content.Context
+import org.json.JSONException
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -71,6 +72,18 @@ object NavigationCodec {
             }) } })
         } })
     }.toString()
+    /** Reject an unusable saved-instance snapshot; the owning Saver supplies its fresh state. */
+    fun decodeOrNull(text: String): NavigationState? = try {
+        decode(text).takeIf { state ->
+            state.active in state.stacks && state.stacks.values.all { it.isNotEmpty() } &&
+                state.history.all { it in state.stacks }
+        }
+    } catch (_: JSONException) {
+        null
+    } catch (_: IllegalArgumentException) {
+        null
+    }
+
     fun decode(text: String): NavigationState = JSONObject(text).run {
         val stacksJson = getJSONObject("stacks")
         val stacks = stacksJson.keys().asSequence().associate { key ->

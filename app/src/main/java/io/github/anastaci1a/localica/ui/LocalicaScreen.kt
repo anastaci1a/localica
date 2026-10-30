@@ -71,7 +71,7 @@ fun LocalicaScreen(
     var pins by remember { mutableStateOf(pinPreferences.read()) }
     fun pin(ref: MediaRef) { pins = PinEdits.toggle(pins, ref); pinPreferences.write(pins) }
     var navigation by rememberSaveable(stateSaver = androidx.compose.runtime.saveable.Saver<NavigationState, String>(
-        save = { NavigationCodec.encode(it) }, restore = { NavigationCodec.decode(it).reconcile(settings.tabs) })) {
+        save = { NavigationCodec.encode(it) }, restore = { NavigationCodec.decodeOrNull(it)?.reconcile(settings.tabs) })) {
         mutableStateOf(NavigationState.fresh(settings.tabs))
     }
     // Count and item keys both read the same live snapshot. A captured List in the
