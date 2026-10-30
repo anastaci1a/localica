@@ -28,7 +28,7 @@ class ImeClosingObservationTest {
         val publications = mutableListOf<Boolean>()
         var observed = false
         compose.setContent {
-            val closing by rememberImeClosing(ime, source, target, Density(1f))
+            val closing = rememberImeClosing(ime, source, target, Density(1f)).value
             SideEffect { observed = closing; publications += closing }
         }
         compose.waitForIdle()
@@ -78,7 +78,7 @@ class ImeClosingObservationTest {
             override fun getBottom(density: Density) = if (density.density > 1f) 100 else 0
         }
         compose.setContent {
-            val closing by rememberImeClosing(ime, source, target, density)
+            val closing = rememberImeClosing(ime, source, target, density).value
             SideEffect { observed = closing; publications++ }
         }
         compose.runOnIdle { assertTrue(observed); ime = newIme }
