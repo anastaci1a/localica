@@ -1171,9 +1171,11 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     addingSong?.let { song -> AddToPlaylistDialog(listOf(song), playlists, playlistController, { addingSong = null }, { addingSong = null }) }
     info?.let { request -> TagEditorPresentationScope(request.presentation) {
     val song = request.track
-    SongInformation(song, { info = null }, folders = library.snapshot.folders) { action ->
-        collectionItemForTrack(action, song, library.snapshot, playlists.playlists, sorts)
-            ?.let { info = null; onOpen(it) }
+    val collectionLookup = rememberCollectionLookup(library.snapshot, playlists.playlists, sorts, queryDispatcher) { item ->
+        info = null; onOpen(item)
+    }
+    SongInformation(song, { collectionLookup.cancel(); info = null }, folders = library.snapshot.folders) { action ->
+        collectionLookup.open(action, song) { info === request }
     } } }
     if (sorting) CompositionLocalProvider(LocalGlassOrigin provides sortOrigin) { sortingPanel(initialView = presentationOnly) }
 }

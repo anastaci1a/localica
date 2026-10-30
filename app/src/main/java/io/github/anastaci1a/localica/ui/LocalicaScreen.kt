@@ -177,7 +177,10 @@ fun LocalicaScreen(
         queueOpen = false; expanded = false; songInfo = false
         navigationScope.launch { queueProgress.animateTo(0f, androidx.compose.animation.core.tween(settings.motionDuration(400))) }
     }
+    val livePlayerOccurrence by rememberUpdatedState(queues.library.activeId to queues.library.active?.currentEntryId)
+    val playerCollectionLookup = rememberCollectionLookup(library.snapshot, playlist.playlists, browseSorts, onOpen = ::openCollection)
     fun playerAction(action: PlayerAction, editTags: ((List<Track>, (Boolean) -> Unit) -> Unit)? = null) {
+        playerCollectionLookup.cancel()
         val track = indexedTrack ?: return
         when (action) {
             PlayerAction.Info, PlayerAction.Count -> songInfo = true
@@ -192,8 +195,16 @@ fun LocalicaScreen(
             PlayerAction.ForwardTen -> onSeek(playback.positionMs + 10000)
             PlayerAction.More -> playerMore = true
             else -> {
-                val item = collectionItemForTrack(action, track, library.snapshot, playlist.playlists, browseSorts)
-                if (item != null) openCollection(item)
+                val routeKey = navigation.route.key
+                val occurrence = livePlayerOccurrence
+                val informationOpen = songInfo
+                val playerExpanded = expanded
+                val drawerOpen = queueOpen
+                // More intentionally closes before invoking this action; root navigation owns the accepted request.
+                playerCollectionLookup.open(action, track) {
+                    navigation.route.key == routeKey && livePlayerOccurrence == occurrence &&
+                        songInfo == informationOpen && expanded == playerExpanded && queueOpen == drawerOpen
+                }
             }
         }
     }
@@ -421,7 +432,7 @@ fun LocalicaScreen(
     GlassPanelTheme(if (playerVisible) playerLightInk else browseInk == androidx.compose.ui.graphics.Color.White) {
     if (repeatOptions) RepeatOptionsDialog(queues.settings, { repeatOptions = false }) { queueController?.settings(it) }
     if (customizeActions) PlayerActionCustomizer(playerActions, { playerActions = it; actionPreferences.write(it) }, { customizeActions = false }, settings.reducedMotion)
-    if (songInfo && indexedTrack != null) SongInformation(indexedTrack, { songInfo = false }, folders = library.snapshot.folders, onAction = { playerAction(it) })
+    if (songInfo && indexedTrack != null) SongInformation(indexedTrack, { playerCollectionLookup.cancel(); songInfo = false }, folders = library.snapshot.folders, onAction = { playerAction(it) })
     if (viewArt && indexedTrack != null) ArtworkViewer(indexedTrack.uri) { viewArt = false }
     if (addPlaying && indexedTrack != null) AddToPlaylistDialog(listOf(indexedTrack), playlist, playlistController, { addPlaying = false }, { addPlaying = false })
     if (playerMore) GlassDialog({ playerMore = false }, GlassPlacement.Sheet) {
