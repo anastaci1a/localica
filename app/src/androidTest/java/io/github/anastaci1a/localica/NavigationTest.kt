@@ -73,6 +73,13 @@ class NavigationTest {
         compose.onNodeWithContentDescription("Library").performClick()
         compose.onNodeWithText("Songs").performClick()
         compose.scrollToUncoveredItem(hasText("Track 40"))
+        val targetBounds = compose.onNodeWithText("Track 40").fetchSemanticsNode().boundsInRoot
+        val returns = compose.onAllNodesWithTag("floating-return-control").fetchSemanticsNodes()
+        assertTrue("The scrolled list must expose its return control", returns.isNotEmpty())
+        returns.forEach { control ->
+            assertTrue("The target must be above the floating return control", targetBounds.bottom <= control.boundsInRoot.top)
+        }
+        android.util.Log.i("NavigationTapClearance", "target=$targetBounds returns=${returns.map { it.boundsInRoot }}")
         compose.onNodeWithText("Track 40").performClick()
         compose.runOnIdle { assertEquals(tracks.last(), selected) }
         compose.onNodeWithContentDescription("More").performClick()
