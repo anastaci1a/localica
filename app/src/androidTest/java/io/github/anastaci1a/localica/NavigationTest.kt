@@ -74,7 +74,33 @@ class NavigationTest {
         compose.onNodeWithText("Songs").performClick()
         compose.scrollToUncoveredItem(hasText("Track 40"))
         compose.onNodeWithText("Track 40").performClick()
-        compose.runOnIdle { assertEquals(tracks.last(), selected) }
+        try {
+            compose.runOnIdle { assertEquals(tracks.last(), selected) }
+        } catch (failure: AssertionError) {
+            fun retain(block: () -> Unit) {
+                try { block() } catch (diagnosticFailure: Throwable) {
+                    if (diagnosticFailure !== failure) failure.addSuppressed(diagnosticFailure)
+                }
+            }
+            retain {
+                val instrumentation = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation()
+                val directory = nativeEvidenceDirectory("navigation-click-failure", instrumentation.targetContext.cacheDir)
+                java.io.File(directory, "selection.txt").writeText("expected=track:40 selected=$selected\n")
+                for (unmerged in listOf(false, true)) retain {
+                    java.io.File(directory, "semantics-$unmerged.txt").writeText(
+                        compose.onAllNodes(isRoot(), useUnmergedTree = unmerged).printToString(maxDepth = Int.MAX_VALUE))
+                }
+                retain {
+                    val screenshot = requireNotNull(instrumentation.uiAutomation.takeScreenshot())
+                    try {
+                        java.io.File(directory, "screen.png").outputStream().use {
+                            check(screenshot.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it))
+                        }
+                    } finally { screenshot.recycle() }
+                }
+            }
+            throw failure
+        }
         compose.onNodeWithContentDescription("More").performClick()
         compose.onNodeWithText("Settings").performClick()
         val librarySettings = compose.onNodeWithText("Library and tags")
