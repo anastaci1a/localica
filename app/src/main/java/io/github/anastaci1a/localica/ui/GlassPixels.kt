@@ -7,13 +7,23 @@ import androidx.compose.ui.graphics.asAndroidBitmap
 /** Owned software pixels. Callers retain their distinct alpha/filter policies. */
 internal class GlassPixels(val width: Int, val height: Int, val pixels: IntArray)
 
-/** Copy before reading or scaling: the input can be hardware-backed or shared.
- * Only these temporary copies are retired; the caller's image is never recycled. */
-internal fun readGlassPixels(image: ImageBitmap, scale: Int): GlassPixels {
+/** Read eligible immutable full-scale sRGB pixels into an owned array; normalize other inputs before sampling.
+ * Only temporary copies are retired; the caller's image is never recycled.
+ * The caller keeps input lifetime and metadata stable throughout the read.
+ * [onSoftwareCopy] reports the normalization copy's allocationByteCount, not total/unique native memory. */
+internal fun readGlassPixels(image: ImageBitmap, scale: Int, onSoftwareCopy: ((Int) -> Unit)? = null): GlassPixels {
     require(scale > 0)
-    val original = checkNotNull(image.asAndroidBitmap().copy(Bitmap.Config.ARGB_8888, false))
+    val input = image.asAndroidBitmap()
+    if (scale == 1 && input.config == Bitmap.Config.ARGB_8888 && !input.isMutable &&
+        input.isPremultiplied && input.colorSpace?.isSrgb == true) {
+        val pixels = IntArray(input.width * input.height)
+        input.getPixels(pixels, 0, input.width, 0, 0, input.width, input.height)
+        return GlassPixels(input.width, input.height, pixels)
+    }
+    val original = checkNotNull(input.copy(Bitmap.Config.ARGB_8888, false))
     var small: Bitmap? = null
     try {
+        onSoftwareCopy?.invoke(original.allocationByteCount)
         val width = (original.width / scale).coerceAtLeast(1)
         val height = (original.height / scale).coerceAtLeast(1)
         val sampled = Bitmap.createScaledBitmap(original, width, height, true)
