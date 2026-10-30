@@ -57,6 +57,7 @@ fun LocalicaScreen(
     scannerRequest: Int = 0,
     onRetryPlayback: () -> Unit = onToggle,
     onSeekRequest: ((Long, String?) -> Long)? = null,
+    playbackSample: (() -> PlaybackState)? = null,
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val session: SessionSelection = androidx.lifecycle.viewmodel.compose.viewModel()
@@ -190,8 +191,8 @@ fun LocalicaScreen(
             PlayerAction.Pin -> pin(MediaRef(MediaKind.Song, track.id))
             PlayerAction.Shuffle -> queueController?.shuffle()
             PlayerAction.Repeat -> queueController?.repeat()
-            PlayerAction.BackTen -> onSeek((playback.positionMs - 10000).coerceAtLeast(0))
-            PlayerAction.ForwardTen -> onSeek(playback.positionMs + 10000)
+            PlayerAction.BackTen -> onSeek(((playbackSample?.invoke() ?: playback).positionMs - 10000).coerceAtLeast(0))
+            PlayerAction.ForwardTen -> onSeek((playbackSample?.invoke() ?: playback).positionMs + 10000)
             PlayerAction.More -> playerMore = true
             else -> {
                 val routeKey = navigation.route.key
@@ -207,10 +208,10 @@ fun LocalicaScreen(
             }
         }
     }
-    val player = if (currentTrack != null && currentTrack.id != playback.trackId) playback.copy(
-        trackId = currentTrack.id, trackUri = currentTrack.uri, title = currentTrack.title, artist = currentTrack.artist,
-        albumArtist = currentTrack.albumArtist, album = currentTrack.album, fileName = currentTrack.fileName,
-        durationMs = currentTrack.durationMs, positionMs = 0) else playback
+    val player = playerDisplayState(playback, currentTrack)
+    val playerSample = remember(playbackSample, currentTrack) {
+        playbackSample?.let { sample -> { playerDisplayState(sample(), currentTrack) } }
+    }
     val hasPlayer = currentTrack != null || playback.trackUri != null
     LaunchedEffect(hasPlayer) { if (!hasPlayer) { expanded = false; queueOpen = false; progress.snapTo(0f) } }
     val dragHost = remember { SongDragHost() }
@@ -366,7 +367,7 @@ fun LocalicaScreen(
             onToggle, onSeek, onPrevious, onNext, ::openQueue, { expanded = false },
             lyricsOpen, { lyricsOpen = it }, playerTracks.lyrics,
             { settings = it; preferences.write(it) }, actionRows = if (playerActions.twoRows) 2 else 1, queueProgress = queueProgress, frostedBackdrop = playerBackdrop, glassBackdrop = browseBackdrop, visual = playerVisual,
-            onSeekRequest = onSeekRequest, backgroundPolarity = playerBackgroundPolarity, artworkVisit = journey?.current?.token, previousArtwork = previousArtwork, nextArtwork = nextArtwork,
+            onSeekRequest = onSeekRequest, sampleState = playerSample, backgroundPolarity = playerBackgroundPolarity, artworkVisit = journey?.current?.token, previousArtwork = previousArtwork, nextArtwork = nextArtwork,
             bottomChrome = bottomChrome, miniForeground = miniInk, onArtworkVisit = queueController?.let { controller -> { token, complete -> controller.swipeTo(token, complete) } }) {
             val editTags = presentedTagEdit()
             PlayerActionStrip(playerActions, { action -> when (action) {

@@ -57,7 +57,9 @@ class MainActivity : ComponentActivity() {
                     io.github.anastaci1a.localica.navigation.InterfacePreferences(this).read().glass.renderer)
             }
             val library by model.library.collectAsStateWithLifecycle()
-            val playback by model.playback.state.collectAsStateWithLifecycle()
+            val playbackSamples = model.playback.state.collectAsStateWithLifecycle()
+            val playbackObservation = io.github.anastaci1a.localica.ui.rememberPlaybackObservation(playbackSamples)
+            val playback by playbackObservation.screen
             val queues by model.playback.queues.state.collectAsStateWithLifecycle()
             val playlist by model.playlist.collectAsStateWithLifecycle()
             val picker = rememberLauncherForActivityResult(LocalFolderPicker()) { uri ->
@@ -75,7 +77,7 @@ class MainActivity : ComponentActivity() {
                     onPrevious = model.playback::previous, onNext = model.playback::next,
                     playlist = playlist, playlistController = model.playlists,
                     onScanAll = model::scanAll, onQuickScan = model::scanNewFiles, scannerRequest = scannerRequest, onRetryPlayback = model.playback::retry,
-                    onSeekRequest = model.playback::requestSeek)
+                    onSeekRequest = model.playback::requestSeek, playbackSample = playbackObservation.sample)
                 }
             }
             }
