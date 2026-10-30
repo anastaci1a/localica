@@ -35,17 +35,16 @@ private object ToneImages {
     suspend fun get(image: ImageBitmap, tone: GlassTone): ImageBitmap = mutex.withLock {
         val key = Key(image, tone)
         images.get(key)?.let { return@withLock it }
-        val original = image.asAndroidBitmap().copy(Bitmap.Config.ARGB_8888, false)
-        val pixels = IntArray(original.width * original.height)
-        original.getPixels(pixels, 0, original.width, 0, 0, original.width, original.height)
+        val source = readGlassPixels(image, 1)
+        val pixels = source.pixels
         val lut = IntArray(256) { tone.byteChannel(it) }
         for (i in pixels.indices) {
             val c = pixels[i]
             pixels[i] = (c and -0x1000000) or (lut[c ushr 16 and 255] shl 16) or
                 (lut[c ushr 8 and 255] shl 8) or lut[c and 255]
         }
-        Bitmap.createBitmap(pixels, original.width, original.height, Bitmap.Config.ARGB_8888)
-            .asImageBitmap().also { original.recycle(); images.put(key, it) }
+        Bitmap.createBitmap(pixels, source.width, source.height, Bitmap.Config.ARGB_8888)
+            .asImageBitmap().also { images.put(key, it) }
     }
 }
 
