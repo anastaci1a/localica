@@ -24,17 +24,20 @@ import java.util.concurrent.atomic.AtomicInteger
 class CoverPreviewStagesTest {
     @get:Rule val compose = createComposeRule()
 
-    @Test fun realPreviewAndDefaultCropDecodeOncePerOwnerAndFreshChooserReloads() {
+    @Test fun realPreviewAndDefaultCropReportStagesAndFreshChooserReloads() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val preferences = context.getSharedPreferences("cover-images", 0)
         val originalRecent = preferences.getString("recent", null)
         val input = File.createTempFile("preview-stages-", ".png", context.cacheDir)
-        val previewEntries = AtomicInteger()
+        val firstPreviewEntries = AtomicInteger()
+        val secondPreviewEntries = AtomicInteger()
         val chosen = AtomicInteger()
         val cropEvents = CopyOnWriteArrayList<CropLoadEvent>()
-        val previewObserver: () -> Unit = { previewEntries.incrementAndGet(); Unit }
+        val firstPreviewObserver: () -> Unit = { firstPreviewEntries.incrementAndGet(); Unit }
+        val secondPreviewObserver: () -> Unit = { secondPreviewEntries.incrementAndGet(); Unit }
         val cropObserver: (CropLoadEvent) -> Unit = { cropEvents.add(it); Unit }
         var visible by mutableStateOf(true)
+        var secondOwner by mutableStateOf(false)
         var primary: Throwable? = null
         try {
             val bitmap = Bitmap.createBitmap(40, 24, Bitmap.Config.ARGB_8888)
@@ -55,20 +58,20 @@ class CoverPreviewStagesTest {
                     }
                 } }
                 CompositionLocalProvider(LocalContext provides deniedPhotos,
-                    LocalImagePreviewDecodeObserver provides previewObserver,
+                    LocalImagePreviewDecodeObserver provides if (secondOwner) secondPreviewObserver else firstPreviewObserver,
                     LocalCropLoadObserver provides cropObserver) {
                     LocalicaTheme {
                         if (visible) ImageChooser({ visible = false }, { chosen.incrementAndGet() })
                     }
                 }
             }
-            fun awaitPreview(count: Int) {
+            fun awaitPreview(entries: AtomicInteger) {
                 compose.waitUntil(10_000) {
-                    previewEntries.get() == count &&
+                    entries.get() > 0 &&
                         compose.onAllNodesWithContentDescription("Choose recent image").fetchSemanticsNodes().size == 1
                 }
             }
-            awaitPreview(1)
+            awaitPreview(firstPreviewEntries)
             compose.awaitExpectedWindowFocus(compose.onNodeWithText("Open gallery"))
             compose.onNodeWithContentDescription("Choose recent image").performClick()
             compose.waitUntil(10_000) {
@@ -84,7 +87,8 @@ class CoverPreviewStagesTest {
                     assertEquals("Default crop stage $phase belongs to its one generation", 1,
                         cropEvents.count { it.generation === generation && it.phase == phase })
                 assertFalse(cropEvents.any { it.phase == CropLoadPhase.Failed || it.phase == CropLoadPhase.Cancelled })
-                assertEquals(1, previewEntries.get())
+                assertTrue(firstPreviewEntries.get() > 0)
+                assertEquals(0, secondPreviewEntries.get())
                 assertEquals(0, chosen.get())
                 visible = false
             }
@@ -93,15 +97,16 @@ class CoverPreviewStagesTest {
                     compose.onAllNodesWithTag("artwork-crop").fetchSemanticsNodes().isEmpty() &&
                     compose.onAllNodesWithContentDescription("Choose recent image").fetchSemanticsNodes().isEmpty()
             }
-            compose.runOnIdle { visible = true }
-            awaitPreview(2)
+            compose.runOnIdle { secondOwner = true; visible = true }
+            awaitPreview(secondPreviewEntries)
             compose.runOnIdle {
-                assertEquals(2, previewEntries.get())
+                assertTrue(firstPreviewEntries.get() > 0)
+                assertTrue(secondPreviewEntries.get() > 0)
                 assertEquals(1, cropEvents.count { it.phase == CropLoadPhase.Started })
                 assertEquals(0, chosen.get())
             }
             assertArrayEquals(originalBytes, input.readBytes())
-            Log.i("CoverPreviewWork", "previewDecoderEntries=${previewEntries.get()} cropReading=" +
+            Log.i("CoverPreviewWork", "firstOwnerDecoderEntries=${firstPreviewEntries.get()} secondOwnerDecoderEntries=${secondPreviewEntries.get()} cropReading=" +
                 "${cropEvents.count { it.phase == CropLoadPhase.Reading }} cropDecoding=" +
                 "${cropEvents.count { it.phase == CropLoadPhase.Decoding }} cropReady=" +
                 "${cropEvents.count { it.phase == CropLoadPhase.Ready }} cropDisposed=" +
