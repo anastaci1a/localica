@@ -58,7 +58,6 @@ dependencies {
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.ui)
     implementation(libs.compose.material)
-    implementation(libs.compose.preview)
     debugImplementation(libs.compose.tooling)
     implementation(libs.room.runtime)
     implementation(libs.room.ktx)
