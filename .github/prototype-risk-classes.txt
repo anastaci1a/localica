@@ -246,3 +246,4 @@ io.github.anastaci1a.localica.ArtworkWashBorderTest
 io.github.anastaci1a.localica.FloatingImeLifecycleTest
 io.github.anastaci1a.localica.TextEditingNativeImeTest
 io.github.anastaci1a.localica.BrowseOptionsFaceContractTest
+io.github.anastaci1a.localica.PlayerTrackProjectionTest
