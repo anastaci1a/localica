@@ -2,6 +2,7 @@ package io.github.anastaci1a.localica
 
 import android.os.Looper
 import androidx.compose.runtime.*
+import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import io.github.anastaci1a.localica.browse.BrowseSortSnapshot
 import io.github.anastaci1a.localica.library.*
@@ -104,4 +105,30 @@ class CollectionLookupLifecycleTest {
             assertTrue(job.isCancelled); assertEquals(0, tracks.mainReads.get())
         } finally { tracks.release.countDown() }
     }
+    @Test fun acceptedInformationLinkSurvivesItsOwnDismissal() {
+        val tracks = HeldTracks(List(500, ::track))
+        val snapshot = LibrarySnapshot(tracks = tracks)
+        var shown by mutableStateOf(true)
+        var opened = 0
+        var actionSawClosedDialog = false
+        var job: Job? = null
+        compose.setContent {
+            LocalicaTheme {
+                val lookup = rememberCollectionLookup(snapshot, emptyList(), BrowseSortSnapshot.Default) { opened++ }
+                if (shown) SongInformation(tracks.values[0], { lookup.cancel(); shown = false }) { action ->
+                    actionSawClosedDialog = !shown
+                    job = lookup.open(action, tracks.values[0]) { !shown }
+                }
+            }
+        }
+        try {
+            compose.onNodeWithTag("song-information-Album").performScrollTo().performClick()
+            assertTrue(tracks.started.await(5, TimeUnit.SECONDS))
+            compose.runOnIdle { assertTrue(actionSawClosedDialog); assertFalse(shown) }
+            tracks.release.countDown(); await(requireNotNull(job))
+            compose.runOnIdle { assertEquals(1, opened) }
+            assertEquals(0, tracks.mainReads.get())
+        } finally { tracks.release.countDown() }
+    }
+
 }
