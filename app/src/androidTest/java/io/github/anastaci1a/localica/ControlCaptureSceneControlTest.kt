@@ -19,68 +19,12 @@ import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
 
-/** Two frozen physical positions and a separate lit software oracle; no causal waiver. */
+/** Two continuously retained coincident owners and a separate lit software oracle. */
 class ControlCaptureSceneControlTest {
     @get:Rule val compose = createComposeRule()
 
-    @Test fun frozenScenesMatchAcrossVerticalPositionsContentExtentFadeRestAndReactivation() {
-        var stage by mutableIntStateOf(0)
-        var captures = 0
-        var referenceCaptures = 0
-        var draws = 0
-        val runtime = GlassRendererRuntime(GlassRendererMode.Legacy)
-        compose.setContent {
-            CompositionLocalProvider(LocalDensity provides Density(1f), LocalGlassRendererRuntime provides runtime) {
-                Column {
-                    // The same closures feed frozen scenes in the original two physical positions.
-                    val geometry: androidx.compose.ui.graphics.drawscope.DrawScope.() -> LensGeometry = {
-                        LensGeometry(Rect(24f, 12f, if (stage == 3) 92f else 88f, 52f), 20f)
-                    }
-                    val active = { when (stage) { 0, 6 -> 0f; 4 -> .4f; else -> 1f } }
-                    val body = { GlassShape(depth = if (stage == 4) -.08f else 0f) }
-                    val scene: androidx.compose.ui.graphics.drawscope.DrawScope.() -> Unit = {
-                        if (stage != 2) drawRect(if (stage % 2 == 0) Color.Red else Color.Blue,
-                            topLeft = Offset(0f, 22f), size = Size(120f, 12f))
-                    }
-                    Box(Modifier.size(120.dp, 64.dp).background(Color.White)) {
-                        CompositionLocalProvider(LocalOriginalControlLensDraw provides { draws++ }) {
-                            OriginalControlCaptureScene(Modifier.fillMaxSize().testTag("candidate"), source = null,
-                                geometry = geometry, body = body, active = active,
-                                onCapture = { captures++ }, scene = scene)
-                        }
-                    }
-                    Box(Modifier.size(120.dp, 64.dp).background(Color.White)) {
-                        OriginalControlCaptureScene(Modifier.fillMaxSize().testTag("reference"), source = null,
-                            geometry = geometry, body = body, active = active,
-                            onCapture = { referenceCaptures++ }, scene = scene)
-                    }
-                }
-            }
-        }
-        var stableCaptures = 0
-        var stableDraws = 0
-        var stableReferences = 0
-        for (next in 0..7) {
-            compose.runOnIdle { stage = next }
-            val actual = compose.onNodeWithTag("candidate").captureToImage()
-            val reference = compose.onNodeWithTag("reference").captureToImage()
-            equalPixels(actual, reference, "stage $next")
-            compose.runOnIdle {
-                when (next) {
-                    0 -> assertEquals(0, captures)
-                    1 -> { assertTrue(draws > 0); stableCaptures = captures; stableDraws = draws; stableReferences = referenceCaptures }
-                    2 -> {
-                        assertTrue(draws > stableDraws)
-                        assertTrue(referenceCaptures > stableReferences)
-                        assertTrue("Frozen actual slot retains fresh capture", captures > stableCaptures)
-                    }
-                    3 -> assertTrue("Extent change allocates", captures > stableCaptures)
-                    6 -> { stableCaptures = captures; stableDraws = draws }
-                    7 -> { assertTrue("Reactivation draws", draws > stableDraws); assertTrue("Reactivation owns a fresh capture", captures > stableCaptures) }
-                }
-                android.util.Log.i("ControlCaptureWork", "control=frozen-spatial stage=$next api=${Build.VERSION.SDK_INT} captures=$captures referenceCaptures=$referenceCaptures draws=$draws")
-            }
-        }
+    @Test fun frozenScenesMatchAtCoincidentPositionAcrossContentExtentFadeRestAndReactivation() {
+        exerciseCoincidentControlScenes(compose, frozenActual = true)
     }
 
     @Test fun litMutableMeshMatchesFrozenPixelsAndKeepsEarlierOutputIndependent() {
