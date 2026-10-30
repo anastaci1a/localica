@@ -1,7 +1,7 @@
-name: Audit empty Home preparation (not release)
+name: Audit Home return policy diagnostic (not release)
 'on':
   push:
-    branches: [dev/audit-empty-home-catalog-20261030]
+    branches: [test/audit-home-return-policy-diagnostic-20261030]
 permissions:
   contents: read
 jobs:
@@ -15,11 +15,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - api: 26
-            target: google_apis
-            gpu: swiftshader_indirect
-            disable_animations: true
-            display: reset
           - api: 36
             target: default
             gpu: lavapipe
@@ -27,11 +22,11 @@ jobs:
             display: compact
     env:
       TEST_API: ${{ matrix.api }}
-      SELECTORS: io.github.anastaci1a.localica.PinnedHomePreparationTest,io.github.anastaci1a.localica.HomeSelectionTest
+      SELECTORS: io.github.anastaci1a.localica.HomeSelectionTest#scrolledHomeReturnHidesForInactivePlayerAndSelectionOwnership
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - uses: ./.github/actions/focused-android-setup
-      - name: Compile Home preparation and selection contracts
+      - name: Compile unchanged Home return assertion with policy diagnostics
         run: ./gradlew assembleDebug assembleDebugAndroidTest --no-daemon --max-workers=2
       - uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
         with:
@@ -55,7 +50,7 @@ jobs:
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
-          name: audit-empty-home-catalog-api-${{ matrix.api }}
+          name: audit-home-return-policy-diagnostic-api-${{ matrix.api }}
           path: |
             app/build/reports/
             app/build/test-results/

@@ -190,7 +190,12 @@ class HomeSelectionTest {
         val session = SessionSelection()
         var active by mutableStateOf(true)
         var playerOpen by mutableStateOf(false)
+        val committedPolicy = java.util.concurrent.atomic.AtomicReference<Pair<Boolean, Boolean>?>(null)
+        val policyCommits = java.util.concurrent.atomic.AtomicInteger()
         compose.setContent { LocalicaTheme {
+            val composedActive = active
+            val composedPlayerOpen = playerOpen
+            SideEffect { committedPolicy.set(composedActive to composedPlayerOpen); policyCommits.incrementAndGet() }
             CompositionLocalProvider(LocalSessionSelection provides session) {
                 Box(Modifier.size(320.dp, 240.dp)) {
                     PinnedHome(LibraryUiState(snapshot, loading = false), PlaylistState(loading = false), pins,
@@ -207,7 +212,17 @@ class HomeSelectionTest {
         assertTrue(before > 0f)
         compose.onNodeWithContentDescription("Return to top").assertIsDisplayed()
         compose.runOnIdle { active = false }
-        compose.onNodeWithContentDescription("Return to top").assertDoesNotExist()
+        try {
+            compose.onNodeWithContentDescription("Return to top").assertDoesNotExist()
+        } catch (failure: AssertionError) {
+            val committed = committedPolicy.get()
+            try {
+                android.util.Log.i("HomeReturnPolicy", "requestedActive=false lastCommitted=$committed commits=${policyCommits.get()}")
+            } catch (diagnostic: Throwable) {
+                if (diagnostic !== failure) failure.addSuppressed(diagnostic)
+            }
+            throw failure
+        }
         assertEquals(before, position(), 0f)
         compose.runOnIdle { active = true; playerOpen = true }
         compose.onNodeWithContentDescription("Return to top").assertDoesNotExist()
