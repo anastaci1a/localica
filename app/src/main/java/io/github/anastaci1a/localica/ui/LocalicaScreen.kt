@@ -105,9 +105,12 @@ fun LocalicaScreen(
     WarmBrowsePresentations(presentationCache, library.snapshot, playlist.playlists, queues.library.queues, libraryFilters, warmRoutes, browseSorts,
         libraryLoading = library.loading, playlistsLoading = playlist.loading, queuesLoading = queues.loading)
     val artworkStore = remember { BrowseArtworkStore() }
-    val retainedRoutes = navigation.stacks.values.mapNotNull { it.lastOrNull()?.key }.toMutableSet()
-    var backDestination = navigation
-    repeat(2) { backDestination.back(settings.tabHistory)?.let { backDestination = it; retainedRoutes += it.route.key } }
+    val retainedRoutes = remember(navigation, settings.tabHistory) {
+        val retained = navigation.stacks.values.mapNotNull { it.lastOrNull()?.key }.toMutableSet()
+        var backDestination = navigation
+        repeat(2) { backDestination.back(settings.tabHistory)?.let { backDestination = it; retained += it.route.key } }
+        retained
+    }
     artworkStore.keep(retainedRoutes, navigation.route.key)
     val actionPreferences = remember(context) { PlayerActionPreferences(context) }
     var playerActions by remember { mutableStateOf(actionPreferences.read()) }
