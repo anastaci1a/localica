@@ -84,7 +84,7 @@ class PlayerTrackProjectionTest {
         assertProjection(savedB, savedB.copy(playCount = 0), savedB)
         // Malformed duplicate occurrence/queue identities retain the old first-match rules.
         val duplicates = queue.copy(entries = listOf(QueueEntry("b", savedA), QueueEntry("b", savedB)), currentEntryId = "b")
-        compose.runOnIdle { queues.value = QueueLibrary(listOf(duplicates, queue), queue.id) }
+        compose.runOnIdle { queues.value = QueueLibrary(listOf(duplicates, queue.copy(currentEntryId = "b")), queue.id) }
         assertProjection(savedA, savedA.copy(playCount = 0), savedA)
         compose.runOnIdle { queues.value = QueueLibrary(listOf(queue.copy(currentEntryId = "absent")), queue.id) }
         assertProjection(null, null, null)
