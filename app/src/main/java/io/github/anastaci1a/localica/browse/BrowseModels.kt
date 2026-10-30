@@ -212,24 +212,7 @@ object BrowseQueries {
             else terms.all { it in (item.title + "\n" + item.subtitle.orEmpty()).lowercase(Locale.ROOT) }
         }
         if (kinds == listOf(MediaKind.Song)) return BrowseResult(items, scope(route))
-        fun <T : Comparable<T>> compare(a: T?, b: T?) = compareKnown(a, b, effective.ascending)
-        var comparisons = 0
-        val ordered = items.sortedWith { a, b ->
-            if (comparisons++ % 128 == 0) checkActive()
-            val primary = when (effective.sort) {
-                TrackSort.Count -> compare(a.songs.size, b.songs.size)
-                TrackSort.Duration -> compare(a.duration(), b.duration())
-                TrackSort.Year -> compare(a.songs.mapNotNull { it.track.year }.minOrNull(), b.songs.mapNotNull { it.track.year }.minOrNull())
-                TrackSort.Modified -> compare(a.modifiedAt, b.modifiedAt)
-                TrackSort.Added -> compare(a.addedAt, b.addedAt)
-                TrackSort.MostPlayed -> compare(a.playCount, b.playCount)
-                TrackSort.Artist, TrackSort.AlbumArtist, TrackSort.Composer, TrackSort.Genre ->
-                    compare(a.metadataText(effective.sort)?.lowercase(Locale.ROOT), b.metadataText(effective.sort)?.lowercase(Locale.ROOT))
-                else -> compare(a.title.lowercase(Locale.ROOT), b.title.lowercase(Locale.ROOT))
-            }
-            primary.takeIf { it != 0 } ?: a.title.lowercase(Locale.ROOT).compareTo(b.title.lowercase(Locale.ROOT)).takeIf { it != 0 } ?: a.key.compareTo(b.key)
-        }
-        checkActive()
+        val ordered = orderCollectionItems(items, effective, checkActive)
         return BrowseResult(ordered, scope(route))
     }
 }
