@@ -4,6 +4,7 @@ root="$RUNNER_TEMP/shuffle-compatibility"
 reports="$root/reports"
 package=io.github.anastaci1a.localica.debug
 scripts="$GITHUB_WORKSPACE/.github/compatibility"
+runner=$(python3 "$scripts/instrumentation_runner.py" "$reports/provenance.json")
 # Run inside the emulator action: evidence is captured before its shutdown hook.
 diagnostics() {
   status=$?
@@ -25,7 +26,7 @@ instrument() {
   name=$1; selector=$2; count=$3
   shift 3
   # A hung instrumentation must leave time for EXIT diagnostics before the job deadline.
-  timeout --kill-after=30s 10m adb shell am instrument -w -r -e class "$selector" "$@" "$package.test/androidx.test.runner.AndroidJUnitRunner" > "$reports/$name-instrumentation.txt" 2>&1
+  timeout --kill-after=30s 10m adb shell am instrument -w -r -e class "$selector" "$@" "$package.test/$runner" > "$reports/$name-instrumentation.txt" 2>&1
   cat "$reports/$name-instrumentation.txt"
   python3 "$scripts/check-instrumentation.py" "$reports/$name-instrumentation.txt" "$count"
 }

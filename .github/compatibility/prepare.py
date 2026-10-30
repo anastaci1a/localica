@@ -8,6 +8,7 @@ from pathlib import Path
 import re
 import subprocess
 import tarfile
+from instrumentation_runner import from_source
 
 root = Path(os.environ['GITHUB_WORKSPACE']).resolve()
 sha = os.environ['GITHUB_SHA']
@@ -40,6 +41,7 @@ def files(tree):
 
 baseline = files(source)
 provenance = {'source_sha': sha, 'legacy_source_sha': '755f2ea0f4f2ff8983a32d484ffcd113712c4cac',
+              'instrumentation_runner': from_source((source / build).read_text()),
               'fixtures': files(source / '.github/compatibility'), 'variants': {}}
 for index, phase in enumerate(('seed', 'bridge', 'verify')):
     tree = out / phase
