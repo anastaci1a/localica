@@ -1,7 +1,7 @@
-name: Audit browse and pinch prototype (not release certified)
+name: Audit integration prototype (not release certified)
 'on':
   push:
-    branches: [dev/audit-browse-preparation-20261030]
+    branches: [dev/audit-integration-20261030]
 permissions:
   contents: read
 jobs:
@@ -11,8 +11,8 @@ jobs:
     needs: protocol_contracts
     uses: ./.github/workflows/prototype.yml
     with:
-      affected_classes: io.github.anastaci1a.localica.ArtistAlbumFilterRangeTest,io.github.anastaci1a.localica.BrowseOptionsFaceContractTest,io.github.anastaci1a.localica.BrowsePinchLayersTest,io.github.anastaci1a.localica.QueueBrowsingTest,io.github.anastaci1a.localica.QueueFollowingTest
-      coverage_reason: Shared snapshot lookup, selected playlist/queue projections, retained pinch index reuse and fixture defaults; exact occurrence following and pixel ownership coverage.
+      affected_classes: io.github.anastaci1a.localica.ArtistAlbumFilterRangeTest,io.github.anastaci1a.localica.BrowseOptionsFaceContractTest,io.github.anastaci1a.localica.BrowsePinchLayersTest,io.github.anastaci1a.localica.QueueBrowsingTest,io.github.anastaci1a.localica.QueueFollowingTest,io.github.anastaci1a.localica.PlayerTrackProjectionTest,io.github.anastaci1a.localica.OrderCommitPersistenceTest
+      coverage_reason: Browse/player projection reuse, retained pinch index reuse, order receipt contracts, fixture defaults and candidate-runner compatibility; exact occurrence following, source freshness and pixel ownership coverage.
       known_issues: Development prototype only. No full-suite, release or measured speedup claim. Legacy SnapshotStateObserver issue 475 and phone pinch issue 474 remain unresolved.
     secrets:
       ANDROID_DEBUG_KEYSTORE: ${{ secrets.ANDROID_DEBUG_KEYSTORE }}
