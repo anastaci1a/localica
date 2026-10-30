@@ -114,6 +114,7 @@ class ListBackTest {
         compose.waitUntil(5000) { route.filter == null }
         compose.runOnIdle { assertEquals(0, ordinaryBack) }
         back()
+        compose.waitUntil(5000) { ordinaryBack == 1 }
         compose.runOnIdle { assertEquals(1, ordinaryBack) }
     }
 
@@ -141,6 +142,7 @@ class ListBackTest {
         compose.waitUntil(5000) { position() == 0f }
         compose.runOnIdle { assertEquals(0, ordinaryBack) }
         back()
+        compose.waitUntil(5000) { ordinaryBack == 1 }
         compose.runOnIdle { assertEquals(1, ordinaryBack) }
     }
 
