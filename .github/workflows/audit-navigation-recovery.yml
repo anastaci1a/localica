@@ -1,7 +1,7 @@
 name: Audit navigation click diagnostics (not release)
 'on':
   push:
-    branches: [dev/audit-navigation-click-diagnostic-20261030]
+    branches: [dev/audit-navigation-tap-geometry-20261030]
 permissions:
   contents: read
 jobs:
@@ -50,7 +50,7 @@ jobs:
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
-          name: audit-navigation-click-diagnostic-api-${{ matrix.api }}
+          name: audit-navigation-tap-geometry-api-${{ matrix.api }}
           path: |
             app/build/reports/
             app/build/test-results/

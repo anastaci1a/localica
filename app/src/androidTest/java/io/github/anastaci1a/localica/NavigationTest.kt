@@ -73,7 +73,13 @@ class NavigationTest {
         compose.onNodeWithContentDescription("Library").performClick()
         compose.onNodeWithText("Songs").performClick()
         compose.scrollToUncoveredItem(hasText("Track 40"))
+        // Diagnostic observation only; keep the original click and callback assertion.
+        val targetBounds = compose.onNodeWithText("Track 40").fetchSemanticsNode().boundsInRoot
+        val floatingBounds = compose.onAllNodes(hasTestTag("tab-pill") or hasTestTag("player-surface"))
+            .fetchSemanticsNodes().map { it.boundsInRoot }
+        android.util.Log.i("NavigationTapGeometry", "beforeClick target=$targetBounds center=${targetBounds.center} floating=$floatingBounds selected=$selected")
         compose.onNodeWithText("Track 40").performClick()
+        android.util.Log.i("NavigationTapGeometry", "afterClick selected=$selected")
         try {
             compose.runOnIdle { assertEquals(tracks.last(), selected) }
         } catch (failure: AssertionError) {
