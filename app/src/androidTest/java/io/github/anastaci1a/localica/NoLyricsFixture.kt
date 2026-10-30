@@ -17,7 +17,7 @@ internal class NoLyricsFixture(title: String) : Closeable {
     val track = Track(Uri.fromFile(file).toString(), title, fileName = file.name, relativePath = file.name)
     init {
         try {
-            instrumentation.context.assets.open("queue-tone.mp3").use { input -> file.outputStream().use(input::copyTo) }
+            copyTestAsset(instrumentation.context.assets, "queue-tone.mp3", file)
             val result = runBlocking { LyricsRepository(instrumentation.targetContext).load(track, 0) }
             assertNull("Empty fixture must be readable", result.problem)
             assertTrue("Empty fixture must contain no lyrics", result.sources.isEmpty())
