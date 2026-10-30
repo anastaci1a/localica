@@ -3,10 +3,7 @@ package io.github.anastaci1a.localica
 import android.content.SharedPreferences
 import android.graphics.Bitmap
 import android.os.Build
-import android.os.Handler
-import android.os.Looper
 import android.os.SystemClock
-import android.view.PixelCopy
 import android.view.View
 import android.view.ViewTreeObserver
 import android.view.Window
@@ -35,8 +32,6 @@ import org.junit.Rule
 import org.junit.Test
 import java.io.File
 import java.security.MessageDigest
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicReference
 
 /** Five actual caller surfaces, not short/tall GlassMenu replicas. This records presentation
@@ -420,23 +415,8 @@ class PopupFamilyPresentationTest {
         val image = compose.runOnUiThread {
             Bitmap.createBitmap(window.decorView.width, window.decorView.height, Bitmap.Config.ARGB_8888)
         }
-        val completed = CountDownLatch(1)
-        val ownership = Any()
-        var returned = false
-        var abandoned = false
-        var result = PixelCopy.ERROR_UNKNOWN
-        try {
-            PixelCopy.request(window, image, { code ->
-                synchronized(ownership) { result = code; returned = true; if (abandoned) image.recycle() }
-                completed.countDown()
-            }, Handler(Looper.getMainLooper()))
-        } catch (failure: Throwable) { image.recycle(); throw failure }
-        if (!completed.await(5, TimeUnit.SECONDS)) {
-            synchronized(ownership) { if (returned) image.recycle() else abandoned = true }
-            throw AssertionError("Single original window copy timed out; no retry")
-        }
-        if (result != PixelCopy.SUCCESS) { image.recycle(); throw AssertionError("Single original window copy failed: $result; no retry") }
-        return image
+        return copyNativeWindowOnce(window, image,
+            "Single original window copy timed out; no retry") { result -> "Single original window copy failed: $result; no retry" }
     }
 
     private fun writeManifest(status: String, failure: String? = null) {

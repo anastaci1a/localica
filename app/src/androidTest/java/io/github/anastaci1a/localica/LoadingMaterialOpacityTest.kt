@@ -271,34 +271,7 @@ class LoadingMaterialOpacityTest {
         val image = compose.runOnUiThread {
             Bitmap.createBitmap(window.decorView.width, window.decorView.height, Bitmap.Config.ARGB_8888)
         }
-        val completed = CountDownLatch(1)
-        val ownership = Any()
-        var returned = false
-        var abandoned = false
-        var result = android.view.PixelCopy.ERROR_UNKNOWN
-        try {
-            android.view.PixelCopy.request(window, image, { code ->
-                synchronized(ownership) {
-                    result = code
-                    returned = true
-                    if (abandoned) image.recycle()
-                }
-                completed.countDown()
-            }, android.os.Handler(android.os.Looper.getMainLooper()))
-        } catch (failure: Throwable) {
-            image.recycle()
-            throw failure
-        }
-        if (!completed.await(5, TimeUnit.SECONDS)) {
-            synchronized(ownership) {
-                if (returned) image.recycle() else abandoned = true
-            }
-            throw AssertionError("The single native window copy did not complete")
-        }
-        if (result != android.view.PixelCopy.SUCCESS) {
-            image.recycle()
-            throw AssertionError("Native window copy failed with result=$result")
-        }
-        return image
+        return copyNativeWindowOnce(window, image,
+            "The single native window copy did not complete") { result -> "Native window copy failed with result=$result" }
     }
 }
