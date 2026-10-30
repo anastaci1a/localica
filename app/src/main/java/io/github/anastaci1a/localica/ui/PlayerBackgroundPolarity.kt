@@ -83,10 +83,11 @@ internal data class PlayerBackgroundGeometry(val size: Size, val cover: Rect, va
     fun measure(name: String, value: LayoutCoordinates) {
         coordinates[name] = value
         val background = coordinates["background"]?.takeIf { it.isAttached } ?: return
-        val next = coordinates.mapNotNull { (key, child) ->
-            if (!child.isAttached) null else key to background.localBoundingBoxOf(child, clipBounds = false)
-        }.toMap()
-        if (measured != next) measured = next
+        val next = preparePlayerMeasuredBounds(measured, coordinates.keys) { key ->
+            val child = coordinates.getValue(key)
+            if (!child.isAttached) null else background.localBoundingBoxOf(child, clipBounds = false)
+        }
+        if (measured !== next) measured = next
     }
     fun detach() {
         coordinates.clear(); measured = emptyMap(); frame = null; backdrops.clear()
