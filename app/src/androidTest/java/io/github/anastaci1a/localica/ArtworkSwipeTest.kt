@@ -21,6 +21,7 @@ import io.github.anastaci1a.localica.ui.*
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
+import kotlinx.coroutines.launch
 
 class ArtworkSwipeTest {
     @get:Rule val compose = createComposeRule()
@@ -286,5 +287,132 @@ class ArtworkSwipeTest {
         val image = compose.onNodeWithTag("player-artwork", true).captureToImage().toPixelMap()
         val center = image[image.width / 2, image.height / 2]
         assertTrue(if (sameArtwork) center.red > .95f else center.green > .95f)
+    }
+
+    @Test fun playerExpansionRevokesAHeldArtworkPreviewAndReopensWithLatestCallback() {
+        val originalAutoAdvance = compose.mainClock.autoAdvance
+        val progresses = listOf(Animatable(1f), Animatable(1f))
+        var scenario by mutableIntStateOf(0)
+        var visit by mutableStateOf("A")
+        var current by mutableStateOf(red)
+        var useLatest by mutableStateOf(false)
+        lateinit var scope: kotlinx.coroutines.CoroutineScope
+        val oldCalls = mutableListOf<String>()
+        val latestCalls = mutableListOf<String>()
+        val expansionRequests = mutableListOf<Boolean>()
+        var queueOpens = 0
+        var lyricOpens = 0
+        var pointerHeld = false
+        var primary: Throwable? = null
+        val oldNavigate: (String, (Boolean) -> Unit) -> Unit = { token, complete ->
+            oldCalls += token
+            complete(false)
+        }
+        val latestNavigate: (String, (Boolean) -> Unit) -> Unit = { token, complete ->
+            latestCalls += token
+            visit = token
+            current = blue
+            complete(true)
+        }
+        try {
+            compose.setContent { LocalicaTheme {
+                key(scenario) {
+                    scope = rememberCoroutineScope()
+                    BoxWithConstraints(Modifier.fillMaxSize()) {
+                        PlayerSurface(state, true, { expansionRequests += it },
+                            InterfaceSettings(reducedMotion = scenario == 1), progresses[scenario],
+                            {}, {}, {}, {}, { queueOpens++ }, {}, onLyrics = { lyricOpens++ },
+                            visual = current, artworkVisit = visit,
+                            previousArtwork = ArtworkNeighbor("previous", green),
+                            nextArtwork = ArtworkNeighbor("B", blue),
+                            onArtworkVisit = if (useLatest) latestNavigate else oldNavigate)
+                    }
+                }
+            } }
+            for (reduced in listOf(false, true)) {
+                compose.mainClock.autoAdvance = true
+                compose.runOnIdle {
+                    visit = "A"; current = red; useLatest = false
+                    oldCalls.clear(); latestCalls.clear(); expansionRequests.clear()
+                    queueOpens = 0; lyricOpens = 0
+                    scenario = if (reduced) 1 else 0
+                }
+                compose.waitForIdle()
+                compose.mainClock.autoAdvance = false
+                val progress = progresses[if (reduced) 1 else 0]
+                val before = compose.onNodeWithTag("artwork-gesture").fetchSemanticsNode().boundsInRoot
+                pointerHeld = true
+                compose.onRoot().performTouchInput {
+                    down(Offset(before.left + before.width * .8f, before.center.y))
+                    moveTo(Offset(before.left + before.width * .3f, before.center.y), delayMillis = 300)
+                }
+                compose.mainClock.advanceTimeBy(32)
+                compose.onNodeWithTag("player-neighbor-artwork", true).assertExists()
+                compose.runOnIdle {
+                    assertEquals("Preview has not changed occurrence reduced=$reduced", "A", visit)
+                    assertTrue(oldCalls.isEmpty()); assertTrue(latestCalls.isEmpty())
+                    useLatest = true
+                    scope.launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) { progress.snapTo(.98f) }
+                }
+                compose.mainClock.advanceTimeBy(32)
+                // Up uses the root's retained pointer coordinates; no new down or stale child-local bounds.
+                compose.onRoot().performTouchInput { advanceEventTime(200); up() }
+                pointerHeld = false
+                compose.mainClock.advanceTimeBy(1200)
+                compose.waitForIdle()
+                compose.onNodeWithTag("player-neighbor-artwork", true).assertDoesNotExist()
+                compose.runOnIdle {
+                    assertEquals(.98f, progress.value, .0001f)
+                    assertEquals("Revoked hold cannot select a visit reduced=$reduced", "A", visit)
+                    assertTrue("Replaced callback must stay silent", oldCalls.isEmpty())
+                    assertTrue("Revoked hold cannot reach latest callback", latestCalls.isEmpty())
+                    assertTrue(expansionRequests.isEmpty()); assertEquals(0, queueOpens); assertEquals(0, lyricOpens)
+                }
+                val restored = compose.onNodeWithTag("player-artwork", true).captureToImage().toPixelMap()
+                val restoredCenter = restored[restored.width / 2, restored.height / 2]
+                assertTrue("Revoked preview restores actual red cover: $restoredCenter", restoredCenter.red > .95f)
+                compose.runOnIdle {
+                    scope.launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) { progress.snapTo(1f) }
+                }
+                compose.mainClock.advanceTimeBy(32)
+                compose.waitForIdle()
+                // Expansion changes width/placement: fetch fresh root-space bounds for the new contact.
+                val fresh = compose.onNodeWithTag("artwork-gesture").fetchSemanticsNode().boundsInRoot
+                pointerHeld = true
+                compose.onRoot().performTouchInput {
+                    swipe(Offset(fresh.left + fresh.width * .8f, fresh.center.y),
+                        Offset(fresh.left + fresh.width * .2f, fresh.center.y), 500)
+                }
+                pointerHeld = false
+                compose.mainClock.advanceTimeBy(1200)
+                compose.waitForIdle()
+                compose.onNodeWithTag("player-neighbor-artwork", true).assertDoesNotExist()
+                compose.runOnIdle {
+                    assertEquals(1f, progress.value, .0001f)
+                    assertTrue("Old callback never regains ownership", oldCalls.isEmpty())
+                    assertEquals("Fresh swipe reaches latest callback once reduced=$reduced", listOf("B"), latestCalls)
+                    assertEquals("B", visit)
+                    assertTrue(expansionRequests.isEmpty()); assertEquals(0, queueOpens); assertEquals(0, lyricOpens)
+                }
+                val committed = compose.onNodeWithTag("player-artwork", true).captureToImage().toPixelMap()
+                val center = committed[committed.width / 2, committed.height / 2]
+                assertTrue("Accepted cover remains blue with no stale red wash: $center", center.blue > .95f && center.red < .05f)
+            }
+        } catch (failure: Throwable) {
+            primary = failure
+            throw failure
+        } finally {
+            val bodyFailed = primary != null
+            fun cleanup(block: () -> Unit) {
+                try { block() } catch (failure: Throwable) {
+                    val existing = primary
+                    if (existing == null) primary = failure
+                    else if (existing !== failure) existing.addSuppressed(failure)
+                }
+            }
+            if (pointerHeld) cleanup { compose.onRoot().performTouchInput { cancel() } }
+            cleanup { compose.mainClock.autoAdvance = originalAutoAdvance }
+            if (!bodyFailed) primary?.let { throw it }
+        }
     }
 }
