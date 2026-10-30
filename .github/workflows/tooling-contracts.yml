@@ -3,9 +3,10 @@ name: Evidence tooling contracts
 'on':
   push:
     # This branch runs the same gate through audit-browse-prototype.yml before native jobs.
-    branches-ignore: [dev/audit-browse-preparation-20261030, dev/audit-integration-20261030, dev/audit-next-20261030, dev/audit-navigation-recovery-20261030, dev/audit-information-owner-20261030, dev/audit-followup-20261030, dev/audit-artwork-hit-20261030, dev/audit-tag-view-cleanup-20261030, dev/audit-track-sort-keys-20261030, dev/audit-selection-frame-20261030]
+    branches-ignore: [dev/audit-browse-preparation-20261030, dev/audit-integration-20261030, dev/audit-next-20261030, dev/audit-navigation-recovery-20261030, dev/audit-information-owner-20261030, dev/audit-followup-20261030, dev/audit-artwork-hit-20261030, dev/audit-tag-view-cleanup-20261030, dev/audit-track-sort-keys-20261030, dev/audit-selection-frame-20261030, dev/audit-menu-canonical-20261030]
     paths:
       - '.github/workflows/**'
+      - '.github/actions/**'
       - 'app/src/androidTest/java/**'
       - '.github/tests/**'
       - '.github/compatibility/**'
@@ -17,6 +18,7 @@ name: Evidence tooling contracts
   pull_request:
     paths:
       - '.github/workflows/**'
+      - '.github/actions/**'
       - 'app/src/androidTest/java/**'
       - '.github/tests/**'
       - '.github/compatibility/**'
@@ -48,7 +50,7 @@ jobs:
           set -euo pipefail
           mkdir tooling-contract-reports
           git rev-parse HEAD > tooling-contract-reports/source-sha.txt
-          git ls-files -z .github/tests .github/compatibility .github/test-evidence .github/workflows app/src/androidTest/java .github/run-device-tests.sh .github/prepare-device-tests.sh .github/run-prototype-tests.sh .github/prototype-risk-classes.txt .github/workflows/tooling-contracts.yml | xargs -0 sha256sum > tooling-contract-reports/source-files.sha256
+          git ls-files -z .github/actions .github/tests .github/compatibility .github/test-evidence .github/workflows app/src/androidTest/java .github/run-device-tests.sh .github/prepare-device-tests.sh .github/run-prototype-tests.sh .github/prototype-risk-classes.txt .github/workflows/tooling-contracts.yml | xargs -0 sha256sum > tooling-contract-reports/source-files.sha256
           # Pin the interpreter ABI to the reviewed PyYAML wheel; refuse runner drift.
           python3.12 -c 'import platform, sys; assert sys.version_info[:2] == (3, 12) and sys.implementation.name == "cpython" and sys.platform == "linux" and platform.machine() == "x86_64"'
           python3.12 -m venv "$RUNNER_TEMP/tooling-contract-python"
