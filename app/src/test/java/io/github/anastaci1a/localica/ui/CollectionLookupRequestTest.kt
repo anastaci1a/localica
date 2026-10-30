@@ -73,7 +73,7 @@ class CollectionLookupRequestTest {
         advanceUntilIdle(); advanceUntilIdle()
         assertEquals(listOf("accepted"), published)
     }
-    @Test fun queryFailureRemainsTheOriginalFailureAndCannotPublish() = runTest {
+    @Test fun queryFailureRemainsInTheCauseChainAndCannotPublish() = runTest {
         val failure = IllegalStateException("provider query failed")
         val received = mutableListOf<Throwable>()
         val parent = SupervisorJob(coroutineContext[Job])
@@ -81,7 +81,13 @@ class CollectionLookupRequestTest {
         var published = false
         CollectionLookupRequests().submit<String>(scope, StandardTestDispatcher(testScheduler), { true }, { throw failure }, { published = true })
         advanceUntilIdle()
-        assertEquals(1, received.size); assertSame(failure, received.single()); assertFalse(published)
+        assertEquals(1, received.size)
+        val forwarded = received.single()
+        assertEquals(failure.javaClass, forwarded.javaClass)
+        assertEquals(failure.message, forwarded.message)
+        // Coroutine stack-trace recovery may copy the exception and retain the original as its cause.
+        assertTrue(generateSequence(forwarded) { it.cause }.take(8).any { it === failure })
+        assertFalse(published)
         parent.cancel()
     }
     @Test fun freshnessUsesSourceIdentityWithoutTraversingPlaylistOrTrackLists() {
