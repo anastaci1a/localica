@@ -10,7 +10,7 @@ internal fun ComposeContentTestRule.scrollToUncoveredItem(target: SemanticsMatch
     waitUntil(5000) { onAllNodesWithTag("browser-list").fetchSemanticsNodes().isNotEmpty() }
     val list = onNodeWithTag("browser-list")
     list.performScrollToNode(target)
-    val coveredTop = onAllNodes(hasTestTag("tab-pill") or hasTestTag("player-surface"))
+    val coveredTop = onAllNodes(hasTestTag("tab-pill") or hasTestTag("player-surface") or hasTestTag("floating-return-control"))
         .fetchSemanticsNodes().map { it.boundsInRoot }.filter { it.width > 0f && it.height > 0f }.minOfOrNull { it.top }
         ?: list.fetchSemanticsNode().boundsInRoot.bottom
     val bottom = onNode(target).fetchSemanticsNode().boundsInRoot.bottom
