@@ -1,7 +1,7 @@
-name: Audit playback observation ownership (not release)
+name: Audit filled controls and player measured bounds (not release)
 'on':
   push:
-    branches: [dev/audit-playback-gate-20261030]
+    branches: [dev/audit-filled-bounds-20261030]
 permissions:
   contents: read
 jobs:
@@ -27,12 +27,12 @@ jobs:
             display: compact
     env:
       TEST_API: ${{ matrix.api }}
-      SELECTORS: io.github.anastaci1a.localica.PlaybackObservationTest,io.github.anastaci1a.localica.PlayerTrackProjectionTest,io.github.anastaci1a.localica.SeekReleaseHandoffTest,io.github.anastaci1a.localica.SeekAcknowledgementPlaybackTest,io.github.anastaci1a.localica.PlayerExpansionMotionTest,io.github.anastaci1a.localica.LyricsInteractionTest,io.github.anastaci1a.localica.LyricsViewportMotionTest,io.github.anastaci1a.localica.LyricsPlayerReopenTest,io.github.anastaci1a.localica.MissingLyricsMotionTest,io.github.anastaci1a.localica.PlayerBackdropTest,io.github.anastaci1a.localica.PlayerActionSlotsTest
+      SELECTORS: io.github.anastaci1a.localica.PlayerMeasuredBoundsTest,io.github.anastaci1a.localica.PlayerBackgroundPolarityTest,io.github.anastaci1a.localica.PlayerContrastTest,io.github.anastaci1a.localica.ActivationHapticsTest,io.github.anastaci1a.localica.ArtworkReviewReadinessTest,io.github.anastaci1a.localica.ArtworkCropTest,io.github.anastaci1a.localica.ArtworkCropLoadingTest,io.github.anastaci1a.localica.FolderLabelsTest,io.github.anastaci1a.localica.TagEditorThemeInheritanceTest,io.github.anastaci1a.localica.TagEditorFlowTest,io.github.anastaci1a.localica.ButtonGestureTest,io.github.anastaci1a.localica.ControlStateMotionTest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - uses: ./.github/actions/focused-android-setup
       - name: Compile instrumentation and verify focused JVM contracts
-        run: ./gradlew testDebugUnitTest --tests io.github.anastaci1a.localica.ui.PlaybackObservationPolicyTest --tests io.github.anastaci1a.localica.ui.PlayerSeekPositionTest --tests io.github.anastaci1a.localica.ui.LyricsSourcePhaseTest --tests io.github.anastaci1a.localica.ui.PlayerActionSlotsTest --tests io.github.anastaci1a.localica.ui.PlayerExpansionMotionTest --tests io.github.anastaci1a.localica.queue.PlaybackIntentsTest assembleDebug assembleDebugAndroidTest --no-daemon --max-workers=2
+        run: ./gradlew testDebugUnitTest --tests io.github.anastaci1a.localica.ui.PlayerMeasuredBoundsTest --tests io.github.anastaci1a.localica.ui.PlayerBackgroundPolarityTest --tests io.github.anastaci1a.localica.ui.PlayerBackgroundJointContrastTest --tests io.github.anastaci1a.localica.ui.ControlGestureIntentTest --tests io.github.anastaci1a.localica.ui.ControlStateMotionTest assembleDebug assembleDebugAndroidTest --no-daemon --max-workers=2
       - uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
         with:
           api-level: ${{ matrix.api }}
@@ -55,7 +55,7 @@ jobs:
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
-          name: audit-playback-observation-api-${{ matrix.api }}
+          name: audit-filled-bounds-api-${{ matrix.api }}
           path: |
             app/build/reports/
             app/build/test-results/
