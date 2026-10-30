@@ -49,9 +49,10 @@ class ArtworkCacheConcurrencyTest {
         var queued: Deferred<Bitmap?>? = null
         try {
             withTimeout(5000) { started.await() }
-            queued = async(start = CoroutineStart.UNDISPATCHED) { store.read(context, "queued", 128) }
+            val waiting = async(start = CoroutineStart.UNDISPATCHED) { store.read(context, "queued", 128) }
+            queued = waiting
             assertEquals(listOf("first"), loads)
-            queued.cancel(); withTimeout(5000) { queued.join() }
+            waiting.cancel(); withTimeout(5000) { waiting.join() }
             release.complete(Unit)
             withTimeout(5000) { first.await() }
             assertEquals(listOf("first"), loads)
@@ -102,11 +103,12 @@ class ArtworkCacheConcurrencyTest {
         var duplicate: Deferred<Bitmap?>? = null
         try {
             withTimeout(5000) { started.await() }
-            duplicate = async(start = CoroutineStart.UNDISPATCHED) { store.read(context, "cover", 100) }
+            val waiting = async(start = CoroutineStart.UNDISPATCHED) { store.read(context, "cover", 100) }
+            duplicate = waiting
             assertEquals(listOf(128), sizes)
             release.complete(Unit)
             assertSame(picture, withTimeout(5000) { first.await() })
-            assertSame(picture, withTimeout(5000) { duplicate.await() })
+            assertSame(picture, withTimeout(5000) { waiting.await() })
             assertEquals(listOf(128), sizes)
             assertSame(picture, store.read(context, "cover", 768))
             assertEquals(listOf(128, 768), sizes)
