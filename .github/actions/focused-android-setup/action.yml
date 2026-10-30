@@ -1,0 +1,37 @@
+name: Focused Android setup
+description: Prepare the shared toolchain and host for focused Android jobs.
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3
+      with:
+        distribution: temurin
+        java-version: '17'
+    - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a
+    - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+      with:
+        node-version: '24'
+    - name: Install pinned live evidence publisher
+      shell: bash -e {0}
+      run: npm ci --prefix .github/test-evidence --ignore-scripts --no-audit --no-fund
+    - name: Record runner and toolchain identity
+      shell: bash -e {0}
+      run: bash .github/test-evidence/environment.sh | tee prototype-runner-environment.txt
+    - name: Enable emulator acceleration
+      shell: bash -e {0}
+      run: 'echo ''KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"'' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+
+        sudo udevadm control --reload-rules
+
+        sudo udevadm trigger --name-match=kvm
+
+        '
+    - name: Make room for emulator userdata
+      shell: bash -e {0}
+      run: '# This Android job does not use the runner''s preinstalled .NET SDKs.
+
+        sudo rm -rf /usr/share/dotnet
+
+        df -h "$HOME"
+
+        '
