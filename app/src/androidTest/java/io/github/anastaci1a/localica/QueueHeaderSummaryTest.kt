@@ -27,7 +27,7 @@ class QueueHeaderSummaryTest {
         }
         fun summary(position: String, duration: String) {
             compose.onNodeWithText(position).assertExists()
-            compose.onNodeWithText(duration).assertExists()
+            compose.onNode(hasText(duration) and hasAnySibling(hasText(position))).assertExists()
         }
         fun update(next: ListeningQueue) {
             compose.runOnIdle { state.value = state.value.copy(library = state.value.library.update(next)) }
