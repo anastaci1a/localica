@@ -206,11 +206,9 @@ object BrowseQueries {
             MainTab.Playlists -> listOf(MediaKind.Playlist)
             else -> emptyList()
         }
-        val terms = effective.text.lowercase(Locale.ROOT).split(Regex("\\s+")).filter { it.isNotBlank() }
+        // evaluate strips text before catalog preparation and filters the completed search index.
         val items = kinds.flatMap { kind -> checkActive(); catalog(kind) }.filter { item ->
-            if (route.tab == MainTab.MostPlayed && !route.globalSearch && item.playCount == 0L) false
-            else if (item.row != null) true
-            else terms.all { it in (item.title + "\n" + item.subtitle.orEmpty()).lowercase(Locale.ROOT) }
+            route.tab != MainTab.MostPlayed || route.globalSearch || item.playCount != 0L
         }
         if (kinds == listOf(MediaKind.Song)) return BrowseResult(items, scope(route))
         val ordered = orderCollectionItems(items, effective, checkActive)
