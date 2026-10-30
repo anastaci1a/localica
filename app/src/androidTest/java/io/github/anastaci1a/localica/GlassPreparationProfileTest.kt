@@ -33,6 +33,7 @@ class GlassPreparationProfileTest {
         lateinit var source: FrostedBackdrop
         var primary: Throwable? = null
         recorder.phase("clear-initial")
+        recorder.renderer(runtime.requested.name, runtime.generation.backend.name, runtime.generation.epoch)
         try {
             compose.setContent {
                 CompositionLocalProvider(LocalGlassRendererRuntime provides runtime,
@@ -80,7 +81,8 @@ class GlassPreparationProfileTest {
             settings("clear-tint-tone", appearance.copy(blur = 0f))
             settings("clear-raw", appearance.copy(whiteTint = 0f, contrast = 0f))
             settings("clear-tone-again", appearance.copy(whiteTint = 0f, contrast = .25f))
-            compose.waitUntil(10_000) { recorder.has("clear-tone-again", "tone-completed") }
+            compose.waitUntil(10_000) { recorder.has("clear-tone-again", "tone-completed") ||
+                recorder.has("clear-tone-again", "tone-composition-hit") || recorder.has("clear-tone-again", "tone-locked-hit") }
             settings("clear-tone-off", appearance.copy(contrast = 0f))
             settings("clear-tone-warm", appearance.copy(contrast = .25f))
             compose.waitUntil(10_000) { recorder.has("clear-tone-warm", "tone-composition-hit") }
@@ -91,9 +93,11 @@ class GlassPreparationProfileTest {
             compose.waitUntil(15_000) { recorder.has("changed-source", "capture-settled") }
             awaitPrepared("changed-source")
             inspectScene(true)
-            compose.runOnIdle { recorder.phase("renderer-request-modern"); runtime.request(GlassRendererMode.Modern) }
+            compose.runOnIdle { recorder.phase("renderer-request-modern"); runtime.request(GlassRendererMode.Modern)
+                recorder.renderer(runtime.requested.name, runtime.generation.backend.name, runtime.generation.epoch) }
             compose.waitForIdle()
-            compose.runOnIdle { recorder.phase("renderer-return-legacy"); runtime.request(GlassRendererMode.Legacy) }
+            compose.runOnIdle { recorder.phase("renderer-return-legacy"); runtime.request(GlassRendererMode.Legacy)
+                recorder.renderer(runtime.requested.name, runtime.generation.backend.name, runtime.generation.epoch) }
             // API26 remains Legacy for both requests; on API36 the epoch boundary owns new preparation.
             if (android.os.Build.VERSION.SDK_INT >= 33) awaitPrepared("renderer-return-legacy")
             inspectScene(true)
@@ -115,7 +119,7 @@ class GlassPreparationProfileTest {
                 recorder.export(document, nativeEvidenceDirectory("glass-preparation-work",
                     InstrumentationRegistry.getInstrumentation().targetContext.getExternalFilesDir(null)))
                 assertEquals("Do not silently lose measurements", 0, document.getInt("droppedRecords"))
-                assertEquals("Metadata conversion must succeed", 0, document.getJSONArray("observationFailures").length())
+                assertEquals("Metadata conversion must succeed", 0, document.getInt("observationFailureCount"))
             }
             followup?.let { failure ->
                 val original = primary

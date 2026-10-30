@@ -8,11 +8,13 @@ import java.io.File
 
 /** Ordinary bounded metadata; no Bitmap, Compose State, source owner or Throwable retained. */
 internal class GlassPreparationWorkRecorder : GlassPreparationWorkObserver {
-    private data class Entry(val phase: String, val event: GlassPreparationWork)
+    private data class Entry(val phase: String, val receivedNs: Long, val event: GlassPreparationWork)
     private val records = ArrayList<Entry>()
     private val totals = linkedMapOf<String, Int>()
     private val phases = ArrayList<Pair<String, Long>>()
     private val failures = ArrayList<String>()
+    private var failureCount = 0
+    private val rendererRequests = ArrayList<JSONObject>()
     private var phase = "initial"
     private var dropped = 0
     private var sealed = false
@@ -25,10 +27,18 @@ internal class GlassPreparationWorkRecorder : GlassPreparationWorkObserver {
         if (sealed) return
         val key = "$phase/${event.kind}"
         totals[key] = (totals[key] ?: 0) + 1
-        if (records.size < 8192) records += Entry(phase, event) else dropped++
+        if (records.size < 8192) records += Entry(phase, System.nanoTime(), event) else dropped++
     }
     @Synchronized override fun observationFailed(kind: String, failure: String) {
-        if (!sealed && failures.size < 64) failures += "$phase/$kind/$failure"
+        if (!sealed) {
+            failureCount++
+            if (failures.size < 64) failures += "$phase/$kind/$failure"
+        }
+    }
+    @Synchronized fun renderer(requested: String, backend: String, epoch: Long) {
+        check(!sealed)
+        rendererRequests += JSONObject().put("phase", phase).put("requested", requested)
+            .put("backend", backend).put("epoch", epoch).put("receivedNs", System.nanoTime())
     }
     @Synchronized fun prepared(name: String, snapshotIdentity: Int, tint: Float): Boolean =
         records.any { it.phase == name && it.event.kind == "appearance-completed" &&
@@ -42,13 +52,17 @@ internal class GlassPreparationWorkRecorder : GlassPreparationWorkObserver {
             .put("testId", "io.github.anastaci1a.localica.GlassPreparationProfileTest#actualLegacyStagesReportSizesAliasesCacheAndWorkAcrossChanges")
             .put("bodyOutcome", if (bodyFailure == null) "returned" else "threw")
             .put("endedNs", System.nanoTime()).put("droppedRecords", dropped)
+            .put("observationFailureCount", failureCount).put("droppedFailureRecords", (failureCount - failures.size).coerceAtLeast(0))
+            .put("rendererRequests", JSONArray(rendererRequests))
+            .put("fixtureToneWeight", 2f).put("fixtureLightInk", true)
+            .put("phaseAssociation", "observer delivery; not operation-start causality")
             .put("scopeComplete", false).put("tailComplete", false)
             .put("rawRecordsComplete", dropped == 0).put("observationFailures", JSONArray(failures))
             .put("aggregateCounts", JSONObject(totals as Map<*, *>))
             .put("phases", JSONArray().also { a -> phases.forEach { (name, ns) -> a.put(JSONObject().put("name", name).put("ns", ns)) } })
             .put("records", JSONArray().also { a -> records.forEach { entry ->
                 val e = entry.event
-                a.put(JSONObject().put("phase", entry.phase).put("kind", e.kind).put("ownerHint", e.owner).put("epoch", e.epoch)
+                a.put(JSONObject().put("phase", entry.phase).put("receivedNs", entry.receivedNs).put("kind", e.kind).put("ownerHint", e.owner).put("epoch", e.epoch)
                     .put("startedNs", e.startedNs).put("endedNs", e.endedNs)
                     .put("parameter", if (e.parameter.isFinite()) e.parameter else JSONObject.NULL)
                     .put("cacheOutputBytes", e.cacheBytes).put("cacheHits", e.cacheHits).put("cacheMisses", e.cacheMisses)
@@ -65,6 +79,7 @@ internal class GlassPreparationWorkRecorder : GlassPreparationWorkObserver {
                 "Output/cache accounting and explicit normalization-copy reports are not unique, retained, peak or total heap.",
                 "Identity hashes are hints; only same-event reference alias matrices are exact.",
                 "Composition lookup/endpoint events are executions, not committed composition or native presentation.",
+                "Cache size/hit/miss/eviction fields are sequential samples, not an atomic cache snapshot; recorder order is delivery order.",
                 "One synthetic scene and bounded settings/source/renderer transitions; no full UI, hardware or global performance claim.",
                 "Recording seals after fixture disposal; asynchronous post-seal worker completions and full tail are not observed.")))
     }
