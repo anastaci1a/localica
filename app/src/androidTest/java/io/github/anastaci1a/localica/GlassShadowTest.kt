@@ -352,7 +352,10 @@ class GlassShadowTest {
                         if (actual) Box(Modifier.size(width, height)
                             .glassShadowOffset { IntOffset(x.roundToPx(), y.roundToPx()) }.glassShadowOpacity { alpha }
                             .clearGlassShadow(.8f, .6f, radius)
-                            .clip(androidx.compose.foundation.shape.RoundedCornerShape(radius)).background(Color.Red))
+                            .drawBehind {
+                                // Match the reference primitive; clipped fills have different legacy edge coverage.
+                                drawRoundRect(Color.Red, cornerRadius = CornerRadius(radius.toPx()))
+                            })
                         else Box(Modifier.fillMaxSize().drawBehind {
                             val w = width.roundToPx().toFloat(); val h = height.roundToPx().toFloat()
                             val left = ((size.width-w)/2).roundToInt().toFloat() + x.roundToPx() * (if (rtl) -1 else 1)
@@ -372,8 +375,10 @@ class GlassShadowTest {
         } }
         listOf(1f, .5f, 0f, .25f, 1f, .5f, 1f, 0f, 1f).forEachIndexed { index, opacity ->
             compose.runOnIdle { alpha = opacity; expanded = index % 2 == 1; rtl = index % 3 == 1 }
-            val expected = compose.onNodeWithTag("padded-false").captureToImage().toPixelMap()
-            val actual = compose.onNodeWithTag("padded-true").captureToImage().toPixelMap()
+            val expectedImage = compose.onNodeWithTag("padded-false").captureToImage()
+            val expected = expectedImage.toPixelMap()
+            val actualImage = compose.onNodeWithTag("padded-true").captureToImage()
+            val actual = actualImage.toPixelMap()
             var error = 0f
             var max = 0f
             for (y in 0 until expected.height) for (x in 0 until expected.width) {
@@ -381,8 +386,26 @@ class GlassShadowTest {
                 error += difference
                 max = maxOf(max, difference)
             }
-            assertTrue("Padded field and foreground share opacity $opacity on reversal $index: max=$max error=$error",
-                max < .08f && error / (expected.width*expected.height) < .006f)
+            try {
+                assertTrue("Padded field and foreground share opacity $opacity on reversal $index: max=$max error=$error",
+                    max < .08f && error / (expected.width*expected.height) < .006f)
+            } catch (failure: AssertionError) {
+                try {
+                    val directory = nativeEvidenceDirectory("glass-shadow-failures",
+                        androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().targetContext.cacheDir)
+                    listOf("reference" to expectedImage, "actual" to actualImage).forEach { (name, image) ->
+                        java.io.File(directory, "padded-$index-$name.png").outputStream().use {
+                            check(image.asAndroidBitmap().compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it))
+                        }
+                    }
+                    java.io.File(directory, "padded-$index.txt").writeText(
+                        "opacity=$opacity reversal=$index expanded=$expanded rtl=$rtl " +
+                            "width=${expected.width} height=${expected.height} max=$max error=$error\n")
+                } catch (diagnosticFailure: Throwable) {
+                    if (diagnosticFailure !== failure) failure.addSuppressed(diagnosticFailure)
+                }
+                throw failure
+            }
         }
     }
 
