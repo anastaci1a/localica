@@ -96,7 +96,7 @@ fun FolderSettings(state: LibraryUiState, onDismiss: () -> Unit, onChooseFolder:
                             }
                         }
                         if (state.updatingFolders) LinearProgressIndicator(Modifier.fillMaxWidth())
-                        Button(onClick = onChooseFolder, enabled = !state.loading && !state.scanning && !state.updatingFolders,
+                        ActionButton(onClick = onChooseFolder, enabled = !state.loading && !state.scanning && !state.updatingFolders,
                             modifier = Modifier.fillMaxWidth()) { Text(if (state.snapshot.folders.isEmpty()) "Choose folder" else "Add folder") }
                     }
                     "Folder options" -> state.snapshot.folders.firstOrNull { it.uri == folderUri }?.let { folder ->

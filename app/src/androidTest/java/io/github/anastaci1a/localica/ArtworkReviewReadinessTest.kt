@@ -8,6 +8,10 @@ import android.net.Uri
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -120,4 +124,67 @@ class ArtworkReviewReadinessTest {
             crops.listFiles()?.filterNot { it in existing }?.forEach { it.delete() }
         }
     }
+    @Test fun filledReviewKeepsReadinessSilentAndSubmitsOnlyAfterConfirmation() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val controller = (context.applicationContext as LocalicaApplication).tagEditing
+        val state = mutableStateOf(TagEditorState(tracks = listOf(Track("review-action:missing", "Original",
+            fileName = "review.mp3", relativePath = "review.mp3")), sessionId = "filled-review-fixture"))
+        val events = mutableListOf<String>()
+        val saves = mutableListOf<TagPatch>()
+        compose.setContent { LocalicaTheme {
+            CompositionLocalProvider(LocalReducedMotion provides true,
+                LocalControlHaptics provides ControlHaptics { events += it.name }) {
+                // The real dialog/caller owns readiness and confirmation. Record, never write.
+                TagEditorDialog(state.value, controller, onSave = { events += "save"; saves += it })
+            }
+        } }
+        compose.awaitExpectedWindowFocus(compose.onNodeWithTag("tag-editor-sheet"))
+        val review = compose.onNodeWithText("Review changes")
+        review.assertHasClickAction().assert(SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Button))
+        review.assertIsNotEnabled().performTouchInput { click() }
+        review.performClick()
+        compose.runOnIdle { assertTrue(events.isEmpty()); assertTrue(saves.isEmpty()) }
+        val draft = "Ready only after this edit"
+        val title = compose.onNode(hasSetTextAction() and hasText(EditField.Title.label))
+        title.performScrollTo().performSemanticsAction(SemanticsActions.SetText) {
+            assertTrue(it(AnnotatedString(draft)))
+        }
+        for (blocked in listOf(state.value.copy(busy = true), state.value.copy(recovery = "fixture original"))) {
+            compose.runOnIdle { state.value = blocked }
+            review.assertIsNotEnabled().performTouchInput { click() }
+            review.performClick()
+            compose.runOnIdle { assertTrue(events.isEmpty()); assertTrue(saves.isEmpty()) }
+        }
+        compose.runOnIdle { state.value = state.value.copy(busy = false, recovery = null) }
+        review.assertIsEnabled().performTouchInput { down(center); cancel() }
+        compose.runOnIdle { assertTrue(events.isEmpty()) }
+        review.performTouchInput { click() }
+        compose.awaitExpectedWindowFocus(compose.onNodeWithText("Save changes"))
+        compose.runOnIdle {
+            assertEquals(listOf("Weak"), events)
+            assertTrue("Review opens confirmation without invoking save", saves.isEmpty())
+        }
+        compose.onNodeWithText("Name: $draft").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Cancel").performClick()
+        compose.awaitExpectedWindowFocus(compose.onNodeWithTag("tag-editor-sheet"))
+        title.performScrollTo().assertTextContains(draft)
+        compose.runOnIdle { assertEquals(listOf("Weak", "Weak"), events); assertTrue(saves.isEmpty()) }
+        review.assertIsEnabled().performClick()
+        compose.awaitExpectedWindowFocus(compose.onNodeWithText("Save changes"))
+        compose.runOnIdle { state.value = state.value.copy(busy = true) }
+        compose.onNodeWithText("Save changes").assertIsNotEnabled().performClick()
+        compose.runOnIdle {
+            assertEquals(listOf("Weak", "Weak", "Weak"), events)
+            assertTrue(saves.isEmpty())
+            state.value = state.value.copy(busy = false)
+        }
+        compose.onNodeWithText("Save changes").assertIsEnabled().performClick()
+        compose.runOnIdle {
+            assertEquals(listOf("Weak", "Weak", "Weak", "Weak", "save"), events)
+            assertEquals(1, saves.size)
+            assertEquals(mapOf(EditField.Title to draft), saves.single().fields)
+            assertEquals(ArtworkChange.Keep, saves.single().artwork)
+        }
+    }
+
 }
