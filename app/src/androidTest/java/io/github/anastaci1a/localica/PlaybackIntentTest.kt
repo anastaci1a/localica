@@ -849,6 +849,49 @@ class PlaybackIntentTest {
         rejected()
     }
 
+    @Test fun clearingPlaybackRetiresTemplatesAndReactivationRebuildsRetainedOccurrences() = fixture(duplicateOccurrences = true) {
+        awaitMain { player.engine.playbackState == Player.STATE_READY }
+        queues.rename(first.id, first.name)
+        barrier()
+        val before = queues.state.value.library.active!!
+        val builds = itemBuilds.get()
+        val collections = store.collections.get()
+        val oldNative = withContext(Dispatchers.Main) { requireNotNull(player.currentMediaItem) }
+        val timeline = QueueTimeline()
+        timeline.resolve(before.id, withContext(Dispatchers.Main) {
+            (0 until player.mediaItemCount).map { player.getMediaItemAt(it) }
+        })
+        assertTrue(timeline.contains(before))
+        timeline.clear()
+        assertNull(timeline.queueId)
+        assertFalse(timeline.contains(before))
+        queues.clearPlayback()
+        barrier()
+        val cleared = queues.state.value.library
+        assertNull(cleared.activeId)
+        assertEquals(before.entries, cleared.queues.first { it.id == before.id }.entries)
+        withContext(Dispatchers.Main) {
+            assertEquals(0, player.mediaItemCount)
+            assertNull(player.currentMediaItem)
+        }
+        assertEquals(builds, itemBuilds.get())
+        queues.settings { it.copy(switching = QueueSwitch.Paused) }
+        barrier()
+        queues.switchTo(before.id)
+        barrier()
+        assertEquals(before.id, queues.state.value.library.activeId)
+        assertEquals(before.entries, queues.state.value.library.active!!.entries)
+        assertEquals(before.currentEntryId, queues.state.value.library.active!!.currentEntryId)
+        assertEquals(builds + before.entries.size, itemBuilds.get())
+        assertTrue(store.collections.get() > collections)
+        withContext(Dispatchers.Main) {
+            assertNotSame(oldNative, player.currentMediaItem)
+            assertEquals(before.currentEntryId, player.currentMediaItem?.mediaId)
+            assertEquals(before.id, player.currentMediaItem?.listeningQueue)
+            assertEquals("origin-0", player.currentMediaItem?.mediaMetadata?.extras?.getString("sourcePlaylistId"))
+        }
+    }
+
     @Test fun attachedOrderEditsReuseOnlyTheUnchangedLibraryIndexAndCurrentVisit() = fixture(duplicateOccurrences = true) {
         val timingReports = kotlinx.coroutines.channels.Channel<Pair<String, QueueOrderTiming.Report>>(kotlinx.coroutines.channels.Channel.UNLIMITED)
         withContext(Dispatchers.Main) {
