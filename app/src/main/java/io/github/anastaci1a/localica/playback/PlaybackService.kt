@@ -61,7 +61,7 @@ class PlaybackService : MediaSessionService() {
     }
 }
 
-/** MediaSession convenience methods must all pass through the same intent boundary. */
+/** Overrides route queue-owned transport commands through QueueController; other Player calls remain delegated. */
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 internal class QueueTransportPlayer(player: Player, private val queues: io.github.anastaci1a.localica.queue.QueueController) : ForwardingPlayer(player) {
     override fun play() = queues.playbackRequested(true)
