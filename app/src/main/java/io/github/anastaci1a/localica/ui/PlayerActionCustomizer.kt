@@ -26,7 +26,6 @@ import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.unit.dp
@@ -50,7 +49,7 @@ internal fun PlayerActionCustomizer(value: PlayerActionSettings, onChange: (Play
     onDismiss: () -> Unit, reducedMotion: Boolean = false) {
     val current by rememberUpdatedState(value)
     val change by rememberUpdatedState(onChange)
-    val view = LocalView.current
+    val haptics = rememberControlHaptics()
     val density = LocalDensity.current
     val scope = rememberCoroutineScope()
     val scroll = rememberScrollState()
@@ -63,8 +62,8 @@ internal fun PlayerActionCustomizer(value: PlayerActionSettings, onChange: (Play
     var drag by remember { mutableStateOf<ActionDrag?>(null) }
     var selected by remember { mutableStateOf<PlayerAction?>(null) }
     var choosing by remember { mutableStateOf<ActionSlot?>(null) }
-    fun haptic(start: Boolean = false) { view.performHapticFeedback(if (start)
-        android.view.HapticFeedbackConstants.LONG_PRESS else android.view.HapticFeedbackConstants.CLOCK_TICK) }
+    fun haptic(start: Boolean = false) { haptics.emit(if (start)
+        ControlHaptic.Strong else ControlHaptic.Weak) }
     fun hover(d: ActionDrag) {
         val remove = poolBounds != Rect.Zero && poolBounds.contains(d.point)
         val target = if (remove) null else current.visibleSlots.firstOrNull { slots[it]?.contains(d.point) == true }

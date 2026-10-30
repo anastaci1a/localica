@@ -26,7 +26,8 @@ class KeyedDragTest {
     private lateinit var reorder: KeyedDragState<Entry, String>
     private var appearance = "at lift"
 
-    private fun fixture(optimisticCommit: Boolean = true, reducedMotion: Boolean = true, startDrag: Boolean = true) {
+    private fun fixture(optimisticCommit: Boolean = true, reducedMotion: Boolean = true, startDrag: Boolean = true,
+        haptics: ControlHaptics? = null) {
         compose.setContent { LocalicaTheme {
             val grid = rememberLazyGridState()
             val scope = rememberCoroutineScope()
@@ -43,8 +44,10 @@ class KeyedDragTest {
                         Box(Modifier.fillMaxWidth().height(52.dp)) { entry?.let { Text(it.name) } }
                     }
                 }
-                KeyedDragOverlay(reorder, reducedMotion = reducedMotion, countDescription = { "Dragging $it queues" }) { entry, presentation ->
-                    Text("${entry.name}: $presentation", Modifier.testTag("lifted-${entry.id}"))
+                CompositionLocalProvider(LocalControlHaptics provides haptics) {
+                    KeyedDragOverlay(reorder, reducedMotion = reducedMotion, countDescription = { "Dragging $it queues" }) { entry, presentation ->
+                        Text("${entry.name}: $presentation", Modifier.testTag("lifted-${entry.id}"))
+                    }
                 }
             }
         } }
@@ -74,7 +77,8 @@ class KeyedDragTest {
     }
 
     @Test fun successfulDropCommitsOnceAndReconcilesPublishedOrder() {
-        fixture()
+        val pulses = mutableListOf<ControlHaptic>()
+        fixture(haptics = ControlHaptics { pulses += it })
         val expected = moveDown()
         var commits = 0
         var moved = 0
@@ -89,6 +93,7 @@ class KeyedDragTest {
         }
         compose.waitUntil(5000) { reorder.drag == null }
         compose.runOnIdle {
+            assertTrue("Insertion and successful landing add no feedback", pulses.isEmpty())
             assertEquals(1, commits); assertEquals(1, moved)
             assertEquals(expected, reorder.rendered(entries))
             published = expected
@@ -99,7 +104,8 @@ class KeyedDragTest {
     }
 
     @Test fun rejectedDropRestoresOrderWithoutReportingSuccess() {
-        fixture()
+        val pulses = mutableListOf<ControlHaptic>()
+        fixture(haptics = ControlHaptics { pulses += it })
         moveDown()
         var commits = 0
         compose.runOnIdle {
@@ -109,10 +115,12 @@ class KeyedDragTest {
         }
         compose.waitUntil(5000) { reorder.drag == null }
         compose.runOnIdle { assertEquals(1, commits); assertEquals(entries, reorder.rendered(entries)); assertNull(reorder.optimistic) }
+        compose.runOnIdle { assertTrue("Rejected landing adds no feedback", pulses.isEmpty()) }
     }
 
     @Test fun canceledMoveRestoresOrderWithoutCommitting() {
-        fixture()
+        val pulses = mutableListOf<ControlHaptic>()
+        fixture(haptics = ControlHaptics { pulses += it })
         moveDown()
         compose.runOnIdle {
             reorder.finish(cancel = true, reducedMotion = true, onMoved = { fail("Cancel cannot succeed") }) { _, _, _ ->
@@ -121,6 +129,7 @@ class KeyedDragTest {
         }
         compose.waitUntil(5000) { reorder.drag == null }
         compose.runOnIdle { assertEquals(entries, reorder.rendered(entries)); assertNull(reorder.optimistic) }
+        compose.runOnIdle { assertTrue("Canceled landing adds no feedback", pulses.isEmpty()) }
     }
     @Test fun authoritativeReceiptNeverHidesConcurrentIdentitiesOrMetadata() {
         fixture(optimisticCommit = false)
@@ -187,12 +196,14 @@ class KeyedDragTest {
     }
 
     @Test fun enteringTargetUsesVisibleGeometryAndTracksAStationaryPointer() {
-        fixture(reducedMotion = false, startDrag = false)
+        val pulses = mutableListOf<ControlHaptic>()
+        fixture(reducedMotion = false, startDrag = false, haptics = ControlHaptics { pulses += it })
         compose.mainClock.autoAdvance = false
         compose.runOnIdle {
             val held = entries[1]
             assertTrue(reorder.begin(held, setOf(held.id), reorder.bounds().getValue(held.id).center))
             assertFalse("No target from a prior gesture can be active", reorder.cancelInteractive)
+            assertTrue(pulses.isEmpty())
         }
         compose.mainClock.advanceTimeBy(48)
         val drawn = compose.onNodeWithTag("cancel-drag").fetchSemanticsNode().boundsInRoot
@@ -207,19 +218,24 @@ class KeyedDragTest {
             val restingTop = reorder.viewportHeight - reorder.cancelBottom - reorder.cancelRadius * 2f
             reorder.move(Offset(reorder.cancelCenter.x, restingTop + 1f))
             assertFalse("The not-yet-visible resting edge must not cancel", reorder.drag!!.overCancel)
+            assertEquals(listOf(ControlHaptic.Strong, ControlHaptic.Weak), pulses)
         }
         compose.mainClock.advanceTimeBy(400)
         compose.runOnIdle {
             assertTrue("X rising under a stationary finger updates hover", reorder.drag!!.overCancel)
+            assertEquals(listOf(ControlHaptic.Strong, ControlHaptic.Weak, ControlHaptic.Strong), pulses)
             reorder.obscuredBottom += reorder.cancelRadius * 3f
         }
         compose.mainClock.advanceTimeByFrame()
         compose.runOnIdle {
             assertFalse("Changing occupancy removes hover without another move", reorder.drag!!.overCancel)
+            assertEquals(listOf(ControlHaptic.Strong, ControlHaptic.Weak, ControlHaptic.Strong, ControlHaptic.Weak), pulses)
             reorder.move(reorder.cancelCenter)
             assertTrue(reorder.drag!!.overCancel)
             reorder.finish(true, true) { _, _, _ -> fail("Cancel cannot commit") }
             assertFalse("A landing/removed X is immediately inactive", reorder.cancelInteractive)
+            assertEquals(listOf(ControlHaptic.Strong, ControlHaptic.Weak, ControlHaptic.Strong,
+                ControlHaptic.Weak, ControlHaptic.Strong), pulses)
         }
         compose.mainClock.autoAdvance = true
         compose.waitUntil(5000) { reorder.drag == null }
@@ -229,12 +245,15 @@ class KeyedDragTest {
             assertTrue(reorder.begin(held, setOf(held.id), reorder.bounds().getValue(held.id).center))
             reorder.move(reorder.cancelCenter)
             assertFalse("Fresh drag cannot inherit the old target", reorder.drag!!.overCancel)
+            assertEquals(5, pulses.size)
         }
         compose.mainClock.advanceTimeBy(48)
         compose.runOnIdle {
             assertTrue(reorder.drag!!.cancelMotion!!.progress < 1f)
             reorder.move(reorder.cancelCenter)
             assertTrue(reorder.drag!!.overCancel)
+            assertEquals(listOf(ControlHaptic.Strong, ControlHaptic.Weak, ControlHaptic.Strong,
+                ControlHaptic.Weak, ControlHaptic.Strong, ControlHaptic.Strong), pulses)
             reorder.viewportHeight = 40
             reorder.cancelRadius = 20f
             reorder.obscuredBottom = 100f
@@ -243,6 +262,32 @@ class KeyedDragTest {
             reorder.finish(true, true) { _, _, _ -> fail("Cancel cannot commit") }
         }
         compose.mainClock.autoAdvance = true
+    }
+
+    @Test fun cancelHoverRoutesDistinctEntryAndExitThroughSharedSink() {
+        val pulses = mutableListOf<ControlHaptic>()
+        fixture(haptics = ControlHaptics { pulses += it })
+        moveDown()
+        compose.runOnIdle {
+            assertTrue("Lift and ordinary insertion are silent", pulses.isEmpty())
+            reorder.move(reorder.cancelCenter)
+            reorder.move(reorder.cancelCenter)
+            reorder.refreshCancelHover()
+            assertEquals(listOf(ControlHaptic.Strong), pulses)
+            reorder.move(Offset.Zero)
+            reorder.move(Offset.Zero)
+            assertEquals(listOf(ControlHaptic.Strong, ControlHaptic.Weak), pulses)
+            reorder.move(reorder.cancelCenter)
+            assertEquals(listOf(ControlHaptic.Strong, ControlHaptic.Weak, ControlHaptic.Strong), pulses)
+            reorder.finish(cancel = true, reducedMotion = true) { _, _, _ -> fail("Cancel cannot commit") }
+            reorder.refreshCancelHover()
+        }
+        compose.waitUntil(5000) { reorder.drag == null }
+        compose.runOnIdle {
+            assertEquals("Release on X adds neither exit nor release feedback",
+                listOf(ControlHaptic.Strong, ControlHaptic.Weak, ControlHaptic.Strong), pulses)
+            assertEquals(entries, reorder.rendered(entries))
+        }
     }
 
 }
