@@ -157,4 +157,120 @@ class PlayerActionSlotsTest {
             assertEquals(sparse, PlayerActionPreferences(context).read())
         } finally { store.edit().clear().commit(); PlayerActionPreferences(context).write(saved) }
     }
+    private fun hapticFixture(events: MutableList<String>, value: () -> PlayerActionSettings,
+        onChange: (PlayerActionSettings) -> Unit) {
+        val sink = ControlHaptics { events += it.name }
+        compose.setContent {
+            CompositionLocalProvider(LocalControlHaptics provides sink) {
+                LocalicaTheme {
+                    PlayerActionCustomizer(value(), { events += "change"; onChange(it) }, {}, reducedMotion = true)
+                }
+            }
+        }
+    }
+
+    @Test fun customizerPickupHoverAndAcceptedDropKeepExistingPulseOrder() {
+        var settings by mutableStateOf(PlayerActionSettings())
+        val events = mutableListOf<String>()
+        hapticFixture(events, { settings }, { settings = it })
+        val editor = compose.onNodeWithTag("player-action-editor")
+        val origin = editor.fetchSemanticsNode().boundsInRoot.topLeft
+        val source = compose.onNodeWithTag("palette-Lyrics").fetchSemanticsNode().boundsInRoot.center
+        val neutral = compose.onNodeWithText("Player actions").fetchSemanticsNode().boundsInRoot.center
+        val first = compose.onNodeWithTag("custom-slot-0:4").fetchSemanticsNode().boundsInRoot.center
+        val last = compose.onNodeWithTag("custom-slot-0:1").fetchSemanticsNode().boundsInRoot.center
+        // A single move outside both slots and pool reveals pickup without an incidental hover tick.
+        editor.performTouchInput { down(source - origin); advanceEventTime(650); moveTo(neutral - origin) }
+        compose.onNodeWithTag("drag-player-action").assertExists()
+        compose.onNodeWithTag("palette-Lyrics").assertDoesNotExist()
+        compose.runOnIdle { assertEquals(listOf("Strong"), events) }
+        editor.performTouchInput { moveTo(first - origin) }
+        compose.runOnIdle { assertEquals(listOf("Strong", "Weak"), events) }
+        editor.performTouchInput { moveTo(first - origin); moveTo(first - origin) }
+        compose.runOnIdle { assertEquals(listOf("Strong", "Weak"), events) }
+        // Change position without a MOVE: hover on UP must precede mutation and completion feedback.
+        editor.performTouchInput { advanceEventTime(16); updatePointerTo(0, last - origin); up() }
+        compose.waitUntil(5000) { compose.onAllNodesWithTag("drag-player-action").fetchSemanticsNodes().isEmpty() }
+        compose.runOnIdle {
+            assertEquals(PlayerAction.Lyrics, settings.slots[ActionSlot(0, 1)])
+            assertEquals(listOf("Strong", "Weak", "Weak", "change", "Weak"), events)
+        }
+    }
+
+    @Test fun customizerNoOpDropAndReturnToPoolRetainCompletionPulse() {
+        var settings by mutableStateOf(PlayerActionSettings())
+        val original = settings
+        val events = mutableListOf<String>()
+        hapticFixture(events, { settings }, { settings = it })
+        val editor = compose.onNodeWithTag("player-action-editor")
+        val origin = editor.fetchSemanticsNode().boundsInRoot.topLeft
+        val source = compose.onNodeWithTag("custom-slot-0:1").fetchSemanticsNode().boundsInRoot.center
+        editor.performTouchInput { down(source - origin); advanceEventTime(650); moveTo(source - origin); up() }
+        compose.waitUntil(5000) { compose.onAllNodesWithTag("drag-player-action").fetchSemanticsNodes().isEmpty() }
+        compose.runOnIdle {
+            assertEquals(original, settings)
+            assertEquals("Accepted same-slot placement is not a silent no-op",
+                listOf("Strong", "Weak", "change", "Weak"), events)
+            events.clear()
+        }
+        val pool = compose.onNodeWithTag("action-palette").fetchSemanticsNode().boundsInRoot.center
+        editor.performTouchInput { down(source - origin); advanceEventTime(650); moveTo(pool - origin) }
+        compose.runOnIdle { assertEquals(listOf("Strong", "Weak"), events) }
+        editor.performTouchInput { moveTo(pool - origin); up() }
+        compose.waitUntil(5000) { compose.onAllNodesWithTag("drag-player-action").fetchSemanticsNodes().isEmpty() }
+        compose.runOnIdle {
+            assertEquals(original.remove(PlayerAction.Playlist), settings)
+            assertEquals(listOf("Strong", "Weak", "change", "Weak"), events)
+        }
+    }
+
+    @Test fun customizerCancellationDoesNotAddCompletionFeedback() {
+        var settings by mutableStateOf(PlayerActionSettings())
+        val original = settings
+        val events = mutableListOf<String>()
+        hapticFixture(events, { settings }, { settings = it })
+        val editor = compose.onNodeWithTag("player-action-editor")
+        val origin = editor.fetchSemanticsNode().boundsInRoot.topLeft
+        val source = compose.onNodeWithTag("custom-slot-0:1").fetchSemanticsNode().boundsInRoot.center
+        val target = compose.onNodeWithTag("custom-slot-0:4").fetchSemanticsNode().boundsInRoot.center
+        editor.performTouchInput { down(source - origin); advanceEventTime(650); moveTo(target - origin) }
+        compose.runOnIdle { assertEquals(listOf("Strong", "Weak"), events) }
+        editor.performTouchInput { cancel() }
+        compose.waitUntil(5000) { compose.onAllNodesWithTag("drag-player-action").fetchSemanticsNodes().isEmpty() }
+        compose.runOnIdle {
+            assertEquals(original, settings)
+            assertEquals(listOf("Strong", "Weak"), events)
+            events.clear()
+        }
+        val neutral = compose.onNodeWithText("Player actions").fetchSemanticsNode().boundsInRoot.center
+        editor.performTouchInput { down(source - origin); advanceEventTime(650); moveTo(neutral - origin) }
+        compose.runOnIdle { assertEquals(listOf("Strong"), events) }
+        editor.performTouchInput { up() }
+        compose.waitUntil(5000) { compose.onAllNodesWithTag("drag-player-action").fetchSemanticsNodes().isEmpty() }
+        compose.runOnIdle {
+            assertEquals(original, settings)
+            assertEquals("No-target release does not become an accepted placement", listOf("Strong"), events)
+        }
+    }
+
+    @Test fun tapPlacementUsesOneWeakWithoutPulsingPaletteSelection() {
+        var settings by mutableStateOf(PlayerActionSettings())
+        val original = settings
+        val events = mutableListOf<String>()
+        hapticFixture(events, { settings }, { settings = it })
+        val palette = compose.onNodeWithTag("palette-Lyrics")
+        palette.performClick()
+        palette.performClick()
+        palette.performClick()
+        compose.runOnIdle { assertEquals(original, settings); assertTrue(events.isEmpty()) }
+        compose.onNodeWithTag("custom-slot-0:4").performClick()
+        compose.runOnIdle {
+            assertEquals(original.place(PlayerAction.Lyrics, ActionSlot(0, 4)), settings)
+            assertEquals(listOf("change", "Weak"), events)
+        }
+        // With no selected pool action this only opens the chooser, not another placement.
+        compose.onNodeWithTag("custom-slot-0:4").performClick()
+        compose.runOnIdle { assertEquals(listOf("change", "Weak"), events) }
+    }
+
 }
