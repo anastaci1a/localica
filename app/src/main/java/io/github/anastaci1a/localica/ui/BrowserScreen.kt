@@ -92,8 +92,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     var measuredSearchSlotHeight by remember { mutableIntStateOf(-1) }
     fun freshSearch() = NavigationState(route.tab, mapOf(route.tab to listOf(route.copy(search = true,
         text = "", queryCommitted = false, key = java.util.UUID.randomUUID().toString()))))
-    var localSearch by androidx.compose.runtime.saveable.rememberSaveable(saver = androidx.compose.runtime.saveable.Saver<androidx.compose.runtime.MutableState<NavigationState>, String>(
-        save = { NavigationCodec.encode(it.value) }, restore = { NavigationCodec.decodeOrNull(it)?.takeIf { state -> state.active == route.tab }?.let { state -> mutableStateOf(state) } })) {
+    var localSearch by androidx.compose.runtime.saveable.rememberSaveable(saver = navigationStateSaver { state -> state.takeIf { it.active == route.tab } }) {
         mutableStateOf(freshSearch())
     }
     var localFocusRequest by androidx.compose.runtime.saveable.rememberSaveable { mutableIntStateOf(0) }

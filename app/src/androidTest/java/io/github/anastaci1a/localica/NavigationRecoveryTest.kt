@@ -7,6 +7,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.junit4.createComposeRule
 import io.github.anastaci1a.localica.navigation.*
+import io.github.anastaci1a.localica.ui.navigationStateSaver
 import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.*
@@ -87,7 +88,7 @@ class NavigationRecoveryTest {
         restoration.setContent {
             roots.forEachIndexed { index, root ->
                 val state = rememberSaveable(saver = Saver<MutableState<NavigationState>, String>(
-                    save = { "{broken" }, restore = { NavigationCodec.decodeOrNull(it)?.let { state -> mutableStateOf(state) } })) {
+                    save = { "{broken" }, restore = { navigationStateSaver().restore(it) })) {
                     initializers[index]++
                     mutableStateOf(root)
                 }
@@ -101,4 +102,58 @@ class NavigationRecoveryTest {
             roots.forEachIndexed { index, root -> assertEquals(root, observed[index]) }
         }
     }
+    @Test fun wholeStateSaverRestoresValidStateWithoutRunningInitializerAgain() {
+        val restoration = StateRestorationTester(compose)
+        var initializations = 0
+        lateinit var current: MutableState<NavigationState>
+        val expected = valid()
+        restoration.setContent {
+            current = rememberSaveable(saver = navigationStateSaver()) {
+                initializations++
+                mutableStateOf(NavigationState.fresh(listOf(MainTab.Home)))
+            }
+        }
+        compose.runOnIdle { current.value = expected }
+        restoration.emulateSavedInstanceStateRestore()
+        compose.runOnIdle {
+            assertEquals(1, initializations)
+            assertEquals(expected, current.value)
+            assertEquals(expected.route, current.value.route)
+            assertEquals(expected.back(true), current.value.back(true))
+        }
+    }
+
+    @Test fun legacyWrappedStringAndUnexpectedOuterTypesHaveExplicitRestorePolicy() {
+        val saver = navigationStateSaver()
+        val expected = valid()
+        val encoded = NavigationCodec.encode(expected)
+        assertEquals(expected, saver.restore(encoded)!!.value)
+        assertEquals(expected, saver.restore(mutableStateOf(encoded))!!.value)
+        for (unexpected in listOf<Any>(42, mutableStateOf(42), mutableStateOf<String?>(null),
+            mutableStateOf("{broken"), mutableStateOf(mutableStateOf(encoded)))) {
+            assertNull(saver.restore(unexpected))
+        }
+    }
+
+    @Test fun callerAdmissionAndReconciliationRunOnlyAfterUsableDecode() {
+        val expected = valid()
+        val encoded = NavigationCodec.encode(expected)
+        var admissions = 0
+        val queueOnly = navigationStateSaver { state -> admissions++; state.takeIf { it.active == MainTab.Queues } }
+        assertNull(queueOnly.restore("{broken"))
+        assertEquals(0, admissions)
+        assertNull(queueOnly.restore(encoded))
+        assertEquals(1, admissions)
+        val queue = NavigationState.fresh(listOf(MainTab.Queues))
+        assertEquals(queue, queueOnly.restore(mutableStateOf(NavigationCodec.encode(queue)))!!.value)
+        val tabs = listOf(MainTab.Library, MainTab.Songs)
+        val root = navigationStateSaver { it.reconcile(tabs) }.restore(encoded)!!.value
+        assertEquals(MainTab.Library, root.active)
+        assertEquals(expected.route, root.route)
+        assertEquals(expected.stacks.getValue(MainTab.Library), root.stacks.getValue(MainTab.Library))
+        assertEquals(listOf(MainTab.Library, MainTab.Songs).toSet(), root.stacks.keys)
+        assertTrue(root.history.isEmpty())
+        assertEquals(MainTab.Songs, root.stacks.getValue(MainTab.Songs).single().tab)
+    }
+
 }
