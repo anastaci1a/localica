@@ -114,9 +114,27 @@ data class QueueJourney(
             .planned(ids, random)
     }
 
+    private data class Reconciliation(val ids: List<String>, val currentEntryId: String?, val modes: JourneyModes)
+    // Only fresh normalized outputs receive this marker. Generated copies and restored values start cold.
+    private var reconciliation: Reconciliation? = null
+
     /** Remove invalid occurrences, retaining valid visits on both sides of the cursor. */
     fun reconcile(ids: List<String>, currentEntryId: String?, requested: JourneyModes,
         random: Random = Random.Default): QueueJourney {
+        reconciliation?.let { previous ->
+            if (previous.currentEntryId == currentEntryId && previous.modes == requested && previous.ids == ids) return this
+        }
+        return reconcileUnprepared(ids, currentEntryId, requested, random).also { result ->
+            // Duplicate occurrences/plans can change future-token ownership on another repair pass.
+            // Preserve that repair rather than treating malformed data as a reusable fixed point.
+            if (ids.toSet().size == ids.size && result.plans.values.all { it.toSet().size == it.size }) {
+                result.reconciliation = Reconciliation(ids.toList(), currentEntryId, requested)
+            }
+        }
+    }
+
+    private fun reconcileUnprepared(ids: List<String>, currentEntryId: String?, requested: JourneyModes,
+        random: Random): QueueJourney {
         if (ids.isEmpty()) return QueueJourney(modes = requested)
         val valid = ids.toSet()
         val selected = currentEntryId?.takeIf { it in valid } ?: ids.first()
