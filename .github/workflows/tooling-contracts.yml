@@ -2,6 +2,8 @@
 name: Evidence tooling contracts
 'on':
   push:
+    # This branch runs the same gate through audit-browse-prototype.yml before native jobs.
+    branches-ignore: [dev/audit-browse-preparation-20261030]
     paths:
       - '.github/workflows/**'
       - 'app/src/androidTest/java/**'
