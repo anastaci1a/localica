@@ -122,6 +122,7 @@ class SoftwareControlCaptureTest {
         assertTrue("New transparent remainder must stay clear", b.toPixelMap()[24, 12].alpha < .01f)
         val old = a.toPixelMap()
         for (i in savedA.indices) assertEquals("Published A stays independent", savedA[i], old[i % old.width, i / old.width].toArgb())
+        equalPixels(render(immutable, false), render(immutable, false, original = true), "immutable cache after B")
         assertEquals(3, counts[LensAllocation.BitmapShader] ?: 0)
         assertEquals(3, counts[LensAllocation.SoftwareRaster] ?: 0)
     }
@@ -181,6 +182,7 @@ class SoftwareControlCaptureTest {
                     6 -> { stableCaptures = captures; stableDraws = draws }
                     7 -> { assertTrue("Reactivation draws", draws > stableDraws); assertTrue("Reactivation owns a fresh capture", captures > stableCaptures) }
                 }
+                android.util.Log.i("ControlCaptureWork", "stage=$next api=${Build.VERSION.SDK_INT} captures=$captures referenceCaptures=$referenceCaptures draws=$draws")
             }
         }
     }
@@ -201,16 +203,18 @@ class SoftwareControlCaptureTest {
         } }
         val slider = compose.onNodeWithTag("actual-slider")
         var held = false
+        val previousAutoAdvance = compose.mainClock.autoAdvance
         var primary: Throwable? = null
         try {
             compose.waitForIdle()
             compose.mainClock.autoAdvance = false
-            slider.performTouchInput { down(center) }
             held = true
+            slider.performTouchInput { down(center) }
             compose.mainClock.advanceTimeBy(240)
             for (fraction in listOf(.8f, .25f, .65f)) {
                 slider.performTouchInput { moveTo(Offset(width * fraction, centerY), delayMillis = 32) }
                 compose.mainClock.advanceTimeBy(64)
+                compose.runOnIdle { android.util.Log.i("ControlCaptureWork", "slider fraction=$fraction value=$value captures=$captures draws=$draws") }
             }
             slider.performTouchInput { up() }
             held = false
@@ -228,7 +232,7 @@ class SoftwareControlCaptureTest {
         finally {
             try { if (held) slider.performTouchInput { cancel() } }
             catch (cleanup: Throwable) { if (primary != null) primary.addSuppressed(cleanup) else throw cleanup }
-            finally { compose.mainClock.autoAdvance = true }
+            finally { compose.mainClock.autoAdvance = previousAutoAdvance }
         }
     }
 
@@ -239,8 +243,12 @@ class SoftwareControlCaptureTest {
         for (y in 0 until a.height) for (x in 0 until a.width) {
             // At most one 8-bit channel quantization step; no geometric or perceptual tolerance.
             val ac = a[x, y]; val bc = b[x, y]
-            for ((v, reference) in listOf(ac.red to bc.red, ac.green to bc.green, ac.blue to bc.blue, ac.alpha to bc.alpha))
-                assertEquals("$label at $x,$y", reference, v, 1f / 255f)
+            val tolerance = 1f / 255f
+            if (!(kotlin.math.abs(ac.red - bc.red) <= tolerance &&
+                kotlin.math.abs(ac.green - bc.green) <= tolerance &&
+                kotlin.math.abs(ac.blue - bc.blue) <= tolerance &&
+                kotlin.math.abs(ac.alpha - bc.alpha) <= tolerance))
+                fail("$label at $x,$y: expected $bc, actual $ac")
         }
     }
 }
