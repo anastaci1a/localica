@@ -24,6 +24,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.editing.CoverImages
 
+/** Optional decoder-entry observation; callbacks run in the decoder context. */
+internal val LocalImagePreviewDecodeObserver = staticCompositionLocalOf<(() -> Unit)?> { null }
+
 @Composable
 internal fun ImageChooser(onDismiss: () -> Unit, onChosen: (String) -> Unit) {
     ImageChooser(rememberArtworkWorkflow("standalone", startChoosing = true), onDismiss, onChosen)
@@ -33,6 +36,7 @@ internal fun ImageChooser(onDismiss: () -> Unit, onChosen: (String) -> Unit) {
 internal fun ImageChooser(workflow: ArtworkWorkflow, onDismiss: () -> Unit, onChosen: (String) -> Unit) {
     val context = LocalContext.current
     val images = remember { CoverImages(context) }
+    val decodeObserver = LocalImagePreviewDecodeObserver.current
     var revision by remember { mutableIntStateOf(0) }
     androidx.lifecycle.compose.LifecycleEventEffect(androidx.lifecycle.Lifecycle.Event.ON_RESUME) { revision++ }
     val hasPermission = remember(revision) {
@@ -58,7 +62,7 @@ internal fun ImageChooser(workflow: ArtworkWorkflow, onDismiss: () -> Unit, onCh
                 horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(recent) { uri ->
                     val cover by produceState<android.graphics.Bitmap?>(null, uri, recent, revision) {
-                        value = try { images.decode(uri, 512) }
+                        value = try { images.decode(uri, 512) { decodeObserver?.invoke() } }
                         catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
                         catch (_: Exception) { null }
                         if (value == null) unavailableRecent = true
