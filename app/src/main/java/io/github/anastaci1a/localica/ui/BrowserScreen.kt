@@ -144,8 +144,8 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     val panelReady = LocalGlassPanelReady.current
     val reportSearchOpening = LocalSearchOpeningReady.current
     val windowFocused = androidx.compose.ui.platform.LocalWindowInfo.current.isWindowFocused
-    val keyboardClosing = WindowInsets.imeAnimationTarget.getBottom(density) == 0 &&
-        (WindowInsets.ime.getBottom(density) > 0 || WindowInsets.imeAnimationSource.getBottom(density) > 0)
+    val keyboardClosing by rememberImeClosing(WindowInsets.ime,
+        WindowInsets.imeAnimationSource, WindowInsets.imeAnimationTarget, density)
     var restoreResultsFocus by remember(route.key) { mutableStateOf(route.search && route.queryCommitted) }
     LaunchedEffect(route.key, playerOpen, focusRequest, inputCompletion, panelReady, windowFocused, keyboardClosing, reportSearchOpening, scopedEditor?.focused) {
         searchEditTrace?.invoke("autofocus decision key=${route.key.hashCode()} request=$focusRequest consumed=$focusedRequest once=$focusedOnce ready=$panelReady window=$windowFocused closing=$keyboardClosing player=$playerOpen editor=${scopedEditor?.let { System.identityHashCode(it) }} active=${scopedEditor?.active} focused=${scopedEditor?.focused}")
