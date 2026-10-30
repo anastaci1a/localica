@@ -236,21 +236,6 @@ class SoftwareControlCaptureTest {
         }
     }
 
-    private fun equalPixels(actual: ImageBitmap, expected: ImageBitmap, label: String) {
-        assertEquals(label, expected.width, actual.width)
-        assertEquals(label, expected.height, actual.height)
-        val a = actual.toPixelMap(); val b = expected.toPixelMap()
-        for (y in 0 until a.height) for (x in 0 until a.width) {
-            // At most one 8-bit channel quantization step; no geometric or perceptual tolerance.
-            val ac = a[x, y]; val bc = b[x, y]
-            // Compare ARGB8 units directly: adjacent normalized Float channels can
-            // subtract to slightly more than 1f / 255f (for example, 16 and 15).
-            val argb = ac.toArgb(); val expectedArgb = bc.toArgb()
-            if (!(kotlin.math.abs((argb ushr 24) - (expectedArgb ushr 24)) <= 1 &&
-                kotlin.math.abs(((argb ushr 16) and 255) - ((expectedArgb ushr 16) and 255)) <= 1 &&
-                kotlin.math.abs(((argb ushr 8) and 255) - ((expectedArgb ushr 8) and 255)) <= 1 &&
-                kotlin.math.abs((argb and 255) - (expectedArgb and 255)) <= 1))
-                fail("$label at $x,$y: expected $bc, actual $ac")
-        }
-    }
+    private fun equalPixels(actual: ImageBitmap, expected: ImageBitmap, label: String) =
+        assertControlCapturePixels(actual, expected, label, "candidate")
 }
