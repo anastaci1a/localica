@@ -2,6 +2,9 @@ package io.github.anastaci1a.localica.library
 
 import io.github.anastaci1a.localica.statistics.ListeningStatistics
 import java.util.concurrent.CancellationException
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -143,5 +146,87 @@ class StatisticsGroupPreparationTest {
         val afterOther = reads.gets
         assertEquals(expected, prepared.groups(SongListView.Albums, first))
         assertEquals(afterOther, reads.gets)
+    }
+
+    @Test fun oversizedMembershipPlansAreRecomputedWithCompleteCurrentCounts() {
+        val values = List(40_001) { index ->
+            Track("large/$index", "Song $index", album = "Large album", fileName = "$index.mp3",
+                relativePath = "$index.mp3", id = "large:$index")
+        }
+        val reads = Reads(values)
+        val base = source(reads)
+        val current = ListeningStatistics(mapOf(values.first().id to 7L, values.last().id to 9L)).applyTo(base)
+        val query = LibraryQuery(sort = TrackSort.Manual)
+        val expectedIds = values.map { it.id }
+        repeat(2) {
+            val before = reads.gets
+            val groups = LibraryViews.Preparation(current) {}.groups(SongListView.Albums, query)
+            assertTrue("An oversized plan must read source metadata again on every request", reads.gets > before)
+            val group = groups.single()
+            assertEquals("Large album", group.title)
+            assertEquals(expectedIds, group.tracks.map { it.id })
+            assertEquals(current.tracks, group.tracks)
+            group.tracks.forEachIndexed { index, track -> assertSame(current.tracks[index], track) }
+            assertEquals(7L, group.tracks.first().playCount)
+            assertEquals(9L, group.tracks.last().playCount)
+            assertEquals(16L, group.tracks.sumOf { it.playCount })
+        }
+        assertTrue("Overlay must leave the metadata source unchanged", values.all { it.playCount == 0L })
+    }
+
+    @Test fun oldAndNewMetadataPreparationsRemainIndependentAcrossWorkerCompletionOrder() {
+        val oldReads = Reads(original)
+        val oldSource = source(oldReads)
+        val oldCurrent = ListeningStatistics(mapOf("duplicate" to 4L)).applyTo(oldSource)
+        val newValues = original.map { track ->
+            track.copy(album = "New album", durationMs = 9876L,
+                locations = listOf(TrackLocation("new", "new/${track.uri}", "fresh/${track.fileName}")))
+        }
+        val newReads = Reads(newValues)
+        val newSource = LibrarySnapshot(folders = listOf(FolderSelection("new", "New root")), tracks = newReads)
+        val newCurrent = ListeningStatistics(mapOf("duplicate" to 8L, "other" to 12L)).applyTo(newSource)
+        val albumQuery = LibraryViews.defaults(SongListView.Albums)
+        val folderQuery = LibraryViews.defaults(SongListView.Folders)
+        fun groups(snapshot: LibrarySnapshot, checkActive: () -> Unit = {}): Pair<List<LibraryGroup>, List<LibraryGroup>> {
+            val preparation = LibraryViews.Preparation(snapshot, checkActive)
+            return preparation.groups(SongListView.Albums, albumQuery) to
+                preparation.groups(SongListView.Folders, folderQuery)
+        }
+        fun expected(snapshot: LibrarySnapshot) =
+            OriginalStatisticsGroups.groups(snapshot, SongListView.Albums, albumQuery) to
+                OriginalStatisticsGroups.groups(snapshot, SongListView.Folders, folderQuery)
+        val oldExpected = expected(oldCurrent)
+        val newExpected = expected(newCurrent)
+        val oldEntered = CountDownLatch(1)
+        val releaseOld = CountDownLatch(1)
+        val workers = Executors.newFixedThreadPool(2)
+        try {
+            val oldResult = workers.submit<Pair<List<LibraryGroup>, List<LibraryGroup>>> {
+                var held = false
+                groups(oldCurrent) {
+                    if (!held) {
+                        held = true
+                        oldEntered.countDown()
+                        assertTrue("Old worker release is bounded", releaseOld.await(10, TimeUnit.SECONDS))
+                    }
+                }
+            }
+            assertTrue("Old source starts first", oldEntered.await(10, TimeUnit.SECONDS))
+            val newResult = workers.submit<Pair<List<LibraryGroup>, List<LibraryGroup>>> { groups(newCurrent) }
+            assertEquals(newExpected, newResult.get(10, TimeUnit.SECONDS))
+            assertFalse("Old source remains held until the new source completes", oldResult.isDone)
+            releaseOld.countDown()
+            assertEquals(oldExpected, oldResult.get(10, TimeUnit.SECONDS))
+            val oldBeforeWarm = oldReads.gets
+            val newBeforeWarm = newReads.gets
+            assertEquals(newExpected, groups(newCurrent))
+            assertEquals(oldExpected, groups(oldCurrent))
+            assertEquals("Old completion must not evict the new metadata source", newBeforeWarm, newReads.gets)
+            assertEquals("New preparation must not contaminate the old metadata source", oldBeforeWarm, oldReads.gets)
+        } finally {
+            releaseOld.countDown()
+            workers.shutdown()
+            assertTrue("All released workers finish before fixture cleanup", workers.awaitTermination(15, TimeUnit.SECONDS))
+        }
     }
 }
