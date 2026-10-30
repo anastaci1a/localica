@@ -1,7 +1,7 @@
-name: Audit queue reconciliation reuse (not release)
+name: Audit empty playback template release (not release)
 'on':
   push:
-    branches: [dev/audit-queue-reconciliation-gate-20261030]
+    branches: [dev/audit-empty-playback-retention-gate-20261030]
 permissions:
   contents: read
 jobs:
@@ -27,7 +27,7 @@ jobs:
             display: compact
     env:
       TEST_API: ${{ matrix.api }}
-      SELECTORS: io.github.anastaci1a.localica.QueueJourneyPlaybackTest,io.github.anastaci1a.localica.QueueJourneyPersistenceTest,io.github.anastaci1a.localica.QueueJourneyInsertPersistenceTest,io.github.anastaci1a.localica.PreparedQueuePlaybackTest,io.github.anastaci1a.localica.QueueRestoreTest,io.github.anastaci1a.localica.QueueRecoveryTest,io.github.anastaci1a.localica.QueuedSettingsTest,io.github.anastaci1a.localica.GlobalPlaybackModesTest,io.github.anastaci1a.localica.AdvancedRepeatTest,io.github.anastaci1a.localica.QueueReorderCommandTest,io.github.anastaci1a.localica.QueuePersistenceTest,io.github.anastaci1a.localica.QueueRandomizePlaybackTest,io.github.anastaci1a.localica.ShuffleModePlaybackTest
+      SELECTORS: io.github.anastaci1a.localica.PlaybackIntentTest,io.github.anastaci1a.localica.PreparedQueuePlaybackTest,io.github.anastaci1a.localica.QueueRestoreTest,io.github.anastaci1a.localica.QueueRecoveryTest,io.github.anastaci1a.localica.QueueJourneyPlaybackTest,io.github.anastaci1a.localica.QueuePersistenceTest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - uses: ./.github/actions/focused-android-setup
@@ -55,7 +55,7 @@ jobs:
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
-          name: audit-queue-reconciliation-api-${{ matrix.api }}
+          name: audit-empty-playback-retention-api-${{ matrix.api }}
           path: |
             app/build/reports/
             app/build/test-results/
