@@ -18,7 +18,8 @@ class NavigationRecoveryTest {
         MainTab.Home to listOf(BrowseRoute(MainTab.Home, key = "home")),
         MainTab.Library to listOf(BrowseRoute(MainTab.Library, key = "library"),
             BrowseRoute(MainTab.Library, MediaRef(MediaKind.Album, "album"), "Album",
-                search = true, text = "query", filter = MediaKind.Song, key = "detail", queryCommitted = true))),
+                search = true, text = "query", filter = MediaKind.Song, key = "detail", queryCommitted = true,
+                querySort = io.github.anastaci1a.localica.library.TrackSort.Year, queryAscending = false))),
         listOf(MainTab.Home))
     private fun detail(json: JSONObject) = json.getJSONObject("stacks").getJSONArray("Library").getJSONObject(1)
 
@@ -66,10 +67,10 @@ class NavigationRecoveryTest {
         detail(json).remove("committed")
         detail(json).put("sort", "FutureSort")
         detail(json).remove("ascending")
-        assertEquals(state, NavigationCodec.decodeOrNull(json.toString()))
+        assertEquals(state.update(state.route.copy(querySort = null, queryAscending = null)), NavigationCodec.decodeOrNull(json.toString()))
         detail(json).remove("id")
         detail(json).put("kind", "FutureKind")
-        assertEquals(state.update(state.route.copy(collection = null)), NavigationCodec.decodeOrNull(json.toString()))
+        assertEquals(state.update(state.route.copy(collection = null, querySort = null, queryAscending = null)), NavigationCodec.decodeOrNull(json.toString()))
     }
 
     @Test fun rejectedSaverValueReinitializesEachOwnerInsteadOfPublishingPartialState() {
