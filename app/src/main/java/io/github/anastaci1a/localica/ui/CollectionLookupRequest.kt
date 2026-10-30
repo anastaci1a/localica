@@ -49,7 +49,7 @@ internal class CollectionLookupHandle(val cancel: () -> Unit,
 internal fun rememberCollectionLookup(snapshot: LibrarySnapshot, playlists: List<ManualPlaylist>,
     sorts: BrowseSortSnapshot, dispatcher: CoroutineDispatcher = Dispatchers.Default,
     onOpen: (BrowserItem) -> Unit): CollectionLookupHandle {
-    val scope = rememberCoroutineScope()
+    val scope = rememberCoroutineScope { Dispatchers.Main.immediate }
     val requests = remember { CollectionLookupRequests() }
     val source = CollectionLookupSource(snapshot, playlists, sorts)
     val latestSource = rememberUpdatedState(source)
