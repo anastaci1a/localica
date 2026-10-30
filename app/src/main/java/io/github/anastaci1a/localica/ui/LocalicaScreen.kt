@@ -192,13 +192,7 @@ fun LocalicaScreen(
             PlayerAction.ForwardTen -> onSeek(playback.positionMs + 10000)
             PlayerAction.More -> playerMore = true
             else -> {
-                val kind = when (action) { PlayerAction.Album -> MediaKind.Album; PlayerAction.Artist -> MediaKind.Artist
-                    PlayerAction.AlbumArtist -> MediaKind.AlbumArtist; else -> MediaKind.Folder }
-                val tab = when (kind) { MediaKind.Album -> MainTab.Albums; MediaKind.Artist -> MainTab.Artists
-                    MediaKind.AlbumArtist -> MainTab.AlbumArtists; else -> MainTab.Folders }
-                val item = io.github.anastaci1a.localica.browse.BrowseQueries.evaluate(library.snapshot, playlist.playlists, BrowseRoute(tab), sorts = browseSorts)
-                    .items.firstOrNull { item -> item.songs.any { it.track.id == track.id &&
-                        (action != PlayerAction.Folder || io.github.anastaci1a.localica.library.sameSongInformationLocation(it.track, track)) } }
+                val item = collectionItemForTrack(action, track, library.snapshot, playlist.playlists, browseSorts)
                 if (item != null) openCollection(item)
             }
         }
