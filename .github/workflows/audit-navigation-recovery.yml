@@ -1,7 +1,7 @@
-name: Audit menu icons and canonical ordering (not release)
+name: Audit shared motion, search and fixture leaves (not release)
 'on':
   push:
-    branches: [dev/audit-menu-canonical-20261030]
+    branches: [dev/audit-shared-primitives-20261030]
 permissions:
   contents: read
 jobs:
@@ -27,12 +27,12 @@ jobs:
             display: compact
     env:
       TEST_API: ${{ matrix.api }}
-      SELECTORS: io.github.anastaci1a.localica.LibraryDatabaseTest,io.github.anastaci1a.localica.LibraryPlaybackReadTest,io.github.anastaci1a.localica.IncompleteScanTest,io.github.anastaci1a.localica.ActivationHapticsTest,io.github.anastaci1a.localica.ControlStateMotionTest,io.github.anastaci1a.localica.GlassMenuViewportTouchTest,io.github.anastaci1a.localica.LibraryFilterTest,io.github.anastaci1a.localica.PlaylistCoverActionTest,io.github.anastaci1a.localica.GalleryNavigationTest,io.github.anastaci1a.localica.QueueSaveOriginTest,io.github.anastaci1a.localica.LyricsInteractionTest
+      SELECTORS: io.github.anastaci1a.localica.SelectorRegistrationTest,io.github.anastaci1a.localica.LiquidGlassTest,io.github.anastaci1a.localica.SelectorCrossMotionTest,io.github.anastaci1a.localica.SelectorTrackControlsTest,io.github.anastaci1a.localica.GlassPressureTest,io.github.anastaci1a.localica.SelectorReboundRecordingTest,io.github.anastaci1a.localica.ListSearchTest,io.github.anastaci1a.localica.SearchSourceRevisionTest,io.github.anastaci1a.localica.AdvancedRepeatTest,io.github.anastaci1a.localica.GlobalPlaybackModesTest,io.github.anastaci1a.localica.LyricsInteractionTest,io.github.anastaci1a.localica.LyricsPlayerReopenTest,io.github.anastaci1a.localica.MissingLyricsMotionTest,io.github.anastaci1a.localica.PlayerExpansionMotionTest,io.github.anastaci1a.localica.GlassShadowTest,io.github.anastaci1a.localica.PopupShadowContinuityTest,io.github.anastaci1a.localica.SelectionLensTest,io.github.anastaci1a.localica.SelectionMotionRenderingTest,io.github.anastaci1a.localica.ArtistSelectionPlacementTest,io.github.anastaci1a.localica.PlaylistSelectionPlacementTest,io.github.anastaci1a.localica.QueueSelectionPlacementTest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - uses: ./.github/actions/focused-android-setup
       - name: Compile instrumentation and verify focused JVM contracts
-        run: ./gradlew testDebugUnitTest --tests io.github.anastaci1a.localica.library.CanonicalTrackOrderTest --tests io.github.anastaci1a.localica.library.TreeScannerTest --tests io.github.anastaci1a.localica.library.LibraryRepositoryTest --tests io.github.anastaci1a.localica.library.LibraryQueryTest --tests io.github.anastaci1a.localica.library.LibraryQuerySortKeysTest assembleDebug assembleDebugAndroidTest --no-daemon --max-workers=2
+        run: ./gradlew testDebugUnitTest --tests io.github.anastaci1a.localica.ui.GlassMomentumTest --tests io.github.anastaci1a.localica.ui.GlassReversalTest --tests io.github.anastaci1a.localica.ui.ControlGeometryTest --tests io.github.anastaci1a.localica.ui.SelectorCrossReturnTest --tests io.github.anastaci1a.localica.browse.BrowseQueriesTest --tests io.github.anastaci1a.localica.library.LibraryQueryTest --tests io.github.anastaci1a.localica.library.LibrarySearchIndexTest --tests io.github.anastaci1a.localica.browse.CollectionSortingTest --tests io.github.anastaci1a.localica.ui.LensGeometryTest --tests io.github.anastaci1a.localica.ui.MediaItemContourTest --tests io.github.anastaci1a.localica.ui.SelectionMotionTest --tests io.github.anastaci1a.localica.ui.SelectionDistanceFieldTest assembleDebug assembleDebugAndroidTest --no-daemon --max-workers=2
       - uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
         with:
           api-level: ${{ matrix.api }}
@@ -55,7 +55,7 @@ jobs:
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
-          name: audit-menu-canonical-api-${{ matrix.api }}
+          name: audit-shared-primitives-api-${{ matrix.api }}
           path: |
             app/build/reports/
             app/build/test-results/
