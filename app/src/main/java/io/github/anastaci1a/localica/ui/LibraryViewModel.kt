@@ -10,6 +10,7 @@ import io.github.anastaci1a.localica.scanner.ScanState
 import io.github.anastaci1a.localica.statistics.withListeningStatistics
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
@@ -38,6 +39,7 @@ class LibraryViewModel(
     val library = mutableLibrary.asStateFlow()
     val playlist = playlists.state
     private var folderJob: Job? = null
+    private val accessRequests = LatestUiRequest()
 
     init {
         viewModelScope.launch {
@@ -83,8 +85,10 @@ class LibraryViewModel(
         if (index >= 0) playback.queues.tap(tracks, index)
     }
     fun refreshAccess() {
-        val missing = library.value.snapshot.folders.filterNot(repository::hasAccess).map { it.uri }.toSet()
-        mutableLibrary.update { it.copy(unavailableFolders = missing) }
+        refreshFolderAccess(accessRequests, viewModelScope, Dispatchers.IO, library.value.snapshot.folders,
+            { library.value.snapshot.folders }, { repository.unavailableFolders(it) }) { missing ->
+            mutableLibrary.update { it.copy(unavailableFolders = missing) }
+        }
     }
     override fun onCleared() { playback.close() }
 }

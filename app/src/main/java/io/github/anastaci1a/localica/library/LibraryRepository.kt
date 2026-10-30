@@ -38,6 +38,11 @@ class LibraryRepository(
 
     fun hasAccess(folder: FolderSelection) = permissions.hasReadAccess(folder.uri)
 
+    fun unavailableFolders(folders: List<FolderSelection>): Set<String> {
+        val requested = folders.mapTo(linkedSetOf()) { it.uri }
+        return requested - permissions.readable(requested)
+    }
+
     fun playableTrack(track: Track): Track = playableTrack(track, permissions::hasReadAccess)
 
     fun playableTracks(tracks: List<Track>): List<Track> {
