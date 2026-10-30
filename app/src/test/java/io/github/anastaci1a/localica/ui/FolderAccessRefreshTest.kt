@@ -33,15 +33,17 @@ class FolderAccessRefreshTest {
         val dispatcher = StandardTestDispatcher(testScheduler)
         val release = CompletableDeferred<Unit>()
         val published = mutableListOf<Set<String>>()
-        refreshFolderAccess(requests, this, dispatcher, folders, { folders }, {
-            withContext(NonCancellable) { release.await() }; setOf("root")
-        }, published::add)
-        runCurrent()
-        refreshFolderAccess(requests, this, dispatcher, folders, { folders }, { emptySet() }, published::add)
-        runCurrent()
-        assertEquals(listOf(emptySet<String>()), published)
-        release.complete(Unit); advanceUntilIdle()
-        assertEquals(listOf(emptySet<String>()), published)
+        try {
+            refreshFolderAccess(requests, this, dispatcher, folders, { folders }, {
+                withContext(NonCancellable) { release.await() }; setOf("root")
+            }, published::add)
+            runCurrent()
+            refreshFolderAccess(requests, this, dispatcher, folders, { folders }, { emptySet() }, published::add)
+            runCurrent()
+            assertEquals(listOf(emptySet<String>()), published)
+            release.complete(Unit); advanceUntilIdle()
+            assertEquals(listOf(emptySet<String>()), published)
+        } finally { release.complete(Unit); requests.cancel(); advanceUntilIdle() }
     }
 
     @Test fun changedFolderOwnerAndDisposedScopeCannotPublishLateMissingFolders() = runTest {
@@ -51,13 +53,14 @@ class FolderAccessRefreshTest {
             val parent = Job(coroutineContext[Job])
             val scope = CoroutineScope(coroutineContext + parent)
             val published = mutableListOf<Set<String>>()
-            refreshFolderAccess(LatestUiRequest(), scope, StandardTestDispatcher(testScheduler), folders,
-                { current }, { withContext(NonCancellable) { release.await() }; setOf("root") }, published::add)
-            runCurrent()
-            if (dispose) parent.cancel() else current = listOf(FolderSelection("other", "Other"))
-            release.complete(Unit); advanceUntilIdle()
-            assertTrue(published.isEmpty())
-            parent.cancel()
+            try {
+                refreshFolderAccess(LatestUiRequest(), scope, StandardTestDispatcher(testScheduler), folders,
+                    { current }, { withContext(NonCancellable) { release.await() }; setOf("root") }, published::add)
+                runCurrent()
+                if (dispose) parent.cancel() else current = listOf(FolderSelection("other", "Other"))
+                release.complete(Unit); advanceUntilIdle()
+                assertTrue(published.isEmpty())
+            } finally { release.complete(Unit); parent.cancel(); advanceUntilIdle() }
         }
     }
 
