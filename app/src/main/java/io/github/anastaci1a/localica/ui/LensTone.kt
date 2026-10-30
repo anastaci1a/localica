@@ -2,7 +2,6 @@ package io.github.anastaci1a.localica.ui
 
 import android.graphics.Bitmap
 import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 
 /** Same ordered shadow-lift curve as the lens shader, prepared once per shared
@@ -10,9 +9,8 @@ import androidx.compose.ui.graphics.asImageBitmap
 internal fun tintLensSnapshot(image: ImageBitmap, amount: Float): ImageBitmap {
     val tint = amount.coerceIn(0f, 1f)
     if (tint == 0f) return image
-    val original = image.asAndroidBitmap().copy(Bitmap.Config.ARGB_8888, false)
-    val pixels = IntArray(original.width * original.height)
-    original.getPixels(pixels, 0, original.width, 0, 0, original.width, original.height)
+    val source = readGlassPixels(image, 1)
+    val pixels = source.pixels
     for (i in pixels.indices) {
         val c = pixels[i]
         val r = ((c ushr 16) and 255) / 255f; val g = ((c ushr 8) and 255) / 255f; val b = (c and 255) / 255f
@@ -22,7 +20,6 @@ internal fun tintLensSnapshot(image: ImageBitmap, amount: Float): ImageBitmap {
         fun channel(v: Float) = ((v + (1f - v) * a) * 255).toInt().coerceIn(0, 255)
         pixels[i] = (c and (255 shl 24)) or (channel(r) shl 16) or (channel(g) shl 8) or channel(b)
     }
-    val result = Bitmap.createBitmap(pixels, original.width, original.height, Bitmap.Config.ARGB_8888)
-    original.recycle()
+    val result = Bitmap.createBitmap(pixels, source.width, source.height, Bitmap.Config.ARGB_8888)
     return result.asImageBitmap()
 }
