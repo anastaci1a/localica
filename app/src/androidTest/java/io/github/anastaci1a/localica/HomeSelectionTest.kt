@@ -192,11 +192,16 @@ class HomeSelectionTest {
         var playerOpen by mutableStateOf(false)
         val committedPolicy = java.util.concurrent.atomic.AtomicReference<Pair<Boolean, Boolean>?>(null)
         val policyCommits = java.util.concurrent.atomic.AtomicInteger()
+        val childPolicies = java.util.Collections.synchronizedList(mutableListOf<String>())
+        val droppedChildPolicies = java.util.concurrent.atomic.AtomicInteger()
+        val observeChildPolicy: (String) -> Unit = { event -> synchronized(childPolicies) {
+            if (childPolicies.size < 128) childPolicies.add(event) else droppedChildPolicies.incrementAndGet()
+        } }
         compose.setContent { LocalicaTheme {
             val composedActive = active
             val composedPlayerOpen = playerOpen
             SideEffect { committedPolicy.set(composedActive to composedPlayerOpen); policyCommits.incrementAndGet() }
-            CompositionLocalProvider(LocalSessionSelection provides session) {
+            CompositionLocalProvider(LocalSessionSelection provides session, LocalReturnPolicyObserver provides observeChildPolicy) {
                 Box(Modifier.size(320.dp, 240.dp)) {
                     PinnedHome(LibraryUiState(snapshot, loading = false), PlaylistState(loading = false), pins,
                         {}, {}, { _, _ -> }, {}, { _, _ -> }, reducedMotion = true,
@@ -218,8 +223,16 @@ class HomeSelectionTest {
             val committed = committedPolicy.get()
             try {
                 android.util.Log.i("HomeReturnPolicy", "requestedActive=false lastCommitted=$committed commits=${policyCommits.get()}")
+                synchronized(childPolicies) { childPolicies.toList() }.forEachIndexed { index, event ->
+                    android.util.Log.i("HomeReturnPolicy", "beforeFailureFrameChildPolicy index=$index event=$event")
+                }
+                android.util.Log.i("HomeReturnPolicy", "beforeFailureFrameChildPolicyDropped=${droppedChildPolicies.get()}")
                 compose.mainClock.advanceTimeByFrame()
                 val afterFrame = compose.onAllNodesWithContentDescription("Return to top").fetchSemanticsNodes()
+                synchronized(childPolicies) { childPolicies.toList() }.forEachIndexed { index, event ->
+                    android.util.Log.i("HomeReturnPolicy", "afterFailureFrameChildPolicy index=$index event=$event")
+                }
+                android.util.Log.i("HomeReturnPolicy", "afterFailureFrameChildPolicyDropped=${droppedChildPolicies.get()}")
                 android.util.Log.i("HomeReturnPolicy", "afterOneFailureFrame nodes=${afterFrame.size} lastCommitted=${committedPolicy.get()} commits=${policyCommits.get()}")
             } catch (diagnostic: Throwable) {
                 if (diagnostic !== failure) failure.addSuppressed(diagnostic)

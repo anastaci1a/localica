@@ -37,6 +37,8 @@ internal fun rememberFloatingControlMotion(visible: Boolean,
     val target = rememberUpdatedState(visible)
     val policy = rememberUpdatedState(reduced)
     val motion = remember { FloatingControlMotion(animation, target, policy) }
+    val policyObserver = LocalReturnPolicyObserver.current
+    if (policyObserver != null) SideEffect { policyObserver("motion visible=$visible effectiveReduced=$reduced") }
     LaunchedEffect(visible, reduced, speed) {
         val destination = if (visible) 1f else 0f
         if (reduced) animation.snapTo(destination)

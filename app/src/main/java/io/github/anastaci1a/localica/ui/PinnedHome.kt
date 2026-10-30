@@ -134,8 +134,11 @@ internal fun PinnedHome(library: LibraryUiState, playlists: PlaylistState, pins:
         } } }
     }
     CompositionLocalProvider(LocalFrostedBackdrop provides listBackdrop) {
+        val returnVisible = selectionVisible && !playerOpen && currentOrder && songs.isNotEmpty() && !session.active && scroll.canScrollBackward && !returnToList.pending
+        val policyObserver = LocalReturnPolicyObserver.current
+        if (policyObserver != null) SideEffect { policyObserver("home selectionVisible=$selectionVisible playerOpen=$playerOpen returnVisible=$returnVisible") }
         FloatingReturnToPositionButton(up = true, label = "Return to top",
-            visible = selectionVisible && !playerOpen && currentOrder && songs.isNotEmpty() && !session.active && scroll.canScrollBackward && !returnToList.pending,
+            visible = returnVisible,
             reducedMotion = reducedMotion,
             returning = returnToList.pending,
             modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = LocalBrowseObscuredInset.current)) {

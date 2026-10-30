@@ -21,8 +21,12 @@ import androidx.compose.ui.unit.dp
 import kotlin.math.roundToInt
 import io.github.anastaci1a.localica.R
 
+internal val LocalReturnPolicyObserver = staticCompositionLocalOf<((String) -> Unit)?> { null }
+
 @Composable
 internal fun ReturnToPositionButton(up: Boolean, label: String, visible: Boolean = true, onClick: () -> Unit) {
+    val policyObserver = LocalReturnPolicyObserver.current
+    if (policyObserver != null) SideEffect { policyObserver("button visible=$visible") }
     var direction by remember { mutableStateOf(up) }
     SideEffect { if (visible) direction = up }
     val activate = controlActivation(enabled = visible, onClick = onClick)
@@ -42,13 +46,18 @@ internal fun FloatingReturnToPositionButton(up: Boolean, label: String, visible:
     reducedMotion: Boolean, modifier: Modifier = Modifier, returning: Boolean = false, onClick: () -> Unit) {
     val motion = rememberFloatingControlMotion(visible, reducedMotion)
     val rise = with(LocalDensity.current) { FloatingControlRise.toPx() }
-    if (motion.retained && !returning) Box(modifier.testTag("floating-return-control")
+    val retained = motion.retained
+    val policyObserver = LocalReturnPolicyObserver.current
+    if (policyObserver != null) SideEffect { policyObserver("floating visible=$visible retained=$retained reducedRequest=$reducedMotion returning=$returning") }
+    if (retained && !returning) Box(modifier.testTag("floating-return-control")
         .offset { IntOffset(0, motion.offsetY(rise).roundToInt()) }
         .graphicsLayer {
             alpha = motion.alpha
             val scale = .92f + .08f * motion.progress
             scaleX = scale; scaleY = scale
         }) {
-        ReturnToPositionButton(up, label, visible = motion.interactive, onClick = onClick)
+        val interactive = motion.interactive
+        if (policyObserver != null) SideEffect { policyObserver("floating-input visible=$visible interactive=$interactive") }
+        ReturnToPositionButton(up, label, visible = interactive, onClick = onClick)
     }
 }
