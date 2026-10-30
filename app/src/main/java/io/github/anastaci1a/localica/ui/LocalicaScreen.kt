@@ -352,8 +352,8 @@ fun LocalicaScreen(
                 onSearch = { navigation = navigation.commitSearch().open(BrowseRoute(navigation.active, search = true, globalSearch = true)) },
                 onMore = { moreOpen = true })
             GlassMenu(moreOpen, utilityAnchor, { moreOpen = false }) {
-                ActionMenuItem("Scan music", onClick = { moreOpen = false; scannerOpen = true })
-                ActionMenuItem("Settings", onClick = { moreOpen = false; settingsCategory = null; settingsOpen = true })
+                ActionMenuItem("Scan music", icon = R.drawable.ic_folder, onClick = { moreOpen = false; scannerOpen = true })
+                ActionMenuItem("Settings", icon = R.drawable.ic_settings, onClick = { moreOpen = false; settingsCategory = null; settingsOpen = true })
             }
         }
         FloatingSelectionPanel(selectionPanel, Modifier.align(Alignment.BottomCenter)

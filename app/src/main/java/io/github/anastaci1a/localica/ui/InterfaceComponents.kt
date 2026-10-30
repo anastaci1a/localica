@@ -58,8 +58,9 @@ internal fun MainTab.icon() = when (this) {
 
 /** Shared action presentation for item, artwork, queue, and application menus. */
 @Composable
-internal fun ActionMenuItem(label: String, enabled: Boolean = true, onClick: () -> Unit) {
-    val icon = when {
+internal fun ActionMenuItem(label: String, enabled: Boolean = true, icon: Int? = null, onClick: () -> Unit) {
+    // Production callers own icons; omitted icons retain the legacy label-based fallback.
+    val resolvedIcon = icon ?: when {
         label == "Sort" -> R.drawable.ic_sort
         label == "View options" -> R.drawable.ic_eye
         label == "Set playlist image" -> R.drawable.ic_albums
@@ -83,7 +84,7 @@ internal fun ActionMenuItem(label: String, enabled: Boolean = true, onClick: () 
         else -> R.drawable.ic_more
     }
     Box(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)) {
-        GlassActionButton(icon, label, Modifier.fillMaxWidth(), enabled = enabled, onClick = onClick)
+        GlassActionButton(resolvedIcon, label, Modifier.fillMaxWidth(), enabled = enabled, onClick = onClick)
     }
 }
 

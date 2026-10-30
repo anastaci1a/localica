@@ -79,8 +79,8 @@ internal fun PlaylistCreationButton(library: LibrarySnapshot, state: PlaylistSta
         }
         GlassMorphPopup(menu, menuAnchor, { menu = false }) {
             GlassMenuContent {
-            ActionMenuItem("Create playlist", enabled = !state.loading && !loading, onClick = { menu = false; naming = true })
-            ActionMenuItem("Import playlist from file", enabled = !state.loading && !loading,
+            ActionMenuItem("Create playlist", icon = R.drawable.ic_playlist, enabled = !state.loading && !loading, onClick = { menu = false; naming = true })
+            ActionMenuItem("Import playlist from file", icon = R.drawable.ic_playlist, enabled = !state.loading && !loading,
                 onClick = { menu = false; picker.launch(arrayOf("*/*")) })
             }
         }

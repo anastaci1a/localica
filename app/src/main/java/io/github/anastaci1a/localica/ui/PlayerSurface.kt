@@ -388,9 +388,9 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
                     onLongClick = { artworkAction(settings.artworkHold, editArtwork) }) else Modifier)) {
                 GlassMenu(artworkMenu, rememberGlassAnchor(), { artworkMenu = false }) {
                     val menuEditArtwork = presentedArtworkEdit()
-                    ActionMenuItem("View artwork", onClick = { artworkMenu = false; viewing = true })
-                    if (menuEditArtwork != null && track != null) ActionMenuItem("Change artwork", onClick = { artworkMenu = false; menuEditArtwork(track) })
-                    ActionMenuItem("Configure tap action", onClick = { artworkMenu = false; configureTap = true })
+                    ActionMenuItem("View artwork", icon = R.drawable.ic_albums, onClick = { artworkMenu = false; viewing = true })
+                    if (menuEditArtwork != null && track != null) ActionMenuItem("Change artwork", icon = R.drawable.ic_albums, onClick = { artworkMenu = false; menuEditArtwork(track) })
+                    ActionMenuItem("Configure tap action", icon = R.drawable.ic_settings, onClick = { artworkMenu = false; configureTap = true })
                 }
             }
             if (handleReveal > 0f) Box(Modifier.offset(y = statusInset).fillMaxWidth().height(48.dp).graphicsLayer { alpha = handleReveal }) {
