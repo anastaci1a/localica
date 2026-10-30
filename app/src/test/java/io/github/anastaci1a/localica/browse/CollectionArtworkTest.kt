@@ -180,7 +180,7 @@ class CollectionArtworkTest {
             allCollections = setOf(MediaKind.Album, MediaKind.Artist, MediaKind.AlbumArtist, MediaKind.Folder))
         println("12,000 tracks / ${result.items.size} collection covers: ${(System.nanoTime() - started) / 1_000_000} ms")
         assertEquals(2040, result.items.size)
-        assertEquals("One library scan per grouping kind, independent of group count", tracks.size * 4, reads)
+        assertEquals("One library scan per distinct grouping query (Album and Folder)", tracks.size * 2, reads)
         result.items.forEach { item ->
             val expected = if (item.ref.kind in setOf(MediaKind.Artist, MediaKind.AlbumArtist)) {
                 // Independent oracle for this fixture: every disc/track number
