@@ -100,20 +100,24 @@ val standaloneStdlib = providers.provider {
 }
 val standaloneRuntimeDirectory = layout.buildDirectory.dir("generated/standalone-test-runtime")
 val prepareStandaloneTestRuntime = tasks.register<Copy>("prepareStandaloneTestRuntime") {
-    from(standaloneStdlib.map { it.file })
-    into(standaloneRuntimeDirectory)
+    // Capture value providers in the action, not the build script or resolved artifacts.
+    val runtimeJar = standaloneStdlib.map { it.file }
+    val runtimeCoordinate = standaloneStdlib.map { it.moduleVersion.id.toString() }
+    val runtimeDirectory = standaloneRuntimeDirectory
+    from(runtimeJar)
+    into(runtimeDirectory)
     rename { "kotlin-stdlib-standalone.jar" }
-    inputs.property("resolvedCoordinate", standaloneStdlib.map { it.moduleVersion.id.toString() })
-    outputs.file(standaloneRuntimeDirectory.map { it.file("binding.txt") })
+    inputs.property("resolvedCoordinate", runtimeCoordinate)
+    outputs.file(runtimeDirectory.map { it.file("binding.txt") })
     doLast {
-        val artifact = standaloneStdlib.get()
-        val copied = standaloneRuntimeDirectory.get().file("kotlin-stdlib-standalone.jar").asFile
+        val original = runtimeJar.get()
+        val copied = runtimeDirectory.get().file("kotlin-stdlib-standalone.jar").asFile
         fun digest(file: java.io.File): String = MessageDigest.getInstance("SHA-256")
             .digest(file.readBytes()).joinToString("") { "%02x".format(it) }
-        val originalHash = digest(artifact.file)
+        val originalHash = digest(original)
         check(digest(copied) == originalHash) { "Standalone stdlib bytes differ from target runtime" }
-        standaloneRuntimeDirectory.get().file("binding.txt").asFile.writeText(
-            "coordinate=${artifact.moduleVersion.id}\nsha256=$originalHash\n"
+        runtimeDirectory.get().file("binding.txt").asFile.writeText(
+            "coordinate=${runtimeCoordinate.get()}\nsha256=$originalHash\n"
         )
     }
 }
