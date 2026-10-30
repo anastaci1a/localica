@@ -203,9 +203,12 @@ class HomeSelectionTest {
             SideEffect { committedPolicy.set(composedActive to composedPlayerOpen); policyCommits.incrementAndGet() }
             CompositionLocalProvider(LocalSessionSelection provides session, LocalReturnPolicyObserver provides observeChildPolicy) {
                 Box(Modifier.size(320.dp, 240.dp)) {
+                    val requestedHomeActive = active
+                    val requestedPlayerOpen = playerOpen
+                    SideEffect { observeChildPolicy("fixture-call selectionVisible=$requestedHomeActive playerOpen=$requestedPlayerOpen") }
                     PinnedHome(LibraryUiState(snapshot, loading = false), PlaylistState(loading = false), pins,
                         {}, {}, { _, _ -> }, {}, { _, _ -> }, reducedMotion = true,
-                        selectionVisible = active, playerOpen = playerOpen)
+                        selectionVisible = requestedHomeActive, playerOpen = requestedPlayerOpen)
                 }
             }
         } }

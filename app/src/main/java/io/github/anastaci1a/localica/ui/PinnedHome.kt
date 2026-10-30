@@ -36,6 +36,8 @@ internal fun PinnedHome(library: LibraryUiState, playlists: PlaylistState, pins:
     listBackEnabled: Boolean = false,
     playlistController: io.github.anastaci1a.localica.playlist.PlaylistController? = null, queues: io.github.anastaci1a.localica.queue.QueueController? = null,
     playerOpen: Boolean = false) {
+    val entryPolicyObserver = LocalReturnPolicyObserver.current
+    if (entryPolicyObserver != null) SideEffect { entryPolicyObserver("home-entry selectionVisible=$selectionVisible playerOpen=$playerOpen") }
     val sorts = rememberBrowseSortSnapshot()
     val cache = LocalBrowsePresentationCache.current
     val cached = remember(library.snapshot, playlists.playlists, pins, cache, sorts) { cache?.home(library.snapshot, playlists.playlists, pins, sorts) }
