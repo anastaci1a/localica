@@ -157,25 +157,7 @@ jobs:
         path: |-
           app/build/reports/androidTests/
           app/build/outputs/androidTest-results/
-          app/build/outputs/connected_android_test_additional_output/**/utility-popup-diagnostics/**
-          app/build/outputs/connected_android_test_additional_output/**/pinch-retained-highlight/**
-          app/build/outputs/connected_android_test_additional_output/**/popup-shadow-continuity/**
-          app/build/outputs/connected_android_test_additional_output/**/search-ime-motion/**
-          app/build/outputs/connected_android_test_additional_output/**/search-slot-frames/**
-          app/build/outputs/connected_android_test_additional_output/**/seek-release-handoff/**
-          app/build/outputs/connected_android_test_additional_output/**/marquee-title/**
-          app/build/outputs/connected_android_test_additional_output/**/player-expansion-motion/**
-          app/build/outputs/connected_android_test_additional_output/**/list-top-fade-*/**
-          app/build/outputs/connected_android_test_additional_output/**/complex-selection-captures/**
-          app/build/outputs/connected_android_test_additional_output/**/pinch-review/**
-          app/build/outputs/connected_android_test_additional_output/**/repeat386/**
-          app/build/outputs/connected_android_test_additional_output/**/glass-morph-failures/**
-          app/build/outputs/connected_android_test_additional_output/**/glass-shadow-failures/**
-          app/build/outputs/connected_android_test_additional_output/**/loading-material-failures/**
-          app/build/outputs/connected_android_test_additional_output/**/lyrics-header-actions/**
-          app/build/outputs/connected_android_test_additional_output/**/list-search-return/**
-          app/build/outputs/connected_android_test_additional_output/**/frosted-surface/**
-          app/build/outputs/connected_android_test_additional_output/**/menu-viewport-touch/**
+          app/build/outputs/connected_android_test_additional_output/
 
           prototype-evidence/
           prototype-runner-environment.txt
@@ -300,25 +282,7 @@ jobs:
         path: |-
           app/build/reports/androidTests/
           app/build/outputs/androidTest-results/
-          app/build/outputs/connected_android_test_additional_output/**/utility-popup-diagnostics/**
-          app/build/outputs/connected_android_test_additional_output/**/pinch-retained-highlight/**
-          app/build/outputs/connected_android_test_additional_output/**/popup-shadow-continuity/**
-          app/build/outputs/connected_android_test_additional_output/**/search-ime-motion/**
-          app/build/outputs/connected_android_test_additional_output/**/search-slot-frames/**
-          app/build/outputs/connected_android_test_additional_output/**/seek-release-handoff/**
-          app/build/outputs/connected_android_test_additional_output/**/marquee-title/**
-          app/build/outputs/connected_android_test_additional_output/**/player-expansion-motion/**
-          app/build/outputs/connected_android_test_additional_output/**/list-top-fade-*/**
-          app/build/outputs/connected_android_test_additional_output/**/complex-selection-captures/**
-          app/build/outputs/connected_android_test_additional_output/**/pinch-review/**
-          app/build/outputs/connected_android_test_additional_output/**/repeat386/**
-          app/build/outputs/connected_android_test_additional_output/**/glass-morph-failures/**
-          app/build/outputs/connected_android_test_additional_output/**/glass-shadow-failures/**
-          app/build/outputs/connected_android_test_additional_output/**/loading-material-failures/**
-          app/build/outputs/connected_android_test_additional_output/**/lyrics-header-actions/**
-          app/build/outputs/connected_android_test_additional_output/**/list-search-return/**
-          app/build/outputs/connected_android_test_additional_output/**/frosted-surface/**
-          app/build/outputs/connected_android_test_additional_output/**/menu-viewport-touch/**
+          app/build/outputs/connected_android_test_additional_output/
 
           prototype-evidence/
           prototype-runner-environment.txt
