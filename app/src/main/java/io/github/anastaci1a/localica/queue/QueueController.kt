@@ -1138,6 +1138,9 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         if (queue == null || queue.entries.isEmpty()) {
             loadedQueueId = queue?.id
             attached.stop(); attached.clearMediaItems(); applyPlaybackModes(timelineChanged = true)
+            // Saved queues keep their data; an empty native timeline needs no resolved templates.
+            activationCatalog = null
+            timeline.clear()
             return
         }
         val previousCatalog = activationCatalog
