@@ -128,8 +128,13 @@ class StartupFrameMetricsTest {
                 if (activity !is MainActivity || !launchActivity.compareAndSet(null, activity)) return
                 milestones.created.set(System.nanoTime())
                 // Observe from creation: the test thread's launch() can return seconds later while Main is busy.
-                observe(ViewModelProvider(activity)[LibraryViewModel::class.java])
-                main.post(poll)
+                // This callback runs inside super.onCreate, before MainActivity creates its model, so attach
+                // right after the launch transaction (front of queue, still ahead of the first traversal).
+                main.postAtFrontOfQueue {
+                    runCatching { observe(ViewModelProvider(activity)[LibraryViewModel::class.java]) }
+                        .onFailure { Log.w(TAG, "Emission observers unavailable", it) }
+                    main.post(poll)
+                }
                 createdLatch.countDown()
                 // Hold the launch transaction only until the recorder's registration is queued
                 // ahead of the first traversal (bounded; a timeout only loses the first frames).
