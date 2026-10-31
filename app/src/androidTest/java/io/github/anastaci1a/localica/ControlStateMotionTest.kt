@@ -201,7 +201,7 @@ class ControlStateMotionTest {
             ActionIcon(R.drawable.ic_shuffle, "Quiet icon", enabled = enabled, quiet = true) { calls++ }
             ActionIcon(R.drawable.ic_shuffle, "Plain icon", enabled = enabled, glass = false) { calls++ }
             GlassActionButton(R.drawable.ic_shuffle, "Glass action", enabled = enabled) { calls++ }
-            ActionMenuItem("Menu action", enabled) { calls++ }
+            ActionMenuItem("Menu action", enabled, icon = R.drawable.ic_more) { calls++ }
             SettingsLink("Settings action", enabled = enabled) { calls++ }
             InterfaceCheckbox(false, { calls++ }, Modifier.testTag("checkbox"), enabled)
             GlassFilterChoice(false, { calls++ }, "Filter action", enabled)

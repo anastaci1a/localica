@@ -214,8 +214,8 @@ class PopupShadowContinuityTest {
                     if (popupWindow === window) { popupView = null; popupWindow = null; marker = null }
                 }
             }
-            ActionMenuItem("Scan music", onClick = {})
-            ActionMenuItem("Settings", onClick = {})
+            ActionMenuItem("Scan music", icon = R.drawable.ic_folder, onClick = {})
+            ActionMenuItem("Settings", icon = R.drawable.ic_settings, onClick = {})
         }
     }
 

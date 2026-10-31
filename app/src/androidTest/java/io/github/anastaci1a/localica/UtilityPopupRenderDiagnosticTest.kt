@@ -318,8 +318,8 @@ class UtilityPopupRenderDiagnosticTest {
                         }
                         GlassMenu(open, anchor, { open = false }) {
                             InstallDialogMarker()
-                            ActionMenuItem("Scan music", onClick = { open = false })
-                            ActionMenuItem("Settings", onClick = { open = false })
+                            ActionMenuItem("Scan music", icon = R.drawable.ic_folder, onClick = { open = false })
+                            ActionMenuItem("Settings", icon = R.drawable.ic_settings, onClick = { open = false })
                         }
                     }
                 }

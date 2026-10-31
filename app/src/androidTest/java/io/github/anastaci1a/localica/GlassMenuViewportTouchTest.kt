@@ -82,7 +82,7 @@ class GlassMenuViewportTouchTest {
                                 SideEffect { popupView = view }
                                 Box(Modifier.width(240.dp)) {
                                     Column {
-                                        repeat(24) { index -> ActionMenuItem("Action ${index + 1}") {
+                                        repeat(24) { index -> ActionMenuItem("Action ${index + 1}", icon = R.drawable.ic_more) {
                                             activated += index; open = false
                                         } }
                                     }
