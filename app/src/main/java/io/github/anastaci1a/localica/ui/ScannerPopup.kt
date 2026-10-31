@@ -24,6 +24,18 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import io.github.anastaci1a.localica.R
+import io.github.anastaci1a.localica.scanner.ScanState
+import kotlinx.coroutines.flow.StateFlow
+
+/** Its own restart scope: live per-file counts recompose only this text. */
+@Composable
+private fun ScanProgressText(state: LibraryUiState, progress: StateFlow<ScanState>?) {
+    val live = progress?.collectAsState()?.value
+    val count = if (live?.running == true) live.count else state.scannedCount
+    Text(if (state.scanning) "$count files checked · ${state.scanStatus.completedFolders}/${state.scanStatus.totalFolders} folders"
+        else state.scanStatus.message ?: "Ready to scan", minLines = 2, maxLines = 2,
+        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall)
+}
 
 internal fun openLocalicaSystemSettings(context: Context, notifications: Boolean = false) {
     val details = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${context.packageName}"))
@@ -33,7 +45,7 @@ internal fun openLocalicaSystemSettings(context: Context, notifications: Boolean
 
 @Composable
 internal fun ScannerPopup(state: LibraryUiState, onDismiss: () -> Unit, onStart: () -> Unit, onCancel: () -> Unit, onQuickScan: () -> Unit = {},
-    onSettings: (String) -> Unit) {
+    progress: StateFlow<ScanState>? = null, onSettings: (String) -> Unit) {
     val context = LocalContext.current
     var backgroundHelp by remember { mutableStateOf(false) }
     var failuresOpen by remember { mutableStateOf(false) }
@@ -60,9 +72,7 @@ internal fun ScannerPopup(state: LibraryUiState, onDismiss: () -> Unit, onStart:
                 if (state.scanning) LinearProgressIndicator(Modifier.fillMaxSize(),
                     color = NavigationAccent, trackColor = NavigationAccent.copy(alpha = .18f))
             }
-            Text(if (state.scanning) "${state.scannedCount} files checked · ${state.scanStatus.completedFolders}/${state.scanStatus.totalFolders} folders"
-                else state.scanStatus.message ?: "Ready to scan", minLines = 2, maxLines = 2,
-                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall)
+            ScanProgressText(state, progress)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 ActionTextButton(onClick = {
                     if (!notifications || restricted) backgroundHelp = true else onDismiss()

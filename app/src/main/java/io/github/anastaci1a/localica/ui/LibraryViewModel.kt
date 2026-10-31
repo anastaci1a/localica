@@ -51,8 +51,14 @@ class LibraryViewModel(
                 }
         }
         viewModelScope.launch {
+<<<<<<< HEAD
             // Count-only progress is paced; every other scan transition is published immediately.
             scanner.state.pacedProgress().collect { scan ->
+=======
+            // Per-file counts would replace the root library state every 25 files and recompose
+            // every screen that receives it. Only the scanner text reads them live.
+            scanner.state.scanMilestones().collect { scan ->
+>>>>>>> 118b4865
                 mutableLibrary.update { it.copy(scanning = scan.running, scannedCount = scan.count,
                     scanningFolderUri = scan.folder, scanStatus = scan) }
                 if (!scan.running) refreshAccess()
@@ -94,4 +100,8 @@ class LibraryViewModel(
     }
     override fun onCleared() { playback.close() }
 }
+
+/** Scan state without per-file count ticks. Each milestone still carries the count reached so far. */
+internal fun Flow<ScanState>.scanMilestones(): Flow<ScanState> =
+    distinctUntilChanged { old, new -> old.copy(count = 0) == new.copy(count = 0) }
 

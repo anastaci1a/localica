@@ -397,7 +397,10 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         return true
     }
     private suspend fun create(tracks: List<Track>, selectedIndex: Int, removals: Set<String>, expandPlayer: Boolean, sourceName: String, playlistOrigins: List<String?>) {
-        val queue = QueueEdits.create(tracks, selectedIndex, sourceName, playlistOrigins).copy(lastActivatedAt = nextActivation())
+        // A library-sized tap mints one random occurrence ID per song (SecureRandom); keep that
+        // pure construction off Main. Queue state is read only after it returns.
+        val created = withContext(Dispatchers.Default) { QueueEdits.create(tracks, selectedIndex, sourceName, playlistOrigins) }
+        val queue = created.copy(lastActivatedAt = nextActivation())
         val next = QueueLibrary(state.value.library.queues.filterNot { it.id in removals } + queue, queue.id)
         // These tracks came from the visible list. Start the decoder before serializing a
         // potentially large queue, and avoid re-reading the entire library on every song tap.
