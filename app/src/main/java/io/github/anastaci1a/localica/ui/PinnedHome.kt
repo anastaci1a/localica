@@ -60,10 +60,9 @@ internal fun PinnedHome(library: LibraryUiState, playlists: PlaylistState, pins:
     var info by remember { mutableStateOf<SongInformationRequest?>(null) }
     val informationLookupOwner = remember(selectionVisible, playerOpen) { Any() }
     val currentInformationLookupOwner by rememberUpdatedState(informationLookupOwner)
-    val collectionLookup = key(informationLookupOwner) {
-        rememberCollectionLookup(library.snapshot, playlists.playlists, sorts, queryDispatcher) { item ->
-            onOpen(item, item.songs)
-        }
+    val collectionLookup = rememberOwnedCollectionLookup(informationLookupOwner,
+        library.snapshot, playlists.playlists, sorts, queryDispatcher) { item ->
+        onOpen(item, item.songs)
     }
     var menu by remember { mutableStateOf<MediaRef?>(null) }
     val scroll = androidx.compose.foundation.lazy.rememberLazyListState()
@@ -80,7 +79,6 @@ internal fun PinnedHome(library: LibraryUiState, playlists: PlaylistState, pins:
             listBackdrop.refresh()
         }
     }
-    val returnOwnerVisible by rememberUpdatedState(selectionVisible && !playerOpen)
     val returnOwner = remember(library.snapshot, playlists.playlists, pins) { Any() }
     val returnToList = ListReturnActions(scrollToTopRequest, returnOwner, selectionVisible && !playerOpen && !session.active, listBackEnabled && !session.active,
         listReturnAction(scroll.canScrollBackward, scroll.isScrollInProgress, false), ready = {}, execute = { action ->
@@ -136,7 +134,7 @@ internal fun PinnedHome(library: LibraryUiState, playlists: PlaylistState, pins:
     }
     CompositionLocalProvider(LocalFrostedBackdrop provides listBackdrop) {
         FloatingReturnToPositionButton(up = true, label = "Return to top",
-            visible = returnOwnerVisible && currentOrder && songs.isNotEmpty() && !session.active && scroll.canScrollBackward && !returnToList.pending,
+            visible = selectionVisible && !playerOpen && currentOrder && songs.isNotEmpty() && !session.active && scroll.canScrollBackward && !returnToList.pending,
             reducedMotion = reducedMotion,
             returning = returnToList.pending,
             modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = LocalBrowseObscuredInset.current)) {
