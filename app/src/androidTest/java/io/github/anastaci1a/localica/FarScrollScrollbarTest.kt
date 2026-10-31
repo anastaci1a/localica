@@ -7,6 +7,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -83,21 +84,17 @@ class FarScrollScrollbarTest {
         compose.runOnIdle { assertFalse("Cancel ends the deferral", transit.active) }
     }
 
-    @Test fun scrollbarDragJumpsAtMostOncePerFrame() {
+    @Test fun scrollbarRequestsWithinOneFrameCollapseToOneJump() {
         lateinit var state: LazyGridState
-        var frames = 0
-        var jumps = 0
+        val seen = mutableListOf<Int>()
         host(LazyGridState().also { state = it }, ArtworkTransit()) {
-            LaunchedEffect(Unit) { while (true) withFrameNanos { frames++ } }
-            LaunchedEffect(Unit) { var last = 0; snapshotFlow { state.firstVisibleItemIndex }.collect { if (it != last) jumps++; last = it } }
-        }
-        compose.onNodeWithTag("browse-scrollbar").performTouchInput {
-            down(Offset(centerX, 30f))
-            repeat(40) { moveTo(Offset(centerX, 30f + it * 8f)) }
-            up()
+            LaunchedEffect(Unit) { snapshotFlow { state.firstVisibleItemIndex }.collect { seen += it } }
         }
         compose.waitForIdle()
-        compose.runOnIdle { assertTrue("jumps=$jumps frames=$frames", jumps in 1..frames) }
+        val set = compose.onNodeWithTag("browse-scrollbar").fetchSemanticsNode().config[SemanticsActions.SetProgress].action!!
+        compose.runOnIdle { for (n in 1..30) set(n / 30f) }
+        compose.waitForIdle()
+        compose.runOnIdle { assertTrue("Distinct firstVisibleItemIndex values: $seen", seen.size <= 2) ; assertTrue(seen.last() > 40) }
     }
 
     @Test fun thumbPositionAndProgressSemanticsTrackTheList() {
@@ -107,7 +104,7 @@ class FarScrollScrollbarTest {
         fun range(): ProgressBarRangeInfo = compose.onNodeWithTag("browse-scrollbar").fetchSemanticsNode()
             .config[SemanticsProperties.ProgressBarRangeInfo]
         fun thumbTop() = compose.onNodeWithTag("browse-scrollbar-thumb").fetchSemanticsNode().boundsInRoot.top
-        compose.runOnIdle { assertEquals(0f, range().current, .001f) }
+        assertEquals(0f, range().current, .001f)
         val top = thumbTop()
         compose.runOnIdle { scope.launch { state.scrollToItem(30) } }
         compose.waitForIdle()

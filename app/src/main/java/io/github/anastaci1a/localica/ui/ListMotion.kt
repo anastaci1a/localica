@@ -13,7 +13,7 @@ import kotlin.math.roundToInt
 import kotlin.math.sign
 
 /** One time curve and one scroll owner. A distant target is reached by one cold jump to about a
- * viewport before it, then the final viewport glides over the whole duration with scrollBy, so
+ * viewport and a half before it, then the final stretch glides over the whole duration with scrollBy, so
  * prefetch and reuse apply and the journey composes about two fresh viewports in total, instead
  * of one per frame. Finish a newly discovered target before drawing any overshoot. */
 private suspend fun LazyLayoutScrollScope.approachItem(index: Int, offset: Int, duration: Int,
@@ -22,8 +22,8 @@ private suspend fun LazyLayoutScrollScope.approachItem(index: Int, offset: Int, 
     val distance = calculateDistanceTo(index, offset).toFloat()
     var direction = sign(distance)
     if (direction == 0f) return
-    val lead = viewport().coerceAtLeast(1)
-    if (abs(distance) > lead * 2f && index !in firstVisibleItemIndex..lastVisibleItemIndex) {
+    val lead = (viewport() * 1.5f).toInt().coerceAtLeast(1)
+    if (abs(distance) > lead * 1.5f && index !in firstVisibleItemIndex..lastVisibleItemIndex) {
         val slots = columns().coerceAtLeast(1)
         val rows = (index - firstVisibleItemIndex).toFloat() / slots
         val stride = if (rows == 0f) 0f else abs((distance + firstVisibleItemScrollOffset - offset) / rows)
