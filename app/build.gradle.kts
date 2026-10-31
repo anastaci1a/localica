@@ -43,6 +43,10 @@ android {
             isMinifyEnabled = true
             isShrinkResources = false
             matchingFallbacks += "release"
+            // Test libraries shared with the app need their classes in the minified process.
+            if (providers.gradleProperty("localicaTestBuildType").orNull == "distribution") {
+                proguardFile("proguard-audit-keep.pro")
+            }
         }
     }
     // CI selects the minified build for R8 runtime audits: -PlocalicaTestBuildType=distribution.

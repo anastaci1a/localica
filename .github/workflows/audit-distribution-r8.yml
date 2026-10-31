@@ -36,6 +36,7 @@ jobs:
             adb shell wm size ${{ matrix.api == 36 && '720x1280' || 'reset' }}
             adb shell wm density ${{ matrix.api == 36 && '280' || 'reset' }}
             sleep 60
+            timeout 1200 ./gradlew connectedDistributionAndroidTest -PlocalicaTestBuildType=distribution --no-daemon --max-workers=2 -Pandroid.testInstrumentationRunnerArguments.class=io.github.anastaci1a.localica.EmbeddedTagsTest,io.github.anastaci1a.localica.TagWritingTest,io.github.anastaci1a.localica.LibraryDatabaseTest,io.github.anastaci1a.localica.QueueDatabaseTest
             bash .github/run-device-tests-distribution.sh
       - name: Capture host diagnostics on emulator failure
         if: failure()
