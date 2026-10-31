@@ -80,7 +80,7 @@ class ListMotionTest {
         compose.mainClock.autoAdvance = true
     }
 
-    @Test fun distantReturnDoesNotTeleportAfterAShortIntroAnimation() {
+    @Test fun distantReturnJumpsOnceThenGlidesTheFinalViewport() {
         lateinit var grid: LazyGridState
         lateinit var scope: CoroutineScope
         compose.setContent { LocalicaTheme {
@@ -99,9 +99,11 @@ class ListMotionTest {
         }
         compose.runOnIdle {
             assertTrue(job.isCompleted)
+            // A frame-by-frame flyby composed a fresh viewport every frame. The journey is one cold jump
+            // to about a viewport before the target (3 rows here), then a gradual multi-frame glide.
             val travel = positions.zipWithNext { a, b -> a - b }
-            assertTrue("No single frame may jump over the distant middle: $travel", travel.max() < 600f)
-            assertTrue("The journey should occupy multiple advancing frames", travel.count { it > 1f } >= 10)
+            assertTrue("At most one cold jump (the journey is not a teleport train): $travel", travel.count { it > 4f } <= 1)
+            assertTrue("The final viewport should glide over multiple frames: $travel", travel.count { it > .01f } >= 10)
             assertEquals(0, grid.firstVisibleItemIndex)
         }
         compose.mainClock.autoAdvance = true
