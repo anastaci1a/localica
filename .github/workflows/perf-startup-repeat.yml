@@ -1,0 +1,45 @@
+name: Perf startup repeat (measurement only, not release)
+'on':
+  push:
+    branches: [perf/startup-repeat-base, perf/startup-repeat-tip]
+permissions:
+  contents: read
+jobs:
+  native:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        repeat: [1, 2, 3, 4]
+    env:
+      TEST_API: 36
+      SELECTORS: io.github.anastaci1a.localica.StartupFrameMetricsTest#songsTabFirstLaunch
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: ./.github/actions/focused-android-setup
+      - name: Compile startup measurement
+        run: ./gradlew assembleDebug assembleDebugAndroidTest --no-daemon --max-workers=2
+      - uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
+        with:
+          api-level: 36
+          target: default
+          arch: x86_64
+          profile: pixel_2
+          emulator-options: -no-window -gpu lavapipe -no-snapshot -noaudio -no-boot-anim -memory 3072
+          disable-animations: false
+          script: |
+            adb shell wm size 720x1280; adb shell wm density 280
+            sleep 60
+            bash .github/test-evidence/environment.sh >> prototype-runner-environment.txt
+            bash .github/run-selection-preconditions.sh
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: perf-startup-repeat-${{ matrix.repeat }}
+          path: |
+            app/build/outputs/androidTest-results/
+            app/build/outputs/connected_android_test_additional_output/
+            selection-evidence/
+          if-no-files-found: error
+          retention-days: 14
