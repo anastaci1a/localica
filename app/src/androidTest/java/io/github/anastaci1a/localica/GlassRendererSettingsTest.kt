@@ -72,6 +72,25 @@ class GlassRendererSettingsTest {
         compose.onNodeWithText(message).assertIsDisplayed()
     }
 
+    @Test fun liveScrollGlassSwitchIsOffByDefaultToggleableAndResets() {
+        var value by mutableStateOf(GlassAppearance())
+        compose.setContent { LocalicaTheme {
+            CompositionLocalProvider(LocalReducedMotion provides true) {
+                Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+                    GlassSettingsControls(value) { value = it }
+                }
+            }
+        } }
+        val row = compose.onNode(hasText("Live glass while scrolling") and isToggleable())
+        row.performScrollTo().assertIsOff()
+        compose.onNodeWithText("Off holds glass controls", substring = true).assertExists()
+        row.performClick().assertIsOn()
+        compose.runOnIdle { assertTrue(value.liveScrollGlass) }
+        compose.onNodeWithText("Reset glass appearance").performScrollTo().performClick()
+        compose.runOnIdle { assertEquals(GlassAppearance(), value) }
+        compose.onNode(hasText("Live glass while scrolling") and isToggleable()).performScrollTo().assertIsOff()
+    }
+
     @Test fun actualGlassSettingsResetRestoresAutomaticWithTheOtherDefaults() {
         var value by mutableStateOf(GlassAppearance(blur = .7f, depth = .9f, renderer = GlassRendererMode.Legacy))
         var changes = 0
