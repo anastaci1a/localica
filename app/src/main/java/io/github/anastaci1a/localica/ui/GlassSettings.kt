@@ -24,6 +24,8 @@ internal val LocalGlassAppearance = compositionLocalOf { GlassAppearance() }
 internal fun GlassSettingsControls(value: GlassAppearance, onChange: (GlassAppearance) -> Unit) {
     Text("Tune floating glass and the navigation selector.")
     GlassRendererPreference(value.renderer) { onChange(value.copy(renderer = it)) }
+    BooleanPreference("Live glass while scrolling", value.liveScrollGlass) { onChange(value.copy(liveScrollGlass = it)) }
+    Text("Off holds glass controls on the last frame until scrolling stops, which scrolls more smoothly. On re-blurs the moving list every frame. Affects the Modern renderer.", style = MaterialTheme.typography.bodySmall)
     var previewLightInk by remember { mutableStateOf(false) }
     CompositionLocalProvider(LocalGlassAppearance provides value) {
         Box(Modifier.fillMaxWidth().height(180.dp), contentAlignment = Alignment.Center) {

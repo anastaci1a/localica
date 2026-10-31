@@ -68,6 +68,19 @@ class GlassRendererPreferenceTest {
         assertEquals("Automatic", raw.getString("glass-renderer", null))
     }
 
+    @Test fun liveScrollGlassDefaultsOffAndRoundTripsWithoutChangingOtherSettings() = withPreferences { context, raw ->
+        assertFalse(GlassAppearance().liveScrollGlass)
+        assertFalse(InterfacePreferences(context).read().glass.liveScrollGlass)
+        assertFalse("Read must not write a default", raw.contains("glass-live-scroll"))
+        val on = InterfaceSettings(confirmExit = true, glass = GlassAppearance(depth = .8f, renderer = GlassRendererMode.Legacy, liveScrollGlass = true))
+        InterfacePreferences(context).write(on)
+        assertTrue(raw.getBoolean("glass-live-scroll", false))
+        assertEquals(on, InterfacePreferences(context).read())
+        InterfacePreferences(context).write(on.copy(glass = on.glass.copy(liveScrollGlass = false)))
+        assertFalse(raw.getBoolean("glass-live-scroll", true))
+        assertEquals(on.copy(glass = on.glass.copy(liveScrollGlass = false)), InterfacePreferences(context).read())
+    }
+
     @Test fun rendererPersistencePreservesTheExistingContrastMigration() = withPreferences { context, raw ->
         for ((legacy, expected) in listOf(0f to 0f, .4f to .25f)) {
             raw.edit().remove("glass-contrast-trim").putFloat("glass-contrast", legacy)

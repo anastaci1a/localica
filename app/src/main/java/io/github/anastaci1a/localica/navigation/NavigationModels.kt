@@ -104,6 +104,8 @@ data class GlassAppearance(
     val overlayDarkening: Float = 0f,
     val overlayForeground: Boolean = false,
     val renderer: GlassRendererMode = GlassRendererMode.Automatic,
+    /** Modern glass re-blurs the moving page every frame; off (default) holds the last frame until scrolling stops. */
+    val liveScrollGlass: Boolean = false,
 ) {
     fun normalized() = GlassAppearance(blur.unit(.2f), whiteTint.unit(.06f),
         shadowStrength.unit(.12f), shadowSpread.unit(.6f), contrast.unit(.25f).coerceAtMost(.5f), tabStyle,
@@ -113,7 +115,7 @@ data class GlassAppearance(
         if (contrastWeight.isFinite()) contrastWeight.coerceIn(1f, 2f) else 2f,
         classicOpacity.unit(.1f),
         if (controlExpansion.isFinite()) controlExpansion.coerceIn(1f, 2f) else 1.75f,
-        overlayDarkening.unit(0f).coerceAtMost(.5f), overlayForeground, renderer)
+        overlayDarkening.unit(0f).coerceAtMost(.5f), overlayForeground, renderer, liveScrollGlass)
     private fun Float.unit(fallback: Float) = if (isFinite()) coerceIn(0f, 1f) else fallback
 }
 
