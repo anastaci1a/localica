@@ -28,13 +28,17 @@ class FarScrollScrollbarTest {
     @get:Rule val compose = createComposeRule()
     private val items = List(60) { BrowserItem(MediaRef(MediaKind.Album, "a$it"), "T$it", null, emptyList()) }
 
-    @Test fun longReturnComposesAboutTwoFreshViewportsNotOnePerFrame() {
+    @Test fun flyThroughComposesFewRegionsAndEndsExactly() = longReturn(LongScrollStyle.FlyThrough, maxJumps = 11, maxComposed = 270)
+    @Test fun jumpGlideComposesAboutTwoRegionsAndEndsExactly() = longReturn(LongScrollStyle.JumpGlide, maxJumps = 1, maxComposed = 90)
+    @Test fun fadeComposesAboutTwoRegionsEndsExactlyAndRestoresAlpha() = longReturn(LongScrollStyle.Fade, maxJumps = 1, maxComposed = 90)
+
+    private fun longReturn(style: LongScrollStyle, maxJumps: Int, maxComposed: Int) {
         lateinit var grid: LazyGridState
         lateinit var scope: CoroutineScope
         val composed = mutableSetOf<Int>()
         compose.setContent { LocalicaTheme {
             grid = rememberLazyGridState(9000); scope = rememberCoroutineScope()
-            LazyVerticalGrid(GridCells.Fixed(3), Modifier.height(360.dp), state = grid) {
+            LazyVerticalGrid(GridCells.Fixed(3), Modifier.height(360.dp).longScrollFade(grid), state = grid) {
                 items(10000) { composed += it; Text("Album $it", Modifier.height(120.dp)) }
             }
         } }
@@ -42,9 +46,10 @@ class FarScrollScrollbarTest {
         compose.mainClock.autoAdvance = false
         lateinit var job: Job
         val firsts = mutableListOf<Int>()
-        compose.runOnIdle { composed.clear(); job = scope.launch { grid.easeToTop(false) } }
+        var minAlpha = 1f
+        compose.runOnIdle { composed.clear(); job = scope.launch { grid.easeToTop(false, style) } }
         repeat(40) {
-            compose.runOnIdle { firsts += grid.firstVisibleItemIndex }
+            compose.runOnIdle { firsts += grid.firstVisibleItemIndex; minAlpha = minOf(minAlpha, fadeFor(grid).alpha) }
             compose.mainClock.advanceTimeByFrame(); compose.waitForIdle()
         }
         compose.runOnIdle {
@@ -52,10 +57,30 @@ class FarScrollScrollbarTest {
             assertEquals(0, grid.firstVisibleItemIndex)
             assertEquals(0, grid.firstVisibleItemScrollOffset)
             val jumps = firsts.zipWithNext { a, b -> a - b }.count { it > 30 }
-            assertTrue("Distinct cold regions: $firsts", jumps <= 1)
-            assertTrue("Fresh items composed during the return: ${composed.size}", composed.size <= 90)
+            assertTrue("Distinct cold regions $jumps: $firsts", jumps <= maxJumps)
+            assertTrue("Fresh items composed during the return: ${composed.size}", composed.size <= maxComposed)
+            assertEquals(1f, fadeFor(grid).alpha, 0f)
+            assertFalse(fadeFor(grid).fading)
+            if (style == LongScrollStyle.Fade) assertTrue("The list must dim while it jumps: $minAlpha", minAlpha < .2f)
+            else assertEquals(1f, minAlpha, 0f)
         }
         compose.mainClock.autoAdvance = true
+    }
+
+    @Test fun longScrollPreferenceDefaultsToFlyThroughAndRoundTrips() {
+        val context = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().targetContext
+        context.getSharedPreferences("interface", 0).edit().remove("long-scroll").commit()
+        val preferences = io.github.anastaci1a.localica.navigation.InterfacePreferences(context)
+        assertEquals(LongScrollStyle.FlyThrough, io.github.anastaci1a.localica.navigation.InterfaceSettings().longScroll)
+        assertEquals(LongScrollStyle.FlyThrough, preferences.read().longScroll)
+        try {
+            for (style in LongScrollStyle.entries) {
+                preferences.write(preferences.read().copy(longScroll = style))
+                assertEquals(style, io.github.anastaci1a.localica.navigation.InterfacePreferences(context).read().longScroll)
+            }
+            context.getSharedPreferences("interface", 0).edit().putString("long-scroll", "Bogus").commit()
+            assertEquals(LongScrollStyle.FlyThrough, preferences.read().longScroll)
+        } finally { context.getSharedPreferences("interface", 0).edit().remove("long-scroll").commit() }
     }
 
     private fun host(state: LazyGridState, transit: ArtworkTransit, content: @Composable () -> Unit = {}) = compose.setContent { LocalicaTheme {
