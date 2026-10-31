@@ -5,6 +5,8 @@ import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import io.github.anastaci1a.localica.library.*
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -128,6 +130,32 @@ class LibraryDatabaseTest {
             assertNull(after.searchIndex)
             assertEquals(store.current(), after)
             assertEquals(after, store.snapshots.first().copy(searchIndex = null))
+        } finally { database.close() }
+    }
+
+    @Test fun unchangedRewriteDoesNotRepublishTheCatalog() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val database = Room.inMemoryDatabaseBuilder(context, LibraryDatabase::class.java).build()
+        try {
+            val store = RoomLibraryStore(database.libraryDao())
+            val song = Track("root/song", "Song", fileName = "song.mp3", relativePath = "song.mp3")
+            val scan = ScanResult(FolderSelection("root", "Music"), listOf(song), 0)
+            store.replaceRoot(scan)
+            val delivered = kotlinx.coroutines.channels.Channel<LibrarySnapshot>(kotlinx.coroutines.channels.Channel.UNLIMITED)
+            val collector = launch(kotlinx.coroutines.Dispatchers.Default) { store.snapshots.collect { delivered.send(it) } }
+            try {
+                val first = kotlinx.coroutines.withTimeout(10_000) { delivered.receive() }
+                assertEquals("Song", first.tracks.single().title)
+                // An identical rewrite invalidates the observed tables but leaves every row unchanged.
+                store.replaceRoot(scan)
+                store.mergeRoot(scan)
+                // A real change afterwards is the next delivered value; no equal copy precedes it.
+                store.updateMetadata(first.tracks.single().copy(title = "Renamed"))
+                val next = kotlinx.coroutines.withTimeout(10_000) { delivered.receive() }
+                assertEquals("Renamed", next.tracks.single().title)
+                assertNotNull(next.searchIndex)
+                assertTrue(delivered.tryReceive().isFailure)
+            } finally { collector.cancelAndJoin() } // The Room query must finish before close.
         } finally { database.close() }
     }
 
