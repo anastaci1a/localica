@@ -124,7 +124,9 @@ On disposable GitHub-hosted API 26 emulators, the native runner temporarily disa
 
 `ANDROID_DEBUG_KEYSTORE` holds the base64 development key. CI restores it via `LOCALICA_DEBUG_KEYSTORE` and verifies the APK certificate. Back up the key outside Git. Local builds otherwise use the normal debug key. PRs use a disposable key.
 
-Regular GitHub releases retain the existing `.debug` application ID and development key for in-place updates. Separate production signing is not configured.
+Distributed APKs are the non-debuggable, R8-minified `distribution` variant. It keeps the `.debug` application ID and development key for in-place updates, and the artifact keeps the `app-debug.apk` name. CI and releases fail if the manifest is debuggable. Separate production signing is not configured.
+
+Device tests and compatibility run the `debug` variant. R8 keeps all of jaudiotagger because it loads classes by name. Audit minified behavior with `-PlocalicaTestBuildType=distribution` and `connectedDistributionAndroidTest`.
 
 ## Release preparation
 
