@@ -60,6 +60,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlin.math.roundToInt
 
+/** Optional per-cell work evidence (kind, item key); no behavior depends on it. */
+internal val LocalBrowseCellWorkObserver = staticCompositionLocalOf<((String, Any) -> Unit)?> { null }
+
 @OptIn(ExperimentalSharedTransitionApi::class, ExperimentalLayoutApi::class)
 @Composable
 internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, route: BrowseRoute,
@@ -969,9 +972,19 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                             val sweep = if (!artDetail && !route.search) 1f else ((entrySweep.value * 600f - itemIndex.coerceAtMost(10) * 30f) / 300f)
                                 .coerceIn(0f, 1f).let { it * it * (3f - 2f * it) }
                             alpha = sweep * (reorder.drag?.takeIf { it.dropping && item.key in it.keys }?.handoff?.value ?: 1f)
-                            pinchMotion.itemAlpha[item.key] = alpha
+                            // Write only a change: an identical boxed value still replaces the
+                            // map and would invalidate the retained overlay on every layer update.
+                            // Do not subscribe this layer to other cells' entries.
+                            val previous = androidx.compose.runtime.snapshots.Snapshot.withoutReadObservation {
+                                pinchMotion.itemAlpha[item.key]
+                            }
+                            if (previous != alpha) pinchMotion.itemAlpha[item.key] = alpha
                         }) {
                         DisposableEffect(item.key, reorder) { onDispose { reorder.itemCoordinates.remove(item.key) } }
+                        val cellWork = LocalBrowseCellWorkObserver.current
+                        // A closed menu is not composed until its first opening. It then stays
+                        // mounted with this row for its return morph, dialogs and saveable workflow.
+                        var actionsMounted by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
                         val menuAnchor = rememberGlassAnchor()
                         SideEffect { menuAnchor.contextual = true; menuAnchor.bottomClearance = with(density) { obscuredInset.toPx() } }
                         val mutableSong = item.row != null && route.collection?.kind in setOf(MediaKind.Playlist, MediaKind.Queue)
@@ -985,13 +998,18 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                                 if (showButton) ActionIcon(R.drawable.ic_ellipsis, "Actions for " + item.title, anchor = menuAnchor,
                                     quietInputEnabled = displayedStyle.presentation == Presentation.List, quiet = true, onLongClickLabel = holdLabel,
                                     onLongClick = onHold.takeIf { !queryPending && (item.row == null || enabled) }) { contextMenu = item.key }
-                                CollectionActions(contextMenu == item.key, menuAnchor, item, playlists, playlistController, queues, pins, onPin, { contextMenu = null },
-                                    onInformationPresented = { song, presentation -> collectionLookup.cancel(); info = SongInformationRequest(song, presentation) }, containingSource = route.collection, selection = session,
-                                    onRemove = if (item.row == null) null else when (route.collection?.kind) {
-                                        MediaKind.Queue -> ({ queues?.removeEntries(setOf(item.key), route.collection.id); Unit })
-                                        MediaKind.Playlist -> ({ playlistController?.removeEntries(route.collection.id, setOf(item.key)) { }; Unit })
-                                        else -> null
-                                    })
+                                val menuOpen = contextMenu == item.key
+                                if (menuOpen || actionsMounted) {
+                                    if (!actionsMounted) SideEffect { actionsMounted = true }
+                                    if (cellWork != null) SideEffect { cellWork("actions", item.key) }
+                                    CollectionActions(menuOpen, menuAnchor, item, playlists, playlistController, queues, pins, onPin, { contextMenu = null },
+                                        onInformationPresented = { song, presentation -> collectionLookup.cancel(); info = SongInformationRequest(song, presentation) }, containingSource = route.collection, selection = session,
+                                        onRemove = if (item.row == null) null else when (route.collection?.kind) {
+                                            MediaKind.Queue -> ({ queues?.removeEntries(setOf(item.key), route.collection.id); Unit })
+                                            MediaKind.Playlist -> ({ playlistController?.removeEntries(route.collection.id, setOf(item.key)) { }; Unit })
+                                            else -> null
+                                        })
+                                }
                             }
                         }
                         item.groupHeading?.let { Text(it, style = MaterialTheme.typography.titleSmall,

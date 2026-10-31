@@ -335,7 +335,8 @@ internal fun Modifier.selectionLens(isSelected: Boolean, partial: Boolean,
         entry.direction = direction
         val selected = isSelected && !partial
         if (entry.selected != selected) { entry.selected = selected; androidx.compose.runtime.snapshots.Snapshot.withoutReadObservation { scene?.placement = (scene?.placement ?: 0) + 1 } }
-        scene?.regions?.set(token, entry)
+        // Registration is identity-stable; rewrite only a missing or replaced entry.
+        if (scene != null && scene.regions[token] !== entry) scene.regions[token] = entry
     }
     DisposableEffect(scene, token) { onDispose { scene?.regions?.remove(token) } }
     return semantics {
