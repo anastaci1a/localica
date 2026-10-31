@@ -48,6 +48,11 @@ class BrowseCellWorkTest {
             compose.waitUntil(5000) { compose.onAllNodesWithTag("media-cell-work:0").fetchSemanticsNodes().isNotEmpty() }
             compose.waitForIdle()
             body()
+            // Leave no modal menu behind: its gesture stack must not reach later classes.
+            if (compose.onAllNodesWithTag("glass-morph-surface").fetchSemanticsNodes().isNotEmpty()) {
+                pressSystemBack()
+                compose.waitUntil(5000) { compose.onAllNodesWithTag("glass-morph-surface").fetchSemanticsNodes().isEmpty() }
+            }
         } finally {
             prefs.write(route, original, overridden)
         }
