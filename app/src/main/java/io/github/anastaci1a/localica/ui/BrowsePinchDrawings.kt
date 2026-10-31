@@ -126,16 +126,45 @@ internal fun <T> retainedPinchItemIndices(items: List<T>, indices: Map<String, I
 internal fun Map<String, Int>.retainedPinchItemIndex(key: Any): Int =
     if (key is String) this[key] ?: -1 else -1
 
+/** Live paint order is item order; lazy layout normally reports it already sorted. */
+internal fun <T> liveItemsInIndexOrder(items: List<T>, indexOf: (T) -> Int): List<T> {
+    for (i in 1 until items.size) if (indexOf(items[i - 1]) > indexOf(items[i])) return items.sortedBy(indexOf)
+    return items
+}
+
 internal fun Modifier.pinchRetainedOverlay(motion: BrowsePinchMotion, grid: LazyGridState,
     indices: Map<String, Int>): Modifier = onGloballyPositioned { motion.viewportCoordinates = it }.drawWithContent {
     // Pass one: all live and retained text (including track numbers and menus).
     drawContent()
     val visible = grid.layoutInfo.visibleItemsInfo
-    val liveKeys = visible.map { it.key }.toSet()
     val p = motion.progress.value.coerceIn(0f, 1f)
+    fun drawLive(part: BrowsePinchLayer, key: Any) {
+        val viewport = motion.viewportCoordinates
+        val coordinates = part.coordinates ?: return
+        if (viewport?.isAttached != true || !coordinates.isAttached || part.layer.isReleased ||
+            part.layer.size.width <= 0 || part.layer.size.height <= 0) return
+        val bounds = viewport.localBoundingBoxOf(coordinates, clipBounds = false)
+        part.layer.alpha = motion.itemAlpha[key] ?: 1f
+        translate(bounds.left, bounds.top) {
+            scale(bounds.width / part.layer.size.width, bounds.height / part.layer.size.height, Offset.Zero) { drawLayer(part.layer) }
+        }
+    }
+    if (motion.visualSource == null) {
+        // Nothing is retained at rest. Keep the same stable two-pass topology
+        // (every text layer, then every artwork layer in item order) without
+        // per-frame key sets, placement maps or a sorted paint list while scrolling.
+        clipRect {
+            visible.forEach { entry -> motion.text[entry.key]?.let { drawLive(it, entry.key) } }
+            liveItemsInIndexOrder(visible) { it.index }.forEach { entry ->
+                motion.artwork[entry.key]?.let { drawLive(it, entry.key) }
+            }
+        }
+        return@drawWithContent
+    }
+    val liveKeys = visible.map { it.key }.toSet()
     val retained = linkedMapOf<Any, RetainedPinchPlacement>()
     val row = visible.firstOrNull { it.key != "browser-notice" }
-    if (motion.visualSource != null && row != null) {
+    if (row != null) {
         val rowIndex = indices.retainedPinchItemIndex(row.key)
         val pitch = max(row.size.height.toFloat(), 1f)
         val geometry = BrowseCellGeometry(motion.targetColumns)
@@ -160,17 +189,6 @@ internal fun Modifier.pinchRetainedOverlay(motion: BrowsePinchMotion, grid: Lazy
             retained[key] = RetainedPinchPlacement(image, origin, (width - 2 * targetInset).coerceAtLeast(0f),
                 image.content?.target?.height?.toFloat() ?: (pitch - 2 * targetVerticalInset).coerceAtLeast(0f),
                 browseViewVisibility(true, false, p), index, exitProgress)
-        }
-    }
-    fun drawLive(part: BrowsePinchLayer, key: Any) {
-        val viewport = motion.viewportCoordinates
-        val coordinates = part.coordinates ?: return
-        if (viewport?.isAttached != true || !coordinates.isAttached || part.layer.isReleased ||
-            part.layer.size.width <= 0 || part.layer.size.height <= 0) return
-        val bounds = viewport.localBoundingBoxOf(coordinates, clipBounds = false)
-        part.layer.alpha = motion.itemAlpha[key] ?: 1f
-        translate(bounds.left, bounds.top) {
-            scale(bounds.width / part.layer.size.width, bounds.height / part.layer.size.height, Offset.Zero) { drawLayer(part.layer) }
         }
     }
     clipRect {
