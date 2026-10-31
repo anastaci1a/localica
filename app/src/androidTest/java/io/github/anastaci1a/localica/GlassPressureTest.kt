@@ -212,19 +212,28 @@ class GlassPressureTest {
         // Reuse only after a full capture cycle, always distinct from the previous frame.
         compose.runOnIdle { presentationStage = (presentationStage + 1) % 32 }
         val pixels = capturePresentedPopupPixels(compose, compose.onNodeWithTag("pressure-scene"), presentationStage) { pressureView }
-        fun scan(accepts: (Color) -> Boolean): Rect {
-            var left = pixels.width; var top = pixels.height; var right = -1; var bottom = -1
-            for (y in 0 until pixels.height) for (x in 0 until pixels.width) {
-                if (accepts(pixels[x, y])) {
-                    left = minOf(left, x); top = minOf(top, y)
-                    right = maxOf(right, x); bottom = maxOf(bottom, y)
-                }
+        fun red(color: Color) = color.red > .6f && color.green < .4f && color.blue < .4f
+        var lensLeft = pixels.width; var lensTop = pixels.height; var lensRight = -1; var lensBottom = -1
+        var shellLeft = pixels.width; var shellTop = pixels.height; var shellRight = -1; var shellBottom = -1
+        // Both silhouettes use this owned copied frame; retain the separate containment pass below.
+        for (y in 0 until pixels.height) for (x in 0 until pixels.width) {
+            val color = pixels[x, y]
+            val isRed = red(color)
+            if (isRed) {
+                lensLeft = minOf(lensLeft, x); lensTop = minOf(lensTop, y)
+                lensRight = maxOf(lensRight, x); lensBottom = maxOf(lensBottom, y)
             }
+            if (isRed ||
+                (color.blue > .75f && color.blue < .97f && color.red < .15f && color.green < .15f)) {
+                shellLeft = minOf(shellLeft, x); shellTop = minOf(shellTop, y)
+                shellRight = maxOf(shellRight, x); shellBottom = maxOf(shellBottom, y)
+            }
+        }
+        fun bounds(left: Int, top: Int, right: Int, bottom: Int): Rect {
             assertTrue("The rendered silhouette must be visible", right >= left && bottom >= top)
             return Rect(left.toFloat(), top.toFloat(), (right + 1).toFloat(), (bottom + 1).toFloat())
         }
-        fun red(color: Color) = color.red > .6f && color.green < .4f && color.blue < .4f
-        val lens = scan(::red)
+        val lens = bounds(lensLeft, lensTop, lensRight, lensBottom)
         if (checkRoundedContainment) {
             val sceneBounds = compose.onNodeWithTag("pressure-scene").fetchSemanticsNode().boundsInRoot
             val layoutShell = compose.onNodeWithTag("choice-track-shell").fetchSemanticsNode().boundsInRoot
@@ -248,8 +257,7 @@ class GlassPressureTest {
         }
         // The gray track is 10% black over the fixture's solid blue; include its
         // red lens where that covers the track. Untinted exterior blue is excluded.
-        val shell = scan { color -> red(color) ||
-            (color.blue > .75f && color.blue < .97f && color.red < .15f && color.green < .15f) }
+        val shell = bounds(shellLeft, shellTop, shellRight, shellBottom)
         android.util.Log.i("GlassPressure", "stage=$presentationStage displayedBounds=$lens shellBounds=$shell")
         return lens to shell
     }
