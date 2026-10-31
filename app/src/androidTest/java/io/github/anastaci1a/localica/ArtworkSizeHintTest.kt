@@ -42,3 +42,18 @@ class ArtworkSizeHintTest {
         assertTrue(edges.isEmpty())
     }
 }
+
+class ArtworkOffMainTest {
+    @get:Rule val compose = createComposeRule()
+
+    @Test fun providerLoadsRunOffTheMainThread() {
+        val threads = CopyOnWriteArrayList<Boolean>()
+        val provider = CoverProvider { _, _, _ ->
+            threads += (android.os.Looper.myLooper() == android.os.Looper.getMainLooper())
+            Bitmap.createBitmap(2, 2, Bitmap.Config.ARGB_8888)
+        }
+        compose.setContent { MediaArtwork(listOf("off-main"), Modifier.size(50.dp), provider, sizeHint = 128) }
+        compose.waitUntil(5000) { threads.isNotEmpty() }
+        assertEquals(listOf(false), threads.toList())
+    }
+}
