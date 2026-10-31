@@ -80,6 +80,7 @@ internal fun PinnedHome(library: LibraryUiState, playlists: PlaylistState, pins:
             listBackdrop.refresh()
         }
     }
+    val returnOwnerVisible by rememberUpdatedState(selectionVisible && !playerOpen)
     val returnOwner = remember(library.snapshot, playlists.playlists, pins) { Any() }
     val returnToList = ListReturnActions(scrollToTopRequest, returnOwner, selectionVisible && !playerOpen && !session.active, listBackEnabled && !session.active,
         listReturnAction(scroll.canScrollBackward, scroll.isScrollInProgress, false), ready = {}, execute = { action ->
@@ -135,7 +136,7 @@ internal fun PinnedHome(library: LibraryUiState, playlists: PlaylistState, pins:
     }
     CompositionLocalProvider(LocalFrostedBackdrop provides listBackdrop) {
         FloatingReturnToPositionButton(up = true, label = "Return to top",
-            visible = selectionVisible && !playerOpen && currentOrder && songs.isNotEmpty() && !session.active && scroll.canScrollBackward && !returnToList.pending,
+            visible = returnOwnerVisible && currentOrder && songs.isNotEmpty() && !session.active && scroll.canScrollBackward && !returnToList.pending,
             reducedMotion = reducedMotion,
             returning = returnToList.pending,
             modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = LocalBrowseObscuredInset.current)) {
