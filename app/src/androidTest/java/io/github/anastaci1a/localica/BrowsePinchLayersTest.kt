@@ -386,7 +386,8 @@ class BrowsePinchLayersTest {
     @Test fun sourceViewportKeepsDistinctCoversAcrossVirtualizationAndGlobalCacheEviction() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val directory = File(context.filesDir, "playlist-covers").also { it.mkdirs() }
-        val files = (0..9).map { File.createTempFile("pinch-lease-$it-", ".png", directory) }
+        // Enough distinct 768 px covers to exceed the largest decoded-cache budget (48 MiB), whatever the device heap class.
+        val files = (0 until 24).map { File.createTempFile("pinch-lease-$it-", ".png", directory) }
         val colors = listOf(android.graphics.Color.RED, android.graphics.Color.GREEN, android.graphics.Color.BLUE)
         val uris = files.map { Uri.fromFile(it).toString() }
         val retention = BrowseArtworkScope().apply { activate(true) }
@@ -412,7 +413,7 @@ class BrowsePinchLayersTest {
             compose.waitForIdle()
             compose.runOnIdle { release = retention.retainForTransition(); shown = false }
             compose.waitForIdle()
-            // Seven distinct large decodes exceed the global 12 MiB LRU. Do not
+            // The remaining distinct large decodes exceed the global LRU at any heap class. Do not
             // invalidate: an artwork revision must deliberately invalidate leases too.
             runBlocking { uris.drop(3).forEach { assertNotNull(ArtworkCache.read(context, it, 768)) } }
             assertNull("The test must genuinely evict the original source from the global cache", ArtworkCache.peek(listOf(uris.first())))

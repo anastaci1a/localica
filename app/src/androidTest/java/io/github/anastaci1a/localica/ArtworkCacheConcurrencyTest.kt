@@ -36,11 +36,11 @@ class ArtworkCacheConcurrencyTest {
         } finally { release.complete(Unit); cold.cancel(); withTimeout(5000) { cold.join() } }
     }
 
-    @Test fun coldRequestsStaySerializedAndQueuedCancellationNeverLoads() = runBlocking {
+    @Test fun coldRequestsBeyondTheDecodeLimitQueueAndQueuedCancellationNeverLoads() = runBlocking {
         val started = CompletableDeferred<Unit>()
         val release = CompletableDeferred<Unit>()
         val loads = mutableListOf<String>()
-        val store = ArtworkCacheStore { _, uri, _ ->
+        val store = ArtworkCacheStore(parallelism = 1) { _, uri, _ ->
             loads += uri
             if (uri == "first") { started.complete(Unit); release.await() }
             null
