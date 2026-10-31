@@ -1,7 +1,7 @@
-name: Audit seek unset duration (not release)
+name: Underrun fixed repeat bisect (not release)
 'on':
   push:
-    branches: [dev/audit-seek-unset-duration-20261031]
+    branches: [test/audit-underrun-ab-bisect-20261031]
 permissions:
   contents: read
 jobs:
@@ -16,22 +16,48 @@ jobs:
       matrix:
         include:
           - api: 26
+            repeat: 1
             target: google_apis
             gpu: swiftshader_indirect
             disable_animations: true
             display: reset
-          - api: 36
-            target: default
-            gpu: lavapipe
-            disable_animations: false
-            display: compact
+          - api: 26
+            repeat: 2
+            target: google_apis
+            gpu: swiftshader_indirect
+            disable_animations: true
+            display: reset
+          - api: 26
+            repeat: 3
+            target: google_apis
+            gpu: swiftshader_indirect
+            disable_animations: true
+            display: reset
+          - api: 26
+            repeat: 4
+            target: google_apis
+            gpu: swiftshader_indirect
+            disable_animations: true
+            display: reset
+          - api: 26
+            repeat: 5
+            target: google_apis
+            gpu: swiftshader_indirect
+            disable_animations: true
+            display: reset
+          - api: 26
+            repeat: 6
+            target: google_apis
+            gpu: swiftshader_indirect
+            disable_animations: true
+            display: reset
     env:
       TEST_API: ${{ matrix.api }}
-      SELECTORS: io.github.anastaci1a.localica.PlaybackIntentTest,io.github.anastaci1a.localica.LargeQueueTransportTest,io.github.anastaci1a.localica.SeekAcknowledgementPlaybackTest,io.github.anastaci1a.localica.SeekReleaseHandoffTest
+      SELECTORS: io.github.anastaci1a.localica.QueueContinuousPlaybackTest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - uses: ./.github/actions/focused-android-setup
-      - name: Compile seek unset duration contracts
+      - name: Compile unchanged queue continuity contracts
         run: ./gradlew assembleDebug assembleDebugAndroidTest --no-daemon --max-workers=2
       - uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
         with:
@@ -55,7 +81,7 @@ jobs:
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
-          name: audit-seek-unset-duration-api-${{ matrix.api }}
+          name: underrun-ab-bisect-api-${{ matrix.api }}-repeat-${{ matrix.repeat }}
           path: |
             app/build/reports/
             app/build/test-results/

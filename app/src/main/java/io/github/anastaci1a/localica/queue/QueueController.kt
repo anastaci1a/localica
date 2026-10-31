@@ -672,20 +672,19 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
     fun seek(positionMs: Long) = submit {
         player?.let { attached ->
             if (attached.currentMediaItem != null) {
-                val target = seekTarget(positionMs, attached.duration) ?: return@let
+                val duration = attached.duration
+                // Next can change the native item before its duration is ready. Media3 masks
+                // this ordered seek until preparation completes; do not silently drop it.
+                val target = when {
+                    duration == C.TIME_UNSET -> positionMs.coerceAtLeast(0)
+                    duration > 0 -> positionMs.coerceIn(0, duration)
+                    else -> return@let
+                }
                 attached.seekTo(target)
             }
         }
         capture()
     }
-    // Next can change the native item before its duration is ready. Media3 masks
-    // an ordered seek until preparation completes; both command paths retain it.
-    private fun seekTarget(positionMs: Long, duration: Long): Long? = when {
-        duration == C.TIME_UNSET -> positionMs.coerceAtLeast(0)
-        duration > 0 -> positionMs.coerceIn(0, duration)
-        else -> null
-    }
-
     /** Main-thread snapshot of the service-owned player; no command or persistence work. */
     internal fun playbackSample(): QueuePlaybackSample? = player?.let { attached ->
         attached.currentMediaItem?.let { item ->
@@ -700,17 +699,13 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         val accepted = enqueue {
             val attached = player
             if (attached == null || attached !== expected || generation != expectedGeneration ||
-                attached.currentMediaItem == null || attached.currentMediaItem?.queueVisit != expectedVisit) {
-                complete(false, playbackSample())
-                return@enqueue
-            }
-            val target = seekTarget(positionMs, attached.duration)
-            if (target == null) {
+                attached.currentMediaItem?.queueVisit != expectedVisit ||
+                attached.duration == C.TIME_UNSET || attached.duration <= 0) {
                 complete(false, playbackSample())
                 return@enqueue
             }
             try {
-                attached.seekTo(target)
+                attached.seekTo(positionMs.coerceIn(0, attached.duration))
             } catch (failure: Exception) {
                 complete(false, playbackSample())
                 throw failure
