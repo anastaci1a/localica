@@ -32,6 +32,12 @@ Shared action buttons, transport/player actions and filter bubbles give exactly 
 
 Lyrics, reordering, carousels and overflow bars must not swipe the parent once acquired. One gesture changes one surface level.
 
+Long scroll animation (Settings, Motion) sets how Return to top, Scroll to songs and return-to-current cross a distance in about 500 ms on one curve. Fly-through (default) keeps the rush but lands a fresh region only every few frames, with artwork deferred.
+
+Jump, then glide jumps once near the target, then glides. Fade dims the list for about 120 ms, jumps while hidden, then fades in during the glide.
+
+Every long scroll style ends exactly on the target, stops early once the target is visible, and Reduce motion overrides the choice by jumping straight there. A scrollbar drag defers artwork like a far journey.
+
 Horizontal/vertical choices and fitting navigation preview the lens at any touched option without committing or pulsing. A deliberate hold or owned axial drag continues from that contact. Selectors, settings sliders and switch thumbs give weak owned engagement, one weak tick per distinct discrete step/Boolean transition, and a strong genuine release. Cancellation has no release pulse.
 
 Ordinary tap, keyboard and accessible activation give one weak pulse at the input owner, including the full-width switch row. Continuous sliders have no step ticks. Pending contact, parent scrolling and external/animated state changes stay silent. Parent scrolling cancels preview/activation and retains ownership through direction changes.

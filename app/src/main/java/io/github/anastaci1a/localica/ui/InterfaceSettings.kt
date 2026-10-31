@@ -33,6 +33,8 @@ internal fun InterfaceSettingsControls(value: InterfaceSettings, section: String
             SettingsHeading("Animation")
             BooleanPreference("Reduce motion", value.reducedMotion) { onChange(value.copy(reducedMotion = it)) }
             BooleanPreference("Faster animations", value.fasterMotion) { onChange(value.copy(fasterMotion = it)) }
+            ChoicePreference("Long scroll animation", value.longScroll, LongScrollStyle.entries, { it.label }) { onChange(value.copy(longScroll = it)) }
+            Text("How Return to top and return-to-current cross a long distance. Fly-through rushes past the list cheaply; Jump, then glide lands near the target and glides in; Fade dims the list while it jumps. Reduce motion jumps straight there.", style = MaterialTheme.typography.bodySmall)
         }
         "Player" -> {
             SettingsHeading("Player behavior")

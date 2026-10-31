@@ -47,6 +47,7 @@ io.github.anastaci1a.localica.DragReorderTest
 io.github.anastaci1a.localica.EffectiveMotionWindowTest
 io.github.anastaci1a.localica.EffectiveReducedMotionTest
 io.github.anastaci1a.localica.EmbeddedTagsTest
+io.github.anastaci1a.localica.FarScrollMeasureTest
 io.github.anastaci1a.localica.FarScrollScrollbarTest
 io.github.anastaci1a.localica.FilterBackdropTest
 io.github.anastaci1a.localica.FloatingControlMotionTest
