@@ -47,7 +47,9 @@ internal fun MediaArtwork(uris: List<String>, modifier: Modifier, provider: Cove
                 resumeStagger[0] = false
                 delay(ArtworkResumeStagger.next())
             }
-            value = request to (warm ?: ArtworkCache.CachedArtwork(provider.load(context, uris, pixels), pixels))
+            // Gate waits, retriever, decode and upload preparation stay off Main; only this single state write returns to it.
+            value = request to (warm ?: ArtworkCache.CachedArtwork(
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { provider.load(context, uris, pixels) }, pixels))
         }
     }
     val sameContent = loaded.first?.first == uris && loaded.first?.third == revision
