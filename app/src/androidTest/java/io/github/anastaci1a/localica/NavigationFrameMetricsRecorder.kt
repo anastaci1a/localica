@@ -59,6 +59,9 @@ internal class NavigationFrameMetricsRecorder private constructor(
         }
     }
 
+    /** Test-only per-phase durations, index-aligned with the returned snapshot's stored records. */
+    class Phases internal constructor(val layoutMeasure: LongArray, val draw: LongArray, val sync: LongArray)
+
     data class Result(
         val snapshot: NavigationFrameWindow.Snapshot?,
         val listenerRemovalConfirmed: Boolean,
@@ -91,6 +94,13 @@ internal class NavigationFrameMetricsRecorder private constructor(
     private var accepting = true // Worker only, sealed before collector finalization.
     private var closed = false // Control thread only.
     var lastResult: Result? = null
+        private set
+    private val layoutNanos = LongArray(capacity) // Worker only until it has stopped.
+    private val drawNanos = LongArray(capacity)
+    private val syncNanos = LongArray(capacity)
+    private var phaseCount = 0
+    /** Set by finish/close after the worker has stopped; aligned with the snapshot's stored records. */
+    var lastPhases: Phases? = null
         private set
     val isWorkerAlive: Boolean get() = worker.isAlive
 
@@ -127,7 +137,13 @@ internal class NavigationFrameMetricsRecorder private constructor(
                 check(timestamp != -1L && duration >= 0 && deadline >= -1L && drops >= 0) {
                     "Unavailable/invalid required frame metrics: vsync=$timestamp total=$duration deadline=$deadline drops=$drops"
                 }
-                requireNotNull(collector).record(timestamp, arrival, duration, deadline, drops)
+                val layout = metrics.getMetric(FrameMetrics.LAYOUT_MEASURE_DURATION)
+                val draw = metrics.getMetric(FrameMetrics.DRAW_DURATION)
+                val sync = metrics.getMetric(FrameMetrics.SYNC_DURATION)
+                if (requireNotNull(collector).record(timestamp, arrival, duration, deadline, drops)) {
+                    layoutNanos[phaseCount] = layout; drawNanos[phaseCount] = draw; syncNanos[phaseCount] = sync
+                    phaseCount++
+                }
                 if (timestamp > latestFrameTimestamp.get()) latestFrameTimestamp.set(timestamp)
                 observedValidFrame.set(true)
                 frameWait.get()?.let { if (timestamp >= it.minimumTimestamp) it.signal.countDown() }
@@ -233,6 +249,7 @@ internal class NavigationFrameMetricsRecorder private constructor(
         }
         callbackFailure.get()?.let { failure = mergeFailure(failure,
             IllegalStateException("Native frame callback failed during recording", it)) }
+        if (!worker.isAlive) lastPhases = Phases(layoutNanos.copyOf(phaseCount), drawNanos.copyOf(phaseCount), syncNanos.copyOf(phaseCount))
         val result = Result(completedSnapshot.get(), removed, terminalReached.get(), !worker.isAlive,
             rejected.get(), invalid.get(), unrecordedDrops.get())
         lastResult = result
