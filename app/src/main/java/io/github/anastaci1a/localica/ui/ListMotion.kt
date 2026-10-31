@@ -8,17 +8,37 @@ import androidx.compose.foundation.lazy.grid.LazyLayoutScrollScope as gridScroll
 import androidx.compose.foundation.lazy.layout.LazyLayoutScrollScope
 import androidx.compose.runtime.withFrameNanos
 import kotlin.math.abs
+import kotlin.math.ceil
 import kotlin.math.roundToInt
 import kotlin.math.sign
 
-/** One time curve and one scroll owner, including distant journeys. Virtualize only the
- * distance crossed in this frame, instead of an intro animation followed by a teleport.
- * Remeasure once per frame; finish a newly discovered target before drawing any overshoot. */
+/** One time curve and one scroll owner. A distant target is reached by one cold jump to about a
+ * viewport before it, then the final viewport glides over the whole duration with scrollBy, so
+ * prefetch and reuse apply and the journey composes about two fresh viewports in total, instead
+ * of one per frame. Finish a newly discovered target before drawing any overshoot. */
 private suspend fun LazyLayoutScrollScope.approachItem(index: Int, offset: Int, duration: Int,
     viewport: () -> Int, columns: () -> Int) {
     if (index !in 0 until itemCount) return
-    val direction = sign(calculateDistanceTo(index, offset).toFloat())
+    val distance = calculateDistanceTo(index, offset).toFloat()
+    var direction = sign(distance)
     if (direction == 0f) return
+    val lead = viewport().coerceAtLeast(1)
+    if (abs(distance) > lead * 2f && index !in firstVisibleItemIndex..lastVisibleItemIndex) {
+        val slots = columns().coerceAtLeast(1)
+        val rows = (index - firstVisibleItemIndex).toFloat() / slots
+        val stride = if (rows == 0f) 0f else abs((distance + firstVisibleItemScrollOffset - offset) / rows)
+        if (stride > .5f) {
+            val back = ceil(lead / stride).toInt().coerceAtLeast(1)
+            val dir = direction.toInt()
+            val near = (index - dir * back * slots).coerceIn(0, itemCount - 1)
+            // Jump only when it stays on the near side of the target and actually advances.
+            if ((near - index) * dir < 0 && (near - firstVisibleItemIndex) * dir > 0) {
+                snapToItem(near, offset)
+                direction = sign(calculateDistanceTo(index, offset).toFloat())
+                if (direction == 0f) return
+            }
+        }
+    }
     val start = withFrameNanos { it }
     var previous = 0f
     while (true) {
@@ -31,17 +51,7 @@ private suspend fun LazyLayoutScrollScope.approachItem(index: Int, offset: Int, 
         val fraction = ((progress - previous) / (1f - previous)).coerceIn(0f, 1f)
         previous = progress
         val step = remaining * fraction
-        val visible = index in firstVisibleItemIndex..lastVisibleItemIndex
-        if (abs(step) > viewport() * .75f && !visible) {
-            val slots = columns().coerceAtLeast(1)
-            val rows = (index - firstVisibleItemIndex).toFloat() / slots
-            val advance = (rows * fraction).toInt()
-            if (advance != 0) {
-                val stride = (remaining + firstVisibleItemScrollOffset - offset) / rows
-                val target = (firstVisibleItemIndex + advance * slots).coerceIn(0, itemCount - 1)
-                snapToItem(target, (firstVisibleItemScrollOffset + step - advance * stride).roundToInt())
-            } else if (abs(scrollBy(step)) < .1f && abs(step) > .5f) return
-        } else if (abs(scrollBy(step)) < .1f && abs(step) > .5f) return
+        if (abs(scrollBy(step)) < .1f && abs(step) > .5f) return
         if (index in firstVisibleItemIndex..lastVisibleItemIndex) {
             val measured = calculateDistanceTo(index, offset).toFloat()
             if (abs(measured) < .5f) return
