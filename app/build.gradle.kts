@@ -18,6 +18,7 @@ android {
         versionCode = 79
         versionName = "0.30.0"
         testInstrumentationRunner = "io.github.anastaci1a.localica.NavigationRandomOwnedSession"
+        testProguardFiles("proguard-test-rules.pro")
     }
     signingConfigs {
         getByName("debug") {
