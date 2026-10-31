@@ -1,0 +1,56 @@
+name: Audit distribution R8 (not release)
+'on':
+  push:
+    branches: [perf/distribution-build]
+permissions:
+  contents: read
+jobs:
+  device-tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 110
+    env:
+      TEST_API: ${{ matrix.api }}
+      LOCALICA_LIVE_EVIDENCE: 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        api: [26, 36]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: ./.github/actions/focused-android-setup
+      - name: Compile minified distribution and instrumentation APKs
+        run: ./gradlew assembleDistribution assembleDistributionAndroidTest -PlocalicaTestBuildType=distribution --no-daemon --max-workers=2
+      - name: Prepare distribution runner
+        run: |
+          sed 's/connectedDebugAndroidTest --no-daemon/connectedDistributionAndroidTest -PlocalicaTestBuildType=distribution --no-daemon/' .github/run-device-tests.sh > .github/run-device-tests-distribution.sh
+          grep -c connectedDistributionAndroidTest .github/run-device-tests-distribution.sh
+      - uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
+        with:
+          api-level: ${{ matrix.api }}
+          target: ${{ matrix.api == 36 && 'default' || 'google_apis' }}
+          arch: x86_64
+          profile: pixel_2
+          emulator-options: -no-window -gpu ${{ matrix.api == 36 && 'lavapipe' || 'swiftshader_indirect' }} -no-snapshot -noaudio -no-boot-anim -memory 3072
+          disable-animations: ${{ matrix.api < 36 }}
+          script: |
+            adb shell wm size ${{ matrix.api == 36 && '720x1280' || 'reset' }}
+            adb shell wm density ${{ matrix.api == 36 && '280' || 'reset' }}
+            sleep 60
+            bash .github/run-device-tests-distribution.sh
+      - name: Capture host diagnostics on emulator failure
+        if: failure()
+        run: |
+          free -h
+          df -h
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: r8-device-reports-api-${{ matrix.api }}
+          path: |
+            app/build/reports/androidTests/
+            app/build/outputs/androidTest-results/
+            app/build/outputs/connected_android_test_additional_output/
+            app/build/outputs/mapping/distribution/
+            native-live-evidence/
+          if-no-files-found: warn
+          retention-days: 14
