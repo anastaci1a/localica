@@ -167,7 +167,9 @@ Bulk tag writes journal pending metadata refresh before touching bytes. Verify e
 
 ### Artwork and lists
 
-Replaceable cover providers use bounded caches (including missing results), cancellable reads (at most three parallel decodes; one per cover and size bucket), a decoded-cover budget of an eighth of the heap class (12-48 MB), 128/192/256/384/768 px buckets, stable collection-cover ordering and display-sized decodes. Rescans/edits invalidate artwork/lyric caches. Long automatic scrolls retain cached covers but defer uncached decode requests until settling or interruption. Manual browsing keeps normal loading. No scraping.
+Replaceable cover providers use bounded caches (including missing results), cancellable reads (at most three parallel decodes; one per cover and size bucket), a decoded-cover budget of an eighth of the heap class (12-48 MB), 128/192/256/384/768 px buckets, stable collection-cover ordering and display-sized decodes.
+
+Rescans/edits invalidate artwork/lyric caches. Long automatic scrolls retain cached covers but defer uncached decode requests until settling or interruption. Manual browsing keeps normal loading. No scraping.
 
 One immutable browse-order snapshot resolves inherited/overridden collection ordering for cards, Home and details. Sort changes invalidate their completed queries without per-card preference reads. Read cached artwork synchronously. Retain smaller same-identity covers while larger decodes load. Warm artwork hits bypass unrelated cold decodes. Misses decode at most three at a time and remain revision-checked.
 
