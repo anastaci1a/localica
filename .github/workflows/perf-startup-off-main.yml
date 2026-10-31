@@ -1,7 +1,7 @@
 name: Perf startup off main (not release)
 'on':
   push:
-    branches: [perf/startup-off-main]
+    branches: [perf/startup-off-main, perf/startup-off-main-base]
 permissions:
   contents: read
 jobs:
