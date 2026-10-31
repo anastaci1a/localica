@@ -43,7 +43,7 @@ class ActivationHapticsTest {
                     5 -> ActionIcon(R.drawable.ic_plus, "Action", enabled = enabled, quiet = true, onClick = domainAction)
                     6 -> ActionIcon(R.drawable.ic_plus, "Action", enabled = enabled, glass = true, onClick = domainAction)
                     7 -> ActionIcon(R.drawable.ic_plus, "Action", enabled = enabled, glass = false, onClick = domainAction)
-                    8 -> ActionMenuItem("Action", enabled = enabled, onClick = domainAction)
+                    8 -> ActionMenuItem("Action", icon = R.drawable.ic_more, enabled = enabled, onClick = domainAction)
                 }
             }
         } } }

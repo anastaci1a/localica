@@ -57,7 +57,7 @@ class LyricsHeaderActionsTest {
                 CompositionLocalProvider(LocalFrostedBackdrop provides backing) { Box(Modifier.padding(32.dp)) {
                 LyricsHeaderActions(true, 1f, anchor, preparation, {}, { sources = true }, {})
                 GlassMenu(sources, anchor, { sources = false }, originPreparation = preparation) {
-                    ActionMenuItem("Embedded lyrics") { sources = false }
+                    ActionMenuItem("Embedded lyrics", icon = R.drawable.ic_lyrics) { sources = false }
                 }
                 } }
             }
@@ -125,7 +125,7 @@ class LyricsHeaderActionsTest {
                 LyricsHeaderActions(open, if (open) 1f else 0f, anchor, preparation,
                     { open = true }, { sources = true }, { open = false; sources = false })
                 GlassMenu(sources, anchor, { sources = false }, originPreparation = preparation) {
-                    ActionMenuItem("Embedded lyrics") { sources = false }
+                    ActionMenuItem("Embedded lyrics", icon = R.drawable.ic_lyrics) { sources = false }
                 }
             }
         } }
