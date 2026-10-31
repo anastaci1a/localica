@@ -16,9 +16,20 @@ import io.github.anastaci1a.localica.library.RoomLibraryStore
 import io.github.anastaci1a.localica.library.TreeScanner
 
 class LocalicaApplication : Application() {
+    private companion object {
+        val STARTUP_PREFERENCES = listOf("interface", "queue-settings", "scanner", "scan-progress", "browse-style",
+            "library-query", "library-filters", "pins", "player-actions", "tag-jobs", "cover-images")
+    }
     override fun onCreate() {
         super.onCreate()
-        CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
+        val startup = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        startup.launch {
+            // The first read of a preferences file blocks its caller until the XML is loaded. Load the
+            // files read while the first frames are built (activity, queue, scanner and browse state)
+            // here so those Main reads find them in memory. Values and write paths are unchanged.
+            for (name in STARTUP_PREFERENCES) runCatching { getSharedPreferences(name, MODE_PRIVATE).contains("") }
+        }
+        startup.launch {
             // The registry starts fail-closed before any service can create/open a source.
             // The writer publishes a useful Unknown state if inspection fails.
             runCatching { tagWriter.initialize() }
