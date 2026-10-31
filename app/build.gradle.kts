@@ -15,10 +15,9 @@ android {
         applicationId = "io.github.anastaci1a.localica"
         minSdk = 26
         targetSdk = 36
-        versionCode = 79
-        versionName = "0.30.0"
+        versionCode = 80
+        versionName = "0.30.1"
         testInstrumentationRunner = "io.github.anastaci1a.localica.NavigationRandomOwnedSession"
-        testProguardFiles("proguard-test-rules.pro")
     }
     signingConfigs {
         getByName("debug") {
@@ -43,14 +42,8 @@ android {
             isMinifyEnabled = true
             isShrinkResources = false
             matchingFallbacks += "release"
-            // Test libraries shared with the app need their classes in the minified process.
-            if (providers.gradleProperty("localicaTestBuildType").orNull == "distribution") {
-                proguardFile("proguard-audit-keep.pro")
-            }
         }
     }
-    // CI selects the minified build for R8 runtime audits: -PlocalicaTestBuildType=distribution.
-    testBuildType = providers.gradleProperty("localicaTestBuildType").getOrElse("debug")
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -94,10 +87,6 @@ dependencies {
     androidTestImplementation(libs.androidx.test.uiautomator)
     androidTestImplementation(libs.coroutines.test)
     debugImplementation(libs.compose.test.manifest)
-}
-// The test manifest registers the Compose test activity; add it to a non-debug test target too.
-providers.gradleProperty("localicaTestBuildType").orNull?.takeIf { it != "debug" }?.let {
-    dependencies.add("${it}Implementation", libs.compose.test.manifest)
 }
 
 // Preserve raw host XML in the existing build-report artifact, including failed tests.
@@ -144,12 +133,8 @@ val prepareStandaloneTestRuntime = tasks.register<Copy>("prepareStandaloneTestRu
         )
     }
 }
-// Audit builds (-PlocalicaTestBuildType=distribution) use the app's kept stdlib: a second copy
-// with different R8/D8 synthetics collides in one classloader on API 26.
-if (providers.gradleProperty("localicaTestBuildType").getOrElse("debug") == "debug") {
-    dependencies {
-        androidTestRuntimeOnly(files(standaloneRuntimeDirectory.map {
-            it.file("kotlin-stdlib-standalone.jar")
-        }).builtBy(prepareStandaloneTestRuntime))
-    }
+dependencies {
+    androidTestRuntimeOnly(files(standaloneRuntimeDirectory.map {
+        it.file("kotlin-stdlib-standalone.jar")
+    }).builtBy(prepareStandaloneTestRuntime))
 }
