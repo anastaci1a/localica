@@ -2,19 +2,19 @@
 
 ## Local verification
 
-Use JDK 17, Android platform 36 and build tools 35.0.0. Set `ANDROID_HOME` or untracked `local.properties` with `sdk.dir=/path/to/sdk`; the pinned wrapper verifies its download checksum.
+Use JDK 17, Android platform 36 and build tools 35.0.0. Set `ANDROID_HOME` or untracked `local.properties` with `sdk.dir=/path/to/sdk`. The pinned wrapper verifies its download checksum.
 
 ### Development and final validation
 
 The Localica lead runs effective tests and test setup without separate user approval. Use focused local checks while implementing individual changes. Documentation-only changes need prose, structure, link and rendering checks. Run the complete suite only after all intended changes form a ready final candidate.
 
-Select tests for migrations and failed operations; occurrence/cursor/metadata preservation; navigation restoration and gestures; playback/lyrics/artwork boundaries; accessibility, short/landscape screens, large fonts and reduced motion.
+Select tests for migrations, failed operations, occurrence/cursor/metadata preservation, navigation restoration, gestures and playback/lyrics/artwork boundaries. Cover accessibility, short/landscape screens, large fonts and reduced motion.
 
-For repeated `compileDebugAndroidTestKotlin` or `assembleDebug` runs, opt in with `--configuration-cache --configuration-cache-problems=fail --no-daemon --max-workers=2`. Run selected tests separately; verify other task graphs before adopting the cache.
+For repeated `compileDebugAndroidTestKotlin` or `assembleDebug` runs, opt in with `--configuration-cache --configuration-cache-problems=fail --no-daemon --max-workers=2`. Run selected tests separately. Verify other task graphs before adopting the cache.
 
 If full validation fails, preserve its first evidence. Repair failures with affected focused tests. Once all repairs are ready, freeze the new candidate and rerun full validation. Investigate every observed failure, including one from a slower parallel run.
 
-One verified complete equivalent pass counts for the exact candidate. A duplicate local and GitHub pass is not routinely required. Changes to code, tests or build inputs require fresh affected checks; final validation applies to the frozen candidate.
+One verified complete equivalent pass counts for the exact candidate. A duplicate local and GitHub pass is not routinely required. Changes to code, tests or build inputs require fresh affected checks. Final validation applies to the frozen candidate.
 
 | Stage | Required evidence |
 | --- | --- |
@@ -30,17 +30,23 @@ Final build and native commands, run only after candidate freeze:
 ./gradlew connectedDebugAndroidTest --no-daemon --max-workers=2
 ```
 
-Mandatory native regressions retain presented-pixel, lifecycle, first/reopened-frame, interruption and disposal assertions. Repeated utility-popup optical recording is opt-in with `utilityPopupOpticalDiagnostics=true`; the three mandatory scene methods still run by default. Successful SwitchTap frame exports require `switchTapOpticsReview=true`; pixel checks and bounded failure evidence remain enabled. Select diagnostic methods explicitly, never with a wildcard exclusion that might remove correctness tests.
+Mandatory native regressions retain presented-pixel, lifecycle, first/reopened-frame, interruption and disposal assertions. Repeated utility-popup optical recording is opt-in with `utilityPopupOpticalDiagnostics=true`. The three mandatory scene methods still run by default. Successful SwitchTap frame exports require `switchTapOpticsReview=true`. Pixel checks and bounded failure evidence remain enabled.
+
+Select diagnostic methods explicitly, never with a wildcard exclusion that might remove correctness tests.
 
 Build-report artifacts include raw JVM XML under `jvm-xml/<run>/testDebugUnitTest`, including when tests fail.
 
-Select the API 26 or 36 emulator explicitly with `ANDROID_SERIAL`. Match the [emulator configuration](#ci-and-signing). Physical-device review supplements automation. Installable development APK: `app/build/outputs/apk/debug/app-debug.apk`. The production release variant is unsigned. Test-only fixtures never ship in the app. Standalone test-package components cannot rely on the target app classloader: the test APK packages identical bytes from the app’s resolved Kotlin standard library. Its coordinate and SHA256 are retained in `app/build/generated/standalone-test-runtime/binding.txt`. `NavigationStandaloneRuntimeTest` checks linkage in the separate provider process; ordinary instrumentation alone does not cover that path.
+Select the API 26 or 36 emulator explicitly with `ANDROID_SERIAL`. Match the [emulator configuration](#ci-and-signing). Physical-device review supplements automation. Installable development APK: `app/build/outputs/apk/debug/app-debug.apk`. The production release variant is unsigned. Test-only fixtures never ship in the app.
+
+Standalone test-package components cannot rely on the target app classloader: the test APK packages identical bytes from the app’s resolved Kotlin standard library. Its coordinate and SHA256 are retained in `app/build/generated/standalone-test-runtime/binding.txt`. `NavigationStandaloneRuntimeTest` checks linkage in the separate provider process. Ordinary instrumentation alone does not cover that path.
 
 ### Evidence tooling prerequisites
 
-The [host contract workflow](../.github/workflows/tooling-contracts.yml) runs the Python selection/observer contracts and Node publisher mocks without an Android device. Its pinned Python dependency targets CPython 3.12 on Linux x86-64; use the hash-locked [requirements](../.github/tests/requirements.txt) in an isolated environment. Node 24 installs the publisher dependencies with `npm ci --prefix .github/test-evidence --ignore-scripts --no-audit --no-fund`; the committed lockfile owns their versions. The workflow owns the exact contract commands and records each result, log hash and tested source.
+The [host contract workflow](../.github/workflows/tooling-contracts.yml) runs the Python selection/observer contracts and Node publisher mocks without an Android device. Its pinned Python dependency targets CPython 3.12 on Linux x86-64. Use the hash-locked [requirements](../.github/tests/requirements.txt) in an isolated environment.
 
-These are evidence-tooling prerequisites, separate from the Gradle/JDK/SDK setup above. The [focused Android setup action](../.github/actions/focused-android-setup/action.yml) prepares hosted native jobs; its runner disk cleanup and KVM configuration are hosted-machine setup, not general local installation instructions. Offline contract passes validate mocks and protocol handling, not Android outcomes or live artifact delivery.
+Node 24 installs the publisher dependencies with `npm ci --prefix .github/test-evidence --ignore-scripts --no-audit --no-fund`. The committed lockfile owns their versions. The workflow owns the exact contract commands and records each result, log hash and tested source.
+
+These are evidence-tooling prerequisites, separate from the Gradle/JDK/SDK setup above. The [focused Android setup action](../.github/actions/focused-android-setup/action.yml) prepares hosted native jobs. Its runner disk cleanup and KVM configuration are hosted-machine setup, not general local installation instructions. Offline contract passes validate mocks and protocol handling, not Android outcomes or live artifact delivery.
 
 ### Coordinated local and hosted comparison
 
@@ -58,52 +64,109 @@ Cancel only a coordinated redundant run after a complete passing result is verif
 
 The comparison does not alter CI, branch protection, deployment or [release publication gates](#release-preparation). Existing hosted publication checks remain enforced. A local result does not by itself satisfy the current release job's hosted-run lookup.
 
-A workflow dispatch may supply `risk_classes` as up to 20 comma-separated instrumentation classes (4096 characters maximum). The hosted disposable job freezes the complete source inventory, APK hashes and API-qualified method partition. Preflight must execute exactly its expected methods with no failures or skips before the app/test-only reset and remaining suite using `notClass`. Archived preflight XML and remaining XML must form the complete disjoint union, with every applicable method once; missing/extra/duplicate outcomes, source/APK drift or unsupported SDK omissions fail closed. Original assumptions remain explicit skips with their observed logs, not passes. The partition and union receipts stay in `preflight-reports`; native remainder XML alone is not full-suite evidence. Failed preflight stops before the remainder and preserves its status/log/reports. Empty input and ordinary PR/main runs remain unfiltered. Compatibility keeps its existing preserved-data phases.
+A workflow dispatch may supply `risk_classes` as up to 20 comma-separated instrumentation classes (4096 characters maximum). The hosted disposable job freezes the complete source inventory, APK hashes and API-qualified method partition. Preflight must execute exactly its expected methods with no failures or skips before the app/test-only reset and remaining suite using `notClass`.
 
-Complete native workflow jobs enable `LOCALICA_LIVE_EVIDENCE=true`: the existing observer and supervised publisher preserve provisional failure observations while final XML owns test outcomes. Both optional preflight and full runs publish from separate fresh directories. Full starts only after a successful preflight certifies zero observed failures and zero uploaded packets through matching observer/supervisor/publisher receipts; contradictory or degraded evidence stops the job. Thus either failed preflight or full consumes at most six live packets total. Monitoring degradation fails an otherwise green run; test failure and cancellation retain their exit precedence, and owned package restoration runs after the supervisor finishes. Before native failure teardown, read-only crash-buffer and window/activity snapshots retain external error-window evidence with per-command status; cancellation or host loss can still prevent them. Fresh `native-live-evidence` is always uploaded, including on failure; existing evidence is refused rather than replayed. Local invocations without this workflow flag keep their existing behavior. Compatibility remains unwrapped.
+Archived preflight XML and remaining XML must form the complete disjoint union, with every applicable method once. Missing/extra/duplicate outcomes, source/APK drift or unsupported SDK omissions fail closed. Original assumptions remain explicit skips with their observed logs, not passes. The partition and union receipts stay in `preflight-reports`. Native remainder XML alone is not full-suite evidence.
+
+Failed preflight stops before the remainder and preserves its status/log/reports. Empty input and ordinary PR/main runs remain unfiltered. Compatibility keeps its existing preserved-data phases.
+
+Complete native workflow jobs enable `LOCALICA_LIVE_EVIDENCE=true`: the existing observer and supervised publisher preserve provisional failure observations while final XML owns test outcomes. Both optional preflight and full runs publish from separate fresh directories.
+
+Full starts only after a successful preflight certifies zero observed failures and zero uploaded packets through matching observer/supervisor/publisher receipts. Contradictory or degraded evidence stops the job. Thus either failed preflight or full consumes at most six live packets total.
+
+Monitoring degradation fails an otherwise green run. Test failure and cancellation retain their exit precedence, and owned package restoration runs after the supervisor finishes. Before native failure teardown, read-only crash-buffer and window/activity snapshots retain external error-window evidence with per-command status. Cancellation or host loss can still prevent them.
+
+Fresh `native-live-evidence` is always uploaded, including on failure. Existing evidence is refused rather than replayed. Local invocations without this workflow flag keep their existing behavior. Compatibility remains unwrapped.
 
 ### Opt-in prototypes
 
-The opt-in `prototype.yml` lane builds an explicitly uncertified development APK through manual dispatch or an explicit reusable-workflow call. Select up to 73 affected behavior classes (4096 characters maximum including the three mandatory regression classes) and describe coverage and limitations. The focused jobs allow 60 minutes without trimming selected methods; this is a capacity allowance, not a measured speedup. Search IME, search-focus and contrast coverage is mandatory on API 26/36; build/JVM/lint/signature and both preserved-data compatibility jobs also remain required. Known issues never waive failures.
+The opt-in `prototype.yml` lane builds an explicitly uncertified development APK through manual dispatch or an explicit reusable-workflow call. Select up to 73 affected behavior classes (4096 characters maximum including the three mandatory regression classes) and describe coverage and limitations.
+
+The focused jobs allow 60 minutes without trimming selected methods. This is a capacity allowance, not a measured speedup. Search IME, search-focus and contrast coverage is mandatory on API 26/36. Build/JVM/lint/signature and both preserved-data compatibility jobs also remain required. Known issues never waive failures.
 
 The decision manifest records the exact SHA, APK identity, selected coverage and that complete native suites were not run. Prototype results do not certify a release.
 
 Prototypes use the same [evidence tooling](#evidence-tooling-prerequisites), six-packet limit and outcome rules described above: final XML owns test results, monitoring degradation blocks a green result, and test failure retains its exit status.
 
-No automatic replay or replacement full-suite run is started. Hosted transport evidence must identify the tested publisher revision; offline contract success alone does not prove live delivery. New manual workflows require registration or an explicitly coordinated branch smoke before use.
+No automatic replay or replacement full-suite run is started. Hosted transport evidence must identify the tested publisher revision. Offline contract success alone does not prove live delivery. New manual workflows require registration or an explicitly coordinated branch smoke before use.
 
 ## Compatibility and dependencies
 
-- Queue schema 7 cannot be reopened by the original schema-6 APK. Before distributing it, dispatch the exact candidate through the Android workflow with `compatibility=true`. Its API 26/36 gate installs candidate → legacy-behavior bridge → candidate with the same package/signature and increasing private version codes, without clearing data. The [isolated overlay](../.github/compatibility/prepare.py) retains current schema, journal and recovery safety; only traversal behavior changes. `ShuffleApkCompatibilityTest` checks duplicate occurrences, saved order/cursor, controller reopening and statistics across `seed`, `bridge`, then `verify`; bridge journal/recovery checks run separately. Compatibility provenance binds the archived candidate’s reviewed instrumentation runner; APK manifest checks and every invocation require that exact runner without resident-session opt-in. Private compatibility artifacts are never distributed: use the canonical `localica-debug` APK. Ordinary migration tests do not replace this gate. Track exact-source evidence in [#295](https://github.com/anastaci1a/localica/issues/295).
+Queue schema 7 cannot be reopened by the original schema-6 APK. Before distributing it, dispatch the exact candidate through the Android workflow with `compatibility=true`. Its API 26/36 gate installs candidate → legacy-behavior bridge → candidate with the same package/signature and increasing private version codes, without clearing data.
 
-- Finish tag editing, recovery and pending metadata refreshes before downgrading: older builds cannot read the incremental metadata-refresh records. The existing array journal migrates on upgrade; queue database schemas are independent.
-- Android 8+; MP3 and AAC/M4A are primary formats, with WAV/FLAC/Ogg/Opus using available device decoders. No decoder extensions. Boundary tests check decoded samples, MP3 waveform alignment and transition buffering; sample counts alone are insufficient.
-- FLAC tests require a decoder; stock Android supplies one from API 27.
-- The [AAC edit-list correction](structure.md#aac-edit-list-trimming) covers bounded shortened-sample and rounded-endpoint layouts. Unsupported M4A timing retains native behavior.
-- Private-file diagnostics are opt-in. Keep inputs and decoded audio private and untracked. Record observer costs and native output failures separately from sample comparisons; none proves physical speaker continuity.
-- Only the measured [Android 8 MP3 padding failure](https://github.com/anastaci1a/localica/issues/30) is skipped after playback checks. Other failures remain fatal.
-- Media3 stays pinned to 1.10.1 pending a stable [MP3 trimming fix](https://github.com/androidx/media/issues/3425); rerun waveform checks before upgrading.
-- Jaudiotagger 3.0.1 uses LGPL 2.1+. Bundle its notice/license and include its source archive with releases. To replace it, build the source with Maven, replace `implementation(libs.jaudiotagger)` with the local JAR, and rebuild under your signing key. Localica remains MIT licensed.
+The [isolated overlay](../.github/compatibility/prepare.py) retains current schema, journal and recovery safety. Only traversal behavior changes. `ShuffleApkCompatibilityTest` checks duplicate occurrences, saved order/cursor, controller reopening and statistics across `seed`, `bridge`, then `verify`. Bridge journal/recovery checks run separately. Compatibility provenance binds the archived candidate’s reviewed instrumentation runner. APK manifest checks and every invocation require that exact runner without resident-session opt-in.
+
+Private compatibility artifacts are never distributed: use the canonical `localica-debug` APK. Ordinary migration tests do not replace this gate. Track exact-source evidence in [#295](https://github.com/anastaci1a/localica/issues/295).
+
+Finish tag editing, recovery and pending metadata refreshes before downgrading: older builds cannot read the incremental metadata-refresh records. The existing array journal migrates on upgrade. Queue database schemas are independent.
+
+Android 8+. MP3 and AAC/M4A are primary formats, with WAV/FLAC/Ogg/Opus using available device decoders. No decoder extensions. Boundary tests check decoded samples, MP3 waveform alignment and transition buffering. Sample counts alone are insufficient.
+
+FLAC tests require a decoder. Stock Android supplies one from API 27.
+
+The [AAC edit-list correction](structure.md#aac-edit-list-trimming) covers bounded shortened-sample and rounded-endpoint layouts. Unsupported M4A timing retains native behavior.
+
+Private-file diagnostics are opt-in. Keep inputs and decoded audio private and untracked. Record observer costs and native output failures separately from sample comparisons. None proves physical speaker continuity.
+
+Only the measured [Android 8 MP3 padding failure](https://github.com/anastaci1a/localica/issues/30) is skipped after playback checks. Other failures remain fatal.
+
+Media3 stays pinned to 1.10.1 pending a stable [MP3 trimming fix](https://github.com/androidx/media/issues/3425). Rerun waveform checks before upgrading.
+
+Jaudiotagger 3.0.1 uses LGPL 2.1+. Bundle its notice/license and include its source archive with releases. To replace it, build the source with Maven, replace `implementation(libs.jaudiotagger)` with the local JAR, and rebuild under your signing key. Localica remains MIT licensed.
 
 ## CI and signing
 
-The [Android workflow](../.github/workflows/android.yml) builds main/PR changes and tests API 26/36. Match its two virtual CPU cores and 3,072 MiB emulator RAM locally.
+The [Android workflow](../.github/workflows/android.yml) builds application changes on main/PR and tests API 26/36. Documentation-only changes use the separate documentation workflow. Match its two virtual CPU cores and 3,072 MiB emulator RAM locally.
 
-API 36 uses explicit `lavapipe`, 720×1280 at 280 dpi, and normal system animations: automatic software/SwiftShader caused rendering crashes; zero-duration system transitions stalled launcher/Back/picker flows. Compose assertions control their own clock. Keep Actions pinned by commit.
+API 36 uses explicit `lavapipe`, 720×1280 at 280 dpi, and normal system animations: automatic software/SwiftShader caused rendering crashes. Zero-duration system transitions stalled launcher/Back/picker flows. Compose assertions control their own clock. Keep Actions pinned by commit.
 
 On disposable GitHub-hosted API 26 emulators, the native runner temporarily disables preinstalled Google Search before instrumentation. Its unrelated JobScheduler crash can obstruct Localica. Cleanup restores its prior enabled state after verifying device and package ownership. Google Search data is preserved. Physical devices are untouched. Localica crashes and all assertions remain fatal.
 
-`ANDROID_DEBUG_KEYSTORE` holds the base64 development key; CI restores it via `LOCALICA_DEBUG_KEYSTORE` and verifies the APK certificate. Back up the key outside Git. Local builds otherwise use the normal debug key; PRs use a disposable key. Regular GitHub releases retain the existing `.debug` application ID and development key for in-place updates; separate production signing is not configured.
+`ANDROID_DEBUG_KEYSTORE` holds the base64 development key. CI restores it via `LOCALICA_DEBUG_KEYSTORE` and verifies the APK certificate. Back up the key outside Git. Local builds otherwise use the normal debug key. PRs use a disposable key.
+
+Regular GitHub releases retain the existing `.debug` application ID and development key for in-place updates. Separate production signing is not configured.
 
 ## Release preparation
 
-1. Update app version/name and increment `versionCode` for every distributed update. Fill the [template](../.github/RELEASE_TEMPLATE.md) into [RELEASE_NOTES](../.github/RELEASE_NOTES.md): basic APK/compatibility/signing introduction, short Changes bullets, **all** resolved issue URLs with brief description fragments, and short Install steps. Include only completed issues; say so if none. Keep previous published descriptions intact.
-2. Review [previews](#previews), current docs and resolved issues; commit and push.
-3. **Wait for successful build, both device jobs, and both compatibility jobs on the exact main SHA before tagging it.** The matching `vX.X.X` workflow reuses that run's APK, verifies version/signature/checksum, and publishes without another build/test matrix. Missing verification/expired artifacts require rerunning main checks; never substitute another commit's APK. Unfilled release placeholders block publication.
-4. Verify published assets, close resolved issues/remove workflow labels, and replace completed roadmap outcomes with the next checkpoint.
+### Step 1
+
+Update app version/name and increment `versionCode` for every distributed update. Fill the [template](../.github/RELEASE_TEMPLATE.md) into [RELEASE_NOTES](../.github/RELEASE_NOTES.md): basic APK/compatibility/signing introduction, short Changes bullets, **all** resolved issue URLs with brief description fragments, and short Install steps. Include only completed issues. Say so if none. Keep previous published descriptions intact.
+
+### Step 2
+
+Review [previews](#previews), current docs and resolved issues. Commit and push.
+
+### Step 3
+
+**Wait for successful build, both device jobs, and both compatibility jobs on the exact main SHA before tagging it.** The matching `vX.X.X` workflow reuses that run's APK, verifies version/signature/checksum, and publishes without another build/test matrix. Missing verification/expired artifacts require rerunning main checks. Never substitute another commit's APK. Unfilled release placeholders block publication.
+
+### Step 4
+
+Verify published assets, close resolved issues/remove workflow labels, and replace completed roadmap outcomes with the next checkpoint.
 
 ## Previews
 
 Review README screenshots/GIF for each release. Recapture changed screens from the candidate, inspect at README size, update version/credits and remove obsolete images. Keep navigation recordings short/silent and third-party demo media outside Git/APK.
 
-Reuse `${XDG_DATA_HOME:-$HOME/.local/share}/localica/previews/` for the local library, setup notes and raw captures. Preserve emulator music/app data; update with `adb install -r` rather than recreating the library.
+Reuse `${XDG_DATA_HOME:-$HOME/.local/share}/localica/previews/` for the local library, setup notes and raw captures. Preserve emulator music/app data. Update with `adb install -r` rather than recreating the library.
+
+## Documentation
+
+Use Node.js 22 or newer. From a fresh clone, install only the documentation tooling:
+
+```sh
+git clone https://github.com/anastaci1a/localica.git
+cd localica
+npm ci --prefix tools/docs --ignore-scripts
+npm test --prefix tools/docs
+npm run check --prefix tools/docs
+npm run build --prefix tools/docs
+```
+
+Open `build/docs-site/docs/index.html` to review the site locally. No Android SDK, signing key or device is needed for these checks. Mathematical display blocks render to HTML and MathML during the build. Fonts and styles are local assets.
+
+The [documentation workflow](../.github/workflows/documentation.yml) checks pull requests and publishes main to the existing `gh-pages` branch. It replaces only the `docs/` directory, preserving all other deployed files.
+
+The site lives at [Localica documentation](https://anastaci1a.github.io/localica/docs/). Maintained-document links resolve to rendered pages. Source and historical links remain explicit GitHub links. No hosting settings or release tags change.
+
+[Writing rules](../DOCUMENTATION.md) define the maintained inventory and historical exclusions. Automated checks cover prose limits, local links and fragments, headings, image descriptions and rendered navigation. Review contract meaning and remote evidence separately.
