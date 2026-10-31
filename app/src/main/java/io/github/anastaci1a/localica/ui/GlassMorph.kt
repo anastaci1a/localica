@@ -29,6 +29,7 @@ import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalView
@@ -86,30 +87,70 @@ internal class GlassAnchor {
     var bottomClearance = 0f
     var bottomLimit = Float.NaN
     var ink by mutableStateOf(Color.Unspecified)
+    // A context trigger in a scrolling grid can defer its placement until opening;
+    // see contextMenuAnchor. Ordinary anchors follow every global position.
+    var contextPlacementTracked by mutableStateOf(true)
+    var contextPlacement: (() -> Unit)? = null
+    /** Publish a deferred context trigger's current placement, then keep following it. */
+    fun prepareContextPlacement() {
+        contextPlacement?.invoke()
+        contextPlacementTracked = true
+    }
 }
 
 @Composable
-internal fun rememberGlassAnchor(): GlassAnchor {
+internal fun rememberGlassAnchor(deferContextPlacement: Boolean = false): GlassAnchor {
     val ink = LocalContentColor.current
-    return remember { GlassAnchor().also { it.ink = ink } }
+    return remember { GlassAnchor().also { it.ink = ink; it.contextPlacementTracked = !deferContextPlacement } }
 }
 
-/** Context menus return to the actual artwork shape, never an invented menu button. */
+/** Optional evidence of each published context-trigger placement; no behavior depends on it. */
+internal val LocalContextAnchorPlacementObserver = staticCompositionLocalOf<((Rect) -> Unit)?> { null }
+
+/** Context menus return to the actual artwork shape, never an invented menu button.
+ * A deferred anchor keeps only its coordinates until prepareContextPlacement, so
+ * resting grids do not publish window geometry for every cell on every scroll frame. */
 @Composable internal fun Modifier.contextMenuAnchor(anchor: GlassAnchor, circular: Boolean = false): Modifier {
     anchor.captureInk()
     val view = LocalView.current
     val source = LocalFrostedBackdrop.current
     val density = LocalDensity.current
     val clearance = with(density) { LocalBrowseObscuredInset.current.toPx() }
+    val observer = LocalContextAnchorPlacementObserver.current
     SideEffect { anchor.source = source; anchor.quiet = true; anchor.contextual = true; anchor.bottomClearance = clearance; anchor.face = null }
-    return backdropLocation(anchor.samplingLocation).onGloballyPositioned {
-        anchor.bounds = Rect(it.backdropPosition(view), Size(it.size.width.toFloat(), it.size.height.toFloat()))
+    fun publish(coordinates: LayoutCoordinates) {
+        anchor.bounds = Rect(coordinates.backdropPosition(view), Size(coordinates.size.width.toFloat(), coordinates.size.height.toFloat()))
         val location = IntArray(2)
         view.getLocationOnScreen(location)
         anchor.bottomLimit = location[1] + view.height - clearance
-        anchor.cornerRadius = if (circular) with(density) { (it.size.width / 2f).toDp() } else 16.dp
+        anchor.cornerRadius = if (circular) with(density) { (coordinates.size.width / 2f).toDp() } else 16.dp
         anchor.lastSamplingFootprint = anchor.samplingFootprint()
+        observer?.invoke(anchor.bounds)
     }
+    if (!anchor.contextPlacementTracked) {
+        val placed = remember(anchor) { arrayOfNulls<LayoutCoordinates>(1) }
+        SideEffect {
+            anchor.contextPlacement = {
+                placed[0]?.takeIf { it.isAttached }?.let { coordinates ->
+                    // The same global sample backdropLocation records, then the trigger geometry.
+                    val location = anchor.samplingLocation
+                    val screen = IntArray(2)
+                    view.getLocationOnScreen(screen)
+                    location.windowOffset = Offset(screen[0].toFloat(), screen[1].toFloat())
+                    location.fallback = coordinates.positionInRoot() + location.windowOffset
+                    androidx.compose.runtime.snapshots.Snapshot.withoutReadObservation { location.transformRevision++ }
+                    publish(coordinates)
+                }
+            }
+        }
+        return onPlaced {
+            placed[0] = it
+            anchor.samplingLocation.coordinates = it
+            androidx.compose.runtime.snapshots.Snapshot.withoutReadObservation { anchor.samplingLocation.placement++ }
+        }
+    }
+    SideEffect { anchor.contextPlacement = null }
+    return backdropLocation(anchor.samplingLocation).onGloballyPositioned { publish(it) }
 }
 
 @Composable
