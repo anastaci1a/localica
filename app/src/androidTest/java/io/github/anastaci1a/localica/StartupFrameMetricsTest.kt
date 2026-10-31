@@ -79,10 +79,57 @@ class StartupFrameMetricsTest {
         val launchActivity = AtomicReference<Activity?>()
         val createdLatch = CountDownLatch(1)
         val queuedLatch = CountDownLatch(1)
+        val launchStartRef = AtomicLong(Long.MAX_VALUE)
+        // Low-rate main-thread probe (about 1 ms per poll); it stops once content is found.
+        val poll = object : Runnable {
+            override fun run() {
+                val activity = launchActivity.get() ?: return
+                val now = System.nanoTime()
+                val tags = semanticsTags(activity)
+                if (milestones.skeleton.get() == 0L && "browse-loading" in tags) milestones.skeleton.set(now)
+                if (milestones.content.get() == 0L && tags.any { it.startsWith("media-") }) milestones.content.set(now)
+                if (milestones.content.get() == 0L && now - launchStartRef.get() < CONTENT_TIMEOUT_NANOS) main.postDelayed(this, POLL_MILLIS)
+            }
+        }
+        // Emission observers run off Main; StateFlow conflation means these count delivered values.
+        val observers = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Default)
+        fun observe(owner: LibraryViewModel) {
+            observers.launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) {
+                var last: Any? = null
+                owner.library.collect { state ->
+                    milestones.libraryEmissions.incrementAndGet()
+                    if (state.snapshot !== last) { last = state.snapshot; milestones.snapshotIdentities.incrementAndGet() }
+                    if (!state.loading) milestones.libraryLoaded.compareAndSet(0L, System.nanoTime())
+                }
+            }
+            observers.launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) {
+                owner.playback.queues.state.collect { milestones.queueEmissions.incrementAndGet() }
+            }
+            observers.launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) {
+                owner.playlist.collect { milestones.playlistEmissions.incrementAndGet() }
+            }
+        }
+        // Poor-man's profiler: sample Main's stack every 10 ms during the window (test-only; a
+        // stack read briefly suspends Main, identical overhead before and after).
+        val stackSamples = mutableListOf<Pair<Long, Array<StackTraceElement>>>()
+        val sampler = Thread {
+            val mainThread = Looper.getMainLooper().thread
+            try {
+                while (!Thread.currentThread().isInterrupted) {
+                    val at = System.nanoTime()
+                    val stack = mainThread.stackTrace
+                    synchronized(stackSamples) { stackSamples += at to stack }
+                    Thread.sleep(SAMPLE_MILLIS)
+                }
+            } catch (_: InterruptedException) { }
+        }
         val callbacks = object : Application.ActivityLifecycleCallbacks {
             override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) {
                 if (activity !is MainActivity || !launchActivity.compareAndSet(null, activity)) return
                 milestones.created.set(System.nanoTime())
+                // Observe from creation: the test thread's launch() can return seconds later while Main is busy.
+                observe(ViewModelProvider(activity)[LibraryViewModel::class.java])
+                main.post(poll)
                 createdLatch.countDown()
                 // Hold the launch transaction only until the recorder's registration is queued
                 // ahead of the first traversal (bounded; a timeout only loses the first frames).
@@ -119,55 +166,28 @@ class StartupFrameMetricsTest {
             }
             val launchStart = NavigationFrameMetricsRecorder.markNanos()
             val windowEnd = launchStart + WINDOW_NANOS
+            launchStartRef.set(launchStart)
+            sampler.start()
             ActivityScenario.launch<MainActivity>(Intent(context, MainActivity::class.java)).use { _ ->
                 val recorder = recorderFuture.get(30, TimeUnit.SECONDS)
                 val activity = requireNotNull(launchActivity.get())
-                // Low-rate main-thread probe (about 1 ms per poll); it stops once content is found.
-                val poll = object : Runnable {
-                    override fun run() {
-                        val now = System.nanoTime()
-                        val tags = semanticsTags(activity)
-                        if (milestones.skeleton.get() == 0L && "browse-loading" in tags) milestones.skeleton.set(now)
-                        if (milestones.content.get() == 0L && tags.any { it.startsWith("media-") }) milestones.content.set(now)
-                        if (milestones.content.get() == 0L && now - launchStart < CONTENT_TIMEOUT_NANOS) main.postDelayed(this, POLL_MILLIS)
-                    }
-                }
-                val model = AtomicReference<LibraryViewModel?>()
-                instrumentation.runOnMainSync {
-                    model.set(ViewModelProvider(activity as androidx.activity.ComponentActivity)[LibraryViewModel::class.java])
-                }
-                // Emission observers run off Main; StateFlow conflation means these count delivered values.
-                val observers = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Default)
-                requireNotNull(model.get()).let { owner ->
-                    observers.launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) {
-                        var last: Any? = null
-                        owner.library.collect { state ->
-                            milestones.libraryEmissions.incrementAndGet()
-                            if (state.snapshot !== last) { last = state.snapshot; milestones.snapshotIdentities.incrementAndGet() }
-                            if (!state.loading) milestones.libraryLoaded.compareAndSet(0L, System.nanoTime())
-                        }
-                    }
-                    observers.launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) {
-                        owner.playback.queues.state.collect { milestones.queueEmissions.incrementAndGet() }
-                    }
-                    observers.launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) {
-                        owner.playlist.collect { milestones.playlistEmissions.incrementAndGet() }
-                    }
-                }
-                main.post(poll)
                 while (System.nanoTime() < windowEnd) SystemClock.sleep(20)
+                sampler.interrupt(); sampler.join(5_000)
                 val drained = control.submit<Boolean> { recorder.awaitFrameAtOrAfter(windowEnd) }.get(30, TimeUnit.SECONDS)
                 val result = control.submit<NavigationFrameMetricsRecorder.Result> { recorder.finish(launchStart, windowEnd) }
                     .get(30, TimeUnit.SECONDS)
                 val deadline = SystemClock.elapsedRealtime() + CONTENT_TIMEOUT_NANOS / 1_000_000
                 while (milestones.content.get() == 0L && SystemClock.elapsedRealtime() < deadline) SystemClock.sleep(20)
-                val refresh = activity.windowManager.defaultDisplay.refreshRate.takeIf { it > 1f } ?: 60f
                 observers.cancel()
-                report(scenario, tabs, seededMs, launchStart, milestones, result, drained, 1_000_000_000.0 / refresh)
+                val refresh = activity.windowManager.defaultDisplay.refreshRate.takeIf { it > 1f } ?: 60f
+                report(scenario, tabs, seededMs, launchStart, milestones, result, drained, 1_000_000_000.0 / refresh,
+                    synchronized(stackSamples) { stackSamples.toList() })
                 assertNotNull("Recorder produced a snapshot", result.snapshot)
             }
         } finally {
             application.unregisterActivityLifecycleCallbacks(callbacks)
+            observers.cancel()
+            sampler.interrupt()
             queuedLatch.countDown()
             control.shutdownNow()
             interfacePreferences.edit().also { editor ->
@@ -176,6 +196,24 @@ class StartupFrameMetricsTest {
             runCatching { runBlocking { store.removeRoot(folder.uri) } }
             database.close()
         }
+    }
+
+    /** Busy-Main histogram: innermost app frame and top frame per sample; idle = waiting in the looper. */
+    private fun profile(samples: List<Pair<Long, Array<StackTraceElement>>>, launchStart: Long): List<String> {
+        val inWindow = samples.filter { it.first - launchStart in 0 until WINDOW_NANOS }
+        fun frame(element: StackTraceElement) = "${element.className}.${element.methodName}:${element.lineNumber}"
+        val busy = inWindow.filterNot { (_, stack) -> stack.firstOrNull()?.let {
+            it.className == "android.os.MessageQueue" && it.methodName == "nativePollOnce" } == true }
+        val app = busy.groupingBy { (_, stack) -> stack.firstOrNull { it.className.startsWith("io.github.anastaci1a") }?.let(::frame) ?: "(no app frame)" }.eachCount()
+        val top = busy.groupingBy { (_, stack) -> stack.take(2).joinToString(" < ") { frame(it) } }.eachCount()
+        // Outermost app frame shows which entry point (composition, service, collector) owns the time.
+        val entry = busy.groupingBy { (_, stack) -> stack.lastOrNull { it.className.startsWith("io.github.anastaci1a") }?.let(::frame) ?: "(no app frame)" }.eachCount()
+        val perSecond = (0 until (WINDOW_NANOS / 1_000_000_000L).toInt()).map { second ->
+            busy.count { (it.first - launchStart) / 1_000_000_000L == second.toLong() } }
+        return listOf("profile samples=${inWindow.size} busy=${busy.size} intervalMs=$SAMPLE_MILLIS busyPerSecond=$perSecond") +
+            app.entries.sortedByDescending { it.value }.take(40).map { "profile.app ${it.value} ${it.key}" } +
+            entry.entries.sortedByDescending { it.value }.take(25).map { "profile.entry ${it.value} ${it.key}" } +
+            top.entries.sortedByDescending { it.value }.take(25).map { "profile.top ${it.value} ${it.key}" }
     }
 
     private fun semanticsTags(activity: Activity): Set<String> {
@@ -195,7 +233,8 @@ class StartupFrameMetricsTest {
     }
 
     private fun report(scenario: String, tabs: List<MainTab>, seededMs: Long, launchStart: Long, milestones: Milestones,
-        result: NavigationFrameMetricsRecorder.Result, drained: Boolean, budgetNanos: Double) {
+        result: NavigationFrameMetricsRecorder.Result, drained: Boolean, budgetNanos: Double,
+        samples: List<Pair<Long, Array<StackTraceElement>>>) {
         val snapshot = result.snapshot
         val frames = if (snapshot == null) emptyList() else (0 until snapshot.storedCount).map { snapshot[it] }
             .filter { it.position == NavigationFrameWindow.Position.IN_WINDOW }
@@ -222,6 +261,7 @@ class StartupFrameMetricsTest {
             lines += "frame[$index] startMs=%.1f totalMs=%.2f deadlineMs=%s".format((frame.frameTimestampNanos - launchStart) / 1e6,
                 frame.totalDurationNanos / 1e6, frame.deadlineDurationNanos?.let { "%.2f".format(it / 1e6) } ?: "n/a")
         }
+        lines += profile(samples, launchStart)
         lines.forEach { Log.i(TAG, it) }
         runCatching {
             val directory = nativeEvidenceDirectory("startup-frame-metrics", null)
@@ -235,5 +275,6 @@ class StartupFrameMetricsTest {
         const val WINDOW_NANOS = 5_000_000_000L
         const val CONTENT_TIMEOUT_NANOS = 30_000_000_000L
         const val POLL_MILLIS = 50L
+        const val SAMPLE_MILLIS = 10L
     }
 }
