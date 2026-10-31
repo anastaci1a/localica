@@ -6,6 +6,8 @@ labels: bug
 assignees: ''
 ---
 
+# Bug report
+
 <!-- Keep each bullet brief. Delete optional bullets you do not need. -->
 
 - **Problem:**
@@ -14,5 +16,5 @@ assignees: ''
   -
 - **Frequency:** <!-- Always, sometimes, or only under specific conditions. -->
 - **App / Android version:**
-- **Cause, if known:** <!-- Optional; do not guess. -->
+- **Cause, if known:** <!-- Optional. Do not guess. -->
 - **Evidence:** <!-- Optional screenshot, recording, or relevant log link. -->
