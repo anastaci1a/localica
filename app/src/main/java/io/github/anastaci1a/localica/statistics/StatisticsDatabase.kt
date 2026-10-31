@@ -38,7 +38,7 @@ class StatisticsRepository(private val dao: StatisticsDao,
     scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)) {
     val counts: Flow<ListeningStatistics> = combine(dao.tracks(), dao.playlists()) { tracks, playlists ->
         ListeningStatistics(tracks.associate { it.id to it.count }, playlists.associate { it.id to it.count })
-    }
+    }.distinctUntilChanged()
     private val pending = Channel<QualifiedPlay>(Channel.UNLIMITED)
     init {
         scope.launch {
