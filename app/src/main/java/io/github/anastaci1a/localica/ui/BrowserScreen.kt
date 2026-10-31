@@ -55,12 +55,13 @@ import io.github.anastaci1a.localica.playlist.*
 import io.github.anastaci1a.localica.queue.*
 import io.github.anastaci1a.localica.home.PinEdits
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlin.math.roundToInt
 
-/** Optional per-cell work evidence (kind, item key); no behavior depends on it. */
+/** Optional screen and per-cell work evidence (kind, route or item key); no behavior depends on it. */
 internal val LocalBrowseCellWorkObserver = staticCompositionLocalOf<((String, Any) -> Unit)?> { null }
 
 @OptIn(ExperimentalSharedTransitionApi::class, ExperimentalLayoutApi::class)
@@ -104,6 +105,8 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     val searchEditor = remember(editorGeneration) { ScopedSearchEditorSession() }
     DisposableEffect(searchEditor) { onDispose { searchEditor.retire() } }
     fun retireSearchEditor() { searchEditor.retire(); editorGeneration++ }
+    val screenWork = LocalBrowseCellWorkObserver.current
+    if (screenWork != null) SideEffect { screenWork("screen", route.key) }
     val obscuredInset = LocalBrowseObscuredInset.current
     val density = androidx.compose.ui.platform.LocalDensity.current
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -467,15 +470,21 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
         retainRaster = false)
     val backdropBacking = if (artDetail) collectionSource else surroundingBackdrop
     val backdropScene = rememberBrowseBackdropScene(listBackdrop, backdropBacking,
-        listOf(presentation, validAlbums, if (artDetail) hero else surroundingBackdrop?.fallback), gridState.isScrollInProgress)
+        listOf(presentation, validAlbums, if (artDetail) hero else surroundingBackdrop?.fallback)) { gridState.isScrollInProgress }
     val maskedBackdrop = (showSearchPill || showFilters) && !artDetail
     val viewportBackdrop = if (needsListBackdrop) rememberBrowseBackdropLayer(backdropScene, maskedBackdrop) else null
     val refreshBackdrop = LocalBackdropRefresh.current
-    LaunchedEffect(presentation, gridState.isScrollInProgress) {
-        if (!gridState.isScrollInProgress) {
-            kotlinx.coroutines.delay(150)
-            refreshBackdrop()
-            if (artDetail) collectionSource.refresh()
+    // Observe scroll start/stop in the effect, not this screen's composition.
+    val currentRefreshBackdrop by rememberUpdatedState(refreshBackdrop)
+    val currentArtDetail by rememberUpdatedState(artDetail)
+    val currentCollectionSource by rememberUpdatedState(collectionSource)
+    LaunchedEffect(presentation) {
+        snapshotFlow { gridState.isScrollInProgress }.collectLatest { scrolling ->
+            if (!scrolling) {
+                kotlinx.coroutines.delay(150)
+                currentRefreshBackdrop()
+                if (currentArtDetail) currentCollectionSource.refresh()
+            }
         }
     }
     val scrollScope = rememberCoroutineScope()
@@ -559,11 +568,15 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     val returnListMatches = loadedResult != null && (!queryPending || presentedReturnOwner === returnOwner)
     val clearableFilter = (route.tab == MainTab.Library && route.collection == null && route.filter != null) ||
         (artistDetail && validAlbums.isNotEmpty())
+    // Recompose only when the offered action changes, not at every scroll start/stop.
+    val returnAction by remember(gridState, clearableFilter) { derivedStateOf {
+        listReturnAction(gridState.canScrollBackward, gridState.isScrollInProgress, clearableFilter)
+    } }
     DisposableEffect(playbackFollow) { onDispose { playbackFollow.cancel() } }
     val returnToList = ListReturnActions(scrollToTopRequest, returnOwner,
         selectionVisible && !playerOpen && !session.active && !localSearchOpen,
         backEnabled = listBackEnabled && !route.search && !localSearchOpen && !playerOpen,
-        action = listReturnAction(gridState.canScrollBackward, gridState.isScrollInProgress, clearableFilter),
+        action = returnAction,
         onSubmit = { orderScroll.cancel(); playbackFollow.userScroll() },
         ready = {
             snapshotFlow { readyToScroll }.first { it }

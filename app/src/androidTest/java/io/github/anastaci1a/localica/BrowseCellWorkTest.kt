@@ -60,6 +60,22 @@ class BrowseCellWorkTest {
         assertEquals("Only the opened row owns a collection menu", setOf<Any>("cell-work:2"), keys("actions"))
     }
 
+    @Test fun scrollStartAndStopAwayFromTheTopDoNotRecomposeTheScreen() =
+        showSongs(BrowseStyle(presentation = Presentation.Standard, itemsPerRow = 5), count = 400) {
+            val list = compose.onNodeWithTag("browser-list")
+            // Leaving the top legitimately changes the offered return action once.
+            list.performScrollToKey("cell-work:150")
+            compose.waitForIdle()
+            events.clear()
+            // Key scrolling toggles isScrollInProgress without a pointer contact.
+            list.performScrollToKey("cell-work:300")
+            compose.waitForIdle()
+            list.performScrollToKey("cell-work:200")
+            compose.waitForIdle()
+            assertEquals("Scroll progress is observed by effects and derived state, not the screen body", 0,
+                synchronized(events) { events.count { it.first == "screen" } })
+        }
+
     @Test fun restingGalleryScrollPublishesNoPerCellPositionsUntilAMenuOpens() =
         showSongs(BrowseStyle(presentation = Presentation.Standard, itemsPerRow = 5)) {
             val list = compose.onNodeWithTag("browser-list")

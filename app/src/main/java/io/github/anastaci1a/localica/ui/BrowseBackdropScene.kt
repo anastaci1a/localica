@@ -45,6 +45,14 @@ internal val LocalBrowseBackdropObserver = staticCompositionLocalOf<((BrowseBack
 @Composable
 internal fun rememberBrowseBackdropScene(source: FrostedBackdrop, backing: FrostedBackdrop?,
     contentKey: Any?, scrolling: Boolean): BrowseBackdropScene {
+    val current by rememberUpdatedState(scrolling)
+    return rememberBrowseBackdropScene(source, backing, contentKey) { current }
+}
+
+/** Read scrolling inside the effect so a scroll start/stop does not recompose the caller. */
+@Composable
+internal fun rememberBrowseBackdropScene(source: FrostedBackdrop, backing: FrostedBackdrop?,
+    contentKey: Any?, scrolling: () -> Boolean): BrowseBackdropScene {
     val renderer = currentGlassRendererGeneration()
     val currentKey by rememberUpdatedState(contentKey)
     val handler = remember { Handler(Looper.getMainLooper()) }
@@ -76,13 +84,17 @@ internal fun rememberBrowseBackdropScene(source: FrostedBackdrop, backing: Frost
     // Coalesce movement using the existing 150ms refresh delay plus the adapter’s
     // 500ms settled interval. Never schedule a CPU readback for each scroll frame.
     // The adapter still owns both attempts and their safe completion lifetime.
-    LaunchedEffect(scene, contentKey, scrolling, renderer) {
+    val currentScrolling by rememberUpdatedState(scrolling)
+    LaunchedEffect(scene, contentKey, renderer) {
         if (renderer.backend == GlassBackend.Legacy) {
-            delay(150)
-            source.refresh()
-            while (scrolling) {
-                delay(650)
+            // Each start/stop restarts the same schedule the scrolling key used to restart.
+            snapshotFlow { currentScrolling() }.collectLatest { moving ->
+                delay(150)
                 source.refresh()
+                while (moving) {
+                    delay(650)
+                    source.refresh()
+                }
             }
         }
     }
