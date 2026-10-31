@@ -195,6 +195,29 @@ class SettingsOptionsTest {
         compose.runOnIdle { assertEquals(2, quick); assertEquals(1, full) }
         assertEquals(idleBounds, compose.onNodeWithTag("scanner-body").fetchSemanticsNode().boundsInRoot)
     }
+    @Test fun scannerPopupFollowsLiveCountWhileLibraryStateHoldsItsMilestone() {
+        val state = LibraryUiState(snapshot = io.github.anastaci1a.localica.library.LibrarySnapshot(folders = listOf(
+            io.github.anastaci1a.localica.library.FolderSelection("content://music", "Music"))), loading = false,
+            scanning = true, scannedCount = 0,
+            scanStatus = io.github.anastaci1a.localica.scanner.ScanState(running = true, totalFolders = 2))
+        val progress = kotlinx.coroutines.flow.MutableStateFlow(io.github.anastaci1a.localica.scanner.ScanState(
+            running = true, totalFolders = 2, count = 25))
+        var popupCompositions = 0
+        compose.setContent { LocalicaTheme {
+            SideEffect { popupCompositions++ }
+            ScannerPopup(state, {}, {}, {}, {}, progress) {}
+        } }
+        compose.onNodeWithText("25 files checked · 0/2 folders").assertExists()
+        val before = compose.runOnIdle { popupCompositions }
+        for (count in listOf(50, 75, 100)) {
+            compose.runOnIdle { progress.value = progress.value.copy(count = count) }
+            compose.onNodeWithText("$count files checked · 0/2 folders").assertExists()
+        }
+        compose.runOnIdle { assertEquals("Live counts must not recompose the popup owner", before, popupCompositions) }
+        // An idle live source defers to the published library state.
+        compose.runOnIdle { progress.value = progress.value.copy(running = false) }
+        compose.onNodeWithText("0 files checked · 0/2 folders").assertExists()
+    }
     @Test fun playlistViewChoicesPersistAndOverrideOnlyTheirCollection() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val prefs = BrowsePreferences(context)
