@@ -1,7 +1,7 @@
-name: Audit Window copy ownership (not release)
+name: Audit seek unset duration (not release)
 'on':
   push:
-    branches: [dev/audit-window-copy-ownership-20261031]
+    branches: [dev/audit-seek-unset-duration-20261031]
 permissions:
   contents: read
 jobs:
@@ -27,11 +27,11 @@ jobs:
             display: compact
     env:
       TEST_API: ${{ matrix.api }}
-      SELECTORS: io.github.anastaci1a.localica.NativeWindowCopyOwnershipTest,io.github.anastaci1a.localica.ListTopFadeTest,io.github.anastaci1a.localica.LoadingMaterialOpacityTest,io.github.anastaci1a.localica.GlassMenuViewportTouchTest,io.github.anastaci1a.localica.PopupFamilyPresentationTest,io.github.anastaci1a.localica.QueueHeaderMaterialBoundaryTest
+      SELECTORS: io.github.anastaci1a.localica.PlaybackIntentTest,io.github.anastaci1a.localica.LargeQueueTransportTest,io.github.anastaci1a.localica.SeekAcknowledgementPlaybackTest,io.github.anastaci1a.localica.SeekReleaseHandoffTest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - uses: ./.github/actions/focused-android-setup
-      - name: Compile Window copy ownership contracts
+      - name: Compile seek unset duration contracts
         run: ./gradlew assembleDebug assembleDebugAndroidTest --no-daemon --max-workers=2
       - uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
         with:
@@ -55,7 +55,7 @@ jobs:
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
-          name: audit-window-copy-ownership-api-${{ matrix.api }}
+          name: audit-seek-unset-duration-api-${{ matrix.api }}
           path: |
             app/build/reports/
             app/build/test-results/

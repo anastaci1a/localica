@@ -82,6 +82,61 @@ class PlaybackIntentTest {
         withContext(Dispatchers.Main) { assertTrue(player.positionSeeks.isEmpty()); assertFalse(player.playWhenReady) }
     }
 
+    @Test fun queuedNextThenReceiptSeekAppliesBeforeTheNewVisitDurationIsKnown() = fixture(duplicateOccurrences = true) {
+        awaitMain { player.engine.playbackState == Player.STATE_READY }
+        queues.rename(first.id, first.name)
+        barrier()
+        val held = dao.gateNextSave()
+        queues.rename(first.id, "Hold ordered receipt seek")
+        held.entered.await()
+        val receipt = CompletableDeferred<Pair<Boolean, QueuePlaybackSample?>>()
+        val callbacks = AtomicInteger()
+        val nextVisit = withContext(Dispatchers.Main) {
+            val next = queues.state.value.library.active!!.journey!!.next!!
+            player.durationOverride = androidx.media3.common.C.TIME_UNSET
+            player.positionSeeks.clear()
+            queues.next()
+            queues.requestSeek(9000, next.token) { applied, sample ->
+                callbacks.incrementAndGet()
+                receipt.complete(applied to sample)
+            }
+            next
+        }
+        assertFalse("Enqueue alone must not acknowledge the seek", receipt.isCompleted)
+        held.release.complete(Unit)
+        val result = receipt.await()
+        assertTrue("The receipt path must accept a seek while the new duration is unknown", result.first)
+        assertEquals(nextVisit.token, result.second!!.playbackVisit)
+        assertEquals(9000L, result.second!!.positionMs)
+        barrier()
+        withContext(Dispatchers.Main) {
+            assertEquals(1, callbacks.get())
+            assertEquals(listOf("duplicate-1" to 9000L), player.positionSeeks.toList())
+            assertEquals("duplicate-1", player.currentMediaItem!!.mediaId)
+            assertEquals(nextVisit.token, player.currentMediaItem!!.queueVisit)
+            assertEquals(9000L, player.currentPosition)
+            assertFalse(player.playWhenReady)
+            player.durationOverride = null
+        }
+        awaitMain { player.engine.playbackState == Player.STATE_READY }
+        withContext(Dispatchers.Main) {
+            assertEquals("The prepared new visit retains the requested position", 9000L, player.currentPosition)
+            queues.next()
+        }
+        barrier()
+        val stale = CompletableDeferred<Boolean>()
+        withContext(Dispatchers.Main) {
+            queues.requestSeek(6000, nextVisit.token) { applied, _ -> stale.complete(applied) }
+        }
+        assertFalse("The accepted old visit must not admit a later stale request", stale.await())
+        barrier()
+        withContext(Dispatchers.Main) {
+            assertEquals("duplicate-2", player.currentMediaItem!!.mediaId)
+            assertEquals(0L, player.currentPosition)
+            assertEquals(listOf("duplicate-1" to 9000L), player.positionSeeks.toList())
+        }
+    }
+
     @Test fun queuedSkipsPublishEveryVisitBeforeOneSlowDurableCheckpoint() = fixture(duplicateOccurrences = true) {
         awaitMain { player.engine.playbackState == Player.STATE_READY }
         queues.rename(first.id, first.name) // Await the initial cursor snapshot before installing a disk gate.
