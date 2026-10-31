@@ -55,10 +55,14 @@ import io.github.anastaci1a.localica.playlist.*
 import io.github.anastaci1a.localica.queue.*
 import io.github.anastaci1a.localica.home.PinEdits
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlin.math.roundToInt
+
+/** Optional screen and per-cell work evidence (kind, route or item key); no behavior depends on it. */
+internal val LocalBrowseCellWorkObserver = staticCompositionLocalOf<((String, Any) -> Unit)?> { null }
 
 @OptIn(ExperimentalSharedTransitionApi::class, ExperimentalLayoutApi::class)
 @Composable
@@ -101,6 +105,8 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     val searchEditor = remember(editorGeneration) { ScopedSearchEditorSession() }
     DisposableEffect(searchEditor) { onDispose { searchEditor.retire() } }
     fun retireSearchEditor() { searchEditor.retire(); editorGeneration++ }
+    val screenWork = LocalBrowseCellWorkObserver.current
+    if (screenWork != null) SideEffect { screenWork("screen", route.key) }
     val obscuredInset = LocalBrowseObscuredInset.current
     val density = androidx.compose.ui.platform.LocalDensity.current
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -465,15 +471,21 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
         retainRaster = false)
     val backdropBacking = if (artDetail) collectionSource else surroundingBackdrop
     val backdropScene = rememberBrowseBackdropScene(listBackdrop, backdropBacking,
-        listOf(presentation, validAlbums, if (artDetail) hero else surroundingBackdrop?.fallback), gridState.isScrollInProgress)
+        listOf(presentation, validAlbums, if (artDetail) hero else surroundingBackdrop?.fallback)) { gridState.isScrollInProgress }
     val maskedBackdrop = (showSearchPill || showFilters) && !artDetail
     val viewportBackdrop = if (needsListBackdrop) rememberBrowseBackdropLayer(backdropScene, maskedBackdrop) else null
     val refreshBackdrop = LocalBackdropRefresh.current
-    LaunchedEffect(presentation, gridState.isScrollInProgress) {
-        if (!gridState.isScrollInProgress) {
-            kotlinx.coroutines.delay(150)
-            refreshBackdrop()
-            if (artDetail) collectionSource.refresh()
+    // Observe scroll start/stop in the effect, not this screen's composition.
+    val currentRefreshBackdrop by rememberUpdatedState(refreshBackdrop)
+    val currentArtDetail by rememberUpdatedState(artDetail)
+    val currentCollectionSource by rememberUpdatedState(collectionSource)
+    LaunchedEffect(presentation) {
+        snapshotFlow { gridState.isScrollInProgress }.collectLatest { scrolling ->
+            if (!scrolling) {
+                kotlinx.coroutines.delay(150)
+                currentRefreshBackdrop()
+                if (currentArtDetail) currentCollectionSource.refresh()
+            }
         }
     }
     val scrollScope = rememberCoroutineScope()
@@ -557,11 +569,15 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     val returnListMatches = loadedResult != null && (!queryPending || presentedReturnOwner === returnOwner)
     val clearableFilter = (route.tab == MainTab.Library && route.collection == null && route.filter != null) ||
         (artistDetail && validAlbums.isNotEmpty())
+    // Recompose only when the offered action changes, not at every scroll start/stop.
+    val returnAction by remember(gridState, clearableFilter) { derivedStateOf {
+        listReturnAction(gridState.canScrollBackward, gridState.isScrollInProgress, clearableFilter)
+    } }
     DisposableEffect(playbackFollow) { onDispose { playbackFollow.cancel() } }
     val returnToList = ListReturnActions(scrollToTopRequest, returnOwner,
         selectionVisible && !playerOpen && !session.active && !localSearchOpen,
         backEnabled = listBackEnabled && !route.search && !localSearchOpen && !playerOpen,
-        action = listReturnAction(gridState.canScrollBackward, gridState.isScrollInProgress, clearableFilter),
+        action = returnAction,
         onSubmit = { orderScroll.cancel(); playbackFollow.userScroll() },
         ready = {
             snapshotFlow { readyToScroll }.first { it }
@@ -970,29 +986,51 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                             val sweep = if (!artDetail && !route.search) 1f else ((entrySweep.value * 600f - itemIndex.coerceAtMost(10) * 30f) / 300f)
                                 .coerceIn(0f, 1f).let { it * it * (3f - 2f * it) }
                             alpha = sweep * (reorder.drag?.takeIf { it.dropping && item.key in it.keys }?.handoff?.value ?: 1f)
-                            pinchMotion.itemAlpha[item.key] = alpha
+                            // Write only a change: an identical boxed value still replaces the
+                            // map and would invalidate the retained overlay on every layer update.
+                            // Do not subscribe this layer to other cells' entries.
+                            val previous = androidx.compose.runtime.snapshots.Snapshot.withoutReadObservation {
+                                pinchMotion.itemAlpha[item.key]
+                            }
+                            if (previous != alpha) pinchMotion.itemAlpha[item.key] = alpha
                         }) {
-                        DisposableEffect(item.key, reorder) { onDispose { reorder.itemCoordinates.remove(item.key) } }
-                        val menuAnchor = rememberGlassAnchor()
+                        // Placement callbacks need not repeat for a re-keyed owner; register the
+                        // last placed coordinates whenever this row's key or drag owner changes.
+                        val cellCoordinates = remember { arrayOfNulls<androidx.compose.ui.layout.LayoutCoordinates>(1) }
+                        DisposableEffect(item.key, reorder) {
+                            cellCoordinates[0]?.let { reorder.itemCoordinates[item.key] = it }
+                            onDispose { reorder.itemCoordinates.remove(item.key) }
+                        }
+                        val cellWork = LocalBrowseCellWorkObserver.current
+                        // A closed menu is not composed until its first opening. It then stays
+                        // mounted with this row for its return morph, dialogs and saveable workflow.
+                        var actionsMounted by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
+                        // Gallery artwork publishes its menu origin only when the menu opens.
+                        val menuAnchor = rememberGlassAnchor(deferContextPlacement = true)
                         SideEffect { menuAnchor.contextual = true; menuAnchor.bottomClearance = with(density) { obscuredInset.toPx() } }
                         val mutableSong = item.row != null && route.collection?.kind in setOf(MediaKind.Playlist, MediaKind.Queue)
                         val holdLabel = if (mutableSong) "Select song" else if (item.row != null) "Song actions" else "Collection actions"
                         val onHold = {
                             if (mutableSong) session.select(route.collection, listOf(requireNotNull(item.row)))
-                            else contextMenu = item.key
+                            else { menuAnchor.prepareContextPlacement(); contextMenu = item.key }
                         }
                         val itemMenu: @Composable (Boolean) -> Unit = { showButton ->
                             Box {
                                 if (showButton) ActionIcon(R.drawable.ic_ellipsis, "Actions for " + item.title, anchor = menuAnchor,
                                     quietInputEnabled = displayedStyle.presentation == Presentation.List, quiet = true, onLongClickLabel = holdLabel,
-                                    onLongClick = onHold.takeIf { !queryPending && (item.row == null || enabled) }) { contextMenu = item.key }
-                                CollectionActions(contextMenu == item.key, menuAnchor, item, playlists, playlistController, queues, pins, onPin, { contextMenu = null },
-                                    onInformationPresented = { song, presentation -> collectionLookup.cancel(); info = SongInformationRequest(song, presentation) }, containingSource = route.collection, selection = session,
-                                    onRemove = if (item.row == null) null else when (route.collection?.kind) {
-                                        MediaKind.Queue -> ({ queues?.removeEntries(setOf(item.key), route.collection.id); Unit })
-                                        MediaKind.Playlist -> ({ playlistController?.removeEntries(route.collection.id, setOf(item.key)) { }; Unit })
-                                        else -> null
-                                    })
+                                    onLongClick = onHold.takeIf { !queryPending && (item.row == null || enabled) }) { menuAnchor.prepareContextPlacement(); contextMenu = item.key }
+                                val menuOpen = contextMenu == item.key
+                                if (menuOpen || actionsMounted) {
+                                    if (!actionsMounted) SideEffect { actionsMounted = true }
+                                    if (cellWork != null) SideEffect { cellWork("actions", item.key) }
+                                    CollectionActions(menuOpen, menuAnchor, item, playlists, playlistController, queues, pins, onPin, { contextMenu = null },
+                                        onInformationPresented = { song, presentation -> collectionLookup.cancel(); info = SongInformationRequest(song, presentation) }, containingSource = route.collection, selection = session,
+                                        onRemove = if (item.row == null) null else when (route.collection?.kind) {
+                                            MediaKind.Queue -> ({ queues?.removeEntries(setOf(item.key), route.collection.id); Unit })
+                                            MediaKind.Playlist -> ({ playlistController?.removeEntries(route.collection.id, setOf(item.key)) { }; Unit })
+                                            else -> null
+                                        })
+                                }
                             }
                         }
                         item.groupHeading?.let { Text(it, style = MaterialTheme.typography.titleSmall,
@@ -1001,14 +1039,21 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                             modifier = Modifier.fillMaxWidth().padding(horizontal = cellGeometry.cardInset.dp, vertical = cellGeometry.cardVerticalInset(displayedStyle).dp),
                             boundsTransform = { _, _ -> androidx.compose.animation.core.tween(if (reducedMotion || editableOrder || loadingCell != null) 0 else 350) })
                             else Modifier.fillMaxWidth().padding(horizontal = cellGeometry.cardInset.dp, vertical = cellGeometry.cardVerticalInset(displayedStyle).dp)
-                                .pinchItemPlacement(pinchMotion, gridState, item.key, itemIndex, displayedStyle, cellGeometry)).onGloballyPositioned {
-                                reorder.itemCoordinates[item.key] = it
+                                .pinchItemPlacement(pinchMotion, gridState, item.key, itemIndex, displayedStyle, cellGeometry))
+                            // Drag hit testing reads these live coordinates when needed; keeping the
+                            // reference does not require a callback for every scrolled frame.
+                            .onPlaced { cellCoordinates[0] = it; reorder.itemCoordinates[item.key] = it }
+                            // Only the loading reveal and the first-row search-slot witness need the
+                            // per-frame global position. A completed reveal leaves scrolling alone.
+                            .then(if (loadingCell == null && (itemIndex != 0 || searchSlotLayoutObserver == null)) Modifier
+                            else Modifier.onGloballyPositioned {
+                                if (cellWork != null) cellWork("global-position", item.key)
                                 if (itemIndex == 0) searchSlotLayoutObserver?.invoke(
                                     SearchSlotLayoutSample(searchSlotLayoutOwner.placedFraction, it.positionInRoot().y))
                                 val origin = it.positionInRoot() - reorder.viewportOrigin
                                 loadingCell?.place(origin.x / density.density,
                                     (origin.y - with(density) { (if (showFilters || showSearchPill) pillSlotHeight else 0.dp).toPx() }) / density.density)
-                            }
+                            })
                             // Frost is redrawn separately from frozen content so its
                             // corners stay identical to selection during pinch.
                             .currentSongHighlight(current, MaterialTheme.colorScheme.primary) { size ->

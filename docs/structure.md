@@ -191,6 +191,8 @@ Initial placement corrects the measured fractional anchor. Current-row decoratio
 
 `CollectionActions` owns song/collection menus across rows, artwork holds and Home, with source-specific removal appended. `ActionMenuItem` requires an explicit icon independent of its label. Song-information links share an off-Main lookup that rejects dismissed, replaced-source or superseded requests. `GlassDragBubble` owns lifted/landing material for song stacks and action customization.
 
+Browse rows compose `CollectionActions` from their first opening and keep it with the row. Gallery artwork publishes its menu origin only when opening. Resting cells keep coordinate references instead of per-frame global-position callbacks; only the loading reveal follows positions while it runs.
+
 `BrowseCellGeometry` and `BrowseItemMetrics` share grid insets and row layout across browsing, pinch and lifted cards. Full-span headers retain viewport alignment. Lifted items reuse the browse presentation and land on measured content bounds. Drag stacks update once per display frame with bounded absolute positions and drawing-layer translation, avoiding per-frame content recomposition/measurement.
 
 Edge scrolling uses elapsed frame time. Stack, cancel target and list clipping have separate foreground layers.

@@ -103,10 +103,14 @@ internal fun BrowseItemLayout(item: BrowserItem, style: BrowseStyle, geometry: B
         // Retain outgoing menu pixels, not an input shield. Even a zero-width
         // gallery slot can acquire a minimum touch target and swallow list drags.
         val menuTag = "browse-menu-${item.key}"
-        Box(Modifier.morph().reveal().graphicsLayer { alpha = menuAlpha }.then(if (gallery)
+        // A settled gallery slot draws nothing (menus and dialogs use their own
+        // windows), so it needs no fade layer. The layer and the outgoing button
+        // enter and leave together; no drawn child ever changes its parent layer.
+        val menuDrawn = !gallery || menuAlpha > 0f
+        Box(Modifier.morph().reveal().then(if (menuDrawn) Modifier.graphicsLayer { alpha = menuAlpha } else Modifier).then(if (gallery)
             // Keep the layout witness inside the clear boundary; a later testTag
             // modifier would be cleared along with the outgoing action semantics.
-            Modifier.clearAndSetSemantics { testTag = menuTag } else Modifier.testTag(menuTag))) { menu(!gallery || menuAlpha > 0f) }
+            Modifier.clearAndSetSemantics { testTag = menuTag } else Modifier.testTag(menuTag))) { menu(menuDrawn) }
         if (loadingReveal != null) {
         Box(Modifier.artShape().testTag("browse-loading-art-${item.key}")) {
             BrowseLoadingShape(Modifier.fillMaxSize(), { 0f }) { 1f - (loadingReveal?.alpha ?: 1f) }
