@@ -15,8 +15,8 @@ android {
         applicationId = "io.github.anastaci1a.localica"
         minSdk = 26
         targetSdk = 36
-        versionCode = 78
-        versionName = "0.29.1-dev78"
+        versionCode = 79
+        versionName = "0.30.0"
         testInstrumentationRunner = "io.github.anastaci1a.localica.NavigationRandomOwnedSession"
     }
     signingConfigs {
