@@ -980,24 +980,31 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                             }
                             if (previous != alpha) pinchMotion.itemAlpha[item.key] = alpha
                         }) {
-                        DisposableEffect(item.key, reorder) { onDispose { reorder.itemCoordinates.remove(item.key) } }
+                        // Placement callbacks need not repeat for a re-keyed owner; register the
+                        // last placed coordinates whenever this row's key or drag owner changes.
+                        val cellCoordinates = remember { arrayOfNulls<androidx.compose.ui.layout.LayoutCoordinates>(1) }
+                        DisposableEffect(item.key, reorder) {
+                            cellCoordinates[0]?.let { reorder.itemCoordinates[item.key] = it }
+                            onDispose { reorder.itemCoordinates.remove(item.key) }
+                        }
                         val cellWork = LocalBrowseCellWorkObserver.current
                         // A closed menu is not composed until its first opening. It then stays
                         // mounted with this row for its return morph, dialogs and saveable workflow.
                         var actionsMounted by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
-                        val menuAnchor = rememberGlassAnchor()
+                        // Gallery artwork publishes its menu origin only when the menu opens.
+                        val menuAnchor = rememberGlassAnchor(deferContextPlacement = true)
                         SideEffect { menuAnchor.contextual = true; menuAnchor.bottomClearance = with(density) { obscuredInset.toPx() } }
                         val mutableSong = item.row != null && route.collection?.kind in setOf(MediaKind.Playlist, MediaKind.Queue)
                         val holdLabel = if (mutableSong) "Select song" else if (item.row != null) "Song actions" else "Collection actions"
                         val onHold = {
                             if (mutableSong) session.select(route.collection, listOf(requireNotNull(item.row)))
-                            else contextMenu = item.key
+                            else { menuAnchor.prepareContextPlacement(); contextMenu = item.key }
                         }
                         val itemMenu: @Composable (Boolean) -> Unit = { showButton ->
                             Box {
                                 if (showButton) ActionIcon(R.drawable.ic_ellipsis, "Actions for " + item.title, anchor = menuAnchor,
                                     quietInputEnabled = displayedStyle.presentation == Presentation.List, quiet = true, onLongClickLabel = holdLabel,
-                                    onLongClick = onHold.takeIf { !queryPending && (item.row == null || enabled) }) { contextMenu = item.key }
+                                    onLongClick = onHold.takeIf { !queryPending && (item.row == null || enabled) }) { menuAnchor.prepareContextPlacement(); contextMenu = item.key }
                                 val menuOpen = contextMenu == item.key
                                 if (menuOpen || actionsMounted) {
                                     if (!actionsMounted) SideEffect { actionsMounted = true }
@@ -1018,14 +1025,21 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                             modifier = Modifier.fillMaxWidth().padding(horizontal = cellGeometry.cardInset.dp, vertical = cellGeometry.cardVerticalInset(displayedStyle).dp),
                             boundsTransform = { _, _ -> androidx.compose.animation.core.tween(if (reducedMotion || editableOrder || loadingCell != null) 0 else 350) })
                             else Modifier.fillMaxWidth().padding(horizontal = cellGeometry.cardInset.dp, vertical = cellGeometry.cardVerticalInset(displayedStyle).dp)
-                                .pinchItemPlacement(pinchMotion, gridState, item.key, itemIndex, displayedStyle, cellGeometry)).onGloballyPositioned {
-                                reorder.itemCoordinates[item.key] = it
+                                .pinchItemPlacement(pinchMotion, gridState, item.key, itemIndex, displayedStyle, cellGeometry))
+                            // Drag hit testing reads these live coordinates when needed; keeping the
+                            // reference does not require a callback for every scrolled frame.
+                            .onPlaced { cellCoordinates[0] = it; reorder.itemCoordinates[item.key] = it }
+                            // Only the loading reveal and the first-row search-slot witness need the
+                            // per-frame global position. A completed reveal leaves scrolling alone.
+                            .then(if (loadingCell == null && (itemIndex != 0 || searchSlotLayoutObserver == null)) Modifier
+                            else Modifier.onGloballyPositioned {
+                                if (cellWork != null) cellWork("global-position", item.key)
                                 if (itemIndex == 0) searchSlotLayoutObserver?.invoke(
                                     SearchSlotLayoutSample(searchSlotLayoutOwner.placedFraction, it.positionInRoot().y))
                                 val origin = it.positionInRoot() - reorder.viewportOrigin
                                 loadingCell?.place(origin.x / density.density,
                                     (origin.y - with(density) { (if (showFilters || showSearchPill) pillSlotHeight else 0.dp).toPx() }) / density.density)
-                            }
+                            })
                             // Frost is redrawn separately from frozen content so its
                             // corners stay identical to selection during pinch.
                             .currentSongHighlight(current, MaterialTheme.colorScheme.primary) { size ->
