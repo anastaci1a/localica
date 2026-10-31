@@ -11,6 +11,7 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 
 @Entity(tableName = "folders")
@@ -212,7 +213,10 @@ interface LibraryStore {
 
 class RoomLibraryStore(private val dao: LibraryDao) : LibraryStore {
     private val searchIndex = LibrarySearchIndexBuilder()
-    override val sortSnapshots = dao.observe().map { it.toSnapshot() }.flowOn(Dispatchers.Default)
+    // Room re-queries after any write to these tables, including writes that leave the rows unchanged.
+    // Equal snapshots are dropped here, off Main, so an unchanged re-read never republishes the
+    // catalog (search index, statistics overlay, every browse query and a full grid recomposition).
+    override val sortSnapshots = dao.observe().map { it.toSnapshot() }.distinctUntilChanged().flowOn(Dispatchers.Default)
     override val snapshots = sortSnapshots.map {
         val context = currentCoroutineContext()
         searchIndex.prepare(it) { context.ensureActive() }

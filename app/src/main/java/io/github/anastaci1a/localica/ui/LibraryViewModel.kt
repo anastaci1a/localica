@@ -7,6 +7,7 @@ import io.github.anastaci1a.localica.playlist.*
 import io.github.anastaci1a.localica.playback.PlaybackConnection
 import io.github.anastaci1a.localica.scanner.ScanController
 import io.github.anastaci1a.localica.scanner.ScanState
+import io.github.anastaci1a.localica.scanner.pacedProgress
 import io.github.anastaci1a.localica.statistics.withListeningStatistics
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -50,7 +51,8 @@ class LibraryViewModel(
                 }
         }
         viewModelScope.launch {
-            scanner.state.collect { scan ->
+            // Count-only progress is paced; every other scan transition is published immediately.
+            scanner.state.pacedProgress().collect { scan ->
                 mutableLibrary.update { it.copy(scanning = scan.running, scannedCount = scan.count,
                     scanningFolderUri = scan.folder, scanStatus = scan) }
                 if (!scan.running) refreshAccess()

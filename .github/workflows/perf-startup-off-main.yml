@@ -1,0 +1,82 @@
+name: Perf startup off main (not release)
+'on':
+  push:
+    branches: [perf/startup-off-main, perf/startup-off-main-base]
+permissions:
+  contents: read
+jobs:
+  protocol_contracts:
+    uses: ./.github/workflows/tooling-contracts.yml
+  jvm:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: ./.github/actions/focused-android-setup
+      - name: Startup JVM contracts
+        run: ./gradlew testDebugUnitTest --no-daemon --max-workers=2 --tests "*ListeningStatisticsTest" --tests "*BrowsePresentationCacheConcurrencyTest" --tests "*BrowseLayoutPublicationTest" --tests "*BrowseOrderScrollTest" --tests "*ScanProgressPacingTest" --tests "*BrowseResultPreparationTest" --tests "*BrowseQueries*"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: perf-startup-off-main-jvm
+          path: app/build/test-results/
+          if-no-files-found: warn
+          retention-days: 14
+  native:
+    needs: protocol_contracts
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - api: 26
+            target: google_apis
+            gpu: swiftshader_indirect
+            disable_animations: true
+            display: reset
+          - api: 36
+            target: default
+            gpu: lavapipe
+            disable_animations: false
+            display: compact
+    env:
+      TEST_API: ${{ matrix.api }}
+      SELECTORS: io.github.anastaci1a.localica.StartupFrameMetricsTest,io.github.anastaci1a.localica.NavigationFrameMetricsRecorderTest,io.github.anastaci1a.localica.NavigationFrameDiagnosticWindowNativeTest,io.github.anastaci1a.localica.BrowseLoadingRevealTest,io.github.anastaci1a.localica.GallerySkeletonGeometryTest,io.github.anastaci1a.localica.QueueRestoreTest,io.github.anastaci1a.localica.IncompleteScanTest,io.github.anastaci1a.localica.SettingsOptionsTest,io.github.anastaci1a.localica.FolderPickerTest,io.github.anastaci1a.localica.LibraryDatabaseTest,io.github.anastaci1a.localica.StartupMergeTest,io.github.anastaci1a.localica.StatisticsStorageTest,io.github.anastaci1a.localica.LibraryPlaybackReadTest,io.github.anastaci1a.localica.BrowseRetentionTest,io.github.anastaci1a.localica.SearchSourceRevisionTest,io.github.anastaci1a.localica.PinnedHomePreparationTest,io.github.anastaci1a.localica.GlobalPlaybackModesTest,io.github.anastaci1a.localica.QueuedSettingsTest,io.github.anastaci1a.localica.NavigationRecoveryTest,io.github.anastaci1a.localica.PlayerPausedConnectionTest,io.github.anastaci1a.localica.EffectiveMotionWindowTest,io.github.anastaci1a.localica.LoadingMaterialOpacityTest,io.github.anastaci1a.localica.ArtworkOccurrenceTransitionTest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: ./.github/actions/focused-android-setup
+      - name: Compile startup contracts
+        run: ./gradlew assembleDebug assembleDebugAndroidTest --no-daemon --max-workers=2
+      - uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
+        with:
+          api-level: ${{ matrix.api }}
+          target: ${{ matrix.target }}
+          arch: x86_64
+          profile: pixel_2
+          emulator-options: -no-window -gpu ${{ matrix.gpu }} -no-snapshot -noaudio -no-boot-anim -memory 3072
+          disable-animations: ${{ matrix.disable_animations }}
+          script: |
+            if [[ '${{ matrix.display }}' == reset ]]; then adb shell wm size reset; adb shell wm density reset; else adb shell wm size 720x1280; adb shell wm density 280; fi
+            sleep 60
+            bash .github/test-evidence/environment.sh >> prototype-runner-environment.txt
+            bash .github/run-selection-preconditions.sh
+      - name: Capture host diagnostics on emulator failure
+        if: failure()
+        run: |
+          free -h
+          df -h
+          sudo dmesg --ctime | tail -100
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: perf-startup-off-main-api-${{ matrix.api }}
+          path: |
+            app/build/reports/
+            app/build/test-results/
+            app/build/outputs/androidTest-results/
+            app/build/outputs/connected_android_test_additional_output/
+            selection-evidence/
+            prototype-runner-environment.txt
+          if-no-files-found: error
+          retention-days: 14

@@ -1,7 +1,6 @@
 package io.github.anastaci1a.localica.ui
 
 import androidx.compose.animation.core.*
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
@@ -9,6 +8,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.layout.ContentScale
@@ -105,14 +106,19 @@ internal fun ArtworkPlaceholder(loading: Boolean, modifier: Modifier = Modifier,
     Box(modifier.then(if (loading) Modifier.testTag("artwork-loading") else Modifier)
         .then(if (loading && loadingOpacity != 1f) Modifier.graphicsLayer { alpha = loadingOpacity } else Modifier),
         contentAlignment = Alignment.Center) {
-        Canvas(Modifier.matchParentSize()) {
-            drawRect(base)
-            progress?.let {
-                val x = size.width * it.value
-                drawRect(Brush.linearGradient(listOf(Color.Transparent, highlight, Color.Transparent),
-                    start = Offset(x - size.width * .6f, 0f), end = Offset(x + size.width * .6f, size.height)))
+        // One gradient per size, translated by the sweep: identical pixels without a new Brush and
+        // native shader per placeholder per frame (every skeleton cell runs this while loading).
+        androidx.compose.foundation.layout.Spacer(Modifier.matchParentSize().drawWithCache {
+            val sweep = Brush.linearGradient(listOf(Color.Transparent, highlight, Color.Transparent),
+                start = Offset(-size.width * .6f, 0f), end = Offset(size.width * .6f, size.height))
+            onDrawBehind {
+                drawRect(base)
+                progress?.let {
+                    val x = size.width * it.value
+                    translate(left = x) { drawRect(sweep, topLeft = Offset(-x, 0f), size = size) }
+                }
             }
-        }
+        })
         if (showIcon && !loading) Icon(painterResource(R.drawable.ic_music), null, Modifier.fillMaxSize(.4f), tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = .45f))
     }
 }

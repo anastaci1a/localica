@@ -36,7 +36,12 @@ internal fun BrowseResult.groupAlbumSongs(grouping: SongGrouping, checkActive: (
 }
 data class BrowseResult(val items: List<BrowserItem> = emptyList(), val scope: SongListView = SongListView.Songs,
     val artistAlbums: List<LibraryGroup> = emptyList()) {
-    val rows: List<SongRow> get() = items.mapNotNull { it.row }
+    // Derived once per immutable result (a 13k-song list would otherwise be rescanned on each
+    // recomposition). Query owners call [prepared] on their worker so Main reads cached values.
+    val rows: List<SongRow> by lazy { items.mapNotNull { it.row } }
+    /** Index of each item key (the last occurrence, as associate keeps). */
+    val keyIndices: Map<String, Int> by lazy { items.withIndex().associate { it.value.key to it.index } }
+    internal fun prepared(): BrowseResult = also { rows; keyIndices }
 }
 
 /** One result owns carousel and row ordering; invalid old values use album fallback. */

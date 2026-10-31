@@ -228,7 +228,8 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     val result = remember(sourceResult, artistDetail, selectedTrackIds) {
         if (artistDetail && selectedTrackIds.isNotEmpty()) sourceResult.copy(items = sourceResult.items.filter { it.row?.track?.id in selectedTrackIds }) else sourceResult
     }
-    val itemIndices = remember(result.items) { result.items.withIndex().associate { it.value.key to it.index } }
+    // Prepared with the query off Main; only an artist album filter derives a new result here.
+    val itemIndices = remember(result.items) { result.keyIndices }
     val pinchIndices = remember(result.items, itemIndices) {
         retainedPinchItemIndices(result.items, itemIndices) { it.key }
     }

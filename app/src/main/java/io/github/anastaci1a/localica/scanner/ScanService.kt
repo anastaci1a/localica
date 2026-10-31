@@ -12,6 +12,8 @@ import io.github.anastaci1a.localica.R
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.collectLatest
 
+private const val NOTIFICATION_PROGRESS_INTERVAL_MILLIS = 1000L
+
 class ScanService : Service() {
     private val scanner get() = (application as LocalicaApplication).scanner
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -32,7 +34,9 @@ class ScanService : Service() {
         if (wake == null) {
             wake = (getSystemService(POWER_SERVICE) as PowerManager).newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "localica:scan")
                 .apply { acquire(6 * 60 * 60 * 1000L) }
-            scope.launch { scanner.state.collectLatest { state ->
+            // Each update builds and posts a notification through binder calls on Main; the scanner
+            // reports every 25 files, so count-only updates are paced (transitions stay immediate).
+            scope.launch { scanner.state.pacedProgress(NOTIFICATION_PROGRESS_INTERVAL_MILLIS).collectLatest { state ->
                 if (state.running && (Build.VERSION.SDK_INT < 33 || checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) == android.content.pm.PackageManager.PERMISSION_GRANTED))
                     getSystemService(NotificationManager::class.java).notify(9001, notification(state))
             } }
@@ -43,12 +47,17 @@ class ScanService : Service() {
         }
         return START_NOT_STICKY
     }
-    private fun notification(state: ScanState): Notification {
-        val open = PendingIntent.getActivity(this, 9001, Intent(this, MainActivity::class.java)
+    // Both intents are constant for this service instance; resolve them once rather than per update.
+    private val open by lazy {
+        PendingIntent.getActivity(this, 9001, Intent(this, MainActivity::class.java)
             .putExtra("show-scanner", true).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-        val cancel = PendingIntent.getService(this, 9002, Intent(this, ScanService::class.java).setAction("cancel"),
+    }
+    private val cancel by lazy {
+        PendingIntent.getService(this, 9002, Intent(this, ScanService::class.java).setAction("cancel"),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+    }
+    private fun notification(state: ScanState): Notification {
         return NotificationCompat.Builder(this, "scanner").setSmallIcon(R.drawable.ic_music)
             .setContentTitle("Scanning music").setContentText("${state.count} files checked · ${state.completedFolders}/${state.totalFolders} folders")
             .setContentIntent(open).setOngoing(true).setOnlyAlertOnce(true).setProgress(0, 0, true)

@@ -140,7 +140,7 @@ internal fun WarmBrowsePresentations(cache: BrowsePresentationCache, library: Li
             if (cache.get(library, playlists, queues, filters, route, style, sorts) != null) continue
             val result = withContext(kotlinx.coroutines.Dispatchers.Default) {
                 val context = currentCoroutineContext()
-                BrowseQueries.evaluate(library, playlists, route, style.query(), queues, filters.allCollections, sorts) { context.ensureActive() }
+                BrowseQueries.evaluate(library, playlists, route, style.query(), queues, filters.allCollections, sorts) { context.ensureActive() }.prepared()
             }
             cache.put(library, playlists, queues, filters, PresentedBrowse(route, style, result, source, sorts))
         }
@@ -192,7 +192,7 @@ internal fun rememberBrowsePresentation(library: LibrarySnapshot, playlists: Lis
         if (cachedPresentation != null) { value = cachedPresentation; return@produceState }
         val queried = withContext(queryDispatcher) {
             val context = currentCoroutineContext()
-            BrowseQueries.evaluate(library, playlists, route, style.query(), queues, libraryFilters.allCollections, sorts) { context.ensureActive() }
+            BrowseQueries.evaluate(library, playlists, route, style.query(), queues, libraryFilters.allCollections, sorts) { context.ensureActive() }.prepared()
         }
         if (latestQueryOwner !== queryOwner) return@produceState
         value = PresentedBrowse(route, style, queried, source, sorts).also {
