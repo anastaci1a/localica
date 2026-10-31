@@ -184,6 +184,7 @@ io.github.anastaci1a.localica.RevertIconTest
 io.github.anastaci1a.localica.RevertOrderPersistenceTest
 io.github.anastaci1a.localica.ScopedSearchHistoryTest
 io.github.anastaci1a.localica.ScopedSearchOpticsTest
+io.github.anastaci1a.localica.ScrollPerformanceTest
 io.github.anastaci1a.localica.SearchHistoryTest
 io.github.anastaci1a.localica.SearchImeHandoffObservationTest
 io.github.anastaci1a.localica.SearchImeMotionTest
