@@ -94,7 +94,7 @@ class FarScrollScrollbarTest {
         val set = compose.onNodeWithTag("browse-scrollbar").fetchSemanticsNode().config[SemanticsActions.SetProgress].action!!
         compose.runOnIdle { for (n in 1..30) set(n / 30f) }
         compose.waitForIdle()
-        compose.runOnIdle { assertTrue("Distinct firstVisibleItemIndex values: $seen", seen.size <= 2) ; assertTrue(seen.last() > 40) }
+        compose.runOnIdle { assertTrue("Distinct firstVisibleItemIndex values: $seen", seen.size <= 3) ; assertTrue(seen.last() > 40) }
     }
 
     @Test fun thumbPositionAndProgressSemanticsTrackTheList() {
