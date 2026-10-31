@@ -4,9 +4,13 @@ Status: proposed work. These outcomes require implementation or verification. Th
 
 ## Current checkpoint
 
-Stabilize the cumulative audit candidate against [release gates](build.md#release-preparation). Component checks do not certify a cumulative APK.
+Released v0.30.0 delivered gesture ownership, queue reuse and the shared glass controls. The next checkpoint is physical-device confidence in responsiveness and stability, judged against [release gates](build.md#release-preparation).
 
-Improve startup/dense-library responsiveness and modal gesture ownership ([#406](https://github.com/anastaci1a/localica/issues/406), [#407](https://github.com/anastaci1a/localica/issues/407)).
+Improve startup and dense-library responsiveness ([#406](https://github.com/anastaci1a/localica/issues/406)).
+
+Investigate the open stability reports: repeated pinching at Smallest ([#474](https://github.com/anastaci1a/localica/issues/474)) and Legacy renderer observer failures during navigation ([#475](https://github.com/anastaci1a/localica/issues/475)).
+
+Resolve the post-release defects [#491](https://github.com/anastaci1a/localica/issues/491) to [#496](https://github.com/anastaci1a/localica/issues/496) and the test-reliability reports [#498](https://github.com/anastaci1a/localica/issues/498) and [#499](https://github.com/anastaci1a/localica/issues/499). Clean up inert CI workflows ([#497](https://github.com/anastaci1a/localica/issues/497)).
 
 Require reproducible optical comparisons before changing glass defaults.
 
