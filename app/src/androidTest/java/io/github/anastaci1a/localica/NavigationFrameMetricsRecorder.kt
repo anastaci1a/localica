@@ -32,16 +32,33 @@ import java.util.concurrent.atomic.AtomicReference
 internal class NavigationFrameMetricsRecorder private constructor(
     private val window: Window,
     private val capacity: Int,
-    private val timeoutMillis: Long
+    private val timeoutMillis: Long,
+    private val beforeFirstTraversal: Boolean = false,
+    private val registrationQueued: (() -> Unit)? = null
 ) : Closeable {
     companion object {
         fun markNanos(): Long = System.nanoTime()
 
-        fun open(window: Window, capacity: Int = 4096, timeoutMillis: Long = 5000): NavigationFrameMetricsRecorder {
+        fun open(window: Window, capacity: Int = 4096, timeoutMillis: Long = 5000): NavigationFrameMetricsRecorder =
+            open(window, capacity, timeoutMillis, beforeFirstTraversal = false, registrationQueued = null)
+
+        /**
+         * Cold-launch variant: registers on a created but not yet attached Window so the first
+         * traversal is observed. View keeps the listener pending until attach. The main thread must
+         * still be inside the launch transaction (for example blocked in onActivityCreated until
+         * [registrationQueued] runs); the registration is queued at the front of the main queue,
+         * ahead of the first traversal.
+         */
+        fun openBeforeFirstTraversal(window: Window, capacity: Int = 4096, timeoutMillis: Long = 5000,
+            registrationQueued: () -> Unit): NavigationFrameMetricsRecorder =
+            open(window, capacity, timeoutMillis, beforeFirstTraversal = true, registrationQueued = registrationQueued)
+
+        private fun open(window: Window, capacity: Int, timeoutMillis: Long, beforeFirstTraversal: Boolean,
+            registrationQueued: (() -> Unit)?): NavigationFrameMetricsRecorder {
             check(Looper.myLooper() != Looper.getMainLooper()) { "Do not block the window/main thread" }
             require(capacity in 1..NavigationFrameWindow.MAX_CAPACITY)
             require(timeoutMillis in 1..30_000)
-            val recorder = NavigationFrameMetricsRecorder(window, capacity, timeoutMillis)
+            val recorder = NavigationFrameMetricsRecorder(window, capacity, timeoutMillis, beforeFirstTraversal, registrationQueued)
             try {
                 recorder.start()
                 return recorder
@@ -147,10 +164,12 @@ internal class NavigationFrameMetricsRecorder private constructor(
         check(ready.await(timeoutMillis, TimeUnit.MILLISECONDS)) { "Frame worker startup timed out" }
         startupFailure.get()?.let { throw it }
         checkNotNull(handler)
-        onMain(cancelIfTimedOut = true) {
+        onMain(cancelIfTimedOut = true, front = beforeFirstTraversal, queued = registrationQueued) {
             // A timed-out queued registration must never attach after shutdown.
             if (!stopping.get()) {
-                check(window.decorView.isAttachedToWindow && window.decorView.isHardwareAccelerated) {
+                if (beforeFirstTraversal) check(window.peekDecorView() != null) {
+                    "Pre-traversal frame metrics require a created Window decor"
+                } else check(window.decorView.isAttachedToWindow && window.decorView.isHardwareAccelerated) {
                     "Frame metrics require an attached hardware-rendered Window"
                 }
                 registrationAttempted.set(true)
@@ -249,9 +268,10 @@ internal class NavigationFrameMetricsRecorder private constructor(
         }
     }
 
-    private fun onMain(cancelIfTimedOut: Boolean, block: () -> Unit) {
+    private fun onMain(cancelIfTimedOut: Boolean, front: Boolean = false, queued: (() -> Unit)? = null, block: () -> Unit) {
         val task = FutureTask<Unit> { block() }
-        check(main.post(task)) { "Main thread rejected frame-listener lifecycle operation" }
+        check(if (front) main.postAtFrontOfQueue(task) else main.post(task)) { "Main thread rejected frame-listener lifecycle operation" }
+        queued?.invoke()
         try { awaitTask(task) } catch (failure: Throwable) {
             if (cancelIfTimedOut) task.cancel(false)
             throw failure
