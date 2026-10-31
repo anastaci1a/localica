@@ -27,7 +27,7 @@ jobs:
             display: compact
     env:
       TEST_API: ${{ matrix.api }}
-      SELECTORS: io.github.anastaci1a.localica.FarScrollMeasureTest
+      SELECTORS: io.github.anastaci1a.localica.FarScrollScrollbarTest,io.github.anastaci1a.localica.ListMotionTest,io.github.anastaci1a.localica.ListControlsTest,io.github.anastaci1a.localica.QueueFollowingTest,io.github.anastaci1a.localica.BrowseOrderViewportTest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - uses: ./.github/actions/focused-android-setup
