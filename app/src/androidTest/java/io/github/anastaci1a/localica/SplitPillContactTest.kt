@@ -94,8 +94,8 @@ class SplitPillContactTest {
                     Modifier.align(androidx.compose.ui.Alignment.BottomEnd).padding(32.dp).size(104.dp, 64.dp),
                     onSearch = {}, onMore = { open = true })
                 GlassMenu(open, anchor, { open = false }) {
-                    ActionMenuItem("Settings", onClick = {})
-                    ActionMenuItem("Scan music", onClick = {})
+                    ActionMenuItem("Settings", icon = R.drawable.ic_settings, onClick = {})
+                    ActionMenuItem("Scan music", icon = R.drawable.ic_folder, onClick = {})
                 }
             }
         } }

@@ -58,33 +58,9 @@ internal fun MainTab.icon() = when (this) {
 
 /** Shared action presentation for item, artwork, queue, and application menus. */
 @Composable
-internal fun ActionMenuItem(label: String, enabled: Boolean = true, icon: Int? = null, onClick: () -> Unit) {
-    // Production callers own icons; omitted icons retain the legacy label-based fallback.
-    val resolvedIcon = icon ?: when {
-        label == "Sort" -> R.drawable.ic_sort
-        label == "View options" -> R.drawable.ic_eye
-        label == "Set playlist image" -> R.drawable.ic_albums
-        label.contains("Information", true) -> R.drawable.ic_info
-        label.startsWith("Delete") || label.startsWith("Remove") -> R.drawable.ic_trash
-        label.startsWith("Close") -> R.drawable.ic_close
-        label.startsWith("Save") -> R.drawable.ic_save
-        label.startsWith("Add to playlist") -> R.drawable.ic_playlist_add
-        label.startsWith("Rename", true) || label.startsWith("Edit", true) -> R.drawable.ic_edit
-        label.contains("playlist", true) -> R.drawable.ic_playlist
-        label.contains("queue", true) -> R.drawable.ic_queue
-        label.contains("artwork", true) || label.contains("album", true) -> R.drawable.ic_albums
-        label.contains("artist", true) -> R.drawable.ic_artist
-        label.contains("folder", true) || label.contains("scan", true) -> R.drawable.ic_folder
-        label.contains("lyrics", true) -> R.drawable.ic_lyrics
-        label.contains("select", true) || label.startsWith("Add") -> R.drawable.ic_plus
-        label.startsWith("Pin") || label.startsWith("Unpin") -> R.drawable.ic_home
-        label.startsWith("Play") || label.startsWith("Insert") -> R.drawable.ic_play
-        label.startsWith("Move") -> R.drawable.ic_drag
-        label.contains("Settings", true) || label.contains("Configure", true) -> R.drawable.ic_settings
-        else -> R.drawable.ic_more
-    }
+internal fun ActionMenuItem(label: String, enabled: Boolean = true, icon: Int, onClick: () -> Unit) {
     Box(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)) {
-        GlassActionButton(resolvedIcon, label, Modifier.fillMaxWidth(), enabled = enabled, onClick = onClick)
+        GlassActionButton(icon, label, Modifier.fillMaxWidth(), enabled = enabled, onClick = onClick)
     }
 }
 
