@@ -23,15 +23,21 @@ internal fun ArtworkImage(artwork: ImageBitmap?, loading: Boolean, modifier: Mod
     shape: Shape = Corners.artwork, contentScale: ContentScale = ContentScale.Crop,
     emptyText: String? = null) {
     val reducedMotion = LocalReducedMotion.current
-    val reveal by animateFloatAsState(if (artwork == null) 0f else 1f,
-        tween(if (reducedMotion) 0 else 300, easing = FastOutSlowInEasing), label = "Artwork reveal")
+    // The reveal is read only while drawing; the cell never recomposes per animation frame.
+    val reveal = remember { Animatable(if (artwork == null) 0f else 1f) }
+    val present = artwork != null
+    LaunchedEffect(present, reducedMotion) {
+        reveal.animateTo(if (present) 1f else 0f, tween(if (reducedMotion) 0 else 300, easing = FastOutSlowInEasing))
+    }
     Box(modifier.clip(shape), contentAlignment = Alignment.Center) {
-        if (artwork == null || reveal < 1f) {
+        // Hidden at the draw step the instant the reveal completes. It stays composed (a zero-alpha layer is
+        // never drawn) so completion needs no second recomposition of the cell.
+        Box(Modifier.matchParentSize().graphicsLayer { if (artwork != null && reveal.value >= 1f) alpha = 0f }) {
             ArtworkPlaceholder(loading && artwork == null, Modifier.matchParentSize(), showIcon = emptyText == null || loading)
-            if (!loading && artwork == null && emptyText != null) Text(emptyText)
         }
+        if (!loading && artwork == null && emptyText != null) Text(emptyText)
         if (artwork != null) ArtworkResolutionBlend(artwork,
-            Modifier.matchParentSize().graphicsLayer { alpha = reveal }, contentScale, if (reducedMotion) 0 else 240)
+            Modifier.matchParentSize().graphicsLayer { alpha = reveal.value }, contentScale, if (reducedMotion) 0 else 240)
     }
 }
 
