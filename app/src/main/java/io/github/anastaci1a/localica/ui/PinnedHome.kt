@@ -82,6 +82,8 @@ internal fun PinnedHome(library: LibraryUiState, playlists: PlaylistState, pins:
             listBackdrop.refresh()
         }
     }
+    val returnOwnerVisible = rememberUpdatedState(selectionVisible && !playerOpen)
+    if (entryPolicyObserver != null) SideEffect { entryPolicyObserver("home-state identity=${System.identityHashCode(returnOwnerVisible)} requestedVisible=${selectionVisible && !playerOpen} value=${returnOwnerVisible.value}") }
     val returnOwner = remember(library.snapshot, playlists.playlists, pins) { Any() }
     val returnToList = ListReturnActions(scrollToTopRequest, returnOwner, selectionVisible && !playerOpen && !session.active, listBackEnabled && !session.active,
         listReturnAction(scroll.canScrollBackward, scroll.isScrollInProgress, false), ready = {}, execute = { action ->
@@ -136,9 +138,9 @@ internal fun PinnedHome(library: LibraryUiState, playlists: PlaylistState, pins:
         } } }
     }
     CompositionLocalProvider(LocalFrostedBackdrop provides listBackdrop) {
-        val returnVisible = selectionVisible && !playerOpen && currentOrder && songs.isNotEmpty() && !session.active && scroll.canScrollBackward && !returnToList.pending
+        val returnVisible = returnOwnerVisible.value && currentOrder && songs.isNotEmpty() && !session.active && scroll.canScrollBackward && !returnToList.pending
         val policyObserver = LocalReturnPolicyObserver.current
-        if (policyObserver != null) SideEffect { policyObserver("home selectionVisible=$selectionVisible playerOpen=$playerOpen returnVisible=$returnVisible") }
+        if (policyObserver != null) SideEffect { policyObserver("home selectionVisible=$selectionVisible playerOpen=$playerOpen returnVisible=$returnVisible stateIdentity=${System.identityHashCode(returnOwnerVisible)}") }
         FloatingReturnToPositionButton(up = true, label = "Return to top",
             visible = returnVisible,
             reducedMotion = reducedMotion,
