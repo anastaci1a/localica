@@ -32,7 +32,6 @@ import java.io.File
 import java.util.Random
 import kotlin.math.abs
 import kotlin.math.ceil
-import kotlin.math.floor
 
 private const val SCROLL_ITEM_PREFIX = "media-"
 
@@ -172,10 +171,11 @@ class ScrollPerformanceTest {
         val sampler = h.startSampler()
         act(h)
         val proxy = h.stopSampler(sampler)
-        val rows = proxy.travelItems / h.columns
+        val unitsPerItem = h.calibrate()
+        val rows = proxy.travelItems / unitsPerItem / h.columns
         val workProxy = if (rows > 0.0) proxy.keys.size / rows else Double.NaN
         writeEvidence(name, JSONObject().put("kind", "proxy").put("rep", 0).put("distinctKeys", proxy.keys.size)
-            .put("itemsTravelled", proxy.travelItems).put("rowsScrolled", rows).put("columns", h.columns)
+            .put("scrollUnitsTravelled", proxy.travelItems).put("scrollUnitsPerItem", unitsPerItem).put("rowsScrolled", rows).put("columns", h.columns)
             .put("workProxyKeysPerRow", workProxy.takeUnless { it.isNaN() } ?: JSONObject.NULL)
             .put("firstScrollValue", proxy.first.toDouble()).put("lastScrollValue", proxy.last.toDouble()))
         val measured = runs.filter { it.kind == "measured" }
@@ -303,8 +303,8 @@ class ScrollPerformanceTest {
                 else if (tag == "browser-list") {
                     val value = node.config.getOrNull(SemanticsProperties.VerticalScrollAxisRange)?.value?.invoke() ?: continue
                     if (first.isNaN()) first = value
-                    // The lazy-layout scroll value is firstVisibleItemIndex plus a fractional offset.
-                    if (!last.isNaN()) travel += abs(floor(value) - floor(last))
+                    // Raw semantics scroll units; converted to items with Harness.calibrate().
+                    if (!last.isNaN()) travel += abs(value - last).toDouble()
                     last = value
                 }
             }
@@ -345,6 +345,16 @@ class ScrollPerformanceTest {
         fun window() = main { it.window }
         fun refreshRate(): Float = main {
             @Suppress("DEPRECATION") it.windowManager.defaultDisplay.refreshRate
+        }
+
+        /** Semantics scroll units per grid item, measured against a known index jump. */
+        fun calibrate(): Double {
+            scrollToIndex(0); settle()
+            val base = scrollValue()
+            scrollToIndex(1000); settle()
+            val moved = scrollValue()
+            scrollToIndex(0); settle()
+            return ((moved - base) / 1000.0).also { check(it > 0.0) { "Cannot calibrate scroll units ($base -> $moved)" } }
         }
 
         fun scrollToIndex(index: Int) {
