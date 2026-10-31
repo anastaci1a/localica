@@ -16,3 +16,11 @@
 -keep class androidx.room.Room { *; }
 -keep class androidx.room.RoomDatabase { *; }
 -keep class androidx.room.RoomDatabase$Builder { *; }
+# Run 41236404337: full suite hit the same class of failure in androidx.collection
+# (IntObjectMapKt) and androidx.media3 (ExoPlayer$Builder, DataSpec, DefaultDataSource$Factory,
+# DefaultAudioSink$Builder, DummyTrackOutput). Test-only members of shared libraries are
+# subtracted from the test APK, so keep the libraries whole in the audit build.
+-keep class androidx.collection.** { *; }
+-keep class androidx.media3.** { *; }
+-keep class androidx.room.** { *; }
+-dontwarn androidx.media3.**
