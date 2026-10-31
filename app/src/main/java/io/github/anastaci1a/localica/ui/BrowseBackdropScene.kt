@@ -48,6 +48,17 @@ internal val LocalBrowseBackdropObserver = staticCompositionLocalOf<((BrowseBack
 
 @Composable
 internal fun rememberBrowseBackdropScene(source: FrostedBackdrop, backing: FrostedBackdrop?,
+    contentKey: Any?, scrolling: Boolean,
+    liveWhileScrolling: Boolean = LocalGlassAppearance.current.liveScrollGlass): BrowseBackdropScene {
+    val current by rememberUpdatedState(scrolling)
+    return rememberBrowseBackdropScene(source, backing, contentKey, liveWhileScrolling) { current }
+}
+
+/** Read scrolling inside the effect so a scroll start/stop does not recompose the caller. */
+@Composable
+internal fun rememberBrowseBackdropScene(source: FrostedBackdrop, backing: FrostedBackdrop?,
+    contentKey: Any?, liveWhileScrolling: Boolean = LocalGlassAppearance.current.liveScrollGlass,
+    scrolling: () -> Boolean): BrowseBackdropScene {
     val renderer = currentGlassRendererGeneration()
     val currentKey by rememberUpdatedState(contentKey)
     val handler = remember { Handler(Looper.getMainLooper()) }
