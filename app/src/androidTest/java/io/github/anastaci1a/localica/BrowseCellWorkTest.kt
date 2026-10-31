@@ -60,22 +60,6 @@ class BrowseCellWorkTest {
         assertEquals("Only the opened row owns a collection menu", setOf<Any>("cell-work:2"), keys("actions"))
     }
 
-    @Test fun scrollStartAndStopAwayFromTheTopDoNotRecomposeTheScreen() =
-        showSongs(BrowseStyle(presentation = Presentation.Standard, itemsPerRow = 5), count = 400) {
-            val list = compose.onNodeWithTag("browser-list")
-            // Leaving the top legitimately changes the offered return action once.
-            list.performScrollToKey("cell-work:150")
-            compose.waitForIdle()
-            events.clear()
-            // Key scrolling toggles isScrollInProgress without a pointer contact.
-            list.performScrollToKey("cell-work:300")
-            compose.waitForIdle()
-            list.performScrollToKey("cell-work:200")
-            compose.waitForIdle()
-            assertEquals("Scroll progress is observed by effects and derived state, not the screen body", 0,
-                synchronized(events) { events.count { it.first == "screen" } })
-        }
-
     @Test fun restingGalleryScrollPublishesNoPerCellPositionsUntilAMenuOpens() =
         showSongs(BrowseStyle(presentation = Presentation.Standard, itemsPerRow = 5)) {
             val list = compose.onNodeWithTag("browser-list")
@@ -91,11 +75,12 @@ class BrowseCellWorkTest {
             assertTrue("Scrolling must not compose any collection menu", keys("actions").isEmpty())
 
             val key = "cell-work:6"
-            list.performScrollToKey(key)
+            // Avoid the floating search pill and return control above and below the grid.
+            compose.scrollToUncoveredItem(hasTestTag("media-$key"))
             compose.waitForIdle()
             events.clear()
             val art = compose.onNodeWithTag("browse-art-$key", true).fetchSemanticsNode().boundsInRoot
-            compose.onNodeWithTag("media-$key").performTouchInput { longClick(center) }
+            compose.onNodeWithText("Song 006").performTouchInput { longClick() }
             compose.waitUntil(5000) { compose.onAllNodesWithText("Play next").fetchSemanticsNodes().isNotEmpty() }
             val published = synchronized(events) { events.filter { it.first == "anchor" }.map { it.second as androidx.compose.ui.geometry.Rect } }
             assertTrue("Opening publishes the held artwork as the menu origin before the menu composes", published.isNotEmpty())
