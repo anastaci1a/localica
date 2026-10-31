@@ -1,0 +1,7 @@
+# Conservative wildcard Baseline Profile: app code and the Compose hot paths it drives.
+HSPLio/github/anastaci1a/localica/**;->**(**)**
+HSPLandroidx/compose/**;->**(**)**
+HSPLandroidx/lifecycle/**;->**(**)**
+HSPLandroidx/activity/**;->**(**)**
+Lio/github/anastaci1a/localica/**;
+Landroidx/compose/**;
