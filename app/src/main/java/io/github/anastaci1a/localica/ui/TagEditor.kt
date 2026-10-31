@@ -74,16 +74,24 @@ internal fun TagEditorDialog(state: TagEditorState, controller: TagEditingContro
     var confirming by rememberSaveable { mutableStateOf(false) }
     var imageError by remember { mutableStateOf<String?>(null) }
     var grantMessage by remember { mutableStateOf<String?>(null) }
-    val cover by key(imageUri) {
-        produceState<CoverImage?>(null, imageUri) {
+    // The encoded cover and its decoded preview publish together: a full-size decode
+    // never runs in composition, and readiness still follows the encoded cover.
+    val loadedCover by key(imageUri) {
+        produceState<Pair<CoverImage, androidx.compose.ui.graphics.ImageBitmap?>?>(null, imageUri) {
             imageError = null
             imageUri?.let { uri ->
-                try { value = readCover?.invoke(uri) ?: CoverImages(context).read(uri) }
+                try {
+                    val image = readCover?.invoke(uri) ?: CoverImages(context).read(uri)
+                    value = image to kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+                        BitmapFactory.decodeByteArray(image.bytes, 0, image.bytes.size)?.asImageBitmap()
+                    }
+                }
                 catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
                 catch (failure: Exception) { imageError = failure.message ?: "Couldn’t open this image." }
             }
         }
     }
+    val cover = loadedCover?.first
     val grant = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
         if (uri != null) {
             grantMessage = runCatching {
@@ -114,12 +122,9 @@ internal fun TagEditorDialog(state: TagEditorState, controller: TagEditingContro
                     Box(Modifier.align(Alignment.CenterHorizontally).size(180.dp)) {
                         Box(Modifier.matchParentSize().recordFrostedBackdrop(artworkBackdrop, LocalFrostedBackdrop.current)) {
                         if (!removeImage) {
-                            val image = cover
-                            if (image == null) AlbumArtwork(state.tracks.first().uri, Modifier.fillMaxSize())
-                            else {
-                                val bitmap = remember(image) { BitmapFactory.decodeByteArray(image.bytes, 0, image.bytes.size) }
-                                Image(bitmap.asImageBitmap(), "New artwork preview", Modifier.fillMaxSize(), contentScale = androidx.compose.ui.layout.ContentScale.Fit)
-                            }
+                            val preview = loadedCover?.second
+                            if (cover == null) AlbumArtwork(state.tracks.first().uri, Modifier.fillMaxSize())
+                            else if (preview != null) Image(preview, "New artwork preview", Modifier.fillMaxSize(), contentScale = androidx.compose.ui.layout.ContentScale.Fit)
                         }
                         }
                         CompositionLocalProvider(LocalFrostedBackdrop provides artworkBackdrop) {
