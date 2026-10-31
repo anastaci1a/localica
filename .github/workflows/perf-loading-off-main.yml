@@ -1,0 +1,67 @@
+name: Perf loading off main (not release)
+'on':
+  push:
+    branches: [perf/loading-off-main]
+permissions:
+  contents: read
+jobs:
+  protocol_contracts:
+    uses: ./.github/workflows/tooling-contracts.yml
+  native:
+    needs: protocol_contracts
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - api: 26
+            target: google_apis
+            gpu: swiftshader_indirect
+            disable_animations: true
+            display: reset
+          - api: 36
+            target: default
+            gpu: lavapipe
+            disable_animations: false
+            display: compact
+    env:
+      TEST_API: ${{ matrix.api }}
+      SELECTORS: io.github.anastaci1a.localica.SettingsOptionsTest,io.github.anastaci1a.localica.IncompleteScanTest,io.github.anastaci1a.localica.NavigationSettingsTest,io.github.anastaci1a.localica.ArtworkReviewReadinessTest,io.github.anastaci1a.localica.ArtworkEditRestorationTest,io.github.anastaci1a.localica.TagEditorFlowTest,io.github.anastaci1a.localica.QueueCreationOffMainTest,io.github.anastaci1a.localica.PlaybackStartTest,io.github.anastaci1a.localica.QueueReusePlaybackTest,io.github.anastaci1a.localica.QueuePlaybackTest,io.github.anastaci1a.localica.LargeQueueTransportTest,io.github.anastaci1a.localica.QueueFollowingTest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: ./.github/actions/focused-android-setup
+      - name: Unit-test and compile loading off main contracts
+        run: ./gradlew testDebugUnitTest --tests io.github.anastaci1a.localica.ui.ScanMilestonesTest --tests io.github.anastaci1a.localica.statistics.ListeningStatisticsTest --tests io.github.anastaci1a.localica.ui.QueueOpeningPresentationTest --tests io.github.anastaci1a.localica.library.LibraryTrackLookupTest --tests io.github.anastaci1a.localica.queue.QueueEditsTest assembleDebug assembleDebugAndroidTest --no-daemon --max-workers=2
+      - uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
+        with:
+          api-level: ${{ matrix.api }}
+          target: ${{ matrix.target }}
+          arch: x86_64
+          profile: pixel_2
+          emulator-options: -no-window -gpu ${{ matrix.gpu }} -no-snapshot -noaudio -no-boot-anim -memory 3072
+          disable-animations: ${{ matrix.disable_animations }}
+          script: |
+            if [[ '${{ matrix.display }}' == reset ]]; then adb shell wm size reset; adb shell wm density reset; else adb shell wm size 720x1280; adb shell wm density 280; fi
+            sleep 60
+            bash .github/test-evidence/environment.sh >> prototype-runner-environment.txt
+            bash .github/run-selection-preconditions.sh
+      - name: Capture host diagnostics on emulator failure
+        if: failure()
+        run: |
+          free -h
+          df -h
+          sudo dmesg --ctime | tail -100
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: perf-loading-off-main-api-${{ matrix.api }}
+          path: |
+            app/build/reports/
+            app/build/test-results/
+            app/build/outputs/androidTest-results/
+            app/build/outputs/connected_android_test_additional_output/
+            selection-evidence/
+            prototype-runner-environment.txt
+          if-no-files-found: error
+          retention-days: 14
