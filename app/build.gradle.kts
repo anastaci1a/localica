@@ -144,8 +144,12 @@ val prepareStandaloneTestRuntime = tasks.register<Copy>("prepareStandaloneTestRu
         )
     }
 }
-dependencies {
-    androidTestRuntimeOnly(files(standaloneRuntimeDirectory.map {
-        it.file("kotlin-stdlib-standalone.jar")
-    }).builtBy(prepareStandaloneTestRuntime))
+// Audit builds (-PlocalicaTestBuildType=distribution) use the app's kept stdlib: a second copy
+// with different R8/D8 synthetics collides in one classloader on API 26.
+if (providers.gradleProperty("localicaTestBuildType").getOrElse("debug") == "debug") {
+    dependencies {
+        androidTestRuntimeOnly(files(standaloneRuntimeDirectory.map {
+            it.file("kotlin-stdlib-standalone.jar")
+        }).builtBy(prepareStandaloneTestRuntime))
+    }
 }
