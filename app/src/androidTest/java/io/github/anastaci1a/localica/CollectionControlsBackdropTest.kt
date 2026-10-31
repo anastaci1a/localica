@@ -101,7 +101,8 @@ class CollectionControlsBackdropTest {
             val density = LocalDensity.current.density
             val view = LocalView.current
             val source = rememberFrostedBackdrop(Unit, dark = true, glassBlur = 0f, retainRaster = false, whiteTint = 0f)
-            val page = rememberBrowseBackdropScene(source, null, Unit, scroll.isScrollInProgress)
+            // This test observes the live moving scene; the default setting now holds it while scrolling.
+            val page = rememberBrowseBackdropScene(source, null, Unit, scroll.isScrollInProgress, liveWhileScrolling = true)
             val viewport = rememberBrowseBackdropLayer(page, masked = true)
             SideEffect {
                 scene = page
