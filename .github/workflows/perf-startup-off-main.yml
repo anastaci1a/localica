@@ -14,7 +14,7 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - uses: ./.github/actions/focused-android-setup
       - name: Startup JVM contracts
-        run: ./gradlew testDebugUnitTest --no-daemon --max-workers=2 --tests "*ListeningStatisticsTest" --tests "*BrowsePresentationCacheConcurrencyTest" --tests "*BrowseLayoutPublicationTest" --tests "*BrowseOrderScrollTest" --tests "*ScanProgressPacingTest"
+        run: ./gradlew testDebugUnitTest --no-daemon --max-workers=2 --tests "*ListeningStatisticsTest" --tests "*BrowsePresentationCacheConcurrencyTest" --tests "*BrowseLayoutPublicationTest" --tests "*BrowseOrderScrollTest" --tests "*ScanProgressPacingTest" --tests "*BrowseResultPreparationTest" --tests "*BrowseQueries*"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
