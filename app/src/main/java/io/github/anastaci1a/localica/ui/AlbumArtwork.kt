@@ -20,14 +20,18 @@ internal fun AlbumArtwork(uri: String?, modifier: Modifier = Modifier.size(200.d
     MediaArtwork(listOfNotNull(uri), modifier, shape = shape, contentScale = contentScale)
 }
 
+/** [sizeHint] is the expected longest edge in pixels; with it the first composition can peek the cache and start
+ * a load without waiting for the first measurement. Measurement still wins once it differs. */
 @Composable
 internal fun MediaArtwork(uris: List<String>, modifier: Modifier, provider: CoverProvider = EmbeddedCoverProvider,
-    shape: androidx.compose.ui.graphics.Shape = Corners.artwork, contentScale: ContentScale = ContentScale.Crop) {
+    shape: androidx.compose.ui.graphics.Shape = Corners.artwork, contentScale: ContentScale = ContentScale.Crop,
+    sizeHint: Int = 0) {
     val context = LocalContext.current.applicationContext
+    ArtworkCache.configure(context)
     val revision by ArtworkCache.revision.collectAsState()
     val retention = LocalBrowseArtwork.current.takeIf { provider === EmbeddedCoverProvider }
     val deferred = LocalArtworkTransit.current?.active == true
-    var pixels by remember { mutableIntStateOf(0) }
+    var pixels by remember { mutableIntStateOf(if (sizeHint > 0) ArtworkCache.bucket(sizeHint) else 0) }
     val request = Triple(uris, pixels, revision)
     val cached = remember(request, provider, retention) {
         retention?.peek(uris) ?: if (provider === EmbeddedCoverProvider) ArtworkCache.peek(uris, pixels) else null
