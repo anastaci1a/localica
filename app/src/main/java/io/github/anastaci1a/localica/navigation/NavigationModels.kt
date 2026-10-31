@@ -63,6 +63,9 @@ data class NavigationState(
         }
     }
 }
+/** How a long Return to top / return-to-current crosses a distant stretch. Reduced motion overrides it. */
+enum class LongScrollStyle(val label: String) { FlyThrough("Fly-through"), JumpGlide("Jump, then glide"), Fade("Fade") }
+
 data class InterfaceSettings(
     val tabs: List<MainTab> = listOf(MainTab.Home, MainTab.Library),
     val tabHistory: Boolean = true,
@@ -79,6 +82,7 @@ data class InterfaceSettings(
     val glass: GlassAppearance = GlassAppearance(),
     val grayTone: Float = .4f,
     val lyricDelayMs: Int = 0,
+    val longScroll: LongScrollStyle = LongScrollStyle.FlyThrough,
 )
 
 fun Float.normalizedGrayTone() = if (isFinite()) coerceIn(0f, 1f) else .4f

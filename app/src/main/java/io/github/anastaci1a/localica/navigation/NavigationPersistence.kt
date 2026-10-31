@@ -33,7 +33,8 @@ class InterfacePreferences(context: Context) {
                 preferences.enumValue<GlassRendererMode>("glass-renderer") ?: GlassRendererMode.Automatic,
                 preferences.getBoolean("glass-live-scroll", false)).normalized(),
             grayTone = preferences.getFloat("gray-tone", .4f).normalizedGrayTone(),
-            lyricDelayMs = preferences.getInt("lyric-delay-ms", 0).coerceIn(-2000, 2000))
+            lyricDelayMs = preferences.getInt("lyric-delay-ms", 0).coerceIn(-2000, 2000),
+            longScroll = preferences.enumValue<LongScrollStyle>("long-scroll") ?: LongScrollStyle.FlyThrough)
     }
     fun write(value: InterfaceSettings) {
         require(value.tabs.isNotEmpty() && value.tabs.distinct() == value.tabs)
@@ -45,6 +46,7 @@ class InterfacePreferences(context: Context) {
             .putString("artwork-transition", value.artworkTransition.name).putBoolean("artwork-swipe", value.artworkSwipe)
             .putFloat("gray-tone", value.grayTone.normalizedGrayTone())
             .putInt("lyric-delay-ms", value.lyricDelayMs.coerceIn(-2000, 2000))
+            .putString("long-scroll", value.longScroll.name)
             .putFloat("glass-blur", glass.blur).putFloat("glass-white-tint", glass.whiteTint)
             .putFloat("glass-shadow-strength", glass.shadowStrength).putFloat("glass-shadow-spread", glass.shadowSpread)
             .putFloat("glass-contrast-trim", glass.contrast).remove("glass-contrast")
