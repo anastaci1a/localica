@@ -82,8 +82,8 @@ internal fun BrowseScrollbar(state: LazyGridState, items: List<BrowserItem>, sor
                     change.consume(); seek(dragY + delta)
                 }
             }) {
-            Box(Modifier.align(Alignment.TopEnd).testTag("browse-scrollbar-thumb").offset { IntOffset(-4.dp.roundToPx(), position().roundToInt()) }
-                .width(if (dragging) 6.dp else 4.dp).height(thumbHeight)
+            Box(Modifier.align(Alignment.TopEnd).offset { IntOffset(-4.dp.roundToPx(), position().roundToInt()) }
+                .width(if (dragging) 6.dp else 4.dp).height(thumbHeight).testTag("browse-scrollbar-thumb")
                 .background(if (dragging) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(8.dp)))
         }
         val preview = items.getOrNull(target)?.let { item -> when (sort) {
