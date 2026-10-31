@@ -2,3 +2,6 @@
 # Jaudiotagger is configured for Android; its desktop image implementations are unused.
 -dontwarn java.awt.**
 -dontwarn javax.imageio.**
+# Jaudiotagger instantiates tag FrameBody and format classes by name (Class.forName).
+-keep class org.jaudiotagger.** { *; }
+-dontwarn org.jaudiotagger.**

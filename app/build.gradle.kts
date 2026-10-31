@@ -18,6 +18,7 @@ android {
         versionCode = 79
         versionName = "0.30.0"
         testInstrumentationRunner = "io.github.anastaci1a.localica.NavigationRandomOwnedSession"
+        testProguardFiles("proguard-test-rules.pro")
     }
     signingConfigs {
         getByName("debug") {
@@ -32,7 +33,24 @@ android {
             isMinifyEnabled = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
+        // Optimized, non-debuggable build that updates the installed debug package in place:
+        // same application ID suffix and development signing key as `debug`.
+        create("distribution") {
+            initWith(getByName("release"))
+            applicationIdSuffix = ".debug"
+            signingConfig = signingConfigs.getByName("debug")
+            isDebuggable = false
+            isMinifyEnabled = true
+            isShrinkResources = false
+            matchingFallbacks += "release"
+            // Test libraries shared with the app need their classes in the minified process.
+            if (providers.gradleProperty("localicaTestBuildType").orNull == "distribution") {
+                proguardFile("proguard-audit-keep.pro")
+            }
+        }
     }
+    // CI selects the minified build for R8 runtime audits: -PlocalicaTestBuildType=distribution.
+    testBuildType = providers.gradleProperty("localicaTestBuildType").getOrElse("debug")
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -52,6 +70,7 @@ ksp { arg("room.schemaLocation", "$projectDir/schemas") }
 dependencies {
     implementation(libs.jaudiotagger)
     implementation(libs.androidx.core)
+    implementation(libs.androidx.profileinstaller)
     implementation(libs.androidx.activity)
     implementation(libs.androidx.lifecycle.compose)
     implementation(libs.androidx.viewmodel.compose)
@@ -75,6 +94,10 @@ dependencies {
     androidTestImplementation(libs.androidx.test.uiautomator)
     androidTestImplementation(libs.coroutines.test)
     debugImplementation(libs.compose.test.manifest)
+}
+// The test manifest registers the Compose test activity; add it to a non-debug test target too.
+providers.gradleProperty("localicaTestBuildType").orNull?.takeIf { it != "debug" }?.let {
+    dependencies.add("${it}Implementation", libs.compose.test.manifest)
 }
 
 // Preserve raw host XML in the existing build-report artifact, including failed tests.
@@ -121,8 +144,12 @@ val prepareStandaloneTestRuntime = tasks.register<Copy>("prepareStandaloneTestRu
         )
     }
 }
-dependencies {
-    androidTestRuntimeOnly(files(standaloneRuntimeDirectory.map {
-        it.file("kotlin-stdlib-standalone.jar")
-    }).builtBy(prepareStandaloneTestRuntime))
+// Audit builds (-PlocalicaTestBuildType=distribution) use the app's kept stdlib: a second copy
+// with different R8/D8 synthetics collides in one classloader on API 26.
+if (providers.gradleProperty("localicaTestBuildType").getOrElse("debug") == "debug") {
+    dependencies {
+        androidTestRuntimeOnly(files(standaloneRuntimeDirectory.map {
+            it.file("kotlin-stdlib-standalone.jar")
+        }).builtBy(prepareStandaloneTestRuntime))
+    }
 }
