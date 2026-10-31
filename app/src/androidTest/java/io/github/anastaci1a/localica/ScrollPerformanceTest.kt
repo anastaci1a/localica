@@ -371,23 +371,30 @@ class ScrollPerformanceTest {
         }?.takeIf { it.right > it.left && it.bottom > it.top }
 
         fun swipe(x0: Float, y0: Float, x1: Float, y1: Float, steps: Int) {
+            val before = scrollValue()
             check(device.swipe(x0.toInt(), y0.toInt(), x1.toInt(), y1.toInt(), steps)) { "UiDevice swipe was rejected" }
+            Log.i("ScrollPerf", "swipe ($x0,$y0)->($x1,$y1) steps=$steps scroll $before -> ${scrollValue()}")
         }
 
-        fun tap(x: Float, y: Float) { check(device.click(x.toInt(), y.toInt())) { "UiDevice click was rejected" } }
+        fun tap(x: Float, y: Float) {
+            val before = scrollValue()
+            check(device.click(x.toInt(), y.toInt())) { "UiDevice click was rejected" }
+            Log.i("ScrollPerf", "tap ($x,$y) scroll $before -> ${scrollValue()}")
+        }
 
         /** Waits until the list stops moving (fling or ease finished) for a quarter second. */
         fun settle(timeoutMs: Long = 20_000) {
             val deadline = System.nanoTime() + timeoutMs * 1_000_000
             var previous = Float.NaN
             var stable = 0
+            val trail = ArrayList<Float>()
             while (System.nanoTime() < deadline) {
                 val now = scrollValue()
                 if (now == previous) { if (++stable >= 5) return } else stable = 0
-                previous = now
+                previous = now; if (trail.size < 400) trail += now
                 Thread.sleep(50)
             }
-            error("List did not settle within ${timeoutMs}ms")
+            error("List did not settle within ${timeoutMs}ms; every 50ms values (first 60): ${trail.take(60)}")
         }
 
         fun await(what: String, timeoutMs: Long, condition: (Harness) -> Boolean) {
@@ -396,7 +403,7 @@ class ScrollPerformanceTest {
                 if (runCatching { condition(this) }.getOrDefault(false)) return
                 Thread.sleep(100)
             }
-            error("Timed out after ${timeoutMs}ms waiting for $what")
+            error("Timed out after ${timeoutMs}ms waiting for $what (scroll=${runCatching { scrollValue() }.getOrNull()})")
         }
 
         fun startSampler(): Sampler = main { activity ->
