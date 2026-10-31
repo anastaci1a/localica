@@ -37,7 +37,8 @@ class BrowseCellWorkTest {
         prefs.write(route, style, false)
         try {
             compose.setContent { LocalicaTheme {
-                CompositionLocalProvider(LocalBrowseCellWorkObserver provides { kind, key -> events += kind to key }) {
+                CompositionLocalProvider(LocalBrowseCellWorkObserver provides { kind, key -> events += kind to key },
+                    LocalContextAnchorPlacementObserver provides { bounds -> events += "anchor" to bounds }) {
                     Box(Modifier.size(360.dp, 640.dp)) {
                         BrowserScreen(library, PlaylistState(), route, {}, {}, {}, { _, _, _ -> }, null, null,
                             true, false, reducedMotion = true, queryDispatcher = kotlinx.coroutines.Dispatchers.Unconfined)
@@ -58,4 +59,33 @@ class BrowseCellWorkTest {
         compose.waitUntil(5000) { compose.onAllNodesWithText("Play next").fetchSemanticsNodes().isNotEmpty() }
         assertEquals("Only the opened row owns a collection menu", setOf<Any>("cell-work:2"), keys("actions"))
     }
+
+    @Test fun restingGalleryScrollPublishesNoPerCellPositionsUntilAMenuOpens() =
+        showSongs(BrowseStyle(presentation = Presentation.Standard, itemsPerRow = 5)) {
+            val list = compose.onNodeWithTag("browser-list")
+            // Reduced motion completes the loading reveal before the first frame.
+            events.clear()
+            list.performTouchInput { swipeUp(startY = bottom * .8f, endY = bottom * .3f, durationMillis = 300) }
+            compose.waitForIdle()
+            list.performTouchInput { swipeDown(startY = bottom * .3f, endY = bottom * .7f, durationMillis = 300) }
+            compose.waitForIdle()
+            assertTrue("Resting rows must not run global-position work while scrolling: ${keys("global-position")}",
+                keys("global-position").isEmpty())
+            assertTrue("Closed artwork anchors must not publish window geometry while scrolling", keys("anchor").isEmpty())
+            assertTrue("Scrolling must not compose any collection menu", keys("actions").isEmpty())
+
+            val key = "cell-work:6"
+            list.performScrollToKey(key)
+            compose.waitForIdle()
+            events.clear()
+            val art = compose.onNodeWithTag("browse-art-$key", true).fetchSemanticsNode().boundsInRoot
+            compose.onNodeWithTag("media-$key").performTouchInput { longClick(center) }
+            compose.waitUntil(5000) { compose.onAllNodesWithText("Play next").fetchSemanticsNodes().isNotEmpty() }
+            val published = synchronized(events) { events.filter { it.first == "anchor" }.map { it.second as androidx.compose.ui.geometry.Rect } }
+            assertTrue("Opening publishes the held artwork as the menu origin before the menu composes", published.isNotEmpty())
+            val origin = published.first()
+            assertEquals("Menu origin keeps the artwork's measured width", art.width, origin.width, 1f)
+            assertEquals("Menu origin keeps the artwork's measured height", art.height, origin.height, 1f)
+            assertEquals(setOf<Any>(key), keys("actions"))
+        }
 }

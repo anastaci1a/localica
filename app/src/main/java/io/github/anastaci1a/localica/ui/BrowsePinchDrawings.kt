@@ -14,6 +14,7 @@ import androidx.compose.ui.graphics.layer.GraphicsLayer
 import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
@@ -83,7 +84,9 @@ private fun Modifier.retainPinchPass(key: Any, motion: BrowsePinchMotion, upper:
         pass[key] = recording
         onDispose { if (pass[key] === recording) pass.remove(key) }
     }
-    return onGloballyPositioned { recording.coordinates = it }.drawWithContent {
+    // Keep the live coordinates reference; the overlay maps it when drawing. A
+    // placement callback avoids a global-position dispatch for every scrolled frame.
+    return onPlaced { recording.coordinates = it }.drawWithContent {
         if (!motion.recordingFrozen || layer.size.width == 0 || layer.size.height == 0)
             layer.record { this@drawWithContent.drawContent() }
         // Standalone row/geometry previews have no viewport compositor.
