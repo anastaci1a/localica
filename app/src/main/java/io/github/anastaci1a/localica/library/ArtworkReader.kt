@@ -17,11 +17,12 @@ class ArtworkReader(private val context: Context) {
             if (parsed.scheme == "file") {
                 val file = java.io.File(parsed.path.orEmpty())
                 if (file.canonicalFile.parentFile == java.io.File(context.filesDir, "playlist-covers").canonicalFile && file.length() <= 16 * 1024 * 1024)
-                    return@withContext decodeArtwork(file.readBytes(), edge)
+                    return@withContext decodeArtwork(file.readBytes(), edge)?.also { it.prepareToDraw() }
             }
             val bytes = platformPicture(uri) ?: supplementalPicture(uri)
                 ?: runCatching { ContainerTags.read(context, uri)?.firstArtwork?.binaryData }.getOrNull()
-            bytes?.let { decodeArtwork(it, edge) }
+            // Kick the GPU upload here, off Main, so the first draw does not pay for it.
+            bytes?.let { decodeArtwork(it, edge) }?.also { it.prepareToDraw() }
         } catch (cancelled: CancellationException) { throw cancelled }
         catch (_: Exception) { null }
     }
