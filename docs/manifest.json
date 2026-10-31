@@ -1,5 +1,5 @@
 {
-  "source": "56bdd6a367212299793c502aac76d4e0b0d589d9",
+  "source": "d3cda6ce3db053ea5f46b5f1d8c3d8acfa64fa5f",
   "pages": [
     "templates/ISSUE_TEMPLATE/bug_report.html",
     "templates/ISSUE_TEMPLATE/feature_request.html",
@@ -13,6 +13,8 @@
     "guide/build.html",
     "guide/interface.html",
     "guide/product.html",
+    "guide/qa/live-failure-context.html",
+    "guide/qa/lyrics-source-phase.html",
     "guide/roadmap.html",
     "guide/structure.html"
   ]

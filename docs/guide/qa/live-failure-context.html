@@ -1,0 +1,38 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Bounded first-failure follow-on diagnostics · Localica</title><link rel="stylesheet" href="../../style.css"><link rel="stylesheet" href="../../math/katex.min.css"></head><body><a class="skip" href="#content">Skip to content</a><nav aria-label="Documentation"><a href="../../index.html">Localica</a><a href="../index.html">Documentation</a><a href="../../standard.html">Writing standard</a><a href="../../contributors/index.html">Contributing</a></nav><main id="content"><h1 id="bounded-first-failure-follow-on-diagnostics">Bounded first-failure follow-on diagnostics</h1>
+<p>The live observer/publisher pair still emits and uploads its original provisional
+failure event immediately. It does not wait for a stack trace. It now follows that
+alert with at most one diagnostic event/immutable packet for the <strong>first failure</strong>.
+Deploy observe.py and publish.mjs together: an older publisher intentionally rejects
+unknown event types rather than silently claiming complete monitoring.</p>
+<p>Collection is same-stream only, starts after the matched failure line, and closes at the first unfamiliar line, EOF, 32 entries, 4096 retained UTF-8 bytes, or five seconds (the selector loop checks the deadline every 100ms). The observer&#39;s existing 64KiB source-line bound still applies. Missing diagnostics produce no extra upload.</p>
+<p>Only ASCII Java exception type identifiers and validated Java/Kotlin stack frames are reconstructed. Exception messages, expected/actual values, arbitrary surrounding logs, environment, argv, paths and URLs are not copied into live packets. This is not a generic raw-log redactor and is not intended to defend against intentionally malicious test code encoding secrets as syntactically valid identifiers.</p>
+<p>The follow-on has event type <code>test_failure_context</code>, references observation_index=1 and the same command/SHA/API/lane/stream, and sets messages_omitted=true. The publisher revalidates every field, rejects duplicates/mismatch, and places it in the optional <code>failure_contexts</code> array of a subsequent packet. No failure count is incremented. The original packet format is unchanged.</p>
+<p>The existing <strong>six artifacts total</strong> cap includes this follow-on, so a failure-heavy run has one fewer failure-batch slot. Cap exhaustion and upload uncertainty retain the pending packet locally and report monitoring_degraded, with no retries or false completeness.</p>
+<p>Tests remain the sole verdict source. Child exit codes, test selections, raw local
+command.log, and authoritative XML are unchanged. Diagnostic upload errors cannot
+turn failed tests green. An observer IO failure still fails closed under the
+existing observer/supervisor contract. Publication is diagnostic, not release proof.</p>
+<h2 id="known-limit">Known limit</h2>
+<p>AGP sometimes prints only an exception name/message and one JUnit frame. Because
+free-form messages are deliberately omitted, such a packet improves failure type
+visibility but may still require final XML for the exact assertion. In particular,
+replaying API26 run40686778656 yields java.lang.AssertionError plus
+org.junit.Assert.fail(Assert.java:89), not its expected/actual color values.</p>
+<h2 id="offline-verification">Offline verification</h2>
+<p>The <a href="https://github.com/anastaci1a/localica/blob/main/.github/workflows/tooling-contracts.yml">host tooling workflow</a> runs all
+eight Python contract files and the Node publisher contracts on changes to their
+helpers, workflows or inspected Android test sources. It keeps source hashes,
+per-command status and raw unittest/TAP logs; it does not run Android tests.</p>
+<p>With CPython 3.12 on Linux x86_64 and Node 24, install the pinned dependencies,
+then run the offline checks:</p>
+<pre><code class="language-sh">python3.12 -m venv /tmp/localica-tooling-contract-python
+. /tmp/localica-tooling-contract-python/bin/activate
+python3 -m pip install --require-hashes --only-binary=:all: --no-deps -r .github/tests/requirements.txt
+npm ci --prefix .github/test-evidence --ignore-scripts --no-audit --no-fund
+unset LOCALICA_OBSERVER_TEST_SOURCE
+python3 -m unittest discover -s .github/tests -p &#39;test_*.py&#39;
+node --test .github/tests/test_publish_test_evidence.mjs
+</code></pre>
+<p>Runner contracts use temporary ADB/Gradle/publisher mocks; no live device is needed. The separate Kotlin compatibility contract is outside this host job. A real subprocess handshake withholds diagnostics until upload1, then exit7 until upload2. This proves live ordering without timing sleeps, preserves the nonzero exit, and confirms the secret-bearing exception message stays local.</p>
+<p>Additional tests cover timeout, EOF, line/byte caps, stream isolation, oversized source lines, duplicate/malformed events, plain Error/Exception names, and identifier grammar consistency.</p>
+</main><footer><a href="https://github.com/anastaci1a/localica/blob/main/docs/qa/live-failure-context.md">Page source</a></footer></body></html>

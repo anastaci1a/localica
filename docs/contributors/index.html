@@ -8,6 +8,13 @@
 <p>Build app-owned choices, switches, sliders, text fields, dialogs and drag visuals from the shared <code>ui</code> controls documented in <a href="../guide/interface.html">Interface</a>.</p>
 <p>Extend the abstraction when behavior is missing. Avoid raw Material segmented buttons, radio rows and parallel visual implementations. System permissions and external pickers remain native.</p>
 <p>Keep shared gesture, selection and material regression tests with changes to those abstractions.</p>
+<h2 id="verification-coordination">Verification coordination</h2>
+<p>Follow <a href="../guide/build.html#development-and-final-validation">development and final validation</a>. The Localica lead initiates focused local checks. Freeze a complete candidate before full validation; coordinate parallel comparisons and any cancellation with the parent and run owner.</p>
+<h2 id="agent-communication">Agent communication</h2>
+<p>Use <code>sessionsation</code> from PATH with a fresh target: Steer Submit while the recipient is active, immediate Submit while idle. Never Queue, replay an accepted input or substitute a new session for recovery of an existing attachment.</p>
+<p>Keep messages short and separate longer messages into paragraphs.</p>
+<p><strong>Sessionsation only:</strong> use prose with file/module references, without diffs, code, file contents or attachments. Enclose messages in <code>-- INCOMING MSG: &lt;sender_session_name&gt; --</code> and <code>-- MSG END (&lt;actual_UTC_ISO_timestamp&gt;) --</code>, with one blank line between each delimiter and the body.</p>
+<p><strong>GitHub and other online communication:</strong> use ordinary formatting without the Sessionsation envelope; a short session-name signature such as <code>–localica-lead</code> is fine. GitHub attachments are allowed.</p>
 <h2 id="issues-and-commits">Issues and commits</h2>
 <p><a href="https://github.com/anastaci1a/localica/issues">Issues</a> own actionable work and acceptance criteria. Use the <a href="../templates/ISSUE_TEMPLATE/bug_report.html">bug</a> or <a href="../templates/ISSUE_TEMPLATE/feature_request.html">feature</a> template, including CLI/API submissions. Omit irrelevant optional fields.</p>
 <p>Write short issue bullets. Bugs explain observed and expected behavior, reproduction and known cause. Features state the request and observable completion. Link supporting evidence.</p>

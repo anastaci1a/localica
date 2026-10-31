@@ -1,12 +1,13 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Roadmap · Localica</title><link rel="stylesheet" href="../style.css"><link rel="stylesheet" href="../math/katex.min.css"></head><body><a class="skip" href="#content">Skip to content</a><nav aria-label="Documentation"><a href="../index.html">Localica</a><a href="index.html">Documentation</a><a href="../standard.html">Writing standard</a><a href="../contributors/index.html">Contributing</a></nav><main id="content"><h1 id="roadmap">Roadmap</h1>
-<p>Status: proposed work. These outcomes require implementation or verification. They are not claims about released builds.</p>
+<p>Status: proposed work. These outcomes require implementation or verification. They do not establish released behavior.</p>
 <h2 id="current-checkpoint">Current checkpoint</h2>
-<ul>
-<li>Stabilize current development candidates against <a href="build.html#release-preparation">release gates</a>. A passing component or local test is not confirmation of a cumulative APK. Preserve unreleased experiments separately.</li>
-<li>Improve startup/dense-library responsiveness and modal gesture ownership (<a href="https://github.com/anastaci1a/localica/issues/406">#406</a>, <a href="https://github.com/anastaci1a/localica/issues/407">#407</a>). Optional new-file-only launch scanning remains a separate <a href="https://github.com/anastaci1a/localica/pull/408">pending change</a>, not current full-scan behavior.</li>
-<li>Require reproducible optical comparisons before changing glass defaults. Preserve immediate selection appearance until the separate <a href="https://github.com/anastaci1a/localica/issues/107">entrance-motion review</a>.</li>
-<li>Validate <a href="https://github.com/anastaci1a/localica/issues/167">frame performance</a> and <a href="https://github.com/anastaci1a/localica/issues/150">manual-scroll jitter</a> on representative physical devices, especially queues, tab travel and player expansion. Emulator tests do not establish physical-device frame rates.</li>
-</ul>
+<p>Stabilize the cumulative audit candidate against <a href="build.html#release-preparation">release gates</a>. Component checks do not certify a cumulative APK.</p>
+<p>Improve startup/dense-library responsiveness and modal gesture ownership (<a href="https://github.com/anastaci1a/localica/issues/406">#406</a>, <a href="https://github.com/anastaci1a/localica/issues/407">#407</a>).</p>
+<p>Require reproducible optical comparisons before changing glass defaults.</p>
+<p>Review the <a href="interface.html#materials-and-controls">material and control contracts</a> on representative physical devices: depth response, interrupted gestures, large collections and material handoffs.</p>
+<p>Validate <a href="https://github.com/anastaci1a/localica/issues/167">rendering performance</a>, especially queue scrolling and player expansion. Emulator measurements do not establish physical-device frame rates. Reproduce <a href="https://github.com/anastaci1a/localica/issues/150">intermittent manual-scroll jitter</a>.</p>
+<p>Validate <a href="https://github.com/anastaci1a/localica/issues/107">selection appearance and reversal</a> on physical devices, preserving accessibility and reduced motion.</p>
+<p>Verify <a href="https://github.com/anastaci1a/localica/issues/28">AAC track boundaries</a> on physical output. Decoded sample equality does not establish seamless speaker playback.</p>
 <h2 id="deferred-capabilities">Deferred capabilities</h2>
 <p>These do not gate visual work. Issues own detailed acceptance criteria.</p>
 <table>
@@ -22,11 +23,11 @@
 </tr>
 <tr>
 <td>Personalized Home</td>
-<td>Extend current typed/manual pins into configurable carousels: pinned mixed items, frequently played mixed items, recently added albums/songs. Default ten previews. Customize sources/order/sort/presentation/count, overriding type defaults. Chevron titles open complete collections.</td>
+<td>Extend current typed/manual pins into configurable carousels: pinned mixed items, frequently played mixed items, recently added albums/songs. Default ten previews; customize sources/order/sort/presentation/count, overriding type defaults. Chevron titles open complete collections.</td>
 </tr>
 <tr>
 <td>Last.fm</td>
-<td>Off by default. Explicit connection/scrobbling, durable pending submissions, disconnect/status controls, reviewed/resettable track/artist matching. No automatic upload of past history or rewriting local tags. Local counts remain independent. Verify <a href="https://www.last.fm/api/scrobbling">protocol eligibility</a> separately from local counting (tracks longer than 30 seconds, half duration or four minutes listened). Retain actual listening duration/start timestamps.</td>
+<td>Off by default; explicit connection/scrobbling, durable pending submissions, disconnect/status controls, reviewed/resettable track/artist matching. No automatic upload of past history or rewriting local tags; local counts remain independent. Verify <a href="https://www.last.fm/api/scrobbling">protocol eligibility</a> separately from local counting (track &gt;30s, half duration or four minutes listened). Retain actual listening duration/start timestamps.</td>
 </tr>
 <tr>
 <td>Lyric lookup</td>
