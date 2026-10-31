@@ -194,10 +194,8 @@ class CollectionLookupLifecycleTest {
         var accepted: Job? = null
         var fresh: Job? = null
         compose.setContent {
-            handle = key(owner) {
-                rememberCollectionLookup(snapshot, emptyList(), BrowseSortSnapshot.Default) {
-                    opened++; publishedOnMain = Looper.myLooper() == Looper.getMainLooper()
-                }
+            handle = rememberOwnedCollectionLookup(owner, snapshot, emptyList(), BrowseSortSnapshot.Default) {
+                opened++; publishedOnMain = Looper.myLooper() == Looper.getMainLooper()
             }
         }
         try {

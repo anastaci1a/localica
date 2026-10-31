@@ -1,4 +1,4 @@
-name: Audit empty Home preparation (not release)
+name: Audit Home preparation and lookup ownership (not release)
 'on':
   push:
     branches: [dev/audit-empty-home-catalog-20261030]
@@ -27,7 +27,7 @@ jobs:
             display: compact
     env:
       TEST_API: ${{ matrix.api }}
-      SELECTORS: io.github.anastaci1a.localica.PinnedHomePreparationTest,io.github.anastaci1a.localica.HomeSelectionTest
+      SELECTORS: io.github.anastaci1a.localica.PinnedHomePreparationTest,io.github.anastaci1a.localica.HomeSelectionTest,io.github.anastaci1a.localica.CollectionLookupLifecycleTest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - uses: ./.github/actions/focused-android-setup
