@@ -14,6 +14,18 @@ internal fun copyNativeWindowOnce(
     image: Bitmap,
     timeoutMessage: String,
     failureMessage: (Int) -> String,
+): Bitmap = awaitNativeWindowCopyOnce(image, timeoutMessage, failureMessage, request = { callback ->
+    PixelCopy.request(window, image, { code -> callback(code) }, Handler(Looper.getMainLooper()))
+})
+
+/** The same ownership protocol with controllable request/deadline boundaries for lifecycle tests. */
+internal fun awaitNativeWindowCopyOnce(
+    image: Bitmap,
+    timeoutMessage: String,
+    failureMessage: (Int) -> String,
+    request: ((Int) -> Unit) -> Unit,
+    awaitCompletion: (CountDownLatch) -> Boolean = { it.await(5, TimeUnit.SECONDS) },
+    recycle: () -> Unit = { image.recycle() },
 ): Bitmap {
     val completed = CountDownLatch(1)
     val ownership = Any()
@@ -21,15 +33,15 @@ internal fun copyNativeWindowOnce(
     var abandoned = false
     var result = PixelCopy.ERROR_UNKNOWN
     try {
-        PixelCopy.request(window, image, { code ->
-            synchronized(ownership) { result = code; returned = true; if (abandoned) image.recycle() }
+        request { code ->
+            synchronized(ownership) { result = code; returned = true; if (abandoned) recycle() }
             completed.countDown()
-        }, Handler(Looper.getMainLooper()))
-    } catch (failure: Throwable) { image.recycle(); throw failure }
-    if (!completed.await(5, TimeUnit.SECONDS)) {
-        synchronized(ownership) { if (returned) image.recycle() else abandoned = true }
+        }
+    } catch (failure: Throwable) { recycle(); throw failure }
+    if (!awaitCompletion(completed)) {
+        synchronized(ownership) { if (returned) recycle() else abandoned = true }
         throw AssertionError(timeoutMessage)
     }
-    if (result != PixelCopy.SUCCESS) { image.recycle(); throw AssertionError(failureMessage(result)) }
+    if (result != PixelCopy.SUCCESS) { recycle(); throw AssertionError(failureMessage(result)) }
     return image
 }
