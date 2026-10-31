@@ -89,6 +89,8 @@ internal class FrostedBackdrop(val layer: GraphicsLayer, dark: Boolean,
     var lastReadbackProgress: String? = null
     var recordedGeneration by mutableStateOf<GlassRendererGeneration?>(null)
     var recordedSize = IntSize.Zero
+    // Main-thread diagnostic: completed live recordings, so tests can prove a held frame was not re-recorded.
+    var recordings = 0
     val recorded get() = recordedGeneration == rendererGeneration
     fun refresh() { revision++ }
 
@@ -316,7 +318,9 @@ internal fun androidx.compose.ui.layout.LayoutCoordinates.backdropPosition(view:
 @Composable
 internal fun Modifier.recordFrostedBackdrop(source: FrostedBackdrop, backing: FrostedBackdrop? = null,
     enabled: Boolean = true, displayCutout: (DrawScope.() -> Path?)? = null,
-    readbackRequest: (() -> Int)? = null, onRecorded: ((Int) -> Unit)? = null): Modifier {
+    readbackRequest: (() -> Int)? = null, onRecorded: ((Int) -> Unit)? = null,
+    /** Hold the last recording (sampling only; never for a displayed producer) while true. */
+    frozen: (() -> Boolean)? = null): Modifier {
     val renderer = currentGlassRendererGeneration()
     BackdropLease(backing.takeIf { enabled })
     return backdropLocation(source.location)
@@ -333,7 +337,9 @@ internal fun Modifier.recordFrostedBackdrop(source: FrostedBackdrop, backing: Fr
             // Native ownership outlives cancellation. Do not mutate the retained
             // own recording while a copy (including a retired generation's copy) is pending.
             // Retained children keep their separate owner/readiness contracts.
-            if (!source.readbackPending) {
+            // Read in draw so the first live frame after a hold is drawn without recomposition.
+            val hold = frozen?.invoke() == true && source.recorded && !source.layer.isReleased && source.recordedSize == extent
+            if (!source.readbackPending && !hold) {
                 source.layer.record(size = if (renderer.backend == GlassBackend.Modern) glassLayerExtent(extent) else extent) {
                     clipRect(right = viewport.width, bottom = viewport.height) {
                         if (backing != null && backing.recorded && !backing.layer.isReleased) {
@@ -345,6 +351,7 @@ internal fun Modifier.recordFrostedBackdrop(source: FrostedBackdrop, backing: Fr
                     }
                 }
                 source.recordedSize = extent
+                source.recordings++
                 source.recordedGeneration = renderer.takeIf { backing == null || backing.recorded }
                 if (request != null) onRecorded?.invoke(request)
             }
