@@ -426,7 +426,9 @@ fun LocalicaScreen(
         }, initialCategory = settingsCategory, onFullScan = onScanAll, onQuickScan = onQuickScan, libraryFiltersContent = {
             LibraryFilterSettings(libraryFilters) { libraryFilters = it; libraryFilterPreferences.write(it) }
         })
-    if (scannerOpen) ScannerPopup(library, { scannerOpen = false }, onScanAll, onCancelScan, onQuickScan) { destination ->
+    // The app-owned scanner is the live count source; LibraryUiState carries scan milestones only.
+    if (scannerOpen) ScannerPopup(library, { scannerOpen = false }, onScanAll, onCancelScan, onQuickScan,
+        remember(context) { (context.applicationContext as? io.github.anastaci1a.localica.LocalicaApplication)?.scanner?.state }) { destination ->
         scannerOpen = false; returnToScanner = true; settingsCategory = destination; settingsOpen = true
     }
     if (exitPrompt) GlassAlertDialog(onDismissRequest = { exitPrompt = false }, title = { Text("Close Localica?") },
