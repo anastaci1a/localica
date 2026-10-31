@@ -13,6 +13,7 @@ import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.browse.BrowserItem
+import io.github.anastaci1a.localica.navigation.LongScrollStyle
 import io.github.anastaci1a.localica.navigation.MediaKind
 import io.github.anastaci1a.localica.navigation.MediaRef
 import io.github.anastaci1a.localica.library.TrackSort
