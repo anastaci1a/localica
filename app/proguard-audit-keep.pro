@@ -7,3 +7,7 @@
 -keep class kotlinx.coroutines.** { *; }
 -keep class androidx.compose.** { *; }
 -dontwarn kotlin.**
+# Test code reaches app internals and library classes by their original names and
+# members, and the test APK is shrunk without the app's name mapping.
+-dontobfuscate
+-keep class io.github.anastaci1a.localica.** { *; }
