@@ -119,7 +119,7 @@ class StartupFrameMetricsTest {
             }
             val launchStart = NavigationFrameMetricsRecorder.markNanos()
             val windowEnd = launchStart + WINDOW_NANOS
-            ActivityScenario.launch<MainActivity>(Intent(context, MainActivity::class.java)).use { scenario ->
+            ActivityScenario.launch<MainActivity>(Intent(context, MainActivity::class.java)).use { _ ->
                 val recorder = recorderFuture.get(30, TimeUnit.SECONDS)
                 val activity = requireNotNull(launchActivity.get())
                 // Low-rate main-thread probe (about 1 ms per poll); it stops once content is found.
