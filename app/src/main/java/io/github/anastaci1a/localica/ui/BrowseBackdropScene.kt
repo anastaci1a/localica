@@ -27,8 +27,9 @@ internal class BrowseBackdropScene(val source: FrostedBackdrop, contentKey: () -
     schedule: (Long, () -> Unit) -> (() -> Unit)) {
     val layers = mutableStateListOf<BrowseBackdropLayer>()
     /** Hold the sampled page while it is scrolling (Modern, "Live glass while scrolling" off). */
-    var holdWhileScrolling: (() -> Boolean)? = null
-    val frozen: Boolean get() = holdWhileScrolling?.invoke() == true
+    var holdWhileScrolling by mutableStateOf(false)
+    var scrollingNow: () -> Boolean = { false }
+    val frozen: Boolean get() = holdWhileScrolling && scrollingNow()
     var compositeDraws: Map<Any, BackdropProducerDraws> = emptyMap()
     val readback = BackdropReadback({ Snapshot.withoutReadObservation {
         BackdropReadbackScene(listOf(contentKey(), source.size, source.location.placement, source.rendererGeneration),
@@ -63,7 +64,8 @@ internal fun rememberBrowseBackdropScene(source: FrostedBackdrop, backing: Frost
         source.readbackBarrier = scene.readback
         scene.readback.sceneChanged()
         observer?.invoke(scene, true)
-        scene.holdWhileScrolling = if (!liveWhileScrolling && renderer.backend == GlassBackend.Modern) ({ currentScrolling() }) else null
+        scene.scrollingNow = { currentScrolling() }
+        scene.holdWhileScrolling = !liveWhileScrolling && renderer.backend == GlassBackend.Modern
     }
     DisposableEffect(scene) { onDispose {
         scene.readback.dispose()
