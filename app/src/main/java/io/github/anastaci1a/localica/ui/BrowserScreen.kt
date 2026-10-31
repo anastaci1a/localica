@@ -883,6 +883,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                     .collectionPinchOverlay(pinchHeader).pinchRetainedOverlay(pinchMotion, gridState, pinchIndices)) { overscroll ->
             LazyVerticalGrid(state = gridState, overscrollEffect = overscroll, columns = GridCells.Fixed(columns), modifier = (if (popupDismiss != null) Modifier.fillMaxWidth() else Modifier.fillMaxSize())
                 .then(if (showSearchPill) searchSlotGridLayout else Modifier)
+                .longScrollFade(gridState)
                 .controlScrollParent(gridState, ControlScrollAxis.Vertical)
                 .nestedScroll(userScrollConnection)
                 .onPreviewKeyEvent { event ->
