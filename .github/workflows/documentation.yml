@@ -1,0 +1,75 @@
+name: Documentation
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '*.md'
+      - 'agents/**'
+      - 'docs/**'
+      - '.github/ISSUE_TEMPLATE/**'
+      - '.github/RELEASE_TEMPLATE.md'
+      - '.github/workflows/documentation.yml'
+      - 'tools/docs/**'
+      - 'fix-permissions.sh'
+  pull_request:
+    paths:
+      - '*.md'
+      - 'agents/**'
+      - 'docs/**'
+      - '.github/ISSUE_TEMPLATE/**'
+      - '.github/RELEASE_TEMPLATE.md'
+      - '.github/workflows/documentation.yml'
+      - 'tools/docs/**'
+      - 'fix-permissions.sh'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: documentation-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+      - run: npm ci --prefix tools/docs --ignore-scripts
+      - run: npm test --prefix tools/docs
+      - run: npm run check --prefix tools/docs
+      - run: npm run build --prefix tools/docs
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: documentation-site
+          path: build/docs-site/
+          if-no-files-found: error
+
+  publish:
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    needs: check
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: documentation-site
+          path: build/docs-site/
+      - name: Update only the documentation directory
+        run: |
+          git fetch origin gh-pages
+          git worktree add --detach build/pages origin/gh-pages
+          node tools/docs/publish.mjs build/docs-site/docs build/pages
+          git -C build/pages config user.name 'github-actions[bot]'
+          git -C build/pages config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git -C build/pages add -- docs
+          if git -C build/pages diff --cached --quiet; then exit 0; fi
+          git -C build/pages commit -m "Publish Localica documentation for $GITHUB_SHA"
+          git -C build/pages push origin HEAD:gh-pages
+          test "$(git -C build/pages rev-parse HEAD)" = "$(git ls-remote origin refs/heads/gh-pages | cut -f1)"

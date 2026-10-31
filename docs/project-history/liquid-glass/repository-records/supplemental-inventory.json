@@ -1,0 +1,100 @@
+{
+  "scope": "Additional locations found in final inventory reconciliation",
+  "captured": [
+    {
+      "source": "/mnt/user/live/projects/localica/localica-feedback/software-refraction/integrate.cjs",
+      "destination": "research/captures/software-refraction/integrate.cjs",
+      "sha256": "8881d4200e9abf4266a67fc9af449fefa8ce42df5b9ca1e274ced142a8c26ea7",
+      "status": "tracked-provisional-capture"
+    },
+    {
+      "source": "/mnt/user/live/projects/localica/localica-feedback/software-refraction/software-results.json",
+      "destination": "research/captures/software-refraction/software-results.json",
+      "sha256": "a7583213bc2ead64c74a518f3bd6c57184fee1594df534a436120c03dd611e19",
+      "status": "tracked-provisional-capture"
+    },
+    {
+      "source": "/mnt/user/live/projects/localica/localica-feedback/software-refraction/webgl-results.json",
+      "destination": "research/captures/software-refraction/webgl-results.json",
+      "sha256": "f999ac774f6db537fc55a838e10a63427b81308d2036a2cb4b1a2c409824c191",
+      "status": "tracked-provisional-capture"
+    }
+  ],
+  "pending": [
+    {
+      "source": "/mnt/user/live/projects/localica/localica-feedback/software-refraction",
+      "reason": "Other status/handoff/PR notes remain in supplemental archive, pending privacy/runtime review"
+    },
+    {
+      "source": "/mnt/user/live/projects/localica/localica-tools/recreation-pages-publish",
+      "reason": "Actual linked generated-Pages worktree; tracked history retained in full original bundle, filesystem preserved in supplemental archive; public source extraction excludes generated output. Uniqueness/cutover reconciliation pending."
+    }
+  ],
+  "root_private_notes": [
+    {
+      "path": "/mnt/user/live/projects/localica/localica-feedback/LIQUID-GLASS-RESEARCH-HANDOFF.md.txt",
+      "status": "Pending scope/privacy review unless already listed in main manifest; originals retained. No public import."
+    },
+    {
+      "path": "/mnt/user/live/projects/localica/localica-feedback/feedback 2026-10-13 (1).txt",
+      "status": "Pending scope/privacy review unless already listed in main manifest; originals retained. No public import."
+    },
+    {
+      "path": "/mnt/user/live/projects/localica/localica-feedback/feedback 2026-10-13 (2).txt",
+      "status": "Pending scope/privacy review unless already listed in main manifest; originals retained. No public import."
+    },
+    {
+      "path": "/mnt/user/live/projects/localica/localica-feedback/feedback 2026-10-14 (v0.23.0).txt",
+      "status": "Pending scope/privacy review unless already listed in main manifest; originals retained. No public import."
+    },
+    {
+      "path": "/mnt/user/live/projects/localica/localica-feedback/feedback 2026-10-14 (v0.26.0) [original].txt",
+      "status": "Pending scope/privacy review unless already listed in main manifest; originals retained. No public import."
+    },
+    {
+      "path": "/mnt/user/live/projects/localica/localica-feedback/feedback 2026-10-14 (v0.26.0).txt",
+      "status": "Pending scope/privacy review unless already listed in main manifest; originals retained. No public import."
+    },
+    {
+      "path": "/mnt/user/live/projects/localica/localica-feedback/feedback 2026-10-14 (v0.27.0 candidate).txt",
+      "status": "Pending scope/privacy review unless already listed in main manifest; originals retained. No public import."
+    },
+    {
+      "path": "/mnt/user/live/projects/localica/localica-feedback/feedback 2026-10-14 additions.txt",
+      "status": "Pending scope/privacy review unless already listed in main manifest; originals retained. No public import."
+    },
+    {
+      "path": "/mnt/user/live/projects/localica/localica-feedback/filter followup 2026-10-13.txt",
+      "status": "Pending scope/privacy review unless already listed in main manifest; originals retained. No public import."
+    },
+    {
+      "path": "/mnt/user/live/projects/localica/localica-feedback/handoff 39c65e56.txt",
+      "status": "Pending scope/privacy review unless already listed in main manifest; originals retained. No public import."
+    },
+    {
+      "path": "/mnt/user/live/projects/localica/localica-feedback/handoff active 2026-10-13.txt",
+      "status": "Pending scope/privacy review unless already listed in main manifest; originals retained. No public import."
+    },
+    {
+      "path": "/mnt/user/live/projects/localica/localica-feedback/handoff efbb4e23.txt",
+      "status": "Pending scope/privacy review unless already listed in main manifest; originals retained. No public import."
+    },
+    {
+      "path": "/mnt/user/live/projects/localica/localica-feedback/handoff-active-2026-10-13.txt",
+      "status": "Pending scope/privacy review unless already listed in main manifest; originals retained. No public import."
+    },
+    {
+      "path": "/mnt/user/live/projects/localica/localica-feedback/optics followup 2026-10-13.txt",
+      "status": "Pending scope/privacy review unless already listed in main manifest; originals retained. No public import."
+    },
+    {
+      "path": "/mnt/user/live/projects/localica/localica-feedback/renderer implementation plan.txt",
+      "status": "Pending scope/privacy review unless already listed in main manifest; originals retained. No public import."
+    },
+    {
+      "path": "/mnt/user/live/projects/localica/localica-feedback/renderer restart 2026-10-13.txt",
+      "status": "Pending scope/privacy review unless already listed in main manifest; originals retained. No public import."
+    }
+  ],
+  "backup": "supplemental-provisional.tar.zst; no writer freeze"
+}

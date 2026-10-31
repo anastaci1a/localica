@@ -20,12 +20,18 @@ This changes preparation timing. Smooth scalar mapping is not proof of spatial/o
 
 ## Existing test intent changes
 
-GlassOriginPreparationTest's six existing methods remain. Tests previously demanded sequential full preparation and zero native mounts before admission; these requirements conflict with the approved continuous choreography. Replacements demand observed overlap both ways and non-touchable/non-focusable premeasurement, while preserving endpoint, restored-draw, canceled opening, retained-window, reopening-during-rejoin and reduced-motion checks. Immediate ownership after reopen is not asserted when retained negative velocity still needs to cross/reverse safely; same native-window reuse and coherent ownership are required instead.
+GlassOriginPreparationTest's six existing methods remain. Tests previously demanded sequential full preparation and zero native mounts before admission; these requirements conflict with the approved continuous choreography. Replacements demand observed overlap both ways and non-touchable/non-focusable premeasurement, while preserving endpoint, restored-draw, canceled opening, retained-window, reopening-during-rejoin and reduced-motion checks.
+
+Immediate ownership after reopen is not asserted when retained negative velocity still needs to cross/reverse safely; same native-window reuse and coherent ownership are required instead.
 
 LyricsHeaderActionsTest retains both real-header/cancellation cases and captures; its pre-admission sample moves from 100 ms to 64 ms because the new opening seam is approximately 101 ms before native readiness holds. This is an intentional timing-spec change, not evidence the UI is correct.
 
 ## Validation and limits
 
-Exact isolated source 4020e7578507dc6eb9d64b5687f80fa200d8512e passed run 40689677878 on API26 and API36. Original XML and exact source inventory independently reconcile all 38 native methods across eight full classes, with no skips or failures. Full JVM includes 14 phase-controller cases. Native closed-fixture screenshot readiness is required before pixel comparison; an earlier run sampled the prior window before the fixture was presented. This is not an animation-budget increase or a weakened pixel assertion.
+Exact isolated source 4020e7578507dc6eb9d64b5687f80fa200d8512e passed run 40689677878 on API26 and API36. Original XML and exact source inventory independently reconcile all 38 native methods across eight full classes, with no skips or failures. Full JVM includes 14 phase-controller cases.
 
-Earlier candidate run 40683771521 failed a mandatory IME zero-height false-exposure path also observed before this feature. Generic/Search lifecycle key isolation was restored, but no IME root-cause fix is claimed. Other failed attempts and their original evidence remain preserved. The integrated prototype must still pass the full retained dev73 selected gate plus GlassOriginPreparationTest, compatibility chains, build/JVM/lint/signature and original-evidence reconciliation. Isolated success is not release certification or optical acceptance.
+Native closed-fixture screenshot readiness is required before pixel comparison; an earlier run sampled the prior window before the fixture was presented. This is not an animation-budget increase or a weakened pixel assertion.
+
+Earlier candidate run 40683771521 failed a mandatory IME zero-height false-exposure path also observed before this feature. Generic/Search lifecycle key isolation was restored, but no IME root-cause fix is claimed. Other failed attempts and their original evidence remain preserved.
+
+The integrated prototype must still pass the full retained dev73 selected gate plus GlassOriginPreparationTest, compatibility chains, build/JVM/lint/signature and original-evidence reconciliation. Isolated success is not release certification or optical acceptance.

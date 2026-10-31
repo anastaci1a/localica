@@ -1,0 +1,382 @@
+[
+  {
+    "base": "main",
+    "head_ref": "research/geometric-playback-222",
+    "head_sha": "e9fcd3a77125310ffe4f7417c1be979aabf3015b",
+    "merged_at": null,
+    "number": 456,
+    "state": "open",
+    "title": "Introduce surface-derived Liquid Glass optics and reconstruction evidence",
+    "url": "https://github.com/anastaci1a/localica/pull/456"
+  },
+  {
+    "base": "main",
+    "head_ref": "research/blue-slider-short-round-222",
+    "head_sha": "8997be17d16781200890f76f169ae19124b3a616",
+    "merged_at": "2026-10-21T21:57:36Z",
+    "number": 441,
+    "state": "closed",
+    "title": "Generate slider exteriors and complete the three-pass reconstruction round",
+    "url": "https://github.com/anastaci1a/localica/pull/441"
+  },
+  {
+    "base": "main",
+    "head_ref": "research/agent-light-dark-222",
+    "head_sha": "a0327a88133830cf3be94aa9a28c86a1810d1798",
+    "merged_at": "2026-10-21T20:40:29Z",
+    "number": 439,
+    "state": "closed",
+    "title": "Reconstruct light/dark exteriors and publish the completed three-pass round",
+    "url": "https://github.com/anastaci1a/localica/pull/439"
+  },
+  {
+    "base": "main",
+    "head_ref": "research/home-short-round-222",
+    "head_sha": "ce3e4eadf3b8b6208aae4a6af3434ee10ee2cff9",
+    "merged_at": "2026-10-21T18:26:03Z",
+    "number": 434,
+    "state": "closed",
+    "title": "Refine Home reconstruction and separate source confidence from target visibility",
+    "url": "https://github.com/anastaci1a/localica/pull/434"
+  },
+  {
+    "base": "main",
+    "head_ref": "research/navigation-verified-round-222",
+    "head_sha": "1770a2f5c29b6eda2f248c1465eeff5e92066ace",
+    "merged_at": "2026-10-21T17:19:12Z",
+    "number": 433,
+    "state": "closed",
+    "title": "Refine Navigation reconstruction in three verified passes",
+    "url": "https://github.com/anastaci1a/localica/pull/433"
+  },
+  {
+    "base": "main",
+    "head_ref": "research/search-verified-round-222",
+    "head_sha": "c8c7feea22710739c41d7706ec7ee8480735b1ed",
+    "merged_at": "2026-10-21T17:07:57Z",
+    "number": 432,
+    "state": "closed",
+    "title": "Refine Search reconstruction in three verified passes",
+    "url": "https://github.com/anastaci1a/localica/pull/432"
+  },
+  {
+    "base": "main",
+    "head_ref": "research/playback-short-round-222",
+    "head_sha": "c08597adc1c48dbc177a5e16d70d56ddc705b4ec",
+    "merged_at": "2026-10-21T16:24:22Z",
+    "number": 431,
+    "state": "closed",
+    "title": "Refine clear playback glass in three verified passes",
+    "url": "https://github.com/anastaci1a/localica/pull/431"
+  },
+  {
+    "base": "main",
+    "head_ref": "research/switch-cap-depth-222",
+    "head_sha": "6edccb1d1f4d90c2c1f7c06612d014e818dca7d6",
+    "merged_at": "2026-10-21T15:54:20Z",
+    "number": 430,
+    "state": "closed",
+    "title": "Refine switch and toolbar reconstructions and verify lens-model constraints",
+    "url": "https://github.com/anastaci1a/localica/pull/430"
+  },
+  {
+    "base": "main",
+    "head_ref": "research/active-segmented-selector-222",
+    "head_sha": "7040725fa3116d2fb90d71c360341c4a82bc6602",
+    "merged_at": "2026-10-21T15:54:23Z",
+    "number": 429,
+    "state": "closed",
+    "title": "Calibrate active segmented-selector content and glass separately",
+    "url": "https://github.com/anastaci1a/localica/pull/429"
+  },
+  {
+    "base": "main",
+    "head_ref": "research/home-boundary-correction-222",
+    "head_sha": "2cf242fca20a8ad82f1b9f18921fc9405f4fd6c5",
+    "merged_at": "2026-10-20T18:53:35Z",
+    "number": 427,
+    "state": "closed",
+    "title": "Repair Home reconstruction boundary and verify source-conditioned lighting",
+    "url": "https://github.com/anastaci1a/localica/pull/427"
+  },
+  {
+    "base": "main",
+    "head_ref": "docs/recreation-gallery-222",
+    "head_sha": "6ec38a1cbb4a57504013e2be3d7959fbbf12e8de",
+    "merged_at": "2026-10-20T13:49:53Z",
+    "number": 426,
+    "state": "closed",
+    "title": "Add current recreation images and measurements to the comparison page",
+    "url": "https://github.com/anastaci1a/localica/pull/426"
+  },
+  {
+    "base": "main",
+    "head_ref": "research/music-navigation-vector-paired-222",
+    "head_sha": "e6b95bea3d5f128e5e0dd5fcac961b97753e8fe5",
+    "merged_at": "2026-10-20T12:47:28Z",
+    "number": 424,
+    "state": "closed",
+    "title": "Recreate Apple Music navigation glass with clean vector foregrounds",
+    "url": "https://github.com/anastaci1a/localica/pull/424"
+  },
+  {
+    "base": "main",
+    "head_ref": "research/music-search-vector-paired-222",
+    "head_sha": "4ea7872da588912d69a5a2e4c5b6e5ae9c7563f9",
+    "merged_at": "2026-10-20T09:13:09Z",
+    "number": 421,
+    "state": "closed",
+    "title": "Redo Search with clean vector geometry and paired calibration [skip ci]",
+    "url": "https://github.com/anastaci1a/localica/pull/421"
+  },
+  {
+    "base": "main",
+    "head_ref": "research/music-home-222",
+    "head_sha": "95769862e6397d47eaf8e38d84429c05a6a4f985",
+    "merged_at": "2026-10-20T07:55:21Z",
+    "number": 419,
+    "state": "closed",
+    "title": "Reconstruct selected Home control across two backgrounds",
+    "url": "https://github.com/anastaci1a/localica/pull/419"
+  },
+  {
+    "base": "main",
+    "head_ref": "research/music-search-222",
+    "head_sha": "f14ca844c659bd750ab7ffff20a7ac593b520d1b",
+    "merged_at": "2026-10-20T07:18:49Z",
+    "number": 418,
+    "state": "closed",
+    "title": "Reconstruct detached Apple Music Search control",
+    "url": "https://github.com/anastaci1a/localica/pull/418"
+  },
+  {
+    "base": "main",
+    "head_ref": "research/music-compact-mini-222",
+    "head_sha": "c3bd0cc8aad59da5090c2cce2189bb11a069db38",
+    "merged_at": "2026-10-20T07:07:46Z",
+    "number": 417,
+    "state": "closed",
+    "title": "Reconstruct compact Apple Music mini-player",
+    "url": "https://github.com/anastaci1a/localica/pull/417"
+  },
+  {
+    "base": "main",
+    "head_ref": "research/music-expanded-mini-222",
+    "head_sha": "b2436a5504c00526123003b18c3e415f1564b654",
+    "merged_at": "2026-10-20T06:37:53Z",
+    "number": 416,
+    "state": "closed",
+    "title": "Recreate expanded Apple Music mini-player through twelve passes",
+    "url": "https://github.com/anastaci1a/localica/pull/416"
+  },
+  {
+    "base": "main",
+    "head_ref": "docs/glass-recreations-publish-222",
+    "head_sha": "282e7012858566748bdeb549ede02b61435dde67",
+    "merged_at": "2026-10-20T05:32:33Z",
+    "number": 415,
+    "state": "closed",
+    "title": "Publish glass recreations, mathematical recipes and scores",
+    "url": "https://github.com/anastaci1a/localica/pull/415"
+  },
+  {
+    "base": "main",
+    "head_ref": "docs/glass-presets-222",
+    "head_sha": "8843595f34a0f28326925d5d5c32da67f6bfe07b",
+    "merged_at": null,
+    "number": 414,
+    "state": "open",
+    "title": "Calibrate glass hypotheses against HD Apple references",
+    "url": "https://github.com/anastaci1a/localica/pull/414"
+  },
+  {
+    "base": "main",
+    "head_ref": "docs/dark-glass-lab",
+    "head_sha": "90a0a100fca83271d38b914364d0f53f6a216116",
+    "merged_at": "2026-10-19T22:15:52Z",
+    "number": 412,
+    "state": "closed",
+    "title": "Rebuild dark glass lab and refresh guide media [skip ci]",
+    "url": "https://github.com/anastaci1a/localica/pull/412"
+  },
+  {
+    "base": "main",
+    "head_ref": "docs/publish-glass-lab",
+    "head_sha": "73021673a736c0c2c23fa9daa1e943c49a9a3247",
+    "merged_at": "2026-10-19T22:00:21Z",
+    "number": 410,
+    "state": "closed",
+    "title": "Reconcile docs and publish a refracting Liquid Glass lab",
+    "url": "https://github.com/anastaci1a/localica/pull/410"
+  },
+  {
+    "base": "dev/next-audit",
+    "head_ref": "codex/pinch-continuity-306",
+    "head_sha": "73701040df832c0121b88f72f29d8626d7dd0aa4",
+    "merged_at": null,
+    "number": 374,
+    "state": "open",
+    "title": "Preserve pinch geometry and text continuity candidate (#306)",
+    "url": "https://github.com/anastaci1a/localica/pull/374"
+  },
+  {
+    "base": "codex/software-backdrop-194",
+    "head_ref": "codex/glass-renderer-policy-280",
+    "head_sha": "3a808fd7ac3738389b5217af88559fb2bdc621cd",
+    "merged_at": null,
+    "number": 372,
+    "state": "open",
+    "title": "WIP: share the selectable glass renderer policy (#280)",
+    "url": "https://github.com/anastaci1a/localica/pull/372"
+  },
+  {
+    "base": "audit/axis-aware-selector-release-218",
+    "head_ref": "codex/software-backdrop-194",
+    "head_sha": "35843f0dd7b65f9eb969deca3c5d4405abc04b6d",
+    "merged_at": null,
+    "number": 370,
+    "state": "open",
+    "title": "Share software-safe glass captures and refresh clear panels",
+    "url": "https://github.com/anastaci1a/localica/pull/370"
+  },
+  {
+    "base": "audit/axis-aware-selector-release-218",
+    "head_ref": "codex/lyrics-split-morph-290-current",
+    "head_sha": "009a27206634e88644181feb0541c95cd5e98d1a",
+    "merged_at": null,
+    "number": 362,
+    "state": "open",
+    "title": "Stage lyrics sources through a split glass pill",
+    "url": "https://github.com/anastaci1a/localica/pull/362"
+  },
+  {
+    "base": "main",
+    "head_ref": "dev/priority-selectors",
+    "head_sha": "1446841faa40a510c9bd530006f984e6bb4701b8",
+    "merged_at": null,
+    "number": 358,
+    "state": "closed",
+    "title": "Integrate priority selector geometry and popup input/material diagnostics",
+    "url": "https://github.com/anastaci1a/localica/pull/358"
+  },
+  {
+    "base": "fix/directional-control-fades-282",
+    "head_ref": "fix/effective-reduced-motion-259",
+    "head_sha": "b6b8bedf2e75474f460b1ddaec6210bf9eea317f",
+    "merged_at": null,
+    "number": 357,
+    "state": "closed",
+    "title": "Honor Android disabled animations in shared glass motion (#259)",
+    "url": "https://github.com/anastaci1a/localica/pull/357"
+  },
+  {
+    "base": "audit/selector-track-composition",
+    "head_ref": "codex/selector-composition-209",
+    "head_sha": "549b289b4d171c11ed7a84ff35c4e11925528a72",
+    "merged_at": null,
+    "number": 348,
+    "state": "closed",
+    "title": "Compose legacy selector optics from current shell and ink geometry",
+    "url": "https://github.com/anastaci1a/localica/pull/348"
+  },
+  {
+    "base": "dot/artwork-grant-lifecycle-212",
+    "head_ref": "dot/restore-artwork-edit-stages",
+    "head_sha": "272ca2745f15b952ad27c2d75ad91021ea5f4a38",
+    "merged_at": null,
+    "number": 334,
+    "state": "closed",
+    "title": "Restore artwork editing stages across activity recreation",
+    "url": "https://github.com/anastaci1a/localica/pull/334"
+  },
+  {
+    "base": "main",
+    "head_ref": "audit/selector-track-composition",
+    "head_sha": "614bc6009efeea542e8dac6f7dfc3d4b3d3c3be8",
+    "merged_at": null,
+    "number": 312,
+    "state": "closed",
+    "title": "Prototype shared selector stretch and contact geometry",
+    "url": "https://github.com/anastaci1a/localica/pull/312"
+  },
+  {
+    "base": "main",
+    "head_ref": "audit/search-ime-motion",
+    "head_sha": "f0376c760ab938ead0e8bef9f6d15ce5a0190352",
+    "merged_at": null,
+    "number": 298,
+    "state": "open",
+    "title": "Probe scoped-search IME opening and return geometry",
+    "url": "https://github.com/anastaci1a/localica/pull/298"
+  },
+  {
+    "base": "dev/noon-candidate",
+    "head_ref": "audit/weighted-shadow-union",
+    "head_sha": "9188d792af82e7599ecc15ee95f01efff7335fbe",
+    "merged_at": null,
+    "number": 275,
+    "state": "closed",
+    "title": "Preserve independently fading bodies in shared glass shadows",
+    "url": "https://github.com/anastaci1a/localica/pull/275"
+  },
+  {
+    "base": "audit/legacy-mesh-conditioning",
+    "head_ref": "audit/mixed-shadow-opacity",
+    "head_sha": "67035dae40c5dc63df5871585961ea9273943d9b",
+    "merged_at": null,
+    "number": 264,
+    "state": "open",
+    "title": "Measure independently fading siblings in a shared glass shadow group",
+    "url": "https://github.com/anastaci1a/localica/pull/264"
+  },
+  {
+    "base": "dev/audit-fixes",
+    "head_ref": "audit/system-motion-diagnostic",
+    "head_sha": "82c718acb05dfc346135863cbe1bb7d2e3b8344b",
+    "merged_at": null,
+    "number": 254,
+    "state": "open",
+    "title": "Measure glass response to system and app reduced-motion settings",
+    "url": "https://github.com/anastaci1a/localica/pull/254"
+  },
+  {
+    "base": "dev/audit-fixes",
+    "head_ref": "audit/trigger-safe-insets",
+    "head_sha": "91a4dda183db97d037cb0622d5d7e8515b384e30",
+    "merged_at": "2026-10-15T11:39:06Z",
+    "number": 251,
+    "state": "closed",
+    "title": "Keep glass pixel-test trigger clear of system navigation scrims",
+    "url": "https://github.com/anastaci1a/localica/pull/251"
+  },
+  {
+    "base": "dev/audit-fixes",
+    "head_ref": "audit/boundary-optics-experiment",
+    "head_sha": "95d4aee4748e2005bfc7539a5ae9c203bb6ec8ec",
+    "merged_at": null,
+    "number": 240,
+    "state": "closed",
+    "title": "Experiment with bounded boundary-localized optical profiles",
+    "url": "https://github.com/anastaci1a/localica/pull/240"
+  },
+  {
+    "base": "dev/audit-fixes",
+    "head_ref": "audit/gallery-geometry",
+    "head_sha": "62ec0827430f7482c9543c8df0bebf3652e2fddc",
+    "merged_at": "2026-10-15T08:44:28Z",
+    "number": 228,
+    "state": "closed",
+    "title": "Restore shared dense-gallery artwork geometry",
+    "url": "https://github.com/anastaci1a/localica/pull/228"
+  },
+  {
+    "base": "dev/audit-fixes",
+    "head_ref": "audit/device-corners",
+    "head_sha": "6c812249c3610bbb180f4f1c6928915a1a4d021b",
+    "merged_at": "2026-10-15T09:10:54Z",
+    "number": 227,
+    "state": "closed",
+    "title": "Use actual device geometry for player and drawer corners",
+    "url": "https://github.com/anastaci1a/localica/pull/227"
+  }
+]

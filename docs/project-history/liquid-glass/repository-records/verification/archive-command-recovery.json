@@ -1,0 +1,8 @@
+{
+  "operation": "Compressed evidence import",
+  "initial_failure": "Output option appeared after zstd's end-of-options marker",
+  "effect": "An extra 13-byte .nojekyll.zst was created in an unscored generated fixture directory",
+  "correction": "Removed only that extra file and moved the output option before the end-of-options marker",
+  "input_effect": "Original .nojekyll and all research inputs unchanged",
+  "recovery": "Corrected import completed; every compressed object decompressed and matched its original SHA-256"
+}

@@ -1,11 +1,22 @@
 # Roadmap
 
+Status: proposed work. These outcomes require implementation or verification. They do not establish released behavior.
+
 ## Current checkpoint
 
-- Review the [Liquid Glass specification](liquid-glass/specification.md) on the user’s phone: depth response, interrupted gestures, large collections and material handoffs.
-- Validate [rendering performance](https://github.com/anastaci1a/localica/issues/167), especially queue scrolling and player expansion; emulator measurements do not establish physical-device frame rates. Reproduce [intermittent manual-scroll jitter](https://github.com/anastaci1a/localica/issues/150).
-- Validate [selection appearance and reversal](https://github.com/anastaci1a/localica/issues/107) on physical devices, preserving accessibility and reduced motion.
-- Verify [AAC track boundaries](https://github.com/anastaci1a/localica/issues/28) on physical output. Decoded sample equality does not establish seamless speaker playback.
+Stabilize the cumulative audit candidate against [release gates](build.md#release-preparation). Component checks do not certify a cumulative APK.
+
+Improve startup/dense-library responsiveness and modal gesture ownership ([#406](https://github.com/anastaci1a/localica/issues/406), [#407](https://github.com/anastaci1a/localica/issues/407)).
+
+Require reproducible optical comparisons before changing glass defaults.
+
+Review the [material and control contracts](interface.md#materials-and-controls) on representative physical devices: depth response, interrupted gestures, large collections and material handoffs.
+
+Validate [rendering performance](https://github.com/anastaci1a/localica/issues/167), especially queue scrolling and player expansion. Emulator measurements do not establish physical-device frame rates. Reproduce [intermittent manual-scroll jitter](https://github.com/anastaci1a/localica/issues/150).
+
+Validate [selection appearance and reversal](https://github.com/anastaci1a/localica/issues/107) on physical devices, preserving accessibility and reduced motion.
+
+Verify [AAC track boundaries](https://github.com/anastaci1a/localica/issues/28) on physical output. Decoded sample equality does not establish seamless speaker playback.
 
 ## Deferred capabilities
 

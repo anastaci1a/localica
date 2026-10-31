@@ -1,0 +1,11 @@
+const fs=require('fs'),cp=require('child_process');
+const W='/mnt/user/live/projects/liquid-glass', B=W+'/migration-backups/20261023T005817Z', R=W+'/history-extraction.git';
+const run=(cmd,args,cwd)=>cp.execFileSync(cmd,args,{cwd,stdio:'inherit',env:{...process.env,GIT_TERMINAL_PROMPT:'0'}});
+if(fs.existsSync(R)) throw Error('Extraction already exists; refuse overwrite');
+run('git',['init','--bare',R]);
+const rows=JSON.parse(fs.readFileSync(B+'/selected-source-refs.json')).refs;
+for(let i=0;i<rows.length;i+=20)run('git',['fetch','--no-tags',B+'/source-all-refs.bundle',...rows.slice(i,i+20).map(r=>r.ref+':'+r.destination_ref)],R);
+const prs=fs.readFileSync(B+'/all-pull-requests.jsonl','utf8').trim().split('\n').map(JSON.parse).filter(p=>/glass|reconstr|recreat|geometr|optics/i.test(p.title+' '+p.head_ref));
+fs.writeFileSync(B+'/selected-pull-requests.json',JSON.stringify(prs,null,2)+'\n');
+for(let i=0;i<prs.length;i+=15)run('git',['fetch','--no-tags','https://github.com/anastaci1a/localica.git',...prs.slice(i,i+15).map(p=>'refs/pull/'+p.number+'/head:refs/heads/archive/pr-'+p.number)],R);
+run('git',['symbolic-ref','HEAD','refs/heads/main'],R);

@@ -1,0 +1,18 @@
+[
+  {
+    "source": "/mnt/user/live/projects/localica/localica-feedback/dark-glass-lab/PUBLICATION-HANDOFF.md",
+    "logical": "historical-records/dark-glass-lab/PUBLICATION-HANDOFF.md",
+    "sha256": "21f83291b531df8d986aceab6c575cfea0c2083eacd0bca02b9f20fddfa7d832",
+    "object": "research/evidence/objects/21/21f83291b531df8d986aceab6c575cfea0c2083eacd0bca02b9f20fddfa7d832.zst",
+    "bytes": 2468,
+    "role": "verbatim-project-report"
+  },
+  {
+    "source": "/mnt/user/live/projects/localica/localica-feedback/liquid-glass-review/toolbar-round/body-phase-theory/rotation-handoff.md",
+    "logical": "historical-records/liquid-glass-review/toolbar-round/body-phase-theory/rotation-handoff.md",
+    "sha256": "ad03e293838a523b28034975a0de9122917ebb33143f521cdb361bba4a082907",
+    "object": "research/evidence/objects/ad/ad03e293838a523b28034975a0de9122917ebb33143f521cdb361bba4a082907.zst",
+    "bytes": 2003,
+    "role": "verbatim-project-report"
+  }
+]

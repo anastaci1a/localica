@@ -1,0 +1,55 @@
+Collecting numpy==2.4.6 (from -r docs/experiments/reconstruction/requirements.txt (line 1))
+  Downloading numpy-2.4.6-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl.metadata (6.6 kB)
+Collecting scipy==1.17.1 (from -r docs/experiments/reconstruction/requirements.txt (line 2))
+  Downloading scipy-1.17.1-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl.metadata (62 kB)
+Collecting opencv-python-headless==5.0.0.93 (from -r docs/experiments/reconstruction/requirements.txt (line 3))
+  Downloading opencv_python_headless-5.0.0.93-cp37-abi3-manylinux_2_28_x86_64.whl.metadata (19 kB)
+Collecting Pillow==13.0.0 (from -r docs/experiments/reconstruction/requirements.txt (line 4))
+  Downloading pillow-13.0.0-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl.metadata (9.1 kB)
+Collecting CairoSVG==2.5.2 (from -r docs/experiments/reconstruction/requirements.txt (line 5))
+  Downloading CairoSVG-2.5.2-py3-none-any.whl.metadata (2.7 kB)
+Collecting fonttools==4.38.0 (from -r docs/experiments/reconstruction/requirements.txt (line 6))
+  Downloading fonttools-4.38.0-py3-none-any.whl.metadata (138 kB)
+Collecting cairocffi (from CairoSVG==2.5.2->-r docs/experiments/reconstruction/requirements.txt (line 5))
+  Downloading cairocffi-1.7.1-py3-none-any.whl.metadata (3.3 kB)
+Collecting cssselect2 (from CairoSVG==2.5.2->-r docs/experiments/reconstruction/requirements.txt (line 5))
+  Downloading cssselect2-0.10.1-py3-none-any.whl.metadata (2.9 kB)
+Collecting defusedxml (from CairoSVG==2.5.2->-r docs/experiments/reconstruction/requirements.txt (line 5))
+  Downloading defusedxml-0.7.1-py2.py3-none-any.whl.metadata (32 kB)
+Collecting tinycss2 (from CairoSVG==2.5.2->-r docs/experiments/reconstruction/requirements.txt (line 5))
+  Downloading tinycss2-1.5.1-py3-none-any.whl.metadata (3.0 kB)
+Collecting cffi>=1.1.0 (from cairocffi->CairoSVG==2.5.2->-r docs/experiments/reconstruction/requirements.txt (line 5))
+  Downloading cffi-2.1.1-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (2.5 kB)
+Collecting webencodings (from cssselect2->CairoSVG==2.5.2->-r docs/experiments/reconstruction/requirements.txt (line 5))
+  Downloading webencodings-0.6.1-py3-none-any.whl.metadata (3.4 kB)
+Collecting pycparser (from cffi>=1.1.0->cairocffi->CairoSVG==2.5.2->-r docs/experiments/reconstruction/requirements.txt (line 5))
+  Downloading pycparser-3.12-py3-none-any.whl.metadata (9.7 kB)
+Downloading numpy-2.4.6-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl (16.6 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 16.6/16.6 MB 16.9 MB/s eta 0:00:00
+Downloading scipy-1.17.1-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl (35.2 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 35.2/35.2 MB 21.9 MB/s eta 0:00:00
+Downloading opencv_python_headless-5.0.0.93-cp37-abi3-manylinux_2_28_x86_64.whl (61.2 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 61.2/61.2 MB 20.1 MB/s eta 0:00:00
+Downloading pillow-13.0.0-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl (7.1 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 7.1/7.1 MB 17.5 MB/s eta 0:00:00
+Downloading CairoSVG-2.5.2-py3-none-any.whl (45 kB)
+Downloading fonttools-4.38.0-py3-none-any.whl (965 kB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 965.4/965.4 kB 22.4 MB/s eta 0:00:00
+Downloading cairocffi-1.7.1-py3-none-any.whl (75 kB)
+Downloading cssselect2-0.10.1-py3-none-any.whl (15 kB)
+Downloading defusedxml-0.7.1-py2.py3-none-any.whl (25 kB)
+Downloading tinycss2-1.5.1-py3-none-any.whl (28 kB)
+Downloading cffi-2.1.1-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (221 kB)
+Downloading webencodings-0.6.1-py3-none-any.whl (8.7 kB)
+Downloading pycparser-3.12-py3-none-any.whl (62 kB)
+Installing collected packages: webencodings, pycparser, Pillow, numpy, fonttools, defusedxml, tinycss2, scipy, opencv-python-headless, cffi, cssselect2, cairocffi, CairoSVG
+Successfully installed CairoSVG-2.5.2 Pillow-13.0.0 cairocffi-1.7.1 cffi-2.1.1 cssselect2-0.10.1 defusedxml-0.7.1 fonttools-4.38.0 numpy-2.4.6 opencv-python-headless-5.0.0.93 pycparser-3.12 scipy-1.17.1 tinycss2-1.5.1 webencodings-0.6.1
+WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager, possibly rendering your system unusable. It is recommended to use a virtual environment instead: https://pip.pypa.io/warnings/venv. Use the --root-user-action option if you know what you are doing and want to suppress this warning.
+
+[notice] A new release of pip is available: 25.0.1 -> 26.2.2
+[notice] To update, run: pip install --upgrade pip
+........................
+----------------------------------------------------------------------
+Ran 24 tests in 1.466s
+
+OK

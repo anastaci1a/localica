@@ -1,0 +1,6 @@
+
+> build
+> node site.cjs
+
+sh: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+Built 666 public files at /mnt/user/live/projects/liquid-glass/liquid-glass/docs/site; source 8de5a47919f226dd2db312a3a9121c4e7e840498
