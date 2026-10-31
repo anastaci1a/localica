@@ -55,3 +55,35 @@ jobs:
             native-live-evidence/
           if-no-files-found: warn
           retention-days: 14
+  production-smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        api: [26, 36]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: ./.github/actions/focused-android-setup
+      - name: Build the production distribution APK (no audit keep rules)
+        run: ./gradlew assembleDistribution --no-daemon --max-workers=2
+      - uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
+        with:
+          api-level: ${{ matrix.api }}
+          target: ${{ matrix.api == 36 && 'default' || 'google_apis' }}
+          arch: x86_64
+          profile: pixel_2
+          emulator-options: -no-window -gpu ${{ matrix.api == 36 && 'lavapipe' || 'swiftshader_indirect' }} -no-snapshot -noaudio -no-boot-anim -memory 3072
+          disable-animations: ${{ matrix.api < 36 }}
+          script: |
+            sleep 30
+            bash .github/audit-distribution-smoke.sh
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: r8-production-smoke-api-${{ matrix.api }}
+          path: |
+            distribution-smoke-logcat.txt
+            app/build/outputs/mapping/distribution/
+          if-no-files-found: warn
+          retention-days: 14
