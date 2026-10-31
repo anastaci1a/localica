@@ -54,6 +54,8 @@ class ArtworkOffMainTest {
         }
         compose.setContent { MediaArtwork(listOf("off-main"), Modifier.size(50.dp), provider, sizeHint = 128) }
         compose.waitUntil(5000) { threads.isNotEmpty() }
-        assertEquals(listOf(false), threads.toList())
+        // The hint and the measured bucket can differ by display density, so more than
+        // one load is valid here; every load must still run off the main thread.
+        assertTrue(threads.isNotEmpty() && threads.none { it })
     }
 }
