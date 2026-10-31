@@ -1,0 +1,86 @@
+name: Perf grid cell structure (not release)
+'on':
+  push:
+    branches: [perf/grid-cell-structure]
+permissions:
+  contents: read
+jobs:
+  protocol_contracts:
+    uses: ./.github/workflows/tooling-contracts.yml
+  jvm:
+    needs: protocol_contracts
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: ./.github/actions/focused-android-setup
+      - name: JVM unit tests
+        run: ./gradlew testDebugUnitTest --no-daemon --max-workers=2
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: perf-grid-cell-structure-jvm
+          path: |
+            app/build/reports/
+            app/build/test-results/
+            prototype-runner-environment.txt
+          if-no-files-found: error
+          retention-days: 14
+  native:
+    needs: protocol_contracts
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - api: 26
+            target: google_apis
+            gpu: swiftshader_indirect
+            disable_animations: true
+            display: reset
+          - api: 36
+            target: default
+            gpu: lavapipe
+            disable_animations: false
+            display: compact
+    env:
+      TEST_API: ${{ matrix.api }}
+      SELECTORS: io.github.anastaci1a.localica.ArtistAlbumFilterRangeTest,io.github.anastaci1a.localica.ArtistAlbumSelectionTest,io.github.anastaci1a.localica.ArtistCollectionActionsTest,io.github.anastaci1a.localica.ArtistSelectionPlacementTest,io.github.anastaci1a.localica.BrowseArtworkTest,io.github.anastaci1a.localica.BrowseCellWorkTest,io.github.anastaci1a.localica.BrowseInteractionTest,io.github.anastaci1a.localica.BrowseLoadingRevealTest,io.github.anastaci1a.localica.BrowseOrderViewportTest,io.github.anastaci1a.localica.BrowsePinchLayersTest,io.github.anastaci1a.localica.BrowsePinchTest,io.github.anastaci1a.localica.BrowsePinchTransactionTest,io.github.anastaci1a.localica.BrowsePositionTest,io.github.anastaci1a.localica.BrowseRetentionTest,io.github.anastaci1a.localica.BrowseScrollContinuityTest,io.github.anastaci1a.localica.CollectionControlsBackdropTest,io.github.anastaci1a.localica.CollectionDetailTest,io.github.anastaci1a.localica.CollectionHeaderPinchFrameTest,io.github.anastaci1a.localica.CollectionNavigationTest,io.github.anastaci1a.localica.CollectionSelectionTest,io.github.anastaci1a.localica.CompactCollectionArtworkTest,io.github.anastaci1a.localica.CurrentSongHighlightGeometryTest,io.github.anastaci1a.localica.DragReorderTest,io.github.anastaci1a.localica.FilterBackdropTest,io.github.anastaci1a.localica.GalleryGeometryTest,io.github.anastaci1a.localica.GalleryMenuInputTest,io.github.anastaci1a.localica.GalleryNavigationTest,io.github.anastaci1a.localica.GallerySkeletonGeometryTest,io.github.anastaci1a.localica.GlassForegroundTest,io.github.anastaci1a.localica.GlassMenuContentTest,io.github.anastaci1a.localica.GlassMenuForegroundTest,io.github.anastaci1a.localica.GlassMenuViewportTouchTest,io.github.anastaci1a.localica.GlassRendererSwitchingTest,io.github.anastaci1a.localica.HomeSelectionTest,io.github.anastaci1a.localica.KeyedDragTest,io.github.anastaci1a.localica.LibraryFilterPresentationTest,io.github.anastaci1a.localica.ListBackTest,io.github.anastaci1a.localica.ListControlsTest,io.github.anastaci1a.localica.ListDensityGeometryTest,io.github.anastaci1a.localica.ListReturnControlsTest,io.github.anastaci1a.localica.ListSearchTest,io.github.anastaci1a.localica.LoadingMaterialOpacityTest,io.github.anastaci1a.localica.ModalGestureTakeoverTest,io.github.anastaci1a.localica.NavigationTest,io.github.anastaci1a.localica.PinchArtworkContinuityTest,io.github.anastaci1a.localica.PinchItemPlacementLifecycleTest,io.github.anastaci1a.localica.PinchReadbackLifetimeTest,io.github.anastaci1a.localica.PinchReleaseHandoffTest,io.github.anastaci1a.localica.PinchRetainedHighlightTest,io.github.anastaci1a.localica.PinnedHomePreparationTest,io.github.anastaci1a.localica.PlaylistArtworkRestorationTest,io.github.anastaci1a.localica.PlaylistCoverActionTest,io.github.anastaci1a.localica.PlaylistDetailPresentationTest,io.github.anastaci1a.localica.PlaylistSelectionPlacementTest,io.github.anastaci1a.localica.QueueDragAnchorTest,io.github.anastaci1a.localica.QueueFollowingTest,io.github.anastaci1a.localica.QueueSelectionPlacementTest,io.github.anastaci1a.localica.QuietActionIconTest,io.github.anastaci1a.localica.ScopedSearchOpticsTest,io.github.anastaci1a.localica.SearchSortResetTest,io.github.anastaci1a.localica.SelectionLensTest,io.github.anastaci1a.localica.SelectionMotionRenderingTest,io.github.anastaci1a.localica.SelectionPanelClearanceTest,io.github.anastaci1a.localica.SelectionPanelReleaseTest,io.github.anastaci1a.localica.SharedKeyedDragRefreshTest,io.github.anastaci1a.localica.SongDragViewportTest,io.github.anastaci1a.localica.TagEditorThemeInheritanceTest,io.github.anastaci1a.localica.TracklistPinchIntegrationTest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: ./.github/actions/focused-android-setup
+      - name: Compile grid cell structure contracts
+        run: ./gradlew assembleDebug assembleDebugAndroidTest --no-daemon --max-workers=2
+      - uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
+        with:
+          api-level: ${{ matrix.api }}
+          target: ${{ matrix.target }}
+          arch: x86_64
+          profile: pixel_2
+          emulator-options: -no-window -gpu ${{ matrix.gpu }} -no-snapshot -noaudio -no-boot-anim -memory 3072
+          disable-animations: ${{ matrix.disable_animations }}
+          script: |
+            if [[ '${{ matrix.display }}' == reset ]]; then adb shell wm size reset; adb shell wm density reset; else adb shell wm size 720x1280; adb shell wm density 280; fi
+            sleep 60
+            bash .github/test-evidence/environment.sh >> prototype-runner-environment.txt
+            bash .github/run-selection-preconditions.sh
+      - name: Capture host diagnostics on emulator failure
+        if: failure()
+        run: |
+          free -h
+          df -h
+          sudo dmesg --ctime | tail -100
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: perf-grid-cell-structure-api-${{ matrix.api }}
+          path: |
+            app/build/reports/
+            app/build/test-results/
+            app/build/outputs/androidTest-results/
+            app/build/outputs/connected_android_test_additional_output/
+            selection-evidence/
+            prototype-runner-environment.txt
+          if-no-files-found: error
+          retention-days: 14
