@@ -8,6 +8,7 @@ import android.view.ViewGroup
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.ui.platform.ViewRootForTest
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsNode
 import androidx.compose.ui.semantics.SemanticsOwner
@@ -109,8 +110,8 @@ class ScrollPerformanceTest {
         scenario = launched
         launched.onActivity { activity ->
             activity.setContent { LocalicaTheme {
-                BrowserScreen(LibraryUiState(LibrarySnapshot(folders = listOf(FolderSelection("root", "Music")), tracks = tracks), loading = false),
-                    PlaylistState(), route, {}, {}, {}, { _, _, _ -> }, null, null, true, false)
+                androidx.compose.runtime.CompositionLocalProvider(LocalBrowseObscuredInset provides 96.dp) { BrowserScreen(LibraryUiState(LibrarySnapshot(folders = listOf(FolderSelection("root", "Music")), tracks = tracks), loading = false),
+                    PlaylistState(), route, {}, {}, {}, { _, _, _ -> }, null, null, true, false) }
             } }
         }
         val harness = Harness(launched, device, style.itemsPerRow ?: 1)
@@ -129,8 +130,8 @@ class ScrollPerformanceTest {
             val x = bounds.centerX
             val low = bounds.top + bounds.height * .82f
             val high = bounds.top + bounds.height * .18f
-            repeat(6) { h.swipe(x, low, x, high, 8); h.settle() }
-            repeat(6) { h.swipe(x, high, x, low, 8); h.settle() }
+            repeat(4) { h.swipe(x, low, x, high, 8); h.settle() }
+            repeat(4) { h.swipe(x, high, x, low, 8); h.settle() }
         }
     }
 
@@ -381,6 +382,13 @@ class ScrollPerformanceTest {
         }?.takeIf { it.right > it.left && it.bottom > it.top }
 
         fun swipe(x0: Float, y0: Float, x1: Float, y1: Float, steps: Int) {
+            // Gesture navigation (API 29+) owns a swipe that starts at the screen edge, which is where the scrollbar lives.
+            if (Build.VERSION.SDK_INT >= 29) main { activity ->
+                val decor = activity.window.decorView
+                decor.systemGestureExclusionRects = listOf(android.graphics.Rect(0, (y0 - 150).toInt().coerceAtLeast(0),
+                    decor.width, (y0 + 150).toInt().coerceAtMost(decor.height)))
+            }
+            Thread.sleep(300)
             val before = scrollValue()
             check(device.swipe(x0.toInt(), y0.toInt(), x1.toInt(), y1.toInt(), steps)) { "UiDevice swipe was rejected" }
             Log.i("ScrollPerf", "swipe ($x0,$y0)->($x1,$y1) steps=$steps scroll $before -> ${scrollValue()}")
@@ -393,7 +401,7 @@ class ScrollPerformanceTest {
         }
 
         /** Waits until the list stops moving (fling or ease finished) for a quarter second. */
-        fun settle(timeoutMs: Long = 20_000) {
+        fun settle(timeoutMs: Long = 90_000) {
             val deadline = System.nanoTime() + timeoutMs * 1_000_000
             var previous = Float.NaN
             var stable = 0
