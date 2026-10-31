@@ -4,7 +4,8 @@ set -euxo pipefail
 trap 'adb logcat -d -v threadtime > distribution-smoke-logcat.txt || true' EXIT
 pkg=io.github.anastaci1a.localica.debug
 apk=app/build/outputs/apk/distribution/app-distribution.apk
-adb logcat -c
+adb wait-for-device
+adb logcat -c || true
 adb install -r "$apk"
 adb shell pm grant "$pkg" android.permission.POST_NOTIFICATIONS || true
 adb shell am start -W -n "$pkg/io.github.anastaci1a.localica.MainActivity"
