@@ -106,6 +106,27 @@ class ListeningStatisticsTest {
         }
     }
 
+    @Test fun publishedSnapshotCarriesItsTrackLookupPreparedOffTheCollector() = runBlocking {
+        val collector = Thread.currentThread()
+        val sourceTracks = List(3) { track(it) }
+        val checkedTracks = object : AbstractList<Track>() {
+            override val size get() = sourceTracks.size
+            override fun get(index: Int): Track {
+                assertNotSame("The ID lookup must not be built on the collector", collector, Thread.currentThread())
+                return sourceTracks[index]
+            }
+        }
+        Executors.newSingleThreadExecutor().asCoroutineDispatcher().use { dispatcher ->
+            val result = flowOf(LibrarySnapshot(tracks = checkedTracks))
+                .withListeningStatistics(flowOf(ListeningStatistics()), dispatcher).first()
+            assertSame(collector, Thread.currentThread())
+            assertSame(checkedTracks, result.tracks)
+            // A synchronous UI projection reads the prepared lookup without touching the track list.
+            assertSame(sourceTracks[1], result.tracksById.getValue(sourceTracks[1].id))
+            assertEquals(sourceTracks.map { it.id }.toSet(), result.tracksById.keys)
+        }
+    }
+
     @Test fun collectionCancellationReleasesBothUpstreams() = runBlocking {
         val libraryStopped = CompletableDeferred<Unit>()
         val statisticsStopped = CompletableDeferred<Unit>()

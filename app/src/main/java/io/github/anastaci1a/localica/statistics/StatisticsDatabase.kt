@@ -28,10 +28,11 @@ data class ListeningStatistics(val tracks: Map<String, Long> = emptyMap(), val p
     fun applyTo(snapshot: LibrarySnapshot): LibrarySnapshot = snapshot.withPlayCounts(tracks, playlists)
 }
 
-/** Both the statistics map preparation and track overlay stay off the UI collector. */
+/** Both the statistics map preparation and track overlay stay off the UI collector. Each published
+ * snapshot also carries its prepared ID lookup, so synchronous UI projections (queue opening) never build it on Main. */
 internal fun Flow<LibrarySnapshot>.withListeningStatistics(statistics: Flow<ListeningStatistics>,
     dispatcher: CoroutineDispatcher = Dispatchers.Default): Flow<LibrarySnapshot> =
-    combine(this, statistics) { snapshot, counts -> counts.applyTo(snapshot) }.flowOn(dispatcher)
+    combine(this, statistics) { snapshot, counts -> counts.applyTo(snapshot).also { it.tracksById } }.flowOn(dispatcher)
 
 /** App-owned writes survive service teardown. Retry the same event ID without double counting. */
 class StatisticsRepository(private val dao: StatisticsDao,
