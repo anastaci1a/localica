@@ -755,10 +755,9 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     var info by remember { mutableStateOf<SongInformationRequest?>(null) }
     val informationLookupOwner = orderOwner
     val currentInformationLookupOwner by rememberUpdatedState(informationLookupOwner)
-    val collectionLookup = key(informationLookupOwner) {
-        rememberCollectionLookup(library.snapshot, playlists.playlists, sorts, queryDispatcher) { item ->
-            onOpen(item)
-        }
+    val collectionLookup = rememberOwnedCollectionLookup(informationLookupOwner,
+        library.snapshot, playlists.playlists, sorts, queryDispatcher) { item ->
+        onOpen(item)
     }
     val pageColors = MaterialTheme.colorScheme
     MaterialTheme(colorScheme = if (artDetail) pageColors.copy(onSurface = collectionInk, onSurfaceVariant = collectionInk.copy(alpha = .65f),
