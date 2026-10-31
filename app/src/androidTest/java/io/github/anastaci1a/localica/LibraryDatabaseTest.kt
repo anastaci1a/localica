@@ -5,6 +5,7 @@ import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import io.github.anastaci1a.localica.library.*
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.flow.first
@@ -154,7 +155,7 @@ class LibraryDatabaseTest {
                 assertEquals("Renamed", next.tracks.single().title)
                 assertNotNull(next.searchIndex)
                 assertTrue(delivered.tryReceive().isFailure)
-            } finally { collector.cancel() }
+            } finally { collector.cancelAndJoin() } // The Room query must finish before close.
         } finally { database.close() }
     }
 
