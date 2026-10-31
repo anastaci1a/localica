@@ -5,9 +5,10 @@ import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.*
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.ui.GlassTone
+import io.github.anastaci1a.localica.ui.GlassRimPreparation
 
 internal fun androidx.compose.ui.graphics.drawscope.DrawScope.drawOriginalGlassRim(
-    bounds: androidx.compose.ui.geometry.Rect, radius: Float, path: Path? = null, tone: GlassTone = GlassTone(), opacity: Float = 1f) {
+    bounds: androidx.compose.ui.geometry.Rect, radius: Float, path: Path? = null, tone: GlassTone = GlassTone(), opacity: Float = 1f, observe: ((GlassRimPreparation) -> Unit)? = null) {
     val white = tone.color(Color.White)
     val black = tone.color(Color.Black)
     // Diagonally opposed highlights taper into quiet, slightly shaded corners.
@@ -23,7 +24,11 @@ internal fun androidx.compose.ui.graphics.drawscope.DrawScope.drawOriginalGlassR
         .375f to black.copy(alpha = .11f), .5f to Color.Transparent,
         .625f to Color.Transparent, .75f to Color.Transparent, .875f to black.copy(alpha = .11f),
         1f to Color.Transparent, center = bounds.center)
-    val silhouette = path ?: Path().apply { addRoundRect(RoundRect(bounds, CornerRadius(radius))) }
+    observe?.invoke(GlassRimPreparation.BrushPair)
+    val silhouette = path ?: Path().apply {
+        addRoundRect(RoundRect(bounds, CornerRadius(radius)))
+        observe?.invoke(GlassRimPreparation.RoundedPath)
+    }
     clipPath(silhouette) {
         drawPath(silhouette, shine, alpha = opacity, style = Stroke(2.6.dp.toPx()))
         drawPath(silhouette, shade, alpha = opacity, style = Stroke(1.4.dp.toPx()))

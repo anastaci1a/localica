@@ -3,8 +3,11 @@ package io.github.anastaci1a.localica.ui
 import androidx.compose.ui.geometry.*
 import androidx.compose.ui.graphics.*
 
+/** Explicit wrapper/path creations only, not native shader memory or draw cost. */
+internal enum class GlassRimPreparation { BrushPair, RoundedPath }
+
 /** One draw owner's current preparation; paths are replaced, never rewritten after publication. */
-internal class GlassRimCache {
+internal class GlassRimCache(private val observe: ((GlassRimPreparation) -> Unit)? = null) {
     private var center: Offset? = null
     private var tone: GlassTone? = null
     private var brushes: GlassRimBrushes? = null
@@ -18,6 +21,7 @@ internal class GlassRimCache {
             this.center = center
             this.tone = tone
             brushes = it
+            observe?.invoke(GlassRimPreparation.BrushPair)
         }
     }
 
@@ -27,6 +31,7 @@ internal class GlassRimCache {
             this.bounds = bounds
             this.radius = radius
             path = it
+            observe?.invoke(GlassRimPreparation.RoundedPath)
         }
     }
 }
