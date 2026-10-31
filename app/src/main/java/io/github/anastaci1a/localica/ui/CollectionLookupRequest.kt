@@ -38,3 +38,11 @@ internal fun rememberCollectionLookup(snapshot: LibrarySnapshot, playlists: List
         }, { latestOpen.value(it) })
     }
 }
+
+@Composable
+internal fun rememberOwnedCollectionLookup(owner: Any, snapshot: LibrarySnapshot,
+    playlists: List<ManualPlaylist>, sorts: BrowseSortSnapshot,
+    dispatcher: CoroutineDispatcher = Dispatchers.Default,
+    onOpen: (BrowserItem) -> Unit): CollectionLookupHandle = key(owner) {
+    rememberCollectionLookup(snapshot, playlists, sorts, dispatcher, onOpen)
+}
