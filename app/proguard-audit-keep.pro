@@ -11,3 +11,8 @@
 # members, and the test APK is shrunk without the app's name mapping.
 -dontobfuscate
 -keep class io.github.anastaci1a.localica.** { *; }
+# Test code calls Room statics and builder members the app itself never uses
+# (NoSuchMethodError Room.databaseBuilder / inMemoryDatabaseBuilder in run 41235326852).
+-keep class androidx.room.Room { *; }
+-keep class androidx.room.RoomDatabase { *; }
+-keep class androidx.room.RoomDatabase$Builder { *; }
