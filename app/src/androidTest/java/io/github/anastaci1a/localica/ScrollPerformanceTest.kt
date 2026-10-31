@@ -140,9 +140,11 @@ class ScrollPerformanceTest {
         runScenario("scrollbar-drag", harness, prepare = { it.scrollToIndex(0); it.settle() }) { h ->
             val bar = h.nodeBounds { it.config.getOrNull(SemanticsProperties.TestTag) == "browse-scrollbar" }
             val x = bar.centerX
-            val top = bar.top + 8f
+            // Stay clear of the status-bar pull-down zone: a drag starting there never reaches the app.
+            val top = maxOf(bar.top, h.systemBarTop().toFloat()) + 24f
             val bottom = bar.bottom - 8f
             h.swipe(x, top, x, bottom, 300); h.settle()
+            check(h.scrollValue() > 1f) { "Scrollbar drag did not move the list" }
             h.swipe(x, bottom, x, top, 300); h.settle()
         }
     }
@@ -344,6 +346,10 @@ class ScrollPerformanceTest {
             all.firstOrNull { it.tag() == "browser-list" }?.config?.getOrNull(SemanticsProperties.VerticalScrollAxisRange)?.value?.invoke() ?: Float.MAX_VALUE
         }
         fun window() = main { it.window }
+        fun systemBarTop(): Int = main {
+            androidx.core.view.ViewCompat.getRootWindowInsets(it.window.decorView)
+                ?.getInsets(androidx.core.view.WindowInsetsCompat.Type.systemBars())?.top ?: 0
+        }
         fun refreshRate(): Float = main {
             @Suppress("DEPRECATION") it.windowManager.defaultDisplay.refreshRate
         }
