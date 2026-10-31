@@ -13,6 +13,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.withStarted
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.first
 import androidx.lifecycle.ViewModel
@@ -23,6 +24,8 @@ import io.github.anastaci1a.localica.playback.PlaybackConnection
 import io.github.anastaci1a.localica.ui.LibraryViewModel
 import io.github.anastaci1a.localica.ui.LocalicaScreen
 import io.github.anastaci1a.localica.ui.LocalicaTheme
+
+private const val STARTUP_SCAN_DELAY_MILLIS = 1_000L
 
 class MainActivity : ComponentActivity() {
     private lateinit var model: LibraryViewModel
@@ -47,7 +50,11 @@ class MainActivity : ComponentActivity() {
         if (scannerRequest == 0 && (scanPreferences.scanOnLaunch || scanPreferences.fullScanOnLaunch)) {
             lifecycleScope.launch {
                 model.library.first { !it.loading }
-                model.scanOnLaunch(scanPreferences.scanOnLaunch, scanPreferences.fullScanOnLaunch)
+                // The first library frames (browse query, loading reveal) need Main; the scan service
+                // start, its notification and progress follow them. Start only while visible.
+                kotlinx.coroutines.android.awaitFrame()
+                kotlinx.coroutines.delay(STARTUP_SCAN_DELAY_MILLIS)
+                lifecycle.withStarted { model.scanOnLaunch(scanPreferences.scanOnLaunch, scanPreferences.fullScanOnLaunch) }
             }
         }
         setContent {
