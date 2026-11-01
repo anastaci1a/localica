@@ -1,5 +1,9 @@
 package io.github.anastaci1a.localica
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.semantics.SemanticsActions
@@ -26,6 +30,29 @@ class QueueBrowsingTest {
         compose.runOnIdle { assertTrue(minimized) }
         compose.onNodeWithContentDescription("Queue actions").performClick()
         compose.onNodeWithText("Delete", substring = false).assertIsDisplayed()
+    }
+
+    /** #500: the drawer removes QueueScreen while closed. A queue created meanwhile must not
+     * reopen onto the previously browsed queue's restored navigation. */
+    @Test fun queueCreatedWhileDrawerClosedOpensOntoTheNewQueue() {
+        val previous = QueueEdits.create(listOf(Track("old", "Old song", fileName = "old.mp3", relativePath = "old.mp3")), 0, "Old")
+        val created = QueueEdits.create(listOf(Track("new", "New song", fileName = "new.mp3", relativePath = "new.mp3")), 0, "New")
+        var state by mutableStateOf(QueueUiState(QueueLibrary(listOf(previous), previous.id), loading = false))
+        var mounted by mutableStateOf(true)
+        compose.setContent { LocalicaTheme {
+            val drawer = rememberSaveableStateHolder()
+            if (mounted) drawer.SaveableStateProvider("player-queue") { QueueScreen(state, null) }
+        } }
+        compose.waitUntil(5000) { compose.onAllNodesWithTag("media-${previous.entries[0].id}").fetchSemanticsNodes().isNotEmpty() }
+        compose.runOnIdle { mounted = false }
+        compose.waitForIdle()
+        compose.runOnIdle {
+            state = QueueUiState(QueueLibrary(listOf(previous, created), created.id), loading = false, browsedId = created.id)
+            mounted = true
+        }
+        compose.onNodeWithText("2. New").assertIsDisplayed()
+        compose.waitUntil(5000) { compose.onAllNodesWithTag("media-${created.entries[0].id}").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("media-${previous.entries[0].id}").assertDoesNotExist()
     }
 
     @Test fun largeQueueSelectorStartsAtPlaybackAndTruncatesConfirmationNames() {
