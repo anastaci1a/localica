@@ -63,7 +63,10 @@ fun QueueScreen(state: QueueUiState, controller: QueueController?, library: Libr
     val duration = remember(active?.entries) {
         active?.let { formatTime(it.entries.mapNotNull { entry -> entry.track.durationMs }.takeIf { it.isNotEmpty() }?.sum()) }
     }
-    var browsing by rememberSaveable(active?.id, saver = navigationStateSaver { state -> state.takeIf { it.active == MainTab.Queues } }) {
+    // Restoration ignores rememberSaveable inputs, and the drawer removes this screen while
+    // closed. Key the saved navigation by queue so a queue activated meanwhile (#500) cannot
+    // reopen onto the previously browsed queue's rows.
+    var browsing by rememberSaveable(active?.id, key = "queue-navigation:${active?.id.orEmpty()}", saver =navigationStateSaver { state -> state.takeIf { it.active == MainTab.Queues } }) {
         mutableStateOf(NavigationState(MainTab.Queues, mapOf(MainTab.Queues to listOf(BrowseRoute(MainTab.Queues,
             MediaRef(MediaKind.Queue, active?.id.orEmpty()), active?.name ?: "Queue")))))
     }
