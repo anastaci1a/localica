@@ -3,7 +3,6 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import {root,words,parser,proseErrors,outputPath,check} from './docs.mjs';
-import {copySite} from './publish.mjs';
 
 test('prose limits count visible labels and catch lazy list continuations',()=>{
  assert.equal(words('[two words](https://example.com/one) `value`'),3);
@@ -21,24 +20,6 @@ test('routes keep documentation within the owned site',()=>{
  assert.equal(outputPath('docs/README.md'),'guide/index.html');
  assert.equal(outputPath('agents/README.md'),'contributors/index.html');
  assert.equal(outputPath('docs/interface.md'),'guide/interface.html');
-});
-test('publication preserves unrelated deployed files',()=>{
- fs.mkdirSync(path.join(root,'build'),{recursive:true});
- const temp=fs.mkdtempSync(path.join(root,'build/publish-test-'));
- try{
-  const checkout=path.join(temp,'pages'),source=path.join(temp,'source');
-  fs.mkdirSync(path.join(checkout,'docs'),{recursive:true});fs.mkdirSync(source);
-  fs.writeFileSync(path.join(checkout,'.git'),'gitdir: fixture');
-  fs.writeFileSync(path.join(checkout,'index.html'),'existing root');
-  fs.mkdirSync(path.join(checkout,'other'));fs.writeFileSync(path.join(checkout,'other/keep'),'unrelated');
-  fs.writeFileSync(path.join(checkout,'docs/stale.html'),'old');
-  fs.writeFileSync(path.join(source,'manifest.json'),JSON.stringify({pages:['index.html']}));
-  fs.writeFileSync(path.join(source,'index.html'),'new docs');copySite(source,checkout);
-  assert.equal(fs.readFileSync(path.join(checkout,'index.html'),'utf8'),'existing root');
-  assert.equal(fs.readFileSync(path.join(checkout,'other/keep'),'utf8'),'unrelated');
-  assert.equal(fs.readFileSync(path.join(checkout,'docs/index.html'),'utf8'),'new docs');
-  assert.equal(fs.existsSync(path.join(checkout,'docs/stale.html')),false);
- }finally{fs.rmSync(temp,{recursive:true,force:true});}
 });
 test('all maintained source links and heading fragments resolve',()=>assert.deepEqual(check().errors,[]));
 

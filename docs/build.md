@@ -167,8 +167,6 @@ npm run build --prefix tools/docs
 
 Open `build/docs-site/docs/index.html` to review the site locally. No Android SDK, signing key or device is needed for these checks. Mathematical display blocks render to HTML and MathML during the build. Fonts and styles are local assets.
 
-The [documentation workflow](../.github/workflows/documentation.yml) checks pull requests and publishes main to the existing `gh-pages` branch. It replaces only the `docs/` directory, preserving all other deployed files.
-
-The site lives at [Localica documentation](https://anastaci1a.github.io/localica/docs/). Maintained-document links resolve to rendered pages. Source and historical links remain explicit GitHub links. No hosting settings or release tags change.
+The [documentation workflow](../.github/workflows/documentation.yml) runs these checks for pull requests and pushes to main, and uploads the built site as a workflow artifact. Nothing is published.
 
 [Writing rules](../DOCUMENTATION.md) define the maintained inventory and historical exclusions. Automated checks cover prose limits, local links and fragments, headings, image descriptions and rendered navigation. Review contract meaning and remote evidence separately.
