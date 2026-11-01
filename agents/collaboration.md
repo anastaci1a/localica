@@ -15,6 +15,8 @@ A task-specific freeze or no-release instruction overrides standing approval. [V
 
 Read current issue comments, branches and `owner:dot` / `owner:codex` labels before claiming work. Use one ownership label and `in progress`. Coordinate overlapping shared-code edits before proceeding.
 
+Label every new issue when you file it: one type label (`bug`, `enhancement`, `documentation` or `maintenance`) and every matching `area:` label. Remove `in progress` when the issue closes.
+
 Preserve uncommitted work and frozen candidates. Branch from current remote main or the agreed current-history SHA. Check ancestry before integration. Never reintegrate obsolete history.
 
 ## Communication and completion
