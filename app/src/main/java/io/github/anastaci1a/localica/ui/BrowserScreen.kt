@@ -254,7 +254,8 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     var collectionView by remember { mutableStateOf(false) }
     var collectionMenu by remember { mutableStateOf(false) }
     val collectionMenuAnchor = rememberGlassAnchor()
-    val gridState = rememberLazyGridState()
+    // A filter switch is a hard reset: fresh scroll state, never items carried across filters.
+    val gridState = key(route.filter) { rememberLazyGridState() }
     val artistFilterRange = remember(route.key) { ArtistFilterRange() }
     fun chooseArtistAlbums(ids: List<String>) {
         if (ids == selectedAlbums) return
@@ -389,7 +390,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
         val child = measurable.measure(constraints.copy(minHeight = height, maxHeight = height))
         layout(child.width, height) { child.placeRelative(0, 0) }
     }
-    val pinchMotion = remember(route.key) { BrowsePinchMotion() }
+    val pinchMotion = remember(route.key, route.filter) { BrowsePinchMotion() }
     val pinchHeader = if (artDetail) remember(pinchMotion, gridState) { CollectionPinchHeader(pinchMotion, gridState) } else null
     val headerFrameObserver = LocalCollectionHeaderFrameObserver.current
     SideEffect { pinchMotion.header = pinchHeader; pinchHeader?.observer = headerFrameObserver }
@@ -844,6 +845,9 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                 rememberGalleryLoadingTextMetrics(displayedStyle, columns) else null
             CompositionLocalProvider(LocalLoadingShimmer provides shimmer, LocalLoadingShimmerActivity provides loadingActivity,
                 LocalReducedMotion provides loadingReducedMotion, LocalGalleryLoadingTextMetrics provides galleryLoadingText) {
+            // Several filters share item keys; a fresh subtree stops bounds/item animation and the
+            // retained pinch overlay from treating the same keys as moved items.
+            key(route.filter) {
             if (loadedResult == null && !artDetail) BrowseLoadingViewport(displayedStyle, cellGeometry,
                 viewportWidth, constraints.maxHeight, if (showFilters || showSearchPill) pillSlotHeight else 0.dp,
                 popupDismiss == null && displayedStyle.extraInfo != ExtraInfo.None, artistOnlyLoading)
@@ -1090,6 +1094,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
             // Passive draw producer only: do not wrap the grid or install a new
             // hit path. SelectionViewport supplies the shared clip/overscroll.
             if (pinchHeader != null) CollectionHeaderActionPresentation(pinchHeader, collectionSource)
+            }
             }
             }
             CompositionLocalProvider(LocalFrostedBackdrop provides
