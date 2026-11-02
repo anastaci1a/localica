@@ -78,6 +78,9 @@ class BitmapLifetimeStressTest {
                     val blurred = withTimeoutOrNull(local.nextLong(1, 12)) { blurGlassSnapshot(source.asImageBitmap(), 6f + local.nextInt(30)) }
                     if (blurred == null) cancelledBlurs.incrementAndGet() else blurs.incrementAndGet()
                     readGlassPixels(source.asImageBitmap(), 1 + local.nextInt(4))
+                    // Cancellation checks do not suspend. Leave Default workers available
+                    // for the interrupted blend's own blur between stress iterations.
+                    yield()
                 }
             }
         }
@@ -85,6 +88,7 @@ class BitmapLifetimeStressTest {
             while (isActive) {
                 decodeArtwork(encoded, 64 + Random.nextInt(256))?.also { if (Build.VERSION.SDK_INT >= 28) it.prepareToDraw() }
                 decodes.incrementAndGet()
+                yield()
             }
         }
         val deadline = SystemClock.uptimeMillis() + 40_000
