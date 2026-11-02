@@ -36,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.platform.testTag
+import kotlin.math.pow
 import kotlin.math.roundToInt
 
 /** Captions share the real slider-track inset and remain visually attached to it. */
@@ -49,9 +50,9 @@ import kotlin.math.roundToInt
 /** Keep a slider's label, track and captions one layout unit in spaced settings lists. */
 @Composable internal fun SliderPreference(label: String, value: Float, onValueChange: (Float) -> Unit,
     modifier: Modifier = Modifier, valueRange: ClosedFloatingPointRange<Float> = 0f..1f, steps: Int = 0,
-    low: String? = null, high: String? = null, description: String? = null) {
+    low: String? = null, high: String? = null, description: String? = null, curve: Float = 1f) {
     SliderPreferenceFrame(label, low, high, description) {
-        InterfaceSlider(value, onValueChange, modifier, valueRange, steps)
+        InterfaceSlider(value, onValueChange, modifier, valueRange, steps, curve = curve)
     }
 }
 
@@ -62,16 +63,25 @@ internal fun controlValue(fraction: Float, range: ClosedFloatingPointRange<Float
     return range.start + snapped * (range.endInclusive - range.start)
 }
 
+/** Track position of a stored value: position = fraction^(1/curve), so a curve above 1 gives the low end more travel. */
+internal fun sliderPosition(value: Float, range: ClosedFloatingPointRange<Float>, curve: Float): Float {
+    val fraction = ((value - range.start) / (range.endInclusive - range.start).coerceAtLeast(.001f)).coerceIn(0f, 1f)
+    return fraction.pow(1f / curve)
+}
+
+/** Stored value at a track position; the inverse of [sliderPosition]. */
+internal fun sliderValue(position: Float, range: ClosedFloatingPointRange<Float>, curve: Float): Float =
+    range.start + position.coerceIn(0f, 1f).pow(curve) * (range.endInclusive - range.start).coerceAtLeast(.001f)
+
 @Composable
 internal fun InterfaceSlider(value: Float, onValueChange: (Float) -> Unit, modifier: Modifier = Modifier,
-    valueRange: ClosedFloatingPointRange<Float> = 0f..1f, steps: Int = 0, enabled: Boolean = true) {
+    valueRange: ClosedFloatingPointRange<Float> = 0f..1f, steps: Int = 0, enabled: Boolean = true, curve: Float = 1f) {
     val enabledProgress by animateControlStateFloat(if (enabled) 1f else 0f, enabled, "Slider availability")
     val actualSteps = if (steps == 0 && valueRange.start == 0f && valueRange.endInclusive == 1f) 19 else steps
     val rtl = androidx.compose.ui.platform.LocalLayoutDirection.current == androidx.compose.ui.unit.LayoutDirection.Rtl
     val current by rememberUpdatedState(value)
     val change by rememberUpdatedState(onValueChange)
     val haptics by rememberUpdatedState(rememberControlHaptics())
-    val span = (valueRange.endInclusive - valueRange.start).coerceAtLeast(.001f)
     var finger by remember { mutableStateOf<Float?>(null) }
     var contact by remember { mutableStateOf(false) }
     var pressure by remember { mutableFloatStateOf(0f) }
@@ -79,7 +89,7 @@ internal fun InterfaceSlider(value: Float, onValueChange: (Float) -> Unit, modif
     val active by animateFloatAsState(if (contact) 1f else 0f,
         tween(if (reduced) 0 else 180), label = "Slider contact")
     val expansion = LocalGlassAppearance.current.controlExpansion
-    val shown by animateFloatAsState(finger ?: ((value - valueRange.start) / span).coerceIn(0f, 1f),
+    val shown by animateFloatAsState(finger ?: sliderPosition(value, valueRange, curve),
         if (finger != null || reduced) androidx.compose.animation.core.snap() else spring(1f, 650f), label = "Slider position")
     val body = rememberGlassBody({ shown }, { pressure }, { if (contact) 1f else 0f })
     val parent = rememberControlScrollContext()
@@ -90,7 +100,7 @@ internal fun InterfaceSlider(value: Float, onValueChange: (Float) -> Unit, modif
             val inset = 14.dp.toPx()
             val extent = (size.width - inset * 2f).coerceAtLeast(1f)
             fun fraction(x: Float): Float { val at = (x - inset) / extent; return if (rtl) 1f - at else at }
-            val initial = ((current - valueRange.start) / span).coerceIn(0f, 1f)
+            val initial = sliderPosition(current, valueRange, curve)
             val grabbed = kotlin.math.abs(fraction(down.position.x) - initial) * extent <= 24.dp.toPx()
             val offset = if (grabbed) initial - fraction(down.position.x) else 0f
             var owned = false
@@ -117,9 +127,9 @@ internal fun InterfaceSlider(value: Float, onValueChange: (Float) -> Unit, modif
                         val raw = fraction(point.position.x) + offset
                         pressure = glassEdgePressure(raw - raw.coerceIn(0f, 1f))
                         finger = if (actualSteps > 0) magneticChoicePosition(raw.coerceIn(0f, 1f) * (actualSteps + 1)) / (actualSteps + 1) else raw.coerceIn(0f, 1f)
-                        val next = controlValue(raw, valueRange, actualSteps)
-                        val step = if (actualSteps > 0)
-                            (((next - valueRange.start) / span) * (actualSteps + 1)).roundToInt() else 0
+                        val snapped = controlValue(raw, 0f..1f, actualSteps)
+                        val next = sliderValue(snapped, valueRange, curve)
+                        val step = if (actualSteps > 0) (snapped * (actualSteps + 1)).roundToInt() else 0
                         if (point.pressed) {
                             feedback.engage(step)
                             feedbackEngaged = true
@@ -147,7 +157,7 @@ internal fun InterfaceSlider(value: Float, onValueChange: (Float) -> Unit, modif
         setProgress { requested ->
             if (enabled) {
                 haptics.emit(ControlHaptic.Weak)
-                change(controlValue((requested - valueRange.start) / span, valueRange, actualSteps))
+                change(sliderValue(controlValue(sliderPosition(requested, valueRange, curve), 0f..1f, actualSteps), valueRange, curve))
             }
             enabled
         }
@@ -165,7 +175,8 @@ internal fun InterfaceSlider(value: Float, onValueChange: (Float) -> Unit, modif
                 }
                 if (direction != 0) {
                     haptics.emit(ControlHaptic.Weak)
-                    change(controlValue((current - valueRange.start) / span + direction.toFloat() / if (actualSteps > 0) actualSteps + 1 else 100, valueRange, actualSteps))
+                    val stepSize = direction.toFloat() / (if (actualSteps > 0) actualSteps + 1 else 100)
+                    change(sliderValue(controlValue(sliderPosition(current, valueRange, curve) + stepSize, 0f..1f, actualSteps), valueRange, curve))
                 }
                 direction != 0
             }
