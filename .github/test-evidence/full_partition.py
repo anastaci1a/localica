@@ -54,8 +54,19 @@ def plan(root, risks, api, sha, run_id='0', attempt='0'):
     require(re.fullmatch('[0-9a-f]{40}', sha), 'Invalid SHA')
     require(risks and len(risks) == len(set(risks)), 'Require unique nonempty risk classes')
     require(re.fullmatch('[0-9]+', run_id) and re.fullmatch('[0-9]+', attempt), 'Invalid run/attempt')
-    inv = discover(root)
+    inv, omissions, expected = expected_for(root, api)
     require(set(risks) <= set(inv['selectors']), 'Risk class outside complete source inventory')
+    preflight = {x for x in expected if x.split('#')[0] in risks}
+    remaining = expected - preflight
+    require(preflight and remaining, 'Require nonempty preflight and remainder')
+    return {'schema_version': 1, 'sha': sha, 'api': api, 'run_id': run_id, 'attempt': attempt, 'inventory': inv,
+            'risk_classes': risks, 'sdk_omissions': omissions,
+            'preflight': sorted(preflight), 'remaining': sorted(remaining),
+            'expected': sorted(expected)}
+
+
+def expected_for(root, api):
+    inv = discover(root)
     omissions = []
     # Reviewed API-specific contracts, not missing-ID waivers. Keep exact
     # file/method/annotation guards; every other SDK filter fails closed.
@@ -80,14 +91,7 @@ def plan(root, risks, api, sha, run_id='0', attempt='0'):
             if int(api) < minimum:
                 omissions.append({'id': sdk_id, 'reason': 'Reviewed minSdkVersion=' + str(minimum) + ' annotation',
                                   'source': path, 'source_sha256': inv['all_source_sha256'][path]})
-    expected = set(inv['runtime_methods']) - {x['id'] for x in omissions}
-    preflight = {x for x in expected if x.split('#')[0] in risks}
-    remaining = expected - preflight
-    require(preflight and remaining, 'Require nonempty preflight and remainder')
-    return {'schema_version': 1, 'sha': sha, 'api': api, 'run_id': run_id, 'attempt': attempt, 'inventory': inv,
-            'risk_classes': risks, 'sdk_omissions': omissions,
-            'preflight': sorted(preflight), 'remaining': sorted(remaining),
-            'expected': sorted(expected)}
+    return inv, omissions, set(inv['runtime_methods']) - {x['id'] for x in omissions}
 
 
 def outcomes(folder):
@@ -133,11 +137,12 @@ def outcomes(folder):
     return rows, evidence
 
 
-def reconcile(root, manifest, preflight_folder, remaining_folder=None):
+def reconcile(root, manifest, preflight_folder, remaining_folder=None, shard=False):
     current = plan(root, manifest['risk_classes'], manifest['api'], manifest['sha'], manifest['run_id'], manifest['attempt'])
     require(current == manifest, 'Source/partition changed since planning')
     preflight, preflight_files = outcomes(preflight_folder)
-    require(set(preflight) == set(manifest['preflight']), 'Missing/extra preflight identities')
+    # A native shard owns a disjoint subset; the summary job proves the complete union.
+    require(set(preflight) <= set(manifest['preflight']) and (shard or set(preflight) == set(manifest['preflight'])), 'Missing/extra preflight identities')
     require(all(x['outcome'] == 'passed' for x in preflight.values()), 'Preflight must pass without skips')
     receipt = {'schema_version': 1, 'sha': manifest['sha'], 'api': manifest['api'],
                'run_id': manifest['run_id'], 'attempt': manifest['attempt'],
@@ -146,8 +151,8 @@ def reconcile(root, manifest, preflight_folder, remaining_folder=None):
     if remaining_folder is not None:
         remaining, files = outcomes(remaining_folder)
         require(not set(remaining) & set(preflight), 'Repeated preflight identity in remainder')
-        require(set(remaining) == set(manifest['remaining']), 'Missing/extra remainder identities')
-        require(set(preflight) | set(remaining) == set(manifest['expected']), 'Incomplete full-suite union')
+        require(set(remaining) <= set(manifest['remaining']) and (shard or set(remaining) == set(manifest['remaining'])), 'Missing/extra remainder identities')
+        require(shard or set(preflight) | set(remaining) == set(manifest['expected']), 'Incomplete full-suite union')
         require(all(x['outcome'] in ('passed','skipped') for x in remaining.values()), 'Remaining suite failed')
         receipt.update(status='complete_union', remaining=remaining, remaining_xml=files,
                        executed_once=len(preflight)+len(remaining),
@@ -156,11 +161,29 @@ def reconcile(root, manifest, preflight_folder, remaining_folder=None):
     return receipt
 
 
+def union(root, api, folders, shards):
+    """Prove the shard XML is the complete once-only inventory for this API."""
+    require(api in ('26', '36') and shards > 0, 'Invalid union request')
+    _, _, expected = expected_for(root, api)
+    rows = {}
+    for folder in folders:
+        part, _ = outcomes(folder)
+        require(not set(part) & set(rows), 'Duplicate identity across shards: ' + str(sorted(set(part) & set(rows))[:5]))
+        rows.update(part)
+    require(not set(rows) - expected, 'Extra identities: ' + str(sorted(set(rows) - expected)[:5]))
+    require(not expected - set(rows), 'Missing identities (' + str(len(expected - set(rows))) + '): ' + str(sorted(expected - set(rows))[:5]))
+    counts = {k: sum(r['outcome'] == k for r in rows.values()) for k in ('passed', 'skipped', 'failure', 'error')}
+    return {'api': api, 'shards': shards, 'xml_roots': len(folders), 'expected': len(expected), 'executed_once': len(rows), **counts}
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('action', choices=('plan','preflight','complete'))
+    parser.add_argument('action', choices=('plan','preflight','complete','union'))
     parser.add_argument('--root', type=Path, default=Path('.'))
-    parser.add_argument('--plan', type=Path, required=True)
+    parser.add_argument('--plan', type=Path)
+    parser.add_argument('--shard', action='store_true')
+    parser.add_argument('--shards', type=int)
+    parser.add_argument('--xml-root', type=Path, action='append', default=[])
     parser.add_argument('--risk-classes')
     parser.add_argument('--sha')
     parser.add_argument('--api')
@@ -171,6 +194,12 @@ def main():
     parser.add_argument('--output', type=Path)
     args = parser.parse_args()
     try:
+        if args.action == 'union':
+            require(args.api and args.shards and args.xml_root, 'Missing union inputs')
+            result = union(args.root.resolve(), args.api, args.xml_root, args.shards)
+            print(json.dumps(result, indent=2))
+            return 0 if not (result['failure'] or result['error']) else 1
+        require(args.plan is not None, 'Missing plan')
         if args.action == 'plan':
             result = plan(args.root.resolve(), args.risk_classes.split(','), args.api, args.sha, args.run_id, args.attempt)
             output = args.plan
@@ -178,7 +207,7 @@ def main():
             require(args.preflight is not None and args.output is not None, 'Missing reconciliation inputs')
             require(args.action != 'complete' or args.remaining is not None, 'Missing remainder input')
             result = reconcile(args.root.resolve(), json.loads(args.plan.read_text()), args.preflight,
-                               args.remaining if args.action == 'complete' else None)
+                               args.remaining if args.action == 'complete' else None, args.shard)
             result['plan_sha256'] = digest(args.plan)
             output = args.output
         with output.open('x') as stream:
