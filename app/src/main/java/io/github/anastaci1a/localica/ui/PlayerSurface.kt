@@ -92,7 +92,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     // Do not subscribe the ordinary player to the sampling-frame clock for diagnostics.
     val inkFrame = if (inkObserver != null) polarity.frame else null
     val lightInk = inkDecision.lightInk
-    val playerInk = if (lightInk) Color.White else Color.Black
+    val inkTarget = if (lightInk) Color.White else Color.Black
     // Preserve the pre-#473 wash policy; foreground selection must not retone the background.
     val tone = GlassTone(settings.glass.contrast, settings.glass.contrastWeight, !artwork.palette.isLight())
     val paletteDuration = settings.motionDuration(550)
@@ -101,6 +101,9 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     // adapters need its prepared pixels whenever that header is visible too.
     val lyricBackdrop = rememberFrostedBackdrop(listOf(artwork, settings.artworkLayout, settings.glass), p > .7f, dark = lightInk)
     val lyricVisibility by animateFloatAsState(if (lyricsOpen) 1f else 0f, tween(settings.motionDuration(550)), label = "Lyrics layout")
+    // A light/dark foreground change during the lyrics animation eases with its progress.
+    val inkTransition = remember { PlayerInkTransition(inkTarget) }
+    val playerInk = inkTransition.update(inkTarget, lyricVisibility, lyricsOpen)
     // Mode selection survives minimization. The finger drives its layout and reveal
     // immediately, including the fully expanded endpoint before onExpanded changes.
     val lyricMotion = playerLyricsMotion(p, lyricVisibility)
@@ -181,20 +184,26 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     val coverBlend = backgroundProgress * reveal * reveal * (3f - 2f * reveal)
     val extraActions = 48.dp * (actionRows - 1)
     val virtualHeight = maxHeight.coerceAtLeast(560.dp + statusInset + navigationInset + extraActions)
-    val floatingArt = minOf(windowWidth - 48.dp, (virtualHeight - statusInset - navigationInset - 440.dp - extraActions).coerceAtLeast(96.dp))
-    val floatingWidth = minOf(floatingArt, floatingArt * palette.aspect)
-    val floatingHeight = minOf(floatingArt, floatingArt / palette.aspect)
-    val fullArt = floatingWidth + (windowWidth - floatingWidth) * backgroundProgress
-    val fullArtHeight = floatingHeight + (windowWidth / palette.aspect - floatingHeight) * backgroundProgress
-    val artX = 16.dp + ((windowWidth - fullArt) / 2 - 16.dp) * p * p
-    val fullArtY = statusInset + 52.dp + (floatingArt - fullArtHeight) / 2
-    val miniArtY = (CompactControlSize - MiniArtworkSize) / 2
-    val artY = miniArtY + (fullArtY - miniArtY) * p - 48.dp * p * (1f - p) - 24.dp * lyricProgress
-    val oldMetadataY = statusInset + 52.dp + floatingArt + 8.dp
+    val floatingSlot = minOf(windowWidth - 48.dp, (virtualHeight - statusInset - navigationInset - 440.dp - extraActions).coerceAtLeast(96.dp))
+    val oldMetadataY = statusInset + 52.dp + floatingSlot + 8.dp
     val lyricSeekY = virtualHeight - navigationInset - 280.dp
     val latestMetadataY = virtualHeight - navigationInset - 368.dp - extraActions
     val ordinarySeekY = (oldMetadataY + (lyricSeekY - oldMetadataY) * .5f)
         .coerceAtMost(latestMetadataY).coerceAtLeast(statusInset + 160.dp)
+    // The artwork is centered between the padded bottom of the top controls and the padded top of the
+    // title. The sharp cover scales down to fit that band; the full-background cover may overlap both.
+    val artworkBand = playerArtworkBand((statusInset + PlayerTopControlsHeight).value, ordinarySeekY.value)
+    val floatingWidth0 = minOf(floatingSlot, floatingSlot * palette.aspect)
+    val floatingHeight0 = minOf(floatingSlot, floatingSlot / palette.aspect)
+    val floatingFit = minOf(1f, artworkBand.fittingHeight() / floatingHeight0.value)
+    val floatingWidth = floatingWidth0 * floatingFit
+    val floatingHeight = floatingHeight0 * floatingFit
+    val fullArt = floatingWidth + (windowWidth - floatingWidth) * backgroundProgress
+    val fullArtHeight = floatingHeight + (windowWidth / palette.aspect - floatingHeight) * backgroundProgress
+    val artX = 16.dp + ((windowWidth - fullArt) / 2 - 16.dp) * p * p
+    val fullArtY = artworkBand.artworkTop(fullArtHeight.value).dp
+    val miniArtY = (CompactControlSize - MiniArtworkSize) / 2
+    val artY = miniArtY + (fullArtY - miniArtY) * p - 48.dp * p * (1f - p) - 24.dp * lyricProgress
     val lyricMetadataY = maxOf(ordinarySeekY, lyricSeekY)
     // Preserve the delivered title trajectory, including selected-lyrics expansion.
     val metadataY = ordinarySeekY + (lyricMetadataY - ordinarySeekY) * lyricProgress
@@ -263,8 +272,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     val glassFrost = smoothReveal((p - .08f) / .8f)
     val deviceCorners = rememberDeviceCorners()
     val surfaceFrame = playerSurfaceFrame(maxWidth, maxHeight, navigationInset, bottomChrome, p, deviceCorners)
-    val lyricsViewport = playerLyricsViewport(surfaceFrame.y.value, titleY.value, metadataY.value,
-        (statusInset + 60.dp).value)
+    val lyricsViewport = playerLyricsViewport(titleY.value, (statusInset + 60.dp).value)
     val surfaceWidth = surfaceFrame.width
     val surfaceCorner = surfaceFrame.maximumCorner
     // This feather belongs to the cover, including its final full-background state.
@@ -432,7 +440,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
                         }
                     },
                 contentHeight = (lyricMetadataY - statusInset - 64.dp).coerceAtLeast(96.dp),
-                contentOffset = lyricsViewport.contentOffset.dp, sourcesAnchor = sourcesAnchor,
+                sourcesAnchor = sourcesAnchor,
                 result = lyricsResult, sourcesVisible = sourcesVisible, onSourcesDismiss = { sourcesVisible = false },
                 originPreparation = sourcesPreparation, contentAlpha = { lyricMotion.contentAlpha },
                 sampledAtMs = sampled.sampledAtMs, playing = sampled.isPlaying, speed = sampled.playbackSpeed,

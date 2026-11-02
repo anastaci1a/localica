@@ -27,13 +27,22 @@ internal data class GlassTone(val trim: Float = 0f, val weight: Float = 2f, val 
 
 /** Older adapters share bounded prepared pixels, never a readback or per-frame CPU filter. */
 private object ToneImages {
-    data class Key(val image: ImageBitmap, val tone: GlassTone)
+    /** Keyed by the decoded pixels, not by an ImageBitmap wrapper: every composition wraps the same
+     * bitmap anew, and a wrapper-keyed lookup never found what an earlier composition prepared. */
+    data class Key(val bitmap: Bitmap, val tone: GlassTone)
     val images = object : LruCache<Key, ImageBitmap>(16 * 1024 * 1024) {
         override fun sizeOf(key: Key, value: ImageBitmap) = value.width * value.height * 4
     }
     val mutex = Mutex()
+    fun peek(image: ImageBitmap, tone: GlassTone): ImageBitmap? = images.get(Key(image.asAndroidBitmap(), tone))
+    /** Pixels already prepared for this image under another tone: close to the wanted result,
+     * unlike the raw image, which is visibly brighter than any positive tone's output. */
+    fun anyTone(image: ImageBitmap): ImageBitmap? {
+        val bitmap = image.asAndroidBitmap()
+        return images.snapshot().entries.firstOrNull { it.key.bitmap === bitmap }?.value
+    }
     suspend fun get(image: ImageBitmap, tone: GlassTone): ImageBitmap = mutex.withLock {
-        val key = Key(image, tone)
+        val key = Key(image.asAndroidBitmap(), tone)
         images.get(key)?.let { return@withLock it }
         val source = readGlassPixels(image, 1)
         val pixels = source.pixels
@@ -85,7 +94,12 @@ private class ToneSnapshotCompletion {
     onProvenance: ((ToneSnapshotProvenance) -> Unit)? = null,
     onReceipt: ((ToneSnapshotReceipt<Bitmap>?) -> Unit)? = null): ImageBitmap? {
     val cached = remember(image, tone, prepare) {
-        image?.takeIf { tone.trim > 0f && prepare == null }?.let { ToneImages.images.get(ToneImages.Key(it, tone)) }
+        image?.takeIf { tone.trim > 0f && prepare == null }?.let { ToneImages.peek(it, tone) }
+    }
+    // A newly mounted consumer (such as the outgoing frame of a crossfade) has no retained
+    // result. Until its own tone is prepared, show another tone of the same pixels, never the raw image.
+    val standIn = remember(image, tone, prepare) {
+        if (cached != null || prepare != null || tone.trim <= 0f) null else image?.let { ToneImages.anyTone(it) }
     }
     var result by remember { mutableStateOf<ImageBitmap?>(null) }
     // Non-observable metadata follows the existing result publication, without another effect,
@@ -109,7 +123,7 @@ private class ToneSnapshotCompletion {
         }
         result = replacement
     }
-    val returned = if (image == null || tone.trim == 0f) image else cached ?: result ?: image
+    val returned = if (image == null || tone.trim == 0f) image else cached ?: result ?: standIn ?: image
     onReceipt?.invoke(when {
         image == null || tone.trim == 0f || cached != null -> ToneSnapshotReceipt(image?.asAndroidBitmap(), returned?.asAndroidBitmap(), tone)
         result != null && completed.output === returned -> completed.receipt
