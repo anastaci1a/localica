@@ -12,13 +12,18 @@ import androidx.compose.ui.unit.*
 /** One placement/contour for the player and overlays that must remain inside it. */
 internal data class PlayerSurfaceFrame(val x: Dp, val y: Dp, val width: Dp, val height: Dp,
     val shape: AbsoluteRoundedCornerShape, val maximumCorner: Dp) {
+    /** The whole-pixel bounds [motionBounds] lays the surface out at (left-to-right). */
+    fun pixels(density: Density): MotionPixelRect = with(density) {
+        motionPixelRect(androidx.compose.ui.geometry.Rect(x.toPx(), y.toPx(), (x + width).toPx(), (y + height).toPx()))
+    }
     fun windowShape(): Shape = object : Shape {
-        override fun createOutline(size: Size, layoutDirection: LayoutDirection, density: Density): Outline = with(density) {
-            // Match offset/width/height layout's pixel rounding, not independent float bounds.
-            val outline = shape.createOutline(Size(width.roundToPx().toFloat(), height.roundToPx().toFloat()), layoutDirection, density)
-            Outline.Generic(Path().apply {
+        override fun createOutline(size: Size, layoutDirection: LayoutDirection, density: Density): Outline {
+            // Match the surface's motionBounds edges, not independent float bounds.
+            val pixels = pixels(density)
+            val outline = shape.createOutline(Size(pixels.width.toFloat(), pixels.height.toFloat()), layoutDirection, density)
+            return Outline.Generic(Path().apply {
                 addOutline(outline)
-                translate(Offset(x.roundToPx().toFloat(), y.roundToPx().toFloat()))
+                translate(Offset(pixels.left.toFloat(), pixels.top.toFloat()))
             })
         }
     }

@@ -108,6 +108,12 @@ internal fun pinchElementRect(source: Rect, target: Rect, progress: Float): Rect
         mix(source.right, target.right), mix(source.bottom, target.bottom))
 }
 
+/** One part's float rectangle between whole-pixel endpoint placements. */
+internal fun browsePinchPartRect(x: Int, y: Int, width: Int, height: Int,
+    targetX: Int, targetY: Int, targetWidth: Int, targetHeight: Int, progress: Float): Rect =
+    pinchElementRect(Rect(x.toFloat(), y.toFloat(), (x + width).toFloat(), (y + height).toFloat()),
+        Rect(targetX.toFloat(), targetY.toFloat(), (targetX + targetWidth).toFloat(), (targetY + targetHeight).toFloat()), progress)
+
 private data class RetainedPinchPlacement(val item: FrozenBrowseItem, val origin: Offset,
     val targetWidth: Float, val targetHeight: Float, val alpha: Float, val index: Int,
     val geometryProgress: Float)
@@ -252,13 +258,14 @@ internal fun Modifier.pinchRetainedOverlay(motion: BrowsePinchMotion, grid: Lazy
                     // The source overflow glyph is a bounded crop, not a scaled whole row.
                     val text = image.text
                     if (text != null && source.menuWidth > 0 && source.menuHeight > 0) {
-                        val width = mix(source.menuWidth, target.menuWidth).roundToInt().coerceAtLeast(0)
-                        val height = mix(source.menuHeight, target.menuHeight).roundToInt().coerceAtLeast(0)
-                        if (width > 0 && height > 0) drawImage(text.image,
+                        val width = mix(source.menuWidth, target.menuWidth).coerceAtLeast(0f)
+                        val height = mix(source.menuHeight, target.menuHeight).coerceAtLeast(0f)
+                        val x = left(mix(source.menuX, target.menuX), width)
+                        val y = mix(source.menuY, target.menuY)
+                        drawMotionImage(text.image,
                             srcOffset = text.origin + IntOffset(if (motion.rightToLeft) text.size.width - source.menuX - source.menuWidth else source.menuX, source.menuY),
                             srcSize = IntSize(source.menuWidth, source.menuHeight),
-                            dstOffset = IntOffset(left(mix(source.menuX, target.menuX), width.toFloat()).roundToInt(), mix(source.menuY, target.menuY).roundToInt()),
-                            dstSize = IntSize(width, height), alpha = placed.alpha * browseViewVisibility(true, target.menuWidth > 0, p))
+                            rect = Rect(x, y, x + width, y + height), alpha = placed.alpha * browseViewVisibility(true, target.menuWidth > 0, p))
                     }
                 }
             }
@@ -275,10 +282,11 @@ internal fun Modifier.pinchRetainedOverlay(motion: BrowsePinchMotion, grid: Lazy
                 val rect = pinchArtworkRect(content.source, content.target, frozen.geometryProgress)
                 val cardWidth = frozen.item.size.width + (frozen.targetWidth - frozen.item.size.width) * frozen.geometryProgress
                 val x = if (motion.rightToLeft) cardWidth - rect.right else rect.left
-                val side = rect.width.roundToInt().coerceAtLeast(0)
-                if (side > 0) drawImage(art.image, srcOffset = art.origin, srcSize = art.size,
-                    dstOffset = IntOffset((frozen.origin.x + x).roundToInt(), (frozen.origin.y + rect.top).roundToInt()),
-                    dstSize = IntSize(side, side), alpha = frozen.alpha *
+                // Independently rounded origin and side moved the far edge back and forth (#505).
+                val left = frozen.origin.x + x
+                val top = frozen.origin.y + rect.top
+                drawMotionImage(art.image, srcOffset = art.origin, srcSize = art.size,
+                    rect = Rect(left, top, left + rect.width, top + rect.height), alpha = frozen.alpha *
                         browseViewVisibility(content.source.artwork, content.target.artwork, p))
             } else if (key in liveKeys) {
                 motion.artwork[key]?.let { drawLive(it, key) }
