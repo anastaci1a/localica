@@ -137,7 +137,11 @@ internal class CollectionPinchHeader(val motion: BrowsePinchMotion, val grid: La
         val measured = measure(source, retain = true) { bounds, spec ->
             capturedAction = CollectionHeaderActionCapture(token, bounds, spec)
         }
-        ordinaryTop?.let { check(kotlin.math.abs(it - measured.top) <= .5f) { "Source hero/header coordinate is not measured consistently" } }
+        // Scrolled away, the scroll-derived coordinate is only an estimate (a jump skips every known row);
+        // the public beyond-bounds measurement is then the authority, so only a mounted header is compared.
+        if (grid.layoutInfo.visibleItemsInfo.any { it.key == "browser-notice" }) {
+            ordinaryTop?.let { check(kotlin.math.abs(it - measured.top) <= .5f) { "Source hero/header coordinate is not measured consistently" } }
+        }
         check(geometry.begin(token, measured.geometry()))
         generation = token
         actionRecordedGeneration = null
@@ -302,7 +306,7 @@ internal fun Modifier.collectionPinchHeader(owner: CollectionPinchHeader, style:
             }
             // Preserve the baseline display-list ownership during pending native
             // capture. Re-entering drawContent could mutate captured descendants.
-            if (owner.motion.visualSource == null || owner.motion.headerless) drawLayer(layer)
+            if (owner.motion.visualSource == null) drawLayer(layer)
         }
 }
 
