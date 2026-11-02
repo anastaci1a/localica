@@ -1,4 +1,4 @@
-name: Bitmap 501 BrowseArtwork base comparison (not release)
+name: Fix bitmap UAF 501 (not release)
 'on':
   push:
     branches: [fix/bitmap-uaf-501]
@@ -15,38 +15,38 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - variant: base
-            source: ef404fb3708cb71a5fbbb7e09923aae594cb9742
-          - variant: candidate
-            source: d5f1e40ca93218c926cf801104a8b604a369b2b4
+          - api: 26
+            target: google_apis
+            gpu: swiftshader_indirect
+            disable_animations: true
+            display: reset
+          - api: 36
+            target: default
+            gpu: lavapipe
+            disable_animations: false
+            display: compact
     env:
-      TEST_API: 26
-      SOURCE_SHA: ${{ matrix.source }}
-      SELECTORS: io.github.anastaci1a.localica.BrowseArtworkTest
+      TEST_API: ${{ matrix.api }}
+      SELECTORS: io.github.anastaci1a.localica.BitmapLifetimeStressTest,io.github.anastaci1a.localica.PlayerExpansionMotionTest,io.github.anastaci1a.localica.ArtworkOccurrenceTransitionTest,io.github.anastaci1a.localica.BrowseArtworkTest,io.github.anastaci1a.localica.EmbeddedTagsTest,io.github.anastaci1a.localica.RetainedLayerReadbackTest,io.github.anastaci1a.localica.PinchReadbackLifetimeTest,io.github.anastaci1a.localica.PinchRetainedHighlightTest,io.github.anastaci1a.localica.BrowsePinchLayersTest,io.github.anastaci1a.localica.GlassPixelBufferTest,io.github.anastaci1a.localica.GlassPixelReadReuseTest,io.github.anastaci1a.localica.GlassSnapshotSoftwareTest,io.github.anastaci1a.localica.FrostedSurfaceTest,io.github.anastaci1a.localica.GlassAppearanceTest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-        with:
-          ref: ${{ matrix.source }}
-      - name: Bind workflow and tested source separately
-        run: |
-          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
-          printf 'workflow_sha=%s\ntested_sha=%s\nvariant=%s\n' "$GITHUB_SHA" "$SOURCE_SHA" '${{ matrix.variant }}' > comparison-identity.txt
       - uses: ./.github/actions/focused-android-setup
-      - name: Compile isolated BrowseArtwork contracts
+      - name: Compile bitmap lifetime contracts
         run: ./gradlew assembleDebug assembleDebugAndroidTest --no-daemon --max-workers=2
       - uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
         with:
-          api-level: 26
-          target: google_apis
+          api-level: ${{ matrix.api }}
+          target: ${{ matrix.target }}
           arch: x86_64
           profile: pixel_2
-          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -memory 3072
-          disable-animations: true
+          emulator-options: -no-window -gpu ${{ matrix.gpu }} -no-snapshot -noaudio -no-boot-anim -memory 3072
+          disable-animations: ${{ matrix.disable_animations }}
           script: |
-            adb shell wm size reset; adb shell wm density reset
+            if [[ '${{ matrix.display }}' == reset ]]; then adb shell wm size reset; adb shell wm density reset; else adb shell wm size 720x1280; adb shell wm density 280; fi
             sleep 60
             bash .github/test-evidence/environment.sh >> prototype-runner-environment.txt
-            GITHUB_SHA="$SOURCE_SHA" bash .github/run-selection-preconditions.sh
+            bash .github/run-selection-preconditions.sh
+            cp -r app/build/outputs/androidTest-results selection-evidence/selection-run; for repeat in 2 3; do ./gradlew connectedDebugAndroidTest --no-daemon --max-workers=2 -Pandroid.testInstrumentationRunnerArguments.class=io.github.anastaci1a.localica.BitmapLifetimeStressTest || exit 1; cp -r app/build/outputs/androidTest-results selection-evidence/stress-repeat-$repeat; done
       - name: Capture host diagnostics on emulator failure
         if: failure()
         run: |
@@ -56,7 +56,7 @@ jobs:
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
-          name: bitmap-501-browse-${{ matrix.variant }}-api-26
+          name: fix-bitmap-uaf-501-api-${{ matrix.api }}
           path: |
             app/build/reports/
             app/build/test-results/
@@ -64,6 +64,5 @@ jobs:
             app/build/outputs/connected_android_test_additional_output/
             selection-evidence/
             prototype-runner-environment.txt
-            comparison-identity.txt
           if-no-files-found: error
           retention-days: 14
