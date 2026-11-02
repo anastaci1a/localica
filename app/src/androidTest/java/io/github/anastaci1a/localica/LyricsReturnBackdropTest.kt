@@ -141,7 +141,7 @@ class LyricsReturnBackdropTest {
     }
 
     @Test fun movingPlayerViewportKeepsTheActiveReturnLensRegisteredThroughReversal() {
-        val poses = listOf(ViewportPose(0f, 348f), ViewportPose(0f, 332f))
+        val poses = listOf(ViewportPose(0f, 348f), ViewportPose(0f, 332f), ViewportPose(48f, 316f))
         val state = Scene().apply { pose = poses.first() }
         mount(state)
         alignCurrentLine(state.document)
