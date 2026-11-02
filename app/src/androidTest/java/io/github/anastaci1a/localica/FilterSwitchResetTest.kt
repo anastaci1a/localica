@@ -70,6 +70,10 @@ class FilterSwitchResetTest {
 
         compose.mainClock.autoAdvance = false
         compose.onNodeWithTag("filter-Playlists").performClick()
+        // The click is delivered by a coroutine; run frames until the route has switched.
+        var waited = 0
+        while (route.filter != MediaKind.Playlist && waited++ < 30) compose.mainClock.advanceTimeBy(16)
+        assertEquals("The filter click must switch the route", MediaKind.Playlist, route.filter)
         // The new query is held: the switch must show loading placeholders, not the old gallery cells.
         repeat(25) {
             compose.mainClock.advanceTimeBy(16)
