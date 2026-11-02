@@ -34,18 +34,15 @@ internal fun playerRowMotion(expansion: Float, titleOffset: Float, transportOffs
 
 private fun playerReveal(value: Float): Float = value.coerceIn(0f, 1f).let { it * it * (3f - 2f * it) }
 
-internal data class PlayerLyricsViewport(val top: Float, val height: Float, val contentOffset: Float)
+internal data class PlayerLyricsViewport(val top: Float, val height: Float)
 
-/** Window-anchored upper edge; the lower edge follows the actually presented title, not its
- * expanded target. Content drifts more slowly inside that viewport instead of carrying its clip. */
-internal fun playerLyricsViewport(surfaceTop: Float, titleTop: Float, metadataTarget: Float,
-    topInset: Float, titleGap: Float = 4f): PlayerLyricsViewport {
-    val windowTop = maxOf(topInset, surfaceTop)
-    val windowTitle = surfaceTop + titleTop
-    val drift = (windowTitle - metadataTarget) * .35f
-    return PlayerLyricsViewport(windowTop - surfaceTop,
-        (windowTitle - titleGap - windowTop).coerceAtLeast(0f), topInset + drift - windowTop)
-}
+/** Both edges are mounted inside the player, in its own coordinates: the upper edge stays at
+ * [topInset] below the player's top, and the lower edge follows the presented title. The whole
+ * box therefore translates and resizes with the shrinking or growing player, and the lyric
+ * layout inside it (whose current-line anchor is a fixed fraction of its stable height) keeps
+ * its position relative to the player. */
+internal fun playerLyricsViewport(titleTop: Float, topInset: Float, titleGap: Float = 4f): PlayerLyricsViewport =
+    PlayerLyricsViewport(topInset, (titleTop - titleGap - topInset).coerceAtLeast(0f))
 
 /** Vertical clearance still determines mini-crop retention, but never gates frame growth.
  * This vertical-only reference cannot establish the bottom-right/title-band constraint; use

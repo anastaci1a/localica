@@ -95,6 +95,8 @@ Adaptive contrast also applies to player color continuations, Queue frost and ne
 
 A choice is current only after matching tone preparation completes. Unmeasured, frozen, native-blurred, moving-cover and partial-player backgrounds retain the last verified decision (white ink before any verification), explicitly without claiming current coverage. Tone preparation, sampling, composition and native presentation are asynchronous, so this does not guarantee atomic ink and background presentation.
 
+A foreground change that arrives while lyrics open or close eases with that animation's progress instead of switching in one frame.
+
 Blur, texture and the artwork continuation remain unchanged.
 
 ### Settings controls
@@ -307,6 +309,8 @@ The entire Queue layer stays clipped inside the player’s moving rounded outlin
 
 Full-background covers soften at their perimeter while keeping the center sharp, then merge into the continuation. Floating covers keep defined edges. The artwork feather never drops away at the final handoff. All blends reverse with the gesture. Artwork stays below title and artist text, including transitions.
 
+In both layouts the expanded artwork is centered between the bottom of the top controls and the top of the title, each with 8 dp of padding, so its edges are equally far from them. The floating cover scales down to fit that band and never overlaps; the full-background cover may overlap both on short screens, layered below them.
+
 Metadata/seek/actions/lyrics have 32 dp side insets. Order: artwork → metadata → seek/times → customizable actions → transport → Queue drawer. No volume controls. Album metadata fades in and seek/actions appear late, while transport persists throughout. Title and transport retain their delivered trajectories, including selected lyrics.
 
 Seek and actions use distinct mixtures between those unchanged references, with actions moving/fading faster than seek. Reversals retrace the presented geometry without changing settled positions. Artwork grows immediately along one reversible, geometry-derived curve, aiming its bottom-right at the title’s top-left without moving existing trajectories or settled positions.
@@ -430,9 +434,11 @@ Alternative: floating cover over an artwork-colored matte/acrylic gradient with 
 
 Both layouts animate into one integrated lyrics state: no boundary or Lyrics heading. Blend lyrics into the upper screen, lower metadata/transport, fade/slide extra actions away. Keep metadata above seek and transport accessible. Fade the artwork and its feathered edges uniformly.
 
-Selected lyrics mode determines all target positions throughout held player movement, rather than switching at release. The lyrics viewport keeps its upper screen anchor until clipped by the player. Its bottom follows the presented title with the normal gap.
+Selected lyrics mode determines all target positions throughout held player movement, rather than switching at release.
 
-Lyrics and their empty placeholder drift more slowly inside those same faded/clipped bounds, retaining content geometry and scroll state. They fade out early in collapse and fade in late on the inverse expansion. At fully expanded held progress they are fully visible and artwork is gone. Artwork returns continuously during held collapse before release.
+The lyrics viewport is mounted to the moving player: its upper edge keeps its offset below the player's top and its bottom follows the presented title with the normal gap, so both edges travel with the shrinking or growing player and the current line keeps its relative position inside it.
+
+Lyrics and their empty placeholder move rigidly inside those same faded/clipped bounds, retaining content geometry and scroll state. They fade out early in collapse and fade in late on the inverse expansion. At fully expanded held progress they are fully visible and artwork is gone. Artwork returns continuously during held collapse before release.
 
 Album-only extra actions remain hidden throughout lyrics-mode movement, including intermediate frames. Partial reversals retain lyric scroll/source state. Keep every lyrics entry point available even without local lyrics.
 
@@ -448,7 +454,7 @@ Follow real playback/seeks/queue changes with active-line emphasis, fluid moveme
 
 Show the shared quiet empty state only after the current lookup finds no usable lyrics without reporting a read error. Never during loading, failed reads or a real lyric document's arrival. Available lyrics remain visible when another source fails.
 
-Keep its inner position fixed during lyrics-mode changes. Player travel uses the same slower content motion and viewport as real lyrics. [Source policy](product.md#lyrics-sources).
+Keep its inner position fixed during lyrics-mode changes. Player travel uses the same viewport as real lyrics. [Source policy](product.md#lyrics-sources).
 
 ## Scanner and folders
 

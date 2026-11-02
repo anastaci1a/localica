@@ -107,22 +107,21 @@ class PlayerExpansionMotionTest {
         }
     }
 
-    @Test fun lyricsUsePresentedTitleBoundaryAndSlowerContentWithReversibleGeometry() {
+    @Test fun lyricsViewportIsMountedToThePlayerAndItsLowerEdgeFollowsThePresentedTitleReversibly() {
         for (metadata in listOf(184f, 300f, 520f)) {
             val snapshots = mutableMapOf<Float, PlayerLyricsViewport>()
             for (p in listOf(1f, .96f, .92f, .86f, .8f, .86f, .92f, .96f, 1f)) {
                 val surface = 560f * (1f - p)
                 val title = 7f + (metadata - 7f) * p
-                val viewport = playerLyricsViewport(surface, title, metadata, 84f)
-                val top = surface + viewport.top
-                val content = top + viewport.contentOffset
-                assertEquals(maxOf(84f, surface), top, .00001f)
-                assertEquals(surface + title - 4f, top + viewport.height, .00005f)
-                assertEquals("Content moves at 35% of title displacement", (surface + title - metadata) * .35f,
-                    content - 84f, .00001f)
+                val viewport = playerLyricsViewport(title, 84f)
+                assertEquals("Upper edge keeps its offset inside the moving player", 84f, viewport.top, 0f)
+                assertEquals("Lower edge follows the presented title inside the player", title - 4f, viewport.top + viewport.height, .00005f)
+                // In window coordinates both edges travel with the player's top edge.
+                assertEquals(surface + 84f, surface + viewport.top, 0f)
                 snapshots[p]?.let { assertEquals(it, viewport) }
                 snapshots[p] = viewport
             }
+            assertEquals(0f, playerLyricsViewport(10f, 84f).height, 0f)
         }
     }
 
