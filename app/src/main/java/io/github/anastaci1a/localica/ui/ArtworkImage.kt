@@ -31,14 +31,22 @@ internal fun ArtworkImage(artwork: ImageBitmap?, loading: Boolean, modifier: Mod
         reveal.animateTo(if (present) 1f else 0f, tween(if (reducedMotion) 0 else 300, easing = FastOutSlowInEasing))
     }
     Box(modifier.clip(shape), contentAlignment = Alignment.Center) {
-        // Hidden at the draw step the instant the reveal completes. It stays composed (a zero-alpha layer is
-        // never drawn) so completion needs no second recomposition of the cell.
-        Box(Modifier.matchParentSize().graphicsLayer { if (artwork != null && reveal.value >= 1f) alpha = 0f }) {
-            ArtworkPlaceholder(loading && artwork == null, Modifier.matchParentSize(), showIcon = emptyText == null || loading)
-        }
+        ArtworkPlaceholderHost(artwork, reveal, loading, emptyText, Modifier.matchParentSize())
         if (!loading && artwork == null && emptyText != null) Text(emptyText)
         if (artwork != null) ArtworkResolutionBlend(artwork,
             Modifier.matchParentSize().graphicsLayer { alpha = reveal.value }, contentScale, if (reducedMotion) 0 else 240)
+    }
+}
+
+/** Reads the reveal in its own composition, so only this host recomposes when the placeholder is removed. */
+@Composable
+private fun ArtworkPlaceholderHost(artwork: ImageBitmap?, reveal: Animatable<Float, AnimationVector1D>, loading: Boolean,
+    emptyText: String?, modifier: Modifier) {
+    val revealed by remember(artwork) { derivedStateOf { artwork != null && reveal.value >= 1f } }
+    if (!revealed) {
+        Box(modifier) {
+            ArtworkPlaceholder(loading && artwork == null, Modifier.matchParentSize(), showIcon = emptyText == null || loading)
+        }
     }
 }
 

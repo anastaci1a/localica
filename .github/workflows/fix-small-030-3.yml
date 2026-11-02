@@ -1,7 +1,7 @@
-name: Fix now playing queue 500 (not release)
+name: Small 0.30.3 fixes focused gates (not release)
 'on':
   push:
-    branches: [fix/now-playing-queue-500, fix/now-playing-queue-500-base]
+    branches: [fix/small-030-3]
 permissions:
   contents: read
 jobs:
@@ -27,12 +27,12 @@ jobs:
             display: compact
     env:
       TEST_API: ${{ matrix.api }}
-      SELECTORS: io.github.anastaci1a.localica.QueueBrowsingTest,io.github.anastaci1a.localica.QueueSelectorDragTest,io.github.anastaci1a.localica.QueueSelectionPlacementTest,io.github.anastaci1a.localica.QueueFollowingTest,io.github.anastaci1a.localica.QueueFollowingPlaybackTest,io.github.anastaci1a.localica.QueueHeaderSummaryTest
+      SELECTORS: io.github.anastaci1a.localica.FarScrollScrollbarTest,io.github.anastaci1a.localica.ListControlsTest,io.github.anastaci1a.localica.ArtworkCacheConcurrencyTest,io.github.anastaci1a.localica.ArtworkCacheSizingTest,io.github.anastaci1a.localica.ArtworkCacheTest,io.github.anastaci1a.localica.ArtworkCropLoadingTest,io.github.anastaci1a.localica.ArtworkCropTest,io.github.anastaci1a.localica.ArtworkEditRestorationTest,io.github.anastaci1a.localica.ArtworkGrantsTest,io.github.anastaci1a.localica.ArtworkOccurrenceTransitionTest,io.github.anastaci1a.localica.ArtworkRevealTest,io.github.anastaci1a.localica.ArtworkReviewReadinessTest,io.github.anastaci1a.localica.ArtworkStaggerTest,io.github.anastaci1a.localica.ArtworkSwipeTest,io.github.anastaci1a.localica.ArtworkOffMainTest,io.github.anastaci1a.localica.ArtworkViewerGestureTest,io.github.anastaci1a.localica.ArtworkWashBorderTest,io.github.anastaci1a.localica.ArtworkWashDetailTest,io.github.anastaci1a.localica.ArtworkWashTest,io.github.anastaci1a.localica.GlassRendererSettingsTest,io.github.anastaci1a.localica.GlassRendererPreferenceTest,io.github.anastaci1a.localica.SettingsOptionsTest,io.github.anastaci1a.localica.GlassAppearanceTest,io.github.anastaci1a.localica.InterfaceControlsTest,io.github.anastaci1a.localica.SliderSwitchHapticsTest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - uses: ./.github/actions/focused-android-setup
-      - name: Compile now playing queue contracts
-        run: ./gradlew assembleDebug assembleDebugAndroidTest --no-daemon --max-workers=2
+      - name: Compile and run the shadow strength unit tests
+        run: ./gradlew testDebugUnitTest --tests io.github.anastaci1a.localica.ui.GlassShadowStrengthCurveTest --tests io.github.anastaci1a.localica.ui.GlassBackendTest assembleDebug assembleDebugAndroidTest --no-daemon --max-workers=2
       - uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
         with:
           api-level: ${{ matrix.api }}
@@ -55,7 +55,7 @@ jobs:
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
-          name: fix-now-playing-queue-500-api-${{ matrix.api }}
+          name: small-030-3-api-${{ matrix.api }}
           path: |
             app/build/reports/
             app/build/test-results/
