@@ -302,7 +302,7 @@ internal fun Modifier.collectionPinchHeader(owner: CollectionPinchHeader, style:
             }
             // Preserve the baseline display-list ownership during pending native
             // capture. Re-entering drawContent could mutate captured descendants.
-            if (owner.motion.visualSource == null) drawLayer(layer)
+            if (owner.motion.visualSource == null || owner.motion.headerless) drawLayer(layer)
         }
 }
 
