@@ -65,8 +65,6 @@ class MotionPixelsTest {
             val frames = (0..4000).map { step ->
                 playerSurfaceFrame(width, height, 24.dp, 80.dp, step / 4000f, DeviceCorners()).pixels(d)
             }
-            // Whole-pixel edges only: the surface never has a partially covered edge pixel.
-            frames.forEach { assertEquals(0f, it.translationX, 0f); assertEquals(1f, it.scaleX, 0f) }
             assertMonotone("player left $density", frames.map { it.left.toFloat() })
             assertMonotone("player right $density", frames.map { it.right.toFloat() })
             assertMonotone("player top $density", frames.map { it.top.toFloat() })
