@@ -30,11 +30,13 @@ internal fun ArtworkImage(artwork: ImageBitmap?, loading: Boolean, modifier: Mod
     LaunchedEffect(present, reducedMotion) {
         reveal.animateTo(if (present) 1f else 0f, tween(if (reducedMotion) 0 else 300, easing = FastOutSlowInEasing))
     }
+    // Read only while drawing the reveal; the cell recomposes once, when the placeholder is no longer visible.
+    val revealed by remember(artwork) { derivedStateOf { artwork != null && reveal.value >= 1f } }
     Box(modifier.clip(shape), contentAlignment = Alignment.Center) {
-        // Hidden at the draw step the instant the reveal completes. It stays composed (a zero-alpha layer is
-        // never drawn) so completion needs no second recomposition of the cell.
-        Box(Modifier.matchParentSize().graphicsLayer { if (artwork != null && reveal.value >= 1f) alpha = 0f }) {
-            ArtworkPlaceholder(loading && artwork == null, Modifier.matchParentSize(), showIcon = emptyText == null || loading)
+        if (!revealed) {
+            Box(Modifier.matchParentSize()) {
+                ArtworkPlaceholder(loading && artwork == null, Modifier.matchParentSize(), showIcon = emptyText == null || loading)
+            }
         }
         if (!loading && artwork == null && emptyText != null) Text(emptyText)
         if (artwork != null) ArtworkResolutionBlend(artwork,
