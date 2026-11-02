@@ -30,17 +30,23 @@ internal fun ArtworkImage(artwork: ImageBitmap?, loading: Boolean, modifier: Mod
     LaunchedEffect(present, reducedMotion) {
         reveal.animateTo(if (present) 1f else 0f, tween(if (reducedMotion) 0 else 300, easing = FastOutSlowInEasing))
     }
-    // Read only while drawing the reveal; the cell recomposes once, when the placeholder is no longer visible.
-    val revealed by remember(artwork) { derivedStateOf { artwork != null && reveal.value >= 1f } }
     Box(modifier.clip(shape), contentAlignment = Alignment.Center) {
-        if (!revealed) {
-            Box(Modifier.matchParentSize()) {
-                ArtworkPlaceholder(loading && artwork == null, Modifier.matchParentSize(), showIcon = emptyText == null || loading)
-            }
-        }
+        ArtworkPlaceholderHost(artwork, reveal, loading, emptyText, Modifier.matchParentSize())
         if (!loading && artwork == null && emptyText != null) Text(emptyText)
         if (artwork != null) ArtworkResolutionBlend(artwork,
             Modifier.matchParentSize().graphicsLayer { alpha = reveal.value }, contentScale, if (reducedMotion) 0 else 240)
+    }
+}
+
+/** Reads the reveal in its own composition, so only this host recomposes when the placeholder is removed. */
+@Composable
+private fun ArtworkPlaceholderHost(artwork: ImageBitmap?, reveal: Animatable<Float, AnimationVector1D>, loading: Boolean,
+    emptyText: String?, modifier: Modifier) {
+    val revealed by remember(artwork) { derivedStateOf { artwork != null && reveal.value >= 1f } }
+    if (!revealed) {
+        Box(modifier) {
+            ArtworkPlaceholder(loading && artwork == null, Modifier.matchParentSize(), showIcon = emptyText == null || loading)
+        }
     }
 }
 
