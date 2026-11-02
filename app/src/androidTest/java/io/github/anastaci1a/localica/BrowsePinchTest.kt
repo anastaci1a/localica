@@ -225,6 +225,32 @@ class BrowsePinchTest {
         } finally { prefs.write(route, old, false) }
     }
 
+    @Test fun playlistPinchStillChangesViewAfterTheHeaderScrollsAway() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val tracks = (0..59).map { Track("away:$it", "Song $it", fileName = "$it.mp3", relativePath = "$it.mp3") }
+        val playlist = PlaylistEdits.append(ManualPlaylist(name = "Pinch away"), tracks)
+        val route = BrowseRoute(MainTab.Playlists, MediaRef(MediaKind.Playlist, playlist.id))
+        val prefs = BrowsePreferences(context)
+        val old = prefs.read(route)
+        prefs.write(route, BrowseStyle(sort = TrackSort.Manual), false)
+        try {
+            compose.setContent { LocalicaTheme {
+                BrowserScreen(LibraryUiState(LibrarySnapshot(folders = listOf(FolderSelection("root", "Music")), tracks = tracks), loading = false),
+                    PlaylistState(listOf(playlist), false), route, {}, {}, {}, { _, _, _ -> }, null, null, true, false)
+            } }
+            compose.waitUntil(5000) { compose.onAllNodesWithText("Song 0").fetchSemanticsNodes().isNotEmpty() }
+            val list = compose.onNodeWithTag("browser-list")
+            val before = list.fetchSemanticsNode().config.getOrNull(SemanticsProperties.StateDescription)
+            list.performScrollToIndex(45)
+            compose.waitForIdle()
+            compose.onNodeWithTag("browse-full-span").assertDoesNotExist()
+            list.performTouchInput { pinch(true) }
+            compose.waitUntil(5000) { list.fetchSemanticsNode().config.getOrNull(SemanticsProperties.StateDescription) != before }
+            compose.waitForIdle()
+            assertNotEquals(before, list.fetchSemanticsNode().config.getOrNull(SemanticsProperties.StateDescription))
+        } finally { prefs.write(route, old, false) }
+    }
+
     @Test fun heldPinchChangesArtworkGeometryBeforeRelease() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val route = BrowseRoute(MainTab.Songs)
