@@ -160,8 +160,6 @@ internal fun WarmBrowsePresentations(cache: BrowsePresentationCache, library: Li
     }
 }
 
-private class FilterSwitch(var filter: MediaKind?) { var switched = false }
-
 internal data class BrowsePresentationState(val current: PresentedBrowse?, val cached: Boolean,
     val reveal: Animatable<Float, AnimationVector1D>, val pending: Boolean)
 
@@ -172,8 +170,8 @@ internal fun rememberBrowsePresentation(library: LibrarySnapshot, playlists: Lis
     reducedMotion: Boolean, queryDispatcher: kotlinx.coroutines.CoroutineDispatcher,
     sorts: BrowseSortSnapshot, sourcesReady: Boolean = true, animateArrival: Boolean = true,
     queueOpeningRequest: Long = 0, queueOpeningOccurrence: String? = null): BrowsePresentationState {
-    // Query work and filter motion are independent. Departing rows begin fading
-    // immediately; only a result for the latest request may replace them.
+    // Query work and filter motion are independent. Only a result for the latest request
+    // may replace the displayed rows; a filter switch withdraws them at once (see below).
     val presentationCache = LocalBrowsePresentationCache.current ?: remember { BrowsePresentationCache() }
     val source = BrowseSourceRevision(library, playlists, queues, libraryFilters)
     val cachedPresentation = remember(source, route, style, sorts, sourcesReady) {
@@ -204,22 +202,31 @@ internal fun rememberBrowsePresentation(library: LibrarySnapshot, playlists: Lis
     // produceState retains its previous value until its restarted producer runs.
     // Gate synchronously so a warmed or superseded partial catalog cannot reach the first frame.
     val candidate = if (sourcesReady) openingPresentation ?: cachedPresentation ?: queriedPresentation else null
-    // A filter switch is a hard reset: nothing from the previous filter stays displayed, and even a
-    // cached destination replays the loading reveal instead of animating shared item keys.
-    val filterSwitch = remember(route.key) { FilterSwitch(route.filter) }
-    if (filterSwitch.filter != route.filter) { filterSwitch.filter = route.filter; filterSwitch.switched = true }
-    var presentation by remember(route.key, route.filter) { mutableStateOf(cachedPresentation) }
-    val reveal = remember(route.key, route.filter) { androidx.compose.animation.core.Animatable(if (cachedPresentation == null) 0f else 1f) }
+    var presentation by remember(route.key) { mutableStateOf(cachedPresentation) }
+    var displayedFilter by remember(route.key) { mutableStateOf(route.filter) }
+    val reveal = remember(route.key) { androidx.compose.animation.core.Animatable(if (cachedPresentation == null) 0f else 1f) }
+    // A filter switch is a hard reset (#503): the previous filter's rows are never displayed
+    // against the new filter. Filters share item keys, so retained rows would let the grid's
+    // item/bounds animation and a retained pinch overlay carry them into the new layout. Until
+    // the new filter publishes, the screen shows the loading viewport, which disposes the grid's
+    // per-item animation state and starts a fresh cascading reveal.
+    val switchingFilter = displayedFilter != route.filter
     LaunchedEffect(source, route, style, candidate, reducedMotion, sorts, sourcesReady, animateArrival) {
         if (!sourcesReady) { reveal.snapTo(0f); return@LaunchedEffect }
+        val switching = displayedFilter != route.filter
+        if (switching) reveal.snapTo(0f)
         if (candidate != null && matchesBrowseRequest(candidate, source, route, style, sorts)) {
+            // Even a cached destination first presents a loading frame.
+            if (switching) withFrameNanos { }
             presentation = candidate
+            displayedFilter = route.filter
             if (reducedMotion || !animateArrival) reveal.snapTo(1f) else if (reveal.value < 1f)
                 reveal.animateTo(1f, androidx.compose.animation.core.tween(180))
         }
     }
-    val displayed = openingPresentation ?: browseLayoutPresentation(presentation, source, route, style, sorts)
+    val displayed = if (switchingFilter) null
+        else openingPresentation ?: browseLayoutPresentation(presentation, source, route, style, sorts)
     return BrowsePresentationState(displayed.takeIf { sourcesReady },
-        openingPresentation != null || cachedPresentation != null && !filterSwitch.switched, reveal,
+        !switchingFilter && (openingPresentation != null || cachedPresentation != null), reveal,
         !sourcesReady || displayed?.source != source || displayed?.route != route || displayed?.style != style || displayed?.sorts != sorts)
 }
