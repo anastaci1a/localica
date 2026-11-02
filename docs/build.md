@@ -32,6 +32,8 @@ Final build and native commands, run only after candidate freeze:
 
 Mandatory native regressions retain presented-pixel, lifecycle, first/reopened-frame, interruption and disposal assertions. Repeated utility-popup optical recording is opt-in with `utilityPopupOpticalDiagnostics=true`. The three mandatory scene methods still run by default. Successful SwitchTap frame exports require `switchTapOpticsReview=true`. Pixel checks and bounded failure evidence remain enabled.
 
+`ScrollPerformanceTest` only measures scrolling. It is skipped by assumption unless `scrollPerformance=true`, set by the Android workflow dispatch input `scroll_performance`. Default runs report its three methods as skipped.
+
 Select diagnostic methods explicitly, never with a wildcard exclusion that might remove correctness tests.
 
 Build-report artifacts include raw JVM XML under `jvm-xml/<run>/testDebugUnitTest`, including when tests fail.
@@ -118,6 +120,10 @@ Jaudiotagger 3.0.1 uses LGPL 2.1+. Bundle its notice/license and include its sou
 
 The [Android workflow](../.github/workflows/android.yml) builds application changes on main/PR and tests API 26/36. Documentation-only changes use the separate documentation workflow. Match its two virtual CPU cores and 3,072 MiB emulator RAM locally.
 
+The native job splits each API suite into four AndroidJUnitRunner shards (`numShards`/`shardIndex`) on separate emulators with the same profile. Evidence and report artifacts end in `-shard-N`.
+
+`device-tests-summary` downloads every shard XML. It fails unless each API's union equals the source inventory exactly once, skipped assumptions included, and every shard passed. With `risk_classes`, each shard runs its slice of those classes first, then its slice of the remainder.
+
 API 36 uses explicit `lavapipe`, 720×1280 at 280 dpi, and normal system animations: automatic software/SwiftShader caused rendering crashes. Zero-duration system transitions stalled launcher/Back/picker flows. Compose assertions control their own clock. Keep Actions pinned by commit.
 
 On disposable GitHub-hosted API 26 emulators, the native runner temporarily disables preinstalled Google Search before instrumentation. Its unrelated JobScheduler crash can obstruct Localica. Cleanup restores its prior enabled state after verifying device and package ownership. Google Search data is preserved. Physical devices are untouched. Localica crashes and all assertions remain fatal.
@@ -142,7 +148,7 @@ Review [previews](#previews), current docs and resolved issues. Commit and push.
 
 ### Step 3
 
-**Wait for successful build, both device jobs, both compatibility jobs, and both distribution smoke jobs on the exact main SHA before tagging it.** The matching `vX.X.X` workflow reuses that run's APK, verifies version/signature/checksum, and publishes without another build/test matrix. Missing verification/expired artifacts require rerunning main checks. Never substitute another commit's APK. Unfilled release placeholders block publication.
+**Wait for successful build, the device-tests summary (all shards), both compatibility jobs, and both distribution smoke jobs on the exact main SHA before tagging it.** The matching `vX.X.X` workflow reuses that run's APK, verifies version/signature/checksum, and publishes without another build/test matrix. Missing verification/expired artifacts require rerunning main checks. Never substitute another commit's APK. Unfilled release placeholders block publication.
 
 ### Step 4
 

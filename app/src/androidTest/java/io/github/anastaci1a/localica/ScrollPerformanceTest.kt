@@ -27,6 +27,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.After
 import org.junit.Assert.assertTrue
+import org.junit.Assume.assumeTrue
 import org.junit.Before
 import org.junit.Test
 import java.io.File
@@ -64,6 +65,8 @@ class ScrollPerformanceTest {
     private var scenario: ActivityScenario<ComponentActivity>? = null
 
     @Before fun clearPreferences() {
+        assumeTrue("Scroll-performance measurement is opt-in: pass scrollPerformance=true (workflow_dispatch scroll_performance)",
+            InstrumentationRegistry.getArguments().getString("scrollPerformance") == "true")
         context.getSharedPreferences("browse-style", 0).edit().clear().commit()
         context.getSharedPreferences("library-query", 0).edit().clear().commit()
     }

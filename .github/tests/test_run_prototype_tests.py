@@ -596,7 +596,7 @@ class WorkflowContract(unittest.TestCase):
         workflow = yaml.safe_load((ROOT/'.github/workflows/android.yml').read_text())
         steps = workflow['jobs']['device-tests']['steps']
         upload = next(step for step in steps
-                      if step.get('with', {}).get('name') == 'device-reports-api-${{ matrix.api }}')
+                      if step.get('with', {}).get('name') == 'device-reports-api-${{ matrix.api }}-shard-${{ matrix.shard }}')
         self.assertEqual('always()', upload['if'])
         paths = upload['with']['path'].splitlines()
         self.assertIn('app/build/outputs/connected_android_test_additional_output/', paths)
