@@ -40,7 +40,7 @@ class PlaylistOpeningPlacementTest {
                     PlaylistState(listOf(playlist), false), route, {}, {}, {}, { _, _, _ -> }, null, null, true, false)
             } }
             var frames = 0
-            while (compose.onAllNodes(artTag).fetchSemanticsNodes().size < 3) {
+            while (compose.onAllNodes(artTag, useUnmergedTree = true).fetchSemanticsNodes().size < 3) {
                 check(frames++ < 400) { "The playlist never produced rows" }
                 compose.mainClock.advanceTimeByFrame()
                 Thread.sleep(10)
@@ -49,13 +49,13 @@ class PlaylistOpeningPlacementTest {
             val samples = mutableListOf<List<Rect>>()
             val images = mutableListOf<androidx.compose.ui.graphics.ImageBitmap>()
             repeat(70) {
-                samples += compose.onAllNodes(artTag).fetchSemanticsNodes().take(3).map { it.boundsInRoot }
+                samples += compose.onAllNodes(artTag, useUnmergedTree = true).fetchSemanticsNodes().take(3).map { it.boundsInRoot }
                 images += compose.onNodeWithTag("browser-list").captureToImage()
                 compose.mainClock.advanceTimeByFrame()
             }
             compose.mainClock.autoAdvance = true
             compose.waitForIdle()
-            val finalBounds = compose.onAllNodes(artTag).fetchSemanticsNodes().take(3).map { it.boundsInRoot }
+            val finalBounds = compose.onAllNodes(artTag, useUnmergedTree = true).fetchSemanticsNodes().take(3).map { it.boundsInRoot }
             val listBounds = compose.onNodeWithTag("browser-list").fetchSemanticsNode().boundsInRoot
             samples.forEachIndexed { frame, bounds ->
                 bounds.zip(finalBounds).forEachIndexed { row, (seen, final) ->
