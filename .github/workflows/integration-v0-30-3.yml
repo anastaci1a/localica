@@ -1,7 +1,7 @@
-name: Small 0.30.3 fixes focused gates (not release)
+name: Integration v0.30.3 focused gates (not release)
 'on':
   push:
-    branches: [fix/small-030-3]
+    branches: [integration/v0.30.3]
 permissions:
   contents: read
 jobs:
@@ -55,7 +55,7 @@ jobs:
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
-          name: small-030-3-api-${{ matrix.api }}
+          name: integration-v0-30-3-api-${{ matrix.api }}
           path: |
             app/build/reports/
             app/build/test-results/
