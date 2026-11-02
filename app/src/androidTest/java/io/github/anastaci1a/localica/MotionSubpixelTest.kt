@@ -121,7 +121,7 @@ class MotionSubpixelTest {
         }
         fun surface() = compose.onNodeWithTag("player-surface").fetchSemanticsNode().boundsInRoot
         val window = compose.onNodeWithTag("window").fetchSemanticsNode().boundsInRoot
-        val sweep = (0..40).map { it / 50f } + (400..1000 step 4).map { it / 1000f }
+        val sweep = (0..19).map { it / 50f } + (400..1000 step 4).map { it / 1000f }
         val surfaces = mutableListOf<Rect>()
         for (p in sweep) { snap(p); surfaces += surface() }
         assertMonotone("player left", surfaces.map { it.left })
