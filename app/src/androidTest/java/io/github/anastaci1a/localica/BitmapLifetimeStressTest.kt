@@ -6,6 +6,8 @@ import android.os.SystemClock
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.MotionDurationScale
+import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.graphics.RectangleShape
@@ -26,8 +28,13 @@ import kotlin.random.Random
  * ArtworkBlend crossfades (frozen layer readback, then CPU blur on Default, cancelled by the next
  * change), cancelled off-main blurs of fresh copies, parallel decodes, and frequent GC so the
  * native cleaners run while those owners are active. Any heap corruption aborts the process. */
+@OptIn(ExperimentalTestApi::class)
 class BitmapLifetimeStressTest {
-    @get:Rule val compose = createComposeRule()
+    // The API 26 runner disables system animations. This fixture must exercise
+    // an interrupted animation even when run alone after the selected suite.
+    @get:Rule val compose = createComposeRule(effectContext = object : MotionDurationScale {
+        override val scaleFactor = 1f
+    })
 
     private fun artwork(random: Random, size: Int = 96 + random.nextInt(96)): Bitmap {
         val colors = IntArray(size * size)
@@ -56,6 +63,7 @@ class BitmapLifetimeStressTest {
             }
         }
         compose.waitForIdle()
+        val originalAutoAdvance = compose.mainClock.autoAdvance
         compose.mainClock.autoAdvance = false
         val encoded = ByteArrayOutputStream().also { artwork(random, 320).compress(Bitmap.CompressFormat.PNG, 100, it) }.toByteArray()
         val blurs = AtomicInteger(); val cancelledBlurs = AtomicInteger(); val decodes = AtomicInteger()
@@ -90,7 +98,8 @@ class BitmapLifetimeStressTest {
                 if (++changes % 8 == 0) { Runtime.getRuntime().gc(); System.runFinalization() }
             }
         } finally {
-            runBlocking { background.coroutineContext[Job]!!.cancelAndJoin() }
+            try { runBlocking { background.coroutineContext[Job]!!.cancelAndJoin() } }
+            finally { compose.mainClock.autoAdvance = originalAutoAdvance }
         }
         compose.mainClock.autoAdvance = true
         compose.waitForIdle()
