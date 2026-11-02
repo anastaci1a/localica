@@ -318,7 +318,7 @@ if a==['get-serialno']:""")
 
     def test_workflow_pins_tools_always_uploads_and_never_wraps_compatibility(self):
         workflow=(ROOT/'.github/workflows/android.yml').read_text()
-        native=workflow.split('  device-tests:\n',1)[1].split('\n  compatibility:',1)[0]
+        native=workflow.split('  device-tests:\n',1)[1].split('\n  device-tests-summary:',1)[0]
         self.assertIn("LOCALICA_LIVE_EVIDENCE: 'true'",native)
         self.assertIn('actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020',native)
         self.assertIn("node-version: '24'",native)
