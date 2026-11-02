@@ -13,32 +13,39 @@ import kotlin.math.abs
  * lyrics animation a changed ink applies immediately, as before.
  */
 internal class PlayerInkTransition(initial: Color) {
-    private var target = initial
-    private var start = initial
-    private var startProgress = 0f
-    private var lastEnd = Float.NaN
-    private var shown = initial
+    /** What one resolution leaves behind; applying it is separate so composition never mutates. */
+    internal data class Step(val shown: Color, val target: Color, val start: Color, val startProgress: Float, val lastEnd: Float)
 
-    /** [progress] is the lyrics mode visibility (0 closed, 1 open); [open] is the mode being animated toward. */
-    fun update(inkTarget: Color, progress: Float, open: Boolean): Color {
+    private var committed = Step(initial, initial, initial, 0f, Float.NaN)
+
+    /**
+     * Pure: derives the ink to show from the last committed step and the current inputs, without
+     * changing any state, so it is safe to call during composition. [progress] is the lyrics mode
+     * visibility (0 closed, 1 open); [open] is the mode being animated toward. Publish the result
+     * with [commit] from a SideEffect.
+     */
+    fun resolve(inkTarget: Color, progress: Float, open: Boolean): Step {
         val end = if (open) 1f else 0f
         val animating = abs(progress - end) > SETTLED
-        if (!animating) {
-            target = inkTarget; start = inkTarget; shown = inkTarget; lastEnd = end
-            return shown
-        }
+        val s = committed
+        if (!animating) return Step(inkTarget, inkTarget, inkTarget, s.startProgress, end)
+        var start = s.start; var startProgress = s.startProgress; var target = s.target
         if (inkTarget != target) {
-            start = shown; startProgress = progress; target = inkTarget
-        } else if (lastEnd != end && shown != target) {
+            start = s.shown; startProgress = progress; target = inkTarget
+        } else if (s.lastEnd != end && s.shown != target) {
             // The animation reversed: continue from the displayed ink rather than jumping.
-            start = shown; startProgress = progress
+            start = s.shown; startProgress = progress
         }
-        lastEnd = end
-        shown = lerp(start, target, ink(progress, end))
-        return shown
+        return Step(lerp(start, target, ink(progress, end, startProgress)), target, start, startProgress, end)
     }
 
-    private fun ink(progress: Float, end: Float): Float {
+    fun commit(step: Step) { committed = step }
+
+    /** Resolve and commit in one call, for callers outside composition. */
+    fun update(inkTarget: Color, progress: Float, open: Boolean): Color =
+        resolve(inkTarget, progress, open).also(::commit).shown
+
+    private fun ink(progress: Float, end: Float, startProgress: Float): Float {
         val span = end - startProgress
         return if (abs(span) < SETTLED) 1f else ((progress - startProgress) / span).coerceIn(0f, 1f)
     }
