@@ -154,13 +154,20 @@ class LyricsReturnBackdropTest {
         // Keep the same document, scroll state and active return consumer while the
         // lower edge follows the presented title while the upper edge stays mounted to the
         // player, inside its stable 320 dp layout in both directions.
-        for ((index, pose) in (poses + poses.dropLast(1).asReversed()).withIndex()) {
+        val sequence = poses + poses.dropLast(1).asReversed()
+        for ((index, pose) in sequence.withIndex()) {
             compose.runOnIdle { state.pose = pose; state.depth = .6f }
             compose.onNodeWithContentDescription(ReturnLabel).assertIsDisplayed()
             updateSampleOrigin()
             // Capture with optics still enabled, before toggling the negative
             // control: reacquiring a lease must not conceal a stale motion frame.
-            val shallow = capture("viewport-$index-shallow", expectFresh = index > 0)
+            // Only a pose that resizes the viewport changes the source-local pixels and
+            // must publish a fresh Legacy readback. A pure translation of the player moves
+            // the source and its return lens together; the source-local snapshot stays
+            // valid and only the draw-time registration moves, which the optical
+            // assertions below verify at the translated pose and on reversal.
+            val resized = index > 0 && sequence[index - 1].titleTop != pose.titleTop
+            val shallow = capture("viewport-$index-shallow", expectFresh = resized)
             val button = returnBounds()
             val probe = localBounds(compose.onNodeWithTag(ProbeTag))
             assertSame("Viewport motion must retain the active sampling scene", source, requireNotNull(sampledScene).source)
