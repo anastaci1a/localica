@@ -37,7 +37,8 @@ class PlaylistOpeningPlacementTest {
             compose.mainClock.autoAdvance = false
             compose.setContent { LocalicaTheme {
                 BrowserScreen(LibraryUiState(LibrarySnapshot(folders = listOf(FolderSelection("root", "Music")), tracks = tracks), loading = false),
-                    PlaylistState(listOf(playlist), false), route, {}, {}, {}, { _, _, _ -> }, null, null, true, false)
+                    PlaylistState(listOf(playlist), false), route, {}, {}, {}, { _, _, _ -> }, null, null, true, false,
+                    queryDispatcher = kotlinx.coroutines.Dispatchers.Unconfined)
             } }
             var frames = 0
             while (compose.onAllNodes(artTag, useUnmergedTree = true).fetchSemanticsNodes().size < 3) {
