@@ -337,7 +337,7 @@ class PlayerExpansionMotionTest {
         verifyCornerContactAndHeldReversal(960.dp)
 
     @Test fun compactArtworkActuallyMeetsTheTitleCornerAndRetracesDuringHeldReversal() =
-        verifyCornerContactAndHeldReversal(600.dp)
+        verifyCornerContactAndHeldReversal(840.dp)
 
     private fun verifyCornerContactAndHeldReversal(height: Dp) {
         val progress = Animatable(0f)
@@ -405,7 +405,7 @@ class PlayerExpansionMotionTest {
         lateinit var scope: CoroutineScope
         compose.setContent {
             LocalicaTheme { CompositionLocalProvider(LocalPlayerArtworkGrowthObserver provides { growth = it }) {
-                BoxWithConstraints(Modifier.requiredSize(412.dp, 600.dp)) {
+                BoxWithConstraints(Modifier.requiredSize(412.dp, 824.dp)) {
                     scope = rememberCoroutineScope()
                     PlayerSurface(state, false, {}, InterfaceSettings(artworkLayout = layout),
                         progress, {}, {}, {}, {}, {}, {}, visual = visual)
