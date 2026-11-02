@@ -212,7 +212,8 @@ jobs:
           path: shard-reports
       - name: Verify the shard union equals the source inventory
         run: |
-          set -euo pipefail
+          set -uo pipefail
+          status=0
           for api in 26 36; do
             args=()
             count=0
@@ -220,10 +221,11 @@ jobs:
               [ -d "$dir" ] || continue
               count=$((count + 1))
             done
-            test "$count" = "$LOCALICA_DEVICE_SHARDS" || { echo "API $api: $count of $LOCALICA_DEVICE_SHARDS shard reports" >&2; exit 1; }
+            test "$count" = "$LOCALICA_DEVICE_SHARDS" || { echo "API $api: $count of $LOCALICA_DEVICE_SHARDS shard reports" >&2; status=1; continue; }
             while IFS= read -r dir; do args+=(--xml-root "$dir"); done < <(find shard-reports -type d -name androidTest-results -path "*-reports-api-$api-shard-*" | sort)
-            python3 .github/test-evidence/full_partition.py union --root "$PWD" --api "$api" --shards "$LOCALICA_DEVICE_SHARDS" "${args[@]}" | tee "union-api-$api.json"
+            python3 .github/test-evidence/full_partition.py union --root "$PWD" --api "$api" --shards "$LOCALICA_DEVICE_SHARDS" "${args[@]}" | tee "union-api-$api.json" || status=1
           done
+          exit $status
       - name: Require every shard job to have succeeded
         if: always()
         run: test "${{ needs.device-tests.result }}" = success
