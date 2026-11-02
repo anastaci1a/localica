@@ -92,7 +92,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     // Do not subscribe the ordinary player to the sampling-frame clock for diagnostics.
     val inkFrame = if (inkObserver != null) polarity.frame else null
     val lightInk = inkDecision.lightInk
-    val playerInk = if (lightInk) Color.White else Color.Black
+    val inkTarget = if (lightInk) Color.White else Color.Black
     // Preserve the pre-#473 wash policy; foreground selection must not retone the background.
     val tone = GlassTone(settings.glass.contrast, settings.glass.contrastWeight, !artwork.palette.isLight())
     val paletteDuration = settings.motionDuration(550)
@@ -101,6 +101,9 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     // adapters need its prepared pixels whenever that header is visible too.
     val lyricBackdrop = rememberFrostedBackdrop(listOf(artwork, settings.artworkLayout, settings.glass), p > .7f, dark = lightInk)
     val lyricVisibility by animateFloatAsState(if (lyricsOpen) 1f else 0f, tween(settings.motionDuration(550)), label = "Lyrics layout")
+    // A light/dark foreground change during the lyrics animation eases with its progress.
+    val inkTransition = remember { PlayerInkTransition(inkTarget) }
+    val playerInk = inkTransition.update(inkTarget, lyricVisibility, lyricsOpen)
     // Mode selection survives minimization. The finger drives its layout and reveal
     // immediately, including the fully expanded endpoint before onExpanded changes.
     val lyricMotion = playerLyricsMotion(p, lyricVisibility)
