@@ -31,6 +31,17 @@ class PlayerLyricsForegroundTest {
         assertMix(white, black, 1f, ink.update(black, 1f, true))
     }
 
+    @Test fun resolvingIsPureUntilCommitted() {
+        val ink = PlayerInkTransition(white)
+        ink.update(white, 0f, false)
+        // Repeated resolution during recomposition changes nothing; only commit does.
+        val first = ink.resolve(black, .5f, true)
+        assertEquals(first, ink.resolve(black, .5f, true))
+        assertEquals(first, ink.resolve(black, .5f, true).also { ink.resolve(white, .1f, true) })
+        ink.commit(first)
+        assertMix(white, black, .5f, ink.resolve(black, .75f, true).shown)
+    }
+
     @Test fun midProgressIsNeitherEndpoint() {
         val ink = PlayerInkTransition(white)
         ink.update(white, 0f, false)

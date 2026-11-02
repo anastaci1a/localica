@@ -103,7 +103,9 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     val lyricVisibility by animateFloatAsState(if (lyricsOpen) 1f else 0f, tween(settings.motionDuration(550)), label = "Lyrics layout")
     // A light/dark foreground change during the lyrics animation eases with its progress.
     val inkTransition = remember { PlayerInkTransition(inkTarget) }
-    val playerInk = inkTransition.update(inkTarget, lyricVisibility, lyricsOpen)
+    val inkStep = inkTransition.resolve(inkTarget, lyricVisibility, lyricsOpen)
+    val playerInk = inkStep.shown
+    SideEffect { inkTransition.commit(inkStep) }
     // Mode selection survives minimization. The finger drives its layout and reveal
     // immediately, including the fully expanded endpoint before onExpanded changes.
     val lyricMotion = playerLyricsMotion(p, lyricVisibility)
