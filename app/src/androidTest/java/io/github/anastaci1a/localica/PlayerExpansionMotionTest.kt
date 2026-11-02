@@ -361,7 +361,7 @@ class PlayerExpansionMotionTest {
         }
         compose.waitForIdle()
         val initial = requireNotNull(growth)
-        assertTrue("$height fixture must use corner-aligned curve", initial.curve.cornerAligned)
+        if (!expectScaledToBand) assertTrue("$height fixture must use corner-aligned curve", initial.curve.cornerAligned)
         compose.mainClock.autoAdvance = false
         fun gap(p: Float): Float {
             val points = initial.trajectory
@@ -372,12 +372,16 @@ class PlayerExpansionMotionTest {
             val title = a.titleTop + (b.titleTop - a.titleTop) * t
             return top + 32f + (initial.fullHeight - 32f) * playerArtworkSizeProgress(p, initial.curve) - title
         }
-        var lo = 0f; var hi = .5f
-        assertTrue(gap(lo) > 0f && gap(hi) < 0f)
-        repeat(24) { val mid = (lo + hi) / 2f; if (gap(mid) > 0f) lo = mid else hi = mid }
-        val contact = (lo + hi) / 2f
+        // The compact (scaled-to-band) cover is not corner-aligned (#508): it never reaches the title corner.
+        var contact = Float.NaN
+        if (!expectScaledToBand) {
+            var lo = 0f; var hi = .5f
+            assertTrue(gap(lo) > 0f && gap(hi) < 0f)
+            repeat(24) { val mid = (lo + hi) / 2f; if (gap(mid) > 0f) lo = mid else hi = mid }
+            contact = (lo + hi) / 2f
+        }
         val snapshots = mutableMapOf<Float, DpRect>()
-        val samples = listOf(0f, .001f, .03f, contact - .003f, contact, contact + .003f, .2f, .4f, .8f, 1f).sorted()
+        val samples = listOf(0f, .001f, .03f, contact - .003f, contact, contact + .003f, .2f, .4f, .8f, 1f).filter { !it.isNaN() }.sorted()
         for (p in samples + samples.dropLast(1).asReversed()) {
             compose.runOnIdle {
                 val snap = scope.launch(start = CoroutineStart.UNDISPATCHED) { progress.snapTo(p) }
@@ -423,7 +427,7 @@ class PlayerExpansionMotionTest {
         lateinit var scope: CoroutineScope
         compose.setContent {
             LocalicaTheme { CompositionLocalProvider(LocalPlayerArtworkGrowthObserver provides { growth = it }) {
-                BoxWithConstraints(Modifier.requiredSize(412.dp, 600.dp)) {
+                BoxWithConstraints(Modifier.requiredSize(412.dp, 824.dp)) {
                     scope = rememberCoroutineScope()
                     PlayerSurface(state, false, {}, InterfaceSettings(artworkLayout = layout),
                         progress, {}, {}, {}, {}, {}, {}, visual = visual)
@@ -431,7 +435,7 @@ class PlayerExpansionMotionTest {
             } }
         }
         compose.waitForIdle()
-        assertTrue("Compact fixture must start with admitted contact", requireNotNull(growth).curve.cornerAligned)
+        assertTrue("Fixture must start with admitted contact", requireNotNull(growth).curve.cornerAligned)
         compose.mainClock.autoAdvance = false
         compose.runOnIdle { scope.launch(start = CoroutineStart.UNDISPATCHED) { progress.snapTo(.5f) } }
         compose.mainClock.advanceTimeByFrame()
