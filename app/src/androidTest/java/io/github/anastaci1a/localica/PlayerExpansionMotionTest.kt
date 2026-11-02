@@ -336,17 +336,23 @@ class PlayerExpansionMotionTest {
     @Test fun tallArtworkActuallyMeetsTheTitleCornerAndRetracesDuringHeldReversal() =
         verifyCornerContactAndHeldReversal(960.dp)
 
-    @Test fun compactArtworkActuallyMeetsTheTitleCornerAndRetracesDuringHeldReversal() =
+    @Test fun unscaledArtworkActuallyMeetsTheTitleCornerAndRetracesDuringHeldReversal() =
         verifyCornerContactAndHeldReversal(840.dp)
 
-    private fun verifyCornerContactAndHeldReversal(height: Dp) {
+    /** The 600 dp compact fixture: the sharp cover is scaled to fit the band between the controls and the title (#508). */
+    @Test fun compactArtworkActuallyMeetsTheTitleCornerAndRetracesDuringHeldReversal() =
+        verifyCornerContactAndHeldReversal(600.dp, expectScaledToBand = true)
+
+    private fun verifyCornerContactAndHeldReversal(height: Dp, expectScaledToBand: Boolean = false) {
         val progress = Animatable(0f)
+        var statusInset = 0f
         var growth: PlayerArtworkGrowthPresentation? = null
         lateinit var scope: CoroutineScope
         compose.setContent {
             LocalicaTheme { CompositionLocalProvider(LocalPlayerArtworkGrowthObserver provides { growth = it }) {
                 // Logical compact/tall fixtures must exercise admission on either emulator size.
                 BoxWithConstraints(Modifier.requiredSize(412.dp, height)) {
+                    statusInset = WindowInsets.statusBars.asPaddingValues().calculateTopPadding().value
                     scope = rememberCoroutineScope()
                     PlayerSurface(state, false, {}, InterfaceSettings(artworkLayout = ArtworkLayout.Floating),
                         progress, {}, {}, {}, {}, {}, {}, visual = visual)
@@ -393,6 +399,18 @@ class PlayerExpansionMotionTest {
             }
             if (artwork.bottom > title.top + 1.dp && artwork.top < title.bottom)
                 assertTrue("Artwork must remain left of title before clearing it", artwork.right <= title.left + 1.dp)
+            if (expectScaledToBand && p == 1f) {
+                val root = compose.onNodeWithTag("player-surface", true).getUnclippedBoundsInRoot()
+                val controlsBottom = root.top.value + statusInset + PlayerTopControlsHeight.value
+                val band = playerArtworkBand(controlsBottom, title.top.value)
+                assertTrue("The scaled cover fits inside the band: ${artwork.height.value} vs ${band.height}",
+                    artwork.height.value <= band.fittingHeight() + 1f)
+                assertTrue("Gap above the cover is at least 8 dp: ${artwork.top.value - controlsBottom}",
+                    artwork.top.value - controlsBottom >= PlayerArtworkEdgePadding - 1f)
+                assertTrue("Gap below the cover is at least 8 dp: ${title.top.value - artwork.bottom.value}",
+                    title.top.value - artwork.bottom.value >= PlayerArtworkEdgePadding - 1f)
+                assertTrue("The cover does not overlap the title", artwork.bottom <= title.top + 1.dp)
+            }
             snapshots[p]?.let { assertEquals("Native reversal retraces the held artwork", it, artwork) }
             snapshots[p] = artwork
         }
@@ -405,7 +423,7 @@ class PlayerExpansionMotionTest {
         lateinit var scope: CoroutineScope
         compose.setContent {
             LocalicaTheme { CompositionLocalProvider(LocalPlayerArtworkGrowthObserver provides { growth = it }) {
-                BoxWithConstraints(Modifier.requiredSize(412.dp, 824.dp)) {
+                BoxWithConstraints(Modifier.requiredSize(412.dp, 600.dp)) {
                     scope = rememberCoroutineScope()
                     PlayerSurface(state, false, {}, InterfaceSettings(artworkLayout = layout),
                         progress, {}, {}, {}, {}, {}, {}, visual = visual)

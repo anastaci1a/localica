@@ -32,7 +32,7 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - uses: ./.github/actions/focused-android-setup
       - name: Compile and run the shadow strength unit tests
-        run: ./gradlew testDebugUnitTest --tests io.github.anastaci1a.localica.ui.GlassShadowStrengthCurveTest --tests io.github.anastaci1a.localica.ui.GlassBackendTest --tests io.github.anastaci1a.localica.ui.MotionPixelsTest --tests io.github.anastaci1a.localica.ui.BrowsePinchMotionTest --tests io.github.anastaci1a.localica.ui.PlayerExpansionMotionTest assembleDebug assembleDebugAndroidTest --no-daemon --max-workers=2
+        run: ./gradlew testDebugUnitTest --tests io.github.anastaci1a.localica.ui.GlassShadowStrengthCurveTest --tests io.github.anastaci1a.localica.ui.GlassBackendTest --tests io.github.anastaci1a.localica.ui.MotionPixelsTest --tests io.github.anastaci1a.localica.ui.BrowsePinchMotionTest --tests io.github.anastaci1a.localica.ui.PlayerExpansionMotionTest --tests io.github.anastaci1a.localica.ui.PlayerArtworkBandTest --tests io.github.anastaci1a.localica.ui.GlassToneTest assembleDebug assembleDebugAndroidTest --no-daemon --max-workers=2
       - uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
         with:
           api-level: ${{ matrix.api }}
