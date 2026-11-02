@@ -17,12 +17,11 @@ class ArtworkReader(private val context: Context) {
             if (parsed.scheme == "file") {
                 val file = java.io.File(parsed.path.orEmpty())
                 if (file.canonicalFile.parentFile == java.io.File(context.filesDir, "playlist-covers").canonicalFile && file.length() <= 16 * 1024 * 1024)
-                    return@withContext decodeArtwork(file.readBytes(), edge)?.also { it.prepareToDraw() }
+                    return@withContext decodeArtwork(file.readBytes(), edge)?.also(::prewarmUpload)
             }
             val bytes = platformPicture(uri) ?: supplementalPicture(uri)
                 ?: runCatching { ContainerTags.read(context, uri)?.firstArtwork?.binaryData }.getOrNull()
-            // Kick the GPU upload here, off Main, so the first draw does not pay for it.
-            bytes?.let { decodeArtwork(it, edge) }?.also { it.prepareToDraw() }
+            bytes?.let { decodeArtwork(it, edge) }?.also(::prewarmUpload)
         } catch (cancelled: CancellationException) { throw cancelled }
         catch (_: Exception) { null }
     }
@@ -39,6 +38,13 @@ class ArtworkReader(private val context: Context) {
         } catch (_: Exception) { null }
         finally { retriever.release() }
     }
+}
+
+/** Kick the GPU upload here, off Main, so the first draw does not pay for it. Android 8.x's
+ * OpenGL TextureCache prefetch adds a cross-thread native reference to each decoded heap bitmap;
+ * keep the prewarm to the Skia pipeline (API 28+), where its benefit was measured (#501). */
+private fun prewarmUpload(bitmap: Bitmap) {
+    if (android.os.Build.VERSION.SDK_INT >= 28) bitmap.prepareToDraw()
 }
 
 internal fun decodeArtwork(bytes: ByteArray, edge: Int = 768): Bitmap? {
