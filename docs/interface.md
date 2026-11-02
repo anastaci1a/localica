@@ -434,9 +434,11 @@ Alternative: floating cover over an artwork-colored matte/acrylic gradient with 
 
 Both layouts animate into one integrated lyrics state: no boundary or Lyrics heading. Blend lyrics into the upper screen, lower metadata/transport, fade/slide extra actions away. Keep metadata above seek and transport accessible. Fade the artwork and its feathered edges uniformly.
 
-Selected lyrics mode determines all target positions throughout held player movement, rather than switching at release. The lyrics viewport keeps its upper screen anchor until clipped by the player. Its bottom follows the presented title with the normal gap.
+Selected lyrics mode determines all target positions throughout held player movement, rather than switching at release.
 
-Lyrics and their empty placeholder drift more slowly inside those same faded/clipped bounds, retaining content geometry and scroll state. They fade out early in collapse and fade in late on the inverse expansion. At fully expanded held progress they are fully visible and artwork is gone. Artwork returns continuously during held collapse before release.
+The lyrics viewport is mounted to the moving player: its upper edge keeps its offset below the player's top and its bottom follows the presented title with the normal gap, so both edges travel with the shrinking or growing player and the current line keeps its relative position inside it.
+
+Lyrics and their empty placeholder move rigidly inside those same faded/clipped bounds, retaining content geometry and scroll state. They fade out early in collapse and fade in late on the inverse expansion. At fully expanded held progress they are fully visible and artwork is gone. Artwork returns continuously during held collapse before release.
 
 Album-only extra actions remain hidden throughout lyrics-mode movement, including intermediate frames. Partial reversals retain lyric scroll/source state. Keep every lyrics entry point available even without local lyrics.
 
@@ -452,7 +454,7 @@ Follow real playback/seeks/queue changes with active-line emphasis, fluid moveme
 
 Show the shared quiet empty state only after the current lookup finds no usable lyrics without reporting a read error. Never during loading, failed reads or a real lyric document's arrival. Available lyrics remain visible when another source fails.
 
-Keep its inner position fixed during lyrics-mode changes. Player travel uses the same slower content motion and viewport as real lyrics. [Source policy](product.md#lyrics-sources).
+Keep its inner position fixed during lyrics-mode changes. Player travel uses the same viewport as real lyrics. [Source policy](product.md#lyrics-sources).
 
 ## Scanner and folders
 
