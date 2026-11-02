@@ -55,6 +55,9 @@ internal class BrowsePinchMotion {
     val recordingFrozen: Boolean get() = capturing || readbackPending
     var destinationReady by mutableStateOf(false)
     var header: CollectionPinchHeader? = null
+    /** Set when the scrolled-away header cannot be measured: this transaction then runs without it. */
+    var headerless = false
+    val activeHeader: CollectionPinchHeader? get() = if (headerless) null else header
     var captureProblem = false
     var transaction = 0L
         private set
@@ -119,6 +122,7 @@ internal class BrowsePinchMotion {
             header?.detachPin()?.let { releaseAfterRead.add(it) }
         }
         header?.clear()
+        headerless = false
         transaction++
         releaseArtwork?.invoke(); releaseArtwork = null
         committed = false
@@ -265,7 +269,7 @@ internal fun Modifier.browsePinch(enabled: Boolean, motion: BrowsePinchMotion, s
     val artwork = LocalBrowseArtwork.current
     val layoutDirection = androidx.compose.ui.platform.LocalLayoutDirection.current
     suspend fun restoreHeaderSource(generation: Long, source: BrowseStyle) {
-        val header = motion.header ?: return
+        val header = motion.activeHeader ?: return
         if (!motion.owns(generation)) return
         motion.progress.snapTo(0f)
         header.beginHandoff(false)
@@ -278,7 +282,7 @@ internal fun Modifier.browsePinch(enabled: Boolean, motion: BrowsePinchMotion, s
     OnModalGestureCancellation {
         val source = motion.source
         if (source != null) {
-            val header = motion.header
+            val header = motion.activeHeader
             if (header != null && !motion.capturing) {
                 if (!motion.committed && !motion.takeover) {
                     val generation = motion.transaction
@@ -347,7 +351,7 @@ internal fun Modifier.browsePinch(enabled: Boolean, motion: BrowsePinchMotion, s
                         if (reducedMotion) motion.progress.snapTo(if (commit) 1f else 0f)
                         else motion.progress.animateTo(if (commit) 1f else 0f, androidx.compose.animation.core.tween(220))
                         if (destination != null) {
-                            motion.header?.beginHandoff(commit)
+                            motion.activeHeader?.beginHandoff(commit)
                             if (cancelled) onPreview(destination) else {
                                 // A takeover after persistence only retires retained drawings;
                                 // it must not undo an already completed, genuine release.
@@ -356,12 +360,12 @@ internal fun Modifier.browsePinch(enabled: Boolean, motion: BrowsePinchMotion, s
                             }
                             motion.focusKey?.let {
                                 val sourceTop = motion.bounds[it]?.top
-                                onAnchor(if (!commit && motion.header != null && sourceTop != null)
+                                onAnchor(if (!commit && motion.activeHeader != null && sourceTop != null)
                                     BrowseZoomAnchor(route, destination, it, sourceTop.toInt(), 0f, motion.focusEdge)
                                 else BrowseZoomAnchor(route, destination, it, motion.focusTop, motion.focusFraction, motion.focusEdge))
                             }
                         }
-                        if (motion.header != null) motion.header?.awaitHandoff()
+                        if (motion.activeHeader != null) motion.activeHeader?.awaitHandoff()
                         else { withFrameNanos { }; withFrameNanos { } }
                     } finally { if (motion.owns(generation) && !motion.takeover) motion.clearTransaction() }
                 }
@@ -371,7 +375,7 @@ internal fun Modifier.browsePinch(enabled: Boolean, motion: BrowsePinchMotion, s
             albumSongs = route.supportsTracklist())
         if (next != style && !motion.disposed && motion.source == null && !motion.readbackPending) {
             val visible = gridState.layoutInfo.visibleItemsInfo.filter { it.key != "browser-notice" }
-            if (motion.header != null && visible.isEmpty()) return@pinchToChangeView false
+            if (motion.activeHeader != null && visible.isEmpty()) return@pinchToChangeView false
             motion.releaseArtwork = artwork?.retainForTransition()
             motion.capturing = true
             motion.source = style
@@ -418,15 +422,24 @@ internal fun Modifier.browsePinch(enabled: Boolean, motion: BrowsePinchMotion, s
                 var previewPublished = false
                 try {
                     motion.frozen.clear()
-                    motion.header?.let { header ->
+                    motion.activeHeader?.let { header ->
                         header.viewport = motion.viewportCoordinates
-                        header.begin(generation, style, next)
+                        // A header scrolled far away cannot be placed by the public beyond-bounds
+                        // measurement. It has nothing visible to freeze: pinch without it.
+                        val measured = try { header.begin(generation, style, next); true } catch (failure: IllegalStateException) {
+                            if (gridState.layoutInfo.visibleItemsInfo.any { it.key == "browser-notice" }) throw failure
+                            android.util.Log.w("BrowsePinch", "Scrolled-away header not measurable; pinching without it", failure)
+                            motion.headerless = true
+                            false
+                        }
+                        if (measured) {
                         // No native read has begun: this preparation wait can still
                         // cancel normally. Pinning keeps the offscreen producer mounted.
                         kotlinx.coroutines.withTimeout(3000) {
                             while (header.recordedRequest != header.captureRequest || header.layer?.size == androidx.compose.ui.unit.IntSize.Zero || header.staticLayer?.size == androidx.compose.ui.unit.IntSize.Zero) {
                                 withFrameNanos { }
                             }
+                        }
                         }
                     }
                     // Freeze all visible drawings in one readback before destination
@@ -448,13 +461,13 @@ internal fun Modifier.browsePinch(enabled: Boolean, motion: BrowsePinchMotion, s
                         listOfNotNull(motion.retained[entry.key]?.let { PinchCaptureDrawing(entry.key, 0, it) },
                             motion.text[entry.key]?.layer?.let { PinchCaptureDrawing(entry.key, 1, it) },
                             motion.artwork[entry.key]?.layer?.let { PinchCaptureDrawing(entry.key, 2, it) })
-                    } + listOfNotNull(motion.header?.layer?.let { PinchCaptureDrawing(PinchHeaderCaptureKey, 3, it) },
-                        motion.header?.staticLayer?.let { PinchCaptureDrawing(PinchHeaderStaticCaptureKey, 4, it) }))
+                    } + listOfNotNull(motion.activeHeader?.layer?.let { PinchCaptureDrawing(PinchHeaderCaptureKey, 3, it) },
+                        motion.activeHeader?.staticLayer?.let { PinchCaptureDrawing(PinchHeaderStaticCaptureKey, 4, it) }))
                         .filter { !it.layer.isReleased && it.size.width > 0 && it.size.height > 0 }
                     if (drawings.isNotEmpty()) {
                         val atlasLayout = packPinchAtlas(drawings.map { it.size }, width)
                         val origins = atlasLayout.origins
-                        if (motion.header?.observer != null) android.util.Log.i("PinchAtlas",
+                        if (motion.activeHeader?.observer != null) android.util.Log.i("PinchAtlas",
                             "width=${atlasLayout.size.width} height=${atlasLayout.size.height} regions=${drawings.size}")
                         // Keep the tint with the same source snapshot even if playback or
                         // virtualization changes the live rows during readback.
@@ -462,7 +475,7 @@ internal fun Modifier.browsePinch(enabled: Boolean, motion: BrowsePinchMotion, s
                         motion.readbackPending = true
                         val image = try {
                             readback.capture(graphicsContext, density, layoutDirection, onPhase = { phase ->
-                                if (motion.header?.observer != null) android.util.Log.i("PinchAtlas", "phase=$phase generation=$generation")
+                                if (motion.activeHeader?.observer != null) android.util.Log.i("PinchAtlas", "phase=$phase generation=$generation")
                             }, onDeadline = {
                                 if (motion.owns(generation)) { onAnchor(null); motion.clearTransaction() }
                             }) { atlas ->
@@ -482,7 +495,7 @@ internal fun Modifier.browsePinch(enabled: Boolean, motion: BrowsePinchMotion, s
                             motion.frozen[drawing.key] = FrozenBrowseItem(image, origins[i], drawing.size,
                                 highlights[drawing.key]?.let(::RetainedCurrentSongHighlight), endpoints[drawing.key], art[drawing.key], text[drawing.key])
                         } }
-                        motion.header?.freeze(checkNotNull(parts(3)[PinchHeaderCaptureKey]),
+                        motion.activeHeader?.freeze(checkNotNull(parts(3)[PinchHeaderCaptureKey]),
                             checkNotNull(parts(4)[PinchHeaderStaticCaptureKey]))
                     }
                     if (motion.owns(generation)) {
@@ -490,7 +503,7 @@ internal fun Modifier.browsePinch(enabled: Boolean, motion: BrowsePinchMotion, s
                         onPreview(next)
                         previewPublished = true
                         motion.focusKey?.let { onAnchor(BrowseZoomAnchor(route, next, it, motion.focusTop, motion.focusFraction, motion.focusEdge)) }
-                        motion.header?.let { header ->
+                        motion.activeHeader?.let { header ->
                             check(kotlinx.coroutines.withTimeoutOrNull(3000) { header.awaitDestination(); true } == true) {
                                 "Header target did not supply anchor-corrected geometry before preview expiry"
                             }
@@ -507,7 +520,7 @@ internal fun Modifier.browsePinch(enabled: Boolean, motion: BrowsePinchMotion, s
                 } catch (failure: Exception) {
                     android.util.Log.w("BrowsePinch", "Source capture failed; retaining the original view", failure)
                     if (motion.owns(generation)) {
-                        if (previewPublished && motion.header != null && !motion.takeover) {
+                        if (previewPublished && motion.activeHeader != null && !motion.takeover) {
                             motion.held = false
                             restoreHeaderSource(generation, style)
                             if (motion.owns(generation)) motion.clearTransaction()
