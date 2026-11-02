@@ -56,9 +56,11 @@ class BitmapLifetimeStressTest {
         val random = Random(501)
         var shown by mutableStateOf(visual(random))
         val frozenFrames = AtomicInteger()
+        val admitted = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
         compose.setContent {
-            ArtworkBlend(shown, Modifier.size(220.dp), duration = 260,
+            ArtworkBlend(shown, Modifier.size(220.dp), duration = 1000,
                 onBackgroundFrame = { if (it.frozenVisible) frozenFrames.incrementAndGet() }) { frame ->
+                SideEffect { frame.contentKey?.let { admitted.add(it) } }
                 PlayerArtworkFrame(frame, Modifier.size(220.dp), RectangleShape, ContentScale.Crop)
             }
         }
@@ -91,8 +93,14 @@ class BitmapLifetimeStressTest {
             while (SystemClock.uptimeMillis() < deadline) {
                 val next = visual(random)
                 compose.runOnUiThread { shown = next }
-                // Step part of a crossfade, then let the real renderer draw (and the readback
-                // callback run) before the next change interrupts it.
+                // Await admission after readback/CPU preparation, without letting an entire
+                // transition elapse. Constant supersession can otherwise cancel every
+                // blur before a frozen frame is ever published.
+                compose.waitUntil(2000) {
+                    compose.mainClock.advanceTimeByFrame()
+                    next.contentKey in admitted
+                }
+                // Interrupt the admitted animation after a partial real draw.
                 compose.mainClock.advanceTimeBy(16L + random.nextLong(140))
                 SystemClock.sleep(16L + random.nextLong(40))
                 if (++changes % 8 == 0) { Runtime.getRuntime().gc(); System.runFinalization() }
