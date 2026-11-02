@@ -14,7 +14,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.navigation.GlassAppearance
 import io.github.anastaci1a.localica.navigation.MainTab
@@ -28,7 +27,7 @@ import kotlin.math.roundToInt
 
 /** Real navbar placement exercises the circular-lens case; pixels verify padded sample origins. */
 class SelectorReboundRecordingTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
     private lateinit var view: View
     private var source: FrostedBackdrop? = null
     private var stage by mutableIntStateOf(0)

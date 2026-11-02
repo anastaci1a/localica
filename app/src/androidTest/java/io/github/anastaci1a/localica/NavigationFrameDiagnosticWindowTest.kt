@@ -5,7 +5,6 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.view.View
 import androidx.activity.ComponentActivity
-import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
@@ -208,7 +207,7 @@ class NavigationFrameDiagnosticWindowTest {
 
 /** One real attached-Window protocol; pure predicates above do not launch this Activity. */
 class NavigationFrameDiagnosticWindowNativeTest {
-    @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
+    @get:Rule val compose = localicaAndroidComposeRule<ComponentActivity>()
 
     @Test fun fixedPostEndDrawsYieldOnlyAnIncompleteReceivedSubsetReceipt() {
         val view = FixedDrawView(compose.activity)

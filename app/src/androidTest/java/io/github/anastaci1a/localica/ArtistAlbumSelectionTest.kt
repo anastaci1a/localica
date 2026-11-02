@@ -3,7 +3,6 @@ package io.github.anastaci1a.localica
 import androidx.compose.runtime.*
 import androidx.compose.ui.test.*
 import androidx.compose.ui.platform.LocalViewConfiguration
-import androidx.compose.ui.test.junit4.createComposeRule
 import io.github.anastaci1a.localica.library.*
 import io.github.anastaci1a.localica.ui.*
 import org.junit.Assert.*
@@ -11,7 +10,7 @@ import org.junit.Rule
 import org.junit.Test
 
 class ArtistAlbumSelectionTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
     private fun albums(names: List<String>) = LibraryViews.groups(LibrarySnapshot(tracks = names.mapIndexed { i, name ->
         Track("album-choice:$i", name, album = name, artist = "Artist", albumArtist = "Artist", fileName = "$i", relativePath = "$i")
     }), SongListView.Albums, LibraryQuery())

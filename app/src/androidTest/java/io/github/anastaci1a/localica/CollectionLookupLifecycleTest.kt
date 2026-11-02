@@ -3,7 +3,6 @@ package io.github.anastaci1a.localica
 import android.os.Looper
 import androidx.compose.runtime.*
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
 import io.github.anastaci1a.localica.browse.BrowseSortSnapshot
 import io.github.anastaci1a.localica.library.*
 import io.github.anastaci1a.localica.ui.*
@@ -19,7 +18,7 @@ import org.junit.Rule
 import org.junit.Test
 
 class CollectionLookupLifecycleTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
     private fun track(index: Int) = Track("lookup:$index", "Song $index", album = "Album ${index % 10}",
         fileName = "$index.mp3", relativePath = "$index.mp3")
     private class HeldTracks(val values: List<Track>) : AbstractList<Track>() {

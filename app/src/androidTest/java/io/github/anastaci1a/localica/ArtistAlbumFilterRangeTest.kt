@@ -9,7 +9,6 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.ViewRootForTest
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.dp
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.anastaci1a.localica.browse.*
@@ -24,7 +23,7 @@ import org.junit.Test
 import java.util.UUID
 
 class ArtistAlbumFilterRangeTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
     private inner class Fixture {
         // Keep the original control available; settle bounds synchronize by default.
         private val settleIdleMode = when (val mode = InstrumentationRegistry.getArguments()

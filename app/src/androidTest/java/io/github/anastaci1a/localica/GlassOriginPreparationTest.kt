@@ -9,14 +9,13 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.test.junit4.createComposeRule
 import io.github.anastaci1a.localica.ui.*
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
 
 class GlassOriginPreparationTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
     private var open by mutableStateOf(false)
     private var mounted by mutableStateOf(true)
     private var reportOrigin by mutableStateOf(true)

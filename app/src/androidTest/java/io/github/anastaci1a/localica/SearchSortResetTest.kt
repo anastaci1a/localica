@@ -5,7 +5,6 @@ import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.StateRestorationTester
-import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.anastaci1a.localica.browse.*
 import io.github.anastaci1a.localica.library.*
@@ -17,7 +16,7 @@ import org.junit.Rule
 import org.junit.Test
 
 class SearchSortResetTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
 
     @Test fun globalResetSurvivesResultBackRecreationAndPreferenceNotifications() = resetSearch(true)
     @Test fun scopedResetSurvivesResultBackRecreationAndPreferenceNotifications() = resetSearch(false)

@@ -14,7 +14,6 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.dp
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.anastaci1a.localica.browse.*
@@ -28,7 +27,7 @@ import org.junit.Test
 
 /** A hidden trailing-menu slot must not own a minimum-sized touch strip. */
 class GalleryMenuInputTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
 
     @Test fun fourColumnGalleryScrollsThroughItsEmptyMenuSlot() = scrollThroughMenuSlot(4)
     @Test fun fiveColumnGalleryScrollsThroughItsEmptyMenuSlot() = scrollThroughMenuSlot(5)

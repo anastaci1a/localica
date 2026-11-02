@@ -7,7 +7,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.anastaci1a.localica.library.Track
 import io.github.anastaci1a.localica.navigation.*
@@ -18,7 +17,7 @@ import org.junit.Rule
 import org.junit.Test
 
 class MissingLyricsMotionTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
 
     private fun emptyCenter(): Offset {
         val background = compose.onNodeWithTag("player-background-space", true).fetchSemanticsNode().boundsInRoot

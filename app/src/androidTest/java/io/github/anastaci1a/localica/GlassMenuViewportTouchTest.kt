@@ -20,7 +20,6 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogWindowProvider
 import androidx.test.platform.app.InstrumentationRegistry
@@ -42,7 +41,7 @@ import kotlin.math.roundToInt
  * replacing the glass renderer or deriving an oracle from artwork. Full original native
  * window copies are saved BEFORE inspecting the start/middle/actual-end pixels. */
 class GlassMenuViewportTouchTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
     private val instrumentation get() = InstrumentationRegistry.getInstrumentation()
     private val activated = mutableListOf<Int>()
     private lateinit var anchor: GlassAnchor

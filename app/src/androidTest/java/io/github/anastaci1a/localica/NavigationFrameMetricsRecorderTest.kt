@@ -7,7 +7,6 @@ import android.os.Build
 import android.view.View
 import android.view.Window
 import androidx.activity.ComponentActivity
-import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
@@ -17,7 +16,7 @@ import java.util.concurrent.TimeUnit
 /** Real isolated ComponentActivity Window delivery; not collector arithmetic or phone performance. */
 class NavigationFrameMetricsRecorderTest {
     // Already declared by the existing debug ui-test-manifest dependency.
-    @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
+    @get:Rule val compose = localicaAndroidComposeRule<ComponentActivity>()
 
     @Test fun actualHardwareWindowDeliversPrimitiveFramesInTheCompatibleClockDomain() = withWindow { window, view ->
         val start = NavigationFrameMetricsRecorder.markNanos()

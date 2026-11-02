@@ -13,7 +13,6 @@ import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.navigation.GlassAppearance
 import io.github.anastaci1a.localica.ui.*
@@ -22,7 +21,7 @@ import org.junit.Rule
 import org.junit.Test
 
 class GlassOpticsTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
 
     @Test fun materialOnlySamplingUsesTheLocalMeanButContentBackdropsKeepDetail() {
         org.junit.Assume.assumeTrue(android.os.Build.VERSION.SDK_INT >= 33)

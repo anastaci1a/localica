@@ -9,7 +9,6 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
 import androidx.compose.ui.semantics.SemanticsProperties
-import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.dp
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.anastaci1a.localica.browse.*
@@ -24,7 +23,7 @@ import org.junit.Test
 import kotlin.math.roundToInt
 
 class GalleryGeometryTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
 
     @Test fun oneThroughFiveColumnsKeepOuterArtworkAlignmentAndDenseGaps() {
         val prefs = BrowsePreferences(InstrumentationRegistry.getInstrumentation().targetContext)

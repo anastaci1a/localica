@@ -2,7 +2,6 @@ package io.github.anastaci1a.localica
 
 import androidx.compose.runtime.*
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.room.Room
 import androidx.test.platform.app.InstrumentationRegistry
@@ -19,7 +18,7 @@ import org.junit.Test
 
 /** Real menus/controller persistence, with no player attached and no audio inputs. */
 class ArtistCollectionActionsTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
     @Test fun artistQueueActionsFollowOneSubsetAllAndChangedAlbumChoices() = actions(MediaKind.Artist, MainTab.Artists, SongListView.Artists)
     @Test fun albumArtistQueueActionsFollowOneSubsetAllAndChangedAlbumChoices() = actions(MediaKind.AlbumArtist, MainTab.AlbumArtists, SongListView.AlbumArtists)
 

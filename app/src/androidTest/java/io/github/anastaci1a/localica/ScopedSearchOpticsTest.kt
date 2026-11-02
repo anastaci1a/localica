@@ -11,7 +11,6 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.browse.*
@@ -25,7 +24,7 @@ import org.junit.Rule
 import org.junit.Test
 
 class ScopedSearchOpticsTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
     @Test fun playlistSearchRefractsItsRecordedBackdrop() = inspect(false)
     @Test fun queueSearchRefractsItsRecordedBackdrop() = inspect(true)
 

@@ -11,7 +11,6 @@ import androidx.compose.ui.platform.LocalViewConfiguration
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.dp
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.anastaci1a.localica.browse.*
@@ -25,7 +24,7 @@ import org.junit.Test
 
 /** Check held contact registration, not merely the drawer's eventual settled endpoint. */
 class QueueDragAnchorTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
 
     @Test fun freshDirectOpeningAcquiresOnceBeforeItsFirstChangedFrameAndKeepsIdentityThroughReversal() {
         val progress = Animatable(.55f)

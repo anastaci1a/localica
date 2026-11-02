@@ -11,7 +11,6 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.captureToImage
-import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.ui.listTopFade
@@ -22,7 +21,7 @@ import org.junit.Test
 /** The band-limited, brush-caching fade must match the pre-change full-viewport offscreen fade pixel for pixel,
  * including translucent overlapping content that crosses the band edge and strength changes that must rebuild the cached brush. */
 class ListTopFadeParityTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
     private val strength = mutableFloatStateOf(1f)
 
     /** Verbatim pre-change implementation (full-viewport Offscreen, brush rebuilt each draw). */

@@ -10,7 +10,6 @@ import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.browse.BrowserItem
 import io.github.anastaci1a.localica.navigation.LongScrollStyle
@@ -26,7 +25,7 @@ import org.junit.Rule
 import org.junit.Test
 
 class FarScrollScrollbarTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
     private val items = List(60) { BrowserItem(MediaRef(MediaKind.Album, "a$it"), "T$it", null, emptyList()) }
 
     @Test fun flyThroughComposesFewRegionsAndEndsExactly() = longReturn(LongScrollStyle.FlyThrough, maxJumps = 11, maxComposed = 270)

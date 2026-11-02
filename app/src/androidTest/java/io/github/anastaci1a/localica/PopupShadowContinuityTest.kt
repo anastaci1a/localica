@@ -20,7 +20,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalView
-import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.*
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogWindowProvider
@@ -37,7 +36,7 @@ import kotlin.math.roundToInt
 /** Real composed-display frames, including adjacent shadows and nested native windows.
  * Compare against one field at the current outline, not just registration counts. */
 class PopupShadowContinuityTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
     private var open by mutableStateOf(false)
     private var strength by mutableFloatStateOf(.8f)
     private lateinit var anchor: GlassAnchor

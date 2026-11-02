@@ -9,7 +9,6 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.ui.*
 import org.junit.Assert.*
@@ -17,7 +16,7 @@ import org.junit.Rule
 import org.junit.Test
 
 class LyricsHeaderActionsTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
 
     private fun advanceWithNativeFrames(durationMillis: Long) {
         if (durationMillis <= 0) return

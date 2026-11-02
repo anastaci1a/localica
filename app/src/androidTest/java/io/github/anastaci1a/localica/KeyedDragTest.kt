@@ -9,7 +9,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.ui.*
 import org.junit.Assert.*
@@ -19,7 +18,7 @@ import kotlin.math.roundToInt
 
 /** A non-song caller proves transaction and lifted rendering do not require browser models. */
 class KeyedDragTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
     private data class Entry(val id: String, val name: String)
     private val entries = (0 until 6).map { Entry("queue-$it", "Queue $it") }
     private var published by mutableStateOf(entries)

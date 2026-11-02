@@ -10,7 +10,6 @@ import androidx.compose.ui.platform.LocalViewConfiguration
 import androidx.compose.ui.semantics.getAllSemanticsNodes
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.navigation.ArtworkLayout
 import io.github.anastaci1a.localica.navigation.InterfaceSettings
@@ -23,7 +22,7 @@ import org.junit.Test
  * Pointer injection targets the resolved Compose root; Android window routing is not covered.
  */
 class PlayerArtworkChoiceInputTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
     private var settings = InterfaceSettings(artworkLayout = ArtworkLayout.FullBackground)
     private var saves = 0
     private var slop = 0f

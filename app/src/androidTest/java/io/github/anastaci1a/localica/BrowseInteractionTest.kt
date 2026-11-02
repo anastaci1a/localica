@@ -3,7 +3,6 @@ package io.github.anastaci1a.localica
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.UiDevice
 import io.github.anastaci1a.localica.browse.*
@@ -16,7 +15,7 @@ import org.junit.Rule
 import org.junit.Test
 
 class BrowseInteractionTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
     @Test fun longPressStartsSelectionAndCanceledPlaylistDialogKeepsIt() {
         val track = Track("missing", "Repeated", fileName = "tone.mp3", relativePath = "tone.mp3")
         val playlist = PlaylistEdits.append(ManualPlaylist(name = "Mix"), listOf(track, track))

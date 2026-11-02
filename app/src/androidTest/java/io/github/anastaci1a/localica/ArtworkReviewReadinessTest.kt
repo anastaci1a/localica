@@ -14,7 +14,6 @@ import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.StateRestorationTester
-import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.anastaci1a.localica.editing.*
 import io.github.anastaci1a.localica.library.Track
@@ -27,7 +26,7 @@ import java.io.File
 
 /** Deterministic saved-composition test of the real editor; not Activity recreation. */
 class ArtworkReviewReadinessTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
 
     @Test fun restoredConfirmationCannotSaveUntilReloadedCoverProducesReplacePatch() = restoredReview(false)
     @Test fun failedCoverReloadLeavesRestoredConfirmationUnableToSave() = restoredReview(true)

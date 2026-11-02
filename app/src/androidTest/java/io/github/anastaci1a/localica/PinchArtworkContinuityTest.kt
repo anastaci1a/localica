@@ -15,7 +15,6 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.dp
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.anastaci1a.localica.browse.*
@@ -34,7 +33,7 @@ import java.io.File
 
 /** Sample actual decoded covers, not artwork bounds or missing-art placeholders. */
 class PinchArtworkContinuityTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
 
     @Test fun galleryArtworkStaysVisibleOnEveryOutwardPinchAndReleaseFrame() = pinch(true, false)
     @Test fun galleryArtworkStaysVisibleOnEveryInwardPinchAndReleaseFrame() = pinch(false, false)

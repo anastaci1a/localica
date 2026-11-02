@@ -16,7 +16,6 @@ import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.ComposeContentTestRule
-import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.unit.dp
 import androidx.test.platform.app.InstrumentationRegistry
@@ -29,7 +28,7 @@ import org.junit.Test
 
 /** Real viewer content, pointer recognizer and frame clock; no synthetic drag callbacks. */
 class ArtworkViewerGestureTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
     private val state = ArtworkViewerState()
     private val reducedMotion = mutableStateOf(false)
     private var closed = 0

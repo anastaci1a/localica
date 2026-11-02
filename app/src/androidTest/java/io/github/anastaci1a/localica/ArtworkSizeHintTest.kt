@@ -4,7 +4,6 @@ import android.graphics.Bitmap
 import androidx.compose.foundation.layout.size
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.Layout
-import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.library.CoverProvider
 import io.github.anastaci1a.localica.ui.MediaArtwork
@@ -14,7 +13,7 @@ import org.junit.Test
 import java.util.concurrent.CopyOnWriteArrayList
 
 class ArtworkSizeHintTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
 
     /** The parent never measures its child, so onSizeChanged cannot fire: only a hint can start a load. */
     private fun unmeasured(hint: Int, edges: CopyOnWriteArrayList<Int>) {
@@ -44,7 +43,7 @@ class ArtworkSizeHintTest {
 }
 
 class ArtworkOffMainTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
 
     @Test fun providerLoadsRunOffTheMainThread() {
         val threads = CopyOnWriteArrayList<Boolean>()

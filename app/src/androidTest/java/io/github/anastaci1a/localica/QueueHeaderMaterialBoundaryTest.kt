@@ -21,7 +21,6 @@ import androidx.compose.ui.platform.ViewRootForTest
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.library.LibrarySnapshot
 import io.github.anastaci1a.localica.library.Track
@@ -47,7 +46,7 @@ import kotlin.math.max
  * extra source readback, capture retry, pixel-driven readiness or optical pass/fail threshold.
  * Native draw/owner state is not atomic with PixelCopy and does not attest GPU/raster consumption. */
 class QueueHeaderMaterialBoundaryTest {
-    @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
+    @get:Rule val compose = localicaAndroidComposeRule<ComponentActivity>()
     private val appearance = GlassAppearance()
     private val tracks = (1..18).map { Track("queue-boundary:$it", "Boundary song $it",
         artist = "Boundary artist", fileName = "$it.mp3", relativePath = "$it.mp3") }

@@ -8,7 +8,6 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.room.Room
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.UiDevice
@@ -28,7 +27,7 @@ import org.junit.Test
 
 /** Real playlist page/adapters and Room actions; no private media or attached decoder. */
 class PlaylistDetailPresentationTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
     private val context get() = InstrumentationRegistry.getInstrumentation().targetContext
     private val preferences get() = context.getSharedPreferences("browse-style", 0)
     private var savedPreferences: Map<String, *> = emptyMap<String, Any>()

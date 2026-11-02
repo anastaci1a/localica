@@ -7,7 +7,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.dp
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.anastaci1a.localica.browse.*
@@ -20,7 +19,7 @@ import org.junit.Rule
 import org.junit.Test
 
 class FilterBackdropTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
     @Test fun libraryFiltersRefractTheFadedScene() = inspect(false)
     @Test fun searchFiltersRefractTheFadedScene() = inspect(true)
 

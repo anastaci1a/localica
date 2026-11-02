@@ -14,7 +14,6 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.IntOffset
 import io.github.anastaci1a.localica.ui.*
@@ -28,7 +27,7 @@ import org.junit.runner.Description
 
 /** Presented-pixel regression plus retained baseline comparison frames for tap/held optics. */
 class SwitchTapOpticsTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
     private var stage by mutableIntStateOf(0)
     private lateinit var view: View
     private var pixelDensity = 1f

@@ -29,7 +29,6 @@ import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.test.platform.app.InstrumentationRegistry
@@ -44,7 +43,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 /** Native lazy placement and actual host-drawn selection geometry, without screenshot-induced redraw. */
 class ArtistSelectionPlacementTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
 
     private enum class Check { Settling, Single, All }
     private data class Body(val key: Int, val offset: Int, val size: Int,

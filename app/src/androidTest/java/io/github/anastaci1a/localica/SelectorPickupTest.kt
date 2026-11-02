@@ -9,7 +9,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.ui.*
@@ -19,7 +18,7 @@ import org.junit.Test
 
 /** Real controls and actual parent displacement: no inferred scroll winner from direction alone. */
 class SelectorPickupTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
     private var selected by mutableIntStateOf(0)
     private var changes = 0
     private val pulses = mutableListOf<ControlHaptic>()

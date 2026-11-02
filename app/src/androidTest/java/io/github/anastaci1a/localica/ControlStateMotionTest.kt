@@ -10,7 +10,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.queue.QueueRepeat
 import io.github.anastaci1a.localica.ui.*
@@ -19,7 +18,7 @@ import org.junit.Rule
 import org.junit.Test
 
 class ControlStateMotionTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
     private var presentationStage by mutableIntStateOf(0)
     private lateinit var sceneView: android.view.View
 

@@ -16,7 +16,6 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.ViewRootForTest
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.dp
 import androidx.room.Room
 import androidx.test.platform.app.InstrumentationRegistry
@@ -39,7 +38,7 @@ import org.junit.Test
  * draw acknowledgements are ownership witnesses, NOT presented-pixel/material continuity proof.
  * The non-reduced, damping-2 fixture exposes an unsettled return without changing production. */
 class QueueSaveOriginTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
 
     @Test fun drawerSaveUsesItsMeasuredActionAndReturnsOnCancel() {
         val drawer = showDrawer()

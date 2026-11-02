@@ -7,7 +7,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.LookaheadScope
 import androidx.compose.ui.test.*
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.test.junit4.createComposeRule
 import io.github.anastaci1a.localica.browse.*
 import io.github.anastaci1a.localica.navigation.*
 import io.github.anastaci1a.localica.ui.*
@@ -17,7 +16,7 @@ import org.junit.Test
 
 /** The live and frozen pinch passes must use the new Tracklist contract, not old album Normal. */
 class TracklistPinchIntegrationTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
 
     @Test fun ordinaryModeChangeRetainsTheNumberUntilItsExitFadeCompletes() {
         var style by mutableStateOf(BrowseStyle(listSize = ListSize.Tracklist))

@@ -13,7 +13,6 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.platform.ViewRootForTest
 import androidx.compose.ui.semantics.SemanticsNode
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.window.DialogWindowProvider
 import androidx.room.Room
 import androidx.test.platform.app.InstrumentationRegistry
@@ -41,7 +40,7 @@ import java.util.concurrent.atomic.AtomicReference
  * atomic proof that a compositor presented a particular source revision or settled animation.
  * Synthetic catalog + in-memory real controllers; no player/service/audio or phone validation. */
 class PopupFamilyPresentationTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
     private val context get() = InstrumentationRegistry.getInstrumentation().targetContext
     private lateinit var host: GlassDialogs
     private lateinit var output: File

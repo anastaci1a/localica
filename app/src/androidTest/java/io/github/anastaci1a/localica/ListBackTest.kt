@@ -9,7 +9,6 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.runtime.*
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
 import io.github.anastaci1a.localica.library.*
 import io.github.anastaci1a.localica.navigation.*
 import io.github.anastaci1a.localica.playlist.*
@@ -19,7 +18,7 @@ import org.junit.Rule
 import org.junit.Test
 
 class ListBackTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
     private fun position() = compose.onNodeWithTag("browser-list").fetchSemanticsNode()
         .config[SemanticsProperties.VerticalScrollAxisRange].value()
     private fun back() {

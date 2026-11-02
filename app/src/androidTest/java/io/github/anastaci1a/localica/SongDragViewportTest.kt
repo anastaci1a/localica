@@ -5,7 +5,6 @@ import androidx.compose.foundation.lazy.grid.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.browse.BrowserItem
 import io.github.anastaci1a.localica.navigation.*
@@ -18,7 +17,7 @@ import org.junit.Test
 
 /** Exercise real lazy-grid key anchoring independently of playback and pointer timing. */
 class SongDragViewportTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
 
     private fun crossingViewportStart(selected: Set<Int>) {
         val songs = (0 until 60).map { BrowserItem(MediaRef(MediaKind.Song, "$it"), "Song $it", null, emptyList()) }

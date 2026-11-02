@@ -12,7 +12,6 @@ import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.navigation.InterfaceSettings
 import io.github.anastaci1a.localica.ui.*
@@ -24,7 +23,7 @@ import org.junit.Test
 
 /** Render the real drawer, with physical clipping owned separately by its window. */
 class QueueContourTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
 
     @Test fun intrinsicCornersSurviveWindowChangesProgressReversalAndReducedMotion() {
         val progress = Animatable(0f)

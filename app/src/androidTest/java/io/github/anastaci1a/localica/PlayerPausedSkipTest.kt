@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
 import io.github.anastaci1a.localica.navigation.InterfaceSettings
 import io.github.anastaci1a.localica.playback.PlaybackState
 import io.github.anastaci1a.localica.ui.LocalicaTheme
@@ -16,7 +15,7 @@ import org.junit.Rule
 import org.junit.Test
 
 class PlayerPausedSkipTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
     private var state by mutableStateOf(PlaybackState(connected = true, title = "Paused", durationMs = 60000))
     private var next = 0
     private var previous = 0

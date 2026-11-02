@@ -3,7 +3,6 @@ package io.github.anastaci1a.localica
 import androidx.compose.ui.test.*
 import androidx.compose.runtime.*
 import io.github.anastaci1a.localica.navigation.*
-import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import io.github.anastaci1a.localica.library.*
 import io.github.anastaci1a.localica.playlist.*
@@ -16,7 +15,7 @@ import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class CollectionNavigationTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
     private val track = Track("missing", "Repeated", fileName = "tone.mp3", relativePath = "tone.mp3")
 
     @Test fun queueLimitInputOpensOnlyForExplicitEditing() {

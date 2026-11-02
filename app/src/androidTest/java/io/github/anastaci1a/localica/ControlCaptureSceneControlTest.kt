@@ -11,7 +11,6 @@ import androidx.compose.ui.graphics.drawscope.CanvasDrawScope
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.*
 import io.github.anastaci1a.localica.navigation.GlassRendererMode
 import io.github.anastaci1a.localica.ui.*
@@ -21,7 +20,7 @@ import org.junit.Test
 
 /** Two continuously retained coincident owners and a separate lit software oracle. */
 class ControlCaptureSceneControlTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
 
     @Test fun frozenScenesMatchAtCoincidentPositionAcrossContentExtentFadeRestAndReactivation() {
         exerciseCoincidentControlScenes(compose, frozenActual = true)

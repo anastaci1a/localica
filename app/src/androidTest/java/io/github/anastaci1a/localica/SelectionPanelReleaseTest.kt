@@ -7,7 +7,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.library.SongRow
 import io.github.anastaci1a.localica.library.Track
@@ -17,7 +16,7 @@ import org.junit.Rule
 import org.junit.Test
 
 class SelectionPanelReleaseTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
     private val session = SessionSelection()
     private val row = SongRow("entry", Track("song", "Song", fileName = "song.mp3", relativePath = "song.mp3"))
 

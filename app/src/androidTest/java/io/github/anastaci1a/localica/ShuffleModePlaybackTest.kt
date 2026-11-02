@@ -10,7 +10,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.dp
 import androidx.media3.common.ForwardingPlayer
 import androidx.media3.common.MediaItem
@@ -34,7 +33,7 @@ import kotlin.random.Random
 
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 class ShuffleModePlaybackTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
 
     @Test fun offAfterShuffledBackUsesOrderedTransportAndNaturalArrivalWithoutJumping() = fixture { f ->
         val anchor = f.queue.journey!!.current!!

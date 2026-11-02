@@ -10,7 +10,6 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
@@ -32,7 +31,7 @@ import org.junit.Rule
 import org.junit.Test
 
 class SongInformationTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
     private val track = Track("file:///private/missing.mp3", "Information song", artist = "Artist", album = "Album",
         albumArtist = "Album artist", fileName = "missing.mp3", relativePath = "Album/missing.mp3",
         locations = listOf(TrackLocation("root", "file:///private/missing.mp3", "Album/missing.mp3")),

@@ -9,7 +9,6 @@ import android.view.ViewTreeObserver
 import androidx.compose.runtime.*
 import androidx.compose.ui.platform.ViewRootForTest
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.anastaci1a.localica.browse.BrowseStyle
 import io.github.anastaci1a.localica.library.OrderCheckpoint
@@ -37,7 +36,7 @@ import kotlin.random.Random
  * OnDraw witnesses a native traversal, not compositor pixel consumption or elapsed latency.
  */
 class QueueOrderActionAdmissionTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
 
     @Test fun freshOrderContactsAreAdmittedOnTheFirstFrameAfterSuccessOrFailureWithoutSettlingMotion() {
         fun track(id: String) = Track("synthetic:$id", id, id = id, fileName = "$id.mp3", relativePath = "$id.mp3")

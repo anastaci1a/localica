@@ -15,7 +15,6 @@ import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Density
 import androidx.test.platform.app.InstrumentationRegistry
@@ -39,7 +38,7 @@ import kotlin.coroutines.CoroutineContext
 
 /** #428: a loading viewport is one complete catalog, never the first available source. */
 class BrowseLoadingRevealTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
 
     private val context get() = InstrumentationRegistry.getInstrumentation().targetContext
     private val track = Track("loading-song", "Loading song", album = "Complete album",

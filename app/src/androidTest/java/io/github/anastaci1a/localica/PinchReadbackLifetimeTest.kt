@@ -14,7 +14,6 @@ import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalGraphicsContext
 import androidx.compose.ui.platform.LocalLayoutDirection
-import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
@@ -32,7 +31,7 @@ import org.junit.Test
 
 /** App-owned atlas/parent leases, never manual release of a composition-owned source. */
 class PinchReadbackLifetimeTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
     private class Fixture {
         lateinit var context: GraphicsContext
         lateinit var density: Density

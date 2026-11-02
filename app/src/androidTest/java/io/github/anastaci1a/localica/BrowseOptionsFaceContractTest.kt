@@ -11,7 +11,6 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsNode
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.DpRect
@@ -57,7 +56,7 @@ private class BrowseFaceTrace {
 }
 
 class BrowseOptionsFaceContractTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
 
     @Test fun everySelectableAndLegacySummaryUsesTheMeasuredFaceWithoutClippedText() {
         val arguments = InstrumentationRegistry.getArguments()

@@ -8,7 +8,6 @@ import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.test.ComposeTimeoutException
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.ComposeContentTestRule
-import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import io.github.anastaci1a.localica.ui.GlassAlertDialog
 import io.github.anastaci1a.localica.ui.GlassAnchor
@@ -20,7 +19,7 @@ import org.junit.Rule
 import org.junit.Test
 
 class GlassReturnCheckTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
 
     @Test fun frameQueuedNativeDismissalCanRunWithinTheOriginalAnimationTimeBound() {
         lateinit var anchor: GlassAnchor

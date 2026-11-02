@@ -22,7 +22,6 @@ import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getAllSemanticsNodes
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.unit.dp
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
@@ -51,7 +50,7 @@ import kotlin.coroutines.CoroutineContext
 
 /** Real browser/queue composition: attachment is user intent, not current-row visibility. */
 class QueueFollowingTest {
-    @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
+    @get:Rule val compose = localicaAndroidComposeRule<ComponentActivity>()
     private val tracks = (0 until 120).map { index ->
         Track("following:$index", "Song ${index.toString().padStart(3, '0')}", artist = "Following artist",
             fileName = "$index.mp3", relativePath = "$index.mp3")

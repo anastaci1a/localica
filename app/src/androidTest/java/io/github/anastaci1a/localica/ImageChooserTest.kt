@@ -8,7 +8,6 @@ import android.net.Uri
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.anastaci1a.localica.editing.CoverImages
 import io.github.anastaci1a.localica.ui.ImageChooser
@@ -19,7 +18,7 @@ import org.junit.Test
 import java.io.File
 
 class ImageChooserTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
 
     @Test fun readablePreviousChoiceRemainsAvailableWithoutPhotoPermissionAndStillRequiresCrop() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext

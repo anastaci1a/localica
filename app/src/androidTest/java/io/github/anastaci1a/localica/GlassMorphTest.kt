@@ -20,7 +20,6 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.ComposeTestRule
-import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.ui.*
 import org.junit.Assert.*
@@ -54,7 +53,7 @@ internal fun ComposeTestRule.advanceMorphOpening(
 }
 
 class GlassMorphTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
 
     @Test fun openingAndLateReversalKeepOneSurfaceAndProducePresentedOriginEvidence() {
         val work = PopupCompositionWorkRecorder("io.github.anastaci1a.localica.GlassMorphTest#openingAndLateReversalKeepOneSurfaceAndProducePresentedOriginEvidence")

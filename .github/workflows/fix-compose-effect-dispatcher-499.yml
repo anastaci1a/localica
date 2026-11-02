@@ -1,0 +1,9 @@
+name: Compose effect dispatcher 499 (not release)
+'on':
+  push:
+    branches: [fix/compose-effect-dispatcher-499]
+permissions:
+  contents: read
+jobs:
+  protocol_contracts:
+    uses: ./.github/workflows/tooling-contracts.yml

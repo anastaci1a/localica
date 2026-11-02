@@ -16,7 +16,6 @@ import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
@@ -38,7 +37,7 @@ import org.junit.Rule
 import org.junit.Test
 
 class MarqueeTitleTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
     private val measuredLayouts = linkedMapOf<String, TextLayoutResult>()
     @Test fun pausedTitleKeepsItsLeadingGlyphsUnfaded() {
         val title = "MMMMMMMMMMMMMMMMMMMMMMMM"

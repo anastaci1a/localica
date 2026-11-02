@@ -9,7 +9,6 @@ import android.util.Log
 import androidx.compose.runtime.*
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.anastaci1a.localica.editing.CoverImages
 import io.github.anastaci1a.localica.ui.*
@@ -22,7 +21,7 @@ import java.util.concurrent.atomic.AtomicInteger
 
 /** Real chooser/default crop loading; no replacement loader or platform permission mutation. */
 class CoverPreviewStagesTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
 
     @Test fun realPreviewAndDefaultCropReportStagesAndFreshChooserReloads() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext

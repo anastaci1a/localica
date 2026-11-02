@@ -2,7 +2,6 @@ package io.github.anastaci1a.localica
 
 import androidx.compose.runtime.*
 import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import io.github.anastaci1a.localica.ui.GlassTone
 import io.github.anastaci1a.localica.ui.rememberToneSnapshot
@@ -17,7 +16,7 @@ import org.junit.runner.RunWith
 /** Synthetic bitmap identities and controlled completions only; no screenshots/readbacks. */
 @RunWith(AndroidJUnit4::class)
 class ToneSnapshotContinuityTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
 
     private class Request(val image: ImageBitmap, val tone: GlassTone) {
         val answer = CompletableDeferred<ImageBitmap>()

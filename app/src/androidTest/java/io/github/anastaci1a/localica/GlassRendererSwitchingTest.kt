@@ -20,7 +20,6 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.navigation.GlassAppearance
@@ -35,7 +34,7 @@ import org.junit.Test
 /** Real mounted windows and retained captures. These checks do not claim frame-perfect optics
  * or native-copy completion ordering; the existing optics/readback lifetime suites own those. */
 class GlassRendererSwitchingTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
 
     private data class Mounted(val owner: Any, val view: View, val generation: GlassRendererGeneration,
         val draft: String = "", val material: FrostedBackdrop? = null)

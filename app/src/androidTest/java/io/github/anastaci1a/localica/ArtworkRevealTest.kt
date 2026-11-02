@@ -10,7 +10,6 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.captureToImage
-import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.ui.*
@@ -21,7 +20,7 @@ import java.util.concurrent.atomic.AtomicInteger
 
 /** The reveal is a draw-phase value: the same pixels as before, without recomposing the cell every frame. */
 class ArtworkRevealTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
     private val red = Bitmap.createBitmap(32, 32, Bitmap.Config.ARGB_8888).apply { eraseColor(android.graphics.Color.RED) }
     private var image by mutableStateOf<Bitmap?>(null)
     private val recompositions = AtomicInteger()

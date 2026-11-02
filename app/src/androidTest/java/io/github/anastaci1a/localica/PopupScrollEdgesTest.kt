@@ -19,7 +19,6 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.ui.*
 import kotlinx.coroutines.runBlocking
@@ -28,7 +27,7 @@ import org.junit.Rule
 import org.junit.Test
 
 class PopupScrollEdgesTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
     private lateinit var sampleView: android.view.View
     private var stage by mutableIntStateOf(1)
 

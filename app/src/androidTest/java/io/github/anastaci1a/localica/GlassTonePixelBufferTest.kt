@@ -6,7 +6,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.test.junit4.createComposeRule
 import io.github.anastaci1a.localica.ui.GlassTone
 import io.github.anastaci1a.localica.ui.ToneSnapshotReceipt
 import io.github.anastaci1a.localica.ui.rememberToneSnapshot
@@ -15,7 +14,7 @@ import org.junit.Rule
 import org.junit.Test
 
 class GlassTonePixelBufferTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
 
     private data class Request(val image: ImageBitmap, val tone: GlassTone)
     private data class Published(val request: Request, val output: ImageBitmap?,

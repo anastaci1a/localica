@@ -8,7 +8,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.dp
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.anastaci1a.localica.browse.BrowseQueries
@@ -23,7 +22,7 @@ import org.junit.Rule
 import org.junit.Test
 
 class HomeSelectionTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
     private fun track(id: String) = Track(id, "Pinned $id", album = "Album $id", fileName = "$id.mp3", relativePath = "$id.mp3")
 
     @Test fun homeScopeTogglesSongsAndAllRangeKeepForeignOccurrences() {

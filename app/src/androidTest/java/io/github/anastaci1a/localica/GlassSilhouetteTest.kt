@@ -14,7 +14,6 @@ import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.ui.*
 import org.junit.Assert.*
@@ -23,7 +22,7 @@ import org.junit.Test
 import kotlin.math.abs
 
 class GlassSilhouetteTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
 
     @Test fun sampledNormalsRemainContinuousAcrossTexelBoundaries() {
         val frame = GlassSilhouetteFrame(splitPillGeometry(Size(120f, 60f), .3f))

@@ -15,7 +15,6 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.onNodeWithTag
-import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.ui.*
@@ -29,7 +28,7 @@ import kotlin.math.roundToInt
  * Blue identifies the presented source frame independently of red/green lookup.
  * No blur, tone, reflection or shadow participates in this optical-only probe. */
 class LensMeshSamplingTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
 
     @Test fun defaultInverseMapPreservesCardinalSamplingAcrossPixelAlignments() {
         val shapes = listOf(LensGeometry(Rect(0f, 0f, 161f, 161f), 80.5f),

@@ -10,7 +10,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.anastaci1a.localica.library.ArtworkCache
 import io.github.anastaci1a.localica.navigation.*
@@ -26,7 +25,7 @@ import java.io.File
 import kotlin.math.abs
 
 class PlayerBackdropTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
 
     @Test fun coverColorsContinueBelowTheArtworkWithoutAFlatBand() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()

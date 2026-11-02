@@ -2,7 +2,6 @@ package io.github.anastaci1a.localica
 
 import androidx.compose.runtime.*
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
 import io.github.anastaci1a.localica.browse.*
 import io.github.anastaci1a.localica.library.*
 import io.github.anastaci1a.localica.navigation.*
@@ -13,7 +12,7 @@ import org.junit.Rule
 import org.junit.Test
 
 class LiveOrderDialogTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
     private fun track(id: String, title: String) = Track("missing:$id", title,
         fileName = "$id.mp3", relativePath = "$id.mp3", id = id)
 

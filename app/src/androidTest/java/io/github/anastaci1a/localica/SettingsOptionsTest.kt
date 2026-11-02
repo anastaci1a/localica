@@ -8,7 +8,6 @@ import androidx.compose.ui.Modifier
 import io.github.anastaci1a.localica.library.FolderSelection
 import io.github.anastaci1a.localica.library.LibrarySnapshot
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.anastaci1a.localica.browse.*
 import io.github.anastaci1a.localica.navigation.*
@@ -18,7 +17,7 @@ import org.junit.Rule
 import org.junit.Test
 
 class SettingsOptionsTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
     private fun assertAnchoredPopup(host: GlassDialogs, title: String, editBeforeCancel: () -> Unit = {}) {
         compose.onNodeWithText(title).performScrollTo().performClick()
         compose.waitUntil(5000) {

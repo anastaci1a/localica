@@ -3,7 +3,6 @@ package io.github.anastaci1a.localica
 import android.util.Log
 import androidx.compose.runtime.*
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
 import io.github.anastaci1a.localica.browse.BrowserItem
 import io.github.anastaci1a.localica.browse.BrowseSortSnapshot
 import io.github.anastaci1a.localica.library.*
@@ -21,7 +20,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import kotlin.coroutines.CoroutineContext
 
 class PinnedHomePreparationTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
 
     @Test fun emptyPinsSkipCatalogPreparationAcrossSourcesAndRepinFreshRows() {
         fun track(id: String, title: String) = Track("empty-home:$id", title,

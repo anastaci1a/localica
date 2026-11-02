@@ -18,7 +18,6 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.ui.*
 import org.junit.Assert.*
@@ -30,7 +29,7 @@ import kotlin.math.roundToInt
  * Both columns draw the same deliberate child overflow in the same captured frame;
  * only padding/scroll order differs. Real caller/material acceptance remains separate. */
 class GlassMenuContentTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
     private lateinit var sampleView: View
     private var density = 1f
 

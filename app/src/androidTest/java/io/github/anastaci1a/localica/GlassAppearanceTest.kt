@@ -14,7 +14,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.dp
 import androidx.test.core.app.ApplicationProvider
 import io.github.anastaci1a.localica.navigation.*
@@ -24,7 +23,7 @@ import org.junit.Rule
 import org.junit.Test
 
 class GlassAppearanceTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
 
     @Test fun frostedPanelsStillScatterTheParentScene() {
         var top by mutableStateOf(300.dp)

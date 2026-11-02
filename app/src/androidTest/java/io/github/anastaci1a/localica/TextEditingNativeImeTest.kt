@@ -8,7 +8,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalView
-import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import io.github.anastaci1a.localica.ui.*
 import org.junit.Assert.*
 import org.junit.Rule
@@ -21,7 +20,7 @@ import java.util.concurrent.atomic.AtomicReference
 
 /** Injected observation bridge contract, NOT real floating-IME compatibility. */
 class TextEditingNativeImeTest {
-    @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
+    @get:Rule val compose = localicaAndroidComposeRule<ComponentActivity>()
 
     private fun nativeFrames(count: Int = 3) {
         val done = CountDownLatch(1)

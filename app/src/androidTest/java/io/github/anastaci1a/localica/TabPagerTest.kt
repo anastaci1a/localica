@@ -9,7 +9,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.navigation.MainTab
 import io.github.anastaci1a.localica.ui.*
@@ -18,7 +17,7 @@ import org.junit.Rule
 import org.junit.Test
 
 class TabPagerTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
     @Test fun diagonalListScrollStaysVerticalButShelfAndDeliberatePageSwipesRemainHorizontal() {
         lateinit var pager: PagerState
         lateinit var list: LazyListState

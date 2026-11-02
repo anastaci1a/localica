@@ -11,7 +11,6 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.assertIsSelected
 import io.github.anastaci1a.localica.queue.ListeningQueue
@@ -26,7 +25,7 @@ import org.junit.Rule
 import org.junit.Test
 
 class QueueSelectionPlacementTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
 
     @Test fun realQueueSelectorTracksNativeDragReversalReentryAndBothDepartingSelections() {
         val frames = SelectorPlacementFrames(compose)
