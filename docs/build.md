@@ -128,6 +128,8 @@ Distributed APKs are the non-debuggable, R8-minified `distribution` variant. It 
 
 Device tests and compatibility run the `debug` variant. R8 keeps all of jaudiotagger because it loads classes by name.
 
+The `distribution-smoke` job installs the exact published APK on API 26 and 36, waits for the main activity, then runs 600 seeded monkey events. It fails on crashes, ANRs, class-linkage errors or a dead process, and uploads the logcat.
+
 ## Release preparation
 
 ### Step 1
@@ -140,7 +142,7 @@ Review [previews](#previews), current docs and resolved issues. Commit and push.
 
 ### Step 3
 
-**Wait for successful build, both device jobs, and both compatibility jobs on the exact main SHA before tagging it.** The matching `vX.X.X` workflow reuses that run's APK, verifies version/signature/checksum, and publishes without another build/test matrix. Missing verification/expired artifacts require rerunning main checks. Never substitute another commit's APK. Unfilled release placeholders block publication.
+**Wait for successful build, both device jobs, both compatibility jobs, and both distribution smoke jobs on the exact main SHA before tagging it.** The matching `vX.X.X` workflow reuses that run's APK, verifies version/signature/checksum, and publishes without another build/test matrix. Missing verification/expired artifacts require rerunning main checks. Never substitute another commit's APK. Unfilled release placeholders block publication.
 
 ### Step 4
 

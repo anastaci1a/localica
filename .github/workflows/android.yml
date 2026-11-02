@@ -312,7 +312,7 @@ jobs:
           gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id" > verified-run.json
           jq -e --arg commit "$commit" '.head_sha == $commit and .head_branch == "main" and .event == "push" and .conclusion == "success"' verified-run.json
           gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/jobs?per_page=100" > verified-jobs.json
-          jq -e '["build", "device-tests (26)", "device-tests (36)", "compatibility (26)", "compatibility (36)"] - [.jobs[] | select(.conclusion == "success") | .name] | length == 0' verified-jobs.json
+          jq -e '["build", "device-tests (26)", "device-tests (36)", "compatibility (26)", "compatibility (36)", "distribution-smoke (26)", "distribution-smoke (36)"] - [.jobs[] | select(.conclusion == "success") | .name] | length == 0' verified-jobs.json
           echo "run-id=$run_id" >> "$GITHUB_OUTPUT"
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
@@ -348,3 +348,50 @@ jobs:
           gh release create "$GITHUB_REF_NAME" *.apk *.sha256 *.jar --verify-tag \
             --title "localica $GITHUB_REF_NAME" \
             --notes-file "$GITHUB_WORKSPACE/.github/RELEASE_NOTES.md"
+
+  distribution-smoke:
+    # Exercises the exact R8 distribution APK that the build job publishes and the release job ships.
+    # The tag release job cannot list this in `needs` (build is skipped on tags); it checks the
+    # main run's job conclusions by name instead.
+    if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        api: [26, 36]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: localica-debug
+          path: artifacts
+      - name: Verify the downloaded APK
+        run: |
+          (cd artifacts && sha256sum --check app-debug.apk.sha256)
+          bash .github/verify-non-debuggable.sh artifacts/app-debug.apk
+      - name: Enable emulator acceleration
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2
+        with:
+          api-level: ${{ matrix.api }}
+          target: ${{ matrix.api == 36 && 'default' || 'google_apis' }}
+          arch: x86_64
+          profile: pixel_2
+          emulator-options: -no-window -gpu ${{ matrix.api == 36 && 'lavapipe' || 'swiftshader_indirect' }} -no-snapshot -noaudio -no-boot-anim -memory 3072
+          disable-animations: ${{ matrix.api < 36 }}
+          script: |
+            adb shell wm size ${{ matrix.api == 36 && '720x1280' || 'reset' }}
+            adb shell wm density ${{ matrix.api == 36 && '280' || 'reset' }}
+            sleep 60
+            bash .github/distribution-smoke.sh artifacts/app-debug.apk distribution-smoke-logcat.txt
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: distribution-smoke-logcat-api-${{ matrix.api }}
+          path: distribution-smoke-logcat*.txt
+          if-no-files-found: warn
