@@ -309,6 +309,8 @@ The entire Queue layer stays clipped inside the player’s moving rounded outlin
 
 Full-background covers soften at their perimeter while keeping the center sharp, then merge into the continuation. Floating covers keep defined edges. The artwork feather never drops away at the final handoff. All blends reverse with the gesture. Artwork stays below title and artist text, including transitions.
 
+In both layouts the expanded artwork is centered between the bottom of the top controls and the top of the title, each with 8 dp of padding, so its edges are equally far from them. The floating cover scales down to fit that band and never overlaps; the full-background cover may overlap both on short screens, layered below them.
+
 Metadata/seek/actions/lyrics have 32 dp side insets. Order: artwork → metadata → seek/times → customizable actions → transport → Queue drawer. No volume controls. Album metadata fades in and seek/actions appear late, while transport persists throughout. Title and transport retain their delivered trajectories, including selected lyrics.
 
 Seek and actions use distinct mixtures between those unchanged references, with actions moving/fading faster than seek. Reversals retrace the presented geometry without changing settled positions. Artwork grows immediately along one reversible, geometry-derived curve, aiming its bottom-right at the title’s top-left without moving existing trajectories or settled positions.
