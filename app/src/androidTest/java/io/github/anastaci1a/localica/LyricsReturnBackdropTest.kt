@@ -65,7 +65,7 @@ class LyricsReturnBackdropTest {
     private val sourceFrameIds = mutableMapOf<Any, Int>()
 
     private data class ViewportPose(val surfaceTop: Float, val titleTop: Float) {
-        val viewport get() = playerLyricsViewport(surfaceTop, titleTop, metadataTarget = 348f, topInset = 24f)
+        val viewport get() = playerLyricsViewport(titleTop, topInset = 24f)
     }
 
     private class Scene {
@@ -141,7 +141,7 @@ class LyricsReturnBackdropTest {
     }
 
     @Test fun movingPlayerViewportKeepsTheActiveReturnLensRegisteredThroughReversal() {
-        val poses = listOf(ViewportPose(0f, 348f), ViewportPose(48f, 316f))
+        val poses = listOf(ViewportPose(0f, 348f), ViewportPose(0f, 332f))
         val state = Scene().apply { pose = poses.first() }
         mount(state)
         alignCurrentLine(state.document)
@@ -152,8 +152,8 @@ class LyricsReturnBackdropTest {
         val frames = mutableMapOf<ViewportPose, PixelMap>()
         val bounds = mutableMapOf<ViewportPose, Rect>()
         // Keep the same document, scroll state and active return consumer while the
-        // upper edge first stays window-anchored, then is clipped by the player.
-        // The content drifts inside its stable 320 dp layout in both directions.
+        // lower edge follows the presented title while the upper edge stays mounted to the
+        // player, inside its stable 320 dp layout in both directions.
         for ((index, pose) in (poses + poses.dropLast(1).asReversed()).withIndex()) {
             compose.runOnIdle { state.pose = pose; state.depth = .6f }
             compose.onNodeWithContentDescription(ReturnLabel).assertIsDisplayed()
@@ -168,7 +168,7 @@ class LyricsReturnBackdropTest {
                 assertTrue("The moving return control must keep its legacy sampling lease", source.consumers > 0)
             val viewport = compose.onNodeWithTag("lyrics-viewport", true).getUnclippedBoundsInRoot()
             val root = compose.onNodeWithTag(SceneTag).getUnclippedBoundsInRoot()
-            assertEquals("The viewport top must follow the player's clipping edge", max(24f, pose.surfaceTop),
+            assertEquals("The viewport top stays mounted inside the player", pose.surfaceTop + 24f,
                 (viewport.top - root.top).value, 1f)
             assertEquals("The viewport bottom must follow the presented title", pose.surfaceTop + pose.titleTop - 4f,
                 (viewport.bottom - root.top).value, 1f)
@@ -368,7 +368,7 @@ class LyricsReturnBackdropTest {
                                                 LyricsLines(state.document, state.position, true, {}, Modifier.fillMaxSize(),
                                                     sourceAlpha = { outgoingAlpha },
                                                     contentHeight = if (viewport != null) 320.dp else null,
-                                                    contentOffset = (viewport?.contentOffset ?: 0f).dp)
+                                                    contentOffset = 0.dp)
                                             }
                                             state.incoming?.let { incoming ->
                                                 Box(Modifier.fillMaxSize().graphicsLayer { alpha = .5f }) {

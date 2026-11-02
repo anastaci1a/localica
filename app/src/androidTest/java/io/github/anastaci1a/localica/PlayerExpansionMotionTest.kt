@@ -148,8 +148,8 @@ class PlayerExpansionMotionTest {
                     val contentTravel = (movingContent.top - fullContent.top).value
                     val playerTravel = (compose.onNodeWithTag("player-surface", true).getUnclippedBoundsInRoot().top -
                         compose.onRoot().getUnclippedBoundsInRoot().top).value
-                    assertTrue("Content must move slower than its enclosing player: $contentTravel vs $playerTravel",
-                        contentTravel >= 0f && contentTravel < playerTravel * .5f)
+                    assertEquals("Lyrics are mounted to the moving player, not fixed on screen or drifting inside it", playerTravel, contentTravel, 1.5f)
+                    assertTrue("The player moved", playerTravel > 1f)
                     val heldBounds = listOf("lyrics-panel", "player-title", "player-seek-row").map {
                         compose.onNodeWithTag(it, true).fetchSemanticsNode().boundsInRoot
                     }
@@ -188,8 +188,8 @@ class PlayerExpansionMotionTest {
                             val movingPanel = compose.onNodeWithTag("lyrics-panel", true).fetchSemanticsNode().boundsInRoot
                             val movingTitle = compose.onNodeWithTag("player-title", true).fetchSemanticsNode().boundsInRoot
                             val movingPlayer = compose.onNodeWithTag("player-surface", true).fetchSemanticsNode().boundsInRoot
-                            assertEquals("The upper clip no longer rides down with the whole player",
-                                maxOf(panel.top, movingPlayer.top), movingPanel.top, 1.5f)
+                            assertEquals("The upper clip stays mounted at its offset inside the moving player",
+                                panel.top - player.top, movingPanel.top - movingPlayer.top, 1.5f)
                             assertEquals("The bottom clip follows the presented title with its normal gap",
                                 title.top - panel.bottom, movingTitle.top - movingPanel.bottom, 1.5f)
                             assertEquals("Real and missing lyrics share the same visible clip", movingPanel,
