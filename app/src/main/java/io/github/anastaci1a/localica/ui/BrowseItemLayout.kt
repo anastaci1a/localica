@@ -124,24 +124,30 @@ internal fun BrowseItemLayout(item: BrowserItem, style: BrowseStyle, geometry: B
             val (source, target) = measureEndpoints(width)
             titleParagraph.layouts = source.title to target.title
             informationParagraph.layouts = source.information to target.information
-            fun mix(a: Int, b: Int) = (a + (b - a) * progress.coerceIn(0f, 1f)).toInt()
             artCorner.floatValue = source.artCorner + (target.artCorner - source.artCorner) * progress.coerceIn(0f, 1f)
-            val artSize = mix(source.art, target.art).coerceAtLeast(0)
-            val art = children[0].measure(Constraints.fixed(artSize, artSize))
-            val text = children[1].measure(Constraints.fixed(
-                mix(source.title.size.width, target.title.size.width).coerceAtLeast(0),
-                mix(source.title.size.height, target.title.size.height).coerceAtLeast(0)))
-            val information = children[2].measure(Constraints.fixed(
-                mix(source.information?.size?.width ?: 0, target.information?.size?.width ?: 0).coerceAtLeast(0),
-                mix(source.information?.size?.height ?: 0, target.information?.size?.height ?: 0).coerceAtLeast(0)))
-            val actions = children[3].measure(Constraints.fixed(mix(source.menuWidth, target.menuWidth).coerceAtLeast(0),
-                mix(source.menuHeight, target.menuHeight).coerceAtLeast(0)))
+            // One float rectangle per part; truncating size and position separately made
+            // cover edges wobble by a pixel against the fractional row translation (#505).
+            val rtl = layoutDirection == androidx.compose.ui.unit.LayoutDirection.Rtl
+            fun rect(x: Int, y: Int, width: Int, height: Int, x2: Int, y2: Int, width2: Int, height2: Int) =
+                motionPixelRect(browsePinchPartRect(x, y, width, height, x2, y2, width2, height2, progress)
+                    .let { if (rtl) it.mirrored(constraints.maxWidth.toFloat()) else it })
+            val artRect = rect(source.artX, source.artY, source.art, source.art, target.artX, target.artY, target.art, target.art)
+            val textRect = rect(source.titleX, source.titleY, source.title.size.width, source.title.size.height,
+                target.titleX, target.titleY, target.title.size.width, target.title.size.height)
+            val infoRect = rect(source.infoX, source.infoY, source.information?.size?.width ?: 0, source.information?.size?.height ?: 0,
+                target.infoX, target.infoY, target.information?.size?.width ?: 0, target.information?.size?.height ?: 0)
+            val menuRect = rect(source.menuX, source.menuY, source.menuWidth, source.menuHeight,
+                target.menuX, target.menuY, target.menuWidth, target.menuHeight)
+            val art = children[0].measure(artRect.constraints())
+            val text = children[1].measure(textRect.constraints())
+            val information = children[2].measure(infoRect.constraints())
+            val actions = children[3].measure(menuRect.constraints())
             children.drop(4).forEach { it.measure(Constraints.fixed(0, 0)) }
             return@Layout layout(constraints.maxWidth, target.height) {
-                art.placeRelative(mix(source.artX, target.artX), mix(source.artY, target.artY))
-                text.placeRelative(mix(source.titleX, target.titleX), mix(source.titleY, target.titleY))
-                information.placeRelative(mix(source.infoX, target.infoX), mix(source.infoY, target.infoY))
-                actions.placeRelative(mix(source.menuX, target.menuX), mix(source.menuY, target.menuY))
+                placeMotion(art, artRect)
+                placeMotion(text, textRect)
+                placeMotion(information, infoRect)
+                placeMotion(actions, menuRect)
             }
         }
         val width = (constraints.maxWidth - geometry.contentInset.dp.roundToPx() * 2).coerceAtLeast(0)

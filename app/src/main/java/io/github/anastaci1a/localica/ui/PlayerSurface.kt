@@ -329,8 +329,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
         surfaceContainer = androidx.compose.ui.graphics.lerp(baseColors.surfaceContainer, palette.middle, p),
         surfaceContainerHigh = androidx.compose.ui.graphics.lerp(baseColors.surfaceContainerHigh, palette.middle, p),
         surfaceContainerHighest = androidx.compose.ui.graphics.lerp(baseColors.surfaceContainerHighest, palette.top, p))) {
-    Surface(Modifier.offset(x = surfaceFrame.x, y = surfaceFrame.y)
-        .width(surfaceFrame.width).height(surfaceFrame.height)
+    Surface(Modifier.motionBounds(surfaceFrame.x, surfaceFrame.y, surfaceFrame.width, surfaceFrame.height)
         .onGloballyPositioned { polarity.measure("viewport", it) }
         .bottomGlassShadow(surfaceCorner, opacity = { 1f - progress.value })
         .then(drag).then(if ((queueProgress?.value ?: 0f) > 0f) Modifier.clearAndSetSemantics {} else Modifier).testTag("player-surface")

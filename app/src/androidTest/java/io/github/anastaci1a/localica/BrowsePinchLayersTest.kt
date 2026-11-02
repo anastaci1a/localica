@@ -365,9 +365,11 @@ class BrowsePinchLayersTest {
             val inset = geometry.cardVerticalInset(BrowseStyle()).roundToInt()
             val y = row.offset.y + (index / fixture.columns - rowIndex / fixture.columns) * row.size.height
             val top = y + inset + pinchContentTranslation(60f, y.toFloat(), inset, inset, fixture.motion.progress.value)
-            assertEquals("Current indices own the destination, source bounds stay frozen", top.roundToInt(), actual.top.toInt())
-            assertEquals(40f, actual.width, .01f)
-            assertEquals(40f, actual.height, .01f)
+            // Retained covers draw at the exact float rectangle (#505): a partly covered edge
+            // pixel row/column can read as green, so the detected box is within one pixel.
+            assertEquals("Current indices own the destination, source bounds stay frozen", top, actual.top, 1f)
+            assertEquals(40f, actual.width, 1.01f)
+            assertEquals(40f, actual.height, 1.01f)
         }
     }
 
