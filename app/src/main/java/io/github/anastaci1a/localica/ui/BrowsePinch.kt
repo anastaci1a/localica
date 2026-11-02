@@ -111,6 +111,12 @@ internal class BrowsePinchMotion {
     val artwork = mutableMapOf<Any, BrowsePinchLayer>()
     val text = mutableMapOf<Any, BrowsePinchLayer>()
     var viewportCoordinates: LayoutCoordinates? = null
+    /** Read while drawing the viewport overlay; bumped per frame by [redrawThroughMotion]. */
+    var motionTick by mutableIntStateOf(0)
+    suspend fun redrawThroughMotion(millis: Long) {
+        val start = withFrameNanos { it }
+        while (withFrameNanos { it } - start < millis * 1_000_000L) motionTick++
+    }
     var anchorIndex = 0
     var anchorTop = 0f
     var rowHeight = 64f

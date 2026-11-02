@@ -135,8 +135,22 @@ internal fun <T> liveItemsInIndexOrder(items: List<T>, indexOf: (T) -> Int): Lis
     return items
 }
 
+/** Rows placed by animateItem/animateBounds move by layer or approach placement, which never
+ * invalidates this ancestor's draw. After any change of the item set or style, redraw every frame
+ * for the length of those animations so the covers follow their cells instead of staying where the
+ * cells began (for example at gallery positions). Nothing runs at rest. */
+private const val PlacementMotionMillis = 500L
+
+@Composable
 internal fun Modifier.pinchRetainedOverlay(motion: BrowsePinchMotion, grid: LazyGridState,
+    indices: Map<String, Int>, placementKey: Any? = null): Modifier {
+    LaunchedEffect(motion, indices, placementKey) { motion.redrawThroughMotion(PlacementMotionMillis) }
+    return pinchRetainedOverlayDrawing(motion, grid, indices)
+}
+
+private fun Modifier.pinchRetainedOverlayDrawing(motion: BrowsePinchMotion, grid: LazyGridState,
     indices: Map<String, Int>): Modifier = onGloballyPositioned { motion.viewportCoordinates = it }.drawWithContent {
+    motion.motionTick
     // Pass one: all live and retained text (including track numbers and menus).
     drawContent()
     val visible = grid.layoutInfo.visibleItemsInfo
