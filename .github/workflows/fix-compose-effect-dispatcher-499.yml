@@ -14,7 +14,7 @@ jobs:
     # Keep every test and its assertion timeout unchanged.
     timeout-minutes: 140
     env:
-      RISK_CLASSES: ''
+      RISK_CLASSES: io.github.anastaci1a.localica.TestComposeDispatcherTest,io.github.anastaci1a.localica.DirectComposeDispatcherTest,io.github.anastaci1a.localica.ActivationHapticsTest,io.github.anastaci1a.localica.ArtistAlbumSelectionTest,io.github.anastaci1a.localica.ArtistAlbumFilterRangeTest
       TEST_API: ${{ matrix.api }}
       LOCALICA_LIVE_EVIDENCE: 'true'
     strategy:
@@ -70,6 +70,12 @@ jobs:
           name: native-live-evidence-api-${{ matrix.api }}
           path: native-live-evidence/
           if-no-files-found: error
+      - name: Preserve preflight and complete union evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: preflight-reports-api-${{ matrix.api }}
+          path: preflight-reports/
       - name: Capture host diagnostics on emulator failure
         if: failure()
         run: |
@@ -89,4 +95,3 @@ jobs:
         with:
           name: emulator-crashes-api-${{ matrix.api }}
           path: /tmp/android-runner/emu-crash-*/
-
