@@ -77,9 +77,13 @@ internal fun BrowseScrollbar(state: LazyGridState, items: List<BrowserItem>, sor
                 setProgress { request((it.coerceIn(0f, 1f) * lastStart).roundToInt()) }
             }
             .pointerInput(lastStart, travel) {
-                detectVerticalDragGestures(onDragStart = { dragging = true; seek(it.y) },
-                    onDragEnd = { dragging = false }, onDragCancel = { dragging = false }) { change, delta ->
-                    change.consume(); seek(dragY + delta)
+                try {
+                    detectVerticalDragGestures(onDragStart = { dragging = true; seek(it.y) },
+                        onDragEnd = { dragging = false }, onDragCancel = { dragging = false }) { change, delta ->
+                        change.consume(); seek(dragY + delta)
+                    }
+                } finally {
+                    dragging = false
                 }
             }) {
             Box(Modifier.align(Alignment.TopEnd).offset { IntOffset(-4.dp.roundToPx(), position().roundToInt()) }
