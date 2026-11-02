@@ -36,10 +36,12 @@ private object ToneImages {
     val mutex = Mutex()
     fun peek(image: ImageBitmap, tone: GlassTone): ImageBitmap? = images.get(Key(image.asAndroidBitmap(), tone))
     /** Pixels already prepared for this image under another tone: close to the wanted result,
-     * unlike the raw image, which is visibly brighter than any positive tone's output. */
-    fun anyTone(image: ImageBitmap): ImageBitmap? {
+     * unlike the raw image, which is visibly brighter than any positive tone's output. An entry
+     * of the same polarity is preferred; the opposite polarity is only a last resort. */
+    fun anyTone(image: ImageBitmap, tone: GlassTone): ImageBitmap? {
         val bitmap = image.asAndroidBitmap()
-        return images.snapshot().entries.firstOrNull { it.key.bitmap === bitmap }?.value
+        val entries = images.snapshot().entries.filter { it.key.bitmap === bitmap }
+        return (entries.firstOrNull { it.key.tone.lightInk == tone.lightInk } ?: entries.firstOrNull())?.value
     }
     suspend fun get(image: ImageBitmap, tone: GlassTone): ImageBitmap = mutex.withLock {
         val key = Key(image.asAndroidBitmap(), tone)
@@ -99,7 +101,7 @@ private class ToneSnapshotCompletion {
     // A newly mounted consumer (such as the outgoing frame of a crossfade) has no retained
     // result. Until its own tone is prepared, show another tone of the same pixels, never the raw image.
     val standIn = remember(image, tone, prepare) {
-        if (cached != null || prepare != null || tone.trim <= 0f) null else image?.let { ToneImages.anyTone(it) }
+        if (cached != null || prepare != null || tone.trim <= 0f) null else image?.let { ToneImages.anyTone(it, tone) }
     }
     var result by remember { mutableStateOf<ImageBitmap?>(null) }
     // Non-observable metadata follows the existing result publication, without another effect,
