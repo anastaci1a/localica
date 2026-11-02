@@ -272,8 +272,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     val glassFrost = smoothReveal((p - .08f) / .8f)
     val deviceCorners = rememberDeviceCorners()
     val surfaceFrame = playerSurfaceFrame(maxWidth, maxHeight, navigationInset, bottomChrome, p, deviceCorners)
-    val lyricsViewport = playerLyricsViewport(surfaceFrame.y.value, titleY.value, metadataY.value,
-        (statusInset + 60.dp).value)
+    val lyricsViewport = playerLyricsViewport(titleY.value, (statusInset + 60.dp).value)
     val surfaceWidth = surfaceFrame.width
     val surfaceCorner = surfaceFrame.maximumCorner
     // This feather belongs to the cover, including its final full-background state.
@@ -441,7 +440,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
                         }
                     },
                 contentHeight = (lyricMetadataY - statusInset - 64.dp).coerceAtLeast(96.dp),
-                contentOffset = lyricsViewport.contentOffset.dp, sourcesAnchor = sourcesAnchor,
+                sourcesAnchor = sourcesAnchor,
                 result = lyricsResult, sourcesVisible = sourcesVisible, onSourcesDismiss = { sourcesVisible = false },
                 originPreparation = sourcesPreparation, contentAlpha = { lyricMotion.contentAlpha },
                 sampledAtMs = sampled.sampledAtMs, playing = sampled.isPlaying, speed = sampled.playbackSpeed,
