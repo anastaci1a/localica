@@ -170,8 +170,8 @@ internal fun rememberBrowsePresentation(library: LibrarySnapshot, playlists: Lis
     reducedMotion: Boolean, queryDispatcher: kotlinx.coroutines.CoroutineDispatcher,
     sorts: BrowseSortSnapshot, sourcesReady: Boolean = true, animateArrival: Boolean = true,
     queueOpeningRequest: Long = 0, queueOpeningOccurrence: String? = null): BrowsePresentationState {
-    // Query work and filter motion are independent. Departing rows begin fading
-    // immediately; only a result for the latest request may replace them.
+    // Query work and filter motion are independent. Only a result for the latest request
+    // may replace the displayed rows; a filter switch withdraws them at once (see below).
     val presentationCache = LocalBrowsePresentationCache.current ?: remember { BrowsePresentationCache() }
     val source = BrowseSourceRevision(library, playlists, queues, libraryFilters)
     val cachedPresentation = remember(source, route, style, sorts, sourcesReady) {
@@ -205,19 +205,28 @@ internal fun rememberBrowsePresentation(library: LibrarySnapshot, playlists: Lis
     var presentation by remember(route.key) { mutableStateOf(cachedPresentation) }
     var displayedFilter by remember(route.key) { mutableStateOf(route.filter) }
     val reveal = remember(route.key) { androidx.compose.animation.core.Animatable(if (cachedPresentation == null) 0f else 1f) }
+    // A filter switch is a hard reset (#503): the previous filter's rows are never displayed
+    // against the new filter. Filters share item keys, so retained rows would let the grid's
+    // item/bounds animation and a retained pinch overlay carry them into the new layout. Until
+    // the new filter publishes, the screen shows the loading viewport, which disposes the grid's
+    // per-item animation state and starts a fresh cascading reveal.
+    val switchingFilter = displayedFilter != route.filter
     LaunchedEffect(source, route, style, candidate, reducedMotion, sorts, sourcesReady, animateArrival) {
         if (!sourcesReady) { reveal.snapTo(0f); return@LaunchedEffect }
-        if (displayedFilter != route.filter) {
-            if (reducedMotion) reveal.snapTo(0f) else reveal.animateTo(0f, androidx.compose.animation.core.tween(110))
-        }
+        val switching = displayedFilter != route.filter
+        if (switching) reveal.snapTo(0f)
         if (candidate != null && matchesBrowseRequest(candidate, source, route, style, sorts)) {
+            // Even a cached destination first presents a loading frame.
+            if (switching) withFrameNanos { }
             presentation = candidate
             displayedFilter = route.filter
             if (reducedMotion || !animateArrival) reveal.snapTo(1f) else if (reveal.value < 1f)
                 reveal.animateTo(1f, androidx.compose.animation.core.tween(180))
         }
     }
-    val displayed = openingPresentation ?: browseLayoutPresentation(presentation, source, route, style, sorts)
-    return BrowsePresentationState(displayed.takeIf { sourcesReady }, openingPresentation != null || cachedPresentation != null, reveal,
+    val displayed = if (switchingFilter) null
+        else openingPresentation ?: browseLayoutPresentation(presentation, source, route, style, sorts)
+    return BrowsePresentationState(displayed.takeIf { sourcesReady },
+        !switchingFilter && (openingPresentation != null || cachedPresentation != null), reveal,
         !sourcesReady || displayed?.source != source || displayed?.route != route || displayed?.style != style || displayed?.sorts != sorts)
 }
