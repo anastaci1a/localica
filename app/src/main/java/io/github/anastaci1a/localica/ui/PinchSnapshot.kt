@@ -28,8 +28,17 @@ import kotlinx.coroutines.ensureActive
  * premultiplied ImageReader bytes as straight colors, attenuating translucent decorations twice. Keep their original bytes
  * and honor row padding while freezing the source atlas. */
 private suspend fun GraphicsLayer.premultipliedPinchSnapshot(density: Density, direction: LayoutDirection,
-    onPhase: (String) -> Unit): ImageBitmap {
-    if (Build.VERSION.SDK_INT >= 28) return toImageBitmap()
+    onPhase: (String) -> Unit): ImageBitmap =
+    if (Build.VERSION.SDK_INT >= 28) toImageBitmap() else legacyLayerSnapshot(density, direction, straightAlpha = false, onPhase)
+
+/** API < 28 layer readback through an owned ImageReader (#501). Unlike Compose's LayerSnapshotV22
+ * (maxImages = 1 with acquireLatestImage over-acquiring, the Image left for ImageReader.close, a resume
+ * per callback), this stays within maxImages, copies and closes each Image inside its callback, publishes
+ * once and clears the listener before releasing the surface and reader. [straightAlpha] reproduces
+ * Compose's pixel conversion for existing readback consumers; pinch keeps the premultiplied bytes.
+ * Both honor row padding. */
+internal suspend fun GraphicsLayer.legacyLayerSnapshot(density: Density, direction: LayoutDirection,
+    straightAlpha: Boolean, onPhase: (String) -> Unit = {}): ImageBitmap {
     val width = size.width
     val height = size.height
     return run {
@@ -58,8 +67,15 @@ private suspend fun GraphicsLayer.premultipliedPinchSnapshot(density: Density, d
                                 packed.put(source)
                             }
                             packed.rewind()
-                            val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-                            bitmap.copyPixelsFromBuffer(packed)
+                            val bitmap = if (straightAlpha) {
+                                // Compose's Image.toBitmap conversion: RGBA bytes read as straight ARGB.
+                                val bytes = packed.array()
+                                Bitmap.createBitmap(IntArray(width * height) { i ->
+                                    val o = i * 4
+                                    (bytes[o + 3].toInt() and 255 shl 24) or (bytes[o].toInt() and 255 shl 16) or
+                                        (bytes[o + 1].toInt() and 255 shl 8) or (bytes[o + 2].toInt() and 255)
+                                }, width, height, Bitmap.Config.ARGB_8888)
+                            } else Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888).also { it.copyPixelsFromBuffer(packed) }
                             onPhase("legacy-pixels-copied")
                             continuation.resume(bitmap.asImageBitmap())
                         }
@@ -74,7 +90,7 @@ private suspend fun GraphicsLayer.premultipliedPinchSnapshot(density: Density, d
                 try {
                     canvas.drawColor(android.graphics.Color.TRANSPARENT, PorterDuff.Mode.CLEAR)
                     CanvasDrawScope().draw(density, direction, Canvas(canvas), Size(width.toFloat(), height.toFloat())) {
-                        drawLayer(this@premultipliedPinchSnapshot)
+                        drawLayer(this@legacyLayerSnapshot)
                     }
                 } finally {
                     // A failed post is ambiguous: retain ownership until an actual
