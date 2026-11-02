@@ -95,6 +95,8 @@ Adaptive contrast also applies to player color continuations, Queue frost and ne
 
 A choice is current only after matching tone preparation completes. Unmeasured, frozen, native-blurred, moving-cover and partial-player backgrounds retain the last verified decision (white ink before any verification), explicitly without claiming current coverage. Tone preparation, sampling, composition and native presentation are asynchronous, so this does not guarantee atomic ink and background presentation.
 
+A foreground change that arrives while lyrics open or close eases with that animation's progress instead of switching in one frame.
+
 Blur, texture and the artwork continuation remain unchanged.
 
 ### Settings controls
