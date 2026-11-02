@@ -18,7 +18,6 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
@@ -35,7 +34,7 @@ import org.junit.Rule
 import org.junit.Test
 
 class PinchRetainedHighlightTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
 
     @Test fun virtualizedCurrentRowRetainsItsHighlightThroughRecognitionAndReversal() = retained(false)
     @Test fun rightToLeftVirtualizedCurrentRowRetainsItsHighlightThroughRecognitionAndReversal() = retained(true)

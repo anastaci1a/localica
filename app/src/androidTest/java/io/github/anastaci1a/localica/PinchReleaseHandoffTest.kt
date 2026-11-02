@@ -16,7 +16,6 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.anastaci1a.localica.browse.*
 import io.github.anastaci1a.localica.library.*
@@ -29,7 +28,7 @@ import org.junit.Rule
 import org.junit.Test
 
 class PinchReleaseHandoffTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
 
     @Test fun longHeldOutwardPinchDoesNotRecenterForOneReleaseFrame() = release(outward = true)
     @Test fun longHeldInwardPinchDoesNotRecenterForOneReleaseFrame() = release(outward = false)

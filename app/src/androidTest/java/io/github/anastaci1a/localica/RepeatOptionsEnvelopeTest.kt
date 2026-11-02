@@ -13,7 +13,6 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
@@ -47,7 +46,7 @@ private fun RepeatTestScene(content: @Composable () -> Unit) {
 }
 
 class RepeatOptionsEnvelopeTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
     private fun capture(name: String) {
         val instrumentation = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation()
         compose.waitForIdle()

@@ -2,7 +2,6 @@ package io.github.anastaci1a.localica
 
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.runtime.*
-import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import io.github.anastaci1a.localica.ui.rememberImeClosing
@@ -11,7 +10,7 @@ import org.junit.Rule
 import org.junit.Test
 
 class ImeClosingObservationTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
 
     private class Insets(bottom: Int = 0) : WindowInsets {
         var bottom by mutableIntStateOf(bottom)

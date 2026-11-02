@@ -13,7 +13,6 @@ import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.activity.ComponentActivity
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.anastaci1a.localica.library.*
@@ -28,7 +27,7 @@ import org.junit.Rule
 import org.junit.Test
 
 class ListSearchTest {
-    @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
+    @get:Rule val compose = localicaAndroidComposeRule<ComponentActivity>()
     @get:Rule val watchdog = BrowseSchedulerWatchdog.rule()
     private var lastRoot = ""
     private var lastMorph = ""

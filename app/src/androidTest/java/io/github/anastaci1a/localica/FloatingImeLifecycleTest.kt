@@ -13,7 +13,6 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.unit.dp
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.anastaci1a.localica.ui.*
@@ -25,7 +24,7 @@ import java.io.File
 /** Real synthetic IME Window; not Gboard or physical-device certification. */
 @OptIn(ExperimentalLayoutApi::class)
 class FloatingImeLifecycleTest {
-    @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
+    @get:Rule val compose = localicaAndroidComposeRule<ComponentActivity>()
     private val records = mutableListOf<String>()
     private val decisions = mutableListOf<String>()
     private var host: View? = null

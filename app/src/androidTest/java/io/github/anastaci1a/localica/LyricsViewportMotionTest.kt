@@ -10,7 +10,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.lyrics.*
 import io.github.anastaci1a.localica.ui.*
@@ -21,7 +20,7 @@ import org.junit.Test
 /** Check final root pixels: a correctly clipped list node alone cannot prove that translated ink
  * stays inside the viewport, or that the missing-lyrics decoration uses that same mask. */
 class LyricsViewportMotionTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
 
     @Test fun translatedLyricsAndMissingInkStayInsideThePresentedFadeInBothDirections() {
         var missing by mutableStateOf(false)

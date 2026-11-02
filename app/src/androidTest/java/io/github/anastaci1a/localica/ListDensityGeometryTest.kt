@@ -9,7 +9,6 @@ import androidx.compose.ui.layout.LookaheadScope
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.browse.*
@@ -25,7 +24,7 @@ import kotlin.math.abs
 import kotlin.math.roundToInt
 
 class ListDensityGeometryTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
     private val track = Track("density", "A long title that must leave room for information", artist = "Artist information",
         fileName = "song.mp3", relativePath = "song.mp3")
     private val row = SongRow(track.id, track)

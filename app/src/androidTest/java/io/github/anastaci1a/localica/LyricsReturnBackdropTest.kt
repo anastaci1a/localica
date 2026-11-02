@@ -28,7 +28,6 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.IntSize
@@ -53,7 +52,7 @@ import kotlin.math.roundToInt
 /** Real lyric text and the real return control, on both the legacy and native lens paths.
  * Chroma separates lyric ink from the neutral arrow, edge illumination and shadow. */
 class LyricsReturnBackdropTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
     private lateinit var view: View
     private lateinit var artwork: FrostedBackdrop
     private var stage by mutableIntStateOf(0)

@@ -1,7 +1,6 @@
 package io.github.anastaci1a.localica
 
 import androidx.compose.runtime.*
-import androidx.compose.ui.test.junit4.createComposeRule
 import io.github.anastaci1a.localica.library.*
 import io.github.anastaci1a.localica.queue.*
 import io.github.anastaci1a.localica.ui.*
@@ -10,7 +9,7 @@ import org.junit.Rule
 import org.junit.Test
 
 class PlayerTrackProjectionTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
     private fun track(id: String, title: String = id) = Track("content://$id", title,
         fileName = "$id.mp3", relativePath = "$id.mp3", id = id)
 

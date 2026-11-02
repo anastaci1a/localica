@@ -18,7 +18,6 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -34,7 +33,7 @@ import kotlin.math.sin
 
 /** Presented contour acceptance at the actual dialog's scrolling/clipping boundaries. */
 class SelectorPopupClearanceTest {
-    @get:Rule val compose = createAndroidComposeRule<androidx.activity.ComponentActivity>()
+    @get:Rule val compose = localicaAndroidComposeRule<androidx.activity.ComponentActivity>()
 
     @Before fun configureWindowLikeTheApp() {
         compose.activityRule.scenario.onActivity {

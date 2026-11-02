@@ -12,7 +12,6 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.library.*
 import io.github.anastaci1a.localica.ui.*
@@ -23,7 +22,7 @@ import org.junit.Rule
 import org.junit.Test
 
 class BrowseArtworkTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
     private fun bitmap(color: Int) = Bitmap.createBitmap(32, 32, Bitmap.Config.ARGB_8888).apply { eraseColor(color) }
 
     @Test fun automaticTransitDefersUncachedDecodeAndCancellationResumesIt() {

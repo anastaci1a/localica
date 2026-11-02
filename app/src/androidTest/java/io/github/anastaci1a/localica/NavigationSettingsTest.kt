@@ -1,7 +1,6 @@
 package io.github.anastaci1a.localica
 
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.test.platform.app.InstrumentationRegistry
@@ -15,7 +14,7 @@ import org.junit.Rule
 import org.junit.Test
 
 class NavigationSettingsTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
 
     @Test fun addingOverflowTabsReorderingAndRemovingTheActiveTabKeepsNavigationUsable() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext

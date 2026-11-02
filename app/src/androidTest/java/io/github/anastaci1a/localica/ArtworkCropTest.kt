@@ -3,7 +3,6 @@ package io.github.anastaci1a.localica
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.anastaci1a.localica.ui.*
 import io.github.anastaci1a.localica.editing.*
@@ -12,7 +11,7 @@ import org.junit.Rule
 import org.junit.Test
 
 class ArtworkCropTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
 
     @Test fun rectangularImageRequiresAnExplicitSquareCropBeforeItCanBeApplied() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext

@@ -14,7 +14,6 @@ import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.navigation.GlassAppearance
 import io.github.anastaci1a.localica.ui.*
@@ -23,7 +22,7 @@ import org.junit.Rule
 import org.junit.Test
 
 class PlayerRefinementTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
 
     private fun assertDrawnArrowPointsUp(expected: Boolean) {
         // Inspect the off-axis arrow wings, not accessibility that must disappear on exit.

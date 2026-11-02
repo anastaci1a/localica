@@ -22,7 +22,6 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.navigation.GlassAppearance
 import io.github.anastaci1a.localica.ui.*
@@ -36,7 +35,7 @@ import kotlin.math.roundToInt
 
 /** Native source registration, not a reproduction of the private white-band report. */
 class NestedGlassRegistrationTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
 
     @Test fun transformedGlassSamplesItsSceneThroughForwardReverseFitAndScrolling() {
         var fitX by mutableFloatStateOf(.55f)

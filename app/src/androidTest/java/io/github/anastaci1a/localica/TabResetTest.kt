@@ -2,7 +2,6 @@ package io.github.anastaci1a.localica
 
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.anastaci1a.localica.library.*
 import io.github.anastaci1a.localica.navigation.*
@@ -14,7 +13,7 @@ import org.junit.Rule
 import org.junit.Test
 
 class TabResetTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
     private fun awaitFirstAlbum() {
         try {
             compose.waitUntil(5000) { runCatching { compose.onNodeWithText("Album 000").assertIsDisplayed() }.isSuccess }

@@ -8,7 +8,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.anastaci1a.localica.library.*
 import io.github.anastaci1a.localica.playback.PlaybackState
@@ -19,7 +18,7 @@ import org.junit.Rule
 import org.junit.Test
 
 class ThemeTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
 
     @Test fun browsingRetainsLightSurfacesAndReadableInheritedTextInSystemNightMode() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext

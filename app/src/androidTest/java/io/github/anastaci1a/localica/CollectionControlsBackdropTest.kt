@@ -20,7 +20,6 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -40,7 +39,7 @@ import kotlin.math.roundToInt
 
 /** Actual Text pixels and the ordinary glass consumer, without another readback path. */
 class CollectionControlsBackdropTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
 
     @Test fun albumToolbarAndOverflowShareTheFinishedPageIncludingAnEmptyCollection() = collection(false)
     @Test fun artistToolbarAndOverflowShareTheFinishedPageIncludingAnEmptyCollection() = collection(true)

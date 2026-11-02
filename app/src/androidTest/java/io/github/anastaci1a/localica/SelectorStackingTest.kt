@@ -15,7 +15,6 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.navigation.GlassAppearance
 import io.github.anastaci1a.localica.navigation.MainTab
@@ -28,7 +27,7 @@ import kotlin.math.roundToInt
 
 /** Actual tab/utility siblings deliberately overlap to expose their draw order. */
 class SelectorStackingTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
     private lateinit var activity: SelectorTrackActivity
     private lateinit var view: View
     private lateinit var inputMode: InputModeManager

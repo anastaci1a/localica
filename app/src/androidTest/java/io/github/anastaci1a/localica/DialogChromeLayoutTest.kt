@@ -12,7 +12,6 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -30,7 +29,7 @@ import kotlin.math.roundToInt
 
 /** Geometry on the real shared viewport and Repeat frame, not a parallel test-only layout. */
 class DialogChromeLayoutTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
     private var titleStyle: TextStyle? = null
 
     @Composable private fun Scene(content: @Composable () -> Unit) {

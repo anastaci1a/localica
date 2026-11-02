@@ -1,7 +1,6 @@
 package io.github.anastaci1a.localica
 
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.UiDevice
 import io.github.anastaci1a.localica.library.*
@@ -17,7 +16,7 @@ class ScopedSearchHistoryTest {
     @get:Rule val watchdog = BrowseSchedulerWatchdog.rule()
     // Production dispatch queues effects; do not run scroll restoration inline
     // while the pager is subcomposing during a measure pass.
-    @get:Rule val compose = createComposeRule(effectContext = kotlinx.coroutines.test.StandardTestDispatcher())
+    @get:Rule val compose = localicaComposeRule()
     private lateinit var albumKeys: Map<String, String>
     private val editor get() = compose.onNode(hasSetTextAction())
 

@@ -17,7 +17,6 @@ import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalGraphicsContext
 import androidx.compose.ui.platform.LocalLayoutDirection
-import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
@@ -38,7 +37,7 @@ import org.junit.Test
 
 /** Genuine layer recording, retained ownership and pixel readback across caller cancellation. */
 class RetainedLayerReadbackTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
 
     private class Fixture {
         var redVisible by mutableStateOf(true)

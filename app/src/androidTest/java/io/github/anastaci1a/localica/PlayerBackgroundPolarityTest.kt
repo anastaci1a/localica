@@ -13,7 +13,6 @@ import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.navigation.*
@@ -26,7 +25,7 @@ import org.junit.Test
 
 /** Real PlayerSurface background/ink regressions; no production GPU sample/readback is enabled. */
 class PlayerBackgroundPolarityTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
     private val owner = PlayerBackgroundPolarityState()
     private var visual by mutableStateOf(PlayerVisual())
     private var visit by mutableStateOf("first")

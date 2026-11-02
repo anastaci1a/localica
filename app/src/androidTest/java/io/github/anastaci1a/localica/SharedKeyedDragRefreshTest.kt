@@ -9,7 +9,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.ui.*
 import androidx.room.Room
@@ -24,7 +23,7 @@ import org.junit.Test
 
 /** Readiness can change independently of the lifetime of an already owned contact. */
 class SharedKeyedDragRefreshTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
     private var ready by mutableStateOf(true)
     private var eligible by mutableStateOf(true)
     private var revision by mutableIntStateOf(0)

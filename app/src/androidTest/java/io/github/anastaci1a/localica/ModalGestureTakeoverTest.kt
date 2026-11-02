@@ -19,7 +19,6 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogWindowProvider
 import io.github.anastaci1a.localica.browse.BrowseStyle
@@ -35,7 +34,7 @@ import org.junit.Test
 /** Use Window.Callback, not performTouchInput: the latter bypasses Android's window boundary. */
 @OptIn(ExperimentalTestApi::class, kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class ModalGestureTakeoverTest {
-    @get:Rule val compose = createComposeRule(effectContext = kotlinx.coroutines.test.StandardTestDispatcher())
+    @get:Rule val compose = localicaComposeRule()
     private val drivers = mutableListOf<WindowTouch>()
     private var popup by mutableStateOf(false)
     private var child by mutableStateOf(false)

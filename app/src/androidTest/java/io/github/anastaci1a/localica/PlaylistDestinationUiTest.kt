@@ -2,7 +2,6 @@ package io.github.anastaci1a.localica
 
 import androidx.compose.runtime.*
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.dp
 import androidx.room.Room
 import androidx.room.withTransaction
@@ -17,7 +16,7 @@ import org.junit.Rule
 import org.junit.Test
 
 class PlaylistDestinationUiTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
 
     @Test fun playlistNameOmitsSearchIconAndItsSlotWhileKeepingClearAndFocus() {
         compose.setContent { LocalicaTheme {

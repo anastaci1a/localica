@@ -19,7 +19,7 @@ class EffectiveReducedMotionTest {
         val scale = object : MotionDurationScale {
             override var scaleFactor by mutableFloatStateOf(1f)
         }
-        runComposeUiTest(effectContext = scale) {
+        localicaRunComposeUiTest(effectContext = scale) {
             var appReduced by mutableStateOf(false)
             var selected by mutableIntStateOf(0)
             var effective = true

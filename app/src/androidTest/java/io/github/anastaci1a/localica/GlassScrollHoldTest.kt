@@ -13,7 +13,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.navigation.GlassAppearance
 import io.github.anastaci1a.localica.ui.*
@@ -23,7 +22,7 @@ import org.junit.Test
 
 /** The page recording that Modern glass samples is held while scrolling unless live glass is enabled. */
 class GlassScrollHoldTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
     private val holds = Build.VERSION.SDK_INT >= 33 // Legacy keeps its own coalesced refresh path.
 
     private class Fixture(val scene: BrowseBackdropScene)

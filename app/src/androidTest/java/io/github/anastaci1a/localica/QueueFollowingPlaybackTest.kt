@@ -8,7 +8,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
@@ -33,7 +32,7 @@ import kotlin.math.abs
 /** Bridges native playback, controller publications and the visible Queue; never publishes a fake cursor. */
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 class QueueFollowingPlaybackTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
     private val instrumentation get() = InstrumentationRegistry.getInstrumentation()
     private val context get() = instrumentation.targetContext
     private val list get() = compose.onNodeWithTag("browser-list")

@@ -9,7 +9,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.unit.dp
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.anastaci1a.localica.library.Track
@@ -40,7 +39,7 @@ import kotlin.math.roundToInt
  * native event/frame or audible output. No decoder delay forces a buffering interval.
  */
 class PlayerPausedConnectionTest {
-    @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
+    @get:Rule val compose = localicaAndroidComposeRule<ComponentActivity>()
 
     @Test fun miniPlayerRealPausedSkipsKeepTheirVisitsAndPlayGlyph() = pausedSkips(false)
     @Test fun fullPlayerRealPausedSkipsKeepTheirVisitsAndPlayGlyph() = pausedSkips(true)

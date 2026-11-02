@@ -3,14 +3,13 @@ package io.github.anastaci1a.localica
 import androidx.compose.runtime.*
 import androidx.compose.ui.MotionDurationScale
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
 import io.github.anastaci1a.localica.ui.*
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
 
 class FloatingControlMotionTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
 
     @Test fun newlyMountedControlsFadeAndRiseAndReversalsRetainDisplayedProgress() {
         var shown by mutableStateOf(true)
@@ -80,7 +79,7 @@ class FloatingControlMotionTest {
 class FloatingControlSystemMotionTest {
     @Test fun liveSystemDisableSnapsAndCannotOverrideExplicitAppReduction() {
         val scale = object : MotionDurationScale { override var scaleFactor by mutableFloatStateOf(1f) }
-        runComposeUiTest(effectContext = scale) {
+        localicaRunComposeUiTest(effectContext = scale) {
             var shown by mutableStateOf(false)
             var appReduced by mutableStateOf(false)
             lateinit var motion: FloatingControlMotion

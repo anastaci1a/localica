@@ -19,7 +19,6 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.unit.dp
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
@@ -38,7 +37,7 @@ import org.junit.rules.TestName
 
 @OptIn(ExperimentalLayoutApi::class)
 class SearchImeMotionTest {
-    @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
+    @get:Rule val compose = localicaAndroidComposeRule<ComponentActivity>()
     @get:Rule val name = TestName()
     private var visible by mutableStateOf(false)
     private var mounted by mutableStateOf(true)

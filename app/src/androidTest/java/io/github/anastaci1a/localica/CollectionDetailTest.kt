@@ -5,7 +5,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
 import io.github.anastaci1a.localica.browse.*
 import io.github.anastaci1a.localica.library.*
 import io.github.anastaci1a.localica.navigation.*
@@ -16,7 +15,7 @@ import org.junit.Rule
 import org.junit.Test
 
 class CollectionDetailTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
     private val tracks = (0..5).map { Track("collection:$it", "Song $it", artist = "Artist", albumArtist = "Artist",
         album = if (it < 3) "First album" else "Second album", trackNumber = it % 3 + 1,
         fileName = "$it.mp3", relativePath = "$it.mp3") }

@@ -11,7 +11,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.navigation.InterfaceSettings
 import io.github.anastaci1a.localica.ui.LocalicaTheme
@@ -22,7 +21,7 @@ import org.junit.Rule
 import org.junit.Test
 
 class QueueScrollOwnershipTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
     private val progress = Animatable(1f)
     private lateinit var list: LazyListState
     private var viewportFraction by mutableFloatStateOf(1f)

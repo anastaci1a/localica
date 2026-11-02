@@ -6,7 +6,6 @@ import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.StateRestorationTester
-import androidx.compose.ui.test.junit4.createComposeRule
 import io.github.anastaci1a.localica.ui.*
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.NonCancellable
@@ -18,7 +17,7 @@ import java.util.concurrent.CopyOnWriteArrayList
 
 /** Controlled suspension tests the real crop owner, without timing a filesystem read. */
 class ArtworkCropLoadingTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
     private val requests = CopyOnWriteArrayList<CompletableDeferred<Bitmap?>>()
     private val events = CopyOnWriteArrayList<CropLoadEvent>()
     private var uri by mutableStateOf("crop-fixture-a")

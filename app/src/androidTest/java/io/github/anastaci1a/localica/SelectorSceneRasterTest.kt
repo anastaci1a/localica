@@ -11,7 +11,6 @@ import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.*
 import io.github.anastaci1a.localica.ui.*
 import org.junit.Assert.*
@@ -20,7 +19,7 @@ import org.junit.Test
 
 /** Native pixels from the layered adapter, including software Canvas on API26. */
 class SelectorSceneRasterTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
     private val shell = LensGeometry(Rect(0f, 0f, 300f, 64f), 32f)
     private val lens = LensGeometry(Rect(4f, 4f, 96f, 60f), 28f)
     private val originalSlot = Rect(0f, 0f, 100f, 64f)

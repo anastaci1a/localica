@@ -5,7 +5,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.platform.ViewRootForTest
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.test.platform.app.InstrumentationRegistry
@@ -22,7 +21,7 @@ import org.junit.Rule
 import org.junit.Test
 
 class ListControlsTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
     private val tracks = (0..99).map { n -> Track("song:$n", "Z song " + n.toString().padStart(3, '0'), year = 2001,
         fileName = "$n.mp3", relativePath = "$n.mp3") }
     @Before @After fun clearPreferences() {

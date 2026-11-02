@@ -12,7 +12,6 @@ import androidx.compose.ui.platform.ViewRootForTest
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextStyle
@@ -35,7 +34,7 @@ import kotlin.math.roundToInt
 
 /** Actual controller, host, sheet and fields. Draft/review only: never submits a tag write. */
 class TagEditorChromeLayoutTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
     private val instrumentation get() = InstrumentationRegistry.getInstrumentation()
     private val controller get() = (instrumentation.targetContext.applicationContext as LocalicaApplication).tagEditing
     private val track = Track("chrome-layout:missing", "Chrome layout song", fileName = "chrome.mp3", relativePath = "chrome.mp3")

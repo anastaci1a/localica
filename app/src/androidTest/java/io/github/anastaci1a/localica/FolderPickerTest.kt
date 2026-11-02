@@ -2,7 +2,6 @@ package io.github.anastaci1a.localica
 
 import android.util.Log
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.By
@@ -32,7 +31,7 @@ import java.util.regex.Pattern
 
 @RunWith(AndroidJUnit4::class)
 class FolderPickerTest {
-    @get:Rule val compose = createAndroidComposeRule<MainActivity>()
+    @get:Rule val compose = localicaAndroidComposeRule<MainActivity>()
 
     @Test fun selectedTreeScansSubfoldersAndPreservesPermission() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()

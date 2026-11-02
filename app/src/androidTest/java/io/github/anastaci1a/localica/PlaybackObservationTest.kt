@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.anastaci1a.localica.library.*
 import io.github.anastaci1a.localica.queue.*
@@ -21,7 +20,7 @@ import org.junit.Rule
 import org.junit.Test
 
 class PlaybackObservationTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
     private var roots = 0
     private var samples = 0
     private var rootValue: PlaybackState? = null

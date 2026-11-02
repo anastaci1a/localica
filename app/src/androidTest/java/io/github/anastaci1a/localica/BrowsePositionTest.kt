@@ -4,7 +4,6 @@ import androidx.compose.ui.test.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.semantics.SemanticsProperties
 import org.junit.Assert.assertTrue
-import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.UiDevice
 import io.github.anastaci1a.localica.library.*
@@ -17,7 +16,7 @@ import org.junit.Rule
 import org.junit.Test
 
 class BrowsePositionTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
     @Test fun libraryReselectionScrollsBeforeSeparatelyClearingItsFilter() {
         val tracks = (0..99).map { Track("reselect:$it", "Song ${it.toString().padStart(3, '0')}", fileName = "$it.mp3", relativePath = "$it.mp3") }
         var route by mutableStateOf(BrowseRoute(MainTab.Library, filter = MediaKind.Song))

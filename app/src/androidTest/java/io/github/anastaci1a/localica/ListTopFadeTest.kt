@@ -21,7 +21,6 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.ViewRootForTest
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.unit.dp
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.anastaci1a.localica.ui.LocalPopupScrollEdges
@@ -38,7 +37,7 @@ import kotlin.math.roundToInt
  * Exactly five native Window copies: no pixel-dependent retry, redraw, clock or tolerance change.
  * Layout/draw observations qualify the copy but are not atomic compositor frame witnesses. */
 class ListTopFadeTest {
-    @get:Rule val compose = createAndroidComposeRule<androidx.activity.ComponentActivity>()
+    @get:Rule val compose = localicaAndroidComposeRule<androidx.activity.ComponentActivity>()
     private val variants = listOf("default", "explicit", "legacy", "popup")
     private val heights = listOf(112, 40)
     private val strength = mutableFloatStateOf(1f)

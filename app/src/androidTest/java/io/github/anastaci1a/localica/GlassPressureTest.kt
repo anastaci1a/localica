@@ -11,7 +11,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.semantics.SemanticsProperties
 import io.github.anastaci1a.localica.ui.*
@@ -20,7 +19,7 @@ import org.junit.Rule
 import org.junit.Test
 
 class GlassPressureTest {
-    @get:Rule val compose = createAndroidComposeRule<androidx.activity.ComponentActivity>()
+    @get:Rule val compose = localicaAndroidComposeRule<androidx.activity.ComponentActivity>()
     @org.junit.Before fun configureWindowLikeTheApp() {
         compose.activityRule.scenario.onActivity {
             androidx.core.view.WindowCompat.setDecorFitsSystemWindows(it.window, false)

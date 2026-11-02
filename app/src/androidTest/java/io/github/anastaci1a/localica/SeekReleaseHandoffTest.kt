@@ -16,7 +16,6 @@ import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.dp
 import androidx.test.platform.app.InstrumentationRegistry
 import java.io.File
@@ -33,7 +32,7 @@ import org.junit.Test
 import org.junit.rules.TestName
 
 class SeekReleaseHandoffTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
     @get:Rule val testName = TestName()
     private var capturedFrame = 0
     private var playback by mutableStateOf(PlaybackState(connected = true, trackUri = "song:a", trackId = "a",

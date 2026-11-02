@@ -5,7 +5,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.test.junit4.StateRestorationTester
-import androidx.compose.ui.test.junit4.createComposeRule
 import io.github.anastaci1a.localica.navigation.*
 import io.github.anastaci1a.localica.ui.navigationStateSaver
 import org.json.JSONArray
@@ -15,7 +14,7 @@ import org.junit.Rule
 import org.junit.Test
 
 class NavigationRecoveryTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
     private fun valid() = NavigationState(MainTab.Library, linkedMapOf(
         MainTab.Home to listOf(BrowseRoute(MainTab.Home, key = "home")),
         MainTab.Library to listOf(BrowseRoute(MainTab.Library, key = "library"),

@@ -5,7 +5,6 @@ import android.net.Uri
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.anastaci1a.localica.editing.CoverImages
 import io.github.anastaci1a.localica.library.Track
@@ -16,7 +15,7 @@ import java.io.File
 
 /** These tests recreate MainActivity, including its real TagEditorHost and dialog windows. */
 class ArtworkEditRestorationTest {
-    @get:Rule val compose = createAndroidComposeRule<MainActivity>()
+    @get:Rule val compose = localicaAndroidComposeRule<MainActivity>()
     private val context get() = InstrumentationRegistry.getInstrumentation().targetContext
     private val controller get() = (context.applicationContext as LocalicaApplication).tagEditing
     private fun track(name: String = "Restoration song") = Track("file:///missing-restoration-song.mp3", name,

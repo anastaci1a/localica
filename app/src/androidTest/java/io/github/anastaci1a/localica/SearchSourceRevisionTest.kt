@@ -1,7 +1,6 @@
 package io.github.anastaci1a.localica
 
 import androidx.compose.runtime.*
-import androidx.compose.ui.test.junit4.createComposeRule
 import io.github.anastaci1a.localica.browse.*
 import io.github.anastaci1a.localica.library.*
 import io.github.anastaci1a.localica.navigation.*
@@ -15,7 +14,7 @@ import java.util.concurrent.TimeUnit
 import kotlin.coroutines.CoroutineContext
 
 class SearchSourceRevisionTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
 
     @Test fun sameQueryCannotPublishAnOldSourceAfterMetadataChanges() {
         val tasks = LinkedBlockingQueue<Runnable>()

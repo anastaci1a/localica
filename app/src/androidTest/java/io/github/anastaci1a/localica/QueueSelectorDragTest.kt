@@ -14,7 +14,6 @@ import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getAllSemanticsNodes
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
@@ -32,7 +31,7 @@ import org.junit.Test
 class QueueSelectorDragTest {
     // Match production's queued UI effects: an unconfined test dispatcher can resume
     // a completed Default-dispatcher preparation inline on that worker.
-    @get:Rule val compose = createComposeRule(effectContext = kotlinx.coroutines.test.StandardTestDispatcher())
+    @get:Rule val compose = localicaComposeRule()
     private val observedOverscroll = mutableListOf<OverscrollEffect>()
     private var enabled by mutableStateOf(true)
     private var present by mutableStateOf(true)

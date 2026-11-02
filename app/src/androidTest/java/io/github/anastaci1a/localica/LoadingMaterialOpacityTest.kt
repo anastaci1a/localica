@@ -17,7 +17,6 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.ViewRootForTest
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.test.platform.app.InstrumentationRegistry
@@ -36,7 +35,7 @@ import kotlin.math.roundToInt
  * This tests the leaf material, not whether a collection/player provider was wired.
  */
 class LoadingMaterialOpacityTest {
-    @get:Rule val compose = createAndroidComposeRule<androidx.activity.ComponentActivity>()
+    @get:Rule val compose = localicaAndroidComposeRule<androidx.activity.ComponentActivity>()
     private val background = Color.Magenta
 
     @Test fun loadingArtAndNestedTextMaterialAreHalvedOnceAndNeverShowNotesWithEitherActivityProvider() {

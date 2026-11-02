@@ -10,7 +10,6 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.test.platform.app.InstrumentationRegistry
@@ -28,7 +27,7 @@ import org.junit.Test
 
 /** Actual list controls, not a model substitute: query, occurrence, ownership and placement. */
 class ListReturnControlsTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
     private val tracks = (0..99).map { index -> Track("return:$index", "Other song ${index.toString().padStart(3, '0')}",
         fileName = "$index.mp3", relativePath = "$index.mp3") }
     private val list get() = compose.onNodeWithTag("browser-list")

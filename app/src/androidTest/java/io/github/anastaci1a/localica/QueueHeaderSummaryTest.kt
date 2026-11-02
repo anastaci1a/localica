@@ -2,7 +2,6 @@ package io.github.anastaci1a.localica
 
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
 import io.github.anastaci1a.localica.library.*
 import io.github.anastaci1a.localica.queue.*
 import io.github.anastaci1a.localica.ui.*
@@ -10,7 +9,7 @@ import org.junit.Rule
 import org.junit.Test
 
 class QueueHeaderSummaryTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
 
     @Test fun currentOccurrenceMetadataAndBrowsedQueueKeepTheirOwnSummary() {
         val first = Track("summary:first", "First", durationMs = 61000, fileName = "first.mp3", relativePath = "first.mp3")

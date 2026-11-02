@@ -23,7 +23,6 @@ import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.dp
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.anastaci1a.localica.browse.BrowseStyle
@@ -38,7 +37,7 @@ import java.io.File
 import kotlin.math.roundToInt
 
 class BrowsePinchLayersTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
 
     @Test fun artworkPassStaysAboveTextFromALaterItemAtRestDuringPinchAndAfterHandoff() {
         val motion = BrowsePinchMotion()

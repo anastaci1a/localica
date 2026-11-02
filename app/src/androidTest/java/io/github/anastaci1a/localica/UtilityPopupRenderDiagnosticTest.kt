@@ -27,7 +27,6 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogWindowProvider
 import androidx.test.platform.app.InstrumentationRegistry
@@ -53,7 +52,7 @@ import kotlin.math.sqrt
  * Bounded output: ten PNGs per scene, plus profiles/geometry for additional frames.
  */
 class UtilityPopupRenderDiagnosticTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
 
     private enum class Scene(val dark: Boolean) { Light(false), Dark(true), Pattern(false) }
     private var open by mutableStateOf(false)

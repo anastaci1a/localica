@@ -13,7 +13,6 @@ import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.StateRestorationTester
-import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.room.Room
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.anastaci1a.localica.browse.BrowserItem
@@ -30,7 +29,7 @@ import java.io.File
 
 /** Saved-composition restoration of the production playlist action, not Activity recreation. */
 class PlaylistArtworkRestorationTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
     private val loadEvents = java.util.concurrent.CopyOnWriteArrayList<CropLoadEvent>()
 
     @Test fun savedChooserAndAdjustedCropRestoreAndCancellationNeverAppliesCover() = withPlaylistActions { restore, controller, _ ->

@@ -12,7 +12,6 @@ import androidx.compose.ui.layout.LookaheadScope
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.browse.*
@@ -29,7 +28,7 @@ import kotlin.math.roundToInt
 
 /** Real queried song rows and MediaArtwork pixels, not a stand-in cover or label-only assertion. */
 class CompactCollectionArtworkTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
 
     @Test fun compactAlbumRowsShowArtworkInsteadOfAlbumNumbers() = verifyCollection(MediaKind.Album)
     @Test fun compactArtistRowsKeepArtwork() = verifyCollection(MediaKind.Artist)

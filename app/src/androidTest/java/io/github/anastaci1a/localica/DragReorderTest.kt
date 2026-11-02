@@ -13,7 +13,6 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.room.Room
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.anastaci1a.localica.library.*
@@ -28,7 +27,7 @@ import org.junit.Rule
 import org.junit.Test
 
 class DragReorderTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
     private val selection = SessionSelection()
     private var interactionEnabled by mutableStateOf(true)
     private var checkpoint by mutableStateOf(QueueUiState(loading = false), neverEqualPolicy())

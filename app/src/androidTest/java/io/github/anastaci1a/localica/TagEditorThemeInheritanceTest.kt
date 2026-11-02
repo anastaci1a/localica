@@ -15,7 +15,6 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.ViewRootForTest
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.anastaci1a.localica.browse.*
@@ -35,7 +34,7 @@ import java.util.concurrent.atomic.AtomicReference
 
 /** Real host and launch controls; no tag write is submitted by these presentation tests. */
 class TagEditorThemeInheritanceTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
     private val controller get() = (InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as LocalicaApplication).tagEditing
     private val track = Track("theme-inheritance:missing", "Presentation song", artist = "Presentation artist",
         albumArtist = "Presentation album artist", album = "Presentation album", fileName = "presentation.mp3", relativePath = "presentation.mp3")

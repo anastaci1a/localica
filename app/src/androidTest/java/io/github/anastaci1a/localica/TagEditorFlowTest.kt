@@ -2,7 +2,6 @@ package io.github.anastaci1a.localica
 
 import android.net.Uri
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.*
 import io.github.anastaci1a.localica.library.AndroidDocuments
@@ -14,7 +13,7 @@ import org.junit.Test
 import java.util.regex.Pattern
 
 class TagEditorFlowTest {
-    @get:Rule val compose = createAndroidComposeRule<MainActivity>()
+    @get:Rule val compose = localicaAndroidComposeRule<MainActivity>()
     @Test fun editThroughPickerVerifiesFileAndRefreshesLibrary() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext

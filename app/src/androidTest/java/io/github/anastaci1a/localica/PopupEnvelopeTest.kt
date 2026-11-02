@@ -9,7 +9,6 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
@@ -19,7 +18,7 @@ import org.junit.Rule
 import org.junit.Test
 
 class PopupEnvelopeTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
 
     @Test fun dialogHostUsesNaturalWidthWithoutQueryingTheLiveSubcomposition() {
         var natural by mutableStateOf(220.dp)

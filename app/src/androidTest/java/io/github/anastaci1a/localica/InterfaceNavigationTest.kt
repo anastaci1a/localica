@@ -1,7 +1,6 @@
 package io.github.anastaci1a.localica
 
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.UiDevice
@@ -18,7 +17,7 @@ import org.junit.Rule
 import org.junit.Test
 
 class InterfaceNavigationTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
     private val context get() = InstrumentationRegistry.getInstrumentation().targetContext
     private val track = Track("missing", "Evening", artist = "Artist", albumArtist = "Album artist", album = "Seasons",
         fileName = "evening.mp3", relativePath = "evening.mp3", locations = listOf(TrackLocation("tree", "missing", "evening.mp3")))

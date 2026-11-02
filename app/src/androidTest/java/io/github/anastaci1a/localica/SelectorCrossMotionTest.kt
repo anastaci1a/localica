@@ -1,7 +1,6 @@
 package io.github.anastaci1a.localica
 
 import androidx.compose.runtime.*
-import androidx.compose.ui.test.junit4.createComposeRule
 import io.github.anastaci1a.localica.ui.*
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -10,7 +9,7 @@ import org.junit.Test
 
 /** Exercise the production presentation clock independently of optical raster tolerances. */
 class SelectorCrossMotionTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
 
     @Test fun contactDuringCenterTravelAndRegrabCaptureTheDisplayedCrossFrame() {
         val rest = SelectorReturnFrame(240f, 64f, 72f, 56f, 4f, 28f, 32f, 0f)

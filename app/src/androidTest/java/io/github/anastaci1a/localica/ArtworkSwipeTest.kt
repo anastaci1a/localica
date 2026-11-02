@@ -14,7 +14,6 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
 import io.github.anastaci1a.localica.navigation.InterfaceSettings
 import io.github.anastaci1a.localica.playback.PlaybackState
 import io.github.anastaci1a.localica.ui.*
@@ -24,7 +23,7 @@ import org.junit.Test
 import kotlinx.coroutines.launch
 
 class ArtworkSwipeTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
     private fun visual(color: Color) = PlayerVisual(
         Bitmap.createBitmap(32, 32, Bitmap.Config.ARGB_8888).apply { eraseColor(color.toArgb()) }.asImageBitmap(),
         PlayerPalette(color, color, color))

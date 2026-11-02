@@ -7,7 +7,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.*
 import androidx.compose.foundation.Canvas
 import androidx.compose.ui.geometry.Size
@@ -26,7 +25,7 @@ import org.junit.Test
 
 /** Exercises the production controls; optical raster registration has its own acceptance gate. */
 class SelectorTrackControlsTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
     private var reviewStage by mutableIntStateOf(0)
     private lateinit var reviewView: android.view.View
     private var reviewName: String? = null

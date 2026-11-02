@@ -8,7 +8,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.test.junit4.createComposeRule
 import io.github.anastaci1a.localica.ui.*
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -19,7 +18,7 @@ import org.junit.Rule
 import org.junit.Test
 
 class ListMotionTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = localicaComposeRule()
     private val heights = List(100) { if (it % 7 == 0) 180 else if (it % 3 == 0) 80 else 30 }
 
     @Test fun initialLyricsFollowWaitsForLayout() = initialFollow(grid = false, reducedMotion = false)
