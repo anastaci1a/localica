@@ -46,10 +46,12 @@ class LibraryFilterPresentationTest {
         assertEquals("Filters float over the same fading viewport", list.top, filters.top, 1f)
         assertTrue("First item initially clears the filters", compose.onNodeWithText("Album 00").fetchSemanticsNode().boundsInRoot.top > filters.bottom)
         compose.onNodeWithText("Albums").performClick()
-        // Hold the new query: feedback is immediate, while the previous complete list remains.
+        // Hold the new query: feedback is immediate and the switch is a hard reset (#503), so the
+        // previous filter's rows are replaced by loading placeholders, never carried across.
         compose.onNodeWithText("All").assertDoesNotExist()
         compose.onNodeWithText("Albums").assertIsSelected()
-        compose.onNodeWithText("Album 00").assertIsDisplayed()
+        compose.onNodeWithTag("browse-loading").assertIsDisplayed()
+        compose.onNodeWithText("Album 00").assertDoesNotExist()
         finishQuery()
         compose.onNodeWithText("Albums").assertIsSelected()
         compose.onNodeWithText("Album 29").assertIsDisplayed()

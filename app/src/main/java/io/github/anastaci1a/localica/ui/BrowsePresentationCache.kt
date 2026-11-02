@@ -160,6 +160,8 @@ internal fun WarmBrowsePresentations(cache: BrowsePresentationCache, library: Li
     }
 }
 
+private class FilterSwitch(var filter: MediaKind?) { var switched = false }
+
 internal data class BrowsePresentationState(val current: PresentedBrowse?, val cached: Boolean,
     val reveal: Animatable<Float, AnimationVector1D>, val pending: Boolean)
 
@@ -202,22 +204,22 @@ internal fun rememberBrowsePresentation(library: LibrarySnapshot, playlists: Lis
     // produceState retains its previous value until its restarted producer runs.
     // Gate synchronously so a warmed or superseded partial catalog cannot reach the first frame.
     val candidate = if (sourcesReady) openingPresentation ?: cachedPresentation ?: queriedPresentation else null
-    var presentation by remember(route.key) { mutableStateOf(cachedPresentation) }
-    var displayedFilter by remember(route.key) { mutableStateOf(route.filter) }
-    val reveal = remember(route.key) { androidx.compose.animation.core.Animatable(if (cachedPresentation == null) 0f else 1f) }
+    // A filter switch is a hard reset: nothing from the previous filter stays displayed, and even a
+    // cached destination replays the loading reveal instead of animating shared item keys.
+    val filterSwitch = remember(route.key) { FilterSwitch(route.filter) }
+    if (filterSwitch.filter != route.filter) { filterSwitch.filter = route.filter; filterSwitch.switched = true }
+    var presentation by remember(route.key, route.filter) { mutableStateOf(cachedPresentation) }
+    val reveal = remember(route.key, route.filter) { androidx.compose.animation.core.Animatable(if (cachedPresentation == null) 0f else 1f) }
     LaunchedEffect(source, route, style, candidate, reducedMotion, sorts, sourcesReady, animateArrival) {
         if (!sourcesReady) { reveal.snapTo(0f); return@LaunchedEffect }
-        if (displayedFilter != route.filter) {
-            if (reducedMotion) reveal.snapTo(0f) else reveal.animateTo(0f, androidx.compose.animation.core.tween(110))
-        }
         if (candidate != null && matchesBrowseRequest(candidate, source, route, style, sorts)) {
             presentation = candidate
-            displayedFilter = route.filter
             if (reducedMotion || !animateArrival) reveal.snapTo(1f) else if (reveal.value < 1f)
                 reveal.animateTo(1f, androidx.compose.animation.core.tween(180))
         }
     }
     val displayed = openingPresentation ?: browseLayoutPresentation(presentation, source, route, style, sorts)
-    return BrowsePresentationState(displayed.takeIf { sourcesReady }, openingPresentation != null || cachedPresentation != null, reveal,
+    return BrowsePresentationState(displayed.takeIf { sourcesReady },
+        openingPresentation != null || cachedPresentation != null && !filterSwitch.switched, reveal,
         !sourcesReady || displayed?.source != source || displayed?.route != route || displayed?.style != style || displayed?.sorts != sorts)
 }
