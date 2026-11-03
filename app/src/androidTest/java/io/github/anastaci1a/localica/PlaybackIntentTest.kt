@@ -32,6 +32,45 @@ import java.util.concurrent.atomic.AtomicInteger
 @OptIn(ExperimentalCoroutinesApi::class)
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 class PlaybackIntentTest {
+    @Test fun failedInitialRestoreRejectsQueuedAndLaterCompletionsWithoutEditingStorage() = fixture(attach = false, blockRestore = true) {
+        dao.restore!!.entered.await()
+        val receipts = CopyOnWriteArrayList<Pair<String, Boolean>>()
+        fun issueCommands(prefix: String) {
+            queues.act(listOf(track), SongTap.NewQueue) { receipts.add("$prefix-act" to it) }
+            queues.appendTo(first.id, emptyList()) { receipts.add("$prefix-append" to it) }
+            queues.moveQueueBefore(first.id, null) { receipts.add("$prefix-moveQueue" to it) }
+            queues.removeEntries(emptySet()) { receipts.add("$prefix-remove" to it) }
+            queues.moveEntry("missing", 1) { receipts.add("$prefix-edit" to it) }
+            queues.reverseOrder(first.id) { receipts.add("$prefix-order" to (it != null)) }
+            queues.swipeTo("missing") { receipts.add("$prefix-swipe" to it) }
+            queues.refreshTrack(track) { receipts.add("$prefix-refresh" to it) }
+            queues.requestSeek(100, null) { applied, sample ->
+                assertNull(sample)
+                receipts.add("$prefix-seek" to applied)
+            }
+        }
+        withContext(Dispatchers.Main) { issueCommands("queued") }
+        dao.restore.fail = true
+        dao.restore.release.complete(Unit)
+        awaitMain { !queues.state.value.loading }
+        withContext(Dispatchers.Main) { issueCommands("later") }
+        withTimeout(2000) { while (receipts.size < 18) delay(10) }
+        assertEquals(18, receipts.size)
+        assertEquals(18, receipts.map { it.first }.toSet().size)
+        assertTrue(receipts.all { !it.second })
+        var edited = false
+        val failure = try {
+            withTimeout(2000) { queues.withFileEdit(track.id) { edited = true } }
+            null
+        } catch (caught: IllegalStateException) { caught }
+        assertNotNull("The suspended edit must receive restore failure, not wait for its watchdog", failure)
+        assertTrue(failure!!.cause is IOException)
+        assertFalse(edited)
+        assertTrue(dao.saveBases.isEmpty())
+        assertTrue(queues.state.value.library.queues.isEmpty())
+        assertNotNull(queues.state.value.problem)
+    }
+
     @Test fun orderedSeeksSurviveUnknownDurationAndNeverLeakToTheFollowingVisit() = fixture(duplicateOccurrences = true) {
         awaitMain { player.engine.playbackState == Player.STATE_READY }
         queues.rename(first.id, first.name)
@@ -1262,7 +1301,11 @@ class PlaybackIntentTest {
         private val gates = mutableListOf<Gate>()
         fun gateNextSave() = Gate().also { check(nextSave.compareAndSet(null, it)); gates.add(it) }
         fun release() { restore?.release?.complete(Unit); gates.forEach { it.release.complete(Unit) } }
-        override suspend fun read(): QueueLibrary { restore?.await(); return saved }
+        override suspend fun read(): QueueLibrary {
+            restore?.await()
+            if (restore?.fail == true) throw IOException("Controlled restore failure")
+            return saved
+        }
         @Volatile var failWrites = false
         val saveBases = CopyOnWriteArrayList<QueueLibrary>()
         val successfulSaveBases = CopyOnWriteArrayList<QueueLibrary>()

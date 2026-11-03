@@ -42,7 +42,8 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
             catch (_: Exception) { android.util.Log.w("QueueOrderTiming", "Diagnostic sink failed") }
         }
     }
-    private data class QueuedCommand(val cursorOnly: Boolean, val action: suspend () -> Unit)
+    private data class QueuedCommand(val cursorOnly: Boolean, val reject: (Exception) -> Unit = {},
+        val action: suspend () -> Unit)
     private val commands = Channel<QueuedCommand>(Channel.UNLIMITED)
     // Only the actor may defer writes, and only while executing a bounded contiguous cursor batch.
     private var deferCursorPersistence = false
@@ -220,13 +221,18 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
             }
         }
         commandJob = scope.launch {
+            var restoreFailure: Exception? = null
             try {
                 val saved = dao.read()
                 persistedLibrary = saved
                 preferences.migratePlaybackModes(saved.active)
                 mutable.update { it.copy(library = saved, settings = preferences.read(), loading = false) }; restored = true
             }
-            catch (_: Exception) { mutable.update { it.copy(loading = false, problem = "Couldn’t restore queues. Reopen the app to retry.") } }
+            catch (cancelled: CancellationException) { throw cancelled }
+            catch (failure: Exception) {
+                restoreFailure = failure
+                mutable.update { it.copy(loading = false, problem = "Couldn’t restore queues. Reopen the app to retry.") }
+            }
             var pending: QueuedCommand? = null
             while (isActive) {
                 var current = pending ?: commands.receiveCatching().getOrNull() ?: break
@@ -241,7 +247,10 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
                         cursorBatch = cursorBatch || current.cursorOnly
                         try {
                             if (restored) current.action()
-                            else reportProblem("Queues are unavailable. Reopen the app to retry restoring them.")
+                            else {
+                                reportProblem("Queues are unavailable. Reopen the app to retry restoring them.")
+                                current.reject(IllegalStateException("Queues could not be restored.", restoreFailure))
+                            }
                         } finally { deferCursorPersistence = false }
                         // Never conflate commands: Next/Previous (including restart semantics) run in order.
                         // Only redundant disk snapshots are combined. Bound the batch so sustained input
@@ -271,15 +280,15 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         scope.launch { while (isActive) { delay(5000); if (restored) submitCursor { capture() } } }
     }
 
-    private fun submit(revision: Long = intents.accept(), command: suspend () -> Unit) {
-        enqueue(revision, command)
+    private fun submit(revision: Long = intents.accept(), reject: (Exception) -> Unit = {}, command: suspend () -> Unit) {
+        if (!enqueue(revision, reject, command)) reject(IllegalStateException("Playback controller is unavailable."))
     }
     private fun submitCursor(command: suspend () -> Unit) {
         val revision = intents.accept()
         commands.trySend(QueuedCommand(cursorOnly = true) { commandRevision = revision; command() })
     }
-    private fun enqueue(revision: Long = intents.accept(), command: suspend () -> Unit): Boolean =
-        commands.trySend(QueuedCommand(cursorOnly = false) { commandRevision = revision; command() }).isSuccess
+    private fun enqueue(revision: Long = intents.accept(), reject: (Exception) -> Unit = {}, command: suspend () -> Unit): Boolean =
+        commands.trySend(QueuedCommand(cursorOnly = false, reject = reject) { commandRevision = revision; command() }).isSuccess
     fun attach(attached: Player) {
         val expected = ++generation
         submit {
@@ -320,14 +329,14 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         perform(tracks, selectedIndex, state.value.settings.tapFor(view), batch = false, sourceName = sourceName, playlistOrigins = playlistOrigins)
     }
     /** Explicit selection actions bypass all tap preferences and preserve displayed occurrence order. */
-    fun act(tracks: List<Track>, action: SongTap, playlistOrigins: List<String?> = emptyList(), complete: (Boolean) -> Unit = {}) = submit {
+    fun act(tracks: List<Track>, action: SongTap, playlistOrigins: List<String?> = emptyList(), complete: (Boolean) -> Unit = {}) = submit(reject = { complete(false) }) {
         try {
             val done = perform(tracks, 0, action, batch = true, playlistOrigins = playlistOrigins)
             if (done) complete(true) else if (state.value.pending != null) pendingComplete = complete else complete(false)
         } catch (failure: Exception) { complete(false); throw failure }
     }
 
-    fun appendTo(id: String, rows: List<io.github.anastaci1a.localica.library.SongRow>, complete: (Boolean) -> Unit = {}) = submit {
+    fun appendTo(id: String, rows: List<io.github.anastaci1a.localica.library.SongRow>, complete: (Boolean) -> Unit = {}) = submit(reject = { complete(false) }) {
         try {
             capture()
             val target = state.value.library.queues.firstOrNull { it.id == id }
@@ -460,7 +469,7 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         }
     }
     /** Resolve a drag's identities at execution time; null appends to the latest queue order. */
-    fun moveQueueBefore(id: String, beforeId: String?, complete: (Boolean) -> Unit = {}) = submit {
+    fun moveQueueBefore(id: String, beforeId: String?, complete: (Boolean) -> Unit = {}) = submit(reject = { complete(false) }) {
         val before = state.value.library
         if (before.queues.none { it.id == id } ||
             beforeId != null && before.queues.none { it.id == beforeId }) return@submit complete(false)
@@ -489,7 +498,7 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         if (activeRemoved) activate(play = wasPlaying)
     }
     fun removeEntry(id: String) = editQueue(null) { QueueEdits.remove(it, id) }
-    fun removeEntries(ids: Set<String>, queueId: String? = null, complete: (Boolean) -> Unit = {}) = submit {
+    fun removeEntries(ids: Set<String>, queueId: String? = null, complete: (Boolean) -> Unit = {}) = submit(reject = { complete(false) }) {
         try {
             capture()
             val active = state.value.library.queues.firstOrNull { it.id == (queueId ?: state.value.library.activeId) } ?: return@submit complete(false)
@@ -556,7 +565,7 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
     }
     private fun editQueue(queueId: String?, complete: (Boolean) -> Unit = {},
         orderTiming: QueueOrderTiming? = null, orderOperation: String = "other",
-        edit: suspend (ListeningQueue) -> ListeningQueue) = submit {
+        edit: suspend (ListeningQueue) -> ListeningQueue) = submit(reject = { complete(false) }) {
         orderTiming?.mark(QueueOrderTiming.Stage.ActorStarted)
         var outcome = QueueOrderTiming.Outcome.Failure
         try {
@@ -700,7 +709,7 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
     internal fun requestSeek(positionMs: Long, expectedVisit: String?, complete: (Boolean, QueuePlaybackSample?) -> Unit) {
         val expected = player
         val expectedGeneration = generation
-        val accepted = enqueue {
+        val accepted = enqueue(reject = { complete(false, playbackSample()) }) {
             val attached = player
             if (attached == null || attached !== expected || generation != expectedGeneration ||
                 attached.currentMediaItem == null || attached.currentMediaItem?.queueVisit != expectedVisit) {
@@ -743,7 +752,7 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         state.value.library.active?.journey?.next?.let { moveTo(it) }
     }
     /** A gesture commits the visit it previewed; autoplay or changed modes may invalidate it. */
-    fun swipeTo(token: String, complete: (Boolean) -> Unit) = submit {
+    fun swipeTo(token: String, complete: (Boolean) -> Unit) = submit(reject = { complete(false) }) {
         try {
             capture()
             val journey = state.value.library.active?.journey
@@ -996,7 +1005,10 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
             continuation.cancel(CancellationException("Playback controller stopped.", cause))
         }
         continuation.invokeOnCancellation { onCancellation(); stopped.dispose() }
-        val sent = commands.trySend(QueuedCommand(cursorOnly = false) {
+        val sent = commands.trySend(QueuedCommand(cursorOnly = false, reject = { failure ->
+            stopped.dispose()
+            if (continuation.isActive) continuation.resumeWithException(failure)
+        }) {
             try {
                 if (alwaysRun || continuation.isActive) continuation.resumeWith(Result.success(action()))
             } catch (failure: Exception) {
@@ -1009,7 +1021,7 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         }
     }
     fun refreshTrack(track: Track, complete: (Boolean) -> Unit) = refreshTracks(listOf(track), complete)
-    fun refreshTracks(tracks: List<Track>, complete: (Boolean) -> Unit) = submit {
+    fun refreshTracks(tracks: List<Track>, complete: (Boolean) -> Unit) = submit(reject = { complete(false) }) {
         val byId = tracks.associateBy { it.id }
         try {
             capture()
