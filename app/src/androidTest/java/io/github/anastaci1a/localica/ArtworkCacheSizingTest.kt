@@ -84,18 +84,25 @@ class ArtworkCacheSizingTest {
     @Test fun invalidationDuringParallelDecodesKeepsOnlyNewRevisionAndCancelledWaitersNeverLoad() = runBlocking {
         val release = CompletableDeferred<Unit>()
         val loads = AtomicInteger()
-        val store = ArtworkCacheStore(parallelism = 2) { _, _, _ -> loads.incrementAndGet(); release.await(); bitmap() }
+        val loaded = java.util.concurrent.ConcurrentLinkedQueue<String>()
+        val store = ArtworkCacheStore(parallelism = 2) { _, uri, _ -> loaded += uri; loads.incrementAndGet(); release.await(); bitmap() }
         val running = (0..1).map { async(Dispatchers.Default) { store.read(context, "r$it", 128) } }
-        val waiting = async(Dispatchers.Default) { store.read(context, "w", 128) }
+        var waiting: Deferred<Bitmap?>? = null
         try {
+            // Dispatchers.Default does not order the launches: started together, "w" can win a permit
+            // before "r1", be cancelled mid-decode, and let "r1" load afterwards (3 loads, #528). The
+            // waiter must only start once both permits are held so that it is genuinely queued.
             withTimeout(5000) { while (loads.get() < 2) delay(5) }
+            waiting = async(Dispatchers.Default) { store.read(context, "w", 128) }
+            delay(50) // Let it reach the semaphore; cancelling earlier would only weaken the check.
             waiting.cancel(); withTimeout(5000) { waiting.join() }
             store.invalidate()
             release.complete(Unit)
             withTimeout(5000) { running.awaitAll() }
             assertEquals(2, loads.get())
+            assertEquals(listOf("r0", "r1"), loaded.toList().sorted())
             assertNull("Stale revisions must not repopulate", store.peek(listOf("r0")))
             assertNull(store.peek(listOf("w")))
-        } finally { release.complete(Unit); running.forEach { it.cancel() }; waiting.cancel() }
+        } finally { release.complete(Unit); running.forEach { it.cancel() }; waiting?.cancel() }
     }
 }
