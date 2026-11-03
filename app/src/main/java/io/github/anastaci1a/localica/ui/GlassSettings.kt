@@ -30,6 +30,13 @@ internal const val GlassShadowStrengthCurve = 2.2f
 /** #502's curve, kept as the baseline for the #540 granularity test. */
 internal const val GlassShadowStrengthCurve502 = 1.8f
 
+/**
+ * Percent shown for a stored shadow strength: its track position rounded to the nearest 5%, so labels step 0, 5 … 100.
+ * Only the label is quantized; the stored strength is unchanged and may be off-grid.
+ */
+internal fun shadowStrengthReadout(strength: Float): Int =
+    (sliderPosition(strength, 0f..1f, GlassShadowStrengthCurve) * 20f).roundToInt() * 5
+
 @Composable
 internal fun GlassSettingsControls(value: GlassAppearance, onChange: (GlassAppearance) -> Unit) {
     Text("Tune floating glass and the navigation selector.")
@@ -55,7 +62,7 @@ internal fun GlassSettingsControls(value: GlassAppearance, onChange: (GlassAppea
     GlassChoices(listOf("Dark icons", "White icons"), if (previewLightInk) 1 else 0, horizontal = true) { previewLightInk = it == 1 }
     GlassSlider("Blur", value.blur, "Clear", "Frosted") { onChange(value.copy(blur = it)) }
     GlassSlider("White tint", value.whiteTint, "None", "White") { onChange(value.copy(whiteTint = it)) }
-    GlassSlider("Shadow strength", value.shadowStrength, "Off", "Strong", curve = GlassShadowStrengthCurve) { onChange(value.copy(shadowStrength = it)) }
+    GlassSlider("Shadow strength", value.shadowStrength, "Off", "Strong", curve = GlassShadowStrengthCurve, readout = ::shadowStrengthReadout) { onChange(value.copy(shadowStrength = it)) }
     GlassSlider("Shadow spread", value.shadowSpread, "Tight", "Broad") { onChange(value.copy(shadowSpread = it)) }
     SettingsHeading("Adaptive contrast")
     Text("Compress background brightness away from the page’s icon color.", style = MaterialTheme.typography.bodySmall)
@@ -153,8 +160,9 @@ private fun GlassPreview(source: FrostedBackdrop) {
 }
 
 @Composable
-private fun GlassSlider(label: String, value: Float, low: String, high: String, maximum: Float = 1f, curve: Float = 1f, onChange: (Float) -> Unit) {
-    SliderPreference("$label · ${(value * 100).roundToInt()}%", value, onChange,
+private fun GlassSlider(label: String, value: Float, low: String, high: String, maximum: Float = 1f, curve: Float = 1f,
+    readout: (Float) -> Int = { (it * 100).roundToInt() }, onChange: (Float) -> Unit) {
+    SliderPreference("$label · ${readout(value)}%", value, onChange,
         Modifier.semantics { contentDescription = label }, valueRange = 0f..maximum,
         steps = (maximum / .05f).roundToInt() - 1, low = low, high = high, curve = curve)
 }
