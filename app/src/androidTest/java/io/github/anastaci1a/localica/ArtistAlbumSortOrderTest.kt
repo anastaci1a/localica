@@ -49,16 +49,21 @@ class ArtistAlbumSortOrderTest {
                     queryDispatcher = Dispatchers.Unconfined)
             }
         } }
-        compose.waitUntil(10_000) { compose.onAllNodesWithText("Zeta").fetchSemanticsNodes().isNotEmpty() }
-        compose.waitForIdle()
-        compose.onNodeWithContentDescription("Play selected albums").performClick()
-        val carousel = listOf("Zeta", "Mid", "Alpha", "Nameless").map { name ->
-            // A 4000dp viewport keeps every chip composed; the first match is the chip above the rows.
-            val node = compose.onAllNodesWithText(name)[0].fetchSemanticsNode().boundsInRoot
-            name to node
+        compose.waitUntil(10_000) {
+            // The click is idempotent; repeat until the loaded rows reach the play callback.
+            compose.onAllNodesWithContentDescription("Play selected albums").fetchSemanticsNodes().isNotEmpty() && kotlin.run {
+                compose.onNodeWithContentDescription("Play selected albums").performClick()
+                played.isNotEmpty()
+            }
         }
-        detail = "sort=$sort ascending=$ascending chips=$carousel"
-        val names = carousel.sortedWith(compareBy({ it.second.left }, { it.second.top })).map { it.first }
+        // The semantics tree follows composition order, which is the carousel's displayed order.
+        val albumNames = setOf("Zeta", "Mid", "Alpha", "Nameless")
+        val names = compose.onAllNodes(androidx.compose.ui.test.SemanticsMatcher("album chip") { node ->
+            node.config.getOrNull(androidx.compose.ui.semantics.SemanticsProperties.Text)
+                ?.any { it.text in albumNames } == true
+        }).fetchSemanticsNodes().flatMap { n -> n.config[androidx.compose.ui.semantics.SemanticsProperties.Text].map { it.text } }
+            .filter { it in albumNames }.distinct()
+        detail = "sort=$sort ascending=$ascending tree=$names"
         return played.map { it.title } to names
     }
 
