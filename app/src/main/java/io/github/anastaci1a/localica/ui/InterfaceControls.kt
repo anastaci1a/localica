@@ -29,6 +29,8 @@ import androidx.compose.ui.semantics.*
 import androidx.compose.ui.input.key.*
 import androidx.compose.foundation.focusable
 import androidx.compose.ui.layout.layout
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntOffset
@@ -82,72 +84,133 @@ internal fun InterfaceSlider(value: Float, onValueChange: (Float) -> Unit, modif
     val current by rememberUpdatedState(value)
     val change by rememberUpdatedState(onValueChange)
     val haptics by rememberUpdatedState(rememberControlHaptics())
+    val host by rememberUpdatedState(LocalSliderCancelHost.current)
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    // Owned finger position; null while resting or pending.
     var finger by remember { mutableStateOf<Float?>(null) }
     var contact by remember { mutableStateOf(false) }
+    var hovered by remember { mutableStateOf(false) }
     var pressure by remember { mutableFloatStateOf(0f) }
+    var gesture by remember { mutableIntStateOf(0) }
+    // The value a cancel bubble restores: the value when the contact locked.
+    var original by remember { mutableFloatStateOf(value) }
+    var pointerInRoot by remember { mutableStateOf<Offset?>(null) }
+    val layout = remember { arrayOfNulls<androidx.compose.ui.layout.LayoutCoordinates>(1) }
+    val touchPreview = rememberSliderTouchPreview()
     val reduced = LocalReducedMotion.current
-    val active by animateFloatAsState(if (contact) 1f else 0f,
-        tween(if (reduced) 0 else 180), label = "Slider contact")
+    val ease = seekPreviewEase()
+    val currentEase by rememberUpdatedState(ease)
+    // Hovering X morphs the clear lens back into the resting white circle.
+    val active by animateFloatAsState(if (contact && !hovered) 1f else 0f, ease, label = "Slider contact")
     val expansion = LocalGlassAppearance.current.controlExpansion
-    val shown by animateFloatAsState(finger ?: sliderPosition(value, valueRange, curve),
-        if (finger != null || reduced) androidx.compose.animation.core.snap() else spring(1f, 650f), label = "Slider position")
-    val body = rememberGlassBody({ shown }, { pressure }, { if (contact) 1f else 0f })
-    val parent = rememberControlScrollContext()
-    val touch = if (!enabled) Modifier else Modifier.readControlScrollContext(parent).pointerInput(valueRange, actualSteps, rtl) {
-        awaitEachGesture {
-            val down = awaitFirstDown(requireUnconsumed = false)
-            val intent = ControlGestureIntent(viewConfiguration.touchSlop, parent.directions())
-            val inset = 14.dp.toPx()
-            val extent = (size.width - inset * 2f).coerceAtLeast(1f)
-            fun fraction(x: Float): Float { val at = (x - inset) / extent; return if (rtl) 1f - at else at }
-            val initial = sliderPosition(current, valueRange, curve)
-            val grabbed = kotlin.math.abs(fraction(down.position.x) - initial) * extent <= 24.dp.toPx()
-            val offset = if (grabbed) initial - fraction(down.position.x) else 0f
-            var owned = false
-            var released = false
-            val feedback = ControlDragHaptics(haptics)
-            var feedbackEngaged = false
-            contact = true; finger = initial
-            try {
-                while (true) {
-                    val event = awaitPointerEvent(PointerEventPass.Initial)
-                    val point = event.changes.firstOrNull { it.id == down.id } ?: break
-                    // Compose marks every change consumed for a system cancellation.
-                    if (point.isConsumed || event.changes.count { it.pressed } > 1) break
-                    val delta = point.position - down.position
-                    if (!owned) {
-                        when (intent.move(delta.x, delta.y, point.uptimeMillis - down.uptimeMillis)) {
-                            ControlGestureOwner.Control -> owned = true
-                            ControlGestureOwner.Scroll, ControlGestureOwner.Cancelled -> break
-                            ControlGestureOwner.Pending -> if (!point.pressed) owned = true
-                        }
-                    }
-                    if (owned) {
-                        contact = point.pressed
-                        val raw = fraction(point.position.x) + offset
-                        pressure = glassEdgePressure(raw - raw.coerceIn(0f, 1f))
-                        finger = if (actualSteps > 0) magneticChoicePosition(raw.coerceIn(0f, 1f) * (actualSteps + 1)) / (actualSteps + 1) else raw.coerceIn(0f, 1f)
-                        val snapped = controlValue(raw, 0f..1f, actualSteps)
-                        val next = sliderValue(snapped, valueRange, curve)
-                        val step = if (actualSteps > 0) (snapped * (actualSteps + 1)).roundToInt() else 0
-                        if (point.pressed) {
-                            feedback.engage(step)
-                            feedbackEngaged = true
-                            feedback.move(step)
-                        } else {
-                            // A tap never entered the owned-drag feedback lifecycle.
-                            if (!feedbackEngaged) haptics.emit(ControlHaptic.Weak)
-                            else feedback.move(step)
-                            released = true
-                        }
-                        change(next)
-                        point.consume()
-                    }
-                    if (!point.pressed) { break }
+    val resting = sliderPosition(value, valueRange, curve)
+    val touched = touchPreview.shown(finger ?: resting)
+    // Entering X eases to the original value; leaving eases back to the finger.
+    val hoverShown = if (touchPreview.owned) key(gesture) {
+        seekCancelPreview(touched, sliderPosition(original, valueRange, curve), hovered)
+    } else touched
+    val shown by animateFloatAsState(if (touchPreview.active) hoverShown else resting,
+        if (touchPreview.active || reduced) androidx.compose.animation.core.snap() else spring(1f, 650f), label = "Slider position")
+    val body = rememberGlassBody({ shown }, { pressure }, { if (contact && !hovered) 1f else 0f })
+    // Down-time state for one contact.
+    val contactState = remember { floatArrayOf(0f) } // [grab offset]
+    var feedback by remember { mutableStateOf<ControlDragHaptics?>(null) }
+    fun geometry(): Pair<Float, Float> = with(density) {
+        val width = layout[0]?.size?.width?.toFloat() ?: 1f
+        14.dp.toPx() to (width - 28.dp.toPx()).coerceAtLeast(1f)
+    }
+    fun fraction(x: Float): Float {
+        val (inset, extent) = geometry()
+        val at = (x - inset) / extent
+        return if (rtl) 1f - at else at
+    }
+    fun stepOf(snapped: Float) = if (actualSteps > 0) (snapped * (actualSteps + 1)).roundToInt() else 0
+    fun hover(over: Boolean) {
+        if (over == hovered) return
+        hovered = over
+        host?.hovered = over
+        haptics.emit(if (over) ControlHaptic.Strong else ControlHaptic.Weak)
+        if (over) change(original)
+    }
+    /** Track the finger; publish its value unless the cancel bubble holds the original. */
+    fun track(position: Offset): Int {
+        val raw = fraction(position.x) + contactState[0]
+        pressure = glassEdgePressure(raw - raw.coerceIn(0f, 1f))
+        finger = if (actualSteps > 0) magneticChoicePosition(raw.coerceIn(0f, 1f) * (actualSteps + 1)) / (actualSteps + 1) else raw.coerceIn(0f, 1f)
+        val snapped = controlValue(raw, 0f..1f, actualSteps)
+        if (!hovered) change(sliderValue(snapped, valueRange, curve))
+        return stepOf(snapped)
+    }
+    fun end() {
+        if (touchPreview.owned) host?.end()
+        contact = false; hovered = false; pressure = 0f; finger = null; pointerInRoot = null
+        feedback = null
+    }
+    // A target rising under a stationary finger is entered without movement.
+    LaunchedEffect(Unit) {
+        snapshotFlow { pointerInRoot?.let { point -> host?.over(point) } }
+            .collect { over -> if (over != null) hover(over) }
+    }
+    val touch = Modifier.sliderContact(enabled) { event ->
+        val point = event.position
+        when (event) {
+            is SliderContact.Down -> {
+                gesture++
+                hovered = false
+                contact = true
+                feedback = ControlDragHaptics(haptics)
+                val initial = sliderPosition(current, valueRange, curve)
+                val at = fraction(point.x)
+                // Touching the thumb keeps its offset; anywhere else the thumb comes to the finger.
+                val grabbed = kotlin.math.abs(at - initial) * geometry().second <= with(density) { 24.dp.toPx() }
+                contactState[0] = if (grabbed) initial - at else 0f
+                touchPreview.begin((at + contactState[0]).coerceIn(0f, 1f), currentEase)
+            }
+            is SliderContact.Lock -> {
+                original = current
+                touchPreview.lock(sliderPosition(current, valueRange, curve))
+                val raw = fraction(point.x) + contactState[0]
+                feedback?.engage(stepOf(controlValue(raw, 0f..1f, actualSteps)))
+                layout[0]?.takeIf { it.isAttached }?.let { coordinates ->
+                    host?.begin(coordinates.boundsInRoot())
+                    pointerInRoot = coordinates.localToRoot(point)
                 }
-            } finally {
-                feedback.finish(released)
-                contact = false; pressure = 0f; finger = null
+            }
+            is SliderContact.Move -> {
+                layout[0]?.takeIf { it.isAttached }?.let { pointerInRoot = it.localToRoot(point) }
+                pointerInRoot?.let { hover(host?.over(it) == true) }
+                val step = track(point)
+                if (!hovered) feedback?.move(step)
+            }
+            is SliderContact.Release -> {
+                val over = pointerInRoot?.let { host?.over(it) } == true
+                if (over) {
+                    // Releasing on X restores the original value without a release pulse.
+                    if (!hovered) change(original)
+                    feedback?.finish(false)
+                } else {
+                    feedback?.move(track(point))
+                    feedback?.finish(true)
+                }
+                end()
+                touchPreview.release()
+            }
+            is SliderContact.Tap -> {
+                track(point)
+                haptics.emit(ControlHaptic.Weak)
+                end()
+                touchPreview.release()
+            }
+            is SliderContact.Yield -> {
+                // A parent took the contact: ease back without publishing.
+                end()
+                touchPreview.yield(currentEase)
+            }
+            is SliderContact.Cancel -> {
+                // A continuous settings slider keeps its last valid value on cancellation.
+                feedback?.finish(false)
+                end()
+                touchPreview.release()
             }
         }
     }
@@ -162,7 +225,8 @@ internal fun InterfaceSlider(value: Float, onValueChange: (Float) -> Unit, modif
             enabled
         }
     }
-    BoxWithConstraints(modifier.fillMaxWidth().height(InterfaceSliderHeight).then(semantics).then(touch)
+    BoxWithConstraints(modifier.fillMaxWidth().height(InterfaceSliderHeight).onGloballyPositioned { layout[0] = it }
+        .then(semantics).then(touch)
         .onKeyEvent { event ->
             if (!enabled || event.type != androidx.compose.ui.input.key.KeyEventType.KeyDown) false
             else {
