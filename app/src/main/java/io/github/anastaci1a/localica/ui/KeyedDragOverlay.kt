@@ -86,31 +86,30 @@ internal fun <T : Any, P> BoxScope.KeyedDragOverlay(state: KeyedDragState<T, P>,
             }
         }
     }
-    val shadowAlpha by animateFloatAsState(if (drag.dropping) 0f else 1f, tween(if (reducedMotion) 0 else 240), label = "Stack shadow")
     // Every card shares its item's outline (#532); trailing cards keep their last measurement.
     val outlines = remember(drag) { mutableMapOf<String, MediaItemOutlineHolder>() }
     fun outlineHolder(item: T) = outlines.getOrPut(state.keyOf(item)) { MediaItemOutlineHolder() }
     val artless = with(density) { ArtlessOutlineCorner.toPx() }
     fun cardOutline(holder: MediaItemOutlineHolder, width: Float, height: Float) = holder.value
         ?: MediaItemOutline(androidx.compose.ui.geometry.Rect(0f, 0f, width, height), minOf(artless, width / 2f, height / 2f))
-    val topOutline = outlineHolder(drag.moving.first())
-    val shadowCorner = with(density) { cardOutline(topOutline, stackWidth, drag.cardSize.height).corner.toDp() }
-    val trailingExtent = with(density) { (if (drag.moving.size > 1) 14.dp else 0.dp).toPx() }
-    // One shared shadow reads as a single lifted bundle, even while its lower cards trail the pointer.
-    Box(Modifier.zIndex(2f).graphicsLayer { translationX = homePosition().x; translationY = homePosition().y }
-        .heldOutlinePlacement {
-            val outline = cardOutline(topOutline, stackWidth, drag.cardSize.height)
-            outline.copy(bounds = outline.bounds.copy(right = outline.bounds.right + trailingExtent,
-                bottom = outline.bounds.bottom + trailingExtent))
-        }
-        .graphicsLayer { alpha = shadowAlpha }.shadow(24.dp, androidx.compose.foundation.shape.RoundedCornerShape(shadowCorner), clip = false))
+    // Cards continue each item's hover (#533): the same lift, shadow and carried backdrop cutout.
+    val backing = state.hoverBacking ?: LocalFrostedBackdrop.current
+    BackdropLease(backing)
+    val defaultRoom = with(density) { (HoverLift.MaxLift / 2).toPx() }.let { androidx.compose.ui.geometry.Rect(it, it, it, it) }
+    // Plain map: the underlay reads it while drawing; every frame lambda reads live motion state.
+    val frames = remember(drag) { mutableMapOf<String, HoverCardFrame>() }
+    fun liftProgress(key: String) = (drag.lifts[key]?.progress ?: 1f) *
+        (if (drag.committed) 1f - drag.handoff.value.coerceIn(0f, 1f) else 1f)
+    HoverDragUnderlay({ drag.moving.mapNotNull { frames[state.keyOf(it)] } }, backing, Modifier.matchParentSize().zIndex(2f))
     val cards = remember(drag, lifted, drag.destinations) { drag.moving.withIndex().filter { (index, item) -> index < 3 ||
         (!lifted && state.keyOf(item) in drag.initialBounds) || (drag.dropping && state.keyOf(item) in drag.destinations.orEmpty()) } }
     cards.reversed().forEach { (index, item) -> key(drag, state.keyOf(item)) {
-        val destination = drag.destinations?.get(state.keyOf(item))
+        val itemKey = state.keyOf(item)
+        val destination = drag.destinations?.get(itemKey)
         val holder = outlineHolder(item)
         fun stackTarget() = homePosition() + Offset(offset * index.coerceAtMost(2), offset * index.coerceAtMost(2))
-        val liftOffset = remember { Animatable((drag.initialBounds[state.keyOf(item)]?.topLeft ?: stackTarget()) - stackTarget(), Offset.VectorConverter) }
+        val start = remember { (drag.initialBounds[itemKey]?.topLeft ?: stackTarget()) - stackTarget() }
+        val liftOffset = remember { Animatable(start, Offset.VectorConverter) }
         LaunchedEffect(drag, reducedMotion) {
             if (reducedMotion) liftOffset.snapTo(Offset.Zero) else liftOffset.animateTo(Offset.Zero, tween(240))
         }
@@ -119,7 +118,7 @@ internal fun <T : Any, P> BoxScope.KeyedDragOverlay(state: KeyedDragState<T, P>,
         fun heldPosition() = (if (index == 0 || reducedMotion) homePosition() else followers[(index - 1).coerceAtMost(1)]) +
             Offset(offset * index.coerceAtMost(2), offset * index.coerceAtMost(2)) + liftOffset.value
         val landingStart = remember(drag.dropping, drag.returnFrom) {
-            drag.returnFrom?.get(state.keyOf(item))?.topLeft ?: heldPosition()
+            drag.returnFrom?.get(itemKey)?.topLeft ?: heldPosition()
         }
         fun displayed() = if (!drag.dropping) heldPosition() else destination?.let {
             landingStart + (it.topLeft - landingStart) * drag.landing.value
@@ -128,11 +127,31 @@ internal fun <T : Any, P> BoxScope.KeyedDragOverlay(state: KeyedDragState<T, P>,
         fun cardHeight() = drag.cardSize.height + ((destination?.height ?: drag.cardSize.height) - drag.cardSize.height) * drag.landing.value
         val alpha by animateFloatAsState(if (drag.destinations != null && destination == null) 0f else 1f,
             tween(if (reducedMotion) 0 else 300), label = "Song landing")
-        GlassDragBubble(Modifier.zIndex(3f + (drag.moving.size - index).toFloat() / drag.moving.size)
+        // The cutout is carried from the rest position and lands at the destination's region.
+        val rest = drag.initialBounds[itemKey]?.topLeft
+        fun sample(): Offset {
+            val from = rest ?: return displayed()
+            val to = destination?.topLeft
+            return if (drag.dropping && to != null) from + (to - from) * drag.landing.value else from
+        }
+        val frame = run {
+            HoverCardFrame(
+                position = { displayed() },
+                geometry = { hoverGeometry(cardOutline(holder, cardWidth(), cardHeight()), drag.lifts[itemKey]?.room ?: defaultRoom, liftProgress(itemKey)) },
+                sampleShift = { displayed() - sample() },
+                restOutline = { rest?.let { at -> cardOutline(holder, drag.cardSize.width, drag.cardSize.height).bounds.translate(at) } },
+                destinationOutline = { destination?.let { at -> cardOutline(holder, at.width, at.height).bounds.translate(at.topLeft) } },
+                flight = { if (start.getDistance() < .5f) 1f else (1f - liftOffset.value.getDistance() / start.getDistance()).coerceIn(0f, 1f) },
+                landing = { if (drag.dropping) drag.landing.value else 0f },
+                alpha = { alpha * (1f - drag.handoff.value.coerceIn(0f, 1f)) })
+        }
+        SideEffect { frames[itemKey] = frame }
+        DisposableEffect(itemKey) { onDispose { frames.remove(itemKey) } }
+        HoverDragCard(Modifier.zIndex(3f + (drag.moving.size - index).toFloat() / drag.moving.size)
             .graphicsLayer { translationX = displayed().x; translationY = displayed().y }
-            .width(with(density) { cardWidth().toDp() }).height(with(density) { cardHeight().toDp() }).graphicsLayer { this.alpha = alpha }
-            .testTag(if (index == 0) "drag-stack" else "drag-card-${state.keyOf(item)}"),
-            landing = { drag.handoff.value }, shadow = false, outline = { cardOutline(holder, cardWidth(), cardHeight()) }) {
+            .width(with(density) { cardWidth().toDp() }).height(with(density) { cardHeight().toDp() })
+            .testTag(if (index == 0) "drag-stack" else "drag-card-$itemKey"),
+            frame, backing) {
             if (index == 0 || !lifted || drag.dropping) CompositionLocalProvider(LocalHeldItemOutline provides holder) { content(item, drag.presentation) }
         }
         if (index == 0 && drag.moving.size > 1 && !drag.dropping) Surface(

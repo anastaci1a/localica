@@ -348,6 +348,60 @@ class DragReorderTest {
         assertEquals(listOf(ids.last()) + ids.dropLast(1), controller.state.value.playlists.single().entries.map { it.id })
     }
 
+    /** #533: adjacent hovering rows start the drag exactly where they hover, fly into the
+     * stack and land without single-frame jumps, then the moved rows ease out of hover. */
+    @Test fun adjacentHoverSelectionFliesIntoTheStackAndLandsWithoutJumps() = fixture { controller, playlist ->
+        val ids = playlist.entries.map { it.id }
+        compose.onNodeWithTag("media-${ids[1]}").performTouchInput { longClick() }
+        compose.onNodeWithTag("media-${ids[2]}").performClick()
+        compose.waitForIdle()
+        compose.onNodeWithTag("media-${ids[2]}").assertIsSelected()
+        val list = compose.onNodeWithTag("browser-list").fetchSemanticsNode().boundsInRoot
+        val rest = compose.onNodeWithTag("media-${ids[1]}").fetchSemanticsNode().boundsInRoot
+        val from = rest.center - list.topLeft
+        val to = compose.onNodeWithTag("media-${ids[5]}").fetchSemanticsNode().boundsInRoot.center - list.topLeft
+        compose.mainClock.autoAdvance = false
+        var held = false
+        try {
+            compose.onNodeWithTag("browser-list").performTouchInput { down(from); held = true }
+            compose.mainClock.advanceTimeBy(700)
+            compose.onNodeWithTag("browser-list").performTouchInput { moveTo(from + Offset(0f, 35f)) }
+            val path = mutableListOf<androidx.compose.ui.geometry.Rect>()
+            repeat(24) {
+                compose.mainClock.advanceTimeByFrame()
+                compose.onAllNodesWithTag("drag-stack").fetchSemanticsNodes().firstOrNull()?.let { path += it.boundsInRoot }
+            }
+            assertTrue("The drag lifted a stack", path.size > 10)
+            assertEquals("The top card starts where its row hovered", rest.left, path.first().left, 3f)
+            assertTrue("The top card starts at its row, not the stack: ${path.first()} vs $rest",
+                kotlin.math.abs(path.first().top - rest.top) <= kotlin.math.abs(path.last().top - rest.top) / 2f + 3f)
+            val travel = (path.last().topLeft - path.first().topLeft).getDistance()
+            path.zipWithNext().forEach { (a, b) ->
+                assertTrue("No single-frame jump into the stack: $path", (b.topLeft - a.topLeft).getDistance() <= travel * .35f + 3f)
+            }
+            compose.onNodeWithTag("browser-list").performTouchInput { moveTo(to) }
+            repeat(6) { compose.mainClock.advanceTimeByFrame() }
+            compose.onNodeWithTag("browser-list").performTouchInput { up(); held = false }
+            val landing = mutableListOf<androidx.compose.ui.geometry.Rect>()
+            repeat(40) {
+                compose.mainClock.advanceTimeByFrame()
+                compose.onAllNodesWithTag("drag-stack").fetchSemanticsNodes().firstOrNull()?.let { landing += it.boundsInRoot }
+            }
+            assertTrue("The stack lands over several frames", landing.size > 8)
+            val distance = (landing.last().topLeft - landing.first().topLeft).getDistance()
+            landing.zipWithNext().forEach { (a, b) ->
+                assertTrue("No single-frame jump while landing: $landing", (b.topLeft - a.topLeft).getDistance() <= distance * .35f + 3f)
+            }
+        } finally {
+            if (held) compose.onNodeWithTag("browser-list").performTouchInput { cancel() }
+            compose.mainClock.autoAdvance = true
+        }
+        compose.waitUntil(5000) { compose.onAllNodesWithTag("drag-stack").fetchSemanticsNodes().isEmpty() }
+        val result = controller.state.value.playlists.single().entries.map { it.id }
+        assertEquals("Adjacent rows stay together in source order", result.indexOf(ids[1]) + 1, result.indexOf(ids[2]))
+        compose.runOnIdle { assertTrue("A completed move ends the selection", selection.entries.isEmpty()) }
+        compose.onNodeWithTag("media-${ids[1]}").assertIsNotSelected()
+    }
     @Test fun disjointSelectionLiftsIntoStackAndMovesInSourceOrder() = fixture { controller, playlist ->
         val ids = playlist.entries.map { it.id }
         compose.onNodeWithTag("media-${ids[2]}").performTouchInput { longClick() }
