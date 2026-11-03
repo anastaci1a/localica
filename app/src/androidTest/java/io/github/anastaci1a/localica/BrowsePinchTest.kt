@@ -72,12 +72,10 @@ class BrowsePinchTest {
                 // Just beyond recognition, almost none of the visual morph has elapsed.
                 moveTo(0, Offset(x - 57.65f, y)); moveTo(1, Offset(x + 57.65f, y))
             }
-            var onsetFrame = 0
+            val onsetFrames = mutableListOf(beforeArt)
             compose.waitUntil(5000) {
                 compose.mainClock.advanceTimeByFrame()
-                val frame = art.fetchSemanticsNode().boundsInRoot
-                assertEquals("No recognition-frame jump in the leading edge: ${onsetFrame}", beforeArt.left, frame.left, 3f)
-                assertEquals("No recognition-frame jump in cover scale: ${onsetFrame++}", beforeArt.width, frame.width, 3f)
+                onsetFrames += art.fetchSemanticsNode().boundsInRoot
                 list.fetchSemanticsNode().config.getOrNull(SemanticsProperties.StateDescription) == "List, Large"
             }
             compose.mainClock.advanceTimeBy(48)
@@ -90,6 +88,18 @@ class BrowsePinchTest {
             val impliedArt = art.fetchSemanticsNode().boundsInRoot
             fun between(label: String, value: Float, from: Float, to: Float) = assertTrue("$label: $value outside $from..$to",
                 value in minOf(from, to) - 1f..maxOf(from, to) + 1f)
+            for ((label, coordinate) in listOf<Pair<String, (androidx.compose.ui.geometry.Rect) -> Float>>(
+                "leading edge" to { it.left }, "trailing edge" to { it.right }, "cover scale" to { it.width })) {
+                val from = coordinate(beforeArt); val to = coordinate(impliedArt)
+                // The first eased frame already moves (#520/#536). Bound its share of the
+                // actual threshold travel, rather than assuming a density-independent 3 px.
+                val limit = kotlin.math.abs(to - from) * .5f + 1f
+                onsetFrames.zipWithNext().forEachIndexed { index, (before, after) ->
+                    between("Recognition $label at frame $index", coordinate(after), from, to)
+                    assertTrue("Recognition $label must ease, not snap, at frame $index (limit $limit)",
+                        kotlin.math.abs(coordinate(after) - coordinate(before)) <= limit)
+                }
+            }
             between("Recognition must not drop the dense grid's horizontal inset", afterArt.left, beforeArt.left, impliedArt.left)
             between("Both artwork edges retain their source alignment", afterArt.right, beforeArt.right, impliedArt.right)
             assertEquals("Recognition implies only the threshold's share of the morph", beforeArt.width, impliedArt.width, beforeArt.width * .15f)
