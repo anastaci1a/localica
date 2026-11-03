@@ -46,6 +46,19 @@ class SettingsPathRestorationTest {
         compose.runOnIdle { assertEquals("The saved path actually contained a legacy title", 1, restoredPaths) }
     }
 
+    @Test fun returningToRootRemainsAtRootAfterRestoreWithAnInitialCategory() {
+        val restoration = StateRestorationTester(compose)
+        restoration.setContent { LocalicaTheme {
+            FolderSettings(LibraryUiState(loading = false), {}, {}, {}, initialCategory = "Scanner")
+        } }
+        compose.onNodeWithContentDescription("Back from settings").performClick()
+        compose.onNodeWithContentDescription("Back from settings").performClick()
+        compose.onNodeWithText("Settings", substring = false).assertIsDisplayed()
+        restoration.emulateSavedInstanceStateRestore()
+        compose.onNodeWithText("Settings", substring = false).assertIsDisplayed()
+        compose.onNodeWithText("Search settings").assertExists()
+    }
+
     @Test fun legacyScannerPageRestoresItsControlsAndCanonicalParent() {
         restoreLegacyPath("Scanner", mapOf("Scanner" to "Scanner configuration"))
         compose.onNodeWithText("Scanner", substring = false).assertIsDisplayed()

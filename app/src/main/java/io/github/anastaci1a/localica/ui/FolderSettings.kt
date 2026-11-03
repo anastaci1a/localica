@@ -5,7 +5,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.saveable.listSaver
+import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -40,7 +40,7 @@ private fun settingsTitle(title: String): String = when (title) {
 }
 
 // Keep the existing saved List representation, migrating every restored ancestor too.
-private val settingsPathSaver = listSaver<List<String>, String>(
+private val settingsPathSaver = Saver<List<String>, List<String>>(
     save = { it }, restore = { path -> path.map(::settingsTitle) })
 
 private fun settingsPath(title: String?): List<String> {
