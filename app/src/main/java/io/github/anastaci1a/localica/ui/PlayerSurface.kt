@@ -205,12 +205,8 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     val artX = 16.dp + ((windowWidth - fullArt) / 2 - 16.dp) * p * p
     val fullArtY = artworkBand.artworkTop(fullArtHeight.value).dp
     val miniArtY = (CompactControlSize - MiniArtworkSize) / 2
+    val artY = miniArtY + (fullArtY - miniArtY) * p - 48.dp * p * (1f - p) - 24.dp * lyricProgress
     val lyricMetadataY = maxOf(ordinarySeekY, lyricSeekY)
-    // The lyrics screen seats its title lower. The artwork enters and leaves from the same #508 centring
-    // rule applied to that title, blended in with the lyrics layout (and so reversed on maximize, #537).
-    val lyricFullArtY = playerArtworkBand((statusInset + PlayerTopControlsHeight).value, lyricMetadataY.value)
-        .artworkTop(fullArtHeight.value).dp
-    val artY = miniArtY + (fullArtY - miniArtY) * p - 48.dp * p * (1f - p) + (lyricFullArtY - fullArtY) * lyricProgress
     // Preserve the delivered title trajectory, including selected-lyrics expansion.
     val metadataY = ordinarySeekY + (lyricMetadataY - ordinarySeekY) * lyricProgress
     val contentInset = 32.dp
@@ -223,7 +219,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
         titleMeasurer.measure(sampled.title, marqueeTextStyle(titleStyle), maxLines = 1, softWrap = false)
             .size.height / density.density
     }
-    val artTrajectory = remember(windowWidth, fullArt, fullArtY, lyricFullArtY, miniArtY, ordinarySeekY,
+    val artTrajectory = remember(windowWidth, fullArt, fullArtY, miniArtY, ordinarySeekY,
         lyricMetadataY, lyricVisibility, fullTitleHeight, miniTitleScale) {
         List(257) { index ->
             val t = index / 256f
@@ -231,7 +227,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
                 (lyricMetadataY - ordinarySeekY).value * lyricVisibility * t * t
             PlayerArtworkTrajectorySample(t,
                 16f + (((windowWidth - fullArt) / 2).value - 16f) * t * t,
-                miniArtY.value + (fullArtY - miniArtY).value * t - 48f * t * (1f - t) + (lyricFullArtY - fullArtY).value * lyricVisibility * t,
+                miniArtY.value + (fullArtY - miniArtY).value * t - 48f * t * (1f - t) - 24f * lyricVisibility * t,
                 titleTop, titleTop + fullTitleHeight * (miniTitleScale + (1f - miniTitleScale) * t),
                 58f + miniTextWidth.value + (-26f + (contentWidth - miniTextWidth).value) * t,
                 titleLeft = 58f - 26f * t)
@@ -250,7 +246,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     }
     // Crop compatibility remains independent of immediate frame growth.
     val clearanceTarget = if (minOf(fullArt, fullArtHeight) < MiniArtworkSize) 0f else
-        playerArtworkClearance((fullArtY + (lyricFullArtY - fullArtY) * lyricVisibility).value,
+        playerArtworkClearance((fullArtY - 24.dp * lyricVisibility).value,
             fullArtHeight.value, (ordinarySeekY + (lyricMetadataY - ordinarySeekY) * lyricVisibility).value,
             miniArtY.value, MiniArtworkSize.value, ((lyricMetadataY - ordinarySeekY) * lyricVisibility).value)
     val artCropRetention by animateFloatAsState(if (clearanceTarget > 0f) 1f else 0f,
