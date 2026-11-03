@@ -266,6 +266,7 @@ class HoverSelectionTest {
     @Test fun aVirtualizedNeighbourRetainsTheJoinedOutlineAndShadow() {
         var retained by mutableStateOf(false)
         compose.setContent { Fixture(true, true, retainSecond = retained) }
+        if (android.os.Build.VERSION.SDK_INT < 33) compose.waitUntil(10000) { source.fallback != null }
         compose.waitForIdle()
         val before = capture()
         val second = checkNotNull(scene.viewportHover["second"])
