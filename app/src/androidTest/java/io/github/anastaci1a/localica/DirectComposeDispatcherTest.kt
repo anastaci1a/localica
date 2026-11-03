@@ -3,7 +3,7 @@ package io.github.anastaci1a.localica
 import android.os.Looper
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.test.ExperimentalTestApi
-import androidx.compose.ui.test.runComposeUiTest
+import io.github.anastaci1a.localica.localicaRunComposeUiTest as runComposeUiTest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.runBlocking

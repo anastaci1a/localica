@@ -2,7 +2,7 @@ package io.github.anastaci1a.localica
 
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.runtime.*
-import androidx.compose.ui.test.junit4.createComposeRule
+import io.github.anastaci1a.localica.localicaComposeRule as createComposeRule
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import io.github.anastaci1a.localica.ui.rememberImeClosing

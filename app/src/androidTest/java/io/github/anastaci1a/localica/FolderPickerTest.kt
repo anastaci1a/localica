@@ -2,7 +2,7 @@ package io.github.anastaci1a.localica
 
 import android.util.Log
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import io.github.anastaci1a.localica.localicaAndroidComposeRule as createAndroidComposeRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.By
