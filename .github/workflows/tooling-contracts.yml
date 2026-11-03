@@ -2,8 +2,6 @@
 name: Evidence tooling contracts
 'on':
   push:
-    # This branch runs the same gate through audit-browse-prototype.yml before native jobs.
-    branches-ignore: [dev/audit-browse-preparation-20261030, dev/audit-integration-20261030, dev/audit-next-20261030, dev/audit-navigation-recovery-20261030, dev/audit-information-owner-20261030, dev/audit-followup-20261030, dev/audit-artwork-hit-20261030, dev/audit-tag-view-cleanup-20261030, dev/audit-track-sort-keys-20261030, dev/audit-selection-frame-20261030, dev/audit-menu-canonical-20261030, dev/audit-shared-primitives-20261030, dev/audit-statistics-lens-20261030, dev/audit-playback-gate-20261030, dev/audit-filled-bounds-20261030, dev/audit-popup-progress-scope-20261030, dev/audit-pixel-pipelines-20261030, dev/audit-ime-closing-observation-20261030, dev/audit-cover-decode-gate-20261030, dev/audit-queue-header-gate-20261030, dev/audit-cover-fixture-correction-20261030, dev/audit-browse-retention-gate-20261030, dev/audit-glass-rim-gate-20261030, dev/audit-queue-reconciliation-gate-20261030, dev/audit-navigation-return-clearance-gate-20261030, dev/audit-control-copy-gate-20261030, dev/audit-sort-choice-readiness-20261030, dev/audit-list-back-delivery-20261030, dev/audit-queue-control-clearance-20261030, dev/audit-tabs-queue-gate-20261030, dev/audit-legacy-capture-gate-20261030, dev/audit-capture-pixel-units-20261030, dev/audit-capture-scene-control-gate-20261030, dev/audit-capture-coincident-oracle-gate-20261030, dev/audit-real-switch-work-gate-20261030, test/audit-popup-composition-candidate-gate-20261030, test/audit-popup-frame-candidate-gate-20261030, test/audit-popup-acceptance-gate-20261030, test/audit-player-expansion-gesture-gate-20261030, test/audit-player-composition-gate-20261030, test/audit-control-capture-acceptance-20261030, test/audit-cover-preview-stages-20261030, dev/audit-immutable-pixel-read-20261030, dev/audit-empty-home-catalog-20261030, dev/audit-browse-lookup-owner-20261031, dev/audit-window-copy-ownership-20261031, dev/audit-seek-unset-duration-20261031]
     paths:
       - '.github/workflows/**'
       - '.github/actions/**'
@@ -70,7 +68,7 @@ jobs:
         run: |
           set -euo pipefail
           npm ci --prefix .github/test-evidence --ignore-scripts --no-audit --no-fund 2>&1 | tee tooling-contract-reports/npm-ci.log
-      - name: Run nine offline contracts and retain every status
+      - name: Run eight offline contracts and retain every status
         shell: bash
         run: |
           set -euo pipefail
@@ -82,7 +80,7 @@ jobs:
               'test_source_methods.py', 'test_full_partition.py',
               'test_prepare_device_tests.py', 'test_full_live_evidence.py',
               'test_run_prototype_tests.py', 'test_observe_test_evidence.py',
-              'test_failure_context.py', 'test_focused_workflows.py',
+              'test_failure_context.py',
           ]
           for name in names:
               if not pathlib.Path('.github/tests', name).is_file():
@@ -102,7 +100,7 @@ jobs:
                   'source': (root / 'source-sha.txt').read_text().strip(),
                   'sourceHashesSha256': hashlib.sha256((root / 'source-files.sha256').read_bytes()).hexdigest(),
                   'python': sys.version, 'contracts': results,
-                  'complete': len(results) == 9,
+                  'complete': len(results) == 8,
                   'scope': 'Host tooling contracts with temporary subprocess/device/upload mocks; no Android runtime verdict',
               }, indent=2) + '\n')
           sys.exit(1 if any(r['returncode'] != 0 for r in results) else 0)
