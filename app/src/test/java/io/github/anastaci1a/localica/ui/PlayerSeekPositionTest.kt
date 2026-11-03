@@ -156,6 +156,31 @@ class PlayerSeekPositionTest {
         assertEquals(1, seeks.size); assertEquals(75_000f, seeks.single().toFloat(), 2f)
     }
 
+    @Test fun refinedDurationRoundsRescaledReleaseToNearestMillisecond() {
+        for ((duration, expected) in listOf(150_000L to 75_001L, 60_000L to 30_001L)) {
+            val position = PlayerSeekPosition()
+            position.edit(60_001f, 120_000f)
+            val seeks = mutableListOf<Long>()
+            val playback = live.copy(durationMs = duration)
+            position.finish(playback) { seeks += it; 5 }
+            assertEquals(listOf(expected), seeks)
+            assertEquals(expected, position.pending!!.positionMs)
+            assertEquals(expected.toFloat(), position.displayed(playback))
+            assertNull(position.editing)
+        }
+    }
+
+    @Test fun unchangedOrUnspecifiedRangeStillTruncatesFractionalRelease() {
+        for (range in listOf(120_000f, 0f)) {
+            val position = PlayerSeekPosition()
+            position.edit(60_001.75f, range)
+            val seeks = mutableListOf<Long>()
+            position.finish(live) { seeks += it; 5 }
+            assertEquals(listOf(60_001L), seeks)
+            assertEquals(60_001L, position.pending!!.positionMs)
+        }
+    }
+
     @Test fun connectionAndProblemChangesEndCommittedHandoffButNotLiveScrub() {
         val position = PlayerSeekPosition()
         position.edit(95_000f, 120_000f); position.finish(live.copy(connected = true)) { 5 }

@@ -13,6 +13,7 @@ import io.github.anastaci1a.localica.playback.PlaybackProblem
 import io.github.anastaci1a.localica.playback.PlaybackState
 import io.github.anastaci1a.localica.playback.SeekAcknowledgement
 import kotlinx.coroutines.delay
+import kotlin.math.roundToLong
 
 /** A watchdog for rejected/unavailable seeks, never a delay on successful acknowledgement. */
 internal const val SeekAcknowledgementTimeoutMs = 2_000L
@@ -67,7 +68,9 @@ internal class PlayerSeekPosition {
     }
 
     fun finish(playback: PlaybackState, seek: (Long) -> Long?) {
-        val selected = editingIn(playback.range())?.toLong() ?: return
+        val range = playback.range()
+        val value = editingIn(range) ?: return
+        val selected = if (editingRange > 0f && editingRange != range) value.roundToLong() else value.toLong()
         // Keep the finger position until the request identity is returned; dispatch
         // and installation run in one Main turn, even for synchronous test receipts.
         try {
