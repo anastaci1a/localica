@@ -42,7 +42,7 @@ class ArtistAlbumSortOrderTest {
             BrowseStyle(presentation = Presentation.List, listSize = ListSize.Normal, sort = sort, ascending = ascending), true)
         var played = emptyList<Track>()
         compose.setContent { LocalicaTheme {
-            Box(Modifier.fillMaxWidth().height(900.dp)) {
+            Box(Modifier.requiredWidth(4000.dp).height(900.dp)) {
                 BrowserScreen(LibraryUiState(snapshot, loading = false), PlaylistState(), route,
                     {}, {}, {}, { rows, _, _ -> played = rows.map { it.track } }, null, null, true, false,
                     queryDispatcher = Dispatchers.Unconfined)
@@ -51,7 +51,7 @@ class ArtistAlbumSortOrderTest {
         compose.waitForIdle()
         compose.onNodeWithContentDescription("Play selected albums").performClick()
         val carousel = listOf("Zeta", "Mid", "Alpha", "Nameless").map { name ->
-            // The first match is the carousel chip, which sits above every song row.
+            // A 4000dp viewport keeps every chip composed; the first match is the chip above the rows.
             val node = compose.onAllNodesWithText(name)[0].fetchSemanticsNode().boundsInRoot
             name to node
         }.sortedWith(compareBy({ it.second.top }, { it.second.left })).map { it.first }
