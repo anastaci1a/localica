@@ -34,6 +34,25 @@ private data class PinchCaptureDrawing(val key: Any, val pass: Int, val layer: G
 private object PinchHeaderCaptureKey
 private object PinchHeaderStaticCaptureKey
 
+/** Input ownership outlives a release when its adjacent view is waiting for an earlier handoff. */
+internal class BrowsePinchGesture(val zoomIn: Boolean, val midpoint: Offset,
+    var source: BrowseStyle, var destination: BrowseStyle, val epoch: Long) {
+    val finished = kotlinx.coroutines.CompletableDeferred<Unit>()
+    var pending = false
+    var released = false
+    var cancelled = false
+    var travel = 0f
+    var generation = -1L
+    var retargeted = false
+    var origin = 0f
+    var direction = 1f
+    var fallbackTarget = false
+    fun progress() = if (retargeted) (origin + direction * travel).coerceIn(0f, 1f) else travel
+    fun targetOnRelease() = if (retargeted) {
+        if (cancelled || travel < .35f) fallbackTarget else direction > 0f
+    } else !cancelled && travel >= .35f
+}
+
 internal data class BrowseZoomAnchor(val route: BrowseRoute, val style: BrowseStyle, val key: Any, val top: Int, val fraction: Float = 0f, val edge: Int = 0) {
     // LazyGrid places items on integer pixels but retains fractional scroll deltas.
     // Quantize the absolute target once; feeding its residual back each frame dithers.
@@ -67,17 +86,34 @@ internal class BrowsePinchMotion {
             val from = progress.value
             var start = -1L
             do {
-                val now = withFrameNanos { it }
-                // The first eased frame already moves; it is one frame into the ease.
-                if (start < 0) start = now - PinchFrameNanos
-                val t = ((now - start) / 1_000_000f / PinchCatchUpMillis).coerceAtMost(1f)
-                progress.snapTo(from + (fingerProgress - from) * androidx.compose.animation.core.LinearOutSlowInEasing.transform(t))
+                var t = 0f
+                var update: kotlinx.coroutines.Job? = null
+                withFrameNanos { now ->
+                    // Write inside the frame callback, before both layout and drawing observe it.
+                    // Resuming the outer coroutine first lets those phases see different progress.
+                    if (start < 0) start = now - PinchFrameNanos
+                    t = ((now - start) / 1_000_000f / PinchCatchUpMillis).coerceAtMost(1f)
+                    update = launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) {
+                        progress.snapTo(from + (fingerProgress - from) * androidx.compose.animation.core.LinearOutSlowInEasing.transform(t))
+                    }
+                }
+                update?.join()
             } while (t < 1f)
             caughtUp = true
         }
     }
     var capture: kotlinx.coroutines.Job? = null
     var settling: kotlinx.coroutines.Job? = null
+    var settleOwner = 0L
+    var releaseTarget = false
+    var gesture by mutableStateOf<BrowsePinchGesture?>(null)
+    var gestureEpoch = 0L
+        private set
+    fun cancelGestures() { gestureEpoch++; gesture = null }
+    fun resumeFingers() {
+        tracking?.cancel(); tracking = null
+        caughtUp = false
+    }
     var disposed = false
     var capturing by mutableStateOf(false)
     var readbackPending by mutableStateOf(false)
@@ -166,6 +202,7 @@ internal class BrowsePinchMotion {
     }
     fun dispose() {
         disposed = true
+        cancelGestures()
         capture?.cancel(); tracking?.cancel(); settling?.cancel()
         clearTransaction()
     }
@@ -300,6 +337,7 @@ internal fun Modifier.browsePinch(enabled: Boolean, motion: BrowsePinchMotion, s
     val readback = remember { PinchReadback() }
     val artwork = LocalBrowseArtwork.current
     val layoutDirection = androidx.compose.ui.platform.LocalLayoutDirection.current
+    val currentStyle by rememberUpdatedState(style)
     suspend fun restoreHeaderSource(generation: Long, source: BrowseStyle) {
         val header = motion.activeHeader ?: return
         if (!motion.owns(generation)) return
@@ -312,6 +350,7 @@ internal fun Modifier.browsePinch(enabled: Boolean, motion: BrowsePinchMotion, s
         header.awaitHandoff()
     }
     OnModalGestureCancellation {
+        motion.cancelGestures()
         val source = motion.source
         if (source != null) {
             val header = motion.activeHeader
@@ -359,58 +398,69 @@ internal fun Modifier.browsePinch(enabled: Boolean, motion: BrowsePinchMotion, s
         motion.disposed = false
         onDispose { motion.dispose() }
     }
-    return pinchToChangeView(enabled && motion.source == null && !motion.readbackPending, gestureKey = route.key,
-        onProgress = { value ->
-            if (motion.held) motion.fingerProgress = value
-            if (!reducedMotion) motion.followFingers(scope)
-        },
-        onRelease = { cancelled ->
-            if (!motion.disposed && motion.source != null && motion.target != null) {
-                val generation = motion.transaction
-                motion.held = false
-                motion.tracking?.cancel()
-                motion.settling = scope.launch {
-                    try {
-                        motion.capture?.join()
-                        if (!motion.owns(generation) || motion.captureProblem) return@launch
-                        val commit = !cancelled && motion.fingerProgress >= .35f
-                        val destination = if (commit) motion.target else motion.source
-                        if (reducedMotion) motion.progress.snapTo(if (commit) 1f else 0f)
-                        else motion.progress.animateTo(if (commit) 1f else 0f, androidx.compose.animation.core.tween(220))
-                        if (destination != null) {
-                            motion.activeHeader?.beginHandoff(commit)
-                            if (cancelled) onPreview(destination) else {
-                                // A takeover after persistence only retires retained drawings;
-                                // it must not undo an already completed, genuine release.
-                                motion.committed = true
-                                onCommit(destination)
-                            }
-                            motion.focusKey?.let {
-                                val sourceTop = motion.bounds[it]?.top
-                                onAnchor(if (!commit && motion.activeHeader != null && sourceTop != null)
-                                    BrowseZoomAnchor(route, destination, it, sourceTop.toInt(), 0f, motion.focusEdge)
-                                else BrowseZoomAnchor(route, destination, it, motion.focusTop, motion.focusFraction, motion.focusEdge))
-                            }
-                        }
-                        if (motion.activeHeader != null) motion.activeHeader?.awaitHandoff()
-                        else { withFrameNanos { }; withFrameNanos { } }
-                    } finally { if (motion.owns(generation) && !motion.takeover) motion.clearTransaction() }
+    fun settle(request: BrowsePinchGesture) {
+        val generation = request.generation
+        if (!motion.owns(generation) || motion.target == null) {
+            request.finished.complete(Unit)
+            if (motion.gesture === request) motion.gesture = null
+            return
+        }
+        val owner = ++motion.settleOwner
+        val commit = request.targetOnRelease()
+        motion.releaseTarget = commit
+        request.destination = requireNotNull(if (commit) motion.target else motion.source)
+        motion.held = false
+        motion.tracking?.cancel()
+        motion.settling = scope.launch {
+            try {
+                motion.capture?.join()
+                if (!motion.owns(generation) || motion.captureProblem) return@launch
+                val destination = if (commit) motion.target else motion.source
+                if (reducedMotion) motion.progress.snapTo(if (commit) 1f else 0f)
+                else motion.progress.animateTo(if (commit) 1f else 0f, androidx.compose.animation.core.tween(220))
+                if (destination != null) {
+                    motion.activeHeader?.beginHandoff(commit)
+                    // A cancelled retarget still owes the preceding genuine release its endpoint.
+                    if (request.cancelled && !request.retargeted) onPreview(destination) else {
+                        motion.committed = true
+                        onCommit(destination)
+                    }
+                    motion.focusKey?.let {
+                        val sourceTop = motion.bounds[it]?.top
+                        onAnchor(if (!commit && motion.activeHeader != null && sourceTop != null)
+                            BrowseZoomAnchor(route, destination, it, sourceTop.toInt(), 0f, motion.focusEdge)
+                        else BrowseZoomAnchor(route, destination, it, motion.focusTop, motion.focusFraction, motion.focusEdge))
+                    }
                 }
+                if (motion.activeHeader != null) motion.activeHeader?.awaitHandoff()
+                else { withFrameNanos { }; withFrameNanos { } }
+            } finally {
+                // Retargeting keeps this transaction's frozen endpoints but replaces its settle.
+                if (motion.owns(generation) && motion.settleOwner == owner && !motion.takeover)
+                    motion.clearTransaction()
+                if (motion.gesture === request) motion.gesture = null
+                request.finished.complete(Unit)
             }
-        }) { zoomIn, midpoint ->
+        }
+    }
+    fun startStep(style: BrowseStyle, request: BrowsePinchGesture): Boolean {
+        val zoomIn = request.zoomIn
+        val midpoint = request.midpoint
         val next = style.zoomStep(zoomIn, with(density) { width.toDp().value },
             albumSongs = route.supportsTracklist())
-        if (next != style && !motion.disposed && motion.source == null && !motion.readbackPending) {
+        return if (next != style && !motion.disposed && motion.source == null && !motion.readbackPending) {
             val visible = gridState.layoutInfo.visibleItemsInfo.filter { it.key != "browser-notice" }
-            if (motion.activeHeader != null && visible.isEmpty()) return@pinchToChangeView false
+            if (motion.activeHeader != null && visible.isEmpty()) return false
             motion.releaseArtwork = artwork?.retainForTransition()
             motion.capturing = true
             motion.source = style
             val generation = motion.transaction
+            request.generation = generation
+            request.source = style; request.destination = next; request.pending = false
             motion.target = next
             motion.targetColumns = galleryColumns(next.presentation, with(density) { width.toDp().value }, next.itemsPerRow)
-            motion.held = true
-            motion.fingerProgress = 0f
+            motion.held = !request.released
+            motion.fingerProgress = request.progress()
             motion.destinationReady = false
             motion.viewportWidth = width.toFloat()
             motion.rightToLeft = layoutDirection == androidx.compose.ui.unit.LayoutDirection.Rtl
@@ -556,7 +606,85 @@ internal fun Modifier.browsePinch(enabled: Boolean, motion: BrowsePinchMotion, s
                 } finally { if (motion.owns(generation)) motion.capturing = false }
                 if (motion.owns(generation) && !reducedMotion) motion.followFingers(scope)
             }
+            if (request.released) settle(request)
             true
         } else false
+    }
+    fun sameView(a: BrowseStyle?, b: BrowseStyle): Boolean {
+        if (a == null) return false
+        if (a.presentation == Presentation.List || b.presentation == Presentation.List)
+            return a.presentation == b.presentation && a.listSize == b.listSize
+        val widthDp = with(density) { width.toDp().value }
+        return galleryColumns(a.presentation, widthDp, a.itemsPerRow) == galleryColumns(b.presentation, widthDp, b.itemsPerRow)
+    }
+    return pinchToChangeView(enabled && !motion.takeover && motion.gesture?.cancelled != true &&
+        (motion.source == null && !motion.readbackPending ||
+            !motion.held && motion.settling?.isActive == true || motion.gesture?.pending == true), gestureKey = route.key,
+        onProgress = { value ->
+            motion.gesture?.let { request ->
+                request.travel = value
+                if (!request.pending && motion.owns(request.generation) && motion.held) {
+                    motion.fingerProgress = request.progress()
+                    if (!reducedMotion) motion.followFingers(scope)
+                }
+            }
+        },
+        onRelease = { cancelled ->
+            motion.gesture?.let { request ->
+                request.released = true; request.cancelled = cancelled
+                if (request.pending) {
+                    if (cancelled || request.travel < .35f) request.destination = request.source
+                } else settle(request)
+            }
+        }) { zoomIn, midpoint ->
+        if (motion.disposed || motion.takeover) return@pinchToChangeView false
+        val predecessor = motion.gesture?.takeUnless { it.finished.isCompleted }
+        if (predecessor?.cancelled == true) return@pinchToChangeView false
+        val base = if (predecessor?.pending == true) predecessor.destination
+            else if (motion.source != null) (if (motion.releaseTarget) motion.target else motion.source) ?: currentStyle
+            else currentStyle
+        val next = base.zoomStep(zoomIn, with(density) { width.toDp().value }, route.supportsTracklist())
+        if (next == base) return@pinchToChangeView false
+        val request = BrowsePinchGesture(zoomIn, midpoint, base, next, motion.gestureEpoch)
+        motion.gesture = request
+        if (motion.source == null && predecessor == null && !motion.readbackPending) {
+            val started = startStep(base, request)
+            if (!started) { motion.gesture = null; request.finished.complete(Unit) }
+            return@pinchToChangeView started
+        }
+        if (predecessor == null) { motion.gesture = null; return@pinchToChangeView false }
+        if (!predecessor.pending && !motion.committed && !motion.capturing && motion.destinationReady &&
+            (sameView(motion.source, next) || sameView(motion.target, next))) {
+            request.generation = motion.transaction
+            request.retargeted = true
+            request.origin = motion.progress.value
+            request.direction = if (sameView(motion.target, next)) 1f else -1f
+            request.fallbackTarget = motion.releaseTarget
+            // Retire the old cleanup owner before cancelling its animation.
+            motion.settleOwner++
+            motion.settling?.cancel(); motion.settling = null
+            motion.held = true
+            motion.fingerProgress = request.origin
+            motion.resumeFingers()
+            true
+        } else {
+            // A further adjacent step needs a fresh source atlas. Keep its complete input,
+            // even if it releases before the previous endpoint and header are handed back.
+            request.pending = true
+            scope.launch {
+                var started = false
+                try {
+                    predecessor.finished.await()
+                    if (!motion.disposed && request.epoch == motion.gestureEpoch && motion.source == null && !motion.readbackPending)
+                        started = startStep(currentStyle, request)
+                } finally {
+                    if (!started) {
+                        if (motion.gesture === request) motion.gesture = null
+                        request.finished.complete(Unit)
+                    }
+                }
+            }
+            true
+        }
     }
 }

@@ -371,7 +371,8 @@ class BrowsePinchLayersTest {
                 LazyVerticalGrid(GridCells.Fixed(columns), state = grid, modifier = Modifier.fillMaxSize()) {
                     item(key = "browser-notice", span = { GridItemSpan(maxLineSpan) }) { Spacer(Modifier.height(0.dp)) }
                     items(fixture.visible.value, key = { it }) { key ->
-                        Box(Modifier.height(100.dp).background(if (key == "frozen") Color.Blue else Color.Red))
+                        // A fading green drawing must remain measurable across the live row edge.
+                        Box(Modifier.height(100.dp).background(if (key == "frozen") Color.Blue else Color.Black))
                     }
                 }
             }

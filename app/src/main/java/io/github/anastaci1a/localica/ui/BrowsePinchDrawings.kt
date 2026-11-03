@@ -156,8 +156,14 @@ internal fun Modifier.pinchRetainedOverlay(motion: BrowsePinchMotion, grid: Lazy
         val entry = visible.firstOrNull { it.key == key }
         val incoming = if (motion.visualSource != null && key !in motion.bounds && entry != null) {
             val source = motion.sourceBounds(key, indices.retainedPinchItemIndex(key))
-            val inset = BrowseCellGeometry(motion.targetColumns).gridInset * motion.pixelDensity
-            val distance = (source.topLeft - Offset(entry.offset.x + inset, entry.offset.y.toFloat())).getDistance()
+            val geometry = BrowseCellGeometry(motion.targetColumns)
+            val inset = (geometry.gridInset * motion.pixelDensity).roundToInt()
+            val sourceVertical = (BrowseCellGeometry(motion.sourceColumns)
+                .cardVerticalInset(requireNotNull(motion.visualSource)) * motion.pixelDensity).roundToInt()
+            val targetVertical = (geometry.cardVerticalInset(requireNotNull(motion.target)) * motion.pixelDensity).roundToInt()
+            // Match retained departures' content origins, including the Smallest row inset.
+            val distance = (source.topLeft + Offset(0f, sourceVertical.toFloat()) -
+                Offset((entry.offset.x + inset).toFloat(), (entry.offset.y + targetVertical).toFloat())).getDistance()
             browseViewVisibility(false, true, p, browsePinchFadeWindow(distance, motion.viewportWidth))
         } else 1f
         part.layer.alpha = (motion.itemAlpha[key] ?: 1f) * incoming

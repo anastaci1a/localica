@@ -173,6 +173,8 @@ In all lists, including queues and album details, pinch outward through Smallest
 
 Change one adjacent view per gesture, requiring all fingers to lift before another step. A 4% span change picks the direction. Geometry then follows the full finger distance, easing out that gap over 100 ms. Reversing restores items virtualized out by the destination. All text draws below a separate artwork pass. Within each pass earlier items draw on top.
 
+Pinches during settlement retain the shown progress. Reversals reuse the frozen endpoints. Further adjacent steps preserve their input until the preceding handoff permits a fresh capture, including gestures already released. Modal interruption discards pending steps.
+
 Departing items stop moving and resizing when their fade completes. Farther journeys fade sooner; reverse arrivals use the same spatial fade window. Elements retrace the same fade in either direction. View controls fade over 120 ms. Live items retain ordinary geometry progression.
 
 Keep source-viewport decoded artwork through capture, reflow and release. Resolution upgrades blend without exposing the background. Release settles before saving.

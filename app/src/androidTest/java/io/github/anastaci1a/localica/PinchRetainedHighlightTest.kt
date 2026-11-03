@@ -132,7 +132,9 @@ class PinchRetainedHighlightTest {
                 val bottom = if (anywhere) pixels.height else (sourceBounds.bottom - sceneBounds.top).toInt().coerceAtMost(pixels.height)
                 val highlighted = (top until bottom).flatMap { py -> (left until right).mapNotNull { px ->
                     val c = pixels[px, py]
-                    if (c.red - c.green > .07f && c.blue - c.green > .07f) px to py else null
+                    // Long departures fade earlier (#536); measure their retained contour
+                    // without requiring the original slab's opacity after recognition.
+                    if (c.red - c.green > .01f && c.blue - c.green > .01f) px to py else null
                 } }
                 val count = highlighted.size
                 if (label == "source" || label == "reversed" || label == "returned") {
