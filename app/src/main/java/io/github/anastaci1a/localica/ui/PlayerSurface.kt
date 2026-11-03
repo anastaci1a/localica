@@ -357,6 +357,28 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
         Box(Modifier.fillMaxWidth().height(virtualHeight).clipToBounds().testTag("player-background-space")
             .onGloballyPositioned { polarity.measure("background", it) }
             .then(if (!expanded) Modifier.clickable(onClickLabel = "Expand player") { settle(true) } else Modifier)) {
+        @Composable fun cover(frame: PlayerVisual, offset: Float, neighbor: Boolean = false) {
+            Box(Modifier.motionBounds(artX, artY, artWidth, artHeight)
+                .then(if (!neighbor) Modifier.onGloballyPositioned { polarity.measure("cover", it) } else Modifier).graphicsLayer {
+                val remaining = if (neighbor) kotlin.math.abs(swipeOffset) else artPixels - kotlin.math.abs(swipeOffset)
+                alpha = lyricMotion.artworkAlpha * if (artSwipe.active) (remaining / (artPixels * .08f)).coerceIn(0f, 1f) else 1f
+                translationX = offset
+                rotationY = (offset / artPixels).coerceIn(-1f, 1f) * -27f
+                cameraDistance = 24f * density.density
+                val depth = kotlin.math.abs(offset / artPixels).coerceIn(0f, 1f)
+                scaleX = 1f - .035f * depth
+                scaleY = 1f - .035f * depth
+            }.then(if (neighbor) Modifier.clearAndSetSemantics {} else Modifier)) {
+            if (edgeSoftness > 0f && frame.softArtwork != null) androidx.compose.foundation.Image(frame.softArtwork, null,
+                Modifier.fillMaxSize().graphicsLayer { alpha = edgeSoftness }.artworkEdgeFeather(1f, .13f),
+                contentScale = artContentScale)
+            PlayerArtworkFrame(frame, Modifier.fillMaxSize().testTag(if (neighbor) "player-neighbor-artwork" else "player-artwork")
+                .artworkEdgeFeather(maxOf(edgeSoftness, swipeFeather),
+                    edgeBand + (.22f - edgeBand) * swipeFeather, coverBlend).clip(artworkShape),
+                shape = artworkShape,
+                contentScale = artContentScale)
+            }
+        }
             ArtworkBlend(artSwipe.source ?: artwork, Modifier.fillMaxSize().recordFrostedBackdrop(lyricBackdrop, enabled = p > .7f), duration = paletteDuration, occurrence = artworkVisit ?: sampled.trackId,
                 immediate = artSwipe.active || artworkVisit != null && artSwipe.handoff == artworkVisit, opacityBlend = lyricsOpen || settings.artworkTransition != io.github.anastaci1a.localica.navigation.ArtworkTransition.BlurThrough,
                 onBackgroundFrame = polarity::frame) { frame ->
@@ -373,32 +395,11 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
                         with(density) { artY.toPx() }, with(density) { artHeight.toPx() },
                         with(density) { artX.toPx() } + neighborOffset, artPixels, softness = maxOf(1f - coverBlend, swipeFeather / .9f), tone = tone)
                 }
-                @Composable fun cover(frame: PlayerVisual, offset: Float, neighbor: Boolean = false) {
-                    Box(Modifier.motionBounds(artX, artY, artWidth, artHeight)
-                        .then(if (!neighbor) Modifier.onGloballyPositioned { polarity.measure("cover", it) } else Modifier).graphicsLayer {
-                        val remaining = if (neighbor) kotlin.math.abs(swipeOffset) else artPixels - kotlin.math.abs(swipeOffset)
-                        alpha = lyricMotion.artworkAlpha * if (artSwipe.active) (remaining / (artPixels * .08f)).coerceIn(0f, 1f) else 1f
-                        translationX = offset
-                        rotationY = (offset / artPixels).coerceIn(-1f, 1f) * -27f
-                        cameraDistance = 24f * density.density
-                        val depth = kotlin.math.abs(offset / artPixels).coerceIn(0f, 1f)
-                        scaleX = 1f - .035f * depth
-                        scaleY = 1f - .035f * depth
-                    }.then(if (neighbor) Modifier.clearAndSetSemantics {} else Modifier)) {
-                    if (edgeSoftness > 0f && frame.softArtwork != null) androidx.compose.foundation.Image(frame.softArtwork, null,
-                        Modifier.fillMaxSize().graphicsLayer { alpha = edgeSoftness }.artworkEdgeFeather(1f, .13f),
-                        contentScale = artContentScale)
-                    PlayerArtworkFrame(frame, Modifier.fillMaxSize().testTag(if (neighbor) "player-neighbor-artwork" else "player-artwork")
-                        .artworkEdgeFeather(maxOf(edgeSoftness, swipeFeather),
-                            edgeBand + (.22f - edgeBand) * swipeFeather, coverBlend).clip(artworkShape),
-                        shape = artworkShape,
-                        contentScale = artContentScale)
-                    }
-                }
                 // Soft edges reveal the two blended color continuations in the space between covers.
-                cover(frame, swipeOffset)
-                if (destination != null) cover(destination.visual, neighborOffset, neighbor = true)
-
+                if (lyricProgress <= 0f) {
+                    cover(frame, swipeOffset)
+                    if (destination != null) cover(destination.visual, neighborOffset, neighbor = true)
+                }
             }
             Box(Modifier.motionBounds(artX, artY, artWidth, artHeight).testTag("artwork-gesture")
                 .then(artworkDrag).then(if (expanded && !lyricsOpen) Modifier.combinedClickable(interactionSource = null, indication = null,
@@ -411,25 +412,6 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
                     ActionMenuItem("View artwork", icon = R.drawable.ic_albums, onClick = { artworkMenu = false; viewing = true })
                     if (menuEditArtwork != null && track != null) ActionMenuItem("Change artwork", icon = R.drawable.ic_albums, onClick = { artworkMenu = false; menuEditArtwork(track) })
                     ActionMenuItem("Configure tap action", icon = R.drawable.ic_settings, onClick = { artworkMenu = false; configureTap = true })
-                }
-            }
-            if (handleReveal > 0f) Box(Modifier.offset(y = statusInset).fillMaxWidth().height(48.dp).graphicsLayer { alpha = handleReveal }) {
-                Box(Modifier.align(Alignment.TopCenter).size(96.dp, 48.dp)
-                    .clickable(interactionSource = null, indication = null, onClickLabel = "Collapse player") { settle(false) }
-                    .semantics { contentDescription = "Player handle" }) {
-                    Box(Modifier.align(Alignment.TopCenter).padding(top = 10.dp).size(72.dp, 4.dp).testTag("player-handle")
-                        .background(playerHandleColor(foreground), RoundedCornerShape(2.dp)))
-                }
-                CompositionLocalProvider(LocalFrostedBackdrop provides lyricBackdrop) {
-                    Box(Modifier.align(Alignment.TopStart).padding(start = 16.dp)) {
-                        ActionIcon(R.drawable.ic_down, "Collapse player") { settle(false) }
-                    }
-                    Box(Modifier.align(Alignment.TopEnd).padding(end = 16.dp)) {
-                        LyricsHeaderActions(lyricsOpen, lyricProgress, sourcesAnchor, sourcesPreparation,
-                            onShow = { onLyrics(true) },
-                            onSources = { if (lyricsResult?.sources?.isNotEmpty() == true) sourcesVisible = true },
-                            onHide = { sourcesVisible = false; onLyrics(false) })
-                    }
                 }
             }
             if (lyricProgress > 0f) CompositionLocalProvider(LocalFrostedBackdrop provides lyricBackdrop) { LyricsPanel(track, sampled.positionMs, settings.reducedMotion, onSeek,
@@ -453,6 +435,36 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
                 originPreparation = sourcesPreparation, contentAlpha = { lyricMotion.contentAlpha },
                 sampledAtMs = sampled.sampledAtMs, playing = sampled.isPlaying, speed = sampled.playbackSpeed,
                 delayMs = settings.lyricDelayMs, durationMs = sampled.durationMs) }
+            // The lyrics (and the missing-lyrics icon) draw beneath the artwork while it fades in or out of
+            // the lyrics screen (#537), so the covers are drawn again above the panel once lyrics are showing.
+            // The cover below the panel is dropped in that interval, so the artwork is composited exactly once.
+            if (lyricProgress > 0f) ArtworkBlend(artSwipe.source ?: artwork, Modifier.fillMaxSize(), duration = paletteDuration,
+                occurrence = artworkVisit ?: sampled.trackId,
+                immediate = artSwipe.active || artworkVisit != null && artSwipe.handoff == artworkVisit,
+                opacityBlend = lyricsOpen || settings.artworkTransition != io.github.anastaci1a.localica.navigation.ArtworkTransition.BlurThrough) { frame ->
+                val destination = artSwipe.destination
+                cover(frame, swipeOffset)
+                if (destination != null) cover(destination.visual, swipeOffset - (if (swipeOffset < 0f) -1f else 1f) * artPixels, neighbor = true)
+            }
+            if (handleReveal > 0f) Box(Modifier.offset(y = statusInset).fillMaxWidth().height(48.dp).graphicsLayer { alpha = handleReveal }) {
+                Box(Modifier.align(Alignment.TopCenter).size(96.dp, 48.dp)
+                    .clickable(interactionSource = null, indication = null, onClickLabel = "Collapse player") { settle(false) }
+                    .semantics { contentDescription = "Player handle" }) {
+                    Box(Modifier.align(Alignment.TopCenter).padding(top = 10.dp).size(72.dp, 4.dp).testTag("player-handle")
+                        .background(playerHandleColor(foreground), RoundedCornerShape(2.dp)))
+                }
+                CompositionLocalProvider(LocalFrostedBackdrop provides lyricBackdrop) {
+                    Box(Modifier.align(Alignment.TopStart).padding(start = 16.dp)) {
+                        ActionIcon(R.drawable.ic_down, "Collapse player") { settle(false) }
+                    }
+                    Box(Modifier.align(Alignment.TopEnd).padding(end = 16.dp)) {
+                        LyricsHeaderActions(lyricsOpen, lyricProgress, sourcesAnchor, sourcesPreparation,
+                            onShow = { onLyrics(true) },
+                            onSources = { if (lyricsResult?.sources?.isNotEmpty() == true) sourcesVisible = true },
+                            onHide = { sourcesVisible = false; onLyrics(false) })
+                    }
+                }
+            }
             val titleScale = 13f / MaterialTheme.typography.headlineSmall.fontSize.value
             val subtitleScale = 11f / MaterialTheme.typography.bodyLarge.fontSize.value
             val textMotionPaused = playerMarqueePaused(p, expanded, dragging, progress.isRunning)
