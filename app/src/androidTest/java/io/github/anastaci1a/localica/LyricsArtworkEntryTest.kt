@@ -30,9 +30,12 @@ import org.junit.Test
 class LyricsArtworkEntryTest {
     @get:Rule val compose = createComposeRule()
     private val state = PlaybackState(connected = true, title = "Evening", artist = "Artist", durationMs = 120000)
-    private val visual = PlayerVisual(Bitmap.createBitmap(32, 32, Bitmap.Config.ARGB_8888).apply {
-        eraseColor(android.graphics.Color.RED)
+    private fun visual(color: Int) = PlayerVisual(Bitmap.createBitmap(32, 32, Bitmap.Config.ARGB_8888).apply {
+        eraseColor(color)
     }.asImageBitmap(), PlayerPalette(Color.Black, Color.Black, Color.Black))
+    private val red = visual(android.graphics.Color.RED)
+    private val white = visual(android.graphics.Color.WHITE)
+    private var visual by mutableStateOf(red)
 
     private val progress = Animatable(0f)
     private var lyricsMode by mutableStateOf(true)
@@ -181,7 +184,9 @@ class LyricsArtworkEntryTest {
         } finally { file.delete() }
     }
 
-    /** Green separates light lyric ink from the red cover; compare both possible compositing orders. */
+    /** A cover above glyphs adds the same green to ink and adjacent blank pixels when red becomes white.
+     * A cover underneath adds less green to ink, because the glyph masks the artwork. This paired
+     * measurement includes the actual feather, shading and opacity rather than assuming their values. */
     private fun assertLyricsUnderArtwork(tag: String) {
         snap(1f)
         compose.waitUntil(10000) {
@@ -189,53 +194,57 @@ class LyricsArtworkEntryTest {
             compose.onAllNodesWithTag(tag, true).fetchSemanticsNodes().isNotEmpty()
         }
         forEachLayout { layout ->
-            snap(1f)
-            compose.waitForIdle()
-            fun green(p: Float): Triple<Float, Float, String> {
+            for (p in listOf(.88f, .91f, .94f)) {
                 snap(p)
-                val surface = bounds("player-surface")
-                val capture = compose.onNodeWithTag("player-surface").captureToImage()
-                val output = InstrumentationRegistry.getArguments().getString("additionalTestOutputDir")
-                if (output != null) {
-                    val dir = File(output, "lyrics-artwork-entry").apply { mkdirs() }
-                    File(dir, "$tag-$layout-$p.png").outputStream().use {
-                        capture.asAndroidBitmap().compress(Bitmap.CompressFormat.PNG, 100, it)
+                fun capture(frame: PlayerVisual, name: String): androidx.compose.ui.graphics.PixelMap {
+                    compose.runOnIdle { visual = frame }
+                    compose.waitForIdle()
+                    val capture = compose.onNodeWithTag("player-surface").captureToImage()
+                    val output = InstrumentationRegistry.getArguments().getString("additionalTestOutputDir")
+                    if (output != null) {
+                        val dir = File(output, "lyrics-artwork-entry").apply { mkdirs() }
+                        File(dir, "$tag-$layout-$p-$name.png").outputStream().use {
+                            capture.asAndroidBitmap().compress(Bitmap.CompressFormat.PNG, 100, it)
+                        }
                     }
+                    return capture.toPixelMap()
                 }
-                val image = capture.toPixelMap()
+                val redPixels = capture(red, "red")
+                val whitePixels = capture(white, "white")
+                val surface = bounds("player-surface")
                 val content = bounds(tag)
                 val cover = bounds("player-artwork")
                 val viewport = bounds("lyrics-panel")
-                // Stable lyric content can extend beyond its shrinking clip; exclude metadata outside it.
-                val left = maxOf(content.left, cover.left, viewport.left)
-                val right = minOf(content.right, cover.right, viewport.right)
+                // The middle of the cover has a flat horizontal feather; compare ink and blank on the same row.
+                val left = maxOf(content.left, cover.left + cover.width * .3f, viewport.left)
+                val right = minOf(content.right, cover.right - cover.width * .3f, viewport.right)
                 val top = maxOf(content.top, cover.top, viewport.top)
                 val bottom = minOf(content.bottom, cover.bottom, viewport.bottom)
-                var high = 0f; var low = 1f
-                for (y in (top - surface.top).toInt() until (bottom - surface.top).toInt())
+                var underError = 0f; var overError = 0f; var rows = 0
+                for (y in (top - surface.top).toInt() until (bottom - surface.top).toInt()) {
+                    if (y !in 0 until redPixels.height) continue
+                    var inkX = -1; var blankX = -1; var high = 0f; var low = 1f
                     for (x in (left - surface.left).toInt() until (right - surface.left).toInt()) {
-                        if (x !in 0 until image.width || y !in 0 until image.height) continue
-                        val g = image[x, y].green
-                        high = maxOf(high, g); low = minOf(low, g)
+                        if (x !in 0 until redPixels.width) continue
+                        val green = redPixels[x, y].green
+                        if (green > high) { high = green; inkX = x }
+                        if (green < low) { low = green; blankX = x }
                     }
-                return Triple(high, low, "content=$content cover=$cover")
-            }
-            val (ink, backgroundAtRest, fullDetail) = green(1f)
-            assertTrue("$tag has measurable contrast at rest in $layout: $ink $fullDetail",
-                ink - backgroundAtRest > .1f)
-            for (p in listOf(.88f, .91f, .94f)) {
-                val (observed, floor, detail) = green(p)
-                val coverAlpha = 1f - p
-                val x = ((p - .78f) / .22f).coerceIn(0f, 1f)
-                val lyricAlpha = x * x * (3f - 2f * x)
-                val background = floor / (1f - coverAlpha)
-                val under = (1f - coverAlpha) * (lyricAlpha * ink + (1f - lyricAlpha) * background)
-                val over = lyricAlpha * ink + (1f - lyricAlpha) * (1f - coverAlpha) * background
-                val message = "$tag $layout p=$p observed=$observed lyricsUnderArtwork=$under lyricsOverArtwork=$over " +
-                    "ink=$ink floor=$floor $detail"
+                    if (inkX < 0 || blankX < 0 || high - low < .04f) continue
+                    val blankGain = whitePixels[blankX, y].green - low
+                    val inkGain = whitePixels[inkX, y].green - high
+                    if (blankGain < .025f) continue
+                    // Estimate the glyph's opacity from its contrast over the red cover's blank background.
+                    val glyphOpacity = ((high - low) / (1f - low)).coerceIn(0f, 1f)
+                    underError += kotlin.math.abs(inkGain - blankGain)
+                    overError += kotlin.math.abs(inkGain - blankGain * (1f - glyphOpacity))
+                    rows++
+                }
+                val message = "$tag $layout p=$p rows=$rows underError=$underError overError=$overError " +
+                    "content=$content cover=$cover"
                 println("LyricsArtworkZOrder $message")
-                assertTrue("Lyrics draw under the artwork: $message",
-                    kotlin.math.abs(observed - under) < kotlin.math.abs(observed - over))
+                assertTrue("Matched frames must contain visible ink and cover: $message", rows >= 5)
+                assertTrue("Lyrics draw under the artwork: $message", underError < overError)
             }
         }
     }
