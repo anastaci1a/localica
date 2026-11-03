@@ -205,8 +205,12 @@ class LyricsArtworkEntryTest {
                 val image = capture.toPixelMap()
                 val content = bounds(tag)
                 val cover = bounds("player-artwork")
-                val left = maxOf(content.left, cover.left); val right = minOf(content.right, cover.right)
-                val top = maxOf(content.top, cover.top); val bottom = minOf(content.bottom, cover.bottom)
+                val viewport = bounds("lyrics-panel")
+                // Stable lyric content can extend beyond its shrinking clip; exclude metadata outside it.
+                val left = maxOf(content.left, cover.left, viewport.left)
+                val right = minOf(content.right, cover.right, viewport.right)
+                val top = maxOf(content.top, cover.top, viewport.top)
+                val bottom = minOf(content.bottom, cover.bottom, viewport.bottom)
                 var high = 0f; var low = 1f
                 for (y in (top - surface.top).toInt() until (bottom - surface.top).toInt())
                     for (x in (left - surface.left).toInt() until (right - surface.left).toInt()) {
