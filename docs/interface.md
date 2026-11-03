@@ -68,6 +68,8 @@ A popup owning a grouped trigger’s shadow matches that group’s shared shadow
 
 Active/inactive and enabled/disabled control appearances activate over 180 ms and deactivate over 270 ms (120/180 ms with Faster animations), with no onset delay. Icon badges crossfade in fixed bounds. State, accessibility and input availability change immediately, reversals continue from the visible appearance, and Reduce motion snaps to the result.
 
+Disabled action text uses the surface foreground color at 38% opacity, with one availability animation owning the fade.
+
 Keep existing transport morphs and gesture-driven travel.
 
 Keep focus stable, accessible/tap alternatives available, and layouts usable in landscape, large fonts and short screens. Adjacent glass actions retain natural label widths and logical order. Overflow offers explicit previous/next controls without changing button-owned drags or shrinking text. Decorative shadow/rebound outsets must not enlarge a strip’s touch viewport into neighboring actions.
