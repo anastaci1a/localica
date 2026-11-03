@@ -142,7 +142,7 @@ internal class LensMeshRenderer {
                         render(target, 1f, conditionedIndices)
                     }
                     // Mutable capture pixels are consumed now; only the new independent
-                    // raster reaches the display canvas. Neither cache retains that input.
+                    // raster reaches the display canvas. The owned input stays in the mutable shader.
                     val image = if (mutableSoftwareSnapshot) rasterize()
                         else rasters.getOrPut(RasterKey(generation, snapshot, contentGeneration, sampling, lighting)) { rasterize() }
                     bitmapPaint.alpha = (255 * alpha).toInt().coerceIn(0, 255)
