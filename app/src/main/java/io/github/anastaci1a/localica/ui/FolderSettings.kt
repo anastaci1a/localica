@@ -5,6 +5,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -32,9 +33,19 @@ private val settingsDestinations = listOf(
     SettingsDestination("Tag jobs and recovery", "Library and tags", R.drawable.ic_music, "Background jobs, outcomes and interrupted tag edits"),
     SettingsDestination("About and licenses", null, R.drawable.ic_info, "Version, source code, help, and open-source licenses"),
 )
+private fun settingsTitle(title: String): String = when (title) {
+    "Interface and gestures" -> "Interface"
+    "Scanner configuration" -> "Scanner"
+    else -> title
+}
+
+// Keep the existing saved List representation, migrating every restored ancestor too.
+private val settingsPathSaver = Saver<List<String>, List<String>>(
+    save = { it }, restore = { path -> path.map(::settingsTitle) })
+
 private fun settingsPath(title: String?): List<String> {
     if (title == null) return emptyList()
-    val name = when (title) { "Interface and gestures" -> "Interface"; "Scanner configuration" -> "Scanner"; else -> title }
+    val name = settingsTitle(title)
     val destination = settingsDestinations.firstOrNull { it.title == name } ?: return emptyList()
     return settingsPath(destination.parent) + name
 }
@@ -44,7 +55,7 @@ fun FolderSettings(state: LibraryUiState, onDismiss: () -> Unit, onChooseFolder:
     onRemove: (String) -> Unit, extraContent: @Composable () -> Unit = {},
     interfaceContent: @Composable (String) -> Unit = {}, playbackContent: @Composable (String) -> Unit = {},
     aboutContent: @Composable () -> Unit = {}, initialCategory: String? = null, onFullScan: () -> Unit = {}, onQuickScan: () -> Unit = {}, libraryFiltersContent: @Composable () -> Unit = {}) {
-    var path by rememberSaveable { mutableStateOf(settingsPath(initialCategory)) }
+    var path by rememberSaveable(stateSaver = settingsPathSaver) { mutableStateOf(settingsPath(initialCategory)) }
     var search by rememberSaveable { mutableStateOf("") }
     var folderUri by rememberSaveable { mutableStateOf<String?>(null) }
     var removing by remember { mutableStateOf<FolderSelection?>(null) }
