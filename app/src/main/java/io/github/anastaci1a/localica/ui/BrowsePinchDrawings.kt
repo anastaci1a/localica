@@ -247,67 +247,67 @@ internal fun Modifier.pinchRetainedOverlay(motion: BrowsePinchMotion, grid: Lazy
                 translate(placed.origin.x, placed.origin.y) {
                     val lift = retainedLift(placed)
                     scale(lift?.scale ?: 1f, lift?.scale ?: 1f, lift?.pivot ?: Offset.Zero) {
-                    image.highlight?.let { highlight ->
-                        val original = androidx.compose.ui.geometry.Size(image.size.width.toFloat(), image.size.height.toFloat())
-                        val size = androidx.compose.ui.geometry.Size(original.width + (placed.targetWidth - original.width) * geometryProgress,
-                            original.height + (placed.targetHeight - original.height) * geometryProgress)
-                        with(highlight.renderer) { retainedCurrentSong(size, original, content, geometryProgress, motion.rightToLeft, highlight.color, placed.alpha * (content?.opacity ?: 1f)) }
-                    }
-                    if (content == null) {
-                        // Non-browser callers can still retain an arbitrary source drawing.
-                        val fit = minOf(placed.targetWidth / image.size.width, placed.targetHeight / image.size.height)
-                        val factor = 1f + (fit - 1f) * geometryProgress
-                        scale(factor, factor, Offset.Zero) {
-                            drawImage(image.image, srcOffset = image.origin, srcSize = image.size, dstSize = image.size, alpha = placed.alpha)
+                        image.highlight?.let { highlight ->
+                            val original = androidx.compose.ui.geometry.Size(image.size.width.toFloat(), image.size.height.toFloat())
+                            val size = androidx.compose.ui.geometry.Size(original.width + (placed.targetWidth - original.width) * geometryProgress,
+                                original.height + (placed.targetHeight - original.height) * geometryProgress)
+                            with(highlight.renderer) { retainedCurrentSong(size, original, content, geometryProgress, motion.rightToLeft, highlight.color, placed.alpha * (content?.opacity ?: 1f)) }
                         }
-                    } else {
-                        // Preserve the captured selection decoration independently of
-                        // fixed endpoint glyphs; current-song frost was drawn beneath it.
-                        val width = image.size.width + (placed.targetWidth - image.size.width) * geometryProgress
-                        val height = image.size.height + (placed.targetHeight - image.size.height) * geometryProgress
-                        scale(width / image.size.width, height / image.size.height, Offset.Zero) {
-                            drawImage(image.image, srcOffset = image.origin, srcSize = image.size, dstSize = image.size, alpha = placed.alpha * content.opacity)
-                        }
-                        val source = content.source; val target = content.target
-                        fun mix(a: Int, b: Int) = a + (b - a) * geometryProgress
-                        val cardWidth = image.size.width + (placed.targetWidth - image.size.width) * geometryProgress
-                        fun left(x: Float, width: Float) = if (motion.rightToLeft) cardWidth - x - width else x
-                        fun paragraph(a: androidx.compose.ui.text.TextLayoutResult?, b: androidx.compose.ui.text.TextLayoutResult?,
-                            ax: Int, ay: Int, bx: Int, by: Int, color: Color) {
-                            val width = mix(a?.size?.width ?: 0, b?.size?.width ?: 0)
-                            val height = mix(a?.size?.height ?: 0, b?.size?.height ?: 0)
-                            translate(left(mix(ax, bx), width), mix(ay, by)) {
-                                clipRect(0f, 0f, width.coerceAtLeast(0f), height.coerceAtLeast(0f)) {
-                                    drawBrowsePinchParagraph(a, b, geometryProgress, width, color, content.foreground, placed.alpha * content.opacity * content.textOpacity)
+                        if (content == null) {
+                            // Non-browser callers can still retain an arbitrary source drawing.
+                            val fit = minOf(placed.targetWidth / image.size.width, placed.targetHeight / image.size.height)
+                            val factor = 1f + (fit - 1f) * geometryProgress
+                            scale(factor, factor, Offset.Zero) {
+                                drawImage(image.image, srcOffset = image.origin, srcSize = image.size, dstSize = image.size, alpha = placed.alpha)
+                            }
+                        } else {
+                            // Keep generic row decoration separate from endpoint glyphs.
+                            // Hover and playback frost each have one explicit drawing owner.
+                            val width = image.size.width + (placed.targetWidth - image.size.width) * geometryProgress
+                            val height = image.size.height + (placed.targetHeight - image.size.height) * geometryProgress
+                            scale(width / image.size.width, height / image.size.height, Offset.Zero) {
+                                drawImage(image.image, srcOffset = image.origin, srcSize = image.size, dstSize = image.size, alpha = placed.alpha * content.opacity)
+                            }
+                            val source = content.source; val target = content.target
+                            fun mix(a: Int, b: Int) = a + (b - a) * geometryProgress
+                            val cardWidth = image.size.width + (placed.targetWidth - image.size.width) * geometryProgress
+                            fun left(x: Float, width: Float) = if (motion.rightToLeft) cardWidth - x - width else x
+                            fun paragraph(a: androidx.compose.ui.text.TextLayoutResult?, b: androidx.compose.ui.text.TextLayoutResult?,
+                                ax: Int, ay: Int, bx: Int, by: Int, color: Color) {
+                                val width = mix(a?.size?.width ?: 0, b?.size?.width ?: 0)
+                                val height = mix(a?.size?.height ?: 0, b?.size?.height ?: 0)
+                                translate(left(mix(ax, bx), width), mix(ay, by)) {
+                                    clipRect(0f, 0f, width.coerceAtLeast(0f), height.coerceAtLeast(0f)) {
+                                        drawBrowsePinchParagraph(a, b, geometryProgress, width, color, content.foreground, placed.alpha * content.opacity * content.textOpacity)
+                                    }
                                 }
                             }
+                            paragraph(source.title, target.title, source.titleX, source.titleY, target.titleX, target.titleY, Color.Unspecified)
+                            val targetStyle = motion.target
+                            val infoInk = if (targetStyle?.presentation == Presentation.List && targetStyle.listSize.trailingInformation)
+                                content.secondary else Color.Unspecified
+                            paragraph(source.information, target.information, source.infoX, source.infoY, target.infoX, target.infoY, infoInk)
+                            val art = pinchArtworkRect(source, target, geometryProgress)
+                            val number = target.number ?: source.number
+                            if (number != null) {
+                                val alpha = browseViewVisibility(source.number != null, target.number != null, p) * placed.alpha * content.opacity * content.textOpacity
+                                drawText(number, color = content.secondary, alpha = alpha,
+                                    topLeft = Offset(left(art.left, art.width) + (art.width - number.size.width) / 2f,
+                                        art.top + (art.height - number.size.height) / 2f))
+                            }
+                            // The source overflow glyph is a bounded crop, not a scaled whole row.
+                            val text = image.text
+                            if (text != null && source.menuWidth > 0 && source.menuHeight > 0) {
+                                val width = mix(source.menuWidth, target.menuWidth).coerceAtLeast(0f)
+                                val height = mix(source.menuHeight, target.menuHeight).coerceAtLeast(0f)
+                                val x = left(mix(source.menuX, target.menuX), width)
+                                val y = mix(source.menuY, target.menuY)
+                                drawMotionImage(text.image,
+                                    srcOffset = text.origin + IntOffset(if (motion.rightToLeft) text.size.width - source.menuX - source.menuWidth else source.menuX, source.menuY),
+                                    srcSize = IntSize(source.menuWidth, source.menuHeight),
+                                    rect = Rect(x, y, x + width, y + height), alpha = placed.alpha * browseViewVisibility(true, target.menuWidth > 0, p))
+                            }
                         }
-                        paragraph(source.title, target.title, source.titleX, source.titleY, target.titleX, target.titleY, Color.Unspecified)
-                        val targetStyle = motion.target
-                        val infoInk = if (targetStyle?.presentation == Presentation.List && targetStyle.listSize.trailingInformation)
-                            content.secondary else Color.Unspecified
-                        paragraph(source.information, target.information, source.infoX, source.infoY, target.infoX, target.infoY, infoInk)
-                        val art = pinchArtworkRect(source, target, geometryProgress)
-                        val number = target.number ?: source.number
-                        if (number != null) {
-                            val alpha = browseViewVisibility(source.number != null, target.number != null, p) * placed.alpha * content.opacity * content.textOpacity
-                            drawText(number, color = content.secondary, alpha = alpha,
-                                topLeft = Offset(left(art.left, art.width) + (art.width - number.size.width) / 2f,
-                                    art.top + (art.height - number.size.height) / 2f))
-                        }
-                        // The source overflow glyph is a bounded crop, not a scaled whole row.
-                        val text = image.text
-                        if (text != null && source.menuWidth > 0 && source.menuHeight > 0) {
-                            val width = mix(source.menuWidth, target.menuWidth).coerceAtLeast(0f)
-                            val height = mix(source.menuHeight, target.menuHeight).coerceAtLeast(0f)
-                            val x = left(mix(source.menuX, target.menuX), width)
-                            val y = mix(source.menuY, target.menuY)
-                            drawMotionImage(text.image,
-                                srcOffset = text.origin + IntOffset(if (motion.rightToLeft) text.size.width - source.menuX - source.menuWidth else source.menuX, source.menuY),
-                                srcSize = IntSize(source.menuWidth, source.menuHeight),
-                                rect = Rect(x, y, x + width, y + height), alpha = placed.alpha * browseViewVisibility(true, target.menuWidth > 0, p))
-                        }
-                    }
                     }
                 }
             }

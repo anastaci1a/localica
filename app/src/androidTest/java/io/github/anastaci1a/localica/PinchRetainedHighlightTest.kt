@@ -148,13 +148,16 @@ class PinchRetainedHighlightTest {
             val y = firstArt.center.y - viewport.top
             var sourceInk = 0
             var sourceTint = 0f
+            var sourceHighlightWidth = 0
+            var sourceHighlightHeight = 0
             fun highlightPixels(label: String): Int {
                 compose.runOnIdle { stage++ }
                 val pixels = capturePresentedPopupPixels(compose, scene, stage) { view }
-                val left = (sourceBounds.left - sceneBounds.left).toInt().coerceAtLeast(0)
-                val right = (sourceBounds.right - sceneBounds.left).toInt().coerceAtMost(pixels.width)
-                val top = (sourceBounds.top - sceneBounds.top).toInt().coerceAtLeast(0)
-                val bottom = (sourceBounds.bottom - sceneBounds.top).toInt().coerceAtMost(pixels.height)
+                val samplingBounds = if (selected) sourceBounds.inflate(4f * density) else sourceBounds
+                val left = (samplingBounds.left - sceneBounds.left).toInt().coerceAtLeast(0)
+                val right = (samplingBounds.right - sceneBounds.left).toInt().coerceAtMost(pixels.width)
+                val top = (samplingBounds.top - sceneBounds.top).toInt().coerceAtLeast(0)
+                val bottom = (samplingBounds.bottom - sceneBounds.top).toInt().coerceAtMost(pixels.height)
                 val highlighted = (top until bottom).flatMap { py -> (left until right).mapNotNull { px ->
                     val c = pixels[px, py]
                     if (c.red - c.green > .07f && c.blue - c.green > .07f) px to py else null
@@ -173,10 +176,17 @@ class PinchRetainedHighlightTest {
                     } }
                     val tint = highlighted.map { (px, py) -> pixels[px, py].red - pixels[px, py].green }.sorted()
                         .let { if (it.isEmpty()) 0f else it[it.size / 2] }
-                    if (label == "source") { sourceInk = dark; sourceTint = tint }
+                    val width = if (highlighted.isEmpty()) 0 else highlighted.maxOf { it.first } - highlighted.minOf { it.first } + 1
+                    val height = if (highlighted.isEmpty()) 0 else highlighted.maxOf { it.second } - highlighted.minOf { it.second } + 1
+                    if (label == "source") {
+                        sourceInk = dark; sourceTint = tint
+                        sourceHighlightWidth = width; sourceHighlightHeight = height
+                    }
                     else {
                         assertTrue("Selected content stays visible at $label: source=$sourceInk current=$dark", dark >= sourceInk * .75f)
                         assertEquals("One current-song frost at $label", sourceTint, tint, .025f)
+                        assertEquals("Retained hover width at $label", sourceHighlightWidth.toFloat(), width.toFloat(), 3f)
+                        assertEquals("Retained hover height at $label", sourceHighlightHeight.toFloat(), height.toFloat(), 3f)
                     }
                 }
                 android.util.Log.i("PinchRetainedHighlight", "rtl=$rtl stage=$label ink=$count bounds=$sourceBounds scene=$sceneBounds")

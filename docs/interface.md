@@ -10,7 +10,9 @@ Related controls morph into their panels and return as one visible surface: crea
 
 Selected media hover: in one 220 ms ease-out the outline grows, a shadow deepens, and the surface shows the same backdrop region magnified with a slight frost. Content scales with it. Deselection is the same ease-out in reverse, and interruptions continue from the current appearance. Liquid Glass remains for controls.
 
-Growth takes a quarter of the gap to each neighbour, at most 4 dp, so about 0.75× the gap remains and lifted items never overlap neighbours. Side-adjacent selections share one hovering outline. Diagonal gallery neighbors and unselected holes stay separate. Partial groups retain accessible state without a pane/checkmark. Inset album choices and preserve readable baselines.
+One uniform scale preserves artwork/outline corner centres. Growth takes at most a quarter of each neighbour gap, capped at 4 dp per side. The tighter axis limits both axes; lifted items never overlap neighbours.
+
+Side-adjacent selections share one hovering outline. Diagonal gallery neighbors and unselected holes stay separate. Partial groups retain accessible state without a pane/checkmark. Inset album choices and preserve readable baselines.
 
 Selection, the current queue occurrence and held drag cards share one item outline. Its corners are concentric with the artwork's, sharing their arc centres. The inset $d$ is the artwork's smaller distance to the item edge, at least 2 dp:
 
