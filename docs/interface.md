@@ -462,7 +462,9 @@ Selected lyrics mode determines all target positions throughout held player move
 
 The lyrics viewport is mounted to the moving player: its upper edge keeps its offset below the player's top and its bottom follows the presented title with the normal gap, so both edges travel with the shrinking or growing player and the current line keeps its relative position inside it.
 
-Lyrics and their empty placeholder move rigidly inside those same faded/clipped bounds, retaining content geometry and scroll state. They fade out early in collapse and fade in late on the inverse expansion. At fully expanded held progress they are fully visible and artwork is gone. Artwork returns continuously during held collapse before release.
+Lyrics and their empty placeholder move rigidly inside those same faded/clipped bounds, retaining content geometry and scroll state. They fade out early in collapse and fade in late on the inverse expansion. At fully expanded held progress they are fully visible and artwork is gone.
+
+Artwork returns continuously above the lyrics and empty placeholder during held collapse before release. In both artwork layouts, its expanded endpoint centers between the padded top controls and the lyrics-layout title. Maximizing into lyrics retraces the same path.
 
 Album-only extra actions remain hidden throughout lyrics-mode movement, including intermediate frames. Partial reversals retain lyric scroll/source state. Keep every lyrics entry point available even without local lyrics.
 
