@@ -32,6 +32,26 @@ import java.util.concurrent.atomic.AtomicInteger
 @OptIn(ExperimentalCoroutinesApi::class)
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 class PlaybackIntentTest {
+    @Test fun detachReceiptWaitsForTheFinalCursorWriteWithoutBlockingMain() = fixture {
+        awaitMain { player.engine.playbackState == Player.STATE_READY }
+        queues.rename(first.id, first.name)
+        barrier()
+        val held = dao.gateNextSave()
+        val receipt: Any? = withContext(Dispatchers.Main) {
+            player.engine.seekTo(2345)
+            queues.detach(player)
+        }
+        assertTrue("Detach must expose its final persistence completion", receipt is Deferred<*>)
+        val completion = receipt as Deferred<*>
+        withTimeout(5000) { held.entered.await() }
+        assertFalse("The receipt must not acknowledge a queued but unwritten cursor", completion.isCompleted)
+        withContext(Dispatchers.Main) { assertEquals(2345L, player.currentPosition) }
+        held.release.complete(Unit)
+        withTimeout(5000) { completion.await() }
+        assertEquals(2345L, dao.read().active!!.positionMs)
+        assertFalse(player.playWhenReady)
+    }
+
     @Test fun orderedSeeksSurviveUnknownDurationAndNeverLeakToTheFollowingVisit() = fixture(duplicateOccurrences = true) {
         awaitMain { player.engine.playbackState == Player.STATE_READY }
         queues.rename(first.id, first.name)
