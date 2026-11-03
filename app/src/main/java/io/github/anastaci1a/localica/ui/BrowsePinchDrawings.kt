@@ -153,7 +153,14 @@ internal fun Modifier.pinchRetainedOverlay(motion: BrowsePinchMotion, grid: Lazy
         if (viewport?.isAttached != true || !coordinates.isAttached || part.layer.isReleased ||
             part.layer.size.width <= 0 || part.layer.size.height <= 0) return
         val bounds = viewport.localBoundingBoxOf(coordinates, clipBounds = false)
-        part.layer.alpha = motion.itemAlpha[key] ?: 1f
+        val entry = visible.firstOrNull { it.key == key }
+        val incoming = if (motion.visualSource != null && key !in motion.bounds && entry != null) {
+            val source = motion.sourceBounds(key, indices.retainedPinchItemIndex(key))
+            val inset = BrowseCellGeometry(motion.targetColumns).gridInset * motion.pixelDensity
+            val distance = (source.topLeft - Offset(entry.offset.x + inset, entry.offset.y.toFloat())).getDistance()
+            browseViewVisibility(false, true, p, browsePinchFadeWindow(distance, motion.viewportWidth))
+        } else 1f
+        part.layer.alpha = (motion.itemAlpha[key] ?: 1f) * incoming
         // A resized cover re-records its layer later in this frame (its own render node is
         // updated after this pass), so the layer still holds last frame's size. Scaling by it
         // painted the new drawing at old/new size, one to a few pixels off per frame (#505).
@@ -185,7 +192,6 @@ internal fun Modifier.pinchRetainedOverlay(motion: BrowsePinchMotion, grid: Lazy
         val targetInset = (geometry.cardInset * motion.pixelDensity).roundToInt()
         val sourceVerticalInset = (BrowseCellGeometry(motion.sourceColumns).cardVerticalInset(requireNotNull(motion.visualSource)) * motion.pixelDensity).roundToInt()
         val targetVerticalInset = (geometry.cardVerticalInset(requireNotNull(motion.target)) * motion.pixelDensity).roundToInt()
-        val exitProgress = browsePinchGeometryProgress(departing = true, progress = p)
         motion.bounds.forEach { (key, old) ->
             if (key in liveKeys) return@forEach
             val image = motion.frozen[key] ?: return@forEach
@@ -196,12 +202,15 @@ internal fun Modifier.pinchRetainedOverlay(motion: BrowsePinchMotion, grid: Lazy
             val leading = geometry.cellLeft(motion.viewportWidth.toInt(), motion.pixelDensity, column).toFloat()
             val x = if (motion.rightToLeft) motion.viewportWidth - leading - width else leading
             val y = row.offset.y + (index / motion.targetColumns - rowIndex / motion.targetColumns) * pitch
-            // Scale/fade departures early without accelerating their scroll-anchor trajectory.
-            val origin = Offset(old.left + sourceInset + (x + targetInset - old.left - sourceInset) * p,
-                y + targetVerticalInset + pinchContentTranslation(old.top, y.toFloat(), sourceVerticalInset, targetVerticalInset, p))
+            val sourceOrigin = Offset(old.left + sourceInset, old.top + sourceVerticalInset)
+            val targetOrigin = Offset(x + targetInset, y + targetVerticalInset)
+            val fadeWindow = browsePinchFadeWindow((targetOrigin - sourceOrigin).getDistance(), motion.viewportWidth)
+            val exitProgress = browsePinchGeometryProgress(true, p, fadeWindow)
+            // Position and every part's dimensions stop on the same spatial frame.
+            val origin = sourceOrigin + (targetOrigin - sourceOrigin) * exitProgress
             retained[key] = RetainedPinchPlacement(image, origin, (width - 2 * targetInset).coerceAtLeast(0f),
                 image.content?.target?.height?.toFloat() ?: (pitch - 2 * targetVerticalInset).coerceAtLeast(0f),
-                browseViewVisibility(true, false, p), index, exitProgress)
+                browseViewVisibility(true, false, p, fadeWindow), index, exitProgress)
         }
     }
     clipRect {
