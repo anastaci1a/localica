@@ -3,8 +3,86 @@ package io.github.anastaci1a.localica.ui
 import org.junit.Assert.*
 import org.junit.Test
 import kotlinx.coroutines.Job
+import androidx.compose.foundation.gestures.ScrollableState
+import androidx.compose.runtime.BroadcastFrameClock
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.runCurrent
+import kotlinx.coroutines.test.runTest
 
 class ArtistFilterRangeTest {
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    @Test fun suspendedCorrectionReleasesScrollFlagBeforeQueuedInterruptionCleanup() = runTest {
+        val owner = ArtistFilterRange()
+        val request = requireNotNull(owner.begin(-432, 600, Any()))
+        val ownership = BrowseScrollOwnership()
+        val clock = BroadcastFrameClock()
+        val deltas = mutableListOf<Float>()
+        val state = ScrollableState { deltas += it; it }
+        val correction = launch(clock) { owner.correct(request, state, ownership, -200f, false) }
+        runCurrent()
+        clock.sendFrame(0); runCurrent()
+        clock.sendFrame(32_000_000); runCurrent()
+        assertTrue(deltas.sum() < 0f)
+        assertTrue(correction.isActive)
+        assertFalse(state.isScrollInProgress)
+        assertFalse(ownership.internal)
+        val before = deltas.toList()
+        owner.interrupt()
+        // Deliberately do not drain the queued cancellation before observing the input boundary.
+        assertFalse(state.isScrollInProgress)
+        assertFalse(ownership.internal)
+        clock.sendFrame(64_000_000); runCurrent()
+        assertEquals(before, deltas)
+        assertTrue(correction.isCancelled)
+        assertSame(request, owner.request)
+    }
+
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    @Test fun competingScrollBetweenFramesIsNeverCancelledByCorrection() = runTest {
+        val owner = ArtistFilterRange()
+        val request = requireNotNull(owner.begin(-432, 600, Any()))
+        val clock = BroadcastFrameClock()
+        val deltas = mutableListOf<Float>()
+        val state = ScrollableState { deltas += it; it }
+        val correction = launch(clock) { owner.correct(request, state, BrowseScrollOwnership(), -200f, false) }
+        runCurrent()
+        clock.sendFrame(0); runCurrent()
+        val user = launch { state.scroll { scrollBy(17f); awaitCancellation() } }
+        runCurrent()
+        val before = deltas.toList()
+        clock.sendFrame(32_000_000); runCurrent()
+        assertTrue(user.isActive)
+        assertTrue(state.isScrollInProgress)
+        assertTrue(correction.isCancelled)
+        assertEquals(before, deltas)
+        user.cancel(); runCurrent()
+    }
+
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    @Test fun correctionCarriesUnconsumedDistanceAndFinishesOnOriginalCurve() = runTest {
+        val owner = ArtistFilterRange()
+        val request = requireNotNull(owner.begin(-432, 600, Any()))
+        val clock = BroadcastFrameClock()
+        var consumed = 0f
+        var partial = true
+        val state = ScrollableState { delta ->
+            (if (partial) delta / 2f else delta).also { consumed += it }
+        }
+        val correction = launch(clock) { owner.correct(request, state, BrowseScrollOwnership(), -200f, false) }
+        runCurrent()
+        clock.sendFrame(0); runCurrent()
+        clock.sendFrame(140_000_000); runCurrent()
+        val halfway = androidx.compose.animation.core.LinearOutSlowInEasing.transform(.5f) * -200f
+        assertEquals(halfway / 2f, consumed, .01f)
+        assertFalse(state.isScrollInProgress)
+        partial = false
+        clock.sendFrame(280_000_000); runCurrent()
+        assertEquals(-200f, consumed, .01f)
+        assertTrue(correction.isCompleted)
+        assertFalse(state.isScrollInProgress)
+    }
+
     @Test fun measuredRangeExcessNeverMeansUnconditionalTopOrMovementOfValidOffsets() {
         assertEquals(0f, ArtistFilterRange.excess(null, 600, 80), 0f)
         assertEquals(0f, ArtistFilterRange.excess(600, 600, 80), 0f)
