@@ -10,17 +10,16 @@ Requires **Android 8+**. Supports MP3 and AAC/M4A, plus WAV, FLAC, Ogg, and Opus
 
 [Documentation](docs/README.md) · [Interface contract](docs/interface.md) · [Contributing](agents/README.md)
 
-<p>
-  <img src="docs/images/library.png" width="240" alt="Library showing In Rainbows and Kid A with floating navigation and mini-player">
-  <img src="docs/images/album.png" width="240" alt="In Rainbows album page with artwork fading into its track list">
-  <img src="docs/images/artist.png" width="240" alt="Radiohead artist page with an album multiselect and combined Play and Shuffle controls">
-  <img src="docs/images/player.png" width="240" alt="Player with embedded artwork and configurable actions">
-  <img src="docs/images/queue.png" width="240" alt="Frosted Queue drawer with saved queues and song controls">
-</p>
+<table>
+  <tr>
+    <td align="center"><img src="docs/images/library.png" width="170" alt="Library in the five-per-row gallery with album and artist covers, floating navigation and the mini-player"><br><sub>Library</sub></td>
+    <td align="center"><img src="docs/images/album.png" width="170" alt="To Pimp a Butterfly album page with artwork fading into its track list"><br><sub>Album</sub></td>
+    <td align="center"><img src="docs/images/artist.png" width="170" alt="Alfa Mist artist page with Play and Shuffle controls and an album row"><br><sub>Artist</sub></td>
+    <td align="center"><img src="docs/images/player.png" width="170" alt="Full-screen player showing Ugetsu artwork, playback controls and the Queue handle"><br><sub>Player</sub></td>
+    <td align="center"><img src="docs/images/queue.png" width="170" alt="Frosted Queue drawer with ten songs and Kid A playing"><br><sub>Queue</sub></td>
+  </tr>
+</table>
 
-<details>
-  <summary>Watch a short navigation preview</summary>
-  <p><img src="docs/images/navigation.gif" width="360" alt="Navigating an album, player, and Queue drawer in Localica"></p>
-</details>
+<p align="center"><img src="docs/images/lyrics.gif" width="300" alt="Opening the player from the Library, showing synced lyrics, tapping a line to seek, and returning to the Library"></p>
 
-Previews captured in v0.29.0 using silent demo files. Album artwork and track names: Radiohead’s [In Rainbows](https://radiohead.bandcamp.com/album/in-rainbows) and [Kid A](https://radiohead.bandcamp.com/album/kid-a). Artwork belongs to its respective rights holders and is not included in the app.
+Previews captured in v0.30.3 using silent demo files. Album artwork and track names come from albums by Radiohead, Kendrick Lamar, Alfa Mist, Art Blakey & The Jazz Messengers and Joey Bada$$. The lyrics are from Joey Bada$$’s “Righteous Minds”. Artwork and lyrics belong to their respective rights holders and are not included in the app.
