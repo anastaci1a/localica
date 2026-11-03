@@ -21,7 +21,6 @@ import androidx.compose.ui.layout.ModifierLocalBeyondBoundsLayout
 import androidx.compose.ui.layout.PinnableContainer
 import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.modifier.modifierLocalConsumer
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import io.github.anastaci1a.localica.browse.BrowseStyle
 import kotlinx.coroutines.CompletableDeferred
@@ -314,9 +313,7 @@ internal fun Modifier.collectionPinchOverlay(owner: CollectionPinchHeader?): Mod
     drawWithContent {
         drawContent()
         owner.drawFrame()?.let { (rect, pixels) ->
-            drawImage(pixels.image, srcOffset = pixels.origin, srcSize = pixels.size,
-                dstOffset = IntOffset(rect.left.toInt(), rect.top.toInt()),
-                dstSize = IntSize(rect.width.toInt().coerceAtLeast(1), rect.height.toInt().coerceAtLeast(1)))
+            drawMotionImage(pixels.image, pixels.origin, pixels.size, rect)
             val live = owner.actionReady()
             if (live) owner.actionStageRect()?.let { action -> owner.actionLayer?.let { layer ->
                 translate(action.left, action.top) { drawLayer(layer) }
