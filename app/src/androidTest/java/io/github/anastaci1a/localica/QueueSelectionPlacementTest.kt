@@ -65,6 +65,8 @@ class QueueSelectionPlacementTest {
                     try { source.state.scrollToItem(index); done.complete(Unit) }
                     catch (caught: Throwable) { done.completeExceptionally(caught) }
                 } }
+                // Drain the queued effect without advancing the paused frame clock.
+                compose.waitForIdle()
                 runBlocking { withTimeout(5000) { done.await() } }
             }
             frames.departing = setOf("q2")
