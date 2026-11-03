@@ -327,7 +327,10 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
         anchor.reclaimOpening = reclaimOpening
         onDispose { if (anchor.reclaimOpening === reclaimOpening) anchor.reclaimOpening = null }
     }
-    LaunchedEffect(visible, reduced, speed, originPreparation, continuousOrigin, placement.takeIf { continuousOrigin != null }) {
+    // A refused search dismissal retires its flight while visible stays true.
+    // Restart that owner from the rendered rectangle so its opening can settle.
+    LaunchedEffect(visible, reduced, speed, originPreparation, continuousOrigin,
+        placement.takeIf { continuousOrigin != null }, dismissalAttempt.takeIf { placement == GlassPlacement.Search }) {
         transitionJob[0] = currentCoroutineContext().job
         if (continuousOrigin != null) {
             val preparation = continuousOrigin
