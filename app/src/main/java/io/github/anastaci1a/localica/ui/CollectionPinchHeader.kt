@@ -172,6 +172,12 @@ internal class CollectionPinchHeader(val motion: BrowsePinchMotion, val grid: La
         endpointStyle = if (commit) targetStyle else sourceStyle
         serialAtHandoff = request
     }
+    /** A user scroll took the list from the anchor that would verify this handoff (#535):
+     * hand the header back where the list now is instead of awaiting a correction that
+     * can no longer run, which left the settle, and with it every later pinch, waiting. */
+    fun abandonHandoff() {
+        if (generation != null && endpointStyle != null) handed.complete(Unit)
+    }
     /** Called only after the browser has measured and corrected the real anchor. */
     fun anchorCorrected(style: BrowseStyle) {
         val token = generation ?: return

@@ -456,8 +456,14 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
             headerPhase("mutation-cancelled type=${cancelled.javaClass.simpleName}")
             throw cancelled
         } finally {
-            headerPhase("retired active=${kotlinx.coroutines.currentCoroutineContext()[kotlinx.coroutines.Job]?.isActive}")
-            if (zoomAnchor == anchor) zoomAnchor = null
+            val active = kotlinx.coroutines.currentCoroutineContext()[kotlinx.coroutines.Job]?.isActive == true
+            headerPhase("retired active=$active")
+            if (zoomAnchor == anchor) {
+                zoomAnchor = null
+                // Still active, this effect was not relaunched: a user scroll interrupted or
+                // refused its mutation, so it will never verify the header handoff (#535).
+                if (active) pinchHeader?.abandonHandoff()
+            }
         }
     }
     val surroundingBackdrop = LocalFrostedBackdrop.current
