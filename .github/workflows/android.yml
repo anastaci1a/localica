@@ -188,6 +188,7 @@ jobs:
         with:
           name: device-reports-api-${{ matrix.api }}-shard-${{ matrix.shard }}
           path: |
+            native-shard-plan.json
             app/build/reports/androidTests/
             app/build/outputs/androidTest-results/
             app/build/outputs/connected_android_test_additional_output/
