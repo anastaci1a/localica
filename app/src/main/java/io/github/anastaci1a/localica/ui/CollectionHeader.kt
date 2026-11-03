@@ -123,9 +123,10 @@ internal fun ArtistAlbumChoices(albums: List<LibraryGroup>, selectedIds: List<St
     Column(Modifier.fillMaxWidth()) {
         Text("Albums", Modifier.padding(horizontal = 20.dp, vertical = 8.dp), style = MaterialTheme.typography.titleSmall)
         SelectionViewport(Modifier.fillMaxWidth(), observePlacement = { scroll.layoutInfo; Unit },
-            visibleItemKeys = { scroll.layoutInfo.visibleItemsInfo.mapTo(mutableSetOf()) { it.key } }) { overscroll ->
+            visibleItemKeys = { scroll.layoutInfo.visibleItemsInfo.mapTo(mutableSetOf()) { it.key } }, liftEdges = LiftEdges.Vertical) { overscroll ->
         LazyRow(Modifier.modalScroll(scroll).nestedScroll(HorizontalGestureOwner), state = scroll, overscrollEffect = overscroll,
-            contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            // Vertical room lets a selected album rise without its shadow meeting the clip (#533).
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             item(key = "all-albums") {
                 Column(Modifier.width(136.dp).selectionLens(selectedIds.isEmpty(), false, itemKey = "all-albums", outline = albumOutline).toggleable(selectedIds.isEmpty(), role = Role.Checkbox, onValueChange = { onSelection(emptyList()) })
                     .semantics { selected = selectedIds.isEmpty() }.padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
