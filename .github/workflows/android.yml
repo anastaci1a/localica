@@ -157,11 +157,12 @@ jobs:
           # Keep API 36 system transitions at normal speed while verifying Back and DocumentsUI.
           # Its cold CI launcher stalls with forced zero-duration transitions; Compose tests own their clock.
           disable-animations: ${{ matrix.api < 36 }}
-          # Preserve the Pixel 2's logical dimensions with fewer software-rendered pixels
-          # on API 36. Keep real system animations and the same test assertions.
+          # Preserve the Pixel 2's logical dimensions with fewer software-rendered pixels on both APIs.
+          # On API 26 the smaller frames also avoid emulator ImageReader/gralloc readback aborts (#544).
+          # Keep the same test assertions.
           script: |
-            adb shell wm size ${{ matrix.api == 36 && '720x1280' || 'reset' }}
-            adb shell wm density ${{ matrix.api == 36 && '280' || 'reset' }}
+            adb shell wm size 720x1280
+            adb shell wm density 280
             sleep 60
             LOCALICA_SHARD_COUNT=$LOCALICA_DEVICE_SHARDS bash .github/run-device-tests.sh
       - name: Preserve native monitoring evidence

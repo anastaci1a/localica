@@ -139,8 +139,8 @@ jobs:
         emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -memory 3072
         disable-animations: true
         script: |
-          adb shell wm size reset
-          adb shell wm density reset
+          adb shell wm size 720x1280
+          adb shell wm density 280
           sleep 60
           bash .github/test-evidence/environment.sh >> prototype-runner-environment.txt
           bash .github/run-prototype-tests.sh
