@@ -1,0 +1,12 @@
+// The producer already built these exact APKs. Keep AGP's instrumentation/report
+// task while disabling every build dependency, including implicit input producers.
+gradle.taskGraph.whenReady { graph ->
+    if (graph.allTasks.findAll { it.path == ':app:connectedDebugAndroidTest' }.size() != 1) {
+        throw new GradleException('Prebuilt native execution requires connectedDebugAndroidTest')
+    }
+    graph.allTasks.each { task ->
+        if (task.path != ':app:connectedDebugAndroidTest') {
+            task.enabled = false
+        }
+    }
+}

@@ -126,7 +126,11 @@ Jaudiotagger 3.0.1 uses LGPL 2.1+. Bundle its notice/license and include its sou
 
 ## CI and signing
 
-The [Android workflow](../.github/workflows/android.yml) builds application changes on main/PR and tests API 26/36. Documentation-only changes use the separate documentation workflow. Match its two virtual CPU cores and 3,072 MiB emulator RAM locally.
+The [Android workflow](../.github/workflows/android.yml) builds application changes on main/PR and tests API 26/36. Match its two virtual CPU cores and 3,072 MiB emulator RAM locally.
+
+One producer builds the native debug app/test APKs and metadata before replacing the delivery artifact. Every shard verifies their source/run identity and digests, then runs AGP instrumentation with build dependency actions disabled. APK hashes are checked again after instrumentation.
+
+Documentation-only changes use the separate documentation workflow.
 
 The native job splits each API suite into four AndroidJUnitRunner shards (`numShards`/`shardIndex`) on separate emulators with the same profile. Evidence and report artifacts end in `-shard-N`.
 
