@@ -11,7 +11,6 @@ This is an optimized build (not debuggable, minified with R8, with a baseline pr
 - Loading artwork placeholders are tinted with each cover's average colour. On first launch after updating, colours are filled in from the background, visible items first. Text loading bars stay gray.
 - Artwork fades in directly over the loading shimmer. The brief music-note frame before the art appeared is gone.
 - A row's title and subtitle fade in together with its artwork.
-- Covers keep their exact size while pinching between gallery sizes. This fixes the remaining size jitter, most visible on the top-left cover going from 4 to 5 per row.
 - The current lyric line and the no-lyrics icon stay centred in the visible lyrics area while the player minimizes and while lyrics open and close.
 - Tapping a lyric line while paused now always moves the highlight to that line.
 - Playback starts with a little audio already buffered, which avoids rare stutters right at the start on slower devices.
@@ -28,7 +27,6 @@ This is an optimized build (not debuggable, minified with R8, with a baseline pr
 - https://github.com/anastaci1a/localica/issues/495 - Queue commands are rejected cleanly after a failed restore.
 - https://github.com/anastaci1a/localica/issues/496 - The final playback position is persisted on controlled shutdown.
 - https://github.com/anastaci1a/localica/issues/498 - Audio output is pre-filled before playback starts.
-- https://github.com/anastaci1a/localica/issues/505 - Covers no longer jitter while pinch-zooming between view sizes.
 - https://github.com/anastaci1a/localica/issues/518 - Paused lyric taps update the highlight.
 - https://github.com/anastaci1a/localica/issues/519 - Lyrics stay centred on the moving lyrics area.
 - https://github.com/anastaci1a/localica/issues/524 - Artwork fades in from the loading shimmer.
