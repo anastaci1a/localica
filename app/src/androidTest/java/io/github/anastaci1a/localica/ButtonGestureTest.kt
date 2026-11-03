@@ -21,7 +21,7 @@ import org.junit.Test
 class ButtonGestureTest {
     @get:Rule val compose = createComposeRule()
 
-    @Test fun sharedButtonsKeepTheirContactWithoutScrollingOrActivatingAfterDrag() {
+    @Test fun sharedButtonsScrollBeforeTheHoldAndKeepAHeldContactWithoutActivating() {
         lateinit var scroll: ScrollState
         var clicks = 0
         compose.setContent { LocalicaTheme {
@@ -42,14 +42,17 @@ class ButtonGestureTest {
             compose.runOnIdle { assertEquals("Small finger jitter remains a tap", index + 1, clicks) }
             node.performTouchInput {
                 down(center)
-                // Gradual unheld motion is distinct from the held jump below.
+                // Gradual motion that starts before the hold threshold belongs to the parent.
                 repeat(10) { moveBy(Offset(0f, -16f), delayMillis = 100) }
                 up()
             }
-            compose.runOnIdle { assertEquals(0, scroll.value); assertEquals(index + 1, clicks) }
+            compose.runOnIdle {
+                assertTrue("Unheld travel scrolls", scroll.value > 0); assertEquals(index + 1, clicks)
+                scroll.dispatchRawDelta(-scroll.value.toFloat())
+            }
             node.performTouchInput {
                 down(center)
-                advanceEventTime(200)
+                advanceEventTime(ControlHoldLockMillis)
                 moveBy(Offset(0f, -160f), delayMillis = 100)
                 up()
             }
