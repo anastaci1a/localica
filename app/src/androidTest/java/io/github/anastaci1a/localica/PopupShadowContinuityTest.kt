@@ -54,6 +54,183 @@ class PopupShadowContinuityTest {
     @Test fun utilityShadowHasOneUnclippedFieldThroughoutRepeatedReversals() = verify(nested = false)
     @Test fun nestedShadowHasOneUnclippedFieldThroughoutRepeatedReversals() = verify(nested = true)
 
+    // ---- #465 per-frame probe (exploration only) ----
+    @Test fun probe465DefaultStrength() = probe465(.12f)
+    @Test fun probe465StrongStrength() = probe465(.8f)
+
+    private fun probe465(level: Float) {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val root = InstrumentationRegistry.getArguments().getString("additionalTestOutputDir")?.let(::File)
+            ?: requireNotNull(instrumentation.targetContext.getExternalFilesDir(null))
+        output = File(root, "popup-shadow-465/strength-$level-api${Build.VERSION.SDK_INT}")
+        assertTrue(output.isDirectory || output.mkdirs())
+        strength = level
+        compose.setContent { Fixture(false) }
+        compose.waitForIdle()
+        compose.mainClock.autoAdvance = false
+        val log = StringBuilder("api=${Build.VERSION.SDK_INT} density=${compose.density.density} strength=$level\n")
+        fun frames(count: Int, label: String) = repeat(count) { index ->
+            compose.mainClock.advanceTimeByFrame(); compose.waitForIdle()
+            probeFrame("$label-$index", level, log)
+        }
+        try {
+            probeFrame("rest", level, log)
+            compose.runOnIdle { open = true }
+            frames(90, "open")
+            compose.runOnIdle { open = false }
+            frames(10, "close1")
+            compose.runOnIdle { open = true }
+            frames(10, "reopen1")
+            compose.runOnIdle { open = false }
+            frames(6, "close2")
+            compose.runOnIdle { open = true }
+            frames(90, "reopen2")
+            compose.runOnIdle { open = false }
+            var gone = 0
+            var index = 0
+            while (gone < 40 && index < 200) {
+                frames(1, "return$index")
+                if (popupWindow == null) gone++
+                index++
+            }
+            compose.runOnIdle { open = true }
+            frames(8, "quick-open")
+            compose.runOnIdle { open = false }
+            gone = 0; index = 0
+            while (gone < 40 && index < 200) {
+                frames(1, "quick-return$index")
+                if (popupWindow == null) gone++
+                index++
+            }
+        } finally {
+            File(output, "frames.txt").writeText(log.toString())
+            compose.runOnIdle { open = false; strength = .8f }
+            compose.mainClock.autoAdvance = true
+        }
+        fail("probe465 strength=$level\n$log")
+    }
+
+    private fun probeFrame(label: String, level: Float, log: StringBuilder) {
+        val on = syncedScreenshot465()
+        try {
+            val d = compose.density.density
+            val popupOrigin = IntArray(2)
+            var popupPresent = false
+            compose.runOnIdle { popupView?.let { popupPresent = true; it.getLocationOnScreen(popupOrigin) } }
+            val nodes = if (popupPresent) compose.onAllNodesWithTag("glass-morph-surface").fetchSemanticsNodes() else emptyList()
+            val popupBounds = nodes.minByOrNull { it.boundsInRoot.width * it.boundsInRoot.height }?.boundsInRoot
+                ?.translate(Offset(popupOrigin[0].toFloat(), popupOrigin[1].toFloat()))
+            val owner = if (popupBounds != null && (anchor.hidden || anchor.modalPresent)) "popup" else "trigger"
+            val screen = if (owner == "popup") requireNotNull(popupBounds) else anchor.bounds
+            val shape = anchor.contact.body.value
+            val sx = shape.scaleX(anchor.contact.vertical)
+            val sy = shape.scaleY(anchor.contact.vertical)
+            val p = anchor.contact.expansion.value
+            val right = screen.center.x + screen.width * sx / 2f
+            val bottom = screen.center.y + screen.height * sy / 2f
+            val reach = (4f + .6f * 28f) * d
+            val shift = 2f * d
+            val steps = (reach + shift).roundToInt() + 4
+            val rightProfile = FloatArray(steps)
+            val rightModel = FloatArray(steps)
+            val pc = p.coerceIn(0f, 1f)
+            val radius = if (owner == "popup") (anchor.bounds.height / 2 * (1f - pc) + 28f * d * pc)
+                .coerceAtMost(minOf(screen.width, screen.height) / 2) else minOf(screen.width, screen.height) / 2
+            fun model(x: Float, y: Float): Float {
+                val lx = (x - screen.center.x) / sx + screen.width / 2
+                val ly = (y - screen.center.y) / sy + screen.height / 2
+                var transmittance = 1f
+                for (ring in 16 downTo 1) {
+                    val t = ring / 16f
+                    val expansion = reach * t
+                    val cx = shadowAxisCenter(lx, screen.width, radius, 0f)
+                    val cy = shadowAxisCenter(ly, screen.height, radius, shift)
+                    if ((lx - cx) * (lx - cx) + (ly - cy) * (ly - cy) < (radius + expansion) * (radius + expansion))
+                        transmittance *= 1f - level * .07f * (1f - t) * (1f - t)
+                }
+                return 1f - transmittance
+            }
+            val refX = (right + 40f * d * sx).roundToInt().coerceIn(0, on.width - 1)
+            for (k in 0 until steps) {
+                var sum = 0f; var expected = 0f; var count = 0
+                val x = (right.roundToInt() + 1 + k).coerceIn(0, on.width - 1)
+                for (dy in -2..2) {
+                    val y = (screen.center.y + dy * d).roundToInt().coerceIn(0, on.height - 1)
+                    val bg = AndroidColor.red(on.getPixel(refX, y)).toFloat()
+                    sum += bg - AndroidColor.red(on.getPixel(x, y))
+                    expected += bg * model(x + .5f, y + .5f)
+                    count++
+                }
+                rightProfile[k] = sum / count; rightModel[k] = expected / count
+            }
+            val bottomProfile = FloatArray(steps)
+            for (k in 0 until steps) {
+                var sum = 0f; var count = 0
+                val y = (bottom.roundToInt() + 1 + k).coerceIn(0, on.height - 1)
+                for (dx in -2..2) {
+                    val x = (screen.center.x + dx * d).roundToInt().coerceIn(0, on.width - 1)
+                    val bg = AndroidColor.red(on.getPixel(refX, y)).toFloat()
+                    sum += bg - AndroidColor.red(on.getPixel(x, y)); count++
+                }
+                bottomProfile[k] = sum / count
+            }
+            var gap = Float.NaN
+            if (neighboringBody != Rect.Zero) {
+                val gx = ((neighboringBody.right + anchor.bounds.left) / 2f).roundToInt()
+                var sum = 0f; var count = 0
+                for (dy in -6..6) for (dx in -1..1) {
+                    val y = (anchor.bounds.center.y + dy * d).roundToInt().coerceIn(0, on.height - 1)
+                    val bg = AndroidColor.red(on.getPixel(refX, y)).toFloat()
+                    sum += bg - AndroidColor.red(on.getPixel((gx + dx).coerceIn(0, on.width - 1), y)); count++
+                }
+                gap = sum / count
+            }
+            fun FloatArray.text() = joinToString(",") { "%.1f".format(it) }
+            log.append("$label owner=$owner p=${"%.4f".format(p)} s=${"%.4f".format(sx)},${"%.4f".format(sy)} " +
+                "rect=${"%.1f".format(screen.left)},${"%.1f".format(screen.top)},${"%.1f".format(screen.right)},${"%.1f".format(screen.bottom)} " +
+                "hidden=${anchor.hidden} inModal=${anchor.shadowInModal} modal=${anchor.modalPresent} window=${popupWindow != null} " +
+                "rSum=${"%.1f".format(rightProfile.sum())} mSum=${"%.1f".format(rightModel.sum())} bSum=${"%.1f".format(bottomProfile.sum())} gap=${"%.2f".format(gap)} " +
+                "R=[${rightProfile.text()}] M=[${rightModel.text()}] B=[${bottomProfile.text()}]\n")
+        } finally { on.recycle() }
+    }
+
+    /** Wait until both the page window and any popup window have drawn this token. */
+    private fun syncedScreenshot465(): Bitmap {
+        compose.waitForIdle()
+        stage = stage % 30 + 1
+        val token = stage
+        val pageOrigin = IntArray(2)
+        val popupOrigin = IntArray(2)
+        var hasPopup = false
+        compose.runOnIdle {
+            pageView.rootView.getLocationOnScreen(pageOrigin)
+            requireNotNull(pageMarker).apply {
+                color = AndroidColor.rgb(token * 8, 255, 0); setBounds(96, 96, 112, 112); invalidateSelf()
+            }
+            val popupMarker = if (popupWindow != null) marker else null
+            hasPopup = popupMarker != null
+            popupMarker?.apply {
+                color = AndroidColor.rgb(token * 8, 255, 0); setBounds(96, 136, 112, 152); invalidateSelf()
+            }
+            popupWindow?.decorView?.getLocationOnScreen(popupOrigin)
+        }
+        var screenshot: Bitmap? = null
+        try {
+            compose.waitUntil(5000) {
+                screenshot?.recycle()
+                val next = requireNotNull(InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot())
+                screenshot = next
+                val page = next.getPixel(pageOrigin[0] + 104, pageOrigin[1] + 104)
+                val g = AndroidColor.green(page)
+                val pageReady = g >= 100 && abs(AndroidColor.red(page) * 255f / g - token * 8) <= 4f
+                val popupReady = !hasPopup || next.getPixel(popupOrigin[0] + 104, popupOrigin[1] + 144) ==
+                    AndroidColor.rgb(token * 8, 255, 0)
+                pageReady && popupReady
+            }
+            return requireNotNull(screenshot)
+        } catch (failure: Throwable) { screenshot?.recycle(); throw failure }
+    }
+
     @Test fun capsuleReferenceKeepsItsZeroWidthCenterRangeOrdered() {
         // Reproduce the API36 64dp capsule at density 1.75 and its outermost ring.
         val height = 112f
