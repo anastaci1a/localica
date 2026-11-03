@@ -44,7 +44,9 @@ internal class PlayerSeekPosition {
     private fun PlaybackState.range() = (durationMs ?: 0).coerceAtLeast(1).toFloat()
 
     private fun editingIn(range: Float): Float? = editing?.let {
-        if (editingRange > 0f) (it * range / editingRange).coerceIn(0f, range) else it
+        // Identical ranges must be exact: a float round trip could turn 95_000 into 94_999.
+        if (editingRange <= 0f || editingRange == range) it
+        else (it.toDouble() * range / editingRange).toFloat().coerceIn(0f, range)
     }
 
     fun displayed(playback: PlaybackState): Float = editingIn(playback.range()) ?: pending
