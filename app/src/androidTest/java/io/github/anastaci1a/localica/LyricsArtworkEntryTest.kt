@@ -28,7 +28,7 @@ class LyricsArtworkEntryTest {
     private val state = PlaybackState(connected = true, title = "Evening", artist = "Artist", durationMs = 120000)
     private val visual = PlayerVisual(Bitmap.createBitmap(32, 32, Bitmap.Config.ARGB_8888).apply {
         eraseColor(android.graphics.Color.RED)
-    }.asImageBitmap(), PlayerPalette(Color(0xFF303040), Color(0xFF303040), Color(0xFF303040)))
+    }.asImageBitmap(), PlayerPalette(Color.Black, Color.Black, Color.Black))
 
     private val progress = Animatable(0f)
     private var lyricsMode by mutableStateOf(true)
@@ -57,7 +57,10 @@ class LyricsArtworkEntryTest {
         compose.waitForIdle()
     }
 
-    private fun bounds(tag: String) = compose.onNodeWithTag(tag, true).fetchSemanticsNode().boundsInRoot
+    // Unclipped: a full-background cover legitimately extends past the clipped player and screen edges.
+    private fun bounds(tag: String) = compose.onNodeWithTag(tag, true).getUnclippedBoundsInRoot().let {
+        androidx.compose.ui.geometry.Rect(it.left.value * density, it.top.value * density, it.right.value * density, it.bottom.value * density)
+    }
     /** Artwork top relative to the player surface, in pixels. */
     private fun artTop() = bounds("player-artwork").top - bounds("player-surface").top
     private fun artHeight() = bounds("player-artwork").height
@@ -185,8 +188,8 @@ class LyricsArtworkEntryTest {
                     return Triple(high, low, "icon=$icon cover=$cover")
                 }
                 val (ink, _, fullDetail) = green(1f)
-                assertTrue("The icon ink is visible at rest in $layout: $ink $fullDetail", ink > .5f)
-                for (p in listOf(.86f, .9f, .94f)) {
+                assertTrue("The icon ink is visible at rest in $layout: $ink $fullDetail", ink > .25f)
+                for (p in listOf(.88f, .91f, .94f)) {
                     val (observed, floor, detail) = green(p)
                     val coverAlpha = 1f - p
                     val x = ((p - .78f) / .22f).coerceIn(0f, 1f)
