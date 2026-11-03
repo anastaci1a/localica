@@ -165,7 +165,13 @@ class QueueFollowingPlaybackTest {
         }
     }
 
-    @Test fun naturalPlaybackAdvancesAndAlignsTheExactDuplicateOccurrence() = fixture(reducedMotion = false) { f ->
+    @Test fun naturalPlaybackAdvancesAndAlignsTheExactDuplicateOccurrence() =
+        fixture(reducedMotion = false) { f -> followsNaturalAdvancement(f) }
+
+    @Test fun reducedMotionStillFollowsNaturalAdvancementToTheExactDuplicateOccurrence() =
+        fixture(reducedMotion = true) { f -> followsNaturalAdvancement(f) }
+
+    private fun followsNaturalAdvancement(f: Fixture) {
         val before = position()
         naturalAdvance(f, 45)
         awaitFollowed(f, 46)
@@ -175,7 +181,13 @@ class QueueFollowingPlaybackTest {
     }
 
     @Test fun manualScrollDetachesAcrossTransportAndReturnReattachesForNaturalAdvancement() =
-        fixture(reducedMotion = false) { f ->
+        fixture(reducedMotion = false) { f -> detachesAndReturns(f) }
+
+    @Test fun reducedMotionScrollDetachesAndReturnReattachesForNaturalAdvancement() =
+        fixture(reducedMotion = true) { f -> detachesAndReturns(f) }
+
+    private fun detachesAndReturns(f: Fixture) {
+        run {
             // A slow native pointer gesture avoids a lingering fling in the stationary assertion.
             list.performTouchInput {
                 down(center)
@@ -214,4 +226,5 @@ class QueueFollowingPlaybackTest {
             awaitFollowed(f, 97)
             assertTrue("Subsequent advancement follows without another Return", position() > returned)
         }
+    }
 }
