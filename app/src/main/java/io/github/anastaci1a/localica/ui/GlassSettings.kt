@@ -20,8 +20,15 @@ import androidx.compose.ui.graphics.graphicsLayer
 
 internal val LocalGlassAppearance = compositionLocalOf { GlassAppearance() }
 
-/** Shadow strength stays linear in storage; its slider gives the faint end more travel (position = strength^(1/curve)). */
-internal const val GlassShadowStrengthCurve = 1.8f
+/**
+ * Shadow strength stays linear in storage; its slider gives the faint end more travel (position = strength^(1/curve)).
+ * #540 raised this from #502's 1.8 to 2.2 so the low end gets finer steps. Stored values are unchanged and still
+ * render at the same strength; a given track position now maps to a lower strength between the endpoints.
+ */
+internal const val GlassShadowStrengthCurve = 2.2f
+
+/** #502's curve, kept as the baseline for the #540 granularity test. */
+internal const val GlassShadowStrengthCurve502 = 1.8f
 
 @Composable
 internal fun GlassSettingsControls(value: GlassAppearance, onChange: (GlassAppearance) -> Unit) {
