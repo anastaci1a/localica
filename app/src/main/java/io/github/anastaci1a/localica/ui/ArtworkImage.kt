@@ -30,8 +30,13 @@ internal fun ArtworkImage(artwork: ImageBitmap?, loading: Boolean, modifier: Mod
     LaunchedEffect(present, reducedMotion) {
         reveal.animateTo(if (present) 1f else 0f, tween(if (reducedMotion) 0 else 300, easing = FastOutSlowInEasing))
     }
+    // Art that replaces a loading shimmer fades in over that shimmer until the reveal completes (#524).
+    // Only known-missing art shows the still placeholder and its icon.
+    val revealsOverLoading = remember { BooleanArray(1) }
+    if (artwork == null) revealsOverLoading[0] = loading
+    val placeholderLoading = if (artwork == null) loading else revealsOverLoading[0]
     Box(modifier.clip(shape), contentAlignment = Alignment.Center) {
-        ArtworkPlaceholderHost(artwork, reveal, loading, emptyText, Modifier.matchParentSize())
+        ArtworkPlaceholderHost(artwork, reveal, placeholderLoading, emptyText, Modifier.matchParentSize())
         if (!loading && artwork == null && emptyText != null) Text(emptyText)
         if (artwork != null) ArtworkResolutionBlend(artwork,
             Modifier.matchParentSize().graphicsLayer { alpha = reveal.value }, contentScale, if (reducedMotion) 0 else 240)
@@ -45,7 +50,7 @@ private fun ArtworkPlaceholderHost(artwork: ImageBitmap?, reveal: Animatable<Flo
     val revealed by remember(artwork) { derivedStateOf { artwork != null && reveal.value >= 1f } }
     if (!revealed) {
         Box(modifier) {
-            ArtworkPlaceholder(loading && artwork == null, Modifier.matchParentSize(), showIcon = emptyText == null || loading)
+            ArtworkPlaceholder(loading, Modifier.matchParentSize(), showIcon = emptyText == null || loading)
         }
     }
 }
@@ -133,6 +138,6 @@ internal fun ArtworkPlaceholder(loading: Boolean, modifier: Modifier = Modifier,
                 }
             }
         })
-        if (showIcon && !loading) Icon(painterResource(R.drawable.ic_music), null, Modifier.fillMaxSize(.4f), tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = .45f))
+        if (showIcon && !loading) Icon(painterResource(R.drawable.ic_music), null, Modifier.fillMaxSize(.4f).testTag("artwork-missing"), tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = .45f))
     }
 }

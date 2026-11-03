@@ -193,7 +193,9 @@ Covers: circles for Artist/Album Artist, rounded squares for albums/playlists. A
 
 A first member without artwork keeps the placeholder instead of borrowing a later member’s cover. Reuse a tapped cover immediately in its detail header and crossfade its higher-resolution replacement. Keep the visible artwork of each tab and the previous two Back destinations.
 
-Show memory-cached covers immediately. Newly decoded covers use a subtle loading sweep and 300 ms reveal, with static missing-cover placeholders and reduced-motion support. Gallery actions are on long-press, without overlaid menu buttons. Collection/nonmutable-song holds open the anchored actions. Mutable-song holds select, then moving the same finger starts reordering.
+Show memory-cached covers immediately. Newly decoded covers fade in over the loading sweep for 300 ms, and the sweep stays beneath them until the reveal completes. Deferred covers keep the sweep. Only confirmed missing artwork shows the static music-note placeholder. Reduced motion snaps.
+
+Gallery actions are on long-press, without overlaid menu buttons. Collection/nonmutable-song holds open the anchored actions. Mutable-song holds select, then moving the same finger starts reordering.
 
 Plain row ellipses tap to open actions and hold for the same selection/actions as their row. Actions include: select songs, queue/playlist destinations and pinning. Playlists additionally offer image, rename and delete. The image action sets a custom cover when absent and removes it when present, restoring representative member artwork.
 

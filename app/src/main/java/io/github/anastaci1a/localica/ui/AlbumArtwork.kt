@@ -58,7 +58,9 @@ internal fun MediaArtwork(uris: List<String>, modifier: Modifier, provider: Cove
     }
     val artwork = remember(retained?.bitmap) { retained?.bitmap?.asImageBitmap() }
     val measured = modifier.clip(shape).onSizeChanged { pixels = ArtworkCache.bucket(maxOf(it.width, it.height)) }
-    val loading = !deferred && cached == null && uris.isNotEmpty() && artwork == null && (pixels == 0 || loaded.first != request)
+    // A deferred (far-journey) cover is pending, not missing. Only a cached or completed
+    // empty result is known-missing art with the still placeholder (#524).
+    val loading = cached == null && uris.isNotEmpty() && artwork == null && (deferred || pixels == 0 || loaded.first != request)
     ArtworkImage(artwork, loading, measured, shape, contentScale)
 }
 
