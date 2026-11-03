@@ -135,7 +135,7 @@ internal fun <T> retainedPinchItemIndices(items: List<T>, indices: Map<String, I
 internal fun Map<String, Int>.retainedPinchItemIndex(key: Any): Int =
     if (key is String) this[key] ?: -1 else -1
 
-/** Live paint order is item order; lazy layout normally reports it already sorted. */
+/** Live items in index order (each pass paints them reversed); lazy layout normally reports them sorted. */
 internal fun <T> liveItemsInIndexOrder(items: List<T>, indexOf: (T) -> Int): List<T> {
     for (i in 1 until items.size) if (indexOf(items[i - 1]) > indexOf(items[i])) return items.sortedBy(indexOf)
     return items
@@ -164,13 +164,13 @@ internal fun Modifier.pinchRetainedOverlay(motion: BrowsePinchMotion, grid: Lazy
     }
     if (motion.visualSource == null) {
         // Nothing is retained at rest. Keep the same stable two-pass topology
-        // (every text layer, then every artwork layer in item order) without
-        // per-frame key sets, placement maps or a sorted paint list while scrolling.
+        // (every text layer, then every artwork layer, each in reverse item order so
+        // earlier items stay on top, #522) without per-frame key sets, placement maps
+        // or a sorted paint list while scrolling.
         clipRect {
-            visible.forEach { entry -> motion.text[entry.key]?.let { drawLive(it, entry.key) } }
-            liveItemsInIndexOrder(visible) { it.index }.forEach { entry ->
-                motion.artwork[entry.key]?.let { drawLive(it, entry.key) }
-            }
+            val order = liveItemsInIndexOrder(visible) { it.index }.asReversed()
+            order.forEach { entry -> motion.text[entry.key]?.let { drawLive(it, entry.key) } }
+            order.forEach { entry -> motion.artwork[entry.key]?.let { drawLive(it, entry.key) } }
         }
         return@drawWithContent
     }
@@ -205,8 +205,11 @@ internal fun Modifier.pinchRetainedOverlay(motion: BrowsePinchMotion, grid: Lazy
         }
     }
     clipRect {
-        visible.forEach { entry -> motion.text[entry.key]?.let { drawLive(it, entry.key) } }
-        retained.values.forEach { placed ->
+        // Within each pass earlier items paint above later ones, so the top-left item stays on
+        // top where cells overlap (#522). Live and retained items interleave by index.
+        val paintOrder = (visible.map { it.index - 1 to it.key } + retained.map { it.value.index to it.key })
+            .sortedByDescending { it.first }
+        fun drawRetainedText(placed: RetainedPinchPlacement) {
             val image = placed.item
             val content = image.content
             val geometryProgress = placed.geometryProgress
@@ -274,10 +277,9 @@ internal fun Modifier.pinchRetainedOverlay(motion: BrowsePinchMotion, grid: Lazy
                 }
             }
         }
+        paintOrder.forEach { (_, key) -> retained[key]?.let(::drawRetainedText) ?: motion.text[key]?.let { drawLive(it, key) } }
         // Pass two: every artwork tile, live or virtualized, above all text.
         // Iterate only the two viewports, never the whole catalog on every frame.
-        val paintOrder = (visible.map { it.index - 1 to it.key } + retained.map { it.value.index to it.key })
-            .sortedBy { it.first }
         paintOrder.forEach { (_, key) ->
             val frozen = retained[key]
             if (frozen != null) {
