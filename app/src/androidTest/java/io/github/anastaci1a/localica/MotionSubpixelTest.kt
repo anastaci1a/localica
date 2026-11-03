@@ -11,6 +11,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
@@ -97,6 +98,99 @@ class MotionSubpixelTest {
             for (edge in listOf(settled.left, settled.top, settled.right, settled.bottom))
                 assertEquals("Settled cover edge $settled", Math.round(edge).toFloat(), edge, .001f)
         } finally { compose.mainClock.autoAdvance = true; prefs.write(route, old, false) }
+    }
+
+    /** The viewport paints each live cover from its recorded layer, scaled onto the cover's
+     * current bounds. Measure the painted pixels, not only the layout node, on every frame.
+     * Primary case (#505): scrolled to the top, the top-left cover from four to five per row. */
+    @Test fun galleryPinchPaintsTheTopLeftCoverAtItsLaidOutSizeOnEveryFrame() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val route = BrowseRoute(MainTab.Songs)
+        val prefs = BrowsePreferences(context)
+        val old = prefs.read(route)
+        val directory = java.io.File(context.filesDir, "playlist-covers").also { it.mkdirs() }
+        val cover = java.io.File.createTempFile("pinch-size-", ".png", directory)
+        prefs.write(route, BrowseStyle(presentation = Presentation.Standard, itemsPerRow = 4), false)
+        try {
+            val bitmap = Bitmap.createBitmap(256, 256, Bitmap.Config.ARGB_8888).apply { eraseColor(android.graphics.Color.RED) }
+            try { cover.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) } } finally { bitmap.recycle() }
+            val uri = android.net.Uri.fromFile(cover).toString()
+            val tracks = (0..30).map { Track(if (it == 0) uri else "size:$it", "Song ${it.toString().padStart(2, '0')}",
+                fileName = "$it.mp3", relativePath = "$it.mp3") }
+            // The app's screens sit under graphics layers, so a root redraw does not re-record the viewport.
+            compose.setContent { LocalicaTheme { Box(Modifier.fillMaxSize().graphicsLayer { }.testTag("window")) {
+                BrowserScreen(LibraryUiState(LibrarySnapshot(folders = listOf(FolderSelection("root", "Music")), tracks = tracks), loading = false),
+                    PlaylistState(), route, {}, {}, {}, { _, _, _ -> }, null, null, true, false,
+                    queryDispatcher = kotlinx.coroutines.Dispatchers.Unconfined)
+            } } }
+            fun laid(tag: String) = compose.onNodeWithTag(tag, true).fetchSemanticsNode().boundsInRoot
+            fun red(color: Color) = color.red > .5f && color.green < .3f && color.blue < .3f
+            // Cover: painted extent through the centre of its laid-out bounds (rounded corners stay outside).
+            // Title: the ink bounding box inside its laid-out box (below the cover edge), against the background beside it.
+            class Frame(val cover: Rect, val coverPainted: Rect, val title: Rect, val titleInk: Rect)
+            fun frame(): Frame {
+                val bounds = laid("browse-art-$uri")
+                val title = laid("browse-text-$uri")
+                val image = compose.onNodeWithTag("window").captureToImage().toPixelMap()
+                val x = bounds.center.x.toInt(); val y = bounds.center.y.toInt()
+                assertTrue("Cover must be painted at $bounds", red(image[x, y]))
+                var left = x; while (left > 0 && red(image[left - 1, y])) left--
+                var right = x; while (right < image.width - 1 && red(image[right + 1, y])) right++
+                var top = y; while (top > 0 && red(image[x, top - 1])) top--
+                var bottom = y; while (bottom < image.height - 1 && red(image[x, bottom + 1])) bottom++
+                val background = image[0, title.center.y.toInt()]
+                var ink = Rect(Float.MAX_VALUE, Float.MAX_VALUE, -1f, -1f)
+                for (ty in (title.top + 2).toInt().coerceAtLeast(0) until (title.bottom + 2).toInt().coerceAtMost(image.height))
+                    for (tx in (title.left - 2).toInt().coerceAtLeast(0) until (title.right + 2).toInt().coerceAtMost(image.width)) {
+                        val c = image[tx, ty]
+                        if (!red(c) && kotlin.math.abs(c.red - background.red) + kotlin.math.abs(c.green - background.green) +
+                            kotlin.math.abs(c.blue - background.blue) > .45f) ink = Rect(minOf(ink.left, tx.toFloat()),
+                            minOf(ink.top, ty.toFloat()), maxOf(ink.right, tx + 1f), maxOf(ink.bottom, ty + 1f))
+                    }
+                return Frame(bounds, Rect(left.toFloat(), top.toFloat(), right + 1f, bottom + 1f), title, ink)
+            }
+            compose.waitUntil(5000) { runCatching { frame() }.isSuccess }
+            val list = compose.onNodeWithTag("browser-list")
+            for (outward in listOf(false, true)) {
+                compose.waitForIdle()
+                compose.mainClock.autoAdvance = false
+                val resting = laid("browse-art-$uri")
+                val near = if (outward) 50f else 160f
+                val first = if (outward) near + 10f else near - 10f
+                list.performTouchInput {
+                    down(0, Offset(centerX - near, centerY)); down(1, Offset(centerX + near, centerY))
+                    moveTo(0, Offset(centerX - first, centerY)); moveTo(1, Offset(centerX + first, centerY))
+                }
+                // Recognition hands over after the real render-thread readback.
+                compose.waitUntil(5000) { compose.mainClock.advanceTimeByFrame(); laid("browse-art-$uri") != resting }
+                val frames = mutableListOf<Frame>()
+                for (step in 1..40) {
+                    val spread = if (outward) first + step * .6f else first - step * 3f
+                    list.performTouchInput { moveTo(0, Offset(centerX - spread, centerY)); moveTo(1, Offset(centerX + spread, centerY)) }
+                    compose.mainClock.advanceTimeByFrame()
+                    frames += frame()
+                }
+                fun Rect.text() = "%.2f,%.2f w %.2f h %.2f".format(left, top, width, height)
+                val log = frames.mapIndexed { index, it -> "$index cover laid ${it.cover.text()} painted ${it.coverPainted.text()}" +
+                    " | title laid ${it.title.text()} ink ${it.titleInk.text()}" }.joinToString("\n")
+                android.util.Log.i("MotionSubpixelTest", "${if (outward) "5 to 4" else "4 to 5"} per row, top-left item:\n$log")
+                assertMonotone("painted width", frames.map { it.coverPainted.width })
+                assertMonotone("painted height", frames.map { it.coverPainted.height })
+                frames.forEachIndexed { index, it ->
+                    // Each antialiased float edge adds at most one partly covered pixel.
+                    assertEquals("Frame $index painted width\n$log", it.cover.width, it.coverPainted.width, 1.5f)
+                    assertEquals("Frame $index painted height\n$log", it.cover.height, it.coverPainted.height, 1.5f)
+                    assertEquals("Frame $index painted left\n$log", it.cover.left, it.coverPainted.left, 1f)
+                    assertEquals("Frame $index painted top\n$log", it.cover.top, it.coverPainted.top, 1f)
+                }
+                list.performTouchInput { up(0); up(1) }
+                compose.mainClock.autoAdvance = true
+                compose.waitForIdle()
+                assertEquals(if (outward) 4 else 5, prefs.read(route).itemsPerRow)
+                val settled = frame()
+                assertEquals("Settled cover is painted exactly at its bounds", settled.cover, settled.coverPainted)
+            }
+        } finally { compose.mainClock.autoAdvance = true; prefs.write(route, old, false); cover.delete() }
     }
 
     @Test fun playerExpansionSweepGrowsMonotonicallyAndCoversTheWindowEdges() {
