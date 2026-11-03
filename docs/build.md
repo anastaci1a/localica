@@ -96,7 +96,9 @@ The focused jobs allow 60 minutes without trimming selected methods. This is a c
 
 The decision manifest records the exact SHA, APK identity, selected coverage and that complete native suites were not run. Prototype results do not certify a release.
 
-The `runner` dispatch input defaults to `github`. `self-hosted` moves only the four emulator jobs to the owner-only ephemeral KVM runner (`self-hosted, linux, x64, localica-kvm`); build, evidence and every Android workflow job, including releases, stay GitHub-hosted. Each such job requires a non-PR event, the repository owner as actor and triggering actor, and this repository; otherwise it is skipped rather than rerouted. That runner gives each job a fresh container and sets `LOCALICA_EPHEMERAL_RUNNER=localica-kvm`, the only self-hosted environment the prototype runner and device preparation accept. Contract tests enforce this routing.
+The `runner` dispatch input defaults to `github`. `self-hosted` moves only the four emulator jobs to the ephemeral KVM runner (`self-hosted, linux, x64, localica-kvm`). Build, evidence and every Android workflow job, including releases, stay GitHub-hosted. Each requires a non-PR event, the repository owner as actor and triggering actor, and this repository; otherwise it is skipped rather than rerouted.
+
+The runner starts a fresh container per job and refuses other events or actors before any step runs. Its `LOCALICA_EPHEMERAL_RUNNER=localica-kvm` marker is the only self-hosted environment the prototype runner and device preparation accept. Contract tests enforce the workflow routing.
 
 Prototypes use the same [evidence tooling](#evidence-tooling-prerequisites), six-packet limit and outcome rules described above: final XML owns test results, monitoring degradation blocks a green result, and test failure retains its exit status.
 
