@@ -108,16 +108,17 @@ class GlassActionRowTest {
             val travel = if (layoutDirection == LayoutDirection.Ltr) -160f else 160f
             // A deliberate held drag keeps button ownership without activation.
             randomize.performTouchInput {
-                down(center); advanceEventTime(200)
+                down(center); advanceEventTime(ControlHoldLockMillis + 20)
                 moveBy(Offset(travel, 0f), delayMillis = 100); up()
             }
             assertEquals(beforeDrag, randomize.getUnclippedBoundsInRoot())
             compose.runOnIdle {
                 assertEquals(clicksBeforeDrag, randomizations); assertEquals(pulsesBeforeDrag, pulses.size)
             }
-            // Slow movement must also retain ownership without a stationary hold.
+            // Once held, slow movement retains the same owner as a faster drag.
             randomize.performTouchInput {
                 down(center)
+                advanceEventTime(ControlHoldLockMillis + 20)
                 repeat(10) { moveBy(Offset(travel / 10f, 0f), delayMillis = 100) }
                 up()
             }
