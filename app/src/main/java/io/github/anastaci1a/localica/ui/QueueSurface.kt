@@ -187,6 +187,11 @@ internal fun BoxWithConstraintsScope.QueueSurface(progress: Animatable<Float, *>
         .then(if (onDragTrace == null) Modifier else Modifier.onGloballyPositioned {
             currentTrace?.invoke("layout top=${it.positionInRoot().y} progress=${progress.value} distance=$distance")
         })
+        // Header and list controls yield the swipes this drawer can still travel.
+        .controlScrollParent {
+            (if (progress.value > 0f) ControlScrollDirection.Down else 0) or
+                (if (progress.value < 1f) ControlScrollDirection.Up else 0)
+        }
         .observeScrollOwnership(scrollOwnership, listPull::cancelPull)
         .nestedScroll(listPull).testTag("queue-surface"), shape = Corners.panel) {
         Column(Modifier.fillMaxSize().clipToBounds().padding(bottom = inset)) {

@@ -125,17 +125,21 @@ internal fun Modifier.glassPress(contact: GlassContact = rememberGlassContact(),
     return drawWithContent {
         val shape = presentation()
         scale(shape.scaleX(contact.vertical), shape.scaleY(contact.vertical)) { this@drawWithContent.drawContent() }
-    }.observeGlassContact(admit) { contact.travel = 0f; contact.pressed = it; onPressed(it) }
+    }.observeGlassContact(admit, yieldToParent = true) { contact.travel = 0f; contact.pressed = it; onPressed(it) }
 }
 
-/** Shared contact lifetime for ordinary buttons and independently draggable glass bodies. */
+/** Shared contact lifetime for ordinary buttons and independently draggable glass bodies.
+ * With [yieldToParent], the press lets go as soon as the shared control intent hands the
+ * contact to a scrolling or moving ancestor, even while the finger stays on the control. */
 @Composable
-internal fun Modifier.observeGlassContact(admit: () -> Boolean = { true }, onPressed: (Boolean) -> Unit): Modifier {
+internal fun Modifier.observeGlassContact(admit: () -> Boolean = { true }, yieldToParent: Boolean = false,
+    onPressed: (Boolean) -> Unit): Modifier {
     val notify by rememberUpdatedState(onPressed)
     val admission by rememberUpdatedState(admit)
     val trace by rememberUpdatedState(LocalGlassContactTrace.current)
     val name by rememberUpdatedState(LocalGlassContactName.current)
-    return pointerInput(Unit) {
+    val parent = rememberControlScrollContext()
+    return readControlScrollContext(parent).pointerInput(yieldToParent) {
         awaitEachGesture {
             val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
             runCatching { trace?.invoke(name, "down", down.position, down.isConsumed) }
@@ -147,16 +151,28 @@ internal fun Modifier.observeGlassContact(admit: () -> Boolean = { true }, onPre
                 return@awaitEachGesture
             }
             notify(true)
+            var pressed = true
+            val intent = if (yieldToParent) ControlGestureIntent(viewConfiguration.touchSlop, parent.directions()) else null
             try {
-                // Visual pressure belongs to the initiating finger until it lifts.
-                // Clickable still cancels activation when that finger leaves the target.
+                // Visual pressure belongs to the initiating finger until it lifts or a
+                // parent takes the contact. Clickable still cancels activation when that
+                // finger leaves the target.
                 do { val event = awaitPointerEvent(PointerEventPass.Final)
                     event.changes.firstOrNull { it.id == down.id }?.let { point ->
                         runCatching { trace?.invoke(name, if (point.pressed) "held" else "up", point.position, point.isConsumed) }
+                        val movement = point.position - down.position
+                        if (pressed && point.pressed && intent != null) {
+                            if (event.changes.count { it.pressed } > 1) intent.cancel()
+                            val owner = intent.move(movement.x, movement.y, point.uptimeMillis - down.uptimeMillis)
+                            if (owner == ControlGestureOwner.Scroll || owner == ControlGestureOwner.Cancelled) {
+                                pressed = false
+                                notify(false)
+                            }
+                        }
                     }
                 }
                 while (event.changes.any { it.id == down.id && it.pressed })
-            } finally { notify(false) }
+            } finally { if (pressed) notify(false) }
         }
     }
 }
