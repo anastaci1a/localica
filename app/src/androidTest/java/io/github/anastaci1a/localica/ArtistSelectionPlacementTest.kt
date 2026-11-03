@@ -333,6 +333,9 @@ class ArtistSelectionPlacementTest {
             // The original settled All oracle starts AFTER its 500 ms reveal.
             phase("offscreen-reentry-and-resize-complete")
             compose.runOnUiThread { validation = Check.Settling; allSelected = true }
+            // Present the source recordings once before advancing virtual animation time.
+            // A bulk clock jump alone does not traverse the native lazy child layers.
+            frame(Check.Settling)
             compose.mainClock.advanceTimeBy(500)
             compose.runOnUiThread { validation = Check.All }
             frame(Check.All)
