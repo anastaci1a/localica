@@ -43,6 +43,7 @@ class CollectionSelectionTest {
                 compose.onAllNodesWithTag("glass-morph-surface").fetchSemanticsNodes().isEmpty()
             }
             compose.awaitExpectedWindowFocus(compose.onNodeWithContentDescription("Collapse selection"))
+            compose.saveSelectionPreview("playlist-catalog")
             compose.onNodeWithContentDescription("Collapse selection").performClick()
             compose.onNodeWithTag("selection-minimized").assertIsDisplayed()
             fun clickAboveSelection(node: SemanticsNodeInteraction, count: Int) {

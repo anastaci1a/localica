@@ -135,6 +135,7 @@ class HomeSelectionTest {
             compose.runOnIdle { playlistState = playlistState.copy(playlists = listOf(playlist.copy(name = "Changed offscreen"))) }
             compose.selectionMenuAction("Select all")
             compose.onNodeWithText("4 selected").assertIsDisplayed()
+            compose.saveSelectionPreview("home")
             compose.onNodeWithContentDescription("Playlists").performClick()
             compose.waitUntil(5000) { compose.onAllNodesWithText("Changed offscreen").fetchSemanticsNodes().isNotEmpty() }
             compose.onNodeWithText("4 selected").assertIsDisplayed()

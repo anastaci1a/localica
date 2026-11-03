@@ -45,11 +45,14 @@ internal fun GlassMorphContent(expanded: Boolean, modifier: Modifier = Modifier,
     }
 }
 
-/** Retain only pixels when a face loses ownership; its children are immediately unplaced. */
+/** Outgoing children are immediately unplaced. Floating exits also retain their measured
+ * footprint, so hidden content changes cannot move the surface or adjacent controls. */
 @Composable
 internal fun RetainedGlassFace(visible: Boolean, alpha: () -> Float, retainShadow: Boolean = false,
+    retainSize: Boolean = false,
     content: @Composable () -> Unit) {
     val layer = rememberGraphicsLayer()
+    val measurement = remember { RetainedGlassMeasurement() }
     val inset = if (retainShadow) glassShadowInset() else 0.dp
     Layout(modifier = Modifier.then(if (visible) Modifier else Modifier.clearAndSetSemantics { })
         .drawWithContent {
@@ -64,6 +67,10 @@ internal fun RetainedGlassFace(visible: Boolean, alpha: () -> Float, retainShado
             }
         }, content = { Box { content() } }) { children, constraints ->
         val child = children.single().measure(constraints)
-        layout(child.width, child.height) { if (visible) child.place(0, 0) }
+        if (visible || measurement.size == IntSize.Zero) measurement.size = IntSize(child.width, child.height)
+        val size = if (retainSize && !visible) measurement.size else IntSize(child.width, child.height)
+        layout(size.width, size.height) { if (visible) child.place(0, 0) }
     }
 }
+
+private class RetainedGlassMeasurement { var size = IntSize.Zero }

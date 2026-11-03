@@ -64,7 +64,7 @@ internal fun FloatingSelectionPanel(state: FloatingSelectionPanelState, modifier
         }
     }.graphicsLayer { alpha = state.progress }) {
         CompositionLocalProvider(LocalSurfaceShadows provides null, LocalBottomShadows provides null) {
-            RetainedGlassFace(state.visible, { 1f }, retainShadow = true, content = content)
+            RetainedGlassFace(state.visible, { 1f }, retainShadow = true, retainSize = true, content = content)
         }
     }
 }
