@@ -18,7 +18,9 @@ internal const val DropGapKey = "localica-drop-gap"
 @Stable
 internal class KeyedDrag<T : Any, P>(val original: List<T>, val moving: List<T>,
     val keyOf: (T) -> String,
-    val initialBounds: Map<String, Rect>, val grab: Offset, point: Offset, val cardSize: androidx.compose.ui.geometry.Size, val presentation: P) {
+    val initialBounds: Map<String, Rect>, val grab: Offset, point: Offset, val cardSize: androidx.compose.ui.geometry.Size, val presentation: P,
+    /** Each item's hover lift when the drag began (#533), in its own coordinates. */
+    val lifts: Map<String, HoverGeometry> = emptyMap()) {
     val keys = moving.map { keyOf(it) }.toSet()
     val remaining = original.filterNot { keyOf(it) in keys }
     val remainingPositions = remaining.withIndex().associate { keyOf(it.value) to it.index }
@@ -32,6 +34,8 @@ internal class KeyedDrag<T : Any, P>(val original: List<T>, val moving: List<T>,
     var returnFrom by mutableStateOf<Map<String, Rect>?>(null)
     val landing = Animatable(0f)
     val handoff = Animatable(0f)
+    /** The drop was saved: the items deselect and ease out of hover while handing off. */
+    var committed by mutableStateOf(false)
     fun ordered() = remaining.take(insertion) + moving + remaining.drop(insertion)
 }
 
@@ -41,6 +45,10 @@ internal class KeyedDrag<T : Any, P>(val original: List<T>, val moving: List<T>,
 internal abstract class KeyedDragState<T : Any, P>(val grid: LazyGridState, private val scope: CoroutineScope,
     val keyOf: (T) -> String, private val optimisticCommit: Boolean = true) {
     var items: List<T> = emptyList()
+    /** The selection host's last drawn lift for an item key, so cards start from it. */
+    var hoverLift: (String) -> HoverGeometry? = { null }
+    /** The backdrop behind the list (not the list itself) that cards carry as their cutout. */
+    var hoverBacking: FrostedBackdrop? = null
     protected abstract fun capturePresentation(): P
     var viewportCoordinates: LayoutCoordinates? = null
     val itemCoordinates = mutableMapOf<String, LayoutCoordinates>()
@@ -94,7 +102,8 @@ internal abstract class KeyedDragState<T : Any, P>(val grid: LazyGridState, priv
         val held = rects[keyOf(item)] ?: return false
         val moving = items.filter { keyOf(it) in selected }
         if (moving.isEmpty()) return false
-        drag = KeyedDrag(items, moving, keyOf, rects.filterKeys { it in selected }, point - held.topLeft, point, held.size, capturePresentation())
+        drag = KeyedDrag(items, moving, keyOf, rects.filterKeys { it in selected }, point - held.topLeft, point, held.size, capturePresentation(),
+            moving.mapNotNull { item -> keyOf(item).let { key -> hoverLift(key)?.let { key to it } } }.toMap())
         return true
     }
     fun move(point: Offset) { drag?.takeUnless { it.dropping }?.let { it.pointer = point
@@ -198,7 +207,7 @@ internal abstract class KeyedDragState<T : Any, P>(val grid: LazyGridState, priv
                 optimisticBase = items.map { keyOf(it) }
                 optimistic = expected
             }
-            if (saved) onMoved()
+            if (saved) { d.committed = true; onMoved() }
             d.handoff.animateTo(1f, tween(if (reducedMotion) 0 else 220))
             if (drag === d) drag = null
         }

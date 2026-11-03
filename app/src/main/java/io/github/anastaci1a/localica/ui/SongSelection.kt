@@ -146,7 +146,9 @@ internal fun AddToPlaylistDialog(tracks: List<Track>, state: PlaylistState, cont
             SideEffect { probe.scene = scene }
             androidx.compose.foundation.lazy.LazyColumn(Modifier.fillMaxWidth()
                 .then(if (observer == null) Modifier else Modifier.onPlaced { probe.content = it }),
-                state = scroll, overscrollEffect = overscroll) {
+                state = scroll, overscrollEffect = overscroll,
+                // Side room so a chosen row can rise (#533) without meeting the clip.
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 6.dp)) {
                 items(sortedPlaylists.size, key = { sortedPlaylists[it].id }) { index ->
                     val playlist = sortedPlaylists[index]
                     val selected = playlist.id in chosen
