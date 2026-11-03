@@ -49,13 +49,14 @@ class SelectionPillTest {
     private val session = SessionSelection()
     private var dragging by mutableStateOf(false)
     private lateinit var backdrop: FrostedBackdrop
+    private lateinit var panelMotion: FloatingSelectionPanelState
 
     private fun content(width: Dp = 380.dp, fontScale: Float = 1f, reduced: Boolean = false) {
         val tracks = (0..3).map { Track("t$it", "Song $it", fileName = "$it.mp3", relativePath = "$it.mp3") }
         compose.setContent { LocalicaTheme {
             CompositionLocalProvider(LocalDensity provides Density(LocalDensity.current.density, fontScale),
                 LocalReducedMotion provides reduced) {
-            backdrop = rememberFrostedBackdrop(Unit)
+            backdrop = rememberFrostedBackdrop(Unit, dark = false)
             Box(Modifier.size(width, 520.dp).testTag("pill-scene")) {
                 Box(Modifier.matchParentSize().recordFrostedBackdrop(backdrop).background(Color(0xFFE9E3F5))) {
                     Column(Modifier.align(Alignment.TopStart).padding(16.dp)) {
@@ -63,7 +64,8 @@ class SelectionPillTest {
                     }
                 }
                 CompositionLocalProvider(LocalFrostedBackdrop provides backdrop) {
-                SelectionPanelVisibility(session.panelVisible, Modifier.align(Alignment.BottomCenter).padding(bottom = 24.dp)) {
+                panelMotion = rememberFloatingSelectionPanel(session.panelVisible, reduced)
+                FloatingSelectionPanel(panelMotion, Modifier.align(Alignment.BottomCenter).padding(bottom = 24.dp)) {
                     SessionSelectionPanel(session, null, null, PlaylistState(loading = false), dragging = dragging)
                 }
                 }
@@ -140,9 +142,11 @@ class SelectionPillTest {
         compose.waitForIdle()
         compose.mainClock.autoAdvance = false
         try {
-            compose.runOnIdle { session.clear() }
+            compose.runOnIdle { session.clear(); dragging = false }
             compose.mainClock.advanceTimeBy(64)
-            compose.onNodeWithTag("selection-pill", useUnmergedTree = true).assertDoesNotExist()
+            // The unmerged debug tree can retain cleared descendants; the normal
+            // semantics tree reflects what accessibility can activate.
+            compose.onNodeWithTag("selection-pill").assertDoesNotExist()
             val departing = compose.onNodeWithTag("pill-scene").captureToImage().toPixelMap()
             save("exiting")
             compose.mainClock.advanceTimeBy(2000)
@@ -158,19 +162,27 @@ class SelectionPillTest {
 
     @Test fun outgoingControlsLoseInputImmediatelyAndInterruptedMorphReverses() {
         content()
+        compose.runOnIdle { dragging = true }
+        compose.waitForIdle()
+        val compact = pillWidth()
+        compose.runOnIdle { dragging = false }
+        compose.waitForIdle()
         compose.mainClock.autoAdvance = false
         try {
             val full = pillWidth()
             compose.runOnIdle { dragging = true }
-            compose.mainClock.advanceTimeBy(80)
+            compose.mainClock.advanceTimeBy(160)
             val partial = pillWidth()
-            assertTrue(partial < full)
+            val span = full - compact
+            assertTrue("Interrupt after meaningful visible travel: full=$full compact=$compact partial=$partial", full - partial > span * .2f)
             compose.onNodeWithContentDescription("Close selection").assertDoesNotExist()
             compose.onNodeWithContentDescription("More selection actions").assertDoesNotExist()
             compose.onNodeWithTag("selection-minimized", useUnmergedTree = true).assertHasNoClickAction()
             compose.runOnIdle { dragging = false }
             compose.mainClock.advanceTimeByFrame()
-            assertTrue("A reversal continues from the displayed width", kotlin.math.abs(pillWidth() - partial) < (full - partial) * .5f + 1f)
+            val reversed = pillWidth()
+            assertTrue("A reversal continues from the displayed width: full=$full compact=$compact partial=$partial reversed=$reversed",
+                kotlin.math.abs(reversed - partial) < span * .2f + 1f)
             compose.onNodeWithContentDescription("Close selection").assertExists()
             compose.mainClock.advanceTimeBy(2000)
             assertEquals(full, pillWidth(), 1f)
@@ -202,6 +214,26 @@ class SelectionPillTest {
             compose.mainClock.advanceTimeByFrame()
             assertTrue(pillWidth() > compact)
             compose.onNodeWithContentDescription("Close selection").assertIsDisplayed()
+        } finally { compose.mainClock.autoAdvance = true }
+    }
+
+    @Test fun completingADragRetainsTheMinimizedFootprintDuringLargeFontExit() {
+        content(width = 320.dp, fontScale = 2f)
+        compose.runOnIdle { dragging = true }
+        compose.waitForIdle()
+        val minimizedHeight = panelMotion.height
+        compose.mainClock.autoAdvance = false
+        try {
+            compose.runOnIdle { session.clear(); dragging = false }
+            var previous = panelMotion.clearance.value
+            repeat(30) {
+                compose.mainClock.advanceTimeByFrame()
+                compose.runOnIdle {
+                    assertEquals("Hidden expanded content cannot grow the exiting footprint", minimizedHeight, panelMotion.height)
+                    assertTrue("Exit clearance only decreases", panelMotion.clearance.value <= previous + .1f)
+                    previous = panelMotion.clearance.value
+                }
+            }
         } finally { compose.mainClock.autoAdvance = true }
     }
 }

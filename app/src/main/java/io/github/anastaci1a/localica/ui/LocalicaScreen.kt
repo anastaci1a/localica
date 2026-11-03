@@ -364,7 +364,9 @@ fun LocalicaScreen(
         FloatingSelectionPanel(selectionPanel, Modifier.align(Alignment.BottomCenter)
             .padding(horizontal = 8.dp).padding(bottom = browseBottomChrome)
             .fillMaxWidth().heightIn(max = maxHeight / 2)) {
-            SessionSelectionPanel(session, queueController, playlistController, playlist, dragging = dragHost.state?.drag != null)
+            Column(Modifier.controlVerticalScroll(rememberScrollState())) {
+                SessionSelectionPanel(session, queueController, playlistController, playlist, dragging = dragHost.state?.drag != null)
+            }
         }
         if (hasPlayer) PlayerSurface(player, expanded, { expanded = it }, settings, progress,
             onToggle, onSeek, onPrevious, onNext, ::openQueue, { expanded = false },
