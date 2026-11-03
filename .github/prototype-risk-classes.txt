@@ -254,3 +254,4 @@ io.github.anastaci1a.localica.CollectionLookupLifecycleTest
 io.github.anastaci1a.localica.EnumDecodingTest
 io.github.anastaci1a.localica.LyricsArtworkEntryTest
 io.github.anastaci1a.localica.PlayerArtworkSpacingTest
+io.github.anastaci1a.localica.PlayerLyricsForegroundTest
