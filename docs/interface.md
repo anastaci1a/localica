@@ -299,7 +299,9 @@ Other items use Select song / Select all songs in their shared menu. The bulk ac
 
 Retain source occurrence identities and selection order across routes, tabs, queries, sorting, rotation and backgrounding. Select-all appends in collection order. Reselect appends last. Preserve distinct occurrences for playlists/queues and deduplicate files for editing. Fresh sessions start empty.
 
-Panel: All, Range, count, actions and a divided collapse/close glass pill. Wrap/scroll within a bounded height. Close, mutable-list Back or successful actions exit. Cancel/failure/empty selection retains the mode. Collapsing the panel retains selection. Remove-from-source requires one editable source. No separate selection-basket screen. Playlist chooser marks existing membership accessibly while allowing duplicates.
+The panel is one compact glass pill: close, count, Play next, Add to playlist, More and a divided collapse. More morphs into a menu with Play now, Add to queue, New queue, Edit tags, Remove from the source, Select all and Select range. Collapsing morphs the same surface into a minimized count pill; tapping it morphs back.
+
+Close, mutable-list Back or successful actions exit. Cancel/failure/empty selection retains the mode. Collapsing retains selection. Remove-from-source requires one editable source. No separate selection-basket screen. Playlist chooser marks existing membership accessibly while allowing duplicates.
 
 In a complete, manual, unfiltered queue/playlist, hold-drag moves the held occurrence or selected occurrences from that source, preserving their source order even when nonconsecutive. Cross-source selections and filtered views cannot reorder. Applying a saved-order sort does not disable subsequent dragging.
 
@@ -309,9 +311,9 @@ Lifted content retains its actual list/gallery layout and lands on the rendered 
 
 Playback checkpoints and unrelated refreshes retain an owned contact. Route or source occurrence-order changes cancel it, and commits reject an intervening source-order change.
 
-Hide the action panel throughout dragging/landing. Floating controls share its animated visible occupancy, with an 8 dp gap above the panel, and return above remaining bottom chrome as it leaves. A Liquid Glass foreground X circle remains above the stack in the shared bottom control row.
+While dragging and landing, the panel morphs into its minimized pill and cannot expand. Floating controls share its animated visible occupancy, with an 8 dp gap above the panel, and return above remaining bottom chrome as it leaves. A Liquid Glass foreground X circle remains above the stack in the shared bottom control row.
 
-Hover tints it red with one firm haptic. Leaving gives a lighter tick, honoring system settings. Release there cancels and restores the panel. Other drops, including an unchanged insertion position, finish selection after successful landing.
+Hover tints it red with one firm haptic. Leaving gives a lighter tick, honoring system settings. Release there cancels and morphs the panel back out. Other drops, including an unchanged insertion position, finish selection after successful landing, and the minimized pill eases away.
 
 System interruption or failed persistence restores order, selection and the panel. All landings crossfade into normal rows and preserve playback cursors. A completed move eases the landed rows out of hover.
 

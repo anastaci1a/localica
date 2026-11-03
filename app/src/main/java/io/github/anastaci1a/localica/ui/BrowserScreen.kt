@@ -1192,8 +1192,8 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
             }
         }
         }
-        if (LocalSessionSelection.current == null) SelectionPanelVisibility(session.panelVisible && reorder.drag == null, reducedMotion = reducedMotion) {
-            SessionSelectionPanel(session, queues, playlistController, playlists)
+        if (LocalSessionSelection.current == null) SelectionPanelVisibility(session.panelVisible, reducedMotion = reducedMotion) {
+            SessionSelectionPanel(session, queues, playlistController, playlists, dragging = reorder.drag != null)
         }
     }
 
