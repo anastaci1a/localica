@@ -55,8 +55,7 @@ import kotlin.math.floor
             var elapsed = 0L
             var holdEligible = true
             val feedback = ControlDragHaptics(haptics)
-            val intent = ControlGestureIntent(viewConfiguration.touchSlop, parent.axes,
-                if (horizontal) ControlScrollAxis.Horizontal else ControlScrollAxis.Vertical)
+            val intent = ControlGestureIntent(viewConfiguration.touchSlop, parent.directions())
             fun engage(over: Float) {
                 started = true; start(); delta(over)
                 // Pickup establishes the baseline, rather than emitting two pulses together.
@@ -65,7 +64,7 @@ import kotlin.math.floor
             try {
                 while (true) {
                     val event = if (!started && holdEligible) withTimeoutOrNull(
-                        (viewConfiguration.longPressTimeoutMillis - elapsed).coerceAtLeast(1L)) {
+                        (ControlHoldLockMillis - elapsed).coerceAtLeast(1L)) {
                         awaitPointerEvent(PointerEventPass.Initial)
                     } else awaitPointerEvent(PointerEventPass.Initial)
                     if (event == null) {
@@ -110,11 +109,12 @@ import kotlin.math.floor
                                 if (kotlin.math.abs(travel) > viewConfiguration.touchSlop) {
                                     engage(kotlin.math.sign(travel) *
                                         (kotlin.math.abs(travel) - viewConfiguration.touchSlop))
-                                    point.consume()
                                 }
+                                // The control owns this contact: no parent may take it at an edge.
+                                point.consume()
                             }
                         }
-                        if (!started) {
+                        if (!started && intent.owner == ControlGestureOwner.Pending) {
                             // A parent/custom recognizer may win even without advertised context.
                             val final = awaitPointerEvent(PointerEventPass.Final)
                             if (final.changes.firstOrNull { it.id == pointer }?.isConsumed == true) break
