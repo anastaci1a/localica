@@ -79,7 +79,43 @@ class ArtworkEditRestorationTest {
         awaitCrop()
     }
     private fun awaitCrop() {
-        compose.waitUntil(10000) { compose.onAllNodesWithTag("artwork-crop").fetchSemanticsNodes().isNotEmpty() }
+        try {
+            compose.waitUntil(10000) { compose.onAllNodesWithTag("artwork-crop").fetchSemanticsNodes().isNotEmpty() }
+        } catch (failure: Throwable) {
+            // Observe only after the original timeout; never retry the click or extend its budget.
+            fun capture(block: () -> Unit) {
+                runCatching(block).exceptionOrNull()?.let(failure::addSuppressed)
+            }
+            capture {
+                val input = File(requireNotNull(Uri.parse(fixtureTag.removePrefix("recent-artwork-")).path))
+                val bounds = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                android.graphics.BitmapFactory.decodeFile(input.path, bounds)
+                android.util.Log.e("ArtworkRestoration", "fixture exists=${input.exists()} bytes=${input.length()} " +
+                    "bounds=${bounds.outWidth}x${bounds.outHeight}")
+            }
+            capture {
+                val chooser = compose.onAllNodesWithText("Open gallery").fetchSemanticsNodes().size
+                val title = compose.onAllNodesWithText("Crop artwork").fetchSemanticsNodes().size
+                val save = compose.onAllNodesWithText("Use square crop").fetchSemanticsNodes()
+                    .map { !it.config.contains(SemanticsProperties.Disabled) }
+                android.util.Log.e("ArtworkRestoration", "awaitCrop timeout chooser=$chooser cropTitle=$title saveEnabled=$save")
+                for (unmerged in listOf(false, true)) {
+                    val tree = compose.onAllNodes(isRoot(), useUnmergedTree = unmerged).printToString(maxDepth = Int.MAX_VALUE)
+                    val sanitized = Regex("(?:file|content)://[^\\s,)]+").replace(tree, "<image-uri>")
+                    sanitized.chunked(3000).forEachIndexed { index, chunk ->
+                        android.util.Log.e("ArtworkRestoration", "unmerged=$unmerged part=$index $chunk")
+                    }
+                }
+            }
+            capture {
+                android.util.Log.e("ArtworkRestoration", InstrumentationRegistry.getInstrumentation()
+                    .uiAutomation.windows.joinToString { window ->
+                        "id=${window.id} type=${window.type} focused=${window.isFocused} " +
+                            "active=${window.isActive} package=${window.root?.packageName}"
+                    })
+            }
+            throw failure
+        }
         compose.awaitExpectedWindowFocus(compose.onNodeWithTag("artwork-crop"))
     }
     private fun recreate() { compose.activityRule.scenario.recreate(); compose.waitForIdle() }
