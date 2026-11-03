@@ -20,6 +20,11 @@ import org.junit.Test
 class MissingLyricsMotionTest {
     @get:Rule val compose = createComposeRule()
 
+    private fun panelMidpoint(): Float {
+        val background = compose.onNodeWithTag("player-background-space", true).fetchSemanticsNode().boundsInRoot
+        return compose.onNodeWithTag("lyrics-panel", true).fetchSemanticsNode().boundsInRoot.let { (it.top + it.bottom) / 2f } - background.top
+    }
+
     private fun emptyCenter(): Offset {
         val background = compose.onNodeWithTag("player-background-space", true).fetchSemanticsNode().boundsInRoot
         return compose.onNodeWithTag("empty-lyrics", true).fetchSemanticsNode().boundsInRoot.center - background.topLeft
@@ -39,6 +44,7 @@ class MissingLyricsMotionTest {
                 compose.waitUntil(5000) { compose.onAllNodesWithTag("empty-lyrics", true).fetchSemanticsNodes().isNotEmpty() }
                 compose.waitForIdle()
                 val expected = emptyCenter()
+                val expectedMidpoint = panelMidpoint()
                 val settledTitle = compose.onNodeWithTag("player-title", true).fetchSemanticsNode().boundsInRoot.top
                 compose.mainClock.autoAdvance = false
                 fun sample(frames: Int) {
@@ -46,7 +52,8 @@ class MissingLyricsMotionTest {
                         compose.mainClock.advanceTimeBy(32)
                         val center = emptyCenter()
                         assertEquals("Background-relative x in $layout", expected.x, center.x, 1f)
-                        assertEquals("Background-relative y in $layout", expected.y, center.y, 1f)
+                        // The decoration follows the clip's midpoint as its bottom edge moves with the title (#519).
+                        assertEquals("Background-relative y in $layout", expected.y + panelMidpoint() - expectedMidpoint, center.y, 1f)
                     }
                 }
                 compose.runOnIdle { open = false }

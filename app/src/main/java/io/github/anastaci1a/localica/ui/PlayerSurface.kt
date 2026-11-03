@@ -440,7 +440,10 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
                             if (lyricMotion.contentAlpha > 0f) child.place(0, 0)
                         }
                     },
+                // The clip's top rides the player and its bottom the title, so the visible midpoint moves by half
+                // the height change from rest; the stable-height content follows that midpoint, not the top edge.
                 contentHeight = (lyricMetadataY - statusInset - 64.dp).coerceAtLeast(96.dp),
+                contentOffset = (lyricsViewport.height.dp - (lyricMetadataY - statusInset - 64.dp)) / 2,
                 sourcesAnchor = sourcesAnchor,
                 result = lyricsResult, sourcesVisible = sourcesVisible, onSourcesDismiss = { sourcesVisible = false },
                 originPreparation = sourcesPreparation, contentAlpha = { lyricMotion.contentAlpha },
