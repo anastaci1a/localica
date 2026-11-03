@@ -9,6 +9,8 @@ import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.audio.AudioOffloadSupport
 import androidx.media3.exoplayer.audio.AudioSink
 import androidx.media3.exoplayer.audio.ForwardingAudioSink
+import androidx.media3.exoplayer.audio.DefaultAudioSink
+import androidx.media3.exoplayer.audio.AudioTrackAudioOutputProvider
 
 /** Authoritative edit units, independent of AAC core rate, SBR or decoded samples per access unit. */
 internal class MediaEditTrim(val timescale: Long, val start: Long) {
@@ -88,5 +90,9 @@ internal class MediaEditAudioSink(sink: AudioSink) : ForwardingAudioSink(sink) {
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 internal open class PlaybackRenderersFactory(context: Context) : DefaultRenderersFactory(context) {
     override fun buildAudioSink(context: Context, enableFloatOutput: Boolean, enableAudioOutputPlaybackParams: Boolean): AudioSink? =
-        super.buildAudioSink(context, enableFloatOutput, enableAudioOutputPlaybackParams)?.let(::MediaEditAudioSink)
+        MediaEditAudioSink(DefaultAudioSink.Builder(context)
+            .setEnableFloatOutput(enableFloatOutput)
+            .setEnableAudioOutputPlaybackParameters(enableAudioOutputPlaybackParams)
+            .setAudioOutputProvider(StartupAudioOutputProvider(AudioTrackAudioOutputProvider.Builder(context).build()))
+            .build())
 }

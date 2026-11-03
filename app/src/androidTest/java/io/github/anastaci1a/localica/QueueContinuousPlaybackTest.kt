@@ -26,6 +26,7 @@ import androidx.room.Room
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.anastaci1a.localica.library.Track
+import io.github.anastaci1a.localica.playback.StartupAudioOutputProvider
 import io.github.anastaci1a.localica.playback.MediaEditAudioSink
 import io.github.anastaci1a.localica.playback.NativeReaders
 import io.github.anastaci1a.localica.playback.PlaybackExtractors
@@ -349,7 +350,7 @@ private class ContinuityWriteHistory {
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 private class ContinuityOutputProvider(
     context: Context,
-    private val native: AudioOutputProvider = AudioTrackAudioOutputProvider.Builder(context).build(),
+    private val native: AudioOutputProvider = StartupAudioOutputProvider(AudioTrackAudioOutputProvider.Builder(context).build()),
 ) : AudioOutputProvider by native {
     override fun getAudioOutput(config: AudioOutputProvider.OutputConfig): AudioOutput {
         val output = native.getAudioOutput(config)

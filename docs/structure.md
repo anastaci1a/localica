@@ -59,6 +59,10 @@ Controlled shutdown retains player cleanup until the final detach write complete
 
 A successful final receipt makes that position restorable. Timeout or write failure falls back to the last committed checkpoint. Abrupt termination also restores the last committed checkpoint: five seconds is the capture cadence, not a disk deadline when the actor, scheduler or storage stalls.
 
+Decoded PCM prefill targets 50 ms or native buffer capacity, whichever is smaller. Initial play and resume wait for accepted PCM, native backpressure or a 30 ms playback-loop deadline. Short end-of-stream tails start immediately. The deadline runs when that loop can execute; it is not a wall-clock scheduling guarantee.
+
+Pause, flush and release cancel delayed starts. PCM samples, timestamps, write results and native buffer configuration remain unchanged. Encoded, offloaded and tunneled output keeps its existing start policy.
+
 ### Traversal
 
 QueuePreferences owns modes. Import legacy active-queue modes once, then leave compatibility columns inert. Feed a bounded window of tokened visits into Media3, using identity shuffle order because the saved sequence already incorporates shuffle. Capture native arrivals immediately, even during storage work. Finish the callback batch before extending/persisting the timeline. [Traversal semantics](product.md#queues-and-playback).
