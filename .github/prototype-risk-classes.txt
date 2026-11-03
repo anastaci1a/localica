@@ -216,6 +216,8 @@ io.github.anastaci1a.localica.SeekCancelMotionTest
 io.github.anastaci1a.localica.SeekReleaseHandoffTest
 io.github.anastaci1a.localica.HoverSelectionTest
 io.github.anastaci1a.localica.SelectionMotionRenderingTest
+io.github.anastaci1a.localica.SelectionPanelRegressionTest
+io.github.anastaci1a.localica.SelectionPillTest
 io.github.anastaci1a.localica.SelectionPanelClearanceTest
 io.github.anastaci1a.localica.SelectionPanelReleaseTest
 io.github.anastaci1a.localica.SelectorCrossMotionTest
