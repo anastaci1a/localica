@@ -208,7 +208,7 @@ class BrowsePinchLayersTest {
                         artwork = FrozenBrowsePart(image, IntOffset.Zero, IntSize(50, 50)))
                 }
             }
-            Box(Modifier.size(200.dp, 250.dp).testTag("frozen-scene")
+            Box(Modifier.size(200.dp, 250.dp).background(Color.Red).testTag("frozen-scene")
                 .pinchRetainedOverlay(motion, grid, mapOf("text" to 0, "frozen" to 1))) {
                 LazyVerticalGrid(GridCells.Fixed(1), state = grid, modifier = Modifier.fillMaxSize()) {
                     item(key = "browser-notice") { Spacer(Modifier.height(0.dp)) }
@@ -216,6 +216,7 @@ class BrowsePinchLayersTest {
                 }
             }
         } }
+        compose.waitForIdle()
         val rowHeight = grid.layoutInfo.visibleItemsInfo.first { it.key == "text" }.size.height
         val cutoff = browsePinchFadeWindow(rowHeight.toFloat(), 200f)
         for (p in listOf(.025f, .05f, .1f, .15f, .2f, .3f, .45f, .15f, .1f, .05f)) {
