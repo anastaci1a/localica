@@ -2,6 +2,9 @@
 # Hosted disposable emulator only; never used by compatibility's preserved-data phases.
 set -euo pipefail
 classes=${RISK_CLASSES:-}
+risk_only=${LOCALICA_RISK_ONLY:-false}
+[[ "$risk_only" == true || "$risk_only" == false ]] || { echo 'Invalid risk_only mode' >&2; exit 2; }
+[[ "$risk_only" != true || -n "$classes" ]] || { echo 'risk_only requires risk_classes' >&2; exit 2; }
 reports="$PWD/preflight-reports"
 live=${LOCALICA_LIVE_EVIDENCE:-false}
 live_reports="$PWD/native-live-evidence"
@@ -34,7 +37,7 @@ if [[ "$live" == true ]]; then
   mkdir "$live_reports"
   printf 'sha=%s\napi=%s\nrun=%s\nattempt=%s\n' "$GITHUB_SHA" "$TEST_API" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" > "$live_reports/context.txt"
 fi
-if [[ -n "$shard_count" ]]; then
+if [[ -n "$shard_count" && "$risk_only" != true ]]; then
   weighted_options=()
   [[ "${LOCALICA_SCROLL_PERFORMANCE:-}" != true ]] || weighted_options+=(--scroll-performance)
   python3 .github/test-evidence/full_partition.py shards --root "$PWD" --api "${TEST_API:-}" --shards "$shard_count" --sha "${GITHUB_SHA:-}" --risk-classes "$classes" --output "$PWD/native-shard-plan.json" "${weighted_options[@]}"
@@ -231,6 +234,11 @@ if [[ "$live" == true ]]; then verify_empty_preflight; fi
 # Admit exact source methods before excluding their classes from the remainder.
 sha256sum --check --status "$reports/test-input-apks.sha256"
 python3 .github/test-evidence/full_partition.py preflight --root "$PWD" --plan "$reports/partition.json" --preflight "$reports/app/build/outputs/androidTest-results" --output "$reports/preflight-reconciled.json" "${partition_shard[@]}"
+if [[ "$risk_only" == true ]]; then
+  printf 'preflight=passed\nmode=risk-only\ncomplete_suite=false\nfull=not-requested\n' > "$reports/status.txt"
+  echo 'Risk-only verification passed; complete suite was not run.'
+  exit 0
+fi
 # Restore fresh-install app state before the complete suite; never touch other packages.
 for package in io.github.anastaci1a.localica.debug io.github.anastaci1a.localica.debug.test; do
   # AGP may already uninstall a test APK after instrumentation; absent is fresh.

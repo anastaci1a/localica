@@ -30,6 +30,11 @@ on:
         type: string
         required: false
         default: ''
+      risk_only:
+        description: Run only risk_classes; does not certify the complete suite or permit release
+        type: boolean
+        required: false
+        default: false
       scroll_performance:
         description: Also run the opt-in ScrollPerformanceTest measurement harness (skipped by default)
         type: boolean
@@ -113,6 +118,7 @@ jobs:
     timeout-minutes: 140
     env:
       RISK_CLASSES: ${{ github.event_name == 'workflow_dispatch' && inputs.risk_classes || '' }}
+      LOCALICA_RISK_ONLY: ${{ github.event_name == 'workflow_dispatch' && inputs.risk_only && 'true' || 'false' }}
       TEST_API: ${{ matrix.api }}
       LOCALICA_SHARD_INDEX: ${{ matrix.shard }}
       LOCALICA_SCROLL_PERFORMANCE: ${{ github.event_name == 'workflow_dispatch' && inputs.scroll_performance && 'true' || '' }}
@@ -199,32 +205,51 @@ jobs:
 
 
   device-tests-summary:
-    # Proves the shards ran every inventory test exactly once. The tag release job checks this job
-    # by name instead of the individual shard jobs.
+    name: ${{ github.event_name == 'workflow_dispatch' && inputs.risk_only && 'device-tests-risk-only-summary' || 'device-tests-summary' }}
+    # The distinct risk-only name cannot satisfy the release complete-suite gate.
     if: ${{ always() && !startsWith(github.ref, 'refs/tags/') }}
     needs: device-tests
+    env:
+      RISK_ONLY: ${{ github.event_name == 'workflow_dispatch' && inputs.risk_only && 'true' || 'false' }}
+      RISK_CLASSES: ${{ github.event_name == 'workflow_dispatch' && inputs.risk_classes || '' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Record verification scope
+        if: always()
+        run: |
+          if [ "$RISK_ONLY" = true ]; then
+            echo 'Risk-only run: complete suite was not run; release is prohibited.' >> "$GITHUB_STEP_SUMMARY"
+            test -n "$RISK_CLASSES"
+          else
+            echo 'Complete-suite verification: all shards and source inventory must reconcile.' >> "$GITHUB_STEP_SUMMARY"
+          fi
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           pattern: '*-reports-api-*-shard-*'
           path: shard-reports
-      - name: Verify the shard union equals the source inventory
+      - name: Verify the shard union equals the requested inventory
         run: |
           set -uo pipefail
           status=0
+          scope_args=()
+          report_prefix=device
+          if [ "$RISK_ONLY" = true ]; then
+            test -n "$RISK_CLASSES" || exit 2
+            scope_args=(--risk-classes "$RISK_CLASSES")
+            report_prefix=preflight
+          fi
           for api in 26 36; do
             args=()
             count=0
-            for dir in shard-reports/device-reports-api-$api-shard-*; do
+            for dir in shard-reports/$report_prefix-reports-api-$api-shard-*; do
               [ -d "$dir" ] || continue
               count=$((count + 1))
             done
             test "$count" = "$LOCALICA_DEVICE_SHARDS" || { echo "API $api: $count of $LOCALICA_DEVICE_SHARDS shard reports" >&2; status=1; continue; }
             while IFS= read -r dir; do args+=(--xml-root "$dir"); done < <(find shard-reports -type d -name androidTest-results -path "*-reports-api-$api-shard-*" | sort)
-            python3 .github/test-evidence/full_partition.py union --root "$PWD" --api "$api" --shards "$LOCALICA_DEVICE_SHARDS" "${args[@]}" | tee "union-api-$api.json" || status=1
+            python3 .github/test-evidence/full_partition.py union --root "$PWD" --api "$api" --shards "$LOCALICA_DEVICE_SHARDS" "${args[@]}" "${scope_args[@]}" | tee "union-api-$api.json" || status=1
           done
           exit $status
       - name: Require every shard job to have succeeded
@@ -336,7 +361,7 @@ jobs:
           if-no-files-found: warn
 
   release:
-    if: startsWith(github.ref, 'refs/tags/')
+    if: startsWith(github.ref, 'refs/tags/') && !inputs.risk_only
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
@@ -360,7 +385,7 @@ jobs:
           gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id" > verified-run.json
           jq -e --arg commit "$commit" '.head_sha == $commit and .head_branch == "main" and .event == "push" and .conclusion == "success"' verified-run.json
           gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/jobs?per_page=100" > verified-jobs.json
-          jq -e '["build", "device-tests-summary", "compatibility (26)", "compatibility (36)", "distribution-smoke (26)", "distribution-smoke (36)"] - [.jobs[] | select(.conclusion == "success") | .name] | length == 0' verified-jobs.json
+          python3 .github/test-evidence/release_jobs.py verified-jobs.json
           echo "run-id=$run_id" >> "$GITHUB_OUTPUT"
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:

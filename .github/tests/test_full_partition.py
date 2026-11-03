@@ -61,6 +61,19 @@ class FullPartitionTest(unittest.TestCase):
                 self.xml(self.preflight,ids,status)
                 with self.assertRaises(ValueError):partition.reconcile(self.root,self.manifest,self.preflight)
 
+    def test_risk_only_union_never_certifies_complete_suite(self):
+        receipt=partition.union(self.root, '26', [self.preflight], 4, ['example.RiskTest'])
+        self.assertFalse(receipt['complete_suite'])
+        self.assertEqual('risk_only', receipt['status'])
+        self.assertEqual(2, receipt['expected'])
+        with self.assertRaises(ValueError):
+            partition.union(self.root, '26', [self.preflight], 4)
+        with self.assertRaises(ValueError):
+            partition.union(self.root, '26', [self.preflight, self.remaining], 4, ['example.RiskTest'])
+        self.xml(self.preflight, self.manifest['preflight'], 'skipped')
+        with self.assertRaises(ValueError):
+            partition.union(self.root, '26', [self.preflight], 4, ['example.RiskTest'])
+
     def test_remaining_failure_cannot_pass(self):
         self.xml(self.remaining,self.manifest['remaining'],'failure')
         with self.assertRaises(ValueError):self.complete()
