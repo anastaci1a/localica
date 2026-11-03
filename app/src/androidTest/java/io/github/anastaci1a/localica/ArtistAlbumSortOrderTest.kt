@@ -51,9 +51,9 @@ class ArtistAlbumSortOrderTest {
             }
         } }
         compose.waitUntil(10_000) {
-            // The click is idempotent; repeat until the loaded rows reach the play callback.
+            // Off-screen in the wide viewport, so invoke the semantic click; repeat until the loaded rows play.
             compose.onAllNodesWithContentDescription("Play selected albums").fetchSemanticsNodes().isNotEmpty() && kotlin.run {
-                compose.onNodeWithContentDescription("Play selected albums").performClick()
+                compose.onNodeWithContentDescription("Play selected albums").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick)
                 played.isNotEmpty()
             }
         }
