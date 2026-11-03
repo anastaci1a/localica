@@ -405,7 +405,10 @@ jobs:
                 provenance = json.loads((canonical / 'provenance.json').read_text())
                 digest = hashlib.sha256(apk.read_bytes()).hexdigest()
                 assert provenance['sha'] == manifest['sha'] and provenance['apk_sha256'] == digest
-                assert provenance['run_id'] == manifest['run_id'] and provenance['run_attempt'] == manifest['run_attempt']
+                assert provenance['run_id'] == manifest['run_id']
+                # A single-job retry retains the canonical APK from an earlier build attempt.
+                assert 1 <= int(provenance['run_attempt']) <= int(manifest['run_attempt'])
+                manifest['build_run_attempt'] = provenance['run_attempt']
                 manifest['apk_sha256'] = digest
                 manifest['signing_certificate'] = provenance['signing_certificate']
                 canonical_valid = True
