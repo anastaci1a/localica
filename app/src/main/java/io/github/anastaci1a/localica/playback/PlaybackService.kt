@@ -19,6 +19,7 @@ class PlaybackService : MediaSessionService() {
     private var statistics: io.github.anastaci1a.localica.statistics.PlaybackStatistics? = null
     private var session: MediaSession? = null
     private var engine: ExoPlayer? = null
+    private var shutdownStarted = false
 
     override fun onCreate() {
         super.onCreate()
@@ -51,13 +52,39 @@ class PlaybackService : MediaSessionService() {
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = session
 
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        // Preserve Media3's ongoing-playback policy, but await our cursor before its stopSelf.
+        if (!isPlaybackOngoing || sessions.none { it.player.isPlaying }) {
+            beginShutdown { pauseAllPlayersAndStopSelf() }
+        }
+    }
+
     override fun onDestroy() {
-        statistics?.close(); statistics = null
-        engine?.let { (application as LocalicaApplication).queues.detach(it); it.release() }
-        engine = null
-        session?.release()
-        session = null
+        // Android cannot await onDestroy. Retain cleanup ownership independently of its lifecycle.
+        beginShutdown()
         super.onDestroy()
+    }
+
+    private fun beginShutdown(afterRelease: () -> Unit = {}) {
+        if (shutdownStarted) return
+        shutdownStarted = true
+        statistics?.close(); statistics = null
+        val closingPlayer = engine
+        val closingSession = session
+        engine = null
+        session = null
+        if (closingPlayer == null) {
+            closingSession?.release()
+            afterRelease()
+            return
+        }
+        closingPlayer.pause()
+        val checkpoint = (application as LocalicaApplication).queues.detach(closingPlayer)
+        // No controller can restart this dying player while the final write is pending.
+        closingSession?.release()
+        finishPlaybackShutdown(checkpoint) {
+            try { closingPlayer.release() } finally { afterRelease() }
+        }
     }
 }
 
