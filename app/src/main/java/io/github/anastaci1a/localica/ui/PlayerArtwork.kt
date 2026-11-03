@@ -22,7 +22,9 @@ import io.github.anastaci1a.localica.library.CoverProvider
 import io.github.anastaci1a.localica.library.EmbeddedCoverProvider
 
 internal data class PlayerVisual(val artwork: ImageBitmap? = null, val palette: PlayerPalette = NeutralPalette,
-    val loading: Boolean = false, val softArtwork: ImageBitmap? = null, val contentKey: String? = null)
+    val loading: Boolean = false, val softArtwork: ImageBitmap? = null, val contentKey: String? = null,
+    /** The track whose average colour tints this loading frame (#525). */
+    val loadingUri: String? = null)
 
 /** Player-only retention: reusable library rows must still clear artwork when their identity changes. */
 @Composable
@@ -47,7 +49,8 @@ internal fun rememberPlayerVisual(uri: String?, provider: CoverProvider = Embedd
     SideEffect { if (cached != null && revision == ArtworkCache.revision.value) loaded.value = request to cached }
     val completed = loaded.value
     val retained = if (completed.first?.third === provider) completed.second else PlayerVisual()
-    return cached ?: retained.copy(loading = uri != null && completed.first != request)
+    val loading = uri != null && completed.first != request
+    return cached ?: retained.copy(loading = loading, loadingUri = uri.takeIf { loading })
 }
 
 /** A collection starts with its tapped thumbnail; preparing its large wash never blocks that frame. */
@@ -89,7 +92,7 @@ internal fun PlayerArtworkFrame(visual: PlayerVisual, modifier: Modifier, shape:
     Box(modifier.clip(shape)) {
         androidx.compose.foundation.Canvas(Modifier.matchParentSize()) { drawRect(visual.palette.middle) }
         if (visual.artwork != null) Image(visual.artwork, stringResource(R.string.album_artwork), Modifier.fillMaxSize(), contentScale = contentScale)
-        else if (visual.loading) ArtworkPlaceholder(true, Modifier.matchParentSize(), showIcon = false)
+        else if (visual.loading) ArtworkPlaceholder(true, Modifier.matchParentSize(), showIcon = false, tintUris = listOfNotNull(visual.loadingUri))
         else androidx.compose.material3.Icon(androidx.compose.ui.res.painterResource(R.drawable.ic_music), "No artwork",
             Modifier.align(androidx.compose.ui.Alignment.Center).fillMaxSize(.3f), tint = androidx.compose.ui.graphics.Color.White.copy(alpha = .4f))
     }
@@ -185,6 +188,9 @@ internal fun PreloadPlayerArtwork(uris: List<String>) {
     val context = LocalContext.current.applicationContext
     val revision by ArtworkCache.revision.collectAsState()
     LaunchedEffect(uris, revision) {
+        // The current and next tracks ask for missing colours ahead of the bulk backfill (#525).
+        uris.distinct().take(2).filter { io.github.anastaci1a.localica.library.ArtworkColors.peek(listOf(it)) == null }
+            .let { if (it.isNotEmpty()) io.github.anastaci1a.localica.library.ArtworkColors.prioritize(it) }
         for (uri in uris.distinct().take(8)) {
             currentCoroutineContext().ensureActive()
             PlayerVisualCache.read(context, uri)

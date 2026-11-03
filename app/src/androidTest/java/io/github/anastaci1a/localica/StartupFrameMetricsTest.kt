@@ -70,8 +70,7 @@ class StartupFrameMetricsTest {
         val interfacePreferences = context.getSharedPreferences("interface", Context.MODE_PRIVATE)
         val originalTabs = interfacePreferences.getString("tabs", null)
         val database = Room.databaseBuilder(context, LibraryDatabase::class.java, "library.db")
-            .addMigrations(LibraryDatabase.MIGRATION_1_2, LibraryDatabase.MIGRATION_2_3, LibraryDatabase.MIGRATION_3_4,
-                LibraryDatabase.MIGRATION_4_5, LibraryDatabase.MIGRATION_5_6).build()
+            .addMigrations(*LibraryDatabase.MIGRATIONS).build()
         val store = RoomLibraryStore(database.libraryDao())
         val control = Executors.newSingleThreadExecutor()
         val main = Handler(Looper.getMainLooper())
