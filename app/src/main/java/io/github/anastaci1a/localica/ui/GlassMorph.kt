@@ -694,7 +694,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                     if (expandedWidth.value < 0f || reduced) expandedWidth.snapTo(measuredWidth.toFloat())
                     else expandedWidth.animateTo(measuredWidth.toFloat(), glassMorphSpring(speed))
                 }
-                val targetWidth = (expandedWidth.value.takeIf { it > 0f } ?: measuredWidth.takeIf { it > 0 }?.toFloat() ?: widthLimit.toFloat()).roundToInt()
+                val targetWidth = (expandedWidth.value.takeIf { it > 0f } ?: measuredWidth.takeIf { it > 0 }?.toFloat() ?: widthLimit.toFloat())
                 val maxHeight = ((if (placement == GlassPlacement.Search) minOf(availableHeight, if (imeHeight > 0 || childPanels.intValue > 0) searchHeightLimit
                         else (searchHeightLimit.toLong() * 120 / 100).coerceAtMost(Int.MAX_VALUE.toLong()).toInt())
                     else availableHeight) - margin * 2).roundToInt().coerceAtLeast(1)
@@ -766,27 +766,12 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                 Box(Modifier.fillMaxSize().onGloballyPositioned {
                     if (hasViewport) windowOrigin = it.backdropPosition(view)
                 }) {
+                    // Measure and placement share one edge-rounded rectangle. Keep the
+                    // shadow's layer-free placement on legacy Android.
+                    val panelBounds = remember { arrayOfNulls<MotionPixelRect>(1) }
                     Layout(modifier = Modifier.glassShadowOffset {
-                        val rightAligned = start.center.x > availableWidth / 2f
-                        val x = if (placement == GlassPlacement.Menu)
-                            (if (anchor.contextual) start.center.x - targetWidth / 2f else if (rightAligned) start.right - targetWidth else start.left).coerceIn(margin, (availableWidth - targetWidth - margin).coerceAtLeast(margin))
-                            else (availableWidth - targetWidth) / 2f
-                        val y = when (placement) {
-                            GlassPlacement.Search -> if (imeHeight > 0)
-                                (availableHeight - targetHeight - margin).coerceAtLeast(margin)
-                                else ((availableHeight - targetHeight) / 2f).coerceAtLeast(margin)
-                            GlassPlacement.Center -> (availableHeight - targetHeight) / 2f
-                            GlassPlacement.Sheet -> (availableHeight - targetHeight - margin).coerceAtLeast(margin)
-                            GlassPlacement.Page -> 0f
-                            GlassPlacement.Menu -> (if (anchor.contextual) minOf(start.top,
-                                (anchor.bottomLimit.takeIf { it.isFinite() }?.minus(windowOrigin.y) ?: (availableHeight - anchor.bottomClearance)) - targetHeight)
-                                else if (start.center.y > availableHeight / 2f) start.bottom - targetHeight else start.top)
-                                .coerceIn(margin, (availableHeight - targetHeight).toFloat().coerceAtLeast(margin))
-                        }
-                        if (flightRect != null) androidx.compose.ui.unit.IntOffset(flightRect.left.roundToInt(), flightRect.top.roundToInt())
-                        else if (page) androidx.compose.ui.unit.IntOffset(with(density) { (28.dp.toPx() * (1f - p)).roundToInt() }, 0)
-                        else androidx.compose.ui.unit.IntOffset(mix(if (detached) x else start.left, x).roundToInt(),
-                            mix(if (detached) y + margin * 2 else start.top, y).roundToInt())
+                        val pixels = panelBounds[0]
+                        androidx.compose.ui.unit.IntOffset(pixels?.left ?: 0, pixels?.top ?: 0)
                     }.onGloballyPositioned {
                         if (!hasViewport || it.size.width == 0 || it.size.height == 0) return@onGloballyPositioned
                         if (continuousOrigin != null && it.size.width > 0 && it.size.height > 0 &&
@@ -899,6 +884,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                             // size or overwrite its remembered target. An empty
                             // measure retains all three composed children, including
                             // the draft owner; removing content here would not.
+                            panelBounds[0] = null
                             return@Layout layout(panelConstraints.minWidth, panelConstraints.minHeight) { }
                         }
                         val contentWidth = if (fitContent)
@@ -907,11 +893,38 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                         val foreground = children[1].measure(Constraints(minWidth = contentWidth, maxWidth = contentWidth,
                             minHeight = if (page) maxHeight else 0, maxHeight = maxHeight))
                         targetHeight = foreground.height
-                        val width = (if (flightRect != null) flightRect.width.roundToInt() else if (page) targetWidth else mix(if (detached) targetWidth * .96f else startWidth, targetWidth.toFloat()).roundToInt()).coerceIn(1, availableWidth)
-                        val height = (if (flightRect != null) flightRect.height.roundToInt() else if (page) foreground.height else if (!detached && geometry < 0f)
-                            (startHeight * (1f - geometry * 2f)).roundToInt()
-                        else mix(if (detached) foreground.height * .96f else startHeight,
-                            expandedHeight.value.takeIf { it >= 0f } ?: foreground.height.toFloat()).roundToInt()).coerceIn(1, availableHeight)
+                        val rightAligned = start.center.x > availableWidth / 2f
+                        val x = if (placement == GlassPlacement.Menu)
+                            (if (anchor.contextual) start.center.x - targetWidth / 2f else if (rightAligned) start.right - targetWidth else start.left).coerceIn(margin, (availableWidth - targetWidth - margin).coerceAtLeast(margin))
+                            else (availableWidth - targetWidth) / 2f
+                        val y = when (placement) {
+                            GlassPlacement.Search -> if (imeHeight > 0)
+                                (availableHeight - targetHeight - margin).coerceAtLeast(margin)
+                                else ((availableHeight - targetHeight) / 2f).coerceAtLeast(margin)
+                            GlassPlacement.Center -> (availableHeight - targetHeight) / 2f
+                            GlassPlacement.Sheet -> (availableHeight - targetHeight - margin).coerceAtLeast(margin)
+                            GlassPlacement.Page -> 0f
+                            GlassPlacement.Menu -> (if (anchor.contextual) minOf(start.top,
+                                (anchor.bottomLimit.takeIf { it.isFinite() }?.minus(windowOrigin.y) ?: (availableHeight - anchor.bottomClearance)) - targetHeight)
+                                else if (start.center.y > availableHeight / 2f) start.bottom - targetHeight else start.top)
+                                .coerceIn(margin, (availableHeight - targetHeight).toFloat().coerceAtLeast(margin))
+                        }
+                        val left = if (flightRect != null) flightRect.left
+                            else if (page) with(density) { 28.dp.toPx() * (1f - p) }
+                            else mix(if (detached) x else start.left, x)
+                        val top = if (flightRect != null) flightRect.top else if (page) 0f
+                            else mix(if (detached) y + margin * 2 else start.top, y)
+                        val rawWidth = if (flightRect != null) flightRect.width else if (page) targetWidth
+                            else mix(if (detached) targetWidth * .96f else startWidth, targetWidth)
+                        val rawHeight = if (flightRect != null) flightRect.height else if (page) foreground.height.toFloat()
+                            else if (!detached && geometry < 0f) startHeight * (1f - geometry * 2f)
+                            else mix(if (detached) foreground.height * .96f else startHeight,
+                                expandedHeight.value.takeIf { it >= 0f } ?: foreground.height.toFloat())
+                        val pixels = glassMorphPixelBounds(Rect(Offset(left, top), Size(rawWidth, rawHeight)),
+                            availableWidth, availableHeight)
+                        panelBounds[0] = pixels
+                        val width = pixels.width
+                        val height = pixels.height
                         val backing = children[0].measure(Constraints.fixed(width, height))
                         val face = children[2].measure(Constraints.fixed(startWidth.roundToInt().coerceAtLeast(1), startHeight.roundToInt().coerceAtLeast(1)))
                         layout(width, height) {
