@@ -203,6 +203,8 @@ Gesture ownership lasts until release. Measure velocity from integrated deltas w
 
 Live and virtualized cells share fixed text/artwork endpoints. Retain their source-viewport bitmap lease, drawings and midpoint anchor through reversal, release and handoff. Placement resolves active pinch ownership in the layer phase, reverting to identity after retirement even before recomposition.
 
+Collection headers resolve beyond-bounds measurement through Compose’s public modifier-node ancestor lookup. Attached header and item nodes provide the current grid ancestor; detaching a node removes its lookup, so virtualized headers use live items without retaining a stale provider.
+
 Initial placement corrects the measured fractional anchor. Current-row decoration follows interpolated content bounds without changing lazy measurement or hit targets. Retained outgoing menu drawings are non-interactive. Empty gallery slots never consume pointer input.
 
 `CollectionActions` owns song/collection menus across rows, artwork holds and Home, with source-specific removal appended. `ActionMenuItem` requires an explicit icon independent of its label. Song-information links share an off-Main lookup that rejects dismissed, replaced-source or superseded requests. `GlassDragBubble` owns lifted/landing material for song stacks and action customization.

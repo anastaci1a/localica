@@ -17,10 +17,8 @@ import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.layout.BeyondBoundsLayout
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.LocalPinnableContainer
-import androidx.compose.ui.layout.ModifierLocalBeyondBoundsLayout
 import androidx.compose.ui.layout.PinnableContainer
 import androidx.compose.ui.layout.onPlaced
-import androidx.compose.ui.modifier.modifierLocalConsumer
 import androidx.compose.ui.unit.IntSize
 import io.github.anastaci1a.localica.browse.BrowseStyle
 import kotlinx.coroutines.CompletableDeferred
@@ -38,7 +36,7 @@ internal val LocalCollectionHeaderFrameObserver = staticCompositionLocalOf<((Col
 @OptIn(ExperimentalComposeUiApi::class)
 internal class CollectionPinchHeader(val motion: BrowsePinchMotion, val grid: LazyGridState) {
     private val geometry = CollectionHeaderPinch()
-    var beyond: BeyondBoundsLayout? = null
+    private val beyond: BeyondBoundsLayout? get() = motion.beyondBounds.provider
     var viewport: LayoutCoordinates? = null
     var background: LayoutCoordinates? = null
     var coordinates: LayoutCoordinates? = null
@@ -296,7 +294,7 @@ internal fun Modifier.collectionPinchHeader(owner: CollectionPinchHeader, style:
     DisposableEffect(owner, layer) { onDispose {
         if (owner.layer === layer) { owner.layer = null; owner.staticLayer = null; owner.coordinates = null; owner.pinnable = null }
     } }
-    return modifierLocalConsumer { ModifierLocalBeyondBoundsLayout.current?.let { owner.beyond = it } }
+    return browseBeyondBounds(owner.motion.beyondBounds)
         .onPlaced { owner.coordinates = it; owner.placedStyle = style; owner.placedRequest = owner.request }
         .graphicsLayer {
             val offset = owner.translation()
