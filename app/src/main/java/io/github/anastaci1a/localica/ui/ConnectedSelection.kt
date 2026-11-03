@@ -22,6 +22,7 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.unit.dp
 import kotlin.math.*
 
 /** [corner] comes from the item's shared outline (#532); null keeps the generic contour. */
@@ -165,7 +166,7 @@ internal fun ConnectedSelectionHost(modifier: Modifier = Modifier, contentDrawin
                 val parts = members.map { lifts[it] }
                 val strengths = { a: Int, b: Int -> min(parts[a].progress, parts[b].progress) }
                 val opacity = members.maxOf { opacities[it] }
-                drawHoverGroup(group, parts, strengths, backing, location, blurEffects, recordingDensity, recordingDirection, gap, opacity = opacity)
+                drawHoverGroup(group, parts, strengths, backing, location, blurEffects, recordingDensity, recordingDirection, gap, opacity = opacity, itemOpacity = members.map { opacities[it] })
                 members.forEach { member ->
                     val item = hovering.getOrNull(member) ?: return@forEach
                     val lift = lifts[member]
@@ -191,9 +192,31 @@ internal class HoverGroupRenderer(val output: GraphicsLayer, scope: kotlinx.coro
 internal fun DrawScope.drawHoverGroup(group: HoverGroupRenderer, parts: List<HoverGeometry>, strength: (Int, Int) -> Float,
     backing: FrostedBackdrop?, location: BackdropLocation, blurEffects: Boolean,
     density: androidx.compose.ui.unit.Density, direction: LayoutDirection, gap: Float,
-    sampleOffset: Offset = Offset.Zero, shadow: Boolean = true, opacity: Float = 1f) {
+    sampleOffset: Offset = Offset.Zero, shadow: Boolean = true, opacity: Float = 1f,
+    itemOpacity: List<Float>? = null, maskVisibility: Boolean = true) {
     if (parts.isEmpty()) return
     val progress = parts.maxOf { it.progress } * opacity.coerceIn(0f, 1f)
+    if (progress <= 0f) return
+    val visibility = parts.mapIndexed { i, part ->
+        (part.progress * (itemOpacity?.get(i) ?: opacity).coerceIn(0f, 1f) / progress).coerceIn(0f, 1f)
+    }
+    if (maskVisibility && visibility.any { it < .9999f }) {
+        // A departing member must fade independently of its still-selected neighbours.
+        // Keep one material/union shadow and mask it once; never redraw foreground here.
+        val padding = if (shadow) (6f + HoverLift.ShadowSpread * 28f).dp.toPx() + 2f else gap / 2f
+        val bounds = parts.map { it.lifted.bounds }.reduce { a, b -> a.union(b) }.inflate(padding)
+        val canvas = drawContext.canvas
+        canvas.saveLayer(bounds, Paint())
+        drawHoverGroup(group, parts, strength, backing, location, blurEffects, density, direction, gap,
+            sampleOffset, shadow, opacity, itemOpacity, maskVisibility = false)
+        // Complement removal also handles transparent/empty masks correctly on API 26.
+        canvas.saveLayer(bounds, Paint().apply { blendMode = BlendMode.DstOut })
+        drawRect(Color.White, bounds.topLeft, bounds.size)
+        canvas.saveLayer(bounds, Paint().apply { blendMode = BlendMode.DstOut })
+        drawSelectionVisibilityMask(parts.indices.map { parts[it].lifted.bounds to visibility[it] }, padding * 2f)
+        canvas.restore(); canvas.restore(); canvas.restore()
+        return
+    }
     val regions = parts.map { SelectionRegion(it.lifted.bounds, it.lifted.corner) }
     val rest = parts.map { SelectionRegion(it.rest.bounds, it.rest.corner) }
     val path = group.path.path(regions, rest, gap, strength)
