@@ -33,8 +33,10 @@ for folder in ('app/build/reports/androidTests','app/build/outputs/androidTest-r
     path=root/folder;path.mkdir(parents=True,exist_ok=True);(path/'stub.txt').write_text('owned stub evidence')
 import xml.etree.ElementTree as ET
 classes=['io.github.anastaci1a.localica.SelectedTest','io.github.anastaci1a.localica.OtherTest']
-if any('Arguments.class=' in a for a in sys.argv):classes=classes[:1]
-if any('Arguments.notClass=' in a for a in sys.argv) and os.environ.get('MOCK_IGNORE_EXCLUSION')!='true':classes=classes[1:]
+selected=next((a.split('=',1)[1].split(',') for a in sys.argv if 'Arguments.class=' in a),None)
+excluded=next((a.split('=',1)[1].split(',') for a in sys.argv if 'Arguments.notClass=' in a),[])
+if selected is not None:classes=[c for c in classes if c in selected]
+if os.environ.get('MOCK_IGNORE_EXCLUSION')!='true':classes=[c for c in classes if c not in excluded]
 if any('Arguments.class=' in a for a in sys.argv) and os.environ.get('MOCK_EMPTY_PREFLIGHT')=='true':classes=[]
 if os.environ.get('MOCK_CHANGE_APK')=='true':(root/'app/build/outputs/apk/debug/app-debug.apk').write_bytes(b'changed stub apk')
 suite=ET.Element('testsuite',tests=str(len(classes)),failures='0',errors='0',skipped='0')
@@ -163,6 +165,32 @@ if a==['get-serialno']:""")
         supervision=json.loads((self.root/'native-live-evidence/full/supervision.json').read_text())
         self.assertTrue(supervision['monitoring_complete'])
         self.assert_restored()
+
+    def test_weighted_full_shard_uses_its_recorded_class_filter_without_method_hashing(self):
+        self.run_runner(LOCALICA_SHARD_COUNT='2', LOCALICA_SHARD_INDEX='0')
+        plan=json.loads((self.root/'native-shard-plan.json').read_text())
+        excluded=','.join(plan['shards'][0]['excluded_classes'])
+        self.assertIn('-Pandroid.testInstrumentationRunnerArguments.notClass='+excluded, self.state['gradleArgs'][0])
+        self.assertFalse(any('Arguments.class=' in a for a in self.state['gradleArgs'][0]))
+        self.assertFalse(any('numShards=' in a or 'shardIndex=' in a for a in self.state['gradleArgs'][0]))
+        self.assertEqual(2, len({c for s in plan['shards'] for c in s['classes']}))
+        self.assert_restored()
+
+    def test_weighted_remainder_retains_risk_preflight_and_exact_union(self):
+        self.run_runner(RISK_CLASSES=SELECTED, LOCALICA_SHARD_COUNT='1', LOCALICA_SHARD_INDEX='0')
+        preflight, full=self.state['gradleArgs']
+        self.assertIn('-Pandroid.testInstrumentationRunnerArguments.numShards=1', preflight)
+        self.assertIn('-Pandroid.testInstrumentationRunnerArguments.class='+SELECTED, preflight)
+        self.assertNotIn('-Pandroid.testInstrumentationRunnerArguments.numShards=1', full)
+        self.assertIn('-Pandroid.testInstrumentationRunnerArguments.notClass='+SELECTED, full)
+        self.assertFalse(any('Arguments.class=' in a for a in full))
+        self.assertEqual(2,json.loads((self.root/'preflight-reports/complete-union.json').read_text())['executed_once'])
+        self.assert_restored()
+
+    def test_impossible_weighted_plan_fails_before_any_device_mutation(self):
+        self.run_runner(2,LOCALICA_SHARD_COUNT='3', LOCALICA_SHARD_INDEX='0')
+        self.assertEqual(0,self.state['mutations'])
+        self.assertEqual(0,self.state['gradle'])
         self.assertNotIn('clears', self.state)
 
     def test_test_failure_keeps_original_status_even_if_monitoring_and_restore_fail(self):

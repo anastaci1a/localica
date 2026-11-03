@@ -80,6 +80,14 @@ Monitoring degradation fails an otherwise green run. Test failure and cancellati
 
 Fresh `native-live-evidence` is always uploaded, including on failure. Existing evidence is refused rather than replayed. Local invocations without this workflow flag keep their existing behavior. Compatibility remains unwrapped.
 
+### Measured native shards
+
+The four native shards per API assign whole classes by measured duration, longest first. The [duration profile](../.github/test-evidence/class-durations.csv) comes from [run 41275536326, attempt 3](https://github.com/anastaci1a/localica/actions/runs/41275536326), source `23a058e047fa4727a294502da129ee0411fc11ba`.
+
+Each device artifact retains `native-shard-plan.json`: source/profile hashes, class assignments, expected methods, estimated loads and fallback costs. New classes use the measured median per-method cost. Historical ScrollPerformance timings apply only when its existing opt-in is enabled; ordinary runs budget its recorded assumptions separately.
+
+Risk preflight retains its existing method partition. Weighted remainder shards exclude those risk classes. The summary still requires every API-qualified method exactly once, including recorded skips; missing, extra, repeated or failed outcomes cannot certify the full suite.
+
 ### Opt-in prototypes
 
 The opt-in `prototype.yml` lane builds an explicitly uncertified development APK through manual dispatch or an explicit reusable-workflow call. Select up to 73 affected behavior classes (4096 characters maximum including the three mandatory regression classes) and describe coverage and limitations.

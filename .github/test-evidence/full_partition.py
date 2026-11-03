@@ -5,11 +5,14 @@ generated tests or unknown SDK omission is inferred. Android runner assumptions 
 skips (never passes), with their original per-method log retained in the receipt.
 """
 import argparse
+import csv
 import hashlib
 import json
+import math
 from pathlib import Path
 import re
 import sys
+import statistics
 import xml.etree.ElementTree as ET
 
 import source_methods as source
@@ -176,9 +179,74 @@ def union(root, api, folders, shards):
     return {'api': api, 'shards': shards, 'xml_roots': len(folders), 'expected': len(expected), 'executed_once': len(rows), **counts}
 
 
+def shards(root, api, count, durations, sha, risks=(), scroll_performance=False):
+    """Longest measured class first; retain every method and explicit unknown costs."""
+    require(api in ('26', '36') and 1 <= count <= 32, 'Invalid shard API/count')
+    require(re.fullmatch('[0-9a-f]{40}', sha), 'Invalid SHA')
+    inv, omissions, expected = expected_for(root, api)
+    require(len(risks) == len(set(risks)) and set(risks) <= set(inv['selectors']), 'Invalid risk classes')
+    measured, per_method = {}, []
+    seen = set()
+    with durations.open(newline='') as stream:
+        rows = csv.DictReader(stream)
+        require(rows.fieldnames == ['api', 'class', 'tests', 'total_seconds', 'skipped'], 'Invalid duration columns')
+        for row in rows:
+            identity = (row['api'], row['class'])
+            require(identity not in seen, 'Duplicate measured class')
+            seen.add(identity)
+            tests, skipped, seconds = int(row['tests']), int(row['skipped']), float(row['total_seconds'])
+            require(row['api'] in ('26', '36') and re.fullmatch(r'[A-Za-z_]\w*(\.[A-Za-z_]\w*)+', row['class']), 'Invalid duration identity')
+            require(tests > 0 and 0 <= skipped <= tests and math.isfinite(seconds) and seconds >= 0, 'Invalid measured cost')
+            if row['api'] == api:
+                measured[row['class']] = (tests, seconds)
+                if seconds > 0:
+                    per_method.append(seconds / tests)
+    require(per_method, 'No measured durations for this API')
+    fallback = statistics.median(per_method)
+    methods = {}
+    for identity in sorted(expected):
+        cls = identity.split('#')[0]
+        if cls not in risks:
+            methods.setdefault(cls, []).append(identity)
+    require(len(methods) >= count, 'Would create an empty native shard')
+    costs, estimated, opt_in = {}, [], []
+    for cls, identities in methods.items():
+        if cls in measured:
+            tests, seconds = measured[cls]
+            costs[cls] = seconds * len(identities) / tests
+        else:
+            costs[cls] = fallback * len(identities)
+            estimated.append(cls)
+        # The historical scan predates the existing opt-in. These methods still run
+        # and record assumptions, but their optical benchmark body is not enabled.
+        if cls == 'io.github.anastaci1a.localica.ScrollPerformanceTest' and not scroll_performance:
+            costs[cls] = 0.01 * len(identities)
+            opt_in.append(cls)
+    result = [{'index': i, 'classes': [], 'methods': [], 'estimated_seconds': 0.0} for i in range(count)]
+    for cls in sorted(methods, key=lambda name: (-costs[name], name)):
+        target = min(result, key=lambda shard: (shard['estimated_seconds'], shard['index']))
+        target['classes'].append(cls)
+        target['methods'].extend(methods[cls])
+        target['estimated_seconds'] += costs[cls]
+    for shard in result:
+        shard['classes'].sort()
+        shard['excluded_classes'] = sorted(set(inv['selectors']) - set(shard['classes']))
+        shard['methods'].sort()
+        shard['estimated_seconds'] = round(shard['estimated_seconds'], 6)
+    return {'schema_version': 1, 'sha': sha, 'api': api, 'shard_count': count,
+            'algorithm': 'longest measured class first, least estimated load, stable class/index ties',
+            'inventory_sha256': hashlib.sha256(json.dumps(inv, sort_keys=True).encode()).hexdigest(),
+            'duration_sha256': digest(durations), 'risk_classes': list(risks),
+            'class_seconds': {cls: round(costs[cls], 6) for cls in sorted(costs)},
+            'preflight_partition': 'Existing AndroidJUnitRunner method shards; risks excluded from weighted remainder',
+            'estimated_classes': sorted(estimated), 'unknown_seconds_per_method': fallback,
+            'opt_in_disabled_classes': opt_in, 'opt_in_assumption_seconds_per_method': 0.01,
+            'sdk_omissions': omissions, 'shards': result}
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('action', choices=('plan','preflight','complete','union'))
+    parser.add_argument('action', choices=('plan','preflight','complete','union','shards'))
     parser.add_argument('--root', type=Path, default=Path('.'))
     parser.add_argument('--plan', type=Path)
     parser.add_argument('--shard', action='store_true')
@@ -192,8 +260,17 @@ def main():
     parser.add_argument('--preflight', type=Path)
     parser.add_argument('--remaining', type=Path)
     parser.add_argument('--output', type=Path)
+    parser.add_argument('--durations', type=Path, default=Path(__file__).with_name('class-durations.csv'))
+    parser.add_argument('--scroll-performance', action='store_true')
     args = parser.parse_args()
     try:
+        if args.action == 'shards':
+            require(args.shards and args.output, 'Missing shard plan inputs')
+            result = shards(args.root.resolve(), args.api, args.shards, args.durations, args.sha,
+                            args.risk_classes.split(',') if args.risk_classes else [], args.scroll_performance)
+            with args.output.open('x') as stream:
+                stream.write(json.dumps(result, indent=2)+'\n')
+            return 0
         if args.action == 'union':
             require(args.api and args.shards and args.xml_root, 'Missing union inputs')
             result = union(args.root.resolve(), args.api, args.xml_root, args.shards)

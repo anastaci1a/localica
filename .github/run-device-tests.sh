@@ -6,14 +6,17 @@ reports="$PWD/preflight-reports"
 live=${LOCALICA_LIVE_EVIDENCE:-false}
 live_reports="$PWD/native-live-evidence"
 child=''
-# Optional native sharding (both values or neither): shards split one filtered suite via
-# AndroidJUnitRunner numShards/shardIndex; the workflow summary proves the once-only union.
+# Full native shards use measured class costs. Risk preflight retains the existing
+# method partition; the workflow summary still proves the once-only union.
 shard_count=${LOCALICA_SHARD_COUNT:-}
 shard_index=${LOCALICA_SHARD_INDEX:-}
 runner_args=()
+full_runner_args=()
+full_excluded_classes=$classes
 partition_shard=()
 # Opt-in measurement harness; skipped by assumption unless requested.
 [[ "${LOCALICA_SCROLL_PERFORMANCE:-}" != true ]] || runner_args+=("-Pandroid.testInstrumentationRunnerArguments.scrollPerformance=true")
+full_runner_args=("${runner_args[@]}")
 if [[ -n "$shard_count$shard_index" ]]; then
   [[ "$shard_count" =~ ^[1-9][0-9]*$ && "$shard_index" =~ ^(0|[1-9][0-9]*)$ && "$shard_index" -lt "$shard_count" ]] || { echo 'Invalid shard count/index' >&2; exit 2; }
   runner_args+=("-Pandroid.testInstrumentationRunnerArguments.numShards=$shard_count" "-Pandroid.testInstrumentationRunnerArguments.shardIndex=$shard_index")
@@ -31,6 +34,14 @@ if [[ "$live" == true ]]; then
   mkdir "$live_reports"
   printf 'sha=%s\napi=%s\nrun=%s\nattempt=%s\n' "$GITHUB_SHA" "$TEST_API" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" > "$live_reports/context.txt"
 fi
+if [[ -n "$shard_count" ]]; then
+  weighted_options=()
+  [[ "${LOCALICA_SCROLL_PERFORMANCE:-}" != true ]] || weighted_options+=(--scroll-performance)
+  python3 .github/test-evidence/full_partition.py shards --root "$PWD" --api "${TEST_API:-}" --shards "$shard_count" --sha "${GITHUB_SHA:-}" --risk-classes "$classes" --output "$PWD/native-shard-plan.json" "${weighted_options[@]}"
+  # Exclude the complement so ordinary suite selection preserves opt-in assumptions.
+  full_excluded_classes=$(python3 -c 'import json,sys; print(",".join(json.load(open("native-shard-plan.json"))["shards"][int(sys.argv[1])]["excluded_classes"]))' "$shard_index")
+fi
+[[ -z "$full_excluded_classes" ]] || full_runner_args+=("-Pandroid.testInstrumentationRunnerArguments.notClass=$full_excluded_classes")
 stop_live_child() {
   local sig=$1 code=$2
   trap '' INT TERM
@@ -155,7 +166,7 @@ if [[ -z "$classes" ]]; then
   install_live_signals
   # Keep the sourced EXIT restoration trap alive; preserve Gradle failure status.
   set +e
-  run_native full ./gradlew connectedDebugAndroidTest --no-daemon --max-workers=2 "${runner_args[@]}"
+  run_native full ./gradlew connectedDebugAndroidTest --no-daemon --max-workers=2 "${full_runner_args[@]}"
   result=$?
   set -e
   exit "$result"
@@ -231,7 +242,7 @@ done
 [[ ! -e app/build/outputs/androidTest-results && ! -L app/build/outputs/androidTest-results ]] || { echo 'Unexpected instrumentation results before remainder' >&2; exit 2; }
 printf 'preflight=passed\nfull=running\n' > "$reports/status.txt"
 set +e
-run_native full ./gradlew connectedDebugAndroidTest --no-daemon --max-workers=2 "-Pandroid.testInstrumentationRunnerArguments.notClass=$classes" "${runner_args[@]}"
+run_native full ./gradlew connectedDebugAndroidTest --no-daemon --max-workers=2 "${full_runner_args[@]}"
 result=$?
 set -e
 status_result=0
