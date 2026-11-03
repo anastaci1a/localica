@@ -96,6 +96,8 @@ The focused jobs allow 60 minutes without trimming selected methods. This is a c
 
 The decision manifest records the exact SHA, APK identity, selected coverage and that complete native suites were not run. Prototype results do not certify a release.
 
+The `runner` dispatch input defaults to `github`. `self-hosted` moves only the four emulator jobs to the owner-only ephemeral KVM runner (`self-hosted, linux, x64, localica-kvm`); build, evidence and every Android workflow job, including releases, stay GitHub-hosted. Each such job requires a non-PR event, the repository owner as actor and triggering actor, and this repository; otherwise it is skipped rather than rerouted. That runner gives each job a fresh container and sets `LOCALICA_EPHEMERAL_RUNNER=localica-kvm`, the only self-hosted environment the prototype runner and device preparation accept. Contract tests enforce this routing.
+
 Prototypes use the same [evidence tooling](#evidence-tooling-prerequisites), six-packet limit and outcome rules described above: final XML owns test results, monitoring degradation blocks a green result, and test failure retains its exit status.
 
 No automatic replay or replacement full-suite run is started. Hosted transport evidence must identify the tested publisher revision. Offline contract success alone does not prove live delivery. New manual workflows require registration or an explicitly coordinated branch smoke before use.
@@ -134,7 +136,7 @@ The native job splits each API suite into four AndroidJUnitRunner shards (`numSh
 
 API 36 uses explicit `lavapipe`, 720×1280 at 280 dpi, and normal system animations: automatic software/SwiftShader caused rendering crashes. Zero-duration system transitions stalled launcher/Back/picker flows. Compose assertions control their own clock. Keep Actions pinned by commit.
 
-On disposable GitHub-hosted API 26 emulators, the native runner temporarily disables preinstalled Google Search before instrumentation. Its unrelated JobScheduler crash can obstruct Localica. Cleanup restores its prior enabled state after verifying device and package ownership. Google Search data is preserved. Physical devices are untouched. Localica crashes and all assertions remain fatal.
+On disposable API 26 emulators (GitHub-hosted, or the ephemeral prototype runner), the native runner temporarily disables preinstalled Google Search before instrumentation. Its unrelated JobScheduler crash can obstruct Localica. Cleanup restores its prior enabled state after verifying device and package ownership. Google Search data is preserved. Physical devices are untouched. Localica crashes and all assertions remain fatal.
 
 `ANDROID_DEBUG_KEYSTORE` holds the base64 development key. CI restores it via `LOCALICA_DEBUG_KEYSTORE` and verifies the APK certificate. Back up the key outside Git. Local builds otherwise use the normal debug key. PRs use a disposable key.
 

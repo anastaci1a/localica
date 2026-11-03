@@ -75,6 +75,7 @@ class PrepareDeviceTestsTest(unittest.TestCase):
         self.env=dict(os.environ,PATH=str(self.root)+os.pathsep+os.environ['PATH'],MOCK_ROOT=str(self.root),
                       GITHUB_ACTIONS='true',RUNNER_ENVIRONMENT='github-hosted',TEST_API='26',GITHUB_RUN_ID='123',
                       ANDROID_SERIAL='emulator-5554',RISK_CLASSES='')
+        self.env.pop('LOCALICA_EPHEMERAL_RUNNER',None)
 
     def run_script(self,script='prepare-device-tests.sh',**environment):
         (self.root/'state.json').write_text(json.dumps(self.state))
@@ -95,6 +96,15 @@ class PrepareDeviceTestsTest(unittest.TestCase):
 
     def test_self_hosted_run_never_contacts_any_device(self):
         self.assert_exit(0,RUNNER_ENVIRONMENT='self-hosted');self.assertEqual([],self.commands())
+
+    def test_self_hosted_without_exact_ephemeral_marker_never_contacts_any_device(self):
+        for marker in ('', 'localica', 'LOCALICA-KVM', 'localica-kvm '):
+            with self.subTest(marker=marker):
+                self.assert_exit(0,RUNNER_ENVIRONMENT='self-hosted',LOCALICA_EPHEMERAL_RUNNER=marker);self.assertEqual([],self.commands())
+
+    def test_ephemeral_self_hosted_runner_is_prepared_like_hosted(self):
+        self.assert_exit(0,RUNNER_ENVIRONMENT='self-hosted',LOCALICA_EPHEMERAL_RUNNER='localica-kvm')
+        self.assertNotEqual([],self.commands())
 
     def test_physical_device_is_rejected_without_mutation(self):
         self.state['qemu']='';self.assert_exit(2);self.assertEqual(0,self.state['mutations'])
