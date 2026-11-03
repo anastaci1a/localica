@@ -46,6 +46,20 @@ class GlassShadowStrengthCurveTest {
         }
     }
 
+    @Test fun readoutIsTheTrackPositionRoundedToFivePercent() {
+        for (strength in listOf(0f, .01f, .05f, .12f, .2f, .3f, .5f, .75f, .9f, 1f)) {
+            val label = shadowStrengthReadout(strength)
+            val position = strength.toDouble().pow(1.0 / GlassShadowStrengthCurve.toDouble())
+            assertEquals("Label must step in 5%: strength $strength", 0, label % 5)
+            assertEquals("Label for strength $strength", (Math.round(position * 20.0) * 5).toInt(), label)
+        }
+    }
+
+    @Test fun readoutEndpointsAreExact() {
+        assertEquals(0, shadowStrengthReadout(0f))
+        assertEquals(100, shadowStrengthReadout(1f))
+    }
+
     @Test fun fivePercentTrackStopsRoundTripThroughTheCurve() {
         // The slider's 19 interior stops sit on the 5% track grid (steps = 19); each stop maps back to its index.
         val stops = (0..20).map { (sliderPosition(sliderValue(it / 20f, unit, GlassShadowStrengthCurve), unit, GlassShadowStrengthCurve) * 20f).roundToInt() }
