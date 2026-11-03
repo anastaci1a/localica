@@ -294,7 +294,8 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         activate(play = false, recordIntent = false)
         }
     }
-    fun detach(attached: Player) {
+    /** Capture before release; the receipt completes only after the final ordered disk write. */
+    fun detach(attached: Player): Deferred<Unit> {
         generation++
         // Take the final cursor before MediaSessionService releases the player.
         val item = attached.currentMediaItem
@@ -303,7 +304,10 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         val position = attached.currentPosition.coerceAtLeast(0)
         attached.removeListener(listener)
         if (player === attached) { player = null; intents.observe(false) }
-        submit {
+        val revision = intents.accept()
+        // Enqueue immediately, even if the caller uses a different dispatcher.
+        return scope.async(start = CoroutineStart.UNDISPATCHED) { editCommand(alwaysRun = true) {
+            commandRevision = revision
             // Fold arrivals after any pending edit commits, so its older snapshot cannot erase them.
             var captured = capturedLibrary(null)
             val queue = captured.queues.firstOrNull { it.id == queueId }
@@ -312,7 +316,7 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
             }
             mutable.update { it.copy(library = captured) }
             persist(captured)
-        }
+        } }
     }
 
     fun tap(tracks: List<Track>, selectedId: String) = tap(tracks, tracks.indexOfFirst { it.id == selectedId })
