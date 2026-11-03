@@ -6,12 +6,16 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.dp
+import androidx.test.platform.app.InstrumentationRegistry
+import io.github.anastaci1a.localica.library.Track
+import java.io.File
 import io.github.anastaci1a.localica.navigation.*
 import io.github.anastaci1a.localica.playback.PlaybackState
 import io.github.anastaci1a.localica.ui.*
@@ -159,52 +163,75 @@ class LyricsArtworkEntryTest {
         }
     }
 
-    /** The missing-lyrics icon is drawn from the surface capture, so its layering is observable in pixels. */
     @Test fun missingLyricsIconDrawsUnderTheArtworkWhileMinimizingFromLyrics() {
         NoLyricsFixture("Missing").use { fixture ->
             setPlayer(fixture.track)
+            assertLyricsUnderArtwork("empty-lyrics")
+        }
+    }
+
+    @Test fun lyricsTextDrawsUnderTheArtworkWhileMinimizingFromLyrics() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val file = File.createTempFile("lyrics-artwork-", ".opus", instrumentation.targetContext.cacheDir)
+        try {
+            copyTestAsset(instrumentation.context.assets, "lyrics.opus", file)
+            val track = Track(android.net.Uri.fromFile(file).toString(), "Lyrics", fileName = file.name, relativePath = file.name)
+            setPlayer(track)
+            assertLyricsUnderArtwork("lyric-lines")
+        } finally { file.delete() }
+    }
+
+    /** Green separates light lyric ink from the red cover; compare both possible compositing orders. */
+    private fun assertLyricsUnderArtwork(tag: String) {
+        snap(1f)
+        compose.waitUntil(10000) {
+            compose.mainClock.advanceTimeByFrame()
+            compose.onAllNodesWithTag(tag, true).fetchSemanticsNodes().isNotEmpty()
+        }
+        forEachLayout { layout ->
             snap(1f)
-            compose.waitUntil(10000) {
-                compose.mainClock.advanceTimeByFrame()
-                compose.onAllNodesWithTag("empty-lyrics", true).fetchSemanticsNodes().isNotEmpty()
+            compose.waitForIdle()
+            fun green(p: Float): Triple<Float, Float, String> {
+                snap(p)
+                val surface = bounds("player-surface")
+                val capture = compose.onNodeWithTag("player-surface").captureToImage()
+                val output = InstrumentationRegistry.getArguments().getString("additionalTestOutputDir")
+                if (output != null) {
+                    val dir = File(output, "lyrics-artwork-entry").apply { mkdirs() }
+                    File(dir, "$tag-$layout-$p.png").outputStream().use {
+                        capture.asAndroidBitmap().compress(Bitmap.CompressFormat.PNG, 100, it)
+                    }
+                }
+                val image = capture.toPixelMap()
+                val content = bounds(tag)
+                val cover = bounds("player-artwork")
+                val left = maxOf(content.left, cover.left); val right = minOf(content.right, cover.right)
+                val top = maxOf(content.top, cover.top); val bottom = minOf(content.bottom, cover.bottom)
+                var high = 0f; var low = 1f
+                for (y in (top - surface.top).toInt() until (bottom - surface.top).toInt())
+                    for (x in (left - surface.left).toInt() until (right - surface.left).toInt()) {
+                        if (x !in 0 until image.width || y !in 0 until image.height) continue
+                        val g = image[x, y].green
+                        high = maxOf(high, g); low = minOf(low, g)
+                    }
+                return Triple(high, low, "content=$content cover=$cover")
             }
-            forEachLayout { layout ->
-                snap(1f)
-                compose.waitForIdle()
-                fun green(p: Float): Triple<Float, Float, String> {
-                    snap(p)
-                    val surface = bounds("player-surface")
-                    val image = compose.onNodeWithTag("player-surface").captureToImage().toPixelMap()
-                    val icon = bounds("empty-lyrics")
-                    val cover = bounds("player-artwork")
-                    val left = maxOf(icon.left, cover.left); val right = minOf(icon.right, cover.right)
-                    val top = maxOf(icon.top, cover.top); val bottom = minOf(icon.bottom, cover.bottom)
-                    var high = 0f; var low = 1f
-                    for (y in (top - surface.top).toInt() until (bottom - surface.top).toInt())
-                        for (x in (left - surface.left).toInt() until (right - surface.left).toInt()) {
-                            if (x !in 0 until image.width || y !in 0 until image.height) continue
-                            val g = image[x, y].green
-                            high = maxOf(high, g); low = minOf(low, g)
-                        }
-                    return Triple(high, low, "icon=$icon cover=$cover")
-                }
-                val (ink, backgroundAtRest, fullDetail) = green(1f)
-                assertTrue("The icon has measurable contrast at rest in $layout: $ink $fullDetail",
-                    ink - backgroundAtRest > .1f)
-                for (p in listOf(.88f, .91f, .94f)) {
-                    val (observed, floor, detail) = green(p)
-                    val coverAlpha = 1f - p
-                    val x = ((p - .78f) / .22f).coerceIn(0f, 1f)
-                    val lyricAlpha = x * x * (3f - 2f * x)
-                    val background = floor / (1f - coverAlpha)
-                    val under = (1f - coverAlpha) * (lyricAlpha * ink + (1f - lyricAlpha) * background)
-                    val over = lyricAlpha * ink + (1f - lyricAlpha) * (1f - coverAlpha) * background
-                    val message = "$layout p=$p observed=$observed iconUnderArtwork=$under iconOverArtwork=$over " +
-                        "ink=$ink floor=$floor $detail"
-                    println("LyricsArtworkZOrder $message")
-                    assertTrue("The icon draws under the artwork: $message",
-                        kotlin.math.abs(observed - under) < kotlin.math.abs(observed - over))
-                }
+            val (ink, backgroundAtRest, fullDetail) = green(1f)
+            assertTrue("$tag has measurable contrast at rest in $layout: $ink $fullDetail",
+                ink - backgroundAtRest > .1f)
+            for (p in listOf(.88f, .91f, .94f)) {
+                val (observed, floor, detail) = green(p)
+                val coverAlpha = 1f - p
+                val x = ((p - .78f) / .22f).coerceIn(0f, 1f)
+                val lyricAlpha = x * x * (3f - 2f * x)
+                val background = floor / (1f - coverAlpha)
+                val under = (1f - coverAlpha) * (lyricAlpha * ink + (1f - lyricAlpha) * background)
+                val over = lyricAlpha * ink + (1f - lyricAlpha) * (1f - coverAlpha) * background
+                val message = "$tag $layout p=$p observed=$observed lyricsUnderArtwork=$under lyricsOverArtwork=$over " +
+                    "ink=$ink floor=$floor $detail"
+                println("LyricsArtworkZOrder $message")
+                assertTrue("Lyrics draw under the artwork: $message",
+                    kotlin.math.abs(observed - under) < kotlin.math.abs(observed - over))
             }
         }
     }
