@@ -36,9 +36,11 @@ internal class FloatingSelectionPanelState(
 internal fun rememberFloatingSelectionPanel(visible: Boolean, reducedMotion: Boolean): FloatingSelectionPanelState {
     val height = remember { mutableStateOf(0.dp) }
     val visibility = rememberUpdatedState(visible)
+    val reduced = reducedMotion || LocalReducedMotion.current
+    val speed = LocalMotionSpeed.current
     // Start only after measurement, so the first reveal cannot lift controls a frame late.
     val progress = animateFloatAsState(if (visible && height.value > 0.dp) 1f else 0f,
-        selectionMotionSpec(reducedMotion, 220), label = "Selection panel occupancy")
+        if (reduced) androidx.compose.animation.core.snap() else glassMorphSpring(speed), label = "Selection panel occupancy")
     return remember { FloatingSelectionPanelState(height, progress, visibility) }
 }
 
@@ -60,5 +62,9 @@ internal fun FloatingSelectionPanel(state: FloatingSelectionPanelState, modifier
         layout(child.width, constraints.constrainHeight(geometry.clearance.roundToInt())) {
             child.placeRelative(0, (geometry.clearance - geometry.occupiedHeight).roundToInt())
         }
-    }.graphicsLayer { alpha = state.progress }) { content() }
+    }.graphicsLayer { alpha = state.progress }) {
+        CompositionLocalProvider(LocalSurfaceShadows provides null, LocalBottomShadows provides null) {
+            RetainedGlassFace(state.visible, { 1f }, retainShadow = true, content = content)
+        }
+    }
 }

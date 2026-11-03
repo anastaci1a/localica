@@ -221,6 +221,8 @@ Pinch and scrollbar requests carry cancellation generations. Geometry restoratio
 
 Measure glass from foreground content, then fit its padded backdrop independently. Uniformly scale fixed menu layout into the moving viewport. Search keeps its field unscaled and top-aligned, with one opening rectangle animation and captured rendered geometry for reversible closing.
 
+`GlassMorphContent` shares the glass spring for in-surface size and face transitions. Only the destination's children are placed; outgoing faces retain drawing without input. The selection panel uses the same spring for its visible occupancy and retains its complete material and shadow during dismissal.
+
 Its own window's reported IME target or safe-bottom compatibility destination drives size and placement together. Retargets retain current position and velocity. Release modal input at dismissal, retaining its drawing until the trigger acknowledges restoration. Trigger and popup share deformation, corner policy and optical parameters. Blend their source recordings before handoff, without discarding unsettled rebound.
 
 One continuous material changes its scattering/tint. No endpoint surface swap. Trigger visibility invalidates recorded drawing, not only a child layer's alpha.
