@@ -126,13 +126,14 @@ class PinchRetainedHighlightTest {
             val sourceArt = part("browse-art")
             val sourceText = part("browse-text")
             val sourceInfo = part("browse-info")
+            val visibleParts = listOf(sourceArt, sourceText, sourceInfo).filterNot { it.isEmpty }
             val density = view.resources.displayMetrics.density
             val outlineInset = maxOf(2f * density, minOf(sourceArt.left - sourceBounds.left,
                 sourceBounds.right - sourceArt.right, sourceArt.top - sourceBounds.top,
                 sourceBounds.bottom - sourceArt.bottom))
             val expectedOutline = Rect(sourceBounds.left,
-                minOf(sourceArt.top, sourceText.top, sourceInfo.top) - outlineInset,
-                sourceBounds.right, maxOf(sourceArt.bottom, sourceText.bottom, sourceInfo.bottom) + outlineInset)
+                visibleParts.minOf { it.top } - outlineInset,
+                sourceBounds.right, visibleParts.maxOf { it.bottom } + outlineInset)
                 .intersect(sourceBounds).intersect(sceneBounds)
             val viewport = list.fetchSemanticsNode().boundsInRoot
             val firstArt = compose.onNodeWithTag("browse-art-retained:0", true).fetchSemanticsNode().boundsInRoot
