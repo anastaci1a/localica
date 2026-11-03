@@ -57,6 +57,33 @@ import java.nio.ByteOrder
 @RunWith(AndroidJUnit4::class)
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 class QueueContinuousPlaybackTest {
+    @Test fun repeatedStartupComparisonRetainsAllUnderrunsAndLatencyObservations() {
+        val failures = mutableListOf<AssertionError>()
+        repeat(6) { round ->
+            for (fixture in listOf("boundary-rounded-short-config.m4a", "boundary-silent-tail.m4a")) {
+                for (queue in listOf(false, true)) {
+                    val variants = if (round % 2 == 0) listOf(false, true) else listOf(true, false)
+                    for (prefill in variants) {
+                        val label = "round=$round queue=$queue fixture=$fixture prefill=$prefill"
+                        Log.i("ContinuityTrial", "$label begin")
+                        try {
+                            playSplitPcm(queue, fixture, prefill)
+                            Log.i("ContinuityTrial", "$label outcome=passed")
+                        } catch (failure: AssertionError) {
+                            failures += failure
+                            Log.i("ContinuityTrial", "$label outcome=failed detail=" + failure.message)
+                        }
+                    }
+                }
+            }
+        }
+        if (failures.isNotEmpty()) {
+            val failure = AssertionError("Interleaved comparison retained "+failures.size+" failed strict contracts")
+            failures.forEach(failure::addSuppressed)
+            throw failure
+        }
+    }
+
     @Test fun staticPlaylistPreservesSplitPcmControl() = playSplitPcm(throughQueue = false)
 
     @Test fun queueActorPreservesSplitPcmAcrossNaturalTransitions() = playSplitPcm(throughQueue = true)
@@ -126,7 +153,7 @@ class QueueContinuousPlaybackTest {
         } finally { capture.reset() }
     }
 
-    private fun playSplitPcm(throughQueue: Boolean, encodedFixture: String? = null) {
+    private fun playSplitPcm(throughQueue: Boolean, encodedFixture: String? = null, prefill: Boolean = false) {
         val rounded = encodedFixture?.startsWith("boundary-rounded-") == true
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
@@ -182,7 +209,7 @@ class QueueContinuousPlaybackTest {
                 val renderers = object : DefaultRenderersFactory(context) {
                     override fun buildAudioSink(context: Context, enableFloatOutput: Boolean,
                         enableAudioOutputPlaybackParams: Boolean): AudioSink = MediaEditAudioSink(DefaultAudioSink.Builder(context)
-                        .setAudioOutputProvider(ContinuityOutputProvider(context))
+                        .setAudioOutputProvider(ContinuityOutputProvider(context, prefill = prefill))
                         .setAudioProcessors(arrayOf(capture)).build())
                 }
                 // Match PlaybackService's source ownership and audio attributes. Test seams are
@@ -207,13 +234,17 @@ class QueueContinuousPlaybackTest {
                 } else {
                     engine.setPreloadConfiguration(ExoPlayer.PreloadConfiguration(5_000_000L))
                     engine.setMediaItems(tracks.mapIndexed { index, track -> queueMediaItem("control-$index", track) })
+                    probe.requestedWallMs = System.currentTimeMillis()
                     engine.prepare()
                     engine.play()
                 }
             }
             if (throughQueue) {
                 awaitMain { !queues!!.state.value.loading }
-                instrumentation.runOnMainSync { queues!!.tap(tracks, 0, sourceName = "Continuous PCM") }
+                instrumentation.runOnMainSync {
+                    probe.requestedWallMs = System.currentTimeMillis()
+                    queues!!.tap(tracks, 0, sourceName = "Continuous PCM")
+                }
             }
             // Let all three tracks play from their beginnings. No seek-to-end shortcuts.
             awaitMain { probe.ended }
@@ -229,7 +260,8 @@ class QueueContinuousPlaybackTest {
                 val digest = java.security.MessageDigest.getInstance("SHA-256").digest(decoded)
                     .joinToString("") { "%02x".format(it) }
                 // Emit evidence before assertions, including on the known shortened-sample failure.
-                Log.i("QueueContinuity", "fixture=$encodedFixture queue=$throughQueue bytes=${decoded.size} " +
+                Log.i("QueueContinuity", "fixture=$encodedFixture queue=$throughQueue prefill=$prefill requestedWallMs=${probe.requestedWallMs} " +
+                    "firstPlayoutStartMs=${probe.firstPlayoutStartMs} estimatedStartupMs=${probe.firstPlayoutStartMs?.minus(probe.requestedWallMs)} bytes=${decoded.size} " +
                     "sha256=$digest arrivals=${probe.arrivals.size} discontinuities=${probe.discontinuities} " +
                     "rebuffers=${probe.rebuffers} underruns=${probe.underruns} " +
                     "unexpected=${probe.unexpectedTransitions} waveformErrors=$waveformErrors")
@@ -350,9 +382,11 @@ private class ContinuityWriteHistory {
 private class ContinuityOutputProvider(
     context: Context,
     private val native: AudioOutputProvider = AudioTrackAudioOutputProvider.Builder(context).build(),
+    private val prefill: Boolean = false,
 ) : AudioOutputProvider by native {
     override fun getAudioOutput(config: AudioOutputProvider.OutputConfig): AudioOutput {
-        val output = native.getAudioOutput(config)
+        val nativeOutput = native.getAudioOutput(config)
+        val output = if (prefill) ContinuityPrefillOutput(nativeOutput, config) else nativeOutput
         return object : AudioOutput by output {
             private val identity = System.identityHashCode(output)
             private val frameSize = Util.getPcmFrameSize(config.encoding, Integer.bitCount(config.channelMask))
@@ -422,6 +456,8 @@ private class ContinuityEvents : Player.Listener, AnalyticsListener {
     private fun trace(detail: String) {
         Log.i("QueueContinuityEvent", "elapsedMs=${SystemClock.elapsedRealtime() - startedMs} $detail")
     }
+    var requestedWallMs = 0L
+    var firstPlayoutStartMs: Long? = null
     var error: PlaybackException? = null
     var ended = false
     var rebuffers = 0
@@ -459,8 +495,51 @@ private class ContinuityEvents : Player.Listener, AnalyticsListener {
         trace("underrun $detail")
     }
     override fun onAudioPositionAdvancing(eventTime: AnalyticsListener.EventTime, playoutStartSystemTimeMs: Long) {
+        if (firstPlayoutStartMs == null) firstPlayoutStartMs = playoutStartSystemTimeMs
         trace("positionAdvancing eventRealtimeMs=${eventTime.realtimeMs} " +
             "window=${eventTime.windowIndex} positionMs=${eventTime.eventPlaybackPositionMs} " +
             "playoutStartSystemTimeMs=$playoutStartSystemTimeMs")
     }
+}
+
+/** Diagnostic variant only: 50 ms/capacity prefill with a 30 ms maximum start deferral. */
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+private class ContinuityPrefillOutput(
+    private val output: AudioOutput,
+    config: AudioOutputProvider.OutputConfig,
+) : AudioOutput by output {
+    private val handler = android.os.Handler(requireNotNull(android.os.Looper.myLooper()))
+    private val frameSize = Util.getPcmFrameSize(config.encoding, Integer.bitCount(config.channelMask))
+    private val targetFrames = minOf(output.bufferSizeInFrames, config.sampleRate / 20L).coerceAtLeast(1L)
+    private var acceptedBytes = 0L
+    private var pending = false
+    private var primed = false
+    private val deadline = Runnable { if (pending) start("deadline") }
+    private fun start(reason: String) {
+        handler.removeCallbacks(deadline)
+        pending = false
+        primed = true
+        Log.i("ContinuityPrefill", "start reason=$reason frames="+(acceptedBytes/frameSize)+" target=$targetFrames timeNs="+SystemClock.elapsedRealtimeNanos())
+        output.play()
+    }
+    override fun play() {
+        if (primed || acceptedBytes / frameSize >= targetFrames) start("ready")
+        else if (!pending) {
+            pending = true
+            handler.postDelayed(deadline, 30)
+        }
+    }
+    override fun write(buffer: ByteBuffer, encodedAccessUnitCount: Int, presentationTimeUs: Long): Boolean {
+        val before = buffer.position()
+        val result = output.write(buffer, encodedAccessUnitCount, presentationTimeUs)
+        acceptedBytes += buffer.position() - before
+        if (pending && acceptedBytes / frameSize >= targetFrames) start("filled")
+        return result
+    }
+    override fun pause() { pending = false; handler.removeCallbacks(deadline); output.pause() }
+    override fun flush() {
+        pending = false; handler.removeCallbacks(deadline); acceptedBytes = 0; primed = false; output.flush()
+    }
+    override fun stop() { if (pending) start("drain"); output.stop() }
+    override fun release() { pending = false; handler.removeCallbacks(deadline); output.release() }
 }
