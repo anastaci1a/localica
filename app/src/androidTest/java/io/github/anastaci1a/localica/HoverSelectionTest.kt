@@ -138,6 +138,11 @@ class HoverSelectionTest {
             val rising = run(true)
             save(compose.onNodeWithTag("hover-scene").captureToImage(), "hover-selected")
             val settled = rising.last()
+            val baselineContent = (0 until restPixels.width).count { lum(restPixels[it, rest.center.y.toInt()]) < .15f }
+            rising.forEach { sample ->
+                assertTrue("The foreground never disappears during preparation or lift: progress=${sample.progress} content=${sample.content}",
+                    sample.content >= baselineContent - 1)
+            }
             assertEquals(1f, settled.progress, 0f)
             // Ease-out from the first frame: the touch reads instantly, then settles.
             val firstMoving = rising.indexOfFirst { it.progress > 0f }
