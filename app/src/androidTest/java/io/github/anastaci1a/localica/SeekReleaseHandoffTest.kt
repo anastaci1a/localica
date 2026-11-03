@@ -285,7 +285,8 @@ class SeekReleaseHandoffTest {
 
     @Test fun scrubSurvivesDurationConnectionAndProblemChangesAndCommitsDraggedPosition() {
         fixture()
-        fun fraction() = value() / playback.durationMs!!
+        // Slider semantics are in its own (frozen during a drag) range; the label reads real time.
+        fun fraction() = seek().fetchSemanticsNode().config[SemanticsProperties.ProgressBarRangeInfo].let { it.current / it.range.endInclusive }
         seek().performTouchInput { down(Offset(width * .4f, centerY)); moveTo(Offset(width * .6f, centerY)) }
         frame()
         assertEquals("thumb under finger", .6f, fraction(), .03f)
