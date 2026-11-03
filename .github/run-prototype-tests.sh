@@ -26,7 +26,8 @@ selector=$(printf '%s\n' "${!seen[@]}" | LC_ALL=C sort | paste -sd, -)
 [[ ${GITHUB_SHA:-} =~ ^[0-9a-f]{40}$ ]] || { echo 'Require exact candidate SHA' >&2; exit 2; }
 [[ $(git rev-parse HEAD) == "$GITHUB_SHA" ]] || { echo 'Checkout SHA differs from candidate' >&2; exit 2; }
 [[ -f .github/test-evidence/observe.py ]] || { echo 'Required test observer is not integrated' >&2; exit 2; }
-[[ ${GITHUB_ACTIONS:-} == true && ${RUNNER_ENVIRONMENT:-} == github-hosted ]] || { echo 'Prototype runner requires the hosted disposable emulator' >&2; exit 2; }
+# The ephemeral self-hosted runner image sets this marker; each job gets a fresh container and emulator.
+[[ ${GITHUB_ACTIONS:-} == true && ( ${RUNNER_ENVIRONMENT:-} == github-hosted || ( ${RUNNER_ENVIRONMENT:-} == self-hosted && ${LOCALICA_EPHEMERAL_RUNNER:-} == localica-kvm ) ) ]] || { echo 'Prototype runner requires a disposable hosted or ephemeral self-hosted emulator' >&2; exit 2; }
 [[ ! -e prototype-evidence ]] || { echo 'Refusing stale prototype evidence' >&2; exit 2; }
 mkdir prototype-evidence
 printf '%s\n' "$selector" > prototype-evidence/selectors.txt

@@ -95,6 +95,7 @@ for i,cls in enumerate(classes):
     E.ElementTree(suite).write(root/('TEST-'+str(i)+'.xml'))
 ''')
         self.env = dict(os.environ, PATH=str(self.root/'bin')+os.pathsep+os.environ['PATH'], AFFECTED_CLASSES=AFFECTED, TEST_API='36', GITHUB_SHA=SHA, GITHUB_RUN_ID='1', GITHUB_RUN_ATTEMPT='1', GITHUB_ACTIONS='true', RUNNER_ENVIRONMENT='github-hosted')
+        self.env.pop('LOCALICA_EPHEMERAL_RUNNER', None)
 
     def executable(self,path,text):
         target=self.root/path;target.write_text(text);target.chmod(0o755)
@@ -432,6 +433,15 @@ p=pathlib.Path(sys.argv[sys.argv.index('--state-dir')+1]);p.mkdir();(p/'complete
     def test_missing_observer(self):
         (self.root/'.github/test-evidence/observe.py').unlink();self.run_case(2)
     def test_non_hosted(self): self.run_case(2,RUNNER_ENVIRONMENT='self-hosted')
+    def test_self_hosted_requires_exact_ephemeral_marker(self):
+        for marker in ('', 'localica', 'LOCALICA-KVM', 'localica-kvm '):
+            with self.subTest(marker=marker):
+                self.run_case(2,RUNNER_ENVIRONMENT='self-hosted',LOCALICA_EPHEMERAL_RUNNER=marker)
+        self.run_case(2,RUNNER_ENVIRONMENT='',LOCALICA_EPHEMERAL_RUNNER='localica-kvm')
+        self.run_case(2,GITHUB_ACTIONS='false',RUNNER_ENVIRONMENT='self-hosted',LOCALICA_EPHEMERAL_RUNNER='localica-kvm')
+    def test_ephemeral_self_hosted_runner_runs_like_hosted(self):
+        self.run_case(RUNNER_ENVIRONMENT='self-hosted',LOCALICA_EPHEMERAL_RUNNER='localica-kvm')
+        self.assertEqual('setup\nrestore\n',(self.root/'lifecycle').read_text())
     def test_actual_sdk_must_match_declared_api(self): self.run_case(2,ACTUAL_API='26')
     def test_bad_api(self): self.run_case(2,TEST_API='35')
     def test_bad_sha(self): self.run_case(2,GITHUB_SHA='main')
@@ -646,6 +656,107 @@ class WorkflowContract(unittest.TestCase):
                 if 'uses' in step:
                     self.assertRegex(step['uses'],r'@[0-9a-f]{40}$')
 
+
+
+class SelfHostedRunnerContract(unittest.TestCase):
+    """The ephemeral KVM runner accepts only owner-dispatched, non-PR jobs."""
+    LABELS = ['self-hosted', 'linux', 'x64', 'localica-kvm']
+    GUARD = ("github.event_name != 'pull_request' && github.event_name != 'pull_request_target' "
+             "&& github.actor == 'anastaci1a' && github.triggering_actor == 'anastaci1a' "
+             "&& github.repository == 'anastaci1a/localica'")
+    EMULATOR_JOBS = ('focused_26', 'focused_36', 'compatibility_26', 'compatibility_36')
+
+    @staticmethod
+    def workflows():
+        import yaml
+        for path in sorted((ROOT/'.github/workflows').glob('*.yml')):
+            yield path.name, yaml.safe_load(path.read_text())
+
+    @staticmethod
+    def evaluate(expression, context):
+        import re
+        text = str(expression).strip()
+        if not (text.startswith('${{') and text.endswith('}}')):
+            return text
+        text = text[3:-2]
+        text = re.sub(r"fromJSON\('([^']*)'\)", lambda m: repr(json.loads(m.group(1))), text)
+        text = text.replace('&&', ' and ').replace('||', ' or ')
+        text = re.sub(r'\b(inputs|github)\.([a-z_]+)\b', lambda m: repr(context.get(m.group(0), '')), text)
+        assert re.fullmatch(r"[\s()'\[\],a-zA-Z0-9_./=!-]*", text), text
+        return eval(text, {'__builtins__': {}})
+
+    def targets_self_hosted(self, runs_on):
+        text = json.dumps(runs_on)
+        return 'self-hosted' in text or 'localica-kvm' in text
+
+    def test_only_guarded_prototype_emulator_jobs_can_target_the_runner(self):
+        for name, workflow in self.workflows():
+            for job_name, job in workflow.get('jobs', {}).items():
+                if not self.targets_self_hosted(job.get('runs-on', '')):
+                    continue
+                with self.subTest(workflow=name, job=job_name):
+                    self.assertEqual('prototype.yml', name)
+                    self.assertIn(job_name, self.EMULATOR_JOBS)
+                    self.assertEqual("${{ inputs.runner != 'self-hosted' || (" + self.GUARD + ") }}", job['if'])
+                    self.assertEqual("${{ inputs.runner == 'self-hosted' && fromJSON('"
+                                     + json.dumps(self.LABELS, separators=(',', ':')) + "') || 'ubuntu-24.04' }}", job['runs-on'])
+
+    def test_release_build_and_evidence_jobs_stay_github_hosted(self):
+        import yaml
+        android = yaml.safe_load((ROOT/'.github/workflows/android.yml').read_text())
+        for job in android['jobs'].values():
+            self.assertFalse(self.targets_self_hosted(job.get('runs-on', '')))
+        self.assertEqual('ubuntu-24.04', android['jobs']['release']['runs-on'])
+        prototype = yaml.safe_load((ROOT/'.github/workflows/prototype.yml').read_text())
+        for job in ('build', 'evidence'):
+            self.assertEqual('ubuntu-24.04', prototype['jobs'][job]['runs-on'])
+
+    def test_runner_choice_is_dispatch_only_and_defaults_to_github(self):
+        import yaml
+        workflow = yaml.safe_load((ROOT/'.github/workflows/prototype.yml').read_text())
+        self.assertFalse({'pull_request', 'pull_request_target', 'push'} & set(workflow['on']))
+        runner = workflow['on']['workflow_dispatch']['inputs']['runner']
+        self.assertEqual(('choice', 'github', ['github', 'self-hosted']),
+                         (runner['type'], runner['default'], runner['options']))
+        self.assertNotIn('runner', workflow['on']['workflow_call']['inputs'])
+
+    def test_routing_matrix_never_sends_untrusted_events_to_the_runner(self):
+        import itertools, yaml
+        jobs = yaml.safe_load((ROOT/'.github/workflows/prototype.yml').read_text())['jobs']
+        owner, repository = 'anastaci1a', 'anastaci1a/localica'
+        for job_name in self.EMULATOR_JOBS:
+            job = jobs[job_name]
+            for event, actor, triggering, repo, runner in itertools.product(
+                    ('workflow_dispatch', 'push', 'pull_request', 'pull_request_target', 'schedule'),
+                    (owner, 'fork-contributor'), (owner, 'fork-contributor'),
+                    (repository, 'fork-contributor/localica'), ('github', 'self-hosted', '')):
+                context = {'github.event_name': event, 'github.actor': actor, 'github.triggering_actor': triggering,
+                           'github.repository': repo, 'inputs.runner': runner}
+                runs = self.evaluate(job['if'], context)
+                labels = self.evaluate(job['runs-on'], context)
+                trusted = (event not in ('pull_request', 'pull_request_target') and actor == owner
+                           and triggering == owner and repo == repository)
+                with self.subTest(job=job_name, **{k.split('.')[1]: v for k, v in context.items()}):
+                    if runner == 'self-hosted':
+                        self.assertEqual(self.LABELS, labels)
+                        self.assertEqual(trusted, bool(runs))
+                    else:
+                        self.assertEqual('ubuntu-24.04', labels)
+                        self.assertTrue(runs)
+
+    def test_host_mutating_steps_run_only_on_github_hosted_runners(self):
+        import yaml
+        jobs = yaml.safe_load((ROOT/'.github/workflows/prototype.yml').read_text())['jobs']
+        for job_name in self.EMULATOR_JOBS:
+            for step in jobs[job_name]['steps']:
+                lines = [line for line in step.get('run', '').splitlines() if 'sudo ' in line]
+                if not lines:
+                    continue
+                with self.subTest(job=job_name, step=step.get('name')):
+                    if step.get('if') == "runner.environment == 'github-hosted'":
+                        continue
+                    self.assertTrue(all(line.strip().startswith('if [ "$RUNNER_ENVIRONMENT" = github-hosted ]; then sudo ')
+                                        for line in lines), lines)
 
 
 class CompatibilityRunnerContract(unittest.TestCase):

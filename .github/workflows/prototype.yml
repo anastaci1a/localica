@@ -16,6 +16,14 @@ name: Prototype (not release certified)
         required: false
         default: ''
         type: string
+      runner:
+        description: Emulator job runner; self-hosted is the owner-only ephemeral KVM runner
+        required: false
+        default: github
+        type: choice
+        options:
+        - github
+        - self-hosted
   workflow_call:
     inputs:
       affected_classes:
@@ -98,7 +106,9 @@ jobs:
           prototype-runner-environment.txt
     name: Prototype build, unit tests and lint
   focused_26:
-    runs-on: ubuntu-24.04
+    # Owner-dispatched runs may opt into the ephemeral self-hosted KVM runner.
+    if: ${{ inputs.runner != 'self-hosted' || (github.event_name != 'pull_request' && github.event_name != 'pull_request_target' && github.actor == 'anastaci1a' && github.triggering_actor == 'anastaci1a' && github.repository == 'anastaci1a/localica') }}
+    runs-on: ${{ inputs.runner == 'self-hosted' && fromJSON('["self-hosted","linux","x64","localica-kvm"]') || 'ubuntu-24.04' }}
     # Capacity for the complete selected gate, not a throughput optimization.
     timeout-minutes: 60
     env:
@@ -119,11 +129,13 @@ jobs:
     - name: Record runner and toolchain identity
       run: bash .github/test-evidence/environment.sh | tee prototype-runner-environment.txt
     - name: Enable emulator acceleration
+      if: runner.environment == 'github-hosted'
       run: |
         echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
         sudo udevadm control --reload-rules
         sudo udevadm trigger --name-match=kvm
     - name: Make room for emulator userdata
+      if: runner.environment == 'github-hosted'
       run: |
         # This Android job does not use the runner's preinstalled .NET SDKs.
         sudo rm -rf /usr/share/dotnet
@@ -149,7 +161,7 @@ jobs:
       run: |
         free -h
         df -h
-        sudo dmesg --ctime | tail -100
+        if [ "$RUNNER_ENVIRONMENT" = github-hosted ]; then sudo dmesg --ctime | tail -100; fi
     - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
       if: always()
       with:
@@ -164,7 +176,9 @@ jobs:
         if-no-files-found: error
     name: Prototype focused API 26
   compatibility_26:
-    runs-on: ubuntu-24.04
+    # Owner-dispatched runs may opt into the ephemeral self-hosted KVM runner.
+    if: ${{ inputs.runner != 'self-hosted' || (github.event_name != 'pull_request' && github.event_name != 'pull_request_target' && github.actor == 'anastaci1a' && github.triggering_actor == 'anastaci1a' && github.repository == 'anastaci1a/localica') }}
+    runs-on: ${{ inputs.runner == 'self-hosted' && fromJSON('["self-hosted","linux","x64","localica-kvm"]') || 'ubuntu-24.04' }}
     timeout-minutes: 60
     steps:
     - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -189,6 +203,7 @@ jobs:
     - name: Record runner and toolchain identity
       run: bash .github/test-evidence/environment.sh | tee prototype-runner-environment.txt
     - name: Enable emulator acceleration and make room
+      if: runner.environment == 'github-hosted'
       run: |
         echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
         sudo udevadm control --reload-rules
@@ -223,7 +238,9 @@ jobs:
         if-no-files-found: error
     name: Prototype preserved-data compatibility API 26
   focused_36:
-    runs-on: ubuntu-24.04
+    # Owner-dispatched runs may opt into the ephemeral self-hosted KVM runner.
+    if: ${{ inputs.runner != 'self-hosted' || (github.event_name != 'pull_request' && github.event_name != 'pull_request_target' && github.actor == 'anastaci1a' && github.triggering_actor == 'anastaci1a' && github.repository == 'anastaci1a/localica') }}
+    runs-on: ${{ inputs.runner == 'self-hosted' && fromJSON('["self-hosted","linux","x64","localica-kvm"]') || 'ubuntu-24.04' }}
     # Capacity for the complete selected gate, not a throughput optimization.
     timeout-minutes: 60
     env:
@@ -244,11 +261,13 @@ jobs:
     - name: Record runner and toolchain identity
       run: bash .github/test-evidence/environment.sh | tee prototype-runner-environment.txt
     - name: Enable emulator acceleration
+      if: runner.environment == 'github-hosted'
       run: |
         echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
         sudo udevadm control --reload-rules
         sudo udevadm trigger --name-match=kvm
     - name: Make room for emulator userdata
+      if: runner.environment == 'github-hosted'
       run: |
         # This Android job does not use the runner's preinstalled .NET SDKs.
         sudo rm -rf /usr/share/dotnet
@@ -274,7 +293,7 @@ jobs:
       run: |
         free -h
         df -h
-        sudo dmesg --ctime | tail -100
+        if [ "$RUNNER_ENVIRONMENT" = github-hosted ]; then sudo dmesg --ctime | tail -100; fi
     - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
       if: always()
       with:
@@ -289,7 +308,9 @@ jobs:
         if-no-files-found: error
     name: Prototype focused API 36
   compatibility_36:
-    runs-on: ubuntu-24.04
+    # Owner-dispatched runs may opt into the ephemeral self-hosted KVM runner.
+    if: ${{ inputs.runner != 'self-hosted' || (github.event_name != 'pull_request' && github.event_name != 'pull_request_target' && github.actor == 'anastaci1a' && github.triggering_actor == 'anastaci1a' && github.repository == 'anastaci1a/localica') }}
+    runs-on: ${{ inputs.runner == 'self-hosted' && fromJSON('["self-hosted","linux","x64","localica-kvm"]') || 'ubuntu-24.04' }}
     timeout-minutes: 60
     steps:
     - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -314,6 +335,7 @@ jobs:
     - name: Record runner and toolchain identity
       run: bash .github/test-evidence/environment.sh | tee prototype-runner-environment.txt
     - name: Enable emulator acceleration and make room
+      if: runner.environment == 'github-hosted'
       run: |
         echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
         sudo udevadm control --reload-rules
