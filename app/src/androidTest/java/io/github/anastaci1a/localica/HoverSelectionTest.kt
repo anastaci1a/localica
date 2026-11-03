@@ -116,7 +116,7 @@ class HoverSelectionTest {
         if (android.os.Build.VERSION.SDK_INT < 33) {
             // Legacy frost needs its one readback, taken only while a selection leases the backdrop.
             compose.runOnIdle { chosen = true }
-            compose.waitUntil(10000) { source.fallback != null }
+            compose.waitUntil(10000) { source.lensSnapshot != null }
             compose.runOnIdle { chosen = false }
         }
         compose.waitForIdle()
@@ -243,7 +243,7 @@ class HoverSelectionTest {
             return values.max() - values.min()
         }
         compose.runOnIdle { first = true; second = true }
-        if (android.os.Build.VERSION.SDK_INT < 33) compose.waitUntil(10000) { source.fallback != null }
+        if (android.os.Build.VERSION.SDK_INT < 33) compose.waitUntil(10000) { source.lensSnapshot != null }
         compose.waitForIdle()
         val lifted = capture()
         val resting = stripes(baseline, 160f)
@@ -266,16 +266,20 @@ class HoverSelectionTest {
     @Test fun aVirtualizedNeighbourRetainsTheJoinedOutlineAndShadow() {
         var retained by mutableStateOf(false)
         compose.setContent { Fixture(true, true, retainSecond = retained) }
-        if (android.os.Build.VERSION.SDK_INT < 33) compose.waitUntil(10000) { source.fallback != null }
+        if (android.os.Build.VERSION.SDK_INT < 33) compose.waitUntil(10000) { source.lensSnapshot != null }
         compose.waitForIdle()
-        val before = capture()
+        val beforeImage = compose.onNodeWithTag("hover-scene").captureToImage()
+        save(beforeImage, "hover-retained-source")
+        val before = beforeImage.toPixelMap()
         val second = checkNotNull(scene.viewportHover["second"])
         compose.runOnIdle {
             scene.retainedHover = listOf(second to 1f)
             retained = true
         }
         compose.waitForIdle()
-        val after = capture()
+        val afterImage = compose.onNodeWithTag("hover-scene").captureToImage()
+        save(afterImage, "hover-retained-virtualized")
+        val after = afterImage.toPixelMap()
         assertEquals("The retained body still participates in the host", 2, scene.lastDrawnRegions.size)
         var changed = 0
         for (y in 0 until before.height) for (x in 0 until before.width) {
