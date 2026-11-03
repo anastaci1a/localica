@@ -26,14 +26,13 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import org.junit.Assert.*
-import org.junit.Assume.assumeTrue
 import org.junit.Rule
 import org.junit.Test
 
 /** #501: the Android 8 emulator's gralloc reserves an 8-byte ashmem header but reads RGBA
  * pixels back at a 16-byte offset, so a CPU lock of a buffer whose RGBA byte count is 4084 or
  * 4088 modulo 4096 writes its last one or two pixels past the mapping into whatever follows.
- * The API < 28 layer readback must never ask for such a buffer. Each buffer this readback maps is
+ * The API < 28 layer readback (exercised on every API) must never ask for such a buffer. Each buffer this readback maps is
  * watched at the byte after its end; an unmapped neighbour gets a private probe page, and a
  * foreign neighbour is compared (and restored) only against this test's distinctive pixel. */
 class LegacyReadbackGrallocBoundsTest {
@@ -124,7 +123,7 @@ class LegacyReadbackGrallocBoundsTest {
     }
 
     @Test fun legacyReadbackNeverWritesPastItsGrallocMapping() {
-        assumeTrue("Only the API < 28 readback locks ImageReader buffers", Build.VERSION.SDK_INT < 28)
+        // The readback runs on every API; only Android 8.x emulator buffers are named gralloc-buffer.
         lateinit var context: GraphicsContext
         lateinit var density: Density
         lateinit var direction: LayoutDirection
@@ -144,7 +143,7 @@ class LegacyReadbackGrallocBoundsTest {
             assertEquals("Readback keeps the layer's logical height", size.height, image.height)
             val pixels = image.toPixelMap()
             assertEquals("Last pixel is the recorded colour", ink, pixels[size.width - 1, size.height - 1])
-            assertTrue("A readback buffer was observed for $size", watches.isNotEmpty())
+            if (Build.VERSION.SDK_INT < 28) assertTrue("A readback buffer was observed for $size", watches.isNotEmpty())
             watches.filter { it.overran() }.takeIf { it.isNotEmpty() }?.let { overruns ->
                 "$size wrote past " + overruns.joinToString { "${java.lang.Long.toHexString(it.end)} into ${it.neighbour}" }
             }
