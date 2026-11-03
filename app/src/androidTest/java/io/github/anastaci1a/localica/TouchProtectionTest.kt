@@ -55,17 +55,32 @@ class TouchProtectionTest {
     }
 
     /** A short scrollable menu that keeps the control visible at both extremes. */
-    private fun scrollable(control: Control) {
+    private var current by mutableStateOf(Control.GlassButton)
+    private var composed = false
+
+    /** Compose once per test (a Compose rule allows one setContent); later controls swap in by key. */
+    private fun show(control: Control, content: @Composable (Control) -> Unit) {
         activations = 0
-        compose.setContent { LocalicaTheme {
+        if (composed) {
+            compose.runOnIdle { current = control }
+            compose.waitForIdle()
+            return
+        }
+        composed = true
+        current = control
+        compose.setContent { LocalicaTheme { key(current) {
             slop = LocalViewConfiguration.current.touchSlop
             scroll = rememberScrollState()
-            Column(Modifier.width(320.dp).height(220.dp).controlVerticalScroll(scroll)) {
-                Spacer(Modifier.height(110.dp))
-                Content(control)
-                Spacer(Modifier.height(110.dp))
-            }
-        } }
+            content(current)
+        } } }
+    }
+
+    private fun scrollable(control: Control) = show(control) { shown ->
+        Column(Modifier.width(320.dp).height(220.dp).controlVerticalScroll(scroll)) {
+            Spacer(Modifier.height(110.dp))
+            Content(shown)
+            Spacer(Modifier.height(110.dp))
+        }
     }
 
     private fun node(control: Control) = compose.onNodeWithTag(control.tag, useUnmergedTree = true)
@@ -145,16 +160,13 @@ class TouchProtectionTest {
 
     @Test fun nonScrollableMenuNeverBlocksVerticalActivation() {
         for (control in dragControls) {
-            activations = 0
-            compose.setContent { LocalicaTheme {
-                slop = LocalViewConfiguration.current.touchSlop
-                scroll = rememberScrollState()
+            show(control) { shown ->
                 // A fitting body registers as a scroll parent but cannot move either way.
                 Column(Modifier.width(320.dp).height(400.dp).controlVerticalScroll(scroll)) {
                     Spacer(Modifier.height(80.dp))
-                    Content(control)
+                    Content(shown)
                 }
-            } }
+            }
             for (down in listOf(true, false)) {
                 shortSwipe(control, down)
                 compose.runOnIdle {
@@ -211,10 +223,9 @@ class TouchProtectionTest {
             }
         } }
         val press = compose.onNodeWithTag("press")
-        press.performTouchInput { down(center) }
-        compose.runOnIdle { assertTrue(contact.pressed) }
+        // One batch: a separate down lets the test clock pass the hold and lock the press.
         // The finger stays on the control while the list moves under it.
-        press.performTouchInput { moveBy(Offset(0f, -30f), delayMillis = 16); moveBy(Offset(0f, -10f), delayMillis = 16) }
+        press.performTouchInput { down(center); repeat(4) { moveBy(Offset(0f, -12f), delayMillis = 16) } }
         compose.runOnIdle {
             assertTrue("The list took the contact", scroll.value > 0)
             assertFalse("The control lets go once scrolling owns the contact", contact.pressed)
@@ -256,19 +267,23 @@ class TouchProtectionTest {
         }
     }
 
+    private var round by mutableIntStateOf(0)
+
     private fun player(onExpanded: (Boolean) -> Unit, seeks: MutableList<Long>) {
-        compose.setContent { LocalicaTheme { BoxWithConstraints(Modifier.fillMaxSize()) {
+        compose.setContent { LocalicaTheme { key(round) { BoxWithConstraints(Modifier.fillMaxSize()) {
             PlayerSurface(PlaybackState(connected = true, title = "Touch fixture", positionMs = 20_000, durationMs = 100_000),
                 true, onExpanded, InterfaceSettings(), remember { Animatable(1f) },
                 {}, { seeks += it }, {}, {}, {}, {}, visual = PlayerVisual())
-        } } }
+        } } } }
     }
 
     @Test fun verticalSwipesStartingOnPlayerControlsMoveThePlayer() {
+        val expanded = mutableListOf<Boolean>()
+        val seeks = mutableListOf<Long>()
+        player({ expanded += it }, seeks)
         for (control in listOf("Next", "Seek")) {
-            val expanded = mutableListOf<Boolean>()
-            val seeks = mutableListOf<Long>()
-            player({ expanded += it }, seeks)
+            compose.runOnIdle { expanded.clear(); seeks.clear(); round++ }
+            compose.waitForIdle()
             compose.onNodeWithContentDescription(control).performTouchInput {
                 swipe(center, center + Offset(0f, 700f), durationMillis = 200)
             }
