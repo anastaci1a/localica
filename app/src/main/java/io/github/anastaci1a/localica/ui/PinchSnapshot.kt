@@ -31,6 +31,19 @@ private suspend fun GraphicsLayer.premultipliedPinchSnapshot(density: Density, d
     onPhase: (String) -> Unit): ImageBitmap =
     if (Build.VERSION.SDK_INT >= 28) toImageBitmap() else legacyLayerSnapshot(density, direction, straightAlpha = false, onPhase)
 
+/** The Android 8 emulator's gralloc reserves an 8-byte header in each CPU-readable buffer but
+ * reads pixels back 16 bytes in, so an RGBA buffer whose byte count is 4084 or 4088 modulo the
+ * 4096-byte page overruns its mapping by one or two pixels: a pipe read into an unwritable
+ * neighbour aborts, and a writable one is silently corrupted (#501). Unused bottom rows avoid
+ * those sizes; the readback still copies only the layer's own rows. */
+internal fun grallocSafeReadbackHeight(width: Int, height: Int): Int {
+    require(width > 0 && height > 0)
+    fun overruns(rows: Int) = (width.toLong() * rows * 4 % 4096).let { it == 4084L || it == 4088L }
+    var rows = height
+    while (overruns(rows)) rows++
+    return rows
+}
+
 /** API < 28 layer readback through an owned ImageReader (#501). Unlike Compose's LayerSnapshotV22
  * (maxImages = 1 with acquireLatestImage over-acquiring, the Image left for ImageReader.close, a resume
  * per callback), this stays within maxImages, copies and closes each Image inside its callback, publishes
@@ -42,7 +55,7 @@ internal suspend fun GraphicsLayer.legacyLayerSnapshot(density: Density, directi
     val width = size.width
     val height = size.height
     return run {
-        ImageReader.newInstance(width, height, PixelFormat.RGBA_8888, 2).use { reader ->
+        ImageReader.newInstance(width, grallocSafeReadbackHeight(width, height), PixelFormat.RGBA_8888, 2).use { reader ->
         val surface = reader.surface
         try { suspendCancellableCoroutine { continuation ->
             var postAttempted = false
