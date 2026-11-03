@@ -24,7 +24,13 @@ Keep the shell and fixed title/footer outside the body mask. Oversized chrome ma
 
 ### Motion and access
 
-Gestures track slow drags, reversals and interruptions, settling by distance/velocity. Controls show contact immediately but defer movement ownership: fast drags along an available parent scroll axis scroll without activating/changing the control. Slow deliberate adjustment or a held drag retains control ownership. Perpendicular scrolling remains available.
+Gestures track slow drags, reversals and interruptions, settling by distance/velocity. Controls show contact immediately but defer movement ownership under one rule for every control, the Queue drawer and the player.
+
+| Contact | Owner |
+| --- | --- |
+| Travel before a 250 ms hold, toward a direction an ancestor can still move | The ancestor: a scrollable short of that edge, the open Queue drawer or the player surface. The control lets go with its normal eased release. |
+| Travel no ancestor can use: a menu that cannot scroll, toward a reached edge, a horizontal slide in a vertical list | The control, immediately. |
+| Contact held still for 250 ms | The control, for any later direction. |
 
 Once resolved, retain the owner through reversal and edges. Cancellation never commits. Opening a modal cancels background contacts and flings, rolls back uncommitted pinch/reorder previews, and discards their later releases. Dismissal permits fresh gestures, never resumes old fingers. Only the top modal accepts interaction, including nested or separately declared dialogs.
 
@@ -327,6 +333,8 @@ Layout, lyrics and aspect changes use presented geometry without a separate curv
 
 Normal metadata and controls sit below the cover with balanced space above Queue. Lyrics mode lowers them further and centers transport between the seek track itself and the collapsed Queue shelf’s top.
 
+Touching the seek track registers at once: it thickens and eases the shown position to the finger. A hold or a horizontal slide locks the scrub, publishing the finger position and keeping later vertical travel. Vertical travel first eases back with the X ease, without seeking, and moves the player. A tap seeks to the tap point.
+
 While scrubbing, show the same foreground X target as mutable-list dragging, above the Queue shelf. Entering and leaving X ease symmetrically between live playback and the current finger position, continuing through reversals. Faster animations shortens the transition and Reduce motion snaps.
 
 An owned seek drag gives one weak engagement pulse and a strong genuine release outside X, with no continuous-position ticks. Entering X gives the shared firm pulse and leaving gives a weak tick. Releasing there or cancelling discards the preview without a seek, pause or release pulse. Tap and accessible changes give one weak activation.
@@ -356,7 +364,7 @@ Both remain interruptible during settling. Player collapse slows into its restin
 
 Bottom-attached, visually separate from player artwork, with one neutral frosted surface throughout expansion: blurred backdrop colors and fine texture, using the same configurable adaptive contrast and artwork-selected ink as the player and nested popups. No fixed dark tint or expansion-dependent darkening. The queue header’s down arrow minimizes it; deletion lives in Queue actions.
 
-Whole label and upward player swipes open it; body/handle/list pulls settle by release velocity and distance. Once a gesture starts opening Queue, reversing only closes Queue and cannot dismiss the player. A fresh downward pull from its already top-scrolled list closes it; an interrupted pull restores the open drawer.
+Whole label and upward player swipes open it; body/handle/list pulls settle by release velocity and distance. Header controls yield a downward swipe to the drawer. Once a gesture starts opening Queue, reversing only closes Queue and cannot dismiss the player. A fresh downward pull from its already top-scrolled list closes it; an interrupted pull restores the open drawer.
 
 Once either the list or drawer acquires a contact, it keeps that contact through edges and reversals until release; switching requires a fresh gesture. Excess finger travel past a list edge must be retraced before scrolling resumes. Flings/reordering retain ownership.
 
