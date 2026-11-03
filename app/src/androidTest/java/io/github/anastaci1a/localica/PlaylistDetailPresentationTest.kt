@@ -139,6 +139,49 @@ class PlaylistDetailPresentationTest {
         } finally { unmount(f) }
     }
 
+    @Test fun automaticAndCustomCoverPlaylistsUseTheAlbumStyleHeaderLayout() {
+        fun prepared(f: Fixture, uri: String, color: Color) {
+            val bitmap = Bitmap.createBitmap(32, 32, Bitmap.Config.ARGB_8888).apply { eraseColor(color.toArgb()) }
+            f.artwork.keepVisual(uri, PlayerVisual(bitmap.asImageBitmap(), PlayerPalette(color, Color.Black, color, wash = bitmap)))
+        }
+        val f = fixture()
+        try {
+            fun assertAlbumStyleHeader(cover: Color) {
+                compose.waitUntil(5000) { f.background == cover }
+                top()
+                val page = list.fetchSemanticsNode().boundsInRoot
+                val header = compose.onNodeWithTag("browse-full-span").fetchSemanticsNode().boundsInRoot
+                // Full-width square artwork region plus the title and actions block, as in the Album header.
+                assertEquals("Header spans the page", page.width, header.width, 1.1f)
+                assertEquals("Header begins at the page top", page.top, header.top, 1.1f)
+                assertTrue("Header is cover-sized plus its text and actions block",
+                    header.height >= page.width + 100f * compose.density.density)
+                compose.onNodeWithText("Playlist detail").assertIsDisplayed()
+                compose.onNodeWithContentDescription("Play playlist").assertIsDisplayed()
+                compose.onNodeWithContentDescription("Shuffle playlist").assertIsDisplayed()
+                compose.onNodeWithContentDescription("Playlist actions").assertIsDisplayed()
+                assertCoverPixels(cover)
+                val songs = compose.onNodeWithTag("browser-song-list-start", true).fetchSemanticsNode().boundsInRoot
+                assertTrue("Songs begin below the header", songs.top >= header.bottom - 1.1f)
+            }
+            val automatic = Color(0xFF204060)
+            val automaticUri = "playlist:layout-automatic"
+            compose.runOnIdle {
+                prepared(f, automaticUri, automatic)
+                f.library = LibraryUiState(LibrarySnapshot(tracks = listOf(tracks.first().copy(uri = automaticUri)) + tracks.drop(1)), loading = false)
+                f.playlists = PlaylistState(listOf(playlist), loading = false)
+            }
+            assertAlbumStyleHeader(automatic)
+            val custom = Color(0xFF602040)
+            val customUri = "playlist:layout-custom"
+            compose.runOnIdle {
+                prepared(f, customUri, custom)
+                f.playlists = PlaylistState(listOf(playlist.copy(coverUri = customUri)), loading = false)
+            }
+            assertAlbumStyleHeader(custom)
+        } finally { unmount(f) }
+    }
+
     @Test fun sharedPlayShuffleAndMutablePlaylistMenuPreserveEveryOccurrence() {
         val db = Room.inMemoryDatabaseBuilder(context, PlaylistDatabase::class.java).build()
         val queueDb = Room.inMemoryDatabaseBuilder(context, QueueDatabase::class.java).build()
