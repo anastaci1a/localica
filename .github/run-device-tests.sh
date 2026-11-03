@@ -6,6 +6,16 @@ reports="$PWD/preflight-reports"
 live=${LOCALICA_LIVE_EVIDENCE:-false}
 live_reports="$PWD/native-live-evidence"
 child=''
+# Disable APK producer actions, including AGP implicit compilation dependencies.
+# AGP still runs instrumentation and writes its ordinary XML/HTML reports.
+prebuilt_args=()
+verify_prebuilt_apks() {
+  [[ ${LOCALICA_PREBUILT_TEST_APKS:-false} != true ]] || sha256sum --check --status native-test-apks.sha256
+}
+if [[ ${LOCALICA_PREBUILT_TEST_APKS:-false} == true ]]; then
+  verify_prebuilt_apks
+  prebuilt_args=(-I .github/prebuilt-device-tests.gradle)
+fi
 # Full native shards use measured class costs. Risk preflight retains the existing
 # method partition; the workflow summary still proves the once-only union.
 shard_count=${LOCALICA_SHARD_COUNT:-}
@@ -166,9 +176,12 @@ if [[ -z "$classes" ]]; then
   install_live_signals
   # Keep the sourced EXIT restoration trap alive; preserve Gradle failure status.
   set +e
-  run_native full ./gradlew connectedDebugAndroidTest --no-daemon --max-workers=2 "${full_runner_args[@]}"
+  run_native full ./gradlew connectedDebugAndroidTest --no-daemon --max-workers=2 "${prebuilt_args[@]}" "${full_runner_args[@]}"
   result=$?
   set -e
+  if ! verify_prebuilt_apks; then
+    [[ "$result" != 0 ]] || result=3
+  fi
   exit "$result"
 fi
 [[ ${#classes} -le 4096 ]] || { echo 'risk_classes exceeds 4096 characters' >&2; exit 2; }
@@ -196,12 +209,12 @@ printf 'preflight=running\nfull=not-started\n' > "$reports/status.txt"
 set +e
 if [[ "$live" == true ]]; then
   # Keep child ownership in this shell, not a tee pipeline's subshell.
-  run_native preflight ./gradlew connectedDebugAndroidTest --no-daemon --max-workers=2 "-Pandroid.testInstrumentationRunnerArguments.class=$classes" "${runner_args[@]}"
+  run_native preflight ./gradlew connectedDebugAndroidTest --no-daemon --max-workers=2 "${prebuilt_args[@]}" "-Pandroid.testInstrumentationRunnerArguments.class=$classes" "${runner_args[@]}"
   result=$?
   cp "$live_reports/preflight/observed/command.log" "$reports/gradle.log"
   log_result=$?
 else
-  run_native preflight ./gradlew connectedDebugAndroidTest --no-daemon --max-workers=2 "-Pandroid.testInstrumentationRunnerArguments.class=$classes" "${runner_args[@]}" 2>&1 | tee "$reports/gradle.log"
+  run_native preflight ./gradlew connectedDebugAndroidTest --no-daemon --max-workers=2 "${prebuilt_args[@]}" "-Pandroid.testInstrumentationRunnerArguments.class=$classes" "${runner_args[@]}" 2>&1 | tee "$reports/gradle.log"
   statuses=("${PIPESTATUS[@]}")
   result=${statuses[0]}
   log_result=${statuses[1]}
@@ -242,7 +255,7 @@ done
 [[ ! -e app/build/outputs/androidTest-results && ! -L app/build/outputs/androidTest-results ]] || { echo 'Unexpected instrumentation results before remainder' >&2; exit 2; }
 printf 'preflight=passed\nfull=running\n' > "$reports/status.txt"
 set +e
-run_native full ./gradlew connectedDebugAndroidTest --no-daemon --max-workers=2 "${full_runner_args[@]}"
+run_native full ./gradlew connectedDebugAndroidTest --no-daemon --max-workers=2 "${prebuilt_args[@]}" "${full_runner_args[@]}"
 result=$?
 set -e
 status_result=0
@@ -250,6 +263,7 @@ printf 'preflight=passed\nfull_exit=%s\n' "$result" > "$reports/status.txt" || s
 [[ "$result" == 0 ]] || exit "$result"
 [[ "$status_result" == 0 ]] || exit "$status_result"
 # Both phase outcomes and their disjoint union must reconcile before green.
+verify_prebuilt_apks
 sha256sum --check --status "$reports/test-input-apks.sha256"
 python3 .github/test-evidence/full_partition.py complete --root "$PWD" --plan "$reports/partition.json" --preflight "$reports/app/build/outputs/androidTest-results" --remaining "$PWD/app/build/outputs/androidTest-results" --output "$reports/complete-union.json" "${partition_shard[@]}"
 
