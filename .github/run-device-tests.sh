@@ -12,6 +12,7 @@ shard_count=${LOCALICA_SHARD_COUNT:-}
 shard_index=${LOCALICA_SHARD_INDEX:-}
 runner_args=()
 full_runner_args=()
+full_excluded_classes=$classes
 partition_shard=()
 # Opt-in measurement harness; skipped by assumption unless requested.
 [[ "${LOCALICA_SCROLL_PERFORMANCE:-}" != true ]] || runner_args+=("-Pandroid.testInstrumentationRunnerArguments.scrollPerformance=true")
@@ -37,10 +38,10 @@ if [[ -n "$shard_count" ]]; then
   weighted_options=()
   [[ "${LOCALICA_SCROLL_PERFORMANCE:-}" != true ]] || weighted_options+=(--scroll-performance)
   python3 .github/test-evidence/full_partition.py shards --root "$PWD" --api "${TEST_API:-}" --shards "$shard_count" --sha "${GITHUB_SHA:-}" --risk-classes "$classes" --output "$PWD/native-shard-plan.json" "${weighted_options[@]}"
-  owned_classes=$(python3 -c 'import json,sys; print(",".join(json.load(open("native-shard-plan.json"))["shards"][int(sys.argv[1])]["classes"]))' "$shard_index")
-  [[ -n "$owned_classes" ]] || { echo 'Refusing an empty native class selector' >&2; exit 2; }
-  full_runner_args+=("-Pandroid.testInstrumentationRunnerArguments.class=$owned_classes")
+  # Exclude the complement so ordinary suite selection preserves opt-in assumptions.
+  full_excluded_classes=$(python3 -c 'import json,sys; print(",".join(json.load(open("native-shard-plan.json"))["shards"][int(sys.argv[1])]["excluded_classes"]))' "$shard_index")
 fi
+[[ -z "$full_excluded_classes" ]] || full_runner_args+=("-Pandroid.testInstrumentationRunnerArguments.notClass=$full_excluded_classes")
 stop_live_child() {
   local sig=$1 code=$2
   trap '' INT TERM
@@ -241,7 +242,7 @@ done
 [[ ! -e app/build/outputs/androidTest-results && ! -L app/build/outputs/androidTest-results ]] || { echo 'Unexpected instrumentation results before remainder' >&2; exit 2; }
 printf 'preflight=passed\nfull=running\n' > "$reports/status.txt"
 set +e
-run_native full ./gradlew connectedDebugAndroidTest --no-daemon --max-workers=2 "-Pandroid.testInstrumentationRunnerArguments.notClass=$classes" "${full_runner_args[@]}"
+run_native full ./gradlew connectedDebugAndroidTest --no-daemon --max-workers=2 "${full_runner_args[@]}"
 result=$?
 set -e
 status_result=0

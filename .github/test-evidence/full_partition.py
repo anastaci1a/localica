@@ -230,6 +230,7 @@ def shards(root, api, count, durations, sha, risks=(), scroll_performance=False)
         target['estimated_seconds'] += costs[cls]
     for shard in result:
         shard['classes'].sort()
+        shard['excluded_classes'] = sorted(set(inv['selectors']) - set(shard['classes']))
         shard['methods'].sort()
         shard['estimated_seconds'] = round(shard['estimated_seconds'], 6)
     return {'schema_version': 1, 'sha': sha, 'api': api, 'shard_count': count,
