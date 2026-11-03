@@ -58,6 +58,8 @@ Glass shape morphs remain visible for roughly 500 ms at normal speed and 350 ms 
 
 Reopening a retained, prepared menu immediately reclaims its surface and shadow. Newly mounted windows prepare before hiding the trigger. Full settings/editor/artwork pages slide/fade. Programmatic scrolling stops without overshoot. Long journeys virtualize each frame’s crossed distance along one continuous ease and finish within about 500 ms. Touch cancels scrolling.
 
+A popup owning a grouped trigger’s shadow matches that group’s shared shadow at home and separates into its own field only as it opens. Neither ownership handoff changes the neighbors’ shading.
+
 Active/inactive and enabled/disabled control appearances activate over 180 ms and deactivate over 270 ms (120/180 ms with Faster animations), with no onset delay. Icon badges crossfade in fixed bounds. State, accessibility and input availability change immediately, reversals continue from the visible appearance, and Reduce motion snaps to the result.
 
 Keep existing transport morphs and gesture-driven travel.
