@@ -155,9 +155,10 @@ internal fun Modifier.pinchRetainedOverlay(motion: BrowsePinchMotion, grid: Lazy
     val blur = renderer.backend == GlassBackend.Modern && android.os.Build.VERSION.SDK_INT >= 31
     DisposableEffect(graphics) { onDispose { groups.forEach { graphics.releaseGraphicsLayer(it.output) } } }
     SideEffect { motion.hoverLift = { scene?.hover?.get(it) } }
+    BackdropLease(backing.takeIf { motion.visualSource != null && motion.frozen.values.any { it.content?.hover != null } })
+    DisposableEffect(scene) { onDispose { scene?.retainedHover = emptyList() } }
     return backdropLocation(location).onGloballyPositioned { motion.viewportCoordinates = it }.drawWithContent {
-        // Pass one: all live and retained text (including track numbers and menus).
-        drawContent()
+        // Publish retained bodies before the host draws its one joined shadow/surface.
         val visible = grid.layoutInfo.visibleItemsInfo
         val p = motion.progress.value.coerceIn(0f, 1f)
         fun drawLive(part: BrowsePinchLayer, key: Any) {
@@ -179,6 +180,8 @@ internal fun Modifier.pinchRetainedOverlay(motion: BrowsePinchMotion, grid: Lazy
             }
         }
         if (motion.visualSource == null) {
+            scene?.retainedHover = emptyList()
+            drawContent()
             // Nothing is retained at rest. Keep the same stable two-pass topology
             // (every text layer, then every artwork layer in item order) without
             // per-frame key sets, placement maps or a sorted paint list while scrolling.
@@ -229,15 +232,22 @@ internal fun Modifier.pinchRetainedOverlay(motion: BrowsePinchMotion, grid: Lazy
                 .let { if (motion.rightToLeft) it.mirrored(width) else it }
             return hoverGeometry(outline, hover.room, hover.progress)
         }
+        val lifted = retained.values.mapNotNull { placed -> retainedLift(placed)?.translate(placed.origin)?.let {
+            it to (placed.alpha * (placed.item.content?.opacity ?: 1f))
+        } }.filter { it.first.progress > 0f && it.second > 0f }
+        scene?.retainedHover = lifted
+        drawContent()
         clipRect {
-            val lifted = retained.values.mapNotNull { placed -> retainedLift(placed)?.translate(placed.origin)?.let { it to placed } }
-            val components = hoverComponents(lifted.map { it.first.rest.bounds }, MediaSelectionGap.toPx())
-            while (groups.size < components.size) groups += HoverGroupRenderer(graphics.createGraphicsLayer(), scope)
-            components.forEachIndexed { index, members ->
-                val parts = members.map { lifted[it].first }
-                drawHoverGroup(groups[index], parts, { a, b -> minOf(parts[a].progress, parts[b].progress) },
-                    backing, location, blur, recordingDensity, direction, MediaSelectionGap.toPx(),
-                    opacity = members.maxOf { lifted[it].second.alpha * (lifted[it].second.item.content?.opacity ?: 1f) })
+            // Standalone compositors can render retained selections without a host.
+            if (scene == null) {
+                val components = hoverComponents(lifted.map { it.first.rest.bounds }, MediaSelectionGap.toPx())
+                while (groups.size < components.size) groups += HoverGroupRenderer(graphics.createGraphicsLayer(), scope)
+                components.forEachIndexed { index, members ->
+                    val parts = members.map { lifted[it].first }
+                    drawHoverGroup(groups[index], parts, { a, b -> minOf(parts[a].progress, parts[b].progress) },
+                        backing, location, blur, recordingDensity, direction, MediaSelectionGap.toPx(),
+                        opacity = members.maxOf { lifted[it].second })
+                }
             }
             visible.forEach { entry -> motion.text[entry.key]?.let { drawLive(it, entry.key) } }
             retained.values.forEach { placed ->

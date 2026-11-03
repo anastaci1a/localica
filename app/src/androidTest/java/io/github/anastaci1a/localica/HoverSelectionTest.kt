@@ -48,7 +48,7 @@ class HoverSelectionTest {
     private lateinit var source: FrostedBackdrop
 
     /** Backdrop: a red ramp across the first row's leading edge, fine green stripes everywhere. */
-    @Composable private fun Fixture(first: Boolean, second: Boolean, rowGap: androidx.compose.ui.unit.Dp = 8.dp) {
+    @Composable private fun Fixture(first: Boolean, second: Boolean, rowGap: androidx.compose.ui.unit.Dp = 8.dp, retainSecond: Boolean = false) {
         LocalicaTheme {
             source = rememberFrostedBackdrop(Unit, dark = false)
             Box(Modifier.size(360.dp, 320.dp).testTag("hover-scene")) {
@@ -74,7 +74,8 @@ class HoverSelectionTest {
                                 drawRect(Color.Black, Offset((size.width - side) / 2f, (size.height - side) / 2f), Size(side, side))
                             }
                             Spacer(Modifier.height(rowGap))
-                            Box(Modifier.fillMaxWidth().height(72.dp).selectionLens(second, false, itemKey = "second"))
+                            if (retainSecond) Spacer(Modifier.fillMaxWidth().height(72.dp))
+                            else Box(Modifier.fillMaxWidth().height(72.dp).selectionLens(second, false, itemKey = "second"))
                         }
                     }
                 }
@@ -220,6 +221,27 @@ class HoverSelectionTest {
                 assertTrue("No single-frame jump while parting: $widths", a - b <= full * .45f)
             }
         } finally { compose.mainClock.autoAdvance = true }
+    }
+
+    @Test fun aVirtualizedNeighbourRetainsTheJoinedOutlineAndShadow() {
+        var retained by mutableStateOf(false)
+        compose.setContent { Fixture(true, true, retainSecond = retained) }
+        compose.waitForIdle()
+        val before = capture()
+        val second = checkNotNull(scene.viewportHover["second"])
+        compose.runOnIdle {
+            scene.retainedHover = listOf(second to 1f)
+            retained = true
+        }
+        compose.waitForIdle()
+        val after = capture()
+        assertEquals("The retained body still participates in the host", 2, scene.lastDrawnRegions.size)
+        var changed = 0
+        for (y in 0 until before.height) for (x in 0 until before.width) {
+            val a = before[x, y]; val b = after[x, y]
+            if (maxOf(abs(a.red - b.red), abs(a.green - b.green), abs(a.blue - b.blue)) > .03f) changed++
+        }
+        assertEquals("Virtualization keeps one merged outline, frost and shadow", 0, changed)
     }
 
     private fun region(vararg rectangles: Rect): Region {
