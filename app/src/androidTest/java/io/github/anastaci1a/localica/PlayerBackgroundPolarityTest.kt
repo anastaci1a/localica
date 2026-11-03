@@ -7,10 +7,14 @@ import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -149,6 +153,39 @@ class PlayerBackgroundPolarityTest {
             if (if (light) red > .9f else red < .1f) inkPixels++
         }
         assertTrue("Real transport glyph draws the selected ink", inkPixels > 10)
+    }
+
+    /** Baseline-only probe; application source stays at 2fc08211. */
+    @Test fun directCoverLetterboxUsesThePaintedRoundedImageOriginOnBase() {
+        val owner = PlayerBackgroundPolarityState()
+        val bitmap = Bitmap.createBitmap(3, 2, Bitmap.Config.ARGB_8888).apply { eraseColor(android.graphics.Color.WHITE) }
+        val visual = PlayerVisual(bitmap.asImageBitmap(), PlayerPalette(Color.Black, Color.Black, Color.Black),
+            contentKey = "rounded-image-origin")
+        val tone = GlassTone()
+        val role = "baseline-cover"
+        // Image rounds its fitted 6.666... pixel height to 7, centering at y = 2.
+        // The baseline production sampler instead starts the image at y = 1.666...
+        val cover = Rect(0f, 0f, 10f, 10f)
+        val geometry = PlayerBackgroundGeometry(Size(10f, 10f), cover, cover,
+            listOf(Rect(2f, 1.7f, 8f, 1.9f)), 0f, 0f, 0f, .26f, 0f, 1f, 0f, 32f, 0f)
+        compose.setContent { LocalicaTheme {
+            CompositionLocalProvider(LocalDensity provides Density(1f)) {
+                Box(Modifier.size(10.dp).testTag("rounding-background")) {
+                    PlayerBackdrop(visual.palette, Modifier.fillMaxSize(), tone = tone,
+                        onBackgroundDescriptor = { owner.backdrop(role, it) })
+                    PlayerArtworkFrame(visual, Modifier.fillMaxSize(), RectangleShape, ContentScale.Fit)
+                }
+                SideEffect { owner.frame(ArtworkBackgroundFrame(listOf(ArtworkBackgroundRole(role, visual, 1f)),
+                    frozenVisible = false, liveBlur = false, transitioning = false)) }
+                ObservePlayerBackgroundPolarity(owner, geometry, null, tone)
+            }
+        } }
+        compose.waitUntil(10000) { owner.decision.confidence == PlayerBackgroundConfidence.Current && owner.sampleDiagnostic != null }
+        val painted = compose.onNodeWithTag("rounding-background").captureToImage().toPixelMap()[5, 1]
+        assertTrue("The real Image leaves the row above its rounded origin black", painted.red <= .035f)
+        val sampled = requireNotNull(owner.sampleDiagnostic).mean
+        assertEquals("Production background metadata must match the painted letterbox, sampled=$sampled",
+            painted.red.toDouble(), sampled.red, .035)
     }
 
     @Test fun metadataParticipatesWhenTitleBackingIsDarkerThanTransport() {
