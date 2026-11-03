@@ -268,3 +268,4 @@ io.github.anastaci1a.localica.ArtworkTintPlaceholderTest
 io.github.anastaci1a.localica.LyricsPausedSeekTest
 io.github.anastaci1a.localica.SearchDismissalLifecycleTest
 io.github.anastaci1a.localica.SettingsPathRestorationTest
+io.github.anastaci1a.localica.NativeWindowCopyOwnershipTest
