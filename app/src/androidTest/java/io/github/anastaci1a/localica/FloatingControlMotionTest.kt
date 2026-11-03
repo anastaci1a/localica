@@ -1,9 +1,10 @@
 package io.github.anastaci1a.localica
 
+import io.github.anastaci1a.localica.localicaRunComposeUiTest as runComposeUiTest
 import androidx.compose.runtime.*
 import androidx.compose.ui.MotionDurationScale
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
+import io.github.anastaci1a.localica.localicaComposeRule as createComposeRule
 import io.github.anastaci1a.localica.ui.*
 import org.junit.Assert.*
 import org.junit.Rule
