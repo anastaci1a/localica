@@ -75,7 +75,9 @@ class QueueHeaderMaterialBoundaryTest {
     @Test fun ordinaryAndHeaderZeroShadowsRetainOwnersAndRecordPairedBoundaryBands() {
         assertTrue("Ordinary control is known nonzero, not an already-disabled comparison", appearance.shadowStrength > 0f)
         val context = compose.activity
-        output = File(requireNotNull(context.getExternalFilesDir(null)), "queue-header-boundary/api${Build.VERSION.SDK_INT}-${SystemClock.uptimeMillis()}")
+        val base = nativeEvidenceDirectory("queue-header-boundary",
+            File(requireNotNull(context.getExternalFilesDir(null)), "queue-header-boundary"))
+        output = File(base, "api${Build.VERSION.SDK_INT}-${SystemClock.uptimeMillis()}")
         assertTrue(output.mkdirs())
         val preferences = listOf("browse-style", "library-query").associate { name ->
             context.getSharedPreferences(name, 0).let { it to it.all.toMap() }
