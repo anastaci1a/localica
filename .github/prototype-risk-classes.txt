@@ -239,6 +239,7 @@ io.github.anastaci1a.localica.SongInformationTest
 io.github.anastaci1a.localica.SplitPillContactTest
 io.github.anastaci1a.localica.StartupMergeTest
 io.github.anastaci1a.localica.StatisticsStorageTest
+io.github.anastaci1a.localica.SubviewPinchRecoveryTest
 io.github.anastaci1a.localica.SwitchTapOpticsTest
 io.github.anastaci1a.localica.TabPagerTest
 io.github.anastaci1a.localica.TabResetTest
