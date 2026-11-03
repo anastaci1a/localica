@@ -464,7 +464,7 @@ p=pathlib.Path(sys.argv[sys.argv.index('--state-dir')+1]);p.mkdir();(p/'complete
 
 
 class WorkflowContract(unittest.TestCase):
-    def decision(self, failed=False, missing=False, wrong_sha=False, contradictory=False, malformed=False, partial_methods=False, skipped_required_method=False):
+    def decision(self, failed=False, missing=False, wrong_sha=False, contradictory=False, malformed=False, partial_methods=False, skipped_required_method=False, build_attempt="1", decision_attempt="1", build_run="1", wrong_digest=False):
         import yaml, hashlib
         workflow=yaml.safe_load((ROOT/'.github/workflows/prototype.yml').read_text())
         script=workflow['jobs']['evidence']['steps'][1]['run']
@@ -472,7 +472,7 @@ class WorkflowContract(unittest.TestCase):
             root=Path(folder); evidence=root/'evidence';evidence.mkdir()
             canonical=evidence/'prototype-build-internal-unvalidated';canonical.mkdir()
             (canonical/'app-debug.apk').write_bytes(b'canonical')
-            (canonical/'provenance.json').write_text(json.dumps({'sha':'a'*40 if wrong_sha else SHA,'apk_sha256':hashlib.sha256(b'canonical').hexdigest(),'run_id':'1','run_attempt':'1','signing_certificate':'verified-test-certificate'}))
+            (canonical/'provenance.json').write_text(json.dumps({'sha':'a'*40 if wrong_sha else SHA,'apk_sha256':hashlib.sha256(b'wrong' if wrong_digest else b'canonical').hexdigest(),'run_id':build_run,'run_attempt':build_attempt,'signing_certificate':'verified-test-certificate'}))
             checks={k:{'result':'success'} for k in workflow['jobs']['evidence']['needs']}
             if failed:checks['focused_36']['result']='failure'
             if not missing:
@@ -502,7 +502,7 @@ class WorkflowContract(unittest.TestCase):
                     (focused/'test-input-apks.sha256').write_text('independently-built-test-inputs')
                     compatibility=evidence/f'prototype-compatibility-api-{api}';compatibility.mkdir()
                     (compatibility/'provenance.json').write_text(json.dumps({'source_sha':SHA}))
-            env=dict(os.environ,CHECKS=json.dumps(checks),KNOWN_ISSUES='Not a release',AFFECTED_CLASSES=AFFECTED,COVERAGE_REASON='Queue regression',GITHUB_SHA=SHA,GITHUB_REF='refs/heads/test',GITHUB_RUN_ID='1',GITHUB_RUN_ATTEMPT='1',GITHUB_STEP_SUMMARY=str(root/'summary'))
+            env=dict(os.environ,CHECKS=json.dumps(checks),KNOWN_ISSUES='Not a release',AFFECTED_CLASSES=AFFECTED,COVERAGE_REASON='Queue regression',GITHUB_SHA=SHA,GITHUB_REF='refs/heads/test',GITHUB_RUN_ID='1',GITHUB_RUN_ATTEMPT=decision_attempt,GITHUB_STEP_SUMMARY=str(root/'summary'))
             result=subprocess.run(['bash','-c',script],cwd=root,env=env,capture_output=True,text=True)
             out=root/'prototype-delivery'
             manifest=json.loads((out/'manifest.json').read_text()) if (out/'manifest.json').exists() else None
@@ -515,6 +515,25 @@ class WorkflowContract(unittest.TestCase):
         self.assertFalse(manifest['release_certified'])
         self.assertEqual(1,len(apks))
         self.assertEqual('not-run',manifest['full_native_api_36'])
+
+    def test_single_job_retry_reuses_matching_earlier_build(self):
+        result,manifest,apks=self.decision(build_attempt='1',decision_attempt='2')
+        self.assertEqual(0,result.returncode,result.stderr)
+        self.assertTrue(manifest['ready_for_prototype_delivery'])
+        self.assertEqual('1',manifest['build_run_attempt'])
+        self.assertEqual('2',manifest['run_attempt'])
+        self.assertEqual(1,len(apks))
+
+    def test_single_job_retry_rejects_mismatched_build_provenance(self):
+        for invalid in ({'wrong_digest':True}, {'wrong_sha':True}, {'build_run':'2'},
+                        {'build_attempt':'3'}, {'build_attempt':'0'}, {'build_attempt':'invalid'}):
+            with self.subTest(invalid=invalid):
+                result,manifest,apks=self.decision(decision_attempt='2',**invalid)
+                self.assertNotEqual(0,result.returncode)
+                self.assertFalse(manifest['ready_for_prototype_delivery'])
+                self.assertTrue(any('Canonical APK provenance' in error
+                                    for error in manifest['validation_errors']))
+                self.assertEqual([],apks)
 
     def test_failed_check_produces_manifest_without_delivery_apk(self):
         result,manifest,apks=self.decision(failed=True)
