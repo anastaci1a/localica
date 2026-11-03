@@ -325,8 +325,20 @@ class GlassMenuViewportTouchTest {
 
     private fun copyOnce(window: Window): Bitmap {
         val bitmap = compose.runOnUiThread { Bitmap.createBitmap(window.decorView.width, window.decorView.height, Bitmap.Config.ARGB_8888) }
+        val sourceBounds = compose.runOnUiThread {
+            if (Build.VERSION.SDK_INT == 26) {
+                // API 26 forwards the entire padded surface, unlike a window-content copy.
+                // Read its pinned framework metadata only on that API; never infer geometry
+                // from the rail or retry/replace the captured image.
+                val insets = android.view.WindowManager.LayoutParams::class.java
+                    .getField("surfaceInsets").get(window.attributes) as android.graphics.Rect
+                android.graphics.Rect(insets.left, insets.top,
+                    insets.left + bitmap.width, insets.top + bitmap.height)
+            } else null
+        }
+        Log.i("NativeWindowCopy", "api=${Build.VERSION.SDK_INT} image=${bitmap.width}x${bitmap.height} sourceBounds=$sourceBounds")
         return copyNativeWindowOnce(window, bitmap,
-            "Single native copy timed out; no retry") { result -> "Single native copy failed: $result" }
+            "Single native copy timed out; no retry", sourceBounds) { result -> "Single native copy failed: $result" }
     }
 
     private fun writeManifest(status: String, failure: String? = null) {
