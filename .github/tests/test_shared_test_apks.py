@@ -30,11 +30,17 @@ class SharedApksTest(unittest.TestCase):
             paths = ['app/build/outputs/apk/debug/app-debug.apk',
                      'app/build/outputs/apk/debug/output-metadata.json',
                      'app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk',
-                     'app/build/outputs/apk/androidTest/debug/output-metadata.json']
+                     'app/build/outputs/apk/androidTest/debug/output-metadata.json',
+                     'app/build/generated/standalone-test-runtime/kotlin-stdlib-standalone.jar',
+                     'app/build/generated/standalone-test-runtime/binding.txt',
+                     'app/build/generated/shared-test-apks/test-classes.zip']
             for path in paths:
                 file = root/path
                 file.parent.mkdir(parents=True, exist_ok=True)
                 file.write_text(path)
+            compiled = root/'app/build/tmp/kotlin-classes/debugAndroidTest/example/Test.class'
+            compiled.parent.mkdir(parents=True)
+            compiled.write_bytes(b'producer class fixture')
             env = dict(os.environ, GITHUB_SHA='a'*40, GITHUB_RUN_ID='123', GITHUB_RUN_ATTEMPT='1')
             def run(*args):
                 return subprocess.run(['python3', str(helper), *args], cwd=root, env=env, capture_output=True)

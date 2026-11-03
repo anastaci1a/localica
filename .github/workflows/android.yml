@@ -201,7 +201,6 @@ jobs:
           TEST_APKS_SHA256: ${{ needs.build.outputs.test-apks-sha256 }}
         run: |
           python3 .github/shared-test-apks.py verify --bundle native-test-apks --digest "$TEST_APKS_SHA256"
-          sha256sum app/build/outputs/apk/debug/* app/build/outputs/apk/androidTest/debug/* > native-test-apks.sha256
       - uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2
         with:
           api-level: ${{ matrix.api }}
