@@ -216,22 +216,25 @@ class BrowsePinchLayersTest {
                 }
             }
         } }
-        for (reversed in listOf(false, true)) {
-            if (reversed) {
-                compose.runOnIdle { runBlocking { motion.progress.snapTo(.3f) } }
-                compose.waitForIdle()
-            }
-            compose.runOnIdle { runBlocking { motion.progress.snapTo(.1f) } }
+        val rowHeight = grid.layoutInfo.visibleItemsInfo.first { it.key == "text" }.size.height
+        val cutoff = browsePinchFadeWindow(rowHeight.toFloat(), 200f)
+        for (p in listOf(.025f, .05f, .1f, .15f, .2f, .3f, .45f, .15f, .1f, .05f)) {
+            compose.runOnIdle { runBlocking { motion.progress.snapTo(p) } }
             compose.waitForIdle()
-            val rowHeight = grid.layoutInfo.visibleItemsInfo.first { it.key == "text" }.size.height
             val pixels = compose.onNodeWithTag("frozen-scene").captureToImage().toPixelMap()
-            val y = (4 + rowHeight * .1f + 25).toInt()
-            // At .1 progress the departing 50→100 px cover has reached 61 px,
-            // ahead of the live 55 px scale. Position still follows the ordinary anchor.
-            val extended = pixels[63, y] // Beyond both the source and ordinary live width.
-            val outside = pixels[67, y]  // Outside the accelerated artwork endpoint, not card aspect-fit.
-            assertTrue("Retained art scales above later text, reversed=$reversed: $extended", extended.green > .8f && extended.red < .2f)
-            assertTrue("Art uses its own endpoint, reversed=$reversed: $outside", outside.red > .9f && outside.green < .1f)
+            val ink = mutableListOf<Pair<Int, Int>>()
+            for (y in 0 until pixels.height) for (x in 0 until pixels.width)
+                if (pixels[x, y].green > .025f) ink += x to y
+            if (p >= cutoff) {
+                assertTrue("A departure is invisible at its distance-scaled fade end: $p / $cutoff", ink.isEmpty())
+            } else {
+                assertTrue("Retained cover remains visible before its fade end: $p / $cutoff", ink.isNotEmpty())
+                val width = ink.maxOf { it.first } - ink.minOf { it.first } + 1
+                val top = ink.minOf { it.second }
+                assertEquals("Retained cover follows its ordinary artwork scale at $p", 50f + 50f * p, width.toFloat(), 2f)
+                assertEquals("Retained cover follows the same progress in position at $p", 4f + rowHeight * p, top.toFloat(), 2f)
+                assertTrue("No departure grows past its fade-end size", width <= 50f + 50f * cutoff + 2f)
+            }
         }
     }
 

@@ -68,7 +68,8 @@ internal fun BrowseItemLayout(item: BrowserItem, style: BrowseStyle, geometry: B
         value.listSize !in setOf(ListSize.Small, ListSize.Smallest))
     val artworkAlpha = browseViewAlpha(artwork(style), from?.let(::artwork), progress, reducedMotion)
     val menuAlpha = browseViewAlpha(!gallery, from?.let { it.presentation == Presentation.List }, progress, reducedMotion)
-    val incomingAlpha = if (from != null && item.key !in requireNotNull(pinch).bounds)
+    // The viewport applies distance-aware row visibility to both global passes.
+    val incomingAlpha = if (from != null && pinch?.viewportCoordinates?.isAttached != true && item.key !in requireNotNull(pinch).bounds)
         browseViewVisibility(false, true, progress) else 1f
     fun Modifier.morph() = if (from != null) this else animateBounds(lookahead, boundsTransform = { _, _ -> tween(duration) })
     // One artwork reveal drives the text (#526); pinches keep their own text handling.
