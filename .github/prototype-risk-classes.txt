@@ -254,3 +254,4 @@ io.github.anastaci1a.localica.CollectionLookupLifecycleTest
 io.github.anastaci1a.localica.EnumDecodingTest
 io.github.anastaci1a.localica.DirectComposeDispatcherTest
 io.github.anastaci1a.localica.TestComposeDispatcherTest
+io.github.anastaci1a.localica.SearchImeTallContentRepeatTest
