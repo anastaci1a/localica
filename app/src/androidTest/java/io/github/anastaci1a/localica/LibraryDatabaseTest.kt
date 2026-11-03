@@ -83,7 +83,7 @@ class LibraryDatabaseTest {
             old.version = 1
         }
         val database = Room.databaseBuilder(context, LibraryDatabase::class.java, name)
-            .addMigrations(LibraryDatabase.MIGRATION_1_2, LibraryDatabase.MIGRATION_2_3, LibraryDatabase.MIGRATION_3_4, LibraryDatabase.MIGRATION_4_5, LibraryDatabase.MIGRATION_5_6).build()
+            .addMigrations(*LibraryDatabase.MIGRATIONS).build()
         try {
             val store = RoomLibraryStore(database.libraryDao())
             val migrationStart = System.currentTimeMillis()

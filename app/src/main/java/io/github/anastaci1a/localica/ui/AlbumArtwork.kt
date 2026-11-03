@@ -10,6 +10,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.library.ArtworkCache
+import io.github.anastaci1a.localica.library.ArtworkColors
 import io.github.anastaci1a.localica.library.CoverProvider
 import io.github.anastaci1a.localica.library.EmbeddedCoverProvider
 import androidx.compose.ui.layout.onSizeChanged
@@ -23,7 +24,8 @@ internal fun AlbumArtwork(uri: String?, modifier: Modifier = Modifier.size(200.d
 
 @Composable
 internal fun MediaArtwork(uris: List<String>, modifier: Modifier, provider: CoverProvider = EmbeddedCoverProvider,
-    shape: androidx.compose.ui.graphics.Shape = Corners.artwork, contentScale: ContentScale = ContentScale.Crop) {
+    shape: androidx.compose.ui.graphics.Shape = Corners.artwork, contentScale: ContentScale = ContentScale.Crop,
+    textReveal: ArtworkTextReveal? = null) {
     val context = LocalContext.current.applicationContext
     ArtworkCache.configure(context)
     val revision by ArtworkCache.revision.collectAsState()
@@ -46,7 +48,12 @@ internal fun MediaArtwork(uris: List<String>, modifier: Modifier, provider: Cove
             }
             // Gate waits, retriever, decode and upload preparation stay off Main; only this single state write returns to it.
             value = request to (warm ?: ArtworkCache.CachedArtwork(
-                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { provider.load(context, uris, pixels) }, pixels))
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    provider.load(context, uris, pixels).also { bitmap ->
+                        // A visible cover without a stored colour supplies it from this decode, on IO (#525).
+                        if (provider === EmbeddedCoverProvider && uris.size == 1) ArtworkColors.offer(uris[0], bitmap)
+                    }
+                }, pixels))
         }
     }
     val sameContent = loaded.first?.first == uris && loaded.first?.third == revision
@@ -58,8 +65,14 @@ internal fun MediaArtwork(uris: List<String>, modifier: Modifier, provider: Cove
     }
     val artwork = remember(retained?.bitmap) { retained?.bitmap?.asImageBitmap() }
     val measured = modifier.clip(shape).onSizeChanged { pixels = ArtworkCache.bucket(maxOf(it.width, it.height)) }
-    val loading = !deferred && cached == null && uris.isNotEmpty() && artwork == null && (pixels == 0 || loaded.first != request)
-    ArtworkImage(artwork, loading, measured, shape, contentScale)
+    // A deferred (far-journey) cover is pending, not missing. Only a cached or completed
+    // empty result is known-missing art with the still placeholder (#524).
+    // A stored "no artwork" row is known-missing on the first frame as well (#525).
+    val indexedMissing = provider === EmbeddedCoverProvider && ArtworkColors.peek(uris) == ArtworkColors.MISSING
+    val loading = cached == null && uris.isNotEmpty() && artwork == null && !indexedMissing &&
+        (deferred || pixels == 0 || loaded.first != request)
+    ArtworkImage(artwork, loading, measured, shape, contentScale, tintUris = uris, textReveal = textReveal,
+        expectsArtwork = provider === EmbeddedCoverProvider && ArtworkColors.peek(uris).let { it != null && it != ArtworkColors.MISSING })
 }
 
 internal fun artworkShape(kind: io.github.anastaci1a.localica.navigation.MediaKind,

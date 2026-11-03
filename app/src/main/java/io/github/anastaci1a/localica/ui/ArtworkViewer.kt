@@ -40,7 +40,7 @@ internal fun ArtworkViewer(uri: String, onDismiss: () -> Unit) {
             CompositionLocalProvider(LocalFrostedBackdrop provides backdrop, LocalContentColor provides Color.White) {
                 key(uri) {
                     ArtworkViewerContent(cover.second?.takeIf { cover.first == uri }?.asImageBitmap(),
-                        cover.first != uri, onDismiss)
+                        cover.first != uri, onDismiss, tintUris = listOf(uri))
                 }
             }
         }
@@ -50,7 +50,7 @@ internal fun ArtworkViewer(uri: String, onDismiss: () -> Unit) {
 /** Only the controls respect safe insets; the centered image owns the entire page. */
 @Composable
 internal fun ArtworkViewerContent(artwork: ImageBitmap?, loading: Boolean, onDismiss: () -> Unit,
-    modifier: Modifier = Modifier, state: ArtworkViewerState = rememberArtworkViewerState()) {
+    modifier: Modifier = Modifier, state: ArtworkViewerState = rememberArtworkViewerState(), tintUris: List<String>? = null) {
     val scope = rememberCoroutineScope()
     val reducedMotion by rememberUpdatedState(LocalReducedMotion.current)
     val stopSpeed = with(LocalDensity.current) { 5.dp.toPx() }
@@ -82,7 +82,7 @@ internal fun ArtworkViewerContent(artwork: ImageBitmap?, loading: Boolean, onDis
                 scaleY = scaleX
                 translationX = if (artwork == null) 0f else state.transform.offset.x
                 translationY = if (artwork == null) 0f else state.transform.offset.y
-            }, shape = RectangleShape, contentScale = ContentScale.Fit, emptyText = "No embedded artwork available")
+            }, shape = RectangleShape, contentScale = ContentScale.Fit, emptyText = "No embedded artwork available", tintUris = tintUris)
         }
         Box(Modifier.matchParentSize().safeDrawingPadding().padding(16.dp)) {
             Box(Modifier.align(Alignment.TopStart)) {

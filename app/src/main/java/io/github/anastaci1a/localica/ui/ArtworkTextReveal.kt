@@ -1,0 +1,76 @@
+package io.github.anastaci1a.localica.ui
+
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.AnimationVector1D
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Stable
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.graphics.graphicsLayer
+
+/**
+ * One artwork reveal drives its item's text (#526). While the art loads, the text waits behind
+ * gray skeleton bars. When the art reveals, the text crossfades in with the same reveal value
+ * and finishes with it. Only art known to exist (a stored colour) closes the gate; cached,
+ * missing and not-yet-indexed art show text at once, so a slow or failing read never hides it. Once the text has been
+ * shown, the gate stays open for that item, so pinches and cache refreshes never replay it.
+ * Every read happens in draw or layer phases; no frame recomposes the cell.
+ */
+@Stable
+internal class ArtworkTextReveal {
+    internal var reveal: Animatable<Float, AnimationVector1D>? = null
+    private val gate = mutableStateOf(false)
+    private var released = false
+
+    private var started = false
+
+    /** Called from the artwork's composition, before the text draws in the same frame. Only the
+     * item's first composition can close the gate, so visible text never disappears again. */
+    internal fun hold(waiting: Boolean) {
+        if (released) return
+        if (!started) { started = true; gate.value = waiting }
+        if (!waiting) release()
+    }
+    internal fun release() {
+        released = true
+        if (gate.value) gate.value = false
+    }
+    val waiting: Boolean get() = gate.value
+    val textAlpha: Float get() = if (!gate.value) 1f else reveal?.value ?: 0f
+}
+
+/** Gray text skeleton under the waiting text, fading as the text fades in. The skeleton keeps
+ * the neutral loading material and the shared sweep clock, like the catalog's text shapes. */
+@Composable
+internal fun Modifier.artworkTextReveal(reveal: ArtworkTextReveal?, lineHeightPx: Float, cornerPx: () -> Float,
+    skeleton: Boolean = true): Modifier {
+    if (reveal == null) return this
+    val base = MaterialTheme.colorScheme.surfaceContainer
+    val highlight = MaterialTheme.colorScheme.onSurface.copy(alpha = .065f)
+    val shimmer = if (LocalReducedMotion.current) null else LocalLoadingShimmer.current
+    val opacity = LocalLoadingMaterialOpacity.current.coerceIn(0f, 1f)
+    return drawWithCache {
+        val sweep = Brush.linearGradient(listOf(Color.Transparent, highlight, Color.Transparent),
+            start = Offset(-size.width * .6f, 0f), end = Offset(size.width * .6f, size.height))
+        onDrawBehind {
+            if (!skeleton || !reveal.waiting) return@onDrawBehind
+            val alpha = (1f - reveal.textAlpha) * opacity
+            if (alpha <= 0f || size.width <= 0f || size.height <= 0f) return@onDrawBehind
+            val bar = Size(size.width, minOf(lineHeightPx, size.height))
+            val radius = CornerRadius(cornerPx().coerceAtMost(bar.height / 2f))
+            drawRoundRect(base, size = bar, cornerRadius = radius, alpha = alpha)
+            shimmer?.let {
+                val x = size.width * it.value
+                translate(left = x) { drawRoundRect(sweep, topLeft = Offset(-x, 0f), size = bar, cornerRadius = radius, alpha = alpha) }
+            }
+        }
+    }.graphicsLayer { alpha = reveal.textAlpha }
+}

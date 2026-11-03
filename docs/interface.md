@@ -193,7 +193,15 @@ Covers: circles for Artist/Album Artist, rounded squares for albums/playlists. A
 
 A first member without artwork keeps the placeholder instead of borrowing a later member’s cover. Reuse a tapped cover immediately in its detail header and crossfade its higher-resolution replacement. Keep the visible artwork of each tab and the previous two Back destinations.
 
-Show memory-cached covers immediately. Newly decoded covers use a subtle loading sweep and 300 ms reveal, with static missing-cover placeholders and reduced-motion support. Gallery actions are on long-press, without overlaid menu buttons. Collection/nonmutable-song holds open the anchored actions. Mutable-song holds select, then moving the same finger starts reordering.
+Show memory-cached covers immediately. Newly decoded covers fade in over the loading sweep for 300 ms, and the sweep stays beneath them until the reveal completes. Deferred covers keep the sweep. Only confirmed missing artwork shows the static music-note placeholder. Reduced motion snaps.
+
+Loading artwork placeholders use their item's average artwork colour as the base, with a lighter sweep. Lightness is clamped per theme and saturation is capped. Text skeletons, catalog skeletons and items without a known colour keep the neutral gray base.
+
+A colour that becomes known while its placeholder is showing eases from gray over 200 ms, delayed by the radial loading-wave distance. Colours already known when a cell appears draw from its first frame. A stored no-artwork result shows the music note at once. Playlist custom covers stay neutral.
+
+While a browse row's artwork loads and has a stored colour, its title and information show gray text skeletons. The real text then crossfades in with the artwork reveal's own value and finishes with it. Cached, missing and not-yet-indexed artwork show text immediately. Pinch transitions keep their text handling, and a shown row never repeats the fade.
+
+Gallery actions are on long-press, without overlaid menu buttons. Collection/nonmutable-song holds open the anchored actions. Mutable-song holds select, then moving the same finger starts reordering.
 
 Plain row ellipses tap to open actions and hold for the same selection/actions as their row. Actions include: select songs, queue/playlist destinations and pinning. Playlists additionally offer image, rename and delete. The image action sets a custom cover when absent and removes it when present, restoring representative member artwork.
 

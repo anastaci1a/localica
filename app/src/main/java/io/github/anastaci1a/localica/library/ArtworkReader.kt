@@ -11,17 +11,23 @@ import kotlinx.coroutines.withContext
 
 /** Artwork stays out of Room. Decode only the current cover at a bounded display size. */
 class ArtworkReader(private val context: Context) {
-    suspend fun read(uri: String, edge: Int = 768): Bitmap? = withContext(Dispatchers.IO) {
+    /** Average colour from a tiny decode, without a GPU upload; [ArtworkColors.MISSING] when absent. */
+    suspend fun averageColor(uri: String): Int = read(uri, 64, prewarm = false)?.let { bitmap ->
+        averageArtworkColor(bitmap).also { bitmap.recycle() }
+    } ?: ArtworkColors.MISSING
+
+    suspend fun read(uri: String, edge: Int = 768, prewarm: Boolean = true): Bitmap? = withContext(Dispatchers.IO) {
+        val upload: (Bitmap) -> Unit = if (prewarm) ::prewarmUpload else { _ -> }
         try {
             val parsed = Uri.parse(uri)
             if (parsed.scheme == "file") {
                 val file = java.io.File(parsed.path.orEmpty())
                 if (file.canonicalFile.parentFile == java.io.File(context.filesDir, "playlist-covers").canonicalFile && file.length() <= 16 * 1024 * 1024)
-                    return@withContext decodeArtwork(file.readBytes(), edge)?.also(::prewarmUpload)
+                    return@withContext decodeArtwork(file.readBytes(), edge)?.also(upload)
             }
             val bytes = platformPicture(uri) ?: supplementalPicture(uri)
                 ?: runCatching { ContainerTags.read(context, uri)?.firstArtwork?.binaryData }.getOrNull()
-            bytes?.let { decodeArtwork(it, edge) }?.also(::prewarmUpload)
+            bytes?.let { decodeArtwork(it, edge) }?.also(upload)
         } catch (cancelled: CancellationException) { throw cancelled }
         catch (_: Exception) { null }
     }
