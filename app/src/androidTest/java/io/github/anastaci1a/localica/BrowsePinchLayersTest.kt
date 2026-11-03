@@ -77,6 +77,42 @@ class BrowsePinchLayersTest {
         verify()
     }
 
+    /** #522: within each pass the earlier item is on top; every cover stays above all text. */
+    @Test fun earlierItemsPaintAboveLaterOnesWithinEachPass() {
+        val motion = BrowsePinchMotion()
+        compose.setContent { LocalicaTheme {
+            val grid = rememberLazyGridState()
+            val shift = with(LocalDensity.current) { 120.dp.toPx() }
+            Box(Modifier.size(180.dp, 300.dp).testTag("order-scene")
+                .pinchRetainedOverlay(motion, grid, mapOf("a" to 0, "b" to 1))) {
+                LazyVerticalGrid(GridCells.Fixed(1), state = grid, modifier = Modifier.fillMaxSize()) {
+                    for ((key, art, text) in listOf(Triple("a", Color.Green, Color.Blue), Triple("b", Color.Red, Color.Yellow)))
+                        item(key = key) {
+                            // The later item is pulled up across the earlier one: its cover over the
+                            // earlier cover and text, its text over the earlier text.
+                            Column(Modifier.graphicsLayer { translationY = if (key == "b") -shift else 0f }) {
+                                Box(Modifier.size(100.dp).retainPinchArtwork(key, motion).background(art))
+                                Box(Modifier.size(100.dp, 40.dp).retainPinchText(key, motion).background(text))
+                            }
+                        }
+                }
+            }
+        } }
+        fun verify(phase: String) {
+            compose.waitForIdle()
+            val pixels = compose.onNodeWithTag("order-scene").captureToImage().toPixelMap()
+            val scale = pixels.height / 300f
+            fun at(y: Int) = pixels[(50 * scale).toInt(), (y * scale).toInt()]
+            val covers = at(60); val texts = at(130); val crossing = at(110)
+            assertTrue("$phase: the earlier cover is above the later cover: $covers", covers.green > .9f && covers.red < .1f)
+            assertTrue("$phase: the earlier text is above the later text: $texts", texts.blue > .9f && texts.red < .1f)
+            assertTrue("$phase: a later cover is still above earlier text: $crossing", crossing.red > .9f && crossing.blue < .1f)
+        }
+        verify("rest")
+        compose.runOnIdle { motion.source = BrowseStyle(); motion.target = BrowseStyle() }
+        verify("pinch")
+    }
+
     @Test fun selectedRowKeepsCrossingArtworkInItsSharpForegroundAndBelowItsRim() {
         verifySelectedArtworkLayering()
     }
