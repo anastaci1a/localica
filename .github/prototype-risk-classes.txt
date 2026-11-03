@@ -232,6 +232,7 @@ io.github.anastaci1a.localica.SettingsOptionsTest
 io.github.anastaci1a.localica.SharedKeyedDragRefreshTest
 io.github.anastaci1a.localica.ShuffleApkCompatibilityTest
 io.github.anastaci1a.localica.ShuffleModePlaybackTest
+io.github.anastaci1a.localica.SliderModelTest
 io.github.anastaci1a.localica.SliderSwitchHapticsTest
 io.github.anastaci1a.localica.SlidingTabsTest
 io.github.anastaci1a.localica.SongDragViewportTest

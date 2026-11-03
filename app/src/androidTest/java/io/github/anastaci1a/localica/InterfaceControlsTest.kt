@@ -96,6 +96,8 @@ class InterfaceControlsTest {
         val slider = compose.onNodeWithTag("continuous-slider")
         compose.mainClock.autoAdvance = false
         slider.performTouchInput { down(center) }
+        // Measure track continuity after the opaque circle has morphed into the clear lens.
+        compose.mainClock.advanceTimeBy(300)
         for (fraction in listOf(.58f, .63f, .69f, .61f, .53f)) {
             slider.performTouchInput { moveTo(Offset(width * fraction, centerY), delayMillis = 32) }
             compose.mainClock.advanceTimeBy(32)

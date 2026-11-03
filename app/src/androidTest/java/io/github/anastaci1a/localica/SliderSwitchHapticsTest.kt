@@ -78,9 +78,14 @@ class SliderSwitchHapticsTest {
 
     @Test fun sliderTapReselectionSemanticsAndKeyboardEachEmitOneWeakPulse() {
         fixture()
-        slider().performTouchInput { down(track(.75f)) }
-        compose.runOnIdle { assertTrue(pulses.isEmpty()); assertTrue(sliderChanges.isEmpty()) }
-        slider().performTouchInput { up() }
+        // Keep inspection inside the pending window instead of auto-advancing to hold lock.
+        compose.mainClock.autoAdvance = false
+        try {
+            slider().performTouchInput { down(track(.75f)) }
+            compose.mainClock.advanceTimeBy(32)
+            compose.runOnIdle { assertTrue(pulses.isEmpty()); assertTrue(sliderChanges.isEmpty()) }
+            slider().performTouchInput { up() }
+        } finally { compose.mainClock.autoAdvance = true }
         slider().performTouchInput { click(track(.75f)) }
         slider().performSemanticsAction(SemanticsActions.SetProgress) { assertTrue(it(.24f)) }
         compose.runOnIdle { sliderFocus.requestFocus() }
@@ -311,7 +316,9 @@ class SliderSwitchHapticsTest {
         compose.runOnIdle {
             assertEquals(0, scroll.value)
             assertEquals(listOf(.75f, .75f), sliderChanges); assertEquals(listOf(true), switchChanges)
-            assertEquals(listOf(ControlHaptic.Weak, ControlHaptic.Strong, ControlHaptic.Weak, ControlHaptic.Strong), pulses)
+            // The timer engages at the held value; moving to another stop gives its own tick.
+            assertEquals(listOf(ControlHaptic.Weak, ControlHaptic.Weak, ControlHaptic.Strong,
+                ControlHaptic.Weak, ControlHaptic.Strong), pulses)
         }
     }
 }
