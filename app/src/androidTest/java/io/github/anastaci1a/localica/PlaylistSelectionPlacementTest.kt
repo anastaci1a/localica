@@ -229,10 +229,14 @@ internal class SelectorPlacementFrames(private val compose: ComposeContentTestRu
             if (item.key in draw.layout.chosen || item.key in fading) {
                 assertTrue("Visibility remains bounded", v in 0f..1f)
                 if (v > 0f) {
+                    // The chooser row's shared outline (#532): 44 dp artwork in 4 dp / 8 dp padding
+                    // is concentric at a 4 dp inset, so the outline sits 4 dp inside the row vertically.
+                    val inset = 4f * androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().targetContext.resources.displayMetrics.density
+                    val outline = Rect(placed.left, placed.top + inset, placed.right, placed.bottom - inset)
                     val scale = .92f + .08f * v
-                    val dx = placed.width * (1f - scale) / 2f
-                    val dy = placed.height * (1f - scale) / 2f
-                    val clipped = Rect(placed.left + dx, placed.top + dy, placed.right - dx, placed.bottom - dy).intersect(draw.layout.viewport)
+                    val dx = outline.width * (1f - scale) / 2f
+                    val dy = outline.height * (1f - scale) / 2f
+                    val clipped = Rect(outline.left + dx, outline.top + dy, outline.right - dx, outline.bottom - dy).intersect(draw.layout.viewport)
                     if (!clipped.isEmpty) expected += clipped
                 }
             }
