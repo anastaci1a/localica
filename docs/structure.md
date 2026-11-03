@@ -237,15 +237,15 @@ Morph home sampling captures the trigger’s affine footprint on opening and fol
 
 Inline lenses exclude themselves. Modal windows use global coordinates. The navbar selector normally samples only bar material. An explicit overlay option includes labels/icons in the sampled scene without drawing them twice.
 
-Selection lenses read live placement and normalize translation before caching geometry/connectivity. Lazy owners also provide current native item keys, since attached prefetched coordinates do not prove placement. Unselected hosts do not observe the selection placement clock. Disconnected bodies have independent optical spans.
+Hover selections read live placement and normalize translation before caching outlines/connectivity. Lazy owners provide current native item keys, since attached prefetched coordinates do not prove placement. Unselected hosts do not observe the selection placement clock.
 
-Simple columns use analytic geometry. Irregular shapes use a cached half-float normal/distance buffer from a separable [Euclidean distance transform](https://cs.brown.edu/people/pfelzens/dt/index.html), bypassing color conversion. Selected viewports share one content raster across all group atlases, which crop backing to the ray model’s conservative reach and keep content sharp.
+Each merged group draws one shadow and magnified backdrop surface before its uniformly scaled foreground. Modern uses a cropped GPU blur; Legacy uses the shared prepared backdrop without per-frame readback. Browser artwork/text passes share the item transform. Pinch snapshots retain hover geometry separately from content and playback frost, preserving one drawing owner for each.
 
-Mix selected and base scenes with complementary alpha masks, preserving transparent holes without doubling foreground opacity even on legacy renderers. Procedural lens/mask recordings use stable density and independent draw scopes, never a mutable node scope as its own density. Retain immutable current-song texture at its exact display resolution instead of replaying grain primitives during scrolling.
+Retain immutable current-song texture at its exact display resolution instead of replaying grain primitives during scrolling. Procedural recordings use stable density and independent draw scopes, never a mutable node scope as its own density.
 
 ### Optics and performance
 
-Controls, panels and selections use one [lens model](interface.md#materials-and-controls), executed by platform-specific adapters. Share outline geometry across clipping, refraction, illumination and shadow. Page-owned ink polarity requires no GPU readback. Both adapters use the same ordered brightness mapping. Older devices share bounded, asynchronously prepared blur/tint/tone endpoints.
+Controls and panels use one [lens model](interface.md#materials-and-controls), executed by platform-specific adapters. Share outline geometry across clipping, refraction, illumination and shadow. Page-owned ink polarity requires no GPU readback. Both adapters use the same ordered brightness mapping. Older devices share bounded, asynchronously prepared blur/tint/tone endpoints.
 
 Active sliders and switches render one procedural scene, unchanged outside the lens and refracted inside. Resting white thumbs release sampling leases and bypass optics. Active controls capture only the thumb neighborhood and replace pixels only within its silhouette. Track, touch mapping and expanded wall contact share geometry.
 
