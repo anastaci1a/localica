@@ -55,7 +55,11 @@ internal class BrowsePinchMotion {
         if (!held || capturing || !destinationReady) return
         if (caughtUp) {
             tracking?.cancel()
-            tracking = scope.launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) { progress.snapTo(fingerProgress) }
+            // A snap animation writes inside the next frame callback, before that frame's
+            // composition and layout; a write after the frame callback lands a frame late.
+            tracking = scope.launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) {
+                progress.animateTo(fingerProgress, androidx.compose.animation.core.snap())
+            }
             return
         }
         if (tracking?.isActive == true) return
@@ -157,6 +161,7 @@ internal class BrowsePinchMotion {
         source = null; target = null; focusKey = null
         focusTop = 0; focusFraction = 0f; focusEdge = 0
         bounds = emptyMap(); frozen.clear()
+        tracking?.cancel()
         capture = null; tracking = null; settling = null
     }
     fun dispose() {
