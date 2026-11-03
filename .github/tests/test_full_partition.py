@@ -171,6 +171,8 @@ class WeightedClassShardsTest(unittest.TestCase):
         self.assertEqual(16, len(set(methods)))
         self.assertEqual(16, len(methods))
         self.assertEqual(result, self.plan())
+        for shard in result['shards']:
+            self.assertEqual(set(self.classes) - set(shard['classes']), set(shard['excluded_classes']))
 
     def test_unknown_classes_keep_every_method_with_explicit_estimated_cost(self):
         folder=self.root/'app/src/androidTest/java/example'
