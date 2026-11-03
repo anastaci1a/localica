@@ -73,8 +73,23 @@ class BrowseItemMetricsTest {
             val m = BrowseItemMetrics(BrowseStyle(presentation = Presentation.Standard, itemsPerRow = columns), columns, width, 1f, false)
             assertEquals(width, m.art)
             assertEquals(8, m.verticalInset)
-            assertEquals(width + 24 + 16 + 16, m.place(24, 0, 16).height)
+            assertEquals(width + 24 + 16 + 8, m.place(24, 0, 16).height)
             assertEquals(8f, m.artCorner, 0f)
+        }
+    }
+
+    @Test fun galleryTextBottomToNextCoverGapIsHalvedFromSixteenDp() {
+        for (density in listOf(1f, 2f, 2.625f, 3f)) for (columns in 1..5) {
+            val width = BrowseCellGeometry(columns).artworkWidth((360 * density).roundToInt(), density)
+            val m = BrowseItemMetrics(BrowseStyle(presentation = Presentation.Standard, itemsPerRow = columns), columns, width, density, false)
+            val title = (24 * density).roundToInt(); val info = (16 * density).roundToInt()
+            val cell = m.place(title, 0, info)
+            // The next cell's cover starts at its own top inset, directly after this cell's height.
+            val gap = cell.height + cell.artY - (cell.infoY + info)
+            assertEquals("old gap was 16 dp", 8f * density, gap.toFloat(), 1f)
+            assertEquals("first row keeps its top inset", (8 * density).roundToInt(), cell.artY)
+            val noInfo = m.place(title, 0, 0)
+            assertEquals(gap, noInfo.height + noInfo.artY - (noInfo.titleY + title))
         }
     }
     @Test fun tracklistPreservesNumberedHybridWhileNormalRestoresCoverSubtitleLayout() {
