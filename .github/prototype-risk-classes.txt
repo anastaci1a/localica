@@ -259,3 +259,5 @@ io.github.anastaci1a.localica.WorkflowPersistenceTest
 io.github.anastaci1a.localica.LyricsArtworkEntryTest
 io.github.anastaci1a.localica.PlayerArtworkSpacingTest
 io.github.anastaci1a.localica.PlayerLyricsForegroundTest
+io.github.anastaci1a.localica.DirectComposeDispatcherTest
+io.github.anastaci1a.localica.TestComposeDispatcherTest
