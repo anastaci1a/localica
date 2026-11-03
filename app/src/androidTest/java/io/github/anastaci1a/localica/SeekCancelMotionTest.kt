@@ -129,7 +129,8 @@ class SeekCancelMotionTest {
             seek.performTouchInput { if (pointerCancel) cancel() else up() }
             compose.mainClock.autoAdvance = false
             seek.performTouchInput { down(Offset(width * .8f, centerY)); moveTo(Offset(width * .9f, centerY)) }
-            compose.mainClock.advanceTimeByFrame()
+            // Touch-down eases from playback to the finger; the hover weight must start fresh.
+            compose.mainClock.advanceTimeBy(320)
             assertTrue("New scrub must not inherit the old cancellation tween", brightAtSixtyPercent())
             seek.performTouchInput { cancel() }
             compose.mainClock.autoAdvance = true
@@ -246,7 +247,8 @@ class SeekCancelMotionTest {
         // the second release from accepting the preceding scrub's stale rectangle.
         seek.performTouchInput {
             up()
-            down(Offset(width * .3f, centerY)); moveTo(oldCenter); up()
+            // Lock with a horizontal slide first: a vertical start belongs to the player.
+            down(Offset(width * .3f, centerY)); moveBy(Offset(width * .1f, 0f)); moveTo(oldCenter); up()
         }
         compose.mainClock.advanceTimeByFrame()
         compose.runOnIdle { assertEquals("First scrub cancels; the fresh unplaced target cannot cancel the second", 1, commits.size) }
