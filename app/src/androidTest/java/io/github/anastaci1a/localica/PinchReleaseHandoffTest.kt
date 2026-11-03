@@ -124,11 +124,8 @@ class PinchReleaseHandoffTest {
                 phase("begin")
                 val pixels = try { capturePresentedPopupPixels(compose, scene, stage) { view } }
                     finally { phase("end") }
-                if (gallery && stage in setOf(0, 1, 2, 6, 12, 22)) {
-                    android.util.Log.i("DIAG521", "stage=$stage expected=$expectedFinalCenter orig=$originalBounds viewport=$viewport")
-                }
                 if (gallery && stage in setOf(0, 1, 2, 6, 12, 22) &&
-                    InstrumentationRegistry.getArguments().getString("pinchReview") != "never") {
+                    InstrumentationRegistry.getArguments().getString("pinchReview") == "true") {
                     val directory = reviewDirectory
                     val bitmap = android.graphics.Bitmap.createBitmap(pixels.width, pixels.height, android.graphics.Bitmap.Config.ARGB_8888)
                     try {
@@ -280,6 +277,7 @@ class PinchReleaseHandoffTest {
     }
 
     private fun highlightCenter(pixels: PixelMap, expected: Float, radius: Float, fullWidth: Boolean = false): Float {
+        // Held gallery frames fade the frost (about .06 channel difference); neutral pixels stay at zero.
         // Sample away from the title, cover and action icon. Only the target row
         // has a magenta tint; neutral text and the green frame marker cannot match.
         // Keep unrelated queue toolbar accents out of the search, while retaining
@@ -291,7 +289,7 @@ class PinchReleaseHandoffTest {
             var matches = 0
             for (x in columns) {
                 val color = pixels[x, y]
-                if (color.red - color.green > .07f && color.blue - color.green > .07f) {
+                if (color.red - color.green > .04f && color.blue - color.green > .04f) {
                     matches++
                     // Row membership only needs three matches; keep scanning every row.
                     if (matches == 3) return@filter true
