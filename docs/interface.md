@@ -115,6 +115,12 @@ Sliders expose a label, value, endpoints and accessible range. Horizontal values
 
 Discrete settings use matching ticks and accessible increments. Percentage settings use 5% increments. Continuous ranges retain their precision. A continuous settings slider keeps its last valid value on cancellation.
 
+Every slider shares the [seek track's touch model](#player-and-queue-drawer): touch-down eases the thumb to the finger, a hold or a horizontal slide locks the drag, vertical travel a parent can use eases back, and a tap sets the tapped value.
+
+A locked drag raises the same X target at the bottom of its menu, popup or settings page. Hovering X morphs the lens back into the white circle and eases to the value the drag started from; leaving X eases back to the finger and the clear lens. Releasing there keeps that original value.
+
+When X would cover the slider, the whole menu or page eases up to clear it during the drag and eases back on release.
+
 Switch rows expose one accessible Boolean control. A drag previews the destination. Release commits once and cancellation restores the committed value. Tap and keyboard alternatives produce the same state.
 
 Track and thumb share one coordinate model for fill, travel and boundary contact. Render identity outside the active lens and refraction inside it. Foreground labels remain sharp.

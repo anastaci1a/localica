@@ -55,16 +55,12 @@ internal fun PlayerSeekBar(value: Float, onValueChange: (Float) -> Unit, valueRa
     var touching by remember { mutableStateOf(false) }
     val thickness by animateDpAsState(if (dragging || touching) 9.dp else 5.dp, tween(if (reduced) 0 else 160), label = "Seek thickness")
     var origin by remember { mutableStateOf(Offset.Zero) }
+    var width by remember { mutableIntStateOf(1) }
     var wasOver by remember { mutableStateOf(false) }
-    var owned by remember { mutableStateOf(false) }
     var previewGesture by remember { mutableIntStateOf(0) }
     // Touch preview in track fractions, so a duration refinement cannot move it.
-    var touchFraction by remember { mutableStateOf<Float?>(null) }
-    var lockedBase by remember { mutableFloatStateOf(0f) }
-    val approach = remember { Animatable(0f) }
-    val scope = rememberCoroutineScope()
+    val touchPreview = rememberSliderTouchPreview()
     val ease by rememberUpdatedState(seekPreviewEase())
-    val parent = rememberControlScrollContext()
     val current by rememberUpdatedState(value)
     val range by rememberUpdatedState(valueRange)
     val change by rememberUpdatedState(onValueChange)
@@ -74,12 +70,18 @@ internal fun PlayerSeekBar(value: Float, onValueChange: (Float) -> Unit, valueRa
     var pointerInRoot by remember { mutableStateOf<Offset?>(null) }
     val report by rememberUpdatedState(onDrag)
     val cancel by rememberUpdatedState(onCancel)
+    var start by remember { mutableStateOf<DragInteraction.Start?>(null) }
     fun fractionOf(v: Float, bounds: ClosedFloatingPointRange<Float> = range): Float {
         val span = bounds.endInclusive - bounds.start
         return if (span <= 0f) 0f else ((v - bounds.start) / span).coerceIn(0f, 1f)
     }
+    fun fractionAt(x: Float) = (x / width.coerceAtLeast(1)).coerceIn(0f, 1f)
     fun valueAt(fraction: Float): Float = range.start + fraction.coerceIn(0f, 1f) * (range.endInclusive - range.start)
     fun overAt(point: Offset) = (if (liveTarget != null) liveTarget?.invoke() else target)?.contains(point) == true
+    fun publish(point: Offset) {
+        val next = valueAt(fractionAt(point.x))
+        if (next != current) change(next)
+    }
     // Entrance/occupancy can move X across a stationary finger. This observes the
     // same live geometry as event-time release checks.
     LaunchedEffect(Unit) {
@@ -90,122 +92,79 @@ internal fun PlayerSeekBar(value: Float, onValueChange: (Float) -> Unit, valueRa
                 report(true, over)
             } }
     }
-    val touch = if (!enabled) Modifier else Modifier.readControlScrollContext(parent).pointerInput(Unit) {
-        awaitEachGesture {
-            val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
-            val intent = ControlGestureIntent(viewConfiguration.touchSlop, parent.directions())
-            fun fractionAt(x: Float) = (x / size.width.coerceAtLeast(1)).coerceIn(0f, 1f)
-            feedback.beginTouch()
-            wasOver = false
-            owned = false
-            previewGesture++
-            touchFraction = fractionAt(down.position.x)
-            touching = true
-            scope.launch(start = CoroutineStart.UNDISPATCHED) { approach.snapTo(0f); approach.animateTo(1f, ease) }
-            var start: DragInteraction.Start? = null
-            var position = down.position
-            var elapsed = 0L
-            var released = false
-            fun publish(point: Offset) {
-                val next = valueAt(fractionAt(point.x))
-                if (next != current) change(next)
+    fun end() {
+        pointerInRoot = null
+        touching = false
+        start = null
+        report(false, false)
+    }
+    // The playback bar follows the shared slider touch model (#538, #539).
+    val touch = Modifier.sliderContact(enabled) { contact ->
+        val point = contact.position
+        when (contact) {
+            is SliderContact.Down -> {
+                feedback.beginTouch()
+                wasOver = false
+                previewGesture++
+                touching = true
+                touchPreview.begin(fractionAt(point.x), ease)
             }
-            fun lock() {
+            is SliderContact.Lock -> {
                 // Continue the touch-down ease from the playback position it started at.
-                lockedBase = fractionOf(current)
-                owned = true
+                touchPreview.lock(fractionOf(current))
                 report(true, false)
                 start = DragInteraction.Start().also { interaction.tryEmit(it) }
-                pointerInRoot = origin + position
-                publish(position)
+                pointerInRoot = origin + point
+                publish(point)
             }
-            try {
-                while (true) {
-                    val event = if (!owned && intent.owner == ControlGestureOwner.Pending) withTimeoutOrNull(
-                        (ControlHoldLockMillis - elapsed).coerceAtLeast(1L)) {
-                        awaitPointerEvent(PointerEventPass.Initial)
-                    } else awaitPointerEvent(PointerEventPass.Initial)
-                    if (event == null) {
-                        intent.hold()
-                        if (intent.owner == ControlGestureOwner.Control) lock()
-                        continue
-                    }
-                    val point = event.changes.firstOrNull { it.id == down.id } ?: break
-                    // Compose marks a system cancellation consumed; an ancestor may also take the release.
-                    if (point.isConsumed) break
-                    if (!owned && event.changes.count { it.pressed } > 1) intent.cancel()
-                    position = point.position
-                    elapsed = point.uptimeMillis - down.uptimeMillis
-                    if (!owned) {
-                        if (!point.pressed) {
-                            // A tap seeks to the tap point.
-                            feedback.pointer(false, genuineUp = true, cancelled = false)
-                            touchFraction?.let { tapped -> valueAt(tapped).let { if (it != current) change(it) } }
-                            feedback.materialFinish()
-                            feedback.pointerFinal()
-                            point.consume()
-                            released = true
-                            finished()
-                            break
-                        }
-                        val movement = point.position - down.position
-                        when (intent.move(movement.x, movement.y, elapsed)) {
-                            ControlGestureOwner.Pending -> continue
-                            ControlGestureOwner.Scroll, ControlGestureOwner.Cancelled -> break
-                            ControlGestureOwner.Control -> lock()
-                        }
-                    }
-                    val over = overAt(origin + point.position)
-                    wasOver = over
-                    if (point.pressed) {
-                        pointerInRoot = origin + point.position
-                        feedback.pointer(over, genuineUp = false, cancelled = false)
-                        report(true, over)
-                        publish(point.position)
-                        point.consume()
-                    } else {
-                        pointerInRoot = null
-                        // Releasing on X cancels; any other genuine release commits.
-                        feedback.pointer(over, genuineUp = true, cancelled = over)
-                        point.consume()
-                        released = true
-                        if (!over) publish(point.position)
-                        start?.let { interaction.tryEmit(DragInteraction.Stop(it)) }
-                        if (over) cancel() else finished()
-                        break
-                    }
-                }
-            } finally {
+            is SliderContact.Move -> {
+                val over = overAt(origin + point)
+                wasOver = over
+                pointerInRoot = origin + point
+                feedback.pointer(over, genuineUp = false, cancelled = false)
+                report(true, over)
+                publish(point)
+            }
+            is SliderContact.Release -> {
+                // Releasing on X cancels; any other genuine release commits.
+                val over = overAt(origin + point)
+                wasOver = over
                 pointerInRoot = null
-                touching = false
-                if (!released) {
-                    feedback.cancelTouch()
-                    start?.let { interaction.tryEmit(DragInteraction.Cancel(it)) }
-                }
-                if (!released && !owned) {
-                    // Unlocked: ease back to playback with the cancel target's ease, publishing nothing.
-                    scope.launch(start = CoroutineStart.UNDISPATCHED) {
-                        approach.animateTo(0f, ease)
-                        touchFraction = null
-                    }
-                } else {
-                    if (!released) cancel()
-                    touchFraction = null
-                    owned = false
-                }
-                report(false, false)
+                feedback.pointer(over, genuineUp = true, cancelled = over)
+                if (!over) publish(point)
+                start?.let { interaction.tryEmit(DragInteraction.Stop(it)) }
+                if (over) cancel() else finished()
+                touchPreview.release()
+                end()
+            }
+            is SliderContact.Tap -> {
+                // A tap seeks to the tap point.
+                feedback.pointer(false, genuineUp = true, cancelled = false)
+                touchPreview.touch?.let { tapped -> valueAt(tapped).let { if (it != current) change(it) } }
+                feedback.materialFinish()
+                feedback.pointerFinal()
+                finished()
+                touchPreview.release()
+                end()
+            }
+            is SliderContact.Yield -> {
+                // Unlocked: ease back to playback with the cancel target's ease, publishing nothing.
+                feedback.cancelTouch()
+                touchPreview.yield(ease)
+                end()
+            }
+            is SliderContact.Cancel -> {
+                feedback.cancelTouch()
+                start?.let { interaction.tryEmit(DragInteraction.Cancel(it)) }
+                cancel()
+                touchPreview.release()
+                end()
             }
         }
     }
-    val valueFraction = fractionOf(value, valueRange)
-    val touched = touchFraction
-    val shown = when {
-        touched == null -> valueFraction
-        owned -> lockedBase + (valueFraction - lockedBase) * approach.value
-        else -> valueFraction + (touched - valueFraction) * approach.value
-    }
+    val shown = touchPreview.shown(fractionOf(value, valueRange))
     // A fresh touch or keyboard/accessibility edit must not inherit a cancelled hover.
-    val preview = if (owned) key(previewGesture) {
+    val preview = if (touchPreview.owned) key(previewGesture) {
         seekCancelPreview(shown, fractionOf(liveValue, valueRange), wasOver)
     } else shown
     val semantics = Modifier.semantics {
@@ -221,7 +180,7 @@ internal fun PlayerSeekBar(value: Float, onValueChange: (Float) -> Unit, valueRa
             }
         }
     }
-    Box(modifier.onGloballyPositioned { origin = it.positionInRoot() }.then(semantics).then(touch)
+    Box(modifier.onGloballyPositioned { origin = it.positionInRoot(); width = it.size.width }.then(semantics).then(touch)
         .onKeyEvent { event ->
             feedback.nonTouchInput()
             if (!enabled || event.type != KeyEventType.KeyDown) return@onKeyEvent false

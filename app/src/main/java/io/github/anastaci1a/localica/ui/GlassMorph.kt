@@ -611,6 +611,8 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
         val keyboard = LocalSoftwareKeyboardController.current
         LaunchedEffect(visible) { if (!visible) keyboard?.hide() }
         val admittedDraw = continuousOrigin == null || originAdmitted && readyWindow === window
+        // A dragged slider rises the whole window body clear of its cancel target (#539).
+        val sliderCancel = rememberSliderCancelHost()
         Box(Modifier.fillMaxSize()
             .then(if (continuousOrigin != null) Modifier
                 .drawWithContent { if (admittedDraw) drawContent() }
@@ -618,7 +620,9 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                 else Modifier)
             .drawBehind { drawRect(Color.Black.copy(alpha = .16f * progress.value.coerceIn(0f, 1f))) }
             .pointerInput(visible, admittedDraw) { detectTapGestures { if (visible && admittedDraw) dismissNow() } }) {
-            BoxWithConstraints(Modifier.fillMaxSize().then(if (placement == GlassPlacement.Page) Modifier else Modifier.safeDrawingPadding().imePadding())) {
+            CompositionLocalProvider(LocalSliderCancelHost provides sliderCancel) {
+            BoxWithConstraints(Modifier.fillMaxSize().then(if (placement == GlassPlacement.Page) Modifier else Modifier.safeDrawingPadding().imePadding())
+                .offset { androidx.compose.ui.unit.IntOffset(0, -sliderCancel.shift.value.roundToInt()) }) {
                 // Geometry still observes every sample in its own layout-content scope.
                 // Window/input ownership above does not subscribe to the animation clock.
                 val p = progress.value.coerceIn(0f, 1f)
@@ -966,6 +970,8 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                     }
                 }
             }
+            }
+            SliderCancelLayer(sliderCancel, WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 24.dp)
         }
     } } }
 }

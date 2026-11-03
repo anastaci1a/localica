@@ -57,7 +57,7 @@ internal class SeekCancelTargetState {
 
 @Composable
 internal fun SeekCancelTarget(state: SeekCancelTargetState, hovered: Boolean, bottomInset: Dp,
-    reducedMotion: Boolean) {
+    reducedMotion: Boolean, action: String = "seek", tag: String = "cancel-seek") {
     key(state.generation) {
         val density = LocalDensity.current
         val motion = rememberFloatingControlMotion(true, reducedMotion)
@@ -75,8 +75,8 @@ internal fun SeekCancelTarget(state: SeekCancelTargetState, hovered: Boolean, bo
             state.hostSize = it.size
             state.hostOrigin = it.positionInRoot()
         }) {
-            if (motion.alpha > 0f) DragCancelTarget(hovered, "seek",
-                Modifier.offset { state.placement }.graphicsLayer { alpha = motion.alpha }.testTag("cancel-seek"))
+            if (motion.alpha > 0f) DragCancelTarget(hovered, action,
+                Modifier.offset { state.placement }.graphicsLayer { alpha = motion.alpha }.testTag(tag))
         }
     }
 }
