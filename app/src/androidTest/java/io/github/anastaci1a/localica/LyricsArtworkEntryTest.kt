@@ -159,6 +159,7 @@ class LyricsArtworkEntryTest {
     @Test fun missingLyricsIconDrawsUnderTheArtworkWhileMinimizingFromLyrics() {
         NoLyricsFixture("Missing").use { fixture ->
             setPlayer(fixture.track)
+            snap(1f)
             compose.waitUntil(10000) {
                 compose.mainClock.advanceTimeByFrame()
                 compose.onAllNodesWithTag("empty-lyrics", true).fetchSemanticsNodes().isNotEmpty()
