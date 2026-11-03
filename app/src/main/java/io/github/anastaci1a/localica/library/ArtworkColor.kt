@@ -113,6 +113,7 @@ internal suspend fun publishArtworkColors(rows: kotlinx.coroutines.flow.Flow<Lis
         val index = HashMap<String, Int>(list.size * 2)
         list.forEach { index[it.uri] = it.color ?: ArtworkColors.MISSING }
         ArtworkColors.publish(index)
+        if (!first) android.util.Log.d("ArtworkColors", "index republished: ${index.size} uris")
         if (first) {
             first = false
             val sinceStart = started - android.os.Process.getStartElapsedRealtime()

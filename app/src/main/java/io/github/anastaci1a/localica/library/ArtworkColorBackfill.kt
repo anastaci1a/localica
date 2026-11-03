@@ -35,11 +35,14 @@ class ArtworkColorBackfill(
     private val paused: Flow<Boolean>,
     private val batch: Int = 50,
     private val priorityCapacity: Int = 48,
+    /** Timing evidence for visible-first work; Log.i in production. */
+    private val log: (String) -> Unit = {},
 ) : ArtworkColorRequests {
     private val lock = Any()
     private val priority = LinkedHashSet<String>()
     private val offered = LinkedHashMap<String, Int>()
     private val wakes = MutableStateFlow(0L)
+    private val requestedAt = HashMap<String, Long>()
     @Volatile var computed = 0
         private set
 
@@ -49,17 +52,18 @@ class ArtworkColorBackfill(
     override fun prioritize(uris: List<String>) {
         if (uris.isEmpty()) return
         synchronized(lock) {
-            uris.forEach { priority.remove(it); priority.add(it) }
+            val now = System.nanoTime()
+            uris.forEach { priority.remove(it); priority.add(it); requestedAt.putIfAbsent(it, now) }
             // Latest visible wins; the oldest requests are stale once the user moved on.
-            while (priority.size > priorityCapacity) priority.remove(priority.first())
+            while (priority.size > priorityCapacity) priority.first().let { priority.remove(it); requestedAt.remove(it) }
         }
         wakes.value++
     }
 
-    override fun withdraw(uris: List<String>) { synchronized(lock) { priority.removeAll(uris.toSet()) } }
+    override fun withdraw(uris: List<String>) { synchronized(lock) { priority.removeAll(uris.toSet()); uris.forEach(requestedAt::remove) } }
 
     override fun offer(uri: String, color: Int) {
-        synchronized(lock) { offered[uri] = color; priority.remove(uri) }
+        synchronized(lock) { offered[uri] = color; priority.remove(uri); requestedAt.putIfAbsent(uri, System.nanoTime()) }
         wakes.value++
     }
 
@@ -101,6 +105,9 @@ class ArtworkColorBackfill(
             }
             store.save(results)
         }
+        val waited = synchronized(lock) { (offers.keys + visible).mapNotNull { requestedAt.remove(it) } }
+        if (waited.isNotEmpty()) log("visible colours stored: ${offers.size} from display decodes, ${visible.size} computed; " +
+            "longest request-to-store ${(System.nanoTime() - waited.min()) / 1_000_000} ms")
         return true
     }
 
@@ -109,7 +116,7 @@ class ArtworkColorBackfill(
             currentCoroutineContext().ensureActive()
             if (urgent()) continue
             val pending = store.pending(batch)
-            if (pending.isEmpty()) return
+            if (pending.isEmpty()) { log("backfill idle: $computed colours computed in this process"); return }
             val results = ArrayList<Pair<ArtworkSource, Int>>()
             try {
                 for (source in pending) {

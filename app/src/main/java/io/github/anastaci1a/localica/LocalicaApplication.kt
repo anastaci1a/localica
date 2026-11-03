@@ -47,7 +47,8 @@ class LocalicaApplication : Application() {
             { uri -> io.github.anastaci1a.localica.library.ArtworkReader(this).averageColor(uri) },
             io.github.anastaci1a.localica.library.ArtworkCache.foregroundDecodes,
             kotlinx.coroutines.flow.combine(scanner.state, io.github.anastaci1a.localica.library.ArtworkColors.foreground) { scan, started ->
-                scan.running || !started }.distinctUntilChanged())
+                scan.running || !started }.distinctUntilChanged(),
+            log = { android.util.Log.i("ArtworkColors", it) })
         io.github.anastaci1a.localica.library.ArtworkColors.requests = backfill
         scope.launch { io.github.anastaci1a.localica.library.publishArtworkColors(dao.observeArtworkColors()) }
         scope.launch { dao.trackChanges().collect { backfill.request() } }
