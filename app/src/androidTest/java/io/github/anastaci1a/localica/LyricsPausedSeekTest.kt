@@ -5,7 +5,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.SemanticsProperties
-import androidx.compose.ui.semantics.getOrNull
 import io.github.anastaci1a.localica.navigation.*
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -45,10 +44,10 @@ class LyricsPausedSeekTest {
             val inLines = hasAnyAncestor(hasTestTag("lyric-lines"))
             for (trial in 0 until 8) {
                 // Tap a different visible line each time, alternating forwards and backwards.
-                val candidates = compose.onAllNodes(hasClickAction() and inLines, useUnmergedTree = true).fetchSemanticsNodes()
-                    .filter { SemanticsProperties.Selected !in it.config || it.config[SemanticsProperties.Selected].not() }
-                    .mapNotNull { node -> node.config.getOrNull(SemanticsProperties.Text)?.joinToString("") { it.text } }
-                    .filter { it in unique }
+                val current = SemanticsMatcher.expectValue(SemanticsProperties.Selected, true)
+                val candidates = document.lines.map { it.text }.filter { it in unique }.filter {
+                    compose.onAllNodes(hasText(it) and inLines, useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty() &&
+                        compose.onAllNodes(hasText(it) and inLines and current, useUnmergedTree = true).fetchSemanticsNodes().isEmpty() }
                 assertTrue("Trial $trial: a visible line other than the current one: $candidates", candidates.isNotEmpty())
                 val text = if (trial % 2 == 0) candidates.last() else candidates.first()
                 val line = document.lines.first { it.text == text }
