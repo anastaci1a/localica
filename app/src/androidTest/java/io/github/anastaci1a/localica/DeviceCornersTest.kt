@@ -5,7 +5,7 @@ import android.view.RoundedCorner
 import android.view.WindowInsets
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.platform.LocalView
-import androidx.compose.ui.test.junit4.createComposeRule
+import io.github.anastaci1a.localica.localicaComposeRule as createComposeRule
 import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
