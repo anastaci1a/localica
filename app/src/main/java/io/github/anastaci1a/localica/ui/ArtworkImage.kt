@@ -13,6 +13,8 @@ import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onPlaced
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -22,7 +24,7 @@ import io.github.anastaci1a.localica.R
 @Composable
 internal fun ArtworkImage(artwork: ImageBitmap?, loading: Boolean, modifier: Modifier,
     shape: Shape = Corners.artwork, contentScale: ContentScale = ContentScale.Crop,
-    emptyText: String? = null) {
+    emptyText: String? = null, tintUris: List<String>? = null) {
     val reducedMotion = LocalReducedMotion.current
     // The reveal is read only while drawing; the cell never recomposes per animation frame.
     val reveal = remember { Animatable(if (artwork == null) 0f else 1f) }
@@ -36,7 +38,7 @@ internal fun ArtworkImage(artwork: ImageBitmap?, loading: Boolean, modifier: Mod
     if (artwork == null) revealsOverLoading[0] = loading
     val placeholderLoading = if (artwork == null) loading else revealsOverLoading[0]
     Box(modifier.clip(shape), contentAlignment = Alignment.Center) {
-        ArtworkPlaceholderHost(artwork, reveal, placeholderLoading, emptyText, Modifier.matchParentSize())
+        ArtworkPlaceholderHost(artwork, reveal, placeholderLoading, emptyText, tintUris, Modifier.matchParentSize())
         if (!loading && artwork == null && emptyText != null) Text(emptyText)
         if (artwork != null) ArtworkResolutionBlend(artwork,
             Modifier.matchParentSize().graphicsLayer { alpha = reveal.value }, contentScale, if (reducedMotion) 0 else 240)
@@ -46,11 +48,11 @@ internal fun ArtworkImage(artwork: ImageBitmap?, loading: Boolean, modifier: Mod
 /** Reads the reveal in its own composition, so only this host recomposes when the placeholder is removed. */
 @Composable
 private fun ArtworkPlaceholderHost(artwork: ImageBitmap?, reveal: Animatable<Float, AnimationVector1D>, loading: Boolean,
-    emptyText: String?, modifier: Modifier) {
+    emptyText: String?, tintUris: List<String>?, modifier: Modifier) {
     val revealed by remember(artwork) { derivedStateOf { artwork != null && reveal.value >= 1f } }
     if (!revealed) {
         Box(modifier) {
-            ArtworkPlaceholder(loading, Modifier.matchParentSize(), showIcon = emptyText == null || loading)
+            ArtworkPlaceholder(loading, Modifier.matchParentSize(), showIcon = emptyText == null || loading, tintUris = tintUris)
         }
     }
 }
@@ -105,16 +107,43 @@ private fun ArtworkResolutionBlend(artwork: ImageBitmap, modifier: Modifier,
     }
 }
 
+/** [tintUris] opts an artwork placeholder into its average-colour tint (#525); text skeletons
+ * and the pre-catalog viewport omit it and keep the neutral base. */
 @Composable
-internal fun ArtworkPlaceholder(loading: Boolean, modifier: Modifier = Modifier, showIcon: Boolean = true) {
+internal fun ArtworkPlaceholder(loading: Boolean, modifier: Modifier = Modifier, showIcon: Boolean = true,
+    tintUris: List<String>? = null) {
     val loadingOpacity = LocalLoadingMaterialOpacity.current.coerceIn(0f, 1f)
     val base = MaterialTheme.colorScheme.surfaceContainer
     val highlight = MaterialTheme.colorScheme.onSurface.copy(alpha = .065f)
+    val dark = MaterialTheme.colorScheme.surface.luminance() < .5f
     val reducedMotion = LocalReducedMotion.current
     val sharedActivity = LocalLoadingShimmerActivity.current
     if (loading && !reducedMotion && sharedActivity != null) DisposableEffect(sharedActivity) {
         sharedActivity.acquire()
         onDispose { sharedActivity.release() }
+    }
+    // Only loading artwork placeholders observe the colour index; it republishes at most a few times a second.
+    val stored = if (loading && tintUris != null) io.github.anastaci1a.localica.library.ArtworkColors.lookup(tintUris) else null
+    if (loading && tintUris != null && stored == null) DisposableEffect(tintUris) {
+        io.github.anastaci1a.localica.library.ArtworkColors.prioritize(tintUris)
+        onDispose { io.github.anastaci1a.localica.library.ArtworkColors.withdraw(tintUris) }
+    }
+    val known = stored?.takeIf { it != io.github.anastaci1a.localica.library.ArtworkColors.MISSING }
+    val tint = remember(known, dark) { known?.let { Color(placeholderTint(it, dark)) } }
+    // A colour known on the first frame draws tinted at once; one that arrives later eases from gray
+    // in the loading wave's distance order. The phase is read only while drawing.
+    val tintPhase = remember { Animatable(if (tint != null) 1f else 0f) }
+    // A coordinate reference, resolved only when a cascade starts (no per-frame position work).
+    val placed = remember { arrayOfNulls<androidx.compose.ui.layout.LayoutCoordinates>(1) }
+    val density = androidx.compose.ui.platform.LocalDensity.current.density
+    LaunchedEffect(tint != null, reducedMotion) {
+        if (tint != null && tintPhase.value < 1f) {
+            if (reducedMotion) tintPhase.snapTo(1f) else {
+                val origin = placed[0]?.takeIf { it.isAttached }?.positionInRoot() ?: Offset.Zero
+                kotlinx.coroutines.delay(BrowseLoadingMotion.delayMillis(origin.x / density, origin.y / density).toLong())
+                tintPhase.animateTo(1f, tween(ArtworkTintTuning.CascadeMillis, easing = FastOutSlowInEasing))
+            }
+        }
     }
     // The sweep is read during drawing; it doesn't recompose or remeasure scrolling rows.
     val progress: State<Float>? = if (loading && !reducedMotion) {
@@ -127,17 +156,29 @@ internal fun ArtworkPlaceholder(loading: Boolean, modifier: Modifier = Modifier,
         contentAlignment = Alignment.Center) {
         // One gradient per size, translated by the sweep: identical pixels without a new Brush and
         // native shader per placeholder per frame (every skeleton cell runs this while loading).
-        androidx.compose.foundation.layout.Spacer(Modifier.matchParentSize().drawWithCache {
+        // A tinted cell adds one cached light wash; the colour itself is a solid fill.
+        androidx.compose.foundation.layout.Spacer(Modifier.matchParentSize()
+            .then(if (tintUris != null) Modifier.onPlaced { placed[0] = it } else Modifier)
+            .drawWithCache {
             val sweep = Brush.linearGradient(listOf(Color.Transparent, highlight, Color.Transparent),
                 start = Offset(-size.width * .6f, 0f), end = Offset(size.width * .6f, size.height))
+            val wash = if (tint == null) null else Brush.linearGradient(listOf(Color.Transparent, TintedHighlight, Color.Transparent),
+                start = Offset(-size.width * .6f, 0f), end = Offset(size.width * .6f, size.height))
             onDrawBehind {
-                drawRect(base)
+                val phase = if (tint == null) 0f else tintPhase.value
+                drawRect(if (tint == null || phase <= 0f) base else lerp(base, tint, phase))
                 progress?.let {
                     val x = size.width * it.value
-                    translate(left = x) { drawRect(sweep, topLeft = Offset(-x, 0f), size = size) }
+                    translate(left = x) {
+                        if (phase < 1f) drawRect(sweep, topLeft = Offset(-x, 0f), size = size, alpha = 1f - phase)
+                        if (wash != null && phase > 0f) drawRect(wash, topLeft = Offset(-x, 0f), size = size, alpha = phase)
+                    }
                 }
             }
         })
         if (showIcon && !loading) Icon(painterResource(R.drawable.ic_music), null, Modifier.fillMaxSize(.4f).testTag("artwork-missing"), tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = .45f))
     }
 }
+
+/** The light half of the colour-to-light sweep over a tinted base. */
+private val TintedHighlight = Color.White.copy(alpha = .16f)

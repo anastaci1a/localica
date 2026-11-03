@@ -171,6 +171,12 @@ Replaceable cover providers use bounded caches (including missing results), canc
 
 Rescans/edits invalidate artwork/lyric caches. Long automatic scrolls retain cached covers but defer uncached decode requests until settling or interruption. Manual browsing keeps normal loading. No scraping.
 
+Average artwork colours live in the library database's `track_artwork` table, keyed by track with the source `modifiedAt`. A changed `modifiedAt` marks a colour stale, and removing a track cascades its row. Catalog writes never wait for colours, and colour writes never republish the catalog.
+
+The average is a 16 by 16 filtered downscale averaged in linear light. A URI-keyed index loads off Main and republishes at most every 400 ms. Only loading artwork placeholders observe it.
+
+One single-flight worker computes missing or stale colours from 64 px decodes without GPU upload. Visible placeholders and the player's current and next tracks queue first, latest first, and display decodes donate their averages. Bulk work waits for foreground decodes to finish and stops while a scan runs or the app is stopped.
+
 One immutable browse-order snapshot resolves inherited/overridden collection ordering for cards, Home and details. Sort changes invalidate their completed queries without per-card preference reads. Read cached artwork synchronously. Retain smaller same-identity covers while larger decodes load. Warm artwork hits bypass unrelated cold decodes. Misses decode at most three at a time and remain revision-checked.
 
 Activity-local viewport leases hold shared bitmap references for current tabs and two Back destinations. Artwork invalidation clears them. Home retains completed pinned-item queries alongside browse presentations. Empty pin requests skip their catalog lookup. Recycled rows never retain another identity.

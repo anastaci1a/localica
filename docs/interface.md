@@ -195,6 +195,10 @@ A first member without artwork keeps the placeholder instead of borrowing a late
 
 Show memory-cached covers immediately. Newly decoded covers fade in over the loading sweep for 300 ms, and the sweep stays beneath them until the reveal completes. Deferred covers keep the sweep. Only confirmed missing artwork shows the static music-note placeholder. Reduced motion snaps.
 
+Loading artwork placeholders use their item's average artwork colour as the base, with a lighter sweep. Lightness is clamped per theme and saturation is capped. Text skeletons, catalog skeletons and items without a known colour keep the neutral gray base.
+
+A colour that becomes known while its placeholder is showing eases from gray over 200 ms, delayed by the radial loading-wave distance. Colours already known when a cell appears draw from its first frame. A stored no-artwork result shows the music note at once. Playlist custom covers stay neutral.
+
 Gallery actions are on long-press, without overlaid menu buttons. Collection/nonmutable-song holds open the anchored actions. Mutable-song holds select, then moving the same finger starts reordering.
 
 Plain row ellipses tap to open actions and hold for the same selection/actions as their row. Actions include: select songs, queue/playlist destinations and pinning. Playlists additionally offer image, rename and delete. The image action sets a custom cover when absent and removes it when present, restoring representative member artwork.
