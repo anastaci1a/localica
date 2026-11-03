@@ -252,3 +252,5 @@ io.github.anastaci1a.localica.BrowseOptionsFaceContractTest
 io.github.anastaci1a.localica.PlayerTrackProjectionTest
 io.github.anastaci1a.localica.CollectionLookupLifecycleTest
 io.github.anastaci1a.localica.EnumDecodingTest
+io.github.anastaci1a.localica.DirectComposeDispatcherTest
+io.github.anastaci1a.localica.TestComposeDispatcherTest
