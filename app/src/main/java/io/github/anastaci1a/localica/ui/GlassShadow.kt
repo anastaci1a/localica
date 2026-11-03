@@ -50,6 +50,59 @@ internal class GlassShadowEntry {
     var radius: Dp? = null
     var opacity: () -> Float = { 1f }
     var anchor: GlassAnchor? = null
+    var view: android.view.View? = null
+
+    /** The drawn, shape-deformed body in [rect]'s space, or null when it casts nothing. */
+    fun body(rect: Rect, density: Density): RoundRect? {
+        if (opacity() <= .001f || anchor?.shadowInModal == true) return null
+        val corner = (radius?.let { with(density) { it.toPx() } } ?: minOf(rect.width, rect.height) / 2)
+            .coerceIn(0f, minOf(rect.width, rect.height) / 2)
+        // Anchored controls deform in draw space. Their coordinates alone
+        // do not include the rebound which persists after a modal returns.
+        val shape = anchor?.contact?.body?.value ?: GlassShape()
+        val sx = shape.scaleX(anchor?.contact?.vertical == true)
+        val sy = shape.scaleY(anchor?.contact?.vertical == true)
+        val half = Offset(rect.width * sx / 2f, rect.height * sy / 2f)
+        return RoundRect(Rect(rect.center - half, rect.center + half), CornerRadius(corner * sx, corner * sy))
+    }
+}
+
+/** Neighboring group shadows that the trigger's own window keeps drawing while a
+ * popup owns the trigger's shadow. Bodies are screen-space; [origin] is the caster's
+ * untransformed screen origin and [size]/[scaleX]/[scaleY]/[shift] its draw transform.
+ * Each ring is drawn at [weight] where it overlaps the same neighbor ring: 0 at home
+ * reproduces the shared union exactly, 1 is the popup's independent resting field. */
+internal class GlassShadowExclusion(private val bodies: List<RoundRect>, private val origin: Offset,
+    private val size: Size, private val scaleX: Float, private val scaleY: Float, private val shift: Float,
+    val weight: Float) {
+    private val path = Path()
+    /** Neighbor ring [index] in caster space, matching glassShadows' ring expansion. */
+    fun ring(index: Int, reach: Float, offsetY: Float, translation: Offset = Offset.Zero): Path? {
+        val expansion = reach * (16 - index) / 16f
+        path.reset()
+        var any = false
+        bodies.forEach { r ->
+            val screen = Rect(r.left - expansion, r.top - expansion + offsetY,
+                r.right + expansion, r.bottom + expansion + offsetY).translate(-origin)
+            val local = glassReceiverInCasterSpace(screen, size, scaleX, scaleY, shift) ?: return@forEach
+            val corner = r.topLeftCornerRadius
+            path.addRoundRect(RoundRect(local.translate(translation),
+                CornerRadius((corner.x + expansion) / scaleX, (corner.y + expansion) / scaleY)))
+            any = true
+        }
+        return path.takeIf { any }
+    }
+}
+
+/** Screen-space neighbor bodies of [anchor]'s shared shadow group, excluding the trigger. */
+internal fun glassShadowNeighbors(anchor: GlassAnchor, density: Density): List<RoundRect> {
+    val group = anchor.shadowGroup ?: return emptyList()
+    return group.entries.values.mapNotNull { entry ->
+        if (entry.anchor === anchor) return@mapNotNull null
+        val item = entry.coordinates?.takeIf { it.isAttached } ?: return@mapNotNull null
+        val view = entry.view ?: return@mapNotNull null
+        entry.body(Rect(item.backdropPosition(view), Size(item.size.width.toFloat(), item.size.height.toFloat())), density)
+    }
 }
 @Stable internal class GlassShadowGroup {
     val entries = mutableStateMapOf<Any, GlassShadowEntry>()
@@ -112,7 +165,8 @@ internal class GlassShadowGeometry {
 
 /** Draw the union once: neighboring shadows never accumulate opacity. */
 internal fun DrawScope.glassShadows(bodies: List<Pair<RoundRect, Float>>, strength: Float, spread: Float, cache: GlassShadowGeometry,
-    excludeInterior: Boolean = true, receiver: GlassShadowReceiver? = null) {
+    excludeInterior: Boolean = true, receiver: GlassShadowReceiver? = null,
+    exclusion: GlassShadowExclusion? = null, exclusionTranslation: Offset = Offset.Zero) {
     if (strength <= 0f || bodies.isEmpty()) return
     val opacity = bodies.maxOf { it.second }.coerceIn(0f, 1f)
     val reach = (4f + spread * 28f).dp.toPx()
@@ -135,25 +189,36 @@ internal fun DrawScope.glassShadows(bodies: List<Pair<RoundRect, Float>>, streng
             corner.x >= 0f && corner.y >= 0f && corner.x <= r.width / 2f && corner.y <= r.height / 2f
     }
     cache.update(outlines, reach, shift, needRings = uniform == null)
+    fun DrawScope.ring(index: Int, alpha: Float) {
+        val color = Color.Black.copy(alpha = alpha)
+        if (uniform == null) {
+            val ring = cache.rings[index]
+            if (brush == null) drawPath(ring, color) else drawPath(ring, brush, alpha = alpha)
+        } else {
+            val expansion = reach * (16 - index) / 16f
+            val left = uniform.left - expansion
+            val top = uniform.top - expansion + shift
+            val right = uniform.right + expansion
+            val bottom = uniform.bottom + expansion + shift
+            val corner = CornerRadius(uniform.topLeftCornerRadius.x + expansion,
+                uniform.topLeftCornerRadius.y + expansion)
+            if (brush == null) drawRoundRect(color, Offset(left, top), Size(right - left, bottom - top), corner)
+            else drawRoundRect(brush, Offset(left, top), Size(right-left,bottom-top), corner, alpha = alpha)
+        }
+    }
     fun DrawScope.rings() {
         repeat(16) { index ->
             val t = (16 - index) / 16f
             val alpha = strength * opacity * .07f * (1f - t).pow(2)
             if (alpha > 0f) {
-                val color = Color.Black.copy(alpha = alpha)
-                if (uniform == null) {
-                    val ring = cache.rings[index]
-                    if (brush == null) drawPath(ring, color) else drawPath(ring, brush, alpha = alpha)
-                } else {
-                    val expansion = reach * (16 - index) / 16f
-                    val left = uniform.left - expansion
-                    val top = uniform.top - expansion + shift
-                    val right = uniform.right + expansion
-                    val bottom = uniform.bottom + expansion + shift
-                    val corner = CornerRadius(uniform.topLeftCornerRadius.x + expansion,
-                        uniform.topLeftCornerRadius.y + expansion)
-                    if (brush == null) drawRoundRect(color, Offset(left, top), Size(right - left, bottom - top), corner)
-                    else drawRoundRect(brush, Offset(left, top), Size(right-left,bottom-top), corner, alpha = alpha)
+                // Where a neighbor's identical ring is already drawn below, apply
+                // that ring once (weight 0, the shared union) up to independently.
+                val shared = exclusion?.ring(index, reach, shift, exclusionTranslation)
+                if (shared == null) ring(index, alpha)
+                else {
+                    clipPath(shared, ClipOp.Difference) { ring(index, alpha) }
+                    val weighted = alpha * (exclusion?.weight ?: 1f).coerceIn(0f, 1f)
+                    if (weighted > 0f) clipPath(shared) { ring(index, weighted) }
                 }
             }
         }
@@ -172,7 +237,7 @@ internal class RetainedGlassShadow(private val scope: CoroutineScope) {
     private var raster by mutableStateOf<Raster?>(null)
     var rasterizations = 0; private set
     fun DrawScope.draw(bodies: List<Pair<RoundRect, Float>>, strength: Float, spread: Float,
-        receiver: GlassShadowReceiver? = null) {
+        receiver: GlassShadowReceiver? = null, exclusion: GlassShadowExclusion? = null) {
         if (bodies.isEmpty() || strength <= 0f) return
         val origin = Offset(bodies.minOf { it.first.left }, bodies.minOf { it.first.top })
         val normalized = bodies.map { (r, alpha) -> RoundRect(r.left - origin.x, r.top - origin.y,
@@ -212,7 +277,8 @@ internal class RetainedGlassShadow(private val scope: CoroutineScope) {
                 rasterizations++
             }
         }
-        val prepared = raster?.takeIf { it.key == key }
+        // A neighbor exclusion exists only while the popup is near its shared home.
+        val prepared = raster?.takeIf { it.key == key && exclusion == null }
         if (prepared != null) translate(origin.x, origin.y) {
             geometry.update(normalized.map { it.first }, (4f + spread * 28f).dp.toPx(), 2.dp.toPx())
             // Keep the cutout in the destination renderer. Baking a software clip
@@ -222,7 +288,10 @@ internal class RetainedGlassShadow(private val scope: CoroutineScope) {
                     drawImage(prepared.image, dstSize = IntSize(prepared.image.width, prepared.image.height), filterQuality = FilterQuality.Low)
                 }
             }
-        } else translate(origin.x, origin.y) { glassShadows(normalized, strength, spread, geometry, receiver = key.receiver) }
+        } else translate(origin.x, origin.y) {
+            glassShadows(normalized, strength, spread, geometry, receiver = key.receiver,
+                exclusion = exclusion, exclusionTranslation = -origin)
+        }
     }
 }
 
@@ -252,19 +321,21 @@ internal class RetainedGlassShadow(private val scope: CoroutineScope) {
 }
 
 @Composable internal fun Modifier.clearGlassShadow(strength: Float, spread: Float, radius: Dp?, visible: () -> Boolean = { true }): Modifier =
-    clearGlassShadowImpl(strength,spread,radius,null,visible)
+    clearGlassShadowImpl(strength,spread,radius,null,null,visible)
 
 /** Receiver-aware adapter; original positional/trailing-lambda API stays unchanged. */
 @Composable internal fun Modifier.clearGlassReceiverShadow(strength: Float, spread: Float, radius: Dp?,
-    receiver: () -> GlassShadowReceiver?): Modifier = clearGlassShadowImpl(strength,spread,radius,receiver) { true }
+    exclusion: () -> GlassShadowExclusion? = { null },
+    receiver: () -> GlassShadowReceiver?): Modifier = clearGlassShadowImpl(strength,spread,radius,receiver,exclusion) { true }
 
 @Composable private fun Modifier.clearGlassShadowImpl(strength: Float, spread: Float, radius: Dp?,
-    receiver: (() -> GlassShadowReceiver?)?, visible: () -> Boolean): Modifier {
+    receiver: (() -> GlassShadowReceiver?)?, exclusion: (() -> GlassShadowExclusion?)?, visible: () -> Boolean): Modifier {
     val cache = rememberGlassShadow()
     return drawBehind {
     if (!visible()) return@drawBehind
     val corner = (radius?.toPx() ?: size.minDimension / 2).coerceIn(0f, size.minDimension / 2)
-    with(cache) { draw(listOf(RoundRect(0f, 0f, size.width, size.height, CornerRadius(corner)) to 1f), strength, spread, receiver?.invoke()) }
+    with(cache) { draw(listOf(RoundRect(0f, 0f, size.width, size.height, CornerRadius(corner)) to 1f), strength, spread,
+        receiver?.invoke(), exclusion?.invoke()) }
     }
 }
 
@@ -283,8 +354,17 @@ internal class RetainedGlassShadow(private val scope: CoroutineScope) {
     val entry = remember { GlassShadowEntry() }
     val anchor = anchorOverride ?: glassSurfaceAnchor()
     val latest by rememberUpdatedState(opacity)
-    SideEffect { entry.radius = radius; entry.anchor = anchor; entry.opacity = { latest() }; group.entries[entry] = entry }
-    DisposableEffect(group) { onDispose { group.entries.remove(entry) } }
+    val view = androidx.compose.ui.platform.LocalView.current
+    SideEffect {
+        entry.radius = radius; entry.anchor = anchor; entry.opacity = { latest() }; entry.view = view
+        group.entries[entry] = entry
+        // A popup owning this trigger's shadow must not stack over its neighbors.
+        anchor?.shadowGroup = group
+    }
+    DisposableEffect(group, anchor) { onDispose {
+        group.entries.remove(entry)
+        if (anchor?.shadowGroup === group) anchor.shadowGroup = null
+    } }
     return onGloballyPositioned { entry.coordinates = it; androidx.compose.runtime.snapshots.Snapshot.withoutReadObservation { group.revision++ } }
 }
 
@@ -297,22 +377,9 @@ internal class RetainedGlassShadow(private val scope: CoroutineScope) {
         group.revision
         val host = coordinates ?: return@drawWithContent
         val bodies = group.entries.values.mapNotNull { entry ->
-            val item = entry.coordinates
-            val alpha = entry.opacity()
-            val anchor = entry.anchor
-            if (item == null || !item.isAttached || alpha <= .001f || anchor?.shadowInModal == true) null else {
-                val rect = host.localBoundingBoxOf(item, clipBounds = false)
-                val corner = (entry.radius?.toPx() ?: minOf(rect.width, rect.height) / 2).coerceIn(0f, minOf(rect.width, rect.height) / 2)
-                // Anchored controls deform in draw space. Their coordinates alone
-                // do not include the rebound which persists after a modal returns.
-                val shape = anchor?.contact?.body?.value ?: GlassShape()
-                val sx = shape.scaleX(anchor?.contact?.vertical == true)
-                val sy = shape.scaleY(anchor?.contact?.vertical == true)
-                val half = Offset(rect.width * sx / 2f, rect.height * sy / 2f)
-                RoundRect(Rect(rect.center - half, rect.center + half), CornerRadius(corner * sx, corner * sy)) to alpha
-            }
+            val item = entry.coordinates?.takeIf { it.isAttached } ?: return@mapNotNull null
+            entry.body(host.localBoundingBoxOf(item, clipBounds = false), this)?.let { it to entry.opacity() }
         }
         with(cache) { draw(bodies, appearance.shadowStrength, appearance.shadowSpread) }
     }
 }
-

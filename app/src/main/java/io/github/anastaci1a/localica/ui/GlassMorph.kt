@@ -78,6 +78,8 @@ internal class GlassAnchor {
     var hidden by mutableStateOf(false)
     var modalPresent by mutableStateOf(false)
     var shadowInModal by mutableStateOf(false)
+    // The shared shadow group its trigger casts into, if any.
+    var shadowGroup: GlassShadowGroup? = null
     var source: FrostedBackdrop? = null
     var face by mutableStateOf<(@Composable () -> Unit)?>(null)
     var depthScale = RaisedGlassDepthScale
@@ -240,6 +242,8 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
     val originWell = remember { GlassOriginWell() }
     val receiverField = remember { GlassShadowReceiverField() }
     val shadowReceiver = remember { arrayOfNulls<GlassShadowReceiver>(1) }
+    val shadowExclusion = remember { arrayOfNulls<GlassShadowExclusion>(1) }
+    val shadowSpread = LocalGlassAppearance.current.shadowSpread
     val wellCoordinates = remember { arrayOfNulls<LayoutCoordinates>(1) }
     val wellStrength = LocalGlassAppearance.current.shadowStrength
     val speed = LocalMotionSpeed.current
@@ -815,6 +819,21 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                                 shape.scaleX(vertical),shape.scaleY(vertical),pose?.horizontalShift ?: 0f,
                                 physicalSize = anchor.bounds.size)
                         }
+                        // The trigger's window keeps drawing its neighbors' shared shadow.
+                        // At home this field must equal that union, not stack over it.
+                        shadowExclusion[0] = null
+                        if (!page && !detached && p < 1f && anchor.shadowInModal && admittedDraw &&
+                            surfaceOpacity() == 1f && coordinates?.isAttached == true) {
+                            val surfaceOrigin = coordinates.backdropPosition(view)
+                            val extent = (4f + shadowSpread * 28f + 2f).dp.toPx()
+                            val sx = shape.scaleX(vertical)
+                            val sy = shape.scaleY(vertical)
+                            val drawn = Rect(surfaceOrigin + Offset((pose?.horizontalShift ?: 0f) + size.width * (1f - sx) / 2f,
+                                size.height * (1f - sy) / 2f), Size(size.width * sx, size.height * sy)).inflate(extent)
+                            val neighbors = glassShadowNeighbors(anchor, this).filter { Rect(it.left, it.top, it.right, it.bottom).inflate(extent).overlaps(drawn) }
+                            if (neighbors.isNotEmpty()) shadowExclusion[0] = GlassShadowExclusion(neighbors, surfaceOrigin, size,
+                                sx, sy, pose?.horizontalShift ?: 0f, weight = p)
+                        }
                         // Source pivot compensation precedes body scaling too.
                         translate(left = pose?.horizontalShift ?: 0f) {
                             scale(shape.scaleX(vertical), shape.scaleY(vertical)) {
@@ -830,7 +849,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                         }
                         .clearGlassReceiverShadow(LocalGlassAppearance.current.shadowStrength *
                             (if (anchor.quiet) (p / .14f).coerceIn(0f, 1f) else if (detached) p else 1f),
-                            LocalGlassAppearance.current.shadowSpread, radius, receiver = { shadowReceiver[0] })
+                            shadowSpread, radius, exclusion = { shadowExclusion[0] }, receiver = { shadowReceiver[0] })
                         .clip(RoundedCornerShape(radius)).recordFrostedBackdrop(completePanel).testTag("glass-morph-surface")
                         .pointerInput(Unit) { detectTapGestures { } }, content = {
                         Box(Modifier.graphicsLayer {

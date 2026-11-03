@@ -54,6 +54,131 @@ class PopupShadowContinuityTest {
     @Test fun utilityShadowHasOneUnclippedFieldThroughoutRepeatedReversals() = verify(nested = false)
     @Test fun nestedShadowHasOneUnclippedFieldThroughoutRepeatedReversals() = verify(nested = true)
 
+    /** #465: a neighbor shares the trigger's union shadow. Ownership moves between the
+     * page and popup windows at identical geometry on every open and return, so their
+     * shared gap must not switch between union and stacked coverage at either handoff. */
+    @Test fun sharedNeighborShadowHasNoOwnershipHandoffThroughRepeatedCycles() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val root = InstrumentationRegistry.getArguments().getString("additionalTestOutputDir")?.let(::File)
+            ?: requireNotNull(instrumentation.targetContext.getExternalFilesDir(null))
+        output = File(root, "popup-shadow-continuity/shared-gap-api${Build.VERSION.SDK_INT}")
+        assertTrue(output.isDirectory || output.mkdirs())
+        compose.setContent { Fixture(false) }
+        compose.waitForIdle()
+        compose.mainClock.autoAdvance = false
+        val log = StringBuilder("api=${Build.VERSION.SDK_INT} density=${compose.density.density} strength=$strength\n")
+        val frames = mutableListOf<Pair<Float, Float>>() // progress to gap darkness, per frame
+        fun frame(label: String) {
+            compose.mainClock.advanceTimeByFrame(); compose.waitForIdle()
+            val p = anchor.contact.expansion.value
+            val gap = sharedGapDarkness()
+            frames += p to gap
+            log.append("$label p=$p hidden=${anchor.hidden} inModal=${anchor.shadowInModal} window=${popupWindow != null} gap=$gap\n")
+        }
+        fun returnToRest(label: String) {
+            compose.runOnIdle { open = false }
+            var settled = 0
+            var index = 0
+            while (settled < 4) {
+                assertTrue("The popup must return and dispose: $log", index < 240)
+                frame("$label-$index")
+                if (popupWindow == null && !anchor.modalPresent) settled++
+                index++
+            }
+        }
+        try {
+            val rest = sharedGapDarkness()
+            log.append("rest gap=$rest\n")
+            assertTrue("The neighbor union must be visible in the gap: $rest", rest > 8f)
+            repeat(2) { cycle ->
+                compose.runOnIdle { open = true }
+                repeat(10) { frame("open$cycle-$it") }
+                returnToRest("return$cycle")
+            }
+            // Interrupted opening, reversed close, then the final return to rest.
+            compose.runOnIdle { open = true }
+            repeat(8) { frame("interrupted-$it") }
+            compose.runOnIdle { open = false }
+            repeat(6) { frame("reversing-$it") }
+            compose.runOnIdle { open = true }
+            repeat(6) { frame("reopened-$it") }
+            returnToRest("final")
+            File(output, "frames.txt").writeText(log.toString())
+            // At home the popup and trigger fields coincide; only ownership differs.
+            val home = frames.filter { it.first <= .002f }
+            assertTrue("Sample both home owners: $log", home.size > 20)
+            val worst = home.maxOf { abs(it.second - rest) }
+            var jump = 0f
+            for (index in 1 until frames.size) {
+                val (previousP, previousGap) = frames[index - 1]
+                val (p, gap) = frames[index]
+                if (previousP <= .002f && p <= .002f) jump = maxOf(jump, abs(gap - previousGap))
+            }
+            assertTrue("Home shadow must keep the neighbor union through every handoff: " +
+                "worst=$worst jump=$jump rest=$rest\n$log", worst < 4f && jump < 3f)
+        } finally {
+            File(output, "frames.txt").writeText(log.toString())
+            compose.runOnIdle { open = false }
+            compose.mainClock.autoAdvance = true
+        }
+    }
+
+    /** Mean shadow levels (red channel, 0-255) in the gap between the neighbor and trigger. */
+    private fun sharedGapDarkness(): Float {
+        val on = syncedScreenshot()
+        try {
+            val d = compose.density.density
+            val gx = ((neighboringBody.right + anchor.bounds.left) / 2f).roundToInt()
+            // The flat white page at the same rows, beyond the trigger's shadow reach.
+            val reference = (anchor.bounds.right + 40f * d).roundToInt()
+            assertTrue("The gap and reference must be on screen", gx in 1 until on.width - 1 && reference < on.width)
+            var sum = 0f
+            var count = 0
+            for (dy in -6..6) for (dx in -1..1) {
+                val y = (anchor.bounds.center.y + dy * d).roundToInt()
+                sum += AndroidColor.red(on.getPixel(reference, y)) - AndroidColor.red(on.getPixel(gx + dx, y)); count++
+            }
+            return sum / count
+        } finally { on.recycle() }
+    }
+
+    /** Wait until the page window and any popup window have both drawn this token:
+     * shadow ownership moves between them. */
+    private fun syncedScreenshot(): Bitmap {
+        compose.waitForIdle()
+        stage = stage % 30 + 1
+        val token = stage
+        val pageOrigin = IntArray(2)
+        val popupOrigin = IntArray(2)
+        var hasPopup = false
+        compose.runOnIdle {
+            pageView.rootView.getLocationOnScreen(pageOrigin)
+            requireNotNull(pageMarker).apply {
+                color = AndroidColor.rgb(token * 8, 255, 0); setBounds(96, 96, 112, 112); invalidateSelf()
+            }
+            val popupMarker = if (popupWindow != null) marker else null
+            hasPopup = popupMarker != null
+            popupMarker?.apply {
+                color = AndroidColor.rgb(token * 8, 255, 0); setBounds(96, 136, 112, 152); invalidateSelf()
+            }
+            popupWindow?.decorView?.getLocationOnScreen(popupOrigin)
+        }
+        var screenshot: Bitmap? = null
+        try {
+            compose.waitUntil(5000) {
+                screenshot?.recycle()
+                val next = requireNotNull(InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot())
+                screenshot = next
+                // The popup's scrim may dim the page token; compare its channel ratio.
+                val page = next.getPixel(pageOrigin[0] + 104, pageOrigin[1] + 104)
+                val green = AndroidColor.green(page)
+                green >= 100 && abs(AndroidColor.red(page) * 255f / green - token * 8) <= 4f &&
+                    (!hasPopup || next.getPixel(popupOrigin[0] + 104, popupOrigin[1] + 144) == AndroidColor.rgb(token * 8, 255, 0))
+            }
+            return requireNotNull(screenshot)
+        } catch (failure: Throwable) { screenshot?.recycle(); throw failure }
+    }
+
     @Test fun capsuleReferenceKeepsItsZeroWidthCenterRangeOrdered() {
         // Reproduce the API36 64dp capsule at density 1.75 and its outermost ring.
         val height = 112f
