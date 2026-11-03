@@ -154,8 +154,12 @@ internal fun Modifier.pinchRetainedOverlay(motion: BrowsePinchMotion, grid: Lazy
             part.layer.size.width <= 0 || part.layer.size.height <= 0) return
         val bounds = viewport.localBoundingBoxOf(coordinates, clipBounds = false)
         part.layer.alpha = motion.itemAlpha[key] ?: 1f
+        // A resized cover re-records its layer later in this frame (its own render node is
+        // updated after this pass), so the layer still holds last frame's size. Scaling by it
+        // painted the new drawing at old/new size, one to a few pixels off per frame (#505).
+        val recorded = if (motion.recordingFrozen) part.layer.size else coordinates.size
         translate(bounds.left, bounds.top) {
-            scale(bounds.width / part.layer.size.width, bounds.height / part.layer.size.height, Offset.Zero) { drawLayer(part.layer) }
+            scale(bounds.width / recorded.width, bounds.height / recorded.height, Offset.Zero) { drawLayer(part.layer) }
         }
     }
     if (motion.visualSource == null) {
