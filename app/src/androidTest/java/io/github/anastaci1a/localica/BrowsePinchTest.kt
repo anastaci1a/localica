@@ -83,8 +83,16 @@ class BrowsePinchTest {
             compose.mainClock.advanceTimeBy(48)
             val afterArt = art.fetchSemanticsNode().boundsInRoot
             val afterTitle = title.fetchSemanticsNode().boundsInRoot
-            assertEquals("Recognition must not drop the dense grid's horizontal inset", beforeArt.left, afterArt.left, 3f)
-            assertEquals("Both artwork edges retain their source alignment", beforeArt.right, afterArt.right, 3f)
+            // The travel past the 4% threshold is kept (#520): the cover eases toward the geometry
+            // the fingers imply, which it reaches once the 100 ms ease ends. A dropped inset or a
+            // lost source alignment would land outside that span.
+            compose.mainClock.advanceTimeBy(100)
+            val impliedArt = art.fetchSemanticsNode().boundsInRoot
+            fun between(label: String, value: Float, from: Float, to: Float) = assertTrue("$label: $value outside $from..$to",
+                value in minOf(from, to) - 1f..maxOf(from, to) + 1f)
+            between("Recognition must not drop the dense grid's horizontal inset", afterArt.left, beforeArt.left, impliedArt.left)
+            between("Both artwork edges retain their source alignment", afterArt.right, beforeArt.right, impliedArt.right)
+            assertEquals("Recognition implies only the threshold's share of the morph", beforeArt.width, impliedArt.width, beforeArt.width * .15f)
             assertEquals("Source title lines must not disappear at recognition", beforeTitle.height, afterTitle.height, 3f)
             assertTrue("Recognition must paint the title, not only preserve its layout bounds",
                 titleInk() >= beforeInk * .5f)

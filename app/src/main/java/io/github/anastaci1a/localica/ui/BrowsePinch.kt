@@ -47,6 +47,31 @@ internal class BrowsePinchMotion {
     var held by mutableStateOf(false)
     var fingerProgress = 0f
     var tracking: kotlinx.coroutines.Job? = null
+    private var caughtUp = false
+    /** Once the destination is ready, ease from the shown progress to the fingers over
+     * [PinchCatchUpMillis] (reading them every frame), then follow them directly. Restarting
+     * a tween on every event kept the view a tween behind the fingers (#520). */
+    fun followFingers(scope: CoroutineScope) {
+        if (!held || capturing || !destinationReady) return
+        if (caughtUp) {
+            tracking?.cancel()
+            tracking = scope.launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) { progress.snapTo(fingerProgress) }
+            return
+        }
+        if (tracking?.isActive == true) return
+        tracking = scope.launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) {
+            val from = progress.value
+            var start = -1L
+            do {
+                val now = withFrameNanos { it }
+                // The first eased frame already moves; it is one frame into the ease.
+                if (start < 0) start = now - PinchFrameNanos
+                val t = ((now - start) / 1_000_000f / PinchCatchUpMillis).coerceAtMost(1f)
+                progress.snapTo(from + (fingerProgress - from) * androidx.compose.animation.core.LinearOutSlowInEasing.transform(t))
+            } while (t < 1f)
+            caughtUp = true
+        }
+    }
     var capture: kotlinx.coroutines.Job? = null
     var settling: kotlinx.coroutines.Job? = null
     var disposed = false
@@ -127,7 +152,7 @@ internal class BrowsePinchMotion {
         releaseArtwork?.invoke(); releaseArtwork = null
         committed = false
         takeover = false
-        held = false; fingerProgress = 0f; capturing = false; captureProblem = false
+        held = false; fingerProgress = 0f; caughtUp = false; capturing = false; captureProblem = false
         destinationReady = false
         source = null; target = null; focusKey = null
         focusTop = 0; focusFraction = 0f; focusEdge = 0
@@ -202,6 +227,9 @@ internal fun pinchContentTranslation(sourceStart: Float, targetStart: Float,
     (sourceStart - targetStart + sourceInset - targetInset) * (1f - progress.coerceIn(0f, 1f))
 
 /** Linear finger distance; returning to the starting span restores the source. */
+internal const val PinchCatchUpMillis = 100f
+private const val PinchFrameNanos = 16_666_667L
+
 internal fun pinchProgress(scale: Float, outward: Boolean): Float =
     ((if (outward) scale - 1f else 1f - scale) / if (outward) .8f else .45f).coerceIn(0f, 1f)
 
@@ -242,11 +270,10 @@ internal fun Modifier.pinchToChangeView(enabled: Boolean, gestureKey: Any? = Uni
                                 accepted = step(outward, event.calculateCentroid())
                             }
                             if (accepted) {
-                                // Consume recognition slop, not a visible fraction of the
-                                // layout transition. Return to the original span still cancels.
-                                val adjusted = if (outward) 1f + (scale - 1.04f).coerceAtLeast(0f)
-                                    else 1f - (1f / 1.04f - scale).coerceAtLeast(0f)
-                                gestureProgress?.invoke(pinchProgress(adjusted, outward))
+                                // The full finger travel, including the direction threshold: the
+                                // motion's catch-up ease covers it, so there is no dead zone (#520).
+                                // Returning to the original span still cancels.
+                                gestureProgress?.invoke(pinchProgress(scale, outward))
                             }
                         }
                         if (fingers == 0) released = event.changes.none { it.isConsumed }
@@ -330,12 +357,7 @@ internal fun Modifier.browsePinch(enabled: Boolean, motion: BrowsePinchMotion, s
     return pinchToChangeView(enabled && motion.source == null && !motion.readbackPending, gestureKey = route.key,
         onProgress = { value ->
             if (motion.held) motion.fingerProgress = value
-            if (motion.held && !motion.capturing && motion.destinationReady && !reducedMotion) {
-                motion.tracking?.cancel()
-                motion.tracking = scope.launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) {
-                    motion.progress.animateTo(value, androidx.compose.animation.core.tween(100, easing = androidx.compose.animation.core.LinearOutSlowInEasing))
-                }
-            }
+            if (!reducedMotion) motion.followFingers(scope)
         },
         onRelease = { cancelled ->
             if (!motion.disposed && motion.source != null && motion.target != null) {
@@ -527,11 +549,7 @@ internal fun Modifier.browsePinch(enabled: Boolean, motion: BrowsePinchMotion, s
                         } else { onAnchor(null); motion.failCapture() }
                     }
                 } finally { if (motion.owns(generation)) motion.capturing = false }
-                if (motion.owns(generation) && motion.held && !reducedMotion) {
-                    motion.tracking = scope.launch {
-                        motion.progress.animateTo(motion.fingerProgress, androidx.compose.animation.core.tween(100, easing = androidx.compose.animation.core.LinearOutSlowInEasing))
-                    }
-                }
+                if (motion.owns(generation) && !reducedMotion) motion.followFingers(scope)
             }
             true
         } else false
