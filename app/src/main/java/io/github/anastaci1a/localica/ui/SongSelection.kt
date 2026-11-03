@@ -125,6 +125,8 @@ internal fun AddToPlaylistDialog(tracks: List<Track>, state: PlaylistState, cont
                 keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = { add() }))
             if (duplicate) Text("A playlist with this name already exists.", color = MaterialTheme.colorScheme.error)
             val selectionView = androidx.compose.ui.platform.LocalView.current
+            // 44 dp artwork inside 4 dp / 8 dp padding, vertically centred (#532).
+            val playlistOutline = rememberPaddedItemOutline(44.dp, 4.dp, null, 4.dp, 8.dp)
             SelectionViewport(Modifier.fillMaxWidth().heightIn(max = 320.dp).scrollEdgeFade(scroll)
                 .testTag("playlist-selection-viewport")
                 .then(if (observer == null) Modifier else Modifier.onPlaced { probe.viewport = it }),
@@ -149,7 +151,7 @@ internal fun AddToPlaylistDialog(tracks: List<Track>, state: PlaylistState, cont
                     val playlist = sortedPlaylists[index]
                     val selected = playlist.id in chosen
                     if (observer != null) DisposableEffect(playlist.id) { onDispose { probe.rows.remove(playlist.id) } }
-                    Row(Modifier.fillMaxWidth().semantics { this.selected = selected }.selectionLens(selected, false, itemKey = playlist.id)
+                    Row(Modifier.fillMaxWidth().semantics { this.selected = selected }.selectionLens(selected, false, itemKey = playlist.id, outline = playlistOutline)
                         .testTag("playlist-selection-${playlist.id}")
                         .then(if (observer == null) Modifier else Modifier.onPlaced { probe.rows[playlist.id] = it })
                         .then(Modifier.combinedClickable(enabled = !saving, onClick = {

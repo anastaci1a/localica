@@ -87,14 +87,28 @@ internal fun <T : Any, P> BoxScope.KeyedDragOverlay(state: KeyedDragState<T, P>,
         }
     }
     val shadowAlpha by animateFloatAsState(if (drag.dropping) 0f else 1f, tween(if (reducedMotion) 0 else 240), label = "Stack shadow")
+    // Every card shares its item's outline (#532); trailing cards keep their last measurement.
+    val outlines = remember(drag) { mutableMapOf<String, MediaItemOutlineHolder>() }
+    fun outlineHolder(item: T) = outlines.getOrPut(state.keyOf(item)) { MediaItemOutlineHolder() }
+    val artless = with(density) { ArtlessOutlineCorner.toPx() }
+    fun cardOutline(holder: MediaItemOutlineHolder, width: Float, height: Float) = holder.value
+        ?: MediaItemOutline(androidx.compose.ui.geometry.Rect(0f, 0f, width, height), minOf(artless, width / 2f, height / 2f))
+    val topOutline = outlineHolder(drag.moving.first())
+    val shadowCorner = with(density) { cardOutline(topOutline, stackWidth, drag.cardSize.height).corner.toDp() }
+    val trailingExtent = with(density) { (if (drag.moving.size > 1) 14.dp else 0.dp).toPx() }
     // One shared shadow reads as a single lifted bundle, even while its lower cards trail the pointer.
     Box(Modifier.zIndex(2f).graphicsLayer { translationX = homePosition().x; translationY = homePosition().y }
-        .size(width + if (drag.moving.size > 1) 14.dp else 0.dp, height + if (drag.moving.size > 1) 14.dp else 0.dp)
-        .graphicsLayer { alpha = shadowAlpha }.shadow(24.dp, Corners.card, clip = false))
+        .heldOutlinePlacement {
+            val outline = cardOutline(topOutline, stackWidth, drag.cardSize.height)
+            outline.copy(bounds = outline.bounds.copy(right = outline.bounds.right + trailingExtent,
+                bottom = outline.bounds.bottom + trailingExtent))
+        }
+        .graphicsLayer { alpha = shadowAlpha }.shadow(24.dp, androidx.compose.foundation.shape.RoundedCornerShape(shadowCorner), clip = false))
     val cards = remember(drag, lifted, drag.destinations) { drag.moving.withIndex().filter { (index, item) -> index < 3 ||
         (!lifted && state.keyOf(item) in drag.initialBounds) || (drag.dropping && state.keyOf(item) in drag.destinations.orEmpty()) } }
     cards.reversed().forEach { (index, item) -> key(drag, state.keyOf(item)) {
         val destination = drag.destinations?.get(state.keyOf(item))
+        val holder = outlineHolder(item)
         fun stackTarget() = homePosition() + Offset(offset * index.coerceAtMost(2), offset * index.coerceAtMost(2))
         val liftOffset = remember { Animatable((drag.initialBounds[state.keyOf(item)]?.topLeft ?: stackTarget()) - stackTarget(), Offset.VectorConverter) }
         LaunchedEffect(drag, reducedMotion) {
@@ -118,8 +132,8 @@ internal fun <T : Any, P> BoxScope.KeyedDragOverlay(state: KeyedDragState<T, P>,
             .graphicsLayer { translationX = displayed().x; translationY = displayed().y }
             .width(with(density) { cardWidth().toDp() }).height(with(density) { cardHeight().toDp() }).graphicsLayer { this.alpha = alpha }
             .testTag(if (index == 0) "drag-stack" else "drag-card-${state.keyOf(item)}"),
-            landing = { drag.handoff.value }, shadow = false) {
-            if (index == 0 || !lifted || drag.dropping) content(item, drag.presentation)
+            landing = { drag.handoff.value }, shadow = false, outline = { cardOutline(holder, cardWidth(), cardHeight()) }) {
+            if (index == 0 || !lifted || drag.dropping) CompositionLocalProvider(LocalHeldItemOutline provides holder) { content(item, drag.presentation) }
         }
         if (index == 0 && drag.moving.size > 1 && !drag.dropping) Surface(
             Modifier.zIndex(5f).graphicsLayer {

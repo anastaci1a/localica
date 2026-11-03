@@ -10,6 +10,14 @@ Related controls morph into their panels and return as one visible surface: crea
 
 Selected media have a clear, untinted rounded lens, fading and scaling in/out with a short ease-out in either direction. Interrupted transitions retain their current appearance. Side-adjacent selections merge. Diagonal gallery neighbors and unselected holes stay separate. Partial groups retain accessible state without a pane/checkmark. Inset album choices and preserve readable baselines.
 
+Selection, the current queue occurrence and held drag cards share one item outline. Its corners are concentric with the artwork's, sharing their arc centres. The inset $d$ is the artwork's smaller distance to the item edge, at least 2 dp:
+
+$$
+r_{\text{outline}} = r_{\text{artwork}} + d
+$$
+
+Artwork always stays inside, and the outline extends at most 2 dp beyond its item. Rows without artwork use a 10 dp radius.
+
 Sort/settings choices share a moving clear lens with tap/drag control. Settings sliders and switches follow the [shared control specification](#settings-controls). Use deeper glass for controls that morph into menus, carrying the same depth into their flyouts. The tab bar stays flatter because it retains its shape.
 
 Search/More follows the deeper profile because its surface opens a menu. Separate the actions in every two-button glass pill with a subtle vertical divider. Use rounded Apple Music-style icons, one shared original record glyph for albums, and attributed open-source transport artwork. Omit unavailable actions.
@@ -293,7 +301,7 @@ Panel: All, Range, count, actions and a divided collapse/close glass pill. Wrap/
 
 In a complete, manual, unfiltered queue/playlist, hold-drag moves the held occurrence or selected occurrences from that source, preserving their source order even when nonconsecutive. Cross-source selections and filtered views cannot reorder. Applying a saved-order sort does not disable subsequent dragging.
 
-Lift visible selected rows into a shadowed Liquid Glass stack above selection controls/list clipping, sharing its material with Player actions dragging. The first source-order song is on top. At most two empty glass layers trail it, with a count badge for multiple items.
+Lift visible selected rows into a shadowed Liquid Glass stack above selection controls/list clipping, sharing its material with Player actions dragging. Each card uses its item's shared outline. The first source-order song is on top. At most two empty glass layers trail it, with a count badge for multiple items.
 
 Lifted content retains its actual list/gallery layout and lands on the rendered item bounds. Material and trailing actions crossfade without shrinking the content or jumping at handoff. Track the finger directly. Keep a one-row insertion gap, ease surrounding rows, edge-scroll and smoothly unpack on release.
 
@@ -368,7 +376,7 @@ Short popups omit the repeated heading to retain a usable list. When more than o
 
 ### Queue Songs/actions
 
-A subtly denser, textured frosted slab marks only the current queue occurrence, matching the selection lens's bounds and rounding with a faint material edge; other browsing lists have no playback highlight. Occurrence menus omit Move up/down; drag ordering remains available; information links close player/queue overlays and open the collection without changing playback.
+A subtly denser, textured frosted slab marks only the current queue occurrence, using the [shared item outline](#materials-and-controls) with a faint material edge; other browsing lists have no playback highlight. Occurrence menus omit Move up/down; drag ordering remains available; information links close player/queue overlays and open the collection without changing playback.
 
 Queue More omits List view options; global Repeat/Shuffle stay in the player. Browsing/deletion behavior: [Product](product.md#queues-and-playback).
 

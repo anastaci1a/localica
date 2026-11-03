@@ -184,7 +184,7 @@ internal fun lensRay(field: LensField, span: Float, depth: Float, flattening: Fl
 internal fun localLensRegions(regions: List<SelectionRegion>, origin: Offset) = regions.map {
     val r = it.bounds.translate(-origin)
     fun stable(value: Float) = round(value * 64f) / 64f
-    SelectionRegion(Rect(stable(r.left), stable(r.top), stable(r.right), stable(r.bottom)))
+    SelectionRegion(Rect(stable(r.left), stable(r.top), stable(r.right), stable(r.bottom)), it.corner)
 }
 
 /** Exact common case, not a bounding-hull approximation: one item or an aligned
@@ -197,21 +197,21 @@ internal fun simpleLensGeometry(regions: List<SelectionRegion>, gap: Float): Len
     }) return null
     val sorted = regions.sortedBy { it.bounds.top }
     val first = sorted.first().bounds
-    val radius = mediaItemCornerRadius(first, gap)
-    if (sorted.all { it.bounds.left == first.left && it.bounds.right == first.right && it.bounds.height >= 2 * radius } &&
+    val radius = sorted.first().radius(gap)
+    if (sorted.all { it.bounds.left == first.left && it.bounds.right == first.right && it.bounds.height >= 2 * radius && it.radius(gap) == radius } &&
         sorted.zipWithNext().all { (a, b) -> b.bounds.top - a.bounds.bottom in 0f..gap }) {
         return LensGeometry(Rect(first.left, first.top, first.right, sorted.last().bounds.bottom), radius)
     }
     val row = regions.sortedBy { it.bounds.left }
     val left = row.first().bounds
-    val rowRadius = mediaItemCornerRadius(left, gap)
+    val rowRadius = row.first().radius(gap)
     // The existing contour bridge extends gap*1.5 into BOTH neighbors. Keep
     // those shoulders inside each item's straight core, never its outside caps.
     // This deliberately declines narrow/unequal-radius cases rather than routing
     // a connected shape through its merely enclosing rectangle.
     val minimumWidth = gap * 1.5f * 2f
     if (!minimumWidth.isFinite() || row.any { it.bounds.top != left.top || it.bounds.bottom != left.bottom ||
-        it.bounds.width < minimumWidth || mediaItemCornerRadius(it.bounds, gap) != rowRadius }) return null
+        it.bounds.width < minimumWidth || it.radius(gap) != rowRadius }) return null
     if (row.zipWithNext().any { (a, b) -> b.bounds.left - a.bounds.right !in 0f..gap }) return null
     return LensGeometry(Rect(left.left, left.top, row.last().bounds.right, left.bottom), rowRadius)
 }
