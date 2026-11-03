@@ -2,7 +2,7 @@
 # Temporary #544 experiment: repeat graphics-heavy classes, count transport aborts.
 set -uo pipefail
 classes=io.github.anastaci1a.localica.MotionSubpixelTest,io.github.anastaci1a.localica.PlayerExpansionMotionTest,io.github.anastaci1a.localica.PlayerGestureTest,io.github.anastaci1a.localica.PinchReleaseHandoffTest,io.github.anastaci1a.localica.PinchRetainedHighlightTest,io.github.anastaci1a.localica.RetainedLayerReadbackTest
-rounds=${ROUNDS:-4}
+rounds=${ROUNDS:-5}
 mkdir -p exp-out
 adb shell settings put global hide_error_dialogs 1 || true
 adb shell getprop ro.kernel.qemu.gles; adb shell getprop ro.hardware.egl; adb shell getprop ro.opengles.version
