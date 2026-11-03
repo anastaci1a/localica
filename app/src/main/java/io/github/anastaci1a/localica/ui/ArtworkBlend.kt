@@ -45,9 +45,11 @@ internal fun ArtworkBlend(visual: PlayerVisual, modifier: Modifier, duration: In
         val previous = blend
         // Loading carries the outgoing pixels, not a newly accepted visit.
         if (visual.loading && !immediate) {
-            if (previous.incoming.artwork == null && previous.outgoing.artwork == null && previous.frozen == null) {
-                blend = ArtworkBlendState(target, previous.occurrence)
-            }
+            // Restarting this effect cancels the old animation. Settle its accepted
+            // visual before holding it for the pending request.
+            val held = if (previous.progress.value < 1f) ArtworkBlendState(previous.incoming, previous.occurrence) else previous
+            blend = if (held.incoming.artwork == null && held.outgoing.artwork == null && held.frozen == null)
+                ArtworkBlendState(target, held.occurrence) else held
             return@LaunchedEffect
         }
         if (immediate || occurrence == null && target.contentKey != null && target.contentKey == previous.incoming.contentKey) {
