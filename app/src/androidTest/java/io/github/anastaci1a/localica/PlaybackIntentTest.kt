@@ -49,7 +49,7 @@ class PlaybackIntentTest {
         held.release.complete(Unit)
         withTimeout(5000) { completion.await() }
         assertEquals(2345L, dao.read().active!!.positionMs)
-        assertFalse(player.playWhenReady)
+        withContext(Dispatchers.Main) { assertFalse(player.playWhenReady) }
     }
 
     @Test fun orderedSeeksSurviveUnknownDurationAndNeverLeakToTheFollowingVisit() = fixture(duplicateOccurrences = true) {
