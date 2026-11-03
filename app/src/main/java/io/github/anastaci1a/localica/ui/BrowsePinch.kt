@@ -185,7 +185,7 @@ internal class BrowsePinchMotion {
 @OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
 internal fun Modifier.pinchItemPlacement(motion: BrowsePinchMotion, grid: LazyGridState, key: Any,
     index: Int, style: BrowseStyle, geometry: BrowseCellGeometry): Modifier =
-    browseBeyondBounds(motion.beyondBounds).graphicsLayer {
+    graphicsLayer {
     val placed = grid.layoutInfo.visibleItemsInfo.firstOrNull { it.key == key }
     val translation = placed?.let {
         motion.contentTranslation(key, index, it.offset, it.size.width, style, geometry, density)
