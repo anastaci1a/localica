@@ -56,7 +56,9 @@ class SearchDismissalLifecycleTest {
                     anchor.contact.expansion.value > 0f && anchor.contact.expansion.value < 1f)
             }
             val originalView = popupView
-            assertTrue(UiDevice.getInstance(InstrumentationRegistry.getInstrumentation()).pressBack())
+            // pressBack waits for a window-change event; a refused dismissal keeps its window.
+            assertTrue(UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
+                .pressKeyCode(android.view.KeyEvent.KEYCODE_BACK))
             compose.waitUntil(5000) { dismissals == 1 }
             val start = compose.mainClock.currentTime
             while (compose.mainClock.currentTime - start < 2000) frame()
