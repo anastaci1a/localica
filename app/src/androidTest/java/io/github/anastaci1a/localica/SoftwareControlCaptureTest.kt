@@ -135,10 +135,14 @@ class SoftwareControlCaptureTest {
         var value by mutableFloatStateOf(.5f)
         var captures = 0
         var draws = 0
+        var shaders = 0
+        var rasters = 0
         val runtime = GlassRendererRuntime(GlassRendererMode.Legacy)
         compose.setContent { LocalicaTheme {
             CompositionLocalProvider(LocalGlassRendererRuntime provides runtime, LocalReducedMotion provides true,
-                LocalControlLensAllocation provides { if (it == LensAllocation.CaptureBitmap) captures++ },
+                LocalControlLensAllocation provides {
+                    when (it) { LensAllocation.CaptureBitmap -> captures++; LensAllocation.BitmapShader -> shaders++
+                        LensAllocation.SoftwareRaster -> rasters++ } },
                 LocalControlLensDraw provides { draws++ }) {
                 Box(Modifier.size(300.dp, 100.dp).background(Color.White)) {
                     InterfaceSlider(value, { value = it }, Modifier.width(280.dp).testTag("actual-slider"))
@@ -158,7 +162,7 @@ class SoftwareControlCaptureTest {
             for (fraction in listOf(.8f, .25f, .65f)) {
                 slider.performTouchInput { moveTo(Offset(width * fraction, centerY), delayMillis = 32) }
                 compose.mainClock.advanceTimeBy(64)
-                compose.runOnIdle { android.util.Log.i("ControlCaptureWork", "slider fraction=$fraction value=$value captures=$captures draws=$draws") }
+                compose.runOnIdle { android.util.Log.i("ControlCaptureWork", "slider fraction=$fraction value=$value captures=$captures shaders=$shaders rasters=$rasters draws=$draws") }
             }
             slider.performTouchInput { up() }
             held = false
