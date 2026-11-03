@@ -148,7 +148,10 @@ class PlayerExpansionMotionTest {
                     val contentTravel = (movingContent.top - fullContent.top).value
                     val playerTravel = (compose.onNodeWithTag("player-surface", true).getUnclippedBoundsInRoot().top -
                         compose.onRoot().getUnclippedBoundsInRoot().top).value
-                    assertEquals("Lyrics are mounted to the moving player, not fixed on screen or drifting inside it", playerTravel, contentTravel, 1.5f)
+                    // The content rides the player and the clip's midpoint: half the clip's height change (#519).
+                    val midpointShift = (compose.onNodeWithTag("lyrics-panel", true).fetchSemanticsNode().boundsInRoot.height - panel.height) /
+                        2f / compose.density.density
+                    assertEquals("Lyrics are mounted to the moving player and the visible midpoint", playerTravel + midpointShift, contentTravel, 1.5f)
                     assertTrue("The player moved", playerTravel > 1f)
                     val heldBounds = listOf("lyrics-panel", "player-title", "player-seek-row").map {
                         compose.onNodeWithTag(it, true).fetchSemanticsNode().boundsInRoot
