@@ -55,6 +55,10 @@ A revisioned intent mailbox records accepted play/pause before actor suspension 
 
 Start queues before persisting full contents. Loaded selections seek without rebuilding/querying. Serialize writes and recover/retry from durable state. Capture cursors on events, every five seconds and at service destruction. Abrupt termination restores the last committed checkpoint.
 
+Decoded PCM prefill targets 50 ms or native buffer capacity, whichever is smaller. Initial play and resume wait for accepted PCM, native backpressure or a 30 ms playback-loop deadline. Short end-of-stream tails start immediately. The deadline runs when that loop can execute; it is not a wall-clock scheduling guarantee.
+
+Pause, flush and release cancel delayed starts. PCM samples, timestamps, write results and native buffer configuration remain unchanged. Encoded, offloaded and tunneled output keeps its existing start policy.
+
 ### Traversal
 
 QueuePreferences owns modes. Import legacy active-queue modes once, then leave compatibility columns inert. Feed a bounded window of tokened visits into Media3, using identity shuffle order because the saved sequence already incorporates shuffle. Capture native arrivals immediately, even during storage work. Finish the callback batch before extending/persisting the timeline. [Traversal semantics](product.md#queues-and-playback).
