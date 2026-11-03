@@ -370,7 +370,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
                         with(density) { artX.toPx() } + neighborOffset, artPixels, softness = maxOf(1f - coverBlend, swipeFeather / .9f), tone = tone)
                 }
                 @Composable fun cover(frame: PlayerVisual, offset: Float, neighbor: Boolean = false) {
-                    Box(Modifier.offset(artX, artY).width(artWidth).height(artHeight)
+                    Box(Modifier.motionBounds(artX, artY, artWidth, artHeight)
                         .then(if (!neighbor) Modifier.onGloballyPositioned { polarity.measure("cover", it) } else Modifier).graphicsLayer {
                         val remaining = if (neighbor) kotlin.math.abs(swipeOffset) else artPixels - kotlin.math.abs(swipeOffset)
                         alpha = lyricMotion.artworkAlpha * if (artSwipe.active) (remaining / (artPixels * .08f)).coerceIn(0f, 1f) else 1f
@@ -396,7 +396,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
                 if (destination != null) cover(destination.visual, neighborOffset, neighbor = true)
 
             }
-            Box(Modifier.offset(artX, artY).width(artWidth).height(artHeight).testTag("artwork-gesture")
+            Box(Modifier.motionBounds(artX, artY, artWidth, artHeight).testTag("artwork-gesture")
                 .then(artworkDrag).then(if (expanded && !lyricsOpen) Modifier.combinedClickable(interactionSource = null, indication = null,
                     onClickLabel = settings.artworkTap.label,
                     onClick = { artworkAction(settings.artworkTap, editArtwork) },
