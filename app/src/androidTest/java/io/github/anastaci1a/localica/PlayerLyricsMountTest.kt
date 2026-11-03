@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.dp
@@ -89,6 +90,83 @@ class PlayerLyricsMountTest {
             assertEquals("Top edge at p=$progress", surface + 84f, panel.top.value, 1f)
             assertEquals("Bottom edge at p=$progress", surface + 7f + (metadata - 7f) * progress - 4f, panel.bottom.value, 1f)
             assertEquals("The anchor keeps its place in the player at p=$progress", reference, anchor() - surface, 1f)
+        }
+    }
+
+    /** Samples [anchor] against the clip's midpoint over a minimize from lyrics; returns (anchor, midpoint) per held position. */
+    private fun anchorsWhileMinimizing(playback: PlaybackState, track: Track, anchorTag: String, settled: String): List<Pair<Float, Float>> {
+        val progress = Animatable(1f)
+        lateinit var scope: kotlinx.coroutines.CoroutineScope
+        compose.setContent { LocalicaTheme { BoxWithConstraints(Modifier.fillMaxSize()) {
+            scope = rememberCoroutineScope()
+            PlayerSurface(playback, true, {}, InterfaceSettings(reducedMotion = true), progress, {}, {}, {}, {}, {}, {},
+                lyricsOpen = true, track = track)
+        } } }
+        compose.waitUntil(10000) { compose.onAllNodesWithTag(settled, useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty() }
+        compose.waitForIdle()
+        fun sample(): Pair<Float, Float> {
+            val panel = rect("lyrics-panel")
+            val anchor = if (anchorTag == "lyric-active") compose.onNode(SemanticsMatcher.expectValue(SemanticsProperties.Selected, true) and
+                hasAnyAncestor(hasTestTag("lyric-lines")), useUnmergedTree = true).fetchSemanticsNode().boundsInRoot.center.y
+                else rect(anchorTag).center.y
+            return anchor to (panel.top + panel.bottom) / 2f
+        }
+        val samples = mutableListOf(sample())
+        for (p in listOf(.97f, .94f, .91f, .88f, .85f, .82f, .8f)) {
+            compose.runOnIdle { scope.launch { progress.snapTo(p) } }
+            compose.waitForIdle()
+            samples += sample()
+        }
+        compose.runOnIdle { scope.launch { progress.snapTo(1f) } }
+        compose.waitForIdle()
+        assertEquals("Returning to rest restores the anchor", samples.first().first, sample().first, 1f)
+        return samples
+    }
+
+    private fun assertTracksMidpoint(samples: List<Pair<Float, Float>>) {
+        val (anchor0, mid0) = samples.first()
+        assertTrue("The visible midpoint must actually move: $samples", kotlin.math.abs(samples.last().second - mid0) > 20f)
+        samples.zipWithNext().forEachIndexed { index, (a, b) ->
+            val step = b.first - a.first
+            assertEquals("Anchor step $index follows the midpoint step: $samples", b.second - a.second, step, 1f)
+            assertEquals("Anchor offset from the midpoint is constant at sample ${index + 1}: $samples",
+                anchor0 - mid0, b.first - b.second, 1f)
+            assertTrue("Anchor moves monotonically with the midpoint: $samples", step * (b.second - a.second) >= -1f)
+        }
+    }
+
+    @Test fun currentLyricFollowsTheVisibleMidpointWhileMinimizing() {
+        val instrumentation = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation()
+        val file = java.io.File(instrumentation.targetContext.cacheDir, "lyric-midpoint.opus")
+        instrumentation.context.assets.open("lyrics.opus").use { input -> file.outputStream().use(input::copyTo) }
+        val lyric = Track(android.net.Uri.fromFile(file).toString(), "Lyrics", fileName = file.name, relativePath = file.name)
+        try {
+            val document = kotlinx.coroutines.runBlocking { LyricsRepository(instrumentation.targetContext).load(lyric, 0) }
+                .sources.first().document
+            assertTrue("The fixture must be synced so exactly one line is current", document.synced)
+            val line = document.lines.getOrElse(2) { document.lines.last() }
+            val state = PlaybackState(connected = true, trackId = lyric.id, trackUri = lyric.uri, title = lyric.title,
+                positionMs = line.timeMs!!, durationMs = 125000)
+            val samples = anchorsWhileMinimizing(state, lyric, "lyric-active", "lyric-lines")
+            // Rest: the current line starts one third down the stable-height viewport.
+            val panel = rect("lyrics-panel")
+            val top = compose.onNode(SemanticsMatcher.expectValue(SemanticsProperties.Selected, true) and
+                hasAnyAncestor(hasTestTag("lyric-lines")), useUnmergedTree = true).fetchSemanticsNode().boundsInRoot.top
+            val rest = compose.onNodeWithTag("lyrics-viewport", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+            assertEquals("The current line rests one third down", panel.top + panel.height / 3f, top, 2f)
+            assertEquals("The viewport is the clip", panel, rest)
+            assertTracksMidpoint(samples)
+        } finally { file.delete() }
+    }
+
+    @Test fun emptyLyricsIconFollowsTheVisibleMidpointWhileMinimizing() {
+        NoLyricsFixture("Missing").use { fixture ->
+            val track = fixture.track
+            val state = PlaybackState(connected = true, trackId = track.id, trackUri = track.uri, title = track.title, durationMs = 125000)
+            val samples = anchorsWhileMinimizing(state, track, "empty-lyrics", "empty-lyrics")
+            // Rest: the icon is centred in the viewport.
+            assertEquals("The icon rests centred", samples.first().second, samples.first().first, 1f)
+            assertTracksMidpoint(samples)
         }
     }
 }
