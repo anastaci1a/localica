@@ -140,7 +140,7 @@ internal fun ConnectedSelectionHost(modifier: Modifier = Modifier, contentDrawin
                     }
                 Placed(entry, at, outline.translate(at), entry.visibility().coerceIn(0f, 1f))
             }
-            val hovering = placed.filter { it.progress > 0f && it.entry.recorded && it.entry.layer?.isReleased == false }
+            val hovering = placed.filter { (it.entry.selected || it.progress > 0f) && it.entry.recorded && it.entry.layer?.isReleased == false }
             val hoveringKeys = hovering.mapNotNullTo(mutableSetOf()) { it.entry.itemKey }
             scene.hover.keys.retainAll(hoveringKeys)
             scene.viewportHover.keys.retainAll(hoveringKeys)
@@ -391,7 +391,9 @@ internal fun Modifier.selectionLens(isSelected: Boolean, partial: Boolean,
         entry.coordinates = it
         if (entry.selected || entry.visibility() > 0f) androidx.compose.runtime.snapshots.Snapshot.withoutReadObservation { scene?.placement = (scene?.placement ?: 0) + 1 }
     }.drawWithContent {
-        val hovering = scene != null && visibility.value > 0f
+        // Prepare and transfer ownership at zero progress, before the first moving frame.
+        // A retained child display list can otherwise acknowledge its recording a frame late.
+        val hovering = scene != null && (entry.selected || visibility.value > 0f)
         if (!hovering) {
             entry.recorded = false
             drawContent()

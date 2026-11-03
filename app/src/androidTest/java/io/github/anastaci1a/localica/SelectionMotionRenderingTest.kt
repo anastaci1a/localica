@@ -250,11 +250,11 @@ class SelectionMotionRenderingTest {
                 assertTrue("The departing scene is still recorded", scene.regions.values.single().visibility() > 0f)
                 verifyFrame()
                 compose.runOnIdle { chosen = true }
-                compose.mainClock.advanceTimeBy(220)
+                compose.mainClock.advanceTimeBy(HoverLift.Duration.toLong() + 32)
                 assertEquals(1f, scene.regions.values.single().visibility(), 0f)
                 verifyFrame()
                 compose.runOnIdle { chosen = false }
-                compose.mainClock.advanceTimeBy(220)
+                compose.mainClock.advanceTimeBy(HoverLift.Duration.toLong() + 32)
                 assertEquals(0f, scene.regions.values.single().visibility(), 0f)
                 verifyFrame()
             }

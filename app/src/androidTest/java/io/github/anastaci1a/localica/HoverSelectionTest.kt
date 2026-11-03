@@ -140,8 +140,10 @@ class HoverSelectionTest {
             val settled = rising.last()
             assertEquals(1f, settled.progress, 0f)
             // Ease-out from the first frame: the touch reads instantly, then settles.
-            val moving = rising.takeWhile { it.progress < 1f } + settled
-            assertTrue("Responds on the first frame: ${rising.map { it.progress }}", rising.first().progress > .1f)
+            val firstMoving = rising.indexOfFirst { it.progress > 0f }
+            assertTrue("Delivery takes at most two frames: ${rising.map { it.progress }}", firstMoving in 0..2)
+            val moving = rising.drop(firstMoving).takeWhile { it.progress < 1f } + settled
+            assertTrue("Responds on the first animation frame", moving.first().progress > .1f)
             moving.zipWithNext().forEach { (a, b) -> assertTrue("Monotone rise", b.progress >= a.progress && b.shadow >= a.shadow - .01f) }
             val steps = moving.zipWithNext { a, b -> b.progress - a.progress }
             steps.zipWithNext().forEach { (a, b) -> assertTrue("Decelerating steps: $steps", b <= a + .02f) }
@@ -170,7 +172,7 @@ class HoverSelectionTest {
             // Deselect is the exact reverse, also an ease-out.
             val falling = run(false)
             assertEquals(0f, falling.last().progress, 0f)
-            val leaving = listOf(settled) + falling.takeWhile { it.progress > 0f } + falling.last()
+            val leaving = listOf(settled) + falling.dropWhile { it.progress == 1f }.takeWhile { it.progress > 0f } + falling.last()
             val drops = leaving.zipWithNext { a, b -> a.progress - b.progress }
             assertTrue(drops.all { it >= 0f })
             drops.zipWithNext().forEach { (a, b) -> assertTrue("Deselect decelerates: $drops", b <= a + .02f) }
