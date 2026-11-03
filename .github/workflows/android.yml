@@ -479,6 +479,8 @@ jobs:
           name: localica-debug
           path: artifacts
       - name: Verify the downloaded APK
+        env:
+          VERIFIED_APK_SHA256: ${{ needs.build.outputs.delivery-apk-sha256 }}
         run: |
           (cd artifacts && sha256sum --check app-debug.apk.sha256)
           test "$(sha256sum artifacts/app-debug.apk | cut -d ' ' -f 1)" = "$VERIFIED_APK_SHA256"

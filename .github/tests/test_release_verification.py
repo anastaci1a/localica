@@ -57,6 +57,29 @@ class ReleaseVerificationTest(unittest.TestCase):
         self.assertIn('python3 .github/release-verification.py record',text)
         self.assertIn('name: complete-verification',text)
 
+    def test_distribution_smoke_binds_expected_hash_to_the_build_output(self):
+        import yaml
+        jobs=yaml.safe_load((ROOT/'.github/workflows/android.yml').read_text())['jobs']
+        step=next(step for step in jobs['distribution-smoke']['steps'] if step.get('name')=='Verify the downloaded APK')
+        self.assertEqual('${{ needs.build.outputs.delivery-apk-sha256 }}',step.get('env',{}).get('VERIFIED_APK_SHA256'))
+        self.assertIn('sha256sum --check',step['run'])
+        self.assertIn('verify-non-debuggable.sh',step['run'])
+        import hashlib, os, subprocess, tempfile
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp)
+            (root/'artifacts').mkdir()
+            (root/'.github').mkdir()
+            (root/'.github/verify-non-debuggable.sh').write_text('exit 0\n')
+            apk=b'fixture canonical APK'
+            (root/'artifacts/app-debug.apk').write_bytes(apk)
+            digest=hashlib.sha256(apk).hexdigest()
+            (root/'artifacts/app-debug.apk.sha256').write_text(digest+'  app-debug.apk\n')
+            for expected, success in ((digest, True), ('0'*64, False)):
+                result=subprocess.run(['bash','-e','-c',step['run']],cwd=root,
+                                      env=dict(os.environ,VERIFIED_APK_SHA256=expected),capture_output=True)
+                self.assertEqual(success,result.returncode==0,result.stderr)
+
+
 
 class ProducerArchiveTest(unittest.TestCase):
     setUp = ReleaseVerificationTest.setUp
