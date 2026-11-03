@@ -96,7 +96,7 @@ internal fun InterfaceSlider(value: Float, onValueChange: (Float) -> Unit, modif
     val touch = if (!enabled) Modifier else Modifier.readControlScrollContext(parent).pointerInput(valueRange, actualSteps, rtl) {
         awaitEachGesture {
             val down = awaitFirstDown(requireUnconsumed = false)
-            val intent = ControlGestureIntent(viewConfiguration.touchSlop, parent.axes, ControlScrollAxis.Horizontal)
+            val intent = ControlGestureIntent(viewConfiguration.touchSlop, parent.directions())
             val inset = 14.dp.toPx()
             val extent = (size.width - inset * 2f).coerceAtLeast(1f)
             fun fraction(x: Float): Float { val at = (x - inset) / extent; return if (rtl) 1f - at else at }
@@ -273,7 +273,7 @@ internal fun InterfaceSwitch(checked: Boolean, onChange: ((Boolean) -> Unit)? = 
     Box(Modifier.size(InterfaceSwitchWidth, InterfaceSwitchHeight).testTag("settings-switch").then(if (onChange == null) Modifier else Modifier.readControlScrollContext(parent).pointerInput(rtl) {
         awaitEachGesture {
             val down = awaitFirstDown(requireUnconsumed = false)
-            val intent = ControlGestureIntent(viewConfiguration.touchSlop, parent.axes, ControlScrollAxis.Horizontal)
+            val intent = ControlGestureIntent(viewConfiguration.touchSlop, parent.directions())
             pressed = true
             val initial = position.value
             var moved = false
@@ -345,7 +345,7 @@ internal fun InterfaceCheckbox(checked: Boolean, onCheckedChange: ((Boolean) -> 
     val opacity by animateControlStateFloat(if (enabled) 1f else .38f, enabled, "Checkbox availability")
     val foreground = LocalContentColor.current
     Box(modifier.size(48.dp).then(if (onCheckedChange != null)
-        Modifier.toggleable(checked, enabled = enabled, role = Role.Checkbox, onValueChange = onCheckedChange) else Modifier)
+        Modifier.ownButtonDrag(enabled).toggleable(checked, enabled = enabled, role = Role.Checkbox, onValueChange = onCheckedChange) else Modifier)
         .graphicsLayer { alpha = opacity }, contentAlignment = Alignment.Center) {
         SelectionPane(Modifier.size(26.dp))
         Canvas(Modifier.fillMaxSize()) {
@@ -364,7 +364,7 @@ internal fun GlassFilterChoice(checked: Boolean, onClick: () -> Unit, label: Str
     val opacity by animateControlStateFloat(if (enabled) 1f else .38f, enabled, "Filter availability")
     val selection by animateControlStateFloat(if (checked) .09f else 0f, checked, "Filter selection")
     Box(Modifier.heightIn(min = 48.dp).wrapContentHeight(Alignment.CenterVertically)) {
-        LiquidGlassSurface(Modifier.height(40.dp).toggleable(checked, enabled = enabled, role = Role.Checkbox, onValueChange = { onClick() })
+        LiquidGlassSurface(Modifier.height(40.dp).ownButtonDrag(enabled).toggleable(checked, enabled = enabled, role = Role.Checkbox, onValueChange = { onClick() })
             .semantics { selected = checked }.graphicsLayer { alpha = opacity },
             tint = Color.Black.copy(alpha = selection), pressFeedback = enabled) {
             Text(label, Modifier.align(Alignment.Center).padding(horizontal = 14.dp), style = MaterialTheme.typography.labelLarge)

@@ -11,13 +11,13 @@ import androidx.compose.ui.input.pointer.pointerInput
 
 /** Keep standard click/long-press/accessibility handling; only arbitrate movement.
  * A scroll winner sees movement before Final cancels the button's activation. */
-internal fun Modifier.ownButtonDrag(enabled: Boolean = true, pass: PointerEventPass = PointerEventPass.Initial,
-    axis: Int = ControlScrollAxis.None): Modifier = if (!enabled) this else composed {
+internal fun Modifier.ownButtonDrag(enabled: Boolean = true, pass: PointerEventPass = PointerEventPass.Initial): Modifier =
+    if (!enabled) this else composed {
     val parent = rememberControlScrollContext()
-    Modifier.readControlScrollContext(parent).pointerInput(pass, axis) {
+    Modifier.readControlScrollContext(parent).pointerInput(pass) {
         awaitEachGesture {
             val down = awaitFirstDown(requireUnconsumed = false, pass = pass)
-            val intent = ControlGestureIntent(viewConfiguration.touchSlop, parent.axes, axis)
+            val intent = ControlGestureIntent(viewConfiguration.touchSlop, parent.directions())
             do {
                 val event = awaitPointerEvent(pass)
                 val point = event.changes.firstOrNull { it.id == down.id } ?: break
