@@ -24,19 +24,25 @@ import io.github.anastaci1a.localica.R
 @Composable
 internal fun ArtworkImage(artwork: ImageBitmap?, loading: Boolean, modifier: Modifier,
     shape: Shape = Corners.artwork, contentScale: ContentScale = ContentScale.Crop,
-    emptyText: String? = null, tintUris: List<String>? = null) {
+    emptyText: String? = null, tintUris: List<String>? = null, textReveal: ArtworkTextReveal? = null,
+    expectsArtwork: Boolean = true) {
     val reducedMotion = LocalReducedMotion.current
+    val currentTextReveal by rememberUpdatedState(textReveal)
     // The reveal is read only while drawing; the cell never recomposes per animation frame.
     val reveal = remember { Animatable(if (artwork == null) 0f else 1f) }
     val present = artwork != null
     LaunchedEffect(present, reducedMotion) {
         reveal.animateTo(if (present) 1f else 0f, tween(if (reducedMotion) 0 else 300, easing = FastOutSlowInEasing))
+        // The item's text finished with the art (#526).
+        if (present) currentTextReveal?.release()
     }
     // Art that replaces a loading shimmer fades in over that shimmer until the reveal completes (#524).
     // Only known-missing art shows the still placeholder and its icon.
     val revealsOverLoading = remember { BooleanArray(1) }
     if (artwork == null) revealsOverLoading[0] = loading
     val placeholderLoading = if (artwork == null) loading else revealsOverLoading[0]
+    // Text waits exactly while the shimmer shows or the art reveals over it (#526).
+    textReveal?.let { it.reveal = reveal; it.hold(placeholderLoading && expectsArtwork) }
     Box(modifier.clip(shape), contentAlignment = Alignment.Center) {
         ArtworkPlaceholderHost(artwork, reveal, placeholderLoading, emptyText, tintUris, Modifier.matchParentSize())
         if (!loading && artwork == null && emptyText != null) Text(emptyText)
