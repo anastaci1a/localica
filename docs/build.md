@@ -32,6 +32,8 @@ Final build and native commands, run only after candidate freeze:
 
 Use the [shared Compose test factories](../app/src/androidTest/java/io/github/anastaci1a/localica/TestComposeRules.kt) for instrumentation. They select `StandardTestDispatcher` by default and preserve explicit fixture contexts. Compose 1.10 drains due work on Main while idling, including with a paused frame clock. Keep clock advances and input assertions explicit; do not add a separate idle-drain backport.
 
+The R8 rules preserve Compose 1.10's `AndroidLayoutApi34` helper as an optimization boundary, while allowing shrinking and renaming. This keeps its guarded text-range adapter out of paragraph classes loaded on API 26. Recheck the rule when upgrading Compose or R8; the distribution smoke linkage gate remains unchanged.
+
 Mandatory native regressions retain presented-pixel, lifecycle, first/reopened-frame, interruption and disposal assertions. Repeated utility-popup optical recording is opt-in with `utilityPopupOpticalDiagnostics=true`. The three mandatory scene methods still run by default. Successful SwitchTap frame exports require `switchTapOpticsReview=true`. Pixel checks and bounded failure evidence remain enabled.
 
 `ScrollPerformanceTest` only measures scrolling. It is skipped by assumption unless `scrollPerformance=true`, set by the Android workflow dispatch input `scroll_performance`. Default runs report its three methods as skipped.
