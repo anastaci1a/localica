@@ -57,6 +57,8 @@ internal class SelectionEntry {
      * starts its cards from exactly this geometry. Plain state, written while drawing. */
     val hover = mutableMapOf<Any, HoverGeometry>()
     val viewportHover = mutableMapOf<Any, HoverGeometry>()
+    /** Virtualized pinch items join live bodies under the same surface and shadow. */
+    var retainedHover: List<Pair<HoverGeometry, Float>> = emptyList()
 }
 internal val LocalSelectionScene = staticCompositionLocalOf<SelectionScene?> { null }
 
@@ -109,7 +111,7 @@ internal fun ConnectedSelectionHost(modifier: Modifier = Modifier, contentDrawin
         Box(modifier.then(contentDrawing).backdropLocation(location).onPlaced { coordinates = it }.drawWithContent {
             // Pager placement also moves unselected rows. Do not subscribe their
             // otherwise reusable display lists to the selection geometry clock.
-            if (!hasSelection) {
+            if (!hasSelection && scene.retainedHover.isEmpty()) {
                 scene.lastDrawnRegions = emptyList()
                 scene.hover.clear()
                 scene.viewportHover.clear()
@@ -141,29 +143,31 @@ internal fun ConnectedSelectionHost(modifier: Modifier = Modifier, contentDrawin
             val hoveringKeys = hovering.mapNotNullTo(mutableSetOf()) { it.entry.itemKey }
             scene.hover.keys.retainAll(hoveringKeys)
             scene.viewportHover.keys.retainAll(hoveringKeys)
-            if (hovering.isEmpty()) { scene.lastDrawnRegions = emptyList(); return@drawWithContent }
+            if (hovering.isEmpty() && scene.retainedHover.isEmpty()) { scene.lastDrawnRegions = emptyList(); return@drawWithContent }
             val viewport = Rect(Offset.Zero, size)
             val cap = HoverLift.MaxLift.toPx()
-            val others = placed.map { it.rest.bounds }
-            val lifts = hovering.map { item ->
+            val others = placed.map { it.rest.bounds } + scene.retainedHover.map { it.first.rest.bounds }
+            val liveLifts = hovering.map { item ->
                 hoverGeometry(item.rest, hoverRoom(item.rest.bounds, others, viewport, liftEdges, cap), item.progress)
             }
             hovering.forEachIndexed { index, item ->
-                item.entry.itemKey?.let { scene.hover[it] = lifts[index].translate(-item.at); scene.viewportHover[it] = lifts[index] }
+                item.entry.itemKey?.let { scene.hover[it] = liveLifts[index].translate(-item.at); scene.viewportHover[it] = liveLifts[index] }
             }
+            val lifts = liveLifts + scene.retainedHover.map { it.first }
+            val opacities = hovering.map { it.entry.alpha().coerceIn(0f, 1f) } + scene.retainedHover.map { it.second }
             scene.lastDrawnRegions = lifts.map { SelectionRegion(it.lifted.bounds, it.lifted.corner) }
             val gap = MediaSelectionGap.toPx()
             // Groups join by REST geometry, so growth never changes membership mid-motion.
-            val components = hoverComponents(hovering.map { it.rest.bounds }, gap)
+            val components = hoverComponents(lifts.map { it.rest.bounds }, gap)
             while (groups.size < components.size) groups += HoverGroupRenderer(graphics.createGraphicsLayer(), scope)
             components.forEachIndexed { index, members ->
                 val group = groups[index]
                 val parts = members.map { lifts[it] }
                 val strengths = { a: Int, b: Int -> min(parts[a].progress, parts[b].progress) }
-                val opacity = members.maxOf { hovering[it].entry.alpha().coerceIn(0f, 1f) }
+                val opacity = members.maxOf { opacities[it] }
                 drawHoverGroup(group, parts, strengths, backing, location, blurEffects, recordingDensity, recordingDirection, gap, opacity = opacity)
                 members.forEach { member ->
-                    val item = hovering[member]
+                    val item = hovering.getOrNull(member) ?: return@forEach
                     val lift = lifts[member]
                     val layer = item.entry.layer ?: return@forEach
                     translate(item.at.x, item.at.y) {
