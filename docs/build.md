@@ -48,7 +48,7 @@ The [host contract workflow](../.github/workflows/tooling-contracts.yml) runs th
 
 Node 24 installs the publisher dependencies with `npm ci --prefix .github/test-evidence --ignore-scripts --no-audit --no-fund`. The committed lockfile owns their versions. The workflow owns the exact contract commands and records each result, log hash and tested source.
 
-These are evidence-tooling prerequisites, separate from the Gradle/JDK/SDK setup above. The [focused Android setup action](../.github/actions/focused-android-setup/action.yml) prepares hosted native jobs. Its runner disk cleanup and KVM configuration are hosted-machine setup, not general local installation instructions. Offline contract passes validate mocks and protocol handling, not Android outcomes or live artifact delivery.
+These are evidence-tooling prerequisites, separate from the Gradle/JDK/SDK setup above. Offline contract passes validate mocks and protocol handling, not Android outcomes or live artifact delivery.
 
 ### Coordinated local and hosted comparison
 
