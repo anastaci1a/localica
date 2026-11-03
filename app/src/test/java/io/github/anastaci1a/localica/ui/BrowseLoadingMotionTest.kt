@@ -47,7 +47,7 @@ class BrowseLoadingMotionTest {
             assertEquals(width, metrics.art)
             assertEquals(2, metrics.lines)
             assertEquals(0, metrics.menu)
-            assertEquals(metrics.place(32, width / 2, 32).height, metrics.art + 80)
+            assertEquals(metrics.place(32, width / 2, 32).height, metrics.art + 72)
         }
         for (size in ListSize.entries) {
             val metrics = BrowseItemMetrics(BrowseStyle(listSize = size), 1, 380, 1f, false)
