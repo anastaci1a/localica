@@ -104,6 +104,7 @@ internal class BrowsePinchMotion {
     var targetColumns = 1
     var sourceColumns = 1
     val retained = mutableMapOf<Any, androidx.compose.ui.graphics.layer.GraphicsLayer>()
+    var hoverLift: (Any) -> HoverGeometry? = { null }
     val currentHighlights = mutableMapOf<Any, androidx.compose.ui.graphics.Color>()
     val itemContent = mutableMapOf<Any, BrowsePinchContent>()
     // Global drawing bypasses the row layer, so entry/reorder alpha must invalidate it too.
@@ -454,7 +455,7 @@ internal fun Modifier.browsePinch(enabled: Boolean, motion: BrowsePinchMotion, s
                             entry.key to FrozenBrowseContent(content.measure(style, motion.sourceColumns,
                                 motion.sourceContentWidth(entry.key, index)),
                                 content.measure(next, motion.targetColumns, targetWidth), content.foreground, content.secondary,
-                                motion.itemAlpha[entry.key] ?: 1f, content.textOpacity())
+                                motion.itemAlpha[entry.key] ?: 1f, content.textOpacity(), motion.hoverLift(entry.key))
                         }
                     }.toMap()
                     val drawings = (visible.flatMap { entry ->

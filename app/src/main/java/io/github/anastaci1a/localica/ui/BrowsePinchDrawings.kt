@@ -30,7 +30,7 @@ internal data class FrozenBrowsePart(val image: androidx.compose.ui.graphics.Ima
     val origin: IntOffset, val size: IntSize)
 internal data class BrowsePinchLayer(val layer: GraphicsLayer, var coordinates: LayoutCoordinates? = null)
 internal data class FrozenBrowseContent(val source: BrowsePinchEndpoint, val target: BrowsePinchEndpoint,
-    val foreground: Color, val secondary: Color, val opacity: Float = 1f, val textOpacity: Float = 1f)
+    val foreground: Color, val secondary: Color, val opacity: Float = 1f, val textOpacity: Float = 1f, val hover: HoverGeometry? = null)
 internal data class FrozenBrowseItem(val image: androidx.compose.ui.graphics.ImageBitmap,
     val origin: androidx.compose.ui.unit.IntOffset, val size: androidx.compose.ui.unit.IntSize,
     val highlight: RetainedCurrentSongHighlight? = null,
@@ -141,159 +141,200 @@ internal fun <T> liveItemsInIndexOrder(items: List<T>, indexOf: (T) -> Int): Lis
     return items
 }
 
+@Composable
 internal fun Modifier.pinchRetainedOverlay(motion: BrowsePinchMotion, grid: LazyGridState,
-    indices: Map<String, Int>): Modifier = onGloballyPositioned { motion.viewportCoordinates = it }.drawWithContent {
-    // Pass one: all live and retained text (including track numbers and menus).
-    drawContent()
-    val visible = grid.layoutInfo.visibleItemsInfo
-    val p = motion.progress.value.coerceIn(0f, 1f)
-    fun drawLive(part: BrowsePinchLayer, key: Any) {
-        val viewport = motion.viewportCoordinates
-        val coordinates = part.coordinates ?: return
-        if (viewport?.isAttached != true || !coordinates.isAttached || part.layer.isReleased ||
-            part.layer.size.width <= 0 || part.layer.size.height <= 0) return
-        val bounds = viewport.localBoundingBoxOf(coordinates, clipBounds = false)
-        part.layer.alpha = motion.itemAlpha[key] ?: 1f
-        // A resized cover re-records its layer later in this frame (its own render node is
-        // updated after this pass), so the layer still holds last frame's size. Scaling by it
-        // painted the new drawing at old/new size, one to a few pixels off per frame (#505).
-        val recorded = if (motion.recordingFrozen) part.layer.size else coordinates.size
-        translate(bounds.left, bounds.top) {
-            scale(bounds.width / recorded.width, bounds.height / recorded.height, Offset.Zero) { drawLayer(part.layer) }
-        }
-    }
-    if (motion.visualSource == null) {
-        // Nothing is retained at rest. Keep the same stable two-pass topology
-        // (every text layer, then every artwork layer in item order) without
-        // per-frame key sets, placement maps or a sorted paint list while scrolling.
-        clipRect {
-            visible.forEach { entry -> motion.text[entry.key]?.let { drawLive(it, entry.key) } }
-            liveItemsInIndexOrder(visible) { it.index }.forEach { entry ->
-                motion.artwork[entry.key]?.let { drawLive(it, entry.key) }
+    indices: Map<String, Int>, scene: SelectionScene? = null): Modifier {
+    val backing = LocalFrostedBackdrop.current
+    val location = remember { BackdropLocation() }
+    val graphics = androidx.compose.ui.platform.LocalGraphicsContext.current
+    val scope = rememberCoroutineScope()
+    val groups = remember { mutableListOf<HoverGroupRenderer>() }
+    val recordingDensity = androidx.compose.ui.platform.LocalDensity.current
+    val direction = androidx.compose.ui.platform.LocalLayoutDirection.current
+    val renderer = currentGlassRendererGeneration()
+    val blur = renderer.backend == GlassBackend.Modern && android.os.Build.VERSION.SDK_INT >= 31
+    DisposableEffect(graphics) { onDispose { groups.forEach { graphics.releaseGraphicsLayer(it.output) } } }
+    SideEffect { motion.hoverLift = { scene?.hover?.get(it) } }
+    return backdropLocation(location).onGloballyPositioned { motion.viewportCoordinates = it }.drawWithContent {
+        // Pass one: all live and retained text (including track numbers and menus).
+        drawContent()
+        val visible = grid.layoutInfo.visibleItemsInfo
+        val p = motion.progress.value.coerceIn(0f, 1f)
+        fun drawLive(part: BrowsePinchLayer, key: Any) {
+            val viewport = motion.viewportCoordinates
+            val coordinates = part.coordinates ?: return
+            if (viewport?.isAttached != true || !coordinates.isAttached || part.layer.isReleased ||
+                part.layer.size.width <= 0 || part.layer.size.height <= 0) return
+            val bounds = viewport.localBoundingBoxOf(coordinates, clipBounds = false)
+            part.layer.alpha = motion.itemAlpha[key] ?: 1f
+            // A resized cover re-records its layer later in this frame (its own render node is
+            // updated after this pass), so the layer still holds last frame's size. Scaling by it
+            // painted the new drawing at old/new size, one to a few pixels off per frame (#505).
+            val recorded = if (motion.recordingFrozen) part.layer.size else coordinates.size
+            val lift = scene?.viewportHover?.get(key)
+            scale(lift?.scale ?: 1f, lift?.scale ?: 1f, lift?.pivot ?: Offset.Zero) {
+                translate(bounds.left, bounds.top) {
+                    scale(bounds.width / recorded.width, bounds.height / recorded.height, Offset.Zero) { drawLayer(part.layer) }
+                }
             }
         }
-        return@drawWithContent
-    }
-    val liveKeys = visible.map { it.key }.toSet()
-    val retained = linkedMapOf<Any, RetainedPinchPlacement>()
-    val row = visible.firstOrNull { it.key != "browser-notice" }
-    if (row != null) {
-        val rowIndex = indices.retainedPinchItemIndex(row.key)
-        val pitch = max(row.size.height.toFloat(), 1f)
-        val geometry = BrowseCellGeometry(motion.targetColumns)
-        val sourceInset = (BrowseCellGeometry(motion.sourceColumns).cardInset * motion.pixelDensity).roundToInt()
-        val targetInset = (geometry.cardInset * motion.pixelDensity).roundToInt()
-        val sourceVerticalInset = (BrowseCellGeometry(motion.sourceColumns).cardVerticalInset(requireNotNull(motion.visualSource)) * motion.pixelDensity).roundToInt()
-        val targetVerticalInset = (geometry.cardVerticalInset(requireNotNull(motion.target)) * motion.pixelDensity).roundToInt()
-        val exitProgress = browsePinchGeometryProgress(departing = true, progress = p)
-        motion.bounds.forEach { (key, old) ->
-            if (key in liveKeys) return@forEach
-            val image = motion.frozen[key] ?: return@forEach
-            val index = indices.retainedPinchItemIndex(key)
-            if (index < 0) return@forEach
-            val column = index % motion.targetColumns
-            val width = geometry.cellWidth(motion.viewportWidth.toInt(), motion.pixelDensity, column).toFloat()
-            val leading = geometry.cellLeft(motion.viewportWidth.toInt(), motion.pixelDensity, column).toFloat()
-            val x = if (motion.rightToLeft) motion.viewportWidth - leading - width else leading
-            val y = row.offset.y + (index / motion.targetColumns - rowIndex / motion.targetColumns) * pitch
-            // Scale/fade departures early without accelerating their scroll-anchor trajectory.
-            val origin = Offset(old.left + sourceInset + (x + targetInset - old.left - sourceInset) * p,
-                y + targetVerticalInset + pinchContentTranslation(old.top, y.toFloat(), sourceVerticalInset, targetVerticalInset, p))
-            retained[key] = RetainedPinchPlacement(image, origin, (width - 2 * targetInset).coerceAtLeast(0f),
-                image.content?.target?.height?.toFloat() ?: (pitch - 2 * targetVerticalInset).coerceAtLeast(0f),
-                browseViewVisibility(true, false, p), index, exitProgress)
-        }
-    }
-    clipRect {
-        visible.forEach { entry -> motion.text[entry.key]?.let { drawLive(it, entry.key) } }
-        retained.values.forEach { placed ->
-            val image = placed.item
-            val content = image.content
-            val geometryProgress = placed.geometryProgress
-            translate(placed.origin.x, placed.origin.y) {
-                image.highlight?.let { highlight ->
-                    val original = androidx.compose.ui.geometry.Size(image.size.width.toFloat(), image.size.height.toFloat())
-                    val size = androidx.compose.ui.geometry.Size(original.width + (placed.targetWidth - original.width) * geometryProgress,
-                        original.height + (placed.targetHeight - original.height) * geometryProgress)
-                    with(highlight.renderer) { retainedCurrentSong(size, original, content, geometryProgress, motion.rightToLeft, highlight.color, placed.alpha * (content?.opacity ?: 1f)) }
+        if (motion.visualSource == null) {
+            // Nothing is retained at rest. Keep the same stable two-pass topology
+            // (every text layer, then every artwork layer in item order) without
+            // per-frame key sets, placement maps or a sorted paint list while scrolling.
+            clipRect {
+                visible.forEach { entry -> motion.text[entry.key]?.let { drawLive(it, entry.key) } }
+                liveItemsInIndexOrder(visible) { it.index }.forEach { entry ->
+                    motion.artwork[entry.key]?.let { drawLive(it, entry.key) }
                 }
-                if (content == null) {
-                    // Non-browser callers can still retain an arbitrary source drawing.
-                    val fit = minOf(placed.targetWidth / image.size.width, placed.targetHeight / image.size.height)
-                    val factor = 1f + (fit - 1f) * geometryProgress
-                    scale(factor, factor, Offset.Zero) {
-                        drawImage(image.image, srcOffset = image.origin, srcSize = image.size, dstSize = image.size, alpha = placed.alpha)
+            }
+            return@drawWithContent
+        }
+        val liveKeys = visible.map { it.key }.toSet()
+        val retained = linkedMapOf<Any, RetainedPinchPlacement>()
+        val row = visible.firstOrNull { it.key != "browser-notice" }
+        if (row != null) {
+            val rowIndex = indices.retainedPinchItemIndex(row.key)
+            val pitch = max(row.size.height.toFloat(), 1f)
+            val geometry = BrowseCellGeometry(motion.targetColumns)
+            val sourceInset = (BrowseCellGeometry(motion.sourceColumns).cardInset * motion.pixelDensity).roundToInt()
+            val targetInset = (geometry.cardInset * motion.pixelDensity).roundToInt()
+            val sourceVerticalInset = (BrowseCellGeometry(motion.sourceColumns).cardVerticalInset(requireNotNull(motion.visualSource)) * motion.pixelDensity).roundToInt()
+            val targetVerticalInset = (geometry.cardVerticalInset(requireNotNull(motion.target)) * motion.pixelDensity).roundToInt()
+            val exitProgress = browsePinchGeometryProgress(departing = true, progress = p)
+            motion.bounds.forEach { (key, old) ->
+                if (key in liveKeys) return@forEach
+                val image = motion.frozen[key] ?: return@forEach
+                val index = indices.retainedPinchItemIndex(key)
+                if (index < 0) return@forEach
+                val column = index % motion.targetColumns
+                val width = geometry.cellWidth(motion.viewportWidth.toInt(), motion.pixelDensity, column).toFloat()
+                val leading = geometry.cellLeft(motion.viewportWidth.toInt(), motion.pixelDensity, column).toFloat()
+                val x = if (motion.rightToLeft) motion.viewportWidth - leading - width else leading
+                val y = row.offset.y + (index / motion.targetColumns - rowIndex / motion.targetColumns) * pitch
+                // Scale/fade departures early without accelerating their scroll-anchor trajectory.
+                val origin = Offset(old.left + sourceInset + (x + targetInset - old.left - sourceInset) * p,
+                    y + targetVerticalInset + pinchContentTranslation(old.top, y.toFloat(), sourceVerticalInset, targetVerticalInset, p))
+                retained[key] = RetainedPinchPlacement(image, origin, (width - 2 * targetInset).coerceAtLeast(0f),
+                    image.content?.target?.height?.toFloat() ?: (pitch - 2 * targetVerticalInset).coerceAtLeast(0f),
+                    browseViewVisibility(true, false, p), index, exitProgress)
+            }
+        }
+        fun retainedLift(placed: RetainedPinchPlacement): HoverGeometry? {
+            val content = placed.item.content ?: return null
+            val hover = content.hover ?: return null
+            val size = placed.item.size
+            val width = size.width + (placed.targetWidth - size.width) * placed.geometryProgress
+            val outline = mediaItemOutlineLerp(content.source.outline(density), content.target.outline(density), placed.geometryProgress)
+                .let { if (motion.rightToLeft) it.mirrored(width) else it }
+            return hoverGeometry(outline, hover.room, hover.progress)
+        }
+        clipRect {
+            val lifted = retained.values.mapNotNull { placed -> retainedLift(placed)?.translate(placed.origin)?.let { it to placed } }
+            val components = hoverComponents(lifted.map { it.first.rest.bounds }, MediaSelectionGap.toPx())
+            while (groups.size < components.size) groups += HoverGroupRenderer(graphics.createGraphicsLayer(), scope)
+            components.forEachIndexed { index, members ->
+                val parts = members.map { lifted[it].first }
+                drawHoverGroup(groups[index], parts, { a, b -> minOf(parts[a].progress, parts[b].progress) },
+                    backing, location, blur, recordingDensity, direction, MediaSelectionGap.toPx(),
+                    opacity = members.maxOf { lifted[it].second.alpha * (lifted[it].second.item.content?.opacity ?: 1f) })
+            }
+            visible.forEach { entry -> motion.text[entry.key]?.let { drawLive(it, entry.key) } }
+            retained.values.forEach { placed ->
+                val image = placed.item
+                val content = image.content
+                val geometryProgress = placed.geometryProgress
+                translate(placed.origin.x, placed.origin.y) {
+                    val lift = retainedLift(placed)
+                    scale(lift?.scale ?: 1f, lift?.scale ?: 1f, lift?.pivot ?: Offset.Zero) {
+                    image.highlight?.let { highlight ->
+                        val original = androidx.compose.ui.geometry.Size(image.size.width.toFloat(), image.size.height.toFloat())
+                        val size = androidx.compose.ui.geometry.Size(original.width + (placed.targetWidth - original.width) * geometryProgress,
+                            original.height + (placed.targetHeight - original.height) * geometryProgress)
+                        with(highlight.renderer) { retainedCurrentSong(size, original, content, geometryProgress, motion.rightToLeft, highlight.color, placed.alpha * (content?.opacity ?: 1f)) }
                     }
-                } else {
-                    // Preserve the captured selection decoration independently of
-                    // fixed endpoint glyphs; current-song frost was drawn beneath it.
-                    val width = image.size.width + (placed.targetWidth - image.size.width) * geometryProgress
-                    val height = image.size.height + (placed.targetHeight - image.size.height) * geometryProgress
-                    scale(width / image.size.width, height / image.size.height, Offset.Zero) {
-                        drawImage(image.image, srcOffset = image.origin, srcSize = image.size, dstSize = image.size, alpha = placed.alpha * content.opacity)
-                    }
-                    val source = content.source; val target = content.target
-                    fun mix(a: Int, b: Int) = a + (b - a) * geometryProgress
-                    val cardWidth = image.size.width + (placed.targetWidth - image.size.width) * geometryProgress
-                    fun left(x: Float, width: Float) = if (motion.rightToLeft) cardWidth - x - width else x
-                    fun paragraph(a: androidx.compose.ui.text.TextLayoutResult?, b: androidx.compose.ui.text.TextLayoutResult?,
-                        ax: Int, ay: Int, bx: Int, by: Int, color: Color) {
-                        val width = mix(a?.size?.width ?: 0, b?.size?.width ?: 0)
-                        val height = mix(a?.size?.height ?: 0, b?.size?.height ?: 0)
-                        translate(left(mix(ax, bx), width), mix(ay, by)) {
-                            clipRect(0f, 0f, width.coerceAtLeast(0f), height.coerceAtLeast(0f)) {
-                                drawBrowsePinchParagraph(a, b, geometryProgress, width, color, content.foreground, placed.alpha * content.opacity * content.textOpacity)
+                    if (content == null) {
+                        // Non-browser callers can still retain an arbitrary source drawing.
+                        val fit = minOf(placed.targetWidth / image.size.width, placed.targetHeight / image.size.height)
+                        val factor = 1f + (fit - 1f) * geometryProgress
+                        scale(factor, factor, Offset.Zero) {
+                            drawImage(image.image, srcOffset = image.origin, srcSize = image.size, dstSize = image.size, alpha = placed.alpha)
+                        }
+                    } else {
+                        // Preserve the captured selection decoration independently of
+                        // fixed endpoint glyphs; current-song frost was drawn beneath it.
+                        val width = image.size.width + (placed.targetWidth - image.size.width) * geometryProgress
+                        val height = image.size.height + (placed.targetHeight - image.size.height) * geometryProgress
+                        scale(width / image.size.width, height / image.size.height, Offset.Zero) {
+                            drawImage(image.image, srcOffset = image.origin, srcSize = image.size, dstSize = image.size, alpha = placed.alpha * content.opacity)
+                        }
+                        val source = content.source; val target = content.target
+                        fun mix(a: Int, b: Int) = a + (b - a) * geometryProgress
+                        val cardWidth = image.size.width + (placed.targetWidth - image.size.width) * geometryProgress
+                        fun left(x: Float, width: Float) = if (motion.rightToLeft) cardWidth - x - width else x
+                        fun paragraph(a: androidx.compose.ui.text.TextLayoutResult?, b: androidx.compose.ui.text.TextLayoutResult?,
+                            ax: Int, ay: Int, bx: Int, by: Int, color: Color) {
+                            val width = mix(a?.size?.width ?: 0, b?.size?.width ?: 0)
+                            val height = mix(a?.size?.height ?: 0, b?.size?.height ?: 0)
+                            translate(left(mix(ax, bx), width), mix(ay, by)) {
+                                clipRect(0f, 0f, width.coerceAtLeast(0f), height.coerceAtLeast(0f)) {
+                                    drawBrowsePinchParagraph(a, b, geometryProgress, width, color, content.foreground, placed.alpha * content.opacity * content.textOpacity)
+                                }
                             }
                         }
+                        paragraph(source.title, target.title, source.titleX, source.titleY, target.titleX, target.titleY, Color.Unspecified)
+                        val targetStyle = motion.target
+                        val infoInk = if (targetStyle?.presentation == Presentation.List && targetStyle.listSize.trailingInformation)
+                            content.secondary else Color.Unspecified
+                        paragraph(source.information, target.information, source.infoX, source.infoY, target.infoX, target.infoY, infoInk)
+                        val art = pinchArtworkRect(source, target, geometryProgress)
+                        val number = target.number ?: source.number
+                        if (number != null) {
+                            val alpha = browseViewVisibility(source.number != null, target.number != null, p) * placed.alpha * content.opacity * content.textOpacity
+                            drawText(number, color = content.secondary, alpha = alpha,
+                                topLeft = Offset(left(art.left, art.width) + (art.width - number.size.width) / 2f,
+                                    art.top + (art.height - number.size.height) / 2f))
+                        }
+                        // The source overflow glyph is a bounded crop, not a scaled whole row.
+                        val text = image.text
+                        if (text != null && source.menuWidth > 0 && source.menuHeight > 0) {
+                            val width = mix(source.menuWidth, target.menuWidth).coerceAtLeast(0f)
+                            val height = mix(source.menuHeight, target.menuHeight).coerceAtLeast(0f)
+                            val x = left(mix(source.menuX, target.menuX), width)
+                            val y = mix(source.menuY, target.menuY)
+                            drawMotionImage(text.image,
+                                srcOffset = text.origin + IntOffset(if (motion.rightToLeft) text.size.width - source.menuX - source.menuWidth else source.menuX, source.menuY),
+                                srcSize = IntSize(source.menuWidth, source.menuHeight),
+                                rect = Rect(x, y, x + width, y + height), alpha = placed.alpha * browseViewVisibility(true, target.menuWidth > 0, p))
+                        }
                     }
-                    paragraph(source.title, target.title, source.titleX, source.titleY, target.titleX, target.titleY, Color.Unspecified)
-                    val targetStyle = motion.target
-                    val infoInk = if (targetStyle?.presentation == Presentation.List && targetStyle.listSize.trailingInformation)
-                        content.secondary else Color.Unspecified
-                    paragraph(source.information, target.information, source.infoX, source.infoY, target.infoX, target.infoY, infoInk)
-                    val art = pinchArtworkRect(source, target, geometryProgress)
-                    val number = target.number ?: source.number
-                    if (number != null) {
-                        val alpha = browseViewVisibility(source.number != null, target.number != null, p) * placed.alpha * content.opacity * content.textOpacity
-                        drawText(number, color = content.secondary, alpha = alpha,
-                            topLeft = Offset(left(art.left, art.width) + (art.width - number.size.width) / 2f,
-                                art.top + (art.height - number.size.height) / 2f))
-                    }
-                    // The source overflow glyph is a bounded crop, not a scaled whole row.
-                    val text = image.text
-                    if (text != null && source.menuWidth > 0 && source.menuHeight > 0) {
-                        val width = mix(source.menuWidth, target.menuWidth).coerceAtLeast(0f)
-                        val height = mix(source.menuHeight, target.menuHeight).coerceAtLeast(0f)
-                        val x = left(mix(source.menuX, target.menuX), width)
-                        val y = mix(source.menuY, target.menuY)
-                        drawMotionImage(text.image,
-                            srcOffset = text.origin + IntOffset(if (motion.rightToLeft) text.size.width - source.menuX - source.menuWidth else source.menuX, source.menuY),
-                            srcSize = IntSize(source.menuWidth, source.menuHeight),
-                            rect = Rect(x, y, x + width, y + height), alpha = placed.alpha * browseViewVisibility(true, target.menuWidth > 0, p))
                     }
                 }
             }
-        }
-        // Pass two: every artwork tile, live or virtualized, above all text.
-        // Iterate only the two viewports, never the whole catalog on every frame.
-        val paintOrder = (visible.map { it.index - 1 to it.key } + retained.map { it.value.index to it.key })
-            .sortedBy { it.first }
-        paintOrder.forEach { (_, key) ->
-            val frozen = retained[key]
-            if (frozen != null) {
-                val content = frozen.item.content ?: return@forEach
-                val art = frozen.item.artwork ?: return@forEach
-                val rect = pinchArtworkRect(content.source, content.target, frozen.geometryProgress)
-                val cardWidth = frozen.item.size.width + (frozen.targetWidth - frozen.item.size.width) * frozen.geometryProgress
-                val x = if (motion.rightToLeft) cardWidth - rect.right else rect.left
-                // Independently rounded origin and side moved the far edge back and forth (#505).
-                val left = frozen.origin.x + x
-                val top = frozen.origin.y + rect.top
-                drawMotionImage(art.image, srcOffset = art.origin, srcSize = art.size,
-                    rect = Rect(left, top, left + rect.width, top + rect.height), alpha = frozen.alpha *
-                        browseViewVisibility(content.source.artwork, content.target.artwork, p))
-            } else if (key in liveKeys) {
-                motion.artwork[key]?.let { drawLive(it, key) }
+            // Pass two: every artwork tile, live or virtualized, above all text.
+            // Iterate only the two viewports, never the whole catalog on every frame.
+            val paintOrder = (visible.map { it.index - 1 to it.key } + retained.map { it.value.index to it.key })
+                .sortedBy { it.first }
+            paintOrder.forEach { (_, key) ->
+                val frozen = retained[key]
+                if (frozen != null) {
+                    val content = frozen.item.content ?: return@forEach
+                    val art = frozen.item.artwork ?: return@forEach
+                    val rect = pinchArtworkRect(content.source, content.target, frozen.geometryProgress)
+                    val cardWidth = frozen.item.size.width + (frozen.targetWidth - frozen.item.size.width) * frozen.geometryProgress
+                    val x = if (motion.rightToLeft) cardWidth - rect.right else rect.left
+                    // Independently rounded origin and side moved the far edge back and forth (#505).
+                    val left = frozen.origin.x + x
+                    val top = frozen.origin.y + rect.top
+                    val lift = retainedLift(frozen)
+                    scale(lift?.scale ?: 1f, lift?.scale ?: 1f, lift?.pivot?.plus(frozen.origin) ?: Offset.Zero) {
+                        drawMotionImage(art.image, srcOffset = art.origin, srcSize = art.size,
+                            rect = Rect(left, top, left + rect.width, top + rect.height), alpha = frozen.alpha *
+                                browseViewVisibility(content.source.artwork, content.target.artwork, p))
+                    }
+                } else if (key in liveKeys) {
+                    motion.artwork[key]?.let { drawLive(it, key) }
+                }
             }
         }
     }

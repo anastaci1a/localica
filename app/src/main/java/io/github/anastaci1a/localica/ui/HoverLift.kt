@@ -66,16 +66,18 @@ internal fun hoverRoom(rest: Rect, neighbours: List<Rect>, viewport: Rect?, edge
     return room
 }
 
-/** The outline grows by the symmetric room on each axis; content scales uniformly by the
- * smaller axis ratio, so it never grows past the outline. Corners stay concentric. */
+/** Apply one uniform transform to outline and content. The tighter axis limits growth,
+ * preserving shared artwork/outline corner centres without entering a neighbour. */
 internal fun hoverGeometry(rest: MediaItemOutline, room: Rect, progress: Float): HoverGeometry {
     val p = progress.coerceIn(0f, 1f)
     val b = rest.bounds
     val ex = min(room.left, room.right).coerceAtLeast(0f) * p
     val ey = min(room.top, room.bottom).coerceAtLeast(0f) * p
-    val lifted = MediaItemOutline(Rect(b.left - ex, b.top - ey, b.right + ex, b.bottom + ey), rest.corner + min(ex, ey))
-    val scale = if (b.width <= 0f || b.height <= 0f) 1f else min((b.width + 2f * ex) / b.width, (b.height + 2f * ey) / b.height)
-    return HoverGeometry(rest, lifted, room, max(scale, 1f), b.center, p)
+    val scale = if (b.width <= 0f || b.height <= 0f) 1f else
+        max(1f, min((b.width + 2f * ex) / b.width, (b.height + 2f * ey) / b.height))
+    val half = Offset(b.width * scale / 2f, b.height * scale / 2f)
+    val lifted = MediaItemOutline(Rect(b.center - half, b.center + half), rest.corner * scale)
+    return HoverGeometry(rest, lifted, room, scale, b.center, p)
 }
 
 /** Maps a group's rest bounds onto its lifted bounds: the same backdrop region, magnified. */

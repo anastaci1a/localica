@@ -41,6 +41,9 @@ class PinchRetainedHighlightTest {
     @Test fun virtualizedCurrentRowRetainsItsHighlightThroughRecognitionAndReversal() = retained(false)
     @Test fun rightToLeftVirtualizedCurrentRowRetainsItsHighlightThroughRecognitionAndReversal() = retained(true)
 
+    @Test fun selectedCurrentRowRetainsItsLiftAndSingleFrostThroughRecognitionAndReversal() = retained(false, true)
+    @Test fun rightToLeftSelectedCurrentRowRetainsItsLiftAndSingleFrostThroughRecognitionAndReversal() = retained(true, true)
+
     @Test fun snapshotPreservesTranslucentInkAndPaddedRows() {
         var captured: PixelMap? = null
         compose.setContent {
@@ -72,7 +75,7 @@ class PinchRetainedHighlightTest {
         }
     }
 
-    private fun retained(rtl: Boolean) {
+    private fun retained(rtl: Boolean, selected: Boolean = false) {
         val prefs = BrowsePreferences(InstrumentationRegistry.getInstrumentation().targetContext)
         val route = BrowseRoute(MainTab.Queues, MediaRef(MediaKind.Queue, "retained-highlight"))
         val original = prefs.read(route)
@@ -90,6 +93,9 @@ class PinchRetainedHighlightTest {
         val queue = ListeningQueue(id = "retained-highlight", name = "Retention regression",
             entries = tracks.map { QueueEntry(id = it.id, track = it) }, currentEntryId = playing)
         val queueState = QueueUiState(QueueLibrary(listOf(queue), queue.id), loading = false)
+        val selection = SessionSelection().apply {
+            if (selected) select(route.collection, listOf(SongRow(playing, tracks[10])))
+        }
         var stage by mutableIntStateOf(0)
         lateinit var view: View
         var pointersDown = false
@@ -98,7 +104,8 @@ class PinchRetainedHighlightTest {
         try {
             compose.setContent { LocalicaTheme {
                 view = LocalView.current
-                CompositionLocalProvider(LocalLayoutDirection provides if (rtl) LayoutDirection.Rtl else LayoutDirection.Ltr) {
+                CompositionLocalProvider(LocalSessionSelection provides selection,
+                    LocalLayoutDirection provides if (rtl) LayoutDirection.Rtl else LayoutDirection.Ltr) {
                     MaterialTheme(colorScheme = MaterialTheme.colorScheme.copy(primary = Color.Magenta)) {
                         Box(Modifier.size(360.dp, 480.dp).testTag("retained-scene")) {
                             BrowserScreen(library, playlists, route, {}, {}, {}, { _, _, _ -> }, null, null, true, false,
@@ -139,6 +146,8 @@ class PinchRetainedHighlightTest {
             val firstArt = compose.onNodeWithTag("browse-art-retained:0", true).fetchSemanticsNode().boundsInRoot
             val x = viewport.width / 2f
             val y = firstArt.center.y - viewport.top
+            var sourceInk = 0
+            var sourceTint = 0f
             fun highlightPixels(label: String): Int {
                 compose.runOnIdle { stage++ }
                 val pixels = capturePresentedPopupPixels(compose, scene, stage) { view }
@@ -151,12 +160,24 @@ class PinchRetainedHighlightTest {
                     if (c.red - c.green > .07f && c.blue - c.green > .07f) px to py else null
                 } }
                 val count = highlighted.size
-                if (label == "source" || label == "reversed" || label == "returned") {
+                if (!selected && (label == "source" || label == "reversed" || label == "returned")) {
                     assertTrue("The current-song contour stays visible at $label", highlighted.isNotEmpty())
                     assertEquals("Full selection width at $label", expectedOutline.width,
                         (highlighted.maxOf { it.first } - highlighted.minOf { it.first } + 1).toFloat(), 3f)
                     assertEquals("Full selection height at $label", expectedOutline.height,
                         (highlighted.maxOf { it.second } - highlighted.minOf { it.second } + 1).toFloat(), 3f)
+                }
+                if (selected && label in listOf("source", "recognized", "reversed", "returned")) {
+                    val dark = (top until bottom).sumOf { py -> (left until right).count { px ->
+                        val c = pixels[px, py]; maxOf(c.red, c.green, c.blue) < .45f
+                    } }
+                    val tint = highlighted.map { (px, py) -> pixels[px, py].red - pixels[px, py].green }.sorted()
+                        .let { if (it.isEmpty()) 0f else it[it.size / 2] }
+                    if (label == "source") { sourceInk = dark; sourceTint = tint }
+                    else {
+                        assertTrue("Selected content stays visible at $label: source=$sourceInk current=$dark", dark >= sourceInk * .75f)
+                        assertEquals("One current-song frost at $label", sourceTint, tint, .025f)
+                    }
                 }
                 android.util.Log.i("PinchRetainedHighlight", "rtl=$rtl stage=$label ink=$count bounds=$sourceBounds scene=$sceneBounds")
                 val exported = InstrumentationRegistry.getArguments().getString("additionalTestOutputDir")
@@ -167,7 +188,7 @@ class PinchRetainedHighlightTest {
                 try {
                     bitmap.setPixels(IntArray(pixels.width * pixels.height) { i -> pixels[i % pixels.width, i / pixels.width].toArgb() },
                         0, pixels.width, 0, 0, pixels.width, pixels.height)
-                    java.io.File(directory, "rtl-$rtl-$label.png").outputStream().use {
+                    java.io.File(directory, "rtl-$rtl-selected-$selected-$label.png").outputStream().use {
                         bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
                     }
                 } finally { bitmap.recycle() }
