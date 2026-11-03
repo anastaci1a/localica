@@ -1,4 +1,10 @@
 # Room and Media3 ship their consumer rules. Keep app-specific rules here when needed.
+# Compose 1.10's API-34 text range adapter must stay behind its SDK guard.
+# R8 8.13.19 otherwise inlines its allocation into AndroidParagraph, making API 26
+# verification resolve Layout$TextInclusionStrategy during ordinary text layout.
+# Preserve this helper's boundary while still allowing removal and renaming.
+-keep,allowshrinking,allowobfuscation class androidx.compose.ui.text.android.AndroidLayoutApi34 { *; }
+
 # Jaudiotagger is configured for Android; its desktop image implementations are unused.
 -dontwarn java.awt.**
 -dontwarn javax.imageio.**
