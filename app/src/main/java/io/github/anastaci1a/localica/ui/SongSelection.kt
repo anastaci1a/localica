@@ -2,6 +2,9 @@ package io.github.anastaci1a.localica.ui
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.clickable
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.background
@@ -38,51 +41,76 @@ private class PlaylistSelectionProbe {
     var hostDraws = 0
 }
 
+/**
+ * The multi-select action pill (#534). One glass surface morphs between its expanded row
+ * (count, two frequent actions, More and collapse/close) and a minimized count pill, used
+ * when collapsed and while selected songs are dragged. Every other action lives in the
+ * More menu, which morphs out of its own glass trigger.
+ */
 @Composable
 internal fun SelectionActions(rows: List<SongRow>, selected: Set<String>, onSelection: (Set<String>) -> Unit,
     queues: QueueController?, playlists: PlaylistController?, playlistState: PlaylistState,
     onRemove: (((Boolean) -> Unit) -> Unit)? = null, removeLabel: String = "Remove from playlist",
-    onAll: (() -> Unit)? = null, onRange: (() -> Unit)? = null, onCollapse: (() -> Unit)? = null) {
+    onAll: (() -> Unit)? = null, onRange: (() -> Unit)? = null, onCollapse: (() -> Unit)? = null,
+    minimized: Boolean = false, onExpand: (() -> Unit)? = null) {
     var menu by remember { mutableStateOf(false) }
     val editTags = presentedTagEdit()
     var adding by remember { mutableStateOf<List<Track>?>(null) }
     val chosen = rows.filter { it.id in selected }
-    Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text("${chosen.size} selected", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
-            LiquidGlassSurface(pressFeedback = false) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (onCollapse != null) {
-                        ActionIcon(io.github.anastaci1a.localica.R.drawable.ic_down, "Collapse selection", glass = false, onClick = onCollapse)
-                        GlassPillDivider()
-                    }
+    val reduced = LocalReducedMotion.current
+    val morph = androidx.compose.animation.core.tween<androidx.compose.ui.unit.IntSize>(if (reduced) 0 else 220,
+        easing = androidx.compose.animation.core.LinearOutSlowInEasing)
+    // A minimized pill cannot keep its menu open.
+    if (minimized && menu) SideEffect { menu = false }
+    val moreAnchor = rememberGlassAnchor()
+    fun act(action: SongTap) { menu = false
+        queues?.act(chosen.map { it.track }, action, chosen.map { it.sourcePlaylistId }) { if (it) onSelection(emptySet()) } }
+    Box(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp), contentAlignment = Alignment.Center) {
+        LiquidGlassSurface(Modifier.animateContentSize(morph).testTag("selection-pill"), pressFeedback = false, cornerRadius = 28.dp) {
+            androidx.compose.animation.AnimatedContent(minimized, label = "Selection pill",
+                transitionSpec = {
+                    androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(if (reduced) 0 else 160, delayMillis = if (reduced) 0 else 60)) togetherWith
+                        androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(if (reduced) 0 else 90)) using null
+                }) { small ->
+                if (small) Row(Modifier.heightIn(min = CompactControlSize)
+                    .then(if (onExpand != null) Modifier.clickable(role = Role.Button, onClickLabel = "Expand selection", onClick = onExpand) else Modifier)
+                    .padding(horizontal = 18.dp).testTag("selection-minimized"),
+                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Icon(androidx.compose.ui.res.painterResource(io.github.anastaci1a.localica.R.drawable.ic_queue), null, Modifier.size(20.dp))
+                    Text("${chosen.size} selected", style = MaterialTheme.typography.labelLarge)
+                } else Row(Modifier.fillMaxWidth().heightIn(min = CompactControlSize).padding(horizontal = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically) {
                     ActionIcon(io.github.anastaci1a.localica.R.drawable.ic_close, "Close selection", glass = false) { onSelection(emptySet()) }
+                    Text("${chosen.size} selected", Modifier.weight(1f).padding(horizontal = 4.dp), maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, style = MaterialTheme.typography.titleMedium)
+                    ActionIcon(io.github.anastaci1a.localica.R.drawable.ic_queue, "Play next", enabled = chosen.isNotEmpty() && queues != null,
+                        glass = false) { act(SongTap.PlayNext) }
+                    ActionIcon(io.github.anastaci1a.localica.R.drawable.ic_playlist_add, "Add to playlist", enabled = chosen.isNotEmpty(),
+                        glass = false) { adding = chosen.map { it.track } }
+                    ActionIcon(io.github.anastaci1a.localica.R.drawable.ic_ellipsis, "More selection actions", anchor = moreAnchor,
+                        glass = false) { menu = true }
+                    if (onCollapse != null) {
+                        GlassPillDivider()
+                        ActionIcon(io.github.anastaci1a.localica.R.drawable.ic_down, "Collapse selection", glass = false, onClick = onCollapse)
+                    }
                 }
             }
         }
-        FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            GlassActionButton(io.github.anastaci1a.localica.R.drawable.ic_queue, "All") {
-                onAll?.invoke() ?: onSelection(rows.map { it.id }.toSet())
-            }
-            if (onRange != null) GlassActionButton(io.github.anastaci1a.localica.R.drawable.ic_queue, "Range", onClick = onRange)
-            if (editTags != null) GlassActionButton(io.github.anastaci1a.localica.R.drawable.ic_edit, "Edit tags", enabled = chosen.isNotEmpty()) {
-                editTags(chosen.map { it.track }.distinctBy { it.id }) { if (it) onSelection(emptySet()) }
-            }
+    }
+    GlassMenu(menu && !minimized, moreAnchor, { menu = false }) {
+        ActionMenuItem("Play now", enabled = chosen.isNotEmpty() && queues != null, icon = io.github.anastaci1a.localica.R.drawable.ic_play) { act(SongTap.PlayNow) }
+        ActionMenuItem("Add to queue", enabled = chosen.isNotEmpty() && queues != null, icon = io.github.anastaci1a.localica.R.drawable.ic_queue) { act(SongTap.Append) }
+        ActionMenuItem("New queue", enabled = chosen.isNotEmpty() && queues != null, icon = io.github.anastaci1a.localica.R.drawable.ic_queue) { act(SongTap.NewQueue) }
+        if (editTags != null) ActionMenuItem("Edit tags", enabled = chosen.isNotEmpty(), icon = io.github.anastaci1a.localica.R.drawable.ic_edit) {
+            menu = false; editTags(chosen.map { it.track }.distinctBy { it.id }) { if (it) onSelection(emptySet()) }
         }
-        HorizontalDivider(color = LocalContentColor.current.copy(alpha = .12f))
-        FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            SongTap.entries.forEach { action ->
-                val label = when (action) { SongTap.NewQueue -> "New queue"; SongTap.PlayNow -> "Play now"; SongTap.PlayNext -> "Play next"; SongTap.Append -> "Append" }
-                GlassActionButton(if (action == SongTap.PlayNow) io.github.anastaci1a.localica.R.drawable.ic_play else io.github.anastaci1a.localica.R.drawable.ic_queue,
-                    label, enabled = chosen.isNotEmpty() && queues != null) {
-                    queues?.act(chosen.map { it.track }, action, chosen.map { it.sourcePlaylistId }) { if (it) onSelection(emptySet()) }
-                }
-            }
-            GlassActionButton(io.github.anastaci1a.localica.R.drawable.ic_playlist_add, "Add to playlist", enabled = chosen.isNotEmpty()) { adding = chosen.map { it.track } }
-            if (onRemove != null) GlassActionButton(io.github.anastaci1a.localica.R.drawable.ic_close, removeLabel, enabled = chosen.isNotEmpty()) {
-                onRemove { if (it) onSelection(emptySet()) }
-            }
+        if (onRemove != null) ActionMenuItem(removeLabel, enabled = chosen.isNotEmpty(), icon = io.github.anastaci1a.localica.R.drawable.ic_close) {
+            menu = false; onRemove { if (it) onSelection(emptySet()) }
         }
+        ActionMenuItem("Select all", icon = io.github.anastaci1a.localica.R.drawable.ic_queue) {
+            menu = false; onAll?.invoke() ?: onSelection(rows.map { it.id }.toSet())
+        }
+        if (onRange != null) ActionMenuItem("Select range", icon = io.github.anastaci1a.localica.R.drawable.ic_queue) { menu = false; onRange() }
     }
     adding?.let { tracks -> AddToPlaylistDialog(tracks, playlistState, playlists,
         onDismiss = { adding = null }, onAdded = { adding = null; onSelection(emptySet()) }) }

@@ -43,7 +43,7 @@ class BrowseInteractionTest {
         compose.onNodeWithTag(first).performClick()
         compose.runOnIdle { assertNull(played) }
         compose.onNodeWithText("2 selected").assertIsDisplayed()
-        compose.onNodeWithText("Add to playlist").performClick()
+        compose.onNodeWithContentDescription("Add to playlist").performClick()
         compose.onNodeWithText("Cancel").performClick()
         compose.onNodeWithText("2 selected").assertIsDisplayed()
         compose.onNodeWithContentDescription("Close selection").performClick()
