@@ -20,6 +20,7 @@ import java.util.UUID
 /** The Artist view's rows, played scope and album carousel share one album-group order (#471). */
 class ArtistAlbumSortOrderTest {
     @get:Rule val compose = createComposeRule()
+    private var detail = ""
 
     private fun track(artist: String, album: String, year: Int?, disc: Int, number: Int, title: String) =
         Track("order:$artist:$album:$disc:$number", title, artist = artist, albumArtist = artist, album = album,
@@ -48,31 +49,34 @@ class ArtistAlbumSortOrderTest {
                     queryDispatcher = Dispatchers.Unconfined)
             }
         } }
+        compose.waitUntil(10_000) { compose.onAllNodesWithText("Zeta").fetchSemanticsNodes().isNotEmpty() }
         compose.waitForIdle()
         compose.onNodeWithContentDescription("Play selected albums").performClick()
         val carousel = listOf("Zeta", "Mid", "Alpha", "Nameless").map { name ->
             // A 4000dp viewport keeps every chip composed; the first match is the chip above the rows.
             val node = compose.onAllNodesWithText(name)[0].fetchSemanticsNode().boundsInRoot
             name to node
-        }.sortedWith(compareBy({ it.second.top }, { it.second.left })).map { it.first }
-        return played.map { it.title } to carousel
+        }
+        detail = "sort=$sort ascending=$ascending chips=$carousel"
+        val names = carousel.sortedWith(compareBy({ it.second.left }, { it.second.top })).map { it.first }
+        return played.map { it.title } to names
     }
 
     @Test fun yearAscendingOrdersAlbumsAndKeepsTracksAscending() {
         val (songs, albums) = run(TrackSort.Year, true)
-        assertEquals(listOf("Zeta", "Mid", "Alpha", "Nameless"), albums)
-        assertEquals(listOf("z-first", "a-second", "m-one", "y-disc1", "b-disc2", "n-one"), songs)
+        assertEquals(detail, listOf("Zeta", "Mid", "Alpha", "Nameless"), albums)
+        assertEquals(detail, listOf("z-first", "a-second", "m-one", "y-disc1", "b-disc2", "n-one"), songs)
     }
 
     @Test fun yearDescendingReversesAlbumsOnlyAndLeavesMissingYearLast() {
         val (songs, albums) = run(TrackSort.Year, false)
-        assertEquals(listOf("Alpha", "Mid", "Zeta", "Nameless"), albums)
-        assertEquals(listOf("y-disc1", "b-disc2", "m-one", "z-first", "a-second", "n-one"), songs)
+        assertEquals(detail, listOf("Alpha", "Mid", "Zeta", "Nameless"), albums)
+        assertEquals(detail, listOf("y-disc1", "b-disc2", "m-one", "z-first", "a-second", "n-one"), songs)
     }
 
     @Test fun titleDescendingFollowsTheAlbumTitleWithAscendingTracks() {
         val (songs, albums) = run(TrackSort.Title, false)
-        assertEquals(listOf("Zeta", "Nameless", "Mid", "Alpha"), albums)
-        assertEquals(listOf("z-first", "a-second", "n-one", "m-one", "y-disc1", "b-disc2"), songs)
+        assertEquals(detail, listOf("Zeta", "Nameless", "Mid", "Alpha"), albums)
+        assertEquals(detail, listOf("z-first", "a-second", "n-one", "m-one", "y-disc1", "b-disc2"), songs)
     }
 }
