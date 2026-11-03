@@ -49,6 +49,10 @@ internal class PlayerSeekPosition {
         else (it.toDouble() * range / editingRange).toFloat().coerceIn(0f, range)
     }
 
+    /** Slider range for this frame. A drag keeps the range it began in: Slider rebuilds its state and
+     *  restarts the drag recognizer when the range changes, which ends the gesture. */
+    fun sliderRange(duration: Float): Float = if (editing != null && editingRange > 0f) editingRange else duration
+
     fun displayed(playback: PlaybackState): Float = editingIn(playback.range()) ?: pending
         ?.takeUnless { it.acknowledgedBy(playback.seekAcknowledgement) ||
             (it.conditions != null && it.conditions != playback.seekConditions()) }
@@ -111,17 +115,20 @@ internal fun PlayerSeekControls(playback: PlaybackState, onSeek: (Long) -> Unit,
     // the gesture too: a trailing callback from the old media must not seek the new one.
     key(position) {
         val duration = (playback.durationMs ?: 0).coerceAtLeast(1).toFloat()
-        val value = position.displayed(playback).coerceIn(0f, duration)
-        PlayerSeekBar(value, { position.edit(it, duration) }, valueRange = 0f..duration,
+        val range = position.sliderRange(duration)
+        val shown = position.displayed(playback).coerceIn(0f, duration)
+        // The slider works in its (possibly frozen) range; the label always reads in real time.
+        val value = (position.editing ?: shown).coerceIn(0f, range)
+        PlayerSeekBar(value, { position.edit(it, range) }, valueRange = 0f..range,
             onValueChangeFinished = { position.finish(playback) { target ->
                 onSeekRequest?.invoke(target, playback.playbackVisit) ?: run { onSeek(target); null }
             } },
             enabled = position.editing != null || playback.connected && playback.problem == null && (playback.durationMs ?: 0) > 0,
             modifier = Modifier.fillMaxWidth().height(40.dp).semantics { contentDescription = "Seek" },
             cancelBounds = cancelBounds, cancelTarget = cancelTarget, onCancel = position::cancel,
-            liveValue = playback.positionMs.toFloat(), onDrag = onDrag)
+            liveValue = playback.positionMs.toFloat() * range / duration, onDrag = onDrag)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text(formatTime(value.toLong()), style = MaterialTheme.typography.labelSmall)
+            Text(formatTime(shown.toLong()), style = MaterialTheme.typography.labelSmall)
             Text(formatTime(playback.durationMs), style = MaterialTheme.typography.labelSmall)
         }
     }
