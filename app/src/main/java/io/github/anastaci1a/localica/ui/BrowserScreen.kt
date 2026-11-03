@@ -883,7 +883,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                 } else Modifier)
                 .then(if (maskedBackdrop && viewportBackdrop != null) Modifier.browseBackdropMaskWitness(backdropScene, viewportBackdrop) else Modifier),
                 contentDrawing = Modifier.onPlaced { pinchHeader?.viewport = it }
-                    .collectionPinchOverlay(pinchHeader).pinchRetainedOverlay(pinchMotion, gridState, pinchIndices),
+                    .collectionPinchOverlay(pinchHeader).pinchRetainedOverlay(pinchMotion, gridState, pinchIndices, selectionScene),
                 scene = selectionScene) { overscroll ->
             LazyVerticalGrid(state = gridState, overscrollEffect = overscroll, columns = GridCells.Fixed(columns), modifier = (if (popupDismiss != null) Modifier.fillMaxWidth() else Modifier.fillMaxSize())
                 .then(if (showSearchPill) searchSlotGridLayout else Modifier)
@@ -1068,13 +1068,14 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                             .currentSongHighlight(current, MaterialTheme.colorScheme.primary, { _, _ -> itemOutline.value },
                                 visible = { hover.progress() <= 0f }) { size ->
                                 pinchMotion.highlightSize(item.key, itemIndex, size)
-                            }.retainPinchItem(item.key, pinchMotion, MaterialTheme.colorScheme.primary.takeIf { current })
+                            }
                             .selectionLens(selectedCount > 0, partiallySelected, itemKey = item.key, outline = { _, _ -> itemOutline.value },
                                 handle = hover, alpha = { pinchMotion.itemAlpha[item.key] ?: 1f }) { size ->
                                 pinchMotion.highlightSize(item.key, itemIndex, size)
                             }
                             .currentSongHighlight(current, MaterialTheme.colorScheme.primary, { _, _ -> itemOutline.value },
                                 visible = { hover.progress() > 0f })
+                            .retainPinchItem(item.key, pinchMotion, MaterialTheme.colorScheme.primary.takeIf { current })
                             .then(if (pinchMotion.visualSource == null) Modifier.clip(Corners.card) else Modifier)
                             .testTag("media-${item.key}").combinedClickable(
                             enabled = !queryPending && (item.row == null || enabled),
