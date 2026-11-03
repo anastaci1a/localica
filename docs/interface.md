@@ -291,7 +291,9 @@ Missing aggregates stay last. Ties use album title then canonical album ID ascen
 
 Completing the available multi-album set or removing the final member restores All. a short-tapped single album remains explicitly focused, even for a one-album artist. Reconcile membership after library changes. Play, Shuffle and collection menu actions share the displayed ordered song scope.
 
-When filtering shortens the list, ease only the excess scroll to the measured new range. Retain valid offsets and user gesture ownership. A combined glass Play/Shuffle pill acts on that displayed list. Shuffle randomizes the new queue’s saved order without enabling global traversal shuffle.
+When filtering shortens the list, ease only the excess scroll to the measured new range. Retain valid offsets and user gesture ownership. Release scroll ownership between correction frames so a new contact can activate an album choice.
+
+A combined glass Play/Shuffle pill acts on that displayed list. Shuffle randomizes the new queue’s saved order without enabling global traversal shuffle.
 
 The Add to playlists panel combines covered existing-playlist rows with an iconless inline new-name field using normal text padding. Add or keyboard submission applies all chosen destinations. Duplicate names disable Add, using the [playlist rules](product.md#library-and-playlists).
 
