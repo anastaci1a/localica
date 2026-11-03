@@ -128,8 +128,9 @@ class LyricsArtworkEntryTest {
         forEachLayout { layout ->
             compose.runOnIdle { lyricsMode = true }
             snap(1f)
-            val down = (0..20).associate { i -> val p = 1f - i / 20f; snap(p); p to artTop() }
-            val up = (0..20).associate { i -> val p = i / 20f; snap(p); p to artTop() }
+            val samples = (0..20).map { it / 20f }
+            val down = samples.reversed().associateWith { p -> snap(p); artTop() }
+            val up = samples.associateWith { p -> snap(p); artTop() }
             for ((p, top) in down) assertEquals("Reverse retraces at p=$p in $layout", top, up.getValue(p), 1f)
             snap(1f)
             assertEquals("The maximized end is the lyrics-layout position in $layout", expectedTop(), artTop(), 1.5f)
@@ -187,8 +188,9 @@ class LyricsArtworkEntryTest {
                         }
                     return Triple(high, low, "icon=$icon cover=$cover")
                 }
-                val (ink, _, fullDetail) = green(1f)
-                assertTrue("The icon ink is visible at rest in $layout: $ink $fullDetail", ink > .25f)
+                val (ink, backgroundAtRest, fullDetail) = green(1f)
+                assertTrue("The icon has measurable contrast at rest in $layout: $ink $fullDetail",
+                    ink - backgroundAtRest > .1f)
                 for (p in listOf(.88f, .91f, .94f)) {
                     val (observed, floor, detail) = green(p)
                     val coverAlpha = 1f - p
