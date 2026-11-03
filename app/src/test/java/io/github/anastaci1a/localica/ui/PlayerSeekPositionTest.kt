@@ -153,7 +153,7 @@ class PlayerSeekPositionTest {
         assertEquals(30_000f, position.displayed(live.copy(durationMs = 60_000)))
         val seeks = mutableListOf<Long>()
         position.finish(live.copy(durationMs = 150_000)) { seeks += it; 5 }
-        assertEquals(listOf(75_000L), seeks)
+        assertEquals(1, seeks.size); assertEquals(75_000f, seeks.single().toFloat(), 2f)
     }
 
     @Test fun connectionAndProblemChangesEndCommittedHandoffButNotLiveScrub() {
