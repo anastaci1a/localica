@@ -225,6 +225,7 @@ io.github.anastaci1a.localica.TagEditorThemeInheritanceTest
 io.github.anastaci1a.localica.TagWritingTest
 io.github.anastaci1a.localica.ThemeTest
 io.github.anastaci1a.localica.ToneSnapshotContinuityTest
+io.github.anastaci1a.localica.TouchProtectionTest
 io.github.anastaci1a.localica.TrackedDataSourceTest
 io.github.anastaci1a.localica.TracklistPinchIntegrationTest
 io.github.anastaci1a.localica.UtilityPopupRenderDiagnosticTest
