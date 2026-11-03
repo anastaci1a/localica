@@ -282,4 +282,30 @@ class SeekReleaseHandoffTest {
         assertFrame(30_000, "new visit after old release")
         compose.runOnIdle { assertTrue(seeks.isEmpty()) }
     }
+
+    @Test fun scrubSurvivesDurationConnectionAndProblemChangesAndCommitsDraggedPosition() {
+        fixture()
+        fun fraction() = value() / playback.durationMs!!
+        seek().performTouchInput { down(Offset(width * .4f, centerY)); moveTo(Offset(width * .6f, centerY)) }
+        frame()
+        assertEquals("thumb under finger", .6f, fraction(), .03f)
+        val steps = listOf<(PlaybackState) -> PlaybackState>(
+            { it.copy(durationMs = 150_000) }, // Duration refinement keeps the thumb at the finger.
+            { it.copy(connected = false) },
+            { it.copy(problem = PlaybackProblem.Failed) },
+            { it.copy(connected = true, problem = null, durationMs = 90_000) },
+        )
+        for ((index, step) in steps.withIndex()) {
+            compose.runOnIdle { playback = step(playback) }
+            frame()
+            assertEquals("thumb under finger after change $index", .6f, fraction(), .03f)
+            compose.runOnIdle { assertTrue("no seek before release", seeks.isEmpty()) }
+        }
+        seek().performTouchInput { moveTo(Offset(width * .8f, centerY)) }
+        frame()
+        assertEquals("drag continues after changes", .8f, fraction(), .03f)
+        seek().performTouchInput { up() }
+        frame()
+        compose.runOnIdle { assertEquals(1, seeks.size); assertEquals(.8f * 90_000f, seeks.single().toFloat(), 90_000f * .03f) }
+    }
 }

@@ -145,4 +145,26 @@ class PlayerSeekPositionTest {
         position.cancel()
         assertEquals(95_000f, position.displayed(playback))
     }
+
+    @Test fun durationRefinementRescalesLiveScrubAndShrinkClamps() {
+        val position = PlayerSeekPosition()
+        position.edit(60_000f, 120_000f)
+        assertEquals(75_000f, position.displayed(live.copy(durationMs = 150_000)), 1f)
+        assertEquals(30_000f, position.displayed(live.copy(durationMs = 60_000)))
+        val seeks = mutableListOf<Long>()
+        position.finish(live.copy(durationMs = 150_000)) { seeks += it; 5 }
+        assertEquals(1, seeks.size); assertEquals(75_000f, seeks.single().toFloat(), 2f)
+    }
+
+    @Test fun connectionAndProblemChangesEndCommittedHandoffButNotLiveScrub() {
+        val position = PlayerSeekPosition()
+        position.edit(95_000f, 120_000f); position.finish(live.copy(connected = true)) { 5 }
+        val down = live.copy(connected = false)
+        assertEquals(20_000f, position.displayed(down))
+        position.conditionsChanged(down)
+        assertNull(position.pending)
+        position.edit(50_000f, 120_000f)
+        position.conditionsChanged(down.copy(problem = io.github.anastaci1a.localica.playback.PlaybackProblem.Failed))
+        assertEquals(50_000f, position.displayed(down))
+    }
 }
