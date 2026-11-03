@@ -145,8 +145,11 @@ internal fun LyricsPanel(track: Track?, positionMs: Long, reducedMotion: Boolean
                         }
                     }
                     is LyricsPresentation.Available -> key(shown.source.id, shown.source.document) {
-                        var shownPosition by remember { mutableLongStateOf(lyricClock) }
-                        SideEffect { if (shown == presentation) shownPosition = lyricClock }
+                        // Read the clock while composing so a paused seek, which only moves it, still recomposes this
+                        // scope; an outgoing document keeps the last position it presented.
+                        var retainedPosition by remember { mutableLongStateOf(lyricClock) }
+                        val shownPosition = if (shown == presentation) lyricClock else retainedPosition
+                        SideEffect { if (shown == presentation) retainedPosition = lyricClock }
                         LyricsLines(shown.source.document, shownPosition, reducedMotion, onSeek,
                             Modifier.fillMaxSize(), sourceAlpha = { sourceAlpha },
                             contentHeight = contentHeight, contentOffset = contentOffset)
