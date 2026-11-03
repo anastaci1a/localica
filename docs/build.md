@@ -160,7 +160,9 @@ Review [previews](#previews), current docs and resolved issues. Commit and push.
 
 ### Step 3
 
-**Wait for successful build, the device-tests summary (all shards), both compatibility jobs, and both distribution smoke jobs on the exact main SHA before tagging it.** The matching `vX.X.X` workflow reuses that run's APK, verifies version/signature/checksum, and publishes without another build/test matrix. Missing verification/expired artifacts require rerunning main checks. Never substitute another commit's APK. Unfilled release placeholders block publication.
+**Wait for a complete green Android run with exactly the release commit’s Git tree before tagging a commit in main.** The producer may be a same-repository integration push or manual full run. Build, all native shards, complete inventory unions, both compatibility jobs and both distribution smoke jobs must succeed. Focused runs cannot qualify.
+
+Main pushes reuse retained exact-tree evidence when available; otherwise they run normal verification. Release selection verifies the original run, attempt, tree, union receipts and artifact identity. APK checksum, version and signing checks remain mandatory. Missing, expired or changed inputs require a new complete run. Unfilled release placeholders block publication.
 
 ### Step 4
 
