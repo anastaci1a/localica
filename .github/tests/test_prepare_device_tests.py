@@ -53,6 +53,11 @@ if len(a)==6 and a[:2]==['shell','pm'] and a[3:]==['--user','0','com.google.andr
         if s['disableExit']:done(s['disableExit'])
     elif s['restoreExit']:done(s['restoreExit'])
     s['mutations']+=1;s['enabled']=states[command];done()
+if a[:2]==['shell','settings']:
+    if a[2]=='put':s.setdefault('settings',{})[a[3]+'/'+a[4]]=a[5];done()
+    if a[2]=='get':done(out=s.get('settings',{}).get(a[3]+'/'+a[4],'null')+'\n')
+if a==['shell','dumpsys','window']:done(out=s.get('window',''))
+if a[:3]==['shell','am','broadcast']:s['window']='';done()
 done(95,'Unexpected mock adb command: '+repr(a))
 '''
 
@@ -119,6 +124,18 @@ class PrepareDeviceTestsTest(unittest.TestCase):
             with self.subTest(prior=prior):
                 self.state['enabled']=prior;self.state['mutations']=0;self.assert_exit(0)
                 self.assertEqual(prior,self.state['enabled']);self.assertEqual('',self.state['token'])
+
+    def test_error_dialogs_are_suppressed_and_absent_dialog_is_logged(self):
+        r=self.run_script(script='run-device-tests.sh');self.assertEqual(0,r.returncode,r.stdout+r.stderr)
+        self.assertEqual({'global/hide_error_dialogs':'1','secure/anr_show_background':'0','global/show_first_crash_dialog':'0','global/show_first_crash_dialog_dev_option':'0'},self.state['settings'])
+        self.assertIn('error-dialog setting global/hide_error_dialogs=1 (wanted 1)',r.stdout)
+        self.assertIn('error-dialog check before full: none found',r.stdout)
+
+    def test_focused_error_dialog_is_dismissed_before_instrumentation(self):
+        self.state['window']='  mCurrentFocus=Window{1 u0 Application Not Responding: com.android.launcher3}\n'
+        r=self.run_script(script='run-device-tests.sh');self.assertEqual(0,r.returncode,r.stdout+r.stderr)
+        self.assertIn('error-dialog check before full: found and dismissed',r.stdout)
+        self.assertIn(['adb','-s','emulator-5554','shell','am','broadcast','-a','android.intent.action.CLOSE_SYSTEM_DIALOGS'],self.commands())
 
     def test_setup_failure_prevents_starting_instrumentation(self):
         self.state['disableExit']=23;self.assert_exit(23,script='run-device-tests.sh');self.assertEqual(0,self.state['gradle'])
