@@ -71,6 +71,12 @@ internal fun BrowseItemLayout(item: BrowserItem, style: BrowseStyle, geometry: B
     val incomingAlpha = if (from != null && item.key !in requireNotNull(pinch).bounds)
         browseViewVisibility(false, true, progress) else 1f
     fun Modifier.morph() = if (from != null) this else animateBounds(lookahead, boundsTransform = { _, _ -> tween(duration) })
+    // One artwork reveal drives the text (#526); pinches keep their own text handling.
+    val textReveal = remember(item.key) { ArtworkTextReveal() }
+    val gatedText = textReveal.takeIf { from == null && artwork(style) }
+    val textDensity = androidx.compose.ui.platform.LocalDensity.current
+    val titleLinePx = with(textDensity) { titleLine.sp.toPx() }
+    val infoLinePx = with(textDensity) { infoLine.toPx() }
     Layout(modifier = Modifier.fillMaxWidth().then(if (pinch != null) Modifier.retainPinchText(item.key, pinch) else Modifier)
         .graphicsLayer { alpha = incomingAlpha }, content = {
         Box(Modifier.morph().then(if (gallery && artworkAnchor != null) Modifier.contextMenuAnchor(artworkAnchor,
@@ -78,7 +84,7 @@ internal fun BrowseItemLayout(item: BrowserItem, style: BrowseStyle, geometry: B
             if (numberAlpha > 0f) Text(numberLabel ?: retainedNumberLabel.orEmpty(), Modifier.fillMaxSize().graphicsLayer { alpha = numberAlpha * (loadingReveal?.alpha ?: 1f) }.wrapContentSize(),
                 color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
             if (artworkAlpha > 0f || artwork(style) || from?.let(::artwork) == true)
-                MediaArtwork(item.coverUris, Modifier.fillMaxSize()
+                MediaArtwork(item.coverUris, textReveal = textReveal, modifier = Modifier.fillMaxSize()
                     .then(if (pinch != null) Modifier.retainPinchArtwork(item.key, pinch) else Modifier).graphicsLayer {
                     alpha = artworkAlpha * incomingAlpha * (loadingReveal?.alpha ?: 1f)
                     shape = RoundedCornerShape(browseLoadingArtCorner(artCorner.floatValue, size.minDimension,
@@ -86,13 +92,13 @@ internal fun BrowseItemLayout(item: BrowserItem, style: BrowseStyle, geometry: B
                     clip = true
                 }, shape = androidx.compose.ui.graphics.RectangleShape)
         }
-        Box(Modifier.morph().reveal().testTag("browse-text-${item.key}")) {
+        Box(Modifier.morph().reveal().artworkTextReveal(gatedText, titleLinePx, { artCorner.floatValue }).testTag("browse-text-${item.key}")) {
             if (measureEndpoints != null) BrowsePinchText(titleParagraph, item.title, progress)
             else Text(item.title, style = MaterialTheme.typography.titleMedium.copy(fontSize = titleSize.sp, lineHeight = titleLine.sp,
                 fontWeight = if (numbered(style)) androidx.compose.ui.text.font.FontWeight.Normal else MaterialTheme.typography.titleMedium.fontWeight),
                 maxLines = if (gallery) 2 else 1, overflow = TextOverflow.Ellipsis)
         }
-        Box(Modifier.morph().reveal().testTag("browse-info-${item.key}")) {
+        Box(Modifier.morph().reveal().artworkTextReveal(gatedText, infoLinePx, { artCorner.floatValue }, loadingInformation).testTag("browse-info-${item.key}")) {
             if (measureEndpoints != null) BrowsePinchText(informationParagraph,
                 if (showInformation) item.information(style, inheritedInformation) else null, progress,
                 if (trailing(style)) MaterialTheme.colorScheme.onSurfaceVariant else androidx.compose.ui.graphics.Color.Unspecified)

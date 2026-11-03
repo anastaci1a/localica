@@ -91,6 +91,8 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onStart() { super.onStart(); io.github.anastaci1a.localica.library.ArtworkColors.foreground.value = true }
+    override fun onStop() { io.github.anastaci1a.localica.library.ArtworkColors.foreground.value = false; super.onStop() }
     override fun onResume() {
         super.onResume()
         if (::model.isInitialized) model.refreshAccess()

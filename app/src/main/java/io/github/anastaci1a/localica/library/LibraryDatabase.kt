@@ -44,6 +44,16 @@ data class TrackRecord(
 data class FolderTrackRecord(val folderUri: String, val trackId: String, val uri: String, val relativePath: String,
     @ColumnInfo(defaultValue = "0") val metadataFailed: Boolean = false)
 
+/** Average artwork colour per track (#525). No row: not yet computed. NULL colour: no embedded
+ * artwork. [sourceModifiedAt] differing from `tracks.modifiedAt` marks the row stale. Kept
+ * outside `tracks` so backfill writes never invalidate the catalog observer. */
+@Entity(tableName = "track_artwork", foreignKeys = [
+    ForeignKey(entity = TrackRecord::class, parentColumns = ["id"], childColumns = ["trackId"], onDelete = ForeignKey.CASCADE),
+])
+data class TrackArtworkRecord(@PrimaryKey val trackId: String, val sourceModifiedAt: Long?, val color: Int?)
+
+data class ArtworkColorRow(val uri: String, val color: Int?)
+
 data class TrackInFolder(
     @Embedded val location: FolderTrackRecord,
     @Relation(parentColumn = "trackId", entityColumn = "id") val track: TrackRecord,
@@ -67,6 +77,34 @@ abstract class LibraryDao {
 
     @Query("SELECT COUNT(DISTINCT folder_tracks.trackId) FROM folder_tracks JOIN folders ON folders.uri = folder_tracks.folderUri")
     protected abstract suspend fun linkedTrackCount(): Int
+
+    /** Every location URI of a track resolves to its colour; read only by the colour index. */
+    @Query("SELECT folder_tracks.uri AS uri, track_artwork.color AS color FROM track_artwork " +
+        "JOIN folder_tracks ON folder_tracks.trackId = track_artwork.trackId")
+    abstract fun observeArtworkColors(): Flow<List<ArtworkColorRow>>
+
+    @Query("SELECT tracks.id AS trackId, tracks.modifiedAt AS modifiedAt, MIN(folder_tracks.uri) AS uri FROM tracks " +
+        "JOIN folder_tracks ON folder_tracks.trackId = tracks.id LEFT JOIN track_artwork ON track_artwork.trackId = tracks.id " +
+        "WHERE track_artwork.trackId IS NULL OR track_artwork.sourceModifiedAt IS NOT tracks.modifiedAt " +
+        "GROUP BY tracks.id LIMIT :limit")
+    abstract suspend fun pendingArtwork(limit: Int): List<ArtworkSource>
+
+    @Query("SELECT tracks.id AS trackId, tracks.modifiedAt AS modifiedAt, folder_tracks.uri AS uri FROM folder_tracks " +
+        "JOIN tracks ON tracks.id = folder_tracks.trackId WHERE folder_tracks.uri IN (:uris)")
+    abstract suspend fun artworkSources(uris: List<String>): List<ArtworkSource>
+
+    @Query("INSERT OR REPLACE INTO track_artwork (trackId, sourceModifiedAt, color) " +
+        "SELECT :trackId, :modifiedAt, :color WHERE EXISTS (SELECT 1 FROM tracks WHERE id = :trackId)")
+    protected abstract suspend fun saveArtwork(trackId: String, modifiedAt: Long?, color: Int?)
+
+    @Transaction open suspend fun saveArtworkColors(colors: List<Pair<ArtworkSource, Int>>) {
+        colors.forEach { (source, color) ->
+            saveArtwork(source.trackId, source.modifiedAt, color.takeIf { it != ArtworkColors.MISSING })
+        }
+    }
+
+    /** Emits after every write to `tracks`: scans, merges, removals and tag edits. */
+    @Query("SELECT COUNT(*) FROM tracks") abstract fun trackChanges(): Flow<Int>
 
     @Transaction
     @Query("SELECT folder_tracks.* FROM folder_tracks JOIN folders ON folders.uri = folder_tracks.folderUri " +
@@ -133,11 +171,19 @@ abstract class LibraryDao {
     }
 }
 
-@Database(entities = [FolderRecord::class, TrackRecord::class, FolderTrackRecord::class], version = 6, exportSchema = true)
+@Database(entities = [FolderRecord::class, TrackRecord::class, FolderTrackRecord::class, TrackArtworkRecord::class], version = 7, exportSchema = true)
 abstract class LibraryDatabase : RoomDatabase() {
     abstract fun libraryDao(): LibraryDao
 
     companion object {
+        val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE IF NOT EXISTS `track_artwork` (`trackId` TEXT NOT NULL, `sourceModifiedAt` INTEGER, `color` INTEGER, " +
+                    "PRIMARY KEY(`trackId`), FOREIGN KEY(`trackId`) REFERENCES `tracks`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )")
+            }
+        }
+        /** Every migration, in order; shared by the app and migration tests. */
+        val MIGRATIONS get() = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
         val MIGRATION_5_6 = object : Migration(5, 6) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE tracks ADD COLUMN addedAt INTEGER")

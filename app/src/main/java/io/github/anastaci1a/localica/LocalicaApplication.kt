@@ -1,6 +1,7 @@
 package io.github.anastaci1a.localica
 
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.distinctUntilChanged
 import io.github.anastaci1a.localica.statistics.withListeningStatistics
 
 import android.app.Application
@@ -29,6 +30,7 @@ class LocalicaApplication : Application() {
             // here so those Main reads find them in memory. Values and write paths are unchanged.
             for (name in STARTUP_PREFERENCES) runCatching { getSharedPreferences(name, MODE_PRIVATE).contains("") }
         }
+        startup.launch { startArtworkColors(this) }
         startup.launch {
             // The registry starts fail-closed before any service can create/open a source.
             // The writer publishes a useful Unknown state if inspection fails.
@@ -36,6 +38,21 @@ class LocalicaApplication : Application() {
             runCatching { io.github.anastaci1a.localica.library.TagViewFiles.sweep(java.io.File(cacheDir, "tag-views")) }
                 .onFailure { android.util.Log.w("TagViewFiles", "Could not sweep leftover metadata mirrors", it) }
         }
+    }
+    /** Colour index, visible-first requests and the bulk backfill (#525); all off Main. */
+    private fun startArtworkColors(scope: CoroutineScope) {
+        val dao = libraryDatabase.libraryDao()
+        val backfill = io.github.anastaci1a.localica.library.ArtworkColorBackfill(
+            io.github.anastaci1a.localica.library.RoomArtworkColorStore(dao),
+            { uri -> io.github.anastaci1a.localica.library.ArtworkReader(this).averageColor(uri) },
+            io.github.anastaci1a.localica.library.ArtworkCache.foregroundDecodes,
+            kotlinx.coroutines.flow.combine(scanner.state, io.github.anastaci1a.localica.library.ArtworkColors.foreground) { scan, started ->
+                scan.running || !started }.distinctUntilChanged(),
+            log = { android.util.Log.i("ArtworkColors", it) })
+        io.github.anastaci1a.localica.library.ArtworkColors.requests = backfill
+        scope.launch { io.github.anastaci1a.localica.library.publishArtworkColors(dao.observeArtworkColors()) }
+        scope.launch { dao.trackChanges().collect { backfill.request() } }
+        scope.launch { backfill.run() }
     }
     val statistics by lazy {
         io.github.anastaci1a.localica.statistics.StatisticsRepository(Room.databaseBuilder(this,
@@ -63,9 +80,11 @@ class LocalicaApplication : Application() {
     private suspend fun liveSortSnapshot() =
         library.sortSnapshots.withListeningStatistics(statistics.counts).first()
 
+    private val libraryDatabase by lazy {
+        Room.databaseBuilder(this, LibraryDatabase::class.java, "library.db").addMigrations(*LibraryDatabase.MIGRATIONS).build()
+    }
     val library by lazy {
-        val database = Room.databaseBuilder(this, LibraryDatabase::class.java, "library.db").addMigrations(LibraryDatabase.MIGRATION_1_2, LibraryDatabase.MIGRATION_2_3, LibraryDatabase.MIGRATION_3_4, LibraryDatabase.MIGRATION_4_5, LibraryDatabase.MIGRATION_5_6).build()
-        LibraryRepository(RoomLibraryStore(database.libraryDao()), TreeScanner(AndroidDocuments(this)),
+        LibraryRepository(RoomLibraryStore(libraryDatabase.libraryDao()), TreeScanner(AndroidDocuments(this)),
             PersistedFolderPermissions(contentResolver))
     }
 }

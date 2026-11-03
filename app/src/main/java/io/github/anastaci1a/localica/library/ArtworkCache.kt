@@ -7,6 +7,7 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
@@ -43,6 +44,8 @@ object ArtworkCache {
     }
     private val configured = java.util.concurrent.atomic.AtomicBoolean(false)
     val revision = store.revision
+    /** Cold decodes in flight for visible surfaces; the bulk colour backfill waits for zero. */
+    val foregroundDecodes = store.decoding
     data class CachedArtwork(val bitmap: Bitmap?, val edge: Int = 0)
     /** Size the cache from the device heap class once; safe to call from any composition. */
     fun configure(context: Context) {
@@ -69,6 +72,8 @@ internal class ArtworkCacheStore(parallelism: Int = ARTWORK_DECODE_PARALLELISM,
     private val permits = Semaphore(parallelism.coerceAtLeast(1))
     private val locks = HashMap<Key, KeyLock>()
     private val mutableRevision = MutableStateFlow(0L)
+    private val mutableDecoding = MutableStateFlow(0)
+    val decoding = mutableDecoding.asStateFlow()
     val revision = mutableRevision.asStateFlow()
 
     val maxBytes get() = synchronized(cache) { cache.maxSize() }
@@ -109,7 +114,8 @@ internal class ArtworkCacheStore(parallelism: Int = ARTWORK_DECODE_PARALLELISM,
             currentCoroutineContext().ensureActive()
             val key = Key(uri, bucket(pixels), revision.value)
             cached(key)?.let { return@withPermit it.bitmap }
-            val bitmap = load(context, uri, key.edge)
+            mutableDecoding.update { it + 1 }
+            val bitmap = try { load(context, uri, key.edge) } finally { mutableDecoding.update { it - 1 } }
             synchronized(cache) { if (key.revision == revision.value) cache.put(key, Cover(bitmap)) }
             bitmap
         }
