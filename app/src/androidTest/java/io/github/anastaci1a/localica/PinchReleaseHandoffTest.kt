@@ -124,8 +124,11 @@ class PinchReleaseHandoffTest {
                 phase("begin")
                 val pixels = try { capturePresentedPopupPixels(compose, scene, stage) { view } }
                     finally { phase("end") }
+                if (gallery && stage in setOf(0, 1, 2, 6, 12, 22)) {
+                    android.util.Log.i("DIAG521", "stage=$stage expected=$expectedFinalCenter orig=$originalBounds viewport=$viewport")
+                }
                 if (gallery && stage in setOf(0, 1, 2, 6, 12, 22) &&
-                    InstrumentationRegistry.getArguments().getString("pinchReview") == "true") {
+                    InstrumentationRegistry.getArguments().getString("pinchReview") != "never") {
                     val directory = reviewDirectory
                     val bitmap = android.graphics.Bitmap.createBitmap(pixels.width, pixels.height, android.graphics.Bitmap.Config.ARGB_8888)
                     try {
