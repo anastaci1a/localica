@@ -223,6 +223,39 @@ class HoverSelectionTest {
         } finally { compose.mainClock.autoAdvance = true }
     }
 
+    @Test fun aDepartingMemberFadesItsFrostWhileItsNeighbourStaysLifted() {
+        var first by mutableStateOf(false)
+        var second by mutableStateOf(false)
+        compose.setContent { Fixture(first, second) }
+        compose.waitForIdle()
+        val baseline = capture()
+        val d = baseline.width / 360f
+        fun stripes(pixels: PixelMap, top: Float): Float {
+            val y = ((top + 12f) * d).toInt()
+            val values = ((24f + 60f) * d).toInt().until(((24f + 90f) * d).toInt()).map { pixels[it, y].green }
+            return values.max() - values.min()
+        }
+        compose.runOnIdle { first = true; second = true }
+        if (android.os.Build.VERSION.SDK_INT < 33) compose.waitUntil(10000) { source.fallback != null }
+        compose.waitForIdle()
+        val lifted = capture()
+        val resting = stripes(baseline, 160f)
+        val full = stripes(lifted, 160f)
+        assertTrue("Fixture exposes the selected frost", resting - full > .05f)
+        compose.mainClock.autoAdvance = false
+        try {
+            compose.runOnIdle { second = false }
+            compose.mainClock.advanceTimeByFrame()
+            compose.mainClock.advanceTimeBy(80)
+            val p = scene.regions.values.single { it.itemKey == "second" }.visibility()
+            assertTrue("Sample an interrupted departure", p > 0f && p < .8f)
+            val partial = capture()
+            assertEquals("The departing frost follows its own visibility", p,
+                (resting - stripes(partial, 160f)) / (resting - full), .15f)
+            assertEquals("The selected neighbour retains its frost", stripes(lifted, 80f), stripes(partial, 80f), .03f)
+        } finally { compose.mainClock.autoAdvance = true }
+    }
+
     @Test fun aVirtualizedNeighbourRetainsTheJoinedOutlineAndShadow() {
         var retained by mutableStateOf(false)
         compose.setContent { Fixture(true, true, retainSecond = retained) }
