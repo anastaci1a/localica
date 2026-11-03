@@ -373,6 +373,12 @@ class DragReorderTest {
             }
             assertTrue("The drag lifted a stack", path.size > 10)
             assertEquals("The top card starts where its row hovered", rest.left, path.first().left, 3f)
+            assertEquals("The first flight frame preserves the source width", rest.width, path.first().width, 3f)
+            assertEquals("The first flight frame preserves the source height", rest.height, path.first().height, 3f)
+            val widthChange = kotlin.math.abs(path.last().width - path.first().width)
+            path.zipWithNext().forEach { (a, b) ->
+                assertTrue("Stack fitting cannot snap the source width", kotlin.math.abs(b.width - a.width) <= widthChange * .35f + 2f)
+            }
             assertTrue("The top card starts at its row, not the stack: ${path.first()} vs $rest",
                 kotlin.math.abs(path.first().top - rest.top) <= kotlin.math.abs(path.last().top - rest.top) / 2f + 3f)
             val travel = (path.last().topLeft - path.first().topLeft).getDistance()
