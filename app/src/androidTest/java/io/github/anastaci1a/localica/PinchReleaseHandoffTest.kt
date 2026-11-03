@@ -202,14 +202,8 @@ class PinchReleaseHandoffTest {
                 android.util.Log.i("PinchReleaseHandoff",
                     "outward=$outward cancelled=$cancelled frame=$frame t=${compose.mainClock.currentTime} center=$center expected=$expectedFinalCenter")
             }
-            // Covers paint above every row decoration, so a crossing cover can hide part of the slab
-            // for a frame. A real anchor jump moves the whole slab; occlusion only shortens it, and
-            // such a frame cannot place the anchor. It stays rare, and never ends the release.
-            val full = extents.sorted()[extents.size / 2]
-            val occluded = extents.map { it < full * .7f }
-            assertTrue("Crossing covers hide the slab in at most two frames: $extents", occluded.count { it } <= 2 && !occluded.last())
             assertTrue("Every presented release frame must preserve the anchor: expected=$expectedFinalCenter held=$before samples=$samples extents=$extents",
-                samples.indices.all { occluded[it] || samples[it] in low..high })
+                anchorPreserved(samples, extents, low..high))
             assertEquals("Final rendered anchor must return to the original midpoint",
                 expectedFinalCenter, samples.last(), 4f)
             assertEquals("Final layout anchor must return to the original midpoint",
@@ -284,6 +278,30 @@ class PinchReleaseHandoffTest {
         android.util.Log.i("PinchReleaseHandoff", "Touch scroll: before=$before after=$after range=$rangeBefore->$rangeAfter start=$rootStart slots=$nearbyMenuSlots")
         assertTrue("$message: before=$before after=$after start=$start return=$returnBounds range=$rangeBefore->$rangeAfter slots=$nearbyMenuSlots",
             after == null || after < (expectedCenter ?: before) - 8f)
+    }
+
+    /** Covers paint above every row decoration, so a crossing cover can hide part of the slab
+     * for a frame. A real anchor jump moves the whole slab; occlusion only shortens it, and such
+     * a frame cannot place the anchor. It stays rare (at most two frames) and never ends the release. */
+    private fun anchorPreserved(samples: List<Float>, extents: List<Int>, range: ClosedFloatingPointRange<Float>): Boolean {
+        val full = extents.sorted()[extents.size / 2]
+        val occluded = extents.map { it < full * .7f }
+        return occluded.count { it } <= 2 && !occluded.last() && samples.indices.all { occluded[it] || samples[it] in range }
+    }
+
+    /** Negative control: the occlusion allowance never excuses a slab that moved whole. */
+    @Test fun anchorCheckRejectsAWholeSlabJumpButNotAnOccludedFrame() {
+        val steady = List(12) { 431.5f }; val extents = List(12) { 288 }
+        val range = 427.5f..435.5f
+        assertTrue(anchorPreserved(steady, extents, range))
+        // One frame the whole slab shifts by 30 px: full extent, so it must place the anchor and fail.
+        assertFalse(anchorPreserved(steady.toMutableList().also { it[4] = 461.5f }, extents, range))
+        // One frame a crossing cover hides the upper slab: shortened, so it cannot place the anchor.
+        assertTrue(anchorPreserved(steady.toMutableList().also { it[4] = 538f }, extents.toMutableList().also { it[4] = 77 }, range))
+        // Three occluded frames, or occlusion at the end, are not excused.
+        assertFalse(anchorPreserved(steady.toMutableList().also { for (i in 3..5) it[i] = 538f },
+            extents.toMutableList().also { for (i in 3..5) it[i] = 77 }, range))
+        assertFalse(anchorPreserved(steady.toMutableList().also { it[11] = 538f }, extents.toMutableList().also { it[11] = 77 }, range))
     }
 
     private fun highlightCenter(pixels: PixelMap, expected: Float, radius: Float, fullWidth: Boolean = false): Float {
