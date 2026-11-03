@@ -7,7 +7,7 @@ import android.os.Build
 import android.view.View
 import android.view.Window
 import androidx.activity.ComponentActivity
-import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import io.github.anastaci1a.localica.localicaAndroidComposeRule as createAndroidComposeRule
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test

@@ -6,7 +6,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.test.junit4.createComposeRule
+import io.github.anastaci1a.localica.localicaComposeRule as createComposeRule
 import io.github.anastaci1a.localica.ui.GlassTone
 import io.github.anastaci1a.localica.ui.ToneSnapshotReceipt
 import io.github.anastaci1a.localica.ui.rememberToneSnapshot

@@ -1,5 +1,6 @@
 package io.github.anastaci1a.localica
 
+import io.github.anastaci1a.localica.localicaRunComposeUiTest as runComposeUiTest
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.*

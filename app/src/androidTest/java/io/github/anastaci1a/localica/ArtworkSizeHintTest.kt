@@ -3,7 +3,7 @@ package io.github.anastaci1a.localica
 import android.graphics.Bitmap
 import androidx.compose.foundation.layout.size
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.test.junit4.createComposeRule
+import io.github.anastaci1a.localica.localicaComposeRule as createComposeRule
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.library.CoverProvider
 import io.github.anastaci1a.localica.ui.MediaArtwork

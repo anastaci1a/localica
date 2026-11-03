@@ -8,7 +8,7 @@ import androidx.compose.ui.Modifier
 import io.github.anastaci1a.localica.library.FolderSelection
 import io.github.anastaci1a.localica.library.LibrarySnapshot
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
+import io.github.anastaci1a.localica.localicaComposeRule as createComposeRule
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.anastaci1a.localica.browse.*
 import io.github.anastaci1a.localica.navigation.*

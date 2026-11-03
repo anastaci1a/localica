@@ -3,7 +3,7 @@ package io.github.anastaci1a.localica
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
+import io.github.anastaci1a.localica.localicaComposeRule as createComposeRule
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.anastaci1a.localica.ui.*
 import io.github.anastaci1a.localica.editing.*

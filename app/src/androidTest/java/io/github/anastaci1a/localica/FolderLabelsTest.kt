@@ -2,7 +2,7 @@ package io.github.anastaci1a.localica
 
 import androidx.compose.runtime.*
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
+import io.github.anastaci1a.localica.localicaComposeRule as createComposeRule
 import io.github.anastaci1a.localica.library.FolderSelection
 import io.github.anastaci1a.localica.library.LibrarySnapshot
 import io.github.anastaci1a.localica.ui.FolderSettings

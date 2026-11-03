@@ -1,7 +1,7 @@
 package io.github.anastaci1a.localica
 
 import androidx.compose.runtime.*
-import androidx.compose.ui.test.junit4.createComposeRule
+import io.github.anastaci1a.localica.localicaComposeRule as createComposeRule
 import io.github.anastaci1a.localica.library.*
 import io.github.anastaci1a.localica.queue.*
 import io.github.anastaci1a.localica.ui.*
