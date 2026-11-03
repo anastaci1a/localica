@@ -8,6 +8,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.AbsoluteAlignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PixelMap
 import androidx.compose.ui.graphics.toArgb
@@ -119,6 +120,20 @@ class PinchRetainedHighlightTest {
             val scene = compose.onNodeWithTag("retained-scene")
             val sceneBounds = scene.fetchSemanticsNode().boundsInRoot
             val sourceBounds = current.fetchSemanticsNode().boundsInRoot
+            // The outline encloses drawn content, not the reserved blank title lines.
+            // Keep this oracle independent of the production outline calculation.
+            fun part(tag: String) = compose.onNodeWithTag("$tag-$playing", true).fetchSemanticsNode().boundsInRoot
+            val sourceArt = part("browse-art")
+            val sourceText = part("browse-text")
+            val sourceInfo = part("browse-info")
+            val density = view.resources.displayMetrics.density
+            val outlineInset = maxOf(2f * density, minOf(sourceArt.left - sourceBounds.left,
+                sourceBounds.right - sourceArt.right, sourceArt.top - sourceBounds.top,
+                sourceBounds.bottom - sourceArt.bottom))
+            val expectedOutline = Rect(sourceBounds.left,
+                minOf(sourceArt.top, sourceText.top, sourceInfo.top) - outlineInset,
+                sourceBounds.right, maxOf(sourceArt.bottom, sourceText.bottom, sourceInfo.bottom) + outlineInset)
+                .intersect(sourceBounds).intersect(sceneBounds)
             val viewport = list.fetchSemanticsNode().boundsInRoot
             val firstArt = compose.onNodeWithTag("browse-art-retained:0", true).fetchSemanticsNode().boundsInRoot
             val x = viewport.width / 2f
@@ -137,9 +152,9 @@ class PinchRetainedHighlightTest {
                 val count = highlighted.size
                 if (label == "source" || label == "reversed" || label == "returned") {
                     assertTrue("The current-song contour stays visible at $label", highlighted.isNotEmpty())
-                    assertEquals("Full selection width at $label", (right - left).toFloat(),
+                    assertEquals("Full selection width at $label", expectedOutline.width,
                         (highlighted.maxOf { it.first } - highlighted.minOf { it.first } + 1).toFloat(), 3f)
-                    assertEquals("Full selection height at $label", (bottom - top).toFloat(),
+                    assertEquals("Full selection height at $label", expectedOutline.height,
                         (highlighted.maxOf { it.second } - highlighted.minOf { it.second } + 1).toFloat(), 3f)
                 }
                 android.util.Log.i("PinchRetainedHighlight", "rtl=$rtl stage=$label ink=$count bounds=$sourceBounds scene=$sceneBounds")
