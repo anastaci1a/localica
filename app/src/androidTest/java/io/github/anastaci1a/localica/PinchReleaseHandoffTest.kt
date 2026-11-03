@@ -163,8 +163,11 @@ class PinchReleaseHandoffTest {
                 }
                 assertTrue("The source highlight remains visible at recognition", columns.isNotEmpty())
                 // Playback frost shares the full selection footprint; allow edge antialiasing.
-                assertEquals("Recognition must retain the gallery highlight width",
-                    originalBounds.width, (columns.last() - columns.first() + 1).toFloat(), 5f)
+                // Recognition keeps the travel past the 4% threshold (#520), so the highlight has
+                // grown by at most that share (under 12%) toward the full-width list row.
+                val width = (columns.last() - columns.first() + 1).toFloat()
+                assertTrue("Recognition must retain the gallery highlight width: $width from ${originalBounds.width}",
+                    width in originalBounds.width - 5f..originalBounds.width + (pixels.width - originalBounds.width) * .12f + 5f)
                 list.performTouchInput {
                     val halfSpan = if (outward) 96f else 39f
                     moveTo(0, Offset(x - halfSpan, y)); moveTo(1, Offset(x + halfSpan, y))
