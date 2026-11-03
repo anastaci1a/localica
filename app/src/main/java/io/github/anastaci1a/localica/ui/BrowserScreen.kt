@@ -1034,7 +1034,8 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                         }
                         item.groupHeading?.let { Text(it, style = MaterialTheme.typography.titleSmall,
                             color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) }
-                        Column(Modifier.then(if (pinchMotion.visualSource == null) Modifier.animateBounds(this@LookaheadScope,
+                        Column(Modifier.browseBeyondBounds(pinchMotion.beyondBounds)
+                            .then(if (pinchMotion.visualSource == null) Modifier.animateBounds(this@LookaheadScope,
                             modifier = Modifier.fillMaxWidth().padding(horizontal = cellGeometry.cardInset.dp, vertical = cellGeometry.cardVerticalInset(displayedStyle).dp),
                             boundsTransform = { _, _ -> androidx.compose.animation.core.tween(if (reducedMotion || editableOrder || loadingCell != null) 0 else 350) })
                             else Modifier.fillMaxWidth().padding(horizontal = cellGeometry.cardInset.dp, vertical = cellGeometry.cardVerticalInset(displayedStyle).dp)
