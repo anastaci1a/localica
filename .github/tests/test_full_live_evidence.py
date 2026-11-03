@@ -187,6 +187,32 @@ if a==['get-serialno']:""")
         self.assertEqual(2,json.loads((self.root/'preflight-reports/complete-union.json').read_text())['executed_once'])
         self.assert_restored()
 
+    def test_risk_only_executes_preflight_without_reset_or_remainder(self):
+        self.run_runner(RISK_CLASSES=SELECTED, LOCALICA_RISK_ONLY='true',
+                        LOCALICA_SHARD_COUNT='4', LOCALICA_SHARD_INDEX='0')
+        self.assertEqual(1, self.state['gradle'])
+        self.assertNotIn('clears', self.state)
+        self.assertFalse((self.root/'native-shard-plan.json').exists())
+        self.assertFalse((self.root/'native-live-evidence/full').exists())
+        self.assertFalse((self.root/'preflight-reports/complete-union.json').exists())
+        status=(self.root/'preflight-reports/status.txt').read_text()
+        self.assertIn('mode=risk-only\ncomplete_suite=false', status)
+        self.assertEqual('preflight_passed', json.loads((self.root/'preflight-reports/preflight-reconciled.json').read_text())['status'])
+        self.assert_restored()
+
+    def test_risk_only_requires_classes_before_any_device_mutation(self):
+        self.run_runner(2, LOCALICA_RISK_ONLY='true')
+        self.assertEqual(0, self.state['gradle'])
+        self.assertEqual(0, self.state['mutations'])
+
+    def test_risk_only_failure_keeps_original_status_and_never_runs_full(self):
+        self.state['gradleExits']=[17]
+        self.run_runner(17, RISK_CLASSES=SELECTED, LOCALICA_RISK_ONLY='true')
+        self.assertEqual(1, self.state['gradle'])
+        self.assertFalse((self.root/'native-live-evidence/full').exists())
+        self.assertNotIn('clears', self.state)
+        self.assert_restored()
+
     def test_impossible_weighted_plan_fails_before_any_device_mutation(self):
         self.run_runner(2,LOCALICA_SHARD_COUNT='3', LOCALICA_SHARD_INDEX='0')
         self.assertEqual(0,self.state['mutations'])
@@ -362,6 +388,35 @@ if a==['get-serialno']:""")
         self.assertNotIn('LOCALICA_LIVE_EVIDENCE',compatibility)
         self.assertNotIn('test-evidence/',compatibility)
         self.assertIn('maxArtifacts = 6',(ROOT/'.github/test-evidence/publish.mjs').read_text())
+
+
+class ReleaseScopeContractTest(unittest.TestCase):
+    def test_release_accepts_complete_jobs_and_refuses_risk_only_or_missing_jobs(self):
+        script=ROOT/'.github/test-evidence/release_jobs.py'
+        required=['build', 'device-tests-summary', 'compatibility (26)', 'compatibility (36)',
+                  'distribution-smoke (26)', 'distribution-smoke (36)']
+        complete=[dict(name=name, conclusion='success') for name in required]
+        risk=[dict(name='device-tests-risk-only-summary', conclusion='success')]
+        cases=[(complete, 0), ([j for j in complete if j['name']!='device-tests-summary']+risk, 1),
+               (complete+ risk, 1), (complete[:-1], 1),
+               ([dict(name=j['name'],conclusion='cancelled') for j in complete], 1)]
+        with tempfile.TemporaryDirectory() as folder:
+            path=Path(folder)/'jobs.json'
+            for jobs, expected in cases:
+                with self.subTest(jobs=jobs):
+                    path.write_text(json.dumps(dict(jobs=jobs)))
+                    result=subprocess.run([sys.executable, str(script), str(path)], capture_output=True, text=True)
+                    self.assertEqual(expected, result.returncode, result.stderr)
+
+    def test_workflow_binds_scope_and_uses_release_gate(self):
+        workflow=(ROOT/'.github/workflows/android.yml').read_text()
+        self.assertIn('      risk_only:\n', workflow)
+        self.assertIn("inputs.risk_only && 'device-tests-risk-only-summary' || 'device-tests-summary'", workflow)
+        self.assertIn('LOCALICA_RISK_ONLY:', workflow)
+        self.assertIn('Risk-only run: complete suite was not run; release is prohibited.', workflow)
+        self.assertIn('scope_args=(--risk-classes "$RISK_CLASSES")', workflow)
+        self.assertIn('python3 .github/test-evidence/release_jobs.py verified-jobs.json', workflow)
+        self.assertIn("if: startsWith(github.ref, 'refs/tags/') && !inputs.risk_only", workflow)
 
 
 if __name__=='__main__':

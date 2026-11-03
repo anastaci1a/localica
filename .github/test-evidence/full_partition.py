@@ -164,10 +164,14 @@ def reconcile(root, manifest, preflight_folder, remaining_folder=None, shard=Fal
     return receipt
 
 
-def union(root, api, folders, shards):
+def union(root, api, folders, shards, risks=()):
     """Prove the shard XML is the complete once-only inventory for this API."""
     require(api in ('26', '36') and shards > 0, 'Invalid union request')
-    _, _, expected = expected_for(root, api)
+    inv, _, expected = expected_for(root, api)
+    if risks:
+        require(len(risks) == len(set(risks)) and set(risks) <= set(inv['selectors']), 'Invalid risk-only classes')
+        expected = {identity for identity in expected if identity.split('#')[0] in risks}
+        require(expected, 'Empty risk-only inventory')
     rows = {}
     for folder in folders:
         part, _ = outcomes(folder)
@@ -176,7 +180,10 @@ def union(root, api, folders, shards):
     require(not set(rows) - expected, 'Extra identities: ' + str(sorted(set(rows) - expected)[:5]))
     require(not expected - set(rows), 'Missing identities (' + str(len(expected - set(rows))) + '): ' + str(sorted(expected - set(rows))[:5]))
     counts = {k: sum(r['outcome'] == k for r in rows.values()) for k in ('passed', 'skipped', 'failure', 'error')}
-    return {'api': api, 'shards': shards, 'xml_roots': len(folders), 'expected': len(expected), 'executed_once': len(rows), **counts}
+    if risks:
+        require(not counts['skipped'], 'Risk-only methods must pass without skips')
+    return {'status': 'risk_only' if risks else 'complete_suite', 'complete_suite': not bool(risks),
+            'api': api, 'shards': shards, 'xml_roots': len(folders), 'expected': len(expected), 'executed_once': len(rows), **counts}
 
 
 def shards(root, api, count, durations, sha, risks=(), scroll_performance=False):
@@ -273,7 +280,8 @@ def main():
             return 0
         if args.action == 'union':
             require(args.api and args.shards and args.xml_root, 'Missing union inputs')
-            result = union(args.root.resolve(), args.api, args.xml_root, args.shards)
+            result = union(args.root.resolve(), args.api, args.xml_root, args.shards,
+                           args.risk_classes.split(',') if args.risk_classes else [])
             print(json.dumps(result, indent=2))
             return 0 if not (result['failure'] or result['error']) else 1
         require(args.plan is not None, 'Missing plan')

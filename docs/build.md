@@ -70,6 +70,8 @@ A workflow dispatch may supply `risk_classes` as up to 20 comma-separated instru
 
 Archived preflight XML and remaining XML must form the complete disjoint union, with every applicable method once. Missing/extra/duplicate outcomes, source/APK drift or unsupported SDK omissions fail closed. Original assumptions remain explicit skips with their observed logs, not passes. The partition and union receipts stay in `preflight-reports`. Native remainder XML alone is not full-suite evidence.
 
+Manual dispatch with `risk_only=true` requires `risk_classes` and runs only their preflight shards. Its summary and union receipt identify partial coverage. It cannot certify the complete suite or authorize a release.
+
 Failed preflight stops before the remainder and preserves its status/log/reports. Empty input and ordinary PR/main runs remain unfiltered. Compatibility keeps its existing preserved-data phases.
 
 Complete native workflow jobs enable `LOCALICA_LIVE_EVIDENCE=true`: the existing observer and supervised publisher preserve provisional failure observations while final XML owns test outcomes. Both optional preflight and full runs publish from separate fresh directories.
