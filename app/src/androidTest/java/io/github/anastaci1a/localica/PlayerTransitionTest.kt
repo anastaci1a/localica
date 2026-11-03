@@ -56,6 +56,8 @@ class PlayerTransitionTest {
         compose.onNodeWithText("0:23").assertIsDisplayed()
         compose.runOnIdle { assertEquals(0, seeks) }
         seek.performTouchInput { down(center) }
+        // Holding still locks the scrub, so the later vertical drag stays with the bar.
+        compose.mainClock.advanceTimeBy(ControlHoldLockMillis + 64)
         val secondCancel = compose.onNodeWithTag("cancel-seek").fetchSemanticsNode().boundsInRoot
         seek.performTouchInput { moveTo(secondCancel.center - bounds.topLeft, delayMillis = 160); up() }
         compose.onNodeWithTag("cancel-seek").assertDoesNotExist()
