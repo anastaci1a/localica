@@ -122,7 +122,9 @@ internal fun <T : Any, P> BoxScope.KeyedDragOverlay(state: KeyedDragState<T, P>,
         if (index == 0) BackdropLease(paneBacking)
         // Propagate the completed material once, not both its raw readback and prepared endpoint.
         val paneScene = if (index > 0) rememberFrostedBackdrop(drag to paneBacking?.lensSnapshot,
-            dark = backing?.dark == true, settledRefresh = false) else null
+            // Consumers already clip to their pane. Avoid a full-viewport offscreen raster
+            // that redraws everything outside those clips whenever a card moves.
+            dark = backing?.dark == true, retainRaster = false, settledRefresh = false) else null
         previousPane = paneScene
         LaunchedEffect(drag, paneScene) {
             if (paneScene == null) return@LaunchedEffect
