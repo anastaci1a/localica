@@ -255,6 +255,8 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     var collectionMenu by remember { mutableStateOf(false) }
     val collectionMenuAnchor = rememberGlassAnchor()
     val gridState = rememberLazyGridState()
+    val scrollScope = rememberCoroutineScope()
+    val reorder = remember(route.key) { SongDragState(gridState, scrollScope) }
     val artistFilterRange = remember(route.key) { ArtistFilterRange() }
     fun chooseArtistAlbums(ids: List<String>) {
         if (ids == selectedAlbums) return
@@ -481,7 +483,8 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
         retainRaster = false)
     val backdropBacking = if (artDetail) collectionSource else surroundingBackdrop
     val backdropScene = rememberBrowseBackdropScene(listBackdrop, backdropBacking,
-        listOf(presentation, validAlbums, if (artDetail) hero else surroundingBackdrop?.fallback)) { gridState.isScrollInProgress }
+        listOf(presentation, validAlbums, if (artDetail) hero else surroundingBackdrop?.fallback),
+        liveWhileScrolling = LocalGlassAppearance.current.liveScrollGlass || reorder.drag != null) { gridState.isScrollInProgress }
     val maskedBackdrop = (showSearchPill || showFilters) && !artDetail
     val viewportBackdrop = if (needsListBackdrop) rememberBrowseBackdropLayer(backdropScene, maskedBackdrop) else null
     val refreshBackdrop = LocalBackdropRefresh.current
@@ -498,7 +501,6 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
             }
         }
     }
-    val scrollScope = rememberCoroutineScope()
     val artworkTransit = remember { ArtworkTransit() }
     val latestBrowse by rememberUpdatedState(browse)
     val latestReducedMotion by rememberUpdatedState(rememberEffectiveReducedMotion(reducedMotion || LocalReducedMotion.current))
@@ -611,7 +613,6 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
         session.clear()
     }
     BindSelectionScope(session, route.collection, result.rows, selectionVisible && !localSearchOpen)
-    val reorder = remember(route.key) { SongDragState(gridState, scrollScope) }
     // The selection host publishes hover lifts; a drag starts its cards from them (#533).
     val selectionScene = remember(route.key) { SelectionScene() }
     SideEffect {
