@@ -7,6 +7,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.*
+import androidx.compose.ui.AbsoluteAlignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.*
 import androidx.compose.ui.graphics.*
@@ -44,7 +45,7 @@ class SelectorFreeCornerPixelTest {
                 val motion = remember { Animatable(0f) }
                 val body = remember { mutableStateOf(GlassShape()) }
                 val current = frame(model)
-                Box(Modifier.size(224.dp).background(Color.Black)) {
+                Box(Modifier.size(224.dp).background(Color.Black), contentAlignment = AbsoluteAlignment.TopLeft) {
                     SelectionLens(Modifier.testTag("corner-lens"), motion, source = null,
                         vertical = model.vertical, tint = Color.White, placement = { current }, deformation = body)
                 }
