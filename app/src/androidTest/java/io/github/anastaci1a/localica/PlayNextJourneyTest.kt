@@ -16,6 +16,37 @@ class PlayNextJourneyTest {
     @Test fun orderedPlayNextAfterPrevious() = reproduce(false)
     @Test fun shuffledPlayNextAfterPrevious() = reproduce(true)
     @Test fun batchesKeepNativeOrderAndPositionAcrossRestoreAutoplayAndModeReset() = reproduce(true, true)
+    @Test fun forwardSkipsPreserveScheduledTokensAndPriority() {
+        val original = listOf("A", "B", "C", "D")
+        val ids = listOf("A", "X", "Y", "B", "C", "D")
+        val path = QueueJourney.start(original, "A", JourneyModes(shuffle = true), kotlin.random.Random(4))
+            .playNext(listOf("X", "Y"), ids)
+        val pending = path.history.drop(1)
+        val selected = path.select("D", ids)
+        assertEquals(pending, selected.history.drop(selected.cursor + 1))
+        val arrived = path.arrive(path.future.last().token, ids)
+        assertEquals(pending, arrived.history.drop(arrived.cursor + 1))
+        assertEquals(setOf("A", "D"), selected.visited)
+        assertEquals("X", arrived.next!!.entryId)
+    }
+
+    @Test fun previousAcrossCycleBoundaryDoesNotReplayScheduledOccurrencesInActiveCycle() {
+        val original = listOf("A", "B", "C")
+        var path = QueueJourney.start(original, "A", JourneyModes(shuffle = true, loop = true), kotlin.random.Random(8))
+        repeat(4) { path = path.arrive(path.next!!.token, original) }
+        val cycle = path.cycle
+        path = path.arrive(path.history.first().token, original)
+        val ids = original + listOf("X", "Y")
+        path = path.playNext(listOf("X", "Y"), ids)
+        val counts = mutableMapOf<String, Int>()
+        repeat(10) {
+            val next = path.next!!
+            if (next.cycle == cycle && next.entryId in listOf("X", "Y")) counts[next.entryId] = counts.getOrDefault(next.entryId, 0) + 1
+            path = path.arrive(next.token, ids)
+        }
+        assertEquals(mapOf("X" to 1, "Y" to 1), counts)
+    }
+
     private fun reproduce(shuffled: Boolean, comprehensive: Boolean = false) {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
