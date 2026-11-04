@@ -130,9 +130,10 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
             val next = journey.next
             if (blocksVisit(queue, next)) { reportRecovery(); return@submit }
             if (policy == null) return@submit
-            val sameCycle = next != null && next.cycle == journey.current?.cycle
-            if (policy.songEnd == SongEnd.Stop && sameCycle) return@submit
-            if (policy.songEnd == SongEnd.NextPaused && sameCycle) {
+            // Historical and scheduled visits may cross labels while remaining in the active traversal.
+            val withinTraversal = next != null && next.cycle <= journey.cycle
+            if (policy.songEnd == SongEnd.Stop && withinTraversal) return@submit
+            if (policy.songEnd == SongEnd.NextPaused && withinTraversal) {
                 moveTo(next!!); return@submit
             }
             finishQueue(policy, play = !policy.pausesEachSong && intents.choose(commandRevision, requestedAtEnd).play)
@@ -379,8 +380,12 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
                 requireNotNull(inserted.currentEntryId), inserted.entries.map { it.id }))
             if (action == SongTap.PlayNext) {
                 val existing = current.entries.mapTo(hashSetOf()) { it.id }
-                inserted = inserted.copy(journey = journey(current).playNext(
-                    inserted.entries.filterNot { it.id in existing }.map { it.id }, inserted.entries.map { it.id }))
+                val added = inserted.entries.filterNot { it.id in existing }.map { it.id }
+                val ids = inserted.entries.map { it.id }
+                val unanchored = current.currentEntryId == null
+                val anchor = if (unanchored) QueueJourney.start(ids.filter { it in existing || it == inserted.currentEntryId },
+                    inserted.currentEntryId, JourneyModes.from(state.value.settings)) else journey(current)
+                inserted = inserted.copy(journey = anchor.playNext(if (unanchored) added.drop(1) else added, ids))
             }
             val next = state.value.library.update(inserted)
             if (action == SongTap.PlayNow) saveStartingPlayback(next) { activate(true, seek = true, refreshLocations = false) }
