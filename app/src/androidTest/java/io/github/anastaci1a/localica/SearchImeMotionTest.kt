@@ -809,8 +809,7 @@ class SearchImeMotionTest {
             compose.onNode(hasSetTextAction()).assertTextContains("Keep this").assertIsNotFocused()
             val positions = compose.runOnUiThread { samples.filter { it.opening }.map { it.bounds }.distinct() }
             assertTrue("Retained panel recenters through intermediate rectangles", positions.size > 2)
-            pressSystemBack()
-            closed()
+            nativeDismissal { pressSystemBack() }
         } finally {
             compose.runOnUiThread { visible = false }
             compose.mainClock.autoAdvance = true
