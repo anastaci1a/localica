@@ -176,7 +176,7 @@ class PopupHomeShapeTest {
             fun glass(): Int {
                 val shot = requireNotNull(automation.takeScreenshot())
                 try {
-                    val c = anchor.presentedBounds.center
+                    val b = anchor.presentedBounds; val c = Offset(b.left + b.width * .15f, b.center.y) // beside the glyph
                     val centre = android.graphics.Color.red(shot.getPixel(c.x.toInt().coerceIn(0, shot.width - 1), c.y.toInt().coerceIn(0, shot.height - 1)))
                     return abs(centre - android.graphics.Color.red(shot.getPixel(4, c.y.toInt().coerceIn(0, shot.height - 1))))
                 } finally { shot.recycle() }
