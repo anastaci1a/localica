@@ -20,7 +20,7 @@ class ReleaseVerificationTest(unittest.TestCase):
                      for name in module.REQUIRED_JOBS]
         self.receipt = dict(schema_version=1, sha=self.sha, tree=self.tree, run_id='42', attempt='1',
                             scope='complete_native_union', apk_sha256='c'*64)
-        self.unions = {api: dict(api=api, shards=4, xml_roots=4, expected=10, executed_once=10,
+        self.unions = {api: dict(api=api, shards=module.DEVICE_SHARDS, xml_roots=module.DEVICE_SHARDS, expected=10, executed_once=10,
                                 passed=9, skipped=1, failure=0, error=0) for api in ('26','36')}
 
     def validate(self):
@@ -50,6 +50,13 @@ class ReleaseVerificationTest(unittest.TestCase):
             original=target[key]; target[key]=value
             with self.assertRaises(ValueError): self.validate()
             target[key]=original
+
+    def test_workflow_shard_count_matches_required_jobs(self):
+        text=(ROOT/'.github/workflows/android.yml').read_text()
+        self.assertIn(f"LOCALICA_DEVICE_SHARDS: '{module.DEVICE_SHARDS}'",text)
+        self.assertIn('shard: ['+', '.join(map(str,range(module.DEVICE_SHARDS)))+']',text)
+        self.assertIn('static-checks',module.REQUIRED_JOBS)
+        self.assertIn('needs: [device-tests, build, static-checks, verification-reuse]',text)
 
     def test_workflow_release_uses_exact_tree_selector(self):
         text=(ROOT/'.github/workflows/android.yml').read_text()
