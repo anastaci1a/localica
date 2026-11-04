@@ -11,6 +11,15 @@ import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.isSpecified
 import androidx.compose.ui.unit.dp
 
+/** Appearance captured at an action whose dialog is declared in another composition scope.
+ * This carries no geometry: detached children keep their existing presentation. */
+internal data class GlassDialogAppearance(val ink: androidx.compose.ui.graphics.Color, val backdrop: FrostedBackdrop?)
+internal val LocalGlassDialogAppearance = compositionLocalOf<GlassDialogAppearance?> { null }
+
+@Composable
+internal fun currentGlassDialogAppearance() = GlassDialogAppearance(LocalContentColor.current,
+    LocalModalBackdrop.current ?: LocalFrostedBackdrop.current)
+
 /** Retain closing dialogs even when their conditional caller has left composition. */
 @Stable
 internal class GlassDialogs {
