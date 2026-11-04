@@ -2,7 +2,13 @@ package io.github.anastaci1a.localica.ui
 
 import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.tween
+import androidx.compose.material3.LocalContentColor
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.remember
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
+import io.github.anastaci1a.localica.navigation.GlassAppearance
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.unit.dp
@@ -22,8 +28,23 @@ internal object HoverLift {
     val Blur = 6.dp
     /** Legacy renderers crossfade their prepared frosted backdrop to this opacity. */
     const val LegacyFrost = .45f
-    const val ShadowStrength = .9f
-    const val ShadowSpread = .35f
+}
+
+/**
+ * The lift shadow under selected and floating items (#553) is the Glass shadow: its spread exactly, a
+ * multiple of its strength (the Glass setting "Lift shadow strength", 50-150%), and a white glow instead of
+ * a dark shadow where the menu's ink is light. Shadow and glow share the strength.
+ */
+@Immutable internal data class LiftShadow(val strength: Float, val spread: Float, val color: Color)
+
+internal fun liftShadow(glass: GlassAppearance, lightInk: Boolean) = LiftShadow(
+    glass.shadowStrength * glass.liftShadowStrength, glass.shadowSpread, if (lightInk) Color.White else Color.Black)
+
+/** Reads the menu's theming: light content ink means a light-icon (dark) menu. */
+@Composable internal fun rememberLiftShadow(): LiftShadow {
+    val glass = LocalGlassAppearance.current
+    val lightInk = LocalContentColor.current.luminance() > .5f
+    return remember(glass.shadowStrength, glass.shadowSpread, glass.liftShadowStrength, lightInk) { liftShadow(glass, lightInk) }
 }
 
 internal fun hoverMotionSpec(reducedMotion: Boolean) =

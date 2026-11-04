@@ -50,6 +50,7 @@ private fun blurEffects(renderer: GlassRendererGeneration) =
 @Composable
 internal fun HoverDragCard(modifier: Modifier, frame: HoverCardFrame, backing: FrostedBackdrop?,
     content: @Composable BoxScope.() -> Unit) {
+    val liftStyle = rememberLiftShadow()
     val renderer = currentGlassRendererGeneration()
     val group = rememberHoverGroupRenderer()
     val location = remember { BackdropLocation() }
@@ -58,7 +59,7 @@ internal fun HoverDragCard(modifier: Modifier, frame: HoverCardFrame, backing: F
     Box(modifier.graphicsLayer { alpha = frame.alpha().coerceIn(0f, 1f) }.backdropLocation(location).drawWithContent {
         val geometry = frame.geometry()
         drawHoverGroup(group, listOf(geometry), { _, _ -> 1f }, backing, location, blurEffects(renderer),
-            density, direction, MediaSelectionGap.toPx(), sampleOffset = frame.sampleShift(), shadow = false)
+            density, direction, MediaSelectionGap.toPx(), sampleOffset = frame.sampleShift(), shadow = false, lift = liftStyle)
         scale(geometry.scale, geometry.scale, geometry.pivot) { this@drawWithContent.drawContent() }
     }) { content() }
 }
@@ -70,6 +71,7 @@ internal fun HoverDragCard(modifier: Modifier, frame: HoverCardFrame, backing: F
  */
 @Composable
 internal fun HoverDragUnderlay(frames: () -> List<HoverCardFrame>, backing: FrostedBackdrop?, modifier: Modifier) {
+    val liftStyle = rememberLiftShadow()
     val renderer = currentGlassRendererGeneration()
     val shadow = rememberHoverGroupRenderer()
     val bridges = remember { mutableListOf<HoverGroupRenderer>() }
@@ -113,14 +115,14 @@ internal fun HoverDragUnderlay(frames: () -> List<HoverCardFrame>, backing: Fros
             path.bridges.map { androidx.compose.ui.geometry.RoundRect(it.first, androidx.compose.ui.geometry.CornerRadius.Zero) to 1f }
         }
         with(shadow.shadow) {
-            draw(bodies + bridgeBodies, HoverLift.ShadowStrength * (placed.maxOfOrNull { it.progress } ?: 0f) * opacity, HoverLift.ShadowSpread)
+            draw(bodies + bridgeBodies, liftStyle.strength * (placed.maxOfOrNull { it.progress } ?: 0f) * opacity, liftStyle.spread, color = liftStyle.color)
         }
         while (bridges.size < joined.size) bridges += HoverGroupRenderer(graphics.createGraphicsLayer(), scope)
         joined.forEachIndexed { index, bridge ->
             // The cards above cover their own areas; only the joining neck shows here.
             drawHoverGroup(bridges[index], listOf(placed[bridge.a], placed[bridge.b]), { _, _ -> bridge.strength }, backing, location,
                 blurEffects(renderer), density, direction, gap, sampleOffset = cards[bridge.a].sampleShift(), shadow = false,
-                opacity = min(alphas[bridge.a], alphas[bridge.b]))
+                opacity = min(alphas[bridge.a], alphas[bridge.b]), lift = liftStyle)
         }
     })
 }
