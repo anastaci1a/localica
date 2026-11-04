@@ -168,6 +168,7 @@ io.github.anastaci1a.localica.PlaylistDestinationUiTest
 io.github.anastaci1a.localica.PlaylistDetailPresentationTest
 io.github.anastaci1a.localica.PlaylistSelectionPlacementTest
 io.github.anastaci1a.localica.PopupEnvelopeTest
+io.github.anastaci1a.localica.PopupFamilyPresentationTest
 io.github.anastaci1a.localica.PopupScrollEdgesTest
 io.github.anastaci1a.localica.PopupShadowContinuityTest
 io.github.anastaci1a.localica.PreparedPlayerVisualCacheTest
