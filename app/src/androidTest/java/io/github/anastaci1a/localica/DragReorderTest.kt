@@ -7,6 +7,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.platform.testTag
@@ -29,6 +30,15 @@ import org.junit.Test
 
 class DragReorderTest {
     @get:Rule val compose = createComposeRule()
+    private fun saveDragFrame(name: String) {
+        val args = InstrumentationRegistry.getArguments()
+        val root = args.getString("additionalTestOutputDir")?.let { java.io.File(it) }
+            ?: requireNotNull(InstrumentationRegistry.getInstrumentation().targetContext.getExternalFilesDir(null))
+        val output = java.io.File(root, "drag-stack-557").apply { mkdirs() }
+        java.io.File(output, "$name-api${android.os.Build.VERSION.SDK_INT}.png").outputStream().use {
+            compose.onRoot().captureToImage().asAndroidBitmap().compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
+        }
+    }
     private val selection = SessionSelection()
     private var interactionEnabled by mutableStateOf(true)
     private var checkpoint by mutableStateOf(QueueUiState(loading = false), neverEqualPolicy())
@@ -48,6 +58,7 @@ class DragReorderTest {
         }
     }
     private val queries = QueryGate()
+    private val fixtureBackdrops = mutableMapOf<FrostedBackdrop, BrowseBackdropScene>()
     private lateinit var fixtureDragHost: SongDragHost
     private lateinit var fixtureFloatingPanel: FloatingSelectionPanelState
     private lateinit var backDispatcher: androidx.activity.OnBackPressedDispatcher
@@ -86,6 +97,9 @@ class DragReorderTest {
                 Box(Modifier.fillMaxSize().testTag("fixture-viewport")) {
                 Box(Modifier.fillMaxSize().padding(bottom = if (foregroundFooter && !panelClearance) chrome else 0.dp).clipToBounds()) {
                 CompositionLocalProvider(LocalSessionSelection provides selection, LocalSongDragHost provides host,
+                    LocalBrowseBackdropObserver provides { scene, attached ->
+                        if (attached) fixtureBackdrops[scene.source] = scene else fixtureBackdrops.remove(scene.source)
+                    },
                     LocalBrowseObscuredInset provides if (panelClearance) chrome + floatingPanel.clearance else 0.dp) {
                     BrowserScreen(library, state,
                         route, {}, {}, {},
@@ -239,7 +253,11 @@ class DragReorderTest {
                     assertSame(transaction, owner.drag)
                     assertFalse(transaction.dropping)
                     assertEquals(if (multiple) setOf(ids[1], ids[2]) else setOf(ids[1]), transaction.keys)
-                    if (edgeScroll) assertTrue(owner.grid.firstVisibleItemIndex > originalScroll)
+                    if (edgeScroll) {
+                        assertTrue(owner.grid.firstVisibleItemIndex > originalScroll)
+                        val scene = requireNotNull(fixtureBackdrops[fixtureDragHost.source])
+                        assertFalse("Drag sampling stays live during edge scroll even with live glass disabled", scene.frozen)
+                    }
                 }
                 queries.release()
                 compose.mainClock.advanceTimeBy(64)
@@ -369,8 +387,9 @@ class DragReorderTest {
             compose.mainClock.advanceTimeBy(700)
             compose.onNodeWithTag("browser-list").performTouchInput { moveTo(from + Offset(0f, 35f)) }
             val path = mutableListOf<androidx.compose.ui.geometry.Rect>()
-            repeat(24) {
+            repeat(24) { frame ->
                 compose.mainClock.advanceTimeByFrame()
+                if (frame in listOf(0, 4, 8, 16, 23)) saveDragFrame("list-pickup-$frame")
                 compose.onAllNodesWithTag("drag-stack").fetchSemanticsNodes().firstOrNull()?.let { path += it.boundsInRoot }
             }
             assertTrue("The drag lifted a stack", path.size > 10)
@@ -391,8 +410,9 @@ class DragReorderTest {
             repeat(6) { compose.mainClock.advanceTimeByFrame() }
             compose.onNodeWithTag("browser-list").performTouchInput { up(); held = false }
             val landing = mutableListOf<androidx.compose.ui.geometry.Rect>()
-            repeat(40) {
+            repeat(40) { frame ->
                 compose.mainClock.advanceTimeByFrame()
+                if (frame in listOf(0, 8, 16, 32)) saveDragFrame("list-landing-$frame")
                 compose.onAllNodesWithTag("drag-stack").fetchSemanticsNodes().firstOrNull()?.let { landing += it.boundsInRoot }
             }
             assertTrue("The stack lands over several frames", landing.size > 8)
@@ -462,6 +482,32 @@ class DragReorderTest {
         } finally { compose.mainClock.autoAdvance = true }
         compose.waitUntil(5000) { compose.onAllNodesWithTag("drag-stack").fetchSemanticsNodes().isEmpty() }
     }
+    @Test fun threeGalleryPanesRetainTheirContentThroughMovementAndCancel() = fixture(gallery = true) { controller, playlist ->
+        val ids = playlist.entries.map { it.id }
+        compose.onNodeWithTag("media-${ids[0]}").performTouchInput { longClick() }
+        compose.onNodeWithTag("media-${ids[1]}").performClick()
+        compose.onNodeWithTag("media-${ids[2]}").performClick()
+        val list = compose.onNodeWithTag("browser-list")
+        val bounds = list.fetchSemanticsNode().boundsInRoot
+        val from = compose.onNodeWithTag("media-${ids[0]}").fetchSemanticsNode().boundsInRoot.center - bounds.topLeft
+        var held = false
+        try {
+            list.performTouchInput { down(from); held = true; advanceEventTime(650); moveTo(from + Offset(0f, 60f)) }
+            compose.onNodeWithContentDescription("Dragging 3 songs").assertExists()
+            saveDragFrame("gallery-three-picked-up")
+            list.performTouchInput { moveTo(from + Offset(80f, 150f)); advanceEventTime(64) }
+            saveDragFrame("gallery-three-moved")
+            compose.onNodeWithTag("browse-art-${ids[0]}", true).assertExists()
+            compose.onNodeWithTag("drag-card-${ids[2]}").assertExists()
+            list.performTouchInput { cancel(); held = false }
+        } finally {
+            if (held) list.performTouchInput { cancel() }
+        }
+        compose.waitUntil(5000) { compose.onAllNodesWithTag("drag-stack").fetchSemanticsNodes().isEmpty() }
+        assertEquals(ids, controller.state.value.playlists.single().entries.map { it.id })
+        saveDragFrame("gallery-three-canceled")
+    }
+
     @Test fun heldCardTracksTheFingerWithinOneFrame() = fixture { _, playlist ->
         val id = playlist.entries[1].id
         compose.onNodeWithTag("media-$id").performTouchInput {
