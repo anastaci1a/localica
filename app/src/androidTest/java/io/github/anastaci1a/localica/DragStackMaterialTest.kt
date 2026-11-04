@@ -71,7 +71,7 @@ class DragStackMaterialTest {
             assertTrue(state.begin(entries.first(), entries.take(count).toSet(), state.bounds().getValue(entries.first()).center))
         }
         compose.waitForIdle()
-        if (android.os.Build.VERSION.SDK_INT < 33) compose.waitUntil(15000) { source.fallback != null }
+        if (android.os.Build.VERSION.SDK_INT < 33) compose.waitUntil(15000) { source.lensSnapshot != null }
     }
 
     private fun capture(name: String): ImageBitmap {

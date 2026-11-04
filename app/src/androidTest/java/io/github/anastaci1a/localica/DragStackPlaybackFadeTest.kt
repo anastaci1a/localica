@@ -54,7 +54,8 @@ class DragStackPlaybackFadeTest {
         compose.waitForIdle()
         val image = compose.onNodeWithTag("marker-scene").captureToImage()
         val d = image.width / 360f
-        val initial = image.toPixelMap()[(300 * d).toInt(), (36 * d).toInt()].green
+        // Sample above the moving card's shadow, which crosses the row centre during pickup.
+        val initial = image.toPixelMap()[(300 * d).toInt(), (12 * d).toInt()].green
         compose.mainClock.autoAdvance = false
         try {
             compose.runOnIdle {
@@ -66,7 +67,7 @@ class DragStackPlaybackFadeTest {
                 compose.mainClock.advanceTimeBy(step)
                 val frame = compose.onNodeWithTag("marker-scene").captureToImage()
                 val pixels = frame.toPixelMap()
-                samples += pixels[(300 * d).toInt(), (36 * d).toInt()].green
+                samples += pixels[(300 * d).toInt(), (12 * d).toInt()].green
                 val args = InstrumentationRegistry.getArguments()
                 val root = args.getString("additionalTestOutputDir")?.let(::File)
                     ?: requireNotNull(InstrumentationRegistry.getInstrumentation().targetContext.getExternalFilesDir(null))
