@@ -97,7 +97,7 @@ internal fun BrowseItemLayout(item: BrowserItem, style: BrowseStyle, geometry: B
             if (measureEndpoints != null) BrowsePinchText(titleParagraph, item.title, progress)
             else Text(item.title, style = MaterialTheme.typography.titleMedium.copy(fontSize = titleSize.sp, lineHeight = titleLine.sp,
                 fontWeight = if (numbered(style)) androidx.compose.ui.text.font.FontWeight.Normal else MaterialTheme.typography.titleMedium.fontWeight),
-                maxLines = if (gallery) 2 else 1, overflow = TextOverflow.Ellipsis)
+                maxLines = style.browseTitleLines(), overflow = TextOverflow.Ellipsis)
         }
         Box(Modifier.morph().reveal().artworkTextReveal(gatedText, infoLinePx, { artCorner.floatValue }, loadingInformation).testTag("browse-info-${item.key}")) {
             if (measureEndpoints != null) BrowsePinchText(informationParagraph,
@@ -164,7 +164,7 @@ internal fun BrowseItemLayout(item: BrowserItem, style: BrowseStyle, geometry: B
         val textWidth = metrics.titleWidth(information.width)
         val text = children[1].measure(Constraints.fixedWidth(textWidth))
         val reserve = if (from == null) loadingReveal?.reservation ?: 0f else 0f
-        val reservedTitle = maxOf(text.height, galleryLoadingText?.titleReservation ?: (metrics.titleLine.sp.roundToPx() * metrics.lines))
+        val reservedTitle = maxOf(text.height, galleryLoadingText?.titleReservation ?: (metrics.titleLine.sp.roundToPx() * metrics.titleLines))
         val reservedInfo = if (loadingInformation) maxOf(information.height,
             galleryLoadingText?.informationReservation ?: (infoLine.roundToPx() * metrics.lines)) else information.height
         fun retained(real: Int, reserved: Int) = (real + (reserved - real) * reserve).toInt()
