@@ -110,8 +110,8 @@ class ListDensityGeometryTest {
                 val firstRow = compose.onNodeWithTag("density-row-${item.key}").fetchSemanticsNode().boundsInRoot
                 val secondRow = compose.onNodeWithTag("density-row-${second.key}").fetchSemanticsNode().boundsInRoot
                 val titleHeight = bounds("text").height
-                val expectedPitch = titleHeight + ((40 * density).roundToInt() - titleHeight) / 2 +
-                    2 * (.6f * density).roundToInt()
+                val formerGap = (40 * density).roundToInt() + 2 * (1.2f * density).roundToInt() - titleHeight
+                val expectedPitch = titleHeight + (formerGap / 2).roundToInt()
                 assertEquals("Smallest halves the space between consecutive titles",
                     expectedPitch, firstRow.height, 1f)
                 assertEquals(expectedPitch, secondRow.top - firstRow.top, 1f)

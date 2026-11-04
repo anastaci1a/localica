@@ -72,8 +72,8 @@ class SmallestTitleGapTest {
             val oldGap = oldInner + 2 * (1.2f * density).roundToInt() - first.height
             val gap = next.top - first.bottom
             measurements += "fontScale=$fontScale numbered=$numbers titleHeight=${first.height} oldGap=$oldGap gap=$gap expected=${oldGap / 2}"
-            // Both row height and the two independent outer insets round to pixels.
-            if (kotlin.math.abs(gap - oldGap / 2) > 2f) failures += measurements.last()
+            // Integer gap rounding and symmetric insets can retain at most one pixel.
+            if (kotlin.math.abs(gap - oldGap / 2) > 1f) failures += measurements.last()
             val row = compose.onNodeWithTag("gap-row-0").fetchSemanticsNode().boundsInRoot
             assertTrue("Metadata stays within its row", info.top >= row.top && info.bottom <= row.bottom)
             assertTrue("Title and metadata stay separate", first.right <= info.left)
