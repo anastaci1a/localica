@@ -200,10 +200,18 @@ class PinchReleaseHandoffTest {
                 val contour = Rect(mix(originalContour.left, targetContour.left), mix(originalContour.top, targetContour.top),
                     mix(originalContour.right, targetContour.right), mix(originalContour.bottom, targetContour.bottom)).translate(row.topLeft)
                 val visualHeight = mix(originalBounds.height, targetRow.height)
-                val covers = compose.onAllNodes(SemanticsMatcher("release artwork") {
-                    it.config.getOrNull(SemanticsProperties.TestTag)?.startsWith("browse-art-release:") == true
-                }, useUnmergedTree = true).fetchSemanticsNodes().map { it.boundsInRoot }
-                val center = galleryHighlightCenter(pixels, contour, covers) - (contour.center.y - row.top - visualHeight / 2f)
+                // A list reflow widens the slab beyond the crossing square covers:
+                // its full-width scan retains both optical edges. A narrow middle
+                // strip can instead stop on a cover edge while its semantic bounds
+                // are one frame ahead. Density changes still need #547's full-height
+                // placement because a crossing cover can hide an entire slab edge.
+                val opticalCenter = if (!outward) visibleCenter else {
+                    val covers = compose.onAllNodes(SemanticsMatcher("release artwork") {
+                        it.config.getOrNull(SemanticsProperties.TestTag)?.startsWith("browse-art-release:") == true
+                    }, useUnmergedTree = true).fetchSemanticsNodes().map { it.boundsInRoot }
+                    galleryHighlightCenter(pixels, contour, covers)
+                }
+                val center = opticalCenter - (contour.center.y - row.top - visualHeight / 2f)
                 if (!center.isFinite()) highlightExtent = 0
                 android.util.Log.i("PinchReleaseContour",
                     "stage=$stage visible=$visibleCenter measured=$center extent=$highlightExtent contour=$contour")
@@ -422,6 +430,20 @@ class PinchReleaseHandoffTest {
         assertTrue(preserves(listOf(3, 4)))
         assertFalse(preserves(listOf(3, 4, 5)))
         assertFalse(preserves(listOf(11)))
+    }
+
+    @Test fun fullWidthGalleryAnchorRejectsWholeTranslationsWithCrossingMiddleCovers() {
+        val contour = Rect(120f, 260.25f, 352f, 539.75f)
+        // List reflows expose the outline on either side of the square covers.
+        // These covers hide the central strip's top/bottom, but not the full edges.
+        val covers = listOf(Rect(218f, 240f, 254f, 285f), Rect(218f, 515f, 254f, 560f))
+        for (shift in listOf(0f, -7.5f, -4.5f, 4.5f, 7.5f)) {
+            val measured = highlightCenter(galleryAnchorPixels(contour, shift, covers), 400f, 400f, true)
+            assertEquals("Full-width pixels place the translated slab", 400f + shift, measured, .51f)
+            val samples = MutableList(12) { 400f }.also { it[4] = measured }
+            assertEquals("Crossing middle covers never excuse a whole-slab shift: $shift",
+                shift == 0f, anchorPreserved(samples, List(12) { 280 }, 396f..404f))
+        }
     }
 
     private fun galleryAnchorPixels(contour: Rect, shift: Float = 0f, covers: List<Rect> = emptyList()): PixelMap {
