@@ -124,7 +124,7 @@ internal fun <T : Any, P> BoxScope.KeyedDragOverlay(state: KeyedDragState<T, P>,
         val paneScene = if (index > 0) rememberFrostedBackdrop(drag to paneBacking?.lensSnapshot,
             // Consumers already clip to their pane. Avoid a full-viewport offscreen raster
             // that redraws everything outside those clips whenever a card moves.
-            dark = backing?.dark == true, retainRaster = false, whiteTint = 0f, settledRefresh = false) else null
+            dark = backing?.dark == true, retainRaster = false, whiteTint = 0f, settledRefresh = false, distinctPixels = true) else null
         SideEffect {
             paneScene?.readbackBackground = {
                 paneBacking?.snapshot?.let { image ->
@@ -149,7 +149,7 @@ internal fun <T : Any, P> BoxScope.KeyedDragOverlay(state: KeyedDragState<T, P>,
             if (paneScene == null) return@LaunchedEffect
             snapshotFlow { drag.pointer to drag.dropping }.collectLatest {
                 // Legacy preparation follows a paused or completed movement, never a readback per frame.
-                delay(48)
+                delay(200)
                 paneScene.refresh()
             }
         }

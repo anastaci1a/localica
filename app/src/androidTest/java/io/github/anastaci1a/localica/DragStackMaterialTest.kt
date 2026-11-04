@@ -38,7 +38,7 @@ class DragStackMaterialTest {
             state = remember { object : KeyedDragState<String, Unit>(grid, scope, { it }) {
                 override fun capturePresentation() = Unit
             }.also { it.items = entries } }
-            source = rememberFrostedBackdrop(changed, dark = false)
+            source = rememberFrostedBackdrop(changed, dark = false, settledRefresh = false, distinctPixels = true)
             Box(Modifier.size(360.dp, 480.dp).testTag("stack-scene").onSizeChanged {
                 state.viewportWidth = it.width; state.viewportHeight = it.height
             }) {
@@ -84,6 +84,16 @@ class DragStackMaterialTest {
             image.asAndroidBitmap().compress(Bitmap.CompressFormat.PNG, 100, it)
         }
         return image
+    }
+
+    @Test fun unchangedLiveSceneDoesNotRepublishItsPixels() {
+        fixture(); begin(3)
+        if (android.os.Build.VERSION.SDK_INT >= 33) return
+        val previous = source.capture
+        val request = source.snapshotReadbackRequest
+        compose.runOnIdle { source.refresh() }
+        compose.waitUntil(15000) { source.snapshotReadbackRequest > request }
+        assertSame("Identical scene pixels must not restart recursive preparation", previous, source.capture)
     }
 
     @Test fun movingStackSamplesItsCurrentViewportAndLiveScene() {
