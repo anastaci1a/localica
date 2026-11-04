@@ -269,6 +269,7 @@ fun LocalicaScreen(
         LocalBrowseObscuredInset provides (browseBottomChrome + selectionPanel.clearance)) {
     BoxWithConstraints(Modifier.fillMaxSize().recordFrostedBackdrop(modalBackdrop).background(MaterialTheme.colorScheme.background).bottomGlassShadowHost(bottomShadows).testTag("browse-background").windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))) {
         val inset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+        val screenScope = this
         val queueSelectionMaxHeight = maxHeight / 3
         SongDragScene(dragHost, Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize()
@@ -392,8 +393,8 @@ fun LocalicaScreen(
         }
         if (hasPlayer && playerVisible) CompositionLocalProvider(LocalFrostedBackdrop provides playerBackdrop) {
         GlassPanelTheme(playerLightInk) {
-        PlayerClippedOverlay({ progress.value }, bottomChrome) {
-        QueueSurface(queueProgress, settings, { queueOpen = it }, playerProgress = { progress.value },
+        screenScope.PlayerClippedOverlay({ progress.value }, bottomChrome) {
+        screenScope.QueueSurface(queueProgress, settings, { queueOpen = it }, playerProgress = { progress.value },
             onOpeningContact = { queueOpeningRequest++ }) {
             Box(Modifier.weight(1f)) { CompositionLocalProvider(LocalBrowseObscuredInset provides 0.dp) {
             queueDrawerState.SaveableStateProvider("player-queue") { QueueScreen(queues, queueController, library,
