@@ -119,6 +119,17 @@ class PinchReleaseHandoffTest {
                     check(it.isDirectory || it.mkdirs()) { "Pinch review directory must be writable" }
                 }
             }
+            fun presentedHighlightWidth(pixels: PixelMap): Float {
+                val columns = (0 until pixels.width).filter { px ->
+                    (originalBounds.top.toInt().coerceAtLeast(0) until originalBounds.bottom.toInt().coerceAtMost(pixels.height)).count { py ->
+                        val c = pixels[px, py]
+                        c.red - c.green > .07f && c.blue - c.green > .07f
+                    } >= 3
+                }
+                assertTrue("The source highlight remains visible", columns.isNotEmpty())
+                return (columns.last() - columns.first() + 1).toFloat()
+            }
+            var initialHighlightWidth: Float? = null
             fun presentedCenter(): Float {
                 fun phase(name: String) = compose.runOnUiThread {
                     android.util.Log.i("PinchCapturePhase",
@@ -130,6 +141,7 @@ class PinchReleaseHandoffTest {
                 phase("begin")
                 val pixels = try { capturePresentedPopupPixels(compose, scene, stage) { view } }
                     finally { phase("end") }
+                if (gallery && stage == 0) initialHighlightWidth = presentedHighlightWidth(pixels)
                 if (gallery && (stage in setOf(0, 1, 2, 6, 12, 22) ||
                     InstrumentationRegistry.getArguments().getString("pinchReviewAllFrames") == "true") &&
                     InstrumentationRegistry.getArguments().getString("pinchReview") == "true") {
@@ -181,19 +193,13 @@ class PinchReleaseHandoffTest {
                 compose.mainClock.advanceTimeBy(48)
                 compose.runOnIdle { stage = 1 }
                 val pixels = capturePresentedPopupPixels(compose, scene, stage) { view }
-                val columns = (0 until pixels.width).filter { px ->
-                    (originalBounds.top.toInt().coerceAtLeast(0) until originalBounds.bottom.toInt().coerceAtMost(pixels.height)).count { py ->
-                        val c = pixels[px, py]
-                        c.red - c.green > .07f && c.blue - c.green > .07f
-                    } >= 3
-                }
-                assertTrue("The source highlight remains visible at recognition", columns.isNotEmpty())
-                // Playback frost shares the full selection footprint; allow edge antialiasing.
+                // Compare presented outlines, which can extend beyond the layout box (#532).
                 // Recognition keeps the travel past the 4% threshold (#520), so the highlight has
                 // grown by at most that share (under 12%) toward the full-width list row.
-                val width = (columns.last() - columns.first() + 1).toFloat()
-                assertTrue("Recognition must retain the gallery highlight width: $width from ${originalBounds.width}",
-                    width in originalBounds.width - 5f..originalBounds.width + (pixels.width - originalBounds.width) * .12f + 5f)
+                val initialWidth = requireNotNull(initialHighlightWidth)
+                val width = presentedHighlightWidth(pixels)
+                assertTrue("Recognition must retain the gallery highlight width: $width from $initialWidth",
+                    width in initialWidth - 5f..initialWidth + (pixels.width - initialWidth) * .12f + 5f)
                 list.performTouchInput {
                     val halfSpan = if (outward) 96f else 39f
                     moveTo(0, Offset(x - halfSpan, y)); moveTo(1, Offset(x + halfSpan, y))

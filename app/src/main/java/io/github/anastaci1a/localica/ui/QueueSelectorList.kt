@@ -147,7 +147,8 @@ private fun QueueSelectorRow(queue: ListeningQueue, number: Int, chosen: Boolean
     selectionPlacement: Modifier = Modifier,
     onSelect: () -> Unit, onRename: () -> Unit, onDelete: () -> Unit, onOffset: (Int) -> Unit) {
     Surface(shape = Corners.card, color = androidx.compose.ui.graphics.Color.Transparent,
-        modifier = Modifier.padding(vertical = 2.dp).selectionLens(chosen, false, itemKey = queue.id)
+        modifier = Modifier.padding(vertical = 2.dp).selectionLens(chosen, false, itemKey = queue.id,
+            outline = rememberPaddedItemOutline(null, 0.dp, null, 0.dp, 0.dp))
             .then(selectionPlacement).testTag("queue-row-${queue.id}")) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             ReorderHandle("Reorder ${queue.name}", onOffset, Modifier.testTag("queue-handle-${queue.id}"), enabled)

@@ -24,13 +24,19 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.toIntSize
 import kotlin.math.*
 
-internal data class SelectionRegion(val bounds: Rect)
+/** [corner] comes from the item's shared outline (#532); null keeps the generic contour. */
+internal data class SelectionRegion(val bounds: Rect, val corner: Float? = null) {
+    fun radius(gap: Float): Float = corner?.let { minOf(it, bounds.width / 2f, bounds.height / 2f).coerceAtLeast(0f) }
+        ?: mediaItemCornerRadius(bounds, gap)
+    fun contour(gap: Float) = androidx.compose.ui.geometry.RoundRect(bounds, CornerRadius(radius(gap)))
+}
 internal class SelectionEntry {
     var coordinates: LayoutCoordinates? = null
     var itemKey: Any? = null
     var selected by mutableStateOf(false)
     var visibility: () -> Float by mutableStateOf({ 0f })
     var visualSize by mutableStateOf<(Size) -> Size>({ it })
+    var outline by mutableStateOf<((Size, LayoutDirection) -> MediaItemOutline?)?>(null)
     var direction by mutableStateOf(LayoutDirection.Ltr)
 }
 @Stable internal class SelectionScene {
@@ -106,7 +112,9 @@ internal fun ConnectedSelectionHost(modifier: Modifier = Modifier, contentDrawin
                     placedKeys != null && entry.itemKey !in placedKeys) null else {
                     val at = host.localPositionOf(item, Offset.Zero)
                     val measured = Size(item.size.width.toFloat(), item.size.height.toFloat())
-                    SelectionRegion(selectionRevealBounds(mediaItemBounds(measured, entry.visualSize(measured), entry.direction), visibility).translate(at)) to visibility
+                    val outline = entry.outline?.invoke(measured, entry.direction)
+                    if (outline != null) SelectionRegion(selectionRevealBounds(outline.bounds, visibility).translate(at), outline.corner) to visibility
+                    else SelectionRegion(selectionRevealBounds(mediaItemBounds(measured, entry.visualSize(measured), entry.direction), visibility).translate(at)) to visibility
                 }
             }
             val regions = visibleEntries.map { it.first }
@@ -295,8 +303,7 @@ internal fun connectedSelectionPath(regions: List<SelectionRegion>, gap: Float):
     val path = Path()
     fun add(part: Path) { path.op(path, part, PathOperation.Union) }
     regions.forEach { region ->
-        val r = region.bounds
-        add(Path().apply { addRoundRect(mediaItemContour(r, gap)) })
+        add(Path().apply { addRoundRect(region.contour(gap)) })
     }
     regions.forEachIndexed { i, a -> regions.drop(i + 1).forEach { b ->
         val xGap = max(a.bounds.left - b.bounds.right, b.bounds.left - a.bounds.right)
@@ -305,7 +312,7 @@ internal fun connectedSelectionPath(regions: List<SelectionRegion>, gap: Float):
         if (xGap < 0 || yGap < 0) {
             // Extend through the rounded shoulders, not just across the empty gap.
             // A round line cap here is as large as half a row's width (the old circle).
-            val r = gap * 1.5f
+            val r = max(a.radius(gap), b.radius(gap))
             val bridge = if (xGap < 0) Rect(max(a.bounds.left, b.bounds.left),
                 min(a.bounds.bottom, b.bounds.bottom) - r,
                 min(a.bounds.right, b.bounds.right), max(a.bounds.top, b.bounds.top) + r)
@@ -321,7 +328,7 @@ internal fun connectedSelectionPath(regions: List<SelectionRegion>, gap: Float):
 
 @Composable
 internal fun Modifier.selectionLens(isSelected: Boolean, partial: Boolean,
-    itemKey: Any? = null, visualSize: (Size) -> Size = { it }): Modifier {
+    itemKey: Any? = null, outline: ((Size, LayoutDirection) -> MediaItemOutline?)? = null, visualSize: (Size) -> Size = { it }): Modifier {
     val scene = LocalSelectionScene.current
     val direction = LocalLayoutDirection.current
     val token = remember { Any() }
@@ -332,6 +339,7 @@ internal fun Modifier.selectionLens(isSelected: Boolean, partial: Boolean,
         entry.itemKey = itemKey
         entry.visibility = { visibility.value }
         entry.visualSize = visualSize
+        entry.outline = outline
         entry.direction = direction
         val selected = isSelected && !partial
         if (entry.selected != selected) { entry.selected = selected; androidx.compose.runtime.snapshots.Snapshot.withoutReadObservation { scene?.placement = (scene?.placement ?: 0) + 1 } }

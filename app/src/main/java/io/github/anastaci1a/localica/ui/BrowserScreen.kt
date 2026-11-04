@@ -998,6 +998,8 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                         // Placement callbacks need not repeat for a re-keyed owner; register the
                         // last placed coordinates whenever this row's key or drag owner changes.
                         val cellCoordinates = remember { arrayOfNulls<androidx.compose.ui.layout.LayoutCoordinates>(1) }
+                        // One measured outline (#532) for this cell's frost and selection.
+                        val itemOutline = remember { MediaItemOutlineHolder() }
                         DisposableEffect(item.key, reorder) {
                             cellCoordinates[0]?.let { reorder.itemCoordinates[item.key] = it }
                             onDispose { reorder.itemCoordinates.remove(item.key) }
@@ -1058,10 +1060,10 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                             })
                             // Frost is redrawn separately from frozen content so its
                             // corners stay identical to selection during pinch.
-                            .currentSongHighlight(current, MaterialTheme.colorScheme.primary) { size ->
+                            .currentSongHighlight(current, MaterialTheme.colorScheme.primary, { _, _ -> itemOutline.value }) { size ->
                                 pinchMotion.highlightSize(item.key, itemIndex, size)
                             }.retainPinchItem(item.key, pinchMotion, MaterialTheme.colorScheme.primary.takeIf { current })
-                            .selectionLens(selectedCount > 0, partiallySelected) { size ->
+                            .selectionLens(selectedCount > 0, partiallySelected, outline = { _, _ -> itemOutline.value }) { size ->
                                 pinchMotion.highlightSize(item.key, itemIndex, size)
                             }
                             .then(if (pinchMotion.visualSource == null) Modifier.clip(Corners.card) else Modifier)
@@ -1076,7 +1078,8 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                             BrowseItemLayout(item, displayedStyle, cellGeometry, this@LookaheadScope, reducedMotion, itemMenu,
                                 showInformation = popupDismiss == null, inheritedInformation = inheritedInformation, itemIndex = itemIndex,
                                 loadingReveal = loadingCell, artistOnlyLoading = artistOnlyLoading, mutablePosition = mutablePositions[item.key],
-                                trackNumber = if (route.collection?.kind == MediaKind.Album) item.row?.track?.trackNumber?.toString() ?: (itemIndex + 1).toString() else null, pinch = pinchMotion, artworkAnchor = menuAnchor)
+                                trackNumber = if (route.collection?.kind == MediaKind.Album) item.row?.track?.trackNumber?.toString() ?: (itemIndex + 1).toString() else null, pinch = pinchMotion, artworkAnchor = menuAnchor,
+                                outline = itemOutline)
                         }
 
                     }
