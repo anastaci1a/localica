@@ -130,4 +130,20 @@ class ListeningEditLifetimeTest {
         session.update(source, "visit", 180_000, true)
         assertEquals(2, f.plays.size)
     }
+
+    @Test fun clearingWithoutAnObserverStartsFreshWhenTheRetainedVisitReopens() {
+        val f = Fixture()
+        val session = f.session()
+        session.update(source, "visit", 180_000, true)
+        f.time = 30_000
+        session.detach()
+        session.clearTraversal()
+        assertNull(f.saved)
+        f.time = 130_000
+        session.update(source, "visit", 180_000, true)
+        f.time = 160_000
+        session.update(source, "visit", 180_000, true)
+        assertEquals(2, f.plays.size)
+    }
+
 }

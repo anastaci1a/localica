@@ -6,6 +6,7 @@ import java.util.UUID
 interface ListeningEditLifecycle {
     fun suspendForEdit()
     fun finishEdit(restoredVisit: String?)
+    fun clearTraversal()
 }
 
 /** Persisted before its qualification event; no decoder or elapsed-time state crosses process death. */
@@ -47,6 +48,12 @@ class ListeningSession(
 
     /** Detaching a service excludes its absence without ending the app-owned traversal. */
     fun detach() { nativePlaying = false; counter.update(now(), source, duration, false) }
+
+    override fun clearTraversal() {
+        editing = false
+        editVisit = null
+        update(null, null, null, false)
+    }
 
     override fun suspendForEdit() {
         if (editing) return
