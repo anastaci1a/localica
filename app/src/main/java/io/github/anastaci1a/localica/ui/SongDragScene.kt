@@ -17,7 +17,7 @@ internal fun SongDragScene(host: SongDragHost, modifier: Modifier = Modifier,
     content: @Composable BoxScope.() -> Unit) {
     val dragging = host.state?.drag != null
     val source = if (dragging) rememberFrostedBackdrop(host.state?.drag,
-        dark = host.source?.dark == true, retainRaster = false) else null
+        dark = host.source?.dark == true, retainRaster = false, settledRefresh = false) else null
     val renderer = currentGlassRendererGeneration()
     LaunchedEffect(source, renderer) {
         if (source != null && renderer.backend == GlassBackend.Legacy) {
