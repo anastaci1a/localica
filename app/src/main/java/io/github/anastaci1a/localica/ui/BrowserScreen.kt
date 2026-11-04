@@ -406,7 +406,6 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
         if (anchor.route != route) { zoomAnchor = null; return@LaunchedEffect }
         if (queryPending || displayedStyle != anchor.style) return@LaunchedEffect
         val index = result.items.indexOfFirst { it.key == anchor.key }
-        var interrupted = false
         try {
             if (index >= 0) scrollOwnership.during {
                 headerPhase("position-request")
@@ -454,17 +453,20 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                 }
             }
         } catch (cancelled: kotlinx.coroutines.CancellationException) {
-            interrupted = true
             headerPhase("mutation-cancelled type=${cancelled.javaClass.simpleName}")
             throw cancelled
         } finally {
             val active = kotlinx.coroutines.currentCoroutineContext()[kotlinx.coroutines.Job]?.isActive == true
             headerPhase("retired active=$active")
-            if (zoomAnchor == anchor) {
+            // A relaunch (a library refresh flips queryPending, or the style changes) cancels this
+            // run. While the pinch still owns its anchor, keep it: the relaunched run verifies it.
+            if (zoomAnchor == anchor && (active || pinchMotion.source == null)) {
                 zoomAnchor = null
-                // Still active, this effect was not relaunched: a user scroll interrupted or
-                // refused its mutation, so it will never verify the header handoff (#535).
-                if (interrupted && active) pinchHeader?.abandonHandoff()
+                // Still active, nothing will run this anchor again: a user scroll took its mutation
+                // (#535), or it ended without verifying because the anchor row left the result.
+                // Hand the header back instead of leaving the settle, and every later pinch, waiting.
+                // A verified handoff has already completed, so this is then a no-op (#542).
+                if (active) pinchHeader?.abandonHandoff()
             }
         }
     }
