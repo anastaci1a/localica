@@ -13,263 +13,297 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.*
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.*
+import androidx.compose.ui.graphics.layer.GraphicsLayer
 import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.layout.LayoutCoordinates
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.semantics.*
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
-import androidx.compose.ui.unit.toIntSize
+import androidx.compose.ui.unit.dp
 import kotlin.math.*
 
-internal data class SelectionRegion(val bounds: Rect)
+/** [corner] comes from the item's shared outline (#532); null keeps the generic contour. */
+internal data class SelectionRegion(val bounds: Rect, val corner: Float? = null) {
+    fun radius(gap: Float): Float = corner?.let { minOf(it, bounds.width / 2f, bounds.height / 2f).coerceAtLeast(0f) }
+        ?: mediaItemCornerRadius(bounds, gap)
+    fun contour(gap: Float) = androidx.compose.ui.geometry.RoundRect(bounds, CornerRadius(radius(gap)))
+}
+
 internal class SelectionEntry {
     var coordinates: LayoutCoordinates? = null
     var itemKey: Any? = null
     var selected by mutableStateOf(false)
+    /** Eased hover progress (#533); the name is kept for the selection inspection tests. */
     var visibility: () -> Float by mutableStateOf({ 0f })
     var visualSize by mutableStateOf<(Size) -> Size>({ it })
+    var outline by mutableStateOf<((Size, LayoutDirection) -> MediaItemOutline?)?>(null)
     var direction by mutableStateOf(LayoutDirection.Ltr)
+    /** The item's own drawing while it hovers; the host draws it lifted. */
+    var layer: GraphicsLayer? = null
+    /** The cell's own fades (entry sweep, drag handoff) that its in-place drawing would get. */
+    var alpha: () -> Float = { 1f }
+    var recorded = false
 }
+
 @Stable internal class SelectionScene {
     val regions = mutableStateMapOf<Any, SelectionEntry>()
     var placement by mutableIntStateOf(0)
     // Last geometry actually submitted by the host draw, not copied placement callbacks.
     // Plain state for source/native regression inspection; never drives composition or animation.
     var lastDrawnRegions: List<SelectionRegion> = emptyList()
+    /** Each hovering item's last drawn lift, in its own coordinates, by item key. A drag
+     * starts its cards from exactly this geometry. Plain state, written while drawing. */
+    val hover = mutableMapOf<Any, HoverGeometry>()
+    val viewportHover = mutableMapOf<Any, HoverGeometry>()
+    /** Virtualized pinch items join live bodies under the same surface and shadow. */
+    var retainedHover: List<Pair<HoverGeometry, Float>> = emptyList()
 }
 internal val LocalSelectionScene = staticCompositionLocalOf<SelectionScene?> { null }
 
-/** Scrolling content and its lenses share a single clip, fade and overscroll transform. */
+/** Lets a cell's other decorations (the current-occurrence frost) follow its hover. */
+@Stable internal class SelectionHoverHandle {
+    var progress: () -> Float = { 0f }
+}
+
+/** Scrolling content and its hovering selections share a single clip, fade and overscroll transform. */
 @Composable
 internal fun SelectionViewport(modifier: Modifier = Modifier, contentDrawing: Modifier = Modifier,
     observePlacement: () -> Unit = {}, visibleItemKeys: (() -> Set<Any>)? = null,
+    scene: SelectionScene = remember { SelectionScene() }, liftEdges: LiftEdges = LiftEdges.Horizontal,
     content: @Composable (OverscrollEffect?) -> Unit) {
     val overscroll = rememberOverscrollEffect()
     val events = remember(overscroll) { overscroll?.withoutVisualEffect() }
     ConnectedSelectionHost(modifier.clipToBounds().then(if (overscroll != null) Modifier.overscroll(overscroll) else Modifier),
-        contentDrawing = contentDrawing, observePlacement = observePlacement, visibleItemKeys = visibleItemKeys) {
+        contentDrawing = contentDrawing, observePlacement = observePlacement, visibleItemKeys = visibleItemKeys,
+        scene = scene, liftEdges = liftEdges) {
         content(events)
     }
 }
 
-/** Record content once and keep it sharp above the separately refracted backing. */
+/**
+ * Hover-lift selection (#533). Selected items rise: their outline grows into a share of the
+ * gap, a shadow deepens, and the surface shows the same backdrop region magnified with a
+ * slight frost. Side-adjacent hovering items share one outline. Items draw their own content
+ * into a retained layer while hovering; this host draws it above the shadow and surface.
+ */
 @Composable
 internal fun ConnectedSelectionHost(modifier: Modifier = Modifier, contentDrawing: Modifier = Modifier,
     observePlacement: () -> Unit = {}, visibleItemKeys: (() -> Set<Any>)? = null,
+    scene: SelectionScene = remember { SelectionScene() }, liftEdges: LiftEdges = LiftEdges.Horizontal,
     content: @Composable () -> Unit) {
     val renderer = currentGlassRendererGeneration()
-    val modern = renderer.backend == GlassBackend.Modern && Build.VERSION.SDK_INT >= 33
-    val scene = remember { SelectionScene() }
-    val contentLayer = rememberGraphicsLayer()
-    val transitionLayer = rememberGraphicsLayer()
-    val visibilityLayer = rememberGraphicsLayer()
+    // RenderEffect blur needs API 31; the Legacy backend crossfades its prepared frost instead.
+    val blurEffects = renderer.backend == GlassBackend.Modern && Build.VERSION.SDK_INT >= 31
     val graphics = androidx.compose.ui.platform.LocalGraphicsContext.current
-    val groups = remember { mutableListOf<SelectionGroupRenderer>() }
-    DisposableEffect(graphics) { onDispose { groups.forEach { graphics.releaseGraphicsLayer(it.output) } } }
+    val scope = rememberCoroutineScope()
+    val groups = remember { mutableListOf<HoverGroupRenderer>() }
+    DisposableEffect(graphics) { onDispose { groups.forEach { graphics.releaseGraphicsLayer(it.output) }; groups.clear() } }
     val backing = LocalFrostedBackdrop.current
     val hasSelection by remember { derivedStateOf { scene.regions.values.any { it.selected || it.visibility() > 0f } } }
     BackdropLease(backing.takeIf { hasSelection })
-    val view = LocalView.current
     var coordinates: LayoutCoordinates? by remember { mutableStateOf(null) }
-    val geometry = remember { SelectionPathCache() }
-    val grouping = remember { SelectionComponentCache() }
-    val depth = LocalGlassAppearance.current.depth
+    val location = remember { BackdropLocation() }
     val recordingDensity = LocalDensity.current
     val recordingDirection = LocalLayoutDirection.current
     CompositionLocalProvider(LocalSelectionScene provides scene) {
-        Box(modifier.onPlaced { coordinates = it }.drawWithContent {
-            // Retire only backend-specific effects; selection and layer identities stay mounted.
-            groups.forEach { it.prepare(renderer) }
+        Box(modifier.then(contentDrawing).backdropLocation(location).onPlaced { coordinates = it }.drawWithContent {
             // Pager placement also moves unselected rows. Do not subscribe their
             // otherwise reusable display lists to the selection geometry clock.
-            if (!hasSelection) {
+            if (!hasSelection && scene.retainedHover.isEmpty()) {
                 scene.lastDrawnRegions = emptyList()
+                scene.hover.clear()
+                scene.viewportHover.clear()
                 return@drawWithContent drawContent()
             }
             // Lazy scrolling can update retained child layers without replacing LayoutCoordinates.
             // Subscribe THIS drawing to its owner's layout result, then read live coordinates.
             observePlacement()
-            // Placement runs before drawing; query live coordinates instead of copying
-            // global bounds through a later callback and lagging one frame behind rows.
             scene.placement
-            val host = coordinates ?: return@drawWithContent drawContent()
+            // Hovering items skip their in-place drawing; everything else is unchanged.
+            drawContent()
+            val host = coordinates ?: return@drawWithContent
             // Lazy prefetch may keep an unplaced item's coordinates attached.
             // Its owner's public native keys, rather than attachment, admit it.
             val placedKeys = visibleItemKeys?.invoke()
-            val visibleEntries = scene.regions.values.mapNotNull { entry ->
+            class Placed(val entry: SelectionEntry, val at: Offset, val rest: MediaItemOutline, val progress: Float)
+            val placed = scene.regions.values.mapNotNull { entry ->
                 val item = entry.coordinates
-                val visibility = entry.visibility().coerceIn(0f, 1f)
-                if (visibility <= 0f || item == null || !item.isAttached ||
-                    placedKeys != null && entry.itemKey !in placedKeys) null else {
-                    val at = host.localPositionOf(item, Offset.Zero)
-                    val measured = Size(item.size.width.toFloat(), item.size.height.toFloat())
-                    SelectionRegion(selectionRevealBounds(mediaItemBounds(measured, entry.visualSize(measured), entry.direction), visibility).translate(at)) to visibility
-                }
-            }
-            val regions = visibleEntries.map { it.first }
-            scene.lastDrawnRegions = regions
-            if (regions.isEmpty()) { drawContent(); return@drawWithContent }
-            // Normalize translation: scrolling moves the cached shape instead of
-            // rasterizing a distance field and uploading another texture every frame.
-            val origin = regions.first().bounds.topLeft
-            val local = localLensRegions(regions, origin)
-            val path = geometry.path(local, MediaSelectionGap.toPx())
-            val components = grouping.get(local, MediaSelectionGap.toPx())
-            while (groups.size < components.size) groups += SelectionGroupRenderer(graphics.createGraphicsLayer()).also { it.prepare(renderer) }
-            val transitioning = visibleEntries.any { it.second < 1f }
-            val recordContent = modern || transitioning
-            // Record foreground once for every reader. Settled legacy lenses keep
-            // their original direct draw; only a transition needs both complete scenes.
-            if (recordContent) {
-                contentLayer.compositingStrategy = androidx.compose.ui.graphics.layer.CompositingStrategy.Offscreen
-                contentLayer.record { this@drawWithContent.drawContent() }
-            }
-            fun DrawScope.selectedScene() {
-                if (modern) {
-                    translate(origin.x, origin.y) { clipPath(path, ClipOp.Difference) {
-                        translate(-origin.x, -origin.y) { drawLayer(contentLayer) }
-                    } }
-                }
-                // All passes in this draw use the same normalized component geometry.
-                // Keep it local to the draw so placement and membership remain live.
-                val frames = components.mapIndexed { index, component ->
-                    val renderer = groups[index]
-                    val groupOrigin = component.first().bounds.topLeft
-                    val groupRegions = localLensRegions(component, groupOrigin)
-                    val groupPath = renderer.path.path(groupRegions, MediaSelectionGap.toPx())
-                    val absolute = origin + groupOrigin
-                    SelectionGroupFrame(renderer, groupRegions, groupPath, groupPath.getBounds(), absolute)
-                }
-                frames.forEach { frame ->
-                    val (renderer, groupRegions, groupPath, bounds, absolute) = frame
-                    val crop = bounds.translate(absolute).inflate(2f).intersect(Rect(Offset.Zero, size))
-                    if (crop.isEmpty) return@forEach
-                    if (modern) {
-                        val at = Offset(floor(crop.left), floor(crop.top))
-                        val visible = Size(ceil(crop.right - at.x), ceil(crop.bottom - at.y))
-                        val source = backing?.takeIf { it.recorded && !it.layer.isReleased }
-                        val sourceOffset = at + host.backdropPosition(view) - (source?.origin ?: Offset.Zero)
-                        // Only upload pixels this lens can reach. The ray model's bounded
-                        // entry/exit projection is below 2.1 spans, including maximum depth.
-                        val reach = bounds.size.minDimension * 1.05f + 2f
-                        val sampled = if (source == null) Rect.Zero else Rect(sourceOffset, visible).inflate(reach)
-                            .intersect(Rect(Offset.Zero, Size(source.size.width.toFloat(), source.size.height.toFloat())))
-                            .takeUnless { it.isEmpty } ?: Rect.Zero
-                        val sampleOrigin = Offset(floor(sampled.left), floor(sampled.top))
-                        val backdropSize = androidx.compose.ui.unit.IntSize(ceil(sampled.right - sampleOrigin.x).toInt(),
-                            ceil(sampled.bottom - sampleOrigin.y).toInt())
-                        val foregroundY = backdropSize.height + 2f
-                        val atlas = LensAtlas(visible, Size(backdropSize.width.toFloat(), backdropSize.height.toFloat()),
-                            sourceOffset - sampleOrigin, foregroundY)
-                        val extent = androidx.compose.ui.unit.IntSize(max(visible.width.toInt(), backdropSize.width + 2),
-                            foregroundY.toInt() + visible.height.toInt())
-                        val output = renderer.output
-                        output.renderEffect = requireNotNull(renderer.optics).effect(groupRegions, groupPath, MediaSelectionGap.toPx(), absolute - at, depth, atlas)
-                        output.clip = true
-                        output.record(recordingDensity, recordingDirection, glassLayerExtent(extent)) {
-                            clipRect(left = 1f, top = 1f, right = backdropSize.width + 1f, bottom = backdropSize.height + 1f) {
-                                if (source != null) translate(1f - sampleOrigin.x, 1f - sampleOrigin.y) { drawLayer(source.layer) }
-                            }
-                            clipRect(top = foregroundY) { translate(-at.x, foregroundY - at.y) { drawLayer(contentLayer) } }
-                        }
-                        translate(absolute.x, absolute.y) { clipPath(groupPath) {
-                            translate(at.x - absolute.x, at.y - absolute.y) { drawLayer(output) }
-                        } }
-                    } else {
-                        renderer.shape.update(groupRegions, groupPath, MediaSelectionGap.toPx())
-                        val shape = renderer.shape.geometry ?: return@forEach
-                        val source = backing
-                        val image = source?.snapshot
-                        if (image != null) translate(absolute.x, absolute.y) { clipPath(groupPath) {
-                            with(renderer.mesh) { draw(shape, image, source.size, absolute + host.backdropPosition(view) - source.origin, depth,
-                                field = renderer.shape.map?.let { map -> { point -> map.sample(point) } }, fieldKey = renderer.shape.map, lighting = false) }
-                        } }
+                if (item == null || !item.isAttached || placedKeys != null && entry.itemKey !in placedKeys) return@mapNotNull null
+                val at = host.localPositionOf(item, Offset.Zero)
+                val measured = Size(item.size.width.toFloat(), item.size.height.toFloat())
+                val outline = entry.outline?.invoke(measured, entry.direction)
+                    ?: mediaItemBounds(measured, entry.visualSize(measured), entry.direction).let {
+                        MediaItemOutline(it, SelectionRegion(it).radius(MediaSelectionGap.toPx()))
                     }
-                }
-                if (!modern) {
-                    if (recordContent) drawLayer(contentLayer) else this@drawWithContent.drawContent()
-                    frames.forEach { frame ->
-                        val renderer = frame.renderer
-                        val shape = renderer.shape.geometry ?: return@forEach
-                        val absolute = frame.absolute
-                        val groupPath = frame.path
-                        translate(absolute.x, absolute.y) { clipPath(groupPath) {
-                            with(renderer.mesh) { draw(shape, null, androidx.compose.ui.unit.IntSize.Zero, Offset.Zero, depth,
-                                field = renderer.shape.map?.let { map -> { point -> map.sample(point) } }, fieldKey = renderer.shape.map) }
-                        } }
-                    }
-                }
-                frames.forEach { frame ->
-                    translate(frame.absolute.x, frame.absolute.y) {
-                        drawGlassRim(frame.bounds, (MediaSelectionGap * 1.5f).toPx(), frame.path, cache = frame.renderer.rim)
+                Placed(entry, at, outline.translate(at), entry.visibility().coerceIn(0f, 1f))
+            }
+            val hovering = placed.filter { (it.entry.selected || it.progress > 0f) && it.entry.recorded && it.entry.layer?.isReleased == false }
+            val hoveringKeys = hovering.mapNotNullTo(mutableSetOf()) { it.entry.itemKey }
+            scene.hover.keys.retainAll(hoveringKeys)
+            scene.viewportHover.keys.retainAll(hoveringKeys)
+            if (hovering.isEmpty() && scene.retainedHover.isEmpty()) { scene.lastDrawnRegions = emptyList(); return@drawWithContent }
+            val viewport = Rect(Offset.Zero, size)
+            val cap = HoverLift.MaxLift.toPx()
+            val others = placed.map { it.rest.bounds } + scene.retainedHover.map { it.first.rest.bounds }
+            val liveLifts = hovering.map { item ->
+                hoverGeometry(item.rest, hoverRoom(item.rest.bounds, others, viewport, liftEdges, cap), item.progress)
+            }
+            hovering.forEachIndexed { index, item ->
+                item.entry.itemKey?.let { scene.hover[it] = liveLifts[index].translate(-item.at); scene.viewportHover[it] = liveLifts[index] }
+            }
+            val lifts = liveLifts + scene.retainedHover.map { it.first }
+            val opacities = hovering.map { it.entry.alpha().coerceIn(0f, 1f) } + scene.retainedHover.map { it.second }
+            scene.lastDrawnRegions = lifts.map { SelectionRegion(it.lifted.bounds, it.lifted.corner) }
+            val gap = MediaSelectionGap.toPx()
+            // Groups join by REST geometry, so growth never changes membership mid-motion.
+            val components = hoverComponents(lifts.map { it.rest.bounds }, gap)
+            while (groups.size < components.size) groups += HoverGroupRenderer(graphics.createGraphicsLayer(), scope)
+            components.forEachIndexed { index, members ->
+                val group = groups[index]
+                val parts = members.map { lifts[it] }
+                val strengths = { a: Int, b: Int -> min(parts[a].progress, parts[b].progress) }
+                val opacity = members.maxOf { opacities[it] }
+                drawHoverGroup(group, parts, strengths, backing, location, blurEffects, recordingDensity, recordingDirection, gap, opacity = opacity, itemOpacity = members.map { opacities[it] })
+                members.forEach { member ->
+                    val item = hovering.getOrNull(member) ?: return@forEach
+                    val lift = lifts[member]
+                    val layer = item.entry.layer ?: return@forEach
+                    translate(item.at.x, item.at.y) {
+                        val pivot = lift.pivot - item.at
+                        layer.alpha = item.entry.alpha().coerceIn(0f, 1f)
+                        scale(lift.scale, lift.scale, pivot) { drawLayer(layer) }
                     }
                 }
             }
-            if (!transitioning) selectedScene() else {
-                // DrawScope.record in Compose 1.8 redirects the node scope to itself
-                // as Density. Procedural dp/mesh reads then recurse; these recordings
-                // need their own scope with the immutable composition density instead.
-                transitionLayer.record(recordingDensity, recordingDirection, size.toIntSize()) { selectedScene() }
-                visibilityLayer.record(recordingDensity, recordingDirection, size.toIntSize()) {
-                    drawSelectionVisibilityMask(visibleEntries.map { it.first.bounds to it.second }, MediaSelectionGap.toPx())
-                }
-                drawSelectionTransition(contentLayer, transitionLayer, visibilityLayer)
-            }
-
-        }.then(contentDrawing)) { content() }
+        }) { content() }
     }
 }
 
-/** Scrolling translates a group; only a membership/layout change rebuilds connectivity. */
-private class SelectionComponentCache {
-    private var regions: List<SelectionRegion> = emptyList()
-    private var gap = Float.NaN
-    private var result: List<List<SelectionRegion>> = emptyList()
-    fun get(value: List<SelectionRegion>, spacing: Float): List<List<SelectionRegion>> {
-        if (value != regions || spacing != gap) {
-            result = selectionComponents(value, spacing)
-            regions = value; gap = spacing
+/** One merged group's retained resources: blur layer, shadow raster and path cache. */
+internal class HoverGroupRenderer(val output: GraphicsLayer, scope: kotlinx.coroutines.CoroutineScope) {
+    val shadow = RetainedGlassShadow(scope)
+    val path = HoverPathCache()
+}
+
+/** Shadow, then the magnified frosted backdrop clipped to the merged outline. Contents are the caller's. */
+internal fun DrawScope.drawHoverGroup(group: HoverGroupRenderer, parts: List<HoverGeometry>, strength: (Int, Int) -> Float,
+    backing: FrostedBackdrop?, location: BackdropLocation, blurEffects: Boolean,
+    density: androidx.compose.ui.unit.Density, direction: LayoutDirection, gap: Float,
+    sampleOffset: Offset = Offset.Zero, shadow: Boolean = true, opacity: Float = 1f,
+    itemOpacity: List<Float>? = null, maskVisibility: Boolean = true) {
+    if (parts.isEmpty()) return
+    val progress = parts.maxOf { it.progress } * opacity.coerceIn(0f, 1f)
+    if (progress <= 0f) return
+    val visibility = parts.mapIndexed { i, part ->
+        (part.progress * (itemOpacity?.get(i) ?: opacity).coerceIn(0f, 1f) / progress).coerceIn(0f, 1f)
+    }
+    if (maskVisibility && visibility.any { it < .9999f }) {
+        // A departing member must fade independently of its still-selected neighbours.
+        // Keep one material/union shadow and mask it once; never redraw foreground here.
+        val padding = if (shadow) (6f + HoverLift.ShadowSpread * 28f).dp.toPx() + 2f else gap / 2f
+        val bounds = parts.map { it.lifted.bounds }.reduce { a, b -> a.union(b) }.inflate(padding)
+        val canvas = drawContext.canvas
+        canvas.saveLayer(bounds, Paint())
+        drawHoverGroup(group, parts, strength, backing, location, blurEffects, density, direction, gap,
+            sampleOffset, shadow, opacity, itemOpacity, maskVisibility = false)
+        // Complement removal also handles transparent/empty masks correctly on API 26.
+        canvas.saveLayer(bounds, Paint().apply { blendMode = BlendMode.DstOut })
+        drawRect(Color.White, bounds.topLeft, bounds.size)
+        canvas.saveLayer(bounds, Paint().apply { blendMode = BlendMode.DstOut })
+        drawSelectionVisibilityMask(parts.indices.map { parts[it].lifted.bounds to visibility[it] }, padding * 2f)
+        canvas.restore(); canvas.restore(); canvas.restore()
+        return
+    }
+    val regions = parts.map { SelectionRegion(it.lifted.bounds, it.lifted.corner) }
+    val rest = parts.map { SelectionRegion(it.rest.bounds, it.rest.corner) }
+    val path = group.path.path(regions, rest, gap, strength)
+    if (shadow) with(group.shadow) {
+        // Strength alone follows progress, so the shadow deepens linearly with the lift.
+        draw(parts.map { it.lifted.contour to 1f } + group.path.bridges.map {
+            RoundRect(it.first, CornerRadius.Zero) to 1f }, HoverLift.ShadowStrength * progress, HoverLift.ShadowSpread)
+    }
+    val source = backing?.takeIf { it.recorded && !it.layer.isReleased } ?: return
+    val registration = source.location.registrationTo(location) ?: return
+    val restBounds = rest.map { it.bounds }.reduce { a, b -> a.union(b) }
+    val liftedBounds = parts.map { it.lifted.bounds }.reduce { a, b -> a.union(b) }
+    val (scale, translation) = hoverMagnification(restBounds, liftedBounds)
+    fun DrawScope.magnified(draw: DrawScope.() -> Unit) = withTransform({
+        translate(translation.x, translation.y); scale(scale.x, scale.y, Offset.Zero)
+        translate(sampleOffset.x, sampleOffset.y)
+    }) { withBackdropRegistration(registration, draw) }
+    val blur = HoverLift.Blur.toPx() * progress
+    clipPath(path) {
+        if (blurEffects && blur > .5f) {
+            // Blur a crop larger than the outline, then clip: edges sample real backdrop.
+            val crop = path.getBounds().inflate(blur * 2f).intersect(Rect(Offset.Zero, size))
+            if (!crop.isEmpty) {
+                val output = group.output
+                output.renderEffect = BlurEffect(blur, blur, TileMode.Clamp)
+                output.record(density, direction, IntSize(ceil(crop.width).toInt(), ceil(crop.height).toInt())) {
+                    translate(-crop.left, -crop.top) { magnified { drawLayer(source.layer) } }
+                }
+                translate(crop.left, crop.top) { drawLayer(output.also { it.alpha = progress }) }
+            }
+        } else {
+            val frost = (source.glassFallback ?: source.fallback).takeIf { !blurEffects }
+            drawContext.canvas.saveLayer(path.getBounds().inflate(1f), Paint().apply { alpha = progress })
+            magnified {
+                drawLayer(source.layer)
+                if (frost != null) drawImage(frost, dstSize = source.size, alpha = HoverLift.LegacyFrost * progress,
+                    filterQuality = FilterQuality.Medium)
+            }
+            drawContext.canvas.restore()
         }
-        return result
     }
 }
 
-private data class SelectionGroupFrame(val renderer: SelectionGroupRenderer,
-    val regions: List<SelectionRegion>, val path: Path, val bounds: Rect, val absolute: Offset)
+private fun Rect.union(other: Rect) = Rect(min(left, other.left), min(top, other.top), max(right, other.right), max(bottom, other.bottom))
 
-private class SelectionGroupRenderer(val output: androidx.compose.ui.graphics.layer.GraphicsLayer) {
-    val path = SelectionPathCache()
-    val rim = GlassRimCache()
-    val mesh = LensMeshRenderer()
-    val shape = LensSelectionShape()
-    // Capability is stable; lazy initialization also supports a Legacy-first mount.
-    val optics by lazy { if (Build.VERSION.SDK_INT >= 33) LensSelectionRenderer() else null }
-    private var generation: GlassRendererGeneration? = null
-    fun prepare(value: GlassRendererGeneration) {
-        if (generation == value) return
-        output.renderEffect = null
-        generation = value
+/** Rebuild the merged outline only when its relative geometry or bridge strengths change. */
+internal class HoverPathCache {
+    private var key: Any? = null
+    private var origin = Offset.Zero
+    private var cached = Path()
+    private var cachedBridges: List<Pair<Rect, Float>> = emptyList()
+    /** Bridge rectangles of the last path, with their strengths (for the shadow). */
+    var bridges: List<Pair<Rect, Float>> = emptyList(); private set
+    fun path(regions: List<SelectionRegion>, rest: List<SelectionRegion>, gap: Float, strength: (Int, Int) -> Float): Path {
+        val at = regions.first().bounds.topLeft
+        val local = localLensRegions(regions, at)
+        val localRest = localLensRegions(rest, at)
+        val strengths = regions.indices.flatMap { a -> (a + 1 until regions.size).map { b -> strength(a, b) } }
+        val next = Triple(local, localRest, strengths) to gap
+        if (next != key) {
+            key = next
+            val bridgeList = mutableListOf<Pair<Rect, Float>>()
+            cached = connectedSelectionPath(local, gap, localRest, strength) { rect, value -> bridgeList += rect to value }
+            cachedBridges = bridgeList
+        }
+        origin = at
+        bridges = cachedBridges.map { it.first.translate(at) to it.second }
+        return Path().apply { addPath(cached, at) }
     }
 }
 
-/** Optical depth belongs to each connected body, never the hull of separated selections. */
-internal fun selectionComponents(regions: List<SelectionRegion>, gap: Float): List<List<SelectionRegion>> {
-    val remaining = regions.toMutableList()
-    val result = mutableListOf<List<SelectionRegion>>()
+/** Groups by rest geometry: side-adjacent within [gap]; diagonal neighbours stay separate. */
+internal fun hoverComponents(rest: List<Rect>, gap: Float): List<List<Int>> {
+    val remaining = rest.indices.toMutableList()
+    val result = mutableListOf<List<Int>>()
     while (remaining.isNotEmpty()) {
         val group = mutableListOf(remaining.removeAt(0))
         var next = 0
         while (next < group.size) {
-            val a = group[next++].bounds
+            val a = rest[group[next++]]
             val iterator = remaining.iterator()
             while (iterator.hasNext()) {
-                val b = iterator.next()
-                val x = max(a.left - b.bounds.right, b.bounds.left - a.right)
-                val y = max(a.top - b.bounds.bottom, b.bounds.top - a.bottom)
-                if (x <= gap && y <= gap && (x < 0 || y < 0)) { group += b; iterator.remove() }
+                val index = iterator.next()
+                val b = rest[index]
+                val x = max(a.left - b.right, b.left - a.right)
+                val y = max(a.top - b.bottom, b.top - a.bottom)
+                if (x <= gap && y <= gap && (x < 0 || y < 0)) { group += index; iterator.remove() }
             }
         }
         result += group
@@ -277,73 +311,98 @@ internal fun selectionComponents(regions: List<SelectionRegion>, gap: Float): Li
     return result
 }
 
-private class SelectionPathCache {
-    private var previous = emptyList<SelectionRegion>()
-    private var previousGap = 0f
-    private var cached = Path()
-    fun path(regions: List<SelectionRegion>, gap: Float): Path {
-        if (regions != previous || gap != previousGap) {
-            cached = connectedSelectionPath(regions, gap)
-            previous = regions; previousGap = gap
-        }
-        return cached
-    }
-}
+/** Optical depth belongs to each connected body, never the hull of separated selections. */
+internal fun selectionComponents(regions: List<SelectionRegion>, gap: Float): List<List<SelectionRegion>> =
+    hoverComponents(regions.map { it.bounds }, gap).map { group -> group.map { regions[it] } }
 
-/** Union neighbors through the gaps, across shared sides only. Never fill group hulls or corner gaps. */
-internal fun connectedSelectionPath(regions: List<SelectionRegion>, gap: Float): Path {
+/** Union neighbors through the gaps, across shared sides only. Never fill group hulls or corner gaps.
+ * Adjacency is decided by [rest] (defaults to [regions]); a bridge narrows with its [strength]. */
+internal fun connectedSelectionPath(regions: List<SelectionRegion>, gap: Float,
+    rest: List<SelectionRegion> = regions, strength: (Int, Int) -> Float = { _, _ -> 1f },
+    onBridge: (Rect, Float) -> Unit = { _, _ -> }): Path {
     val path = Path()
     fun add(part: Path) { path.op(path, part, PathOperation.Union) }
     regions.forEach { region ->
-        val r = region.bounds
-        add(Path().apply { addRoundRect(mediaItemContour(r, gap)) })
+        add(Path().apply { addRoundRect(region.contour(gap)) })
     }
-    regions.forEachIndexed { i, a -> regions.drop(i + 1).forEach { b ->
-        val xGap = max(a.bounds.left - b.bounds.right, b.bounds.left - a.bounds.right)
-        val yGap = max(a.bounds.top - b.bounds.bottom, b.bounds.top - a.bounds.bottom)
-        if (xGap > gap || yGap > gap || (xGap < 0 && yGap < 0)) return@forEach
-        if (xGap < 0 || yGap < 0) {
-            // Extend through the rounded shoulders, not just across the empty gap.
-            // A round line cap here is as large as half a row's width (the old circle).
-            val r = gap * 1.5f
-            val bridge = if (xGap < 0) Rect(max(a.bounds.left, b.bounds.left),
-                min(a.bounds.bottom, b.bounds.bottom) - r,
-                min(a.bounds.right, b.bounds.right), max(a.bounds.top, b.bounds.top) + r)
-            else Rect(min(a.bounds.right, b.bounds.right) - r, max(a.bounds.top, b.bounds.top),
-                max(a.bounds.left, b.bounds.left) + r, min(a.bounds.bottom, b.bounds.bottom))
-            add(Path().apply { addRect(bridge) })
-            return@forEach
-        }
-        // Corner-only neighbors remain separate; no diagonal connectors.
+    regions.indices.forEach { i -> (i + 1 until regions.size).forEach { j ->
+        val ra = rest[i].bounds; val rb = rest[j].bounds
+        val xRest = max(ra.left - rb.right, rb.left - ra.right)
+        val yRest = max(ra.top - rb.bottom, rb.top - ra.bottom)
+        if (xRest > gap || yRest > gap || (xRest < 0 && yRest < 0)) return@forEach
+        if (xRest >= 0 && yRest >= 0) return@forEach // Corner-only neighbors remain separate.
+        val s = strength(i, j).coerceIn(0f, 1f)
+        if (s <= 0f) return@forEach
+        val a = regions[i]; val b = regions[j]
+        // Extend through the rounded shoulders, not just across the empty gap.
+        val r = max(a.radius(gap), b.radius(gap))
+        val full = if (xRest < 0) Rect(max(a.bounds.left, b.bounds.left),
+            min(a.bounds.bottom, b.bounds.bottom) - r,
+            min(a.bounds.right, b.bounds.right), max(a.bounds.top, b.bounds.top) + r)
+        else Rect(min(a.bounds.right, b.bounds.right) - r, max(a.bounds.top, b.bounds.top),
+            max(a.bounds.left, b.bounds.left) + r, min(a.bounds.bottom, b.bounds.bottom))
+        if (full.width <= 0f || full.height <= 0f) return@forEach
+        // A weakening bridge pinches toward its middle, like a neck, before it parts.
+        val bridge = if (xRest < 0) Rect(full.center.x - full.width * s / 2f, full.top, full.center.x + full.width * s / 2f, full.bottom)
+            else Rect(full.left, full.center.y - full.height * s / 2f, full.right, full.center.y + full.height * s / 2f)
+        onBridge(bridge, s)
+        add(Path().apply { addRect(bridge) })
     } }
     return path
 }
 
+/**
+ * Registers an item with the surrounding host and lifts it while selected (#533). While its
+ * hover progress is above zero the item's drawing goes to a retained layer that the host
+ * draws scaled above the group's shadow and surface. A [handle] shares its progress with
+ * the cell's other decorations (the current-occurrence frost).
+ */
 @Composable
 internal fun Modifier.selectionLens(isSelected: Boolean, partial: Boolean,
-    itemKey: Any? = null, visualSize: (Size) -> Size = { it }): Modifier {
+    itemKey: Any? = null, outline: ((Size, LayoutDirection) -> MediaItemOutline?)? = null,
+    handle: SelectionHoverHandle? = null, alpha: () -> Float = { 1f },
+    visualSize: (Size) -> Size = { it }): Modifier {
     val scene = LocalSelectionScene.current
     val direction = LocalLayoutDirection.current
     val token = remember { Any() }
     val entry = remember { SelectionEntry() }
+    val layer = androidx.compose.ui.graphics.rememberGraphicsLayer()
     val visibility = androidx.compose.animation.core.animateFloatAsState(if (isSelected && !partial) 1f else 0f,
-        selectionMotionSpec(LocalReducedMotion.current), label = "Selection lens visibility")
+        hoverMotionSpec(LocalReducedMotion.current), label = "Selection hover")
     SideEffect {
         entry.itemKey = itemKey
         entry.visibility = { visibility.value }
         entry.visualSize = visualSize
+        entry.outline = outline
         entry.direction = direction
+        entry.layer = layer
+        entry.alpha = alpha
+        handle?.progress = { visibility.value }
         val selected = isSelected && !partial
         if (entry.selected != selected) { entry.selected = selected; androidx.compose.runtime.snapshots.Snapshot.withoutReadObservation { scene?.placement = (scene?.placement ?: 0) + 1 } }
         // Registration is identity-stable; rewrite only a missing or replaced entry.
         if (scene != null && scene.regions[token] !== entry) scene.regions[token] = entry
     }
-    DisposableEffect(scene, token) { onDispose { scene?.regions?.remove(token) } }
+    DisposableEffect(scene, token) { onDispose { scene?.regions?.remove(token); entry.recorded = false } }
     return semantics {
         this.selected = isSelected && !partial
         if (partial) stateDescription = "Partially selected"
     }.onPlaced {
         entry.coordinates = it
         if (entry.selected || entry.visibility() > 0f) androidx.compose.runtime.snapshots.Snapshot.withoutReadObservation { scene?.placement = (scene?.placement ?: 0) + 1 }
+    }.drawWithContent {
+        // Prepare and transfer ownership at zero progress, before the first moving frame.
+        // A retained child display list can otherwise acknowledge its recording a frame late.
+        val hovering = scene != null && (entry.selected || visibility.value > 0f)
+        if (!hovering) {
+            entry.recorded = false
+            drawContent()
+            return@drawWithContent
+        }
+        // The host draws this recording lifted in the same frame; nothing is drawn in place.
+        layer.record {
+            this@drawWithContent.drawContent()
+        }
+        entry.recorded = true
     }
 }

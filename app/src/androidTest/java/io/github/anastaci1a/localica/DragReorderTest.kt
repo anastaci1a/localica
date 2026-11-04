@@ -79,7 +79,7 @@ class DragReorderTest {
                 val state by controller.state.collectAsState()
                 val host = remember { SongDragHost() }
                 val route = remember(playlist.id, routeGeneration) { BrowseRoute(MainTab.Playlists, MediaRef(MediaKind.Playlist, playlist.id), text = if (filtered) "Song" else "", key = "drag-fixture-$routeGeneration") }
-                val floatingPanel = rememberFloatingSelectionPanel(selection.panelVisible && host.state?.drag == null, false)
+                val floatingPanel = rememberFloatingSelectionPanel(selection.panelVisible, false)
                 fixtureDragHost = host
                 fixtureFloatingPanel = floatingPanel
                 val chrome = if (foregroundFooter) 80.dp else 0.dp
@@ -94,7 +94,9 @@ class DragReorderTest {
                 if (foregroundFooter) Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(80.dp).background(Color.Magenta).testTag("fixture-footer"))
                 if (panelClearance) {
                     FloatingSelectionPanel(floatingPanel, Modifier.align(Alignment.BottomCenter).padding(bottom = chrome)) {
-                        Box(Modifier.fillMaxWidth().height(96.dp).testTag("fixture-selection-panel"))
+                        Box(Modifier.fillMaxWidth().testTag("fixture-selection-panel")) {
+                            SessionSelectionPanel(selection, null, controller, state, dragging = host.state?.drag != null)
+                        }
                     }
                     Box(Modifier.align(Alignment.BottomEnd).padding(bottom = chrome + floatingPanel.clearance)
                         .size(48.dp).testTag("fixture-lifted-control"))
@@ -348,6 +350,66 @@ class DragReorderTest {
         assertEquals(listOf(ids.last()) + ids.dropLast(1), controller.state.value.playlists.single().entries.map { it.id })
     }
 
+    /** #533: adjacent hovering rows start the drag exactly where they hover, fly into the
+     * stack and land without single-frame jumps, then the moved rows ease out of hover. */
+    @Test fun adjacentHoverSelectionFliesIntoTheStackAndLandsWithoutJumps() = fixture { controller, playlist ->
+        val ids = playlist.entries.map { it.id }
+        compose.onNodeWithTag("media-${ids[1]}").performTouchInput { longClick() }
+        compose.onNodeWithTag("media-${ids[2]}").performClick()
+        compose.waitForIdle()
+        compose.onNodeWithTag("media-${ids[2]}").assertIsSelected()
+        val list = compose.onNodeWithTag("browser-list").fetchSemanticsNode().boundsInRoot
+        val rest = compose.onNodeWithTag("media-${ids[1]}").fetchSemanticsNode().boundsInRoot
+        val from = rest.center - list.topLeft
+        val to = compose.onNodeWithTag("media-${ids[5]}").fetchSemanticsNode().boundsInRoot.center - list.topLeft
+        compose.mainClock.autoAdvance = false
+        var held = false
+        try {
+            compose.onNodeWithTag("browser-list").performTouchInput { down(from); held = true }
+            compose.mainClock.advanceTimeBy(700)
+            compose.onNodeWithTag("browser-list").performTouchInput { moveTo(from + Offset(0f, 35f)) }
+            val path = mutableListOf<androidx.compose.ui.geometry.Rect>()
+            repeat(24) {
+                compose.mainClock.advanceTimeByFrame()
+                compose.onAllNodesWithTag("drag-stack").fetchSemanticsNodes().firstOrNull()?.let { path += it.boundsInRoot }
+            }
+            assertTrue("The drag lifted a stack", path.size > 10)
+            assertEquals("The top card starts where its row hovered", rest.left, path.first().left, 3f)
+            assertEquals("The first flight frame preserves the source width", rest.width, path.first().width, 3f)
+            assertEquals("The first flight frame preserves the source height", rest.height, path.first().height, 3f)
+            val widthChange = kotlin.math.abs(path.last().width - path.first().width)
+            path.zipWithNext().forEach { (a, b) ->
+                assertTrue("Stack fitting cannot snap the source width", kotlin.math.abs(b.width - a.width) <= widthChange * .35f + 2f)
+            }
+            assertTrue("The top card starts at its row, not the stack: ${path.first()} vs $rest",
+                kotlin.math.abs(path.first().top - rest.top) <= kotlin.math.abs(path.last().top - rest.top) / 2f + 3f)
+            val travel = (path.last().topLeft - path.first().topLeft).getDistance()
+            path.zipWithNext().forEach { (a, b) ->
+                assertTrue("No single-frame jump into the stack: $path", (b.topLeft - a.topLeft).getDistance() <= travel * .35f + 3f)
+            }
+            compose.onNodeWithTag("browser-list").performTouchInput { moveTo(to) }
+            repeat(6) { compose.mainClock.advanceTimeByFrame() }
+            compose.onNodeWithTag("browser-list").performTouchInput { up(); held = false }
+            val landing = mutableListOf<androidx.compose.ui.geometry.Rect>()
+            repeat(40) {
+                compose.mainClock.advanceTimeByFrame()
+                compose.onAllNodesWithTag("drag-stack").fetchSemanticsNodes().firstOrNull()?.let { landing += it.boundsInRoot }
+            }
+            assertTrue("The stack lands over several frames", landing.size > 8)
+            val distance = (landing.last().topLeft - landing.first().topLeft).getDistance()
+            landing.zipWithNext().forEach { (a, b) ->
+                assertTrue("No single-frame jump while landing: $landing", (b.topLeft - a.topLeft).getDistance() <= distance * .35f + 3f)
+            }
+        } finally {
+            if (held) compose.onNodeWithTag("browser-list").performTouchInput { cancel() }
+            compose.mainClock.autoAdvance = true
+        }
+        compose.waitUntil(5000) { compose.onAllNodesWithTag("drag-stack").fetchSemanticsNodes().isEmpty() }
+        val result = controller.state.value.playlists.single().entries.map { it.id }
+        assertEquals("Adjacent rows stay together in source order", result.indexOf(ids[1]) + 1, result.indexOf(ids[2]))
+        compose.runOnIdle { assertTrue("A completed move ends the selection", selection.entries.isEmpty()) }
+        compose.onNodeWithTag("media-${ids[1]}").assertIsNotSelected()
+    }
     @Test fun disjointSelectionLiftsIntoStackAndMovesInSourceOrder() = fixture { controller, playlist ->
         val ids = playlist.entries.map { it.id }
         compose.onNodeWithTag("media-${ids[2]}").performTouchInput { longClick() }
@@ -528,15 +590,14 @@ class DragReorderTest {
                     compose.mainClock.advanceTimeByFrame()
                     compose.onNodeWithTag("cancel-drag").assertExists()
                     assertUtilityRow()
-                    var previousBottom = controlBottom()
+                    val shownBottom = controlBottom()
                     val firstRise = compose.runOnIdle {
                         val source = fixtureDragHost.state!!
                         source.drag!!.cancelMotion!!.offsetY(source.cancelTravel)
                     }
                     assertTrue("The first visible X must still be entering", firstRise > 0f)
                     assertEquals("The first published X uses the same clearance plus entrance", firstRise,
-                        compose.onNodeWithTag("cancel-drag").fetchSemanticsNode().boundsInRoot.bottom - previousBottom, 1.1f)
-                    var intermediate = false
+                        compose.onNodeWithTag("cancel-drag").fetchSemanticsNode().boundsInRoot.bottom - shownBottom, 1.1f)
                     repeat(18) {
                         compose.mainClock.advanceTimeByFrame()
                         assertUtilityRow()
@@ -552,21 +613,20 @@ class DragReorderTest {
                             assertEquals("Hit geometry reads the same published inset without another composition",
                                 cancelBottom - source.cancelRadius, source.viewportOrigin.y + source.cancelCenter.y, 1.1f)
                         }
-                        assertTrue("Hide never jumps back upward", bottom >= previousBottom - 1.1f)
-                        val remaining = root.bottom - bottom - base * scale
-                        if (remaining > scale && remaining < 103f * scale) intermediate = true
-                        previousBottom = bottom
+                        compose.runOnIdle { assertEquals("The minimized panel stays fully shown", 1f, fixtureFloatingPanel.progress, 0f) }
+                        assertShown()
                     }
-                    assertTrue("The open panel must animate to hidden", intermediate)
                     compose.mainClock.advanceTimeBy(100)
                     compose.runOnIdle { assertEquals(1f, fixtureDragHost.state!!.drag!!.cancelMotion!!.progress, 0f) }
                     assertUtilityRow()
                 } finally { compose.mainClock.autoAdvance = true }
                 compose.onNodeWithTag("drag-stack").assertExists()
-                compose.onNodeWithTag("fixture-selection-panel").assertDoesNotExist()
-                assertEquals(base * scale, root.bottom - controlBottom(), 1.1f)
+                compose.onNodeWithTag("fixture-selection-panel").assertExists()
+                compose.onNodeWithTag("selection-minimized").assertExists().assertHasNoClickAction()
+                val clearance = compose.runOnIdle { fixtureFloatingPanel.clearance.value }
+                assertEquals((base + clearance) * scale, root.bottom - controlBottom(), 1.1f)
                 val cancel = compose.onNodeWithTag("cancel-drag").fetchSemanticsNode().boundsInRoot
-                assertEquals("X follows remaining chrome", base * scale, root.bottom - cancel.bottom, 1.1f)
+                assertEquals("X stays above the minimized panel and chrome", (base + clearance) * scale, root.bottom - cancel.bottom, 1.1f)
                 assertUtilityRow()
                 val list = compose.onNodeWithTag("browser-list")
                 if (cancelPointer) list.performTouchInput { cancel(); held = false }
@@ -577,6 +637,7 @@ class DragReorderTest {
                 compose.waitUntil(5000) { compose.onAllNodesWithTag("drag-stack").fetchSemanticsNodes().isEmpty() }
                 assertEquals(playlist, controller.state.value.playlists.single())
                 compose.runOnIdle { assertTrue(selection.panelVisible); assertEquals(listOf(id), selection.entries.map { it.row.id }) }
+                compose.onNodeWithContentDescription("More selection actions").assertIsDisplayed()
                 assertShown()
             } finally { if (held) compose.onNodeWithTag("browser-list").performTouchInput { cancel() } }
         }

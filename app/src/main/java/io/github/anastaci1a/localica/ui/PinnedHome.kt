@@ -105,14 +105,15 @@ internal fun PinnedHome(library: LibraryUiState, playlists: PlaylistState, pins:
             Text("Pinned", style = MaterialTheme.typography.titleLarge)
             if (pins.isEmpty()) Text("Hold a song, album, or playlist and choose Pin to Home.")
         } }
-        item { SelectionViewport { overscroll -> LazyRow(state = carousel, overscrollEffect = overscroll,
+        item { SelectionViewport(liftEdges = LiftEdges.Vertical) { overscroll -> LazyRow(state = carousel, overscrollEffect = overscroll,
             modifier = Modifier.nestedScroll(HorizontalGestureOwner)
                 .controlScrollParent(carousel, ControlScrollAxis.Horizontal).testTag("home-pins"), contentPadding = PaddingValues(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             items(items, key = { it.key }) { item -> Box {
+                val pinOutline = rememberPaddedItemOutline(160.dp, 0.dp, 0.dp, 0.dp, 0.dp)
                 val anchor = rememberGlassAnchor()
                 val selectedCount = session.selectedCount(item)
                 Column(Modifier.width(160.dp).clip(Corners.card).testTag("pin-${item.key}")
-                    .selectionLens(selectedCount > 0, item.row == null && selectedCount > 0 && selectedCount < item.songs.size)
+                    .selectionLens(selectedCount > 0, item.row == null && selectedCount > 0 && selectedCount < item.songs.size, outline = pinOutline)
                     .combinedClickable(enabled = currentOrder, onClick = {
                         if (item.row != null && session.active) session.toggle(null, item.row)
                         else onOpen(item, songs)

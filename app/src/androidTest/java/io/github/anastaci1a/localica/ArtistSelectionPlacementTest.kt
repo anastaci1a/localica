@@ -188,6 +188,13 @@ class ArtistSelectionPlacementTest {
                 assertEquals("Independent placed width matches native key ${body.key}", body.size.toFloat(), raw.width, 1f)
             }
         }
+        fun assertLifted(item: Rect, glass: Rect) {
+            val lift = 4f * InstrumentationRegistry.getInstrumentation().targetContext.resources.displayMetrics.density + 1f
+            assertTrue("Lifted left follows $item: $glass", glass.left <= item.left + 1f && glass.left >= item.left - lift)
+            assertTrue("Lifted right follows $item: $glass", glass.right >= item.right - 1f && glass.right <= item.right + lift)
+            assertTrue("Lifted top follows $item: $glass", glass.top <= item.top + 1f && glass.top >= item.top - lift)
+            assertTrue("Lifted bottom follows $item: $glass", glass.bottom >= item.bottom - 1f && glass.bottom <= item.bottom + lift)
+        }
         fun assertDraw(draw: Draw, mode: Check) {
             assertLayout(draw.layout)
             val actual = draw.regions
@@ -198,10 +205,9 @@ class ArtistSelectionPlacementTest {
                 } else {
                     assertEquals("Exactly one live selected album", 1, actual.size)
                     val body = actual.single()
-                    assertEquals("Drawn left follows this frame's placed item", selected.left, body.left, 1f)
-                    assertEquals("Drawn right follows this frame's placed item", selected.right, body.right, 1f)
-                    assertEquals("Drawn top follows this frame's placed item", selected.top, body.top, 1f)
-                    assertEquals("Drawn bottom follows this frame's placed item", selected.bottom, body.bottom, 1f)
+                    // Hover lift (#533): the drawn outline follows this frame's placed item and
+                    // grows around it by at most the 4 dp lift on each side.
+                    assertLifted(selected, body)
                 }
             } else if (mode == Check.All) {
                 val expected = visibleBodies(draw.layout).map { requireNotNull(it.clipped) }.sortedBy { it.left }
@@ -209,8 +215,7 @@ class ArtistSelectionPlacementTest {
                 assertEquals("All-mode bodies draw=${draw.sequence} host=${draw.hostDraws} layout=${draw.layout} actual=$actual",
                     expected.size, actual.size)
                 expected.zip(actual).forEach { (item, glass) ->
-                    assertEquals(item.left, glass.left, 1f); assertEquals(item.right, glass.right, 1f)
-                    assertEquals(item.top, glass.top, 1f); assertEquals(item.bottom, glass.bottom, 1f)
+                    assertLifted(item, glass)
                 }
             }
         }
@@ -330,6 +335,9 @@ class ArtistSelectionPlacementTest {
             // The original settled All oracle starts AFTER its 500 ms reveal.
             phase("offscreen-reentry-and-resize-complete")
             compose.runOnUiThread { validation = Check.Settling; allSelected = true }
+            // Present the source recordings once before advancing virtual animation time.
+            // A bulk clock jump alone does not traverse the native lazy child layers.
+            frame(Check.Settling)
             compose.mainClock.advanceTimeBy(500)
             compose.runOnUiThread { validation = Check.All }
             frame(Check.All)
