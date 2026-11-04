@@ -13,6 +13,7 @@ import androidx.media3.common.audio.AudioProcessor
 import androidx.media3.common.audio.AudioProcessor.AudioFormat
 import androidx.media3.common.audio.BaseAudioProcessor
 import androidx.media3.datasource.DefaultDataSource
+import androidx.media3.extractor.DefaultExtractorsFactory
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.analytics.AnalyticsListener
@@ -69,6 +70,17 @@ class QueueContinuousPlaybackTest {
     @Test fun staticPlaylistTrimsShortFinalSampleM4a() = playSplitPcm(false, "boundary-edit-list.m4a")
 
     @Test fun queueActorTrimsShortFinalSampleM4a() = playSplitPcm(true, "boundary-edit-list.m4a")
+
+    @Test fun nativePaddingControlMatchesCorrectedNaturalPlaybackExactly() {
+        var audibleNative: ByteArray? = null
+        playSplitPcm(false, "boundary-edit-list.m4a", nativeExtraction = true) { audibleNative = it }
+        playSplitPcm(false, "boundary-edit-list.m4a") {
+            assertArrayEquals("Only metadata-declared end padding may differ", audibleNative, it)
+        }
+    }
+
+    @Test fun queueActorTrimsShortFinalSampleWithoutPreloading() =
+        playSplitPcm(true, "boundary-edit-list.m4a", preload = false)
 
     @Test fun staticPlaylistPreservesM4aSilentTail() = playSplitPcm(false, "boundary-silent-tail.m4a")
 
@@ -127,7 +139,14 @@ class QueueContinuousPlaybackTest {
         } finally { capture.reset() }
     }
 
-    private fun playSplitPcm(throughQueue: Boolean, encodedFixture: String? = null) {
+    private fun playSplitPcm(
+        throughQueue: Boolean,
+        encodedFixture: String? = null,
+        nativeExtraction: Boolean = false,
+        preload: Boolean = true,
+        checkAudible: (ByteArray) -> Unit = {},
+    ) {
+        require(!nativeExtraction || encodedFixture == "boundary-edit-list.m4a")
         val rounded = encodedFixture?.startsWith("boundary-rounded-") == true
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
@@ -178,7 +197,7 @@ class QueueContinuousPlaybackTest {
                 Track(file.toURI().toString(), "Split $index", durationMs = if (rounded && index < 2) 1009 else 1000,
                     fileName = file.name, relativePath = file.name)
             }
-            if (throughQueue) preferences.write(QueueSettings())
+            if (throughQueue) preferences.write(QueueSettings(preloadNext = preload))
             instrumentation.runOnMainSync {
                 val renderers = object : DefaultRenderersFactory(context) {
                     override fun buildAudioSink(context: Context, enableFloatOutput: Boolean,
@@ -189,7 +208,8 @@ class QueueContinuousPlaybackTest {
                 // Match PlaybackService's source ownership and audio attributes. Test seams are
                 // pass-through PCM capture, muting, isolated storage and disabled focus handling.
                 val engine = ExoPlayer.Builder(context, renderers)
-                    .setMediaSourceFactory(DefaultMediaSourceFactory(readers.track(DefaultDataSource.Factory(context)), PlaybackExtractors(decodedEditBinding = rounded)))
+                    .setMediaSourceFactory(DefaultMediaSourceFactory(readers.track(DefaultDataSource.Factory(context)),
+                        if (nativeExtraction) DefaultExtractorsFactory() else PlaybackExtractors(decodedEditBinding = rounded)))
                     .build()
                 player = engine
                 engine.setAudioAttributes(AudioAttributes.Builder().setUsage(C.USAGE_MEDIA)
@@ -226,11 +246,22 @@ class QueueContinuousPlaybackTest {
             instrumentation.runOnMainSync {
                 checkPlayback()
                 val decoded = capture.snapshot()
-                val waveformErrors = if (encodedFixture == null) emptyList() else encodedErrors(decoded, encodedFixture)
+                // Independent fixture metadata declares 44,100 audible frames after priming.
+                // Native extraction retains 956 extra frames per encoded track. Remove only
+                // those declared ranges in this comparison, never search or align the waveform.
+                val audible = if (nativeExtraction) {
+                    val nativeFrames = 45_056
+                    Log.i("QueueContinuity", "nativeControl frames=${decoded.size / 2} expected=${nativeFrames * 2 + SAMPLE_RATE}")
+                    assertEquals("Native shortened-sample padding control", (nativeFrames * 2 + SAMPLE_RATE) * 2, decoded.size)
+                    decoded.copyOfRange(0, SAMPLE_RATE * 2) +
+                        decoded.copyOfRange(nativeFrames * 2, (nativeFrames + SAMPLE_RATE) * 2) +
+                        decoded.copyOfRange(nativeFrames * 4, decoded.size)
+                } else decoded
+                val waveformErrors = if (encodedFixture == null) emptyList() else encodedErrors(audible, encodedFixture)
                 val digest = java.security.MessageDigest.getInstance("SHA-256").digest(decoded)
                     .joinToString("") { "%02x".format(it) }
                 // Emit evidence before assertions, including on the known shortened-sample failure.
-                Log.i("QueueContinuity", "fixture=$encodedFixture queue=$throughQueue bytes=${decoded.size} " +
+                Log.i("QueueContinuity", "fixture=$encodedFixture queue=$throughQueue native=$nativeExtraction preload=$preload bytes=${decoded.size} " +
                     "sha256=$digest arrivals=${probe.arrivals.size} discontinuities=${probe.discontinuities} " +
                     "rebuffers=${probe.rebuffers} underruns=${probe.underruns} " +
                     "unexpected=${probe.unexpectedTransitions} waveformErrors=$waveformErrors")
@@ -252,6 +283,7 @@ class QueueContinuousPlaybackTest {
                 } else {
                     assertTrue("$encodedFixture queue=$throughQueue: $waveformErrors", waveformErrors.isEmpty())
                 }
+                checkAudible(audible)
             }
         } finally {
             instrumentation.runOnMainSync {
