@@ -126,7 +126,11 @@ Jaudiotagger 3.0.1 uses LGPL 2.1+. Bundle its notice/license and include its sou
 
 ## CI and signing
 
-The [Android workflow](../.github/workflows/android.yml) builds application changes on main/PR and tests API 26/36. Documentation-only changes use the separate documentation workflow. Match its two virtual CPU cores and 3,072 MiB emulator RAM locally.
+The [Android workflow](../.github/workflows/android.yml) builds application changes on main/PR and tests API 26/36. Match its two virtual CPU cores and 3,072 MiB emulator RAM locally.
+
+One producer builds the native debug app/test APKs, metadata, class inventory and standalone runtime binding before replacing the delivery artifact. Every shard verifies their source/run identity and digests, then runs AGP instrumentation with build dependency actions disabled. APK hashes are checked again after instrumentation.
+
+Documentation-only changes use the separate documentation workflow.
 
 The native job splits each API suite into four AndroidJUnitRunner shards (`numShards`/`shardIndex`) on separate emulators with the same profile. Evidence and report artifacts end in `-shard-N`.
 
@@ -156,7 +160,9 @@ Review [previews](#previews), current docs and resolved issues. Commit and push.
 
 ### Step 3
 
-**Wait for successful build, the device-tests summary (all shards), both compatibility jobs, and both distribution smoke jobs on the exact main SHA before tagging it.** The matching `vX.X.X` workflow reuses that run's APK, verifies version/signature/checksum, and publishes without another build/test matrix. Missing verification/expired artifacts require rerunning main checks. Never substitute another commit's APK. Unfilled release placeholders block publication.
+**Wait for a complete green Android run with exactly the release commit’s Git tree before tagging a commit in main.** The producer may be a same-repository integration push or manual full run. Build, all native shards, complete inventory unions, both compatibility jobs and both distribution smoke jobs must succeed. Focused runs cannot qualify.
+
+Main pushes reuse retained exact-tree evidence when available; otherwise they run normal verification. Release selection verifies the original run, attempt, tree, union receipts and artifact identity. APK checksum, version and signing checks remain mandatory. Missing, expired or changed inputs require a new complete run. Unfilled release placeholders block publication.
 
 ### Step 4
 
