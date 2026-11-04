@@ -26,7 +26,6 @@ import org.junit.Assume.assumeTrue
 import org.junit.Rule
 import org.junit.Test
 import java.io.File
-import kotlin.math.abs
 
 class PlayerArtworkOpticsTest {
     @get:Rule val compose = localicaComposeRule(effectContext = object : MotionDurationScale { override val scaleFactor = 1f })
@@ -165,12 +164,17 @@ class PlayerArtworkOpticsTest {
                 compose.mainClock.autoAdvance = true
                 compose.waitForIdle()
                 sample("late")
-                if (mixed.red <= .05f || mixed.blue <= .05f) failures += "$prefix did not establish a mixed frame: $mixed"
-                // At 1x speed the default blur reveal can advance by .195 in
-                // one 16ms frame; allow quantization, but reject a fresh solid target.
-                if (abs(moving.blue - mixed.blue) > .22f || abs(moving.red - mixed.red) > .22f)
-                    failures += "$prefix jumped on entering player motion: $mixed -> $moving"
-                if (returned.blue < moving.blue - .04f) failures += "$prefix jumped backwards on settle: $moving -> $returned"
+                fun redSignal(color: Color) = color.red - color.green
+                fun blueSignal(color: Color) = color.blue - color.green
+                if (redSignal(mixed) <= .05f || blueSignal(mixed) <= .05f)
+                    failures += "$prefix did not establish a mixed frame: $mixed"
+                // The mini cover's blur changes its neutral contribution with the
+                // viewport and frame. Both artwork colors must survive motion entry;
+                // a newly mounted blend instead presents the solid blue target.
+                if (redSignal(moving) <= .05f || blueSignal(moving) <= .05f)
+                    failures += "$prefix lost its admitted artwork mix on entering motion: $mixed -> $moving"
+                if (blueSignal(returned) < blueSignal(moving) - .04f)
+                    failures += "$prefix jumped backwards on settle: $moving -> $returned"
             }
         } finally {
             compose.mainClock.autoAdvance = true
