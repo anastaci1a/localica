@@ -12,7 +12,7 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
+import io.github.anastaci1a.localica.localicaComposeRule as createComposeRule
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.window.DialogWindowProvider
 import io.github.anastaci1a.localica.ui.*

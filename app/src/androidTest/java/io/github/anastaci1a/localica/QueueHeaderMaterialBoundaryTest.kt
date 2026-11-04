@@ -21,7 +21,7 @@ import androidx.compose.ui.platform.ViewRootForTest
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import io.github.anastaci1a.localica.localicaAndroidComposeRule as createAndroidComposeRule
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.library.LibrarySnapshot
 import io.github.anastaci1a.localica.library.Track

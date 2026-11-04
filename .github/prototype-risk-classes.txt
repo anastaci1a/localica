@@ -266,3 +266,13 @@ io.github.anastaci1a.localica.LyricsArtworkEntryTest
 io.github.anastaci1a.localica.PlayerArtworkSpacingTest
 io.github.anastaci1a.localica.PlayerLyricsForegroundTest
 io.github.anastaci1a.localica.SoftwareControlCaptureTest
+io.github.anastaci1a.localica.DirectComposeDispatcherTest
+io.github.anastaci1a.localica.TestComposeDispatcherTest
+io.github.anastaci1a.localica.ArtworkBlendLoadingTest
+io.github.anastaci1a.localica.ArtworkLoadingFallbackTest
+io.github.anastaci1a.localica.ArtworkTextRevealTest
+io.github.anastaci1a.localica.ArtworkTintPlaceholderTest
+io.github.anastaci1a.localica.LyricsPausedSeekTest
+io.github.anastaci1a.localica.SearchDismissalLifecycleTest
+io.github.anastaci1a.localica.SettingsPathRestorationTest
+io.github.anastaci1a.localica.NativeWindowCopyOwnershipTest

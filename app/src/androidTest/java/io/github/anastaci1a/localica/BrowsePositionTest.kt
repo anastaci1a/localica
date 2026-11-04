@@ -4,7 +4,7 @@ import androidx.compose.ui.test.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.semantics.SemanticsProperties
 import org.junit.Assert.assertTrue
-import androidx.compose.ui.test.junit4.createComposeRule
+import io.github.anastaci1a.localica.localicaComposeRule as createComposeRule
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.UiDevice
 import io.github.anastaci1a.localica.library.*

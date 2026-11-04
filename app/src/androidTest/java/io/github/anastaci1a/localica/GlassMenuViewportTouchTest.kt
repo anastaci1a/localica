@@ -20,7 +20,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
+import io.github.anastaci1a.localica.localicaComposeRule as createComposeRule
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogWindowProvider
 import androidx.test.platform.app.InstrumentationRegistry
@@ -325,8 +325,24 @@ class GlassMenuViewportTouchTest {
 
     private fun copyOnce(window: Window): Bitmap {
         val bitmap = compose.runOnUiThread { Bitmap.createBitmap(window.decorView.width, window.decorView.height, Bitmap.Config.ARGB_8888) }
+        val sourceBounds = compose.runOnUiThread {
+            if (Build.VERSION.SDK_INT == 26) {
+                // API 26 copies the padded Surface. ViewRoot computes its insets on a copy
+                // of Window attributes, so read that actual surface metadata on this API only.
+                // Never infer geometry from the rail or retry/replace the captured image.
+                val root = android.view.View::class.java.getDeclaredMethod("getViewRootImpl")
+                    .invoke(window.decorView)
+                val attributes = root.javaClass.getDeclaredField("mWindowAttributes")
+                    .apply { isAccessible = true }.get(root)
+                val insets = android.view.WindowManager.LayoutParams::class.java
+                    .getField("surfaceInsets").get(attributes) as android.graphics.Rect
+                android.graphics.Rect(insets.left, insets.top,
+                    insets.left + bitmap.width, insets.top + bitmap.height)
+            } else null
+        }
+        Log.i("NativeWindowCopy", "api=${Build.VERSION.SDK_INT} image=${bitmap.width}x${bitmap.height} sourceBounds=$sourceBounds")
         return copyNativeWindowOnce(window, bitmap,
-            "Single native copy timed out; no retry") { result -> "Single native copy failed: $result" }
+            "Single native copy timed out; no retry", sourceBounds) { result -> "Single native copy failed: $result" }
     }
 
     private fun writeManifest(status: String, failure: String? = null) {

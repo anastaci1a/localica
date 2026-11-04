@@ -702,15 +702,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
         val guard = layout.visibleItemsInfo.firstOrNull { it.key == ArtistFilterRange.GuardKey }
         val excess = ArtistFilterRange.excess(guard?.offset?.y, layout.viewportEndOffset, layout.afterContentPadding)
         if (excess < 0f) {
-            val motion = kotlinx.coroutines.currentCoroutineContext()[kotlinx.coroutines.Job]!!
-            if (!artistFilterRange.bindMotion(request, motion)) return@LaunchedEffect
-            try {
-                scrollOwnership.during {
-                    if (latestReducedMotion) gridState.scroll { scrollBy(excess) }
-                    else gridState.animateScrollBy(excess, androidx.compose.animation.core.tween(
-                        durationMillis = 280, easing = androidx.compose.animation.core.LinearOutSlowInEasing))
-                }
-            } finally { artistFilterRange.releaseMotion(motion) }
+            artistFilterRange.correct(request, gridState, scrollOwnership, excess, latestReducedMotion)
         }
         // Removing the reserve now exposes only the new real range; valid offsets never moved.
         artistFilterRange.finish(request)
@@ -1044,7 +1036,8 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                         }
                         item.groupHeading?.let { Text(it, style = MaterialTheme.typography.titleSmall,
                             color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) }
-                        Column(Modifier.then(if (pinchMotion.visualSource == null) Modifier.animateBounds(this@LookaheadScope,
+                        Column(Modifier.browseBeyondBounds(pinchMotion.beyondBounds)
+                            .then(if (pinchMotion.visualSource == null) Modifier.animateBounds(this@LookaheadScope,
                             modifier = Modifier.fillMaxWidth().padding(horizontal = cellGeometry.cardInset.dp, vertical = cellGeometry.cardVerticalInset(displayedStyle).dp),
                             boundsTransform = { _, _ -> androidx.compose.animation.core.tween(if (reducedMotion || editableOrder || loadingCell != null) 0 else 350) })
                             else Modifier.fillMaxWidth().padding(horizontal = cellGeometry.cardInset.dp, vertical = cellGeometry.cardVerticalInset(displayedStyle).dp)

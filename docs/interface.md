@@ -70,6 +70,8 @@ A popup owning a grouped trigger’s shadow matches that group’s shared shadow
 
 Active/inactive and enabled/disabled control appearances activate over 180 ms and deactivate over 270 ms (120/180 ms with Faster animations), with no onset delay. Icon badges crossfade in fixed bounds. State, accessibility and input availability change immediately, reversals continue from the visible appearance, and Reduce motion snaps to the result.
 
+Disabled action text uses the surface foreground color at 38% opacity, with one availability animation owning the fade.
+
 Keep existing transport morphs and gesture-driven travel.
 
 Keep focus stable, accessible/tap alternatives available, and layouts usable in landscape, large fonts and short screens. Adjacent glass actions retain natural label widths and logical order. Overflow offers explicit previous/next controls without changing button-owned drags or shrinking text. Decorative shadow/rebound outsets must not enlarge a strip’s touch viewport into neighboring actions.
@@ -297,7 +299,9 @@ Missing aggregates stay last. Ties use album title then canonical album ID ascen
 
 Completing the available multi-album set or removing the final member restores All. a short-tapped single album remains explicitly focused, even for a one-album artist. Reconcile membership after library changes. Play, Shuffle and collection menu actions share the displayed ordered song scope.
 
-When filtering shortens the list, ease only the excess scroll to the measured new range. Retain valid offsets and user gesture ownership. A combined glass Play/Shuffle pill acts on that displayed list. Shuffle randomizes the new queue’s saved order without enabling global traversal shuffle.
+When filtering shortens the list, ease only the excess scroll to the measured new range. Retain valid offsets and user gesture ownership. Release scroll ownership between correction frames so a new contact can activate an album choice.
+
+A combined glass Play/Shuffle pill acts on that displayed list. Shuffle randomizes the new queue’s saved order without enabling global traversal shuffle.
 
 The Add to playlists panel combines covered existing-playlist rows with an iconless inline new-name field using normal text padding. Add or keyboard submission applies all chosen destinations. Duplicate names disable Add, using the [playlist rules](product.md#library-and-playlists).
 
