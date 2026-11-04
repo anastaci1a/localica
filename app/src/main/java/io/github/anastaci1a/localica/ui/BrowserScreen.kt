@@ -614,7 +614,10 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     val reorder = remember(route.key) { SongDragState(gridState, scrollScope) }
     // The selection host publishes hover lifts; a drag starts its cards from them (#533).
     val selectionScene = remember(route.key) { SelectionScene() }
-    SideEffect { reorder.hoverLift = { key -> selectionScene.hover[key] }; reorder.hoverBacking = backdropBacking }
+    SideEffect {
+        reorder.hoverLift = { key -> selectionScene.hover[key] }; reorder.hoverBacking = backdropBacking
+        reorder.currentSongKey = playingEntryId.takeIf { route.collection?.kind == MediaKind.Queue }
+    }
     val dragHost = LocalSongDragHost.current
     val floatingControlClearance = if (route.collection?.kind == MediaKind.Queue) 12.dp else 0.dp
     SideEffect {

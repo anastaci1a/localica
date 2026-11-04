@@ -45,11 +45,11 @@ internal class HoverCardFrame(
 private fun blurEffects(renderer: GlassRendererGeneration) =
     renderer.backend == GlassBackend.Modern && Build.VERSION.SDK_INT >= 31
 
-/** A dragged card keeps its hover: the carried, magnified backdrop cutout and scaled content.
- * Its shadow belongs to the shared underlay, so stacked cards never accumulate shadow. */
+/** A dragged card reuses the hover outline and frost. The shared underlay owns the outside
+ * shadow; a small additional shadow separates panes once they join the stack. */
 @Composable
 internal fun HoverDragCard(modifier: Modifier, frame: HoverCardFrame, backing: FrostedBackdrop?,
-    content: @Composable BoxScope.() -> Unit) {
+    stackShadow: () -> Float = { 0f }, content: @Composable BoxScope.() -> Unit) {
     val renderer = currentGlassRendererGeneration()
     val group = rememberHoverGroupRenderer()
     val location = remember { BackdropLocation() }
@@ -57,6 +57,9 @@ internal fun HoverDragCard(modifier: Modifier, frame: HoverCardFrame, backing: F
     val direction = LocalLayoutDirection.current
     Box(modifier.graphicsLayer { alpha = frame.alpha().coerceIn(0f, 1f) }.backdropLocation(location).drawWithContent {
         val geometry = frame.geometry()
+        with(group.shadow) {
+            draw(listOf(geometry.lifted.contour to 1f), .22f * stackShadow(), .12f)
+        }
         drawHoverGroup(group, listOf(geometry), { _, _ -> 1f }, backing, location, blurEffects(renderer),
             density, direction, MediaSelectionGap.toPx(), sampleOffset = frame.sampleShift(), shadow = false)
         scale(geometry.scale, geometry.scale, geometry.pivot) { this@drawWithContent.drawContent() }

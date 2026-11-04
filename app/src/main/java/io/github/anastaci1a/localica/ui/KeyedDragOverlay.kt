@@ -24,6 +24,8 @@ import androidx.compose.ui.unit.constrainHeight
 import kotlin.math.roundToInt
 import androidx.compose.ui.zIndex
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.delay
 import kotlin.math.exp
 
 @Composable
@@ -98,8 +100,8 @@ internal fun <T : Any, P> BoxScope.KeyedDragOverlay(state: KeyedDragState<T, P>,
     val artless = with(density) { ArtlessOutlineCorner.toPx() }
     fun cardOutline(holder: MediaItemOutlineHolder, width: Float, height: Float) = holder.value
         ?: MediaItemOutline(androidx.compose.ui.geometry.Rect(0f, 0f, width, height), minOf(artless, width / 2f, height / 2f))
-    // Cards continue each item's hover (#533): the same lift, shadow and carried backdrop cutout.
-    val backing = state.hoverBacking ?: LocalFrostedBackdrop.current
+    // Continue each item's shared hover outline while sampling the live scene under the stack.
+    val backing = LocalFrostedBackdrop.current ?: state.hoverBacking
     BackdropLease(backing)
     val defaultRoom = with(density) { (HoverLift.MaxLift / 2).toPx() }.let { androidx.compose.ui.geometry.Rect(it, it, it, it) }
     // Plain map: the underlay reads it while drawing; every frame lambda reads live motion state.
@@ -113,7 +115,18 @@ internal fun <T : Any, P> BoxScope.KeyedDragOverlay(state: KeyedDragState<T, P>,
     HoverDragUnderlay({ drag.moving.mapNotNull { frames[state.keyOf(it)] } }, backing, Modifier.matchParentSize().zIndex(2f))
     val cards = remember(drag, lifted, drag.destinations) { drag.moving.withIndex().filter { (index, item) -> index < 3 ||
         (!lifted && state.keyOf(item) in drag.initialBounds) || (drag.dropping && state.keyOf(item) in drag.destinations.orEmpty()) } }
+    var previousPane = backing
     cards.reversed().forEach { (index, item) -> key(drag, state.keyOf(item)) {
+        val paneBacking = previousPane
+        val paneScene = rememberFrostedBackdrop(drag to paneBacking?.capture, dark = backing?.dark == true)
+        previousPane = paneScene
+        LaunchedEffect(drag, paneScene) {
+            snapshotFlow { drag.pointer to drag.dropping }.collectLatest {
+                // Legacy preparation follows a paused or completed movement, never a readback per frame.
+                delay(48)
+                paneScene.refresh()
+            }
+        }
         val itemKey = state.keyOf(item)
         val destination = drag.destinations?.get(itemKey)
         val holder = outlineHolder(item)
@@ -148,18 +161,16 @@ internal fun <T : Any, P> BoxScope.KeyedDragOverlay(state: KeyedDragState<T, P>,
             landingHeight + ((destination?.height ?: landingHeight) - landingHeight) * drag.landing.value
         val alpha by animateFloatAsState(if (drag.destinations != null && destination == null) 0f else 1f,
             tween(if (reducedMotion) 0 else 300), label = "Song landing")
-        // The cutout is carried from the rest position and lands at the destination's region.
         val rest = drag.initialBounds[itemKey]?.topLeft
-        fun sample(): Offset {
-            val from = rest ?: return displayed()
-            val to = destination?.topLeft
-            return if (drag.dropping && to != null) from + (to - from) * drag.landing.value else from
-        }
+        // Sample the moving viewport, with the greatest displacement on the top pane.
+        fun sampleShift() = Offset(offset, offset) *
+            ((3 - index.coerceAtMost(2)) * flightProgress() *
+                (if (drag.dropping) 1f - drag.landing.value else 1f))
         val frame = run {
             HoverCardFrame(
                 position = { displayed() },
                 geometry = { hoverGeometry(cardOutline(holder, cardWidth(), cardHeight()), drag.lifts[itemKey]?.room ?: defaultRoom, liftProgress(itemKey)) },
-                sampleShift = { displayed() - sample() },
+                sampleShift = { sampleShift() },
                 restOutline = { rest?.let { at -> (drag.lifts[itemKey]?.rest?.bounds ?: cardOutline(holder, originalSize.width, originalSize.height).bounds).translate(at) } },
                 destinationOutline = { destination?.let { at -> cardOutline(holder, at.width, at.height).bounds.translate(at.topLeft) } },
                 flight = { flightProgress() },
@@ -168,18 +179,22 @@ internal fun <T : Any, P> BoxScope.KeyedDragOverlay(state: KeyedDragState<T, P>,
         }
         SideEffect { frames[itemKey] = frame }
         DisposableEffect(itemKey) { onDispose { frames.remove(itemKey) } }
-        HoverDragCard(Modifier.zIndex(3f + (drag.moving.size - index).toFloat() / drag.moving.size)
-            .graphicsLayer { translationX = displayed().x; translationY = displayed().y }
-            .layout { measurable, constraints ->
-                // Fitting/landing sizes remeasure; pointer and followers stay draw-only.
-                val width = constraints.constrainWidth(cardWidth().roundToInt().coerceAtLeast(0))
-                val height = constraints.constrainHeight(cardHeight().roundToInt().coerceAtLeast(0))
-                val child = measurable.measure(Constraints.fixed(width, height))
-                layout(width, height) { child.place(0, 0) }
+        Box(Modifier.matchParentSize()
+            .zIndex(3f + (drag.moving.size - index).toFloat() / drag.moving.size)
+            .recordFrostedBackdrop(paneScene, paneBacking, displayBacking = false)) {
+            HoverDragCard(Modifier
+                .graphicsLayer { translationX = displayed().x; translationY = displayed().y }
+                .layout { measurable, constraints ->
+                    // Fitting/landing sizes remeasure; pointer and followers stay draw-only.
+                    val width = constraints.constrainWidth(cardWidth().roundToInt().coerceAtLeast(0))
+                    val height = constraints.constrainHeight(cardHeight().roundToInt().coerceAtLeast(0))
+                    val child = measurable.measure(Constraints.fixed(width, height))
+                    layout(width, height) { child.place(0, 0) }
+                }
+                .testTag(if (index == 0) "drag-stack" else "drag-card-$itemKey"),
+                frame, paneBacking, stackShadow = { flightProgress() * (1f - if (drag.dropping) drag.landing.value else 0f) }) {
+                if (index == 0 || !lifted || drag.dropping) CompositionLocalProvider(LocalHeldItemOutline provides holder) { content(item, drag.presentation) }
             }
-            .testTag(if (index == 0) "drag-stack" else "drag-card-$itemKey"),
-            frame, backing) {
-            if (index == 0 || !lifted || drag.dropping) CompositionLocalProvider(LocalHeldItemOutline provides holder) { content(item, drag.presentation) }
         }
         if (index == 0 && drag.moving.size > 1 && !drag.dropping) Surface(
             Modifier.zIndex(5f).graphicsLayer {
