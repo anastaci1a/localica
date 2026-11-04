@@ -44,7 +44,7 @@ class ArtistAlbumSortOrderTest {
             BrowseStyle(presentation = Presentation.List, listSize = ListSize.Normal, sort = sort, ascending = ascending), true)
         var played = emptyList<Track>()
         compose.setContent { LocalicaTheme {
-            Box(Modifier.requiredWidth(4000.dp).height(900.dp)) {
+            Box(Modifier.requiredWidth(1400.dp).height(900.dp)) {
                 BrowserScreen(LibraryUiState(snapshot, loading = false), PlaylistState(), route,
                     {}, {}, {}, { rows, _, _ -> played = rows.map { it.track } }, null, null, true, false,
                     queryDispatcher = Dispatchers.Unconfined)
