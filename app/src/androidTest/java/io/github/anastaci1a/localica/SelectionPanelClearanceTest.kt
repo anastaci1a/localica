@@ -26,12 +26,14 @@ class SelectionPanelClearanceTest {
     private lateinit var panel: FloatingSelectionPanelState
     private lateinit var referenceProgress: State<Float>
 
-    private fun fixture(chrome: Int, reducedMotion: Boolean = false, inline: Boolean = false, cap: Int = 160) {
+    private fun fixture(chrome: Int, reducedMotion: Boolean = false, inline: Boolean = false, cap: Int = 160,
+        motionSpeed: Float = 1f) {
         compose.setContent {
+            CompositionLocalProvider(LocalMotionSpeed provides motionSpeed) {
             panel = rememberFloatingSelectionPanel(visible, reducedMotion)
             // Independent clock oracle: unlike the panel this has no measurement/occupancy state.
             referenceProgress = animateFloatAsState(if (visible) 1f else 0f,
-                if (reducedMotion) snap() else spring(1f, 90f, visibilityThreshold = .0001f), label = "Reference panel motion")
+                if (reducedMotion) snap() else spring(1f, 90f * motionSpeed * motionSpeed, visibilityThreshold = .0001f), label = "Reference panel motion")
             CompositionLocalProvider(LocalBrowseObscuredInset provides (chrome.dp + panel.clearance)) {
                 Box(Modifier.size(320.dp, 480.dp).background(Color.White).testTag("viewport")) {
                     if (inline) Column(Modifier.fillMaxSize()) {
@@ -51,7 +53,7 @@ class SelectionPanelClearanceTest {
                     }
                 }
             }
-        }
+        } }
     }
 
     private fun assertFrame(chrome: Int): Float {
@@ -121,8 +123,8 @@ class SelectionPanelClearanceTest {
         return progress
     }
 
-    private fun interruptedMotion(chrome: Int, inline: Boolean = false) {
-        fixture(chrome, inline = inline)
+    private fun interruptedMotion(chrome: Int, inline: Boolean = false, motionSpeed: Float = 1f) {
+        fixture(chrome, inline = inline, motionSpeed = motionSpeed)
         compose.runOnIdle { visible = true }
         assertEquals(1f, assertFrame(chrome), 0f)
         compose.mainClock.autoAdvance = false
@@ -154,7 +156,7 @@ class SelectionPanelClearanceTest {
     }
 
     @Test fun liftedControlsTrackInterruptedPanelWithChrome() = interruptedMotion(80)
-    @Test fun liftedControlsTrackInterruptedPanelWithoutChrome() = interruptedMotion(0)
+    @Test fun liftedControlsTrackInterruptedPanelWithoutChrome() = interruptedMotion(0, motionSpeed = 4f / 3f)
     @Test fun inlineQueueViewportTracksInterruptedPanel() = interruptedMotion(0, inline = true)
     @Test fun boundedPanelReservesGapInsideHeightCap() {
         fixture(80, cap = 64)
