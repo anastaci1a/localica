@@ -187,8 +187,17 @@ class PinchRetainedHighlightTest {
                     else {
                         assertTrue("Selected content stays visible at $label: source=$sourceInk current=$dark", dark >= sourceInk * .75f)
                         assertEquals("One current-song frost at $label", sourceTint, tint, .025f)
-                        assertEquals("Retained hover width at $label", sourceHighlightWidth.toFloat(), width.toFloat(), 3f)
-                        assertEquals("Retained hover height at $label", sourceHighlightHeight.toFloat(), height.toFloat(), 3f)
+                        if (label == "recognized") {
+                            // #520 preserves travel beyond recognition; the retained outline
+                            // has started its journey rather than remaining at source size.
+                            assertTrue("Retained hover width at recognition: $width from $sourceHighlightWidth",
+                                kotlin.math.abs(width - sourceHighlightWidth) <= pixels.width * .12f + 3f)
+                            assertTrue("Retained hover height at recognition: $height from $sourceHighlightHeight",
+                                kotlin.math.abs(height - sourceHighlightHeight) <= pixels.height * .12f + 3f)
+                        } else {
+                            assertEquals("Retained hover width at $label", sourceHighlightWidth.toFloat(), width.toFloat(), 3f)
+                            assertEquals("Retained hover height at $label", sourceHighlightHeight.toFloat(), height.toFloat(), 3f)
+                        }
                     }
                 }
                 android.util.Log.i("PinchRetainedHighlight", "rtl=$rtl stage=$label ink=$count bounds=$sourceBounds scene=$sceneBounds")

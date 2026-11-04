@@ -75,7 +75,8 @@ class PinchReleaseHandoffTest {
             lastDrawNs = android.os.SystemClock.elapsedRealtimeNanos()
         }
         var pointersDown = false
-        prefs.write(route, initial, false)
+        val destination = if (outward) initial.copy(itemsPerRow = 4) else initial.copy(presentation = Presentation.List)
+        prefs.write(route, if (gallery) destination else initial, false)
         try {
             compose.setContent { LocalicaTheme {
                 view = LocalView.current
@@ -94,6 +95,33 @@ class PinchReleaseHandoffTest {
             compose.runOnUiThread {
                 drawObserver = view.viewTreeObserver.also { it.addOnDrawListener(drawListener) }
             }
+            // Probe endpoint geometry independently of the renderer's outline helper.
+            // Blank title reservations are deliberately excluded from the measured shape.
+            fun measuredPart(tag: String): Rect {
+                val node = compose.onNodeWithTag("$tag-release:73", true).fetchSemanticsNode()
+                return Rect(node.positionInRoot, androidx.compose.ui.geometry.Size(node.size.width.toFloat(), node.size.height.toFloat()))
+            }
+            fun measuredContour(row: Rect): Rect {
+                val art = measuredPart("browse-art")
+                val parts = listOf(art, measuredPart("browse-text"), measuredPart("browse-info")).filterNot { it.isEmpty }
+                val minimum = 2f * view.resources.displayMetrics.density
+                val inset = maxOf(minimum, minOf(art.left - row.left, row.right - art.right,
+                    art.top - row.top, row.bottom - art.bottom))
+                return Rect(parts.minOf { it.left } - inset, parts.minOf { it.top } - inset,
+                    parts.maxOf { it.right } + inset, parts.maxOf { it.bottom } + inset)
+                    .intersect(row.inflate(minimum)).translate(-row.topLeft)
+            }
+            val targetRow = if (gallery) measuredPart("media") else Rect.Zero
+            val targetContour = if (gallery) measuredContour(targetRow) else Rect.Zero
+            val targetArtWidth = if (gallery) measuredPart("browse-art").width else 0f
+            if (gallery) {
+                compose.runOnIdle { prefs.write(route, initial, false) }
+                compose.waitUntil(5000) {
+                    compose.onNodeWithTag("browser-list").fetchSemanticsNode().config
+                        .getOrNull(SemanticsProperties.StateDescription) == "Gallery, 5 columns"
+                }
+                compose.waitForIdle()
+            }
             val list = compose.onNodeWithTag("browser-list")
             list.performScrollToIndex(70)
             val anchor = compose.onNodeWithTag("media-release:73")
@@ -107,6 +135,7 @@ class PinchReleaseHandoffTest {
             val originalBounds = anchor.fetchSemanticsNode().boundsInRoot
             val artwork = compose.onNodeWithTag("browse-art-release:73", true)
             val originalArtwork = artwork.fetchSemanticsNode().boundsInRoot
+            val originalContour = if (gallery) measuredContour(originalBounds) else Rect.Zero
             val expectedFinalCenter = originalBounds.center.y
             val y = expectedFinalCenter - viewport.top
             val x = originalBounds.center.x - viewport.left
@@ -156,21 +185,22 @@ class PinchReleaseHandoffTest {
                     } finally { bitmap.recycle() }
                 }
                 val visibleCenter = highlightCenter(pixels, expectedFinalCenter, originalBounds.height * 2f, gallery)
-                if (!gallery || !outward) return visibleCenter
-                // Density changes keep artwork as wide as the visual card. Infer its
-                // size from independently placed artwork, then locate an uncovered
-                // presented edge. The layout's center is never the measured answer.
+                if (!gallery) return visibleCenter
+                // Infer progress from separately placed artwork. The guide supplies full
+                // contour dimensions; only visible tinted pixels establish its position (#547).
                 val row = anchor.fetchSemanticsNode().boundsInRoot
-                val art = artwork.fetchSemanticsNode().boundsInRoot
-                val widthChange = row.width - originalArtwork.width
-                val progress = if (kotlin.math.abs(widthChange) < .5f) 0f else
-                    ((art.width - originalArtwork.width) / widthChange).coerceIn(0f, 1f)
-                val height = originalBounds.height + (row.height - originalBounds.height) * progress
-                val contour = Rect(row.left, row.top, row.left + art.width, row.top + height)
+                val art = measuredPart("browse-art")
+                val delta = targetArtWidth - originalArtwork.width
+                val progress = if (kotlin.math.abs(delta) < .5f) 0f else
+                    ((art.width - originalArtwork.width) / delta).coerceIn(0f, 1f)
+                fun mix(a: Float, b: Float) = a + (b - a) * progress
+                val contour = Rect(mix(originalContour.left, targetContour.left), mix(originalContour.top, targetContour.top),
+                    mix(originalContour.right, targetContour.right), mix(originalContour.bottom, targetContour.bottom)).translate(row.topLeft)
+                val visualHeight = mix(originalBounds.height, targetRow.height)
                 val covers = compose.onAllNodes(SemanticsMatcher("release artwork") {
                     it.config.getOrNull(SemanticsProperties.TestTag)?.startsWith("browse-art-release:") == true
                 }, useUnmergedTree = true).fetchSemanticsNodes().map { it.boundsInRoot }
-                val center = galleryHighlightCenter(pixels, contour, covers)
+                val center = galleryHighlightCenter(pixels, contour, covers) - (contour.center.y - row.top - visualHeight / 2f)
                 if (!center.isFinite()) highlightExtent = 0
                 android.util.Log.i("PinchReleaseContour",
                     "stage=$stage visible=$visibleCenter measured=$center extent=$highlightExtent contour=$contour")
