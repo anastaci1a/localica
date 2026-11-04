@@ -72,7 +72,8 @@ internal data class SelectorTrackSlot(
 /** Circular contact corners are constructed in final layout space, never stretched after drawing. */
 internal data class SelectorTrackLens(val bounds: androidx.compose.ui.geometry.Rect, val corner: Float,
     val wall: Float, val gap: Float, val outerCorner: Float, val crossExtent: Float,
-    val travelExtent: Float? = null) {
+    val travelExtent: Float? = null, val freeCorner: androidx.compose.ui.geometry.CornerRadius? = null,
+    val vertical: Boolean = false) {
     fun contactCenters(vertical: Boolean): Pair<androidx.compose.ui.geometry.Offset, androidx.compose.ui.geometry.Offset> {
         val b = bounds
         return if (vertical) {
@@ -115,7 +116,13 @@ internal fun SelectorTrackGeometry.lens(position: Float, count: Int, insets: Sel
     val crossStart = this.crossStart + (crossExtent - across) / 2f
     val bounds = if (vertical) androidx.compose.ui.geometry.Rect(crossStart, start, crossStart + across, start + main)
         else androidx.compose.ui.geometry.Rect(start, crossStart, start + main, crossStart + across)
-    return SelectorTrackLens(bounds, corner.coerceAtMost(minOf(main, across) / 2f), affinity, gap, radius, across, main)
+    val contactCorner = corner.coerceAtMost(minOf(main, across) / 2f)
+    // The presented gap already carries held interpolation and release motion.
+    // Only the free travel radius changes; contact circles and cross size stay intact.
+    val freeTravel = (contactCorner - (baseGap - gap).coerceAtLeast(0f)).coerceAtLeast(0f)
+    val freeCorner = if (vertical) androidx.compose.ui.geometry.CornerRadius(contactCorner, freeTravel)
+        else androidx.compose.ui.geometry.CornerRadius(freeTravel, contactCorner)
+    return SelectorTrackLens(bounds, contactCorner, affinity, gap, radius, across, main, freeCorner, vertical)
 }
 
 internal fun SelectorTrackGeometry.slot(index: Int, count: Int, insets: SelectorTrackInsets,

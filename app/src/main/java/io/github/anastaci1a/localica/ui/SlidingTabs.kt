@@ -240,7 +240,7 @@ internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, pagePosition: () 
                 val modifier = Modifier.testTag("tab-selector")
                 if (appearance.tabStyle == TabLensStyle.Classic) {
                     Box(Modifier.selectorTrackPlacement(selectorFrame.bounds).then(modifier).background(Color.Black.copy(alpha = appearance.classicOpacity),
-                        androidx.compose.foundation.shape.RoundedCornerShape(with(density) { selectorFrame.corner.toDp() })))
+                        androidx.compose.foundation.shape.GenericShape { size, _ -> addRoundRect(selectorContour.outlineAt(size)) }))
                 } else if (legacyOverlay) {
                     // Retire retained tone/mesh preparation, not selector gesture or motion state.
                     key(renderer) {

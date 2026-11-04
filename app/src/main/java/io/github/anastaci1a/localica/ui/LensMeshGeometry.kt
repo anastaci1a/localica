@@ -72,17 +72,18 @@ private fun lensRingIndices(perimeter: Int, rings: Int): ShortArray {
  * One mesh/raster owns all pieces, avoiding independently antialiased seams. */
 internal fun outlinedLensMesh(outlines: List<RoundRect>, density: Float, field: (Offset) -> LensField): LensMeshGeometry {
     val parts = outlines.map { outline ->
-        val rawRadii = listOf(outline.topLeftCornerRadius.x, outline.topRightCornerRadius.x,
-            outline.bottomRightCornerRadius.x, outline.bottomLeftCornerRadius.x)
+        val rawRadii = listOf(outline.topLeftCornerRadius, outline.topRightCornerRadius,
+            outline.bottomRightCornerRadius, outline.bottomLeftCornerRadius)
         val bounds = Rect(outline.left, outline.top, outline.right, outline.bottom)
         fun fit(extent: Float, sum: Float) = if (sum > 0f) (extent / sum).coerceAtMost(1f) else 1f
         // Match the path's proportional corner normalization in a narrow viewport.
-        val scale = minOf(fit(bounds.width, rawRadii[0] + rawRadii[1]),
-            fit(bounds.width, rawRadii[2] + rawRadii[3]),
-            fit(bounds.height, rawRadii[0] + rawRadii[3]),
-            fit(bounds.height, rawRadii[1] + rawRadii[2]))
-        val radii = rawRadii.map { it * scale }
-        if (radii.all { it == radii.first() }) curvedLensMesh(LensGeometry(bounds, radii.first()), density, field)
+        val scale = minOf(fit(bounds.width, rawRadii[0].x + rawRadii[1].x),
+            fit(bounds.width, rawRadii[2].x + rawRadii[3].x),
+            fit(bounds.height, rawRadii[0].y + rawRadii[3].y),
+            fit(bounds.height, rawRadii[1].y + rawRadii[2].y))
+        val radii = rawRadii.map { androidx.compose.ui.geometry.CornerRadius(it.x * scale, it.y * scale) }
+        if (radii.all { it == radii.first() && it.x == it.y })
+            curvedLensMesh(LensGeometry(bounds, radii.first().x), density, field)
         else {
             val contour = ArrayList<Offset>()
             val tiny = .05f * density
@@ -96,23 +97,24 @@ internal fun outlinedLensMesh(outlines: List<RoundRect>, density: Float, field: 
                 val count = ceil(length / (8f * density)).toInt().coerceIn(1, 64)
                 repeat(count) { point(x + dx * it / count, y + dy * it / count) }
             }
-            fun corner(x: Float, y: Float, radius: Float, quadrant: Int) {
-                if (radius <= tiny) return
-                val count = ceil(PI.toFloat() * radius / (4f * density)).toInt().coerceIn(12, 32)
+            fun corner(x: Float, y: Float, radius: androidx.compose.ui.geometry.CornerRadius, quadrant: Int) {
+                val largest = maxOf(radius.x, radius.y)
+                if (largest <= tiny) return
+                val count = ceil(PI.toFloat() * largest / (4f * density)).toInt().coerceIn(12, 32)
                 repeat(count) {
                     val angle = (quadrant + it.toFloat() / count) * PI.toFloat() / 2f
-                    point(x + radius * cos(angle), y + radius * sin(angle))
+                    point(x + radius.x * cos(angle), y + radius.y * sin(angle))
                 }
             }
             val (tl, tr, br, bl) = radii
-            line(bounds.left + tl, bounds.top, bounds.width - tl - tr, 0f)
-            corner(bounds.right - tr, bounds.top + tr, tr, -1)
-            line(bounds.right, bounds.top + tr, 0f, bounds.height - tr - br)
-            corner(bounds.right - br, bounds.bottom - br, br, 0)
-            line(bounds.right - br, bounds.bottom, -(bounds.width - br - bl), 0f)
-            corner(bounds.left + bl, bounds.bottom - bl, bl, 1)
-            line(bounds.left, bounds.bottom - bl, 0f, -(bounds.height - bl - tl))
-            corner(bounds.left + tl, bounds.top + tl, tl, 2)
+            line(bounds.left + tl.x, bounds.top, bounds.width - tl.x - tr.x, 0f)
+            corner(bounds.right - tr.x, bounds.top + tr.y, tr, -1)
+            line(bounds.right, bounds.top + tr.y, 0f, bounds.height - tr.y - br.y)
+            corner(bounds.right - br.x, bounds.bottom - br.y, br, 0)
+            line(bounds.right - br.x, bounds.bottom, -(bounds.width - br.x - bl.x), 0f)
+            corner(bounds.left + bl.x, bounds.bottom - bl.y, bl, 1)
+            line(bounds.left, bounds.bottom - bl.y, 0f, -(bounds.height - bl.y - tl.y))
+            corner(bounds.left + tl.x, bounds.top + tl.y, tl, 2)
             if (contour.size > 1 && (contour.first() - contour.last()).getDistance() <= tiny) contour.removeAt(contour.lastIndex)
             val rings = 32
             val perimeter = contour.size
