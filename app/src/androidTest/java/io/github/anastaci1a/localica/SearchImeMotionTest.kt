@@ -356,7 +356,9 @@ class SearchImeMotionTest {
         try {
             compose.waitUntil(wallTimeoutMillis) {
                 compose.mainClock.advanceTimeBy(32)
-                val satisfied = compose.runOnUiThread(predicate)
+                // Native callbacks can queue editing/animation effects after the frame tick.
+                // Drain them before sampling, rather than reading an older placed frame.
+                val satisfied = compose.runOnIdle(predicate)
                 if (!satisfied && compose.mainClock.currentTime - start >= virtualTimeoutMillis)
                     throw ComposeTimeoutException("Animation exceeded its ${virtualTimeoutMillis}ms virtual budget")
                 satisfied
