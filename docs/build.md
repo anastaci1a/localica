@@ -38,6 +38,8 @@ Mandatory native regressions retain presented-pixel, lifecycle, first/reopened-f
 
 `ScrollPerformanceTest` only measures scrolling. It is skipped by assumption unless `scrollPerformance=true`, set by the Android workflow dispatch input `scroll_performance`. Default runs report its three methods as skipped.
 
+The [startup diagnostic controller source](../tools/startup-diagnostics/run.py) runs in the test package, outside the measured process. Explicit disposable-emulator admission permits fixture seeding and paired process-cold/warm activity launches. It records p50/p95/p99 frame times, accessibility input milestones and optional system traces. Synthetic embedded covers exercise decoding; physical-device acceptance remains open.
+
 Select diagnostic methods explicitly, never with a wildcard exclusion that might remove correctness tests.
 
 Build-report artifacts include raw JVM XML under `jvm-xml/<run>/testDebugUnitTest`, including when tests fail.
