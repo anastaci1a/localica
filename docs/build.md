@@ -122,7 +122,7 @@ The [AAC edit-list correction](structure.md#aac-edit-list-trimming) covers bound
 
 Private-file diagnostics are opt-in. Keep inputs and decoded audio private and untracked. Record observer costs and native output failures separately from sample comparisons. None proves physical speaker continuity.
 
-Only the measured [Android 8 MP3 padding failure](https://github.com/anastaci1a/localica/issues/30) is skipped after playback checks. Other failures remain fatal.
+MP3 boundary checks require exact sample counts and unshifted waveforms on Android 8 and modern decoders. Additional regressions preserve intentional trailing silence and verify seek resets during a deferred transition.
 
 Media3 stays pinned to 1.10.1 pending a stable [MP3 trimming fix](https://github.com/androidx/media/issues/3425). Rerun waveform checks before upgrading.
 
