@@ -49,9 +49,24 @@ class PlaybackTest {
                     await { playback.state.value.isPlaying }
                     // Leaving the activity must not release the service's player.
                     scenario.moveToState(androidx.lifecycle.Lifecycle.State.CREATED)
-                    // Leave time for transport commands on slower emulators, then test
-                    // a real natural end while the Activity is already in the background.
-                    instrumentation.runOnMainSync { playback.seekTo(playback.state.value.durationMs!! - 500) }
+                    // Backgrounding must neither pause nor release playback. moveToState first
+                    // waits for main-thread idle, which has taken longer than the whole tone on
+                    // loaded API 36 emulators, so the tone may already have ended naturally.
+                    // A seek would then reposition a paused, ended player and never end again,
+                    // while the stale pre-seek end satisfied the wait below. Start from a known
+                    // playing position with room left, so the end checked here is a fresh one
+                    // reached while the Activity is already in the background.
+                    val durationMs = playback.state.value.durationMs!!
+                    await(15000) { playback.state.value.let { it.trackId == track.id && (it.ended || (it.isPlaying && it.positionMs < durationMs - 3000)) } }
+                    if (playback.state.value.ended) {
+                        instrumentation.runOnMainSync { playback.toggle() }
+                        await { playback.state.value.let { it.isPlaying && !it.ended && it.positionMs < durationMs - 3000 } }
+                    }
+                    var seekRequest = 0L
+                    instrumentation.runOnMainSync { seekRequest = playback.requestSeek(durationMs - 500) }
+                    // Only an end published after this seek's receipt counts.
+                    await { playback.state.value.seekAcknowledgement?.requestId == seekRequest }
+                    assertTrue("The end seek must apply: ${playback.state.value}", playback.state.value.seekAcknowledgement!!.applied)
                     await { playback.state.value.ended }
                     assertFalse(playback.state.value.isPlaying)
                     assertEquals(track.uri, playback.state.value.trackUri)
