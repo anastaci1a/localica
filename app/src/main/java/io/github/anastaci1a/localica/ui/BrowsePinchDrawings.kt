@@ -234,7 +234,7 @@ internal fun Modifier.pinchRetainedOverlay(motion: BrowsePinchMotion, grid: Lazy
                     val original = androidx.compose.ui.geometry.Size(image.size.width.toFloat(), image.size.height.toFloat())
                     val size = androidx.compose.ui.geometry.Size(original.width + (placed.targetWidth - original.width) * geometryProgress,
                         original.height + (placed.targetHeight - original.height) * geometryProgress)
-                    with(highlight.renderer) { draw(Rect(Offset.Zero, size), highlight.color, original, placed.alpha * (content?.opacity ?: 1f)) }
+                    with(highlight.renderer) { retainedCurrentSong(size, original, content, geometryProgress, motion.rightToLeft, highlight.color, placed.alpha * (content?.opacity ?: 1f)) }
                 }
                 if (content == null) {
                     // Non-browser callers can still retain an arbitrary source drawing.

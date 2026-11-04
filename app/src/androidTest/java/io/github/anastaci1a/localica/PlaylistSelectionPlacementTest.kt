@@ -45,7 +45,7 @@ class PlaylistSelectionPlacementTest {
         val route = BrowseRoute(MainTab.Playlists)
         val preferences = BrowsePreferences(context)
         val previous = preferences.read(route)
-        val frames = SelectorPlacementFrames(compose)
+        val frames = SelectorPlacementFrames(compose, outlineVerticalInsetDp = 4f)
         lateinit var scope: CoroutineScope
         lateinit var source: PlaylistSelectionDrawSource
         val playlists = (0..39).map { ManualPlaylist(id = "p$it", name = "Playlist ${it.toString().padStart(2, '0')}") }
@@ -150,7 +150,8 @@ internal fun selectorDraw(scene: SelectionScene, viewport: LayoutCoordinates, la
 
 /** A content-draw witness inside the real shared host/overscroll. This reports its
  * submitted region geometry, not physical pixels or a completed GPU presentation. */
-internal class SelectorPlacementFrames(private val compose: ComposeContentTestRule) {
+internal class SelectorPlacementFrames(private val compose: ComposeContentTestRule,
+    private val outlineVerticalInsetDp: Float = 0f) {
     var checking = false
     var departing = emptySet<String>()
     private val draws = mutableListOf<Triple<SelectorDraw, Set<String>, Boolean>>()
@@ -231,10 +232,14 @@ internal class SelectorPlacementFrames(private val compose: ComposeContentTestRu
             if (item.key in draw.layout.chosen || item.key in fading) {
                 assertTrue("Visibility remains bounded", v in 0f..1f)
                 if (v > 0f) {
+                    // The chooser row's shared outline (#532): 44 dp artwork in 4 dp / 8 dp padding
+                    // is concentric at a 4 dp inset, so the outline sits 4 dp inside the row vertically.
+                    val inset = outlineVerticalInsetDp * androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().targetContext.resources.displayMetrics.density
+                    val outline = Rect(placed.left, placed.top + inset, placed.right, placed.bottom - inset)
                     val scale = .92f + .08f * v
-                    val dx = placed.width * (1f - scale) / 2f
-                    val dy = placed.height * (1f - scale) / 2f
-                    val clipped = Rect(placed.left + dx, placed.top + dy, placed.right - dx, placed.bottom - dy).intersect(draw.layout.viewport)
+                    val dx = outline.width * (1f - scale) / 2f
+                    val dy = outline.height * (1f - scale) / 2f
+                    val clipped = Rect(outline.left + dx, outline.top + dy, outline.right - dx, outline.bottom - dy).intersect(draw.layout.viewport)
                     if (!clipped.isEmpty) expected += clipped
                 }
             }
