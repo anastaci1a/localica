@@ -8,6 +8,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.ContentScale
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
@@ -68,7 +69,7 @@ internal data class PlayerBackgroundSampleDiagnostic(val decision: Int, val fram
 
 internal data class PlayerBackgroundGeometry(val size: Size, val cover: Rect, val washCover: Rect, val footprints: List<Rect>,
     val fullArtBlend: Float, val softness: Float, val edgeSoftness: Float, val edgeBand: Float,
-    val coverBlend: Float, val artworkAlpha: Float, val corner: Float, val miniSize: Float, val cropRetention: Float)
+    val coverBlend: Float, val artworkAlpha: Float, val corner: Float, val contentScale: ContentScale)
 
 /** All coordinates are relative to the measured background, including scroll and viewport clipping. */
 @Stable internal class PlayerBackgroundPolarityState {
@@ -353,8 +354,8 @@ private fun validBackgroundGeometry(value: PlayerBackgroundGeometry): Boolean =
     valid(value.cover) && valid(value.washCover) && value.footprints.isNotEmpty() && value.footprints.all(::valid) &&
         value.size.width.isFinite() && value.size.height.isFinite() && value.size.width > 0f && value.size.height > 0f &&
         listOf(value.fullArtBlend, value.softness, value.edgeSoftness, value.edgeBand, value.coverBlend,
-            value.artworkAlpha, value.corner, value.miniSize, value.cropRetention).all { it.isFinite() } &&
-        value.edgeBand > 0f && value.miniSize > 0f && value.corner >= 0f
+            value.artworkAlpha, value.corner).all { it.isFinite() } &&
+        value.edgeBand > 0f && value.corner >= 0f
 
 private fun smooth(value: Float) = value.coerceIn(0f, 1f).let { it * it * (3f - 2f * it) }
 // ArtworkEdge uses 33 gradient stops, not a continuously evaluated cubic.
@@ -362,7 +363,7 @@ private fun featherStop(position: Float, value: (Float) -> Float): Float {
     val scaled = position.coerceIn(0f, 1f) * 32f; val low = scaled.toInt().coerceAtMost(31)
     return value(low / 32f) + (value((low + 1) / 32f) - value(low / 32f)) * (scaled - low)
 }
-private fun feather(x: Float, y: Float, amount: Float, band: Float, continuation: Float): Float {
+internal fun playerBackgroundFeather(x: Float, y: Float, amount: Float, band: Float, continuation: Float): Float {
     fun edge(v: Float) = featherStop(v) { 1f - amount * (1f - smooth(minOf(it, 1f - it) / band)) }
     val bottom = featherStop(y) { 1f - smooth(if (it < .14f) (.14f - it) / .14f else (it - .68f) / .32f) * continuation }
     return edge(x) * edge(y) * bottom
@@ -384,6 +385,11 @@ private suspend fun prepareBackground(request: BackgroundRequest): PreparedBackg
         val softWash = backdrop.softWash?.let { BackgroundPixelCache.get(it) ?: return null }
         val cover = visual.artwork?.let { BackgroundPixelCache.get(it.asAndroidBitmap()) ?: return null }
         val softCover = visual.softArtwork?.let { BackgroundPixelCache.get(it.asAndroidBitmap()) ?: return null }
+        fun bounds(pixels: BackgroundPixels?) = pixels?.let {
+            playerBackgroundImageBounds(Size(it.width.toFloat(), it.height.toFloat()), geometry.cover, geometry.contentScale)
+        }
+        val coverImage = bounds(cover)
+        val softCoverImage = bounds(softCover)
         val grain = BackgroundPixelCache.get(backdrop.grain) ?: return null
         val top = tone.color(backdrop.palette.top).rgb()
         val middle = tone.color(backdrop.palette.middle).rgb()
@@ -404,16 +410,14 @@ private suspend fun prepareBackground(request: BackgroundRequest): PreparedBackg
             val x = (point.x - geometry.cover.left) / geometry.cover.width
             val y = (point.y - geometry.cover.top) / geometry.cover.height
             if (x in 0f..1f && y in 0f..1f && geometry.artworkAlpha > 0f) {
-                fun image(pixels: BackgroundPixels): BackgroundRgb? {
-                    val fit = minOf(geometry.cover.width / pixels.width, geometry.cover.height / pixels.height)
-                    val mini = maxOf(geometry.miniSize / pixels.width, geometry.miniSize / pixels.height)
-                    val scale = fit + (maxOf(fit, mini) - fit) * geometry.cropRetention
-                    val u = (point.x - geometry.cover.center.x) / (pixels.width * scale) + .5f
-                    val v = (point.y - geometry.cover.center.y) / (pixels.height * scale) + .5f
+                fun image(pixels: BackgroundPixels, bounds: Rect?): BackgroundRgb? {
+                    bounds ?: return null
+                    val u = (point.x - bounds.left) / bounds.width
+                    val v = (point.y - bounds.top) / bounds.height
                     return if (u in 0f..1f && v in 0f..1f) pixels.at(u, v) else null
                 }
-                if (softCover != null && geometry.edgeSoftness > 0f) image(softCover)?.let {
-                    result = it.over(result, geometry.artworkAlpha * geometry.edgeSoftness * feather(x, y, 1f, .13f, 0f))
+                if (softCover != null && geometry.edgeSoftness > 0f) image(softCover, softCoverImage)?.let {
+                    result = it.over(result, geometry.artworkAlpha * geometry.edgeSoftness * playerBackgroundFeather(x, y, 1f, .13f, 0f))
                 }
                 val radius = geometry.corner.coerceAtMost(minOf(geometry.cover.width, geometry.cover.height) / 2)
                 val dx = max(0f, radius - min(point.x - geometry.cover.left, geometry.cover.right - point.x))
@@ -422,8 +426,8 @@ private suspend fun prepareBackground(request: BackgroundRequest): PreparedBackg
                     // Missing/loading placeholders have their own foreground; do not invent their pixels.
                     if (cover == null) return null
                     var direct = visual.palette.middle.rgb()
-                    image(cover)?.let { direct = it.over(direct) }
-                    result = direct.over(result, geometry.artworkAlpha * feather(x, y, geometry.edgeSoftness, geometry.edgeBand, geometry.coverBlend))
+                    image(cover, coverImage)?.let { direct = it.over(direct) }
+                    result = direct.over(result, geometry.artworkAlpha * playerBackgroundFeather(x, y, geometry.edgeSoftness, geometry.edgeBand, geometry.coverBlend))
                 }
             }
             result

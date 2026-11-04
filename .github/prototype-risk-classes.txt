@@ -146,12 +146,14 @@ io.github.anastaci1a.localica.PlaybackTest
 io.github.anastaci1a.localica.PlayerActionSlotsTest
 io.github.anastaci1a.localica.PlayerArtworkChoiceInputTest
 io.github.anastaci1a.localica.PlayerBackdropTest
+io.github.anastaci1a.localica.PlayerBackgroundImageMappingTest
 io.github.anastaci1a.localica.PlayerBackgroundPolarityTest
 io.github.anastaci1a.localica.PlayerContrastTest
 io.github.anastaci1a.localica.PlayerExpansionMotionTest
 io.github.anastaci1a.localica.PlayerFeedbackTest
 io.github.anastaci1a.localica.PlayerGestureTest
 io.github.anastaci1a.localica.PlayerLayoutTest
+io.github.anastaci1a.localica.PlayerMeasuredBoundsTest
 io.github.anastaci1a.localica.PlayerPausedSkipTest
 io.github.anastaci1a.localica.PlayerRefinementTest
 io.github.anastaci1a.localica.PlayerSeekHapticsTest
