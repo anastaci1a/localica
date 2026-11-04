@@ -142,7 +142,7 @@ class PrepareDeviceTestsTest(unittest.TestCase):
     def test_focused_error_dialog_is_dismissed_before_instrumentation(self):
         self.state['window']='  mCurrentFocus=Window{1 u0 Application Not Responding: com.android.launcher3}\n'
         r=self.run_script(script='run-device-tests.sh');self.assertEqual(0,r.returncode,r.stdout+r.stderr)
-        self.assertIn('error-dialog check before full: found and dismissed',r.stdout)
+        self.assertIn('error-dialog check before preparation: found and dismissed',r.stdout)
         self.assertIn(['adb','-s','emulator-5554','shell','am','broadcast','-a','android.intent.action.CLOSE_SYSTEM_DIALOGS'],self.commands())
 
     def test_setup_failure_prevents_starting_instrumentation(self):
