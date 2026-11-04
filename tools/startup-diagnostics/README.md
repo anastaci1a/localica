@@ -1,6 +1,6 @@
 # Startup diagnostics
 
-Measure a debuggable APK on an owned disposable emulator. These opt-in tools never run through the normal JUnit suite. They clear the target app's data. Keep output outside the repository.
+Measure a debuggable APK on an owned disposable emulator. The controller never runs through the normal JUnit suite; the seed test skips unless explicitly selected with its opt-in argument. These tools clear the target app's data. Keep output outside the repository.
 
 Build and install the debug app and test APK, then run with Python 3 and `adb` on PATH:
 

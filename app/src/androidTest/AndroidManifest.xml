@@ -3,8 +3,6 @@
         <package android:name="io.github.anastaci1a.localica.debug" />
     </queries>
     <!-- Explicit disposable-emulator tools; never selected by the ordinary JUnit runner. -->
-    <instrumentation android:name="io.github.anastaci1a.localica.StartupDiagnosticsSeed"
-        android:targetPackage="io.github.anastaci1a.localica.debug" />
     <instrumentation android:name="io.github.anastaci1a.localica.StartupProcessDiagnostics"
         android:targetPackage="io.github.anastaci1a.localica.debug.test" />
     <application>
