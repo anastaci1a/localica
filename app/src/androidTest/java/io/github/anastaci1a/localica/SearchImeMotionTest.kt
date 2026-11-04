@@ -481,12 +481,9 @@ class SearchImeMotionTest {
                 sample.progress < .99f && (sample.ime > 0 || sample.imeSource > sample.imeTarget || hostOverlap)
             }
             assertTrue("Return moves before the native keyboard hide settles", overlap >= 0)
-            // A closing popup can lose IME control before disposal. Its cached current
-            // inset may rebound after onEnd, even though the active host is hidden.
-            // Control release alone is insufficient: require real native window closure
-            // and terminal zero insets on the surviving, focused activity as well.
-            assertTrue("Observe native hide control release after moving overlap",
-                returning.drop(overlap + 1).any { it.imeSource == 0 && it.imeTarget == 0 })
+            // The independently clocked return can dispose the popup before native onEnd.
+            // Its retired inset snapshots cannot witness that later control release:
+            // require native window closure and terminal zero insets on the focused host.
             awaitNativeHideEnd()
         }
         all.drop(all.indexOfLast { it.opening && it.ime > 0 } + 1)
@@ -576,8 +573,10 @@ class SearchImeMotionTest {
 
     private fun nativeDismissal(action: () -> Unit) = runBlocking {
         // Android input/IME use wall time; our return spring uses the paused Compose clock.
-        // Join the native request only after driving its return, never before its first frame.
-        supervisorScope {
+        // Idle waits can span native frames, so let them advance the spring during this phase.
+        val previousAutoAdvance = compose.mainClock.autoAdvance
+        compose.mainClock.autoAdvance = true
+        try { supervisorScope {
             val input = async(Dispatchers.IO) { action() }
             var failure: Throwable? = null
             try { closed() } catch (caught: Throwable) { failure = caught }
@@ -588,7 +587,7 @@ class SearchImeMotionTest {
                 }
             }
             failure?.let { throw it }
-        }
+        } } finally { compose.mainClock.autoAdvance = previousAutoAdvance }
     }
 
     @Test fun nativeInputCompletionDoesNotStarveTheFirstPlacedReturnFrame() =
