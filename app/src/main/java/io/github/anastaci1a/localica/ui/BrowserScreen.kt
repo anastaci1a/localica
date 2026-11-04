@@ -1072,7 +1072,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                                 visible = { hover.progress() <= 0f }) { size ->
                                 pinchMotion.highlightSize(item.key, itemIndex, size)
                             }
-                            .selectionLens(selectedCount > 0, partiallySelected, itemKey = item.key, outline = { _, _ -> itemOutline.value },
+                            .selectionLens(selectedCount > 0, partiallySelected, itemKey = item.key, anchor = menuAnchor, outline = { _, _ -> itemOutline.value },
                                 handle = hover, alpha = { pinchMotion.itemAlpha[item.key] ?: 1f }) { size ->
                                 pinchMotion.highlightSize(item.key, itemIndex, size)
                             }
