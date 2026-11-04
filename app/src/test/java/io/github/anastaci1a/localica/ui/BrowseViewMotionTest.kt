@@ -18,17 +18,16 @@ class BrowseViewMotionTest {
         }
     }
 
-    @Test fun appearingAndDisappearingElementsFinishBeforeGeometryAndReverseContinuously() {
-        for (p in listOf(0f, .05f, .2f, .45f, .8f, 1f, .8f, .45f, .2f, .05f, 0f)) {
-            val incoming = browseViewVisibility(false, true, p)
-            val outgoing = browseViewVisibility(true, false, p)
-            assertTrue(incoming in 0f..1f)
-            assertEquals(1f, incoming + outgoing, .0001f)
-            if (p >= .45f) { assertEquals(1f, incoming, 0f); assertEquals(0f, outgoing, 0f) }
+    @Test fun reversedElementFadesMatchAtEverySpatialPosition() {
+        for (window in listOf(.45f, .3f, .15f)) for (step in 0..1000) {
+            val p = step / 1000f
+            assertEquals("Reverse uses the same spatial fade", browseViewVisibility(true, false, p, window),
+                browseViewVisibility(false, true, 1f - p, window), .0001f)
+            if (p >= window) assertEquals(0f, browseViewVisibility(true, false, p, window), .0001f)
+            if (p <= 1f - window) assertEquals(0f, browseViewVisibility(false, true, p, window), .0001f)
         }
-        assertEquals(0f, browseViewVisibility(false, true, 0f), 0f)
         assertEquals(1f, browseViewVisibility(true, false, 0f), 0f)
-        assertTrue(BrowseViewFadeMillis < 180)
+        assertEquals(1f, browseViewVisibility(false, true, 1f), 0f)
     }
 
     @Test fun persistentElementsNeverDimAndOvershootingProgressIsClamped() {
@@ -40,59 +39,33 @@ class BrowseViewMotionTest {
         assertEquals(1f, browseViewVisibility(false, true, 2f), 0f)
     }
 
-    @Test fun virtualizedDepartureScalesToItsEndpointByTheFadeWithoutAcceleratingLiveItems() {
+    @Test fun invisibleDeparturesStopAtTheirFadeEndSizeAndPosition() {
         val source = androidx.compose.ui.geometry.Rect(2f, 8f, 54f, 60f)
-        val target = androidx.compose.ui.geometry.Rect(12f, 20f, 112f, 120f)
-        for (p in listOf(0f, .1f, .225f, .45f, .8f, 1f)) {
-            val outgoing = browsePinchGeometryProgress(true, p)
-            val live = browsePinchGeometryProgress(false, p)
-            assertEquals("Live geometry keeps the finger's original progression", p, live, 0f)
-            assertEquals((p / .45f).coerceIn(0f, 1f), outgoing, 0f)
-            val frame = pinchElementRect(source, target, outgoing)
-            assertEquals(52f + 48f * outgoing, frame.width, .001f)
-            assertEquals(frame.width, frame.height, .001f)
-            assertEquals(2f + 10f * outgoing, frame.left, .001f)
-            assertEquals(8f + 12f * outgoing, frame.top, .001f)
-            if (p in .001f.. .449f) {
-                assertTrue("Departure must scale faster, not only become transparent", outgoing > live)
-                assertTrue(frame.width > pinchElementRect(source, target, live).width)
+        val target = androidx.compose.ui.geometry.Rect(102f, 208f, 206f, 312f)
+        for (window in listOf(.45f, .3f, .15f)) {
+            val end = pinchElementRect(source, target, window)
+            for (step in 0..1000) {
+                val p = step / 1000f
+                val geometry = browsePinchGeometryProgress(true, p, window)
+                val frame = pinchElementRect(source, target, geometry)
+                assertEquals("Live geometry is unchanged", p, browsePinchGeometryProgress(false, p, window), 0f)
+                if (p <= window) assertEquals("Departures follow ordinary geometry until invisible", p, geometry, 0f)
+                else assertEquals("No invisible growth or travel", end, frame)
+                assertTrue(frame.width <= end.width && frame.left <= end.left && frame.top <= end.top)
             }
-            if (p >= .45f) {
-                assertEquals(target, frame)
-                assertEquals(0f, browseViewVisibility(true, false, p), 0f)
-            }
+            assertTrue("Fade end must not accelerate growth to the full target", end.width < target.width)
         }
-        assertEquals(source, pinchElementRect(source, target, browsePinchGeometryProgress(true, 0f)))
     }
 
-    @Test fun departingGeometryRetracesShrinkingAndGrowingEndpointsWithoutOvershootOrDeadlineJump() {
-        val source = androidx.compose.ui.geometry.Rect(10f, 20f, 110f, 100f)
-        val target = androidx.compose.ui.geometry.Rect(-20f, -10f, 32f, 30f)
-        val frames = (0..1000).map { step ->
-            val p = step / 1000f
-            val q = browsePinchGeometryProgress(true, p)
-            assertTrue(q in 0f..1f)
-            assertTrue("Departing geometry never trails ordinary geometry", q >= p)
-            pinchElementRect(source, target, q).also { frame ->
-                assertTrue(frame.width in target.width..source.width)
-                assertTrue(frame.height in target.height..source.height)
-            }
-        }
-        frames.zipWithNext().forEach { (before, after) ->
-            assertTrue(after.width <= before.width)
-            assertTrue("Continuous before/after fade completion", kotlin.math.abs(after.width - before.width) < .11f)
-        }
-        for (step in 1000 downTo 0) {
-            val p = step / 1000f
-            assertEquals("Finger reversal has no independent scale clock", frames[step],
-                pinchElementRect(source, target, browsePinchGeometryProgress(true, p)))
-        }
-        for (departing in listOf(false, true)) {
-            assertEquals(0f, browsePinchGeometryProgress(departing, -1f), 0f)
-            assertEquals(1f, browsePinchGeometryProgress(departing, 2f), 0f)
-        }
-        assertEquals(source, frames.first())
-        assertEquals(target, frames.last())
+    @Test fun fartherJourneysFadeEarlierAndTheirReverseArrivalsFadeLater() {
+        val near = browsePinchFadeWindow(100f, 400f)
+        val far = browsePinchFadeWindow(800f, 400f)
+        assertTrue(far < near)
+        val p = (near + far) / 2f
+        assertEquals(0f, browseViewVisibility(true, false, p, far), .0001f)
+        assertTrue(browseViewVisibility(true, false, p, near) > 0f)
+        assertEquals(0f, browseViewVisibility(false, true, 1f - p, far), .0001f)
+        assertTrue(browseViewVisibility(false, true, 1f - p, near) > 0f)
+        assertEquals(near, browsePinchFadeWindow(200f, 800f), .0001f)
     }
-
 }

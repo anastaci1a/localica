@@ -135,7 +135,7 @@ internal fun <T> retainedPinchItemIndices(items: List<T>, indices: Map<String, I
 internal fun Map<String, Int>.retainedPinchItemIndex(key: Any): Int =
     if (key is String) this[key] ?: -1 else -1
 
-/** Live paint order is item order; lazy layout normally reports it already sorted. */
+/** Live items in index order (each pass paints them reversed); lazy layout normally reports them sorted. */
 internal fun <T> liveItemsInIndexOrder(items: List<T>, indexOf: (T) -> Int): List<T> {
     for (i in 1 until items.size) if (indexOf(items[i - 1]) > indexOf(items[i])) return items.sortedBy(indexOf)
     return items
@@ -153,7 +153,20 @@ internal fun Modifier.pinchRetainedOverlay(motion: BrowsePinchMotion, grid: Lazy
         if (viewport?.isAttached != true || !coordinates.isAttached || part.layer.isReleased ||
             part.layer.size.width <= 0 || part.layer.size.height <= 0) return
         val bounds = viewport.localBoundingBoxOf(coordinates, clipBounds = false)
-        part.layer.alpha = motion.itemAlpha[key] ?: 1f
+        val entry = visible.firstOrNull { it.key == key }
+        val incoming = if (motion.visualSource != null && key !in motion.bounds && entry != null) {
+            val source = motion.sourceBounds(key, indices.retainedPinchItemIndex(key))
+            val geometry = BrowseCellGeometry(motion.targetColumns)
+            val inset = (geometry.gridInset * motion.pixelDensity).roundToInt()
+            val sourceVertical = (BrowseCellGeometry(motion.sourceColumns)
+                .cardVerticalInset(requireNotNull(motion.visualSource)) * motion.pixelDensity).roundToInt()
+            val targetVertical = (geometry.cardVerticalInset(requireNotNull(motion.target)) * motion.pixelDensity).roundToInt()
+            // Match retained departures' content origins, including the Smallest row inset.
+            val distance = (source.topLeft + Offset(0f, sourceVertical.toFloat()) -
+                Offset((entry.offset.x + inset).toFloat(), (entry.offset.y + targetVertical).toFloat())).getDistance()
+            browseViewVisibility(false, true, p, browsePinchFadeWindow(distance, motion.viewportWidth))
+        } else 1f
+        part.layer.alpha = (motion.itemAlpha[key] ?: 1f) * incoming
         // A resized cover re-records its layer later in this frame (its own render node is
         // updated after this pass), so the layer still holds last frame's size. Scaling by it
         // painted the new drawing at old/new size, one to a few pixels off per frame (#505).
@@ -164,13 +177,13 @@ internal fun Modifier.pinchRetainedOverlay(motion: BrowsePinchMotion, grid: Lazy
     }
     if (motion.visualSource == null) {
         // Nothing is retained at rest. Keep the same stable two-pass topology
-        // (every text layer, then every artwork layer in item order) without
-        // per-frame key sets, placement maps or a sorted paint list while scrolling.
+        // (every text layer, then every artwork layer, each in reverse item order so
+        // earlier items stay on top, #522) without per-frame key sets, placement maps
+        // or a sorted paint list while scrolling.
         clipRect {
-            visible.forEach { entry -> motion.text[entry.key]?.let { drawLive(it, entry.key) } }
-            liveItemsInIndexOrder(visible) { it.index }.forEach { entry ->
-                motion.artwork[entry.key]?.let { drawLive(it, entry.key) }
-            }
+            val order = liveItemsInIndexOrder(visible) { it.index }.asReversed()
+            order.forEach { entry -> motion.text[entry.key]?.let { drawLive(it, entry.key) } }
+            order.forEach { entry -> motion.artwork[entry.key]?.let { drawLive(it, entry.key) } }
         }
         return@drawWithContent
     }
@@ -185,7 +198,6 @@ internal fun Modifier.pinchRetainedOverlay(motion: BrowsePinchMotion, grid: Lazy
         val targetInset = (geometry.cardInset * motion.pixelDensity).roundToInt()
         val sourceVerticalInset = (BrowseCellGeometry(motion.sourceColumns).cardVerticalInset(requireNotNull(motion.visualSource)) * motion.pixelDensity).roundToInt()
         val targetVerticalInset = (geometry.cardVerticalInset(requireNotNull(motion.target)) * motion.pixelDensity).roundToInt()
-        val exitProgress = browsePinchGeometryProgress(departing = true, progress = p)
         motion.bounds.forEach { (key, old) ->
             if (key in liveKeys) return@forEach
             val image = motion.frozen[key] ?: return@forEach
@@ -196,17 +208,23 @@ internal fun Modifier.pinchRetainedOverlay(motion: BrowsePinchMotion, grid: Lazy
             val leading = geometry.cellLeft(motion.viewportWidth.toInt(), motion.pixelDensity, column).toFloat()
             val x = if (motion.rightToLeft) motion.viewportWidth - leading - width else leading
             val y = row.offset.y + (index / motion.targetColumns - rowIndex / motion.targetColumns) * pitch
-            // Scale/fade departures early without accelerating their scroll-anchor trajectory.
-            val origin = Offset(old.left + sourceInset + (x + targetInset - old.left - sourceInset) * p,
-                y + targetVerticalInset + pinchContentTranslation(old.top, y.toFloat(), sourceVerticalInset, targetVerticalInset, p))
+            val sourceOrigin = Offset(old.left + sourceInset, old.top + sourceVerticalInset)
+            val targetOrigin = Offset(x + targetInset, y + targetVerticalInset)
+            val fadeWindow = browsePinchFadeWindow((targetOrigin - sourceOrigin).getDistance(), motion.viewportWidth)
+            val exitProgress = browsePinchGeometryProgress(true, p, fadeWindow)
+            // Position and every part's dimensions stop on the same spatial frame.
+            val origin = sourceOrigin + (targetOrigin - sourceOrigin) * exitProgress
             retained[key] = RetainedPinchPlacement(image, origin, (width - 2 * targetInset).coerceAtLeast(0f),
                 image.content?.target?.height?.toFloat() ?: (pitch - 2 * targetVerticalInset).coerceAtLeast(0f),
-                browseViewVisibility(true, false, p), index, exitProgress)
+                browseViewVisibility(true, false, p, fadeWindow), index, exitProgress)
         }
     }
     clipRect {
-        visible.forEach { entry -> motion.text[entry.key]?.let { drawLive(it, entry.key) } }
-        retained.values.forEach { placed ->
+        // Within each pass earlier items paint above later ones, so the top-left item stays on
+        // top where cells overlap (#522). Live and retained items interleave by index.
+        val paintOrder = (visible.map { it.index - 1 to it.key } + retained.map { it.value.index to it.key })
+            .sortedByDescending { it.first }
+        fun drawRetainedText(placed: RetainedPinchPlacement) {
             val image = placed.item
             val content = image.content
             val geometryProgress = placed.geometryProgress
@@ -274,10 +292,9 @@ internal fun Modifier.pinchRetainedOverlay(motion: BrowsePinchMotion, grid: Lazy
                 }
             }
         }
+        paintOrder.forEach { (_, key) -> retained[key]?.let(::drawRetainedText) ?: motion.text[key]?.let { drawLive(it, key) } }
         // Pass two: every artwork tile, live or virtualized, above all text.
         // Iterate only the two viewports, never the whole catalog on every frame.
-        val paintOrder = (visible.map { it.index - 1 to it.key } + retained.map { it.value.index to it.key })
-            .sortedBy { it.first }
         paintOrder.forEach { (_, key) ->
             val frozen = retained[key]
             if (frozen != null) {
