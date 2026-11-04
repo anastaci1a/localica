@@ -119,7 +119,7 @@ Adaptive contrast also applies to player color continuations, Queue frost and ne
 
 A choice is current only after matching tone preparation completes. Unmeasured, frozen, native-blurred, moving-cover and partial-player backgrounds retain the last verified decision (white ink before any verification), explicitly without claiming current coverage. Tone preparation, sampling, composition and native presentation are asynchronous, so this does not guarantee atomic ink and background presentation.
 
-A foreground change that arrives while lyrics open or close eases with that animation's progress instead of switching in one frame.
+A light/dark polarity change that arrives while lyrics open or close eases with that animation's progress instead of switching in one frame, and reverses with it. One fraction drives the foreground (text and icons) and the materials: glass control ink and tone, panel frost and coating, the backdrops that follow the player's ink and the panel theme. The player publishes it as `PlayerBackgroundPolarityState.lightMix`, and every surface that follows the player's ink reads it instead of the discrete decision. Under Reduced Motion the lyrics clock has no duration, so the polarity snaps with the layout. Expanding and collapsing with lyrics open keeps the last verified polarity, so nothing changes during that motion.
 
 Blur, texture and the artwork continuation remain unchanged.
 
