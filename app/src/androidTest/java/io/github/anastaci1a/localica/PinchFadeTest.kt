@@ -151,9 +151,12 @@ class PinchFadeTest {
             motion.sourceColumns = if (arriving) 1 else 2
             motion.targetColumns = if (arriving) 2 else 1
             motion.pixelDensity = scale; motion.viewportWidth = viewport.toFloat()
-            motion.anchorIndex = 0; motion.anchorTop = 0f; motion.rowHeight = pitch.toFloat()
+            // Keep synthetic incoming endpoints on screen: this fixture measures alpha, not clipping.
+            motion.anchorIndex = 0; motion.anchorTop = 0f; motion.rowHeight = scale
+            motion.focusKey = "focus"; motion.focusTop = pitch / 2
             motion.bounds = if (arriving) emptyMap() else mapOf("near" to Rect(0f, 0f, pitch.toFloat(), pitch.toFloat()),
                 "far" to Rect(pitch.toFloat(), 0f, viewport.toFloat(), pitch.toFloat()))
+            motion.bounds = motion.bounds + ("focus" to Rect(0f, 0f, pitch.toFloat(), pitch.toFloat()))
             motion.frozen.clear()
             if (!arriving) for ((key, color) in listOf("near" to android.graphics.Color.GREEN, "far" to android.graphics.Color.BLUE)) {
                 val image = Bitmap.createBitmap(32, 32, Bitmap.Config.ARGB_8888).apply { eraseColor(color) }.asImageBitmap()
@@ -168,7 +171,7 @@ class PinchFadeTest {
             fun sweep(arriving: Boolean): List<Pair<Float, Float>> {
                 configure(arriving)
                 return (0..20).map { step ->
-                    val p = step / 40f
+                    val p = step / 20f
                     compose.runOnIdle { runBlocking { motion.progress.snapTo(if (arriving) 1f - p else p) } }
                     compose.mainClock.advanceTimeByFrame()
                     compose.waitForIdle()
@@ -178,13 +181,17 @@ class PinchFadeTest {
             val departures = sweep(false)
             val arrivals = sweep(true)
             departures.zip(arrivals).forEachIndexed { index, (a, b) ->
-                assertEquals("Near journey retraces its alpha at ${index / 40f}", a.first, b.first, .008f)
-                assertEquals("Far journey retraces its alpha at ${index / 40f}", a.second, b.second, .008f)
+                assertEquals("Near journey retraces its alpha at ${index / 20f}", a.first, b.first, .008f)
+                assertEquals("Far journey retraces its alpha at ${index / 20f}", a.second, b.second, .008f)
             }
             assertEquals(1f, departures.first().first, .02f)
             assertEquals(1f, departures.first().second, .02f)
             assertTrue("The farther departure disappears while the nearer cover still paints",
                 departures.any { (near, far) -> near > .05f && far < .01f })
+            assertTrue("Fades must still paint late in the eased transition", departures[15].first > .05f)
+            assertTrue("Neighboring equal-width fades overlap", departures.any { (near, far) ->
+                near in .05f.. .95f && far in .05f.. .95f
+            })
             assertEquals(0f, departures.last().first, .01f)
             assertEquals(0f, departures.last().second, .01f)
         } finally { compose.mainClock.autoAdvance = true }
