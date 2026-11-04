@@ -55,7 +55,13 @@ class LargeQueueTransportTest {
     @Test fun distinctDocumentQueueStartsDecodesAndCommitsSeekAndNextCursors() = exerciseTransport(pendingSave = false)
     @Test fun nextAndSeekSubmittedBeforeInitialSaveWaitForTheMatchingCommit() = exerciseTransport(pendingSave = true)
 
-    private fun exerciseTransport(pendingSave: Boolean) {
+    @Test fun measureLargeQueueTransportLatency() {
+        org.junit.Assume.assumeTrue("Opt-in emulator latency diagnostic",
+            InstrumentationRegistry.getArguments().getString("largeQueueLatency") == "true")
+        for (size in listOf(1000, 6500, 13000)) exerciseTransport(false, size, measure = true)
+    }
+
+    private fun exerciseTransport(pendingSave: Boolean, size: Int = 13_000, measure: Boolean = false) {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
         val preferences = QueuePreferences(context)
@@ -67,12 +73,12 @@ class LargeQueueTransportTest {
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         }
         val probe = DocumentsContract.buildDocumentUriUsingTree(QueueScaleGrantActivity.TREE, "scale-0.mp3")
-        val tracks = List(13_000) { index ->
+        val tracks = List(size) { index ->
             val name = "scale-$index.mp3"
             val uri = DocumentsContract.buildDocumentUriUsingTree(QueueScaleGrantActivity.TREE, name).toString()
             Track(uri, "Track $index", durationMs = 20_000, fileName = name, relativePath = name)
         }
-        assertEquals(13_000, tracks.map { it.uri }.toSet().size)
+        assertEquals(size, tracks.map { it.uri }.toSet().size)
         val databaseName = "queue-scale-transport.db"
         context.deleteDatabase(databaseName)
         val db = Room.databaseBuilder(context, QueueDatabase::class.java, databaseName).build()
@@ -123,7 +129,7 @@ class LargeQueueTransportTest {
                     player.currentMediaItem!!.mediaMetadata.extras!!.getString("queueVisit"))
                 assertTrue(player.mediaItemCount <= 129)
             }
-            Log.i("QueueScale", "documents=13000 sharedBytes=true action=$action readyMs=$readyAfter commitMs=${committedAt - requestedAt}")
+            Log.i("QueueScale", "documents=$size sharedBytes=true action=$action readyMs=$readyAfter commitMs=${committedAt - requestedAt}")
         }
         try {
             preferences.write(QueueSettings())
@@ -157,7 +163,7 @@ class LargeQueueTransportTest {
             await { !queues.state.value.loading }
             if (pendingSave) dao.onSaveStarted = { library ->
                 val queue = library.active
-                if (queue?.entries?.size == 13_000 && pendingNext.compareAndSet(null, queue.journey!!.next!!)) {
+                if (queue?.entries?.size == size && pendingNext.compareAndSet(null, queue.journey!!.next!!)) {
                     val pauseAndObserve = {
                         player.pause()
                         pendingNativeState.set("state=${player.playbackState} firstReady=${firstReady.get() > 0} firstDecoded=${firstDecoded.get() > 0}")
@@ -165,17 +171,17 @@ class LargeQueueTransportTest {
                     if (Looper.myLooper() == Looper.getMainLooper()) pauseAndObserve()
                     else instrumentation.runOnMainSync { pauseAndObserve() }
                     // This one-shot hook queues commands, then immediately starts the real save; no delay/gate.
-                    assertFalse(dao.completed.any { it.library.active?.entries?.size == 13_000 })
+                    assertFalse(dao.completed.any { it.library.active?.entries?.size == size })
                     pendingRequestedAt.set(SystemClock.elapsedRealtime())
                     queues.next(); queues.seek(9000)
                     pendingReturnedAt.set(SystemClock.elapsedRealtime())
                 }
             }
             val requestedAt = SystemClock.elapsedRealtime()
-            queues.tap(tracks, 6500)
-            await(timeoutMs = 30_000) { checkPlayback(); queues.state.value.library.active?.entries?.size == 13_000 }
+            queues.tap(tracks, size / 2)
+            await(timeoutMs = 30_000) { checkPlayback(); queues.state.value.library.active?.entries?.size == size }
             val active = queues.state.value.library.active!!
-            val selected = active.entries[6500].id
+            val selected = active.entries[size / 2].id
             await(timeoutMs = 30_000) {
                 checkPlayback()
                 firstDecoded.get() > 0 && firstReady.get() > 0 && if (pendingSave)
@@ -183,12 +189,12 @@ class LargeQueueTransportTest {
             }
             val targetReadyAt = SystemClock.elapsedRealtime()
             if (!pendingSave) instrumentation.runOnMainSync { player.pause() }
-            await(timeoutMs = 30_000) { checkPlayback(); dao.completed.any { it.library.active?.entries?.size == 13_000 } }
-            val firstCommit = dao.completed.first { it.library.active?.entries?.size == 13_000 }.at
+            await(timeoutMs = 30_000) { checkPlayback(); dao.completed.any { it.library.active?.entries?.size == size } }
+            val firstCommit = dao.completed.first { it.library.active?.entries?.size == size }.at
             // PCM is processor admission, not speaker output. Pending commands leave its source unassigned.
-            Log.i("QueueScale", "documents=13000 sharedBytes=true providerPreflight=true action=start pendingCommands=$pendingSave pcmOrigin=${if (pendingSave) "unassigned" else "fresh-start"} readyMs=${firstReady.get() - requestedAt} firstDecodedMs=${firstDecoded.get() - requestedAt} firstDecodedBeforeInitialCommit=${firstDecoded.get() < firstCommit} commitMs=${firstCommit - requestedAt}")
+            Log.i("QueueScale", "documents=$size sharedBytes=true providerPreflight=true action=start pendingCommands=$pendingSave pcmOrigin=${if (pendingSave) "unassigned" else "fresh-start"} readyMs=${firstReady.get() - requestedAt} firstDecodedMs=${firstDecoded.get() - requestedAt} firstDecodedBeforeInitialCommit=${firstDecoded.get() < firstCommit} commitMs=${firstCommit - requestedAt}")
             assertTrue(firstDecoded.get() >= requestedAt)
-            assertEquals(tracks[6500].uri, active.entries[6500].track.uri)
+            assertEquals(tracks[size / 2].uri, active.entries[size / 2].track.uri)
             val next = if (pendingSave) {
                 val expected = pendingNext.get()!!
                 val submitted = pendingRequestedAt.get()
@@ -201,7 +207,7 @@ class LargeQueueTransportTest {
                 val targetIndex = snapshots.indexOfFirst { it.library.active?.let { q -> q.currentEntryId == expected.entryId && q.positionMs == 9000L } == true }
                 assertTrue(initialIndex >= 0 && targetIndex > initialIndex)
                 instrumentation.runOnMainSync { assertFalse(player.playWhenReady); assertTrue(player.mediaItemCount <= 129) }
-                Log.i("QueueScale", "documents=13000 sharedBytes=true action=pending-save-next-seek boundary=before-initial-delegate-save rawPlayerPaused=true ${pendingNativeState.get()} submissionReturnMs=${pendingReturnedAt.get() - submitted} readyMs=${targetReadyAt - submitted} initialCommitMs=${firstCommit - submitted} commitMs=${committedAt - submitted} postSeekPcm=unmeasured")
+                Log.i("QueueScale", "documents=$size sharedBytes=true action=pending-save-next-seek boundary=before-initial-delegate-save rawPlayerPaused=true ${pendingNativeState.get()} submissionReturnMs=${pendingReturnedAt.get() - submitted} readyMs=${targetReadyAt - submitted} initialCommitMs=${firstCommit - submitted} commitMs=${committedAt - submitted} postSeekPcm=unmeasured")
                 expected
             } else {
                 seek("seek", selected, 6000) { queues.seek(6000) }
@@ -215,13 +221,63 @@ class LargeQueueTransportTest {
                 assertEquals(next.token, player.currentMediaItem!!.mediaMetadata.extras!!.getString("queueVisit"))
             }
             val stored = runBlocking { db.queues().read().active!! }
-            assertEquals(13_000, stored.entries.size)
+            assertEquals(size, stored.entries.size)
             assertEquals(next, stored.journey!!.current)
             assertEquals(9000L, stored.positionMs)
+            if (measure) {
+                // Upper bound including dispatch/observation, without ordinary await polling quantization.
+                // Each action follows a durable checkpoint; pending-save is measured separately.
+                val samples = linkedMapOf<String, MutableList<Double>>()
+                fun sample(action: String, visit: QueueVisit, position: Long, warmup: Boolean, command: () -> Unit) {
+                    val nativeAt = AtomicLong()
+                    val listener = object : Player.Listener {
+                        override fun onEvents(player: Player, events: Player.Events) {
+                            if (player.currentMediaItem?.mediaMetadata?.extras?.getString("queueVisit") == visit.token &&
+                                player.currentPosition == position) nativeAt.compareAndSet(0, SystemClock.elapsedRealtimeNanos())
+                        }
+                    }
+                    instrumentation.runOnMainSync { player.addListener(listener) }
+                    val startedMs = SystemClock.elapsedRealtime()
+                    val started = SystemClock.elapsedRealtimeNanos()
+                    command()
+                    while (true) {
+                        checkPlayback()
+                        var matched = false
+                        instrumentation.runOnMainSync {
+                            matched = player.playbackState == Player.STATE_READY &&
+                                player.currentMediaItem?.mediaMetadata?.extras?.getString("queueVisit") == visit.token &&
+                                player.currentPosition == position &&
+                                queues.state.value.library.active?.journey?.current == visit
+                        }
+                        if (matched) break
+                        assertTrue("$action timed out", SystemClock.elapsedRealtime() - startedMs < 30_000)
+                        Thread.sleep(1)
+                    }
+                    val readyMs = (SystemClock.elapsedRealtimeNanos() - started) / 1_000_000.0
+                    val committed = checkpoint(visit.entryId, position, startedMs)
+                    instrumentation.runOnMainSync { player.removeListener(listener) }
+                    if (!warmup) samples.getOrPut(action) { mutableListOf() }.add(readyMs)
+                    val nativeMs = nativeAt.get().takeIf { it >= started }?.let { (it - started) / 1_000_000.0 }
+                    Log.i("QueueLatency", "entries=$size action=$action warmup=$warmup readyMs=$readyMs nativeEventMs=$nativeMs commitMs=${committed - startedMs}")
+                }
+                repeat(35) { iteration ->
+                    val current = queues.state.value.library.active!!.journey!!.current!!
+                    val forward = queues.state.value.library.active!!.journey!!.next!!
+                    sample("next", forward, 0, iteration < 5) { queues.next() }
+                    sample("previous", current, 0, iteration < 5) { queues.previous(alwaysSong = true) }
+                    sample("seek", current, 6000, iteration < 5) { queues.seek(6000) }
+                    sample("seek-return", current, 9000, iteration < 5) { queues.seek(9000) }
+                }
+                samples.forEach { (action, values) ->
+                    val sorted = values.sorted()
+                    val p95 = sorted[kotlin.math.ceil(sorted.size * .95).toInt() - 1]
+                    Log.i("QueueLatency", "SUMMARY entries=$size action=$action n=${values.size} p50Ms=${sorted[kotlin.math.ceil(sorted.size * .5).toInt() - 1]} p95Ms=$p95 maxMs=${sorted.last()} barMs=100 passes=${p95 < 100}")
+                }
+            }
             val provider = context.contentResolver.call(probe, "stats", null, null)!!
             val opened = provider.getStringArrayList("documents")!!
-            assertTrue(opened.containsAll(listOf("scale-6500.mp3", "scale-6501.mp3")))
-            Log.i("QueueScale", "documents=13000 sharedBytes=true providerOpens=${provider.getInt("opens")} distinctOpened=${opened.size} readBytes=unmeasured")
+            assertTrue(opened.containsAll(listOf("scale-${size / 2}.mp3", "scale-${size / 2 + 1}.mp3")))
+            Log.i("QueueScale", "documents=$size sharedBytes=true providerOpens=${provider.getInt("opens")} distinctOpened=${opened.size} readBytes=unmeasured")
         } finally {
             try {
                 instrumentation.runOnMainSync { createdPlayer?.let { createdQueues?.detach(it); it.release() } }
