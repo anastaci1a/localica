@@ -249,6 +249,8 @@ fun LocalicaScreen(
     val bottomChrome = 8.dp + 72.dp * chromeVisibility
     val selectionPanel = rememberFloatingSelectionPanel(
         session.panelVisible && !expanded, settings.reducedMotion)
+    // The Queue drawer's pill floats above its list (#552); its occupancy also pads the list end.
+    val queueSelectionPanel = rememberFloatingSelectionPanel(session.panelVisible, settings.reducedMotion)
     val browseBottomChrome = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() +
         if (hasPlayer) CompactControlSize + bottomChrome + 8.dp else bottomChrome
     val browseBackdrop = rememberFrostedBackdrop(navigation.route to library.snapshot, !expanded, dark = browseInk == androidx.compose.ui.graphics.Color.White, glassBlur = settings.glass.blur)
@@ -362,6 +364,10 @@ fun LocalicaScreen(
                 ActionMenuItem("Settings", icon = R.drawable.ic_settings, onClick = { moreOpen = false; settingsCategory = null; settingsOpen = true })
             }
         }
+        // The pill is a standard Liquid Glass pill over the page: it samples the browse backdrop and takes the
+        // page's ink for its material, icons and menu, like the mini-player and utility pill (#552).
+        CompositionLocalProvider(LocalFrostedBackdrop provides browseBackdrop) {
+        GlassPanelTheme(browseInk == androidx.compose.ui.graphics.Color.White) {
         FloatingSelectionPanel(selectionPanel, Modifier.align(Alignment.BottomCenter)
             .padding(horizontal = 8.dp).padding(bottom = browseBottomChrome)
             .fillMaxWidth().heightIn(max = maxHeight / 2)) {
@@ -369,6 +375,7 @@ fun LocalicaScreen(
                 SessionSelectionPanel(session, queueController, playlistController, playlist, dragging = dragHost.state?.drag != null)
             }
         }
+        } }
         if (hasPlayer) PlayerSurface(player, expanded, { expanded = it }, settings, progress,
             onToggle, onSeek, onPrevious, onNext, ::openQueue, { expanded = false },
             lyricsOpen, { lyricsOpen = it }, playerTracks.lyrics,
@@ -394,15 +401,16 @@ fun LocalicaScreen(
         PlayerClippedOverlay({ progress.value }, bottomChrome) {
         QueueSurface(queueProgress, settings, { queueOpen = it }, playerProgress = { progress.value },
             onOpeningContact = { queueOpeningRequest++ }) {
-            Box(Modifier.weight(1f)) { CompositionLocalProvider(LocalBrowseObscuredInset provides 0.dp) {
+            Box(Modifier.weight(1f)) { CompositionLocalProvider(LocalBrowseObscuredInset provides queueSelectionPanel.clearance) {
             queueDrawerState.SaveableStateProvider("player-queue") { QueueScreen(queues, queueController, library,
                 playlist, playlistController, playback.connected, pins, ::pin, reducedMotion = settings.reducedMotion, isPlaying = playback.isPlaying, onOpen = ::openCollection, onMinimize = { queueOpen = false },
                 selectionVisible = queueOpen && expanded, playerOpen = !queueOpen || !expanded,
-                openingRequest = queueOpeningRequest) } } }
-            SelectionPanelVisibility(session.panelVisible, reducedMotion = settings.reducedMotion) {
+                openingRequest = queueOpeningRequest) } }
+            // Floats over the list: it never shortens the viewport, so the items gain no new bottom clip edge.
+            FloatingSelectionPanel(queueSelectionPanel, Modifier.align(Alignment.BottomCenter)) {
             Column(Modifier.heightIn(max = queueSelectionMaxHeight).controlVerticalScroll(rememberScrollState())) {
                 SessionSelectionPanel(session, queueController, playlistController, playlist, dragging = dragHost.state?.drag != null)
-            } }
+            } } }
         }
         } } }
         CompositionLocalProvider(LocalFrostedBackdrop provides if (queueVisible) playerBackdrop else browseBackdrop) {

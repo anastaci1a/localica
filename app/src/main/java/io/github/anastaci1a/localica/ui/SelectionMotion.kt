@@ -25,9 +25,15 @@ internal fun selectionRevealBounds(bounds: Rect, visibility: Float): Rect {
 /** Overlap uses the greatest per-entry visibility, never additive opacity. The selected
  * scene already owns silhouette antialiasing, so this mask deliberately has no lens clip. */
 internal fun DrawScope.drawSelectionVisibilityMask(entries: List<Pair<Rect, Float>>, gap: Float) {
-    entries.sortedBy { it.second }.forEach { (bounds, alpha) ->
+    val ordered = entries.sortedBy { it.second }
+    // The shadow zone around each member first, then every body over it at its own visibility, so a
+    // neighbour's wide shadow zone (Glass spread) never overrides a departing member's fade.
+    ordered.forEach { (bounds, alpha) ->
         val r = bounds.inflate(gap / 2f)
         drawRect(Color.White.copy(alpha = alpha.coerceIn(0f, 1f)), r.topLeft, r.size, blendMode = BlendMode.Src)
+    }
+    ordered.forEach { (bounds, alpha) ->
+        drawRect(Color.White.copy(alpha = alpha.coerceIn(0f, 1f)), bounds.topLeft, bounds.size, blendMode = BlendMode.Src)
     }
 }
 
