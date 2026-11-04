@@ -295,3 +295,4 @@ io.github.anastaci1a.localica.PlayerArtworkOpticsTest
 io.github.anastaci1a.localica.LiftShadowTest
 io.github.anastaci1a.localica.SelectionPillMaterialTest
 io.github.anastaci1a.localica.PopupHomeShapeTest
+io.github.anastaci1a.localica.SeekCancelGlassTest

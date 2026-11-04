@@ -548,7 +548,9 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
 
         }
     }
-    if (scrubDragging) CompositionLocalProvider(LocalFrostedBackdrop provides lyricBackdrop) {
+    // The complete player composite (artwork, wash, controls, text) as recorded by the Surface above;
+    // this target is a sibling of that Surface, so it never samples itself (#562).
+    if (scrubDragging) CompositionLocalProvider(LocalFrostedBackdrop provides seekCancelBackdrop(frostedBackdrop, lyricBackdrop, p)) {
         SeekCancelTarget(scrubCancel, scrubOverCancel,
             navigationInset + CollapsedQueueHeight + 20.dp, settings.reducedMotion)
     }
@@ -584,3 +586,9 @@ private fun Modifier.recordPlayerCoverBackdrop(source: FrostedBackdrop, wash: Fr
     }
 }
 
+
+/** The seek-cancel (X) refracts the complete recorded player scene, UI included (#562). That scene
+ * is recorded by the player Surface only once it is fully open; before that, and without one, it
+ * falls back to the artwork-and-wash recording. */
+internal fun seekCancelBackdrop(scene: FrostedBackdrop?, artwork: FrostedBackdrop, progress: Float): FrostedBackdrop =
+    scene?.takeIf { progress >= .99f } ?: artwork
