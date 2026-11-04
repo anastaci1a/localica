@@ -84,12 +84,17 @@ data class QueueJourney(
             if (end > history.size) future.take(end - history.size) else emptyList()
     }
 
+    // Unplayed explicit visits use the active cycle even while retracing older history.
+    // Membership distinguishes them from already-played forward history without new stored state.
+    private fun scheduledNext(): List<QueueVisit> = if (!modes.shuffle) emptyList() else
+        history.drop(cursor + 1).filter { it.cycle == cycle && it.entryId !in visited }
+
     fun select(entryId: String, ids: List<String>, random: Random = Random.Default): QueueJourney {
         require(entryId in ids)
         if (modes.shuffle && visited.containsAll(ids)) return restart(ids, entryId, random)
         val visit = QueueVisit(entryId, cycle)
         val kept = history.take(cursor + 1) + visit
-        return copy(history = kept, cursor = kept.lastIndex, visited = visited + entryId,
+        return copy(history = kept + scheduledNext().filterNot { it.entryId == entryId }, cursor = kept.lastIndex, visited = visited + entryId,
             orderedTraversalId = if (modes.shuffle) null else UUID.randomUUID().toString(),
             orderedAnchorToken = if (modes.shuffle) null else visit.token).planned(ids, random)
     }
@@ -101,7 +106,7 @@ data class QueueJourney(
         if (!modes.shuffle) return reconcile(ids, anchor.entryId, modes, random)
         val existing = (history.asSequence() + future.asSequence()).map { it.entryId }.toHashSet()
         require(added.none { it in existing })
-        val visits = added.map { QueueVisit(it, anchor.cycle) }
+        val visits = added.map { QueueVisit(it, cycle) }
         return copy(history = history.take(cursor + 1) + visits + history.drop(cursor + 1))
             .planned(ids, random)
     }
@@ -121,11 +126,20 @@ data class QueueJourney(
         val old = history.indexOfFirst { it.token == token }
         if (old >= 0) {
             val visit = history[old]
-            return copy(cursor = old, visited = if (visit.cycle == cycle) visited + visit.entryId else visited)
+            val reserved = scheduledNext().mapTo(hashSetOf()) { it.token }
+            val skipped = if (old > cursor) history.subList(cursor + 1, old).filter { it.token in reserved } else emptyList()
+            if (skipped.isEmpty()) return copy(cursor = old,
+                visited = if (visit.cycle == cycle) visited + visit.entryId else visited)
+            val skippedTokens = skipped.mapTo(hashSetOf()) { it.token }
+            val prefix = history.take(old + 1).filterNot { it.token in skippedTokens }
+            return copy(history = prefix + skipped + history.drop(old + 1), cursor = prefix.lastIndex,
+                visited = if (visit.cycle == cycle) visited + visit.entryId else visited).planned(ids, random)
         }
         val visit = future.firstOrNull { it.token == token } ?: return this
         val kept = history.take(cursor + 1) + visit
-        return copy(history = kept, cursor = kept.lastIndex, cycle = visit.cycle,
+        val scheduled = scheduledNext().filterNot { it.entryId == visit.entryId }
+            .map { if (it.cycle == visit.cycle) it else it.copy(cycle = visit.cycle) }
+        return copy(history = kept + scheduled, cursor = kept.lastIndex, cycle = visit.cycle,
             visited = (if (visit.cycle == cycle) visited else emptySet()) + visit.entryId)
             .planned(ids, random)
     }
