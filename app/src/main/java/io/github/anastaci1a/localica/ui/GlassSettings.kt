@@ -14,6 +14,10 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.navigation.GlassAppearance
 import io.github.anastaci1a.localica.navigation.GlassRendererMode
+import io.github.anastaci1a.localica.navigation.LiftShadowMax
+import io.github.anastaci1a.localica.navigation.LiftShadowMin
+import io.github.anastaci1a.localica.navigation.LiftShadowSteps
+import io.github.anastaci1a.localica.navigation.normalizedLiftShadowStrength
 import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 import androidx.compose.ui.graphics.graphicsLayer
@@ -64,6 +68,10 @@ internal fun GlassSettingsControls(value: GlassAppearance, onChange: (GlassAppea
     GlassSlider("White tint", value.whiteTint, "None", "White") { onChange(value.copy(whiteTint = it)) }
     GlassSlider("Shadow strength", value.shadowStrength, "Off", "Strong", curve = GlassShadowStrengthCurve, readout = ::shadowStrengthReadout) { onChange(value.copy(shadowStrength = it)) }
     GlassSlider("Shadow spread", value.shadowSpread, "Tight", "Broad") { onChange(value.copy(shadowSpread = it)) }
+    SliderPreference("Lift shadow strength · ${(value.liftShadowStrength * 100).roundToInt()}%", value.liftShadowStrength,
+        { onChange(value.copy(liftShadowStrength = normalizedLiftShadowStrength(it))) }, Modifier.semantics { contentDescription = "Lift shadow strength" },
+        valueRange = LiftShadowMin..LiftShadowMax, steps = LiftShadowSteps, low = "50%", high = "150%",
+        description = "Selected and floating items lift with Glass shadow spread, or a white glow on white-icon menus, at this share of Glass shadow strength.")
     SettingsHeading("Adaptive contrast")
     Text("Compress background brightness away from the page’s icon color.", style = MaterialTheme.typography.bodySmall)
     GlassSlider("Brightness trim", value.contrast, "Off", "50%", maximum = .5f) { onChange(value.copy(contrast = it)) }
