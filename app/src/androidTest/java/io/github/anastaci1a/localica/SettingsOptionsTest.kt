@@ -96,6 +96,8 @@ class SettingsOptionsTest {
         compose.onNodeWithText("Synthetic origin").performScrollTo().performClick()
         repeat(2) {
             assertAnchoredPopup(host, "Excluded subfolders") {
+                compose.onNodeWithText("Both scans skip these paths when Include subfolders is on.", substring = true).assertIsDisplayed()
+                compose.onNodeWithText("Run Full scan to remove indexed songs from excluded paths.", substring = true).assertIsDisplayed()
                 compose.onNode(hasSetTextAction()).performTextReplacement("Synthetic/Cancelled")
             }
             assertAnchoredPopup(host, "Remove folder")
@@ -133,9 +135,15 @@ class SettingsOptionsTest {
             assertFalse(preferences.scanOnLaunch)
             assertFalse(preferences.fullScanOnLaunch)
             compose.setContent { LocalicaTheme { FolderSettings(LibraryUiState(loading = false), {}, {}, {}) } }
-            compose.onNode(hasSetTextAction()).performTextInput("Quick scan")
+            compose.onNode(hasSetTextAction()).performTextInput("Quick Scan")
             compose.onNodeWithText("Scanner").performClick()
-            val quick = hasText("Quick scan") and isToggleable()
+            compose.onNodeWithText("Quick Scan adds new songs.", substring = true).performScrollTo().assertIsDisplayed()
+            compose.onNode(hasText("Quick Scan") and !isToggleable()).performScrollTo().assertExists()
+            compose.onNodeWithText("Off scans only each chosen folder; on includes nested folders. Both scans skip excluded paths. Set exclusions in Library and tags → Folders to scan → choose a folder → Excluded subfolders.")
+                .performScrollTo().assertIsDisplayed()
+            compose.onNodeWithText("Unknown durations are kept. Quick Scan keeps indexed songs. Run Full scan to apply changed rules to them.")
+                .performScrollTo().assertIsDisplayed()
+            val quick = hasText("Quick Scan") and isToggleable()
             val full = hasText("Full scan") and isToggleable()
             compose.onNode(quick).performScrollTo().performClick()
             compose.onNode(full).performScrollTo().performClick()
@@ -180,18 +188,18 @@ class SettingsOptionsTest {
         var quick = 0
         var full = 0
         compose.setContent { LocalicaTheme { ScannerPopup(state.value, {}, { full++ }, {}, { quick++ }) {} } }
-        compose.onNodeWithText("Quick scan").performScrollTo().performClick()
+        compose.onNodeWithText("Quick Scan").performScrollTo().performClick()
         compose.onNodeWithText("Full scan").performScrollTo().performClick()
         compose.runOnIdle { assertEquals(1, quick); assertEquals(1, full) }
         val idleBounds = compose.onNodeWithTag("scanner-body").fetchSemanticsNode().boundsInRoot
         compose.runOnIdle { state.value = state.value.copy(scanning = true, scannedCount = 123,
             scanStatus = io.github.anastaci1a.localica.scanner.ScanState(running = true, totalFolders = 2)) }
         compose.onNodeWithText("Full scan").assertIsNotEnabled()
-        compose.onNodeWithText("Quick scan").assertIsNotEnabled()
+        compose.onNodeWithText("Quick Scan").assertIsNotEnabled()
         assertEquals(idleBounds, compose.onNodeWithTag("scanner-body").fetchSemanticsNode().boundsInRoot)
         compose.runOnIdle { state.value = state.value.copy(scanning = false,
             scanStatus = io.github.anastaci1a.localica.scanner.ScanState(message = "Scan complete.")) }
-        compose.onNodeWithText("Quick scan").performScrollTo().performClick()
+        compose.onNodeWithText("Quick Scan").performScrollTo().performClick()
         compose.runOnIdle { assertEquals(2, quick); assertEquals(1, full) }
         assertEquals(idleBounds, compose.onNodeWithTag("scanner-body").fetchSemanticsNode().boundsInRoot)
     }
