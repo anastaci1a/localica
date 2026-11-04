@@ -1194,6 +1194,40 @@ class PlaybackIntentTest {
         }
     }
 
+    @Test fun stopHereDoesNotTreatPendingPlayNextInActiveCycleAsQueueEnd() = stopAtPlayNextHistoryBoundary(false)
+    @Test fun stopHereDoesNotTreatReturnFromScheduledVisitToOldHistoryAsQueueEnd() = stopAtPlayNextHistoryBoundary(true)
+
+    private fun stopAtPlayNextHistoryBoundary(leavingScheduled: Boolean) = fixture(rawPlayer = true, duplicateOccurrences = true) {
+        queues.settings(QueueSettings(shuffle = true,
+            advancedRepeat = AdvancedRepeat(songEnd = SongEnd.Stop, queueEnd = QueueEnd.Repeat)))
+        barrier()
+        repeat(4) { queues.next(); barrier() }
+        assertEquals(1L, queues.state.value.library.active!!.journey!!.cycle)
+        repeat(4) { queues.previous(alwaysSong = true); barrier() }
+        assertEquals(0L, queues.state.value.library.active!!.journey!!.current!!.cycle)
+        val done = CompletableDeferred<Boolean>()
+        queues.act(listOf(track, track), SongTap.PlayNext) { done.complete(it) }
+        assertTrue(withTimeout(5000) { done.await() })
+        if (leavingScheduled) repeat(2) { queues.next(); barrier() }
+        val journey = queues.state.value.library.active!!.journey!!
+        val current = journey.current!!
+        assertEquals(if (leavingScheduled) 1L else 0L, current.cycle)
+        assertEquals(if (leavingScheduled) 0L else 1L, journey.next!!.cycle)
+        awaitMain { player.engine.playbackState == Player.STATE_READY && player.duration > 300 }
+        withContext(Dispatchers.Main) {
+            player.engine.seekTo(player.duration - 80)
+            player.engine.play()
+        }
+        awaitMain { !player.engine.playWhenReady }
+        barrier()
+        assertEquals("Stop here must retain the ended visit when retracing the active traversal", current,
+            queues.state.value.library.active!!.journey!!.current)
+        withContext(Dispatchers.Main) {
+            assertEquals(current.token, player.currentMediaItem!!.queueVisit)
+            assertFalse(player.playWhenReady)
+        }
+    }
+
     private class CountingTracks(private val values: List<Track>) : AbstractList<Track>() {
         val reads = AtomicInteger()
         override val size get() = values.size
