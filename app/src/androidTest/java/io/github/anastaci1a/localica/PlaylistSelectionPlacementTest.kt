@@ -45,7 +45,7 @@ class PlaylistSelectionPlacementTest {
         val route = BrowseRoute(MainTab.Playlists)
         val preferences = BrowsePreferences(context)
         val previous = preferences.read(route)
-        val frames = SelectorPlacementFrames(compose, outlineVerticalInsetDp = 4f)
+        val frames = SelectorPlacementFrames(compose, outlineVerticalInsetDp = 4.5f)
         lateinit var scope: CoroutineScope
         lateinit var source: PlaylistSelectionDrawSource
         val playlists = (0..39).map { ManualPlaylist(id = "p$it", name = "Playlist ${it.toString().padStart(2, '0')}") }
@@ -241,7 +241,7 @@ internal class SelectorPlacementFrames(private val compose: ComposeContentTestRu
                     val outline = Rect(placed.left, placed.top + outlineVerticalInsetDp * density, placed.right, placed.bottom - outlineVerticalInsetDp * density)
                     val neighbours = draw.layout.items.mapNotNull { it.placed }.map { Rect(it.left, it.top + outlineVerticalInsetDp * density, it.right, it.bottom - outlineVerticalInsetDp * density) }
                     val room = hoverRoom(outline, neighbours, draw.layout.viewport, LiftEdges.Horizontal, 4f * density,
-                        neighbourInset = 4f * density, clearance = HoverLift.Clearance.value * density)
+                        neighbourInset = 3.5f * density, clearance = HoverLift.Clearance.value * density)
                     val lifted = hoverGeometry(MediaItemOutline(outline, 0f), room, v).lifted.bounds
                     val clipped = lifted.intersect(draw.layout.viewport)
                     if (!clipped.isEmpty) expected += clipped
