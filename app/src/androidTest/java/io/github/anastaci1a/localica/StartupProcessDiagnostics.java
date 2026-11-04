@@ -39,6 +39,8 @@ public final class StartupProcessDiagnostics extends Instrumentation {
     private final Map<String, File> commandScripts = new HashMap<>();
     private final AtomicReference<long[]> scrollEvent = new AtomicReference<>();
     private volatile long gestureStart;
+    private boolean replay;
+    private Rect replayArtists, replayAlbums, replayBounds;
 
     @Override public void onCreate(Bundle args) {
         arguments = args == null ? new Bundle() : new Bundle(args);
@@ -54,6 +56,7 @@ public final class StartupProcessDiagnostics extends Instrumentation {
                     "Controller must run outside target UID");
             String label = arguments.getString("label", "trial");
             require(label.matches("[A-Za-z0-9_-]{1,80}"), "Invalid label");
+            replay = "replay".equals(arguments.getString("inputMode", "replay"));
             boolean trace = "true".equals(arguments.getString("trace", "false"));
             File directory = new File(getTargetContext().getExternalFilesDir(null), "startup-diagnostics/" + label);
             require(!directory.exists() && directory.mkdirs(), "Refuse overwriting previous evidence");
@@ -69,11 +72,41 @@ public final class StartupProcessDiagnostics extends Instrumentation {
                             event.getScrollY(), event.getMaxScrollX(), event.getMaxScrollY()});
                 }
             });
+            String geometry = arguments.getString("replayGeometry");
+            if (replay && geometry != null) {
+                require(geometry.matches("[0-9]+(,[0-9]+){11}"), "Invalid replay geometry");
+                String[] values = geometry.split(","); int[] coordinates = new int[12];
+                for (int i = 0; i < coordinates.length; i++) coordinates[i] = Integer.parseInt(values[i]);
+                replayArtists = new Rect(coordinates[0], coordinates[1], coordinates[2], coordinates[3]);
+                replayAlbums = new Rect(coordinates[4], coordinates[5], coordinates[6], coordinates[7]);
+                replayBounds = new Rect(coordinates[8], coordinates[9], coordinates[10], coordinates[11]);
+                require(!replayArtists.isEmpty() && !replayAlbums.isEmpty() && replayBounds.contains(replayArtists) &&
+                        replayBounds.contains(replayAlbums), "Replay targets outside discovered bounds");
+            } else if (replay) {
+                require("true".equals(arguments.getString("discoveryOnly")), "Replay requires a separate discovery invocation");
+                long discoveryStart = SystemClock.uptimeMillis();
+                write(directory, "discovery-launch.txt", shell("am start -W -f 0x10008000 -n " + APP + "/io.github.anastaci1a.localica.MainActivity"));
+                ObservedNode discovery = snapshot(automation.getRootInActiveWindow());
+                require(discovery != null && hasPrefix(discovery, "Diagnostic album"), "Discovery requires loaded Albums fixture");
+                replayArtists = findNavigation(discovery, "Artists");
+                replayAlbums = findNavigation(discovery, "Albums");
+                replayBounds = new Rect(discovery.bounds);
+                require(replayArtists != null && replayAlbums != null, "Discovery requires both navigation targets");
+                write(directory, "discovery.json", new JSONObject().put("outsideMeasurement", true)
+                        .put("elapsedMs", SystemClock.uptimeMillis() - discoveryStart)
+                        .put("geometry", geometry(replayArtists) + "," + geometry(replayAlbums) + "," + geometry(replayBounds))
+                        .put("artists", replayArtists.toShortString()).put("albums", replayAlbums.toShortString())
+                        .put("gestureBounds", replayBounds.toShortString()).toString(2));
+                result.putString("stream", "Geometry discovered outside measurement; reseed before replay.\n");
+                finish(0, result); return;
+            }
             JSONObject identity = new JSONObject().put("api", Build.VERSION.SDK_INT).put("fingerprint", Build.FINGERPRINT)
                     .put("controllerPid", android.os.Process.myPid()).put("controllerPackage", getTargetContext().getPackageName())
                     .put("target", APP).put("trace", trace).put("windowMs", WINDOW_MS)
                     .put("fixture", arguments.getString("fixture", "unspecified"))
-                    .put("observer", "Accessibility root polling 100ms; first observed shell/content and input response; not presented-pixel latency")
+                    .put("inputMode", replay ? "scheduled-replay" : "adaptive-polling")
+                    .put("observer", replay ? "Coordinates discovered before force-stop; scheduled input and vertical accessibility events; readiness unmeasured" :
+                            "Accessibility root polling 100ms; first observed shell/content and input response; not presented-pixel latency")
                     .put("coldDefinition", "am force-stop and no target PID before launch; filesystem/OS caches not cleared")
                     .put("device", shell("wm size; wm density; dumpsys package " + APP + " | grep versionName"));
             write(directory, "identity.json", identity.toString(2));
@@ -128,6 +161,9 @@ public final class StartupProcessDiagnostics extends Instrumentation {
         frameSampler.start();
         try {
             write(output, "launch.txt", shell("am start -W -f 0x10008000 -n " + APP + "/io.github.anastaci1a.localica.MainActivity"));
+            if (replay) {
+                replayWindow(report, inputs, start);
+            } else {
             long shellAt = 0, firstContent = 0;
             int step = 0, polls = 0;
             JSONObject navigation = null;
@@ -214,6 +250,7 @@ public final class StartupProcessDiagnostics extends Instrumentation {
                     .put("controlLoopEndedMs", SystemClock.uptimeMillis() - start)
                     .put("dragScrollEventObserved", step >= 3).put("flingScrollEventObserved", step == 6)
                     .put("firstFiveSecondInputAttempt", inputs.length() > 0 && inputs.getJSONObject(0).getLong("requestedMs") <= 5_000);
+            }
         } finally {
             sampling.set(false);
             frameSampler.interrupt();
@@ -235,11 +272,64 @@ public final class StartupProcessDiagnostics extends Instrumentation {
         report.put("pid", pid).put("sameProcessAsCold", expectedPid == null ? JSONObject.NULL : expectedPid.equals(pid));
         write(output, "milestones.json", report.toString(2));
         // Return to Albums outside the measurement; warm activity starts from a comparable tab.
-        ObservedNode root = snapshot(automation.getRootInActiveWindow());
-        if (root != null) {
-            Rect albums = find(root, "Albums", false); if (albums != null) tap(albums);
+        if (replay) { tap(replayAlbums); }
+        else {
+            ObservedNode root = snapshot(automation.getRootInActiveWindow());
+            if (root != null) {
+                Rect albums = find(root, "Albums", false); if (albums != null) tap(albums);
+            }
         }
         return pid;
+    }
+
+    private static String geometry(Rect bounds) {
+        return bounds.left + "," + bounds.top + "," + bounds.right + "," + bounds.bottom;
+    }
+    private static Rect findNavigation(ObservedNode node, String label) {
+        Rect result = null;
+        if (node.visible && !node.bounds.isEmpty() && (matches(node.text, label, false) || matches(node.description, label, false)))
+            result = new Rect(node.bounds);
+        for (ObservedNode child : node.children) {
+            Rect candidate = findNavigation(child, label);
+            if (candidate != null && (result == null || candidate.centerY() > result.centerY())) result = candidate;
+        }
+        return result;
+    }
+
+    private void replayWindow(JSONObject report, JSONArray inputs, long start) throws Exception {
+        long[] planned = {2_000, 4_500, 8_000, 10_500};
+        String[] kinds = {"tap-artists", "gallery-drag", "tap-albums", "gallery-fling"};
+        JSONObject pendingScroll = null, drag = null, fling = null;
+        int next = 0;
+        while (SystemClock.uptimeMillis() - start < WINDOW_MS) {
+            if (pendingScroll != null && scrollEvent.get() != null) {
+                recordScroll(pendingScroll, start); pendingScroll = null;
+            }
+            long elapsed = SystemClock.uptimeMillis() - start;
+            if (next < planned.length && elapsed >= planned[next]) {
+                JSONObject input = new JSONObject().put("kind", kinds[next]).put("plannedMs", planned[next])
+                        .put("requestedMs", elapsed).put("scheduleDelayMs", elapsed - planned[next]);
+                if (next == 0 || next == 2) tap(next == 0 ? replayArtists : replayAlbums);
+                else {
+                    gestureStart = SystemClock.uptimeMillis(); scrollEvent.set(null);
+                    swipe(replayBounds, next == 1 ? 20 : 6);
+                    pendingScroll = input;
+                    if (next == 1) drag = input; else fling = input;
+                }
+                input.put("injectionReturnedMs", SystemClock.uptimeMillis() - start);
+                inputs.put(input); next++;
+            }
+            SystemClock.sleep(20);
+        }
+        if (pendingScroll != null && scrollEvent.get() != null) recordScroll(pendingScroll, start);
+        report.put("inputMode", "scheduled-replay").put("inputs", inputs)
+                .put("shellObservedMs", JSONObject.NULL).put("firstContentObservedMs", JSONObject.NULL)
+                .put("navigationContentObserved", false).put("navigationReadiness", "unmeasured; no hierarchy reads inside window")
+                .put("accessibilityReadMs", 0).put("accessibilityNodes", 0).put("polls", 0)
+                .put("controlLoopEndedMs", SystemClock.uptimeMillis() - start)
+                .put("dragScrollEventObserved", drag != null && drag.has("scrollEventMs"))
+                .put("flingScrollEventObserved", fling != null && fling.has("scrollEventMs"))
+                .put("firstFiveSecondInputAttempt", inputs.length() > 0 && inputs.getJSONObject(0).getLong("requestedMs") <= 5_000);
     }
 
     private static final class ObservedNode {

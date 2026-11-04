@@ -21,9 +21,11 @@ The controller instruments the test package with a distinct UID. Cold means the 
 
 Launch output retains Android's `am start -W` timing and launch state. Frame snapshots begin before launch; input starts after launch completion so the warm control cannot target its outgoing activity. Shell commands retain stderr and use explicit shell interpretation.
 
-The controller requests Artists when its tab first appears, then drags its loaded gallery. It returns to Albums and flings when that content appears. Requests can land after five seconds on a slow emulator; receipts expose that limitation. Accessibility polling observes shell/content and scroll events. It does not certify presented pixels or instant interaction.
+Default replay discovers navigation coordinates outside measurement, then clears and reseeds the app again. It schedules Artists at two seconds, a drag at 4.5 seconds, Albums at eight seconds, and a fling at 10.5 seconds. Launch completion or scheduling can delay requests; receipts retain planned and actual times.
 
-Navigation records tab-selection response separately from content arrival. Artists content requires the outgoing album titles to disappear, so an album's artist subtitle cannot certify destination readiness. Scroll-event timestamps remain accessibility observations, with vertical ranges retained for source review.
+Replay performs no hierarchy reads inside either window. Vertical accessibility events record gesture responses and ranges. Navigation selection and content-readiness latency remain unmeasured. A scroll event cannot prove which page supplied it. Keep this input coverage separate from readiness and presented-pixel acceptance.
+
+Use `--input-mode adaptive` to investigate accessibility-observed selection and content. It requests Artists when the tab appears and scrolls after content arrives. Artists requires outgoing album titles to disappear. Tree reads can dominate the window on slow emulators; keep these samples separate from replay.
 
 Each fifteen-second window retains overlapping `gfxinfo framestats` snapshots, memory and CPU snapshots, input milestones and optional `atrace` output. Analysis also isolates the first five seconds. Frame timestamps use uptime; p50/p95/p99 use nearest rank. Deadline misses are unavailable on older APIs; the explicit 16.7 ms count remains separate.
 
@@ -31,7 +33,7 @@ The controller polls the frame ring every second and deduplicates its overlappin
 
 Each dump retains its observation clock. Completion timestamps later than that observation are invalid; raw values remain archived. Later valid observations can recover the same traversal. Reports distinguish recovered and unresolved frames. Unresolved completions limit total-duration percentiles; CPU and trace measurements remain separate.
 
-Accessibility samples the first two cells of long scrollable galleries and retains surrounding navigation. API 33 and newer request descendant prefetch. This is a content-presence probe, not a complete gallery inventory. Receipts retain traversal time and observed node counts. Input is never injected after the nominal window has ended.
+Discovery and adaptive polling request descendant prefetch on API 33 and newer. Long scrollable nodes sample two children. Receipts retain traversal time and node counts. Replay uses the lowest matching navigation label to avoid page headers. No new input sequence starts after the nominal window ends.
 
 The frame ring and incomplete tail cannot certify lossless capture. Missing input/content/scroll observations remain explicit rather than passing performance assertions. Timing values never fail a correctness test. Profile attribution requires inspecting raw traces; phase medians do not establish a bottleneck by themselves.
 
