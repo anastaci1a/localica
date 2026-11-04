@@ -199,11 +199,8 @@ internal fun Modifier.pinchRetainedOverlay(motion: BrowsePinchMotion, grid: Lazy
         val focus = if (motion.source == null) Offset.Zero else fadeFocus.resolve(motion.transaction,
             motion.gesture?.midpoint ?: Offset(motion.bounds[motion.focusKey]?.center?.x ?: motion.viewportWidth / 2f,
                 motion.focusTop.toFloat()))
-        val departures = if (motion.visualSource == null) emptyMap() else pinchFadeSchedule(
-            motion.bounds.filterKeys { it !in liveKeys && it in motion.frozen && indices.retainedPinchItemIndex(it) >= 0 }
-                .mapValues { (_, bounds) -> (bounds.center - focus).getDistance() })
         val arrivals = if (motion.visualSource == null) emptyMap() else pinchFadeSchedule(
-            visible.filter { it.key !in motion.bounds && indices.retainedPinchItemIndex(it.key) >= 0 }
+            visible.filter { it.key !in motion.bounds && (it.key in motion.artwork || it.key in motion.text) }
                 .associate { entry -> entry.key to (Offset(entry.offset.x + entry.size.width / 2f,
                     entry.offset.y + entry.size.height / 2f) - focus).getDistance() })
         fun drawLive(part: BrowsePinchLayer, key: Any) {
@@ -267,9 +264,14 @@ internal fun Modifier.pinchRetainedOverlay(motion: BrowsePinchMotion, grid: Lazy
                 val origin = sourceOrigin + (targetOrigin - sourceOrigin) * exitProgress
                 retained[key] = RetainedPinchPlacement(image, origin, (width - 2 * targetInset).coerceAtLeast(0f),
                     image.content?.target?.height?.toFloat() ?: (pitch - 2 * targetVerticalInset).coerceAtLeast(0f),
-                    departures.getValue(key).alpha(p), index, exitProgress)
+                    1f, index, exitProgress)
             }
         }
+        // Reuse the validated placements: scheduling must not add catalog lookups.
+        val departures = pinchFadeSchedule(retained.keys.associateWith { key ->
+            (motion.bounds.getValue(key).center - focus).getDistance()
+        })
+        retained.replaceAll { key, placed -> placed.copy(alpha = departures.getValue(key).alpha(p)) }
         fun retainedLift(placed: RetainedPinchPlacement): HoverGeometry? {
             val content = placed.item.content ?: return null
             val hover = content.hover ?: return null
