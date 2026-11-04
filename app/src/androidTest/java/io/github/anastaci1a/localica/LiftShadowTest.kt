@@ -148,7 +148,10 @@ class LiftShadowTest {
         assertEquals(1f, value.liftShadowStrength, 0f)
         compose.onNodeWithContentDescription("Lift shadow strength").performSemanticsAction(SemanticsActions.SetProgress) { it(1.23f) }
         compose.runOnIdle { assertEquals(1.25f, value.liftShadowStrength, .0001f) }
-        compose.onNode(hasText("Lift shadow strength · 125%"), true).assertExists()
+        compose.waitForIdle()
+        val labels = compose.onAllNodes(hasText("Lift shadow strength ·", substring = true), true).fetchSemanticsNodes()
+            .flatMap { n -> (if (n.config.contains(androidx.compose.ui.semantics.SemanticsProperties.Text)) n.config[androidx.compose.ui.semantics.SemanticsProperties.Text] else emptyList()).map { t -> t.text } }
+        assertTrue("Label shows 125%: $labels", labels.any { it.contains("125%") })
         compose.onNodeWithContentDescription("Lift shadow strength").performSemanticsAction(SemanticsActions.SetProgress) { it(9f) }
         compose.runOnIdle { assertEquals(1.5f, value.liftShadowStrength, .0001f) }
         compose.onNodeWithContentDescription("Lift shadow strength").performSemanticsAction(SemanticsActions.SetProgress) { it(0f) }
