@@ -22,6 +22,7 @@ internal class BrowseItemMetrics(val style: BrowseStyle, columns: Int, val width
     val titleSize = style.browseTitleSize(columns)
     val titleLine = style.browseTitleLine(columns)
     val lines = if (gallery) 2 else 1
+    val titleLines = style.browseTitleLines()
     val art = when {
         gallery -> width
         numbered || style.listSize == ListSize.Tracklist -> px(28).coerceAtMost(width)
@@ -56,7 +57,7 @@ internal class BrowseItemMetrics(val style: BrowseStyle, columns: Int, val width
 
     fun place(titleHeight: Int, infoWidth: Int, infoHeight: Int): BrowseItemPlacement {
         val textHeight = if (trailing) maxOf(titleHeight, infoHeight) else titleHeight + infoHeight
-        val minimum = px(when (style.listSize) { ListSize.Compact -> 56; ListSize.Small -> 48; ListSize.Smallest -> 40; else -> 48 })
+        val minimum = px(when (style.listSize) { ListSize.Compact -> 56; ListSize.Small -> 40; ListSize.Smallest -> 40; else -> 48 })
         val row = if (gallery) art + textHeight else maxOf(art, textHeight, minimum)
         val titleY = if (gallery) art else (row - textHeight) / 2
         val titleX = inset + if (gallery) 0 else art + gap
@@ -88,3 +89,7 @@ internal fun BrowseStyle.browseTitleLine(columns: Int) = when {
     listSize == ListSize.Large -> 26
     else -> 24
 }
+
+/** Large titles may wrap; list metadata always remains a single line. */
+internal fun BrowseStyle.browseTitleLines() =
+    if (presentation != Presentation.List || listSize == ListSize.Large) 2 else 1

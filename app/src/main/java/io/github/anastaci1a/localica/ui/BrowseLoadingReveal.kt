@@ -149,7 +149,7 @@ internal fun BrowseLoadingItem(style: BrowseStyle, geometry: BrowseCellGeometry,
     val corner = remember { mutableFloatStateOf(with(density) { 8.dp.toPx() }) }
     val galleryText = if (style.presentation != Presentation.List) rememberGalleryLoadingTextMetrics(style, geometry.columns) else null
     val titleLine = galleryText?.titleLine ?: with(density) { style.browseTitleLine(geometry.columns).sp.roundToPx() }
-    val titleHeight = galleryText?.titleReservation ?: titleLine
+    val titleHeight = galleryText?.titleReservation ?: titleLine * style.browseTitleLines()
     val infoLine = galleryText?.informationLine ?: with(density) { MaterialTheme.typography.bodySmall.lineHeight.roundToPx() }
     val infoHeight = if (showInformation) galleryText?.informationReservation ?: infoLine else 0
     Layout(modifier = Modifier.fillMaxWidth().testTag("browse-skeleton-item").padding(horizontal = geometry.cardInset.dp, vertical = geometry.cardVerticalInset(style).dp), content = {
@@ -169,10 +169,11 @@ internal fun BrowseLoadingItem(style: BrowseStyle, geometry: BrowseCellGeometry,
         val titleWidth = metrics.titleWidth(infoWidth)
         // Gallery's visual placeholders describe one text line; keep the existing
         // two-line row reservation separate so real multiline content is never clipped.
-        val placement = metrics.place(titleLine, infoWidth, if (showInformation) infoLine else 0)
+        val placeholderTitleHeight = if (metrics.gallery) titleLine else titleHeight
+        val placement = metrics.place(placeholderTitleHeight, infoWidth, if (showInformation) infoLine else 0)
         val reservedHeight = metrics.place(titleHeight, infoWidth, infoHeight).height
         val art = children[0].measure(Constraints.fixed(metrics.art, metrics.art))
-        val title = children[1].measure(Constraints.fixed(titleWidth, titleLine))
+        val title = children[1].measure(Constraints.fixed(titleWidth, placeholderTitleHeight))
         val info = children[2].measure(Constraints.fixed(infoWidth, if (showInformation) infoLine else 0))
         layout(constraints.maxWidth, reservedHeight) {
             art.placeRelative(placement.artX, placement.artY)
@@ -189,7 +190,7 @@ internal fun BrowseLoadingViewport(style: BrowseStyle, geometry: BrowseCellGeome
     val galleryText = if (style.presentation != Presentation.List) rememberGalleryLoadingTextMetrics(style, geometry.columns) else null
     val count = with(density) {
         val metrics = BrowseItemMetrics(style, geometry.columns, geometry.artworkWidth(widthPx, this.density), this.density, false)
-        val titleHeight = galleryText?.titleReservation ?: style.browseTitleLine(geometry.columns).sp.roundToPx()
+        val titleHeight = galleryText?.titleReservation ?: (style.browseTitleLine(geometry.columns).sp.roundToPx() * metrics.titleLines)
         val infoHeight = if (showInformation) galleryText?.informationReservation ?: MaterialTheme.typography.bodySmall.lineHeight.roundToPx() else 0
         val pitch = metrics.place(titleHeight, 0, infoHeight).height + geometry.cardVerticalInset(style).dp.roundToPx() * 2
         (ceil(heightPx.toFloat() / pitch.coerceAtLeast(1)).toInt() + 1) * geometry.columns

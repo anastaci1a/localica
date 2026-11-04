@@ -55,7 +55,7 @@ internal fun rememberBrowseItemMeasure(item: BrowserItem, trackNumber: String?,
         val title = measurer.measure(AnnotatedString(item.title), titleStyle.copy(
             fontSize = metrics.titleSize.sp, lineHeight = metrics.titleLine.sp,
             fontWeight = if (numbered) FontWeight.Normal else titleStyle.fontWeight),
-            overflow = TextOverflow.Ellipsis, maxLines = metrics.lines,
+            overflow = TextOverflow.Ellipsis, maxLines = metrics.titleLines,
             constraints = Constraints.fixedWidth(metrics.titleWidth(info?.size?.width ?: 0)))
         val number = if (numbered) measurer.measure(AnnotatedString(requireNotNull(label)), numberStyle,
             maxLines = 1, constraints = Constraints(maxWidth = metrics.art, maxHeight = metrics.art)) else null
