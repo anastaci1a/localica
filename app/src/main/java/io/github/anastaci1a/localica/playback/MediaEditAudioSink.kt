@@ -89,6 +89,21 @@ internal class MediaEditAudioSink(sink: AudioSink) : ForwardingAudioSink(sink) {
 
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 internal open class PlaybackRenderersFactory(context: Context) : DefaultRenderersFactory(context) {
+    override fun buildAudioRenderers(context: Context, extensionRendererMode: Int,
+        mediaCodecSelector: androidx.media3.exoplayer.mediacodec.MediaCodecSelector,
+        enableDecoderFallback: Boolean, audioSink: AudioSink, eventHandler: android.os.Handler,
+        eventListener: androidx.media3.exoplayer.audio.AudioRendererEventListener,
+        out: java.util.ArrayList<androidx.media3.exoplayer.Renderer>) {
+        val first = out.size
+        super.buildAudioRenderers(context, extensionRendererMode, mediaCodecSelector, enableDecoderFallback,
+            audioSink, eventHandler, eventListener, out)
+        if (android.os.Build.VERSION.SDK_INT == 26) {
+            val index = (first until out.size).first { out[it] is androidx.media3.exoplayer.audio.MediaCodecAudioRenderer }
+            out[index] = LegacyMp3AudioRenderer(context, codecAdapterFactory, mediaCodecSelector,
+                enableDecoderFallback, eventHandler, eventListener, audioSink)
+        }
+    }
+
     override fun buildAudioSink(context: Context, enableFloatOutput: Boolean, enableAudioOutputPlaybackParams: Boolean): AudioSink? =
         MediaEditAudioSink(DefaultAudioSink.Builder(context)
             .setEnableFloatOutput(enableFloatOutput)
