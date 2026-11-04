@@ -224,6 +224,7 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
     val lens = remember { lazy { if (Build.VERSION.SDK_INT >= 33) LensRenderer() else null } }
     val mesh = remember { lazy { LensMeshRenderer() } }
     val rim = remember { GlassRimCache() }
+    val popupRim = if (panel > 0f && silhouette == null) remember { PopupGlassRimCache() } else null
     // Transform the surface and its shadow together in the draw pass; a legacy
     // ViewLayer would clip the shadow outside its bounds even with clipping disabled.
     Box(modifier.then(if (pressFeedback) Modifier.glassPress(contact, contactShape,
@@ -332,8 +333,14 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
             if (panel > 0f) drawFrostCoating(coatingDark, Color.Transparent, panel)
             val outline = silhouette?.frame(size)
             val splitRim = outline?.description?.rimSplit ?: 0f
-            drawGlassRim(androidx.compose.ui.geometry.Rect(Offset.Zero, size), cornerRadius?.toPx() ?: size.minDimension / 2f,
-                path = outline?.path, tone = tone, opacity = 1f - splitRim, cache = rim)
+            val bounds = androidx.compose.ui.geometry.Rect(Offset.Zero, size)
+            val radius = cornerRadius?.toPx() ?: size.minDimension / 2f
+            // Blend the control finish into the shared panel finish during the morph.
+            // Flat panel walls have constant normals; diagonal glints stay on corners.
+            val panelRimWeight = if (popupRim == null) 0f else panel
+            if (panelRimWeight < 1f) drawGlassRim(bounds, radius,
+                path = outline?.path, tone = tone, opacity = (1f - splitRim) * (1f - panelRimWeight), cache = rim)
+            popupRim?.let { drawPopupGlassRim(bounds, radius, tone, panelRimWeight, it) }
             if (outline != null && splitRim > 0f) outline.bodies.forEach { part ->
                 clipRect(part.left, part.top, part.right, part.bottom) {
                     drawGlassRim(androidx.compose.ui.geometry.Rect(part.left, part.top, part.right, part.bottom),
