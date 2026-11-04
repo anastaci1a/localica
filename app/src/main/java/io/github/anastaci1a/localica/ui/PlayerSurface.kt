@@ -15,6 +15,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -23,6 +24,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.*
+import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.animation.core.animateFloatAsState
@@ -100,6 +102,9 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     // Header controls already sample this scene before lyrics open. Older
     // adapters need its prepared pixels whenever that header is visible too.
     val lyricBackdrop = rememberFrostedBackdrop(listOf(artwork, settings.artworkLayout, settings.glass), p > .7f, dark = lightInk)
+    // Only the complete scene needs prepared pixels. The wash is a GPU backing
+    // for the cover's sampling source, not a second full-window CPU snapshot.
+    val artworkWash = rememberFrostedBackdrop(Unit, enabled = false, dark = lightInk, retainRaster = false)
     val lyricVisibility by animateFloatAsState(if (lyricsOpen) 1f else 0f, tween(settings.motionDuration(550)), label = "Lyrics layout")
     // A light/dark foreground change during the lyrics animation eases with its progress.
     val inkTransition = remember { PlayerInkTransition(inkTarget) }
@@ -262,6 +267,10 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     val artProgress = playerArtworkSizeProgress(p, growthCurve)
     val artWidth = MiniArtworkSize + (fullArt - MiniArtworkSize) * artProgress
     val artHeight = MiniArtworkSize + (fullArtHeight - MiniArtworkSize) * artProgress
+    // Only metadata moves behind the foreground cover during expansion/contraction.
+    // Keep the settled full-background title above the cover, and all controls above it.
+    val movingCover = p > 0f && p < 1f
+    val metadataLayer = if (movingCover) -.5f else 0f
     val normalTransport = ordinarySeekY + 184.dp + extraActions
     val lyricBarCenter = lyricMetadataY + 64.dp + 20.dp
     val shelfTop = virtualHeight - navigationInset - CollapsedQueueHeight
@@ -383,7 +392,9 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
                 contentScale = artContentScale)
             }
         }
-            ArtworkBlend(artSwipe.source ?: artwork, Modifier.fillMaxSize().recordFrostedBackdrop(lyricBackdrop, enabled = p > .7f), duration = paletteDuration, occurrence = artworkVisit ?: sampled.trackId,
+            ArtworkBlend(artSwipe.source ?: artwork, Modifier.fillMaxSize().zIndex(-1f)
+                .recordFrostedBackdrop(if (lyricProgress > 0f) lyricBackdrop else artworkWash, enabled = p > .7f),
+                duration = paletteDuration, occurrence = artworkVisit ?: sampled.trackId,
                 immediate = artSwipe.active || artworkVisit != null && artSwipe.handoff == artworkVisit, opacityBlend = lyricsOpen || settings.artworkTransition != io.github.anastaci1a.localica.navigation.ArtworkTransition.BlurThrough,
                 onBackgroundFrame = polarity::frame) { frame ->
                 val backgroundRole = LocalArtworkBackgroundRole.current
@@ -398,11 +409,6 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
                         Modifier.fillMaxSize().graphicsLayer { alpha = swipeFraction }, backgroundProgress,
                         with(density) { artY.toPx() }, with(density) { artHeight.toPx() },
                         with(density) { artX.toPx() } + neighborOffset, artPixels, softness = maxOf(1f - coverBlend, swipeFeather / .9f), tone = tone)
-                }
-                // Soft edges reveal the two blended color continuations in the space between covers.
-                if (lyricProgress <= 0f) {
-                    cover(frame, swipeOffset)
-                    if (destination != null) cover(destination.visual, neighborOffset, neighbor = true)
                 }
             }
             Box(Modifier.motionBounds(artX, artY, artWidth, artHeight).testTag("artwork-gesture")
@@ -420,7 +426,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
             }
             if (lyricProgress > 0f) CompositionLocalProvider(LocalFrostedBackdrop provides lyricBackdrop) { LyricsPanel(track, sampled.positionMs, settings.reducedMotion, onSeek,
                 Modifier.offset(x = contentInset, y = lyricsViewport.top.dp).width(contentWidth)
-                    .height(lyricsViewport.height.dp).clipToBounds()
+                    .height(lyricsViewport.height.dp).zIndex(-1f).clipToBounds()
                     .graphicsLayer { alpha = lyricMotion.contentAlpha }
                     // Keep scroll/source identity through a cancelled collapse, but invisible
                     // lyrics must not intercept the next player gesture or accessibility.
@@ -439,10 +445,13 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
                 originPreparation = sourcesPreparation, contentAlpha = { lyricMotion.contentAlpha },
                 sampledAtMs = sampled.sampledAtMs, playing = sampled.isPlaying, speed = sampled.playbackSpeed,
                 delayMs = settings.lyricDelayMs, durationMs = sampled.durationMs) }
-            // The lyrics (and the missing-lyrics icon) draw beneath the artwork while it fades in or out of
-            // the lyrics screen (#537), so the covers are drawn again above the panel once lyrics are showing.
-            // The cover below the panel is dropped in that interval, so the artwork is composited exactly once.
-            if (lyricProgress > 0f) ArtworkBlend(artSwipe.source ?: artwork, Modifier.fillMaxSize(), duration = paletteDuration,
+            // One blend owner survives both progress boundaries. Its displayed cover
+            // stays above moving metadata/lyrics and below settled metadata. Header
+            // glass samples wash + cover; lyrics retain their original wash-only source.
+            ArtworkBlend(artSwipe.source ?: artwork, Modifier.fillMaxSize()
+                .zIndex(if (movingCover || lyricProgress > 0f) 0f else -1f)
+                .recordPlayerCoverBackdrop(lyricBackdrop, artworkWash, enabled = p > .7f && lyricProgress <= 0f),
+                duration = paletteDuration,
                 occurrence = artworkVisit ?: sampled.trackId,
                 immediate = artSwipe.active || artworkVisit != null && artSwipe.handoff == artworkVisit,
                 opacityBlend = lyricsOpen || settings.artworkTransition != io.github.anastaci1a.localica.navigation.ArtworkTransition.BlurThrough) { frame ->
@@ -480,7 +489,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
             val titlePadding = 8.dp
             // Keep the original pixel rounding without adding a translated graphics layer.
             val titleInputY = with(density) { (titleY.roundToPx() - titlePadding.roundToPx()).toDp() }
-            Layout(modifier = Modifier.offset(textX, titleInputY).width(textWidth), content = {
+            Layout(modifier = Modifier.offset(textX, titleInputY).width(textWidth).zIndex(metadataLayer), content = {
                 MarqueeTitle(sampled.title, settings.reducedMotion,
                     Modifier.fillMaxWidth().scalePlayerText(titleScale + (1f - titleScale) * p).testTag("player-title").onGloballyPositioned { polarity.measure("title", it) },
                     style = titleStyle, motionPaused = textMotionPaused)
@@ -512,7 +521,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
                     append(" · "); append(album)
                 } }
             }, settings.reducedMotion,
-                Modifier.offset(textX, subtitleY).width(textWidth).scalePlayerText(subtitleScale + (1f - subtitleScale) * p).testTag("player-artist").onGloballyPositioned { polarity.measure("artist", it) },
+                Modifier.offset(textX, subtitleY).width(textWidth).zIndex(metadataLayer).scalePlayerText(subtitleScale + (1f - subtitleScale) * p).testTag("player-artist").onGloballyPositioned { polarity.measure("artist", it) },
                 style = MaterialTheme.typography.bodyLarge.copy(color = subtitleColor), motionPaused = textMotionPaused,
                 visiblePrefixLength = artist.length, suffixVisibility = albumVisibility)
             if (rowMotion.seekAlpha > 0f) Column(Modifier.offset(x = contentInset, y = seekY).width(contentWidth)
@@ -551,5 +560,27 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
             onSettings(settings.copy(artworkTap = value)); configureTap = false
         }) { Text(value.label) } } } }, confirmButton = { ActionTextButton(onClick = { configureTap = false }) { Text("Close") } })
 }
+}
+
+/** Record the complete glass scene while displaying only its already-recorded cover.
+ * Replaying drawContent for display would mutate nested blend owners during readback. */
+@Composable
+private fun Modifier.recordPlayerCoverBackdrop(source: FrostedBackdrop, wash: FrostedBackdrop,
+    enabled: Boolean): Modifier {
+    val cover = rememberGraphicsLayer()
+    val cutout = remember { Path() }
+    return drawWithContent {
+        drawContent()
+        if (enabled) drawLayer(cover)
+    }.recordFrostedBackdrop(source, backing = wash, enabled = enabled, displayCutout = {
+        cutout.reset()
+        cutout.addRect(Rect(0f, 0f, size.width, size.height))
+        cutout
+    }).drawWithContent {
+        // Keep the displayed owner and the sampled composite on the same frame
+        // for the full lifetime of a retained native copy, including cancellation.
+        if (!source.readbackPending) cover.record { this@drawWithContent.drawContent() }
+        drawLayer(cover)
+    }
 }
 
