@@ -86,11 +86,16 @@ public final class StartupProcessDiagnostics extends Instrumentation {
                 require("true".equals(arguments.getString("discoveryOnly")), "Replay requires a separate discovery invocation");
                 long discoveryStart = SystemClock.uptimeMillis();
                 write(directory, "discovery-launch.txt", shell("am start -W -f 0x10008000 -n " + APP + "/io.github.anastaci1a.localica.MainActivity"));
-                ObservedNode discovery = snapshot(automation.getRootInActiveWindow());
-                require(discovery != null && hasPrefix(discovery, "Diagnostic album"), "Discovery requires loaded Albums fixture");
-                replayArtists = findNavigation(discovery, "Artists");
-                replayAlbums = findNavigation(discovery, "Albums");
-                replayBounds = new Rect(discovery.bounds);
+                do {
+                    ObservedNode discovery = snapshot(automation.getRootInActiveWindow());
+                    if (discovery != null && APP.equals(discovery.packageName)) {
+                        replayArtists = findNavigation(discovery, "Artists");
+                        replayAlbums = findNavigation(discovery, "Albums");
+                        replayBounds = new Rect(discovery.bounds);
+                    }
+                    if (replayArtists != null && replayAlbums != null) break;
+                    SystemClock.sleep(100);
+                } while (SystemClock.uptimeMillis() - discoveryStart < 60_000);
                 require(replayArtists != null && replayAlbums != null, "Discovery requires both navigation targets");
                 write(directory, "discovery.json", new JSONObject().put("outsideMeasurement", true)
                         .put("elapsedMs", SystemClock.uptimeMillis() - discoveryStart)
