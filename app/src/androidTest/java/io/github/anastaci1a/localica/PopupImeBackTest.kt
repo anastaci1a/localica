@@ -209,7 +209,8 @@ class PopupImeBackTest {
                 compose.awaitExpectedWindowFocus(compose.onNode(hasSetTextAction()))
                 pressSystemBack()
                 awaitIme(false)
-                compose.waitUntil(5000) { !searchOpen && !searchAnchor.modalPresent }
+                // Drain queued editing/return effects as well as advancing animation frames.
+                compose.waitUntil(5000) { compose.runOnIdle { !searchOpen && !searchAnchor.modalPresent } }
                 compose.awaitExpectedWindowFocus(compose.onNodeWithTag("ime-back-popup-trigger"))
                 nativeTap(compose.onNodeWithTag("ime-back-popup-trigger"))
                 val body = compose.onNodeWithTag("ime-back-popup-body").assertIsDisplayed()
@@ -249,7 +250,8 @@ class PopupImeBackTest {
             finish {
                 val directory = nativeEvidenceDirectory("popup-ime-back", instrumentation.targetContext.getExternalFilesDir(null))
                 File(directory, "${if (edgeGesture) "edge" else "system"}-api${Build.VERSION.SDK_INT}.txt")
-                    .writeText(events.joinToString("\n", postfix = "\n") + "failure=$failure\n" +
+                    .writeText(events.joinToString("\n", postfix = "\n") +
+                        "searchOpen=$searchOpen popupOpen=$popupOpen keyboardSettled=$keyboardSettled dismissals=$dismissals\n" + "failure=$failure\n" +
                         shell("dumpsys -t 2 input_method") + "\n" + shell("dumpsys -t 2 window windows"))
             }
             finish { compose.mainClock.autoAdvance = true; compose.runOnIdle { mounted = false }; compose.waitForIdle() }
