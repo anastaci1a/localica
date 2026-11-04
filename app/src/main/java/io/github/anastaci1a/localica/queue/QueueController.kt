@@ -29,7 +29,8 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
                       private val readers: NativeReaders = NativeReaders(),
                       private val sortSnapshot: suspend () -> io.github.anastaci1a.localica.library.LibrarySnapshot = { library.sortSnapshots.first() },
                       private val mediaItemFactory: (String, Track, String?) -> MediaItem = ::queueMediaItem,
-                      diagnoseOrders: Boolean = false) {
+                      diagnoseOrders: Boolean = false,
+                      private val listening: io.github.anastaci1a.localica.statistics.ListeningEditLifecycle? = null) {
     /** Debug diagnostics only; the sink runs off the actor after its terminal callback. */
     internal var orderTimingObserver: ((String, QueueOrderTiming.Report) -> Unit)? = if (diagnoseOrders) {
         { operation, report -> android.util.Log.i("QueueOrderTiming", "operation=$operation $report"); Unit }
@@ -908,6 +909,7 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
             token.resume = if (token.recoveryRevision != null && currentSource(queue) == token.trackId)
                 intents.choose(token.recoveryRevision, fallback = false).play else desiredPlayIntent()
             token.suspendedPlayback = true
+            listening?.suspendForEdit()
         }
         if (play != null) editPlayRequest = play
         if (attached.mediaItemCount != 0) {
@@ -1000,12 +1002,16 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         editing = null
         val request = editPlayRequest
         editPlayRequest = null
-        // A newer unrelated queue/player keeps its own timeline and intent, including Pause.
-        if (!affected || !token.suspendedPlayback) return
-        val unchanged = state.value.library.activeId == token.queueId &&
-            state.value.library.active?.currentEntryId == token.entryId
-        val resume = request ?: (unchanged && token.resume)
-        activate(resume, seek = true, recordIntent = false)
+        try {
+            // A newer unrelated queue/player keeps its own timeline and intent, including Pause.
+            if (!affected || !token.suspendedPlayback) return
+            val unchanged = state.value.library.activeId == token.queueId &&
+                state.value.library.active?.currentEntryId == token.entryId
+            val resume = request ?: (unchanged && token.resume)
+            activate(resume, seek = true, recordIntent = false)
+        } finally {
+            if (token.suspendedPlayback) listening?.finishEdit(state.value.library.active?.journey?.current?.token)
+        }
     }
 
     private suspend fun <T> editCommand(alwaysRun: Boolean = false, onCancellation: () -> Unit = {},
@@ -1045,6 +1051,7 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
     fun clearPlayback() = submit(intents.accept(false)) {
         capture()
         save(state.value.library.copy(activeId = null))
+        listening?.clearTraversal()
         activate(false)
     }
 
