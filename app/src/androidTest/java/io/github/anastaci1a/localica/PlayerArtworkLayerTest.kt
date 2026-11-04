@@ -26,8 +26,8 @@ import org.junit.Test
 import java.io.File
 import kotlin.math.ceil
 
-/** Compare actual player pixels with/without glyphs inside an opaque cover interior.
- * Geometry remains identical; the blank reference retains both text layout boxes. */
+/** Neutral metadata below a red cover preserves its red-minus-green chroma, including
+ * feathered pixels. Neutral ink above it reduces that chroma. Blank text keeps geometry. */
 class PlayerArtworkLayerTest {
     @get:Rule val compose = localicaComposeRule()
 
@@ -74,9 +74,9 @@ class PlayerArtworkLayerTest {
                 val name = "$artworkLayout-reduced-$reduce-$index-p-$p"
                 val root = compose.onRoot().fetchSemanticsNode().boundsInRoot
                 val cover = bounds("player-artwork")
-                // Exclude rounded/feathered edges, where metadata legitimately shows through.
-                val core = Rect(cover.left + cover.width * .28f, cover.top + cover.height * .28f,
-                    cover.right - cover.width * .28f, cover.bottom - cover.height * .28f)
+                // Keep feathering in the assertion; omit only the rounded outside perimeter.
+                val core = Rect(cover.left + cover.width * .03f, cover.top + cover.height * .03f,
+                    cover.right - cover.width * .03f, cover.bottom - cover.height * .03f)
                 val metadata = listOf("player-title", "player-artist").associateWith(::bounds)
                 val shown = capture(name).toPixelMap()
                 compose.runOnIdle { ink = false }
@@ -89,9 +89,15 @@ class PlayerArtworkLayerTest {
                     var changed = 0
                     for (y in ceil(region.top - root.top).toInt().coerceAtLeast(0) until (region.bottom - root.top).toInt().coerceAtMost(shown.height))
                         for (x in ceil(region.left - root.left).toInt().coerceAtLeast(0) until (region.right - root.left).toInt().coerceAtMost(shown.width)) {
-                            count++
                             val a = shown[x, y]; val b = blank[x, y]
-                            if (maxOf(kotlin.math.abs(a.red - b.red), kotlin.math.abs(a.green - b.green), kotlin.math.abs(a.blue - b.blue)) > .08f) changed++
+                            if (p > 0f && p < 1f) {
+                                if (b.red - b.green <= .15f) continue
+                                count++
+                                if (kotlin.math.abs((a.red - a.green) - (b.red - b.green)) > .04f) changed++
+                            } else {
+                                count++
+                                if (maxOf(kotlin.math.abs(a.red - b.red), kotlin.math.abs(a.green - b.green), kotlin.math.abs(a.blue - b.blue)) > .08f) changed++
+                            }
                         }
                     if (p > 0f && p < 1f && count > 40) {
                         overlaps[tag] = (overlaps[tag] ?: 0) + 1
