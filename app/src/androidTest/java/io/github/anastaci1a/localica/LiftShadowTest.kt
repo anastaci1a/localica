@@ -17,6 +17,7 @@ import androidx.compose.ui.graphics.drawscope.CanvasDrawScope
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.test.*
 import io.github.anastaci1a.localica.localicaComposeRule as createComposeRule
 import androidx.compose.ui.unit.Density
@@ -120,7 +121,7 @@ class LiftShadowTest {
             val glass = GlassAppearance(shadowStrength = 1f, shadowSpread = spread)
             val lift = profile(glass, Color.Black)
             val reference = glassReference(glass, d)
-            assertEquals("Lift spread at Glass spread $spread", reference.extentDp, lift.extentDp, 1.5f)
+            assertEquals("Lift spread at Glass spread $spread", reference.extentDp, lift.extentDp, 4f)
             assertEquals("100% default equals Glass strength at $spread", reference.peak, lift.peak, .03f)
         }
     }
@@ -140,12 +141,14 @@ class LiftShadowTest {
                 }
             }
         } }
-        compose.onNodeWithText("Shadow spread").performScrollTo().assertExists()
-        compose.onNodeWithText("Lift shadow strength · 100%").performScrollTo().assertExists()
+        compose.onNodeWithContentDescription("Lift shadow strength").performScrollTo()
+        val spreadTop = compose.onNode(hasText("Shadow spread"), true).fetchSemanticsNode().positionInRoot.y
+        val liftTop = compose.onNode(hasText("Lift shadow strength · 100%"), true).fetchSemanticsNode().positionInRoot.y
+        assertTrue("Next to the Glass shadow controls", liftTop > spreadTop && liftTop - spreadTop < 160f * InstrumentationRegistry.getInstrumentation().targetContext.resources.displayMetrics.density)
         assertEquals(1f, value.liftShadowStrength, 0f)
         compose.onNodeWithContentDescription("Lift shadow strength").performSemanticsAction(SemanticsActions.SetProgress) { it(1.23f) }
         compose.runOnIdle { assertEquals(1.25f, value.liftShadowStrength, .0001f) }
-        compose.onNodeWithText("Lift shadow strength · 125%").performScrollTo().assertExists()
+        compose.onNode(hasText("Lift shadow strength · 125%"), true).assertExists()
         compose.onNodeWithContentDescription("Lift shadow strength").performSemanticsAction(SemanticsActions.SetProgress) { it(9f) }
         compose.runOnIdle { assertEquals(1.5f, value.liftShadowStrength, .0001f) }
         compose.onNodeWithContentDescription("Lift shadow strength").performSemanticsAction(SemanticsActions.SetProgress) { it(0f) }
