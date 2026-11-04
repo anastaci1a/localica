@@ -188,7 +188,7 @@ class ScrollPerformanceTest {
         val med = { f: (Run) -> Double -> median(measured.map(f)) }
         val line = "scenario=$name api=${Build.VERSION.SDK_INT} reps=${measured.size} " +
             "frames(med)=${med { it.frames.toDouble() }.fmt()} " +
-            "total p50/p90/p95/p99 ms (med)=${(med { it.total.p50 }).ms()}/${(med { it.total.p90 }).ms()}/${(med { it.total.p95 }).ms()}/${(med { it.total.p99 }).ms()} " +
+            "total p50/p90/p99 ms (med)=${(med { it.total.p50 }).ms()}/${(med { it.total.p90 }).ms()}/${(med { it.total.p99 }).ms()} " +
             "layout p50/p90 ms=${(med { it.layout.p50 }).ms()}/${(med { it.layout.p90 }).ms()} " +
             "draw p50/p90 ms=${(med { it.draw.p50 }).ms()}/${(med { it.draw.p90 }).ms()} " +
             "sync p50/p90 ms=${(med { it.sync.p50 }).ms()}/${(med { it.sync.p90 }).ms()} " +
@@ -200,7 +200,7 @@ class ScrollPerformanceTest {
 
     private class Run(val kind: String, val frames: Long, val total: Pct, val layout: Pct, val draw: Pct, val sync: Pct,
         val janky: Int, val over: Int, val tail: String)
-    private class Pct(val p50: Double, val p90: Double, val p95: Double, val p99: Double)
+    private class Pct(val p50: Double, val p90: Double, val p99: Double)
 
     private fun measuredPass(name: String, kind: String, rep: Int, h: Harness,
         prepare: (Harness) -> Unit, act: (Harness) -> Unit): Run {
@@ -236,7 +236,7 @@ class ScrollPerformanceTest {
         assertTrue("$name/$kind$rep produced no frames in its window (received=${snapshot.receivedCount})", total.isNotEmpty())
         val run = Run(kind, total.size.toLong(), pct(total), pct(layout), pct(draw), pct(sync), janky, over,
             snapshot.tailStatus.name)
-        fun json(p: Pct) = JSONObject().put("p50Ms", p.p50 / 1e6).put("p90Ms", p.p90 / 1e6).put("p95Ms", p.p95 / 1e6).put("p99Ms", p.p99 / 1e6)
+        fun json(p: Pct) = JSONObject().put("p50Ms", p.p50 / 1e6).put("p90Ms", p.p90 / 1e6).put("p99Ms", p.p99 / 1e6)
         val doc = JSONObject().put("kind", kind).put("rep", rep)
             .put("framesReceived", snapshot.receivedCount).put("framesInWindow", total.size)
             .put("framesStored", snapshot.storedCount).put("bufferOverflow", snapshot.bufferOverflowCount)
@@ -271,7 +271,7 @@ class ScrollPerformanceTest {
     private fun pct(values: List<Double>): Pct {
         val sorted = values.sorted()
         fun at(p: Double) = sorted[(ceil(p * sorted.size).toInt() - 1).coerceIn(0, sorted.size - 1)]
-        return Pct(at(.5), at(.9), at(.95), at(.99))
+        return Pct(at(.5), at(.9), at(.99))
     }
     private fun median(values: List<Double>): Double {
         val sorted = values.sorted()
