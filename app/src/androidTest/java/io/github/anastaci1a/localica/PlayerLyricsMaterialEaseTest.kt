@@ -90,8 +90,8 @@ class PlayerLyricsMaterialEaseTest {
         check("outside backdrop", frames.map { it.backdrop }, towardLight)
         check("glass tone", frames.map { it.tone }, towardLight)
         check("panel coating", frames.map { it.coating }, towardLight)
-        // The panel theme's ink is its own colour channel: 1 is light ink, and it follows the same fraction.
-        check("panel theme ink", frames.map { it.panel }, towardLight)
+        // The panel theme ink runs from dark ink (red .1255) to white; normalise to the 0..1 fraction.
+        check("panel theme ink", frames.map { ((it.panel - .1255f) / .8745f).coerceIn(0f, 1f) }, towardLight)
         // The player's own foreground and every material read the one eased fraction: they never disagree by more than a frame.
         frames.zipWithNext().forEach { (a, b) -> assertTrue(abs(b.backdrop - a.shared) <= .3f) }
     }
