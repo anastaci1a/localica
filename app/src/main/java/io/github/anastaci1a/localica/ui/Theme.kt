@@ -44,22 +44,51 @@ private val LightColors = lightColorScheme(
     surfaceTint = Color(0xFF777980),
 )
 
+private val GlassDarkColors = androidx.compose.material3.darkColorScheme(
+    primary = Color.White, onPrimary = Color(0xFF202124),
+    primaryContainer = Color(0xFF414249), onPrimaryContainer = Color.White,
+    secondary = Color(0xFFE4E4E8), onSecondary = Color(0xFF202124),
+    secondaryContainer = Color(0xFF414249), onSecondaryContainer = Color.White,
+    tertiary = Color(0xFFE4E4E8), onTertiary = Color(0xFF202124),
+    tertiaryContainer = Color(0xFF414249), onTertiaryContainer = Color.White,
+    background = Color(0xFF242528), onBackground = Color.White,
+    surface = Color(0xFF242528), onSurface = Color.White, onSurfaceVariant = Color(0xFFE4E4E8),
+    surfaceContainer = Color(0xFF303136), surfaceContainerLow = Color(0xFF242528),
+    surfaceContainerHigh = Color(0xFF414249), surfaceContainerHighest = Color(0xFF4A4B50),
+    outline = Color(0xFFA6A7AD), outlineVariant = Color(0xFF61636A), surfaceTint = Color.White,
+)
+
+private fun lerpScheme(a: androidx.compose.material3.ColorScheme, b: androidx.compose.material3.ColorScheme, f: Float): androidx.compose.material3.ColorScheme {
+    fun mix(x: Color, y: Color) = androidx.compose.ui.graphics.lerp(x, y, f)
+    return a.copy(
+        primary = mix(a.primary, b.primary), onPrimary = mix(a.onPrimary, b.onPrimary),
+        primaryContainer = mix(a.primaryContainer, b.primaryContainer), onPrimaryContainer = mix(a.onPrimaryContainer, b.onPrimaryContainer),
+        secondary = mix(a.secondary, b.secondary), onSecondary = mix(a.onSecondary, b.onSecondary),
+        secondaryContainer = mix(a.secondaryContainer, b.secondaryContainer), onSecondaryContainer = mix(a.onSecondaryContainer, b.onSecondaryContainer),
+        tertiary = mix(a.tertiary, b.tertiary), onTertiary = mix(a.onTertiary, b.onTertiary),
+        tertiaryContainer = mix(a.tertiaryContainer, b.tertiaryContainer), onTertiaryContainer = mix(a.onTertiaryContainer, b.onTertiaryContainer),
+        background = mix(a.background, b.background), onBackground = mix(a.onBackground, b.onBackground),
+        surface = mix(a.surface, b.surface), onSurface = mix(a.onSurface, b.onSurface), onSurfaceVariant = mix(a.onSurfaceVariant, b.onSurfaceVariant),
+        surfaceContainer = mix(a.surfaceContainer, b.surfaceContainer), surfaceContainerLow = mix(a.surfaceContainerLow, b.surfaceContainerLow),
+        surfaceContainerHigh = mix(a.surfaceContainerHigh, b.surfaceContainerHigh), surfaceContainerHighest = mix(a.surfaceContainerHighest, b.surfaceContainerHighest),
+        outline = mix(a.outline, b.outline), outlineVariant = mix(a.outlineVariant, b.outlineVariant), surfaceTint = mix(a.surfaceTint, b.surfaceTint))
+}
+
 /** Popup controls and explicit secondary labels must agree with the material's ink. */
 @Composable
-internal fun GlassPanelTheme(dark: Boolean, content: @Composable () -> Unit) {
-    val colors = if (dark) androidx.compose.material3.darkColorScheme(
-        primary = Color.White, onPrimary = Color(0xFF202124),
-        primaryContainer = Color(0xFF414249), onPrimaryContainer = Color.White,
-        secondary = Color(0xFFE4E4E8), onSecondary = Color(0xFF202124),
-        secondaryContainer = Color(0xFF414249), onSecondaryContainer = Color.White,
-        tertiary = Color(0xFFE4E4E8), onTertiary = Color(0xFF202124),
-        tertiaryContainer = Color(0xFF414249), onTertiaryContainer = Color.White,
-        background = Color(0xFF242528), onBackground = Color.White,
-        surface = Color(0xFF242528), onSurface = Color.White, onSurfaceVariant = Color(0xFFE4E4E8),
-        surfaceContainer = Color(0xFF303136), surfaceContainerLow = Color(0xFF242528),
-        surfaceContainerHigh = Color(0xFF414249), surfaceContainerHighest = Color(0xFF4A4B50),
-        outline = Color(0xFFA6A7AD), outlineVariant = Color(0xFF61636A), surfaceTint = Color.White,
-    ) else MaterialTheme.colorScheme.takeIf { it.onSurface.red < .5f } ?: LightColors
+internal fun GlassPanelTheme(dark: Boolean, content: @Composable () -> Unit) = GlassPanelTheme(if (dark) 1f else 0f, content)
+
+/** [lightMix] is the light-ink fraction (0 dark ink, 1 light ink); a fraction between them is the same scheme
+ * interpolated, so a polarity change can ease with an animation instead of switching in one frame. */
+@Composable
+internal fun GlassPanelTheme(lightMix: Float, content: @Composable () -> Unit) {
+    val ambient = MaterialTheme.colorScheme
+    val light = ambient.takeIf { it.onSurface.red < .5f } ?: LightColors
+    val colors = when {
+        lightMix >= 1f -> GlassDarkColors
+        lightMix <= 0f -> light
+        else -> lerpScheme(light, GlassDarkColors, lightMix)
+    }
     MaterialTheme(colorScheme = colors) {
         androidx.compose.runtime.CompositionLocalProvider(
             androidx.compose.material3.LocalContentColor provides colors.onSurface,

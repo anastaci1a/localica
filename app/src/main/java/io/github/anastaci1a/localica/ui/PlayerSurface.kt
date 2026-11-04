@@ -99,18 +99,21 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     val tone = GlassTone(settings.glass.contrast, settings.glass.contrastWeight, !artwork.palette.isLight())
     val paletteDuration = settings.motionDuration(550)
     val palette = animatedPlayerPalette(artwork.palette, paletteDuration)
-    // Header controls already sample this scene before lyrics open. Older
-    // adapters need its prepared pixels whenever that header is visible too.
-    val lyricBackdrop = rememberFrostedBackdrop(listOf(artwork, settings.artworkLayout, settings.glass), p > .7f, dark = lightInk)
-    // Only the complete scene needs prepared pixels. The wash is a GPU backing
-    // for the cover's sampling source, not a second full-window CPU snapshot.
-    val artworkWash = rememberFrostedBackdrop(Unit, enabled = false, dark = lightInk, retainRaster = false)
     val lyricVisibility by animateFloatAsState(if (lyricsOpen) 1f else 0f, tween(settings.motionDuration(550)), label = "Lyrics layout")
     // A light/dark foreground change during the lyrics animation eases with its progress.
     val inkTransition = remember { PlayerInkTransition(inkTarget) }
     val inkStep = inkTransition.resolve(inkTarget, lyricVisibility, lyricsOpen)
     val playerInk = inkStep.shown
-    SideEffect { inkTransition.commit(inkStep) }
+    // Every material that follows the player's ink (the glass backdrops and the panel theme below) reads the same
+    // eased polarity as the foreground, and the shared state exposes it to the surfaces outside this composable.
+    val lightMix = inkStep.light
+    SideEffect { inkTransition.commit(inkStep); polarity.presentLightMix(lightMix) }
+    // Header controls already sample this scene before lyrics open. Older
+    // adapters need its prepared pixels whenever that header is visible too.
+    val lyricBackdrop = rememberFrostedBackdrop(listOf(artwork, settings.artworkLayout, settings.glass), p > .7f, dark = lightInk, lightMix = lightMix)
+    // Only the complete scene needs prepared pixels. The wash is a GPU backing
+    // for the cover's sampling source, not a second full-window CPU snapshot.
+    val artworkWash = rememberFrostedBackdrop(Unit, enabled = false, dark = lightInk, lightMix = lightMix, retainRaster = false)
     // Mode selection survives minimization. The finger drives its layout and reveal
     // immediately, including the fully expanded endpoint before onExpanded changes.
     val lyricMotion = playerLyricsMotion(p, lyricVisibility)
@@ -339,7 +342,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
         else -> null
     }, tone)
     val baseColors = MaterialTheme.colorScheme
-    GlassPanelTheme(lightInk) {
+    GlassPanelTheme(lightMix) {
     val playerColors = MaterialTheme.colorScheme
     MaterialTheme(colorScheme = playerColors.copy(onSurface = foreground,
         onSurfaceVariant = foreground.copy(alpha = 0.72f), primary = androidx.compose.ui.graphics.lerp(baseColors.primary, playerInk, p),

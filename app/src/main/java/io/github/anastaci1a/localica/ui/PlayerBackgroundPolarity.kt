@@ -81,6 +81,17 @@ internal data class PlayerBackgroundGeometry(val size: Size, val cover: Rect, va
     var measured by mutableStateOf<Map<String, Rect>>(emptyMap()); private set
     val backdrops = mutableStateMapOf<Any, PlayerBackdropDescriptor>()
     private val publication = PlayerBackgroundPublication()
+    /**
+     * The polarity actually presented: [decision]'s light ink eased with the lyrics open/close clock (1 light ink,
+     * 0 dark ink). Every consumer of the light/dark choice outside the player's own composition (the glass
+     * backdrops, the panel theme, the Queue) reads this rather than the discrete decision, so the foreground
+     * and the materials ease together. Published by the player surface, which owns the lyrics clock.
+     */
+    var lightMix by mutableFloatStateOf(1f); private set
+    fun presentLightMix(value: Float) { if (lightMix != value) lightMix = value }
+    /** Holds [decision] at a fixed polarity so a presentation test controls exactly when it changes. */
+    private var pinned: Boolean? = null
+    internal fun pin(lightInk: Boolean?) { pinned = lightInk; if (lightInk != null) decision = PlayerBackgroundDecision(lightInk, PlayerBackgroundConfidence.Current, null) }
     fun measure(name: String, value: LayoutCoordinates) {
         coordinates[name] = value
         val background = coordinates["background"]?.takeIf { it.isAttached } ?: return
@@ -102,10 +113,12 @@ internal data class PlayerBackgroundGeometry(val size: Size, val cover: Rect, va
             .take(backdrops.size - 8).forEach { backdrops.remove(it) }
     }
     fun unavailable(reason: PlayerBackgroundUnavailable): Long = publication.begin(reason).also {
+        if (pinned != null) return@also
         sampleDiagnostic = null
         decision = publication.decision
     }
     fun current(lightInk: Boolean) {
+        if (pinned != null) return
         val token = publication.begin(PlayerBackgroundUnavailable.Preparing)
         publication.publish(token, lightInk)
         decision = publication.decision

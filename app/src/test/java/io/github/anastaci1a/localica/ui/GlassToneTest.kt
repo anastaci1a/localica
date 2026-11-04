@@ -32,3 +32,36 @@ class GlassToneTest {
         }
     }
 }
+
+class GlassToneMixTest {
+    @Test fun endpointsAreExactAndTheMixIsBetweenThem() {
+        val dark = GlassTone(.25f, 2f, false); val light = GlassTone(.25f, 2f, true)
+        for (sample in 0..255) {
+            val x = sample / 255f
+            assertEquals(dark.channel(x), GlassTone.mixed(.25f, 2f, 0f).channel(x), 0f)
+            assertEquals(light.channel(x), GlassTone.mixed(.25f, 2f, 1f).channel(x), 0f)
+            val half = GlassTone.mixed(.25f, 2f, .5f).channel(x)
+            assertEquals((dark.channel(x) + light.channel(x)) / 2f, half, 1e-6f)
+        }
+    }
+
+    @Test fun everyChannelValueMovesMonotonicallyAsThePolarityEases() {
+        for (sample in 0..16) {
+            val x = sample / 16f
+            var last = GlassTone.mixed(.5f, 1.5f, 1f).channel(x)
+            for (step in 1..100) {
+                val tone = GlassTone.mixed(.5f, 1.5f, 1f - step / 100f)
+                val value = tone.channel(x)
+                assertTrue("$x at $step", value >= last - 1e-6f)
+                last = value
+            }
+        }
+    }
+
+    @Test fun mixedRoundTripsAndEndpointPinsPolarity() {
+        for (m in listOf(0f, .2f, .5f, .8f, 1f)) assertEquals(m, GlassTone.mixed(.1f, 2f, m).lightMix, 1e-6f)
+        val halfway = GlassTone.mixed(.3f, 2f, .35f)
+        assertEquals(0f, halfway.endpoint(false).lightMix, 0f); assertEquals(1f, halfway.endpoint(true).lightMix, 0f)
+        assertEquals(GlassTone(.3f, 2f, true), halfway.endpoint(true))
+    }
+}
