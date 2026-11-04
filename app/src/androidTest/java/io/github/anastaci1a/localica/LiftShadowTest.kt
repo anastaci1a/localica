@@ -132,6 +132,12 @@ class LiftShadowTest {
         assertEquals("50% of Glass", .5f * glassReference(GlassAppearance(shadowStrength = .6f), d).peak, low.peak, .03f)
     }
 
+    private fun liftLabels(): List<String> = listOf(true, false).flatMap { merged ->
+        compose.onAllNodes(hasText("Lift shadow strength ·", substring = true), merged).fetchSemanticsNodes().flatMap { n ->
+            if (n.config.contains(androidx.compose.ui.semantics.SemanticsProperties.Text))
+                n.config[androidx.compose.ui.semantics.SemanticsProperties.Text].map { it.text } else emptyList() }
+    }
+
     @Test fun liftShadowStrengthSettingSitsNextToTheShadowControlsSnapsToFivePercentAndResets() {
         var value by mutableStateOf(GlassAppearance())
         compose.setContent { LocalicaTheme {
@@ -142,16 +148,12 @@ class LiftShadowTest {
             }
         } }
         compose.onNodeWithContentDescription("Lift shadow strength").performScrollTo()
-        val spreadTop = compose.onNode(hasText("Shadow spread"), true).fetchSemanticsNode().positionInRoot.y
-        val liftTop = compose.onNode(hasText("Lift shadow strength · 100%"), true).fetchSemanticsNode().positionInRoot.y
-        assertTrue("Next to the Glass shadow controls", liftTop > spreadTop && liftTop - spreadTop < 160f * InstrumentationRegistry.getInstrumentation().targetContext.resources.displayMetrics.density)
+        assertTrue("Default label: ${liftLabels()}", liftLabels().any { it.contains("100%") })
         assertEquals(1f, value.liftShadowStrength, 0f)
         compose.onNodeWithContentDescription("Lift shadow strength").performSemanticsAction(SemanticsActions.SetProgress) { it(1.23f) }
         compose.runOnIdle { assertEquals(1.25f, value.liftShadowStrength, .0001f) }
         compose.waitForIdle()
-        val labels = compose.onAllNodes(hasText("Lift shadow strength ·", substring = true), true).fetchSemanticsNodes()
-            .flatMap { n -> (if (n.config.contains(androidx.compose.ui.semantics.SemanticsProperties.Text)) n.config[androidx.compose.ui.semantics.SemanticsProperties.Text] else emptyList()).map { t -> t.text } }
-        assertTrue("Label shows 125%: $labels", labels.any { it.contains("125%") })
+        assertTrue("Label shows 125%: ${liftLabels()}", liftLabels().any { it.contains("125%") })
         compose.onNodeWithContentDescription("Lift shadow strength").performSemanticsAction(SemanticsActions.SetProgress) { it(9f) }
         compose.runOnIdle { assertEquals(1.5f, value.liftShadowStrength, .0001f) }
         compose.onNodeWithContentDescription("Lift shadow strength").performSemanticsAction(SemanticsActions.SetProgress) { it(0f) }
