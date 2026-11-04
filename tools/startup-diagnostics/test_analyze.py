@@ -1,5 +1,5 @@
 import unittest
-from analyze import frames, percentiles, summarize, scheduling, sections
+from analyze import frames, percentiles, summarize, scheduling, sections, input_delivery
 
 HEADER = "Flags,IntendedVsync,Vsync,HandleInputStart,AnimationStart,PerformTraversalsStart,DrawStart,SyncQueued,SyncStart,IssueDrawCommandsStart,SwapBuffers,FrameCompleted,FrameDeadline,"
 
@@ -10,6 +10,27 @@ def row(start=1_000_000_000, flags=0, duration=20_000_000):
 
 
 class FrameStatsTest(unittest.TestCase):
+    def test_input_delivery_matches_target_main_event_times_and_deduplicates(self):
+        event = " app-7 ( 7) [000] .... 1.050000: tracing_mark_write: B|7|deliverInputEvent src=0x1002 eventTimeNano=1020000000 id=0x1"
+        trace = "\n".join([event, event, event.replace("app-7", "app-8"),
+                           event.replace("B|7|", "B|8|"), event.replace("src=0x1002", "src=0x101")])
+        result = input_delivery(trace, 7, {"launchUptimeMs": 1000, "windowMs": 1000,
+            "inputs": [{"kind":"tap-artists", "requestedMs":10, "injectionReturnedMs":40},
+                       {"kind":"gallery-drag", "requestedMs":100, "injectionReturnedMs":150}]})
+        self.assertEqual(1, result["actions"][0]["matchedEvents"])
+        self.assertEqual(30, result["actions"][0]["queue"]["p95Ms"])
+        self.assertEqual(0, result["actions"][1]["matchedEvents"])
+        self.assertIsNone(result["actions"][1]["queue"]["p95Ms"])
+
+    def test_input_delivery_outside_capture_or_before_event_is_unavailable(self):
+        trace = "\n".join([
+            " app-7 [000] .... 2.100000: tracing_mark_write: B|7|deliverInputEvent src=0x1002 eventTimeNano=1020000000 id=0x1",
+            " app-7 [000] .... 1.010000: tracing_mark_write: B|7|deliverInputEvent src=0x1002 eventTimeNano=1020000000 id=0x2"])
+        result = input_delivery(trace, 7, {"launchUptimeMs":1000, "windowMs":1000,
+            "inputs":[{"kind":"tap-artists", "requestedMs":10, "injectionReturnedMs":40}]})
+        self.assertEqual(0, result["actions"][0]["matchedEvents"])
+
+
     def test_background_threads_with_the_same_name_keep_distinct_cpu_intervals(self):
         trace = "\n".join([
             " a-1 [000] .... 1.000000: sched_switch: prev_comm=x prev_pid=1 prev_prio=0 prev_state=S ==> next_comm=DefaultDispatch next_pid=8 next_prio=0",
