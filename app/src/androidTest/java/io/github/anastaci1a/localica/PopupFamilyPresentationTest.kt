@@ -17,6 +17,7 @@ import io.github.anastaci1a.localica.localicaComposeRule as createComposeRule
 import androidx.compose.ui.window.DialogWindowProvider
 import androidx.room.Room
 import androidx.test.platform.app.InstrumentationRegistry
+import androidx.test.uiautomator.UiDevice
 import io.github.anastaci1a.localica.library.*
 import io.github.anastaci1a.localica.navigation.*
 import io.github.anastaci1a.localica.playback.PlaybackState
@@ -33,6 +34,7 @@ import org.junit.Test
 import java.io.File
 import java.security.MessageDigest
 import java.util.concurrent.atomic.AtomicReference
+import kotlin.math.roundToInt
 
 /** Five actual caller surfaces, not short/tall GlassMenu replicas. This records presentation
  * evidence ONLY: no optical oracle, band-absence assertion or production change. One original
@@ -66,7 +68,9 @@ class PopupFamilyPresentationTest {
     }
 
     @Test fun fiveActualCallerSurfacesRetainOriginalNativeWindowsAndProvenance() {
-        output = File(requireNotNull(context.getExternalFilesDir(null)), "popup-family-presentation/api${Build.VERSION.SDK_INT}-${SystemClock.uptimeMillis()}")
+        output = File(nativeEvidenceDirectory("popup-family-presentation",
+            File(requireNotNull(context.getExternalFilesDir(null)), "popup-family-presentation")),
+            "api${Build.VERSION.SDK_INT}-${SystemClock.uptimeMillis()}")
         assertTrue(output.mkdirs())
         writeManifest("starting")
         // Preserve preferences exactly, including absence of migration flags; no production data store is seeded.
@@ -266,9 +270,22 @@ class PopupFamilyPresentationTest {
     }
 
     private fun dismiss() {
-        pressSystemBack()
+        // This fixture records presentation, not Back dispatch. Use the real scrim
+        // instead of inheriting an earlier test's Android IME Back callback.
+        // PopupImeBackTest separately proves one native Back after search IME hide.
+        val node = surfaces().single()
+        val root = view(node)
+        val origin = IntArray(2)
+        compose.runOnUiThread { root.getLocationOnScreen(origin) }
+        val bounds = node.boundsInRoot
+        assertTrue("The real popup leaves a tappable left scrim", bounds.left > 2f)
+        val outside = Offset(bounds.left / 2f, bounds.center.y)
+        assertFalse(bounds.contains(outside))
+        assertTrue(UiDevice.getInstance(InstrumentationRegistry.getInstrumentation()).click(
+            origin[0] + outside.x.roundToInt(), origin[1] + outside.y.roundToInt()))
         compose.waitForIdle()
         compose.waitUntil(5000) { surfaces().isEmpty() }
+        compose.waitUntil(5000) { compose.runOnUiThread { !root.isAttachedToWindow } }
         compose.awaitExpectedWindowFocus(compose.onNodeWithTag("browse-background"))
     }
 
