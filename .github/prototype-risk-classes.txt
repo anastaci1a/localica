@@ -93,6 +93,8 @@ io.github.anastaci1a.localica.InterfaceControlsTest
 io.github.anastaci1a.localica.InterfaceNavigationTest
 io.github.anastaci1a.localica.KeyedDragTest
 io.github.anastaci1a.localica.LargeQueueTransportTest
+io.github.anastaci1a.localica.QueueInitialSaveProfileTest
+io.github.anastaci1a.localica.InitialSaveTransportTest
 io.github.anastaci1a.localica.LegacyReadbackGrallocBoundsTest
 io.github.anastaci1a.localica.LensMeshSamplingTest
 io.github.anastaci1a.localica.LibraryDatabaseTest
@@ -296,3 +298,4 @@ io.github.anastaci1a.localica.LiftShadowTest
 io.github.anastaci1a.localica.SelectionPillMaterialTest
 io.github.anastaci1a.localica.PopupHomeShapeTest
 io.github.anastaci1a.localica.SeekCancelGlassTest
+io.github.anastaci1a.localica.PlaybackShutdownTest
