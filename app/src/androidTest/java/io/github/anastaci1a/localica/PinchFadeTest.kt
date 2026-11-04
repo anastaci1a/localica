@@ -121,7 +121,8 @@ class PinchFadeTest {
         val art = (30 * scale).roundToInt()
         val list = BrowseStyle(listSize = if (smallest) ListSize.Smallest else ListSize.Normal)
         val gallery = BrowseStyle(presentation = Presentation.Standard, itemsPerRow = 2)
-        val indices = mapOf("anchor" to 0, "near" to 1, "far" to 3)
+        // The nearer item travels farther: focus distance, not travel distance, orders fades.
+        val indices = mapOf("anchor" to 0, "near" to 3, "far" to 1)
         compose.setContent { CompositionLocalProvider(LocalDensity provides Density(scale)) { LocalicaTheme {
             empty = rememberTextMeasurer().measure(AnnotatedString(""))
             val grid = rememberLazyGridState()
@@ -179,6 +180,16 @@ class PinchFadeTest {
                 }
             }
             val departures = sweep(false)
+            val rollback = (20 downTo 0).map { step ->
+                compose.runOnIdle { runBlocking { motion.progress.snapTo(step / 20f) } }
+                compose.mainClock.advanceTimeByFrame()
+                compose.waitForIdle()
+                peak("journey-fade") { it.green } to peak("journey-fade") { it.blue }
+            }.reversed()
+            departures.zip(rollback).forEachIndexed { index, (a, b) ->
+                assertEquals("Near rollback retraces frame $index", a.first, b.first, .008f)
+                assertEquals("Far rollback retraces frame $index", a.second, b.second, .008f)
+            }
             val arrivals = sweep(true)
             departures.zip(arrivals).forEachIndexed { index, (a, b) ->
                 assertEquals("Near journey retraces its alpha at ${index / 20f}", a.first, b.first, .008f)
