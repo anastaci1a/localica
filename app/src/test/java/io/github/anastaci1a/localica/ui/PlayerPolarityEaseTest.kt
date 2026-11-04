@@ -104,6 +104,20 @@ class PlayerPolarityEaseTest {
         assertTrue(reverse.all { it.light == 0f || it.light == 1f }); assertEquals(1f, reverse.last().light, 0f)
     }
 
+    /** Prints the frame strip kept as release evidence; also asserts it is a smooth ramp. */
+    @Test fun frameStripShowsOneSmoothRamp() {
+        fun table(title: String, sequence: List<Frame>) {
+            println("STRIP $title")
+            println("STRIP frame,lyricsProgress,foregroundRed,materialLightMix")
+            sequence.forEachIndexed { i, f -> println("STRIP %d,%.3f,%.3f,%.3f".format(java.util.Locale.ROOT, i, f.progress, f.ink.red, f.light)) }
+        }
+        val open = run(white, { true }, ::opening, { if (it < 14) white else black })
+        table("opening to the lyrics theme (dark ink decided at frame 14)", open)
+        val close = run(black, { false }, ::closing, { if (it < 8) black else white })
+        table("closing back to the player theme (light ink decided at frame 8)", close)
+        assertNoJump(open, .1f); assertNoJump(close, .1f)
+    }
+
     @Test fun outsideTheLyricsAnimationAChangeStaysImmediate() {
         val sequence = run(white, { false }, { 0f }, { if (it < 3) white else black }, count = 6)
         assertEquals(1f, sequence[2].light, 0f); assertEquals(0f, sequence[3].light, 0f)
