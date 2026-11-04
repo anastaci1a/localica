@@ -107,4 +107,52 @@ class GlassMenuForegroundTest {
         compose.onNodeWithTag("menu-trigger").assertIsDisplayed()
         if (anchored) compose.runOnIdle { assertEquals("Returned trigger keeps its ink", ink, anchor.ink) }
     }
+    @Test fun lightParentInkSurvivesDetachedChildDeclaration() = verifyDetached(true)
+    @Test fun darkParentInkSurvivesDetachedChildDeclaration() = verifyDetached(false)
+
+    private fun verifyDetached(light: Boolean) {
+        var appearance by mutableStateOf<GlassDialogAppearance?>(null)
+        var child by mutableStateOf(false)
+        var observed: Triple<Color, Color, Boolean>? = null
+        compose.setContent { LocalicaTheme {
+            // The root can still display artwork with the opposite polarity from Settings.
+            GlassPanelTheme(!light) {
+                GlassPanelTheme(light) {
+                    GlassDialog({}) {
+                        Column {
+                            Text("Parent settings")
+                            val launchAppearance = currentGlassDialogAppearance()
+                            ActionTextButton({ appearance = launchAppearance; child = true }) {
+                                Text("Customize player actions")
+                            }
+                        }
+                    }
+                }
+                // Mirrors the root-owned child reached through the Settings callback.
+                if (child) CompositionLocalProvider(LocalGlassDialogAppearance provides appearance) {
+                    GlassAlertDialog({ child = false }, title = { Text("Child actions") }, text = {
+                        val ink = LocalContentColor.current
+                        val theme = MaterialTheme.colorScheme.onSurface
+                        val dark = LocalFrostedBackdrop.current?.dark == true
+                        SideEffect { observed = Triple(ink, theme, dark) }
+                        ActionTextButton({}, enabled = false) { Text("Unavailable action") }
+                    }, confirmButton = { ActionTextButton({ child = false }) { Text("Return to settings") } })
+                }
+            }
+        } }
+        repeat(2) {
+            compose.onNodeWithText("Customize player actions").performClick()
+            compose.onNodeWithText("Child actions").assertIsDisplayed()
+            compose.runOnIdle {
+                val actual = requireNotNull(observed)
+                assertEquals("Child content keeps the launching parent ink", light, actual.first.luminance() > .5f)
+                assertEquals("Child theme agrees", light, actual.second.luminance() > .5f)
+                assertEquals("Child material agrees", light, actual.third)
+            }
+            compose.onNodeWithText("Unavailable action").assertIsNotEnabled()
+            compose.onNodeWithText("Return to settings").performClick()
+            compose.waitForIdle()
+            compose.onNodeWithText("Parent settings").assertIsDisplayed()
+        }
+    }
 }
