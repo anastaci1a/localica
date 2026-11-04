@@ -114,6 +114,29 @@ internal fun browsePinchPartRect(x: Int, y: Int, width: Int, height: Int,
     pinchElementRect(Rect(x.toFloat(), y.toFloat(), (x + width).toFloat(), (y + height).toFloat()),
         Rect(targetX.toFloat(), targetY.toFloat(), (targetX + targetWidth).toFloat(), (targetY + targetHeight).toFloat()), progress)
 
+/** Rank zero is farthest from the focus. Half-overlapping windows cover the whole
+ * eased geometry progress; the singleton uses the complete transition. */
+internal data class PinchFadeWindow(val start: Float, val width: Float) {
+    fun alpha(progress: Float, arriving: Boolean = false): Float {
+        val p = if (arriving) 1f - progress else progress
+        val local = ((p.coerceIn(0f, 1f) - start) / width).coerceIn(0f, 1f)
+        return 1f - local * local * (3f - 2f * local)
+    }
+}
+
+internal fun pinchFadeWindow(rank: Int, count: Int): PinchFadeWindow {
+    require(count > 0 && rank in 0 until count)
+    return if (count == 1) PinchFadeWindow(0f, 1f)
+        else PinchFadeWindow(rank.toFloat() / (count + 1f), 2f / (count + 1f))
+}
+
+/** Endpoint distances keep order independent of interpolated positions and direction.
+ * Input order breaks equal-distance ties consistently for both drawing passes. */
+internal fun <T> pinchFadeSchedule(distances: Map<T, Float>): Map<T, PinchFadeWindow> =
+    distances.entries.sortedByDescending { it.value }.mapIndexed { rank, entry ->
+        entry.key to pinchFadeWindow(rank, distances.size)
+    }.toMap()
+
 private data class RetainedPinchPlacement(val item: FrozenBrowseItem, val origin: Offset,
     val targetWidth: Float, val targetHeight: Float, val alpha: Float, val index: Int,
     val geometryProgress: Float)
@@ -161,24 +184,23 @@ internal fun Modifier.pinchRetainedOverlay(motion: BrowsePinchMotion, grid: Lazy
         // Publish retained bodies before the host draws its one joined shadow/surface.
         val visible = grid.layoutInfo.visibleItemsInfo
         val p = motion.progress.value.coerceIn(0f, 1f)
+        val liveKeys = if (motion.visualSource == null) emptySet() else visible.map { it.key }.toSet()
+        val focus = Offset(motion.bounds[motion.focusKey]?.center?.x ?: motion.viewportWidth / 2f,
+            motion.focusTop.toFloat())
+        val departures = if (motion.visualSource == null) emptyMap() else pinchFadeSchedule(
+            motion.bounds.filterKeys { it !in liveKeys && it in motion.frozen && indices.retainedPinchItemIndex(it) >= 0 }
+                .mapValues { (_, bounds) -> (bounds.center - focus).getDistance() })
+        val arrivals = if (motion.visualSource == null) emptyMap() else pinchFadeSchedule(
+            visible.filter { it.key !in motion.bounds && indices.retainedPinchItemIndex(it.key) >= 0 }
+                .associate { entry -> entry.key to (Offset(entry.offset.x + entry.size.width / 2f,
+                    entry.offset.y + entry.size.height / 2f) - focus).getDistance() })
         fun drawLive(part: BrowsePinchLayer, key: Any) {
             val viewport = motion.viewportCoordinates
             val coordinates = part.coordinates ?: return
             if (viewport?.isAttached != true || !coordinates.isAttached || part.layer.isReleased ||
                 part.layer.size.width <= 0 || part.layer.size.height <= 0) return
             val bounds = viewport.localBoundingBoxOf(coordinates, clipBounds = false)
-            val entry = visible.firstOrNull { it.key == key }
-            val incoming = if (motion.visualSource != null && key !in motion.bounds && entry != null) {
-                val source = motion.sourceBounds(key, indices.retainedPinchItemIndex(key))
-                val geometry = BrowseCellGeometry(motion.targetColumns)
-                val inset = (geometry.gridInset * motion.pixelDensity).roundToInt()
-                val sourceVertical = (BrowseCellGeometry(motion.sourceColumns)
-                    .cardVerticalInset(requireNotNull(motion.visualSource)) * motion.pixelDensity).roundToInt()
-                val targetVertical = (geometry.cardVerticalInset(requireNotNull(motion.target)) * motion.pixelDensity).roundToInt()
-                val distance = (source.topLeft + Offset(0f, sourceVertical.toFloat()) -
-                    Offset((entry.offset.x + inset).toFloat(), (entry.offset.y + targetVertical).toFloat())).getDistance()
-                browseViewVisibility(false, true, p, browsePinchFadeWindow(distance, motion.viewportWidth))
-            } else 1f
+            val incoming = arrivals[key]?.alpha(p, arriving = true) ?: 1f
             part.layer.alpha = (motion.itemAlpha[key] ?: 1f) * incoming
             // A resized cover re-records its layer later in this frame (its own render node is
             // updated after this pass), so the layer still holds last frame's size. Scaling by it
@@ -205,7 +227,6 @@ internal fun Modifier.pinchRetainedOverlay(motion: BrowsePinchMotion, grid: Lazy
             }
             return@drawWithContent
         }
-        val liveKeys = visible.map { it.key }.toSet()
         val retained = linkedMapOf<Any, RetainedPinchPlacement>()
         val row = visible.firstOrNull { it.key != "browser-notice" }
         if (row != null) {
@@ -234,7 +255,7 @@ internal fun Modifier.pinchRetainedOverlay(motion: BrowsePinchMotion, grid: Lazy
                 val origin = sourceOrigin + (targetOrigin - sourceOrigin) * exitProgress
                 retained[key] = RetainedPinchPlacement(image, origin, (width - 2 * targetInset).coerceAtLeast(0f),
                     image.content?.target?.height?.toFloat() ?: (pitch - 2 * targetVerticalInset).coerceAtLeast(0f),
-                    browseViewVisibility(true, false, p, fadeWindow), index, exitProgress)
+                    departures.getValue(key).alpha(p), index, exitProgress)
             }
         }
         fun retainedLift(placed: RetainedPinchPlacement): HoverGeometry? {
