@@ -126,12 +126,14 @@ internal fun playlistPlacement(source: PlaylistSelectionDrawSource): SelectorDra
     val info = source.state.layoutInfo
     val content = source.content.positionInRoot()
     val width = source.content.size.width.toFloat()
+    val sidePadding = 6f * androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().targetContext.resources.displayMetrics.density
     val layout = SelectorLayout(source.viewport.boundsInRoot(),
         source.state.firstVisibleItemIndex to source.state.firstVisibleItemScrollOffset,
         source.chosen.toSet(), info.visibleItemsInfo.map { item ->
             val key = item.key as String
             val top = content.y + info.beforeContentPadding + item.offset
-            SelectorPlacedItem(key, Rect(content.x, top, content.x + width, top + item.size),
+            // The chooser list keeps 6 dp of side room for hover (#533).
+            SelectorPlacedItem(key, Rect(content.x + sidePadding, top, content.x + width - sidePadding, top + item.size),
                 source.rows[key]?.takeIf { it.isAttached }?.let { Rect(it.positionInRoot(), Size(it.size.width.toFloat(), it.size.height.toFloat())) })
         }, source.state.isScrollInProgress)
     selectorDraw(source.scene, source.viewport, layout, source.hostDraws())
@@ -232,14 +234,15 @@ internal class SelectorPlacementFrames(private val compose: ComposeContentTestRu
             if (item.key in draw.layout.chosen || item.key in fading) {
                 assertTrue("Visibility remains bounded", v in 0f..1f)
                 if (v > 0f) {
-                    // The chooser row's shared outline (#532): 44 dp artwork in 4 dp / 8 dp padding
-                    // is concentric at a 4 dp inset, so the outline sits 4 dp inside the row vertically.
-                    val inset = outlineVerticalInsetDp * androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().targetContext.resources.displayMetrics.density
-                    val outline = Rect(placed.left, placed.top + inset, placed.right, placed.bottom - inset)
-                    val scale = .92f + .08f * v
-                    val dx = outline.width * (1f - scale) / 2f
-                    val dy = outline.height * (1f - scale) / 2f
-                    val clipped = Rect(outline.left + dx, outline.top + dy, outline.right - dx, outline.bottom - dy).intersect(draw.layout.viewport)
+                    // Apply each surface's shared outline inset before calculating hover growth.
+                    // Hover (#533) grows it by a quarter of the gap to its neighbours (none
+                    // horizontally: half the 6 dp side room), scaled by the eased progress.
+                    val density = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().targetContext.resources.displayMetrics.density
+                    val outline = Rect(placed.left, placed.top + outlineVerticalInsetDp * density, placed.right, placed.bottom - outlineVerticalInsetDp * density)
+                    val neighbours = draw.layout.items.mapNotNull { it.placed }.map { Rect(it.left, it.top + outlineVerticalInsetDp * density, it.right, it.bottom - outlineVerticalInsetDp * density) }
+                    val room = hoverRoom(outline, neighbours, draw.layout.viewport, LiftEdges.Horizontal, 4f * density)
+                    val lifted = hoverGeometry(MediaItemOutline(outline, 0f), room, v).lifted.bounds
+                    val clipped = lifted.intersect(draw.layout.viewport)
                     if (!clipped.isEmpty) expected += clipped
                 }
             }

@@ -75,12 +75,12 @@ internal class RetainedCurrentSongHighlight(val color: Color) {
 
 internal fun Modifier.currentSongHighlight(current: Boolean, color: Color,
     outline: ((Size, androidx.compose.ui.unit.LayoutDirection) -> MediaItemOutline?)? = null,
-    visualSize: (Size) -> Size = { it }) = semantics {
+    visible: () -> Boolean = { true }, visualSize: (Size) -> Size = { it }) = semantics {
     if (current) stateDescription = "Current song"
 }.drawWithCache {
     val renderer = CurrentSongHighlightRenderer()
     onDrawBehind {
-        if (current) with(renderer) {
+        if (current && visible()) with(renderer) {
             // The shared outline (#532) is the frost's footprint; its texture keeps one scale.
             val shared = outline?.invoke(size, layoutDirection)
             if (shared != null) draw(shared.bounds, color, sourceSize = shared.bounds.size, corner = shared.corner)
