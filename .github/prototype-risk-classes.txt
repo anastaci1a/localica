@@ -92,6 +92,7 @@ io.github.anastaci1a.localica.InterfaceControlsTest
 io.github.anastaci1a.localica.InterfaceNavigationTest
 io.github.anastaci1a.localica.KeyedDragTest
 io.github.anastaci1a.localica.LargeQueueTransportTest
+io.github.anastaci1a.localica.LegacyReadbackGrallocBoundsTest
 io.github.anastaci1a.localica.LensMeshSamplingTest
 io.github.anastaci1a.localica.LibraryDatabaseTest
 io.github.anastaci1a.localica.LibraryFilterMotionTest
