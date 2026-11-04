@@ -75,6 +75,12 @@ Measure monotonic playing time in the service. Serialized writes retry stable ev
 
 Typed preference boundaries retain explicit inheritance. Shared enum decoding preserves unknown-value fallbacks. Pure ordering/move helpers are shared across collection types. Selection retains source occurrence IDs and clears only after command completion. Pins retain typed identity/manual order independently of tabs.
 
+## Legacy MP3 transitions
+
+On API 26, `LegacyMp3AudioRenderer` defers transition discontinuities only for `OMX.google.mp3.decoder`. Its final decoded buffer follows the stream-end timestamp. Notifying the sink earlier drains encoder padding before reconfiguration ([#30](https://github.com/anastaci1a/localica/issues/30)).
+
+The next output-format configuration releases the deferred notification. Position resets and disposal clear it immediately. Delay and padding still come from Media3 metadata; no amplitude-based trimming or fixed sample subtraction is applied. Other decoders retain native behavior, and other API levels retain the native renderer.
+
 ## AAC edit-list trimming
 
 `PlaybackExtractors` retains Media3 extraction and reads bounded MP4 metadata through the registered source. AAC edit handling has two narrow cases ([#28](https://github.com/anastaci1a/localica/issues/28)). Neither inspects audio amplitude or changes encoded media bytes.
