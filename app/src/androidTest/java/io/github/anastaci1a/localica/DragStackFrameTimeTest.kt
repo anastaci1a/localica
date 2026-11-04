@@ -57,7 +57,7 @@ class DragStackFrameTimeTest {
                     val page = rememberFrostedBackdrop(Unit, dark = false)
                     SideEffect { hasState = true; host.state = state; host.source = page; host.reducedMotion = false }
                     val scene = if (fullScene && state.drag != null)
-                        rememberFrostedBackdrop(state.drag, dark = false, retainRaster = false, settledRefresh = false) else null
+                        rememberFrostedBackdrop(state.drag, dark = false, retainRaster = false, settledRefresh = false, distinctPixels = true) else null
                     val renderer = currentGlassRendererGeneration()
                     LaunchedEffect(scene, renderer) {
                         if (scene != null && renderer.backend == GlassBackend.Legacy) {
