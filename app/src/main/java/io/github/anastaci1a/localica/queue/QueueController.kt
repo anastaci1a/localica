@@ -379,8 +379,12 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
                 requireNotNull(inserted.currentEntryId), inserted.entries.map { it.id }))
             if (action == SongTap.PlayNext) {
                 val existing = current.entries.mapTo(hashSetOf()) { it.id }
-                inserted = inserted.copy(journey = journey(current).playNext(
-                    inserted.entries.filterNot { it.id in existing }.map { it.id }, inserted.entries.map { it.id }))
+                val added = inserted.entries.filterNot { it.id in existing }.map { it.id }
+                val ids = inserted.entries.map { it.id }
+                val unanchored = current.currentEntryId == null
+                val anchor = if (unanchored) QueueJourney.start(ids.filterNot { it in added.drop(1) },
+                    inserted.currentEntryId, JourneyModes.from(state.value.settings)) else journey(current)
+                inserted = inserted.copy(journey = anchor.playNext(if (unanchored) added.drop(1) else added, ids))
             }
             val next = state.value.library.update(inserted)
             if (action == SongTap.PlayNow) saveStartingPlayback(next) { activate(true, seek = true, refreshLocations = false) }
