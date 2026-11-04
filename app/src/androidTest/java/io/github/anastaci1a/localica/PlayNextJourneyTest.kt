@@ -38,10 +38,11 @@ class PlayNextJourneyTest {
         path = path.arrive(path.history.first().token, original)
         val ids = original + listOf("X", "Y")
         path = path.playNext(listOf("X", "Y"), ids)
+        assertEquals("Scheduled visits belong to the active cycle after Previous", cycle, path.next!!.cycle)
         val counts = mutableMapOf<String, Int>()
         repeat(10) {
             val next = path.next!!
-            if (next.cycle == cycle && next.entryId in listOf("X", "Y")) counts[next.entryId] = counts.getOrDefault(next.entryId, 0) + 1
+            if (next.cycle <= cycle && next.entryId in listOf("X", "Y")) counts[next.entryId] = counts.getOrDefault(next.entryId, 0) + 1
             path = path.arrive(next.token, ids)
         }
         assertEquals(mapOf("X" to 1, "Y" to 1), counts)
