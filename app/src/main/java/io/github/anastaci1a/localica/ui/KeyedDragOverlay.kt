@@ -28,6 +28,9 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.delay
 import kotlin.math.exp
 
+/** Passive test observation of the recursive capture graph. */
+internal val LocalDragPaneObserver = staticCompositionLocalOf<((Int, FrostedBackdrop) -> Unit)?> { null }
+
 @Composable
 internal fun <T : Any, P> BoxScope.KeyedDragOverlay(state: KeyedDragState<T, P>, reducedMotion: Boolean,
     countDescription: (Int) -> String, cancelBottomMargin: Dp = 20.dp, content: @Composable BoxScope.(T, P) -> Unit) {
@@ -115,6 +118,7 @@ internal fun <T : Any, P> BoxScope.KeyedDragOverlay(state: KeyedDragState<T, P>,
     HoverDragUnderlay({ drag.moving.mapNotNull { frames[state.keyOf(it)] } }, backing, Modifier.matchParentSize().zIndex(2f))
     val cards = remember(drag, lifted, drag.destinations) { drag.moving.withIndex().filter { (index, item) -> index < 3 ||
         (!lifted && state.keyOf(item) in drag.initialBounds) || (drag.dropping && state.keyOf(item) in drag.destinations.orEmpty()) } }
+    val paneObserver = LocalDragPaneObserver.current
     var previousPane = backing
     cards.reversed().forEach { (index, item) -> key(drag, state.keyOf(item)) {
         val paneBacking = previousPane
@@ -126,6 +130,7 @@ internal fun <T : Any, P> BoxScope.KeyedDragOverlay(state: KeyedDragState<T, P>,
             // that redraws everything outside those clips whenever a card moves.
             dark = backing?.dark == true, retainRaster = false, whiteTint = 0f, settledRefresh = false, distinctPixels = true) else null
         SideEffect {
+            if (paneScene != null) paneObserver?.invoke(index, paneScene)
             paneScene?.readbackBackground = {
                 paneBacking?.snapshot?.let { image ->
                     paneBacking.location.registrationTo(paneScene.location)?.let { BackdropSnapshotBackground(image, it) }
