@@ -295,3 +295,5 @@ io.github.anastaci1a.localica.PlayerArtworkOpticsTest
 io.github.anastaci1a.localica.LiftShadowTest
 io.github.anastaci1a.localica.SelectionPillMaterialTest
 io.github.anastaci1a.localica.GalleryLiftFrameTest
+
+io.github.anastaci1a.localica.SelectionMergeGeometryTest
