@@ -150,7 +150,8 @@ internal fun ConnectedSelectionHost(modifier: Modifier = Modifier, contentDrawin
             val cap = HoverLift.MaxLift.toPx()
             val others = placed.map { it.rest.bounds } + scene.retainedHover.map { it.first.rest.bounds }
             val liveLifts = hovering.map { item ->
-                hoverGeometry(item.rest, hoverRoom(item.rest.bounds, others, viewport, liftEdges, cap), item.progress)
+                hoverGeometry(item.rest, hoverRoom(item.rest.bounds, others, viewport, liftEdges, cap,
+                    neighbourInset = MediaOutlinePadding.toPx(), clearance = HoverLift.Clearance.toPx()), item.progress)
             }
             hovering.forEachIndexed { index, item ->
                 item.entry.itemKey?.let { scene.hover[it] = liveLifts[index].translate(-item.at); scene.viewportHover[it] = liveLifts[index] }
