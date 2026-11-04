@@ -43,7 +43,7 @@ for phase in seed bridge verify; do
   grep -q '^package:' "$reports/$phase-installed-path.txt"
   instrument "$phase" io.github.anastaci1a.localica.ShuffleApkCompatibilityTest 1 -e shuffleCompatibilityPhase "$phase"
   if [[ "$phase" == bridge ]]; then
-    instrument bridge-legacy io.github.anastaci1a.localica.LegacyJourneyCompatibilityTest 2
+    instrument bridge-legacy io.github.anastaci1a.localica.LegacyJourneyCompatibilityTest 3
     instrument bridge-journal io.github.anastaci1a.localica.MetadataRefreshJournalTest 6
     for method in failedOverwriteAndRollbackCannotReopenCurrentOrDuplicateSources failedRecoveryRemainsBlockedAndVerifiedLaterRecoveryLoadsPaused explicitPlayDuringVerifiedRecoveryWinsWithoutStaleAutoplay unreadableStartupJournalFailsClosedBeforeAnyNativeSourceOpen missingBackupRemainsSourceScopedAndUnrelatedPlaybackStillWorks mismatchedAndUnfinishedJournalsFailClosedBeforeStartupOpening retainedUnsafeJournalCannotBeReplacedByEditingAnotherSong; do
       instrument "bridge-recovery-$method" "io.github.anastaci1a.localica.QueueRecoveryTest#$method" 1
