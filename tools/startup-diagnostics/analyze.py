@@ -127,6 +127,7 @@ def analyze(root):
             text = trace.read_text()
             trial["scheduling"] = scheduling(text, (file.parent / "threads.txt").read_text(),
                                              int(milestones["pid"]), milestones["launchUptimeMs"], window_ms)
+            trial["inputDelivery"] = input_delivery(text, int(milestones["pid"]), milestones)
             trial["sections"] = sections(text, trial["scheduling"]["threads"],
                                           milestones["launchUptimeMs"], window_ms)
         trials.append(trial)
@@ -137,6 +138,38 @@ def analyze(root):
         gap = by_mode["warm"]["milestones"]["launchUptimeMs"] - (cold["launchUptimeMs"] + cold.get("windowMs", 10_000))
     return {"percentile": "nearest rank, per trial; no pooled frame distribution",
             "physicalAcceptance": "open", "observedWarmGapAfterColdWindowMs": gap, "trials": trials}
+
+
+def input_delivery(trace, pid, milestones):
+    """Match target Main touch delivery to injected event-time intervals, not pixels."""
+    pattern = re.compile(r"-(\d+)\s+(?:\(.*?\)\s+)?\[\d+\].*?\s(\d+\.\d+):\s+tracing_mark_write:\s+B\|(\d+)\|deliverInputEvent src=0x1002 eventTimeNano=(\d+) id=(\S+)")
+    launch = milestones["launchUptimeMs"]
+    end = launch + milestones.get("windowMs", 15_000)
+    events, seen = [], set()
+    for line in trace.splitlines():
+        match = pattern.search(line)
+        if match is None:
+            continue
+        tid, at, owner, event_time, identity = match.groups()
+        at_ms, event_ns = float(at) * 1000, int(event_time)
+        key = (identity, event_ns)
+        if int(tid) != pid or int(owner) != pid or not launch <= at_ms < end or key in seen:
+            continue
+        if at_ms * 1e6 < event_ns:
+            continue
+        seen.add(key)
+        events.append({"id": identity, "eventUptimeMs": event_ns / 1e6,
+                       "mainDeliveryUptimeMs": at_ms, "queueMs": (at_ms * 1e6 - event_ns) / 1e6})
+    result = []
+    for action in milestones.get("inputs", []):
+        first = launch + action["requestedMs"]
+        last = launch + action["injectionReturnedMs"]
+        matched = [event for event in events if first <= event["eventUptimeMs"] <= last]
+        result.append({"kind": action["kind"], "requestedMs": action["requestedMs"],
+                       "matchedEvents": len(matched), "queue": percentiles([round(event["queueMs"] * 1e6) for event in matched]),
+                       "events": matched})
+    return {"meaning": "injected event time to target Main deliverInputEvent; includes dispatch and scheduling; not selection, content or presented-pixel latency",
+            "unmatchedMeaning": "no matched delivery observed inside this window; not proof of dropped input", "actions": result}
 
 
 def scheduling(trace, threads, pid, start_ms, window_ms=10_000):

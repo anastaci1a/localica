@@ -25,6 +25,8 @@ Default replay discovers navigation coordinates outside measurement, then clears
 
 Replay performs no hierarchy reads inside either window. Vertical accessibility events record gesture responses and ranges. Navigation selection and content-readiness latency remain unmeasured. A scroll event cannot prove which page supplied it. Keep this input coverage separate from readiness and presented-pixel acceptance.
 
+With `--trace`, analysis matches target Main `deliverInputEvent` records to injected event-time intervals. It reports queue p50/p95/p99 and matched counts per action. This includes input dispatch and Main scheduling. Unmatched delivery stays unknown; matched delivery does not prove navigation or presentation.
+
 Use `--input-mode adaptive` to investigate accessibility-observed selection and content. It requests Artists when the tab appears and scrolls after content arrives. Artists requires outgoing album titles to disappear. Tree reads can dominate the window on slow emulators; keep these samples separate from replay.
 
 Each fifteen-second window retains overlapping `gfxinfo framestats` snapshots, memory and CPU snapshots, input milestones and optional `atrace` output. Analysis also isolates the first five seconds. Frame timestamps use uptime; p50/p95/p99 use nearest rank. Deadline misses are unavailable on older APIs; the explicit 16.7 ms count remains separate.
