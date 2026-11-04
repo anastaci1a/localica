@@ -725,14 +725,16 @@ elif args[:3]==['shell','am','instrument']:
     assert not any('localicaOwnedSession' in arg for arg in args)
     with (root/'commands.jsonl').open('a') as out: out.write(json.dumps(args)+'\n')
     selector=args[args.index('class')+1]
-    count=2 if selector.endswith('LegacyJourneyCompatibilityTest') else 6 if selector.endswith('MetadataRefreshJournalTest') else 1
+    count=int(os.environ['EXPECTED_LEGACY_COUNT']) if selector.endswith('LegacyJourneyCompatibilityTest') else 6 if selector.endswith('MetadataRefreshJournalTest') else 1
     for _ in range(count): print('INSTRUMENTATION_STATUS_CODE: 1\nINSTRUMENTATION_STATUS_CODE: 0')
     print('INSTRUMENTATION_CODE: -1\nOK (%d tests)'%count)
 else: raise SystemExit('Unexpected fixture adb command: '+repr(args))
 ''')
                 adb.chmod(0o755)
                 env = dict(os.environ, RUNNER_TEMP=str(root), GITHUB_WORKSPACE=str(ROOT),
-                    MOCK_COMPAT_ROOT=str(root), EXPECTED_RUNNER=runner, PATH=str(binary)+os.pathsep+os.environ['PATH'])
+                    MOCK_COMPAT_ROOT=str(root), EXPECTED_RUNNER=runner,
+                    EXPECTED_LEGACY_COUNT=str((ROOT/'.github/compatibility/LegacyJourneyCompatibilityTest.kt').read_text().count('@Test fun ')),
+                    PATH=str(binary)+os.pathsep+os.environ['PATH'])
                 result = subprocess.run(['bash', str(ROOT/'.github/compatibility/run.sh')], env=env,
                     capture_output=True, text=True, timeout=30)
                 self.assertEqual(0, result.returncode, result.stdout+result.stderr)
