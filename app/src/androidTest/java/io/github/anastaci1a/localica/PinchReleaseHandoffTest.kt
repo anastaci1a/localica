@@ -9,6 +9,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PixelMap
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.geometry.Offset
@@ -103,6 +105,8 @@ class PinchReleaseHandoffTest {
             compose.waitForIdle()
             val viewport = list.fetchSemanticsNode().boundsInRoot
             val originalBounds = anchor.fetchSemanticsNode().boundsInRoot
+            val artwork = compose.onNodeWithTag("browse-art-release:73", true)
+            val originalArtwork = artwork.fetchSemanticsNode().boundsInRoot
             val expectedFinalCenter = originalBounds.center.y
             val y = expectedFinalCenter - viewport.top
             val x = originalBounds.center.x - viewport.left
@@ -126,7 +130,8 @@ class PinchReleaseHandoffTest {
                 phase("begin")
                 val pixels = try { capturePresentedPopupPixels(compose, scene, stage) { view } }
                     finally { phase("end") }
-                if (gallery && stage in setOf(0, 1, 2, 6, 12, 22) &&
+                if (gallery && (stage in setOf(0, 1, 2, 6, 12, 22) ||
+                    InstrumentationRegistry.getArguments().getString("pinchReviewAllFrames") == "true") &&
                     InstrumentationRegistry.getArguments().getString("pinchReview") == "true") {
                     val directory = reviewDirectory
                     val bitmap = android.graphics.Bitmap.createBitmap(pixels.width, pixels.height, android.graphics.Bitmap.Config.ARGB_8888)
@@ -138,7 +143,26 @@ class PinchReleaseHandoffTest {
                         }
                     } finally { bitmap.recycle() }
                 }
-                return highlightCenter(pixels, expectedFinalCenter, originalBounds.height * 2f, gallery)
+                val visibleCenter = highlightCenter(pixels, expectedFinalCenter, originalBounds.height * 2f, gallery)
+                if (!gallery || !outward) return visibleCenter
+                // Density changes keep artwork as wide as the visual card. Infer its
+                // size from independently placed artwork, then locate an uncovered
+                // presented edge. The layout's center is never the measured answer.
+                val row = anchor.fetchSemanticsNode().boundsInRoot
+                val art = artwork.fetchSemanticsNode().boundsInRoot
+                val widthChange = row.width - originalArtwork.width
+                val progress = if (kotlin.math.abs(widthChange) < .5f) 0f else
+                    ((art.width - originalArtwork.width) / widthChange).coerceIn(0f, 1f)
+                val height = originalBounds.height + (row.height - originalBounds.height) * progress
+                val contour = Rect(row.left, row.top, row.left + art.width, row.top + height)
+                val covers = compose.onAllNodes(SemanticsMatcher("release artwork") {
+                    it.config.getOrNull(SemanticsProperties.TestTag)?.startsWith("browse-art-release:") == true
+                }, useUnmergedTree = true).fetchSemanticsNodes().map { it.boundsInRoot }
+                val center = galleryHighlightCenter(pixels, contour, covers)
+                if (!center.isFinite()) highlightExtent = 0
+                android.util.Log.i("PinchReleaseContour",
+                    "stage=$stage visible=$visibleCenter measured=$center extent=$highlightExtent contour=$contour")
+                return center
             }
             assertEquals("Initial rendered landmark", expectedFinalCenter, presentedCenter(), 4f)
             compose.mainClock.autoAdvance = false
@@ -180,7 +204,6 @@ class PinchReleaseHandoffTest {
             compose.mainClock.advanceTimeBy(1200)
             compose.runOnIdle { stage = 1 }
             val before = presentedCenter()
-            val artwork = compose.onNodeWithTag("browse-art-release:73", true)
             val heldArtwork = artwork.fetchSemanticsNode().boundsInRoot
             list.performTouchInput {
                 if (cancelled) cancel() else { up(0); up(1) }
@@ -305,6 +328,75 @@ class PinchReleaseHandoffTest {
         assertFalse(anchorPreserved(steady.toMutableList().also { for (i in 3..5) it[i] = 538f },
             extents.toMutableList().also { for (i in 3..5) it[i] = 77 }, range))
         assertFalse(anchorPreserved(steady.toMutableList().also { it[11] = 538f }, extents.toMutableList().also { it[11] = 77 }, range))
+    }
+
+    @Test fun galleryAnchorCheckPlacesSmallTopAndBottomClipsWhileTheCardResizes() {
+        val centers = mutableListOf<Float>()
+        val extents = mutableListOf<Int>()
+        val legacy = mutableListOf<Float>()
+        repeat(12) { frame ->
+            val height = 282f - frame * 3f
+            val contour = Rect(120f, 400f - height / 2f, 352f, 400f + height / 2f)
+            val cover = if (frame % 2 == 0)
+                Rect(100f, contour.top - 8f, 372f, contour.top + 15f)
+            else Rect(100f, contour.bottom - 15f, 372f, contour.bottom + 8f)
+            val pixels = galleryAnchorPixels(contour, covers = listOf(cover))
+            legacy += highlightCenter(pixels, 400f, 400f, true)
+            extents += highlightExtent
+            centers += galleryHighlightCenter(pixels, contour, listOf(cover))
+        }
+        assertFalse("Small clips expose the old remaining-tint midpoint error",
+            anchorPreserved(legacy, extents, 396f..404f))
+        assertTrue("Every changing-size frame still places its full contour",
+            anchorPreserved(centers, extents, 396f..404f))
+        centers.forEach { assertEquals(400f, it, 1f) }
+    }
+
+    @Test fun galleryAnchorCheckRejectsTranslatedContoursEvenWithPartialOcclusion() {
+        // Quarter-pixel edges keep the 4.5 px control distinct from raster rounding.
+        val contour = Rect(120f, 260.25f, 352f, 539.75f)
+        val masks = listOf(emptyList(),
+            listOf(Rect(100f, contour.top - 20f, 372f, contour.top + 20f)),
+            listOf(Rect(100f, contour.bottom - 20f, 372f, contour.bottom + 20f)))
+        for (shift in listOf(-30f, -7.5f, -4.5f, 4.5f, 7.5f, 30f)) for (covers in masks) {
+            val pixels = galleryAnchorPixels(contour, shift, covers)
+            val measured = galleryHighlightCenter(pixels, contour, covers)
+            assertTrue("A partly covered translated contour remains placeable: shift=$shift covers=$covers measured=$measured",
+                measured.isFinite())
+            val centers = MutableList(12) { 400f }.also { it[4] = measured }
+            assertFalse("A real translation must fail the original 4 px bound: shift=$shift covers=$covers measured=$measured",
+                anchorPreserved(centers, List(12) { 280 }, 396f..404f))
+        }
+    }
+
+    @Test fun galleryAnchorCheckKeepsTheUnplaceableFrameCapAndFinalFrameRule() {
+        val contour = Rect(120f, 260f, 352f, 540f)
+        val covers = listOf(Rect(100f, 240f, 372f, 280f), Rect(100f, 520f, 372f, 560f))
+        val hidden = galleryHighlightCenter(galleryAnchorPixels(contour, covers = covers), contour, covers)
+        assertTrue("Neither optical edge can establish the full contour", hidden.isNaN())
+        fun preserves(indices: List<Int>): Boolean {
+            val centers = MutableList(12) { 400f }
+            val extents = MutableList(12) { 280 }
+            indices.forEach { centers[it] = hidden; extents[it] = 0 }
+            return anchorPreserved(centers, extents, 396f..404f)
+        }
+        assertTrue(preserves(listOf(3, 4)))
+        assertFalse(preserves(listOf(3, 4, 5)))
+        assertFalse(preserves(listOf(11)))
+    }
+
+    private fun galleryAnchorPixels(contour: Rect, shift: Float = 0f, covers: List<Rect> = emptyList()): PixelMap {
+        val bitmap = android.graphics.Bitmap.createBitmap(480, 800, android.graphics.Bitmap.Config.ARGB_8888)
+        try {
+            val canvas = android.graphics.Canvas(bitmap)
+            canvas.drawColor(android.graphics.Color.WHITE)
+            val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
+            paint.color = Color.Magenta.copy(alpha = .13f).toArgb()
+            canvas.drawRoundRect(contour.left, contour.top + shift, contour.right, contour.bottom + shift, 42f, 42f, paint)
+            paint.color = android.graphics.Color.LTGRAY
+            covers.forEach { canvas.drawRect(it.left, it.top, it.right, it.bottom, paint) }
+            return bitmap.asImageBitmap().toPixelMap()
+        } finally { bitmap.recycle() }
     }
 
     private fun highlightCenter(pixels: PixelMap, expected: Float, radius: Float, fullWidth: Boolean = false): Float {
