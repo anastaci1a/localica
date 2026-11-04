@@ -216,7 +216,6 @@ internal fun Modifier.pinchRetainedOverlay(motion: BrowsePinchMotion, grid: Lazy
             val targetInset = (geometry.cardInset * motion.pixelDensity).roundToInt()
             val sourceVerticalInset = (BrowseCellGeometry(motion.sourceColumns).cardVerticalInset(requireNotNull(motion.visualSource)) * motion.pixelDensity).roundToInt()
             val targetVerticalInset = (geometry.cardVerticalInset(requireNotNull(motion.target)) * motion.pixelDensity).roundToInt()
-            val exitProgress = browsePinchGeometryProgress(departing = true, progress = p)
             motion.bounds.forEach { (key, old) ->
                 if (key in liveKeys) return@forEach
                 val image = motion.frozen[key] ?: return@forEach
@@ -227,12 +226,15 @@ internal fun Modifier.pinchRetainedOverlay(motion: BrowsePinchMotion, grid: Lazy
                 val leading = geometry.cellLeft(motion.viewportWidth.toInt(), motion.pixelDensity, column).toFloat()
                 val x = if (motion.rightToLeft) motion.viewportWidth - leading - width else leading
                 val y = row.offset.y + (index / motion.targetColumns - rowIndex / motion.targetColumns) * pitch
-                // Scale/fade departures early without accelerating their scroll-anchor trajectory.
-                val origin = Offset(old.left + sourceInset + (x + targetInset - old.left - sourceInset) * p,
-                    y + targetVerticalInset + pinchContentTranslation(old.top, y.toFloat(), sourceVerticalInset, targetVerticalInset, p))
+                val sourceOrigin = Offset(old.left + sourceInset, old.top + sourceVerticalInset)
+                val targetOrigin = Offset(x + targetInset, y + targetVerticalInset)
+                val fadeWindow = browsePinchFadeWindow((targetOrigin - sourceOrigin).getDistance(), motion.viewportWidth)
+                val exitProgress = browsePinchGeometryProgress(true, p, fadeWindow)
+                // Position and every part's dimensions stop on the same spatial frame.
+                val origin = sourceOrigin + (targetOrigin - sourceOrigin) * exitProgress
                 retained[key] = RetainedPinchPlacement(image, origin, (width - 2 * targetInset).coerceAtLeast(0f),
                     image.content?.target?.height?.toFloat() ?: (pitch - 2 * targetVerticalInset).coerceAtLeast(0f),
-                    browseViewVisibility(true, false, p), index, exitProgress)
+                    browseViewVisibility(true, false, p, fadeWindow), index, exitProgress)
             }
         }
         fun retainedLift(placed: RetainedPinchPlacement): HoverGeometry? {
