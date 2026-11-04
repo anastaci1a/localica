@@ -10,6 +10,17 @@ def row(start=1_000_000_000, flags=0, duration=20_000_000):
 
 
 class FrameStatsTest(unittest.TestCase):
+    def test_background_threads_with_the_same_name_keep_distinct_cpu_intervals(self):
+        trace = "\n".join([
+            " a-1 [000] .... 1.000000: sched_switch: prev_comm=x prev_pid=1 prev_prio=0 prev_state=S ==> next_comm=DefaultDispatch next_pid=8 next_prio=0",
+            " w-8 [000] .... 1.100000: sched_switch: prev_comm=DefaultDispatch prev_pid=8 prev_prio=0 prev_state=S ==> next_comm=DefaultDispatch next_pid=9 next_prio=0",
+            " w-9 [000] .... 1.300000: sched_switch: prev_comm=DefaultDispatch prev_pid=9 prev_prio=0 prev_state=S ==> next_comm=x next_pid=1 next_prio=0",
+        ])
+        threads = scheduling(trace, "TID NAME\n7 app\n8 DefaultDispatch\n9 DefaultDispatch", 7, 1000, 1000)["threads"]
+        by_tid = {value["tid"]: value for value in threads.values()}
+        self.assertEqual({7, 8, 9}, set(by_tid))
+        self.assertEqual((100, 200), (by_tid[8]["runningMs"], by_tid[9]["runningMs"]))
+
     def test_trace_slices_retain_nested_wall_time_without_calling_it_cpu_time(self):
         trace = "\n".join([
             " app-7 [000] .... 0.900000: tracing_mark_write: B|7|parent",
