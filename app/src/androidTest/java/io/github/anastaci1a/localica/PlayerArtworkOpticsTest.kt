@@ -30,9 +30,9 @@ import kotlin.math.abs
 class PlayerArtworkOpticsTest {
     @get:Rule val compose = localicaComposeRule()
 
-    private fun visual(color: Int, key: String) = PlayerVisual(
-        Bitmap.createBitmap(32, 96, Bitmap.Config.ARGB_8888).apply { eraseColor(color) }.asImageBitmap(),
-        PlayerPalette(Color(0xFF303040), Color(0xFF303040), Color(0xFF303040), aspect = 1f / 3f), contentKey = key)
+    private fun visual(color: Int, key: String, width: Int = 32, height: Int = 96) = PlayerVisual(
+        Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888).apply { eraseColor(color) }.asImageBitmap(),
+        PlayerPalette(Color(0xFF303040), Color(0xFF303040), Color(0xFF303040), aspect = width.toFloat() / height), contentKey = key)
 
     private fun output(): File {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
@@ -44,7 +44,9 @@ class PlayerArtworkOpticsTest {
     @Test fun headerGlassKeepsTheCoverAcrossExpansionAndCollapse() {
         assumeTrue("SDK <33 has cached Legacy glass rather than live Modern sampling", Build.VERSION.SDK_INT >= 33)
         val progress = Animatable(1f)
-        val red = visual(android.graphics.Color.RED, "red")
+        // Fill the header's horizontal region; a very narrow portrait leaves it
+        // outside the actual fitted image even though its layout box spans the width.
+        val red = visual(android.graphics.Color.RED, "red", width = 64, height = 100)
         lateinit var scope: CoroutineScope
         compose.setContent { LocalicaTheme { BoxWithConstraints(Modifier.fillMaxSize()) {
             scope = rememberCoroutineScope()
@@ -119,7 +121,7 @@ class PlayerArtworkOpticsTest {
                     scene++
                 }
                 compose.waitForIdle()
-                val coordinates = compose.onNodeWithTag("artwork-gesture").fetchSemanticsNode().layoutInfo.coordinates
+                val coordinates = compose.onNodeWithTag("artwork-gesture", true).fetchSemanticsNode().layoutInfo.coordinates
                 val cover = compose.runOnUiThread { coordinates.findRootCoordinates().localBoundingBoxOf(coordinates, clipBounds = false) }
                 val root = compose.onRoot().fetchSemanticsNode().boundsInRoot
                 val visible = cover.intersect(root)
