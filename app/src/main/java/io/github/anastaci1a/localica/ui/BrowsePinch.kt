@@ -200,6 +200,25 @@ internal class BrowsePinchMotion {
         tracking?.cancel()
         capture = null; tracking = null; settling = null
     }
+    /** Compact phase line for the diagnostics trail (#535 b); reads state only. */
+    fun breadcrumb(): String {
+        val request = gesture
+        return "pinch tx=$transaction ${source?.let { "${it.presentation}/${it.listSize}" }}>${target?.let { "${it.presentation}/${it.listSize}" }} " +
+            "held=$held cap=$capturing rb=$readbackPending dest=$destinationReady commit=$committed " +
+            "g=${request?.let { "p${it.pending}/r${it.released}/c${it.cancelled}" }}"
+    }
+    /** Stuck-state report (#535 b); reads state only. */
+    fun diagnostics(): String {
+        fun BrowseStyle?.name() = this?.let { "${it.presentation}/${it.listSize}/${it.itemsPerRow}" }
+        val request = gesture
+        return "transaction=$transaction source=${source.name()} target=${target.name()} progress=${progress.value} " +
+            "held=$held capturing=$capturing readbackPending=$readbackPending destinationReady=$destinationReady " +
+            "committed=$committed takeover=$takeover releaseTarget=$releaseTarget headerless=$headerless " +
+            "capture=${capture?.isActive} settling=${settling?.isActive} focus=$focusKey@$focusTop edge=$focusEdge " +
+            "gesture=${request?.let { "pending=${it.pending} released=${it.released} cancelled=${it.cancelled} " +
+                "retargeted=${it.retargeted} travel=${it.travel} generation=${it.generation} finished=${it.finished.isCompleted}" }} " +
+            "header=[${activeHeader?.diagnostics()}]"
+    }
     fun dispose() {
         disposed = true
         cancelGestures()
@@ -349,6 +368,8 @@ internal fun Modifier.browsePinch(enabled: Boolean, motion: BrowsePinchMotion, s
         header.awaitHandoff()
     }
     OnModalGestureCancellation {
+        if (motion.source != null || motion.gesture != null)
+            io.github.anastaci1a.localica.diagnostics.Diagnostics.info(PinchDiagnosticsTag, "modal-cancellation ${motion.diagnostics()}")
         motion.cancelGestures()
         val source = motion.source
         if (source != null) {

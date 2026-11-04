@@ -440,6 +440,7 @@ fun LocalicaScreen(
         }, aboutContent = {
             Text("Localica", style = MaterialTheme.typography.headlineSmall)
             Text("Offline music, organized your way.")
+            DiagnosticsExportAction()
             LibraryLicenses()
         }, initialCategory = settingsCategory, onFullScan = onScanAll, onQuickScan = onQuickScan, libraryFiltersContent = {
             LibraryFilterSettings(libraryFilters) { libraryFilters = it; libraryFilterPreferences.write(it) }

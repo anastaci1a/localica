@@ -98,6 +98,12 @@ Browsing/settings stay light, with a pink selected-tab accent, shared neutral gr
 
 Settings categories are Interface, Playback and queues, Library and tags, About/licenses, with icons, summaries and chevrons. Search appears only at the root. Both Back controls reverse the page entrance direction.
 
+**Settings → About and licenses → Export diagnostics** opens a glass dialog, then the Android share sheet with one text file: app version, device model, Android version, export time and the diagnostics trail. Nothing leaves the device unless the user picks a share target; there is no network path.
+
+The trail is an in-memory ring of the last 500 lines (about 256 KB), lost when the process ends. It holds stuck-pinch dumps (a pinch transaction, readback or zoom anchor outliving its gesture by 2 s), their recoveries, pill cancellations of a live pinch, and a compact trail of pinch, transaction and readback phase changes.
+
+A healthy idle app records nothing. Debuggable builds also mirror each line to logcat.
+
 **Interface → Glass** provides live persistent controls and reset, with a draggable preview that compresses at its edges and morphs between a pill and dialog:
 
 | Control | Range / treatment |
