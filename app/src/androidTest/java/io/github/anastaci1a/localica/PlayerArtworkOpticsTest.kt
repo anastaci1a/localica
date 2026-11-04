@@ -5,6 +5,7 @@ import android.os.Build
 import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.MotionDurationScale
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
@@ -28,7 +29,7 @@ import java.io.File
 import kotlin.math.abs
 
 class PlayerArtworkOpticsTest {
-    @get:Rule val compose = localicaComposeRule()
+    @get:Rule val compose = localicaComposeRule(effectContext = object : MotionDurationScale { override val scaleFactor = 1f })
 
     private fun visual(color: Int, key: String, width: Int = 32, height: Int = 96) = PlayerVisual(
         Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888).apply { eraseColor(color) }.asImageBitmap(),
@@ -106,7 +107,7 @@ class PlayerArtworkOpticsTest {
             scope = rememberCoroutineScope()
             PlayerSurface(PlaybackState(connected = true, trackId = if (incoming) "blue" else "red",
                 title = "Track", artist = "Artist", durationMs = 120000), endpoint == 1f, {},
-                InterfaceSettings(artworkLayout = layout, artworkTransition = ArtworkTransition.Carousel), progress,
+                InterfaceSettings(artworkLayout = layout), progress,
                 {}, {}, {}, {}, {}, {}, visual = if (incoming) blue else red)
         } } } }
         val directory = output()
@@ -141,9 +142,12 @@ class PlayerArtworkOpticsTest {
                 // Establish the fixture's admitted fade before testing either
                 // progress boundary. Native recording can delay its first frame.
                 // Boundary samples below never wait for an optical result.
-                compose.waitUntil(5000) {
+                compose.mainClock.advanceTimeByFrame()
+                compose.mainClock.advanceTimeBy(InterfaceSettings().motionDuration(550).toLong() / 3)
+                compose.waitUntil(15000) {
                     compose.mainClock.advanceTimeByFrame()
                     val color = compose.onRoot().captureToImage().toPixelMap()[x, y]
+                    observations += "$prefix-admitting-${compose.mainClock.currentTime}=$color"
                     color.red in .2f.. .8f && color.blue in .2f.. .8f
                 }
                 val mixed = sample("mixed")
@@ -162,7 +166,9 @@ class PlayerArtworkOpticsTest {
                 compose.waitForIdle()
                 sample("late")
                 if (mixed.red <= .05f || mixed.blue <= .05f) failures += "$prefix did not establish a mixed frame: $mixed"
-                if (abs(moving.blue - mixed.blue) > .18f || abs(moving.red - mixed.red) > .18f)
+                // At 1x speed the default blur reveal can advance by .195 in
+                // one 16ms frame; allow quantization, but reject a fresh solid target.
+                if (abs(moving.blue - mixed.blue) > .22f || abs(moving.red - mixed.red) > .22f)
                     failures += "$prefix jumped on entering player motion: $mixed -> $moving"
                 if (returned.blue < moving.blue - .04f) failures += "$prefix jumped backwards on settle: $moving -> $returned"
             }
