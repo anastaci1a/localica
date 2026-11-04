@@ -118,7 +118,10 @@ internal fun <T : Any, P> BoxScope.KeyedDragOverlay(state: KeyedDragState<T, P>,
     var previousPane = backing
     cards.reversed().forEach { (index, item) -> key(drag, state.keyOf(item)) {
         val paneBacking = previousPane
-        val paneScene = if (index > 0) rememberFrostedBackdrop(Triple(drag, paneBacking?.capture, paneBacking?.glassFallback),
+        // The top pane still samples its backing even though no later pane needs its recording.
+        if (index == 0) BackdropLease(paneBacking)
+        // Propagate the completed material once, not both its raw readback and prepared endpoint.
+        val paneScene = if (index > 0) rememberFrostedBackdrop(drag to paneBacking?.lensSnapshot,
             dark = backing?.dark == true, settledRefresh = false) else null
         previousPane = paneScene
         LaunchedEffect(drag, paneScene) {
