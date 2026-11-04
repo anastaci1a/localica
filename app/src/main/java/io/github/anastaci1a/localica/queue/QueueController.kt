@@ -130,9 +130,10 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
             val next = journey.next
             if (blocksVisit(queue, next)) { reportRecovery(); return@submit }
             if (policy == null) return@submit
-            val sameCycle = next != null && next.cycle == journey.current?.cycle
-            if (policy.songEnd == SongEnd.Stop && sameCycle) return@submit
-            if (policy.songEnd == SongEnd.NextPaused && sameCycle) {
+            // Historical and scheduled visits may cross labels while remaining in the active traversal.
+            val withinTraversal = next != null && next.cycle <= journey.cycle
+            if (policy.songEnd == SongEnd.Stop && withinTraversal) return@submit
+            if (policy.songEnd == SongEnd.NextPaused && withinTraversal) {
                 moveTo(next!!); return@submit
             }
             finishQueue(policy, play = !policy.pausesEachSong && intents.choose(commandRevision, requestedAtEnd).play)
