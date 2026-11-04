@@ -52,6 +52,7 @@ class SearchImeMotionTest {
     private val samples = mutableListOf<SearchMorphSample>()
     private val keyboardSetup = mutableListOf<String>()
     private val motionTimeline = mutableListOf<String>()
+    private var nativeActionReturnGate: java.util.concurrent.CountDownLatch? = null
     private var nativeReturnProbe: NativeReturnProbe? = null
     private val nativeReturnFrames = mutableListOf<Pair<SearchMorphSample, NativeReturnEvidence>>()
 
@@ -213,6 +214,7 @@ class SearchImeMotionTest {
             }, LocalReducedMotion provides reduced,
                 LocalSearchMorphObserver provides {
                     samples += it
+                    if (!it.opening && it.progress in .01f.. .99f) nativeActionReturnGate?.countDown()
                     motionTimeline += "${SystemClock.uptimeMillis()} $it"
                     nativeReturnProbe?.snapshot()?.let { evidence ->
                         nativeReturnFrames += it to evidence
@@ -437,7 +439,7 @@ class SearchImeMotionTest {
         }
     }
 
-    private fun exerciseDismissal(outside: Boolean, reduced: Boolean = false) = withDockedKeyboard {
+    private fun exerciseDismissal(outside: Boolean, reduced: Boolean = false, awaitFirstReturn: Boolean = false) = withDockedKeyboard {
         fixture(true, reduced)
         try {
             val home = compose.runOnUiThread { anchor.bounds }
@@ -459,16 +461,25 @@ class SearchImeMotionTest {
                 }
             }
             android.util.Log.i("SearchImeMotionTest", "Native dismissal requested outside=$outside uptime=${SystemClock.uptimeMillis()}")
-            if (outside) {
-                val device = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
-                assertTrue(raised.left > 2f)
-                assertTrue(device.click(2, raised.center.y.toInt()))
-            } else pressSystemBack()
-            android.util.Log.i("SearchImeMotionTest", "Native dismissal input returned uptime=${SystemClock.uptimeMillis()}")
-            closed()
+            val returnGate = java.util.concurrent.CountDownLatch(1).takeIf { awaitFirstReturn }
+            compose.runOnUiThread { nativeActionReturnGate = returnGate }
+            nativeDismissal {
+                if (outside) {
+                    val device = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
+                    assertTrue(raised.left > 2f)
+                    assertTrue(device.click(2, raised.center.y.toInt()))
+                } else pressSystemBack()
+                returnGate?.let { gate ->
+                    assertTrue("Native input completion must not starve the first placed return frame",
+                        gate.await(5, java.util.concurrent.TimeUnit.SECONDS))
+                }
+                android.util.Log.i("SearchImeMotionTest", "Native dismissal input returned uptime=${SystemClock.uptimeMillis()}")
+            }
             verifyReturn(raised, home, reduced)
         } finally {
             compose.runOnUiThread {
+                nativeActionReturnGate?.countDown()
+                nativeActionReturnGate = null
                 nativeReturnProbe?.dispose()
                 nativeReturnProbe = null
                 visible = false
@@ -476,6 +487,14 @@ class SearchImeMotionTest {
             compose.mainClock.autoAdvance = true
         }
     }
+
+    private fun nativeDismissal(action: () -> Unit) {
+        action()
+        closed()
+    }
+
+    @Test fun nativeInputCompletionDoesNotStarveTheFirstPlacedReturnFrame() =
+        exerciseDismissal(outside = true, awaitFirstReturn = true)
 
     @Test fun independentOpeningAndEmptyNativeBackHaveOneDirectReturn() = exerciseDismissal(outside = false)
     @Test fun outsidePointerDismissalDoesNotFollowTheKeyboardDown() = exerciseDismissal(outside = true)
