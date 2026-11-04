@@ -2,12 +2,6 @@
     <queries>
         <package android:name="io.github.anastaci1a.localica.debug" />
     </queries>
-    <!-- The secondary controller is opt-in and instruments only the test package. -->
-    <!-- AGP rewrites the first instrumentation node to its configured runner. Keep it explicit. -->
-    <instrumentation android:name="io.github.anastaci1a.localica.NavigationRandomOwnedSession"
-        android:targetPackage="io.github.anastaci1a.localica.debug" />
-    <instrumentation android:name="io.github.anastaci1a.localica.StartupProcessDiagnostics"
-        android:targetPackage="io.github.anastaci1a.localica.debug.test" />
     <application>
         <activity android:name="io.github.anastaci1a.localica.TestDocumentsProvider$LyricsGrantActivity"
             android:exported="true" android:theme="@android:style/Theme.NoDisplay" />

@@ -252,7 +252,7 @@ class StartupFrameMetricsTest {
         val firstFrameEnd = first?.let { (it.frameTimestampNanos + it.totalDurationNanos - launchStart) / 1e6 }
         val summary = "scenario=$scenario api=${Build.VERSION.SDK_INT} tabs=${tabs.joinToString(",")} tracks=${NavigationScaleCatalog.TRACK_COUNT} " +
             "seedMs=$seededMs windowMs=${WINDOW_NANOS / 1_000_000} frames=${frames.size} " +
-            "p50Ms=%.2f p90Ms=%.2f p95Ms=%.2f p99Ms=%.2f longestMs=%.2f janky=%d budgetMs=%.2f ".format(percentile(.5), percentile(.9), percentile(.95),
+            "p50Ms=%.2f p90Ms=%.2f p99Ms=%.2f longestMs=%.2f janky=%d budgetMs=%.2f ".format(percentile(.5), percentile(.9),
                 percentile(.99), (durations.lastOrNull() ?: 0L) / 1e6, janky, budgetNanos / 1e6) +
             "firstFrameEndMs=${firstFrameEnd?.let { "%.1f".format(it) } ?: "n/a"} createdMs=${since(milestones.created.get())} " +
             "skeletonMs=${since(milestones.skeleton.get())} libraryLoadedMs=${since(milestones.libraryLoaded.get())} " +
