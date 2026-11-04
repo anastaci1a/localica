@@ -393,14 +393,13 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     val pinchHeader = if (artDetail) remember(pinchMotion, gridState) { CollectionPinchHeader(pinchMotion, gridState) } else null
     val headerFrameObserver = LocalCollectionHeaderFrameObserver.current
     SideEffect { pinchMotion.header = pinchHeader; pinchHeader?.observer = headerFrameObserver }
-    val pinchDiagnostics = pinchDiagnosticsEnabled()
     var zoomAnchor by remember(route.key) { mutableStateOf<BrowseZoomAnchor?>(null) }
     LaunchedEffect(zoomAnchor, queryPending, displayedStyle) {
         fun headerPhase(phase: String) {
-            if (pinchHeader != null && (headerFrameObserver != null || pinchDiagnostics)) android.util.Log.i("CollectionHeaderAnchor",
+            if (pinchHeader != null) io.github.anastaci1a.localica.diagnostics.Diagnostics.info("CollectionHeaderAnchor",
                 "phase=$phase anchor=${zoomAnchor != null} pending=$queryPending " +
                     "styleMatches=${zoomAnchor?.style == displayedStyle} rows=${result.items.size} " +
-                    "capturing=${pinchMotion.capturing} held=${pinchMotion.held}")
+                    "capturing=${pinchMotion.capturing} held=${pinchMotion.held}", alsoLog = headerFrameObserver != null)
         }
         headerPhase("admission")
         val anchor = zoomAnchor ?: return@LaunchedEffect
@@ -485,34 +484,23 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
         listOf(presentation, validAlbums, if (artDetail) hero else surroundingBackdrop?.fallback)) { gridState.isScrollInProgress }
     val maskedBackdrop = (showSearchPill || showFilters) && !artDetail
     val viewportBackdrop = if (needsListBackdrop) rememberBrowseBackdropLayer(backdropScene, maskedBackdrop) else null
-    if (pinchDiagnostics) {
-        val diagnosedQuery by rememberUpdatedState(queryPending)
-        val diagnosedStyle by rememberUpdatedState(displayedStyle)
-        val diagnosedBackdrop by rememberUpdatedState(viewportBackdrop?.source)
-        LaunchedEffect(pinchMotion, listBackdrop) {
-            // #535 (b): report a pinch transaction, anchor or list recording that outlives its
-            // gesture by 2 s, then its recovery. Debuggable builds only; reads state only.
-            var reported = false
-            snapshotFlow {
-                pinchMotion.source != null && !pinchMotion.held || pinchMotion.readbackPending ||
-                    zoomAnchor != null && pinchMotion.source == null ||
-                    listBackdrop.readbackPending || diagnosedBackdrop?.readbackPending == true
-            }.collectLatest { lingering ->
-                if (!lingering) {
-                    if (reported) android.util.Log.i(PinchDiagnosticsTag, "recovered ${pinchMotion.diagnostics()}")
-                    reported = false
-                    return@collectLatest
-                }
-                kotlinx.coroutines.delay(2000)
-                reported = true
-                android.util.Log.w(PinchDiagnosticsTag, "lingering ${pinchMotion.diagnostics()} anchor=$zoomAnchor " +
-                    "queryPending=$diagnosedQuery displayed=${diagnosedStyle.presentation}/${diagnosedStyle.listSize} " +
-                    "scrolling=${gridState.isScrollInProgress} first=${gridState.firstVisibleItemIndex}/" +
-                    "${gridState.firstVisibleItemScrollOffset} listRecordingHeld=${listBackdrop.readbackPending}/" +
-                    "${diagnosedBackdrop?.readbackPending}")
-            }
-        }
-    }
+    // #535 (b): the always-on stuck-state watchdog and phase trail feed the in-app diagnostics buffer.
+    // Both observe state transitions through snapshot flows, so a healthy run does no per-frame work.
+    PinchBreadcrumbs { pinchMotion.breadcrumb() }
+    StuckStateWatchdog(
+        lingering = {
+            pinchMotion.source != null && !pinchMotion.held || pinchMotion.readbackPending ||
+                zoomAnchor != null && pinchMotion.source == null ||
+                listBackdrop.readbackPending || viewportBackdrop?.source?.readbackPending == true
+        },
+        lingeringReport = {
+            "${pinchMotion.diagnostics()} anchor=$zoomAnchor queryPending=$queryPending " +
+                "displayed=${displayedStyle.presentation}/${displayedStyle.listSize} " +
+                "scrolling=${gridState.isScrollInProgress} first=${gridState.firstVisibleItemIndex}/" +
+                "${gridState.firstVisibleItemScrollOffset} listRecordingHeld=${listBackdrop.readbackPending}/" +
+                "${viewportBackdrop?.source?.readbackPending}"
+        },
+        recoveredReport = { pinchMotion.diagnostics() })
     val refreshBackdrop = LocalBackdropRefresh.current
     // Observe scroll start/stop in the effect, not this screen's composition.
     val currentRefreshBackdrop by rememberUpdatedState(refreshBackdrop)
