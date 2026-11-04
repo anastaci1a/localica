@@ -15,6 +15,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -262,6 +263,10 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     val artProgress = playerArtworkSizeProgress(p, growthCurve)
     val artWidth = MiniArtworkSize + (fullArt - MiniArtworkSize) * artProgress
     val artHeight = MiniArtworkSize + (fullArtHeight - MiniArtworkSize) * artProgress
+    // Only metadata moves behind the foreground cover during expansion/contraction.
+    // Keep the settled full-background title above the cover, and all controls above it.
+    val movingCover = p > 0f && p < 1f
+    val metadataLayer = if (movingCover) -.5f else 0f
     val normalTransport = ordinarySeekY + 184.dp + extraActions
     val lyricBarCenter = lyricMetadataY + 64.dp + 20.dp
     val shelfTop = virtualHeight - navigationInset - CollapsedQueueHeight
@@ -383,7 +388,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
                 contentScale = artContentScale)
             }
         }
-            ArtworkBlend(artSwipe.source ?: artwork, Modifier.fillMaxSize().recordFrostedBackdrop(lyricBackdrop, enabled = p > .7f), duration = paletteDuration, occurrence = artworkVisit ?: sampled.trackId,
+            ArtworkBlend(artSwipe.source ?: artwork, Modifier.fillMaxSize().zIndex(-1f).recordFrostedBackdrop(lyricBackdrop, enabled = p > .7f), duration = paletteDuration, occurrence = artworkVisit ?: sampled.trackId,
                 immediate = artSwipe.active || artworkVisit != null && artSwipe.handoff == artworkVisit, opacityBlend = lyricsOpen || settings.artworkTransition != io.github.anastaci1a.localica.navigation.ArtworkTransition.BlurThrough,
                 onBackgroundFrame = polarity::frame) { frame ->
                 val backgroundRole = LocalArtworkBackgroundRole.current
@@ -399,8 +404,8 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
                         with(density) { artY.toPx() }, with(density) { artHeight.toPx() },
                         with(density) { artX.toPx() } + neighborOffset, artPixels, softness = maxOf(1f - coverBlend, swipeFeather / .9f), tone = tone)
                 }
-                // Soft edges reveal the two blended color continuations in the space between covers.
-                if (lyricProgress <= 0f) {
+                // Retain the settled cover in the header's original optical source.
+                if (!movingCover && lyricProgress <= 0f) {
                     cover(frame, swipeOffset)
                     if (destination != null) cover(destination.visual, neighborOffset, neighbor = true)
                 }
@@ -420,7 +425,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
             }
             if (lyricProgress > 0f) CompositionLocalProvider(LocalFrostedBackdrop provides lyricBackdrop) { LyricsPanel(track, sampled.positionMs, settings.reducedMotion, onSeek,
                 Modifier.offset(x = contentInset, y = lyricsViewport.top.dp).width(contentWidth)
-                    .height(lyricsViewport.height.dp).clipToBounds()
+                    .height(lyricsViewport.height.dp).zIndex(-1f).clipToBounds()
                     .graphicsLayer { alpha = lyricMotion.contentAlpha }
                     // Keep scroll/source identity through a cancelled collapse, but invisible
                     // lyrics must not intercept the next player gesture or accessibility.
@@ -439,10 +444,9 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
                 originPreparation = sourcesPreparation, contentAlpha = { lyricMotion.contentAlpha },
                 sampledAtMs = sampled.sampledAtMs, playing = sampled.isPlaying, speed = sampled.playbackSpeed,
                 delayMs = settings.lyricDelayMs, durationMs = sampled.durationMs) }
-            // The lyrics (and the missing-lyrics icon) draw beneath the artwork while it fades in or out of
-            // the lyrics screen (#537), so the covers are drawn again above the panel once lyrics are showing.
-            // The cover below the panel is dropped in that interval, so the artwork is composited exactly once.
-            if (lyricProgress > 0f) ArtworkBlend(artSwipe.source ?: artwork, Modifier.fillMaxSize(), duration = paletteDuration,
+            // Draw the cover exactly once, above lyrics (#537) and moving metadata (#391).
+            // The wash stays below both; settled metadata retains its original drawing order.
+            if (movingCover || lyricProgress > 0f) ArtworkBlend(artSwipe.source ?: artwork, Modifier.fillMaxSize(), duration = paletteDuration,
                 occurrence = artworkVisit ?: sampled.trackId,
                 immediate = artSwipe.active || artworkVisit != null && artSwipe.handoff == artworkVisit,
                 opacityBlend = lyricsOpen || settings.artworkTransition != io.github.anastaci1a.localica.navigation.ArtworkTransition.BlurThrough) { frame ->
@@ -480,7 +484,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
             val titlePadding = 8.dp
             // Keep the original pixel rounding without adding a translated graphics layer.
             val titleInputY = with(density) { (titleY.roundToPx() - titlePadding.roundToPx()).toDp() }
-            Layout(modifier = Modifier.offset(textX, titleInputY).width(textWidth), content = {
+            Layout(modifier = Modifier.offset(textX, titleInputY).width(textWidth).zIndex(metadataLayer), content = {
                 MarqueeTitle(sampled.title, settings.reducedMotion,
                     Modifier.fillMaxWidth().scalePlayerText(titleScale + (1f - titleScale) * p).testTag("player-title").onGloballyPositioned { polarity.measure("title", it) },
                     style = titleStyle, motionPaused = textMotionPaused)
@@ -512,7 +516,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
                     append(" · "); append(album)
                 } }
             }, settings.reducedMotion,
-                Modifier.offset(textX, subtitleY).width(textWidth).scalePlayerText(subtitleScale + (1f - subtitleScale) * p).testTag("player-artist").onGloballyPositioned { polarity.measure("artist", it) },
+                Modifier.offset(textX, subtitleY).width(textWidth).zIndex(metadataLayer).scalePlayerText(subtitleScale + (1f - subtitleScale) * p).testTag("player-artist").onGloballyPositioned { polarity.measure("artist", it) },
                 style = MaterialTheme.typography.bodyLarge.copy(color = subtitleColor), motionPaused = textMotionPaused,
                 visiblePrefixLength = artist.length, suffixVisibility = albumVisibility)
             if (rowMotion.seekAlpha > 0f) Column(Modifier.offset(x = contentInset, y = seekY).width(contentWidth)

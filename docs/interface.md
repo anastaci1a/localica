@@ -466,6 +466,8 @@ Default full-background cover: scale uniformly to screen width without side crop
 
 Alternative: floating cover over an artwork-colored matte/acrylic gradient with subtle non-tiled texture.
 
+During player expansion and contraction, foreground artwork draws above overlapping title and artist text. Preserve feathering, text trajectories, gesture targets and settled drawing order.
+
 Both layouts animate into one integrated lyrics state: no boundary or Lyrics heading. Blend lyrics into the upper screen, lower metadata/transport, fade/slide extra actions away. Keep metadata above seek and transport accessible. Fade the artwork and its feathered edges uniformly.
 
 Selected lyrics mode determines all target positions throughout held player movement, rather than switching at release.
