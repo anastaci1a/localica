@@ -63,8 +63,14 @@ internal class BrowseItemMetrics(val style: BrowseStyle, columns: Int, val width
         // expands the title. Shared endpoints and skeletons use this same pitch.
         val row = when {
             gallery -> art + textHeight
-            style.listSize == ListSize.Smallest -> maxOf(art, textHeight,
-                titleHeight + ((formerRow - titleHeight) / 2f).roundToInt())
+            style.listSize == ListSize.Smallest -> {
+                val outer = listGeometry.cardVerticalInset(style) * density
+                val formerGap = formerRow - titleHeight + 2 * (outer * 2).roundToInt()
+                // Round the whole gap once; separate inner/outer rounding can
+                // otherwise add a pixel at fractional display densities.
+                val inner = titleHeight + (formerGap / 2f).roundToInt() - 2 * outer.roundToInt()
+                maxOf(art, textHeight, inner)
+            }
             else -> formerRow
         }
         val titleY = if (gallery) art else (row - textHeight) / 2

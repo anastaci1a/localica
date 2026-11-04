@@ -63,7 +63,7 @@ class BrowseItemMetricsTest {
         for (size in ListSize.entries.filter { it != ListSize.Smallest })
             assertEquals(4f, geometry.cardVerticalInset(BrowseStyle(listSize = size)), 0f)
         assertEquals(4f, geometry.cardVerticalInset(BrowseStyle(presentation = Presentation.Standard, listSize = ListSize.Smallest)), 0f)
-        for ((size, height) in listOf(ListSize.Compact to 56, ListSize.Small to 40, ListSize.Smallest to 30)) {
+        for ((size, height) in listOf(ListSize.Compact to 56, ListSize.Small to 40, ListSize.Smallest to 29)) {
             val m = metrics(size)
             assertEquals(height, m.place(20, 0, 16).height)
             assertTrue(m.place(80, 0, 72).height >= 80)
@@ -84,7 +84,7 @@ class BrowseItemMetricsTest {
                 val formerHeight = maxOf((40 * density).roundToInt(), title, info, m.art)
                 val formerGap = formerHeight + 2 * (1.2f * density).roundToInt() - title
                 val gap = row.height + 2 * (.6f * density).roundToInt() - title
-                assertEquals("$density/$scale numbered=$numbered", formerGap / 2f, gap.toFloat(), 2f)
+                assertEquals("$density/$scale numbered=$numbered", formerGap / 2f, gap.toFloat(), 1f)
                 assertTrue(row.height >= maxOf(title, info, m.art))
             }
         }
