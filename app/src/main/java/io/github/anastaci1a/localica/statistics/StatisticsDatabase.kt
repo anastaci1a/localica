@@ -36,17 +36,30 @@ internal fun Flow<LibrarySnapshot>.withListeningStatistics(statistics: Flow<List
 
 /** App-owned writes survive service teardown. Retry the same event ID without double counting. */
 class StatisticsRepository(private val dao: StatisticsDao,
-    scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)) {
+    scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
+    private val identities: ListeningIdentityStore? = null) {
     val counts: Flow<ListeningStatistics> = combine(dao.tracks(), dao.playlists()) { tracks, playlists ->
         ListeningStatistics(tracks.associate { it.id to it.count }, playlists.associate { it.id to it.count })
     }.distinctUntilChanged()
-    private val pending = Channel<QualifiedPlay>(Channel.UNLIMITED)
+    private sealed interface Write {
+        data class Identity(val value: ListeningIdentity?) : Write
+        data class Play(val value: QualifiedPlay) : Write
+    }
+    private val pending = Channel<Write>(Channel.UNLIMITED)
+    fun restoredIdentity(): ListeningIdentity? = identities?.read()
+    fun checkpoint(identity: ListeningIdentity?) { pending.trySend(Write.Identity(identity)) }
     init {
         scope.launch {
             for (play in pending) {
                 var retryDelay = 1000L
                 while (isActive) {
-                    try { dao.record(play); break }
+                    try {
+                        when (play) {
+                            is Write.Identity -> identities?.write(play.value)
+                            is Write.Play -> dao.record(play.value)
+                        }
+                        break
+                    }
                     catch (cancelled: CancellationException) { throw cancelled }
                     catch (failure: Exception) {
                         android.util.Log.w("ListeningStatistics", "Could not save qualified play; retrying", failure)
@@ -56,5 +69,8 @@ class StatisticsRepository(private val dao: StatisticsDao,
             }
         }
     }
-    fun record(source: ListeningSource) { pending.trySend(QualifiedPlay(trackId = source.trackId, playlistId = source.playlistId)) }
+    fun record(source: ListeningSource) = record(source, UUID.randomUUID().toString())
+    fun record(source: ListeningSource, eventId: String) {
+        pending.trySend(Write.Play(QualifiedPlay(id = eventId, trackId = source.trackId, playlistId = source.playlistId)))
+    }
 }

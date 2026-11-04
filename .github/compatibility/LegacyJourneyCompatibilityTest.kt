@@ -13,6 +13,17 @@ import org.junit.Test
 
 /** Real legacy DAO proofs; replacing installed APKs is a separate, still-required compatibility gate. */
 class LegacyJourneyCompatibilityTest {
+    @Test fun playNextControllerAdapterKeepsLegacyShuffleAppendBehavior() {
+        val ids = listOf("a", "b", "c")
+        val before = QueueJourney.start(ids, "a", JourneyModes(shuffle = true), kotlin.random.Random(7))
+        val after = before.playNext(listOf("new"), ids + "new", kotlin.random.Random(7))
+        assertEquals(before.current, after.current)
+        assertEquals(before.history, after.history)
+        assertEquals(before.visited, after.visited)
+        assertEquals(before.next, after.next)
+        assertEquals("new", after.future.last().entryId)
+    }
+
     @Test fun readAndMetadataOnlySavePreserveProjectionWhileHistoryOnlyChangeInvalidatesIt() = runBlocking {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val name = "legacy-projection-compatibility.db"

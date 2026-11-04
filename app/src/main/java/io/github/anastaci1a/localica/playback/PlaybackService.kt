@@ -34,7 +34,7 @@ class PlaybackService : MediaSessionService() {
             shuffleModeEnabled = false
         }
         engine = player
-        statistics = io.github.anastaci1a.localica.statistics.PlaybackStatistics(player, (application as LocalicaApplication).statistics::record)
+        statistics = io.github.anastaci1a.localica.statistics.PlaybackStatistics(player, app.listening)
         (application as LocalicaApplication).queues.attach(player)
         val activity = PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
