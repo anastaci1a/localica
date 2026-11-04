@@ -135,6 +135,7 @@ io.github.anastaci1a.localica.NavigationTest
 io.github.anastaci1a.localica.OrderCommitPersistenceTest
 io.github.anastaci1a.localica.OrderedJourneyDatabaseTest
 io.github.anastaci1a.localica.PinchArtworkContinuityTest
+io.github.anastaci1a.localica.PinchDiagnosticsRecorderTest
 io.github.anastaci1a.localica.PinchFadeTest
 io.github.anastaci1a.localica.PinchItemPlacementLifecycleTest
 io.github.anastaci1a.localica.PinchOnsetTest

@@ -31,7 +31,7 @@ private val settingsDestinations = listOf(
     SettingsDestination("Scanner", "Library and tags", R.drawable.ic_search, "Quick Scan, full scan, startup scans, subfolders and short files"),
     SettingsDestination("Metadata read failures", "Scanner", R.drawable.ic_info, "Files with incomplete metadata"),
     SettingsDestination("Tag jobs and recovery", "Library and tags", R.drawable.ic_music, "Background jobs, outcomes and interrupted tag edits"),
-    SettingsDestination("About and licenses", null, R.drawable.ic_info, "Version, source code, help, and open-source licenses"),
+    SettingsDestination("About and licenses", null, R.drawable.ic_info, "Version, source code, help, diagnostics export, and open-source licenses"),
 )
 private fun settingsTitle(title: String): String = when (title) {
     "Interface and gestures" -> "Interface"
