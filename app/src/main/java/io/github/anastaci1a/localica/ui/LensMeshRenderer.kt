@@ -38,14 +38,19 @@ internal class LensMeshRenderer {
     private val lightPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val bitmapPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
     private val addition = android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.ADD)
-    private val shaders = object : LinkedHashMap<ImageBitmap, BitmapShader>(4, .75f, true) {
-        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<ImageBitmap, BitmapShader>) = size > 4
+    private data class ShaderKey(val image: ImageBitmap, val content: Int)
+    private val shaders = object : LinkedHashMap<ShaderKey, BitmapShader>(4, .75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<ShaderKey, BitmapShader>) = size > 4
     }
+    // A mutable software capture keeps one shader per bitmap identity. It is only
+    // sampled inside the synchronous raster below, never by the display canvas.
+    private var mutableShader: BitmapShader? = null
+    private var mutableShaderImage: ImageBitmap? = null
     // drawVertices is hardware-supported only from API 29. Older devices execute
     // the same mesh into a software raster, then composite it normally. Immutable
     // sources can retain rasters; mutable captures always produce independent output.
     // Never turn off hardware acceleration or retain another optical style.
-    private data class RasterKey(val generation: Int, val image: ImageBitmap?,
+    private data class RasterKey(val generation: Int, val image: ImageBitmap?, val content: Int,
         val sampling: BackdropSampleMapping, val lighting: Boolean)
     private val rasters = object : LinkedHashMap<RasterKey, Bitmap>(4, .75f, true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<RasterKey, Bitmap>) = size > 4
@@ -56,7 +61,7 @@ internal class LensMeshRenderer {
         field: ((Offset) -> LensField)? = null, fieldKey: Any? = null, lighting: Boolean = true, additive: Boolean = false,
         flattening: Float = 0f, tone: GlassTone = GlassTone(), outlines: List<RoundRect>? = null,
         registration: BackdropRegistration? = null, mutableSoftwareSnapshot: Boolean = false,
-        onAllocation: ((LensAllocation) -> Unit)? = null) {
+        contentGeneration: Int = 0, onAllocation: ((LensAllocation) -> Unit)? = null) {
         require(!mutableSoftwareSnapshot || Build.VERSION.SDK_INT < 29) {
             "Mutable snapshots require synchronous software rasterization"
         }
@@ -94,7 +99,10 @@ internal class LensMeshRenderer {
                     onAllocation?.invoke(LensAllocation.BitmapShader)
                 }
             scenePaint.shader = snapshot?.let {
-                if (mutableSoftwareSnapshot) shader(it) else shaders.getOrPut(it) { shader(it) }
+                if (mutableSoftwareSnapshot) {
+                    if (mutableShaderImage !== it) { mutableShader = shader(it); mutableShaderImage = it }
+                    mutableShader
+                } else shaders.getOrPut(ShaderKey(it, contentGeneration)) { shader(it) }
             }
             val sampling = BackdropSampleMapping(sourceSize,
                 if (snapshot == null || registration != null) Offset.Zero else sourceOffset,
@@ -134,16 +142,16 @@ internal class LensMeshRenderer {
                         render(target, 1f, conditionedIndices)
                     }
                     // Mutable capture pixels are consumed now; only the new independent
-                    // raster reaches the display canvas. Neither cache retains that input.
+                    // raster reaches the display canvas. The owned input stays in the mutable shader.
                     val image = if (mutableSoftwareSnapshot) rasterize()
-                        else rasters.getOrPut(RasterKey(generation, snapshot, sampling, lighting)) { rasterize() }
+                        else rasters.getOrPut(RasterKey(generation, snapshot, contentGeneration, sampling, lighting)) { rasterize() }
                     bitmapPaint.alpha = (255 * alpha).toInt().coerceIn(0, 255)
                     bitmapPaint.xfermode = if (additive) addition else null
                     canvas.nativeCanvas.drawBitmap(image, shape.bounds.left, shape.bounds.top, bitmapPaint)
                 }
             }
         } finally {
-            // Paint also retains its shader, independently of both cache maps.
+            // Paint also retains its shader, independently of the caches.
             if (mutableSoftwareSnapshot) scenePaint.shader = null
         }
     }

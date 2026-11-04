@@ -15,6 +15,9 @@ import androidx.compose.ui.unit.LayoutDirection
 internal class SoftwareControlCapture {
     private var image: ImageBitmap? = null
     private var inUse = false
+    /** Changes on every recording, so identity reuse can never name old pixels. */
+    var generation = 0
+        private set
 
     fun withScene(extent: IntSize, density: Density, direction: LayoutDirection,
         onAllocation: ((LensAllocation) -> Unit)? = null,
@@ -27,6 +30,7 @@ internal class SoftwareControlCapture {
                     image = it
                     onAllocation?.invoke(LensAllocation.CaptureBitmap)
                 }
+            generation++
             target.asAndroidBitmap().eraseColor(android.graphics.Color.TRANSPARENT)
             // Fresh scope/canvas state also isolates a previous failed recording.
             CanvasDrawScope().draw(density, direction, Canvas(target),

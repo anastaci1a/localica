@@ -76,15 +76,16 @@ internal fun GlassControlScene(modifier: Modifier, horizontalPadding: Dp = 20.dp
             layer.record(Density(density, fontScale), layoutDirection, extent) { recordScene() }
             clipPath(silhouette) { translate(origin.x, origin.y) { drawLayer(layer) } }
         } else {
-            fun drawCapture(image: ImageBitmap, mutable: Boolean) {
+            fun drawCapture(image: ImageBitmap, mutable: Boolean, content: Int = 0) {
                 clipPath(silhouette) {
                     with(mesh.value) { draw(shape, image, extent, -origin, 1.35f * thickness,
-                        flattening = flattening, mutableSoftwareSnapshot = mutable, onAllocation = onAllocation) }
+                        flattening = flattening, mutableSoftwareSnapshot = mutable,
+                        contentGeneration = content, onAllocation = onAllocation) }
                 }
             }
             if (softwareCapture != null) {
                 softwareCapture.withScene(extent, Density(density, fontScale), layoutDirection, onAllocation,
-                    record = { recordScene() }, consume = { drawCapture(it, true) })
+                    record = { recordScene() }, consume = { drawCapture(it, true, softwareCapture.generation) })
             } else {
                 // Hardware mesh drawing can retain shader input beyond this call.
                 val image = ImageBitmap(extent.width, extent.height)

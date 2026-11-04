@@ -86,14 +86,14 @@ class SoftwareControlCaptureTest {
                 drawRect(color, size = Size(16f, 24f))
             }
         }
-        fun render(input: ImageBitmap, changing: Boolean, original: Boolean = false): ImageBitmap {
+        fun render(input: ImageBitmap, changing: Boolean, original: Boolean = false, content: Int = 0): ImageBitmap {
             val output = ImageBitmap(32, 24)
             CanvasDrawScope().draw(Density(1f), LayoutDirection.Ltr, Canvas(output), Size(32f, 24f)) {
                 if (original) with(OriginalControlLensMesh()) {
                     draw(shape, input, IntSize(32, 24), Offset.Zero, .8f, lighting = false)
                 } else with(renderer) {
                     draw(shape, input, IntSize(32, 24), Offset.Zero, .8f, lighting = false,
-                        mutableSoftwareSnapshot = changing, onAllocation = observe)
+                        mutableSoftwareSnapshot = changing, contentGeneration = content, onAllocation = observe)
                 }
             }
             return output
@@ -108,7 +108,7 @@ class SoftwareControlCaptureTest {
             equalPixels(render(immutable, false), render(immutable, false, original = true), "immutable API>=29")
             return
         }
-        val a = render(mutable, true)
+        val a = render(mutable, true, content = 1)
         val savedA = a.toPixelMap().let { p -> IntArray(p.width * p.height) { i -> p[i % p.width, i / p.width].toArgb() } }
         equalPixels(a, render(mutable, false, original = true), "A fresh reference")
         render(immutable, false)
@@ -116,15 +116,24 @@ class SoftwareControlCaptureTest {
         render(immutable, false)
         assertEquals("Immutable image still uses existing shader/raster caches", afterImmutable, counts)
         paint(Color.Blue)
-        val b = render(mutable, true)
+        val b = render(mutable, true, content = 2)
         equalPixels(b, render(mutable, false, original = true), "B fresh reference")
         assertTrue("Current blue pixels must replace red", b.toPixelMap()[8, 12].blue > .9f)
         assertTrue("New transparent remainder must stay clear", b.toPixelMap()[24, 12].alpha < .01f)
         val old = a.toPixelMap()
         for (i in savedA.indices) assertEquals("Published A stays independent", savedA[i], old[i % old.width, i / old.width].toArgb())
         equalPixels(render(immutable, false), render(immutable, false, original = true), "immutable cache after B")
-        assertEquals(3, counts[LensAllocation.BitmapShader] ?: 0)
+        // The mutable capture shader is reused across A and B; only the immutable image adds one.
+        assertEquals(2, counts[LensAllocation.BitmapShader] ?: 0)
         assertEquals(3, counts[LensAllocation.SoftwareRaster] ?: 0)
+        // A reused immutable-cache identity with new content and a new generation never returns the old raster.
+        val reused = ImageBitmap(32, 24).also { it.asAndroidBitmap().eraseColor(android.graphics.Color.RED) }
+        val staleRed = render(reused, false, content = 1)
+        reused.asAndroidBitmap().eraseColor(android.graphics.Color.BLUE)
+        val freshBlue = render(reused, false, content = 2)
+        assertTrue("Red raster before reuse", staleRed.toPixelMap()[16, 12].red > .9f)
+        assertTrue("New generation must not return the red raster", freshBlue.toPixelMap()[16, 12].blue > .9f)
+        equalPixels(freshBlue, render(reused, false, original = true), "reused identity new generation")
     }
 
     @Test fun legacyControlMatchesFrozenSceneAcrossContentExtentFadeRestAndReactivation() {
@@ -135,10 +144,14 @@ class SoftwareControlCaptureTest {
         var value by mutableFloatStateOf(.5f)
         var captures = 0
         var draws = 0
+        var shaders = 0
+        var rasters = 0
         val runtime = GlassRendererRuntime(GlassRendererMode.Legacy)
         compose.setContent { LocalicaTheme {
             CompositionLocalProvider(LocalGlassRendererRuntime provides runtime, LocalReducedMotion provides true,
-                LocalControlLensAllocation provides { if (it == LensAllocation.CaptureBitmap) captures++ },
+                LocalControlLensAllocation provides {
+                    when (it) { LensAllocation.CaptureBitmap -> captures++; LensAllocation.BitmapShader -> shaders++
+                        LensAllocation.SoftwareRaster -> rasters++ } },
                 LocalControlLensDraw provides { draws++ }) {
                 Box(Modifier.size(300.dp, 100.dp).background(Color.White)) {
                     InterfaceSlider(value, { value = it }, Modifier.width(280.dp).testTag("actual-slider"))
@@ -158,7 +171,7 @@ class SoftwareControlCaptureTest {
             for (fraction in listOf(.8f, .25f, .65f)) {
                 slider.performTouchInput { moveTo(Offset(width * fraction, centerY), delayMillis = 32) }
                 compose.mainClock.advanceTimeBy(64)
-                compose.runOnIdle { android.util.Log.i("ControlCaptureWork", "slider fraction=$fraction value=$value captures=$captures draws=$draws") }
+                compose.runOnIdle { android.util.Log.i("ControlCaptureWork", "slider fraction=$fraction value=$value captures=$captures shaders=$shaders rasters=$rasters draws=$draws") }
             }
             slider.performTouchInput { up() }
             held = false
@@ -167,6 +180,7 @@ class SoftwareControlCaptureTest {
             compose.runOnIdle {
                 assertTrue("Real contact drew optics", draws > 0)
                 assertTrue("Real contact captured input", captures > 0)
+                if (Build.VERSION.SDK_INT < 29) assertTrue("Mutable capture shader is reused: shaders=$shaders captures=$captures", shaders <= captures)
                 assertTrue("Reversal ends on the right half", value > .5f)
             }
             val stopped = captures to draws
