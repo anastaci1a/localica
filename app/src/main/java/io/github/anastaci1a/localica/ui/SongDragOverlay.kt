@@ -25,7 +25,7 @@ internal fun BoxScope.SongDragOverlay(state: SongDragState, reducedMotion: Boole
         val color = drag.presentation.colors?.primary ?: MaterialTheme.colorScheme.primary
         val bounds = drag.initialBounds[marker]
         if (bounds != null) androidx.compose.foundation.Canvas(Modifier.matchParentSize().zIndex(4.5f)) {
-            val outline = drag.lifts[marker]?.rest?.translate(bounds.topLeft)
+            val outline = drag.lifts[marker]?.lifted?.translate(bounds.topLeft)
             with(renderer) { draw(outline?.bounds ?: bounds, color, alpha = fade.value, corner = outline?.corner) }
         }
     }
