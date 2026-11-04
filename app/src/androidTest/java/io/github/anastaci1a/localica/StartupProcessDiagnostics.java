@@ -266,8 +266,7 @@ public final class StartupProcessDiagnostics extends Instrumentation {
             if (live.isScrollable() && children > 5) children = 2;
             for (int i = 0; i < children; i++) {
                 AccessibilityNodeInfo child = Build.VERSION.SDK_INT >= 33
-                        ? live.getChild(i, AccessibilityNodeInfo.FLAG_PREFETCH_DESCENDANTS_BREADTH_FIRST |
-                                AccessibilityNodeInfo.FLAG_PREFETCH_UNINTERRUPTIBLE)
+                        ? live.getChild(i, AccessibilityNodeInfo.FLAG_PREFETCH_DESCENDANTS_BREADTH_FIRST)
                         : live.getChild(i);
                 ObservedNode observed = snapshot(child);
                 if (observed != null) { result.children.add(observed); result.nodes += observed.nodes; }
