@@ -320,7 +320,9 @@ internal fun Modifier.recordFrostedBackdrop(source: FrostedBackdrop, backing: Fr
     enabled: Boolean = true, displayCutout: (DrawScope.() -> Path?)? = null,
     readbackRequest: (() -> Int)? = null, onRecorded: ((Int) -> Unit)? = null,
     /** Hold the last recording (sampling only; never for a displayed producer) while true. */
-    frozen: (() -> Boolean)? = null): Modifier {
+    frozen: (() -> Boolean)? = null,
+    /** Record the complete sampling scene, but display only this producer's foreground. */
+    displayBacking: Boolean = true): Modifier {
     val renderer = currentGlassRendererGeneration()
     BackdropLease(backing.takeIf { enabled })
     return backdropLocation(source.location)
@@ -357,6 +359,10 @@ internal fun Modifier.recordFrostedBackdrop(source: FrostedBackdrop, backing: Fr
             }
             // A transparent optical overlay replaces the source beneath its body;
             // retain the complete source for sampling, omit only its direct display.
+            if (!displayBacking) {
+                drawContent()
+                return@drawWithContent
+            }
             val cutout = displayCutout?.invoke(this)
             if (cutout == null) drawLayer(source.layer)
             else clipPath(cutout, ClipOp.Difference) { drawLayer(source.layer) }
