@@ -54,14 +54,23 @@ class PlayerBackdropTest {
             } } }
             val player = compose.onNodeWithTag("player-surface")
             // Artwork decoding and background filtering happen outside Compose's idle clock.
-            compose.waitUntil(10000) {
+            var attempt = 0
+            try { compose.waitUntil(10000) {
                 val pixels = player.captureToImage().toPixelMap()
                 val c = pixels[pixels.width / 2, pixels.height / 6]
                 val bounds = player.fetchSemanticsNode().boundsInRoot
                 val art = compose.onNodeWithTag("player-artwork").fetchSemanticsNode().boundsInRoot
                 val y = (art.bottom - bounds.top + 12).toInt().coerceIn(0, pixels.height - 1)
                 val wash = pixels[pixels.width / 8, y]
+                android.util.Log.i("PlayerBackdropProbe", "attempt=${++attempt} clock=${compose.mainClock.currentTime} center=$c wash=$wash bounds=$bounds art=$art prepared=${PlayerVisualCache.peek(state.trackUri!!)}")
                 c.blue > c.red * 1.4f && wash.red > wash.blue * 1.4f
+            } } catch (failure: Throwable) {
+                player.captureToImage().asAndroidBitmap().let { bitmap ->
+                    File(context.getExternalFilesDir(null), "player-backdrop-timeout.png").outputStream().use {
+                        bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)
+                    }
+                }
+                throw failure
             }
             val image = player.captureToImage()
             File(context.getExternalFilesDir(null), "player-artwork-wash.png").outputStream().use {
