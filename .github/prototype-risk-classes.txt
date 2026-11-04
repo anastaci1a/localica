@@ -292,3 +292,4 @@ io.github.anastaci1a.localica.ItemOutlinePixelTest
 io.github.anastaci1a.localica.GlassRendererSwitchingTest
 io.github.anastaci1a.localica.PlayerArtworkLayerTest
 io.github.anastaci1a.localica.PlayerArtworkOpticsTest
+io.github.anastaci1a.localica.SelectorFreeCornerPixelTest
