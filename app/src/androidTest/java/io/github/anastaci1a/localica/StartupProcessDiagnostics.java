@@ -251,41 +251,26 @@ public final class StartupProcessDiagnostics extends Instrumentation {
         String getPackageName() { return packageName; }
         void getBoundsInScreen(Rect out) { out.set(bounds); }
     }
-    private static ObservedNode observe(AccessibilityNodeInfo live, boolean ancestors) {
-        ObservedNode result = new ObservedNode();
-        result.text = live.getText() == null ? null : live.getText().toString();
-        result.description = live.getContentDescription() == null ? null : live.getContentDescription().toString();
-        result.packageName = live.getPackageName() == null ? null : live.getPackageName().toString();
-        result.visible = live.isVisibleToUser(); result.selected = live.isSelected();
-        live.getBoundsInScreen(result.bounds);
-        if (ancestors && (matches(result.text, "Artists", false) || matches(result.description, "Artists", false) ||
-                matches(result.text, "Albums", false) || matches(result.description, "Albums", false))) {
-            AccessibilityNodeInfo parent = live.getParent();
-            try {
-                for (int level = 0; parent != null && level < 4; level++) {
-                    result.nodes++;
-                    if (parent.isSelected()) { result.selected = true; break; }
-                    if (parent.isFocusable()) break;
-                    AccessibilityNodeInfo next = parent.getParent();
-                    parent.recycle(); parent = next;
-                }
-            } finally { if (parent != null) parent.recycle(); }
-        }
-        return result;
-    }
     private static ObservedNode snapshot(AccessibilityNodeInfo live) {
         if (live == null) return null;
         try {
-            ObservedNode result = observe(live, false);
-            // Query matching semantics in the application in one Binder call per term.
-            // Fetching every virtual child individually can consume the whole window.
-            for (String term : new String[] {"Artists", "Albums", "Diagnostic"}) {
-                for (AccessibilityNodeInfo match : live.findAccessibilityNodeInfosByText(term)) {
-                    try {
-                        ObservedNode child = observe(match, true);
-                        result.children.add(child); result.nodes += child.nodes;
-                    } finally { match.recycle(); }
-                }
+            ObservedNode result = new ObservedNode();
+            result.text = live.getText() == null ? null : live.getText().toString();
+            result.description = live.getContentDescription() == null ? null : live.getContentDescription().toString();
+            result.packageName = live.getPackageName() == null ? null : live.getPackageName().toString();
+            result.visible = live.isVisibleToUser(); result.selected = live.isSelected();
+            live.getBoundsInScreen(result.bounds);
+            // Sample two cells in long scrollable galleries. Navigation and page
+            // containers retain their full structure; this is a content-presence probe.
+            int children = live.getChildCount();
+            if (live.isScrollable() && children > 5) children = 2;
+            for (int i = 0; i < children; i++) {
+                AccessibilityNodeInfo child = Build.VERSION.SDK_INT >= 33
+                        ? live.getChild(i, AccessibilityNodeInfo.FLAG_PREFETCH_DESCENDANTS_BREADTH_FIRST |
+                                AccessibilityNodeInfo.FLAG_PREFETCH_UNINTERRUPTIBLE)
+                        : live.getChild(i);
+                ObservedNode observed = snapshot(child);
+                if (observed != null) { result.children.add(observed); result.nodes += observed.nodes; }
             }
             return result;
         } finally { live.recycle(); }
