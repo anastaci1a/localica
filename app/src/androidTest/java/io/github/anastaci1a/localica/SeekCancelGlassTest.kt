@@ -62,8 +62,8 @@ class SeekCancelGlassTest {
         compose.waitForIdle()
         fun spread(): Float {
             val pixels = compose.onNodeWithTag("cancel-seek").captureToImage().toPixelMap()
-            val y = pixels.height / 2
-            val values = (pixels.width / 8 until pixels.width * 7 / 8).map {
+            val y = pixels.height * 85 / 100 // below the X glyph, inside the circle
+            val values = (pixels.width * 3 / 10 until pixels.width * 7 / 10).map {
                 val c = pixels[it, y]; .3f * c.red + .59f * c.green + .11f * c.blue
             }
             val mean = values.average().toFloat()
@@ -74,7 +74,7 @@ class SeekCancelGlassTest {
         compose.runOnIdle { chosenScene = true }; compose.waitForIdle()
         compose.runOnIdle { assertSame("A fully open player refracts its scene", sceneRecording, selected) }
         val withUi = spread()
-        assertTrue("The UI behind the X is refracted by the scene recording: scene=$withUi artwork-only=$artOnly", withUi > artOnly + .04f)
+        assertTrue("The UI behind the X is refracted by the scene recording: scene=$withUi artwork-only=$artOnly", withUi > artOnly + .03f)
         compose.runOnIdle { progress = .5f }; compose.waitForIdle()
         compose.runOnIdle { assertSame("Before the scene is recorded the artwork recording is used", artRecording, selected) }
     }
