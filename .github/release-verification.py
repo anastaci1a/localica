@@ -14,10 +14,11 @@ import zipfile
 sys.path.insert(0, str(Path(__file__).resolve().parent/'test-evidence'))
 from full_partition import expected_for
 
+DEVICE_SHARDS = 7  # keep equal to LOCALICA_DEVICE_SHARDS and the device-tests matrix in android.yml
 REQUIRED_JOBS = (
-    'build', 'device-tests-summary', 'compatibility (26)', 'compatibility (36)',
+    'build', 'static-checks', 'device-tests-summary', 'compatibility (26)', 'compatibility (36)',
     'distribution-smoke (26)', 'distribution-smoke (36)',
-) + tuple(f'device-tests ({api}, {shard})' for api in (26, 36) for shard in range(4))
+) + tuple(f'device-tests ({api}, {shard})' for api in (26, 36) for shard in range(DEVICE_SHARDS))
 
 
 def require(condition, reason):
@@ -60,7 +61,7 @@ def validate(run, jobs, receipt, unions, repository, tree, expected):
                 'Unsuccessful or stale required job: ' + name)
     for api in ('26', '36'):
         union = unions[api]
-        require(union['api'] == api and union['shards'] == 4 and union['xml_roots'] >= 4, 'Missing shard union')
+        require(union['api'] == api and union['shards'] == DEVICE_SHARDS and union['xml_roots'] >= DEVICE_SHARDS, 'Missing shard union')
         require(union['expected'] == union['executed_once'] == expected[api] > 0, 'Incomplete native union')
         require(union['failure'] == union['error'] == 0, 'Native failures')
         require(union['passed'] + union['skipped'] == expected[api], 'Inconsistent union outcomes')
