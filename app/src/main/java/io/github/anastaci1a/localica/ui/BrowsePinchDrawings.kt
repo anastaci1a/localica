@@ -149,6 +149,7 @@ internal fun Modifier.pinchRetainedOverlay(motion: BrowsePinchMotion, grid: Lazy
     val graphics = androidx.compose.ui.platform.LocalGraphicsContext.current
     val scope = rememberCoroutineScope()
     val groups = remember { mutableListOf<HoverGroupRenderer>() }
+    val liftStyle = rememberLiftShadow()
     val recordingDensity = androidx.compose.ui.platform.LocalDensity.current
     val direction = androidx.compose.ui.platform.LocalLayoutDirection.current
     val renderer = currentGlassRendererGeneration()
@@ -260,7 +261,7 @@ internal fun Modifier.pinchRetainedOverlay(motion: BrowsePinchMotion, grid: Lazy
                     val parts = members.map { lifted[it].first }
                     drawHoverGroup(groups[index], parts, { a, b -> minOf(parts[a].progress, parts[b].progress) },
                         backing, location, blur, recordingDensity, direction, MediaSelectionGap.toPx(),
-                        opacity = members.maxOf { lifted[it].second })
+                        opacity = members.maxOf { lifted[it].second }, lift = liftStyle)
                 }
             }
             fun drawRetainedText(placed: RetainedPinchPlacement) {

@@ -110,6 +110,8 @@ data class GlassAppearance(
     val renderer: GlassRendererMode = GlassRendererMode.Automatic,
     /** Modern glass re-blurs the moving page every frame; off (default) holds the last frame until scrolling stops. */
     val liveScrollGlass: Boolean = false,
+    /** Lift shadow strength under selected and floating items, as a multiple of [shadowStrength] (#553). */
+    val liftShadowStrength: Float = LiftShadowDefault,
 ) {
     fun normalized() = GlassAppearance(blur.unit(.2f), whiteTint.unit(.06f),
         shadowStrength.unit(.12f), shadowSpread.unit(.6f), contrast.unit(.25f).coerceAtMost(.5f), tabStyle,
@@ -119,7 +121,8 @@ data class GlassAppearance(
         if (contrastWeight.isFinite()) contrastWeight.coerceIn(1f, 2f) else 2f,
         classicOpacity.unit(.1f),
         if (controlExpansion.isFinite()) controlExpansion.coerceIn(1f, 2f) else 1.75f,
-        overlayDarkening.unit(0f).coerceAtMost(.5f), overlayForeground, renderer, liveScrollGlass)
+        overlayDarkening.unit(0f).coerceAtMost(.5f), overlayForeground, renderer, liveScrollGlass,
+        normalizedLiftShadowStrength(liftShadowStrength))
     private fun Float.unit(fallback: Float) = if (isFinite()) coerceIn(0f, 1f) else fallback
 }
 
@@ -130,3 +133,12 @@ enum class ArtworkAction(val label: String) {
 enum class ArtworkLayout(val label: String) { FullBackground("Full-background artwork"), Floating("Floating artwork with matte background") }
 
 enum class ArtworkTransition(val label: String) { BlurThrough("Blur through"), Carousel("Carousel") }
+
+/** The lift shadow is a 50-150% multiple of Glass shadow strength in plain 5% steps; default 100%. */
+const val LiftShadowDefault = 1f
+const val LiftShadowMin = .5f
+const val LiftShadowMax = 1.5f
+const val LiftShadowSteps = 19
+
+fun normalizedLiftShadowStrength(value: Float): Float =
+    if (value.isFinite()) (Math.round(value.coerceIn(LiftShadowMin, LiftShadowMax) * 20f) / 20f) else LiftShadowDefault

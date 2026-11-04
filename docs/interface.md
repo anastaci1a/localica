@@ -12,6 +12,8 @@ Selected media hover: in one 220 ms ease-out the outline grows, a shadow deepens
 
 One uniform scale preserves artwork/outline corner centres. Growth takes at most a quarter of each neighbour gap, capped at 4 dp per side. The tighter axis limits both axes; lifted items never overlap neighbours.
 
+The lift shadow follows the menu's theming: dark under dark-icon menus, a white glow under light-icon menus. Both use Glass shadow spread and share the Lift shadow strength setting.
+
 Side-adjacent selections share one hovering outline. Diagonal gallery neighbors and unselected holes stay separate. Partial groups retain accessible state without a pane/checkmark. Inset album choices and preserve readable baselines.
 
 Selection, the current queue occurrence and held drag cards share one item outline. Its corners are concentric with the artwork's, sharing their arc centres. Every item style, in lists, galleries, carousels and drag cards, uses one padding $d = 3.5$ dp (1.75 times the former 2 dp minimum) between its content, such as a cover's top edge, and the outline:
@@ -105,6 +107,7 @@ Settings categories are Interface, Playback and queues, Library and tags, About/
 | Blur / white tint | Clear through frosted; defaults use light scattering/tint. |
 | Shape damping / resting depth | Damping 2–40 (default 8); depth 0.6–2 (default 1.35). Footprint and lensing share the same response. |
 | Shadow strength / spread | Off through visible; tight through broad; default very subtle and broad. |
+| Lift shadow strength | 50–150% of Glass shadow strength in plain 5% steps (default 100%), for the lift shadow under selected and floating items. Its spread is exactly Glass shadow spread. |
 | Adaptive contrast | [Adaptive contrast rules](#adaptive-contrast). |
 | Navigation selector | Adjustable glass has independent blur/tint; Clear overlay has 0–50% darkening (default off) and optional icon/text refraction (default off). Classic gray pill has adjustable opacity (default 10%) and no glass deformation. |
 | Sliders and switches | White opaque resting thumbs morph into clear unblurred glass on contact; independent expansion 1–2× (default 1.75×). |
