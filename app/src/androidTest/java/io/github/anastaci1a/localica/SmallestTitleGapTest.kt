@@ -85,9 +85,10 @@ class SmallestTitleGapTest {
                     android.graphics.Color.red(color) < 150 && android.graphics.Color.green(color) < 150
                 }
             })
-            InstrumentationRegistry.getArguments().getString("smallestGapCapture")?.let { label ->
+            (InstrumentationRegistry.getArguments().getString("smallestGapCapture") ?: "before").let { label ->
                 val context = InstrumentationRegistry.getInstrumentation().targetContext
-                val directory = File(context.getExternalFilesDir(null), "smallest-gap-548/$label").apply { mkdirs() }
+                val directory = File(nativeEvidenceDirectory("smallest-gap-548", context.getExternalFilesDir(null)), label)
+                    .apply { mkdirs() }
                 File(directory, "font-$fontScale-numbered-$numbers.png").outputStream().use {
                     check(capture.compress(Bitmap.CompressFormat.PNG, 100, it))
                 }
