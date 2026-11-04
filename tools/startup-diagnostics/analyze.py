@@ -118,6 +118,8 @@ def analyze(root):
             missing.append("frames")
         if milestones.get("frameSamplerFailure"):
             missing.append("frameSamplerFailure")
+        input_missing = [key for key in missing if key != "navigationContentObserved"]
+        trial["inputCoverage"] = {"status": "partial" if input_missing else "observed", "missing": input_missing}
         trial["coverage"] = {"status": "partial" if missing else "observed", "missing": missing,
                              "meaning": "harness observations only; not performance acceptance"}
         trace = file.parent / "trace.txt"

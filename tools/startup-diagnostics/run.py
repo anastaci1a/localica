@@ -21,6 +21,7 @@ def main():
     parser.add_argument("--artwork", choices=("embedded", "none"), default="embedded")
     parser.add_argument("--columns", type=int, choices=range(1, 6), default=5)
     parser.add_argument("--trace", action="store_true")
+    parser.add_argument("--input-mode", choices=("replay", "adaptive"), default="replay")
     parser.add_argument("--admit-disposable-emulator", action="store_true", required=True,
                         help="Authorizes clearing the target app's data on this owned emulator")
     args = parser.parse_args()
@@ -62,6 +63,20 @@ def main():
     instrument("NavigationRandomOwnedSession", {"columns": args.columns, "artwork": args.artwork,
                "class": PREFIX + "StartupDiagnosticsSeedTest#seedDisposableEmulator"}, args.output / "seed.txt")
     adb("shell", "am", "force-stop", APP)
+    geometry = None
+    if args.input_mode == "replay":
+        discovery = "geometry-" + uuid.uuid4().hex[:8]
+        instrument("StartupProcessDiagnostics", {"label": discovery, "inputMode": "replay", "discoveryOnly": "true"},
+                   args.output / "discovery-instrumentation.txt")
+        (args.output / "discovery-pull.txt").write_text(adb("pull",
+            f"/sdcard/Android/data/{TEST}/files/startup-diagnostics/{discovery}", str(args.output)))
+        geometry = json.loads((args.output / discovery / "discovery.json").read_text())["geometry"]
+        # Discovery launches the app and can persist artwork colors. Clear/reseed
+        # again so no discovery state is admitted as a process-cold baseline.
+        (args.output / "reset-after-discovery.txt").write_text(adb("shell", "pm", "clear", APP))
+        instrument("NavigationRandomOwnedSession", {"columns": args.columns, "artwork": args.artwork,
+                   "class": PREFIX + "StartupDiagnosticsSeedTest#seedDisposableEmulator"}, args.output / "seed-after-discovery.txt")
+        adb("shell", "am", "force-stop", APP)
     for pair in range(1, args.pairs + 1):
         label = f"pair-{pair}-{uuid.uuid4().hex[:8]}"
         started = time.monotonic()
@@ -70,7 +85,8 @@ def main():
                                stdout=(args.output / f"{label}-logcat.txt").open("w"), stderr=subprocess.STDOUT)
         try:
             instrument("StartupProcessDiagnostics", {"label": label,
-                "fixture": f"synthetic-{args.artwork}-{args.columns}columns", "trace": str(args.trace).lower()},
+                "fixture": f"synthetic-{args.artwork}-{args.columns}columns", "trace": str(args.trace).lower(),
+                "inputMode": args.input_mode, **({"replayGeometry": geometry} if geometry else {})},
                 args.output / f"{label}-instrumentation.txt")
         finally:
             log.terminate()
