@@ -115,6 +115,7 @@ fun LocalicaScreen(
     val actionPreferences = remember(context) { PlayerActionPreferences(context) }
     var playerActions by remember { mutableStateOf(actionPreferences.read()) }
     var customizeActions by remember { mutableStateOf(false) }
+    var customizeAppearance by remember { mutableStateOf<GlassDialogAppearance?>(null) }
     var repeatOptions by remember { mutableStateOf(false) }
     var songInfo by remember { mutableStateOf(false) }
     var viewArt by remember { mutableStateOf(false) }
@@ -374,6 +375,7 @@ fun LocalicaScreen(
             onSeekRequest = onSeekRequest, sampleState = playerSample, backgroundPolarity = playerBackgroundPolarity, artworkVisit = journey?.current?.token, previousArtwork = previousArtwork, nextArtwork = nextArtwork,
             bottomChrome = bottomChrome, miniForeground = miniInk, onArtworkVisit = queueController?.let { controller -> { token, complete -> controller.swipeTo(token, complete) } }) {
             val editTags = presentedTagEdit()
+            val actionAppearance = currentGlassDialogAppearance()
             PlayerActionStrip(playerActions, { action -> when (action) {
                 PlayerAction.Shuffle -> "Shuffle: " + if (queues.settings.shuffle) "on" else "off"
                 PlayerAction.Repeat -> queues.settings.advancedRepeat?.let { "Repeat: ${it.songEnd.label}; queue end: ${it.queueEnd.label}" } ?: ("Repeat: " + queues.settings.repeat.name)
@@ -381,7 +383,7 @@ fun LocalicaScreen(
                 PlayerAction.Lyrics -> if (lyricsOpen) "Hide lyrics" else "Show lyrics"
                 PlayerAction.Pin -> if (currentTrack?.let { MediaRef(MediaKind.Song, it.id) in pins } == true) "Unpin from Home" else "Pin to Home"
                 else -> action.label
-            } }, { playerAction(it, editTags) }, { customizeActions = true }, shuffle = queues.settings.shuffle, repeat = queues.settings.repeat,
+            } }, { playerAction(it, editTags) }, { customizeAppearance = actionAppearance; customizeActions = true }, shuffle = queues.settings.shuffle, repeat = queues.settings.repeat,
                 lyricsOpen = lyricsOpen, pinned = currentTrack?.let { MediaRef(MediaKind.Song, it.id) in pins } == true,
                 onRepeatOptions = { repeatOptions = true }, advancedRepeat = queues.settings.advancedRepeat,
                 count = "${(queues.library.active?.entries?.indexOfFirst { it.id == queues.library.active?.currentEntryId } ?: -1) + 1} / ${queues.library.active?.entries?.size ?: 0}")
@@ -409,12 +411,18 @@ fun LocalicaScreen(
     androidx.activity.compose.BackHandler(expanded) { if (lyricsOpen) lyricsOpen = false else expanded = false }
     androidx.activity.compose.BackHandler(queueOpen || queueVisible) { queueOpen = false; navigationScope.launch { queueProgress.animateTo(0f, androidx.compose.animation.core.tween(settings.motionDuration(400))) } }
     androidx.activity.compose.BackHandler((queueOpen || queueVisible) && session.active) { session.clear() }
+    GlassPanelTheme(if (playerVisible) playerLightInk else browseInk == androidx.compose.ui.graphics.Color.White) {
     if (settingsOpen) FolderSettings(library,
         onDismiss = { settingsOpen = false; if (returnToScanner) { scannerOpen = true; returnToScanner = false } }, onChooseFolder, onRemoveFolder,
         extraContent = {
             (context.applicationContext as? io.github.anastaci1a.localica.LocalicaApplication)?.let { TagRecoverySettings(it.tagEditing) }
         }, interfaceContent = { section ->
-            if (section == "Player") SettingsLink("Customize player actions", "Choose controls and their order") { customizeActions = true }
+            if (section == "Player") {
+                val appearance = currentGlassDialogAppearance()
+                SettingsLink("Customize player actions", "Choose controls and their order") {
+                    customizeAppearance = appearance; customizeActions = true
+                }
+            }
             InterfaceSettingsControls(settings, section) {
                 settings = it; preferences.write(it); navigation = navigation.reconcile(it.tabs)
             }
@@ -435,9 +443,10 @@ fun LocalicaScreen(
     if (exitPrompt) GlassAlertDialog(onDismissRequest = { exitPrompt = false }, title = { Text("Close Localica?") },
         text = { Text("Playback will continue.") }, confirmButton = { ActionTextButton(onClick = { exitPrompt = false; exit() }) { Text("Close") } },
         dismissButton = { ActionTextButton(onClick = { exitPrompt = false }) { Text("Cancel") } })
-    GlassPanelTheme(if (playerVisible) playerLightInk else browseInk == androidx.compose.ui.graphics.Color.White) {
     if (repeatOptions) RepeatOptionsDialog(queues.settings, { repeatOptions = false }) { queueController?.settings(it) }
-    if (customizeActions) PlayerActionCustomizer(playerActions, { playerActions = it; actionPreferences.write(it) }, { customizeActions = false }, settings.reducedMotion)
+    if (customizeActions) CompositionLocalProvider(LocalGlassDialogAppearance provides customizeAppearance) {
+        PlayerActionCustomizer(playerActions, { playerActions = it; actionPreferences.write(it) }, { customizeActions = false; customizeAppearance = null }, settings.reducedMotion)
+    }
     if (songInfo && indexedTrack != null) SongInformation(indexedTrack, { playerCollectionLookup.cancel(); songInfo = false }, folders = library.snapshot.folders, onAction = { playerAction(it) })
     if (viewArt && indexedTrack != null) ArtworkViewer(indexedTrack.uri) { viewArt = false }
     if (addPlaying && indexedTrack != null) AddToPlaylistDialog(listOf(indexedTrack), playlist, playlistController, { addPlaying = false }, { addPlaying = false })
