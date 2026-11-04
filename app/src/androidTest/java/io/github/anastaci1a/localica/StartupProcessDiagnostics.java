@@ -17,6 +17,8 @@ import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -32,6 +34,8 @@ public final class StartupProcessDiagnostics extends Instrumentation {
     private static final long WINDOW_MS = 15_000;
     private Bundle arguments;
     private UiAutomation automation;
+    private File commandDirectory;
+    private final Map<String, File> commandScripts = new HashMap<>();
     private final AtomicReference<long[]> scrollEvent = new AtomicReference<>();
     private volatile long gestureStart;
 
@@ -52,6 +56,8 @@ public final class StartupProcessDiagnostics extends Instrumentation {
             boolean trace = "true".equals(arguments.getString("trace", "false"));
             File directory = new File(getTargetContext().getExternalFilesDir(null), "startup-diagnostics/" + label);
             require(!directory.exists() && directory.mkdirs(), "Refuse overwriting previous evidence");
+            commandDirectory = new File(directory, "commands");
+            require(commandDirectory.mkdir(), "Cannot create command directory");
             automation = getUiAutomation();
             automation.setOnAccessibilityEventListener(event -> {
                 if (APP.contentEquals(event.getPackageName() == null ? "" : event.getPackageName()) &&
@@ -120,7 +126,7 @@ public final class StartupProcessDiagnostics extends Instrumentation {
         }, "startup-frame-snapshots");
         frameSampler.start();
         try {
-            write(output, "launch.txt", shell("am start --activity-new-task --activity-clear-task -n " + APP + "/io.github.anastaci1a.localica.MainActivity"));
+            write(output, "launch.txt", shell("am start -W -f 0x10008000 -n " + APP + "/io.github.anastaci1a.localica.MainActivity"));
             long shellAt = 0, firstContent = 0;
             int step = 0, polls = 0;
             JSONObject navigation = null;
@@ -287,7 +293,7 @@ public final class StartupProcessDiagnostics extends Instrumentation {
         finally { event.recycle(); }
     }
     private String shell(String command) throws Exception {
-        try (ParcelFileDescriptor.AutoCloseInputStream input = new ParcelFileDescriptor.AutoCloseInputStream(automation.executeShellCommand(command));
+        try (ParcelFileDescriptor.AutoCloseInputStream input = new ParcelFileDescriptor.AutoCloseInputStream(automation.executeShellCommand("/system/bin/sh " + commandScript(command).getAbsolutePath()));
              ByteArrayOutputStream bytes = new ByteArrayOutputStream()) {
             byte[] buffer = new byte[8192]; int count;
             while ((count = input.read(buffer)) != -1) bytes.write(buffer, 0, count);
@@ -297,11 +303,22 @@ public final class StartupProcessDiagnostics extends Instrumentation {
     private void capture(File directory, String name, String command) throws Exception {
         // Trace buffers can be tens of MiB; retain bytes without a second full-size
         // String/byte-array copy in the controller's heap between paired windows.
-        try (ParcelFileDescriptor.AutoCloseInputStream input = new ParcelFileDescriptor.AutoCloseInputStream(automation.executeShellCommand(command));
+        try (ParcelFileDescriptor.AutoCloseInputStream input = new ParcelFileDescriptor.AutoCloseInputStream(automation.executeShellCommand("/system/bin/sh " + commandScript(command).getAbsolutePath()));
              FileOutputStream output = new FileOutputStream(new File(directory, name))) {
             byte[] buffer = new byte[8192]; int count;
             while ((count = input.read(buffer)) != -1) output.write(buffer, 0, count);
         }
+    }
+    private synchronized File commandScript(String command) throws Exception {
+        File existing = commandScripts.get(command);
+        if (existing != null) return existing;
+        File script = new File(commandDirectory, "command-" + commandScripts.size() + ".sh");
+        require(!script.getAbsolutePath().matches(".*\\s.*"), "Command path contains whitespace");
+        // UiAutomation's command API does not interpret shell operators or capture
+        // stderr. A script gives pipes/substitutions real shell semantics and retains errors.
+        write(commandDirectory, script.getName(), "#!/system/bin/sh\nexec 2>&1\n" + command + "\n");
+        commandScripts.put(command, script);
+        return script;
     }
     private static void write(File directory, String name, String value) throws Exception {
         try (FileOutputStream stream = new FileOutputStream(new File(directory, name))) {

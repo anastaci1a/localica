@@ -19,6 +19,8 @@ The seed creates 13,313 metadata rows and 1,110 album sources from the original 
 
 The controller instruments the test package with a distinct UID. Cold means the target has no process after `am force-stop`; filesystem caches remain warm. Warm means a fresh task/activity in the same verified process, after capture teardown and at least three seconds of settling. Every pair retains PID evidence and the observed interval between windows.
 
+Launch output retains Android's `am start -W` timing and launch state. Frame snapshots begin before launch; input starts after launch completion so the warm control cannot target its outgoing activity. Shell commands retain stderr and use explicit shell interpretation.
+
 The controller requests Artists when its tab first appears, then drags its loaded gallery. It returns to Albums and flings when that content appears. Requests can land after five seconds on a slow emulator; receipts expose that limitation. Accessibility polling observes shell/content and scroll events. It does not certify presented pixels or instant interaction.
 
 Navigation records tab-selection response separately from content arrival. Artists content requires the outgoing album titles to disappear, so an album's artist subtitle cannot certify destination readiness. Scroll-event timestamps remain accessibility observations, with vertical ranges retained for source review.
