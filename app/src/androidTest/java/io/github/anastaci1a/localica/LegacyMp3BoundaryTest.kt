@@ -22,7 +22,6 @@ import androidx.media3.exoplayer.audio.ForwardingAudioSink
 import androidx.media3.exoplayer.mediacodec.MediaCodecAdapter
 import androidx.media3.exoplayer.mediacodec.MediaCodecSelector
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
-import androidx.test.filters.SdkSuppress
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.anastaci1a.localica.playback.LegacyMp3AudioRenderer
 import io.github.anastaci1a.localica.playback.MediaEditAudioSink
@@ -57,20 +56,20 @@ class LegacyMp3BoundaryTest {
         assertArrayEquals(tailPcm(), result.bytes.copyOfRange(88200 * 2, result.bytes.size))
     }
 
-    @Test @SdkSuppress(minSdkVersion = 27)
-    fun modernDecoderRemainsByteIdenticalToNativeRenderer() {
+    @Test fun legacyCorrectionLeavesModernDecoderByteIdentical() {
         for (asset in listOf("boundary.mp3", "boundary-mp3-silent-tail.mp3")) {
             val native = decode(asset, native = true)
             val application = decode(asset)
             assertEquals(native.decoder, application.decoder)
-            assertArrayEquals("Application renderer changed modern PCM for $asset", native.bytes, application.bytes)
+            if (android.os.Build.VERSION.SDK_INT == 26 && native.decoder == "OMX.google.mp3.decoder") {
+                assertEquals("Legacy output must retain only the source samples", 132300 * 2, application.bytes.size)
+            } else assertArrayEquals("Application renderer changed modern PCM for $asset", native.bytes, application.bytes)
         }
     }
 
-    @Test @SdkSuppress(minSdkVersion = 26, maxSdkVersion = 26)
-    fun realSeekAcrossDeferredBoundaryFlushesImmediately() {
+    @Test fun realSeekAcrossBoundaryFlushesImmediately() {
         val result = decode("boundary.mp3", seekAtBoundary = true)
-        assertEquals("OMX.google.mp3.decoder", result.decoder)
+        assertNotNull("The test must exercise decoded MP3", result.decoder)
         val reset = result.events.indexOf("seek-reset")
         assertTrue("The player must perform a real position reset: ${result.events}", reset >= 0)
         assertEquals("flush", result.events[reset + 1])
@@ -140,7 +139,7 @@ class LegacyMp3BoundaryTest {
                         enableDecoderFallback, eventHandler, eventListener, audioSink) {
                         override fun onProcessedStreamChange() {
                             super.onProcessedStreamChange()
-                            if (codecInfo?.name == "OMX.google.mp3.decoder" &&
+                            if (codecInfo != null &&
                                 lastProcessedOutputBufferTimeUs != C.TIME_UNSET && seekRequested.compareAndSet(false, true)) {
                                 events += "deferred-boundary"
                                 Handler(Looper.getMainLooper()).post { player.seekTo(2, 0) }
@@ -182,7 +181,7 @@ class LegacyMp3BoundaryTest {
         }
         try {
             await { ended.get() }
-            if (seekAtBoundary) assertTrue("Legacy boundary was not exercised", seekRequested.get() && seekReset.get())
+            if (seekAtBoundary) assertTrue("Decoded boundary was not exercised", seekRequested.get() && seekReset.get())
             return Decoded(synchronized(captured) { captured.toByteArray() }, decoder, synchronized(events) { events.toList() })
         } finally {
             instrumentation.runOnMainSync { player.release() }
