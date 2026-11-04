@@ -30,10 +30,10 @@ def main():
     args.output.mkdir(parents=True, exist_ok=False)
     (args.output / "invocation.json").write_text(json.dumps(vars(args), default=str, indent=2) + "\n")
 
-    def adb(*command, timeout=180):
+    def adb(*command, timeout=180, allow_failure=False):
         completed = subprocess.run(["adb", "-s", args.serial, *command], text=True,
                                    capture_output=True, timeout=timeout)
-        if completed.returncode:
+        if completed.returncode and not allow_failure:
             raise RuntimeError(f"adb failed ({completed.returncode}): {completed.stdout}{completed.stderr}")
         return completed.stdout + completed.stderr
 
@@ -41,7 +41,7 @@ def main():
         command = ["shell", "am", "instrument", "-w", "-r", "-e", "startupDiagnostics", "disposable-emulator"]
         for key, value in options.items():
             command += ["-e", key, str(value)]
-        result = adb(*command, TEST + "/" + PREFIX + name, timeout=timeout)
+        result = adb(*command, TEST + "/" + PREFIX + name, timeout=timeout, allow_failure=True)
         record.write_text(result)
         success = "INSTRUMENTATION_CODE: 0" in result if name == "StartupProcessDiagnostics" else "OK (1 test)" in result
         if not success or "INSTRUMENTATION_FAILED" in result:
@@ -50,6 +50,11 @@ def main():
 
     if adb("shell", "getprop", "ro.kernel.qemu").strip() != "1":
         raise RuntimeError("Not an emulator; no data cleared")
+    inventory = adb("shell", "pm", "list", "instrumentation")
+    (args.output / "instrumentation-inventory.txt").write_text(inventory)
+    for name in ("NavigationRandomOwnedSession", "StartupProcessDiagnostics"):
+        if TEST + "/" + PREFIX + name not in inventory:
+            raise RuntimeError(f"Missing registered runner: {name}; no data cleared")
     (args.output / "device.txt").write_text(adb("shell", "getprop", "ro.build.fingerprint") +
                                             adb("shell", "wm", "size") + adb("shell", "wm", "density") +
                                             adb("shell", "dumpsys", "display"))
@@ -71,7 +76,8 @@ def main():
             log.terminate()
             log.wait(timeout=15)
             # Retain partial evidence even if the controller failed.
-            adb("pull", f"/sdcard/Android/data/{TEST}/files/startup-diagnostics/{label}", str(args.output))
+            (args.output / f"{label}-pull.txt").write_text(adb("pull",
+                f"/sdcard/Android/data/{TEST}/files/startup-diagnostics/{label}", str(args.output), allow_failure=True))
         receipt = analyze(args.output / label)
         receipt["elapsedSeconds"] = time.monotonic() - started
         receipt["hostLoadAverageBefore"] = host_load_before

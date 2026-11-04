@@ -32,7 +32,7 @@ public final class StartupProcessDiagnostics extends Instrumentation {
     private static final long WINDOW_MS = 15_000;
     private Bundle arguments;
     private UiAutomation automation;
-    private final AtomicLong scrollEvent = new AtomicLong();
+    private final AtomicReference<long[]> scrollEvent = new AtomicReference<>();
     private volatile long gestureStart;
 
     @Override public void onCreate(Bundle args) {
@@ -55,8 +55,11 @@ public final class StartupProcessDiagnostics extends Instrumentation {
             automation = getUiAutomation();
             automation.setOnAccessibilityEventListener(event -> {
                 if (APP.contentEquals(event.getPackageName() == null ? "" : event.getPackageName()) &&
-                        event.getEventType() == AccessibilityEvent.TYPE_VIEW_SCROLLED && event.getEventTime() >= gestureStart) {
-                    scrollEvent.compareAndSet(0, event.getEventTime());
+                        event.getEventType() == AccessibilityEvent.TYPE_VIEW_SCROLLED && event.getMaxScrollY() > 0 &&
+                        event.getEventTime() >= gestureStart) {
+                    // A tab pager's horizontal scroll event cannot certify a gallery response.
+                    scrollEvent.compareAndSet(null, new long[] {event.getEventTime(), event.getScrollX(),
+                            event.getScrollY(), event.getMaxScrollX(), event.getMaxScrollY()});
                 }
             });
             JSONObject identity = new JSONObject().put("api", Build.VERSION.SDK_INT).put("fingerprint", Build.FINGERPRINT)
@@ -149,18 +152,16 @@ public final class StartupProcessDiagnostics extends Instrumentation {
                                 Rect bounds = new Rect();
                                 root.getBoundsInScreen(bounds);
                                 JSONObject swipe = new JSONObject().put("kind", "gallery-drag");
-                                scrollEvent.set(0);
                                 gestureStart = SystemClock.uptimeMillis();
+                                scrollEvent.set(null);
                                 swipe.put("requestedMs", gestureStart - start);
                                 swipe(bounds, 20);
                                 swipe.put("injectionReturnedMs", SystemClock.uptimeMillis() - start);
                                 inputs.put(swipe);
                                 navigation = swipe;
                                 step = 2;
-                            } else if (step == 2 && scrollEvent.get() != 0) {
-                                navigation.put("scrollEventMs", scrollEvent.get() - start)
-                                        .put("responseMs", scrollEvent.get() - gestureStart)
-                                        .put("observedMs", SystemClock.uptimeMillis() - start);
+                            } else if (step == 2 && scrollEvent.get() != null) {
+                                recordScroll(navigation, start);
                                 step = 3;
                             } else if (step == 3 && albums != null) {
                                 navigationAt = SystemClock.uptimeMillis();
@@ -174,17 +175,15 @@ public final class StartupProcessDiagnostics extends Instrumentation {
                                         .put("responseMs", SystemClock.uptimeMillis() - navigationAt);
                                 Rect bounds = new Rect(); root.getBoundsInScreen(bounds);
                                 navigation = new JSONObject().put("kind", "gallery-fling");
-                                scrollEvent.set(0);
                                 gestureStart = SystemClock.uptimeMillis();
+                                scrollEvent.set(null);
                                 navigation.put("requestedMs", gestureStart - start);
                                 swipe(bounds, 6);
                                 navigation.put("injectionReturnedMs", SystemClock.uptimeMillis() - start);
                                 inputs.put(navigation);
                                 step = 5;
-                            } else if (step == 5 && scrollEvent.get() != 0) {
-                                navigation.put("scrollEventMs", scrollEvent.get() - start)
-                                        .put("responseMs", scrollEvent.get() - gestureStart)
-                                        .put("observedMs", SystemClock.uptimeMillis() - start);
+                            } else if (step == 5 && scrollEvent.get() != null) {
+                                recordScroll(navigation, start);
                                 step = 6;
                             }
                         }
@@ -241,6 +240,12 @@ public final class StartupProcessDiagnostics extends Instrumentation {
     }
 
     private static boolean hasPrefix(AccessibilityNodeInfo root, String prefix) { return find(root, prefix, true) != null; }
+    private void recordScroll(JSONObject navigation, long start) throws Exception {
+        long[] event = scrollEvent.get();
+        navigation.put("scrollEventMs", event[0] - start).put("responseMs", event[0] - gestureStart)
+                .put("observedMs", SystemClock.uptimeMillis() - start)
+                .put("scrollX", event[1]).put("scrollY", event[2]).put("maxScrollX", event[3]).put("maxScrollY", event[4]);
+    }
     private static boolean matches(CharSequence value, String text, boolean prefix) {
         return value != null && (prefix ? value.toString().startsWith(text) : value.toString().equals(text));
     }
