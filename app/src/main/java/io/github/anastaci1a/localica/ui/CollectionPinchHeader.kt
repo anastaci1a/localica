@@ -32,6 +32,10 @@ internal data class CollectionHeaderFrame(val generation: Long, val progress: Fl
     val staticRetainedPart: FrozenBrowsePart?, val sourceActionBounds: Rect?, val displayedHeaderPart: FrozenBrowsePart?)
 internal val LocalCollectionHeaderFrameObserver = staticCompositionLocalOf<((CollectionHeaderFrame) -> Unit)?> { null }
 
+/** The lazy grid composes at most two viewports of items beyond its bounds; the header lies further away. */
+internal class CollectionHeaderBeyondReach(style: BrowseStyle) :
+    IllegalStateException("Collection header is beyond the ${style.presentation}/${style.listSize} beyond-bounds reach")
+
 /** Public lazy measurements own geometry; only a completed immutable atlas owns retained pixels. */
 @OptIn(ExperimentalComposeUiApi::class)
 internal class CollectionPinchHeader(val motion: BrowsePinchMotion, val grid: LazyGridState) {
@@ -117,7 +121,7 @@ internal class CollectionPinchHeader(val motion: BrowsePinchMotion, val grid: La
         // provider can return without visiting its block when there is no Before
         // extent; its absence is not evidence that this placed header is missing.
         if (mounted) copyPlaced(requireTicket = false)?.let { return it }
-        return checkNotNull(checkNotNull(beyond) { "Collection header has no public beyond-bounds provider" }
+        return checkNotNull(beyond) { "Collection header has no public beyond-bounds provider" }
             .layout(BeyondBoundsLayout.LayoutDirection.Before) {
                 copyPlaced(requireTicket = true) ?: run {
                     check(hasMoreContent) {
@@ -126,7 +130,7 @@ internal class CollectionPinchHeader(val motion: BrowsePinchMotion, val grid: La
                     }
                     null
                 }
-            }) { "Public header measurement produced no geometry" }
+            } ?: throw CollectionHeaderBeyondReach(style)
     }
     fun begin(token: Long, source: BrowseStyle, destination: BrowseStyle) {
         check(generation == null)
@@ -179,8 +183,21 @@ internal class CollectionPinchHeader(val motion: BrowsePinchMotion, val grid: La
     /** Called only after the browser has measured and corrected the real anchor. */
     fun anchorCorrected(style: BrowseStyle) {
         val token = generation ?: return
+        if (motion.headerless) return
         if (endpointStyle != null && style != endpointStyle || endpointStyle == null && style != targetStyle) return
         val measured = runCatching { measure(style) }.getOrElse {
+            if (it is CollectionHeaderBeyondReach && endpointStyle == null) {
+                // The source header was measurable, but the destination's sparser rows put it
+                // beyond the lazy grid's beyond-bounds reach (two viewports of items) at this
+                // anchor. It is offscreen in both views: pinch without it, as when the source
+                // itself is out of reach. Waiting would hold the preview frozen at progress 0
+                // until expiry and then restore the source (#535 b).
+                android.util.Log.w("CollectionHeaderPinch", "${it.message}; pinching without the header")
+                motion.headerless = true
+                revision++
+                target.complete(Unit)
+                return
+            }
             val problem = it.message ?: it.javaClass.simpleName
             val kind = problem.substringBefore(" request=")
             if (lastMeasurementProblem != kind) android.util.Log.w("CollectionHeaderPinch", problem)
@@ -222,6 +239,8 @@ internal class CollectionPinchHeader(val motion: BrowsePinchMotion, val grid: La
     }
     private fun frame(): CollectionHeaderPinch.Frame? {
         revision
+        // A header dropped from the transaction keeps its live, untranslated placement.
+        if (motion.headerless) return null
         val token = generation ?: return null
         val live = coordinates?.takeIf { it.isAttached }?.let(::rect)
         return geometry.frame(token, motion.progress.value, live?.geometry()) ?: verifiedFrame
