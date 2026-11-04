@@ -13,6 +13,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.platform.ViewRootForTest
@@ -39,6 +40,7 @@ import kotlin.math.roundToInt
 /** Real search IME -> native hide/search retirement -> new popup -> one native Back.
  * API36 additionally uses a physical edge swipe in verified gesture navigation.
  * No callback invocation, repeated Back, semantic dismissal or screenshot readiness. */
+@OptIn(ExperimentalLayoutApi::class)
 class PopupImeBackTest {
     private val compose = localicaAndroidComposeRule<ComponentActivity>()
     private val instrumentation get() = InstrumentationRegistry.getInstrumentation()
@@ -62,17 +64,19 @@ class PopupImeBackTest {
                 val gesture = "com.android.internal.systemui.navbar.gestural"
                 fun activeNavigation() = Regex("(?m)^\\[x] (com\\.android\\.internal\\.systemui\\.navbar\\.[A-Za-z0-9_.]+)$")
                     .find(shell("cmd overlay list --user 0"))?.groupValues?.get(1)
-                val originalNavigation = if (Build.VERSION.SDK_INT >= 29) requireNotNull(activeNavigation()) else null
+                // The emulator can use its base navigation resource without an enabled overlay.
+                val originalNavigation = if (Build.VERSION.SDK_INT >= 29) activeNavigation() else null
+                val originalMode = shell("settings get secure navigation_mode")
                 var failure: Throwable? = null
                 try {
                     shell("settings put secure $keyboardKey 1")
                     assertEquals("1", shell("settings get secure $keyboardKey"))
-                    if (originalNavigation != null) {
+                    if (Build.VERSION.SDK_INT >= 29) {
                         shell("cmd overlay enable-exclusive --user 0 --category $gesture")
                         val deadline = SystemClock.uptimeMillis() + 5000
                         while (shell("settings get secure navigation_mode") != "2" && SystemClock.uptimeMillis() < deadline)
                             SystemClock.sleep(50)
-                        assertEquals(gesture, activeNavigation())
+                        assertEquals(shell("cmd overlay list --user 0"), gesture, activeNavigation())
                         assertEquals("Native gesture navigation must be active", "2", shell("settings get secure navigation_mode"))
                     }
                     events += "nativePolicy api=${Build.VERSION.SDK_INT} navigation=${shell("settings get secure navigation_mode")}"
@@ -83,9 +87,15 @@ class PopupImeBackTest {
                         if (failure == null) failure = caught else failure!!.addSuppressed(caught)
                     } }
                     restore {
-                        if (originalNavigation != null) {
-                            shell("cmd overlay enable-exclusive --user 0 --category $originalNavigation")
+                        if (Build.VERSION.SDK_INT >= 29) {
+                            if (originalNavigation != null)
+                                shell("cmd overlay enable-exclusive --user 0 --category $originalNavigation")
+                            else shell("cmd overlay disable --user 0 $gesture")
+                            val deadline = SystemClock.uptimeMillis() + 5000
+                            while (shell("settings get secure navigation_mode") != originalMode && SystemClock.uptimeMillis() < deadline)
+                                SystemClock.sleep(50)
                             assertEquals(originalNavigation, activeNavigation())
+                            assertEquals(originalMode, shell("settings get secure navigation_mode"))
                         }
                     }
                     restore {
@@ -134,6 +144,7 @@ class PopupImeBackTest {
         var dialog by mutableStateOf(false)
         var mounted by mutableStateOf(true)
         var dismissals = 0
+        var keyboardSettled = false
         lateinit var searchAnchor: GlassAnchor
         lateinit var popupAnchor: GlassAnchor
         var failure: Throwable? = null
@@ -161,7 +172,11 @@ class PopupImeBackTest {
                     val focused = LocalWindowInfo.current.isWindowFocused
                     val ready = LocalSearchOpeningReady.current
                     val view = LocalView.current
-                    SideEffect { searchView = view }
+                    val density = LocalDensity.current
+                    val ime = WindowInsets.ime.getBottom(density)
+                    val source = WindowInsets.imeAnimationSource.getBottom(density)
+                    val target = WindowInsets.imeAnimationTarget.getBottom(density)
+                    SideEffect { searchView = view; keyboardSettled = focused && ime > 0 && ime == source && ime == target }
                     LaunchedEffect(searchOpen, focused, ready) {
                         if (searchOpen && focused) {
                             withFrameNanos { }
@@ -188,6 +203,9 @@ class PopupImeBackTest {
                 val label = "${if (asDialog) "dialog" else "menu"}-${if (edgeGesture) "edge" else "system"}"
                 nativeTap(compose.onNodeWithTag("list-search-pill"))
                 awaitIme(true)
+                compose.waitUntil(5000) { compose.runOnUiThread { keyboardSettled } }
+                compose.waitForIdle()
+                events += "${SystemClock.uptimeMillis()} $label Compose IME settled"
                 compose.awaitExpectedWindowFocus(compose.onNode(hasSetTextAction()))
                 pressSystemBack()
                 awaitIme(false)
