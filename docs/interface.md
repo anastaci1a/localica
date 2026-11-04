@@ -212,7 +212,9 @@ Change one adjacent view per gesture, requiring all fingers to lift before anoth
 
 Pinches during settlement retain the shown progress. Reversals reuse the frozen endpoints. Further adjacent steps preserve their input until the preceding handoff permits a fresh capture, including gestures already released. Modal interruption discards pending steps.
 
-Departing items stop moving and resizing when their fade completes. Farther journeys fade sooner; reverse arrivals use the same spatial fade window. Elements retrace the same fade in either direction. View controls fade over 120 ms. Live items retain ordinary geometry progression.
+Departing items retain their bounded movement and resizing. Whole-item fades span the eased geometry transition, with evenly spaced starts and equal widths overlapping by half. Items farthest from the pinch focus fade first; arrivals mirror departures. A single item fades over the full transition. Reversals retrace every alpha.
+
+View controls fade over 120 ms. Live items retain ordinary geometry progression.
 
 Keep source-viewport decoded artwork through capture, reflow and release. Resolution upgrades blend without exposing the background. Release settles before saving.
 
