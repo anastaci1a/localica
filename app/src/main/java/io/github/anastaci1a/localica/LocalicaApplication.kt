@@ -19,7 +19,7 @@ import io.github.anastaci1a.localica.library.TreeScanner
 class LocalicaApplication : Application() {
     private companion object {
         val STARTUP_PREFERENCES = listOf("interface", "queue-settings", "scanner", "scan-progress", "browse-style",
-            "library-query", "library-filters", "pins", "player-actions", "tag-jobs", "cover-images")
+            "library-query", "library-filters", "pins", "player-actions", "tag-jobs", "cover-images", "listening-identity")
     }
     override fun onCreate() {
         super.onCreate()
@@ -56,7 +56,13 @@ class LocalicaApplication : Application() {
     }
     val statistics by lazy {
         io.github.anastaci1a.localica.statistics.StatisticsRepository(Room.databaseBuilder(this,
-            io.github.anastaci1a.localica.statistics.StatisticsDatabase::class.java, "statistics.db").build().statistics())
+            io.github.anastaci1a.localica.statistics.StatisticsDatabase::class.java, "statistics.db").build().statistics(),
+            identities = io.github.anastaci1a.localica.statistics.ListeningIdentityStore(
+                getSharedPreferences("listening-identity", MODE_PRIVATE)))
+    }
+    val listening by lazy {
+        io.github.anastaci1a.localica.statistics.ListeningSession(android.os.SystemClock::elapsedRealtime,
+            statistics.restoredIdentity(), statistics::checkpoint, statistics::record)
     }
     val scanner by lazy { io.github.anastaci1a.localica.scanner.ScanController(this, library) }
     val lyrics by lazy { io.github.anastaci1a.localica.lyrics.LyricsRepository(this) }

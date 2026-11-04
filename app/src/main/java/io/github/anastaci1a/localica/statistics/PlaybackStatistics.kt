@@ -6,8 +6,10 @@ import androidx.media3.common.Player
 import kotlinx.coroutines.*
 
 /** Main-thread observer of the real service player, independent of Activity and queue cursor saves. */
-class PlaybackStatistics(private val player: Player, record: (ListeningSource) -> Unit) : Player.Listener {
-    private val counter = ListeningCounter(record)
+class PlaybackStatistics(private val player: Player, private val listening: ListeningSession) : Player.Listener {
+    constructor(player: Player, record: (ListeningSource) -> Unit) : this(player,
+        ListeningSession(SystemClock::elapsedRealtime, record = { source, _ -> record(source) }))
+    private var observedItem = false
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     init {
         player.addListener(this)
@@ -16,13 +18,16 @@ class PlaybackStatistics(private val player: Player, record: (ListeningSource) -
     }
     private fun update(restart: Boolean = false) {
         val item = player.currentMediaItem
+        // A newly attached service has no timeline until the queue restores it.
+        if (item == null && !observedItem) return
+        if (item != null) observedItem = true
         val extras = item?.mediaMetadata?.extras
         val source = extras?.getString("trackId")?.let {
             ListeningSource(requireNotNull(item).mediaId, it, extras.getString("sourcePlaylistId"))
         }
         val duration = player.duration.takeIf { it > 0 }
             ?: extras?.getLong("durationMs")?.takeIf { it > 0 }
-        counter.update(SystemClock.elapsedRealtime(), source, duration, player.isPlaying, restart)
+        listening.update(source, extras?.getString("queueVisit"), duration, player.isPlaying, restart)
     }
     override fun onIsPlayingChanged(isPlaying: Boolean) = update()
     override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) = update()
@@ -34,7 +39,7 @@ class PlaybackStatistics(private val player: Player, record: (ListeningSource) -
             (reason == Player.DISCONTINUITY_REASON_SEEK && oldPosition.positionMs > 0 && newPosition.positionMs == 0L))
     }
     fun close() {
-        counter.sample(SystemClock.elapsedRealtime())
+        listening.detach()
         player.removeListener(this)
         scope.cancel()
     }
