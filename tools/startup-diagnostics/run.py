@@ -32,7 +32,9 @@ def main():
 
     def adb(*command, timeout=180):
         completed = subprocess.run(["adb", "-s", args.serial, *command], text=True,
-                                   capture_output=True, timeout=timeout, check=True)
+                                   capture_output=True, timeout=timeout)
+        if completed.returncode:
+            raise RuntimeError(f"adb failed ({completed.returncode}): {completed.stdout}{completed.stderr}")
         return completed.stdout + completed.stderr
 
     def instrument(name, options, record, timeout=600):
@@ -41,7 +43,8 @@ def main():
             command += ["-e", key, str(value)]
         result = adb(*command, TEST + "/" + PREFIX + name, timeout=timeout)
         record.write_text(result)
-        if "INSTRUMENTATION_CODE: 0" not in result or "INSTRUMENTATION_FAILED" in result:
+        success = "INSTRUMENTATION_CODE: 0" in result if name == "StartupProcessDiagnostics" else "OK (1 test)" in result
+        if not success or "INSTRUMENTATION_FAILED" in result:
             raise RuntimeError(result)
         return result
 
@@ -51,11 +54,13 @@ def main():
                                             adb("shell", "wm", "size") + adb("shell", "wm", "density") +
                                             adb("shell", "dumpsys", "display"))
     (args.output / "reset.txt").write_text(adb("shell", "pm", "clear", APP))
-    instrument("StartupDiagnosticsSeed", {"columns": args.columns, "artwork": args.artwork}, args.output / "seed.txt")
+    instrument("NavigationRandomOwnedSession", {"columns": args.columns, "artwork": args.artwork,
+               "class": PREFIX + "StartupDiagnosticsSeedTest#seedDisposableEmulator"}, args.output / "seed.txt")
     adb("shell", "am", "force-stop", APP)
     for pair in range(1, args.pairs + 1):
         label = f"pair-{pair}-{uuid.uuid4().hex[:8]}"
         started = time.monotonic()
+        host_load_before = os.getloadavg()
         log = subprocess.Popen(["adb", "-s", args.serial, "logcat", "-T", "1", "-v", "threadtime"],
                                stdout=(args.output / f"{label}-logcat.txt").open("w"), stderr=subprocess.STDOUT)
         try:
@@ -69,6 +74,9 @@ def main():
             adb("pull", f"/sdcard/Android/data/{TEST}/files/startup-diagnostics/{label}", str(args.output))
         receipt = analyze(args.output / label)
         receipt["elapsedSeconds"] = time.monotonic() - started
+        receipt["hostLoadAverageBefore"] = host_load_before
+        receipt["hostLoadAverageAfter"] = os.getloadavg()
+        receipt["hostCpuCount"] = os.cpu_count()
         (args.output / f"{label}-summary.json").write_text(json.dumps(receipt, indent=2) + "\n")
         print(json.dumps(receipt), flush=True)
 
