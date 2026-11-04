@@ -7,6 +7,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Color
@@ -39,6 +41,44 @@ import kotlin.math.roundToInt
 
 class BrowsePinchLayersTest {
     @get:Rule val compose = createComposeRule()
+
+    @Test fun zeroSizeLiveCoordinatesSkipTheCoverAndRecoverAfterMeasurement() {
+        val motion = BrowsePinchMotion()
+        var empty: LayoutCoordinates? = null
+        compose.setContent { LocalicaTheme {
+            val grid = rememberLazyGridState()
+            Box(Modifier.size(180.dp, 250.dp).background(Color.Black).testTag("zero-scene")
+                .pinchRetainedOverlay(motion, grid, mapOf("a" to 0, "b" to 1))) {
+                LazyVerticalGrid(GridCells.Fixed(1), state = grid, modifier = Modifier.fillMaxSize()) {
+                    item(key = "a") { Box(Modifier.height(100.dp).retainPinchArtwork("a", motion).background(Color.Green)) }
+                    item(key = "b") { Box(Modifier.height(100.dp).retainPinchArtwork("b", motion).background(Color.Red)) }
+                }
+                Box(Modifier.size(0.dp).onGloballyPositioned { empty = it })
+            }
+        } }
+        compose.waitForIdle()
+        fun pixels() = compose.onNodeWithTag("zero-scene").captureToImage().toPixelMap()
+        val before = pixels()
+        assertTrue(before[before.width / 2, before.height / 5].green > .9f)
+        lateinit var original: LayoutCoordinates
+        compose.runOnIdle {
+            val part = requireNotNull(motion.artwork["a"])
+            assertTrue(part.layer.size.width > 0 && part.layer.size.height > 0)
+            assertEquals(IntSize.Zero, requireNotNull(empty).size)
+            original = requireNotNull(part.coordinates)
+            part.coordinates = empty
+            motion.itemAlpha["b"] = .99f // Invalidate the overlay while retaining the recording.
+        }
+        val skipped = pixels()
+        assertTrue(skipped[skipped.width / 2, skipped.height / 5].green < .1f)
+        assertTrue(skipped[skipped.width / 2, skipped.height * 3 / 5].red > .9f)
+        compose.runOnIdle {
+            requireNotNull(motion.artwork["a"]).coordinates = original
+            motion.itemAlpha["b"] = 1f
+        }
+        val restored = pixels()
+        assertTrue(restored[restored.width / 2, restored.height / 5].green > .9f)
+    }
 
     @Test fun artworkPassStaysAboveTextFromALaterItemAtRestDuringPinchAndAfterHandoff() {
         val motion = BrowsePinchMotion()
