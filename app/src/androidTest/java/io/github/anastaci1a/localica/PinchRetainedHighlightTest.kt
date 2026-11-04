@@ -153,6 +153,18 @@ class PinchRetainedHighlightTest {
             fun highlightPixels(label: String, anywhere: Boolean = false): Int {
                 compose.runOnIdle { stage++ }
                 val pixels = capturePresentedPopupPixels(compose, scene, stage) { view }
+                val exported = InstrumentationRegistry.getArguments().getString("additionalTestOutputDir")
+                val root = exported?.let { java.io.File(it) } ?: requireNotNull(
+                    InstrumentationRegistry.getInstrumentation().targetContext.getExternalFilesDir(null))
+                val directory = java.io.File(root, "pinch-retained-highlight").also { check(it.isDirectory || it.mkdirs()) }
+                val bitmap = android.graphics.Bitmap.createBitmap(pixels.width, pixels.height, android.graphics.Bitmap.Config.ARGB_8888)
+                try {
+                    bitmap.setPixels(IntArray(pixels.width * pixels.height) { i -> pixels[i % pixels.width, i / pixels.width].toArgb() },
+                        0, pixels.width, 0, 0, pixels.width, pixels.height)
+                    java.io.File(directory, "rtl-$rtl-selected-$selected-$label.png").outputStream().use {
+                        bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
+                    }
+                } finally { bitmap.recycle() }
                 val samplingBounds = if (selected) sourceBounds.inflate(4f * density) else sourceBounds
                 val left = if (anywhere) 0 else (samplingBounds.left - sceneBounds.left).toInt().coerceAtLeast(0)
                 val right = if (anywhere) pixels.width else (samplingBounds.right - sceneBounds.left).toInt().coerceAtMost(pixels.width)
@@ -186,8 +198,11 @@ class PinchRetainedHighlightTest {
                     }
                     else {
                         assertTrue("Selected content stays visible at $label: source=$sourceInk current=$dark", dark >= sourceInk * .75f)
-                        assertEquals("One current-song frost at $label", sourceTint, tint, .025f)
                         if (label == "recognized") {
+                            // #536 fades long departures immediately; #520 retains the
+                            // initial travel. Recognition may reduce, never add, frost.
+                            assertTrue("Departing current-song frost at recognition: $tint from $sourceTint",
+                                tint > 0f && tint <= sourceTint + .025f)
                             // #520 preserves travel beyond recognition; the retained outline
                             // has started its journey rather than remaining at source size.
                             assertTrue("Retained hover width at recognition: $width from $sourceHighlightWidth",
@@ -195,24 +210,13 @@ class PinchRetainedHighlightTest {
                             assertTrue("Retained hover height at recognition: $height from $sourceHighlightHeight",
                                 kotlin.math.abs(height - sourceHighlightHeight) <= pixels.height * .12f + 3f)
                         } else {
+                            assertEquals("One current-song frost at $label", sourceTint, tint, .025f)
                             assertEquals("Retained hover width at $label", sourceHighlightWidth.toFloat(), width.toFloat(), 3f)
                             assertEquals("Retained hover height at $label", sourceHighlightHeight.toFloat(), height.toFloat(), 3f)
                         }
                     }
                 }
                 android.util.Log.i("PinchRetainedHighlight", "rtl=$rtl stage=$label ink=$count bounds=$sourceBounds scene=$sceneBounds")
-                val exported = InstrumentationRegistry.getArguments().getString("additionalTestOutputDir")
-                val root = exported?.let { java.io.File(it) } ?: requireNotNull(
-                    InstrumentationRegistry.getInstrumentation().targetContext.getExternalFilesDir(null))
-                val directory = java.io.File(root, "pinch-retained-highlight").also { check(it.isDirectory || it.mkdirs()) }
-                val bitmap = android.graphics.Bitmap.createBitmap(pixels.width, pixels.height, android.graphics.Bitmap.Config.ARGB_8888)
-                try {
-                    bitmap.setPixels(IntArray(pixels.width * pixels.height) { i -> pixels[i % pixels.width, i / pixels.width].toArgb() },
-                        0, pixels.width, 0, 0, pixels.width, pixels.height)
-                    java.io.File(directory, "rtl-$rtl-selected-$selected-$label.png").outputStream().use {
-                        bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
-                    }
-                } finally { bitmap.recycle() }
                 return count
             }
             val originalInk = highlightPixels("source")

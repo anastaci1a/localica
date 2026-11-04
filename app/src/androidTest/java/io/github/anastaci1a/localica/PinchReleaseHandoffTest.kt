@@ -113,7 +113,6 @@ class PinchReleaseHandoffTest {
             }
             val targetRow = if (gallery) measuredPart("media") else Rect.Zero
             val targetContour = if (gallery) measuredContour(targetRow) else Rect.Zero
-            val targetArtWidth = if (gallery) measuredPart("browse-art").width else 0f
             if (gallery) {
                 compose.runOnIdle { prefs.write(route, initial, false) }
                 compose.waitUntil(5000) {
@@ -172,8 +171,8 @@ class PinchReleaseHandoffTest {
                     finally { phase("end") }
                 if (gallery && stage == 0) initialHighlightWidth = presentedHighlightWidth(pixels)
                 if (gallery && (stage in setOf(0, 1, 2, 6, 12, 22) ||
-                    InstrumentationRegistry.getArguments().getString("pinchReviewAllFrames") == "true") &&
-                    InstrumentationRegistry.getArguments().getString("pinchReview") == "true") {
+                    InstrumentationRegistry.getArguments().getString("pinchReviewAllFrames") == "true" &&
+                    InstrumentationRegistry.getArguments().getString("pinchReview") == "true")) {
                     val directory = reviewDirectory
                     val bitmap = android.graphics.Bitmap.createBitmap(pixels.width, pixels.height, android.graphics.Bitmap.Config.ARGB_8888)
                     try {
@@ -186,13 +185,13 @@ class PinchReleaseHandoffTest {
                 }
                 val visibleCenter = highlightCenter(pixels, expectedFinalCenter, originalBounds.height * 2f, gallery)
                 if (!gallery) return visibleCenter
-                // Infer progress from separately placed artwork. The guide supplies full
-                // contour dimensions; only visible tinted pixels establish its position (#547).
+                // Infer size from this same presented frame. Semantic artwork dimensions
+                // can be one render frame ahead during release, even after the marker draws.
+                // Horizontal size supplies the full contour; optical edges place it (#547).
                 val row = anchor.fetchSemanticsNode().boundsInRoot
-                val art = measuredPart("browse-art")
-                val delta = targetArtWidth - originalArtwork.width
+                val delta = targetContour.width - originalContour.width
                 val progress = if (kotlin.math.abs(delta) < .5f) 0f else
-                    ((art.width - originalArtwork.width) / delta).coerceIn(0f, 1f)
+                    ((presentedHighlightWidth(pixels) - originalContour.width) / delta).coerceIn(0f, 1f)
                 fun mix(a: Float, b: Float) = a + (b - a) * progress
                 val contour = Rect(mix(originalContour.left, targetContour.left), mix(originalContour.top, targetContour.top),
                     mix(originalContour.right, targetContour.right), mix(originalContour.bottom, targetContour.bottom)).translate(row.topLeft)
