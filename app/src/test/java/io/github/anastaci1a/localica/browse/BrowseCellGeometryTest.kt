@@ -6,7 +6,7 @@ import kotlin.math.roundToInt
 
 class BrowseCellGeometryTest {
     @Test fun denseArtworkRestoresUsableWidthWithoutMovingOuterEdges() {
-        val expected = listOf(328, 148, 104, 76, 60)
+        val expected = listOf(328, 160, 104, 76, 60)
         for (columns in 1..5) {
             val geometry = BrowseCellGeometry(columns)
             assertEquals(expected[columns - 1], geometry.contentWidth(geometry.cellWidth(360, 1f), 1f))
@@ -30,8 +30,8 @@ class BrowseCellGeometryTest {
             assertEquals(viewport - inset, edge)
         }
     }
-    @Test fun denseGuttersAreBetweenCoversRatherThanRepeatedInsideEveryTile() {
-        for (columns in 3..5) {
+    @Test fun galleryGuttersAreBetweenCoversRatherThanRepeatedInsideEveryTile() {
+        for (columns in 2..5) {
             val geometry = BrowseCellGeometry(columns)
             for (column in 0 until columns - 1) {
                 val end = geometry.cellLeft(360, 1f, column) + geometry.cellWidth(360, 1f, column) - geometry.cardInset

@@ -96,24 +96,35 @@ class BrowseItemMetricsTest {
             val width = geometry.artworkWidth(360, 1f)
             val m = BrowseItemMetrics(BrowseStyle(presentation = Presentation.Standard, itemsPerRow = columns), columns, width, 1f, false)
             assertEquals(width, m.art)
-            assertEquals(8, m.verticalInset)
-            assertEquals(width + 24 + 16 + 8, m.place(24, 0, 16).height)
+            assertEquals(0, m.verticalInset)
+            assertEquals(width + 24 + 16, m.place(24, 0, 16).height)
             assertEquals(8f, m.artCorner, 0f)
         }
     }
 
-    @Test fun galleryTextBottomToNextCoverGapIsHalvedFromSixteenDp() {
-        for (density in listOf(1f, 2f, 2.625f, 3f)) for (columns in 1..5) {
-            val width = BrowseCellGeometry(columns).artworkWidth((360 * density).roundToInt(), density)
+    @Test fun galleryTextBottomToNextCoverAndCoverToCoverShareOneGapAtEverySize() {
+        for (density in listOf(1f, 1.5f, 2f, 2.625f, 3f)) for (viewport in listOf(320, 360, 411, 600, 840)) for (columns in 1..5) {
+            val geometry = BrowseCellGeometry(columns)
+            val pixels = (viewport * density).roundToInt()
+            val width = geometry.artworkWidth(pixels, density)
             val m = BrowseItemMetrics(BrowseStyle(presentation = Presentation.Standard, itemsPerRow = columns), columns, width, density, false)
             val title = (24 * density).roundToInt(); val info = (16 * density).roundToInt()
+            val outer = 2 * (geometry.cardInset * density).roundToInt()
+            val gap = (GalleryGapDp * density).roundToInt()
+            // The outer card padding above and below each row is part of the vertical gap.
             val cell = m.place(title, 0, info)
-            // The next cell's cover starts at its own top inset, directly after this cell's height.
-            val gap = cell.height + cell.artY - (cell.infoY + info)
-            assertEquals("old gap was 16 dp", 8f * density, gap.toFloat(), 1f)
-            assertEquals("first row keeps its top inset", (8 * density).roundToInt(), cell.artY)
+            assertEquals("text to next cover at columns=$columns density=$density", gap.toFloat(), (cell.height + outer + cell.artY - (cell.infoY + info)).toFloat(), 1f)
             val noInfo = m.place(title, 0, 0)
-            assertEquals(gap, noInfo.height + noInfo.artY - (noInfo.titleY + title))
+            assertEquals(cell.height + outer + cell.artY - (cell.infoY + info), noInfo.height + outer + noInfo.artY - (noInfo.titleY + title))
+            assertEquals(0, cell.artY)
+            // Cover to cover, horizontally, for every adjacent pair (exact in pixels).
+            if (columns >= 2) for (column in 0 until columns - 1) {
+                val end = geometry.cellLeft(pixels, density, column) + geometry.cellWidth(pixels, density, column) -
+                    (geometry.cardInset * density).roundToInt()
+                val next = geometry.cellLeft(pixels, density, column + 1) + (geometry.cardInset * density).roundToInt()
+                assertEquals("cover to cover columns=$columns column=$column density=$density viewport=$viewport", outer, next - end)
+                assertEquals(gap.toFloat(), (next - end).toFloat(), 1f)
+            }
         }
     }
     @Test fun tracklistPreservesNumberedHybridWhileNormalRestoresCoverSubtitleLayout() {

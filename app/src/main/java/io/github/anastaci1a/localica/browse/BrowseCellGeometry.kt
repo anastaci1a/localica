@@ -2,12 +2,18 @@ package io.github.anastaci1a.localica.browse
 
 import kotlin.math.roundToInt
 
+/** The one gallery gap (dp): between neighbouring covers, and from the bottom of an item's
+ * lowest text line to the next cover, at every gallery size (#561). It is the former 3-per-row gutter. */
+internal const val GalleryGapDp = 8
+
 /** Shared grid, artwork and lifted-card insets; dimensions are dp until a viewport is supplied. */
 internal data class BrowseCellGeometry(val columns: Int) {
     init { require(columns > 0) }
-    val dense = columns >= 3
+    /** Two or more columns have neighbouring covers and share [GalleryGapDp]. One column
+     * (and every list) keeps its 12 dp content inset, so its edge margins stay 16 dp. */
+    val dense = columns >= 2
     val gridInset = if (dense) 12 else 0
-    val cardInset = 4
+    val cardInset = GalleryGapDp / 2
     fun cardVerticalInset(style: BrowseStyle): Float = cardInset *
         if (style.presentation == Presentation.List && style.listSize == ListSize.Smallest) .15f else 1f
     val contentInset = if (dense) 0 else 12

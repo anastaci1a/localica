@@ -201,6 +201,8 @@ These three dense sizes keep one-line extra information immediately before the o
 
 Normal/Large halve the inter-cover gap, retaining cover sizes and horizontal geometry. Gallery **Items per row** snaps to 1–5. Preserve legacy presets until changed. Use smaller text/tighter padding at three or more columns, with an overlaid scrollbar.
 
+Every gallery size uses one fixed 8 dp gap, independent of zoom: between neighbouring covers and from the bottom of an item's lowest text line to the next cover. Outer margins stay 16 dp.
+
 In all lists, including queues and album details, pinch outward through Smallest list → Small list → Tracklist where offered → Compact list → Normal list → Large list → Gallery 5 → 4 → 3 → 2 → 1, and inward to reverse.
 
 Change one adjacent view per gesture, requiring all fingers to lift before another step. A 4% span change picks the direction. Geometry then follows the full finger distance, easing out that gap over 100 ms. Reversing restores items virtualized out by the destination. All text draws below a separate artwork pass. Within each pass earlier items draw on top.
