@@ -24,6 +24,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.*
+import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.animation.core.animateFloatAsState
@@ -101,6 +102,9 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     // Header controls already sample this scene before lyrics open. Older
     // adapters need its prepared pixels whenever that header is visible too.
     val lyricBackdrop = rememberFrostedBackdrop(listOf(artwork, settings.artworkLayout, settings.glass), p > .7f, dark = lightInk)
+    // Only the complete scene needs prepared pixels. The wash is a GPU backing
+    // for the cover's sampling source, not a second full-window CPU snapshot.
+    val artworkWash = rememberFrostedBackdrop(Unit, enabled = false, dark = lightInk, retainRaster = false)
     val lyricVisibility by animateFloatAsState(if (lyricsOpen) 1f else 0f, tween(settings.motionDuration(550)), label = "Lyrics layout")
     // A light/dark foreground change during the lyrics animation eases with its progress.
     val inkTransition = remember { PlayerInkTransition(inkTarget) }
@@ -388,7 +392,9 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
                 contentScale = artContentScale)
             }
         }
-            ArtworkBlend(artSwipe.source ?: artwork, Modifier.fillMaxSize().zIndex(-1f).recordFrostedBackdrop(lyricBackdrop, enabled = p > .7f), duration = paletteDuration, occurrence = artworkVisit ?: sampled.trackId,
+            ArtworkBlend(artSwipe.source ?: artwork, Modifier.fillMaxSize().zIndex(-1f)
+                .recordFrostedBackdrop(if (lyricProgress > 0f) lyricBackdrop else artworkWash, enabled = p > .7f),
+                duration = paletteDuration, occurrence = artworkVisit ?: sampled.trackId,
                 immediate = artSwipe.active || artworkVisit != null && artSwipe.handoff == artworkVisit, opacityBlend = lyricsOpen || settings.artworkTransition != io.github.anastaci1a.localica.navigation.ArtworkTransition.BlurThrough,
                 onBackgroundFrame = polarity::frame) { frame ->
                 val backgroundRole = LocalArtworkBackgroundRole.current
@@ -403,11 +409,6 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
                         Modifier.fillMaxSize().graphicsLayer { alpha = swipeFraction }, backgroundProgress,
                         with(density) { artY.toPx() }, with(density) { artHeight.toPx() },
                         with(density) { artX.toPx() } + neighborOffset, artPixels, softness = maxOf(1f - coverBlend, swipeFeather / .9f), tone = tone)
-                }
-                // Retain the settled cover in the header's original optical source.
-                if (!movingCover && lyricProgress <= 0f) {
-                    cover(frame, swipeOffset)
-                    if (destination != null) cover(destination.visual, neighborOffset, neighbor = true)
                 }
             }
             Box(Modifier.motionBounds(artX, artY, artWidth, artHeight).testTag("artwork-gesture")
@@ -444,9 +445,13 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
                 originPreparation = sourcesPreparation, contentAlpha = { lyricMotion.contentAlpha },
                 sampledAtMs = sampled.sampledAtMs, playing = sampled.isPlaying, speed = sampled.playbackSpeed,
                 delayMs = settings.lyricDelayMs, durationMs = sampled.durationMs) }
-            // Draw the cover exactly once, above lyrics (#537) and moving metadata (#391).
-            // The wash stays below both; settled metadata retains its original drawing order.
-            if (movingCover || lyricProgress > 0f) ArtworkBlend(artSwipe.source ?: artwork, Modifier.fillMaxSize(), duration = paletteDuration,
+            // One blend owner survives both progress boundaries. Its displayed cover
+            // stays above moving metadata/lyrics and below settled metadata. Header
+            // glass samples wash + cover; lyrics retain their original wash-only source.
+            ArtworkBlend(artSwipe.source ?: artwork, Modifier.fillMaxSize()
+                .zIndex(if (movingCover || lyricProgress > 0f) 0f else -1f)
+                .recordPlayerCoverBackdrop(lyricBackdrop, artworkWash, enabled = p > .7f && lyricProgress <= 0f),
+                duration = paletteDuration,
                 occurrence = artworkVisit ?: sampled.trackId,
                 immediate = artSwipe.active || artworkVisit != null && artSwipe.handoff == artworkVisit,
                 opacityBlend = lyricsOpen || settings.artworkTransition != io.github.anastaci1a.localica.navigation.ArtworkTransition.BlurThrough) { frame ->
@@ -555,5 +560,27 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
             onSettings(settings.copy(artworkTap = value)); configureTap = false
         }) { Text(value.label) } } } }, confirmButton = { ActionTextButton(onClick = { configureTap = false }) { Text("Close") } })
 }
+}
+
+/** Record the complete glass scene while displaying only its already-recorded cover.
+ * Replaying drawContent for display would mutate nested blend owners during readback. */
+@Composable
+private fun Modifier.recordPlayerCoverBackdrop(source: FrostedBackdrop, wash: FrostedBackdrop,
+    enabled: Boolean): Modifier {
+    val cover = rememberGraphicsLayer()
+    val cutout = remember { Path() }
+    return drawWithContent {
+        drawContent()
+        if (enabled) drawLayer(cover)
+    }.recordFrostedBackdrop(source, backing = wash, enabled = enabled, displayCutout = {
+        cutout.reset()
+        cutout.addRect(Rect(0f, 0f, size.width, size.height))
+        cutout
+    }).drawWithContent {
+        // Keep the displayed owner and the sampled composite on the same frame
+        // for the full lifetime of a retained native copy, including cancellation.
+        if (!source.readbackPending) cover.record { this@drawWithContent.drawContent() }
+        drawLayer(cover)
+    }
 }
 

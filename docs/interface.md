@@ -339,9 +339,9 @@ Tap/swipe up expands one shared outline containing glass, artwork, text and tran
 
 The entire Queue layer stays clipped inside the player’s moving rounded outline during expansion, collapse and interruption. Its lower edge is revealed only as that outline reaches it. Glass grows blurrier through expansion. The final artwork color continuation blends in later and becomes opaque near full size, without passing through a darker average-color backing.
 
-Full-background covers soften at their perimeter while keeping the center sharp, then merge into the continuation. Floating covers keep defined edges. The artwork feather never drops away at the final handoff. All blends reverse with the gesture. Artwork stays below title and artist text, including transitions.
+Full-background covers soften at their perimeter while keeping the center sharp, then merge into the continuation. Floating covers keep defined edges. The artwork feather never drops away at the final handoff. All blends reverse with the gesture.
 
-In both layouts the expanded artwork is centered between the bottom of the top controls and the top of the title, each with 8 dp of padding, so its edges are equally far from them. The floating cover scales down to fit that band and never overlaps; the full-background cover may overlap both on short screens, layered below them.
+In both layouts the expanded artwork is centered between the bottom of the top controls and the top of the title, each with 8 dp of padding, so its edges are equally far from them. The floating cover scales down to fit that band and never overlaps; the full-background cover may overlap both on short screens.
 
 Metadata/seek/actions/lyrics have 32 dp side insets. Order: artwork → metadata → seek/times → customizable actions → transport → Queue drawer. No volume controls. Album metadata fades in and seek/actions appear late, while transport persists throughout. Title and transport retain their delivered trajectories, including selected lyrics.
 
@@ -466,7 +466,7 @@ Default full-background cover: scale uniformly to screen width without side crop
 
 Alternative: floating cover over an artwork-colored matte/acrylic gradient with subtle non-tiled texture.
 
-During player expansion and contraction, foreground artwork draws above overlapping title and artist text. Preserve feathering, text trajectories, gesture targets and settled drawing order.
+During expansion and contraction, foreground artwork draws above overlapping title and artist text. At rest, artwork stays below them. Preserve feathering, text trajectories and gesture targets. Keep the active artwork blend through player movement. With lyrics closed, header glass samples the artwork as well as its color continuation.
 
 Both layouts animate into one integrated lyrics state: no boundary or Lyrics heading. Blend lyrics into the upper screen, lower metadata/transport, fade/slide extra actions away. Keep metadata above seek and transport accessible. Fade the artwork and its feathered edges uniformly.
 
