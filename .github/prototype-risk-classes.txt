@@ -7,6 +7,7 @@ io.github.anastaci1a.localica.AdvancedRepeatTest
 io.github.anastaci1a.localica.AppIdentityTest
 io.github.anastaci1a.localica.ArtistAlbumFilterRangeTest
 io.github.anastaci1a.localica.ArtistAlbumSelectionTest
+io.github.anastaci1a.localica.ArtistAlbumSortOrderTest
 io.github.anastaci1a.localica.ArtistCollectionActionsTest
 io.github.anastaci1a.localica.ArtistSelectionPlacementTest
 io.github.anastaci1a.localica.ArtworkCacheTest
