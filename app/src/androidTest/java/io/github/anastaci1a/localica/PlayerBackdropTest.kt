@@ -74,6 +74,13 @@ class PlayerBackdropTest {
                 android.util.Log.i("PlayerBackdropProbe", "iteration=$iteration attempt=${++attempt} clock=${compose.mainClock.currentTime} center=$c wash=$wash bounds=$bounds art=$art prepared=${PlayerVisualCache.peek(state.trackUri!!)}")
                 c.blue > c.red * 1.4f && wash.red > wash.blue * 1.4f
             } } catch (failure: Throwable) {
+                instrumentation.uiAutomation.takeScreenshot()?.let { bitmap ->
+                    output.mkdirs()
+                    File(output, "player-backdrop-native-timeout.png").outputStream().use {
+                        bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)
+                    }
+                    bitmap.recycle()
+                }
                 player.captureToImage().asAndroidBitmap().let { bitmap ->
                     output.mkdirs()
                     File(output, "player-backdrop-timeout.png").outputStream().use {
