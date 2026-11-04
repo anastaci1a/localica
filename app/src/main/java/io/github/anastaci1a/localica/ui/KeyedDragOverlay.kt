@@ -118,7 +118,8 @@ internal fun <T : Any, P> BoxScope.KeyedDragOverlay(state: KeyedDragState<T, P>,
     var previousPane = backing
     cards.reversed().forEach { (index, item) -> key(drag, state.keyOf(item)) {
         val paneBacking = previousPane
-        val paneScene = rememberFrostedBackdrop(drag to paneBacking?.capture, dark = backing?.dark == true)
+        val paneScene = rememberFrostedBackdrop(Triple(drag, paneBacking?.capture, paneBacking?.glassFallback),
+            dark = backing?.dark == true)
         previousPane = paneScene
         LaunchedEffect(drag, paneScene) {
             snapshotFlow { drag.pointer to drag.dropping }.collectLatest {

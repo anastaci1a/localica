@@ -119,9 +119,11 @@ class DragStackMaterialTest {
         begin(3)
         // Legacy prepares the recursive snapshots asynchronously. Pixel convergence, not a delay,
         // owns readiness; the endpoint must differ from independently sampled identical panes.
-        compose.waitUntil(15000) {
-            contrast(compose.onNodeWithTag("stack-scene").captureToImage()) < one - .015f
-        }
+        try {
+            compose.waitUntil(15000) {
+                contrast(compose.onNodeWithTag("stack-scene").captureToImage()) < one - .015f
+            }
+        } finally { capture("recursive-endpoint") }
         val stack = capture("recursive-three-panes")
         assertTrue("Recursive frost reduces stripe contrast: one=$one stack=${contrast(stack)}", contrast(stack) < one - .015f)
         val top = compose.onNodeWithTag("drag-stack").fetchSemanticsNode().boundsInRoot
