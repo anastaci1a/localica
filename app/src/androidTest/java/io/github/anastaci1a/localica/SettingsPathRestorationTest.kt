@@ -6,7 +6,7 @@ import androidx.compose.runtime.saveable.LocalSaveableStateRegistry
 import androidx.compose.runtime.saveable.SaveableStateRegistry
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.StateRestorationTester
-import androidx.compose.ui.test.junit4.createComposeRule
+import io.github.anastaci1a.localica.localicaComposeRule as createComposeRule
 import io.github.anastaci1a.localica.ui.*
 import org.junit.Assert.*
 import org.junit.Rule

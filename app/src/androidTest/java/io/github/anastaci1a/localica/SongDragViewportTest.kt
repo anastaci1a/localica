@@ -5,7 +5,7 @@ import androidx.compose.foundation.lazy.grid.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.test.junit4.createComposeRule
+import io.github.anastaci1a.localica.localicaComposeRule as createComposeRule
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.browse.BrowserItem
 import io.github.anastaci1a.localica.navigation.*

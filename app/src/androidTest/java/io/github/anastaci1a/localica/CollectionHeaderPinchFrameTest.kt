@@ -12,7 +12,7 @@ import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
+import io.github.anastaci1a.localica.localicaComposeRule as createComposeRule
 import io.github.anastaci1a.localica.browse.*
 import io.github.anastaci1a.localica.library.*
 import io.github.anastaci1a.localica.navigation.*

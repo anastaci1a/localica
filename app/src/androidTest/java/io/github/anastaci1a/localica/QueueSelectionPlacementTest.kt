@@ -11,7 +11,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.test.junit4.createComposeRule
+import io.github.anastaci1a.localica.localicaComposeRule as createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.assertIsSelected
 import io.github.anastaci1a.localica.queue.ListeningQueue
@@ -65,6 +65,8 @@ class QueueSelectionPlacementTest {
                     try { source.state.scrollToItem(index); done.complete(Unit) }
                     catch (caught: Throwable) { done.completeExceptionally(caught) }
                 } }
+                // Drain the queued effect without advancing the paused frame clock.
+                compose.waitForIdle()
                 runBlocking { withTimeout(5000) { done.await() } }
             }
             frames.departing = setOf("q2")

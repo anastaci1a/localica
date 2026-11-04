@@ -3,8 +3,6 @@ package io.github.anastaci1a.localica.ui
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.layout.LayoutCoordinates
-import androidx.compose.ui.layout.ModifierLocalBeyondBoundsLayout
-import androidx.compose.ui.modifier.modifierLocalConsumer
 import androidx.compose.ui.graphics.layer.GraphicsLayer
 import kotlin.math.max
 import kotlin.math.roundToInt
@@ -62,6 +60,7 @@ internal data class BrowseZoomAnchor(val route: BrowseRoute, val style: BrowseSt
 
 @Stable
 internal class BrowsePinchMotion {
+    val beyondBounds = BrowseBeyondBounds()
     val progress = Animatable(1f)
     var held by mutableStateOf(false)
     var fingerProgress = 0f
@@ -252,9 +251,8 @@ internal class BrowsePinchMotion {
 /** A retired/capturing transaction leaves the live layout at its ordinary placement. */
 @OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
 internal fun Modifier.pinchItemPlacement(motion: BrowsePinchMotion, grid: LazyGridState, key: Any,
-    index: Int, style: BrowseStyle, geometry: BrowseCellGeometry): Modifier = modifierLocalConsumer {
-        ModifierLocalBeyondBoundsLayout.current?.let { motion.header?.beyond = it }
-    }.graphicsLayer {
+    index: Int, style: BrowseStyle, geometry: BrowseCellGeometry): Modifier =
+    graphicsLayer {
     val placed = grid.layoutInfo.visibleItemsInfo.firstOrNull { it.key == key }
     val translation = placed?.let {
         motion.contentTranslation(key, index, it.offset, it.size.width, style, geometry, density)

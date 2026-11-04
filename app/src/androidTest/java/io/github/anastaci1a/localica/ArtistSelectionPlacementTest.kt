@@ -29,7 +29,7 @@ import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.test.junit4.createComposeRule
+import io.github.anastaci1a.localica.localicaComposeRule as createComposeRule
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.test.platform.app.InstrumentationRegistry
@@ -311,6 +311,8 @@ class ArtistSelectionPlacementTest {
                 val completed = CompletableDeferred<Unit>()
                 compose.runOnUiThread { scope.launch { try { scroll.scrollToItem(index); completed.complete(Unit) }
                     catch (failure: Throwable) { completed.completeExceptionally(failure) } } }
+                // Drain the queued effect without advancing the paused frame clock.
+                compose.waitForIdle()
                 runBlocking { withTimeout(5000) { completed.await() } }
                 frame()
             }

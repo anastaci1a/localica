@@ -1,6 +1,7 @@
 package io.github.anastaci1a.localica
 
 import android.graphics.Bitmap
+import android.graphics.Rect
 import android.os.Handler
 import android.os.Looper
 import android.view.PixelCopy
@@ -13,9 +14,10 @@ internal fun copyNativeWindowOnce(
     window: Window,
     image: Bitmap,
     timeoutMessage: String,
+    sourceBounds: Rect? = null,
     failureMessage: (Int) -> String,
 ): Bitmap = awaitNativeWindowCopyOnce(image, timeoutMessage, failureMessage, request = { callback ->
-    PixelCopy.request(window, image, { code -> callback(code) }, Handler(Looper.getMainLooper()))
+    PixelCopy.request(window, sourceBounds, image, { code -> callback(code) }, Handler(Looper.getMainLooper()))
 })
 
 /** The same ownership protocol with controllable request/deadline boundaries for lifecycle tests. */

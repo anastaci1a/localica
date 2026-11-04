@@ -7,13 +7,13 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.test.junit4.createComposeRule
+import io.github.anastaci1a.localica.localicaComposeRule as createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.browse.BrowseCellGeometry
@@ -41,10 +41,13 @@ class PinchItemPlacementLifecycleTest {
         compose.setContent {
             val grid = rememberLazyGridState()
             val density = LocalDensity.current
-            LaunchedEffect(density) {
-                motion.pixelDensity = density.density
-                shift = with(density) { 24.dp.toPx() }
-                motion.bounds = mapOf("song" to Rect(0f, shift, with(density) { 180.dp.toPx() }, shift * 3))
+            // Source capture is complete before the production layer first reads it.
+            val sourceMotion = remember(motion, density) {
+                motion.apply {
+                    pixelDensity = density.density
+                    shift = with(density) { 24.dp.toPx() }
+                    bounds = mapOf("song" to Rect(0f, shift, with(density) { 180.dp.toPx() }, shift * 3))
+                }
             }
             Box(Modifier.size(180.dp, 180.dp).testTag("viewport")) {
                 LazyVerticalGrid(GridCells.Fixed(1), state = grid, modifier = Modifier.fillMaxSize()) {
@@ -52,7 +55,7 @@ class PinchItemPlacementLifecycleTest {
                         SideEffect { compositions++ }
                         // Deliberately keep the real production modifier mounted after retirement:
                         // native layer invalidation may run before BrowserScreen replaces it.
-                        Box(Modifier.height(48.dp).pinchItemPlacement(motion, grid, "song", 0,
+                        Box(Modifier.height(48.dp).pinchItemPlacement(sourceMotion, grid, "song", 0,
                             style, BrowseCellGeometry(1)).testTag("song"))
                     }
                 }
