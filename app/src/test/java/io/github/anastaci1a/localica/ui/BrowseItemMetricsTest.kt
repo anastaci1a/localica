@@ -63,7 +63,7 @@ class BrowseItemMetricsTest {
         for (size in ListSize.entries.filter { it != ListSize.Smallest })
             assertEquals(4f, geometry.cardVerticalInset(BrowseStyle(listSize = size)), 0f)
         assertEquals(4f, geometry.cardVerticalInset(BrowseStyle(presentation = Presentation.Standard, listSize = ListSize.Smallest)), 0f)
-        for ((size, height) in listOf(ListSize.Compact to 56, ListSize.Small to 48, ListSize.Smallest to 40)) {
+        for ((size, height) in listOf(ListSize.Compact to 56, ListSize.Small to 40, ListSize.Smallest to 40)) {
             val m = metrics(size)
             assertEquals(height, m.place(20, 0, 16).height)
             assertTrue(m.place(80, 0, 72).height >= 80)

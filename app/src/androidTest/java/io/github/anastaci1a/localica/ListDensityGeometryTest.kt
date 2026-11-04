@@ -63,7 +63,8 @@ class ListDensityGeometryTest {
                 assertEquals("Dense metadata is vertically centered", card.center.y, info.center.y, 1f)
                 assertTrue("Font scaling must not clip metadata", info.top >= card.top && info.bottom <= card.bottom)
                 assertTrue("Denser rows cannot become taller", card.height <= previousHeight)
-                if (scale == 1f) assertTrue("Each reference density has distinct spacing", card.height < previousHeight)
+                if (scale == 1f && mode != ListSize.Smallest)
+                    assertTrue("Compact has a taller inner row than Small", card.height < previousHeight)
                 previousHeight = card.height
                 val beforeClick = clicks
                 compose.onNodeWithContentDescription("Density actions").performClick()

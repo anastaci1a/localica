@@ -252,10 +252,10 @@ class BrowseLoadingRevealTest {
 
     @Test fun skeletonCoverageIncludesNormalCellPaddingAtTheViewportEdge() {
         val style = BrowseStyle(listSize = ListSize.Small)
-        var height by mutableIntStateOf(110)
+        var height by mutableIntStateOf(94)
         compose.setContent { LocalicaTheme {
             CompositionLocalProvider(LocalReducedMotion provides true, LocalDensity provides Density(1f)) {
-                // Small rows allocate 48dp content + 8dp card padding. Exercise bottom
+                // Small rows allocate 40dp content + 8dp card padding. Exercise bottom
                 // padding, an exact row boundary, next-row top padding, then its content.
                 BoxWithConstraints(Modifier.size(320.dp, height.dp)) {
                     BrowseLoadingViewport(style, BrowseCellGeometry(1),
@@ -263,14 +263,14 @@ class BrowseLoadingRevealTest {
                 }
             }
         } }
-        for (boundary in listOf(110, 112, 114, 118)) {
+        for (boundary in listOf(94, 96, 98, 102)) {
             compose.runOnIdle { height = boundary }
             val viewport = compose.onNodeWithTag("browse-loading").fetchSemanticsNode().boundsInRoot
             assertEquals("The fixture exercises its requested viewport boundary", boundary.toFloat(), viewport.height, 0f)
             val rows = compose.onAllNodesWithTag("browse-skeleton-item", useUnmergedTree = true)
                 .fetchSemanticsNodes().map { it.boundsInRoot }.filter { it.height > 0f }.sortedBy { it.top }
             assertTrue("The viewport must contain complete allocated row bounds at $boundary", rows.isNotEmpty())
-            assertEquals("Small row allocation includes both card insets", 56f, rows.first().height, 1f)
+            assertEquals("Small row allocation includes both card insets", 48f, rows.first().height, 1f)
             assertEquals("The first row starts at the viewport edge", viewport.top, rows.first().top, 1f)
             rows.zipWithNext().forEach { (above, below) ->
                 assertEquals("Allocated loading rows tile without unfilled gaps", above.bottom, below.top, 1f)
