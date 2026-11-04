@@ -52,6 +52,7 @@ class BrowseLoadingMotionTest {
         for (size in ListSize.entries) {
             val metrics = BrowseItemMetrics(BrowseStyle(listSize = size), 1, 380, 1f, false)
             assertEquals(1, metrics.lines)
+            assertEquals(if (size == ListSize.Large) 2 else 1, metrics.titleLines)
             assertEquals(size.trailingInformation, metrics.trailing)
             assertEquals(size in setOf(ListSize.Small, ListSize.Smallest), metrics.art == 0)
             assertEquals(48, metrics.menu)
