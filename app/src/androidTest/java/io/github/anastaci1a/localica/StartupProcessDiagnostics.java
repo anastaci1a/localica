@@ -40,6 +40,10 @@ public final class StartupProcessDiagnostics extends Instrumentation {
     private final AtomicReference<long[]> scrollEvent = new AtomicReference<>();
     private volatile long gestureStart;
     private boolean replay;
+    private volatile long eventWindowStart = Long.MAX_VALUE;
+    private final java.util.concurrent.CopyOnWriteArrayList<long[]> rawScrollEvents = new java.util.concurrent.CopyOnWriteArrayList<>();
+    private final java.util.concurrent.CopyOnWriteArrayList<String> rawSelectionEvents = new java.util.concurrent.CopyOnWriteArrayList<>();
+    private final java.util.concurrent.ConcurrentHashMap<Integer, AtomicInteger> eventCounts = new java.util.concurrent.ConcurrentHashMap<>();
     private Rect replayArtists, replayAlbums, replayBounds;
 
     @Override public void onCreate(Bundle args) {
@@ -64,6 +68,17 @@ public final class StartupProcessDiagnostics extends Instrumentation {
             require(commandDirectory.mkdir(), "Cannot create command directory");
             automation = getUiAutomation();
             automation.setOnAccessibilityEventListener(event -> {
+                if (APP.contentEquals(event.getPackageName() == null ? "" : event.getPackageName()) &&
+                        event.getEventTime() >= eventWindowStart && event.getEventTime() < eventWindowStart + WINDOW_MS) {
+                    eventCounts.computeIfAbsent(event.getEventType(), ignored -> new AtomicInteger()).incrementAndGet();
+                    if (event.getEventType() == AccessibilityEvent.TYPE_VIEW_SCROLLED && rawScrollEvents.size() < 1000)
+                        rawScrollEvents.add(new long[] {event.getEventTime(), event.getScrollX(), event.getScrollY(),
+                            event.getMaxScrollX(), event.getMaxScrollY(),
+                            Build.VERSION.SDK_INT >= 28 ? event.getScrollDeltaX() : 0,
+                            Build.VERSION.SDK_INT >= 28 ? event.getScrollDeltaY() : 0});
+                    if (event.getEventType() == AccessibilityEvent.TYPE_VIEW_SELECTED && rawSelectionEvents.size() < 1000)
+                        rawSelectionEvents.add(event.getEventTime() + " " + event.getText() + " " + event.getContentDescription());
+                }
                 if (APP.contentEquals(event.getPackageName() == null ? "" : event.getPackageName()) &&
                         event.getEventType() == AccessibilityEvent.TYPE_VIEW_SCROLLED && event.getMaxScrollY() > 0 &&
                         event.getEventTime() >= gestureStart) {
@@ -142,6 +157,7 @@ public final class StartupProcessDiagnostics extends Instrumentation {
         JSONObject report = new JSONObject().put("mode", mode).put("windowMs", WINDOW_MS)
                 .put("launchUptimeMs", SystemClock.uptimeMillis());
         long start = report.getLong("launchUptimeMs");
+        rawScrollEvents.clear(); rawSelectionEvents.clear(); eventCounts.clear(); eventWindowStart = start;
         JSONArray inputs = new JSONArray();
         AtomicBoolean sampling = new AtomicBoolean(true);
         AtomicInteger snapshots = new AtomicInteger();
@@ -257,6 +273,17 @@ public final class StartupProcessDiagnostics extends Instrumentation {
                     .put("firstFiveSecondInputAttempt", inputs.length() > 0 && inputs.getJSONObject(0).getLong("requestedMs") <= 5_000);
             }
         } finally {
+            eventWindowStart = Long.MAX_VALUE;
+            JSONObject counts = new JSONObject();
+            for (Map.Entry<Integer, AtomicInteger> entry : eventCounts.entrySet())
+                counts.put(AccessibilityEvent.eventTypeToString(entry.getKey()), entry.getValue().get());
+            JSONArray rawEvents = new JSONArray();
+            for (long[] event : rawScrollEvents) {
+                JSONArray values = new JSONArray(); for (long value : event) values.put(value); rawEvents.put(values);
+            }
+            write(output, "accessibility-events.json", new JSONObject().put("eventTypeCounts", counts)
+                    .put("scrollColumns", "eventUptimeMs,scrollX,scrollY,maxScrollX,maxScrollY,deltaX,deltaY")
+                    .put("scrolls", rawEvents).put("selections", new JSONArray(rawSelectionEvents)).toString(2));
             sampling.set(false);
             frameSampler.interrupt();
             frameSampler.join(5_000);
