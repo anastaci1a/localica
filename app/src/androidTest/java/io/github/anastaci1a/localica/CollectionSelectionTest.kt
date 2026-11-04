@@ -35,7 +35,7 @@ class CollectionSelectionTest {
             compose.onNodeWithContentDescription("Actions for Selection mix").performClick()
             compose.onNodeWithText("Select all songs").performClick()
             compose.onNodeWithText("2 selected").assertIsDisplayed()
-            compose.onNodeWithText("Remove from playlist").assertExists()
+            compose.assertSelectionMenuAction("Remove from playlist")
             // Selection appears in the underlying activity before the closing menu's
             // native window is necessarily removed. Wait for that explicit handoff
             // before injecting the next physical touch into the activity.
@@ -43,11 +43,11 @@ class CollectionSelectionTest {
                 compose.onAllNodesWithTag("glass-morph-surface").fetchSemanticsNodes().isEmpty()
             }
             compose.awaitExpectedWindowFocus(compose.onNodeWithContentDescription("Collapse selection"))
+            compose.saveSelectionPreview("playlist-catalog")
             compose.onNodeWithContentDescription("Collapse selection").performClick()
-            compose.onNodeWithText("Selection: 2").assertIsDisplayed()
+            compose.onNodeWithTag("selection-minimized").assertIsDisplayed()
             fun clickAboveSelection(node: SemanticsNodeInteraction, count: Int) {
-                fun panelBounds() = generateSequence(compose.onNodeWithText("Selection: $count").fetchSemanticsNode()) { it.parent }
-                    .first { it.config.contains(androidx.compose.ui.semantics.SemanticsProperties.VerticalScrollAxisRange) }.boundsInRoot
+                fun panelBounds() = compose.onNodeWithTag("selection-pill", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot.also { count }
                 val panel = panelBounds()
                 val bounds = node.fetchSemanticsNode().boundsInRoot
                 val overlap = bounds.bottom - panel.top + 16f
@@ -77,9 +77,9 @@ class CollectionSelectionTest {
             clickAboveSelection(first, 2)
             first.assertIsNotSelected()
             second.assertIsSelected()
-            compose.onNodeWithText("Selection: 1").assertIsDisplayed().performClick()
+            compose.onNodeWithTag("selection-minimized").assertIsDisplayed().performClick()
             compose.onNodeWithText("1 selected").assertIsDisplayed()
-            compose.onNodeWithText("Remove from playlist").assertExists()
+            compose.assertSelectionMenuAction("Remove from playlist")
         } catch (failure: Throwable) {
             runCatching {
                 compose.onAllNodes(isRoot(), useUnmergedTree = true).fetchSemanticsNodes().indices.forEach { index ->

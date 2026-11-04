@@ -8,7 +8,11 @@ Floating pills, mini-player, filter/search bars and circular controls share Liqu
 
 Related controls morph into their panels and return as one visible surface: creation, More, sorting, search and queue/lyric-source selectors. Hidden sources accept no input. a visibly restored source can immediately reverse the current return motion with one owner, without a settling lock or cooldown.
 
-Selected media have a clear, untinted rounded lens, fading and scaling in/out with a short ease-out in either direction. Interrupted transitions retain their current appearance. Side-adjacent selections merge. Diagonal gallery neighbors and unselected holes stay separate. Partial groups retain accessible state without a pane/checkmark. Inset album choices and preserve readable baselines.
+Selected media hover: in one 220 ms ease-out the outline grows, a shadow deepens, and the surface shows the same backdrop region magnified with a slight frost. Content scales with it. Deselection is the same ease-out in reverse, and interruptions continue from the current appearance. Liquid Glass remains for controls.
+
+One uniform scale preserves artwork/outline corner centres. Growth takes at most a quarter of each neighbour gap, capped at 4 dp per side. The tighter axis limits both axes; lifted items never overlap neighbours.
+
+Side-adjacent selections share one hovering outline. Diagonal gallery neighbors and unselected holes stay separate. Partial groups retain accessible state without a pane/checkmark. Inset album choices and preserve readable baselines.
 
 Selection, the current queue occurrence and held drag cards share one item outline. Its corners are concentric with the artwork's, sharing their arc centres. The inset $d$ is the artwork's smaller distance to the item edge, at least 2 dp:
 
@@ -319,25 +323,29 @@ The Add to playlists panel combines covered existing-playlist rows with an iconl
 
 Holding a mutable playlist/queue song selects immediately. Its new action panel waits for release, so continued movement into dragging never flashes it. Floating utility controls never select obscured rows. Existing panels retain their state. Accessibility selection without a pointer shows the panel immediately.
 
-Other items use Select song / Select all songs in their shared menu. The bulk action panel eases/fades above the mini-player over 220 ms, independently of immediate item selection, retaining tabs. Normal collection taps navigate. Song taps toggle membership while selection is active. Use the [shared selection treatment](#materials-and-controls).
+Other items use Select song / Select all songs in their shared menu. The bulk action panel appears and disappears above the mini-player with the shared glass morph, independently of immediate item selection, retaining tabs. Normal collection taps navigate. Song taps toggle membership while selection is active. Use the [shared selection treatment](#materials-and-controls).
 
 Retain source occurrence identities and selection order across routes, tabs, queries, sorting, rotation and backgrounding. Select-all appends in collection order. Reselect appends last. Preserve distinct occurrences for playlists/queues and deduplicate files for editing. Fresh sessions start empty.
 
-Panel: All, Range, count, actions and a divided collapse/close glass pill. Wrap/scroll within a bounded height. Close, mutable-list Back or successful actions exit. Cancel/failure/empty selection retains the mode. Collapsing the panel retains selection. Remove-from-source requires one editable source. No separate selection-basket screen. Playlist chooser marks existing membership accessibly while allowing duplicates.
+The panel is one compact glass pill: close, count, Play next, Add to playlist, More and a divided collapse. More morphs into a menu with Play now, Add to queue, New queue, Edit tags, Remove from the source, Select all and Select range.
+
+Collapsing morphs the same surface into a minimized count pill; tapping it morphs back. Size, foreground and appearance share the interruptible glass spring, honor animation speed and Reduce motion, and immediately release input on outgoing faces.
+
+Close, mutable-list Back or successful actions exit. Cancel/failure/empty selection retains the mode. Collapsing retains selection. Remove-from-source requires one editable source. No separate selection-basket screen. Playlist chooser marks existing membership accessibly while allowing duplicates.
 
 In a complete, manual, unfiltered queue/playlist, hold-drag moves the held occurrence or selected occurrences from that source, preserving their source order even when nonconsecutive. Cross-source selections and filtered views cannot reorder. Applying a saved-order sort does not disable subsequent dragging.
 
-Lift visible selected rows into a shadowed Liquid Glass stack above selection controls/list clipping, sharing its material with Player actions dragging. Each card uses its item's shared outline. The first source-order song is on top. At most two empty glass layers trail it, with a count badge for multiple items.
+Visible selected rows fly from their hover into a stack above selection controls/list clipping. Each card keeps its outline, lift, shadow and carried backdrop region. Joined neighbours part while flying in and rejoin while landing at adjacent destinations. The first source-order song is on top. At most two empty cards trail it, with a count badge for multiple items.
 
 Lifted content retains its actual list/gallery layout and lands on the rendered item bounds. Material and trailing actions crossfade without shrinking the content or jumping at handoff. Track the finger directly. Keep a one-row insertion gap, ease surrounding rows, edge-scroll and smoothly unpack on release.
 
 Playback checkpoints and unrelated refreshes retain an owned contact. Route or source occurrence-order changes cancel it, and commits reject an intervening source-order change.
 
-Hide the action panel throughout dragging/landing. Floating controls share its animated visible occupancy, with an 8 dp gap above the panel, and return above remaining bottom chrome as it leaves. A Liquid Glass foreground X circle remains above the stack in the shared bottom control row.
+While dragging and landing, the panel morphs into its minimized pill and cannot expand. Floating controls share its animated visible occupancy, with an 8 dp gap above the panel, and return above remaining bottom chrome as it leaves. A Liquid Glass foreground X circle remains above the stack in the shared bottom control row.
 
-Hover tints it red with one firm haptic. Leaving gives a lighter tick, honoring system settings. Release there cancels and restores the panel. Other drops, including an unchanged insertion position, finish selection after successful landing.
+Hover tints it red with one firm haptic. Leaving gives a lighter tick, honoring system settings. Release there cancels and morphs the panel back out. Other drops, including an unchanged insertion position, finish selection after successful landing, and the minimized pill eases away.
 
-System interruption or failed persistence restores order, selection and the panel. All landings crossfade into normal rows and preserve playback cursors.
+System interruption or failed persistence restores order, selection and the panel. All landings crossfade into normal rows and preserve playback cursors. A completed move eases the landed rows out of hover.
 
 ## Player and Queue drawer
 

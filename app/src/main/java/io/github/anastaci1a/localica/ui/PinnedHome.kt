@@ -105,7 +105,7 @@ internal fun PinnedHome(library: LibraryUiState, playlists: PlaylistState, pins:
             Text("Pinned", style = MaterialTheme.typography.titleLarge)
             if (pins.isEmpty()) Text("Hold a song, album, or playlist and choose Pin to Home.")
         } }
-        item { SelectionViewport { overscroll -> LazyRow(state = carousel, overscrollEffect = overscroll,
+        item { SelectionViewport(liftEdges = LiftEdges.Vertical) { overscroll -> LazyRow(state = carousel, overscrollEffect = overscroll,
             modifier = Modifier.nestedScroll(HorizontalGestureOwner)
                 .controlScrollParent(carousel, ControlScrollAxis.Horizontal).testTag("home-pins"), contentPadding = PaddingValues(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             items(items, key = { it.key }) { item -> Box {

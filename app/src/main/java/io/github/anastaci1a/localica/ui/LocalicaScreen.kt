@@ -248,7 +248,7 @@ fun LocalicaScreen(
     SideEffect { if (!insideCollection) { browseInk = androidx.compose.ui.graphics.Color.Black; pageBackground = androidx.compose.ui.graphics.Color(0xFFF9F9FB) } }
     val bottomChrome = 8.dp + 72.dp * chromeVisibility
     val selectionPanel = rememberFloatingSelectionPanel(
-        session.panelVisible && !expanded && dragHost.state?.drag == null, settings.reducedMotion)
+        session.panelVisible && !expanded, settings.reducedMotion)
     val browseBottomChrome = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() +
         if (hasPlayer) CompactControlSize + bottomChrome + 8.dp else bottomChrome
     val browseBackdrop = rememberFrostedBackdrop(navigation.route to library.snapshot, !expanded, dark = browseInk == androidx.compose.ui.graphics.Color.White, glassBlur = settings.glass.blur)
@@ -365,9 +365,10 @@ fun LocalicaScreen(
         FloatingSelectionPanel(selectionPanel, Modifier.align(Alignment.BottomCenter)
             .padding(horizontal = 8.dp).padding(bottom = browseBottomChrome)
             .fillMaxWidth().heightIn(max = maxHeight / 2)) {
-            FrostedSurface(shape = Corners.panel) {
-            Column(Modifier.controlVerticalScroll(rememberScrollState())) { SessionSelectionPanel(session, queueController, playlistController, playlist) }
-        } }
+            Column(Modifier.controlVerticalScroll(rememberScrollState())) {
+                SessionSelectionPanel(session, queueController, playlistController, playlist, dragging = dragHost.state?.drag != null)
+            }
+        }
         if (hasPlayer) PlayerSurface(player, expanded, { expanded = it }, settings, progress,
             onToggle, onSeek, onPrevious, onNext, ::openQueue, { expanded = false },
             lyricsOpen, { lyricsOpen = it }, playerTracks.lyrics,
@@ -398,9 +399,9 @@ fun LocalicaScreen(
                 playlist, playlistController, playback.connected, pins, ::pin, reducedMotion = settings.reducedMotion, isPlaying = playback.isPlaying, onOpen = ::openCollection, onMinimize = { queueOpen = false },
                 selectionVisible = queueOpen && expanded, playerOpen = !queueOpen || !expanded,
                 openingRequest = queueOpeningRequest) } } }
-            SelectionPanelVisibility(session.panelVisible && dragHost.state?.drag == null, reducedMotion = settings.reducedMotion) {
+            SelectionPanelVisibility(session.panelVisible, reducedMotion = settings.reducedMotion) {
             Column(Modifier.heightIn(max = queueSelectionMaxHeight).controlVerticalScroll(rememberScrollState())) {
-                SessionSelectionPanel(session, queueController, playlistController, playlist)
+                SessionSelectionPanel(session, queueController, playlistController, playlist, dragging = dragHost.state?.drag != null)
             } }
         }
         } } }
