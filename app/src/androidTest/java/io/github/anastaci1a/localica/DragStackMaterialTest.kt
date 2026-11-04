@@ -100,7 +100,9 @@ class DragStackMaterialTest {
                 compose.runOnIdle {
                     assertTrue(state.begin(entries.first(), entries.take(3).toSet(), state.bounds().getValue(entries.first()).center))
                 }
-                repeat(4) {
+                // Coroutine delays use the Compose clock too. Reach the 200 ms
+                // paused-pointer refresh while pickup is still animating.
+                repeat(14) {
                     compose.mainClock.advanceTimeByFrame()
                     compose.onNodeWithTag("stack-scene").captureToImage()
                 }
@@ -117,11 +119,15 @@ class DragStackMaterialTest {
                     val pixels = image.toPixelMap()
                     val d = image.width / 360f
                     return (0 until (230 * d).toInt()).any { y ->
-                        pixels[(180 * d).toInt(), y].let { it.red > .7f && it.blue > .7f }
+                        pixels[(180 * d).toInt(), y].let { it.red > .7f && it.blue > .7f && it.green < .3f }
                     }
                 }
                 assertTrue("Seed the native cache with the still-visible pickup content", hasPickupContent(requireNotNull(bottom.snapshot)))
-                compose.mainClock.advanceTimeBy(400)
+                // Native readback needs rendered frames, not only virtual animation time.
+                repeat(25) {
+                    compose.mainClock.advanceTimeByFrame()
+                    compose.onNodeWithTag("stack-scene").captureToImage()
+                }
                 compose.mainClock.autoAdvance = true
                 var last: ImageBitmap? = null
                 var stale = true
