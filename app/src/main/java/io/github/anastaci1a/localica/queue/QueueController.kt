@@ -376,6 +376,11 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
             var inserted = QueueEdits.insert(current, if (batch) tracks else listOf(selected), action, if (batch) playlistOrigins else listOf(playlistOrigins.getOrNull(selectedIndex)))
             if (action == SongTap.PlayNow) inserted = inserted.copy(journey = journey(current).select(
                 requireNotNull(inserted.currentEntryId), inserted.entries.map { it.id }))
+            if (action == SongTap.PlayNext) {
+                val existing = current.entries.mapTo(hashSetOf()) { it.id }
+                inserted = inserted.copy(journey = journey(current).playNext(
+                    inserted.entries.filterNot { it.id in existing }.map { it.id }, inserted.entries.map { it.id }))
+            }
             val next = state.value.library.update(inserted)
             if (action == SongTap.PlayNow) saveStartingPlayback(next) { activate(true, seek = true, refreshLocations = false) }
             else { save(next); activate(null) }
