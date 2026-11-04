@@ -335,7 +335,9 @@ Close, mutable-list Back or successful actions exit. Cancel/failure/empty select
 
 In a complete, manual, unfiltered queue/playlist, hold-drag moves the held occurrence or selected occurrences from that source, preserving their source order even when nonconsecutive. Cross-source selections and filtered views cannot reorder. Applying a saved-order sort does not disable subsequent dragging.
 
-Visible selected rows fly from their hover into a stack above selection controls/list clipping. Each card keeps its outline, lift, shadow and carried backdrop region. Joined neighbours part while flying in and rejoin while landing at adjacent destinations. The first source-order song is on top. At most two empty cards trail it, with a count badge for multiple items.
+Visible selected rows fly from their hover into a stack above selection controls/list clipping. Each card keeps its shared outline and lift. Joined neighbours part while flying in and rejoin while landing at adjacent destinations. The first source-order song is on top. At most two empty cards trail it, with a count badge for multiple items.
+
+Equal-sized panes sample the live scene beneath their moving viewports and frost recursively through lower panes. The top pane has the greatest sampling offset. Slight inter-pane shadows separate the layers; the shared outside shadow remains. Queue playback highlighting fades at the pickup location instead of travelling with the stack.
 
 Lifted content retains its actual list/gallery layout and lands on the rendered item bounds. Material and trailing actions crossfade without shrinking the content or jumping at handoff. Track the finger directly. Keep a one-row insertion gap, ease surrounding rows, edge-scroll and smoothly unpack on release.
 
