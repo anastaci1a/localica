@@ -150,6 +150,10 @@ class PlayerArtworkOpticsTest {
                 compose.mainClock.advanceTimeByFrame()
                 val returned = sample("returned")
                 compose.mainClock.advanceTimeBy(InterfaceSettings().motionDuration(550).toLong() + 100)
+                // Only the final endpoint drains outstanding draw ownership. The
+                // motion-entry and return samples above observe their exact frames.
+                compose.mainClock.autoAdvance = true
+                compose.waitForIdle()
                 val settled = sample("blue")
                 if (mixed.red <= .05f || mixed.blue <= .05f) failures += "$prefix did not establish a mixed frame: $mixed"
                 if (abs(moving.blue - mixed.blue) > .18f || abs(moving.red - mixed.red) > .18f)
