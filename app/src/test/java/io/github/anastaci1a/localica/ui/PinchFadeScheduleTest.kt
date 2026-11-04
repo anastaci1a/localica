@@ -1,9 +1,20 @@
 package io.github.anastaci1a.localica.ui
 
+import androidx.compose.ui.geometry.Offset
 import org.junit.Assert.*
 import org.junit.Test
 
 class PinchFadeScheduleTest {
+    @Test fun actualMidpointRemainsFixedDuringRetargetAndResetsForTheNextPreview() {
+        val focus = PinchFadeFocus()
+        val midpoint = Offset(17f, 93f)
+        assertEquals(midpoint, focus.resolve(1, midpoint))
+        assertEquals(midpoint, focus.resolve(1, Offset(200f, 300f)))
+        val next = Offset(44f, 51f)
+        assertEquals(next, focus.resolve(2, next))
+        assertEquals(next, focus.resolve(2, midpoint))
+    }
+
     @Test fun singletonFadesAcrossTheCompleteTransition() {
         val window = pinchFadeWindow(0, 1)
         assertEquals(0f, window.start, 0f)

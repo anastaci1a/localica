@@ -137,6 +137,16 @@ internal fun <T> pinchFadeSchedule(distances: Map<T, Float>): Map<T, PinchFadeWi
         entry.key to pinchFadeWindow(rank, distances.size)
     }.toMap()
 
+/** Drawing-only focus snapshot: re-grabbing a preview must not reorder its fades. */
+internal class PinchFadeFocus {
+    private var generation = -1L
+    private var point = Offset.Zero
+    fun resolve(transaction: Long, midpoint: Offset): Offset {
+        if (generation != transaction) { generation = transaction; point = midpoint }
+        return point
+    }
+}
+
 private data class RetainedPinchPlacement(val item: FrozenBrowseItem, val origin: Offset,
     val targetWidth: Float, val targetHeight: Float, val alpha: Float, val index: Int,
     val geometryProgress: Float)
@@ -172,6 +182,7 @@ internal fun Modifier.pinchRetainedOverlay(motion: BrowsePinchMotion, grid: Lazy
     val graphics = androidx.compose.ui.platform.LocalGraphicsContext.current
     val scope = rememberCoroutineScope()
     val groups = remember { mutableListOf<HoverGroupRenderer>() }
+    val fadeFocus = remember(motion) { PinchFadeFocus() }
     val recordingDensity = androidx.compose.ui.platform.LocalDensity.current
     val direction = androidx.compose.ui.platform.LocalLayoutDirection.current
     val renderer = currentGlassRendererGeneration()
@@ -185,8 +196,9 @@ internal fun Modifier.pinchRetainedOverlay(motion: BrowsePinchMotion, grid: Lazy
         val visible = grid.layoutInfo.visibleItemsInfo
         val p = motion.progress.value.coerceIn(0f, 1f)
         val liveKeys = if (motion.visualSource == null) emptySet() else visible.map { it.key }.toSet()
-        val focus = Offset(motion.bounds[motion.focusKey]?.center?.x ?: motion.viewportWidth / 2f,
-            motion.focusTop.toFloat())
+        val focus = if (motion.visualSource == null) Offset.Zero else fadeFocus.resolve(motion.transaction,
+            motion.gesture?.midpoint ?: Offset(motion.bounds[motion.focusKey]?.center?.x ?: motion.viewportWidth / 2f,
+                motion.focusTop.toFloat()))
         val departures = if (motion.visualSource == null) emptyMap() else pinchFadeSchedule(
             motion.bounds.filterKeys { it !in liveKeys && it in motion.frozen && indices.retainedPinchItemIndex(it) >= 0 }
                 .mapValues { (_, bounds) -> (bounds.center - focus).getDistance() })
