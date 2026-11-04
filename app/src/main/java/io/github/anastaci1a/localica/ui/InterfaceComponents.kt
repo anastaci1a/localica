@@ -19,7 +19,7 @@ internal fun ActionIcon(resource: Int, label: String, enabled: Boolean = true, a
     onLongClickLabel: String? = null, onLongClick: (() -> Unit)? = null, quietInputEnabled: Boolean = true,
     onClick: () -> Unit) {
     val source = LocalFrostedBackdrop.current
-    SideEffect { anchor?.quiet = quiet; anchor?.source = source; anchor?.face = { Icon(painterResource(resource), null, Modifier.size(iconSize)) } }
+    SideEffect { anchor?.quiet = quiet || !glass; if (!glass) anchor?.cornerRadius = null; anchor?.source = source; anchor?.face = { Icon(painterResource(resource), null, Modifier.size(iconSize)) } }
     val modifier = Modifier.size(if (glass) CompactControlSize else 48.dp).then(if (anchor != null) Modifier.glassAnchor(anchor) else Modifier)
     if (quiet) {
         val opacity by animateControlStateFloat(if (enabled) 1f else .38f, enabled, "Quiet action availability")
