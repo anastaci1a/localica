@@ -11,6 +11,22 @@ import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.isSpecified
 import androidx.compose.ui.unit.dp
 
+/** Appearance captured at an action whose dialog is declared in another composition scope.
+ * This carries no geometry: detached children keep their existing presentation. */
+internal class GlassDialogAppearance(private val inkState: State<androidx.compose.ui.graphics.Color>,
+    private val backdropState: State<FrostedBackdrop?>) {
+    val ink get() = inkState.value
+    val backdrop get() = backdropState.value
+}
+internal val LocalGlassDialogAppearance = compositionLocalOf<GlassDialogAppearance?> { null }
+
+@Composable
+internal fun currentGlassDialogAppearance(): GlassDialogAppearance {
+    val ink = rememberUpdatedState(LocalContentColor.current)
+    val backdrop = rememberUpdatedState(LocalModalBackdrop.current ?: LocalFrostedBackdrop.current)
+    return remember { GlassDialogAppearance(ink, backdrop) }
+}
+
 /** Retain closing dialogs even when their conditional caller has left composition. */
 @Stable
 internal class GlassDialogs {
@@ -26,6 +42,7 @@ internal class GlassDialogEntry(val anchor: GlassAnchor, locals: CompositionLoca
     var dark by mutableStateOf(dark)
     var content by mutableStateOf(content)
     var fitContent by mutableStateOf(false)
+    var appearance by mutableStateOf<GlassDialogAppearance?>(null)
 }
 
 internal val LocalGlassDialogs = staticCompositionLocalOf<GlassDialogs?> { null }
@@ -43,8 +60,11 @@ internal fun GlassDialogHost(content: @Composable () -> Unit) {
             // Restore caller locals before creating the window. Dialog installs its own
             // view/focus locals; replacing those with Activity locals breaks keyboard input.
             CompositionLocalProvider(entry.locals) {
-                GlassMorphPopup(entry.mounted, entry.anchor, { if (entry.mounted) entry.dismiss() },
-                    entry.placement, darkOverride = entry.dark, fitContent = entry.fitContent, content = entry.content)
+                CompositionLocalProvider(LocalModalBackdrop provides
+                    (entry.appearance?.backdrop ?: LocalModalBackdrop.current)) {
+                    GlassMorphPopup(entry.mounted, entry.anchor, { if (entry.mounted) entry.dismiss() },
+                        entry.placement, darkOverride = entry.dark, fitContent = entry.fitContent, content = entry.content)
+                }
             }
             LaunchedEffect(entry.mounted, entry.anchor.modalPresent) {
                 if (!entry.mounted && !entry.anchor.modalPresent) host.entries.remove(entry)
@@ -63,23 +83,30 @@ internal fun GlassDialog(onDismiss: () -> Unit, placement: GlassPlacement = Glas
     val host = checkNotNull(LocalGlassDialogs.current) { "Glass dialogs require LocalicaTheme" }
     val trigger = LocalGlassOrigin.current?.takeUnless { placement == GlassPlacement.Page }
     val origin = trigger ?: rememberGlassAnchor()
-    val source = LocalModalBackdrop.current ?: LocalFrostedBackdrop.current ?: host.backdrop
+    val appearance = LocalGlassDialogAppearance.current.takeIf { trigger == null }
+    val source = appearance?.backdrop ?: LocalModalBackdrop.current ?: LocalFrostedBackdrop.current ?: host.backdrop
     val locals = currentCompositionLocalContext
     // Dialog declarations may live outside the artwork theme containing their trigger.
-    // An unanchored window instead follows its current ambient ink, not a remembered seed.
-    val ink = trigger?.ink?.takeIf { it.isSpecified } ?: LocalContentColor.current
+    // Detached callbacks carry their launching scope; ordinary unanchored windows
+    // follow current ambient ink, not a remembered anchor seed.
+    val ink = trigger?.ink?.takeIf { it.isSpecified } ?: appearance?.ink ?: LocalContentColor.current
     val dark = ink.luminance() > .5f
+    val resolvedContent: @Composable () -> Unit = {
+        CompositionLocalProvider(LocalGlassDialogAppearance provides null, content = content)
+    }
     val entry = remember(host, origin, placement) {
         // Conditional callers are disposed at dismissal, while their host entry keeps
         // returning. Reclaim that same animation/window instead of creating a second
         // writer for the trigger's hidden, shadow and expansion state.
         host.entries.lastOrNull { !it.mounted && it.anchor === origin && it.placement == placement }
-            ?: GlassDialogEntry(origin, locals, onDismiss, dark, placement, content)
+            ?: GlassDialogEntry(origin, locals, onDismiss, dark, placement, resolvedContent)
     }
     SideEffect {
         if (trigger == null) origin.ink = ink
         if (origin.source == null) origin.source = source
-        entry.locals = locals; entry.dismiss = onDismiss; entry.dark = dark; entry.content = content
+        entry.locals = locals; entry.dismiss = onDismiss; entry.dark = dark
+        entry.content = resolvedContent
+        entry.appearance = appearance
         entry.fitContent = fitContent
     }
     DisposableEffect(host, entry) {

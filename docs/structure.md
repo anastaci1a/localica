@@ -227,7 +227,7 @@ Edge scrolling uses elapsed frame time. Stack, cancel target and list clipping h
 
 The theme retains modal state/locals through exit. Restore caller locals before creating each window to preserve view/focus ownership. Nested windows sample the completed parent panel. One logical modal stack cancels and quarantines lower windows' native pointer streams, stops registered scroll motion and rejects stale queued flings independently of window recreation or exit drawing.
 
-Pinch and scrollbar requests carry cancellation generations. Geometry restoration remains permitted. Popup foreground and optical tone inherit the explicit trigger's ink, otherwise the current ambient ink. App-drawn scrims replace native dim layers, whose invisible surfaces can still block touches during return.
+Pinch and scrollbar requests carry cancellation generations. Geometry restoration remains permitted. Popup foreground and optical tone inherit explicit trigger ink, then a detached callback's launching appearance, otherwise ambient ink. The callback appearance follows its mounted source and retains the last value after disposal. App-drawn scrims replace native dim layers, whose invisible surfaces can still block touches during return.
 
 Measure glass from foreground content, then fit its padded backdrop independently. Uniformly scale fixed menu layout into the moving viewport. Search keeps its field unscaled and top-aligned, with one opening rectangle animation and captured rendered geometry for reversible closing.
 
