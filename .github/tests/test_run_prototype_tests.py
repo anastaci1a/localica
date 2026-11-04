@@ -678,11 +678,12 @@ class CompatibilityRunnerContract(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder); badging = root/'badging.txt'; manifest = root/'manifest.txt'
             badging.write_text("package: name='"+package+".test' versionCode='0'\n")
+            def block(name, target):
+                return ('E: instrumentation (line=1)\n'
+                        '  A: android:name(0x01010003)="'+name+'"\n'
+                        '  A: android:targetPackage(0x01010021)="'+target+'"\n')
             def check(expected, actual, target=package, copies=1):
-                block = ('E: instrumentation (line=1)\n'
-                         '  A: android:name(0x01010003)="'+actual+'"\n'
-                         '  A: android:targetPackage(0x01010021)="'+target+'"\n')
-                manifest.write_text(block*copies)
+                manifest.write_text(block(actual, target)*copies)
                 return subprocess.run([sys.executable, str(ROOT/'.github/compatibility/check-apk.py'),
                     str(badging), 'test', '1900000001', str(manifest), expected], capture_output=True).returncode
             runners = sorted(self.module().SUPPORTED)
@@ -693,6 +694,19 @@ class CompatibilityRunnerContract(unittest.TestCase):
                 self.assertNotEqual(0, check(runner, runner, copies=0))
                 self.assertNotEqual(0, check(runner, runner, copies=2))
             self.assertNotEqual(0, check('unknown.Runner', 'unknown.Runner'))
+            runner = runners[0]
+            primary = block(runner, package)
+            def run(text):
+                manifest.write_text(text)
+                return subprocess.run([sys.executable, str(ROOT/'.github/compatibility/check-apk.py'),
+                    str(badging), 'test', '1900000001', str(manifest), runner], capture_output=True).returncode
+            extra = block('io.github.anastaci1a.localica.StartupProcessDiagnostics', package+'.test')
+            self.assertEqual(0, run(primary+extra))
+            self.assertEqual(0, run(extra+primary))
+            self.assertNotEqual(0, run(primary+extra+extra))
+            self.assertNotEqual(0, run(primary+block('io.github.anastaci1a.localica.StartupProcessDiagnostics', package)))
+            self.assertNotEqual(0, run(primary+block('other.Controller', package+'.test')))
+            self.assertNotEqual(0, run(extra))
             badging.write_text("package: name='wrong.package.test' versionCode='0'\n")
             self.assertNotEqual(0, check(runners[0], runners[0]))
 
