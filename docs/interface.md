@@ -20,6 +20,8 @@ Corner tokens: small art 8 dp, cards 16, inputs/menus 20, large art 24, panels 2
 
 Scrollable popup bodies fade content only at edges hiding more content, fading the affordance away as each boundary is reached. Bodies that fit have no edge fade. Keep action-menu gutters inside the scroll viewport so child shadows reach the rounded shell without straight inset cutoffs.
 
+Popup rim highlights follow curved corners instead of stretching across flat edges. The shared finish blends continuously from the triggering control.
+
 Keep the shell and fixed title/footer outside the body mask. Oversized chrome may scroll when necessary to keep actions reachable.
 
 ### Motion and access
