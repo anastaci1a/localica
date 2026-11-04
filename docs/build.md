@@ -156,7 +156,13 @@ On disposable GitHub-hosted API 26 emulators, the native runner temporarily disa
 
 Distributed APKs are the non-debuggable, R8-minified `distribution` variant. It keeps the `.debug` application ID and development key for in-place updates, and the artifact keeps the `app-debug.apk` name. CI and releases fail if the manifest is debuggable. Separate production signing is not configured.
 
-Device tests and compatibility run the `debug` variant. R8 keeps all of jaudiotagger because it loads classes by name.
+Device tests and compatibility run the `debug` variant. R8 keeps all of jaudiotagger because it loads classes by name. The diagnostics export needs no keep rules: its `FileProvider` is manifest-declared and the recorder is referenced directly.
+
+### Capturing a rare freeze without adb
+
+Use any build, including the R8 `distribution` APK. After a freeze, wait at least 2 s so the watchdog records the stuck state, then recover with the Sort/View pill or Back.
+
+Open **More → Settings → About and licenses → Export diagnostics**, tap **Export** and share the text file with the developer. Export before closing the app, because the buffer lives only for the current process. Debug builds also log to `adb logcat -d -s PinchDiagnostics:* CollectionHeaderAnchor:*`.
 
 The `distribution-smoke` job installs the exact published APK on API 26 and 36, waits for the main activity, then runs 600 seeded monkey events. It fails on crashes, ANRs, class-linkage errors or a dead process, and uploads the logcat.
 
