@@ -30,6 +30,10 @@ import androidx.test.uiautomator.UiDevice
 import io.github.anastaci1a.localica.ui.*
 import org.junit.Assert.*
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.supervisorScope
 import org.junit.After
 import org.junit.Before
 import org.junit.Rule
@@ -488,9 +492,21 @@ class SearchImeMotionTest {
         }
     }
 
-    private fun nativeDismissal(action: () -> Unit) {
-        action()
-        closed()
+    private fun nativeDismissal(action: () -> Unit) = runBlocking {
+        // Android input/IME use wall time; our return spring uses the paused Compose clock.
+        // Join the native request only after driving its return, never before its first frame.
+        supervisorScope {
+            val input = async(Dispatchers.IO) { action() }
+            var failure: Throwable? = null
+            try { closed() } catch (caught: Throwable) { failure = caught }
+            finally {
+                compose.runOnUiThread { nativeActionReturnGate?.countDown() }
+                try { input.await() } catch (caught: Throwable) {
+                    if (failure == null) failure = caught else failure.addSuppressed(caught)
+                }
+            }
+            failure?.let { throw it }
+        }
     }
 
     @Test fun nativeInputCompletionDoesNotStarveTheFirstPlacedReturnFrame() =
