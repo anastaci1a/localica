@@ -295,3 +295,4 @@ io.github.anastaci1a.localica.PlayerArtworkOpticsTest
 
 io.github.anastaci1a.localica.DragStackMaterialTest
 io.github.anastaci1a.localica.DragStackPlaybackFadeTest
+io.github.anastaci1a.localica.DragStackFrameTimeTest
