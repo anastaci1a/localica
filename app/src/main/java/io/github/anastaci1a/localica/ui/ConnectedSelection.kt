@@ -46,6 +46,8 @@ internal class SelectionEntry {
     /** The cell's own fades (entry sweep, drag handoff) that its in-place drawing would get. */
     var alpha: () -> Float = { 1f }
     var recorded = false
+    /** This item's last drawn lift in its own coordinates while it hovers; null at rest (#554). */
+    var presented: HoverGeometry? = null
 }
 
 @Stable internal class SelectionScene {
@@ -153,6 +155,7 @@ internal fun ConnectedSelectionHost(modifier: Modifier = Modifier, contentDrawin
                 hoverGeometry(item.rest, hoverRoom(item.rest.bounds, others, viewport, liftEdges, cap), item.progress)
             }
             hovering.forEachIndexed { index, item ->
+                item.entry.presented = liveLifts[index].translate(-item.at)
                 item.entry.itemKey?.let { scene.hover[it] = liveLifts[index].translate(-item.at); scene.viewportHover[it] = liveLifts[index] }
             }
             val lifts = liveLifts + scene.retainedHover.map { it.first }
@@ -362,12 +365,13 @@ internal fun connectedSelectionPath(regions: List<SelectionRegion>, gap: Float,
 internal fun Modifier.selectionLens(isSelected: Boolean, partial: Boolean,
     itemKey: Any? = null, outline: ((Size, LayoutDirection) -> MediaItemOutline?)? = null,
     handle: SelectionHoverHandle? = null, alpha: () -> Float = { 1f },
-    visualSize: (Size) -> Size = { it }): Modifier {
+    anchor: GlassAnchor? = null, visualSize: (Size) -> Size = { it }): Modifier {
     val scene = LocalSelectionScene.current
     val direction = LocalLayoutDirection.current
     val token = remember { Any() }
     val entry = remember { SelectionEntry() }
     val layer = androidx.compose.ui.graphics.rememberGraphicsLayer()
+    val view = androidx.compose.ui.platform.LocalView.current
     val visibility = androidx.compose.animation.core.animateFloatAsState(if (isSelected && !partial) 1f else 0f,
         hoverMotionSpec(LocalReducedMotion.current), label = "Selection hover")
     SideEffect {
@@ -379,6 +383,9 @@ internal fun Modifier.selectionLens(isSelected: Boolean, partial: Boolean,
         entry.layer = layer
         entry.alpha = alpha
         handle?.progress = { visibility.value }
+        // Popups homed on this item follow its lift (#554), however the item is keyed.
+        anchor?.presentation = { entry.presented?.let { lift -> entry.coordinates?.takeIf { it.isAttached }
+            ?.let { GlassLift(lift.scale, it.backdropPosition(view) + lift.pivot) } } }
         val selected = isSelected && !partial
         if (entry.selected != selected) { entry.selected = selected; androidx.compose.runtime.snapshots.Snapshot.withoutReadObservation { scene?.placement = (scene?.placement ?: 0) + 1 } }
         // Registration is identity-stable; rewrite only a missing or replaced entry.
@@ -396,7 +403,7 @@ internal fun Modifier.selectionLens(isSelected: Boolean, partial: Boolean,
         // A retained child display list can otherwise acknowledge its recording a frame late.
         val hovering = scene != null && (entry.selected || visibility.value > 0f)
         if (!hovering) {
-            entry.recorded = false
+            entry.recorded = false; entry.presented = null
             drawContent()
             return@drawWithContent
         }
