@@ -28,9 +28,15 @@ import kotlin.math.abs
 class PlayerBackdropTest {
     @get:Rule val compose = createComposeRule()
 
-    @Test fun coverColorsContinueBelowTheArtworkWithoutAFlatBand() {
+    @Test fun coverColorsContinueBelowTheArtworkWithoutAFlatBand() = checkBackdrop(1)
+
+    @Test fun repeatedColdArtworkLoadsRetainTheBackdrop() = checkBackdrop(40)
+
+    private fun checkBackdrop(repeats: Int) {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
+        val output = InstrumentationRegistry.getArguments().getString("additionalTestOutputDir")
+            ?.let(::File) ?: context.getExternalFilesDir(null)!!
         val audio = File(context.cacheDir, "player-wash.mp3")
         val cover = Bitmap.createBitmap(384, 384, Bitmap.Config.ARGB_8888)
         Canvas(cover).apply {
@@ -49,9 +55,12 @@ class PlayerBackdropTest {
             }.apply { binaryData = bytes; mimeType = "image/png"; width = 384; height = 384; pictureType = 3 }); commit() }
             ArtworkCache.invalidate()
             val state = PlaybackState(connected = true, trackUri = audio.toURI().toString(), title = "Color study", artist = "Localica", durationMs = 180000)
-            compose.setContent { LocalicaTheme { BoxWithConstraints(Modifier.fillMaxSize()) {
+            val generation = mutableIntStateOf(0)
+            compose.setContent { key(generation.intValue) { LocalicaTheme { BoxWithConstraints(Modifier.fillMaxSize()) {
                 PlayerSurface(state, true, {}, InterfaceSettings(reducedMotion = true), remember { Animatable(1f) }, {}, {}, {}, {}, {}, {})
-            } } }
+            } } } }
+            repeat(repeats) { iteration ->
+            if (iteration > 0) compose.runOnIdle { ArtworkCache.invalidate(); generation.intValue++ }
             val player = compose.onNodeWithTag("player-surface")
             // Artwork decoding and background filtering happen outside Compose's idle clock.
             var attempt = 0
@@ -62,18 +71,20 @@ class PlayerBackdropTest {
                 val art = compose.onNodeWithTag("player-artwork").fetchSemanticsNode().boundsInRoot
                 val y = (art.bottom - bounds.top + 12).toInt().coerceIn(0, pixels.height - 1)
                 val wash = pixels[pixels.width / 8, y]
-                android.util.Log.i("PlayerBackdropProbe", "attempt=${++attempt} clock=${compose.mainClock.currentTime} center=$c wash=$wash bounds=$bounds art=$art prepared=${PlayerVisualCache.peek(state.trackUri!!)}")
+                android.util.Log.i("PlayerBackdropProbe", "iteration=$iteration attempt=${++attempt} clock=${compose.mainClock.currentTime} center=$c wash=$wash bounds=$bounds art=$art prepared=${PlayerVisualCache.peek(state.trackUri!!)}")
                 c.blue > c.red * 1.4f && wash.red > wash.blue * 1.4f
             } } catch (failure: Throwable) {
                 player.captureToImage().asAndroidBitmap().let { bitmap ->
-                    File(context.getExternalFilesDir(null), "player-backdrop-timeout.png").outputStream().use {
+                    output.mkdirs()
+                    File(output, "player-backdrop-timeout.png").outputStream().use {
                         bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)
                     }
                 }
                 throw failure
             }
             val image = player.captureToImage()
-            File(context.getExternalFilesDir(null), "player-artwork-wash.png").outputStream().use {
+            output.mkdirs()
+            File(output, "player-artwork-wash.png").outputStream().use {
                 image.asAndroidBitmap().compress(Bitmap.CompressFormat.PNG, 100, it)
             }
             val pixels = image.toPixelMap()
@@ -92,6 +103,7 @@ class PlayerBackdropTest {
             val edge = (art.bottom - bounds.top).toInt()
             val above = pixels[x, edge - 2]; val below = pixels[x, edge + 2]
             assertTrue("No visible color seam at the cover boundary", abs(above.red - below.red) + abs(above.green - below.green) + abs(above.blue - below.blue) < 0.08f)
+            }
         } finally { audio.delete(); cover.recycle(); ArtworkCache.invalidate() }
     }
 }
