@@ -200,6 +200,18 @@ internal class BrowsePinchMotion {
         tracking?.cancel()
         capture = null; tracking = null; settling = null
     }
+    /** Debug-build stuck-state report (#535 b); reads state only. */
+    fun diagnostics(): String {
+        fun BrowseStyle?.name() = this?.let { "${it.presentation}/${it.listSize}/${it.itemsPerRow}" }
+        val request = gesture
+        return "transaction=$transaction source=${source.name()} target=${target.name()} progress=${progress.value} " +
+            "held=$held capturing=$capturing readbackPending=$readbackPending destinationReady=$destinationReady " +
+            "committed=$committed takeover=$takeover releaseTarget=$releaseTarget headerless=$headerless " +
+            "capture=${capture?.isActive} settling=${settling?.isActive} focus=$focusKey@$focusTop edge=$focusEdge " +
+            "gesture=${request?.let { "pending=${it.pending} released=${it.released} cancelled=${it.cancelled} " +
+                "retargeted=${it.retargeted} travel=${it.travel} generation=${it.generation} finished=${it.finished.isCompleted}" }} " +
+            "header=[${activeHeader?.diagnostics()}]"
+    }
     fun dispose() {
         disposed = true
         cancelGestures()
@@ -268,6 +280,13 @@ internal fun pinchContentTranslation(sourceStart: Float, targetStart: Float,
     (sourceStart - targetStart + sourceInset - targetInset) * (1f - progress.coerceIn(0f, 1f))
 
 /** Linear finger distance; returning to the starting span restores the source. */
+/** Stuck-transaction reports (#535 b) run only in debuggable builds. */
+internal const val PinchDiagnosticsTag = "PinchDiagnostics"
+@Composable
+internal fun pinchDiagnosticsEnabled(): Boolean {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    return remember(context) { context.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0 }
+}
 internal const val PinchCatchUpMillis = 100f
 private const val PinchFrameNanos = 16_666_667L
 
@@ -337,6 +356,7 @@ internal fun Modifier.browsePinch(enabled: Boolean, motion: BrowsePinchMotion, s
     val artwork = LocalBrowseArtwork.current
     val layoutDirection = androidx.compose.ui.platform.LocalLayoutDirection.current
     val currentStyle by rememberUpdatedState(style)
+    val diagnostics = pinchDiagnosticsEnabled()
     suspend fun restoreHeaderSource(generation: Long, source: BrowseStyle) {
         val header = motion.activeHeader ?: return
         if (!motion.owns(generation)) return
@@ -349,6 +369,8 @@ internal fun Modifier.browsePinch(enabled: Boolean, motion: BrowsePinchMotion, s
         header.awaitHandoff()
     }
     OnModalGestureCancellation {
+        if (diagnostics && (motion.source != null || motion.gesture != null))
+            android.util.Log.i(PinchDiagnosticsTag, "modal-cancellation ${motion.diagnostics()}")
         motion.cancelGestures()
         val source = motion.source
         if (source != null) {
