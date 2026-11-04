@@ -110,14 +110,19 @@ class GlassMenuForegroundTest {
     @Test fun lightParentInkSurvivesDetachedChildDeclaration() = verifyDetached(true)
     @Test fun darkParentInkSurvivesDetachedChildDeclaration() = verifyDetached(false)
 
-    private fun verifyDetached(light: Boolean) {
+    @Test fun detachedChildFollowsLightToDarkParentAndReturn() = verifyDetached(true, changeParent = true)
+    @Test fun detachedChildFollowsDarkToLightParentAndReturn() = verifyDetached(false, changeParent = true)
+
+    private fun verifyDetached(light: Boolean, changeParent: Boolean = false) {
         var appearance by mutableStateOf<GlassDialogAppearance?>(null)
         var child by mutableStateOf(false)
+        var parentLight by mutableStateOf(light)
+        lateinit var childView: View
         var observed: Triple<Color, Color, Boolean>? = null
         compose.setContent { LocalicaTheme {
             // The root can still display artwork with the opposite polarity from Settings.
             GlassPanelTheme(!light) {
-                GlassPanelTheme(light) {
+                GlassPanelTheme(parentLight) {
                     GlassDialog({}) {
                         Column {
                             Text("Parent settings")
@@ -130,24 +135,40 @@ class GlassMenuForegroundTest {
                 }
                 // Mirrors the root-owned child reached through the Settings callback.
                 if (child) CompositionLocalProvider(LocalGlassDialogAppearance provides appearance) {
-                    GlassAlertDialog({ child = false }, title = { Text("Child actions") }, text = {
+                    GlassAlertDialog({ child = false }, title = { Text("Child actions", Modifier.testTag("detached-child-title")) }, text = {
+                        val view = LocalView.current
                         val ink = LocalContentColor.current
                         val theme = MaterialTheme.colorScheme.onSurface
                         val dark = LocalFrostedBackdrop.current?.dark == true
-                        SideEffect { observed = Triple(ink, theme, dark) }
+                        SideEffect { observed = Triple(ink, theme, dark); childView = view }
                         ActionTextButton({}, enabled = false) { Text("Unavailable action") }
                     }, confirmButton = { ActionTextButton({ child = false }) { Text("Return to settings") } })
                 }
             }
         } }
+        fun assertAppearance(expected: Boolean) {
+            compose.runOnIdle {
+                val actual = requireNotNull(observed)
+                assertEquals("Child content keeps the launching parent ink", expected, actual.first.luminance() > .5f)
+                assertEquals("Child theme agrees", expected, actual.second.luminance() > .5f)
+                assertEquals("Child material agrees", expected, actual.third)
+            }
+            compose.waitUntil(5000) {
+                val pixels = capturePopupPixels(compose, compose.onNodeWithTag("detached-child-title")) { childView }
+                (0 until pixels.height).sumOf { y -> (0 until pixels.width).count { x ->
+                    val color = pixels[x, y]
+                    if (expected) color.red > .85f && color.green > .85f && color.blue > .85f
+                    else color.red < .2f && color.green < .2f && color.blue < .2f
+                } } > 12
+            }
+        }
         repeat(2) {
             compose.onNodeWithText("Customize player actions").performClick()
             compose.onNodeWithText("Child actions").assertIsDisplayed()
-            compose.runOnIdle {
-                val actual = requireNotNull(observed)
-                assertEquals("Child content keeps the launching parent ink", light, actual.first.luminance() > .5f)
-                assertEquals("Child theme agrees", light, actual.second.luminance() > .5f)
-                assertEquals("Child material agrees", light, actual.third)
+            assertAppearance(parentLight)
+            if (changeParent) {
+                compose.runOnIdle { parentLight = !parentLight }
+                assertAppearance(parentLight)
             }
             compose.onNodeWithText("Unavailable action").assertIsNotEnabled()
             compose.onNodeWithText("Return to settings").performClick()
