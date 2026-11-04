@@ -17,6 +17,7 @@ This is an optimized build (not debuggable, minified with R8, with a baseline pr
 - Legacy control drawing reuses its bitmaps instead of allocating new ones every frame, which reduces stutter on older devices.
 - Updated the Compose UI libraries (BOM 2026.03.01), with fixes for the behaviour changes it required.
 - Pinch handoff guards: a normal finish no longer runs the abandon path, and a zero-size cell is not drawn.
+- A library refresh during a collection pinch no longer leaves later pinches stuck.
 - MP3 tracks play back to back without the short gap on Android 8's built-in MP3 decoder.
 - Settings, the scanner and the exit dialog take their colors from the current artwork theme, and dialogs keep the backdrop behind them.
 - Large density titles can use two lines, and Small density items are 40 dp tall again.
