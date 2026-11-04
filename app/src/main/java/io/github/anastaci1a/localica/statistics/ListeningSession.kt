@@ -25,15 +25,19 @@ class ListeningSession(
     private var editVisit: String? = null
     private var editing = false
     private var nativePlaying = false
+    private var nativeSourcePresent = false
     private val counter = ListeningCounter { record(it, requireNotNull(identity).event) }
 
     fun update(next: ListeningSource?, visit: String?, durationMs: Long?, playing: Boolean, restart: Boolean = false) {
         val at = now()
         nativePlaying = playing
-        if (next == null && editing && identity?.visit == editVisit) {
+        nativeSourcePresent = next != null
+        // A failed/deferred native restore can outlive the writer lease. Only this held visit survives it.
+        if (next == null && editVisit != null && identity?.visit == editVisit) {
             counter.update(at, source, duration, false)
             return
         }
+        if (next != null && !editing) editVisit = null
         counter.sample(at)
         val key = if (next == null) null else visit ?: next.occurrenceId
         val changed = key != identity?.visit || (source != null && next != source) || restart
@@ -47,7 +51,11 @@ class ListeningSession(
     }
 
     /** Detaching a service excludes its absence without ending the app-owned traversal. */
-    fun detach() { nativePlaying = false; counter.update(now(), source, duration, false) }
+    fun detach() {
+        nativePlaying = false
+        nativeSourcePresent = false
+        counter.update(now(), source, duration, false)
+    }
 
     override fun clearTraversal() {
         editing = false
@@ -65,8 +73,12 @@ class ListeningSession(
     override fun finishEdit(restoredVisit: String?) {
         if (!editing) return
         editing = false
-        editVisit = null
-        if (identity?.visit != restoredVisit) update(null, null, null, false)
-        else counter.update(now(), source, duration, nativePlaying)
+        if (identity?.visit != restoredVisit) {
+            editVisit = null
+            update(null, null, null, false)
+        } else {
+            if (nativeSourcePresent) editVisit = null
+            counter.update(now(), source, duration, nativePlaying)
+        }
     }
 }

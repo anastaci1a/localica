@@ -35,8 +35,9 @@ class PlaybackStatisticsLifetimeTest {
         assertEquals(1, plays.size)
         // Explicit restart at zero creates another qualification, even for the same queue visit.
         main { player.seekTo(2000) }
-        await { player.currentPosition >= 2000 }
+        await { player.isPlaying && player.currentPosition >= 2000 }
         main { player.seekTo(0) }
+        await { player.isPlaying && player.currentPosition < 2000 }
         advance(30_000)
         assertEquals(2, plays.size)
     }
@@ -44,6 +45,13 @@ class PlaybackStatisticsLifetimeTest {
     @Test fun serviceReplacementDuringEditRetainsUnqualifiedPartialTime() = fixture {
         advance(20_000)
         edit(recreate = true)
+        advance(10_000)
+        assertEquals(1, plays.size)
+    }
+
+    @Test fun delayedNativeRestorationAfterEditReleaseKeepsPartialListening() = fixture {
+        advance(20_000)
+        edit(delayedRestore = true)
         advance(10_000)
         assertEquals(1, plays.size)
     }
@@ -99,7 +107,7 @@ class PlaybackStatisticsLifetimeTest {
             time += milliseconds
             observer.onIsPlayingChanged(player.isPlaying)
         }
-        fun edit(recreate: Boolean = false) {
+        fun edit(recreate: Boolean = false, delayedRestore: Boolean = false) {
             var position = 0L
             main {
                 position = player.currentPosition
@@ -109,6 +117,7 @@ class PlaybackStatisticsLifetimeTest {
             await { player.currentMediaItem == null }
             main {
                 if (recreate) { observer.close(); player.release(); createPlayer() }
+                if (delayedRestore) session.finishEdit("visit")
                 time += 100_000
                 observer.onIsPlayingChanged(false)
                 item = item.buildUpon().setMediaMetadata(item.mediaMetadata.buildUpon().setTitle("After edit").build()).build()

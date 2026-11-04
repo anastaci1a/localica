@@ -146,4 +146,25 @@ class ListeningEditLifetimeTest {
         assertEquals(2, f.plays.size)
     }
 
+    @Test fun delayedNativeRestorationAfterLeaseReleaseRetainsPartialAndQualifiedState() {
+        for (heard in listOf(20_000L, 30_000L)) {
+            val f = Fixture()
+            val session = f.session()
+            session.update(source, "visit", 180_000, true)
+            f.time = heard
+            session.suspendForEdit()
+            session.update(null, null, null, false)
+            session.finishEdit("visit")
+            f.time += 100_000
+            session.update(null, null, null, false)
+            session.update(source, "visit", 180_000, true)
+            f.time += 30_000 - heard
+            session.update(source, "visit", 180_000, true)
+            assertEquals(1, f.plays.size)
+            f.time += 30_000
+            session.update(source, "visit", 180_000, true)
+            assertEquals(1, f.plays.size)
+        }
+    }
+
 }
