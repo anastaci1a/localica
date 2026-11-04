@@ -45,7 +45,7 @@ class PlaylistSelectionPlacementTest {
         val route = BrowseRoute(MainTab.Playlists)
         val preferences = BrowsePreferences(context)
         val previous = preferences.read(route)
-        val frames = SelectorPlacementFrames(compose)
+        val frames = SelectorPlacementFrames(compose, outlineVerticalInsetDp = 4f)
         lateinit var scope: CoroutineScope
         lateinit var source: PlaylistSelectionDrawSource
         val playlists = (0..39).map { ManualPlaylist(id = "p$it", name = "Playlist ${it.toString().padStart(2, '0')}") }
@@ -126,12 +126,14 @@ internal fun playlistPlacement(source: PlaylistSelectionDrawSource): SelectorDra
     val info = source.state.layoutInfo
     val content = source.content.positionInRoot()
     val width = source.content.size.width.toFloat()
+    val sidePadding = 6f * androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().targetContext.resources.displayMetrics.density
     val layout = SelectorLayout(source.viewport.boundsInRoot(),
         source.state.firstVisibleItemIndex to source.state.firstVisibleItemScrollOffset,
         source.chosen.toSet(), info.visibleItemsInfo.map { item ->
             val key = item.key as String
             val top = content.y + info.beforeContentPadding + item.offset
-            SelectorPlacedItem(key, Rect(content.x, top, content.x + width, top + item.size),
+            // The chooser list keeps 6 dp of side room for hover (#533).
+            SelectorPlacedItem(key, Rect(content.x + sidePadding, top, content.x + width - sidePadding, top + item.size),
                 source.rows[key]?.takeIf { it.isAttached }?.let { Rect(it.positionInRoot(), Size(it.size.width.toFloat(), it.size.height.toFloat())) })
         }, source.state.isScrollInProgress)
     selectorDraw(source.scene, source.viewport, layout, source.hostDraws())
@@ -150,7 +152,8 @@ internal fun selectorDraw(scene: SelectionScene, viewport: LayoutCoordinates, la
 
 /** A content-draw witness inside the real shared host/overscroll. This reports its
  * submitted region geometry, not physical pixels or a completed GPU presentation. */
-internal class SelectorPlacementFrames(private val compose: ComposeContentTestRule) {
+internal class SelectorPlacementFrames(private val compose: ComposeContentTestRule,
+    private val outlineVerticalInsetDp: Float = 0f) {
     var checking = false
     var departing = emptySet<String>()
     private val draws = mutableListOf<Triple<SelectorDraw, Set<String>, Boolean>>()
@@ -231,10 +234,15 @@ internal class SelectorPlacementFrames(private val compose: ComposeContentTestRu
             if (item.key in draw.layout.chosen || item.key in fading) {
                 assertTrue("Visibility remains bounded", v in 0f..1f)
                 if (v > 0f) {
-                    val scale = .92f + .08f * v
-                    val dx = placed.width * (1f - scale) / 2f
-                    val dy = placed.height * (1f - scale) / 2f
-                    val clipped = Rect(placed.left + dx, placed.top + dy, placed.right - dx, placed.bottom - dy).intersect(draw.layout.viewport)
+                    // Apply each surface's shared outline inset before calculating hover growth.
+                    // Hover (#533) grows it by a quarter of the gap to its neighbours (none
+                    // horizontally: half the 6 dp side room), scaled by the eased progress.
+                    val density = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().targetContext.resources.displayMetrics.density
+                    val outline = Rect(placed.left, placed.top + outlineVerticalInsetDp * density, placed.right, placed.bottom - outlineVerticalInsetDp * density)
+                    val neighbours = draw.layout.items.mapNotNull { it.placed }.map { Rect(it.left, it.top + outlineVerticalInsetDp * density, it.right, it.bottom - outlineVerticalInsetDp * density) }
+                    val room = hoverRoom(outline, neighbours, draw.layout.viewport, LiftEdges.Horizontal, 4f * density)
+                    val lifted = hoverGeometry(MediaItemOutline(outline, 0f), room, v).lifted.bounds
+                    val clipped = lifted.intersect(draw.layout.viewport)
                     if (!clipped.isEmpty) expected += clipped
                 }
             }

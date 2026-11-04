@@ -612,6 +612,9 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     }
     BindSelectionScope(session, route.collection, result.rows, selectionVisible && !localSearchOpen)
     val reorder = remember(route.key) { SongDragState(gridState, scrollScope) }
+    // The selection host publishes hover lifts; a drag starts its cards from them (#533).
+    val selectionScene = remember(route.key) { SelectionScene() }
+    SideEffect { reorder.hoverLift = { key -> selectionScene.hover[key] }; reorder.hoverBacking = backdropBacking }
     val dragHost = LocalSongDragHost.current
     val floatingControlClearance = if (route.collection?.kind == MediaKind.Queue) 12.dp else 0.dp
     SideEffect {
@@ -882,7 +885,8 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                 } else Modifier)
                 .then(if (maskedBackdrop && viewportBackdrop != null) Modifier.browseBackdropMaskWitness(backdropScene, viewportBackdrop) else Modifier),
                 contentDrawing = Modifier.onPlaced { pinchHeader?.viewport = it }
-                    .collectionPinchOverlay(pinchHeader).pinchRetainedOverlay(pinchMotion, gridState, pinchIndices)) { overscroll ->
+                    .collectionPinchOverlay(pinchHeader).pinchRetainedOverlay(pinchMotion, gridState, pinchIndices, selectionScene),
+                scene = selectionScene) { overscroll ->
             LazyVerticalGrid(state = gridState, overscrollEffect = overscroll, columns = GridCells.Fixed(columns), modifier = (if (popupDismiss != null) Modifier.fillMaxWidth() else Modifier.fillMaxSize())
                 .then(if (showSearchPill) searchSlotGridLayout else Modifier)
                 .longScrollFade(gridState)
@@ -1000,6 +1004,9 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                         // Placement callbacks need not repeat for a re-keyed owner; register the
                         // last placed coordinates whenever this row's key or drag owner changes.
                         val cellCoordinates = remember { arrayOfNulls<androidx.compose.ui.layout.LayoutCoordinates>(1) }
+                        // One measured outline (#532) for this cell's frost and selection.
+                        val itemOutline = remember { MediaItemOutlineHolder() }
+                        val hover = remember { SelectionHoverHandle() }
                         DisposableEffect(item.key, reorder) {
                             cellCoordinates[0]?.let { reorder.itemCoordinates[item.key] = it }
                             onDispose { reorder.itemCoordinates.remove(item.key) }
@@ -1059,13 +1066,19 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                                     (origin.y - with(density) { (if (showFilters || showSearchPill) pillSlotHeight else 0.dp).toPx() }) / density.density)
                             })
                             // Frost is redrawn separately from frozen content so its
-                            // corners stay identical to selection during pinch.
-                            .currentSongHighlight(current, MaterialTheme.colorScheme.primary) { size ->
-                                pinchMotion.highlightSize(item.key, itemIndex, size)
-                            }.retainPinchItem(item.key, pinchMotion, MaterialTheme.colorScheme.primary.takeIf { current })
-                            .selectionLens(selectedCount > 0, partiallySelected) { size ->
+                            // corners stay identical to selection during pinch. While the
+                            // row hovers (#533) the same frost is drawn inside its lifted layer.
+                            .currentSongHighlight(current, MaterialTheme.colorScheme.primary, { _, _ -> itemOutline.value },
+                                visible = { hover.progress() <= 0f }) { size ->
                                 pinchMotion.highlightSize(item.key, itemIndex, size)
                             }
+                            .selectionLens(selectedCount > 0, partiallySelected, itemKey = item.key, outline = { _, _ -> itemOutline.value },
+                                handle = hover, alpha = { pinchMotion.itemAlpha[item.key] ?: 1f }) { size ->
+                                pinchMotion.highlightSize(item.key, itemIndex, size)
+                            }
+                            .currentSongHighlight(current, MaterialTheme.colorScheme.primary, { _, _ -> itemOutline.value },
+                                visible = { hover.progress() > 0f })
+                            .retainPinchItem(item.key, pinchMotion, MaterialTheme.colorScheme.primary.takeIf { current })
                             .then(if (pinchMotion.visualSource == null) Modifier.clip(Corners.card) else Modifier)
                             .testTag("media-${item.key}").combinedClickable(
                             enabled = !queryPending && (item.row == null || enabled),
@@ -1078,7 +1091,8 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                             BrowseItemLayout(item, displayedStyle, cellGeometry, this@LookaheadScope, reducedMotion, itemMenu,
                                 showInformation = popupDismiss == null, inheritedInformation = inheritedInformation, itemIndex = itemIndex,
                                 loadingReveal = loadingCell, artistOnlyLoading = artistOnlyLoading, mutablePosition = mutablePositions[item.key],
-                                trackNumber = if (route.collection?.kind == MediaKind.Album) item.row?.track?.trackNumber?.toString() ?: (itemIndex + 1).toString() else null, pinch = pinchMotion, artworkAnchor = menuAnchor)
+                                trackNumber = if (route.collection?.kind == MediaKind.Album) item.row?.track?.trackNumber?.toString() ?: (itemIndex + 1).toString() else null, pinch = pinchMotion, artworkAnchor = menuAnchor,
+                                outline = itemOutline)
                         }
 
                     }
@@ -1182,8 +1196,8 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
             }
         }
         }
-        if (LocalSessionSelection.current == null) SelectionPanelVisibility(session.panelVisible && reorder.drag == null, reducedMotion = reducedMotion) {
-            SessionSelectionPanel(session, queues, playlistController, playlists)
+        if (LocalSessionSelection.current == null) SelectionPanelVisibility(session.panelVisible, reducedMotion = reducedMotion) {
+            SessionSelectionPanel(session, queues, playlistController, playlists, dragging = reorder.drag != null)
         }
     }
 

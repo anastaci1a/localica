@@ -54,7 +54,7 @@ class HomeSelectionTest {
         pin("C").assertIsNotSelected().performClick().assertIsSelected()
         compose.onNodeWithTag("home-pins").performScrollToNode(hasTestTag("pin-E"))
         pin("E").performClick().assertIsSelected()
-        compose.onNodeWithText("Range").performClick()
+        compose.selectionMenuAction("Select range")
         compose.runOnIdle {
             assertEquals(listOf("entry-A", "C", "E", "D"), session.entries.map { it.row.id })
             assertEquals(source, session.entries.first().source)
@@ -63,7 +63,7 @@ class HomeSelectionTest {
         }
         compose.onNodeWithTag("home-pins").performScrollToNode(hasTestTag("pin-D"))
         pin("D").performClick().assertIsNotSelected()
-        compose.onNodeWithText("All", substring = false).performClick()
+        compose.selectionMenuAction("Select all")
         pin("D").assertIsSelected()
         compose.runOnIdle { assertEquals(4, session.entries.size); assertFalse(session.entries.any { it.row.id == "entry-B" }) }
         compose.onNodeWithTag("home-pins").performScrollToNode(hasTestTag("pin-Album:${album.id}"))
@@ -76,7 +76,7 @@ class HomeSelectionTest {
         compose.onNodeWithText("Select song").performClick()
         compose.runOnIdle { assertEquals(listOf("C"), session.entries.map { it.row.id }); assertNull(session.entries.single().source) }
         compose.waitUntil(5000) { compose.onAllNodesWithTag("glass-morph-surface").fetchSemanticsNodes().isEmpty() }
-        compose.onNodeWithText("All", substring = false).performClick()
+        compose.selectionMenuAction("Select all")
         compose.runOnIdle { assertEquals(listOf("C", "D", "E"), session.entries.map { it.row.id }) }
     }
 
@@ -130,11 +130,12 @@ class HomeSelectionTest {
             compose.onNodeWithContentDescription("Collapse selection").performClick()
             compose.waitUntil(5000) { compose.onAllNodesWithTag("pin-C").fetchSemanticsNodes().isNotEmpty() }
             compose.onNodeWithTag("pin-C").performClick().assertIsSelected()
-            compose.onNodeWithText("Selection: 3").assertIsDisplayed().performClick()
+            compose.onNodeWithTag("selection-minimized").assertIsDisplayed().performClick()
             // Recompose an offscreen playlist page while Home remains settled.
             compose.runOnIdle { playlistState = playlistState.copy(playlists = listOf(playlist.copy(name = "Changed offscreen"))) }
-            compose.onNodeWithText("All", substring = false).performClick()
+            compose.selectionMenuAction("Select all")
             compose.onNodeWithText("4 selected").assertIsDisplayed()
+            compose.saveSelectionPreview("home")
             compose.onNodeWithContentDescription("Playlists").performClick()
             compose.waitUntil(5000) { compose.onAllNodesWithText("Changed offscreen").fetchSemanticsNodes().isNotEmpty() }
             compose.onNodeWithText("4 selected").assertIsDisplayed()

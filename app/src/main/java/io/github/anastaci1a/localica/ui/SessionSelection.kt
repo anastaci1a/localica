@@ -69,26 +69,25 @@ internal fun BindSelectionScope(session: SessionSelection, source: MediaRef?, ro
 @Composable
 internal fun SessionSelectionPanel(session: SessionSelection, queues: io.github.anastaci1a.localica.queue.QueueController?,
     playlists: io.github.anastaci1a.localica.playlist.PlaylistController?,
-    playlistState: io.github.anastaci1a.localica.playlist.PlaylistState) {
+    playlistState: io.github.anastaci1a.localica.playlist.PlaylistState, dragging: Boolean = false) {
     var retained by remember { mutableStateOf(session.entries.toList()) }
     if (session.active) SideEffect { retained = session.entries.toList() }
     val entries = if (session.active) session.entries.toList() else retained
-    if (session.collapsed) GlassActionButton(io.github.anastaci1a.localica.R.drawable.ic_queue,
-        "Selection: " + session.entries.size, onClick = { session.collapsed = false }) else {
-        val rows = entries.map { it.row.copy(id = it.id) }
-        val source = entries.map { it.source }.distinct().singleOrNull()
-        val remove: (((Boolean) -> Unit) -> Unit)? = when {
-            source?.kind == io.github.anastaci1a.localica.navigation.MediaKind.Playlist -> ({ complete ->
-                playlists?.removeEntries(source.id, session.entries.map { it.row.id }.toSet(), complete) })
-            source?.kind == io.github.anastaci1a.localica.navigation.MediaKind.Queue && queues != null -> ({ complete ->
-                queues.removeEntries(session.entries.map { it.row.id }.toSet(), source.id, complete) })
-            else -> null
-        }
-        SelectionActions(rows, rows.map { it.id }.toSet(), { session.clear() }, queues, playlists, playlistState, remove,
-            if (source?.kind == io.github.anastaci1a.localica.navigation.MediaKind.Queue) "Remove from queue" else "Remove from playlist",
-            onAll = { session.select(session.source, session.visible) }, onRange = session::range,
-            onCollapse = { session.collapsed = true })
+    val rows = entries.map { it.row.copy(id = it.id) }
+    val source = entries.map { it.source }.distinct().singleOrNull()
+    val remove: (((Boolean) -> Unit) -> Unit)? = when {
+        source?.kind == io.github.anastaci1a.localica.navigation.MediaKind.Playlist -> ({ complete ->
+            playlists?.removeEntries(source.id, session.entries.map { it.row.id }.toSet(), complete) })
+        source?.kind == io.github.anastaci1a.localica.navigation.MediaKind.Queue && queues != null -> ({ complete ->
+            queues.removeEntries(session.entries.map { it.row.id }.toSet(), source.id, complete) })
+        else -> null
     }
+    // Collapsed and dragging share the minimized pill (#534); dragging cannot expand it.
+    SelectionActions(rows, rows.map { it.id }.toSet(), { session.clear() }, queues, playlists, playlistState, remove,
+        if (source?.kind == io.github.anastaci1a.localica.navigation.MediaKind.Queue) "Remove from queue" else "Remove from playlist",
+        onAll = { session.select(session.source, session.visible) }, onRange = session::range,
+        onCollapse = { session.collapsed = true }, minimized = session.collapsed || dragging,
+        onExpand = { session.collapsed = false }.takeUnless { dragging })
 }
 
 @Composable

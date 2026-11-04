@@ -26,7 +26,8 @@ import io.github.anastaci1a.localica.browse.*
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 internal fun BrowseItemLayout(item: BrowserItem, style: BrowseStyle, geometry: BrowseCellGeometry,
-    lookahead: LookaheadScope, reducedMotion: Boolean, menu: @Composable (Boolean) -> Unit, trackNumber: String? = null, pinch: BrowsePinchMotion? = null, artworkAnchor: GlassAnchor? = null, showInformation: Boolean = true, inheritedInformation: Map<io.github.anastaci1a.localica.navigation.MediaKind, BrowseStyle> = emptyMap(), itemIndex: Int = 0, loadingReveal: BrowseLoadingCell? = null, artistOnlyLoading: Boolean = false, mutablePosition: Int? = null) {
+    lookahead: LookaheadScope, reducedMotion: Boolean, menu: @Composable (Boolean) -> Unit, trackNumber: String? = null, pinch: BrowsePinchMotion? = null, artworkAnchor: GlassAnchor? = null, showInformation: Boolean = true, inheritedInformation: Map<io.github.anastaci1a.localica.navigation.MediaKind, BrowseStyle> = emptyMap(), itemIndex: Int = 0, loadingReveal: BrowseLoadingCell? = null, artistOnlyLoading: Boolean = false, mutablePosition: Int? = null,
+    outline: MediaItemOutlineHolder? = null) {
     val gallery = style.presentation != Presentation.List
     val from = pinch?.visualSource
     val progress = if (from != null) requireNotNull(pinch).progress.value else 1f
@@ -150,6 +151,10 @@ internal fun BrowseItemLayout(item: BrowserItem, style: BrowseStyle, geometry: B
             val information = children[2].measure(infoRect.constraints())
             val actions = children[3].measure(menuRect.constraints())
             children.drop(4).forEach { it.measure(Constraints.fixed(0, 0)) }
+            // The outline follows its parts: both endpoint outlines, interpolated like their rectangles.
+            if (outline != null) mediaItemOutlineLerp(source.outline(density), target.outline(density), progress).let {
+                outline.value = if (rtl) it.mirrored(constraints.maxWidth.toFloat()) else it
+            }
             return@Layout layout(constraints.maxWidth, target.height) {
                 placeMotion(art, artRect)
                 placeMotion(text, textRect)
@@ -180,6 +185,8 @@ internal fun BrowseItemLayout(item: BrowserItem, style: BrowseStyle, geometry: B
         val blankInfo = children.getOrNull(6)?.measure(Constraints.fixed(blankInfoWidth, blankInfoHeight))
         val blankPlacement = if (gallery) metrics.place(blankTitleHeight, blankInfoWidth, blankInfoHeight) else
             metrics.place(retained(text.height, reservedTitle), blankInfoWidth, retained(information.height, reservedInfo))
+        if (outline != null) outline.value = metrics.outline(placement, constraints.maxWidth, text.width, text.height,
+            information.width, information.height, artwork(style), layoutDirection == androidx.compose.ui.unit.LayoutDirection.Rtl, density)
         layout(constraints.maxWidth, placement.height) {
             blankArt?.placeRelative(placement.artX, placement.artY)
             blankTitle?.placeRelative(placement.titleX, placement.titleY)

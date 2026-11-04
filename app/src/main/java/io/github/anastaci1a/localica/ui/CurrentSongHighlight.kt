@@ -27,7 +27,7 @@ internal class CurrentSongHighlightRenderer {
     private var textureDensity = 0f
     private val outline = Path()
 
-    fun DrawScope.draw(bounds: Rect, color: Color, sourceSize: Size = bounds.size, alpha: Float = 1f) {
+    fun DrawScope.draw(bounds: Rect, color: Color, sourceSize: Size = bounds.size, alpha: Float = 1f, corner: Float? = null) {
         if (sourceSize.width <= 0f || sourceSize.height <= 0f || bounds.isEmpty || alpha <= 0f) return
         if (texture == null || textureSize != sourceSize || textureDensity != density) {
             textureSize = sourceSize
@@ -42,7 +42,7 @@ internal class CurrentSongHighlightRenderer {
                 }
             }
         }
-        val contour = mediaItemContour(bounds, MediaSelectionGap.toPx())
+        val contour = SelectionRegion(bounds, corner).contour(MediaSelectionGap.toPx())
         val corner = contour.topLeftCornerRadius
         drawRoundRect(color.copy(alpha = .13f * alpha), bounds.topLeft, bounds.size, corner)
         outline.reset()
@@ -58,6 +58,15 @@ internal class CurrentSongHighlightRenderer {
                 style = Stroke(.7.dp.toPx()))
         }
     }
+
+    /** A virtualized pinch copy draws the same endpoint outlines as the live row (#532). */
+    fun DrawScope.retainedCurrentSong(size: Size, original: Size, content: FrozenBrowseContent?,
+        progress: Float, rightToLeft: Boolean, color: Color, alpha: Float) {
+        if (content == null) { draw(Rect(Offset.Zero, size), color, original, alpha); return }
+        val outline = mediaItemOutlineLerp(content.source.outline(density), content.target.outline(density), progress)
+            .let { if (rightToLeft) it.mirrored(size.width) else it }
+        draw(outline.bounds, color, outline.bounds.size, alpha, outline.corner)
+    }
 }
 
 internal class RetainedCurrentSongHighlight(val color: Color) {
@@ -65,13 +74,17 @@ internal class RetainedCurrentSongHighlight(val color: Color) {
 }
 
 internal fun Modifier.currentSongHighlight(current: Boolean, color: Color,
-    visualSize: (Size) -> Size = { it }) = semantics {
+    outline: ((Size, androidx.compose.ui.unit.LayoutDirection) -> MediaItemOutline?)? = null,
+    visible: () -> Boolean = { true }, visualSize: (Size) -> Size = { it }) = semantics {
     if (current) stateDescription = "Current song"
 }.drawWithCache {
     val renderer = CurrentSongHighlightRenderer()
     onDrawBehind {
-        if (current) with(renderer) {
-            draw(mediaItemBounds(size, visualSize(size), layoutDirection), color, sourceSize = size)
+        if (current && visible()) with(renderer) {
+            // The shared outline (#532) is the frost's footprint; its texture keeps one scale.
+            val shared = outline?.invoke(size, layoutDirection)
+            if (shared != null) draw(shared.bounds, color, sourceSize = shared.bounds.size, corner = shared.corner)
+            else draw(mediaItemBounds(size, visualSize(size), layoutDirection), color, sourceSize = size)
         }
     }
 }

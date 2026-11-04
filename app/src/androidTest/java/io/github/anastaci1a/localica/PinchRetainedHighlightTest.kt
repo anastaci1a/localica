@@ -8,6 +8,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.AbsoluteAlignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PixelMap
 import androidx.compose.ui.graphics.toArgb
@@ -40,6 +41,9 @@ class PinchRetainedHighlightTest {
     @Test fun virtualizedCurrentRowRetainsItsHighlightThroughRecognitionAndReversal() = retained(false)
     @Test fun rightToLeftVirtualizedCurrentRowRetainsItsHighlightThroughRecognitionAndReversal() = retained(true)
 
+    @Test fun selectedCurrentRowRetainsItsLiftAndSingleFrostThroughRecognitionAndReversal() = retained(false, true)
+    @Test fun rightToLeftSelectedCurrentRowRetainsItsLiftAndSingleFrostThroughRecognitionAndReversal() = retained(true, true)
+
     @Test fun snapshotPreservesTranslucentInkAndPaddedRows() {
         var captured: PixelMap? = null
         compose.setContent {
@@ -71,7 +75,7 @@ class PinchRetainedHighlightTest {
         }
     }
 
-    private fun retained(rtl: Boolean) {
+    private fun retained(rtl: Boolean, selected: Boolean = false) {
         val prefs = BrowsePreferences(InstrumentationRegistry.getInstrumentation().targetContext)
         val route = BrowseRoute(MainTab.Queues, MediaRef(MediaKind.Queue, "retained-highlight"))
         val original = prefs.read(route)
@@ -89,6 +93,9 @@ class PinchRetainedHighlightTest {
         val queue = ListeningQueue(id = "retained-highlight", name = "Retention regression",
             entries = tracks.map { QueueEntry(id = it.id, track = it) }, currentEntryId = playing)
         val queueState = QueueUiState(QueueLibrary(listOf(queue), queue.id), loading = false)
+        val selection = SessionSelection().apply {
+            if (selected) select(route.collection, listOf(SongRow(playing, tracks[10])))
+        }
         var stage by mutableIntStateOf(0)
         lateinit var view: View
         var pointersDown = false
@@ -97,7 +104,8 @@ class PinchRetainedHighlightTest {
         try {
             compose.setContent { LocalicaTheme {
                 view = LocalView.current
-                CompositionLocalProvider(LocalLayoutDirection provides if (rtl) LayoutDirection.Rtl else LayoutDirection.Ltr) {
+                CompositionLocalProvider(LocalSessionSelection provides selection,
+                    LocalLayoutDirection provides if (rtl) LayoutDirection.Rtl else LayoutDirection.Ltr) {
                     MaterialTheme(colorScheme = MaterialTheme.colorScheme.copy(primary = Color.Magenta)) {
                         Box(Modifier.size(360.dp, 480.dp).testTag("retained-scene")) {
                             BrowserScreen(library, playlists, route, {}, {}, {}, { _, _, _ -> }, null, null, true, false,
@@ -119,32 +127,32 @@ class PinchRetainedHighlightTest {
             val scene = compose.onNodeWithTag("retained-scene")
             val sceneBounds = scene.fetchSemanticsNode().boundsInRoot
             val sourceBounds = current.fetchSemanticsNode().boundsInRoot
+            // The outline encloses drawn content, not the reserved blank title lines.
+            // Keep this oracle independent of the production outline calculation.
+            fun part(tag: String) = compose.onNodeWithTag("$tag-$playing", true).fetchSemanticsNode().boundsInRoot
+            val sourceArt = part("browse-art")
+            val sourceText = part("browse-text")
+            val sourceInfo = part("browse-info")
+            val visibleParts = listOf(sourceArt, sourceText, sourceInfo).filterNot { it.isEmpty }
+            val density = view.resources.displayMetrics.density
+            val outlineInset = maxOf(2f * density, minOf(sourceArt.left - sourceBounds.left,
+                sourceBounds.right - sourceArt.right, sourceArt.top - sourceBounds.top,
+                sourceBounds.bottom - sourceArt.bottom))
+            val expectedOutline = Rect(sourceBounds.left,
+                visibleParts.minOf { it.top } - outlineInset,
+                sourceBounds.right, visibleParts.maxOf { it.bottom } + outlineInset)
+                .intersect(sourceBounds).intersect(sceneBounds)
             val viewport = list.fetchSemanticsNode().boundsInRoot
             val firstArt = compose.onNodeWithTag("browse-art-retained:0", true).fetchSemanticsNode().boundsInRoot
             val x = viewport.width / 2f
             val y = firstArt.center.y - viewport.top
+            var sourceInk = 0
+            var sourceTint = 0f
+            var sourceHighlightWidth = 0
+            var sourceHighlightHeight = 0
             fun highlightPixels(label: String, anywhere: Boolean = false): Int {
                 compose.runOnIdle { stage++ }
                 val pixels = capturePresentedPopupPixels(compose, scene, stage) { view }
-                val left = if (anywhere) 0 else (sourceBounds.left - sceneBounds.left).toInt().coerceAtLeast(0)
-                val right = if (anywhere) pixels.width else (sourceBounds.right - sceneBounds.left).toInt().coerceAtMost(pixels.width)
-                val top = if (anywhere) 0 else (sourceBounds.top - sceneBounds.top).toInt().coerceAtLeast(0)
-                val bottom = if (anywhere) pixels.height else (sourceBounds.bottom - sceneBounds.top).toInt().coerceAtMost(pixels.height)
-                val highlighted = (top until bottom).flatMap { py -> (left until right).mapNotNull { px ->
-                    val c = pixels[px, py]
-                    // Long departures fade earlier (#536); measure their retained contour
-                    // without requiring the original slab's opacity after recognition.
-                    if (c.red - c.green > .01f && c.blue - c.green > .01f) px to py else null
-                } }
-                val count = highlighted.size
-                if (label == "source" || label == "reversed" || label == "returned") {
-                    assertTrue("The current-song contour stays visible at $label", highlighted.isNotEmpty())
-                    assertEquals("Full selection width at $label", (right - left).toFloat(),
-                        (highlighted.maxOf { it.first } - highlighted.minOf { it.first } + 1).toFloat(), 3f)
-                    assertEquals("Full selection height at $label", (bottom - top).toFloat(),
-                        (highlighted.maxOf { it.second } - highlighted.minOf { it.second } + 1).toFloat(), 3f)
-                }
-                android.util.Log.i("PinchRetainedHighlight", "rtl=$rtl stage=$label ink=$count bounds=$sourceBounds scene=$sceneBounds")
                 val exported = InstrumentationRegistry.getArguments().getString("additionalTestOutputDir")
                 val root = exported?.let { java.io.File(it) } ?: requireNotNull(
                     InstrumentationRegistry.getInstrumentation().targetContext.getExternalFilesDir(null))
@@ -153,10 +161,62 @@ class PinchRetainedHighlightTest {
                 try {
                     bitmap.setPixels(IntArray(pixels.width * pixels.height) { i -> pixels[i % pixels.width, i / pixels.width].toArgb() },
                         0, pixels.width, 0, 0, pixels.width, pixels.height)
-                    java.io.File(directory, "rtl-$rtl-$label.png").outputStream().use {
+                    java.io.File(directory, "rtl-$rtl-selected-$selected-$label.png").outputStream().use {
                         bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
                     }
                 } finally { bitmap.recycle() }
+                val samplingBounds = if (selected) sourceBounds.inflate(4f * density) else sourceBounds
+                val left = if (anywhere) 0 else (samplingBounds.left - sceneBounds.left).toInt().coerceAtLeast(0)
+                val right = if (anywhere) pixels.width else (samplingBounds.right - sceneBounds.left).toInt().coerceAtMost(pixels.width)
+                val top = if (anywhere) 0 else (samplingBounds.top - sceneBounds.top).toInt().coerceAtLeast(0)
+                val bottom = if (anywhere) pixels.height else (samplingBounds.bottom - sceneBounds.top).toInt().coerceAtMost(pixels.height)
+                val highlighted = (top until bottom).flatMap { py -> (left until right).mapNotNull { px ->
+                    val c = pixels[px, py]
+                    // Long departures fade earlier (#536); measure their retained contour
+                    // without requiring the original slab's opacity after recognition.
+                    if (c.red - c.green > .01f && c.blue - c.green > .01f) px to py else null
+                } }
+                val count = highlighted.size
+                if (!selected && (label == "source" || label == "reversed" || label == "returned")) {
+                    assertTrue("The current-song contour stays visible at $label", highlighted.isNotEmpty())
+                    assertEquals("Full selection width at $label", expectedOutline.width,
+                        (highlighted.maxOf { it.first } - highlighted.minOf { it.first } + 1).toFloat(), 3f)
+                    assertEquals("Full selection height at $label", expectedOutline.height,
+                        (highlighted.maxOf { it.second } - highlighted.minOf { it.second } + 1).toFloat(), 3f)
+                }
+                if (selected && label in listOf("source", "recognized", "reversed", "returned")) {
+                    val dark = (top until bottom).sumOf { py -> (left until right).count { px ->
+                        val c = pixels[px, py]; maxOf(c.red, c.green, c.blue) < .45f
+                    } }
+                    val tint = highlighted.map { (px, py) -> pixels[px, py].red - pixels[px, py].green }.sorted()
+                        .let { if (it.isEmpty()) 0f else it[it.size / 2] }
+                    val width = if (highlighted.isEmpty()) 0 else highlighted.maxOf { it.first } - highlighted.minOf { it.first } + 1
+                    val height = if (highlighted.isEmpty()) 0 else highlighted.maxOf { it.second } - highlighted.minOf { it.second } + 1
+                    if (label == "source") {
+                        sourceInk = dark; sourceTint = tint
+                        sourceHighlightWidth = width; sourceHighlightHeight = height
+                    }
+                    else {
+                        assertTrue("Selected content stays visible at $label: source=$sourceInk current=$dark", dark >= sourceInk * .75f)
+                        if (label == "recognized") {
+                            // #536 fades long departures immediately; #520 retains the
+                            // initial travel. Recognition may reduce, never add, frost.
+                            assertTrue("Departing current-song frost at recognition: $tint from $sourceTint",
+                                tint > 0f && tint <= sourceTint + .025f)
+                            // #520 preserves travel beyond recognition; the retained outline
+                            // has started its journey rather than remaining at source size.
+                            assertTrue("Retained hover width at recognition: $width from $sourceHighlightWidth",
+                                kotlin.math.abs(width - sourceHighlightWidth) <= pixels.width * .12f + 3f)
+                            assertTrue("Retained hover height at recognition: $height from $sourceHighlightHeight",
+                                kotlin.math.abs(height - sourceHighlightHeight) <= pixels.height * .12f + 3f)
+                        } else {
+                            assertEquals("One current-song frost at $label", sourceTint, tint, .025f)
+                            assertEquals("Retained hover width at $label", sourceHighlightWidth.toFloat(), width.toFloat(), 3f)
+                            assertEquals("Retained hover height at $label", sourceHighlightHeight.toFloat(), height.toFloat(), 3f)
+                        }
+                    }
+                }
+                android.util.Log.i("PinchRetainedHighlight", "rtl=$rtl stage=$label ink=$count bounds=$sourceBounds scene=$sceneBounds")
                 return count
             }
             val originalInk = highlightPixels("source")

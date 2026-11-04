@@ -75,7 +75,8 @@ class PinchReleaseHandoffTest {
             lastDrawNs = android.os.SystemClock.elapsedRealtimeNanos()
         }
         var pointersDown = false
-        prefs.write(route, initial, false)
+        val destination = if (outward) initial.copy(itemsPerRow = 4) else initial.copy(presentation = Presentation.List)
+        prefs.write(route, if (gallery) destination else initial, false)
         try {
             compose.setContent { LocalicaTheme {
                 view = LocalView.current
@@ -94,6 +95,36 @@ class PinchReleaseHandoffTest {
             compose.runOnUiThread {
                 drawObserver = view.viewTreeObserver.also { it.addOnDrawListener(drawListener) }
             }
+            // Probe endpoint geometry independently of the renderer's outline helper.
+            // Blank title reservations are deliberately excluded from the measured shape.
+            fun measuredPart(tag: String): Rect {
+                val node = compose.onNodeWithTag("$tag-release:73", true).fetchSemanticsNode()
+                return Rect(node.positionInRoot, androidx.compose.ui.geometry.Size(node.size.width.toFloat(), node.size.height.toFloat()))
+            }
+            fun measuredContour(row: Rect): Rect {
+                val art = measuredPart("browse-art")
+                val menu = measuredPart("browse-menu")
+                // A menu contributes its horizontal slot; its tall touch target
+                // contributes only the vertical centre of the drawn icon.
+                val parts = listOf(art, measuredPart("browse-text"), measuredPart("browse-info")).filterNot { it.isEmpty } +
+                    listOfNotNull(menu.takeIf { it.width > 0f }?.let { Rect(it.left, it.center.y, it.right, it.center.y) })
+                val minimum = 2f * view.resources.displayMetrics.density
+                val inset = maxOf(minimum, minOf(art.left - row.left, row.right - art.right,
+                    art.top - row.top, row.bottom - art.bottom))
+                return Rect(parts.minOf { it.left } - inset, parts.minOf { it.top } - inset,
+                    parts.maxOf { it.right } + inset, parts.maxOf { it.bottom } + inset)
+                    .intersect(row.inflate(minimum)).translate(-row.topLeft)
+            }
+            val targetRow = if (gallery) measuredPart("media") else Rect.Zero
+            val targetContour = if (gallery) measuredContour(targetRow) else Rect.Zero
+            if (gallery) {
+                compose.runOnIdle { prefs.write(route, initial, false) }
+                compose.waitUntil(5000) {
+                    compose.onNodeWithTag("browser-list").fetchSemanticsNode().config
+                        .getOrNull(SemanticsProperties.StateDescription) == "Gallery, 5 columns"
+                }
+                compose.waitForIdle()
+            }
             val list = compose.onNodeWithTag("browser-list")
             list.performScrollToIndex(70)
             val anchor = compose.onNodeWithTag("media-release:73")
@@ -107,6 +138,7 @@ class PinchReleaseHandoffTest {
             val originalBounds = anchor.fetchSemanticsNode().boundsInRoot
             val artwork = compose.onNodeWithTag("browse-art-release:73", true)
             val originalArtwork = artwork.fetchSemanticsNode().boundsInRoot
+            val originalContour = if (gallery) measuredContour(originalBounds) else Rect.Zero
             val expectedFinalCenter = originalBounds.center.y
             val y = expectedFinalCenter - viewport.top
             val x = originalBounds.center.x - viewport.left
@@ -119,6 +151,17 @@ class PinchReleaseHandoffTest {
                     check(it.isDirectory || it.mkdirs()) { "Pinch review directory must be writable" }
                 }
             }
+            fun presentedHighlightWidth(pixels: PixelMap): Float {
+                val columns = (0 until pixels.width).filter { px ->
+                    (originalBounds.top.toInt().coerceAtLeast(0) until originalBounds.bottom.toInt().coerceAtMost(pixels.height)).count { py ->
+                        val c = pixels[px, py]
+                        c.red - c.green > .07f && c.blue - c.green > .07f
+                    } >= 3
+                }
+                assertTrue("The source highlight remains visible", columns.isNotEmpty())
+                return (columns.last() - columns.first() + 1).toFloat()
+            }
+            var initialHighlightWidth: Float? = null
             fun presentedCenter(): Float {
                 fun phase(name: String) = compose.runOnUiThread {
                     android.util.Log.i("PinchCapturePhase",
@@ -130,9 +173,10 @@ class PinchReleaseHandoffTest {
                 phase("begin")
                 val pixels = try { capturePresentedPopupPixels(compose, scene, stage) { view } }
                     finally { phase("end") }
+                if (gallery && stage == 0) initialHighlightWidth = presentedHighlightWidth(pixels)
                 if (gallery && (stage in setOf(0, 1, 2, 6, 12, 22) ||
-                    InstrumentationRegistry.getArguments().getString("pinchReviewAllFrames") == "true") &&
-                    InstrumentationRegistry.getArguments().getString("pinchReview") == "true") {
+                    InstrumentationRegistry.getArguments().getString("pinchReviewAllFrames") == "true" &&
+                    InstrumentationRegistry.getArguments().getString("pinchReview") == "true")) {
                     val directory = reviewDirectory
                     val bitmap = android.graphics.Bitmap.createBitmap(pixels.width, pixels.height, android.graphics.Bitmap.Config.ARGB_8888)
                     try {
@@ -144,21 +188,30 @@ class PinchReleaseHandoffTest {
                     } finally { bitmap.recycle() }
                 }
                 val visibleCenter = highlightCenter(pixels, expectedFinalCenter, originalBounds.height * 2f, gallery)
-                if (!gallery || !outward) return visibleCenter
-                // Density changes keep artwork as wide as the visual card. Infer its
-                // size from independently placed artwork, then locate an uncovered
-                // presented edge. The layout's center is never the measured answer.
+                if (!gallery) return visibleCenter
+                // Infer size from this same presented frame. Semantic artwork dimensions
+                // can be one render frame ahead during release, even after the marker draws.
+                // Horizontal size supplies the full contour; optical edges place it (#547).
                 val row = anchor.fetchSemanticsNode().boundsInRoot
-                val art = artwork.fetchSemanticsNode().boundsInRoot
-                val widthChange = row.width - originalArtwork.width
-                val progress = if (kotlin.math.abs(widthChange) < .5f) 0f else
-                    ((art.width - originalArtwork.width) / widthChange).coerceIn(0f, 1f)
-                val height = originalBounds.height + (row.height - originalBounds.height) * progress
-                val contour = Rect(row.left, row.top, row.left + art.width, row.top + height)
-                val covers = compose.onAllNodes(SemanticsMatcher("release artwork") {
-                    it.config.getOrNull(SemanticsProperties.TestTag)?.startsWith("browse-art-release:") == true
-                }, useUnmergedTree = true).fetchSemanticsNodes().map { it.boundsInRoot }
-                val center = galleryHighlightCenter(pixels, contour, covers)
+                val delta = targetContour.width - originalContour.width
+                val progress = if (kotlin.math.abs(delta) < .5f) 0f else
+                    ((presentedHighlightWidth(pixels) - originalContour.width) / delta).coerceIn(0f, 1f)
+                fun mix(a: Float, b: Float) = a + (b - a) * progress
+                val contour = Rect(mix(originalContour.left, targetContour.left), mix(originalContour.top, targetContour.top),
+                    mix(originalContour.right, targetContour.right), mix(originalContour.bottom, targetContour.bottom)).translate(row.topLeft)
+                val visualHeight = mix(originalBounds.height, targetRow.height)
+                // A list reflow widens the slab beyond the crossing square covers:
+                // its full-width scan retains both optical edges. A narrow middle
+                // strip can instead stop on a cover edge while its semantic bounds
+                // are one frame ahead. Density changes still need #547's full-height
+                // placement because a crossing cover can hide an entire slab edge.
+                val opticalCenter = if (!outward) visibleCenter else {
+                    val covers = compose.onAllNodes(SemanticsMatcher("release artwork") {
+                        it.config.getOrNull(SemanticsProperties.TestTag)?.startsWith("browse-art-release:") == true
+                    }, useUnmergedTree = true).fetchSemanticsNodes().map { it.boundsInRoot }
+                    galleryHighlightCenter(pixels, contour, covers)
+                }
+                val center = opticalCenter - (contour.center.y - row.top - visualHeight / 2f)
                 if (!center.isFinite()) highlightExtent = 0
                 android.util.Log.i("PinchReleaseContour",
                     "stage=$stage visible=$visibleCenter measured=$center extent=$highlightExtent contour=$contour")
@@ -181,19 +234,13 @@ class PinchReleaseHandoffTest {
                 compose.mainClock.advanceTimeBy(48)
                 compose.runOnIdle { stage = 1 }
                 val pixels = capturePresentedPopupPixels(compose, scene, stage) { view }
-                val columns = (0 until pixels.width).filter { px ->
-                    (originalBounds.top.toInt().coerceAtLeast(0) until originalBounds.bottom.toInt().coerceAtMost(pixels.height)).count { py ->
-                        val c = pixels[px, py]
-                        c.red - c.green > .07f && c.blue - c.green > .07f
-                    } >= 3
-                }
-                assertTrue("The source highlight remains visible at recognition", columns.isNotEmpty())
-                // Playback frost shares the full selection footprint; allow edge antialiasing.
+                // Compare presented outlines, which can extend beyond the layout box (#532).
                 // Recognition keeps the travel past the 4% threshold (#520), so the highlight has
                 // grown by at most that share (under 12%) toward the full-width list row.
-                val width = (columns.last() - columns.first() + 1).toFloat()
-                assertTrue("Recognition must retain the gallery highlight width: $width from ${originalBounds.width}",
-                    width in originalBounds.width - 5f..originalBounds.width + (pixels.width - originalBounds.width) * .12f + 5f)
+                val initialWidth = requireNotNull(initialHighlightWidth)
+                val width = presentedHighlightWidth(pixels)
+                assertTrue("Recognition must retain the gallery highlight width: $width from $initialWidth",
+                    width in initialWidth - 5f..initialWidth + (pixels.width - initialWidth) * .12f + 5f)
                 list.performTouchInput {
                     val halfSpan = if (outward) 96f else 39f
                     moveTo(0, Offset(x - halfSpan, y)); moveTo(1, Offset(x + halfSpan, y))
@@ -383,6 +430,20 @@ class PinchReleaseHandoffTest {
         assertTrue(preserves(listOf(3, 4)))
         assertFalse(preserves(listOf(3, 4, 5)))
         assertFalse(preserves(listOf(11)))
+    }
+
+    @Test fun fullWidthGalleryAnchorRejectsWholeTranslationsWithCrossingMiddleCovers() {
+        val contour = Rect(120f, 260.25f, 352f, 539.75f)
+        // List reflows expose the outline on either side of the square covers.
+        // These covers hide the central strip's top/bottom, but not the full edges.
+        val covers = listOf(Rect(218f, 240f, 254f, 285f), Rect(218f, 515f, 254f, 560f))
+        for (shift in listOf(0f, -7.5f, -4.5f, 4.5f, 7.5f)) {
+            val measured = highlightCenter(galleryAnchorPixels(contour, shift, covers), 400f, 400f, true)
+            assertEquals("Full-width pixels place the translated slab", 400f + shift, measured, .51f)
+            val samples = MutableList(12) { 400f }.also { it[4] = measured }
+            assertEquals("Crossing middle covers never excuse a whole-slab shift: $shift",
+                shift == 0f, anchorPreserved(samples, List(12) { 280 }, 396f..404f))
+        }
     }
 
     private fun galleryAnchorPixels(contour: Rect, shift: Float = 0f, covers: List<Rect> = emptyList()): PixelMap {
