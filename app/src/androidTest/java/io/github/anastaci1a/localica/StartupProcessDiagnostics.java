@@ -251,18 +251,41 @@ public final class StartupProcessDiagnostics extends Instrumentation {
         String getPackageName() { return packageName; }
         void getBoundsInScreen(Rect out) { out.set(bounds); }
     }
+    private static ObservedNode observe(AccessibilityNodeInfo live, boolean ancestors) {
+        ObservedNode result = new ObservedNode();
+        result.text = live.getText() == null ? null : live.getText().toString();
+        result.description = live.getContentDescription() == null ? null : live.getContentDescription().toString();
+        result.packageName = live.getPackageName() == null ? null : live.getPackageName().toString();
+        result.visible = live.isVisibleToUser(); result.selected = live.isSelected();
+        live.getBoundsInScreen(result.bounds);
+        if (ancestors && (matches(result.text, "Artists", false) || matches(result.description, "Artists", false) ||
+                matches(result.text, "Albums", false) || matches(result.description, "Albums", false))) {
+            AccessibilityNodeInfo parent = live.getParent();
+            try {
+                for (int level = 0; parent != null && level < 4; level++) {
+                    result.nodes++;
+                    if (parent.isSelected()) { result.selected = true; break; }
+                    if (parent.isFocusable()) break;
+                    AccessibilityNodeInfo next = parent.getParent();
+                    parent.recycle(); parent = next;
+                }
+            } finally { if (parent != null) parent.recycle(); }
+        }
+        return result;
+    }
     private static ObservedNode snapshot(AccessibilityNodeInfo live) {
         if (live == null) return null;
         try {
-            ObservedNode result = new ObservedNode();
-            result.text = live.getText() == null ? null : live.getText().toString();
-            result.description = live.getContentDescription() == null ? null : live.getContentDescription().toString();
-            result.packageName = live.getPackageName() == null ? null : live.getPackageName().toString();
-            result.visible = live.isVisibleToUser(); result.selected = live.isSelected();
-            live.getBoundsInScreen(result.bounds);
-            for (int i = 0; i < live.getChildCount(); i++) {
-                ObservedNode child = snapshot(live.getChild(i));
-                if (child != null) { result.children.add(child); result.nodes += child.nodes; }
+            ObservedNode result = observe(live, false);
+            // Query matching semantics in the application in one Binder call per term.
+            // Fetching every virtual child individually can consume the whole window.
+            for (String term : new String[] {"Artists", "Albums", "Diagnostic"}) {
+                for (AccessibilityNodeInfo match : live.findAccessibilityNodeInfosByText(term)) {
+                    try {
+                        ObservedNode child = observe(match, true);
+                        result.children.add(child); result.nodes += child.nodes;
+                    } finally { match.recycle(); }
+                }
             }
             return result;
         } finally { live.recycle(); }
