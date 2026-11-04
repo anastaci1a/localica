@@ -1,11 +1,15 @@
 package io.github.anastaci1a.localica
 
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.spring
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -27,20 +31,20 @@ class SelectionPanelClearanceTest {
             panel = rememberFloatingSelectionPanel(visible, reducedMotion)
             // Independent clock oracle: unlike the panel this has no measurement/occupancy state.
             referenceProgress = animateFloatAsState(if (visible) 1f else 0f,
-                tween(if (reducedMotion) 0 else 220, easing = androidx.compose.animation.core.LinearOutSlowInEasing), label = "Reference panel motion")
+                if (reducedMotion) snap() else spring(1f, 90f, visibilityThreshold = .0001f), label = "Reference panel motion")
             CompositionLocalProvider(LocalBrowseObscuredInset provides (chrome.dp + panel.clearance)) {
-                Box(Modifier.size(320.dp, 480.dp).testTag("viewport")) {
+                Box(Modifier.size(320.dp, 480.dp).background(Color.White).testTag("viewport")) {
                     if (inline) Column(Modifier.fillMaxSize()) {
                         Box(Modifier.weight(1f).fillMaxWidth()) {
                             Box(Modifier.align(Alignment.BottomEnd).size(48.dp).testTag("control"))
                         }
                         FloatingSelectionPanel(panel, Modifier.heightIn(max = cap.dp).testTag("panel-window")) {
-                            Box(Modifier.fillMaxWidth().height(96.dp).testTag("panel"))
+                            Box(Modifier.fillMaxWidth().height(96.dp).background(Color.Red).testTag("panel"))
                         }
                         Spacer(Modifier.height(chrome.dp))
                     } else {
                     FloatingSelectionPanel(panel, Modifier.align(Alignment.BottomCenter).padding(bottom = chrome.dp).heightIn(max = cap.dp).testTag("panel-window")) {
-                        Box(Modifier.fillMaxWidth().height(96.dp).testTag("panel"))
+                        Box(Modifier.fillMaxWidth().height(96.dp).background(Color.Red).testTag("panel"))
                     }
                     Box(Modifier.align(Alignment.BottomEnd).padding(bottom = LocalBrowseObscuredInset.current)
                         .size(48.dp).testTag("control"))
@@ -57,7 +61,7 @@ class SelectionPanelClearanceTest {
         var progress = 0f
         compose.runOnIdle {
             progress = panel.progress
-            assertEquals("Panel retains the uninterrupted tween at this clock phase",
+            assertEquals("Panel follows the independent glass spring at this clock phase",
                 referenceProgress.value, progress, .0001f)
         }
         val contentPixels = (96f * density).roundToInt()
@@ -67,15 +71,30 @@ class SelectionPanelClearanceTest {
         assertEquals("Every frame uses the panel's same occupancy", chromePixels + clearancePixels,
             viewport.bottom - control.bottom, 1.1f)
         if (progress > 0f || visible) {
-            val content = compose.onNodeWithTag("panel")
-            val node = content.fetchSemanticsNode()
-            val bounds = node.boundsInRoot
-            val window = compose.onNodeWithTag("panel-window").fetchSemanticsNode()
+            val windowNode = compose.onNodeWithTag("panel-window")
+            val window = windowNode.fetchSemanticsNode()
             val windowPixels = clearancePixels.roundToInt()
             val gapPixels = (clearancePixels - occupiedPixels).roundToInt()
             val visiblePixels = (windowPixels - gapPixels).coerceIn(0, contentPixels)
             assertEquals("Reveal window matches rounded occupancy on every frame",
                 windowPixels, window.size.height)
+            // Exit drawing has no live child semantics. Measure its actual pixels,
+            // rather than asking an intentionally unplaced child for visible bounds.
+            if (windowPixels > 0 && visiblePixels > 0 && progress > .02f) {
+                val pixels = windowNode.captureToImage().toPixelMap()
+                val x = pixels.width / 2
+                val red = (0 until pixels.height).filter { y -> pixels[x, y].red - pixels[x, y].green > .001f }
+                assertTrue("The retained surface remains drawn", red.isNotEmpty())
+                assertEquals("Rendered surface starts after the live gap", gapPixels.toFloat(), red.first().toFloat(), 1.1f)
+                assertEquals("Rendered surface fills the exact visible occupancy", visiblePixels.toFloat(), red.size.toFloat(), 1.1f)
+            }
+            if (!visible) {
+                compose.onNodeWithTag("panel").assertDoesNotExist()
+                return progress
+            }
+            val content = compose.onNodeWithTag("panel")
+            val node = content.fetchSemanticsNode()
+            val bounds = node.boundsInRoot
             assertEquals("Content keeps its measured height even behind an empty clip",
                 contentPixels, node.size.height)
             assertEquals("Unclipped placement remains anchored to actual bottom chrome",
@@ -95,7 +114,10 @@ class SelectionPanelClearanceTest {
                 assertEquals("Visible pixels end at remaining bottom chrome",
                     viewport.bottom - chromePixels, bounds.bottom, 1.1f)
             }
-        } else compose.onNodeWithTag("panel").assertDoesNotExist()
+        } else {
+            compose.onNodeWithTag("panel").assertDoesNotExist()
+            compose.onNodeWithTag("panel-window").assertDoesNotExist()
+        }
         return progress
     }
 
@@ -117,14 +139,16 @@ class SelectionPanelClearanceTest {
             // Clock subscribers animate before recomposition accepts the new target. Compare
             // against the same-frame oracle, not the preceding outgoing frame's value.
             assertFrame(chrome)
-            compose.mainClock.advanceTimeBy(300)
+            compose.mainClock.advanceTimeBy(2000)
             assertEquals(1f, assertFrame(chrome), 0f)
             compose.runOnIdle { visible = false }
             repeat(18) { compose.mainClock.advanceTimeByFrame(); assertFrame(chrome) }
+            compose.mainClock.advanceTimeBy(2000)
             assertEquals(0f, assertFrame(chrome), 0f)
             compose.onNodeWithTag("panel").assertDoesNotExist()
             compose.runOnIdle { visible = true }
             repeat(18) { compose.mainClock.advanceTimeByFrame(); assertFrame(chrome) }
+            compose.mainClock.advanceTimeBy(2000)
             assertEquals(1f, assertFrame(chrome), 0f)
         } finally { compose.mainClock.autoAdvance = true }
     }
