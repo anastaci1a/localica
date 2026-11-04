@@ -8,7 +8,7 @@ Localica plays audio stored on an Android device: Musicolet-inspired organizatio
 
 Combine user-selected folder trees. Overlapping roots share song identity while retaining alternate access paths. Removing a root never deletes audio or saved playlist/queue occurrences. Inaccessible songs remain visible.
 
-Startup Quick scan and Full scan are independently off by default. Show the cached library immediately. Enabled scans run in the background, respecting Include subfolders, exclusions and minimum duration. Quick scan discovers new files while preserving existing metadata, dates and references. Full scan also refreshes changed files and reconciles removals.
+Startup Quick Scan and Full scan are independently off by default. Show the cached library immediately. Enabled scans run in the background, respecting Include subfolders, exclusions and minimum duration. Quick Scan discovers new files while preserving existing metadata, dates and references. Full scan also refreshes changed files and reconciles removals.
 
 With both enabled, finish quick discovery across all roots before full refresh. Discovery uses provider identity, not file timestamps, and may require enumerating every included directory.
 

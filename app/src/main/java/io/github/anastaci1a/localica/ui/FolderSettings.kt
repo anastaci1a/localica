@@ -28,7 +28,7 @@ private val settingsDestinations = listOf(
     SettingsDestination("Library and tags", null, R.drawable.ic_library, "Folders, scanner configuration, tag jobs and recovery"),
     SettingsDestination("Library filters", "Library and tags", R.drawable.ic_library, "Visible filters, their order, and unfiltered collections"),
     SettingsDestination("Folders to scan", "Library and tags", R.drawable.ic_folder, "Choose music folders and excluded subfolders"),
-    SettingsDestination("Scanner", "Library and tags", R.drawable.ic_search, "Quick scan, full scan, startup scans, subfolders and short files"),
+    SettingsDestination("Scanner", "Library and tags", R.drawable.ic_search, "Quick Scan, full scan, startup scans, subfolders and short files"),
     SettingsDestination("Metadata read failures", "Scanner", R.drawable.ic_info, "Files with incomplete metadata"),
     SettingsDestination("Tag jobs and recovery", "Library and tags", R.drawable.ic_music, "Background jobs, outcomes and interrupted tag edits"),
     SettingsDestination("About and licenses", null, R.drawable.ic_info, "Version, source code, help, and open-source licenses"),
@@ -139,12 +139,13 @@ private fun ScannerConfiguration(preferences: ScanPreferences, state: LibraryUiS
     SettingsLink("Metadata read failures", "${state.snapshot.metadataFailures.map { it.trackId }.distinct().size} songs", onClick = failures)
     SettingsHeading("Music library")
     BooleanPreference("Include subfolders", options.includeSubfolders) { options = options.copy(includeSubfolders = it); preferences.write(options) }
+    Text("Off scans only each chosen folder; on includes nested folders. Both scans skip excluded paths. Set exclusions in Library and tags → Folders to scan → choose a folder → Excluded subfolders.", style = MaterialTheme.typography.bodySmall)
     SettingsLink("Exclude short files", if (options.minimumDurationSeconds == 0) "Off" else "Shorter than ${options.minimumDurationSeconds} seconds", anchor = durationOrigin) { durationOpen = true }
-    Text("Unknown durations are kept. Use Scan music to apply changed rules to indexed songs.", style = MaterialTheme.typography.bodySmall)
+    Text("Unknown durations are kept. Quick Scan keeps indexed songs. Run Full scan to apply changed rules to them.", style = MaterialTheme.typography.bodySmall)
     SettingsHeading("On launch")
-    BooleanPreference("Quick scan", onLaunch) { onLaunch = it; preferences.scanOnLaunch = it }
+    BooleanPreference("Quick Scan", onLaunch) { onLaunch = it; preferences.scanOnLaunch = it }
     BooleanPreference("Full scan", fullOnLaunch) { fullOnLaunch = it; preferences.fullScanOnLaunch = it }
-    Text("Both are off by default. Quick scan finds new songs; full scan also refreshes tags and removes missing files. Enable both to run quick scan first, then full scan.", style = MaterialTheme.typography.bodySmall)
+    Text("Both are off by default. Quick Scan finds new songs; Full scan also refreshes tags and removes missing files. Enable both to run Quick Scan first, then Full scan.", style = MaterialTheme.typography.bodySmall)
     if (durationOpen) CompositionLocalProvider(LocalGlassOrigin provides durationOrigin) {
         var input by remember { mutableStateOf(options.minimumDurationSeconds.toString()) }
         val seconds = input.toIntOrNull()
@@ -170,7 +171,7 @@ private fun ExcludedFoldersPreference(folder: FolderSelection, preferences: Scan
         val valid = lines.all { !it.startsWith('/') && it.split('/').none { part -> part in setOf("", ".", "..") } }
         GlassAlertDialog(onDismissRequest = { open = false }, title = { Text("Excluded subfolders") }, text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text("One path per line, relative to ${folder.name}. For example: Podcasts or Albums/Demos. No wildcards. Quick Scan skips these paths. Run a full scan from Scan music to remove already indexed songs from excluded paths.")
+                Text("One path per line, relative to ${folder.name}. For example: Podcasts or Albums/Demos. No wildcards. Both scans skip these paths when Include subfolders is on. Run Full scan to remove indexed songs from excluded paths.")
                 GlassTextField(input, { input = it }, label = { Text("Subfolder paths") }, minLines = 3, maxLines = 6, isError = !valid)
             }
         }, confirmButton = { ActionTextButton(enabled = valid, onClick = { paths = lines; preferences.excluded(folder.uri, paths); open = false }) { Text("Save") } },
