@@ -196,7 +196,7 @@ internal fun Modifier.pinchRetainedOverlay(motion: BrowsePinchMotion, grid: Lazy
         val visible = grid.layoutInfo.visibleItemsInfo
         val p = motion.progress.value.coerceIn(0f, 1f)
         val liveKeys = if (motion.visualSource == null) emptySet() else visible.map { it.key }.toSet()
-        val focus = if (motion.visualSource == null) Offset.Zero else fadeFocus.resolve(motion.transaction,
+        val focus = if (motion.source == null) Offset.Zero else fadeFocus.resolve(motion.transaction,
             motion.gesture?.midpoint ?: Offset(motion.bounds[motion.focusKey]?.center?.x ?: motion.viewportWidth / 2f,
                 motion.focusTop.toFloat()))
         val departures = if (motion.visualSource == null) emptyMap() else pinchFadeSchedule(
