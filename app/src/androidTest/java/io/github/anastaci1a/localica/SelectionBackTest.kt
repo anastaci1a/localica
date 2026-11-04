@@ -24,6 +24,8 @@ class SelectionBackTest {
     @get:Rule val compose = createComposeRule()
     private lateinit var session: SessionSelection
     private lateinit var dispatcher: OnBackPressedDispatcher
+    private val track = Track("back:song", "Back song", artist = "Back artist", album = "Back album",
+        albumArtist = "Back artist", durationMs = 180000, fileName = "back.mp3", relativePath = "back.mp3")
 
     private enum class Host(val tab: MainTab) {
         Library(MainTab.Library), Songs(MainTab.Songs), Home(MainTab.Home),
@@ -146,7 +148,6 @@ class SelectionBackTest {
         compose.runOnIdle {
             val source = if (host == Host.QueueTab || host == Host.QueueDrawer) MediaRef(MediaKind.Queue, "back-queue") else session.source
             val id = if (source?.kind == MediaKind.Queue) "back-entry" else "back:song"
-            val track = session.visible.first { it.track.id == "back:song" }.track
             session.select(source, listOf(SongRow(id, track)))
         }
         compose.waitUntil(5000) {
@@ -159,8 +160,6 @@ class SelectionBackTest {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val stores = listOf("interface", "browse-style", "pins").map { context.getSharedPreferences(it, 0) }
         stores.forEach { it.edit().clear().commit() }
-        val track = Track("back:song", "Back song", artist = "Back artist", album = "Back album",
-            albumArtist = "Back artist", durationMs = 180000, fileName = "back.mp3", relativePath = "back.mp3")
         val queue = ListeningQueue(id = "back-queue", name = "Back queue", entries = listOf(QueueEntry("back-entry", track)))
         val queueHost = host == Host.QueueTab || host == Host.QueueDrawer || withPlayer
         val queues = if (queueHost) QueueUiState(QueueLibrary(listOf(queue), queue.id), loading = false) else QueueUiState(loading = false)
