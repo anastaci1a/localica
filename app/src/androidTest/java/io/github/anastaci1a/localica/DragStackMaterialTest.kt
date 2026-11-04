@@ -29,9 +29,10 @@ class DragStackMaterialTest {
     private lateinit var state: KeyedDragState<String, Unit>
     private lateinit var source: FrostedBackdrop
     private var changed by mutableStateOf(false)
+    private val panes = mutableMapOf<Int, FrostedBackdrop>()
     private val entries = listOf("first", "second", "third", "fourth")
 
-    private fun fixture() {
+    private fun fixture(pickupContent: Boolean = false) {
         compose.setContent { LocalicaTheme {
             val grid = rememberLazyGridState()
             val scope = rememberCoroutineScope()
@@ -39,6 +40,7 @@ class DragStackMaterialTest {
                 override fun capturePresentation() = Unit
             }.also { it.items = entries } }
             source = rememberFrostedBackdrop(changed, dark = false, settledRefresh = false, distinctPixels = true)
+            if (pickupContent) BackdropLease(source)
             Box(Modifier.size(360.dp, 480.dp).testTag("stack-scene").onSizeChanged {
                 state.viewportWidth = it.width; state.viewportHeight = it.height
             }) {
@@ -58,8 +60,11 @@ class DragStackMaterialTest {
                         Box(Modifier.fillMaxWidth().height(72.dp))
                     }
                 }
-                CompositionLocalProvider(LocalFrostedBackdrop provides source) {
-                    KeyedDragOverlay(state, true, { "Dragging $it" }) { _, _ -> }
+                CompositionLocalProvider(LocalFrostedBackdrop provides source,
+                    LocalDragPaneObserver provides { index, pane -> panes[index] = pane }) {
+                    KeyedDragOverlay(state, !pickupContent, { "Dragging $it" }) { item, _ ->
+                        if (pickupContent && item != entries.first()) Canvas(Modifier.fillMaxSize()) { drawRect(Color.Magenta) }
+                    }
                 }
             }
         } }
@@ -84,6 +89,56 @@ class DragStackMaterialTest {
             image.asAndroidBitmap().compress(Bitmap.CompressFormat.PNG, 100, it)
         }
         return image
+    }
+
+    @Test fun joinedPanesDiscardPickupContentFromTheirFrost() {
+        fixture(pickupContent = true)
+        if (android.os.Build.VERSION.SDK_INT < 33) {
+            compose.waitUntil(15000) { source.lensSnapshot != null }
+            compose.mainClock.autoAdvance = false
+            try {
+                compose.runOnIdle {
+                    assertTrue(state.begin(entries.first(), entries.take(3).toSet(), state.bounds().getValue(entries.first()).center))
+                }
+                repeat(4) {
+                    compose.mainClock.advanceTimeByFrame()
+                    compose.onNodeWithTag("stack-scene").captureToImage()
+                }
+                val bottom = requireNotNull(panes[2])
+                // Service the paused-pointer capture before finishing the pickup animation.
+                // Otherwise that later refresh could hide a missing pickup-phase dependency.
+                compose.waitUntil(15000) { bottom.revision > 0 && bottom.readbackRequest >= 2 }
+                repeat(2) {
+                    compose.mainClock.advanceTimeByFrame()
+                    compose.onNodeWithTag("stack-scene").captureToImage()
+                }
+                compose.waitUntil(15000) { bottom.snapshotReadbackRequest >= 2 }
+                fun hasPickupContent(image: ImageBitmap): Boolean {
+                    val pixels = image.toPixelMap()
+                    val d = image.width / 360f
+                    return (0 until (230 * d).toInt()).any { y ->
+                        pixels[(180 * d).toInt(), y].let { it.red > .7f && it.blue > .7f }
+                    }
+                }
+                assertTrue("Seed the native cache with the still-visible pickup content", hasPickupContent(requireNotNull(bottom.snapshot)))
+                compose.mainClock.advanceTimeBy(400)
+                compose.mainClock.autoAdvance = true
+                var last: ImageBitmap? = null
+                var stale = true
+                compose.waitUntil(15000) {
+                    bottom.snapshot?.let { current ->
+                        if (current !== last) { stale = hasPickupContent(current); last = current }
+                    }
+                    !stale
+                }
+            } finally { compose.mainClock.autoAdvance = true }
+        } else begin(3)
+        compose.waitUntil(15000) {
+            val image = compose.onNodeWithTag("stack-scene").captureToImage()
+            val d = image.width / 360f
+            image.toPixelMap()[(180 * d).toInt(), (36 * d).toInt()].blue < .2f
+        }
+        capture("joined-panes-without-pickup-content")
     }
 
     @Test fun unchangedLiveSceneDoesNotRepublishItsPixels() {
