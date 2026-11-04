@@ -169,9 +169,9 @@ Require at least twice as much horizontal as vertical intent, without changing c
 
 ### Back
 
-First end focused text editing and hide keyboard/cursor while preserving the draft. Then dismiss topmost popup/dialog → visible queue/playlist selection → queue overlay, artwork viewer or lyrics → player → current main-tab list to the top → applicable list filter reset → detail/search history → tab visits → exit.
+First end focused text editing and hide keyboard/cursor while preserving the draft. Then dismiss topmost popup/dialog → visible media selection → queue overlay, artwork viewer or lyrics → player → current main-tab list to the top → applicable list filter reset → detail/search history → tab visits → exit.
 
-Each press takes one applicable step. List scrolling/filter reset also applies within details, without returning to the tab root. Detail/search return restores the parent query, first item and pixel offset after matching results load.
+Each system Back or committed Back gesture takes one applicable step. List scrolling/filter reset also applies within details, without returning to the tab root. Detail/search return restores the parent query, first item and pixel offset after matching results load.
 
 ### Lifecycle
 
@@ -331,7 +331,7 @@ The panel is one compact glass pill: close, count, Play next, Add to playlist, M
 
 Collapsing morphs the same surface into a minimized count pill; tapping it morphs back. Size, foreground and appearance share the interruptible glass spring, honor animation speed and Reduce motion, and immediately release input on outgoing faces.
 
-Close, mutable-list Back or successful actions exit. Cancel/failure/empty selection retains the mode. Collapsing retains selection. Remove-from-source requires one editable source. No separate selection-basket screen. Playlist chooser marks existing membership accessibly while allowing duplicates.
+Close, [Back](#back) or successful actions exit. Cancel/failure/empty selection retains the mode. Collapsing retains selection. Remove-from-source requires one editable source. No separate selection-basket screen. Playlist chooser marks existing membership accessibly while allowing duplicates.
 
 In a complete, manual, unfiltered queue/playlist, hold-drag moves the held occurrence or selected occurrences from that source, preserving their source order even when nonconsecutive. Cross-source selections and filtered views cannot reorder. Applying a saved-order sort does not disable subsequent dragging.
 
