@@ -118,10 +118,11 @@ internal fun <T : Any, P> BoxScope.KeyedDragOverlay(state: KeyedDragState<T, P>,
     var previousPane = backing
     cards.reversed().forEach { (index, item) -> key(drag, state.keyOf(item)) {
         val paneBacking = previousPane
-        val paneScene = rememberFrostedBackdrop(Triple(drag, paneBacking?.capture, paneBacking?.glassFallback),
-            dark = backing?.dark == true)
+        val paneScene = if (index > 0) rememberFrostedBackdrop(Triple(drag, paneBacking?.capture, paneBacking?.glassFallback),
+            dark = backing?.dark == true, settledRefresh = false) else null
         previousPane = paneScene
         LaunchedEffect(drag, paneScene) {
+            if (paneScene == null) return@LaunchedEffect
             snapshotFlow { drag.pointer to drag.dropping }.collectLatest {
                 // Legacy preparation follows a paused or completed movement, never a readback per frame.
                 delay(48)
@@ -182,7 +183,8 @@ internal fun <T : Any, P> BoxScope.KeyedDragOverlay(state: KeyedDragState<T, P>,
         DisposableEffect(itemKey) { onDispose { frames.remove(itemKey) } }
         Box(Modifier.matchParentSize()
             .zIndex(3f + (drag.moving.size - index).toFloat() / drag.moving.size)
-            .recordFrostedBackdrop(paneScene, paneBacking, displayBacking = false)) {
+            .then(if (paneScene != null) Modifier.recordFrostedBackdrop(paneScene, paneBacking,
+                displayBacking = false) else Modifier)) {
             HoverDragCard(Modifier
                 .graphicsLayer { translationX = displayed().x; translationY = displayed().y }
                 .layout { measurable, constraints ->

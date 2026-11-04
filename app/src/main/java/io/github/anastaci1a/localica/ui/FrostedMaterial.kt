@@ -205,7 +205,8 @@ internal fun DrawScope.withBackdropRegistration(registration: BackdropRegistrati
 @Composable
 internal fun rememberFrostedBackdrop(key: Any?, enabled: Boolean = true, dark: Boolean = true,
     glassBlur: Float = LocalGlassAppearance.current.blur, retainRaster: Boolean = true,
-    whiteTint: Float = LocalGlassAppearance.current.whiteTint): FrostedBackdrop {
+    whiteTint: Float = LocalGlassAppearance.current.whiteTint,
+    settledRefresh: Boolean = true): FrostedBackdrop {
     val layer = rememberGraphicsLayer()
     val runtime = LocalGlassRendererRuntime.current
     val renderer = currentGlassRendererGeneration()
@@ -226,7 +227,7 @@ internal fun rememberFrostedBackdrop(key: Any?, enabled: Boolean = true, dark: B
     // Keep a completed sample across temporary visibility changes. Modal sources
     // with no open consumer never need a CPU readback at all.
     var captured by remember(source) { mutableStateOf<List<Any?>?>(null) }
-    LaunchedEffect(source, key, enabled, sampled, graphicsContext, renderer) {
+    LaunchedEffect(source, key, enabled, sampled, graphicsContext, renderer, settledRefresh) {
         // Size belongs to sampling, not the caller's composition. Reading it above
         // this effect would recompose the whole player host on every resize frame.
         if (renderer.backend == GlassBackend.Legacy && enabled && sampled) snapshotFlow {
@@ -273,11 +274,13 @@ internal fun rememberFrostedBackdrop(key: Any?, enabled: Boolean = true, dark: B
                     ticket?.close()
                 }
             }
-            capture()
+            val firstCaptured = capture()
             // Artwork/lyrics may still be easing when the new scene key is published.
             // Refresh its settled appearance once, without readback on every animation frame.
-            kotlinx.coroutines.delay(500)
-            if (capture()) captured = captureKey
+            if (settledRefresh) {
+                kotlinx.coroutines.delay(500)
+                if (capture()) captured = captureKey
+            } else if (firstCaptured) captured = captureKey
         }
     }
     val blurRadius = with(LocalDensity.current) { 22.dp.toPx() } * glassBlur.coerceIn(0f, 1f)
