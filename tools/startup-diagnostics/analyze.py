@@ -34,10 +34,14 @@ def percentiles(values):
 def frames(text, start_ms, end_ms):
     """Read each window's ring; reject flagged, unfinished and out-of-window rows."""
     header = None
-    result = []
-    seen = set()
-    rejected = {"flagged": 0, "unfinished": 0, "outsideWindow": 0, "duplicate": 0}
+    result = {}
+    future = set()
+    captured_at = None
+    rejected = {"flagged": 0, "unfinished": 0, "outsideWindow": 0, "duplicate": 0, "futureCompletion": 0}
     for line in text.splitlines():
+        if line.startswith("# capturedAtNanos="):
+            captured_at = int(line.split("=", 1)[1])
+            continue
         if line.startswith("Flags,") and "IntendedVsync" in line and "FrameCompleted" in line:
             header = next(csv.reader([line.rstrip(",")]))
             continue
@@ -60,13 +64,20 @@ def frames(text, start_ms, end_ms):
         if not start_ms * 1e6 <= begin < end_ms * 1e6:
             rejected["outsideWindow"] += 1
             continue
-        key = (begin, end)
-        if key in seen:
-            rejected["duplicate"] += 1
+        # GPU completion fields can change after a live snapshot. Identify the CPU
+        # traversal instead, retain the latest valid completion, and never count it twice.
+        key = (begin, row.get("DrawStart") or row.get("FrameTimelineVsyncId") or end)
+        if captured_at is not None and end > captured_at:
+            rejected["futureCompletion"] += 1
+            future.add(key)
             continue
-        seen.add(key)
-        result.append(row)
-    return result, rejected
+        if key in result:
+            rejected["duplicate"] += 1
+        result[key] = row
+    rejected["futureCompletionFrames"] = len(future)
+    rejected["futureCompletionRecovered"] = len(future.intersection(result))
+    rejected["futureCompletionUnresolved"] = len(future.difference(result))
+    return list(result.values()), rejected
 
 
 def summarize(text, milestones, window_ms=10_000):
@@ -130,7 +141,7 @@ def scheduling(trace, threads, pid, start_ms, window_ms=10_000):
     """Integrate observed sched_switch intervals, preserving unknown time explicitly."""
     targets = {pid: "Main"}
     for line in threads.splitlines():
-        cells = line.split()
+        cells = line.split(maxsplit=1)
         if len(cells) == 2 and cells[0].isdigit() and int(cells[0]) != pid:
             tid = int(cells[0])
             label = "RenderThread" if cells[1] == "RenderThread" and "RenderThread" not in targets.values() else f"{cells[1]}:{tid}"
