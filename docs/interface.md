@@ -496,10 +496,14 @@ Keep its inner position fixed during lyrics-mode changes. Player travel uses the
 
 ## Scanner and folders
 
-More → Scan music and Settings → Library and tags → Scanner share glass **Full scan** / **Quick scan** actions. The popup reserves progress/status/action space so starting or finishing does not resize it. Progress uses the navigation accent. Continue in background and Cancel remain available during a scan.
+More → Scan music and Settings → Library and tags → Scanner share glass **Full scan** / **Quick Scan** actions. The popup reserves progress/status/action space so starting or finishing does not resize it. Progress uses the navigation accent. Continue in background and Cancel remain available during a scan.
 
 Explain actual background restrictions and link directly to Localica’s Android settings, without promising to scroll another app.
 
-Scanner owns subfolders, minimum duration, Metadata read failures, and independent off-by-default Quick scan / Full scan startup switches. Enabling both runs all quick discovery before full refresh. Folders to scan remains in Library and tags, with per-folder exclusions, removal and Add folder. Duplicate basenames use stable fractions such as Media (1/2). Unique names stay plain.
+Scanner owns subfolders, minimum duration, Metadata read failures, and independent off-by-default Quick Scan / Full scan startup switches. Enabling both runs all quick discovery before full refresh.
+
+Include subfolders applies to every chosen folder. Off scans only that folder; on includes nested folders except excluded paths. Both scans respect exclusions. Configure each folder’s paths in Library and tags → Folders to scan → choose a folder → Excluded subfolders. Run Full scan to apply changed rules to indexed songs; Quick Scan keeps them.
+
+Folders to scan also owns removal and Add folder. Duplicate basenames use stable fractions such as Media (1/2). Unique names stay plain.
 
 Adding a folder only grants access. Metadata failures are never a persistent queue warning. From a shortcut’s initial settings page, Android Back returns to the caller. The header Back still visits the settings parent. Safety/lifecycle guarantees: [Structure](structure.md#file-operations).

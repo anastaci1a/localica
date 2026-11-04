@@ -107,8 +107,8 @@ internal fun ScannerPopup(state: LibraryUiState, onDismiss: () -> Unit, onStart:
 internal fun ScannerActions(state: LibraryUiState, onFullScan: () -> Unit, onQuickScan: () -> Unit) {
     val enabled = !state.scanning && !state.loading && !state.updatingFolders && state.snapshot.folders.isNotEmpty()
     SettingsLink("Full scan", enabled = enabled, onClick = onFullScan)
-    SettingsLink("Quick scan", enabled = enabled, onClick = onQuickScan)
-    Text("Quick scan adds new songs. Full scan also refreshes tags and removes missing files. Your audio files stay untouched.",
+    SettingsLink("Quick Scan", enabled = enabled, onClick = onQuickScan)
+    Text("Quick Scan adds new songs. Full scan also refreshes tags and removes missing files. Your audio files stay untouched.",
         style = MaterialTheme.typography.bodySmall)
 }
 
