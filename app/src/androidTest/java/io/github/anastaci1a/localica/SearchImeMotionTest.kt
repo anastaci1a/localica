@@ -321,6 +321,7 @@ class SearchImeMotionTest {
                     val ime = WindowInsets.ime.getBottom(density)
                     val source = WindowInsets.imeAnimationSource.getBottom(density)
                     val target = WindowInsets.imeAnimationTarget.getBottom(density)
+                    val hiddenImeConsumed by rememberUpdatedState(ime == 0 && source == 0 && target == 0)
                     SideEffect { popupView = view; keyboardSettled = ime == target && source == target }
                     LaunchedEffect(visible, focusedWindow, ready) {
                         if (visible && focusedWindow) {
@@ -330,6 +331,15 @@ class SearchImeMotionTest {
                                 // The delayed fixture releases input only after observing
                                 // the fallback endpoint, independent of CI wall-clock load.
                                 snapshotFlow { keyboardAllowed }.first { it }
+                                // The warmup editor's hide can reach this new popup after attach.
+                                // Consume it before focus can arm the measured editor's hide detector.
+                                do {
+                                    withFrameNanos { }
+                                    val native = ViewCompat.getRootWindowInsets(view)
+                                    val hidden = native?.isVisible(WindowInsetsCompat.Type.ime()) == false &&
+                                        native.getInsets(WindowInsetsCompat.Type.ime()).bottom == 0
+                                } while (!hiddenImeConsumed || !hidden)
+                                motionTimeline += "${SystemClock.uptimeMillis()} measured-editor-focus-after-native-and-compose-hide"
                                 focus.requestFocus(); keyboard?.show()
                             } else keyboard?.hide()
                         }
