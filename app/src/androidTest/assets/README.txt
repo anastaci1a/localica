@@ -82,3 +82,8 @@ moov immediately after ftyp and increases each stco offset by the moov size.
 Its encoded media and edit are unchanged. It exercises post-moov mdat validation
 and proves that reading the following free/mdat headers adds no source reopen.
 SHA-256: 8ebc21c95d1e9b9d190a61c82ef9c16309b6d295d8858edfb6ea381cb4019d73
+
+boundary-mp3-silent-tail.mp3 encodes an original one-second mono 44.1 kHz
+16-bit sawtooth with samples [33075, 44100) set to zero. Generated with
+FFmpeg 5.1 using `-map_metadata -1 -c:a libmp3lame -b:a 128k`. It verifies
+that legacy MP3 encoder-padding correction preserves intentional trailing silence.

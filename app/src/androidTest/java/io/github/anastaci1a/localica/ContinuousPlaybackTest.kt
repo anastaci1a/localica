@@ -9,7 +9,7 @@ import io.github.anastaci1a.localica.playback.PlaybackExtractors
 import androidx.media3.common.Player
 import androidx.media3.common.audio.AudioProcessor.AudioFormat
 import androidx.media3.common.audio.BaseAudioProcessor
-import androidx.media3.exoplayer.DefaultRenderersFactory
+import io.github.anastaci1a.localica.playback.PlaybackRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.analytics.AnalyticsListener
 import androidx.media3.exoplayer.audio.AudioSink
@@ -67,12 +67,6 @@ class ContinuousPlaybackTest {
                 .put("data".toByteArray()).putInt(88200)
             repeat(44100) { pcm.putShort(((it % 441 - 220) * 80).toShort()) }; tail.writeBytes(pcm.array())
             play(listOf(file, file, tail)) { decoded, decoder ->
-                // Keep the exact assertion below. Only this measured legacy failure is a known
-                // exception (#30); other sample counts/decoders must still fail. Playback and
-                // no-rebuffer assertions run before this assumption, even on the affected device.
-                org.junit.Assume.assumeFalse("Known Android 8 MP3 padding tail: issue #30",
-                    extension == "mp3" && android.os.Build.VERSION.SDK_INT == 26 &&
-                        decoder == "OMX.google.mp3.decoder" && decoded.size == 268100)
                 assertEquals(extension + " must trim encoder delay/padding", 44100 * 3 * 2, decoded.size)
                 if (extension == "mp3") {
                     // Equal counts alone missed Media3 1.11's 529-frame phase shift (#3425).
@@ -113,7 +107,7 @@ class ContinuousPlaybackTest {
                     replaceOutputBuffer(bytes.size).put(bytes).flip()
                 }
             }
-            val renderers = object : DefaultRenderersFactory(context) {
+            val renderers = object : PlaybackRenderersFactory(context) {
                 override fun buildAudioSink(context: Context, enableFloatOutput: Boolean,
                     enableAudioOutputPlaybackParams: Boolean): AudioSink = MediaEditAudioSink(DefaultAudioSink.Builder(context)
                     .setAudioProcessors(arrayOf(processor)).build())
