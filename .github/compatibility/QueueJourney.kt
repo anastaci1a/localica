@@ -58,6 +58,12 @@ data class QueueJourney(
         return copy(history = kept, cursor = kept.lastIndex, visited = visited + entryId).planned(ids, random)
     }
 
+    /** Current controller API, retaining legacy append/reconcile behavior rather than priority visits. */
+    fun playNext(added: List<String>, ids: List<String>, random: Random = Random.Default): QueueJourney {
+        require(added.toSet().size == added.size && ids.toSet().containsAll(added))
+        return reconcile(ids, current?.entryId, modes, random)
+    }
+
     fun arrive(token: String, ids: List<String>, random: Random = Random.Default): QueueJourney {
         val old = history.indexOfFirst { it.token == token }
         if (old >= 0) return copy(cursor = old)

@@ -109,6 +109,7 @@ io.github.anastaci1a.localica.ListMotionTest
 io.github.anastaci1a.localica.ListReturnControlsTest
 io.github.anastaci1a.localica.ListSearchTest
 io.github.anastaci1a.localica.ListTopFadeTest
+io.github.anastaci1a.localica.ListeningIdentityStorageTest
 io.github.anastaci1a.localica.LiveOrderDialogTest
 io.github.anastaci1a.localica.LiveOrderPersistenceTest
 io.github.anastaci1a.localica.LoadingMaterialOpacityTest
@@ -139,9 +140,11 @@ io.github.anastaci1a.localica.PinchReadbackLifetimeTest
 io.github.anastaci1a.localica.PinchReleaseHandoffTest
 io.github.anastaci1a.localica.PinchRetainedHighlightTest
 io.github.anastaci1a.localica.PinchRetargetTest
+io.github.anastaci1a.localica.PlayNextJourneyTest
 io.github.anastaci1a.localica.PlaybackDataSourceTest
 io.github.anastaci1a.localica.PlaybackIntentTest
 io.github.anastaci1a.localica.PlaybackStartTest
+io.github.anastaci1a.localica.PlaybackStatisticsLifetimeTest
 io.github.anastaci1a.localica.PlaybackStatisticsTest
 io.github.anastaci1a.localica.PlaybackTest
 io.github.anastaci1a.localica.PlayerActionSlotsTest
@@ -189,6 +192,7 @@ io.github.anastaci1a.localica.QueueInsertPreparationBenchmarkTest
 io.github.anastaci1a.localica.QueueJourneyInsertPersistenceTest
 io.github.anastaci1a.localica.QueueJourneyPersistenceTest
 io.github.anastaci1a.localica.QueueJourneyPlaybackTest
+io.github.anastaci1a.localica.QueueListeningEditTest
 io.github.anastaci1a.localica.QueueOrderActionAdmissionTest
 io.github.anastaci1a.localica.QueuePersistenceTest
 io.github.anastaci1a.localica.QueuePlaybackTest
