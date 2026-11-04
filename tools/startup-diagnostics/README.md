@@ -19,6 +19,8 @@ The seed creates 13,313 metadata rows and 1,110 album sources from the original 
 
 The controller instruments the test package with a distinct UID. Cold means the target has no process after `am force-stop`; filesystem caches remain warm. Warm means a fresh task/activity in the same verified process, after capture teardown and at least three seconds of settling. Every pair retains PID evidence and the observed interval between windows.
 
+Warm control preserves the process and caches. Background artwork work can continue; normal settled scrolling needs separate measurement.
+
 Launch output retains Android's `am start -W` timing and launch state. Frame snapshots begin before launch; input starts after launch completion so the warm control cannot target its outgoing activity. Shell commands retain stderr and use explicit shell interpretation.
 
 Default replay discovers navigation coordinates outside measurement, then clears and reseeds the app again. It schedules Artists at two seconds, a drag at 4.5 seconds, Albums at eight seconds, and a fling at 10.5 seconds. Launch completion or scheduling can delay requests; receipts retain planned and actual times.
@@ -40,6 +42,8 @@ Discovery and adaptive polling request descendant prefetch on API 33 and newer. 
 The frame ring and incomplete tail cannot certify lossless capture. Missing input/content/scroll observations remain explicit rather than passing performance assertions. Timing values never fail a correctness test. Profile attribution requires inspecting raw traces; phase medians do not establish a bottleneck by themselves.
 
 Trace summaries retain Main, RenderThread and background threads present in the final thread snapshot. Threads that already exited may be absent. Scheduler intervals and inclusive trace slices are separate measurements; nested slice durations overlap and must not be added as CPU time.
+
+The [2026-11-04 emulator results](RESULTS.md) retain measured limitations and every trial. Physical acceptance remains open.
 
 Check the analyzer independently:
 
