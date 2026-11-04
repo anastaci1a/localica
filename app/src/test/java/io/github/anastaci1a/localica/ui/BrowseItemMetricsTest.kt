@@ -12,6 +12,14 @@ class BrowseItemMetricsTest {
             geometry.contentWidth((viewport * density).roundToInt(), density), density, numbered)
     }
 
+    @Test fun smallMatchesArchivedDev53SmallestInnerHeight() {
+        for (density in listOf(1f, 1.5f, 2.625f, 3f)) {
+            val small = metrics(ListSize.Small, density = density)
+            assertEquals((40 * density).roundToInt(), small.place((20 * density).roundToInt(), 0,
+                (16 * density).roundToInt()).height)
+        }
+    }
+
     @Test fun normalAndLargeHalveInterCoverGapWithoutChangingCoverOrHorizontalGeometry() {
         for (density in listOf(1f, 1.5f, 2.625f, 3f)) for (viewport in listOf(320, 360, 411, 600)) {
             for ((size, columns) in listOf(ListSize.Normal to 5, ListSize.Large to 3)) {
