@@ -144,7 +144,7 @@ class SelectionBackTest {
 
     private fun selectVisible(host: Host) {
         compose.waitUntil(5000) { compose.onAllNodes(media).fetchSemanticsNodes().isNotEmpty() }
-        compose.onNodeWithTag("browser-list").performScrollToIndex(0)
+        if (host != Host.Home) compose.onNodeWithTag("browser-list").performScrollToIndex(0)
         compose.runOnIdle {
             val source = if (host == Host.QueueTab || host == Host.QueueDrawer) MediaRef(MediaKind.Queue, "back-queue") else session.source
             val id = if (source?.kind == MediaKind.Queue) "back-entry" else "back:song"
