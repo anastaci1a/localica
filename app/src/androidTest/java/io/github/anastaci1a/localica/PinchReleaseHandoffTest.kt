@@ -75,8 +75,7 @@ class PinchReleaseHandoffTest {
             lastDrawNs = android.os.SystemClock.elapsedRealtimeNanos()
         }
         var pointersDown = false
-        val destination = if (outward) initial.copy(itemsPerRow = 4) else initial.copy(presentation = Presentation.List)
-        prefs.write(route, if (gallery) destination else initial, false)
+        prefs.write(route, initial, false)
         try {
             compose.setContent { LocalicaTheme {
                 view = LocalView.current
@@ -111,16 +110,6 @@ class PinchReleaseHandoffTest {
                     parts.maxOf { it.right } + inset, parts.maxOf { it.bottom } + inset)
                     .intersect(row.inflate(minimum)).translate(-row.topLeft)
             }
-            val targetRow = if (gallery) measuredPart("media") else Rect.Zero
-            val targetContour = if (gallery) measuredContour(targetRow) else Rect.Zero
-            if (gallery) {
-                compose.runOnIdle { prefs.write(route, initial, false) }
-                compose.waitUntil(5000) {
-                    compose.onNodeWithTag("browser-list").fetchSemanticsNode().config
-                        .getOrNull(SemanticsProperties.StateDescription) == "Gallery, 5 columns"
-                }
-                compose.waitForIdle()
-            }
             val list = compose.onNodeWithTag("browser-list")
             list.performScrollToIndex(70)
             val anchor = compose.onNodeWithTag("media-release:73")
@@ -135,6 +124,8 @@ class PinchReleaseHandoffTest {
             val artwork = compose.onNodeWithTag("browse-art-release:73", true)
             val originalArtwork = artwork.fetchSemanticsNode().boundsInRoot
             val originalContour = if (gallery) measuredContour(originalBounds) else Rect.Zero
+            var targetRow = originalBounds
+            var targetContour = originalContour
             val expectedFinalCenter = originalBounds.center.y
             val y = expectedFinalCenter - viewport.top
             val x = originalBounds.center.x - viewport.left
@@ -229,6 +220,19 @@ class PinchReleaseHandoffTest {
                 val width = presentedHighlightWidth(pixels)
                 assertTrue("Recognition must retain the gallery highlight width: $width from $initialWidth",
                     width in initialWidth - 5f..initialWidth + (pixels.width - initialWidth) * .12f + 5f)
+                // Probe the held destination, whose fixed pinch paragraphs can reserve
+                // different space from a separately composed settled row. Recognition
+                // was checked first; return to the original partial release below.
+                list.performTouchInput {
+                    val halfSpan = if (outward) 108f else 33f
+                    moveTo(0, Offset(x - halfSpan, y)); moveTo(1, Offset(x + halfSpan, y))
+                }
+                compose.mainClock.advanceTimeBy(300)
+                compose.waitForIdle()
+                targetRow = measuredPart("media")
+                targetContour = measuredContour(targetRow)
+                android.util.Log.i("PinchReleaseEndpoints",
+                    "source=$originalBounds/$originalContour target=$targetRow/$targetContour")
                 list.performTouchInput {
                     val halfSpan = if (outward) 96f else 39f
                     moveTo(0, Offset(x - halfSpan, y)); moveTo(1, Offset(x + halfSpan, y))
