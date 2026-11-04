@@ -382,7 +382,7 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
                 val added = inserted.entries.filterNot { it.id in existing }.map { it.id }
                 val ids = inserted.entries.map { it.id }
                 val unanchored = current.currentEntryId == null
-                val anchor = if (unanchored) QueueJourney.start(ids.filterNot { it in added.drop(1) },
+                val anchor = if (unanchored) QueueJourney.start(ids.filter { it in existing || it == inserted.currentEntryId },
                     inserted.currentEntryId, JourneyModes.from(state.value.settings)) else journey(current)
                 inserted = inserted.copy(journey = anchor.playNext(if (unanchored) added.drop(1) else added, ids))
             }
