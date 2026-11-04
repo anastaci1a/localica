@@ -77,12 +77,10 @@ internal fun PlaylistCreationButton(library: LibrarySnapshot, state: PlaylistSta
                 Icon(androidx.compose.ui.res.painterResource(R.drawable.ic_plus), "Add playlist", Modifier.size(24.dp))
             }
         }
-        GlassMorphPopup(menu, menuAnchor, { menu = false }) {
-            GlassMenuContent {
+        GlassMenu(menu, menuAnchor, { menu = false }) {
             ActionMenuItem("Create playlist", icon = R.drawable.ic_playlist, enabled = !state.loading && !loading, onClick = { menu = false; naming = true })
             ActionMenuItem("Import playlist from file", icon = R.drawable.ic_playlist, enabled = !state.loading && !loading,
                 onClick = { menu = false; picker.launch(arrayOf("*/*")) })
-            }
         }
     }
     if (loading) GlassAlertDialog(onDismissRequest = { loadJob?.cancel() }, title = { Text("Reading playlist") },
