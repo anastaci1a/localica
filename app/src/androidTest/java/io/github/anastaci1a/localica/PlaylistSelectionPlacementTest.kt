@@ -241,7 +241,7 @@ internal class SelectorPlacementFrames(private val compose: ComposeContentTestRu
                     val outline = Rect(placed.left, placed.top + outlineVerticalInsetDp * density, placed.right, placed.bottom - outlineVerticalInsetDp * density)
                     val neighbours = draw.layout.items.mapNotNull { it.placed }.map { Rect(it.left, it.top + outlineVerticalInsetDp * density, it.right, it.bottom - outlineVerticalInsetDp * density) }
                     val room = hoverRoom(outline, neighbours, draw.layout.viewport, LiftEdges.Horizontal, 4f * density,
-                        neighbourInset = MediaOutlinePadding.value * density, clearance = HoverLift.Clearance.value * density)
+                        neighbourInset = 4f * density, clearance = HoverLift.Clearance.value * density)
                     val lifted = hoverGeometry(MediaItemOutline(outline, 0f), room, v).lifted.bounds
                     val clipped = lifted.intersect(draw.layout.viewport)
                     if (!clipped.isEmpty) expected += clipped
