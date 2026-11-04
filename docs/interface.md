@@ -10,7 +10,7 @@ Related controls morph into their panels and return as one visible surface: crea
 
 Selected media hover: in one 220 ms ease-out the outline grows, a shadow deepens, and the surface shows the same backdrop region magnified with a slight frost. Content scales with it. Deselection is the same ease-out in reverse, and interruptions continue from the current appearance. Liquid Glass remains for controls.
 
-One uniform scale preserves artwork/outline corner centres. Growth takes at most a quarter of each neighbour gap, capped at 4 dp per side. The tighter axis limits both axes; lifted items never overlap neighbours.
+One uniform scale preserves artwork/outline corner centres. Growth takes at most a quarter of the gap to each neighbour's content (its cover or row content, not its outline), capped at 4 dp per side, and always leaves at least 1 dp of clearance to that content. The tighter axis limits both axes; lifted items never overlap neighbours.
 
 The lift shadow follows the menu's theming: dark under dark-icon menus, a white glow under light-icon menus. Both use Glass shadow spread and share the Lift shadow strength setting.
 

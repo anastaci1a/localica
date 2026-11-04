@@ -24,6 +24,8 @@ internal object HoverLift {
     /** Across the scroll axis, the share of the distance to the viewport edge. */
     const val EdgeShare = .5f
     val MaxLift = 4.dp
+    /** Growth never leaves less than this to a neighbour's content. */
+    val Clearance = 1.dp
     /** Frost blur radius at full lift (Modern renderer). */
     val Blur = 6.dp
     /** Legacy renderers crossfade their prepared frosted backdrop to this opacity. */
@@ -62,21 +64,25 @@ internal enum class LiftEdges { Horizontal, Vertical }
     fun translate(offset: Offset) = HoverGeometry(rest.translate(offset), lifted.translate(offset), room, scale, pivot + offset, progress)
 }
 
-/** Per-side growth room in pixels: a share of the gap to the nearest neighbour outline on
- * that side, or of the distance to a limiting viewport edge, capped at [cap]. */
-internal fun hoverRoom(rest: Rect, neighbours: List<Rect>, viewport: Rect?, edges: LiftEdges, cap: Float): Rect {
+/** Per-side growth room in pixels: a share of the gap to the nearest neighbour on that side, or of the
+ * distance to a limiting viewport edge, capped at [cap]. Neighbours are measured at their CONTENT
+ * (their outline shrunk by [neighbourInset]): an unselected neighbour shows no outline and adjacent
+ * selections merge. Growth never leaves less than [clearance] to that content. */
+internal fun hoverRoom(rest: Rect, neighbours: List<Rect>, viewport: Rect?, edges: LiftEdges, cap: Float,
+    neighbourInset: Float = 0f, clearance: Float = 0f): Rect {
     var left = Float.POSITIVE_INFINITY; var right = Float.POSITIVE_INFINITY
     var top = Float.POSITIVE_INFINITY; var bottom = Float.POSITIVE_INFINITY
     for (r in neighbours) {
         if (r == rest) continue
         val rows = r.top < rest.bottom && r.bottom > rest.top
         val columns = r.left < rest.right && r.right > rest.left
-        if (rows && r.right <= rest.left + .5f) left = min(left, rest.left - r.right)
-        if (rows && r.left >= rest.right - .5f) right = min(right, r.left - rest.right)
-        if (columns && r.bottom <= rest.top + .5f) top = min(top, rest.top - r.bottom)
-        if (columns && r.top >= rest.bottom - .5f) bottom = min(bottom, r.top - rest.bottom)
+        val c = if (neighbourInset > 0f) r.deflate(neighbourInset) else r
+        if (rows && r.right <= rest.left + .5f) left = min(left, rest.left - c.right)
+        if (rows && r.left >= rest.right - .5f) right = min(right, c.left - rest.right)
+        if (columns && r.bottom <= rest.top + .5f) top = min(top, rest.top - c.bottom)
+        if (columns && r.top >= rest.bottom - .5f) bottom = min(bottom, c.top - rest.bottom)
     }
-    fun share(gap: Float) = if (gap.isInfinite()) cap else (gap * HoverLift.GapShare).coerceIn(0f, cap)
+    fun share(gap: Float) = if (gap.isInfinite()) cap else min(gap * HoverLift.GapShare, (gap - clearance).coerceAtLeast(0f)).coerceIn(0f, cap)
     var room = Rect(share(left), share(top), share(right), share(bottom))
     if (viewport != null) {
         fun edge(distance: Float, current: Float) = min(current, (distance * HoverLift.EdgeShare).coerceAtLeast(0f))
