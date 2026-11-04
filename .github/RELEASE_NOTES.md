@@ -17,6 +17,10 @@ This is an optimized build (not debuggable, minified with R8, with a baseline pr
 - Legacy control drawing reuses its bitmaps instead of allocating new ones every frame, which reduces stutter on older devices.
 - Updated the Compose UI libraries (BOM 2026.03.01), with fixes for the behaviour changes it required.
 - Pinch handoff guards: a normal finish no longer runs the abandon path, and a zero-size cell is not drawn.
+- MP3 tracks play back to back without the short gap on Android 8's built-in MP3 decoder.
+- Settings, the scanner and the exit dialog take their colors from the current artwork theme, and dialogs keep the backdrop behind them.
+- Large density titles can use two lines, and Small density items are 40 dp tall again.
+- Quick Scan is named consistently, and its settings explain how Include subfolders and per-folder exclusions work.
 
 ## Resolved issues
 
@@ -33,6 +37,10 @@ This is an optimized build (not debuggable, minified with R8, with a baseline pr
 - https://github.com/anastaci1a/localica/issues/543 - CI builds test APKs once and shares them with every device shard.
 - https://github.com/anastaci1a/localica/issues/397 - CI reuses verified checks for code-identical release commits.
 - https://github.com/anastaci1a/localica/issues/542 - v0.30.6 review follow-ups: pinch handoff completion and zero-size guards (the seek rounding item shipped in v0.30.7).
+- https://github.com/anastaci1a/localica/issues/547 - The pinch release anchor test measures the full outline, so a crossing cover clipping the highlight no longer fails it.
+- https://github.com/anastaci1a/localica/issues/30 - MP3 boundaries are trimmed correctly with the legacy Android 8 decoder.
+- https://github.com/anastaci1a/localica/issues/310 - Dialog and root-screen appearance follows the active artwork theme.
+- https://github.com/anastaci1a/localica/issues/309 - Large titles use two lines; Small density restored to 40 dp.
 
 ## Known issues
 
