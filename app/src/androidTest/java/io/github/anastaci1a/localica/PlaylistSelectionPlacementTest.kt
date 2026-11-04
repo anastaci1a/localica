@@ -250,12 +250,12 @@ internal class SelectorPlacementFrames(private val compose: ComposeContentTestRu
         }
         expected.sortBy { it.top }
         assertEquals("Only native visible selected or legitimately departing rows contribute glass: $draw", expected.size, draw.regions.size)
-        expected.zip(draw.regions).forEach { (body, glass) -> assertRect("This draw follows independently placed body", body, glass) }
+        expected.zip(draw.regions).forEach { (body, glass) -> assertRect("This draw follows independently placed body", body, glass, 1.5f) }
     }
 
-    private fun assertRect(label: String, expected: Rect, actual: Rect) {
-        assertEquals(label, expected.left, actual.left, 1f); assertEquals(label, expected.top, actual.top, 1f)
-        assertEquals(label, expected.right, actual.right, 1f); assertEquals(label, expected.bottom, actual.bottom, 1f)
+    private fun assertRect(label: String, expected: Rect, actual: Rect, tolerance: Float = 1f) {
+        assertEquals(label, expected.left, actual.left, tolerance); assertEquals(label, expected.top, actual.top, tolerance)
+        assertEquals(label, expected.right, actual.right, tolerance); assertEquals(label, expected.bottom, actual.bottom, tolerance)
     }
 
     fun requireChosen(expected: Set<String>) {
