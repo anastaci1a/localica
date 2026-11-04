@@ -51,17 +51,19 @@ class BrowsePinchTest {
             val title = compose.onNodeWithTag("browse-text-onset:0", true)
             val beforeArt = art.fetchSemanticsNode().boundsInRoot
             val beforeTitle = title.fetchSemanticsNode().boundsInRoot
-            fun titleInk(): Int {
+            fun titleInk(): List<Int> {
                 val pixels = title.captureToImage().toPixelMap()
-                return (0 until pixels.height).sumOf { py ->
-                    (0 until pixels.width).count { px ->
-                        val color = pixels[px, py]
-                        color.alpha > .5f && maxOf(color.red, color.green, color.blue) < .5f
+                return (0..1).map { line ->
+                    (pixels.height * line / 2 until pixels.height * (line + 1) / 2).sumOf { py ->
+                        (0 until pixels.width).count { px ->
+                            val color = pixels[px, py]
+                            color.alpha > .5f && maxOf(color.red, color.green, color.blue) < .5f
+                        }
                     }
                 }
             }
             val beforeInk = titleInk()
-            assertTrue("The source title must contain rendered glyphs", beforeInk > 20)
+            assertTrue("Both source title lines must contain rendered glyphs", beforeInk.all { it > 10 })
             val viewport = list.fetchSemanticsNode().boundsInRoot
             val x = beforeArt.center.x - viewport.left
             val y = beforeArt.center.y - viewport.top
@@ -73,19 +75,23 @@ class BrowsePinchTest {
                 moveTo(0, Offset(x - 57.65f, y)); moveTo(1, Offset(x + 57.65f, y))
             }
             val onsetFrames = mutableListOf(beforeArt)
+            val onsetTitleFrames = mutableListOf(beforeTitle)
             compose.waitUntil(5000) {
                 compose.mainClock.advanceTimeByFrame()
                 onsetFrames += art.fetchSemanticsNode().boundsInRoot
+                onsetTitleFrames += title.fetchSemanticsNode().boundsInRoot
                 list.fetchSemanticsNode().config.getOrNull(SemanticsProperties.StateDescription) == "List, Large"
             }
             compose.mainClock.advanceTimeBy(48)
             val afterArt = art.fetchSemanticsNode().boundsInRoot
             val afterTitle = title.fetchSemanticsNode().boundsInRoot
+            val afterInk = titleInk()
             // The travel past the 4% threshold is kept (#520): the cover eases toward the geometry
             // the fingers imply, which it reaches once the 100 ms ease ends. A dropped inset or a
             // lost source alignment would land outside that span.
             compose.mainClock.advanceTimeBy(100)
             val impliedArt = art.fetchSemanticsNode().boundsInRoot
+            val impliedTitle = title.fetchSemanticsNode().boundsInRoot
             fun between(label: String, value: Float, from: Float, to: Float) = assertTrue("$label: $value outside $from..$to",
                 value in minOf(from, to) - 1f..maxOf(from, to) + 1f)
             for ((label, coordinate) in listOf<Pair<String, (androidx.compose.ui.geometry.Rect) -> Float>>(
@@ -103,9 +109,17 @@ class BrowsePinchTest {
             between("Recognition must not drop the dense grid's horizontal inset", afterArt.left, beforeArt.left, impliedArt.left)
             between("Both artwork edges retain their source alignment", afterArt.right, beforeArt.right, impliedArt.right)
             assertEquals("Recognition implies only the threshold's share of the morph", beforeArt.width, impliedArt.width, beforeArt.width * .15f)
-            assertEquals("Source title lines must not disappear at recognition", beforeTitle.height, afterTitle.height, 3f)
-            assertTrue("Recognition must paint the title, not only preserve its layout bounds",
-                titleInk() >= beforeInk * .5f)
+            // Large now also has two title lines (#309). Its taller line height
+            // legitimately grows this box during the retained threshold travel.
+            between("Recognition title height follows its endpoints", afterTitle.height, beforeTitle.height, impliedTitle.height)
+            val titleStepLimit = kotlin.math.abs(impliedTitle.height - beforeTitle.height) * .5f + 1f
+            onsetTitleFrames.zipWithNext().forEachIndexed { index, (before, after) ->
+                between("Recognition title height at frame $index", after.height, beforeTitle.height, impliedTitle.height)
+                assertTrue("Recognition title height must ease, not snap, at frame $index",
+                    kotlin.math.abs(after.height - before.height) <= titleStepLimit)
+            }
+            for (line in beforeInk.indices) assertTrue("Recognition must paint source title line ${line + 1}",
+                afterInk[line] >= beforeInk[line] * .5f)
         } finally {
             try { if (pointersDown) compose.onNodeWithTag("browser-list").performTouchInput { cancel() } }
             finally { compose.mainClock.autoAdvance = true; prefs.write(route, original, originalOverride) }
