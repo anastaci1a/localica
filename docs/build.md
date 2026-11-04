@@ -90,7 +90,9 @@ Fresh `native-live-evidence` is always uploaded, including on failure. Existing 
 
 ### Measured native shards
 
-The seven native shards per API assign whole classes by measured duration, longest first. The [duration profile](../.github/test-evidence/class-durations.csv) is the per-class median of the complete device reports of runs 41771741272, 41766949579 and 41762838145 (issue #550). Refresh it from the latest full run's `device-reports-*` artifacts when shard times drift; the budget is build 10 minutes, slowest shard 22 minutes, whole run 40 minutes.
+The seven native shards per API assign whole classes by measured duration, longest first. The [duration profile](../.github/test-evidence/class-durations.csv) is the per-class median of the complete device reports of runs 41771741272, 41766949579 and 41762838145 (issue #550).
+
+Refresh it from the latest full run's `device-reports-*` artifacts when shard times drift; the budget is build 10 minutes, slowest shard 22 minutes, whole run 40 minutes.
 
 Each device artifact retains `native-shard-plan.json`: source/profile hashes, class assignments, expected methods, estimated loads and fallback costs. New classes use the measured median per-method cost. Historical ScrollPerformance timings apply only when its existing opt-in is enabled; ordinary runs budget its recorded assumptions separately.
 
@@ -136,7 +138,9 @@ Jaudiotagger 3.0.1 uses LGPL 2.1+. Bundle its notice/license and include its sou
 
 The [Android workflow](../.github/workflows/android.yml) builds application changes on main/PR and tests API 26/36. Match its two virtual CPU cores and 3,072 MiB emulator RAM locally.
 
-The `static-checks` job runs unit tests, lint and the release build in parallel with the `build` job, which only produces the APKs; the summary and verified-run reuse require both. One producer builds the native debug app/test APKs, metadata, class inventory and standalone runtime binding before replacing the delivery artifact. Every shard verifies their source/run identity and digests, then runs AGP instrumentation with build dependency actions disabled. APK hashes are checked again after instrumentation.
+The `static-checks` job runs unit tests, lint and the release build in parallel with the `build` job, which only produces the APKs; the summary and verified-run reuse require both.
+
+One producer builds the native debug app/test APKs, metadata, class inventory and standalone runtime binding before replacing the delivery artifact. Every shard verifies their source/run identity and digests, then runs AGP instrumentation with build dependency actions disabled. APK hashes are checked again after instrumentation.
 
 Documentation-only changes use the separate documentation workflow.
 
