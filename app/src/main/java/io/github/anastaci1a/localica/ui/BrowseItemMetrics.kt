@@ -58,7 +58,21 @@ internal class BrowseItemMetrics(val style: BrowseStyle, columns: Int, val width
     fun place(titleHeight: Int, infoWidth: Int, infoHeight: Int): BrowseItemPlacement {
         val textHeight = if (trailing) maxOf(titleHeight, infoHeight) else titleHeight + infoHeight
         val minimum = px(when (style.listSize) { ListSize.Compact -> 56; ListSize.Small -> 40; ListSize.Smallest -> 40; else -> 48 })
-        val row = if (gallery) art + textHeight else maxOf(art, textHeight, minimum)
+        val formerRow = maxOf(art, textHeight, minimum)
+        // Halve the title-to-title blank space, including when font scaling
+        // expands the title. Shared endpoints and skeletons use this same pitch.
+        val row = when {
+            gallery -> art + textHeight
+            style.listSize == ListSize.Smallest -> {
+                val outer = listGeometry.cardVerticalInset(style) * density
+                val formerGap = formerRow - titleHeight + 2 * (outer * 2).roundToInt()
+                // Round the whole gap once; separate inner/outer rounding can
+                // otherwise add a pixel at fractional display densities.
+                val inner = titleHeight + (formerGap / 2f).roundToInt() - 2 * outer.roundToInt()
+                maxOf(art, textHeight, inner)
+            }
+            else -> formerRow
+        }
         val titleY = if (gallery) art else (row - textHeight) / 2
         val titleX = inset + if (gallery) 0 else art + gap
         val menuHeight = minOf(row, px(48))
