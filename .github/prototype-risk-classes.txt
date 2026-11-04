@@ -290,3 +290,5 @@ io.github.anastaci1a.localica.NativeWindowCopyOwnershipTest
 io.github.anastaci1a.localica.PinchLibraryRefreshTest
 io.github.anastaci1a.localica.ItemOutlinePixelTest
 io.github.anastaci1a.localica.GlassRendererSwitchingTest
+io.github.anastaci1a.localica.PlayerArtworkLayerTest
+io.github.anastaci1a.localica.PlayerArtworkOpticsTest

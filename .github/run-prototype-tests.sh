@@ -108,6 +108,8 @@ def qualify_skip(name, method, skipped, xml_file):
         expected = 'got: <false>, expected: is <true>'
     if identity == package+'PlayerBackgroundPolarityTest#nativeBlurRetainsVerifiedInkAsDistinctUnavailableThenRecovers' and api == '26':
         expected = 'got: <false>, expected: is <true>'
+    if identity == package+'PlayerArtworkOpticsTest#headerGlassKeepsTheCoverAcrossExpansionAndCollapse' and api == '26':
+        expected = 'SDK <33 has cached Legacy glass rather than live Modern sampling'
     if expected is None or api not in ('26', '36'):
         raise ValueError('Unqualified skipped identity/API: '+identity+' API'+api)
     logs = sorted(pathlib.Path('app/build/outputs/androidTest-results').rglob('logcat-'+name+'-'+method+'.txt'))
