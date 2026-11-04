@@ -131,8 +131,8 @@ public final class StartupProcessDiagnostics extends Instrumentation {
                     .put("device", shell("wm size; wm density; dumpsys package " + APP + " | grep versionName"));
             write(directory, "identity.json", identity.toString(2));
             String coldPid = measure(directory, "cold", trace, null);
-            // Settled control: same process and caches, fresh activity/task. This is deliberately
-            // separate from resume latency and from a process-cold launch.
+            // Process-warm control: same process/caches, fresh activity/task.
+            // Background loading can continue; this is separate from resume latency.
             SystemClock.sleep(3_000);
             measure(directory, "warm", trace, coldPid);
             result.putString("stream", "Evidence: " + directory + "\n");
