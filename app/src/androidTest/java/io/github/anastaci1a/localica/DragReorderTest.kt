@@ -79,7 +79,7 @@ class DragReorderTest {
                 val state by controller.state.collectAsState()
                 val host = remember { SongDragHost() }
                 val route = remember(playlist.id, routeGeneration) { BrowseRoute(MainTab.Playlists, MediaRef(MediaKind.Playlist, playlist.id), text = if (filtered) "Song" else "", key = "drag-fixture-$routeGeneration") }
-                val floatingPanel = rememberFloatingSelectionPanel(selection.panelVisible && host.state?.drag == null, false)
+                val floatingPanel = rememberFloatingSelectionPanel(selection.panelVisible, false)
                 fixtureDragHost = host
                 fixtureFloatingPanel = floatingPanel
                 val chrome = if (foregroundFooter) 80.dp else 0.dp
@@ -94,7 +94,9 @@ class DragReorderTest {
                 if (foregroundFooter) Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(80.dp).background(Color.Magenta).testTag("fixture-footer"))
                 if (panelClearance) {
                     FloatingSelectionPanel(floatingPanel, Modifier.align(Alignment.BottomCenter).padding(bottom = chrome)) {
-                        Box(Modifier.fillMaxWidth().height(96.dp).testTag("fixture-selection-panel"))
+                        Box(Modifier.fillMaxWidth().testTag("fixture-selection-panel")) {
+                            SessionSelectionPanel(selection, null, controller, state, dragging = host.state?.drag != null)
+                        }
                     }
                     Box(Modifier.align(Alignment.BottomEnd).padding(bottom = chrome + floatingPanel.clearance)
                         .size(48.dp).testTag("fixture-lifted-control"))
@@ -588,15 +590,14 @@ class DragReorderTest {
                     compose.mainClock.advanceTimeByFrame()
                     compose.onNodeWithTag("cancel-drag").assertExists()
                     assertUtilityRow()
-                    var previousBottom = controlBottom()
+                    val shownBottom = controlBottom()
                     val firstRise = compose.runOnIdle {
                         val source = fixtureDragHost.state!!
                         source.drag!!.cancelMotion!!.offsetY(source.cancelTravel)
                     }
                     assertTrue("The first visible X must still be entering", firstRise > 0f)
                     assertEquals("The first published X uses the same clearance plus entrance", firstRise,
-                        compose.onNodeWithTag("cancel-drag").fetchSemanticsNode().boundsInRoot.bottom - previousBottom, 1.1f)
-                    var intermediate = false
+                        compose.onNodeWithTag("cancel-drag").fetchSemanticsNode().boundsInRoot.bottom - shownBottom, 1.1f)
                     repeat(18) {
                         compose.mainClock.advanceTimeByFrame()
                         assertUtilityRow()
@@ -612,21 +613,20 @@ class DragReorderTest {
                             assertEquals("Hit geometry reads the same published inset without another composition",
                                 cancelBottom - source.cancelRadius, source.viewportOrigin.y + source.cancelCenter.y, 1.1f)
                         }
-                        assertTrue("Hide never jumps back upward", bottom >= previousBottom - 1.1f)
-                        val remaining = root.bottom - bottom - base * scale
-                        if (remaining > scale && remaining < 103f * scale) intermediate = true
-                        previousBottom = bottom
+                        compose.runOnIdle { assertEquals("The minimized panel stays fully shown", 1f, fixtureFloatingPanel.progress, 0f) }
+                        assertShown()
                     }
-                    assertTrue("The open panel must animate to hidden", intermediate)
                     compose.mainClock.advanceTimeBy(100)
                     compose.runOnIdle { assertEquals(1f, fixtureDragHost.state!!.drag!!.cancelMotion!!.progress, 0f) }
                     assertUtilityRow()
                 } finally { compose.mainClock.autoAdvance = true }
                 compose.onNodeWithTag("drag-stack").assertExists()
-                compose.onNodeWithTag("fixture-selection-panel").assertDoesNotExist()
-                assertEquals(base * scale, root.bottom - controlBottom(), 1.1f)
+                compose.onNodeWithTag("fixture-selection-panel").assertExists()
+                compose.onNodeWithTag("selection-minimized").assertExists().assertHasNoClickAction()
+                val clearance = compose.runOnIdle { fixtureFloatingPanel.clearance.value }
+                assertEquals((base + clearance) * scale, root.bottom - controlBottom(), 1.1f)
                 val cancel = compose.onNodeWithTag("cancel-drag").fetchSemanticsNode().boundsInRoot
-                assertEquals("X follows remaining chrome", base * scale, root.bottom - cancel.bottom, 1.1f)
+                assertEquals("X stays above the minimized panel and chrome", (base + clearance) * scale, root.bottom - cancel.bottom, 1.1f)
                 assertUtilityRow()
                 val list = compose.onNodeWithTag("browser-list")
                 if (cancelPointer) list.performTouchInput { cancel(); held = false }
@@ -637,6 +637,7 @@ class DragReorderTest {
                 compose.waitUntil(5000) { compose.onAllNodesWithTag("drag-stack").fetchSemanticsNodes().isEmpty() }
                 assertEquals(playlist, controller.state.value.playlists.single())
                 compose.runOnIdle { assertTrue(selection.panelVisible); assertEquals(listOf(id), selection.entries.map { it.row.id }) }
+                compose.onNodeWithContentDescription("More selection actions").assertIsDisplayed()
                 assertShown()
             } finally { if (held) compose.onNodeWithTag("browser-list").performTouchInput { cancel() } }
         }
