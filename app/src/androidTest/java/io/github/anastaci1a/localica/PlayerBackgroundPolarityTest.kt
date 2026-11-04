@@ -32,6 +32,7 @@ class PlayerBackgroundPolarityTest {
     private var visit by mutableStateOf("first")
     private var tall by mutableStateOf(false)
     private var topInset by mutableStateOf(0.dp)
+    private var bottomInset by mutableStateOf(0.dp)
     private var queue by mutableStateOf(false)
     private var compareWash by mutableStateOf(false)
     @Volatile private var baselineBackdrop: PlayerBackdropDescriptor? = null
@@ -45,14 +46,14 @@ class PlayerBackgroundPolarityTest {
     private var settings by mutableStateOf(InterfaceSettings(artworkLayout = ArtworkLayout.FullBackground,
         artworkTransition = ArtworkTransition.BlurThrough, glass = GlassAppearance(contrast = 0f)))
 
-    private fun cover(white: Boolean, border: Boolean = false): PlayerVisual {
-        val bitmap = Bitmap.createBitmap(150, 300, Bitmap.Config.ARGB_8888).apply {
+    private fun cover(white: Boolean, border: Boolean = false, width: Int = 150, height: Int = 300): PlayerVisual {
+        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888).apply {
             eraseColor(if (white) android.graphics.Color.WHITE else android.graphics.Color.BLACK)
             if (border) for (y in 210 until height) for (x in 0 until width) setPixel(x, y, android.graphics.Color.BLACK)
         }
         val palette = runBlocking { playerPalette(bitmap) }
         return PlayerVisual(bitmap.asImageBitmap(), palette,
-            softArtwork = runBlocking { blurGlassSnapshot(bitmap.asImageBitmap(), bitmap.width * .035f) }, contentKey = "$white/$border")
+            softArtwork = runBlocking { blurGlassSnapshot(bitmap.asImageBitmap(), bitmap.width * .035f) }, contentKey = "$white/$border/$width/$height")
     }
 
     private fun mount(initial: PlayerVisual, waitForCurrent: Boolean = true) {
@@ -62,8 +63,8 @@ class PlayerBackgroundPolarityTest {
                 LocalPlayerInkCompositionObserver provides { inkComposition = it }) {
                 BoxWithConstraints(Modifier.fillMaxSize()) {
                     val available = maxHeight
-                    BoxWithConstraints(Modifier.padding(top = topInset).width(300.dp)
-                        .height(minOf(if (tall) 900.dp else 560.dp, available - topInset))) {
+                    BoxWithConstraints(Modifier.padding(top = topInset, bottom = bottomInset).width(300.dp)
+                        .height(minOf(if (tall) 900.dp else 560.dp, available - topInset - bottomInset))) {
                         PlayerSurface(PlaybackState(connected = true, title = "Region", artist = "Artwork", durationMs = 120000),
                             true, {}, settings, remember { Animatable(1f) }, {}, {}, {}, {}, {}, {},
                             visual = visual, artworkVisit = visit, backgroundPolarity = owner, lyricsOpen = lyrics) {
@@ -242,6 +243,31 @@ class PlayerBackgroundPolarityTest {
             assertTrue("Measured source frame includes translated inset without a fixed bottom-half crop", measured.values.all {
                 it.left.isFinite() && it.top.isFinite() && it.right.isFinite() && it.bottom.isFinite()
             })
+        }
+    }
+
+    @Test fun measuredPlayerFootprintsResolveAcrossArtworkAspectsAndBothSafeInsets() {
+        settings = settings.copy(reducedMotion = true)
+        mount(cover(false))
+        for ((width, height) in listOf(300 to 150, 300 to 300, 150 to 300)) {
+            for (white in listOf(false, true)) {
+                val image = cover(white, width = width, height = height)
+                for (isTall in listOf(false, true)) {
+                    compose.runOnIdle {
+                        visual = image; visit = "$width/$height/$white"
+                        tall = isTall; topInset = 17.dp; bottomInset = 23.dp
+                    }
+                    compose.waitForIdle(); current()
+                    assertEquals("$width x $height tall=$isTall", !white, owner.decision.lightInk)
+                    assertRenderedInk(!white)
+                    val measured = owner.measured
+                    val footprints = playerBackgroundFootprints(measured["background"], measured["viewport"],
+                        listOf("title", "artist", "seek", "actions", "transport").mapNotNull { measured[it] })
+                    assertTrue(footprints.isNotEmpty())
+                    val viewport = requireNotNull(measured["viewport"])
+                    assertTrue(footprints.all { it.top >= viewport.top && it.bottom <= viewport.bottom })
+                }
+            }
         }
     }
 

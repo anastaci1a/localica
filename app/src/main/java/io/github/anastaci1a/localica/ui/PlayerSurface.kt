@@ -255,7 +255,10 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
             miniArtY.value, MiniArtworkSize.value, ((lyricMetadataY - ordinarySeekY) * lyricVisibility).value)
     val artCropRetention by animateFloatAsState(if (clearanceTarget > 0f) 1f else 0f,
         tween(settings.motionDuration(300)), label = "Artwork crop retention")
-    val artContentScale = playerArtworkContentScale(with(density) { MiniArtworkSize.toPx() }, artCropRetention, p == 0f)
+    val miniArtworkPixels = with(density) { MiniArtworkSize.toPx() }
+    val artContentScale = remember(miniArtworkPixels, artCropRetention, p == 0f) {
+        playerArtworkContentScale(miniArtworkPixels, artCropRetention, p == 0f)
+    }
     val artProgress = playerArtworkSizeProgress(p, growthCurve)
     val artWidth = MiniArtworkSize + (fullArt - MiniArtworkSize) * artProgress
     val artHeight = MiniArtworkSize + (fullArtHeight - MiniArtworkSize) * artProgress
@@ -319,7 +322,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
             footprints, backgroundProgress * (1f - lyricProgress), maxOf(1f - coverBlend, swipeFeather / .9f),
             edgeSoftness, edgeBand, coverBlend, lyricMotion.artworkAlpha,
             with(density) { ((8f + 16f * p).dp * (1f - p * backgroundProgress)).toPx() },
-            with(density) { MiniArtworkSize.toPx() }, artCropRetention) else null
+            artContentScale) else null
     ObservePlayerBackgroundPolarity(polarity, backgroundGeometry, when {
         p < .999f || backgroundReveal < 1f -> PlayerBackgroundUnavailable.PartialPlayer
         artSwipe.active || swipeOffset != 0f -> PlayerBackgroundUnavailable.MovingCover
