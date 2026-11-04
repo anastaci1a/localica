@@ -138,9 +138,9 @@ Jaudiotagger 3.0.1 uses LGPL 2.1+. Bundle its notice/license and include its sou
 
 The [Android workflow](../.github/workflows/android.yml) builds application changes on main/PR and tests API 26/36. Match its two virtual CPU cores and 3,072 MiB emulator RAM locally.
 
-The `static-checks` job runs unit tests, lint and the release build in parallel with the `build` job, which only produces the APKs; the summary and verified-run reuse require both. One producer builds the native debug app/test APKs, metadata, class inventory and standalone runtime binding before replacing the delivery artifact.
+The `static-checks` job runs unit tests, lint and the release build in parallel with the `build` job, which only produces the APKs; the summary and verified-run reuse require both.
 
-Every shard verifies their source/run identity and digests, then runs AGP instrumentation with build dependency actions disabled. APK hashes are checked again after instrumentation.
+One producer builds the native debug app/test APKs, metadata, class inventory and standalone runtime binding before replacing the delivery artifact. Every shard verifies their source/run identity and digests, then runs AGP instrumentation with build dependency actions disabled. APK hashes are checked again after instrumentation.
 
 Documentation-only changes use the separate documentation workflow.
 
