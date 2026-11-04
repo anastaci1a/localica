@@ -109,7 +109,8 @@ class ListDensityRevisionTest {
                     BrowseCellGeometry(1), this@LookaheadScope, true, menu = {}, pinch = motion)
             }
         } } }
-        for ((source, target) in listOf(ListSize.Normal to ListSize.Large, ListSize.Large to ListSize.Normal)) {
+        for ((source, target) in listOf(ListSize.Normal to ListSize.Large, ListSize.Large to ListSize.Normal,
+            ListSize.Small to ListSize.Smallest, ListSize.Smallest to ListSize.Small)) {
             compose.runOnIdle {
                 size = target
                 motion.pixelDensity = density
