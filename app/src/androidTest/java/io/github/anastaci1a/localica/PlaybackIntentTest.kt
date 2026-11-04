@@ -1149,7 +1149,7 @@ class PlaybackIntentTest {
         assertPlayback(false)
     }
 
-    @Test fun playNextSurvivesDecoderArrivalWhileActivationResolvesUris() = fixture(duplicateOccurrences = true) {
+    @Test fun playNextSurvivesDecoderArrivalWhileActivationResolvesUris() = fixture(rawPlayer = true, duplicateOccurrences = true) {
         queues.settings(QueueSettings(shuffle = true)); barrier()
         val before = queues.state.value.library.active!!
         val oldNext = before.journey!!.next!!
@@ -1187,7 +1187,7 @@ class PlaybackIntentTest {
         assertEquals(active.currentEntryId, active.journey!!.current!!.entryId)
         assertEquals(setOf(added.first()), active.journey!!.visited)
         assertEquals(added.last(), active.journey!!.next!!.entryId)
-        queues.attach(player); barrier()
+        queues.attach(player.engine); barrier()
         withContext(Dispatchers.Main) {
             assertEquals(active.currentEntryId, player.currentMediaItem!!.mediaId)
             assertEquals(added.last(), player.getMediaItemAt(player.nextMediaItemIndex).mediaId)
