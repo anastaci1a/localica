@@ -1,0 +1,292 @@
+package io.github.anastaci1a.localica;
+
+import android.app.Instrumentation;
+import android.app.UiAutomation;
+import android.graphics.Rect;
+import android.os.Build;
+import android.os.Bundle;
+import android.os.ParcelFileDescriptor;
+import android.os.SystemClock;
+import android.view.InputDevice;
+import android.view.MotionEvent;
+import android.view.accessibility.AccessibilityEvent;
+import android.view.accessibility.AccessibilityNodeInfo;
+import org.json.JSONArray;
+import org.json.JSONObject;
+import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.nio.charset.StandardCharsets;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
+
+/**
+ * Opt-in external controller: instruments the TEST package, never the measured app.
+ * No target classes, Compose test clock, performance thresholds or production hooks.
+ * Input milestones are accessibility observations, not proof of presented pixels.
+ */
+public final class StartupProcessDiagnostics extends Instrumentation {
+    private static final String APP = "io.github.anastaci1a.localica.debug";
+    private static final long WINDOW_MS = 15_000;
+    private Bundle arguments;
+    private UiAutomation automation;
+    private final AtomicLong scrollEvent = new AtomicLong();
+    private volatile long gestureStart;
+
+    @Override public void onCreate(Bundle args) {
+        arguments = args == null ? new Bundle() : new Bundle(args);
+        start();
+    }
+
+    @Override public void onStart() {
+        Bundle result = new Bundle();
+        try {
+            require("disposable-emulator".equals(arguments.getString("startupDiagnostics")), "Explicit opt-in required");
+            require((APP + ".test").equals(getTargetContext().getPackageName()), "Must instrument own test package");
+            require(getTargetContext().getApplicationInfo().uid != getTargetContext().getPackageManager().getApplicationInfo(APP, 0).uid,
+                    "Controller must run outside target UID");
+            String label = arguments.getString("label", "trial");
+            require(label.matches("[A-Za-z0-9_-]{1,80}"), "Invalid label");
+            boolean trace = "true".equals(arguments.getString("trace", "false"));
+            File directory = new File(getTargetContext().getExternalFilesDir(null), "startup-diagnostics/" + label);
+            require(!directory.exists() && directory.mkdirs(), "Refuse overwriting previous evidence");
+            automation = getUiAutomation();
+            automation.setOnAccessibilityEventListener(event -> {
+                if (APP.contentEquals(event.getPackageName() == null ? "" : event.getPackageName()) &&
+                        event.getEventType() == AccessibilityEvent.TYPE_VIEW_SCROLLED && event.getEventTime() >= gestureStart) {
+                    scrollEvent.compareAndSet(0, event.getEventTime());
+                }
+            });
+            JSONObject identity = new JSONObject().put("api", Build.VERSION.SDK_INT).put("fingerprint", Build.FINGERPRINT)
+                    .put("controllerPid", android.os.Process.myPid()).put("controllerPackage", getTargetContext().getPackageName())
+                    .put("target", APP).put("trace", trace).put("windowMs", WINDOW_MS)
+                    .put("fixture", arguments.getString("fixture", "unspecified"))
+                    .put("observer", "Accessibility root polling 100ms; first observed shell/content and input response; not presented-pixel latency")
+                    .put("coldDefinition", "am force-stop and no target PID before launch; filesystem/OS caches not cleared")
+                    .put("device", shell("wm size; wm density; dumpsys package " + APP + " | grep versionName"));
+            write(directory, "identity.json", identity.toString(2));
+            String coldPid = measure(directory, "cold", trace, null);
+            // Settled control: same process and caches, fresh activity/task. This is deliberately
+            // separate from resume latency and from a process-cold launch.
+            SystemClock.sleep(3_000);
+            measure(directory, "warm", trace, coldPid);
+            result.putString("stream", "Evidence: " + directory + "\n");
+            finish(0, result);
+        } catch (Throwable failure) {
+            result.putString("stream", android.util.Log.getStackTraceString(failure));
+            finish(1, result);
+        }
+    }
+
+    private String measure(File directory, String mode, boolean trace, String expectedPid) throws Exception {
+        File output = new File(directory, mode);
+        require(output.mkdir(), "Cannot create trial directory");
+        if (mode.equals("cold")) {
+            shell("am force-stop " + APP);
+            require(shell("pidof " + APP).trim().isEmpty(), "Cold target still running");
+        } else {
+            require(expectedPid.equals(shell("pidof " + APP).trim()), "Warm process replaced before launch");
+        }
+        shell("dumpsys gfxinfo " + APP + " reset");
+        if (trace) write(output, "trace-start.txt", shell("atrace --async_start -b 32768 -a " + APP + " sched gfx view dalvik am wm binder_driver"));
+        JSONObject report = new JSONObject().put("mode", mode).put("windowMs", WINDOW_MS)
+                .put("launchUptimeMs", SystemClock.uptimeMillis());
+        long start = report.getLong("launchUptimeMs");
+        JSONArray inputs = new JSONArray();
+        AtomicBoolean sampling = new AtomicBoolean(true);
+        AtomicInteger snapshots = new AtomicInteger();
+        AtomicLong samplingMs = new AtomicLong();
+        AtomicReference<Throwable> samplingFailure = new AtomicReference<>();
+        // gfxinfo retains a bounded ring. Overlapping one-second snapshots prevent a
+        // settled 60Hz window from silently replacing its startup frames before finish.
+        Thread frameSampler = new Thread(() -> {
+            try {
+                while (sampling.get()) {
+                    Thread.sleep(1_000);
+                    if (!sampling.get()) break;
+                    long before = SystemClock.uptimeMillis();
+                    String frames = shell("dumpsys gfxinfo " + APP + " framestats");
+                    samplingMs.addAndGet(SystemClock.uptimeMillis() - before);
+                    write(output, String.format(java.util.Locale.ROOT, "gfxinfo-%03d.txt", snapshots.incrementAndGet()), frames);
+                }
+            } catch (InterruptedException stopped) {
+                Thread.currentThread().interrupt();
+            } catch (Throwable failure) { samplingFailure.set(failure); }
+        }, "startup-frame-snapshots");
+        frameSampler.start();
+        try {
+            write(output, "launch.txt", shell("am start --activity-new-task --activity-clear-task -n " + APP + "/io.github.anastaci1a.localica.MainActivity"));
+            long shellAt = 0, firstContent = 0;
+            int step = 0, polls = 0;
+            JSONObject navigation = null;
+            long navigationAt = 0;
+            boolean navigated = false;
+            while (SystemClock.uptimeMillis() - start < WINDOW_MS) {
+                AccessibilityNodeInfo root = automation.getRootInActiveWindow();
+                polls++;
+                if (root != null) {
+                    try {
+                        if (APP.contentEquals(root.getPackageName() == null ? "" : root.getPackageName())) {
+                            Rect artists = find(root, "Artists", false);
+                            Rect albums = find(root, "Albums", false);
+                            if (shellAt == 0 && artists != null && albums != null) shellAt = SystemClock.uptimeMillis();
+                            if (firstContent == 0 && (hasPrefix(root, "Diagnostic album") || hasPrefix(root, "Diagnostic artist")))
+                                firstContent = SystemClock.uptimeMillis();
+                            if (step == 0 && artists != null) {
+                                navigationAt = SystemClock.uptimeMillis();
+                                navigation = new JSONObject().put("kind", "tap-artists").put("requestedMs", navigationAt - start);
+                                tap(artists);
+                                navigation.put("injectionReturnedMs", SystemClock.uptimeMillis() - start);
+                                inputs.put(navigation);
+                                step = 1;
+                            } else if (step == 1 && selected(root, "Artists") && hasPrefix(root, "Diagnostic artist")) {
+                                navigation.put("contentObservedMs", SystemClock.uptimeMillis() - start)
+                                        .put("responseMs", SystemClock.uptimeMillis() - navigationAt);
+                                navigated = true;
+                                // Begin a real-time drag as soon as the navigated content exists.
+                                Rect bounds = new Rect();
+                                root.getBoundsInScreen(bounds);
+                                JSONObject swipe = new JSONObject().put("kind", "gallery-drag");
+                                scrollEvent.set(0);
+                                gestureStart = SystemClock.uptimeMillis();
+                                swipe.put("requestedMs", gestureStart - start);
+                                swipe(bounds, 20);
+                                swipe.put("injectionReturnedMs", SystemClock.uptimeMillis() - start);
+                                inputs.put(swipe);
+                                navigation = swipe;
+                                step = 2;
+                            } else if (step == 2 && scrollEvent.get() != 0) {
+                                navigation.put("scrollEventMs", scrollEvent.get() - start)
+                                        .put("responseMs", scrollEvent.get() - gestureStart)
+                                        .put("observedMs", SystemClock.uptimeMillis() - start);
+                                step = 3;
+                            } else if (step == 3 && albums != null) {
+                                navigationAt = SystemClock.uptimeMillis();
+                                navigation = new JSONObject().put("kind", "tap-albums").put("requestedMs", navigationAt - start);
+                                tap(albums);
+                                navigation.put("injectionReturnedMs", SystemClock.uptimeMillis() - start);
+                                inputs.put(navigation);
+                                step = 4;
+                            } else if (step == 4 && selected(root, "Albums") && hasPrefix(root, "Diagnostic album")) {
+                                navigation.put("contentObservedMs", SystemClock.uptimeMillis() - start)
+                                        .put("responseMs", SystemClock.uptimeMillis() - navigationAt);
+                                Rect bounds = new Rect(); root.getBoundsInScreen(bounds);
+                                navigation = new JSONObject().put("kind", "gallery-fling");
+                                scrollEvent.set(0);
+                                gestureStart = SystemClock.uptimeMillis();
+                                navigation.put("requestedMs", gestureStart - start);
+                                swipe(bounds, 6);
+                                navigation.put("injectionReturnedMs", SystemClock.uptimeMillis() - start);
+                                inputs.put(navigation);
+                                step = 5;
+                            } else if (step == 5 && scrollEvent.get() != 0) {
+                                navigation.put("scrollEventMs", scrollEvent.get() - start)
+                                        .put("responseMs", scrollEvent.get() - gestureStart)
+                                        .put("observedMs", SystemClock.uptimeMillis() - start);
+                                step = 6;
+                            }
+                        }
+                    } finally { root.recycle(); }
+                }
+                SystemClock.sleep(100);
+            }
+            report.put("shellObservedMs", shellAt == 0 ? JSONObject.NULL : shellAt - start)
+                    .put("firstContentObservedMs", firstContent == 0 ? JSONObject.NULL : firstContent - start)
+                    .put("inputs", inputs).put("polls", polls).put("navigationContentObserved", navigated)
+                    .put("dragScrollEventObserved", step >= 3).put("flingScrollEventObserved", step == 6)
+                    .put("firstFiveSecondInputAttempt", inputs.length() > 0 && inputs.getJSONObject(0).getLong("requestedMs") <= 5_000);
+        } finally {
+            sampling.set(false);
+            frameSampler.interrupt();
+            frameSampler.join(5_000);
+            report.put("frameSamplerStopped", !frameSampler.isAlive()).put("frameSnapshots", snapshots.get())
+                    .put("frameSnapshotCommandMs", samplingMs.get())
+                    .put("frameSamplerFailure", samplingFailure.get() == null ? JSONObject.NULL : samplingFailure.get().toString());
+            if (trace) write(output, "trace.txt", shell("atrace --async_stop"));
+            write(output, "gfxinfo.txt", shell("dumpsys gfxinfo " + APP + " framestats"));
+            write(output, "cpuinfo.txt", shell("dumpsys cpuinfo"));
+            write(output, "meminfo.txt", shell("dumpsys meminfo " + APP));
+            write(output, "threads.txt", shell("ps -T -p $(pidof " + APP + ") -o TID,NAME"));
+            write(output, "milestones.json", report.toString(2));
+        }
+        String pid = shell("pidof " + APP).trim();
+        require(!pid.isEmpty(), "Target exited");
+        if (expectedPid != null) require(expectedPid.equals(pid), "Warm target was process-cold");
+        report.put("pid", pid).put("sameProcessAsCold", expectedPid == null ? JSONObject.NULL : expectedPid.equals(pid));
+        write(output, "milestones.json", report.toString(2));
+        // Return to Albums outside the measurement; warm activity starts from a comparable tab.
+        AccessibilityNodeInfo root = automation.getRootInActiveWindow();
+        if (root != null) {
+            try { Rect albums = find(root, "Albums", false); if (albums != null) tap(albums); }
+            finally { root.recycle(); }
+        }
+        return pid;
+    }
+
+    private static Rect find(AccessibilityNodeInfo node, String text, boolean prefix) {
+        CharSequence value = node.getText(), description = node.getContentDescription();
+        if (matches(value, text, prefix) || matches(description, text, prefix)) {
+            Rect bounds = new Rect(); node.getBoundsInScreen(bounds);
+            if (node.isVisibleToUser() && !bounds.isEmpty()) return bounds;
+        }
+        for (int i = 0; i < node.getChildCount(); i++) {
+            AccessibilityNodeInfo child = node.getChild(i);
+            if (child == null) continue;
+            try { Rect match = find(child, text, prefix); if (match != null) return match; }
+            finally { child.recycle(); }
+        }
+        return null;
+    }
+
+    private static boolean hasPrefix(AccessibilityNodeInfo root, String prefix) { return find(root, prefix, true) != null; }
+    private static boolean matches(CharSequence value, String text, boolean prefix) {
+        return value != null && (prefix ? value.toString().startsWith(text) : value.toString().equals(text));
+    }
+    private static boolean selected(AccessibilityNodeInfo node, String text) {
+        if (node.isSelected() && find(node, text, false) != null) return true;
+        for (int i = 0; i < node.getChildCount(); i++) {
+            AccessibilityNodeInfo child = node.getChild(i);
+            if (child == null) continue;
+            try { if (selected(child, text)) return true; } finally { child.recycle(); }
+        }
+        return false;
+    }
+    private void tap(Rect bounds) {
+        long at = SystemClock.uptimeMillis();
+        pointer(at, at, MotionEvent.ACTION_DOWN, bounds.exactCenterX(), bounds.exactCenterY());
+        SystemClock.sleep(40);
+        pointer(at, SystemClock.uptimeMillis(), MotionEvent.ACTION_UP, bounds.exactCenterX(), bounds.exactCenterY());
+    }
+    private void swipe(Rect bounds, int steps) {
+        long at = SystemClock.uptimeMillis();
+        float x = bounds.centerX(), y = bounds.top + bounds.height() * .72f;
+        pointer(at, at, MotionEvent.ACTION_DOWN, x, y);
+        for (int i = 1; i <= steps; i++) {
+            SystemClock.sleep(16);
+            pointer(at, SystemClock.uptimeMillis(), MotionEvent.ACTION_MOVE, x, y - bounds.height() * .4f * i / steps);
+        }
+        pointer(at, SystemClock.uptimeMillis(), MotionEvent.ACTION_UP, x, y - bounds.height() * .4f);
+    }
+    private void pointer(long down, long at, int action, float x, float y) {
+        MotionEvent event = MotionEvent.obtain(down, at, action, x, y, 0);
+        event.setSource(InputDevice.SOURCE_TOUCHSCREEN);
+        try { require(automation.injectInputEvent(event, false), "Input injection refused"); }
+        finally { event.recycle(); }
+    }
+    private String shell(String command) throws Exception {
+        try (ParcelFileDescriptor.AutoCloseInputStream input = new ParcelFileDescriptor.AutoCloseInputStream(automation.executeShellCommand(command));
+             ByteArrayOutputStream bytes = new ByteArrayOutputStream()) {
+            byte[] buffer = new byte[8192]; int count;
+            while ((count = input.read(buffer)) != -1) bytes.write(buffer, 0, count);
+            return bytes.toString("UTF-8");
+        }
+    }
+    private static void write(File directory, String name, String value) throws Exception {
+        try (FileOutputStream stream = new FileOutputStream(new File(directory, name))) {
+            stream.write(value.getBytes(StandardCharsets.UTF_8));
+        }
+    }
+    private static void require(boolean value, String message) { if (!value) throw new IllegalStateException(message); }
+}
