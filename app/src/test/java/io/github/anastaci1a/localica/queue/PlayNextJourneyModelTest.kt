@@ -67,7 +67,9 @@ class PlayNextJourneyModelTest {
         assertEquals("Y", removed.next!!.entryId)
         val selected = path.select("B", ids)
         assertEquals(setOf("A", "B"), selected.visited)
-        assertEquals(setOf("X", "Y", "C"), selected.future.map { it.entryId }.toSet())
+        // Selecting elsewhere keeps unplayed explicit requests ahead of the random plan.
+        assertEquals(listOf("X", "Y"), selected.history.drop(selected.cursor + 1).map { it.entryId })
+        assertEquals(listOf("C"), selected.future.map { it.entryId })
         val ordered = path.reconcile(ids, "A", JourneyModes())
         assertEquals("X", ordered.next!!.entryId)
         val reset = ordered.reconcile(ids, "A", path.modes)
@@ -87,15 +89,49 @@ class PlayNextJourneyModelTest {
         path = path.playNext(listOf("X", "Y"), updated)
         for (id in listOf("X", "Y")) {
             assertEquals(id, path.next!!.entryId)
-            assertEquals(0L, path.next!!.cycle)
+            assertEquals(1L, path.next!!.cycle)
             path = path.arrive(path.next!!.token, updated).reconcile(updated, id, path.modes)
-            assertEquals(membership, path.visited)
+            assertEquals(membership + listOf("X", "Y").take(if (id == "X") 1 else 2), path.visited)
         }
         for (visit in original.drop(1)) {
             assertEquals(visit, path.next)
             path = path.arrive(visit.token, updated)
         }
-        assertTrue(path.future.any { it.entryId == "X" && it.cycle == 1L })
-        assertTrue(path.future.any { it.entryId == "Y" && it.cycle == 1L })
+        // Requests made from older history belong to the active cycle and must not repeat there.
+        assertFalse(path.future.any { it.entryId in listOf("X", "Y") && it.cycle == 1L })
     }
+    @Test fun skipsIntoForwardHistoryKeepUnplayedRequestsButDoNotReservePlayedRetrace() {
+        val original = listOf("A", "B", "C", "D")
+        val ids = original + listOf("X", "Y")
+        var path = QueueJourney.start(original, "A", JourneyModes(shuffle = true), Random(9))
+            .select("B", original).select("C", original)
+        val destination = path.current!!
+        path = path.arrive(path.history.first().token, original).playNext(listOf("X", "Y"), ids)
+        val reserved = path.history.drop(1).take(2)
+        path = path.arrive(destination.token, ids)
+        assertEquals(destination, path.current)
+        assertEquals(reserved, path.history.drop(path.cursor + 1))
+        path = path.arrive(path.next!!.token, ids)
+        val selected = path.select("D", ids)
+        assertEquals(listOf(reserved.last()), selected.history.drop(selected.cursor + 1))
+        assertEquals(setOf("A", "B", "C", "D", "X"), selected.visited)
+        val consumed = selected.select("Y", ids)
+        assertNull(consumed.next)
+    }
+
+    @Test fun staleArrivalIntoNextCycleKeepsPendingRequestsOnceInDestinationCycle() {
+        val original = listOf("A", "B")
+        val ids = original + listOf("X", "Y")
+        var path = QueueJourney.start(original, "A", JourneyModes(true, true), Random(2))
+        path = path.arrive(path.next!!.token, original)
+        val stale = path.next!!
+        path = path.playNext(listOf("X", "Y"), ids)
+        val tokens = path.history.drop(path.cursor + 1).map { it.token }
+        path = path.arrive(stale.token, ids)
+        assertEquals(tokens, path.history.drop(path.cursor + 1).map { it.token })
+        assertEquals(listOf(1L, 1L), path.history.drop(path.cursor + 1).map { it.cycle })
+        repeat(2) { path = path.arrive(path.next!!.token, ids) }
+        assertTrue(path.future.none { it.cycle == 1L && it.entryId in listOf("X", "Y") })
+    }
+
 }
