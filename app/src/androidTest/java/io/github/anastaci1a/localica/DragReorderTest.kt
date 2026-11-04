@@ -58,6 +58,7 @@ class DragReorderTest {
         }
     }
     private val queries = QueryGate()
+    private var fixtureDragScene: FrostedBackdrop? = null
     private val fixtureBackdrops = mutableMapOf<FrostedBackdrop, BrowseBackdropScene>()
     private lateinit var fixtureDragHost: SongDragHost
     private lateinit var fixtureFloatingPanel: FloatingSelectionPanelState
@@ -94,7 +95,8 @@ class DragReorderTest {
                 fixtureDragHost = host
                 fixtureFloatingPanel = floatingPanel
                 val chrome = if (foregroundFooter) 80.dp else 0.dp
-                Box(Modifier.fillMaxSize().testTag("fixture-viewport")) {
+                CompositionLocalProvider(LocalSongDragSceneObserver provides { fixtureDragScene = it }) {
+                SongDragScene(host, Modifier.fillMaxSize().testTag("fixture-viewport")) {
                 Box(Modifier.fillMaxSize().padding(bottom = if (foregroundFooter && !panelClearance) chrome else 0.dp).clipToBounds()) {
                 CompositionLocalProvider(LocalSessionSelection provides selection, LocalSongDragHost provides host,
                     LocalBrowseBackdropObserver provides { scene, attached ->
@@ -118,8 +120,7 @@ class DragReorderTest {
                     Modifier.align(Alignment.BottomCenter)) {
                     Box(Modifier.size(1.dp).testTag("fixture-selection-panel"))
                 }
-                ForegroundSongDragOverlay(host)
-                }
+                } }
             } }
             var arranged = false
             compose.waitUntil(5000) {
@@ -490,10 +491,12 @@ class DragReorderTest {
         val list = compose.onNodeWithTag("browser-list")
         val bounds = list.fetchSemanticsNode().boundsInRoot
         val from = compose.onNodeWithTag("media-${ids[0]}").fetchSemanticsNode().boundsInRoot.center - bounds.topLeft
+        compose.runOnIdle { assertNull("Idle browsing allocates no drag scene", fixtureDragScene) }
         var held = false
         try {
             list.performTouchInput { down(from); held = true; advanceEventTime(650); moveTo(from + Offset(0f, 60f)) }
             compose.onNodeWithContentDescription("Dragging 3 songs").assertExists()
+            compose.runOnIdle { assertTrue("A held stack records the full scene", requireNotNull(fixtureDragScene).recordings > 0) }
             saveDragFrame("gallery-three-picked-up")
             list.performTouchInput { moveTo(from + Offset(80f, 150f)); advanceEventTime(64) }
             saveDragFrame("gallery-three-moved")
@@ -505,6 +508,7 @@ class DragReorderTest {
         }
         compose.waitUntil(5000) { compose.onAllNodesWithTag("drag-stack").fetchSemanticsNodes().isEmpty() }
         assertEquals(ids, controller.state.value.playlists.single().entries.map { it.id })
+        compose.runOnIdle { assertNull("Landing releases the drag recording", fixtureDragScene) }
         saveDragFrame("gallery-three-canceled")
     }
 
