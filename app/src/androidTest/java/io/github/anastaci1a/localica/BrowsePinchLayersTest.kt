@@ -77,6 +77,42 @@ class BrowsePinchLayersTest {
         verify()
     }
 
+    /** #522: within each pass the earlier item is on top; every cover stays above all text. */
+    @Test fun earlierItemsPaintAboveLaterOnesWithinEachPass() {
+        val motion = BrowsePinchMotion()
+        compose.setContent { LocalicaTheme {
+            val grid = rememberLazyGridState()
+            val shift = with(LocalDensity.current) { 120.dp.toPx() }
+            Box(Modifier.size(180.dp, 300.dp).testTag("order-scene")
+                .pinchRetainedOverlay(motion, grid, mapOf("a" to 0, "b" to 1))) {
+                LazyVerticalGrid(GridCells.Fixed(1), state = grid, modifier = Modifier.fillMaxSize()) {
+                    for ((key, art, text) in listOf(Triple("a", Color.Green, Color.Blue), Triple("b", Color.Red, Color.Yellow)))
+                        item(key = key) {
+                            // The later item is pulled up across the earlier one: its cover over the
+                            // earlier cover and text, its text over the earlier text.
+                            Column(Modifier.graphicsLayer { translationY = if (key == "b") -shift else 0f }) {
+                                Box(Modifier.size(100.dp).retainPinchArtwork(key, motion).background(art))
+                                Box(Modifier.size(100.dp, 40.dp).retainPinchText(key, motion).background(text))
+                            }
+                        }
+                }
+            }
+        } }
+        fun verify(phase: String) {
+            compose.waitForIdle()
+            val pixels = compose.onNodeWithTag("order-scene").captureToImage().toPixelMap()
+            val scale = pixels.height / 300f
+            fun at(y: Int) = pixels[(50 * scale).toInt(), (y * scale).toInt()]
+            val covers = at(60); val texts = at(130); val crossing = at(110)
+            assertTrue("$phase: the earlier cover is above the later cover: $covers", covers.green > .9f && covers.red < .1f)
+            assertTrue("$phase: the earlier text is above the later text: $texts", texts.blue > .9f && texts.red < .1f)
+            assertTrue("$phase: a later cover is still above earlier text: $crossing", crossing.red > .9f && crossing.blue < .1f)
+        }
+        verify("rest")
+        compose.runOnIdle { motion.source = BrowseStyle(); motion.target = BrowseStyle() }
+        verify("pinch")
+    }
+
     @Test fun selectedRowKeepsCrossingArtworkInItsSharpForegroundAndBelowItsRim() {
         verifySelectedArtworkLayering()
     }
@@ -172,7 +208,7 @@ class BrowsePinchLayersTest {
                         artwork = FrozenBrowsePart(image, IntOffset.Zero, IntSize(50, 50)))
                 }
             }
-            Box(Modifier.size(200.dp, 250.dp).testTag("frozen-scene")
+            Box(Modifier.size(200.dp, 250.dp).background(Color.Red).testTag("frozen-scene")
                 .pinchRetainedOverlay(motion, grid, mapOf("text" to 0, "frozen" to 1))) {
                 LazyVerticalGrid(GridCells.Fixed(1), state = grid, modifier = Modifier.fillMaxSize()) {
                     item(key = "browser-notice") { Spacer(Modifier.height(0.dp)) }
@@ -180,22 +216,26 @@ class BrowsePinchLayersTest {
                 }
             }
         } }
-        for (reversed in listOf(false, true)) {
-            if (reversed) {
-                compose.runOnIdle { runBlocking { motion.progress.snapTo(.3f) } }
-                compose.waitForIdle()
-            }
-            compose.runOnIdle { runBlocking { motion.progress.snapTo(.1f) } }
+        compose.waitForIdle()
+        val rowHeight = grid.layoutInfo.visibleItemsInfo.first { it.key == "text" }.size.height
+        val cutoff = browsePinchFadeWindow(rowHeight.toFloat(), 200f)
+        for (p in listOf(.025f, .05f, .1f, .15f, .2f, .3f, .45f, .15f, .1f, .05f)) {
+            compose.runOnIdle { runBlocking { motion.progress.snapTo(p) } }
             compose.waitForIdle()
-            val rowHeight = grid.layoutInfo.visibleItemsInfo.first { it.key == "text" }.size.height
             val pixels = compose.onNodeWithTag("frozen-scene").captureToImage().toPixelMap()
-            val y = (4 + rowHeight * .1f + 25).toInt()
-            // At .1 progress the departing 50→100 px cover has reached 61 px,
-            // ahead of the live 55 px scale. Position still follows the ordinary anchor.
-            val extended = pixels[63, y] // Beyond both the source and ordinary live width.
-            val outside = pixels[67, y]  // Outside the accelerated artwork endpoint, not card aspect-fit.
-            assertTrue("Retained art scales above later text, reversed=$reversed: $extended", extended.green > .8f && extended.red < .2f)
-            assertTrue("Art uses its own endpoint, reversed=$reversed: $outside", outside.red > .9f && outside.green < .1f)
+            val ink = mutableListOf<Pair<Int, Int>>()
+            for (y in 0 until pixels.height) for (x in 0 until pixels.width)
+                if (pixels[x, y].green > .025f) ink += x to y
+            if (p >= cutoff) {
+                assertTrue("A departure is invisible at its distance-scaled fade end: $p / $cutoff", ink.isEmpty())
+            } else {
+                assertTrue("Retained cover remains visible before its fade end: $p / $cutoff", ink.isNotEmpty())
+                val width = ink.maxOf { it.first } - ink.minOf { it.first } + 1
+                val top = ink.minOf { it.second }
+                assertEquals("Retained cover follows its ordinary artwork scale at $p", 50f + 50f * p, width.toFloat(), 2f)
+                assertEquals("Retained cover follows the same progress in position at $p", 4f + rowHeight * p, top.toFloat(), 2f)
+                assertTrue("No departure grows past its fade-end size", width <= 50f + 50f * cutoff + 2f)
+            }
         }
     }
 
@@ -331,7 +371,8 @@ class BrowsePinchLayersTest {
                 LazyVerticalGrid(GridCells.Fixed(columns), state = grid, modifier = Modifier.fillMaxSize()) {
                     item(key = "browser-notice", span = { GridItemSpan(maxLineSpan) }) { Spacer(Modifier.height(0.dp)) }
                     items(fixture.visible.value, key = { it }) { key ->
-                        Box(Modifier.height(100.dp).background(if (key == "frozen") Color.Blue else Color.Red))
+                        // A fading green drawing must remain measurable across the live row edge.
+                        Box(Modifier.height(100.dp).background(if (key == "frozen") Color.Blue else Color.Black))
                     }
                 }
             }

@@ -123,16 +123,18 @@ class PinchRetainedHighlightTest {
             val firstArt = compose.onNodeWithTag("browse-art-retained:0", true).fetchSemanticsNode().boundsInRoot
             val x = viewport.width / 2f
             val y = firstArt.center.y - viewport.top
-            fun highlightPixels(label: String): Int {
+            fun highlightPixels(label: String, anywhere: Boolean = false): Int {
                 compose.runOnIdle { stage++ }
                 val pixels = capturePresentedPopupPixels(compose, scene, stage) { view }
-                val left = (sourceBounds.left - sceneBounds.left).toInt().coerceAtLeast(0)
-                val right = (sourceBounds.right - sceneBounds.left).toInt().coerceAtMost(pixels.width)
-                val top = (sourceBounds.top - sceneBounds.top).toInt().coerceAtLeast(0)
-                val bottom = (sourceBounds.bottom - sceneBounds.top).toInt().coerceAtMost(pixels.height)
+                val left = if (anywhere) 0 else (sourceBounds.left - sceneBounds.left).toInt().coerceAtLeast(0)
+                val right = if (anywhere) pixels.width else (sourceBounds.right - sceneBounds.left).toInt().coerceAtMost(pixels.width)
+                val top = if (anywhere) 0 else (sourceBounds.top - sceneBounds.top).toInt().coerceAtLeast(0)
+                val bottom = if (anywhere) pixels.height else (sourceBounds.bottom - sceneBounds.top).toInt().coerceAtMost(pixels.height)
                 val highlighted = (top until bottom).flatMap { py -> (left until right).mapNotNull { px ->
                     val c = pixels[px, py]
-                    if (c.red - c.green > .07f && c.blue - c.green > .07f) px to py else null
+                    // Long departures fade earlier (#536); measure their retained contour
+                    // without requiring the original slab's opacity after recognition.
+                    if (c.red - c.green > .01f && c.blue - c.green > .01f) px to py else null
                 } }
                 val count = highlighted.size
                 if (label == "source" || label == "reversed" || label == "returned") {
@@ -159,11 +161,13 @@ class PinchRetainedHighlightTest {
             }
             val originalInk = highlightPixels("source")
             assertTrue("The source current row must have a visible highlight", originalInk > 100)
+            // Ink of the same hue outside the current row (controls, other rows), for the recognized stage.
+            val otherInk = highlightPixels("source-scene", anywhere = true) - originalInk
             compose.mainClock.autoAdvance = false
             pointersDown = true
             list.performTouchInput {
                 down(0, Offset(x - 60f, y)); down(1, Offset(x + 60f, y))
-                // Cross recognition with almost zero geometry travel. The playing
+                // Cross recognition just past the threshold. The playing
                 // row is away from the anchor and disappears from the live grid.
                 moveTo(0, Offset(x - 57.65f, y)); moveTo(1, Offset(x + 57.65f, y))
             }
@@ -173,7 +177,9 @@ class PinchRetainedHighlightTest {
             }
             compose.mainClock.advanceTimeBy(300)
             current.assertDoesNotExist()
-            val recognizedInk = highlightPixels("recognized")
+            // Recognition keeps the travel past the 4% threshold (#520), so the departing slab has
+            // started toward its destination: it must still be drawn, wherever it now is.
+            val recognizedInk = highlightPixels("recognized", anywhere = true) - otherInk
             assertTrue("Virtualization must retain the current-song slab: source=$originalInk recognized=$recognizedInk",
                 recognizedInk >= originalInk * .7f)
             // Hold a partial transition, then reverse without lifting either finger.
