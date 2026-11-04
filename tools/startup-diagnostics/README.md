@@ -31,7 +31,7 @@ The controller polls the frame ring every second and deduplicates its overlappin
 
 Each dump retains its observation clock. Completion timestamps later than that observation are invalid; raw values remain archived. Later valid observations can recover the same traversal. Reports distinguish recovered and unresolved frames. Unresolved completions limit total-duration percentiles; CPU and trace measurements remain separate.
 
-Accessibility nodes are read once per poll and searched locally. Receipts retain traversal time and node counts, so observation delays are visible. Input is never injected after the nominal window has ended.
+Accessibility uses targeted text queries rather than fetching every virtual child. Tab selection also checks matching nodes’ ancestors. Receipts retain query time and observed node counts, so observation delays are visible. Input is never injected after the nominal window has ended.
 
 The frame ring and incomplete tail cannot certify lossless capture. Missing input/content/scroll observations remain explicit rather than passing performance assertions. Timing values never fail a correctness test. Profile attribution requires inspecting raw traces; phase medians do not establish a bottleneck by themselves.
 
