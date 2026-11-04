@@ -496,6 +496,28 @@ class SearchImeMotionTest {
     @Test fun nativeInputCompletionDoesNotStarveTheFirstPlacedReturnFrame() =
         exerciseDismissal(outside = true, awaitFirstReturn = true)
 
+    @Test fun nativeKeyboardPolicyRemainsOwnedUntilTheEditorWindowRetires() {
+        try {
+            withDockedKeyboard {
+                fixture(true)
+                compose.onNodeWithTag("list-search-pill").performTouchInput { click() }
+                opened()
+                awaitDockedKeyboard()
+                opened()
+            }
+            assertTrue("The measured editor window has not retired yet",
+                compose.runOnUiThread { popupView?.isAttachedToWindow == true })
+            assertEquals("Keep keyboard policy until the editing window retires", "1",
+                shell("settings get secure show_ime_with_hard_keyboard"))
+            for (setting in listOf("animator_duration_scale", "transition_animation_scale", "window_animation_scale"))
+                assertEquals("Keep native animation policy until the editing window retires", 1f,
+                    shell("settings get global $setting").toFloat(), 0f)
+        } finally {
+            compose.runOnUiThread { visible = false }
+            compose.mainClock.autoAdvance = true
+        }
+    }
+
     @Test fun independentOpeningAndEmptyNativeBackHaveOneDirectReturn() = exerciseDismissal(outside = false)
     @Test fun outsidePointerDismissalDoesNotFollowTheKeyboardDown() = exerciseDismissal(outside = true)
     @Test fun reducedMotionShapesImmediatelyThenAnchorsAndSnapsDirectlyHome() = exerciseDismissal(outside = false, reduced = true)
