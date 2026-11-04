@@ -171,6 +171,7 @@ internal fun Modifier.pinchRetainedOverlay(motion: BrowsePinchMotion, grid: Lazy
         // updated after this pass), so the layer still holds last frame's size. Scaling by it
         // painted the new drawing at old/new size, one to a few pixels off per frame (#505).
         val recorded = if (motion.recordingFrozen) part.layer.size else coordinates.size
+        if (recorded.width <= 0 || recorded.height <= 0) return
         translate(bounds.left, bounds.top) {
             scale(bounds.width / recorded.width, bounds.height / recorded.height, Offset.Zero) { drawLayer(part.layer) }
         }

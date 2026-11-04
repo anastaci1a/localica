@@ -406,6 +406,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
         if (anchor.route != route) { zoomAnchor = null; return@LaunchedEffect }
         if (queryPending || displayedStyle != anchor.style) return@LaunchedEffect
         val index = result.items.indexOfFirst { it.key == anchor.key }
+        var interrupted = false
         try {
             if (index >= 0) scrollOwnership.during {
                 headerPhase("position-request")
@@ -453,6 +454,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                 }
             }
         } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            interrupted = true
             headerPhase("mutation-cancelled type=${cancelled.javaClass.simpleName}")
             throw cancelled
         } finally {
@@ -462,7 +464,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                 zoomAnchor = null
                 // Still active, this effect was not relaunched: a user scroll interrupted or
                 // refused its mutation, so it will never verify the header handoff (#535).
-                if (active) pinchHeader?.abandonHandoff()
+                if (interrupted && active) pinchHeader?.abandonHandoff()
             }
         }
     }
