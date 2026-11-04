@@ -124,7 +124,26 @@ internal fun <T : Any, P> BoxScope.KeyedDragOverlay(state: KeyedDragState<T, P>,
         val paneScene = if (index > 0) rememberFrostedBackdrop(drag to paneBacking?.lensSnapshot,
             // Consumers already clip to their pane. Avoid a full-viewport offscreen raster
             // that redraws everything outside those clips whenever a card moves.
-            dark = backing?.dark == true, retainRaster = false, settledRefresh = false) else null
+            dark = backing?.dark == true, retainRaster = false, whiteTint = 0f, settledRefresh = false) else null
+        SideEffect {
+            paneScene?.readbackBackground = {
+                paneBacking?.snapshot?.let { image ->
+                    paneBacking.location.registrationTo(paneScene.location)?.let { BackdropSnapshotBackground(image, it) }
+                }
+            }
+            paneScene?.readbackRegion = {
+                val bounds = frames.values.map { it.geometry().lifted.bounds.translate(it.position()) }
+                if (bounds.isEmpty()) null else {
+                    // Include every pane, its sampling displacement, blur and outside shadow.
+                    val room = with(density) { 96.dp.toPx() }
+                    androidx.compose.ui.unit.IntRect(
+                        kotlin.math.floor(bounds.minOf { it.left } - room).toInt().coerceIn(0, state.viewportWidth - 1),
+                        kotlin.math.floor(bounds.minOf { it.top } - room).toInt().coerceIn(0, state.viewportHeight - 1),
+                        kotlin.math.ceil(bounds.maxOf { it.right } + room).toInt().coerceIn(1, state.viewportWidth),
+                        kotlin.math.ceil(bounds.maxOf { it.bottom } + room).toInt().coerceIn(1, state.viewportHeight))
+                }
+            }
+        }
         previousPane = paneScene
         LaunchedEffect(drag, paneScene) {
             if (paneScene == null) return@LaunchedEffect

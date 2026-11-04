@@ -50,6 +50,9 @@ private data class GlassBackdropPreparation(val renderer: GlassRendererGeneratio
 internal class FrostedBackdrop(val layer: GraphicsLayer, dark: Boolean,
     private val renderer: GlassRendererRuntime? = null) {
     val readback = RetainedLayerReadback()
+    // Optional same-coordinate crop for transient producers; the surrounding scene stays intact.
+    var readbackRegion: (() -> androidx.compose.ui.unit.IntRect?)? = null
+    var readbackBackground: (() -> BackdropSnapshotBackground?)? = null
     private val defaultRenderer = automaticGlassRendererGeneration()
     val rendererGeneration get() = renderer?.generation ?: defaultRenderer
     private val captureLock = Mutex()
@@ -108,10 +111,10 @@ internal class FrostedBackdrop(val layer: GraphicsLayer, dark: Boolean,
      * wait here but cannot clear another generation's pending-recording freeze. */
     suspend fun captureCurrent(graphics: androidx.compose.ui.graphics.GraphicsContext,
         density: androidx.compose.ui.unit.Density, direction: androidx.compose.ui.unit.LayoutDirection,
-        valid: () -> Boolean): ImageBitmap? = captureLock.withLock {
+        valid: () -> Boolean, region: androidx.compose.ui.unit.IntRect? = null): ImageBitmap? = captureLock.withLock {
         if (!valid()) return@withLock null
         readbackPending = true
-        try { readback.capture(layer, graphics, density, direction) }
+        try { readback.captureRegion(layer, graphics, density, direction, region) }
         finally {
             readbackPending = false
             if (!layer.isReleased) layer.compositingStrategy = desiredCompositing
@@ -256,10 +259,13 @@ internal fun rememberFrostedBackdrop(key: Any?, enabled: Boolean = true, dark: B
                     if (!current()) return false
                     // Draw readiness does not own native lifetime: the retained lease remains
                     // protected through completion even when this generation is cancelled.
-                    val native = source.captureCurrent(graphicsContext, currentDensity, currentDirection, ::current) ?: return false
+                    val background = source.readbackBackground?.invoke()
+                    val region = source.readbackRegion?.invoke().takeIf { background != null }
+                    val native = source.captureCurrent(graphicsContext, currentDensity, currentDirection, ::current, region) ?: return false
                     if (!current()) return false
                     val (snapshot, fallback) = withContext(Dispatchers.Default) {
-                        val software = softwareGlassSnapshot(native, size)
+                        val software = if (region == null) softwareGlassSnapshot(native, size)
+                            else expandBackdropSnapshot(native, region, size, requireNotNull(background))
                         software to scatterSnapshot(software)
                     }
                     currentCoroutineContext().ensureActive()
