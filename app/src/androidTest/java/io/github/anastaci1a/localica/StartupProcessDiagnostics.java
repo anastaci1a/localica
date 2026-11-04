@@ -19,6 +19,7 @@ import java.io.FileOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.ArrayList;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -114,9 +115,9 @@ public final class StartupProcessDiagnostics extends Instrumentation {
             try {
                 while (sampling.get()) {
                     Thread.sleep(1_000);
-                    if (!sampling.get()) break;
+                    if (!sampling.get() || SystemClock.uptimeMillis() - start >= WINDOW_MS) break;
                     long before = SystemClock.uptimeMillis();
-                    String frames = shell("dumpsys gfxinfo " + APP + " framestats");
+                    String frames = frameSnapshot();
                     samplingMs.addAndGet(SystemClock.uptimeMillis() - before);
                     write(output, String.format(java.util.Locale.ROOT, "gfxinfo-%03d.txt", snapshots.incrementAndGet()), frames);
                 }
@@ -132,11 +133,15 @@ public final class StartupProcessDiagnostics extends Instrumentation {
             JSONObject navigation = null;
             long navigationAt = 0;
             boolean navigated = false;
+            long accessibilityReadMs = 0, accessibilityNodes = 0;
             while (SystemClock.uptimeMillis() - start < WINDOW_MS) {
-                AccessibilityNodeInfo root = automation.getRootInActiveWindow();
+                long readStart = SystemClock.uptimeMillis();
+                ObservedNode root = snapshot(automation.getRootInActiveWindow());
+                accessibilityReadMs += SystemClock.uptimeMillis() - readStart;
                 polls++;
+                if (root != null) accessibilityNodes += root.nodes;
+                if (SystemClock.uptimeMillis() - start >= WINDOW_MS) break;
                 if (root != null) {
-                    try {
                         if (APP.contentEquals(root.getPackageName() == null ? "" : root.getPackageName())) {
                             Rect artists = find(root, "Artists", false);
                             Rect albums = find(root, "Albums", false);
@@ -199,13 +204,14 @@ public final class StartupProcessDiagnostics extends Instrumentation {
                                 step = 6;
                             }
                         }
-                    } finally { root.recycle(); }
                 }
                 SystemClock.sleep(100);
             }
             report.put("shellObservedMs", shellAt == 0 ? JSONObject.NULL : shellAt - start)
                     .put("firstContentObservedMs", firstContent == 0 ? JSONObject.NULL : firstContent - start)
                     .put("inputs", inputs).put("polls", polls).put("navigationContentObserved", navigated)
+                    .put("accessibilityReadMs", accessibilityReadMs).put("accessibilityNodes", accessibilityNodes)
+                    .put("controlLoopEndedMs", SystemClock.uptimeMillis() - start)
                     .put("dragScrollEventObserved", step >= 3).put("flingScrollEventObserved", step == 6)
                     .put("firstFiveSecondInputAttempt", inputs.length() > 0 && inputs.getJSONObject(0).getLong("requestedMs") <= 5_000);
         } finally {
@@ -216,10 +222,11 @@ public final class StartupProcessDiagnostics extends Instrumentation {
                     .put("frameSnapshotCommandMs", samplingMs.get())
                     .put("frameSamplerFailure", samplingFailure.get() == null ? JSONObject.NULL : samplingFailure.get().toString());
             if (trace) capture(output, "trace.txt", "atrace --async_stop");
-            write(output, "gfxinfo.txt", shell("dumpsys gfxinfo " + APP + " framestats"));
+            write(output, "gfxinfo.txt", frameSnapshot());
             write(output, "cpuinfo.txt", shell("dumpsys cpuinfo"));
             write(output, "meminfo.txt", shell("dumpsys meminfo " + APP));
-            write(output, "threads.txt", shell("ps -T -p $(pidof " + APP + ") -o TID,NAME"));
+            write(output, "threads.txt", shell("startup_pid=$(pidof " + APP + "); if [ -n \"$startup_pid\" ]; then " +
+                    "for startup_task in /proc/$startup_pid/task/*; do printf '%s ' \"${startup_task##*/}\"; cat \"$startup_task/comm\"; done; fi"));
             write(output, "milestones.json", report.toString(2));
         }
         String pid = shell("pidof " + APP).trim();
@@ -228,30 +235,49 @@ public final class StartupProcessDiagnostics extends Instrumentation {
         report.put("pid", pid).put("sameProcessAsCold", expectedPid == null ? JSONObject.NULL : expectedPid.equals(pid));
         write(output, "milestones.json", report.toString(2));
         // Return to Albums outside the measurement; warm activity starts from a comparable tab.
-        AccessibilityNodeInfo root = automation.getRootInActiveWindow();
+        ObservedNode root = snapshot(automation.getRootInActiveWindow());
         if (root != null) {
-            try { Rect albums = find(root, "Albums", false); if (albums != null) tap(albums); }
-            finally { root.recycle(); }
+            Rect albums = find(root, "Albums", false); if (albums != null) tap(albums);
         }
         return pid;
     }
 
-    private static Rect find(AccessibilityNodeInfo node, String text, boolean prefix) {
-        CharSequence value = node.getText(), description = node.getContentDescription();
-        if (matches(value, text, prefix) || matches(description, text, prefix)) {
-            Rect bounds = new Rect(); node.getBoundsInScreen(bounds);
-            if (node.isVisibleToUser() && !bounds.isEmpty()) return bounds;
+    private static final class ObservedNode {
+        String text, description, packageName;
+        boolean visible, selected;
+        final Rect bounds = new Rect();
+        final ArrayList<ObservedNode> children = new ArrayList<>();
+        long nodes = 1;
+        String getPackageName() { return packageName; }
+        void getBoundsInScreen(Rect out) { out.set(bounds); }
+    }
+    private static ObservedNode snapshot(AccessibilityNodeInfo live) {
+        if (live == null) return null;
+        try {
+            ObservedNode result = new ObservedNode();
+            result.text = live.getText() == null ? null : live.getText().toString();
+            result.description = live.getContentDescription() == null ? null : live.getContentDescription().toString();
+            result.packageName = live.getPackageName() == null ? null : live.getPackageName().toString();
+            result.visible = live.isVisibleToUser(); result.selected = live.isSelected();
+            live.getBoundsInScreen(result.bounds);
+            for (int i = 0; i < live.getChildCount(); i++) {
+                ObservedNode child = snapshot(live.getChild(i));
+                if (child != null) { result.children.add(child); result.nodes += child.nodes; }
+            }
+            return result;
+        } finally { live.recycle(); }
+    }
+    private static Rect find(ObservedNode node, String text, boolean prefix) {
+        if (matches(node.text, text, prefix) || matches(node.description, text, prefix)) {
+            if (node.visible && !node.bounds.isEmpty()) return new Rect(node.bounds);
         }
-        for (int i = 0; i < node.getChildCount(); i++) {
-            AccessibilityNodeInfo child = node.getChild(i);
-            if (child == null) continue;
-            try { Rect match = find(child, text, prefix); if (match != null) return match; }
-            finally { child.recycle(); }
+        for (ObservedNode child : node.children) {
+            Rect match = find(child, text, prefix); if (match != null) return match;
         }
         return null;
     }
 
-    private static boolean hasPrefix(AccessibilityNodeInfo root, String prefix) { return find(root, prefix, true) != null; }
+    private static boolean hasPrefix(ObservedNode root, String prefix) { return find(root, prefix, true) != null; }
     private void recordScroll(JSONObject navigation, long start) throws Exception {
         long[] event = scrollEvent.get();
         navigation.put("scrollEventMs", event[0] - start).put("responseMs", event[0] - gestureStart)
@@ -261,12 +287,10 @@ public final class StartupProcessDiagnostics extends Instrumentation {
     private static boolean matches(CharSequence value, String text, boolean prefix) {
         return value != null && (prefix ? value.toString().startsWith(text) : value.toString().equals(text));
     }
-    private static boolean selected(AccessibilityNodeInfo node, String text) {
-        if (node.isSelected() && find(node, text, false) != null) return true;
-        for (int i = 0; i < node.getChildCount(); i++) {
-            AccessibilityNodeInfo child = node.getChild(i);
-            if (child == null) continue;
-            try { if (selected(child, text)) return true; } finally { child.recycle(); }
+    private static boolean selected(ObservedNode node, String text) {
+        if (node.selected && find(node, text, false) != null) return true;
+        for (ObservedNode child : node.children) {
+            if (selected(child, text)) return true;
         }
         return false;
     }
@@ -299,6 +323,10 @@ public final class StartupProcessDiagnostics extends Instrumentation {
             while ((count = input.read(buffer)) != -1) bytes.write(buffer, 0, count);
             return bytes.toString("UTF-8");
         }
+    }
+    private String frameSnapshot() throws Exception {
+        String raw = shell("dumpsys gfxinfo " + APP + " framestats");
+        return "# capturedAtNanos=" + System.nanoTime() + "\n" + raw;
     }
     private void capture(File directory, String name, String command) throws Exception {
         // Trace buffers can be tens of MiB; retain bytes without a second full-size

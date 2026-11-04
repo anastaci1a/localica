@@ -29,6 +29,10 @@ Each fifteen-second window retains overlapping `gfxinfo framestats` snapshots, m
 
 The controller polls the frame ring every second and deduplicates its overlapping records. This limits startup-frame replacement by later frames. Receipts retain snapshot count, cumulative command duration and failures. Polling adds Binder/observer work, applied identically to cold and warm trials; it is not subtracted from timings.
 
+Each dump retains its observation clock. Completion timestamps later than that observation are invalid; raw values remain archived. Later valid observations can recover the same traversal. Reports distinguish recovered and unresolved frames. Unresolved completions limit total-duration percentiles; CPU and trace measurements remain separate.
+
+Accessibility nodes are read once per poll and searched locally. Receipts retain traversal time and node counts, so observation delays are visible. Input is never injected after the nominal window has ended.
+
 The frame ring and incomplete tail cannot certify lossless capture. Missing input/content/scroll observations remain explicit rather than passing performance assertions. Timing values never fail a correctness test. Profile attribution requires inspecting raw traces; phase medians do not establish a bottleneck by themselves.
 
 Trace summaries retain Main, RenderThread and background threads present in the final thread snapshot. Threads that already exited may be absent. Scheduler intervals and inclusive trace slices are separate measurements; nested slice durations overlap and must not be added as CPU time.

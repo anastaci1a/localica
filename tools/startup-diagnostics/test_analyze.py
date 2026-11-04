@@ -16,9 +16,9 @@ class FrameStatsTest(unittest.TestCase):
             " w-8 [000] .... 1.100000: sched_switch: prev_comm=DefaultDispatch prev_pid=8 prev_prio=0 prev_state=S ==> next_comm=DefaultDispatch next_pid=9 next_prio=0",
             " w-9 [000] .... 1.300000: sched_switch: prev_comm=DefaultDispatch prev_pid=9 prev_prio=0 prev_state=S ==> next_comm=x next_pid=1 next_prio=0",
         ])
-        threads = scheduling(trace, "TID NAME\n7 app\n8 DefaultDispatch\n9 DefaultDispatch", 7, 1000, 1000)["threads"]
+        threads = scheduling(trace, "TID NAME\n7 app\n8 DefaultDispatch\n9 DefaultDispatch\n10 Jit thread pool", 7, 1000, 1000)["threads"]
         by_tid = {value["tid"]: value for value in threads.values()}
-        self.assertEqual({7, 8, 9}, set(by_tid))
+        self.assertEqual({7, 8, 9, 10}, set(by_tid))
         self.assertEqual((100, 200), (by_tid[8]["runningMs"], by_tid[9]["runningMs"]))
 
     def test_trace_slices_retain_nested_wall_time_without_calling_it_cpu_time(self):
@@ -51,11 +51,28 @@ class FrameStatsTest(unittest.TestCase):
         self.assertEqual((50, 95, 99), (result["p50Ms"], result["p95Ms"], result["p99Ms"]))
         self.assertIsNone(percentiles([])["p95Ms"])
 
+    def test_future_completion_is_rejected_and_later_valid_snapshot_recovers_once(self):
+        raw = "\n".join(["# capturedAtNanos=2000000000", HEADER,
+                          row(duration=137_000_000_000_000), row(duration=800_000_000)])
+        selected, rejected = frames(raw, 1_000, 1_500)
+        self.assertEqual(1, len(selected))
+        self.assertEqual(800_000_000, selected[0]["FrameCompleted"] - selected[0]["IntendedVsync"])
+        self.assertEqual((1, 1, 0), (rejected["futureCompletionFrames"], rejected["futureCompletionRecovered"], rejected["futureCompletionUnresolved"]))
+
+    def test_updated_completion_for_one_traversal_is_not_a_second_frame(self):
+        raw = "\n".join(["# capturedAtNanos=2000000000", HEADER, row(), row(duration=25_000_000)])
+        selected, rejected = frames(raw, 1_000, 6_000)
+        self.assertEqual(1, len(selected))
+        self.assertEqual(25_000_000, selected[0]["FrameCompleted"] - selected[0]["IntendedVsync"])
+        self.assertEqual(1, rejected["duplicate"])
+
     def test_flagged_unfinished_outside_and_duplicate_frames_are_not_samples(self):
         raw = "\n".join([HEADER, row(), row(), row(flags=1), row(start=500), row(duration=-1)])
         selected, rejected = frames(raw, 1_000, 6_000)
         self.assertEqual(1, len(selected))
-        self.assertEqual({"flagged": 1, "unfinished": 1, "outsideWindow": 1, "duplicate": 1}, rejected)
+        self.assertEqual({"flagged": 1, "unfinished": 1, "outsideWindow": 1, "duplicate": 1,
+                          "futureCompletion": 0, "futureCompletionFrames": 0,
+                          "futureCompletionRecovered": 0, "futureCompletionUnresolved": 0}, rejected)
 
     def test_first_five_seconds_and_deadlines_are_distinct(self):
         raw = "\n".join([HEADER, row(), row(start=7_000_000_000)])
