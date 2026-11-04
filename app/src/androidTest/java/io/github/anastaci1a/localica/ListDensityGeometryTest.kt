@@ -109,10 +109,12 @@ class ListDensityGeometryTest {
             } else if (mode == ListSize.Smallest) {
                 val firstRow = compose.onNodeWithTag("density-row-${item.key}").fetchSemanticsNode().boundsInRoot
                 val secondRow = compose.onNodeWithTag("density-row-${second.key}").fetchSemanticsNode().boundsInRoot
-                val expectedPitch = (40 * density).roundToInt() + 2 * (1.2f * density).roundToInt()
-                assertEquals("Smallest keeps its inner row and halves its former 2.4dp outer padding",
-                    expectedPitch.toFloat(), firstRow.height, 1f)
-                assertEquals(expectedPitch.toFloat(), secondRow.top - firstRow.top, 1f)
+                val titleHeight = bounds("text").height
+                val expectedPitch = titleHeight + ((40 * density).roundToInt() - titleHeight) / 2 +
+                    2 * (.6f * density).roundToInt()
+                assertEquals("Smallest halves the space between consecutive titles",
+                    expectedPitch, firstRow.height, 1f)
+                assertEquals(expectedPitch, secondRow.top - firstRow.top, 1f)
                 assertEquals("Consecutive rows have no additional spacing", firstRow.bottom, secondRow.top, 1f)
                 assertEquals(0f, firstArt.width, 0f)
             } else {

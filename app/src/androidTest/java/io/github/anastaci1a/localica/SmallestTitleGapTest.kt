@@ -32,6 +32,7 @@ class SmallestTitleGapTest {
         var scale by mutableFloatStateOf(1f)
         var numbered by mutableStateOf(false)
         var density = 1f
+        val clicks = mutableListOf<Int>()
         val entries = (0..3).map { index ->
             val track = Track("gap-$index", "Title ${index + 1}", artist = "Artist information",
                 fileName = "song.mp3", relativePath = "song.mp3")
@@ -48,7 +49,7 @@ class SmallestTitleGapTest {
                         Box(Modifier.fillMaxWidth().testTag("gap-row-$index").padding(
                             horizontal = geometry.cardInset.dp, vertical = geometry.cardVerticalInset(style).dp)) {
                             BrowseItemLayout(entry, style, geometry, this@LookaheadScope, true,
-                                menu = { ActionIcon(R.drawable.ic_ellipsis, "Gap actions $index", quiet = true) {} },
+                                menu = { ActionIcon(R.drawable.ic_ellipsis, "Gap actions $index", quiet = true) { clicks += index } },
                                 trackNumber = if (numbered) "${index + 1}" else null)
                         }
                     }
@@ -76,7 +77,10 @@ class SmallestTitleGapTest {
             val row = compose.onNodeWithTag("gap-row-0").fetchSemanticsNode().boundsInRoot
             assertTrue("Metadata stays within its row", info.top >= row.top && info.bottom <= row.bottom)
             assertTrue("Title and metadata stay separate", first.right <= info.left)
-            compose.onNodeWithContentDescription("Gap actions 0").performClick()
+            compose.runOnIdle { clicks.clear() }
+            for (index in entries.indices)
+                compose.onNodeWithContentDescription("Gap actions $index").performTouchInput { click() }
+            compose.runOnIdle { assertEquals("Each menu receives its own pointer tap", entries.indices.toList(), clicks) }
             val capture = compose.onRoot().captureToImage().asAndroidBitmap()
             // A pixel witness confirms the title area contains drawn text.
             assertTrue("First title must paint pixels", (first.top.toInt() until first.bottom.toInt()).any { y ->
@@ -85,9 +89,10 @@ class SmallestTitleGapTest {
                     android.graphics.Color.red(color) < 150 && android.graphics.Color.green(color) < 150
                 }
             })
-            InstrumentationRegistry.getArguments().getString("smallestGapCapture")?.let { label ->
+            (InstrumentationRegistry.getArguments().getString("smallestGapCapture") ?: "verified").let { label ->
                 val context = InstrumentationRegistry.getInstrumentation().targetContext
-                val directory = File(context.getExternalFilesDir(null), "smallest-gap-548/$label").apply { mkdirs() }
+                val directory = File(nativeEvidenceDirectory("smallest-gap-548", context.getExternalFilesDir(null)), label)
+                    .apply { mkdirs() }
                 File(directory, "font-$fontScale-numbered-$numbers.png").outputStream().use {
                     check(capture.compress(Bitmap.CompressFormat.PNG, 100, it))
                 }

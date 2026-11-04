@@ -183,7 +183,7 @@ List **Size** offers Smallest, Small, Compact, Normal (default), and Large (18 s
 
 Compact keeps its fixed row pitch and text size, sizing leading artwork to Normal’s gap-to-art ratio up to the inner row height, with proportionate corner rounding. Small/Smallest replace artwork with physical occurrence positions in mutable lists or track numbers in albums. Elsewhere they omit artwork.
 
-Large titles allow two lines; other list titles remain single-line. Small matches the former Smallest inner row height. Smallest shares that inner height and uses 30% of ordinary between-row padding.
+Large titles allow two lines; other list titles remain single-line. Small retains a 40 dp minimum inner row height. Smallest halves its former gap between adjacent title bounds, including inner slack and outer padding, with pixel rounding. Rows grow for larger text and retain metadata and number space.
 
 These three dense sizes keep one-line extra information immediately before the overflow, with smaller single-line titles. Metadata moves between trailing and subtitle positions through the shared layout animation. Long text ellipsizes, and larger system fonts grow rows.
 

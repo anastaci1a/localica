@@ -59,11 +59,11 @@ class BrowseItemMetricsTest {
 
     @Test fun denseTextOnlyAndNumberedRowsRetainAccessiblePitchAndGrowForLargeText() {
         val geometry = BrowseCellGeometry(1)
-        assertEquals(1.2f, geometry.cardVerticalInset(BrowseStyle(listSize = ListSize.Smallest)), .00001f)
+        assertEquals(.6f, geometry.cardVerticalInset(BrowseStyle(listSize = ListSize.Smallest)), .00001f)
         for (size in ListSize.entries.filter { it != ListSize.Smallest })
             assertEquals(4f, geometry.cardVerticalInset(BrowseStyle(listSize = size)), 0f)
         assertEquals(4f, geometry.cardVerticalInset(BrowseStyle(presentation = Presentation.Standard, listSize = ListSize.Smallest)), 0f)
-        for ((size, height) in listOf(ListSize.Compact to 56, ListSize.Small to 40, ListSize.Smallest to 40)) {
+        for ((size, height) in listOf(ListSize.Compact to 56, ListSize.Small to 40, ListSize.Smallest to 30)) {
             val m = metrics(size)
             assertEquals(height, m.place(20, 0, 16).height)
             assertTrue(m.place(80, 0, 72).height >= 80)
@@ -71,6 +71,22 @@ class BrowseItemMetricsTest {
             assertEquals(28, numbered.art)
             assertEquals(height, numbered.place(20, 0, 16).height)
             if (size != ListSize.Compact) assertEquals(0, m.art)
+        }
+    }
+
+    @Test fun smallestHalvesFormerTitleGapAcrossPixelDensitiesAndFontSizes() {
+        for (density in listOf(1f, 1.5f, 1.75f, 2.625f, 3f)) {
+            for (scale in listOf(1f, 1.3f, 2f)) for (numbered in listOf(false, true)) {
+                val title = (20 * density * scale).roundToInt()
+                val info = (16 * density * scale).roundToInt()
+                val m = metrics(ListSize.Smallest, density = density, numbered = numbered)
+                val row = m.place(title, 0, info)
+                val formerHeight = maxOf((40 * density).roundToInt(), title, info, m.art)
+                val formerGap = formerHeight + 2 * (1.2f * density).roundToInt() - title
+                val gap = row.height + 2 * (.6f * density).roundToInt() - title
+                assertEquals("$density/$scale numbered=$numbered", formerGap / 2f, gap.toFloat(), 2f)
+                assertTrue(row.height >= maxOf(title, info, m.art))
+            }
         }
     }
 
