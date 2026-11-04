@@ -137,6 +137,11 @@ public final class StartupProcessDiagnostics extends Instrumentation {
                             if (shellAt == 0 && artists != null && albums != null) shellAt = SystemClock.uptimeMillis();
                             if (firstContent == 0 && (hasPrefix(root, "Diagnostic album") || hasPrefix(root, "Diagnostic artist")))
                                 firstContent = SystemClock.uptimeMillis();
+                            if ((step == 1 || step == 4) && navigation != null &&
+                                    !navigation.has("selectedObservedMs") && selected(root, step == 1 ? "Artists" : "Albums")) {
+                                navigation.put("selectedObservedMs", SystemClock.uptimeMillis() - start)
+                                        .put("selectionResponseMs", SystemClock.uptimeMillis() - navigationAt);
+                            }
                             if (step == 0 && artists != null) {
                                 navigationAt = SystemClock.uptimeMillis();
                                 navigation = new JSONObject().put("kind", "tap-artists").put("requestedMs", navigationAt - start);
@@ -144,7 +149,8 @@ public final class StartupProcessDiagnostics extends Instrumentation {
                                 navigation.put("injectionReturnedMs", SystemClock.uptimeMillis() - start);
                                 inputs.put(navigation);
                                 step = 1;
-                            } else if (step == 1 && selected(root, "Artists") && hasPrefix(root, "Diagnostic artist")) {
+                            } else if (step == 1 && selected(root, "Artists") && hasPrefix(root, "Diagnostic artist") &&
+                                    !hasPrefix(root, "Diagnostic album")) {
                                 navigation.put("contentObservedMs", SystemClock.uptimeMillis() - start)
                                         .put("responseMs", SystemClock.uptimeMillis() - navigationAt);
                                 navigated = true;
@@ -203,7 +209,7 @@ public final class StartupProcessDiagnostics extends Instrumentation {
             report.put("frameSamplerStopped", !frameSampler.isAlive()).put("frameSnapshots", snapshots.get())
                     .put("frameSnapshotCommandMs", samplingMs.get())
                     .put("frameSamplerFailure", samplingFailure.get() == null ? JSONObject.NULL : samplingFailure.get().toString());
-            if (trace) write(output, "trace.txt", shell("atrace --async_stop"));
+            if (trace) capture(output, "trace.txt", "atrace --async_stop");
             write(output, "gfxinfo.txt", shell("dumpsys gfxinfo " + APP + " framestats"));
             write(output, "cpuinfo.txt", shell("dumpsys cpuinfo"));
             write(output, "meminfo.txt", shell("dumpsys meminfo " + APP));
@@ -286,6 +292,15 @@ public final class StartupProcessDiagnostics extends Instrumentation {
             byte[] buffer = new byte[8192]; int count;
             while ((count = input.read(buffer)) != -1) bytes.write(buffer, 0, count);
             return bytes.toString("UTF-8");
+        }
+    }
+    private void capture(File directory, String name, String command) throws Exception {
+        // Trace buffers can be tens of MiB; retain bytes without a second full-size
+        // String/byte-array copy in the controller's heap between paired windows.
+        try (ParcelFileDescriptor.AutoCloseInputStream input = new ParcelFileDescriptor.AutoCloseInputStream(automation.executeShellCommand(command));
+             FileOutputStream output = new FileOutputStream(new File(directory, name))) {
+            byte[] buffer = new byte[8192]; int count;
+            while ((count = input.read(buffer)) != -1) output.write(buffer, 0, count);
         }
     }
     private static void write(File directory, String name, String value) throws Exception {

@@ -117,8 +117,13 @@ def analyze(root):
             trial["sections"] = sections(text, trial["scheduling"]["threads"],
                                           milestones["launchUptimeMs"], window_ms)
         trials.append(trial)
+    by_mode = {trial["milestones"]["mode"]: trial for trial in trials}
+    gap = None
+    if "cold" in by_mode and "warm" in by_mode:
+        cold = by_mode["cold"]["milestones"]
+        gap = by_mode["warm"]["milestones"]["launchUptimeMs"] - (cold["launchUptimeMs"] + cold.get("windowMs", 10_000))
     return {"percentile": "nearest rank, per trial; no pooled frame distribution",
-            "physicalAcceptance": "open", "trials": trials}
+            "physicalAcceptance": "open", "observedWarmGapAfterColdWindowMs": gap, "trials": trials}
 
 
 def scheduling(trace, threads, pid, start_ms, window_ms=10_000):
@@ -126,8 +131,10 @@ def scheduling(trace, threads, pid, start_ms, window_ms=10_000):
     targets = {pid: "Main"}
     for line in threads.splitlines():
         cells = line.split()
-        if len(cells) == 2 and cells[0].isdigit() and cells[1] == "RenderThread":
-            targets[int(cells[0])] = "RenderThread"
+        if len(cells) == 2 and cells[0].isdigit() and int(cells[0]) != pid:
+            tid = int(cells[0])
+            label = "RenderThread" if cells[1] == "RenderThread" and "RenderThread" not in targets.values() else f"{cells[1]}:{tid}"
+            targets[tid] = label
     begin, end = start_ms / 1000, (start_ms + window_ms) / 1000
     states, totals = {}, {tid: {state: 0.0 for state in ("running", "runnable", "sleeping")} for tid in targets}
     pattern = re.compile(r"\s(\d+\.\d+):\s+sched_switch:\s+.*prev_pid=(\d+).*prev_state=(\S+)\s+==>.*next_pid=(\d+)")
@@ -157,7 +164,7 @@ def scheduling(trace, threads, pid, start_ms, window_ms=10_000):
         if tid in states:
             transition(tid, end, states[tid][1])
     return {"events": events, "lostEventsMarker": "LOST" in trace,
-            "scope": "observed scheduler intervals; sleeping includes waits/idle; not a CPU/GPU bottleneck verdict",
+            "scope": "observed scheduler intervals for threads alive at the final snapshot; sleeping includes waits/idle; not a bottleneck verdict",
             "threads": {targets[tid]: {"tid": tid, **{kind + "Ms": round(value, 3) for kind, value in values.items()},
                                        "unknownMs": round(max(0, window_ms - sum(values.values())), 3)}
                         for tid, values in totals.items()}}
