@@ -134,11 +134,7 @@ class ListReturnControlsTest {
         }
     }
 
-    @Test fun subviewBackUsesOneMonotonicEaseAllTheWayThroughTheTallHeader() {
-        val playlist = PlaylistEdits.append(ManualPlaylist(name = "Continuous Back"), tracks)
-        val state = fixture(BrowseRoute(MainTab.Playlists, MediaRef(MediaKind.Playlist, playlist.id)),
-            playlists = PlaylistState(listOf(playlist), loading = false), listBackEnabled = true, reducedMotion = false)
-        awaitRow(playlist.entries.first().id)
+    private fun playlistPixels(playlist: ManualPlaylist): () -> Float {
         val headerHeight = compose.onNodeWithTag("browse-full-span", true).fetchSemanticsNode().size.height.toFloat()
         list.performScrollToIndex(1)
         val viewportTop = list.fetchSemanticsNode().positionInRoot.y
@@ -146,15 +142,26 @@ class ListReturnControlsTest {
         val stride = row(playlist.entries[1].id).fetchSemanticsNode().positionInRoot.y - firstTop
         val inset = firstTop - viewportTop
         val indices = playlist.entries.mapIndexed { index, entry -> "media-" + entry.id to index }.toMap()
-        fun pixels(): Float {
+        return {
             val header = compose.onAllNodesWithTag("browse-full-span", true).fetchSemanticsNodes().singleOrNull()
-            if (header != null) return viewportTop - header.positionInRoot.y
+            if (header != null) viewportTop - header.positionInRoot.y
+            else {
             val node = compose.onAllNodes(SemanticsMatcher("Actual media row") {
                 it.config.getOrNull(SemanticsProperties.TestTag) in indices
             }, true).fetchSemanticsNodes().first()
             val index = indices.getValue(node.config[SemanticsProperties.TestTag])
-            return headerHeight + index * stride + inset - (node.positionInRoot.y - viewportTop)
+            headerHeight + index * stride + inset - (node.positionInRoot.y - viewportTop)
+            }
         }
+    }
+
+    @Test fun subviewBackUsesOneMonotonicEaseAllTheWayThroughTheTallHeader() {
+        val playlist = PlaylistEdits.append(ManualPlaylist(name = "Continuous Back"), tracks)
+        val state = fixture(BrowseRoute(MainTab.Playlists, MediaRef(MediaKind.Playlist, playlist.id)),
+            playlists = PlaylistState(listOf(playlist), loading = false), listBackEnabled = true, reducedMotion = false)
+        awaitRow(playlist.entries.first().id)
+        val headerHeight = compose.onNodeWithTag("browse-full-span", true).fetchSemanticsNode().size.height.toFloat()
+        val pixels = playlistPixels(playlist)
         list.performScrollToIndex(65)
         compose.awaitExpectedWindowFocus(list)
         compose.mainClock.autoAdvance = false
@@ -251,11 +258,12 @@ class ListReturnControlsTest {
         assertHeaderHome(MediaKind.Artist)
     }
 
-    @Test fun animatedCollectionReturnStopsAtSongsWithoutASecondHeroScroll() {
+    @Test fun animatedCollectionReturnStopsAtMeasuredHomeWithoutASecondHeroScroll() {
         val playlist = PlaylistEdits.append(ManualPlaylist(name = "Animated return"), tracks)
         fixture(BrowseRoute(MainTab.Playlists, MediaRef(MediaKind.Playlist, playlist.id)),
             playlists = PlaylistState(listOf(playlist), loading = false), reducedMotion = false)
         awaitRow(playlist.entries.first().id)
+        val pixels = playlistPixels(playlist)
         list.performScrollToIndex(65)
         // Let the real return control enter before freezing animation time.
         compose.onNodeWithContentDescription("Return to top").assertIsDisplayed()
@@ -264,21 +272,20 @@ class ListReturnControlsTest {
             compose.onNodeWithContentDescription("Return to top").performClick()
             compose.mainClock.advanceTimeByFrame()
             compose.onNodeWithContentDescription("Return to top").assertDoesNotExist()
-            var previous = position()
+            var previous = pixels()
             repeat(45) {
                 compose.mainClock.advanceTimeByFrame()
                 compose.waitForIdle()
-                val current = position()
-                assertTrue("Return never crosses above the first song row", current >= 1f)
+                val current = pixels()
+                assertTrue("Return stays within the page", current >= 0f)
                 assertTrue("Single-direction return", current <= previous + .01f)
                 previous = current
             }
-            val boundary = compose.onNodeWithTag("browser-song-list-start", true).getUnclippedBoundsInRoot().top.value
-            assertEquals(list.getUnclippedBoundsInRoot().top.value, boundary, 1f)
-            val settled = position()
+            assertHeaderHome(MediaKind.Playlist)
+            val settled = pixels()
             compose.mainClock.advanceTimeBy(1000)
             compose.waitForIdle()
-            assertEquals("No follow-on ease to the hero", settled, position(), 0f)
+            assertEquals("No follow-on ease to the hero", settled, pixels(), 0f)
         } finally { compose.mainClock.autoAdvance = true }
         compose.onNodeWithContentDescription("Return to top").assertDoesNotExist()
     }
