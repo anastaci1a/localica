@@ -9,7 +9,6 @@ import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.R
@@ -78,7 +77,7 @@ internal fun BrowseSortDialog(route: BrowseRoute, value: BrowseStyle, overridden
     GlassAlertDialog(onDismissRequest = onDismiss, modifier = Modifier.testTag("browse-options-dialog"), title = {
         Column {
             GlassChoices(listOf("Sort", "View"), tab, horizontal = true,
-                icons = listOf(R.drawable.ic_sort, R.drawable.ic_eye), role = Role.Tab,
+                icons = listOf(AppIcon.ActionSort, AppIcon.ActionEye), role = Role.Tab,
                 modifier = Modifier.testTag("browse-options-tabs")) { tab = it }
             HorizontalDivider(Modifier.padding(top = 8.dp), color = LocalContentColor.current.copy(alpha = .12f))
         }
@@ -101,7 +100,7 @@ internal fun BrowseSortDialog(route: BrowseRoute, value: BrowseStyle, overridden
                 } else {
                     if (onRandomize != null) {
                         GlassActionRow {
-                            GlassActionButton(R.drawable.ic_shuffle, "Randomize", enabled = !busy, onClick = {
+                            GlassActionButton(AppIcon.ActionShuffle, "Randomize", enabled = !busy, onClick = {
                                 busy = true; failure = false
                                 onRandomize { ok -> busy = false; failure = !ok
                                     if (ok) {
@@ -110,7 +109,7 @@ internal fun BrowseSortDialog(route: BrowseRoute, value: BrowseStyle, overridden
                                 }
                             })
                             if (checkpoint != null && onRevertOrder != null) GlassPresence(canRevert) {
-                                GlassActionButton(R.drawable.ic_revert, "Revert", enabled = !busy, onClick = {
+                                GlassActionButton(AppIcon.ActionRevert, "Revert", enabled = !busy, onClick = {
                                     busy = true; failure = false
                                     onRevertOrder(checkpoint) { ok -> busy = false; failure = !ok
                                         if (ok) {
@@ -121,7 +120,7 @@ internal fun BrowseSortDialog(route: BrowseRoute, value: BrowseStyle, overridden
                             }
                         }
                         if (onReverseOrder != null) GlassActionRow {
-                            GlassActionButton(R.drawable.ic_reverse, "Reverse",
+                            GlassActionButton(AppIcon.ActionReverse, "Reverse",
                                 enabled = !busy && (mutableOrderIds?.size ?: 0) > 1, onClick = {
                                     busy = true; failure = false
                                     onReverseOrder { committed ->
@@ -174,9 +173,9 @@ internal fun BrowseOptionsPill(anchor: GlassAnchor, onChoose: (Boolean) -> Unit)
         anchor.source = source
         anchor.face = {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) { Icon(painterResource(R.drawable.ic_sort), null) }
+                Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) { Icon(appIconPainter(AppIcon.ActionSort), null) }
                 GlassPillDivider()
-                Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) { Icon(painterResource(R.drawable.ic_eye), null) }
+                Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) { Icon(appIconPainter(AppIcon.ActionEye), null) }
             }
         }
     }
@@ -184,12 +183,12 @@ internal fun BrowseOptionsPill(anchor: GlassAnchor, onChoose: (Boolean) -> Unit)
         contactAdmission = { !anchor.hidden }) {
         anchor.captureInk()
         Row(Modifier.align(Alignment.Center), verticalAlignment = Alignment.CenterVertically) {
-            ActionIcon(R.drawable.ic_sort, "Sort", glass = false) {
+            ActionIcon(AppIcon.ActionSort, "Sort", glass = false) {
                 anchor.reclaimOpening?.invoke()
                 onChoose(false)
             }
             GlassPillDivider()
-            ActionIcon(R.drawable.ic_eye, "View options", glass = false) {
+            ActionIcon(AppIcon.ActionEye, "View options", glass = false) {
                 anchor.reclaimOpening?.invoke()
                 onChoose(true)
             }

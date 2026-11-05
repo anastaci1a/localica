@@ -1,0 +1,96 @@
+package io.github.anastaci1a.localica.ui
+
+import android.graphics.Bitmap
+import androidx.annotation.DrawableRes
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.remember
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.FilterQuality
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.painter.Painter
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.unit.IntSize
+import io.github.anastaci1a.localica.R
+import io.github.anastaci1a.localica.icons.IconPacks
+
+/** Every icon the app draws. [id] is the stable pack key; [builtin] is the fallback vector. */
+internal enum class AppIcon(val id: String, @DrawableRes val builtin: Int) {
+    TabHome("tab.home", R.drawable.ic_home),
+    TabLibrary("tab.library", R.drawable.ic_library),
+    TabSongs("tab.songs", R.drawable.ic_music),
+    TabAlbums("tab.albums", R.drawable.ic_albums),
+    TabArtists("tab.artists", R.drawable.ic_artist),
+    TabFolders("tab.folders", R.drawable.ic_folder),
+    TabPlaylists("tab.playlists", R.drawable.ic_playlist),
+    TabQueues("tab.queues", R.drawable.ic_queue),
+    TransportPlay("transport.play", R.drawable.ic_play),
+    TransportPause("transport.pause", R.drawable.ic_pause),
+    TransportPrevious("transport.previous", R.drawable.ic_previous),
+    TransportNext("transport.next", R.drawable.ic_next),
+    MenuPin("menu.pin", R.drawable.ic_menu_pin),
+    MenuTrash("menu.trash", R.drawable.ic_menu_trash),
+    MenuPlaylistAdd("menu.playlist_add", R.drawable.ic_menu_playlist_add),
+    MenuPlayNext("menu.play_next", R.drawable.ic_menu_play_next),
+    MenuQueueAdd("menu.queue_add", R.drawable.ic_menu_queue_add),
+    MenuInfo("menu.info", R.drawable.ic_menu_info),
+    MenuDownload("menu.download", R.drawable.ic_download),
+    MenuShare("menu.share", R.drawable.ic_share),
+    MenuStation("menu.station", R.drawable.ic_station),
+    MenuFavorite("menu.favorite", R.drawable.ic_star),
+    MenuSuggestLess("menu.suggest_less", R.drawable.ic_thumb_down),
+    ActionEdit("action.edit", R.drawable.ic_edit),
+    ActionClose("action.close", R.drawable.ic_close),
+    ActionBack("action.back", R.drawable.ic_back),
+    ActionForward("action.forward", R.drawable.ic_forward),
+    ActionDown("action.down", R.drawable.ic_down),
+    ActionArrowDown("action.arrow_down", R.drawable.ic_arrow_down),
+    ActionSearch("action.search", R.drawable.ic_search),
+    ActionMore("action.more", R.drawable.ic_more),
+    ActionEllipsis("action.ellipsis", R.drawable.ic_ellipsis),
+    ActionPlus("action.plus", R.drawable.ic_plus),
+    ActionSort("action.sort", R.drawable.ic_sort),
+    ActionEye("action.eye", R.drawable.ic_eye),
+    ActionEyeOff("action.eye_off", R.drawable.ic_eye_off),
+    ActionDrag("action.drag", R.drawable.ic_drag),
+    ActionRevert("action.revert", R.drawable.ic_revert),
+    ActionReverse("action.reverse", R.drawable.ic_reverse),
+    ActionSave("action.save", R.drawable.ic_save),
+    ActionSettings("action.settings", R.drawable.ic_settings),
+    ActionShuffle("action.shuffle", R.drawable.ic_shuffle),
+    ActionRepeat("action.repeat", R.drawable.ic_repeat),
+    ActionSeekBack("action.seek_back", R.drawable.ic_seek_back),
+    ActionSeekForward("action.seek_forward", R.drawable.ic_seek_forward),
+    ActionLyrics("action.lyrics", R.drawable.ic_lyrics),
+    ActionInfo("action.info", R.drawable.ic_info),
+    ActionTrash("action.trash", R.drawable.ic_trash),
+    ActionPlaylistAdd("action.playlist_add", R.drawable.ic_playlist_add);
+    companion object {
+        val ids: Set<String> = entries.mapTo(linkedSetOf()) { it.id }
+        fun byId(id: String): AppIcon? = entries.firstOrNull { it.id == id }
+    }
+}
+
+/** The one resolver: the active pack's mask for this icon, otherwise the built-in vector. */
+@Composable
+internal fun appIconPainter(icon: AppIcon): Painter {
+    val masks by IconPacks.masks.collectAsState()
+    val mask = masks[icon.id]
+    val builtin = painterResource(icon.builtin)
+    return if (mask == null) builtin else remember(mask) { MaskPainter(mask) }
+}
+
+/** Pack images are alpha masks: the caller's tint decides the colour, and the size follows the host Icon. */
+private class MaskPainter(bitmap: Bitmap) : Painter() {
+    private val image = bitmap.asImageBitmap()
+    override val intrinsicSize: Size = Size.Unspecified
+    override fun DrawScope.onDraw() {
+        drawImage(image, dstSize = IntSize(size.width.toInt(), size.height.toInt()),
+            colorFilter = currentFilter, filterQuality = FilterQuality.High)
+    }
+    private var currentFilter: ColorFilter? = null
+    override fun applyColorFilter(colorFilter: ColorFilter?): Boolean { currentFilter = colorFilter; return true }
+}

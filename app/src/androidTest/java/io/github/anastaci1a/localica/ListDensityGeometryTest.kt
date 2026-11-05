@@ -44,7 +44,7 @@ class ListDensityGeometryTest {
                 LookaheadScope {
                     Box(Modifier.width(width.dp).testTag("density-card")) {
                         BrowseItemLayout(item, BrowseStyle(listSize = size, extraInfo = ExtraInfo.Artist),
-                            BrowseCellGeometry(1), this@LookaheadScope, true, menu = { ActionIcon(R.drawable.ic_ellipsis, "Density actions", quiet = true) { clicks++ } })
+                            BrowseCellGeometry(1), this@LookaheadScope, true, menu = { ActionIcon(AppIcon.ActionEllipsis, "Density actions", quiet = true) { clicks++ } })
                     }
                 }
             }

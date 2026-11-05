@@ -16,7 +16,6 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import io.github.anastaci1a.localica.R
 
@@ -182,7 +181,7 @@ internal fun ArtworkPlaceholder(loading: Boolean, modifier: Modifier = Modifier,
                 }
             }
         })
-        if (showIcon && !loading) Icon(painterResource(R.drawable.ic_music), null, Modifier.fillMaxSize(.4f).testTag("artwork-missing"), tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = .45f))
+        if (showIcon && !loading) Icon(appIconPainter(AppIcon.TabSongs), null, Modifier.fillMaxSize(.4f).testTag("artwork-missing"), tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = .45f))
     }
 }
 

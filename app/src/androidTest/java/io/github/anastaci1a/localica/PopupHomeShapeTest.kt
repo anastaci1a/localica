@@ -50,9 +50,9 @@ class PopupHomeShapeTest {
                             .selectionLens(selected, false, itemKey = "row", anchor = anchor)) {
                             when (trigger) {
                                 Trigger.ListMore -> Box(Modifier.align(Alignment.CenterEnd)) {
-                                    ActionIcon(R.drawable.ic_ellipsis, "More", anchor = anchor, quiet = true) { open = true } }
+                                    ActionIcon(AppIcon.ActionEllipsis, "More", anchor = anchor, quiet = true) { open = true } }
                                 Trigger.PillMore -> Box(Modifier.align(Alignment.CenterEnd)) {
-                                    ActionIcon(R.drawable.ic_ellipsis, "More", anchor = anchor, glass = false) { open = true } }
+                                    ActionIcon(AppIcon.ActionEllipsis, "More", anchor = anchor, glass = false) { open = true } }
                                 Trigger.Cover -> Box(Modifier.align(Alignment.CenterStart).size(itemHeight)
                                     .contextMenuAnchor(anchor)) { Canvas(Modifier.fillMaxSize()) { drawRect(Color(0xFFB4D8C8)) } }
                             }
