@@ -18,6 +18,7 @@ import io.github.anastaci1a.localica.library.SongListView
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.selects.select
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.coroutines.resumeWithException
 
@@ -44,9 +45,12 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         }
     }
     private data class QueuedCommand(val cursorOnly: Boolean, val reject: (Exception) -> Unit = {},
+        val transportDuringSave: Boolean = cursorOnly,
         val action: suspend () -> Unit)
     private val commands = Channel<QueuedCommand>(Channel.UNLIMITED)
-    // Only the actor may defer writes, and only while executing a bounded contiguous cursor batch.
+    // The first structural command encountered during an activation wait remains the FIFO head.
+    private var commandAfterActivation: QueuedCommand? = null
+    // Only the actor defers writes: bounded cursor batches or eligible transport during an activation wait.
     private var deferCursorPersistence = false
     private class Checkpoint(var library: QueueLibrary, val receipt: CompletableDeferred<Unit>? = null)
     private val checkpointLock = Any()
@@ -130,9 +134,10 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
             val next = journey.next
             if (blocksVisit(queue, next)) { reportRecovery(); return@submit }
             if (policy == null) return@submit
-            val sameCycle = next != null && next.cycle == journey.current?.cycle
-            if (policy.songEnd == SongEnd.Stop && sameCycle) return@submit
-            if (policy.songEnd == SongEnd.NextPaused && sameCycle) {
+            // Historical and scheduled visits may cross labels while remaining in the active traversal.
+            val withinTraversal = next != null && next.cycle <= journey.cycle
+            if (policy.songEnd == SongEnd.Stop && withinTraversal) return@submit
+            if (policy.songEnd == SongEnd.NextPaused && withinTraversal) {
                 moveTo(next!!); return@submit
             }
             finishQueue(policy, play = !policy.pausesEachSong && intents.choose(commandRevision, requestedAtEnd).play)
@@ -236,7 +241,8 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
             }
             var pending: QueuedCommand? = null
             while (isActive) {
-                var current = pending ?: commands.receiveCatching().getOrNull() ?: break
+                var current = pending ?: commandAfterActivation?.also { commandAfterActivation = null }
+                    ?: commands.receiveCatching().getOrNull() ?: break
                 pending = null
                 var cursorBatch = false
                 try {
@@ -281,15 +287,19 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         scope.launch { while (isActive) { delay(5000); if (restored) submitCursor { capture() } } }
     }
 
-    private fun submit(revision: Long = intents.accept(), reject: (Exception) -> Unit = {}, command: suspend () -> Unit) {
-        if (!enqueue(revision, reject, command)) reject(IllegalStateException("Playback controller is unavailable."))
+    private fun submit(revision: Long = intents.accept(), reject: (Exception) -> Unit = {},
+        transportDuringSave: Boolean = false, command: suspend () -> Unit) {
+        if (!enqueue(revision, reject, transportDuringSave, command)) reject(IllegalStateException("Playback controller is unavailable."))
     }
     private fun submitCursor(command: suspend () -> Unit) {
         val revision = intents.accept()
         commands.trySend(QueuedCommand(cursorOnly = true) { commandRevision = revision; command() })
     }
-    private fun enqueue(revision: Long = intents.accept(), reject: (Exception) -> Unit = {}, command: suspend () -> Unit): Boolean =
-        commands.trySend(QueuedCommand(cursorOnly = false, reject = reject) { commandRevision = revision; command() }).isSuccess
+    private fun enqueue(revision: Long = intents.accept(), reject: (Exception) -> Unit = {},
+        transportDuringSave: Boolean = false, command: suspend () -> Unit): Boolean =
+        commands.trySend(QueuedCommand(cursorOnly = false, reject = reject, transportDuringSave = transportDuringSave) {
+            commandRevision = revision; command()
+        }).isSuccess
     fun attach(attached: Player) {
         val expected = ++generation
         submit {
@@ -379,8 +389,12 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
                 requireNotNull(inserted.currentEntryId), inserted.entries.map { it.id }))
             if (action == SongTap.PlayNext) {
                 val existing = current.entries.mapTo(hashSetOf()) { it.id }
-                inserted = inserted.copy(journey = journey(current).playNext(
-                    inserted.entries.filterNot { it.id in existing }.map { it.id }, inserted.entries.map { it.id }))
+                val added = inserted.entries.filterNot { it.id in existing }.map { it.id }
+                val ids = inserted.entries.map { it.id }
+                val unanchored = current.currentEntryId == null
+                val anchor = if (unanchored) QueueJourney.start(ids.filter { it in existing || it == inserted.currentEntryId },
+                    inserted.currentEntryId, JourneyModes.from(state.value.settings)) else journey(current)
+                inserted = inserted.copy(journey = anchor.playNext(if (unanchored) added.drop(1) else added, ids))
             }
             val next = state.value.library.update(inserted)
             if (action == SongTap.PlayNow) saveStartingPlayback(next) { activate(true, seek = true, refreshLocations = false) }
@@ -657,11 +671,11 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
     /** Publish before enqueueing, so a Pause can supersede activation suspended inside the actor. */
     fun playbackRequested(play: Boolean) {
         val revision = intents.accept(play)
-        submit(revision) { applyPlaybackRequest(revision) }
+        submit(revision, transportDuringSave = true) { applyPlaybackRequest(revision) }
     }
     fun togglePlayback() {
         val revision = intents.toggle()
-        submit(revision) { applyPlaybackRequest(revision) }
+        submit(revision, transportDuringSave = true) { applyPlaybackRequest(revision) }
     }
     fun retryPlayback() = playbackRequested(true)
 
@@ -691,7 +705,7 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         if (holdForRecovery(attached, state.value.library.active)) return
         intents.apply(revision, fallback) { attached.playWhenReady = it }
     }
-    fun seek(positionMs: Long) = submit {
+    fun seek(positionMs: Long) = submit(transportDuringSave = true) {
         player?.let { attached ->
             if (attached.currentMediaItem != null) {
                 val target = seekTarget(positionMs, attached.duration) ?: return@let
@@ -719,7 +733,7 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
     internal fun requestSeek(positionMs: Long, expectedVisit: String?, complete: (Boolean, QueuePlaybackSample?) -> Unit) {
         val expected = player
         val expectedGeneration = generation
-        val accepted = enqueue(reject = { complete(false, playbackSample()) }) {
+        val accepted = enqueue(reject = { complete(false, playbackSample()) }, transportDuringSave = true) {
             val attached = player
             if (attached == null || attached !== expected || generation != expectedGeneration ||
                 attached.currentMediaItem == null || attached.currentMediaItem?.queueVisit != expectedVisit) {
@@ -1119,13 +1133,53 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
             sent
         }
     }
-    private suspend fun persist(next: QueueLibrary) {
+    private suspend fun persist(next: QueueLibrary, serviceTransport: Boolean = false) {
         if (deferCursorPersistence) return
         val receipt = CompletableDeferred<Unit>()
         synchronized(checkpointLock) {
             // Never replace a cursor snapshot across an awaited structural barrier.
             pendingCursorCheckpoint = null
             checkpoints.trySend(Checkpoint(next, receipt)).getOrThrow()
+        }
+        if (serviceTransport) awaitPlaybackCheckpoint(receipt) else receipt.await()
+    }
+    /** Keep the structural receipt while servicing only the contiguous eligible transport prefix. */
+    private suspend fun awaitPlaybackCheckpoint(receipt: Deferred<Unit>) {
+        val attached = player
+        val queueId = state.value.library.activeId
+        val expectedGeneration = generation
+        fun eligible(): Boolean = attached != null && player === attached && generation == expectedGeneration &&
+            queueId != null && loadedQueueId == queueId && state.value.library.activeId == queueId &&
+            attached.currentMediaItem?.listeningQueue == queueId && attached.playerError == null &&
+            !holdsForEdit(state.value.library.active) && readers.recovery() == RecoveryAdmission.Clear
+        while (!receipt.isCompleted && eligible()) {
+            // Prefer the receipt when both clauses are ready. No transport crosses a structural head.
+            val command = select<QueuedCommand?> {
+                receipt.onAwait { null }
+                commands.onReceiveCatching { it.getOrNull() }
+            } ?: break
+            if (!command.transportDuringSave) {
+                commandAfterActivation = command
+                break
+            }
+            yield() // Finish native event batches before touching the timeline again.
+            if (!eligible()) {
+                commandAfterActivation = command
+                break
+            }
+            val revision = commandRevision
+            deferCursorPersistence = true
+            try { command.action() }
+            catch (cancelled: CancellationException) { throw cancelled }
+            catch (_: Exception) { reportProblem("Couldn’t save this queue change. Try again.") }
+            finally {
+                deferCursorPersistence = false
+                commandRevision = revision
+                // This snapshot is queued behind the initial receipt, never substituted for it.
+                if (currentCoroutineContext().isActive && !checkpointCursor(state.value.library)) {
+                    reportProblem("Couldn’t save this queue change. Try again.")
+                }
+            }
         }
         receipt.await()
     }
@@ -1138,7 +1192,8 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         }
         mutable.update { it.copy(library = prepared.library, problem = problemAfterSuccess(it, prepared.library)) }
         // Audio starts before persistence; failed writes remain retryable from the durable snapshot.
-        try { start() } finally { persist(state.value.library) }
+        var activated = false
+        try { start(); activated = true } finally { persist(state.value.library, serviceTransport = activated) }
     }
     private fun syncTimeline(seek: Boolean = false) {
         val attached = player ?: return

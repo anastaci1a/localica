@@ -34,9 +34,14 @@ internal data class SelectorSceneGeometry(
     val selectorDepth: Float,
     val shellFlattening: Float = 0f,
     val selectorFlattening: Float = 0f,
+    val selectorContour: SelectorTrackContour? = null,
+    val selectorSilhouette: GlassSilhouetteFrame? = null,
 ) {
+    fun selectorField(point: Offset) = selectorSilhouette?.opticalField(point - selector.bounds.topLeft)
+        ?: selector.field(point)
+
     fun sample(point: Offset, refractInk: Boolean, extendBoundary: Boolean = false): SelectorSceneSample {
-        val field = selector.field(point)
+        val field = selectorField(point)
         // Boundary triangles can straddle the final clip. Extend their ray instead
         // of interpolating a zero displacement into the visible rounded edge.
         val selectorRay = lensRay(if (extendBoundary) field.copy(distance = field.distance.coerceAtLeast(0f)) else field,
@@ -48,6 +53,6 @@ internal data class SelectorSceneGeometry(
         val ink = if (refractInk && shellRay != null)
             slots.firstOrNull { it.displayed.contains(surface) }?.sourceAt(surface) else null
         return SelectorSceneSample(surface, surface + (shellRay?.offset ?: Offset.Zero),
-            shellRay, selectorRay, ink, ink != null && selector.field(surface).distance >= 0f)
+            shellRay, selectorRay, ink, ink != null && (selectorContour?.contains(surface) ?: (selector.field(surface).distance >= 0f)))
     }
 }

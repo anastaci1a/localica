@@ -66,6 +66,8 @@ internal data class GlassSurfaceDrawObservation(
     val blur: Float, val whiteTint: Float, val depth: Float, val depthScale: Float, val refraction: Float,
     val shadowEnabled: Boolean, val shadowStrength: Float, val shadowSpread: Float,
     val shadowGroupIdentity: Int?, val shadowInModal: Boolean?, val silhouettePresent: Boolean,
+    /** Light-ink fraction of the tone and ink actually drawn (0 dark ink, 1 light ink); fractional while a polarity change eases. */
+    val toneLightMix: Float = if (lightInk) 1f else 0f, val coatingLightMix: Float = if (coatingDark) 1f else 0f,
 )
 internal val LocalGlassSurfaceDrawObserver = staticCompositionLocalOf<((GlassSurfaceDrawObservation) -> Unit)?> { null }
 
@@ -204,11 +206,14 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
     val appearance = LocalGlassAppearance.current.normalized()
     // The page owns ink polarity. A control never flips independently as content
     // scrolls beneath it, and no GPU readback is needed to choose its foreground.
-    val dark = inkOverride?.let { it.luminance() > .5f } ?: (source?.dark == true)
+    val lightMix = inkOverride?.let { if (it.luminance() > .5f) 1f else 0f } ?: (source?.lightMix ?: 0f)
+    val dark = lightMix >= .5f
     val frost = frostProgress.coerceIn(0f, 1f)
     val panel = panelProgress.coerceIn(0f, 1f)
-    val tone = GlassTone(appearance.contrast, appearance.contrastWeight, dark)
-    val coatingDark = panelDark ?: dark
+    val tone = GlassTone.mixed(appearance.contrast, appearance.contrastWeight, lightMix)
+    val coatingLightMix = panelDark?.let { if (it) 1f else 0f } ?: lightMix
+    val coatingDark = coatingLightMix >= .5f
+    val ink = inkOverride ?: lerp(Color(0xFF202124), Color.White, lightMix)
     val anchor = modifier.glassSurfaceAnchor()
     val contact = rememberGlassContact(anchor?.contact ?: sharedContact)
     val contactShape = contactPresentation ?: { contact.body.value }
@@ -267,20 +272,24 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
         }
 
         if (visible && renderer.backend == GlassBackend.Legacy) {
-        val endpointTone = GlassTone(appearance.contrast, appearance.contrastWeight, dark)
-        @Composable fun prepared(backing: FrostedBackdrop?): List<ImageBitmap?> {
+        // The tone's polarity may be mid-ease: its prepared endpoint pixels cross-fade by arrival, never per-frame filtering.
+        val endpointTone = tone.endpoint(tone.lightInk)
+        val easing = tone.arrival < 1f
+        val fromTone = tone.endpoint(!tone.lightInk)
+        @Composable fun prepared(backing: FrostedBackdrop?, endpointTone: GlassTone, active: Boolean = true): List<ImageBitmap?> {
             val clear = backing?.glassFallback ?: backing?.snapshot
             val frosted = backing?.fallback ?: clear
             // Morphs blend fixed prepared endpoints; progress must never schedule
             // a new pixel filter on every animation frame.
-            return listOf(rememberToneSnapshot(clear, endpointTone),
-                rememberToneSnapshot((backing?.lensSnapshot ?: clear).takeIf { frost < 1f && panel < 1f }, endpointTone),
-                rememberToneSnapshot(frosted, endpointTone),
-                rememberToneSnapshot((backing?.lensFrostSnapshot ?: frosted).takeIf { frost > 0f && panel < 1f }, endpointTone))
+            return listOf(rememberToneSnapshot(clear.takeIf { active }, endpointTone),
+                rememberToneSnapshot((backing?.lensSnapshot ?: clear).takeIf { active && frost < 1f && panel < 1f }, endpointTone),
+                rememberToneSnapshot(frosted.takeIf { active }, endpointTone),
+                rememberToneSnapshot((backing?.lensFrostSnapshot ?: frosted).takeIf { active && frost > 0f && panel < 1f }, endpointTone))
         }
         // A coalesced Legacy→Modern→Legacy switch must not reuse the prior epoch's tone result.
         // Only disposable preparation is keyed; contact and surface motion stay mounted.
-        val (sourceImages, homeImages) = key(renderer) { prepared(source) to prepared(homeSource) }
+        val (sourceImages, homeImages) = key(renderer) { prepared(source, endpointTone) to prepared(homeSource, endpointTone) }
+        val (sourceFrom, homeFrom) = key(renderer) { prepared(source, fromTone, easing) to prepared(homeSource, fromTone, easing) }
         Canvas(Modifier.matchParentSize()) {
             val outline = silhouette?.frame(size)
             val shape = outline?.geometry ?: LensGeometry(androidx.compose.ui.geometry.Rect(Offset.Zero, size),
@@ -304,7 +313,9 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
                 add(imagesByRole[2], frost * panel)
                 images.forEach { (image, amount) -> samples += Triple(backing, image, amount) }
             }
-            samples(source, sourceImages, 1f - home); samples(homeSource, homeImages, home)
+            val arrived = tone.arrival.coerceIn(0f, 1f)
+            samples(source, sourceImages, (1f - home) * arrived); samples(homeSource, homeImages, home * arrived)
+            if (arrived < 1f) { samples(source, sourceFrom, (1f - home) * (1f - arrived)); samples(homeSource, homeFrom, home * (1f - arrived)) }
             val registrations = samples.map { it.first }.distinct().associateWith { backing ->
                 location.registrationTo(backing.location) ?: return@Canvas
             }
@@ -330,7 +341,7 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
         }
         Canvas(Modifier.matchParentSize()) {
             drawRect(tone.color(tint))
-            if (panel > 0f) drawFrostCoating(coatingDark, Color.Transparent, panel)
+            if (panel > 0f) drawFrostCoating(coatingLightMix, Color.Transparent, panel)
             val outline = silhouette?.frame(size)
             val splitRim = outline?.description?.rimSplit ?: 0f
             val bounds = androidx.compose.ui.geometry.Rect(Offset.Zero, size)
@@ -368,18 +379,18 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
                         rootCorners?.map { it + Offset(onScreen[0].toFloat(), onScreen[1].toFloat()) }?.surfaceDrawScalars(),
                         outline?.geometry?.bounds?.surfaceDrawScalars(),
                         source.surfaceDrawSource(location, size), homeSource.surfaceDrawSource(location, size),
-                        (inkOverride ?: if (dark) Color.White else Color(0xFF202124)).toArgb(), inkOverride != null,
+                        ink.toArgb(), inkOverride != null,
                         dark, coatingDark, tone.trim, tone.weight, tint.toArgb(), panel, frost,
                         // Supplied reader sampled here, NOT the private filter's admitted/clamped blend.
                         homeWeight(), appearance.blur, appearance.whiteTint, appearance.depth, depthScale, refraction,
                         shadow, shadows.shadowStrength, shadows.shadowSpread,
                         surfaceDrawIdentity(observedShadowGroup),
-                        anchor?.shadowInModal, silhouette != null))
+                        anchor?.shadowInModal, silhouette != null, lightMix, coatingLightMix))
                 }
             } catch (_: Throwable) { /* A diagnostic must never fail or change the drawing. */ }
 
         }
-        val ink = inkOverride ?: if (dark) Color.White else Color(0xFF202124)
+
         if (content != null) CompositionLocalProvider(LocalContentColor provides ink) {
             Box(content = content)
         }

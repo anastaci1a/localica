@@ -9,7 +9,8 @@ import androidx.compose.ui.graphics.PathOperation
  * Keep display and sampled-resolution geometry separately; translating a control
  * never rebuilds its field. Distance pixels are only created if optics need them. */
 internal data class GlassSilhouetteGeometry(val bodies: List<RoundRect>, val fieldWeight: Float = 1f,
-    val circles: Pair<Offset, Offset>? = null, val rimSplit: Float = 0f, val splitInner: Float? = null)
+    val circles: Pair<Offset, Offset>? = null, val rimSplit: Float = 0f, val splitInner: Float? = null,
+    val corner: Float? = null)
 
 internal class GlassSilhouette(private val describe: (Size) -> GlassSilhouetteGeometry) {
     private val frames = mutableListOf<GlassSilhouetteFrame>()
@@ -29,7 +30,7 @@ internal class GlassSilhouetteFrame(val description: GlassSilhouetteGeometry) {
         Path.combine(PathOperation.Union, combined, Path().apply { addRoundRect(body) })
     }
     val bounds = path.getBounds()
-    val geometry = LensGeometry(bounds, bounds.height / 2f)
+    val geometry = LensGeometry(bounds, description.corner ?: (bounds.height / 2f))
     val field by lazy { if (description.fieldWeight > 0f && description.splitInner == null) LensDistanceMap.create(path) else null }
     fun opticalField(point: Offset): LensField {
         val analytic = description.circles?.let { centers ->
