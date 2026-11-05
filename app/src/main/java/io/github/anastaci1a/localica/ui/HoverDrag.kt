@@ -58,7 +58,7 @@ internal fun HoverDragCard(modifier: Modifier, frame: HoverCardFrame, backing: F
     val direction = LocalLayoutDirection.current
     Box(modifier.graphicsLayer { alpha = frame.alpha().coerceIn(0f, 1f) }.backdropLocation(location).drawWithContent {
         val geometry = frame.geometry()
-        with(group.shadow) {
+        with(group.surface(listOf(0)).shadow) {
             draw(listOf(geometry.lifted.contour to 1f), .22f * liftStyle.strength * stackShadow(),
                 liftStyle.spread, color = liftStyle.color)
         }
