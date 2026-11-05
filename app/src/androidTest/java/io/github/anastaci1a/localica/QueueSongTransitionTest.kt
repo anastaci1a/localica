@@ -50,6 +50,8 @@ class QueueSongTransitionTest {
     @Volatile private var surfaceTint = Float.NaN
     private lateinit var captureView: android.view.View
     private var captureStage by mutableIntStateOf(0)
+    // Adjacent stages must remain distinct even with the screenshot channel tolerance.
+    private fun markerCode(stage: Int) = 20 + (stage % 24) * 8
 
     private var preparationBarrier: (suspend () -> Unit)? = null
 
@@ -90,7 +92,7 @@ class QueueSongTransitionTest {
                     }
                     // Independent compositor-frame receipt; never a predicate on the optics under test.
                     Canvas(Modifier.align(Alignment.TopStart).size(8.dp)) {
-                        drawRect(Color((captureStage % 200 + 20) / 255f, 1f, 0f))
+                        drawRect(Color(markerCode(captureStage) / 255f, 1f, 0f))
                     }
                 }
             }
@@ -118,7 +120,7 @@ class QueueSongTransitionTest {
             try {
                 check(left >= 0 && top >= 0 && left + width <= screen.width && top + height <= screen.height)
                 val marker = screen.getPixel(left + 2, top + 2)
-                val presented = abs(android.graphics.Color.red(marker) - (stage % 200 + 20)) <= 1 &&
+                val presented = abs(android.graphics.Color.red(marker) - markerCode(stage)) <= 1 &&
                     android.graphics.Color.green(marker) > 250 && android.graphics.Color.blue(marker) < 5
                 if (presented) {
                     var sum = 0f; var n = 0
