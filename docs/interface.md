@@ -32,7 +32,7 @@ One uniform scale preserves artwork/outline corner centres. Growth takes at most
 
 The lift shadow follows the menu's theming: dark under dark-icon menus, a white glow under light-icon menus. Both use Glass shadow spread and share the Lift shadow strength setting.
 
-Side-adjacent selections share one hovering outline. A compact-support field rounds concave intersections and connects or parts continuously with displayed separation and motion progress. Fillets are capped at 4 dp, with an 8 dp connection band.
+Side-adjacent selections share one hovering outline. Tangent lobes and rounded concave fillets connect or part continuously with displayed separation and motion progress. Fillets are capped at 4 dp, with an 8 dp connection band.
 
 Frost and shadow use that same path, including drag launch and landing. Diagonal gallery neighbors and unselected holes stay separate. Partial groups retain accessible state without a pane/checkmark. Inset album choices and preserve readable baselines.
 
