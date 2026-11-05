@@ -85,39 +85,6 @@ capture_native_failure() {
   printf 'activities=%s\n' "$status" >> "$folder/status.txt"
   return 0
 }
-# Hosted disposable emulator only: a system crash/ANR dialog takes window focus
-# from instrumentation (#529). Suppress them once, then dismiss any survivor
-# before each instrumentation command. Best effort; never fails the run.
-dialogs_ready=''
-dialog_adb() {
-  local serial=${LOCALICA_GUARD_SERIAL:-${ANDROID_SERIAL:-}}
-  if [[ -n "$serial" ]]; then timeout 20 adb -s "$serial" "$@"; else timeout 20 adb "$@"; fi
-}
-focused_error_dialog() {
-  dialog_adb shell dumpsys window 2>/dev/null | tr -d '\r' | grep -E '^[[:space:]]*(mCurrentFocus|mFocusedWindow)=.*(Application Error|Application Not Responding):' | head -n 1 || true
-}
-guard_error_dialogs() {
-  local lane=$1 setting ns key value found
-  [[ ${GITHUB_ACTIONS:-} == true && ${RUNNER_ENVIRONMENT:-} == github-hosted ]] || return 0
-  [[ $(dialog_adb shell getprop ro.kernel.qemu 2>/dev/null | tr -d '\r') == 1 ]] || return 0
-  if [[ -z "$dialogs_ready" ]]; then
-    dialogs_ready=yes
-    # Keys absent on an API are harmless; read each back to prove the value.
-    for setting in global:hide_error_dialogs:1 secure:anr_show_background:0 global:show_first_crash_dialog:0 global:show_first_crash_dialog_dev_option:0; do
-      IFS=: read -r ns key value <<< "$setting"
-      dialog_adb shell settings put "$ns" "$key" "$value" >/dev/null 2>&1 || true
-      echo "error-dialog setting $ns/$key=$(dialog_adb shell settings get "$ns" "$key" 2>/dev/null | tr -d '\r') (wanted $value)"
-    done
-  fi
-  found=$(focused_error_dialog)
-  if [[ -z "$found" ]]; then echo "error-dialog check before $lane: none found"; return 0; fi
-  dialog_adb shell am broadcast -a android.intent.action.CLOSE_SYSTEM_DIALOGS >/dev/null 2>&1 || true
-  sleep 1
-  if [[ -n $(focused_error_dialog) ]]; then dialog_adb shell input keyevent KEYCODE_BACK >/dev/null 2>&1 || true; sleep 1; fi
-  if [[ -n $(focused_error_dialog) ]]; then echo "error-dialog check before $lane: found and NOT dismissed: ${found//[[:space:]]/ }"
-  else echo "error-dialog check before $lane: found and dismissed: ${found//[[:space:]]/ }"; fi
-  return 0
-}
 run_native() {
   local lane=$1 result label
   shift
