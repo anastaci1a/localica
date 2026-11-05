@@ -108,7 +108,7 @@ class CarouselSelectionArtworkTest {
             left to right
         }.sortedBy { it.first }
         val density = InstrumentationRegistry.getInstrumentation().targetContext.resources.displayMetrics.density
-        val gallery = 2 * (io.github.anastaci1a.localica.browse.BrowseCellGeometry.Carousel.cardInset * density + .5f).toInt()
+        val gallery = 2 * (io.github.anastaci1a.localica.browse.GalleryGapDp / 2 * density + .5f).toInt()
         runs.zipWithNext().forEach { (a, b) ->
             val gap = b.first - a.second - 1
             assertEquals("cover-to-cover gap $gap px is the gallery gap $gallery px (density $density): $runs", gallery.toFloat(), gap.toFloat(), 1.5f)
