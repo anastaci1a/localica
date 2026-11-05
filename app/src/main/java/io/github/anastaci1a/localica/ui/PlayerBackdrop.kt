@@ -32,13 +32,32 @@ internal fun thumbnailPalette(bitmap: android.graphics.Bitmap): PlayerPalette {
     return PlayerPalette(band(0), band(1), band(2), bitmap.width.toFloat() / bitmap.height)
 }
 
+/** Pure palette-color retargeting on the artwork reveal clock. */
+internal class PlayerPaletteTransition(initial: PlayerPalette) {
+    internal data class Step(val shown: PlayerPalette, val start: PlayerPalette, val target: PlayerPalette,
+        val startProgress: Float = 0f, val lastProgress: Float = 1f)
+    private var committed = Step(initial, initial, initial)
+    fun resolve(target: PlayerPalette, clock: Float): Step {
+        val progress = clock.coerceIn(0f, 1f)
+        if (progress >= 1f) return Step(target, target, target)
+        val old = committed
+        val restart = target != old.target || progress < old.lastProgress - .001f
+        val start = if (restart) old.shown else old.start
+        val startProgress = if (restart) progress else old.startProgress
+        val fraction = ((progress - startProgress) / (1f - startProgress).coerceAtLeast(.001f)).coerceIn(0f, 1f)
+        val shown = target.copy(top = lerp(start.top, target.top, fraction),
+            middle = lerp(start.middle, target.middle, fraction), bottom = lerp(start.bottom, target.bottom, fraction))
+        return Step(shown, start, target, startProgress, progress)
+    }
+    fun commit(step: Step) { committed = step }
+}
+
 @Composable
-internal fun animatedPlayerPalette(palette: PlayerPalette, duration: Int): PlayerPalette {
-    val top by androidx.compose.animation.animateColorAsState(palette.top, androidx.compose.animation.core.tween(duration), label = "Player top color")
-    val middle by androidx.compose.animation.animateColorAsState(palette.middle, androidx.compose.animation.core.tween(duration), label = "Player middle color")
-    val bottom by androidx.compose.animation.animateColorAsState(palette.bottom, androidx.compose.animation.core.tween(duration), label = "Player bottom color")
-    val aspect by androidx.compose.animation.core.animateFloatAsState(palette.aspect, androidx.compose.animation.core.tween(duration), label = "Cover proportions")
-    return palette.copy(top = top, middle = middle, bottom = bottom, aspect = aspect)
+internal fun animatedPlayerPalette(palette: PlayerPalette, clock: Float): PlayerPalette {
+    val transition = remember { PlayerPaletteTransition(palette) }
+    val step = transition.resolve(palette, clock)
+    SideEffect { transition.commit(step) }
+    return step.shown
 }
 
 /** Derived with the full cover, so both become ready in the same frame. */
@@ -78,13 +97,17 @@ internal suspend fun playerPalette(bitmap: android.graphics.Bitmap): PlayerPalet
 internal fun PlayerBackdrop(palette: PlayerPalette, modifier: Modifier = Modifier, fullArtBlend: Float = 0f,
     artTop: Float = 0f, artHeight: Float = 0f, artLeft: Float = 0f, artWidth: Float = 0f, softness: Float = 0f, tone: GlassTone = GlassTone(),
     artTopReader: (() -> Float)? = null,
-    onBackgroundDescriptor: ((PlayerBackdropDescriptor) -> Unit)? = null) {
+    onBackgroundDescriptor: ((PlayerBackdropDescriptor) -> Unit)? = null, ready: Boolean = true) {
     var washProvenance: ToneSnapshotProvenance? = null
     var softWashProvenance: ToneSnapshotProvenance? = null
     var washReceipt: ToneSnapshotReceipt<android.graphics.Bitmap>? = null
     var softWashReceipt: ToneSnapshotReceipt<android.graphics.Bitmap>? = null
-    val wash = rememberToneSnapshot(remember(palette.wash) { palette.wash?.asImageBitmap() }, tone)?.asAndroidBitmap()
-    val softWash = rememberToneSnapshot(remember(palette.softWash) { palette.softWash?.asImageBitmap() }, tone)?.asAndroidBitmap()
+    var paintedWashReceipt: ToneSnapshotReceipt<android.graphics.Bitmap>? = null
+    var paintedSoftReceipt: ToneSnapshotReceipt<android.graphics.Bitmap>? = null
+    val wash = rememberToneSnapshot(remember(palette.wash) { palette.wash?.asImageBitmap() }, tone,
+        onReceipt = { paintedWashReceipt = it })?.asAndroidBitmap()
+    val softWash = rememberToneSnapshot(remember(palette.softWash) { palette.softWash?.asImageBitmap() }, tone,
+        onReceipt = { paintedSoftReceipt = it })?.asAndroidBitmap()
     // The ink decision measures the UNGRADED backdrop (#576): the grade depends on the chosen ink, so measuring
     // graded pixels would be circular. These untoned snapshots are the raw palette images the sampler reads.
     val measured = GlassTone()
@@ -115,7 +138,12 @@ internal fun PlayerBackdrop(palette: PlayerPalette, modifier: Modifier = Modifie
         }
     }
     val grainMatrix = remember { android.graphics.Matrix() }
+    val paintReady = fullArtBlend <= 0f || (
+        (palette.wash == null || paintedWashReceipt?.matches(palette.wash, wash, tone) == true) &&
+        (softness <= 0f || palette.softWash == null || paintedSoftReceipt?.matches(palette.softWash, softWash, tone) == true))
     Canvas(modifier) {
+        // Measurement/preparation stays mounted; no raw or stale-tone fallback reaches the first draw.
+        if (!ready || !paintReady) return@Canvas
         drawRect(Brush.verticalGradient(listOf(tone.color(palette.top), tone.color(palette.middle), tone.color(palette.bottom))))
         drawRect(Brush.radialGradient(listOf(tone.color(palette.top).copy(alpha = 0.45f), Color.Transparent),
             center = Offset(size.width * 0.1f, size.height * 0.4f), radius = size.width * 1.2f))
