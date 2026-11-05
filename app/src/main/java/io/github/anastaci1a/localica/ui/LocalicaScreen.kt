@@ -460,7 +460,7 @@ fun LocalicaScreen(
         PlayerActionCustomizer(playerActions, { playerActions = it; actionPreferences.write(it) }, { customizeActions = false; customizeAppearance = null }, settings.reducedMotion)
     }
     if (songInfo && indexedTrack != null) SongInformation(indexedTrack, { playerCollectionLookup.cancel(); songInfo = false }, folders = library.snapshot.folders, onAction = { playerAction(it) })
-    if (viewArt && indexedTrack != null) ArtworkViewer(indexedTrack.uri) { viewArt = false }
+    if (viewArt && indexedTrack != null) ArtworkViewer(indexedTrack.uri, indexedTrack.albumArtist ?: indexedTrack.artist, indexedTrack.album) { viewArt = false }
     if (addPlaying && indexedTrack != null) AddToPlaylistDialog(listOf(indexedTrack), playlist, playlistController, { addPlaying = false }, { addPlaying = false })
     if (playerMore) GlassDialog({ playerMore = false }, GlassPlacement.Sheet) {
         val editTags = presentedTagEdit()
