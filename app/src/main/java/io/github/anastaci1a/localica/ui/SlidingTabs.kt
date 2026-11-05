@@ -27,7 +27,6 @@ import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.style.TextOverflow
@@ -229,7 +228,7 @@ internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, pagePosition: () 
                                 .graphicsLayer { scaleX = cell.width / pixels; scaleY = cell.height / baseHeight }
                                 .padding(4.dp).then(if (interactive) Modifier.testTag("tab-option-content-$index") else Modifier),
                                 horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                                Icon(painterResource(tab.icon()), if (interactive) tab.label else null, Modifier.size(29.dp), tint = color)
+                                Icon(appIconPainter(tab.icon()), if (interactive) tab.label else null, Modifier.size(29.dp), tint = color)
                                 Text(tab.label, color = color, maxLines = 1, style = labelStyle, overflow = TextOverflow.Ellipsis)
                             }
                         }

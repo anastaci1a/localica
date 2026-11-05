@@ -55,7 +55,7 @@ class SongInformationTest {
         compose.setContent { LocalicaTheme {
             CompositionLocalProvider(LocalControlHaptics provides ControlHaptics { pulses++ }) {
                 Box(Modifier.width(320.dp)) {
-                    SongInformationRow("Album", "An album", R.drawable.ic_albums, PlayerAction.Album) {
+                    SongInformationRow("Album", "An album", AppIcon.TabAlbums, PlayerAction.Album) {
                         assertEquals(PlayerAction.Album, it); calls++
                     }
                 }

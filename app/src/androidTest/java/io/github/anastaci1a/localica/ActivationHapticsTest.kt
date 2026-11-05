@@ -36,14 +36,14 @@ class ActivationHapticsTest {
                 when (button) {
                     0 -> ActionTextButton(domainAction, enabled = enabled) { Text("Action") }
                     1 -> ActionIconButton(domainAction, enabled = enabled) { Text("Action") }
-                    2 -> GlassActionButton(R.drawable.ic_plus, "Action", enabled = enabled, onClick = domainAction)
+                    2 -> GlassActionButton(AppIcon.ActionPlus, "Action", enabled = enabled, onClick = domainAction)
                     3 -> TransportButton(TransportGlyph.PlayPause, playing, "Action", domainAction,
                         Modifier.size(64.dp), 32.dp, Color.Black, enabled, false)
                     4 -> SettingsLink("Action", enabled = enabled, onClick = domainAction)
-                    5 -> ActionIcon(R.drawable.ic_plus, "Action", enabled = enabled, quiet = true, onClick = domainAction)
-                    6 -> ActionIcon(R.drawable.ic_plus, "Action", enabled = enabled, glass = true, onClick = domainAction)
-                    7 -> ActionIcon(R.drawable.ic_plus, "Action", enabled = enabled, glass = false, onClick = domainAction)
-                    8 -> ActionMenuItem("Action", icon = R.drawable.ic_more, enabled = enabled, onClick = domainAction)
+                    5 -> ActionIcon(AppIcon.ActionPlus, "Action", enabled = enabled, quiet = true, onClick = domainAction)
+                    6 -> ActionIcon(AppIcon.ActionPlus, "Action", enabled = enabled, glass = true, onClick = domainAction)
+                    7 -> ActionIcon(AppIcon.ActionPlus, "Action", enabled = enabled, glass = false, onClick = domainAction)
+                    8 -> ActionMenuItem("Action", icon = AppIcon.ActionMore, enabled = enabled, onClick = domainAction)
                 }
             }
         } } }

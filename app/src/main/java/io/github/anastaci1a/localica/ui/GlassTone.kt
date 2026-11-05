@@ -16,7 +16,11 @@ import kotlin.math.pow
  * [lightInk] is the polarity being approached and [arrival] how far the tone has travelled to it from the opposite
  * polarity (1 = arrived). Both polarities are exact endpoints; between them the mapping is their linear mix, so a
  * polarity change can ease with an animation instead of switching in one frame. */
-internal data class GlassTone(val trim: Float = 0f, val weight: Float = 2f, val lightInk: Boolean = false, val arrival: Float = 1f) {
+internal data class GlassTone(val trim: Float = 0f, val weight: Float = 2f, val lightInk: Boolean = false, val arrival: Float = 1f,
+    /** Backdrop grading (#576): an OKLab lightness shift from [BackdropGrade]. Nonzero replaces the curve above. */
+    val shift: Float = 0f) {
+    /** True when this tone leaves pixels untouched. */
+    val identity: Boolean get() = trim <= 0f && shift == 0f
     /** 0 is the dark-ink (lifted) endpoint and 1 the light-ink (compressed) endpoint. */
     val lightMix: Float get() = (if (lightInk) arrival else 1f - arrival).coerceIn(0f, 1f)
     /** The tone pinned at one polarity; only these tones have prepared pixels. */
@@ -35,7 +39,10 @@ internal data class GlassTone(val trim: Float = 0f, val weight: Float = 2f, val 
             else -> endpointChannel(x, false) + (endpointChannel(x, true) - endpointChannel(x, false)) * m
         }
     }
-    fun color(color: Color) = Color(channel(color.red), channel(color.green), channel(color.blue), color.alpha)
+    fun color(color: Color): Color {
+        if (shift != 0f) return BackdropGrade.apply(color.red, color.green, color.blue, shift).let { Color(it[0], it[1], it[2], color.alpha) }
+        return Color(channel(color.red), channel(color.green), channel(color.blue), color.alpha)
+    }
     /** Same rounded 8-bit stage as the prepared image, before bitmap filtering. */
     fun byteChannel(value: Int): Int = (channel(value / 255f) * 255f + .5f).toInt()
     companion object {
@@ -70,11 +77,15 @@ private object ToneImages {
         images.get(key)?.let { return@withLock it }
         val source = readGlassPixels(image, 1)
         val pixels = source.pixels
-        val lut = IntArray(256) { tone.byteChannel(it) }
-        for (i in pixels.indices) {
-            val c = pixels[i]
-            pixels[i] = (c and -0x1000000) or (lut[c ushr 16 and 255] shl 16) or
-                (lut[c ushr 8 and 255] shl 8) or lut[c and 255]
+        if (tone.shift != 0f) {
+            for (i in pixels.indices) pixels[i] = BackdropGrade.applyPixel(pixels[i], tone.shift)
+        } else {
+            val lut = IntArray(256) { tone.byteChannel(it) }
+            for (i in pixels.indices) {
+                val c = pixels[i]
+                pixels[i] = (c and -0x1000000) or (lut[c ushr 16 and 255] shl 16) or
+                    (lut[c ushr 8 and 255] shl 8) or lut[c and 255]
+            }
         }
         Bitmap.createBitmap(pixels, source.width, source.height, Bitmap.Config.ARGB_8888)
             .asImageBitmap().also { images.put(key, it) }
@@ -101,7 +112,7 @@ internal data class ToneSnapshotReceipt<T : Any>(private val source: T?, private
     private val appliedTone: GlassTone?, private val custom: Boolean = false) {
     fun matches(source: T?, output: T?, tone: GlassTone): Boolean = !custom &&
         this.source === source && this.output === output &&
-        (if (tone.trim == 0f) source === output else appliedTone == tone)
+        (if (tone.identity) source === output else appliedTone == tone)
 }
 private class ToneSnapshotCompletion {
     @Volatile var provenance: ToneSnapshotProvenance? = null
@@ -118,12 +129,12 @@ private class ToneSnapshotCompletion {
     onProvenance: ((ToneSnapshotProvenance) -> Unit)? = null,
     onReceipt: ((ToneSnapshotReceipt<Bitmap>?) -> Unit)? = null): ImageBitmap? {
     val cached = remember(image, tone, prepare) {
-        image?.takeIf { tone.trim > 0f && prepare == null }?.let { ToneImages.peek(it, tone) }
+        image?.takeIf { !tone.identity && prepare == null }?.let { ToneImages.peek(it, tone) }
     }
     // A newly mounted consumer (such as the outgoing frame of a crossfade) has no retained
     // result. Until its own tone is prepared, show another tone of the same pixels, never the raw image.
     val standIn = remember(image, tone, prepare) {
-        if (cached != null || prepare != null || tone.trim <= 0f) null else image?.let { ToneImages.anyTone(it, tone) }
+        if (cached != null || prepare != null || tone.identity) null else image?.let { ToneImages.anyTone(it, tone) }
     }
     var result by remember { mutableStateOf<ImageBitmap?>(null) }
     // Non-observable metadata follows the existing result publication, without another effect,
@@ -131,32 +142,32 @@ private class ToneSnapshotCompletion {
     // one exact raw/output association until the next completion or disposal.
     val completed = remember { ToneSnapshotCompletion() }
     LaunchedEffect(image, tone, prepare) {
-        val replacement = if (image == null || tone.trim == 0f) image
+        val replacement = if (image == null || tone.identity) image
             else if (prepare != null) prepare(image, tone)
             else withContext(Dispatchers.Default) { ToneImages.get(image, tone) }
         // A suspended preparer may finish non-cancellable owned work after replacement.
         // Its retired effect must never publish into the retained result.
         currentCoroutineContext().ensureActive()
         completed.provenance = ToneSnapshotProvenance(replacement.toneIdentity(), image.toneIdentity(),
-            tone.takeIf { image != null && tone.trim != 0f && prepare == null },
-            ToneSnapshotPath.CompletedResult, image.toneIdentity(), tone, image != null && tone.trim != 0f && prepare != null)
+            tone.takeIf { image != null && !tone.identity && prepare == null },
+            ToneSnapshotPath.CompletedResult, image.toneIdentity(), tone, image != null && !tone.identity && prepare != null)
         if (onReceipt != null) {
             completed.receipt = ToneSnapshotReceipt(image?.asAndroidBitmap(), replacement?.asAndroidBitmap(), tone,
-                custom = image != null && tone.trim != 0f && prepare != null)
+                custom = image != null && !tone.identity && prepare != null)
             completed.output = replacement
         }
         result = replacement
     }
-    val returned = if (image == null || tone.trim == 0f) image else cached ?: result ?: standIn ?: image
+    val returned = if (image == null || tone.identity) image else cached ?: result ?: standIn ?: image
     onReceipt?.invoke(when {
-        image == null || tone.trim == 0f || cached != null -> ToneSnapshotReceipt(image?.asAndroidBitmap(), returned?.asAndroidBitmap(), tone)
+        image == null || tone.identity || cached != null -> ToneSnapshotReceipt(image?.asAndroidBitmap(), returned?.asAndroidBitmap(), tone)
         result != null && completed.output === returned -> completed.receipt
         else -> null
     })
     if (onProvenance != null) {
         val source = image.toneIdentity()
         val provenance = when {
-            image == null || tone.trim == 0f -> ToneSnapshotProvenance(returned.toneIdentity(), source,
+            image == null || tone.identity -> ToneSnapshotProvenance(returned.toneIdentity(), source,
                 null, ToneSnapshotPath.UntonedInput, source, tone)
             cached != null -> ToneSnapshotProvenance(returned.toneIdentity(), source,
                 tone, ToneSnapshotPath.CacheHit, source, tone)

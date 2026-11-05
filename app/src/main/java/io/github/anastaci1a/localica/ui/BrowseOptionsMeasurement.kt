@@ -60,11 +60,11 @@ internal fun BrowseOptionsMeasurement(declaration: BrowseOptionsDeclaration, sha
             verticalArrangement = Arrangement.spacedBy(8.dp)) {
             if (declaration.randomize) {
                 GlassActionRowMeasurement {
-                    GlassActionButtonFace(R.drawable.ic_shuffle, "Randomize", Modifier.heightIn(min = CompactControlSize))
-                    GlassActionButtonFace(R.drawable.ic_revert, "Revert", Modifier.heightIn(min = CompactControlSize))
+                    GlassActionButtonFace(AppIcon.ActionShuffle, "Randomize", Modifier.heightIn(min = CompactControlSize))
+                    GlassActionButtonFace(AppIcon.ActionRevert, "Revert", Modifier.heightIn(min = CompactControlSize))
                 }
                 if (declaration.reverse) GlassActionRowMeasurement {
-                    GlassActionButtonFace(R.drawable.ic_reverse, "Reverse", Modifier.heightIn(min = CompactControlSize))
+                    GlassActionButtonFace(AppIcon.ActionReverse, "Reverse", Modifier.heightIn(min = CompactControlSize))
                 }
                 HorizontalDivider(Modifier.padding(vertical = 8.dp))
             }
@@ -103,7 +103,7 @@ internal fun BrowseOptionsActionsMeasurement() {
 @Composable
 internal fun BrowseOptionsWidthMeasurement(declaration: BrowseOptionsDeclaration, shadowInset: Dp) {
     Column(Modifier.padding(24.dp)) {
-        GlassChoicesMeasurement(listOf("Sort", "View"), listOf(R.drawable.ic_sort, R.drawable.ic_eye), tab = true)
+        GlassChoicesMeasurement(listOf("Sort", "View"), listOf(AppIcon.ActionSort, AppIcon.ActionEye), tab = true)
         BrowseOptionsMeasurement(declaration, shadowInset)
         if (declaration.footerScope) {
             BooleanPreferenceFrame("Save only for this list") { Spacer(Modifier.size(InterfaceSwitchWidth, InterfaceSwitchHeight)) }

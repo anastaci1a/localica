@@ -2,6 +2,24 @@
 
 ## Shared controls and motion
 
+### Icon set
+
+The song-menu icon set is the reference for future icons: 24 dp vectors, 1.8 stroke (filled trash), rounded caps and joins.
+
+| Action | Resource |
+| --- | --- |
+| Pin to Home / Unpin | `ic_menu_pin` |
+| Remove from playlist or queue, Delete playlist, Remove image | `ic_menu_trash` |
+| Add to playlist | `ic_menu_playlist_add` |
+| Play next | `ic_menu_play_next` |
+| Add to current queue, Add to a queue, Add to queue (selection) | `ic_menu_queue_add` |
+| Information | `ic_menu_info` |
+| Download (unused) | `ic_download` |
+| Share (unused) | `ic_share` |
+| Station (unused) | `ic_station` |
+| Favorite (unused) | `ic_star` |
+| Suggest less (unused) | `ic_thumb_down` |
+
 ### Materials and controls
 
 Floating pills, mini-player, filter/search bars and circular controls share Liquid Glass: curved refraction, illuminated edges and crisp foregrounds. The Queue uses one continuous denser textured neutral-frost surface behind its header and list. Popups use the same material and inherited adaptive contrast.
@@ -16,7 +34,9 @@ The lift shadow follows the menu's theming: dark under dark-icon menus, a white 
 
 Side-adjacent selections share one hovering outline. Diagonal gallery neighbors and unselected holes stay separate. Partial groups retain accessible state without a pane/checkmark. Inset album choices and preserve readable baselines.
 
-Selection, the current queue occurrence and held drag cards share one item outline. Its corners are concentric with the artwork's, sharing their arc centres. Every item style, in lists, galleries, carousels and drag cards, uses one padding $d = 3.5$ dp (1.75 times the former 2 dp minimum) between its content, such as a cover's top edge, and the outline:
+Selection, the current queue occurrence and held drag cards share one item outline. Its corners are concentric with the artwork's, sharing their arc centres.
+
+Every item style, in lists, galleries, carousels and drag cards, uses one padding $d = 3.5$ dp (1.75 times the former 2 dp minimum) between its content, such as a cover's top edge, and the outline:
 
 $$
 r_{\text{outline}} = r_{\text{artwork}} + d
@@ -130,7 +150,13 @@ Adaptive contrast also applies to player color continuations, Queue frost and ne
 
 A choice is current only after matching tone preparation completes. Unmeasured, frozen, native-blurred, moving-cover and partial-player backgrounds retain the last verified decision (white ink before any verification), explicitly without claiming current coverage. Tone preparation, sampling, composition and native presentation are asynchronous, so this does not guarantee atomic ink and background presentation.
 
-A light/dark polarity change that arrives while lyrics open or close eases with that animation's progress instead of switching in one frame, and reverses with it. One fraction drives the foreground (text and icons) and the materials: glass control ink and tone, panel frost and coating, the backdrops that follow the player's ink and the panel theme. The player publishes it as `PlayerBackgroundPolarityState.lightMix`, and every surface that follows the player's ink reads it instead of the discrete decision. Under Reduced Motion the lyrics clock has no duration, so the polarity snaps with the layout. Expanding and collapsing with lyrics open keeps the last verified polarity, so nothing changes during that motion.
+A light/dark polarity change that arrives while lyrics open or close eases with that animation's progress instead of switching in one frame, and reverses with it.
+
+One fraction drives the foreground (text and icons) and the materials: glass control ink and tone, panel frost and coating, the backdrops that follow the player's ink and the panel theme.
+
+The player publishes it as `PlayerBackgroundPolarityState.lightMix`, and every surface that follows the player's ink reads it instead of the discrete decision.
+
+Under Reduced Motion the lyrics clock has no duration, so the polarity snaps with the layout. Expanding and collapsing with lyrics open keeps the last verified polarity, so nothing changes during that motion.
 
 Blur, texture and the artwork continuation remain unchanged.
 
@@ -199,6 +225,8 @@ Lists draw behind these controls, with enough content padding to reveal final it
 Library/Playlists have an aligned circular + matching the mini-player's height. It morphs into its frosted creation menu and returns on dismissal, offering Create playlist and Import playlist from file ([import rules](product.md#library-and-playlists)).
 
 ## Browsing and search
+
+Library filter changes, including Back clearing a filter, start the resulting list at the top. Full-library search query or scope changes also start at the top.
 
 Use shared catalog/content/search templates. Dedicated catalog tabs and corresponding Library filters share sort/view preferences, without page overrides. Existing Library filter overrides take precedence during migration. Collections and search retain optional overrides and reset. Search text does not create another override. Album catalogs and contents are separate types.
 
@@ -342,7 +370,11 @@ Other items use Select song / Select all songs in their shared menu. The bulk ac
 
 Retain source occurrence identities and selection order across routes, tabs, queries, sorting, rotation and backgrounding. Select-all appends in collection order. Reselect appends last. Preserve distinct occurrences for playlists/queues and deduplicate files for editing. Fresh sessions start empty.
 
-The panel is one compact glass pill: close, count, Play next, Add to playlist, More and a divided collapse. It uses the standard Liquid Glass pill material in Library tabs, subviews and the Queue, with material, icons and its More menu following the page's light or dark ink. In the Queue it floats above the list without shortening it, so the items gain no new bottom clip edge; the list end pads by the pill's occupancy. More morphs into a menu with Play now, Add to queue, New queue, Edit tags, Remove from the source, Select all and Select range.
+The panel is one compact glass pill: close, count, Play next, Add to playlist, More and a divided collapse. It uses the standard Liquid Glass pill material in Library tabs, subviews and the Queue, with material, icons and its More menu following the page's light or dark ink.
+
+In the Queue it floats above the list without shortening it, so the items gain no new bottom clip edge; the list end pads by the pill's occupancy.
+
+More morphs into a menu with Play now, Add to queue, New queue, Edit tags, Remove from the source, Select all and Select range.
 
 Collapsing morphs the same surface into a minimized count pill; tapping it morphs back. Size, foreground and appearance share the interruptible glass spring, honor animation speed and Reduce motion, and immediately release input on outgoing faces.
 
@@ -350,7 +382,9 @@ Close, [Back](#back) or successful actions exit. Cancel/failure/empty selection 
 
 In a complete, manual, unfiltered queue/playlist, hold-drag moves the held occurrence or selected occurrences from that source, preserving their source order even when nonconsecutive. Cross-source selections and filtered views cannot reorder. Applying a saved-order sort does not disable subsequent dragging.
 
-Visible selected rows fly from their hover into a stack above selection controls/list clipping. Each card keeps its outline, lift, shadow and carried backdrop region. Joined neighbours part while flying in and rejoin while landing at adjacent destinations. The first source-order song is on top. At most two empty cards trail it, with a count badge for multiple items.
+Visible selected rows fly from their hover into a stack above selection controls/list clipping. Each card keeps its shared outline and lift. Joined neighbours part while flying in and rejoin while landing at adjacent destinations. The first source-order song is on top. At most two empty cards trail it, with a count badge for multiple items.
+
+Equal-sized panes sample the live scene beneath their moving viewports and frost recursively through lower panes. The top pane has the greatest sampling offset. Slight inter-pane shadows separate the layers; the shared outside shadow remains. Queue playback highlighting fades at the pickup location instead of travelling with the stack.
 
 Lifted content retains its actual list/gallery layout and lands on the rendered item bounds. Material and trailing actions crossfade without shrinking the content or jumping at handoff. Track the finger directly. Keep a one-row insertion gap, ease surrounding rows, edge-scroll and smoothly unpack on release.
 
@@ -366,7 +400,9 @@ System interruption or failed persistence restores order, selection and the pane
 
 The mini-player appears whenever an active queue has a current song, including paused playback. Inset its artwork/title together inside the leading curve. Use black filled Previous/Play/Pause/Next icons. Pause appears only while playing or buffering with playback requested. Paused skips retain Play.
 
-The settled Play triangle uses a single filled contour. It morphs into Pause. Skips use two rounded triangles without an end bar, with a staggered directional nudge. Secondary metadata defaults to Album Artist with Artist fallback. Artist-first is configurable. The body is one rounded tap target. Transport remains independent.
+The settled Play triangle uses a single filled contour. It morphs into Pause using configurable endpoint shapes. Skips scroll overlapping rounded triangles one step, crossfading departing and arriving elements symmetrically. Repeated presses preserve presented position and velocity. The 380 ms normal cycle has a longer settle; Faster shortens it and Reduce motion snaps.
+
+Secondary metadata defaults to Album Artist with Artist fallback. Artist-first is configurable. The body is one rounded tap target. Transport remains independent.
 
 Tap/swipe up expands one shared outline containing glass, artwork, text and transport. The expanded player follows device-reported corner radii. Absent or unavailable physical geometry stays square. Queue keeps the shared rounded panel contour for its material, content clip and border throughout opening, closing and reversal, independently of physical window clipping.
 

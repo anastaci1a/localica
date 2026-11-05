@@ -39,10 +39,10 @@ class ActionStripDrawingTest {
             CompositionLocalProvider(LocalLayoutDirection provides direction, LocalReducedMotion provides true) {
                 Column(Modifier.width(240.dp).padding(top = 32.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     GlassActionRow {
-                        GlassActionButton(R.drawable.ic_shuffle, "Randomize", onClick = { randomizations++ })
+                        GlassActionButton(AppIcon.ActionShuffle, "Randomize", onClick = { randomizations++ })
                     }
                     GlassActionRow {
-                        GlassActionButton(R.drawable.ic_reverse, "Reverse", onClick = { reversals++ })
+                        GlassActionButton(AppIcon.ActionReverse, "Reverse", onClick = { reversals++ })
                     }
                 }
             }
@@ -84,9 +84,9 @@ class ActionStripDrawingTest {
                             .then(drawing.record { replay })
                             .controlHorizontalScroll(state).padding(inset),
                             horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                            GlassActionButton(R.drawable.ic_shuffle, "Randomize", onClick = {})
+                            GlassActionButton(AppIcon.ActionShuffle, "Randomize", onClick = {})
                             GlassPresence(visible) {
-                                GlassActionButton(R.drawable.ic_revert, "Revert", onClick = {})
+                                GlassActionButton(AppIcon.ActionRevert, "Revert", onClick = {})
                             }
                         }
                     }
