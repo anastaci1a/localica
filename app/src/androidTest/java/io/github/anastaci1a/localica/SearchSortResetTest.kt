@@ -25,6 +25,7 @@ class SearchSortResetTest {
     private fun resetSearch(global: Boolean) {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val store = context.getSharedPreferences("browse-style", 0)
+        val originalPreferences = store.all.toMap()
         val trace = java.util.concurrent.ConcurrentLinkedQueue<String>()
         fun record(event: String) {
             trace += "${android.os.SystemClock.uptimeMillis()} $event"
@@ -49,6 +50,7 @@ class SearchSortResetTest {
         val snapshot = LibrarySnapshot(folders = listOf(FolderSelection("root", "Music")), tracks = tracks)
         val items = BrowseQueries.evaluate(snapshot, emptyList(), root).items.associateBy { it.title }
         lateinit var navigation: MutableState<NavigationState>
+        lateinit var sorting: MutableState<Boolean>
         val restoration = StateRestorationTester(compose)
         try {
             restoration.setContent {
@@ -56,7 +58,7 @@ class SearchSortResetTest {
                     save = { NavigationCodec.encode(it) }, restore = { NavigationCodec.decode(it) })) {
                     mutableStateOf(NavigationState(MainTab.Albums, mapOf(MainTab.Albums to listOf(root, older, search))))
                 }
-                var sorting by rememberSaveable { mutableStateOf(true) }
+                sorting = rememberSaveable { mutableStateOf(false) }
                 val route = navigation.value.route
                 LocalicaTheme {
                     key(route.key) {
@@ -64,15 +66,23 @@ class SearchSortResetTest {
                             { record("route sort=${it.querySort} ascending=${it.queryAscending}"); navigation.value = navigation.value.update(it) },
                             { item -> navigation.value = navigation.value.open(BrowseRoute(MainTab.Albums, item.ref, item.title)) },
                             {}, { _, _, _ -> }, null, null, true, false,
-                            sorting = sorting, onSortDismiss = {
+                            sorting = sorting.value, onSortDismiss = {
                                 record("sort-dismiss overridden=${preferences.overridden(search)} route=${navigation.value.route.querySort}")
-                                sorting = false
+                                sorting.value = false
                             }, reducedMotion = true,
                             onSearchEdit = { navigation.value = navigation.value.editSearch(it) },
                             onSearchCommit = { navigation.value = navigation.value.commitSearch() },
                             onBack = { navigation.value = navigation.value.back(false)!! })
                     }
                 }
+            }
+            // A new search requests native input outside Compose's clock. Finish
+            // that handoff before opening Sort, just as a committed search does.
+            compose.awaitSearchImeHandoff { compose.onNode(hasSetTextAction()).performImeAction() }
+            compose.runOnIdle {
+                assertEquals(search, navigation.value.route)
+                assertTrue("Preparing the editor must not reset its sort", preferences.overridden(search))
+                sorting.value = true
             }
             val reset = compose.onNodeWithText("Use list-type defaults").assertIsDisplayed().assertIsEnabled()
             compose.awaitExpectedWindowFocus(reset)
@@ -130,7 +140,18 @@ class SearchSortResetTest {
         } finally {
             android.util.Log.i("SearchSortReset", trace.joinToString(" | "))
             store.unregisterOnSharedPreferenceChangeListener(listener)
-            store.edit().clear().commit()
+            store.edit().clear().apply {
+                originalPreferences.forEach { (key, value) ->
+                    when (value) {
+                        is String -> putString(key, value)
+                        is Boolean -> putBoolean(key, value)
+                        is Int -> putInt(key, value)
+                        is Long -> putLong(key, value)
+                        is Float -> putFloat(key, value)
+                        is Set<*> -> putStringSet(key, value.filterIsInstance<String>().toSet())
+                    }
+                }
+            }.commit()
         }
     }
 }
