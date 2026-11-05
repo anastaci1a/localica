@@ -1,4 +1,5 @@
 import importlib.util
+import itertools
 import json
 import os
 from pathlib import Path
@@ -176,6 +177,30 @@ class CacheTests(unittest.TestCase):
 
 
 class WorkflowTests(unittest.TestCase):
+    def test_prototypes_use_at_most_two_runners_without_skipping_failed_checks(self):
+        jobs = yaml.safe_load((ROOT / '.github/workflows/prototype.yml').read_text())['jobs']
+        parents = {'compatibility_26': 'build', 'compatibility_36': 'compatibility_26',
+                   'focused_36': 'focused_26'}
+        for job, parent in parents.items():
+            self.assertEqual(parent, jobs[job]['needs'])
+            self.assertEqual('${{ !cancelled() }}', jobs[job]['if'])
+        names = set(jobs) - {'evidence'}
+        self.assertEqual({'build', 'focused_26', 'focused_36', 'compatibility_26', 'compatibility_36'}, names)
+
+        def ancestors(name):
+            result = set()
+            while name in parents:
+                name = parents[name]
+                result.add(name)
+            return result
+
+        # No three checks can run together, regardless of individual durations.
+        for triple in itertools.combinations(names, 3):
+            self.assertTrue(any(a in ancestors(b) or b in ancestors(a)
+                                for a, b in itertools.combinations(triple, 2)))
+        self.assertEqual(names, set(jobs['evidence']['needs']))
+        self.assertEqual('${{ always() }}', jobs['evidence']['if'])
+
     def test_every_emulator_lane_polls_and_caches_with_retained_diagnostics(self):
         count = 0
         for filename in ('android.yml', 'prototype.yml'):
