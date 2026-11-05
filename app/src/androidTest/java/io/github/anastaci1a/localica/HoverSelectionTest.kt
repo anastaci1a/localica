@@ -290,7 +290,8 @@ class HoverSelectionTest {
     }
 
     private fun region(vararg rectangles: Rect): Region {
-        val path = connectedSelectionPath(rectangles.map { SelectionRegion(it) }, 16f)
+        // Inputs are content footprints: the shared 3.5 dp padding leaves a 1 dp outline gap.
+        val path = connectedSelectionPath(rectangles.map { SelectionRegion(it.inflate(MediaOutlinePadding.value)) }, 16f)
         return Region().apply { setPath(path.asAndroidPath(), Region(-1000, -1000, 1000, 1000)) }
     }
     @Test fun sideNeighborsJoinWithoutCoveringAnUnselectedHole() {
@@ -300,12 +301,14 @@ class HoverSelectionTest {
         assertTrue(shape.contains(40, 84))
         assertFalse("Unselected tile must remain uncovered", shape.contains(120, 120))
     }
-    @Test fun wideRowsMergeWithoutCircularCapsOrInternalShoulders() {
+    @Test fun wideRowsKeepTheirWidthWithRoundedConcaveJoins() {
         val shape = region(Rect(8f, 240f, 712f, 360f), Rect(8f, 370f, 712f, 490f))
-        assertEquals(android.graphics.Rect(8, 240, 712, 490), shape.bounds)
+        assertTrue(shape.bounds.left in 4..5 && shape.bounds.right in 715..716)
+        assertTrue(shape.bounds.top in 236..237 && shape.bounds.bottom in 493..494)
+        assertTrue("The shared gap joins at the centre", shape.contains(360,365))
         for (y in 330..400) {
-            assertTrue("Continuous left side at $y", shape.contains(10, y))
-            assertTrue("Continuous right side at $y", shape.contains(710, y))
+            assertTrue("Continuous left side at $y", shape.contains(40, y))
+            assertTrue("Continuous right side at $y", shape.contains(680, y))
         }
     }
     @Test fun diagonalNeighborsStaySeparate() {
@@ -314,15 +317,17 @@ class HoverSelectionTest {
         assertFalse(shape.contains(120, 40))
         assertFalse(shape.contains(40, 120))
     }
-    @Test fun aWeakeningBridgePinchesTowardItsMiddle() {
-        val rows = listOf(SelectionRegion(Rect(0f, 0f, 400f, 60f)), SelectionRegion(Rect(0f, 68f, 400f, 128f)))
+    @Test fun aWeakeningFieldPartsContinuouslyBeforeZeroStrength() {
+        val rows = listOf(Rect(0f,0f,400f,60f),Rect(0f,69f,400f,129f))
+            .map { SelectionRegion(it.inflate(MediaOutlinePadding.value)) }
         var previous = Int.MAX_VALUE
         for (strength in listOf(1f, .75f, .5f, .25f, .05f)) {
             val path = connectedSelectionPath(rows, 16f, rows, { _, _ -> strength })
             val shape = Region().apply { setPath(path.asAndroidPath(), Region(-1000, -1000, 1000, 1000)) }
             val width = (0 until 400).count { shape.contains(it, 64) }
-            assertTrue("Bridge narrows with strength: $strength -> $width", width < previous)
-            assertTrue("It stays centred", shape.contains(200, 64))
+            assertTrue("Bridge narrows with strength: $strength -> $width", width <= previous)
+            if (width > 0) assertTrue("It stays centred", shape.contains(200,64))
+            if (strength == 1f) assertTrue("Full strength joins the padded outlines",width > 0)
             previous = width
         }
         val parted = connectedSelectionPath(rows, 16f, rows, { _, _ -> 0f })

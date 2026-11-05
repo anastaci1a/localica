@@ -1,0 +1,111 @@
+package io.github.anastaci1a.localica
+
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Paint
+import android.graphics.Color
+import android.os.Build
+import android.os.SystemClock
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.asAndroidPath
+import androidx.test.platform.app.InstrumentationRegistry
+import io.github.anastaci1a.localica.ui.*
+import org.junit.Assert.*
+import org.junit.Test
+import java.io.File
+import kotlin.math.*
+
+/** Subpixel connect/disconnect proofs, including both directions of the drag motion adapters. */
+class SelectionMergeSequenceTest {
+    private val output: File by lazy {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        File(InstrumentationRegistry.getArguments().getString("additionalTestOutputDir")
+            ?.takeIf { it.isNotBlank() }?.let(::File) ?: requireNotNull(context.getExternalFilesDir(null)),"selection-merge")
+            .apply { mkdirs() }
+    }
+    private fun coverage(regions: List<SelectionRegion>,density: Float,strength: Float): IntArray {
+        val path = connectedSelectionPath(regions,16f*density,strength = { _,_ -> strength })
+        val bitmap = Bitmap.createBitmap(420,280,Bitmap.Config.ARGB_8888)
+        Canvas(bitmap).apply {
+            scale(1f/density,1f/density)
+            drawPath(path.asAndroidPath(),Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE })
+        }
+        return IntArray(420*280).also { bitmap.getPixels(it,0,420,0,0,420,280); bitmap.recycle() }
+    }
+    private fun sequence(name: String,width: Float,height: Float,vertical: Boolean,drag: Boolean) {
+        val csv = StringBuilder("density,rtl,frame,separation,progress,changedCoverage\n")
+        for (density in listOf(1f,1.75f,2.625f)) for (rtl in listOf(false,true)) {
+            var previous: IntArray? = null
+            val frames = mutableListOf<IntArray>()
+            val outbound = (0..120).map { it/120f }
+            val positions = outbound + outbound.reversed()
+            for ((frame,t) in positions.withIndex()) {
+                val separation = -4f+20f*t
+                val progress = if (drag) hoverBridgeStrength(true,true,t to t,(1f-t) to (1f-t),1f to 1f) else 1f
+                val a = Rect(16f,16f,16f+width,16f+height)
+                val b = if (vertical) a.translate(Offset(0f,height+separation)) else a.translate(Offset(width+separation,0f))
+                val regions = listOf(a,b).map {
+                    val r = if (rtl) Rect(400f-it.right,it.top,400f-it.left,it.bottom) else it
+                    SelectionRegion(Rect(r.left*density,r.top*density,r.right*density,r.bottom*density),12f*density)
+                }
+                val pixels = coverage(regions,density,progress)
+                val old = previous
+                val changed = if (old == null) 0f else pixels.indices.sumOf { abs((pixels[it] ushr 24)-(old[it] ushr 24)).toDouble()/255 }.toFloat()
+                if (changed >= (width+height)*1.2f && old != null) {
+                    for ((label,imagePixels) in listOf("before" to old,"after" to pixels)) {
+                        val image = Bitmap.createBitmap(imagePixels,420,280,Bitmap.Config.ARGB_8888)
+                        File(output,"$name-failed-$frame-$label.png").outputStream().use { image.compress(Bitmap.CompressFormat.PNG,100,it) }
+                        image.recycle()
+                    }
+                }
+                assertTrue("$name frame=$frame density=$density rtl=$rtl changed=$changed",changed < (width+height)*1.2f)
+                if (frame > 120) assertArrayEquals("Reversal must reproduce its exact outline",frames[241-frame],pixels)
+                else frames += pixels
+                if (density == 1f && !rtl && frame % 12 == 0) {
+                    val image = Bitmap.createBitmap(pixels,420,280,Bitmap.Config.ARGB_8888)
+                    File(output,"$name-$frame-api${Build.VERSION.SDK_INT}.png").outputStream().use { image.compress(Bitmap.CompressFormat.PNG,100,it) }
+                    image.recycle()
+                }
+                csv.append("$density,$rtl,$frame,$separation,$progress,$changed\n")
+                previous = pixels
+            }
+        }
+        File(output,"$name-api${Build.VERSION.SDK_INT}.csv").writeText(csv.toString())
+    }
+    @Test fun carouselConnectDisconnectAndReverse() = sequence("carousel",88f,100f,false,false)
+    @Test fun listConnectDisconnectAndReverse() = sequence("list",320f,72f,true,false)
+    @Test fun galleryConnectDisconnectAndReverse() = sequence("gallery",96f,96f,false,false)
+    @Test fun dragStartReleaseAndCancelReverse() = sequence("drag",240f,72f,true,true)
+
+    @Test fun api26ChangingTwelveItemDragOutlineAndCacheCost() {
+        val profile = SelectionOutlineProfile()
+        val cache = HoverPathCache(profile)
+        fun regions(frame: Int): List<SelectionRegion> = List(12) { i ->
+            val dx = if (i == 5) sin(frame*.07f)*10f else 0f
+            val dy = if (i == 5) cos(frame*.09f)*8f else 0f
+            SelectionRegion(Rect(i%3*73f+dx,i/3*73f+dy,i%3*73f+72f+dx,i/3*73f+72f+dy),12f)
+        }
+        val changing = LongArray(500)
+        var last = regions(0)
+        for (i in 0 until 1000) {
+            last = regions(i)
+            val progress = .2f+.6f*(i%100)/100f
+            val start = SystemClock.elapsedRealtimeNanos()
+            cache.path(last,last,16f) { _,_ -> progress }
+            if (i >= 500) changing[i-500] = SystemClock.elapsedRealtimeNanos()-start
+        }
+        val cached = LongArray(500)
+        repeat(500) { i ->
+            val start = SystemClock.elapsedRealtimeNanos()
+            cache.path(last,last,16f) { _,_ -> .794f }
+            cached[i] = SystemClock.elapsedRealtimeNanos()-start
+        }
+        changing.sort(); cached.sort()
+        val report = "api=${Build.VERSION.SDK_INT} items=12 changing-p50-ns=${changing[250]} changing-p95-ns=${changing[475]} changing-max-ns=${changing.last()} cache-p50-ns=${cached[250]} cache-p95-ns=${cached[475]} rebuilds=${cache.rebuilds} evaluation-mean-ns=${profile.evaluationNanos/1000} path-mean-ns=${profile.pathNanos/1000}"
+        File(output,"performance-api${Build.VERSION.SDK_INT}.txt").writeText(report)
+        android.util.Log.i("SelectionOutlinePerformance",report)
+        assertTrue(report,changing[475] < 1_000_000)
+        assertTrue(report,cached[475] < 1_000_000)
+    }
+}
