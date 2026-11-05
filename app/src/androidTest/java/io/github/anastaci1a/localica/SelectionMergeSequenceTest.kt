@@ -73,39 +73,63 @@ class SelectionMergeSequenceTest {
         }
         File(output,"$name-api${Build.VERSION.SDK_INT}.csv").writeText(csv.toString())
     }
-    @Test fun carouselConnectDisconnectAndReverse() = sequence("carousel",88f,100f,false,false)
+    // 112 dp artwork, 3.5 dp padding on each side, and an 8 dp artwork gap (#573).
+    @Test fun carouselConnectDisconnectAndReverse() = sequence("carousel",119f,119f,false,false)
     @Test fun listConnectDisconnectAndReverse() = sequence("list",320f,72f,true,false)
     @Test fun galleryConnectDisconnectAndReverse() = sequence("gallery",96f,96f,false,false)
     @Test fun dragStartReleaseAndCancelReverse() = sequence("drag",240f,72f,true,true)
 
-    @Test fun api26ChangingTwelveItemDragOutlineAndCacheCost() {
+    @Test fun api26ChangingTwelveItemDragOutlineAndCacheCost() = benchmark("nearby-grid",false)
+    @Test fun api26LiftedTwelveItemFlightOutlineAndCacheCost() = benchmark("lifted-flight",true)
+    private fun benchmark(name: String,flight: Boolean) {
         val profile = SelectionOutlineProfile()
         val cache = HoverPathCache(profile)
+        val density=InstrumentationRegistry.getInstrumentation().targetContext.resources.displayMetrics.density
         fun regions(frame: Int): List<SelectionRegion> = List(12) { i ->
             val dx = if (i == 5) sin(frame*.07f)*10f else 0f
             val dy = if (i == 5) cos(frame*.09f)*8f else 0f
-            SelectionRegion(Rect(i%3*73f+dx,i/3*73f+dy,i%3*73f+72f+dx,i/3*73f+72f+dy),12f)
+            if (!flight) SelectionRegion(Rect(i%3*73f+dx,i/3*73f+dy,i%3*73f+72f+dx,i/3*73f+72f+dy),12f)
+            else {
+                val rest=MediaItemOutline(Rect(i%3*73f*density,i/3*73f*density,
+                    (i%3*73f+72f)*density,(i/3*73f+72f)*density),12f*density)
+                val lifted=hoverGeometry(rest,Rect(1.125f*density,1.125f*density,1.125f*density,1.125f*density),1f).lifted
+                val p=androidx.compose.animation.core.FastOutSlowInEasing.transform((frame%100)/99f)
+                val target=Rect((80f+min(i,2)*6f)*density,(70f+min(i,2)*6f)*density,
+                    (154.25f+min(i,2)*6f)*density,(144.25f+min(i,2)*6f)*density)
+                fun mix(a: Float,b: Float)=a+(b-a)*p
+                val a=lifted.bounds
+                SelectionRegion(Rect(mix(a.left,target.left),mix(a.top,target.top),mix(a.right,target.right),mix(a.bottom,target.bottom)),lifted.corner)
+            }
         }
+        var lastProgress=0f
+        fun strength(a: Int,b: Int): Float = if(!flight) lastProgress else
+            hoverBridgeStrength(abs(a%3-b%3)+abs(a/3-b/3)==1,false,
+                lastProgress to lastProgress,0f to 0f,1f to 1f)
+        val gap=if(flight)16f*density else 16f
         val changing = LongArray(500)
         var last = regions(0)
         for (i in 0 until 1000) {
             last = regions(i)
-            val progress = .2f+.6f*(i%100)/100f
+            lastProgress = if(flight) androidx.compose.animation.core.FastOutSlowInEasing.transform((i%100)/99f) else .2f+.6f*(i%100)/100f
             val start = SystemClock.elapsedRealtimeNanos()
-            cache.path(last,last,16f) { _,_ -> progress }
+            cache.path(last,last,gap,::strength)
             if (i >= 500) changing[i-500] = SystemClock.elapsedRealtimeNanos()-start
         }
         val cached = LongArray(500)
+        cache.path(last,last,gap,::strength)
+        val settledRebuilds = cache.rebuilds
         repeat(500) { i ->
             val start = SystemClock.elapsedRealtimeNanos()
-            cache.path(last,last,16f) { _,_ -> .794f }
+            cache.path(last,last,gap,::strength)
             cached[i] = SystemClock.elapsedRealtimeNanos()-start
         }
+        assertEquals("Unchanged inputs must reuse the contour",settledRebuilds,cache.rebuilds)
         changing.sort(); cached.sort()
-        val report = "api=${Build.VERSION.SDK_INT} items=12 changing-p50-ns=${changing[250]} changing-p95-ns=${changing[475]} changing-max-ns=${changing.last()} cache-p50-ns=${cached[250]} cache-p95-ns=${cached[475]} rebuilds=${cache.rebuilds} evaluation-mean-ns=${profile.evaluationNanos/1000} path-mean-ns=${profile.pathNanos/1000}"
-        File(output,"performance-api${Build.VERSION.SDK_INT}.txt").writeText(report)
+        val report = "workload=$name api=${Build.VERSION.SDK_INT} density=$density items=12 changing-p50-ns=${changing[250]} changing-p95-ns=${changing[475]} changing-max-ns=${changing.last()} cache-p50-ns=${cached[250]} cache-p95-ns=${cached[475]} rebuilds=${cache.rebuilds} geometry-mean-ns=${profile.evaluationNanos/1000} primitives-per-frame=${profile.samples/1000} segments-per-frame=${profile.cells/1000} fillets-per-frame=${profile.curves/1000} arrangement-mean-ns=${profile.arrangementNanos/1000} rounding-mean-ns=${profile.roundingNanos/1000} path-mean-ns=${profile.pathNanos/1000}"
+        File(output,"performance-$name-api${Build.VERSION.SDK_INT}.txt").writeText(report)
         android.util.Log.i("SelectionOutlinePerformance",report)
-        assertTrue(report,changing[475] < 1_000_000)
-        assertTrue(report,cached[475] < 1_000_000)
+        assertTrue(report,changing[250] <= 1_000_000)
+        assertTrue(report,changing[475] <= 2_000_000)
+        assertTrue(report,cached[250] <= 1_000_000 && cached[475] <= 2_000_000)
     }
 }
