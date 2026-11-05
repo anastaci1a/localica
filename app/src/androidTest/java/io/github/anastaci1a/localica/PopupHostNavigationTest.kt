@@ -19,6 +19,14 @@ import org.junit.Test
 
 class PopupHostNavigationTest {
     @get:Rule val compose = localicaComposeRule()
+    private val markers = java.util.IdentityHashMap<View, FrameMarker>()
+    private var frameViews: () -> List<View> = { emptyList() }
+    private var frameState: () -> String = { "" }
+    private var stage = 0
+
+    @org.junit.After fun removeMarkers() = compose.runOnUiThread {
+        markers.forEach { (view, marker) -> view.overlay.remove(marker) }
+    }
 
     @Test fun settingsBackDuringRetractLeavesWithSubmenu() = navigate(settings = true, expanding = false)
     @Test fun settingsBackDuringExpandThenBackLeavesWithSubmenu() = navigate(settings = true, expanding = true)
@@ -32,6 +40,8 @@ class PopupHostNavigationTest {
         var popupView: View? = null
         var parentView: View? = null
         var parentProgress = 1f
+        frameViews = { listOfNotNull(parentView, popupView) }
+        frameState = { "parent=$parentProgress open=$open parentAttached=${parentView?.isAttachedToWindow} popupAttached=${popupView?.isAttachedToWindow}" }
         compose.setContent { LocalicaTheme {
             CompositionLocalProvider(LocalGlassMorphWorkObserver provides { phase, window, progress ->
                 if (phase == "geometry" && progress != null && window ===
@@ -103,12 +113,55 @@ class PopupHostNavigationTest {
 
     private data class RedFrame(val pixels: Int, val peak: Int)
 
+    private class FrameMarker(val x: Int) : android.graphics.drawable.Drawable() {
+        var stage = 0
+        private val paint = android.graphics.Paint()
+        init { setBounds(x, 100, x + 8, 108) }
+        override fun draw(canvas: android.graphics.Canvas) {
+            paint.color = android.graphics.Color.rgb(stage * 8, 255, 128)
+            canvas.drawRect(bounds, paint)
+        }
+        override fun setAlpha(alpha: Int) { }
+        override fun setColorFilter(filter: android.graphics.ColorFilter?) { }
+        @Suppress("DEPRECATION") override fun getOpacity() = android.graphics.PixelFormat.TRANSLUCENT
+    }
+
     private fun redFrame(): RedFrame {
         compose.waitForIdle()
         val automation = InstrumentationRegistry.getInstrumentation().uiAutomation
-        // Native window drawing is independent of the paused Compose clock.
-        UiDevice.getInstance(InstrumentationRegistry.getInstrumentation()).waitForIdle(1000)
-        val bitmap = requireNotNull(automation.takeScreenshot())
+        stage = stage % 24 + 1
+        val requested = stage
+        lateinit var views: List<View>
+        compose.runOnUiThread {
+            views = frameViews().filter { it.isAttachedToWindow }
+            views.forEachIndexed { index, view ->
+                val marker = markers.getOrPut(view) { FrameMarker(4 + index * 16).also { view.overlay.add(it) } }
+                marker.stage = requested
+                marker.invalidateSelf()
+                view.invalidate()
+            }
+        }
+        var presented: android.graphics.Bitmap? = null
+        // Window overlays prove the current frame of both native windows, even
+        // when the modal's Compose drawing has transferred into its home layer.
+        compose.waitUntil(5000) {
+            val next = requireNotNull(automation.takeScreenshot())
+            var matches = true
+            compose.runOnUiThread {
+                views.filter { it.isAttachedToWindow }.forEach { view ->
+                    val origin = IntArray(2)
+                    view.getLocationOnScreen(origin)
+                    val c = next.getPixel(origin[0] + requireNotNull(markers[view]).x + 4, origin[1] + 104)
+                    val green = android.graphics.Color.green(c)
+                    // A covering native scrim scales all channels equally.
+                    matches = matches && green > 80 && kotlin.math.abs(android.graphics.Color.red(c).toFloat() / green - requested * 8 / 255f) < .012f
+                }
+            }
+            if (matches) presented = next else next.recycle()
+            matches
+        }
+        android.util.Log.i("PopupHostNavigation", "stage=$requested clock=${compose.mainClock.currentTime} ${frameState()}")
+        val bitmap = requireNotNull(presented)
         return try {
             var count = 0
             var peak = 0
