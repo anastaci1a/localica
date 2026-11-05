@@ -229,8 +229,7 @@ internal fun DrawScope.drawHoverGroup(group: HoverGroupRenderer, parts: List<Hov
     val path = group.path.path(regions, rest, gap, strength)
     if (shadow) with(group.shadow) {
         // Strength alone follows progress, so the shadow deepens linearly with the lift.
-        draw(parts.map { it.lifted.contour to 1f } + group.path.bridges.map {
-            RoundRect(it.first, CornerRadius.Zero) to 1f }, lift.strength * progress, lift.spread, color = lift.color)
+        draw(group.path.localPath,regions.first().bounds.topLeft, lift.strength * progress, lift.spread, color = lift.color)
     }
     val source = backing?.takeIf { it.recorded && !it.layer.isReleased } ?: return
     val registration = source.location.registrationTo(location) ?: return
@@ -270,28 +269,30 @@ internal fun DrawScope.drawHoverGroup(group: HoverGroupRenderer, parts: List<Hov
 private fun Rect.union(other: Rect) = Rect(min(left, other.left), min(top, other.top), max(right, other.right), max(bottom, other.bottom))
 
 /** Rebuild the merged outline only when its relative geometry or bridge strengths change. */
-internal class HoverPathCache {
+internal class HoverPathCache(profile: SelectionOutlineProfile? = null) {
     private var key: Any? = null
-    private var origin = Offset.Zero
-    private var cached = Path()
-    private var cachedBridges: List<Pair<Rect, Float>> = emptyList()
-    /** Bridge rectangles of the last path, with their strengths (for the shadow). */
-    var bridges: List<Pair<Rect, Float>> = emptyList(); private set
+    private var origin = Offset(Float.NaN,Float.NaN)
+    private var presented = Path()
+    private val contour = SelectionOutlineContour(profile)
+    var localPath = Path(); private set
+    var rebuilds = 0; private set
     fun path(regions: List<SelectionRegion>, rest: List<SelectionRegion>, gap: Float, strength: (Int, Int) -> Float): Path {
+        if (regions.isEmpty()) return Path()
         val at = regions.first().bounds.topLeft
         val local = localLensRegions(regions, at)
-        val localRest = localLensRegions(rest, at)
         val strengths = regions.indices.flatMap { a -> (a + 1 until regions.size).map { b -> strength(a, b) } }
-        val next = Triple(local, localRest, strengths) to gap
-        if (next != key) {
+        val next = local to (strengths to gap)
+        val changed = next != key
+        if (changed) {
             key = next
-            val bridgeList = mutableListOf<Pair<Rect, Float>>()
-            cached = connectedSelectionPath(local, gap, localRest, strength) { rect, value -> bridgeList += rect to value }
-            cachedBridges = bridgeList
+            rebuilds++
+            localPath = connectedSelectionPath(local, gap, strength = strength, contour = contour)
         }
-        origin = at
-        bridges = cachedBridges.map { it.first.translate(at) to it.second }
-        return Path().apply { addPath(cached, at) }
+        if (changed || at != origin) {
+            origin = at
+            presented = Path().apply { addPath(localPath, at) }
+        }
+        return presented
     }
 }
 
@@ -322,39 +323,28 @@ internal fun hoverComponents(rest: List<Rect>, gap: Float): List<List<Int>> {
 internal fun selectionComponents(regions: List<SelectionRegion>, gap: Float): List<List<SelectionRegion>> =
     hoverComponents(regions.map { it.bounds }, gap).map { group -> group.map { regions[it] } }
 
-/** Union neighbors through the gaps, across shared sides only. Never fill group hulls or corner gaps.
- * Adjacency is decided by [rest] (defaults to [regions]); a bridge narrows with its [strength]. */
+/** One compact-support outline, driven by presented geometry and the existing motion progress.
+ * [rest] remains an adapter parameter; it never authorizes a tether across a displayed gap. */
 internal fun connectedSelectionPath(regions: List<SelectionRegion>, gap: Float,
     rest: List<SelectionRegion> = regions, strength: (Int, Int) -> Float = { _, _ -> 1f },
-    onBridge: (Rect, Float) -> Unit = { _, _ -> }): Path {
-    val path = Path()
-    fun add(part: Path) { path.op(path, part, PathOperation.Union) }
-    regions.forEach { region ->
-        add(Path().apply { addRoundRect(region.contour(gap)) })
+    contour: SelectionOutlineContour = SelectionOutlineContour()): Path {
+    if (regions.isEmpty()) return Path()
+    val field = SelectionOutlineField(regions,gap,strength = strength)
+    val path = Path().apply { regions.forEach { addRoundRect(it.contour(gap),Path.Direction.Clockwise) } }
+    val connections = Path()
+    // The original item curves are exact. Field evaluation is needed only where two
+    // compact supports intersect; all other pixels already have the analytic outline.
+    contour.beginPatches()
+    for (patch in field.patches) {
+        val members = regions.indices.filter { regions[it].bounds.inflate(gap*.5f).overlaps(patch) }
+        val surface = contour.patch(members.map { regions[it] },gap,patch,
+            { a,b -> strength(members[a],members[b]) })
+        connections.addPath(surface)
     }
-    regions.indices.forEach { i -> (i + 1 until regions.size).forEach { j ->
-        val ra = rest[i].bounds; val rb = rest[j].bounds
-        val xRest = max(ra.left - rb.right, rb.left - ra.right)
-        val yRest = max(ra.top - rb.bottom, rb.top - ra.bottom)
-        if (xRest > gap || yRest > gap || (xRest < 0 && yRest < 0)) return@forEach
-        if (xRest >= 0 && yRest >= 0) return@forEach // Corner-only neighbors remain separate.
-        val s = strength(i, j).coerceIn(0f, 1f)
-        if (s <= 0f) return@forEach
-        val a = regions[i]; val b = regions[j]
-        // Extend through the rounded shoulders, not just across the empty gap.
-        val r = max(a.radius(gap), b.radius(gap))
-        val full = if (xRest < 0) Rect(max(a.bounds.left, b.bounds.left),
-            min(a.bounds.bottom, b.bounds.bottom) - r,
-            min(a.bounds.right, b.bounds.right), max(a.bounds.top, b.bounds.top) + r)
-        else Rect(min(a.bounds.right, b.bounds.right) - r, max(a.bounds.top, b.bounds.top),
-            max(a.bounds.left, b.bounds.left) + r, min(a.bounds.bottom, b.bounds.bottom))
-        if (full.width <= 0f || full.height <= 0f) return@forEach
-        // A weakening bridge pinches toward its middle, like a neck, before it parts.
-        val bridge = if (xRest < 0) Rect(full.center.x - full.width * s / 2f, full.top, full.center.x + full.width * s / 2f, full.bottom)
-            else Rect(full.left, full.center.y - full.height * s / 2f, full.right, full.center.y + full.height * s / 2f)
-        onBridge(bridge, s)
-        add(Path().apply { addRect(bridge) })
-    } }
+    contour.endPatches()
+    // Every contour winds clockwise. Non-zero fill is their union without boolean
+    // reconstruction at the many coincident item/patch edges on legacy Skia.
+    path.addPath(connections)
     return path
 }
 
