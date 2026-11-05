@@ -33,6 +33,7 @@ class SwitchTapOpticsTest {
     private lateinit var view: View
     private var pixelDensity = 1f
     private val backings = mutableMapOf<String, FrostedBackdrop>()
+    private val drawnSources = mutableMapOf<String, FrostedBackdrop>()
     // Instrumentation opt-in: -e switchTapOpticsReview true.
     private val exportReviewFrames by lazy {
         InstrumentationRegistry.getArguments().getString("switchTapOpticsReview") == "true"
@@ -207,6 +208,7 @@ class SwitchTapOpticsTest {
     @Composable private fun Sample(tag: String, checked: Boolean, recordingAllowed: Boolean = true, change: (Boolean) -> Unit) {
         val source = rememberFrostedBackdrop(Unit, enabled = recordingAllowed)
         SideEffect { backings[tag] = source }
+        val onDraw = LocalControlLensDraw.current
         Box(Modifier.fillMaxWidth().height(96.dp).testTag(tag)) {
             Canvas(Modifier.matchParentSize().recordFrostedBackdrop(source, enabled = recordingAllowed)) {
                 val cell = 8.dp.toPx()
@@ -215,7 +217,13 @@ class SwitchTapOpticsTest {
                     Offset(x * cell, 0f), Size(cell, size.height))
             }
             Canvas(Modifier.matchParentSize()) { drawRect(Color.Blue) }
-            CompositionLocalProvider(LocalFrostedBackdrop provides source) {
+            CompositionLocalProvider(
+                LocalFrostedBackdrop provides source,
+                LocalControlLensDraw provides {
+                    drawnSources[tag] = source
+                    onDraw?.invoke()
+                },
+            ) {
                 Box(Modifier.padding(horizontal = 24.dp, vertical = 24.dp)) {
                     BooleanPreference("$tag switch", checked, change)
                 }
@@ -226,12 +234,14 @@ class SwitchTapOpticsTest {
 
     private fun awaitRecording(tag: String) {
         // Readback uses real rendering as well as Compose frames. Prime the held
-        // reference from source readiness, never by waiting for the optical pixels.
+        // reference only after this switch consumes its current source in a lens draw,
+        // never by waiting for the optical pixels.
         compose.waitUntil(10_000) {
             compose.mainClock.advanceTimeByFrame()
             val source = backings[tag]
-            source != null && if (android.os.Build.VERSION.SDK_INT >= 33)
-                source.recorded && !source.layer.isReleased else source.snapshot != null
+            source != null && drawnSources[tag] === source &&
+                source.recorded && !source.layer.isReleased &&
+                (android.os.Build.VERSION.SDK_INT >= 33 || source.snapshot != null)
         }
     }
 
@@ -382,13 +392,6 @@ class SwitchTapOpticsTest {
             held = true
             switch.performTouchInput { down(center) }
             awaitRecording(tag)
-            // Older APIs average a tiny readback; newer APIs average directly on the GPU.
-            compose.waitUntil(10_000) {
-                compose.mainClock.advanceTimeByFrame()
-                val source = backings[tag]
-                source != null && source.recorded && !source.layer.isReleased &&
-                    (android.os.Build.VERSION.SDK_INT >= 33 || source.snapshot != null)
-            }
             compose.mainClock.advanceTimeBy(320)
             val primed = sample("work-priming-held")
             assertTrue("Held lens must visibly sample its green backing", primed.first > 10)
