@@ -178,7 +178,7 @@ class IconPackLibraryTest {
         val first = import()
         import("Second", "transport.play")
         compose.setContent {
-            val registryOwner = androidx.activity.compose.LocalActivityResultRegistryOwner.current
+            val registryOwner = checkNotNull(androidx.activity.compose.LocalActivityResultRegistryOwner.current)
             androidx.compose.runtime.CompositionLocalProvider(
             androidx.activity.compose.LocalActivityResultRegistryOwner provides registryOwner,
             androidx.compose.ui.platform.LocalContext provides context) {
