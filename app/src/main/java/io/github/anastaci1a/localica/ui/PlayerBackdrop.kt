@@ -32,7 +32,7 @@ internal fun thumbnailPalette(bitmap: android.graphics.Bitmap): PlayerPalette {
     return PlayerPalette(band(0), band(1), band(2), bitmap.width.toFloat() / bitmap.height)
 }
 
-/** Pure retargeting on the artwork reveal clock, including cover proportions. */
+/** Pure palette-color retargeting on the artwork reveal clock. */
 internal class PlayerPaletteTransition(initial: PlayerPalette) {
     internal data class Step(val shown: PlayerPalette, val start: PlayerPalette, val target: PlayerPalette,
         val startProgress: Float = 0f, val lastProgress: Float = 1f)
@@ -46,8 +46,7 @@ internal class PlayerPaletteTransition(initial: PlayerPalette) {
         val startProgress = if (restart) progress else old.startProgress
         val fraction = ((progress - startProgress) / (1f - startProgress).coerceAtLeast(.001f)).coerceIn(0f, 1f)
         val shown = target.copy(top = lerp(start.top, target.top, fraction),
-            middle = lerp(start.middle, target.middle, fraction), bottom = lerp(start.bottom, target.bottom, fraction),
-            aspect = start.aspect + (target.aspect - start.aspect) * fraction)
+            middle = lerp(start.middle, target.middle, fraction), bottom = lerp(start.bottom, target.bottom, fraction))
         return Step(shown, start, target, startProgress, progress)
     }
     fun commit(step: Step) { committed = step }
