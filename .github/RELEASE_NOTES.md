@@ -19,6 +19,9 @@ This is an optimized build (not debuggable, minified with R8, with a baseline pr
 - When you pinch to another view size, items that are leaving fade out one after another across the whole pinch, farthest from your fingers first, and reversing the pinch plays it backwards.
 - With a very large queue, Next, Previous and seek respond right after playback starts, instead of waiting for the queue to finish saving.
 - Play Next songs keep their next-up place when you pick another song or a track change was already loading. Going back across a shuffle cycle no longer repeats a song, and Stop here and the repeat modes stay on the song that just ended.
+- The navbar and segmented selectors squash their free-end corners elliptically when you stretch them against an end, and the corners return smoothly to round as you release.
+- Opening or closing lyrics now eases the player theme, including the glass and frost of the controls, instead of switching in a single frame when lyrics use a different light or dark theme.
+- Selected items lift a little more visibly in galleries, staying clear of neighbouring artwork.
 - More → Settings → About and licenses → Export diagnostics shares a small text file of recent pinch and list diagnostics. Use it to capture the rare frozen-list state for #535. Nothing leaves the device unless you share it.
 
 ## Resolved issues
@@ -34,12 +37,14 @@ This is an optimized build (not debuggable, minified with R8, with a baseline pr
 - https://github.com/anastaci1a/localica/issues/559 - Disappearing items fade in a staggered sequence across the pinch.
 - https://github.com/anastaci1a/localica/issues/214 - Large-queue transport stays responsive while the initial queue save runs.
 - https://github.com/anastaci1a/localica/issues/549 - Play Next edge cases: in-flight changes, forward skips, cycle boundaries, no current entry.
+- https://github.com/anastaci1a/localica/issues/209 - Stretched selectors deform their free-end corners with the stretch.
+- https://github.com/anastaci1a/localica/issues/564 - Lyrics theme changes ease text, icons and materials together.
+- https://github.com/anastaci1a/localica/issues/567 - PlaylistSelectionPlacementTest updated for the new outline padding (test only).
 
 ## Known issues
 
 - The whole-list freeze after a fling followed by a pinch in subviews is still being investigated. If it happens, use Export diagnostics (https://github.com/anastaci1a/localica/issues/535).
 - Selection outlines don't yet merge with smooth concave joins (https://github.com/anastaci1a/localica/issues/556), and the live frosted drag stack is coming in a later release (https://github.com/anastaci1a/localica/issues/557).
-- The theme switch into and out of lyrics still jumps in a single frame (https://github.com/anastaci1a/localica/issues/564).
 
 ## Install
 
