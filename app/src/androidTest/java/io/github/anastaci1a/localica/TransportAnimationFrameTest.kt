@@ -159,8 +159,9 @@ class TransportAnimationFrameTest {
                 Column(Modifier.background(Color.White).padding(16.dp).testTag("strip")) {
                     for (side in listOf(24, 40)) Row {
                         for (glyph in TransportGlyph.entries) {
+                            val iconSide = if (side == 40 && glyph != TransportGlyph.PlayPause) 34 else side
                             TransportButton(glyph, playing, "$side ${glyph.name}", {},
-                                Modifier.size(64.dp).testTag("$side-${glyph.name}"), side.dp,
+                                Modifier.size(64.dp).testTag("$side-${glyph.name}"), iconSide.dp,
                                 Color.Black, true, false)
                         }
                     }
@@ -183,7 +184,7 @@ class TransportAnimationFrameTest {
             save("$name-00")
             compose.runOnIdle { playing = true }
             for (side in listOf(24, 40)) for (glyph in listOf(TransportGlyph.Previous, TransportGlyph.Next))
-                compose.onNodeWithTag("$side-${glyph.name}").performClick()
+                compose.onNodeWithTag("$side-${glyph.name}").performSemanticsAction(SemanticsActions.OnClick) { it() }
             for (i in 1..16) {
                 compose.mainClock.advanceTimeBy(32)
                 save("$name-${i.toString().padStart(2, '0')}")
