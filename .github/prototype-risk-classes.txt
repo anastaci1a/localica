@@ -298,6 +298,10 @@ io.github.anastaci1a.localica.ItemOutlinePixelTest
 io.github.anastaci1a.localica.GlassRendererSwitchingTest
 io.github.anastaci1a.localica.PlayerArtworkLayerTest
 io.github.anastaci1a.localica.PlayerArtworkOpticsTest
+
+io.github.anastaci1a.localica.DragStackMaterialTest
+io.github.anastaci1a.localica.DragStackPlaybackFadeTest
+io.github.anastaci1a.localica.DragStackFrameTimeTest
 io.github.anastaci1a.localica.LiftShadowTest
 io.github.anastaci1a.localica.SelectionPillMaterialTest
 io.github.anastaci1a.localica.PopupHomeShapeTest

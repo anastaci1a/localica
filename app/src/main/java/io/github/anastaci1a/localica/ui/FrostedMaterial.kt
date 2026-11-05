@@ -50,6 +50,9 @@ private data class GlassBackdropPreparation(val renderer: GlassRendererGeneratio
 internal class FrostedBackdrop(val layer: GraphicsLayer, dark: Boolean,
     private val renderer: GlassRendererRuntime? = null) {
     val readback = RetainedLayerReadback()
+    // Optional same-coordinate crop for transient producers; the surrounding scene stays intact.
+    var readbackRegion: (() -> androidx.compose.ui.unit.IntRect?)? = null
+    var readbackBackground: (() -> BackdropSnapshotBackground?)? = null
     private val defaultRenderer = automaticGlassRendererGeneration()
     val rendererGeneration get() = renderer?.generation ?: defaultRenderer
     private val captureLock = Mutex()
@@ -112,10 +115,10 @@ internal class FrostedBackdrop(val layer: GraphicsLayer, dark: Boolean,
      * wait here but cannot clear another generation's pending-recording freeze. */
     suspend fun captureCurrent(graphics: androidx.compose.ui.graphics.GraphicsContext,
         density: androidx.compose.ui.unit.Density, direction: androidx.compose.ui.unit.LayoutDirection,
-        valid: () -> Boolean): ImageBitmap? = captureLock.withLock {
+        valid: () -> Boolean, region: androidx.compose.ui.unit.IntRect? = null): ImageBitmap? = captureLock.withLock {
         if (!valid()) return@withLock null
         readbackPending = true
-        try { readback.capture(layer, graphics, density, direction) }
+        try { readback.captureRegion(layer, graphics, density, direction, region) }
         finally {
             readbackPending = false
             if (!layer.isReleased) layer.compositingStrategy = desiredCompositing
@@ -209,7 +212,8 @@ internal fun DrawScope.withBackdropRegistration(registration: BackdropRegistrati
 @Composable
 internal fun rememberFrostedBackdrop(key: Any?, enabled: Boolean = true, dark: Boolean = true, lightMix: Float? = null,
     glassBlur: Float = LocalGlassAppearance.current.blur, retainRaster: Boolean = true,
-    whiteTint: Float = LocalGlassAppearance.current.whiteTint): FrostedBackdrop {
+    whiteTint: Float = LocalGlassAppearance.current.whiteTint,
+    settledRefresh: Boolean = true, distinctPixels: Boolean = false): FrostedBackdrop {
     val layer = rememberGraphicsLayer()
     val runtime = LocalGlassRendererRuntime.current
     val renderer = currentGlassRendererGeneration()
@@ -230,7 +234,7 @@ internal fun rememberFrostedBackdrop(key: Any?, enabled: Boolean = true, dark: B
     // Keep a completed sample across temporary visibility changes. Modal sources
     // with no open consumer never need a CPU readback at all.
     var captured by remember(source) { mutableStateOf<List<Any?>?>(null) }
-    LaunchedEffect(source, key, enabled, sampled, graphicsContext, renderer) {
+    LaunchedEffect(source, key, enabled, sampled, graphicsContext, renderer, settledRefresh, distinctPixels) {
         // Size belongs to sampling, not the caller's composition. Reading it above
         // this effect would recompose the whole player host on every resize frame.
         if (renderer.backend == GlassBackend.Legacy && enabled && sampled) snapshotFlow {
@@ -259,16 +263,27 @@ internal fun rememberFrostedBackdrop(key: Any?, enabled: Boolean = true, dark: B
                     if (!current()) return false
                     // Draw readiness does not own native lifetime: the retained lease remains
                     // protected through completion even when this generation is cancelled.
-                    val native = source.captureCurrent(graphicsContext, currentDensity, currentDirection, ::current) ?: return false
+                    val background = source.readbackBackground?.invoke()
+                    val region = source.readbackRegion?.invoke().takeIf { background != null }
+                    val native = source.captureCurrent(graphicsContext, currentDensity, currentDirection, ::current, region) ?: return false
                     if (!current()) return false
-                    val (snapshot, fallback) = withContext(Dispatchers.Default) {
-                        val software = softwareGlassSnapshot(native, size)
-                        software to scatterSnapshot(software)
+                    val previous = source.snapshot
+                    val pixels = withContext(Dispatchers.Default) {
+                        val software = if (region == null) softwareGlassSnapshot(native, size)
+                            else expandBackdropSnapshot(native, region, size, requireNotNull(background))
+                        if (distinctPixels && previous != null &&
+                            software.asAndroidBitmap().sameAs(previous.asAndroidBitmap())) {
+                            software.asAndroidBitmap().recycle()
+                            null
+                        } else software to scatterSnapshot(software)
                     }
                     currentCoroutineContext().ensureActive()
                     if (!current()) return false
                     // Publish one completed generation, never a new snapshot with an old fallback.
-                    if (!source.publish(renderer, snapshot, fallback, request, draws)) return false
+                    if (pixels == null) {
+                        source.snapshotReadbackRequest = request
+                        source.snapshotDraws = draws
+                    } else if (!source.publish(renderer, pixels.first, pixels.second, request, draws)) return false
                     source.lastReadbackAbort = null
                     return true
                 } finally {
@@ -277,11 +292,13 @@ internal fun rememberFrostedBackdrop(key: Any?, enabled: Boolean = true, dark: B
                     ticket?.close()
                 }
             }
-            capture()
+            val firstCaptured = capture()
             // Artwork/lyrics may still be easing when the new scene key is published.
             // Refresh its settled appearance once, without readback on every animation frame.
-            kotlinx.coroutines.delay(500)
-            if (capture()) captured = captureKey
+            if (settledRefresh) {
+                kotlinx.coroutines.delay(500)
+                if (capture()) captured = captureKey
+            } else if (firstCaptured) captured = captureKey
         }
     }
     val blurRadius = with(LocalDensity.current) { 22.dp.toPx() } * glassBlur.coerceIn(0f, 1f)
@@ -324,7 +341,9 @@ internal fun Modifier.recordFrostedBackdrop(source: FrostedBackdrop, backing: Fr
     enabled: Boolean = true, displayCutout: (DrawScope.() -> Path?)? = null,
     readbackRequest: (() -> Int)? = null, onRecorded: ((Int) -> Unit)? = null,
     /** Hold the last recording (sampling only; never for a displayed producer) while true. */
-    frozen: (() -> Boolean)? = null): Modifier {
+    frozen: (() -> Boolean)? = null,
+    /** Record the complete sampling scene, but display only this producer's foreground. */
+    displayBacking: Boolean = true): Modifier {
     val renderer = currentGlassRendererGeneration()
     BackdropLease(backing.takeIf { enabled })
     return backdropLocation(source.location)
@@ -361,6 +380,10 @@ internal fun Modifier.recordFrostedBackdrop(source: FrostedBackdrop, backing: Fr
             }
             // A transparent optical overlay replaces the source beneath its body;
             // retain the complete source for sampling, omit only its direct display.
+            if (!displayBacking) {
+                drawContent()
+                return@drawWithContent
+            }
             val cutout = displayCutout?.invoke(this)
             if (cutout == null) drawLayer(source.layer)
             else clipPath(cutout, ClipOp.Difference) { drawLayer(source.layer) }

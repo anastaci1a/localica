@@ -219,7 +219,7 @@ That measurement reaches only two viewports of items. A header beyond it in eith
 
 Initial placement corrects the measured fractional anchor. Current-row decoration follows interpolated content bounds without changing lazy measurement or hit targets. Retained outgoing menu drawings are non-interactive. Empty gallery slots never consume pointer input.
 
-`CollectionActions` owns song/collection menus across rows, artwork holds and Home, with source-specific removal appended. `ActionMenuItem` requires an explicit icon independent of its label. Song-information links share an off-Main lookup that rejects dismissed, replaced-source or superseded requests. `GlassDragBubble` owns lifted/landing material for song stacks and action customization.
+`CollectionActions` owns song/collection menus across rows, artwork holds and Home, with source-specific removal appended. `ActionMenuItem` requires an explicit icon independent of its label. Song-information links share an off-Main lookup that rejects dismissed, replaced-source or superseded requests. `HoverDragCard` owns song-stack material; `GlassDragBubble` owns action-customization material.
 
 Browse rows compose `CollectionActions` from their first opening and keep it with the row. Gallery artwork publishes its menu origin only when opening. Resting cells keep coordinate references instead of per-frame global-position callbacks; only the loading reveal follows positions while it runs.
 

@@ -25,6 +25,7 @@ internal val LocalSongDragHost = staticCompositionLocalOf<SongDragHost?> { null 
 /** Draw outside pager/list clipping and above player/selection panels; cancel stays above cards. */
 @Composable
 internal fun ForegroundSongDragOverlay(host: SongDragHost) {
+    val source = LocalFrostedBackdrop.current ?: host.source
     var origin by remember { mutableStateOf(Offset.Zero) }
     val density = LocalDensity.current
     Box(Modifier.fillMaxSize().zIndex(100f).onGloballyPositioned { origin = it.positionInRoot() }
@@ -33,7 +34,7 @@ internal fun ForegroundSongDragOverlay(host: SongDragHost) {
             val offset = state.viewportOrigin - origin
             Box(Modifier.offset { IntOffset(offset.x.roundToInt(), offset.y.roundToInt()) }
                 .size(with(density) { state.viewportWidth.toDp() }, with(density) { state.viewportHeight.toDp() })) {
-                CompositionLocalProvider(LocalFrostedBackdrop provides host.source) {
+                CompositionLocalProvider(LocalFrostedBackdrop provides source) {
                     // The source owner supplies the same clearance as its return control.
                     SongDragOverlay(state, host.reducedMotion, cancelBottomMargin = host.cancelBottomMargin)
                 }
