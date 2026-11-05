@@ -54,11 +54,13 @@ internal fun MaterialAverageStyle.color(mean: Color): Color {
 internal fun AverageBackdrop(modifier: Modifier, source: FrostedBackdrop, location: BackdropLocation,
     style: MaterialAverageStyle, home: FrostedBackdrop? = null, homeWeight: () -> Float = { 0f },
     homeBounds: (() -> Rect)? = null, homeFootprint: (() -> HomeBackdropFootprint?)? = null) {
+    val drawObserver = LocalBackdropSamplingObserver.current
     BackdropLease(source)
     BackdropLease(home?.takeUnless { it === source })
     Canvas(modifier) {
         val bounds = Rect(Offset.Zero, size)
-        val primary = source.averageColor(location, bounds) ?: return@Canvas
+        val localToSource = location.registrationTo(source.location) ?: return@Canvas
+        val primary = source.averageColor(localToSource, bounds) ?: return@Canvas
         val weight = homeWeight().coerceIn(0f, 1f)
         val homeColor = if (home != null && weight > 0f) {
             val footprint = homeFootprint?.invoke()
@@ -75,6 +77,7 @@ internal fun AverageBackdrop(modifier: Modifier, source: FrostedBackdrop, locati
                 ?: return@Canvas
         } else primary
         val color = lerp(primary, homeColor, weight)
+        drawObserver?.let { observeBackdropSampling(it, location, localToSource, bounds) }
         drawRect(style.color(color))
     }
 }

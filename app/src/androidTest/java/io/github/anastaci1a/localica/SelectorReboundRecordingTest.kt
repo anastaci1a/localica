@@ -113,8 +113,15 @@ class SelectorReboundRecordingTest {
         for (fraction in listOf(.18f, .82f)) {
             val x = (lens.left + lens.width * fraction - origin.x).roundToInt().coerceIn(1, pixels.width - 2)
             val colors = (y - 1..y + 1).map { pixels[x, it] }
-            assertTrue("Padded navbar sampling lost its center landmark at $lens fraction=$fraction: $colors",
-                colors.any { it.red > .6f && it.blue < .4f })
+            if (Build.VERSION.SDK_INT >= 33) {
+                assertTrue("Padded navbar sampling lost its center landmark at $lens fraction=$fraction: $colors",
+                    colors.any { it.red > .6f && it.blue < .4f })
+            } else {
+                assertTrue("The solid average remains dominated by the blue backing: $colors",
+                    colors.all { it.red < .3f && it.blue > .6f && it.green < .1f })
+                assertTrue("None has no spatial landmark inside its flat fill: $colors",
+                    colors.maxOf { it.red } - colors.minOf { it.red } < .02f)
+            }
         }
     }
 }
