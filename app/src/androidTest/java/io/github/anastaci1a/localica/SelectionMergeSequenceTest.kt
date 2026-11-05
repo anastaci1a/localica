@@ -25,7 +25,10 @@ class SelectionMergeSequenceTest {
             .apply { mkdirs() }
     }
     private fun coverage(regions: List<SelectionRegion>,density: Float,strength: Float): IntArray {
-        val path = connectedSelectionPath(regions,16f*density,strength = { _,_ -> strength })
+        return coverage(regions,density) { _,_->strength }
+    }
+    private fun coverage(regions: List<SelectionRegion>,density: Float,strength: (Int,Int)->Float): IntArray {
+        val path = connectedSelectionPath(regions,16f*density,strength = strength)
         val bitmap = Bitmap.createBitmap(420,280,Bitmap.Config.ARGB_8888)
         Canvas(bitmap).apply {
             scale(1f/density,1f/density)
@@ -79,27 +82,58 @@ class SelectionMergeSequenceTest {
     @Test fun galleryConnectDisconnectAndReverse() = sequence("gallery",96f,96f,false,false)
     @Test fun dragStartReleaseAndCancelReverse() = sequence("drag",240f,72f,true,true)
 
+    @Test fun twelveItemFlightAndLandingPreserveItemsAndReverseEveryFrame() {
+        val frames=mutableListOf<IntArray>()
+        var previous: IntArray?=null
+        val report=StringBuilder("frame,progress,changedCoverage\n")
+        for(frame in 0..240) {
+            val step=if(frame<=120)frame else 240-frame
+            val p=androidx.compose.animation.core.FastOutSlowInEasing.transform(step/120f)
+            val regions=liftedFlightRegions(p,1f)
+            val pixels=coverage(regions,1f) { a,b ->
+                hoverBridgeStrength(abs(a%3-b%3)+abs(a/3-b/3)==1,false,p to p,0f to 0f,1f to 1f)
+            }
+            for(item in regions) {
+                val c=item.bounds.center
+                if(c.x in 0f..419f && c.y in 0f..279f)
+                    assertTrue("No item interior disappears: frame=$frame",pixels[c.y.toInt()*420+c.x.toInt()] ushr 24==255)
+            }
+            val old=previous
+            val changed=if(old==null)0.0 else pixels.indices.sumOf { abs((pixels[it] ushr 24)-(old[it] ushr 24))/255.0 }
+            assertTrue("Flight frame=$frame changed=$changed",changed<2500)
+            if(frame<=120)frames+=pixels else assertArrayEquals("Flight/landing reversibility",frames[step],pixels)
+            if(frame%12==0) {
+                val image=Bitmap.createBitmap(pixels,420,280,Bitmap.Config.ARGB_8888)
+                File(output,"flight12-$frame-api${Build.VERSION.SDK_INT}.png").outputStream().use { image.compress(Bitmap.CompressFormat.PNG,100,it) }
+                image.recycle()
+            }
+            report.append("$frame,$p,$changed\n");previous=pixels
+        }
+        File(output,"flight12-api${Build.VERSION.SDK_INT}.csv").writeText(report.toString())
+    }
+
+    private fun liftedFlightRegions(p: Float,density: Float): List<SelectionRegion> = List(12) { i ->
+        val rest=MediaItemOutline(Rect(i%3*73f*density,i/3*73f*density,
+            (i%3*73f+72f)*density,(i/3*73f+72f)*density),12f*density)
+        val lifted=hoverGeometry(rest,Rect(1.125f*density,1.125f*density,1.125f*density,1.125f*density),1f).lifted
+        val target=Rect((80f+min(i,2)*6f)*density,(70f+min(i,2)*6f)*density,
+            (154.25f+min(i,2)*6f)*density,(144.25f+min(i,2)*6f)*density)
+        fun mix(a: Float,b: Float)=a+(b-a)*p
+        val a=lifted.bounds
+        SelectionRegion(Rect(mix(a.left,target.left),mix(a.top,target.top),mix(a.right,target.right),mix(a.bottom,target.bottom)),lifted.corner)
+    }
+
     @Test fun api26ChangingTwelveItemDragOutlineAndCacheCost() = benchmark("nearby-grid",false)
     @Test fun api26LiftedTwelveItemFlightOutlineAndCacheCost() = benchmark("lifted-flight",true)
     private fun benchmark(name: String,flight: Boolean) {
         val profile = SelectionOutlineProfile()
         val cache = HoverPathCache(profile)
         val density=InstrumentationRegistry.getInstrumentation().targetContext.resources.displayMetrics.density
-        fun regions(frame: Int): List<SelectionRegion> = List(12) { i ->
+        fun regions(frame: Int): List<SelectionRegion> = if(flight) liftedFlightRegions(
+            androidx.compose.animation.core.FastOutSlowInEasing.transform((frame%100)/99f),density) else List(12) { i ->
             val dx = if (i == 5) sin(frame*.07f)*10f else 0f
             val dy = if (i == 5) cos(frame*.09f)*8f else 0f
-            if (!flight) SelectionRegion(Rect(i%3*73f+dx,i/3*73f+dy,i%3*73f+72f+dx,i/3*73f+72f+dy),12f)
-            else {
-                val rest=MediaItemOutline(Rect(i%3*73f*density,i/3*73f*density,
-                    (i%3*73f+72f)*density,(i/3*73f+72f)*density),12f*density)
-                val lifted=hoverGeometry(rest,Rect(1.125f*density,1.125f*density,1.125f*density,1.125f*density),1f).lifted
-                val p=androidx.compose.animation.core.FastOutSlowInEasing.transform((frame%100)/99f)
-                val target=Rect((80f+min(i,2)*6f)*density,(70f+min(i,2)*6f)*density,
-                    (154.25f+min(i,2)*6f)*density,(144.25f+min(i,2)*6f)*density)
-                fun mix(a: Float,b: Float)=a+(b-a)*p
-                val a=lifted.bounds
-                SelectionRegion(Rect(mix(a.left,target.left),mix(a.top,target.top),mix(a.right,target.right),mix(a.bottom,target.bottom)),lifted.corner)
-            }
+            SelectionRegion(Rect(i%3*73f+dx,i/3*73f+dy,i%3*73f+72f+dx,i/3*73f+72f+dy),12f)
         }
         var lastProgress=0f
         fun strength(a: Int,b: Int): Float = if(!flight) lastProgress else
@@ -107,13 +141,20 @@ class SelectionMergeSequenceTest {
                 lastProgress to lastProgress,0f to 0f,1f to 1f)
         val gap=if(flight)16f*density else 16f
         val changing = LongArray(500)
+        val timings=StringBuilder("frame,progress,totalNs,arrangementNs,roundingNs,pathNs,fillets\n")
         var last = regions(0)
         for (i in 0 until 1000) {
             last = regions(i)
             lastProgress = if(flight) androidx.compose.animation.core.FastOutSlowInEasing.transform((i%100)/99f) else .2f+.6f*(i%100)/100f
+            val arrangement=profile.arrangementNanos;val rounding=profile.roundingNanos
+            val path=profile.pathNanos;val fillets=profile.curves
             val start = SystemClock.elapsedRealtimeNanos()
             cache.path(last,last,gap,::strength)
-            if (i >= 500) changing[i-500] = SystemClock.elapsedRealtimeNanos()-start
+            if (i >= 500) {
+                val elapsed=SystemClock.elapsedRealtimeNanos()-start
+                changing[i-500] = elapsed
+                timings.append("$i,$lastProgress,$elapsed,${profile.arrangementNanos-arrangement},${profile.roundingNanos-rounding},${profile.pathNanos-path},${profile.curves-fillets}\n")
+            }
         }
         val cached = LongArray(500)
         cache.path(last,last,gap,::strength)
@@ -127,6 +168,7 @@ class SelectionMergeSequenceTest {
         changing.sort(); cached.sort()
         val report = "workload=$name api=${Build.VERSION.SDK_INT} density=$density items=12 changing-p50-ns=${changing[250]} changing-p95-ns=${changing[475]} changing-max-ns=${changing.last()} cache-p50-ns=${cached[250]} cache-p95-ns=${cached[475]} rebuilds=${cache.rebuilds} geometry-mean-ns=${profile.evaluationNanos/1000} primitives-per-frame=${profile.samples/1000} segments-per-frame=${profile.cells/1000} fillets-per-frame=${profile.curves/1000} arrangement-mean-ns=${profile.arrangementNanos/1000} rounding-mean-ns=${profile.roundingNanos/1000} path-mean-ns=${profile.pathNanos/1000}"
         File(output,"performance-$name-api${Build.VERSION.SDK_INT}.txt").writeText(report)
+        File(output,"performance-$name-frames-api${Build.VERSION.SDK_INT}.csv").writeText(timings.toString())
         android.util.Log.i("SelectionOutlinePerformance",report)
         assertTrue(report,changing[250] <= 1_000_000)
         assertTrue(report,changing[475] <= 2_000_000)
