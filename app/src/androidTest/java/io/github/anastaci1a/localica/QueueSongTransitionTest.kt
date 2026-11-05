@@ -45,7 +45,7 @@ class QueueSongTransitionTest {
     @Volatile private var surfaceTint = Float.NaN
     private var preparationBarrier: (suspend () -> Unit)? = null
 
-    private class Frame(val mix: Float, val queue: Float, val backdrop: Float, val shot: Float, val clock: Float, val tint: Float)
+    private class Frame(val mix: Float, val queue: Float, val backdrop: Float, val shot: Float, val clock: Float, val tint: Float, val incoming: Float)
     private val frames = ArrayList<Frame>()
 
     private fun cover(color: Int, key: String): PlayerVisual {
@@ -98,7 +98,11 @@ class QueueSongTransitionTest {
         compose.mainClock.advanceTimeByFrame(); compose.waitForIdle()
         // Let off-thread preparation of the new artwork's samples land between frames.
         Thread.sleep(12)
-        frames += Frame(owner.lightMix, (queueInk - .1255f) / .8745f, backdropMix, gutter(), owner.artworkClock, surfaceTint)
+        val artworkFrame = owner.frame
+        val incoming = artworkFrame?.roles?.firstOrNull { it.incoming && !it.soft }?.visual?.palette?.bottom
+            ?.convert(ColorSpaces.Oklab)?.red ?: Float.NaN
+        frames += Frame(owner.lightMix, (queueInk - .1255f) / .8745f, backdropMix, gutter(),
+            artworkFrame?.clock ?: 1f, surfaceTint, incoming)
     }
 
     private fun assertOneClock(name: String, toLight: Boolean) {
@@ -126,10 +130,13 @@ class QueueSongTransitionTest {
         val startTint = (if (toLight) white else black).palette.bottom.convert(ColorSpaces.Oklab).red
         val endTint = (if (toLight) black else white).palette.bottom.convert(ColorSpaces.Oklab).red
         val tintFraction = frames.map { (it.tint - startTint) / (endTint - startTint) }
-        frames.forEachIndexed { i, f ->
-            val previous = frames.getOrNull(i - 1)?.clock ?: f.clock
-            assertTrue("$name: surface tint left the artwork clock at $i: ${tintFraction[i]} vs ${f.clock}",
-                minOf(abs(tintFraction[i] - f.clock), abs(tintFraction[i] - previous)) <= .05f)
+        // Before admission, clock=1 still belongs to the outgoing artwork. Pair the
+        // fraction with the target from the same immutable frame bundle.
+        val clocks = frames.map { if (abs(it.incoming - endTint) < .001f) it.clock else 0f }
+        frames.forEachIndexed { i, _ ->
+            val previous = clocks.getOrNull(i - 1) ?: clocks[i]
+            assertTrue("$name: surface tint left the artwork clock at $i: ${tintFraction[i]} vs ${clocks[i]}",
+                minOf(abs(tintFraction[i] - clocks[i]), abs(tintFraction[i] - previous)) <= .05f)
         }
         tintFraction.zipWithNext().forEach { (a, b) ->
             assertTrue("$name: surface tint jump or reversal: $a -> $b", b >= a - .001f && b - a <= .3f)
