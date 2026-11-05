@@ -14,9 +14,9 @@ import zipfile
 sys.path.insert(0, str(Path(__file__).resolve().parent/'test-evidence'))
 from full_partition import expected_for
 
-DEVICE_SHARDS = 7  # keep equal to LOCALICA_DEVICE_SHARDS and the device-tests matrix in android.yml
+DEVICE_SHARDS = 8  # keep equal to LOCALICA_DEVICE_SHARDS and the device-tests matrix in android.yml
 REQUIRED_JOBS = (
-    'build', 'static-checks', 'device-tests-summary', 'compatibility (26)', 'compatibility (36)',
+    'build', 'test-apks', 'static-checks', 'device-tests-summary', 'compatibility (26)', 'compatibility (36)',
     'distribution-smoke (26)', 'distribution-smoke (36)',
 ) + tuple(f'device-tests ({api}, {shard})' for api in (26, 36) for shard in range(DEVICE_SHARDS))
 
