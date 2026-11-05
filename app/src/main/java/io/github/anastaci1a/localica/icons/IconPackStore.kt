@@ -201,13 +201,16 @@ object IconPacks {
                 if (entry.name == IconPackNames.MANIFEST) { manifest = manifest(bytes); continue }
                 val id = IconPackNames.iconId(entry.name) ?: continue
                 if (id !in AppIcon.ids) { unknown += id; continue }
+                val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+                if (bounds.outWidth <= 0 || bounds.outHeight <= 0) { rejected += entry.name to "not a decodable image"; continue }
+                val problem = IconPackNames.sizeProblem(bounds.outWidth, bounds.outHeight)
+                if (problem != null) { rejected += entry.name to problem; continue }
                 val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
                 if (bitmap == null) { rejected += entry.name to "not a decodable image"; continue }
-                val problem = IconPackNames.sizeProblem(bitmap.width, bitmap.height)
-                if (problem != null) { rejected += entry.name to problem; bitmap.recycle(); continue }
-                masks[id] = bitmap
                 files[id] = if (entry.name.endsWith(".png", ignoreCase = true)) bytes else
                     ByteArrayOutputStream().also { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }.toByteArray()
+                masks[id] = displayMask(bitmap)
             }
         }
         val info = manifest ?: throw IconPackException("pack.json is missing")
@@ -240,9 +243,17 @@ object IconPacks {
         val manifest = File(directory, IconPackNames.MANIFEST).takeIf { it.isFile } ?: return null
         val info = manifest(manifest.readBytes())
         val masks = AppIcon.entries.mapNotNull { icon ->
-            File(directory, "icons/${icon.id}.png").takeIf { it.isFile }?.let { BitmapFactory.decodeFile(it.path) }?.let { icon.id to it }
+            File(directory, "icons/${icon.id}.png").takeIf { it.isFile }?.let { BitmapFactory.decodeFile(it.path) }?.let { icon.id to displayMask(it) }
         }.toMap()
         return if (masks.isEmpty()) null else masks to info
+    }
+
+    // Keep library memory proportional to icon display size, not the author's source resolution.
+    // The original accepted pixels remain on disk; only this private decoded instance is recycled.
+    private fun displayMask(bitmap: Bitmap): Bitmap {
+        if (bitmap.width <= IconPackNames.TEMPLATE_SIZE) return bitmap
+        return Bitmap.createScaledBitmap(bitmap, IconPackNames.TEMPLATE_SIZE, IconPackNames.TEMPLATE_SIZE, true)
+            .also { bitmap.recycle() }
     }
 
     /** The stored icon for [id] as decoded alpha, for tests. */

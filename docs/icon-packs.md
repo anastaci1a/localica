@@ -12,6 +12,8 @@ Importing the same name and version offers to update the existing entry. Cancel 
 
 Imported packs live under `filesDir/icon-packs/<id>/`, with their manifest, accepted images, import date and validation report. Updates stage a complete directory before replacing an entry. The previous directory remains recoverable until replacement succeeds. Decoded images are retained in memory; switching never reopens source documents or decodes stored images.
 
+Cached masks use at most 192 × 192 pixels per icon. Accepted source images retain their original resolution in storage.
+
 ## Format
 
 A pack is a `.zip` with:
