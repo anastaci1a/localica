@@ -144,7 +144,7 @@ class PopupFamilyPresentationTest {
             // Ordinary user-visible scroll, not changed padding/placement or a fabricated popup body.
             compose.onNodeWithTag("browser-list").performScrollToIndex(1)
             capture("collection-actions", "Library > Diagnostic album > first song Actions", hasText("Information"), retainedDialog = false) {
-                compose.onNodeWithContentDescription("Actions for Diagnostic song 1").performClick()
+                compose.awaitRowActions("Diagnostic song 1").performClick()
             }
             compose.onNodeWithText("Edit tags", substring = false).assertExists()
             // The real menu callback closes its caller and launches the real SongInformation dialog.

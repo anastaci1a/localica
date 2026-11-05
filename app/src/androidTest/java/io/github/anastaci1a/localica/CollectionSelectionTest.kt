@@ -32,7 +32,7 @@ class CollectionSelectionTest {
             compose.waitUntil(5000) {
                 compose.onAllNodesWithTag("media-Playlist:${playlist.id}").fetchSemanticsNodes().isNotEmpty()
             }
-            compose.onNodeWithContentDescription("Actions for Selection mix").performClick()
+            compose.awaitRowActions("Selection mix").performClick()
             compose.onNodeWithText("Select all songs").performClick()
             compose.onNodeWithText("2 selected").assertIsDisplayed()
             compose.assertSelectionMenuAction("Remove from playlist")

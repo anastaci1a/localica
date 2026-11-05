@@ -141,7 +141,7 @@ class QueueBrowsingTest {
             compose.onNodeWithText("Select", substring = false).performClick()
             compose.onNodeWithText("Apply").assertIsNotEnabled()
             compose.onNodeWithText("Close").performClick()
-            compose.onNodeWithContentDescription("Actions for Second").performClick()
+            compose.awaitRowActions("Second").performClick()
             compose.onNodeWithText("Move up").assertDoesNotExist()
             compose.onNodeWithText("Move down").assertDoesNotExist()
             assertEquals(listOf("Second", "First"), queue.entries.map { it.track.title })

@@ -284,6 +284,10 @@ A colour that becomes known while its placeholder is showing eases from gray ove
 
 While a browse row's artwork loads and has a stored colour, its title and information show gray text skeletons. The real text then crossfades in with the artwork reveal's own value and finishes with it. Cached, missing and not-yet-indexed artwork show text immediately. Pinch transitions keep their text handling, and a shown row never repeats the fade.
 
+Each text skeleton behind loading artwork has one rounded bar for every line of text. Its position and dimensions match that line's layout metrics. All bars share the existing loading material, shimmer clock and artwork crossfade.
+
+List-row actions wait for loading artwork, including unindexed covers, and use its reveal value for opacity. Invisible actions have no input or accessibility target. Cached or missing artwork and rows without artwork show their actions immediately, subject to the row's content reveal.
+
 Gallery actions are on long-press, without overlaid menu buttons. Collection/nonmutable-song holds open the anchored actions. Mutable-song holds select, then moving the same finger starts reordering.
 
 Plain row ellipses tap to open actions and hold for the same selection/actions as their row. Actions include: select songs, queue/playlist destinations and pinning. Playlists additionally offer image, rename and delete. The image action sets a custom cover when absent and removes it when present, restoring representative member artwork.
