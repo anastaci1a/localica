@@ -80,7 +80,7 @@ class ArtworkSaveTest {
 
     @Test fun jpegKeepsOriginalBytesAndSecondSaveIsDeduplicated() {
         val (uri, bytes) = cover("$tag.jpg", Bitmap.CompressFormat.JPEG, android.graphics.Color.BLUE)
-        val first = save(uri, "$tag Artist", "Album") as ArtworkSaveResult.Saved
+        val first = save(uri, "$tag Artist", "Album").also { assertTrue(it.toString(), it is ArtworkSaveResult.Saved) } as ArtworkSaveResult.Saved
         val second = save(uri, "$tag Artist", "Album") as ArtworkSaveResult.Saved
         saved += first.name; saved += second.name
         assertEquals("$tag Artist - Album.jpg", first.name)

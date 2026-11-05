@@ -16,7 +16,7 @@ import java.io.File
 sealed interface ArtworkSaveResult {
     data class Saved(val name: String) : ArtworkSaveResult
     data object NoArtwork : ArtworkSaveResult
-    data object Failed : ArtworkSaveResult
+    data class Failed(val reason: String = "") : ArtworkSaveResult
 }
 
 /** Saves the original cover bytes (never re-encoded) to the public Downloads folder. All I/O runs on [Dispatchers.IO]. */
@@ -32,9 +32,9 @@ object ArtworkSaver {
             val name = fileName(a, b, format.extension)
             val saved = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) saveMediaStore(context, name, format.mime, bytes)
                 else saveLegacy(context, name, format.mime, bytes)
-            saved?.let { ArtworkSaveResult.Saved(it) } ?: ArtworkSaveResult.Failed
+            saved?.let { ArtworkSaveResult.Saved(it) } ?: ArtworkSaveResult.Failed("no target")
         } catch (cancelled: CancellationException) { throw cancelled }
-        catch (_: Exception) { ArtworkSaveResult.Failed }
+        catch (e: Exception) { ArtworkSaveResult.Failed(e.toString()) }
     }
 
     internal class Format(val extension: String, val mime: String)
@@ -90,7 +90,7 @@ object ArtworkSaver {
     @Suppress("DEPRECATION")
     private fun saveLegacy(context: Context, name: String, mime: String, bytes: ByteArray): String? {
         val dir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
-        if (!dir.isDirectory && !dir.mkdirs()) return null
+        if (!dir.isDirectory && !dir.mkdirs()) error("Downloads unavailable: ${dir.path}")
         val stem = name.substringBeforeLast('.')
         val ext = name.substringAfterLast('.')
         var file = File(dir, name)
