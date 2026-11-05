@@ -7,12 +7,14 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Canvas as UiCanvas
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.PixelMap
+import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.drawscope.CanvasDrawScope
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.platform.testTag
@@ -93,7 +95,12 @@ class LiftShadowTest {
         val lifted = scene.lastDrawnRegions.first()
         CanvasDrawScope().draw(Density(d), LayoutDirection.Ltr, UiCanvas(image), Size(width.toFloat(), height.toFloat())) {
             drawRect(Color(.5f, .5f, .5f))
-            glassShadows(listOf(RoundRect(lifted.bounds, CornerRadius(lifted.corner ?: 0f)) to 1f), glass.shadowStrength, glass.shadowSpread, GlassShadowGeometry())
+            // Write cumulative coverage into a transparent reference field, as the retained
+            // renderer does. Software source-over rounds away the fine contour increments.
+            drawContext.canvas.saveLayer(Rect(Offset.Zero, size), Paint())
+            glassShadows(listOf(RoundRect(lifted.bounds, CornerRadius(lifted.corner ?: 0f)) to 1f),
+                glass.shadowStrength, glass.shadowSpread, GlassShadowGeometry(), rasterizing = true)
+            drawContext.canvas.restore()
         }
         val pixels = image.toPixelMap()
         val base = lum(Color(.5f, .5f, .5f))
