@@ -30,6 +30,14 @@ import androidx.test.uiautomator.UiDevice
 import io.github.anastaci1a.localica.ui.*
 import org.junit.Assert.*
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.supervisorScope
+import org.junit.ClassRule
+import org.junit.rules.TestRule
+import org.junit.runner.Description
+import org.junit.runners.model.Statement
 import org.junit.After
 import org.junit.Before
 import org.junit.Rule
@@ -38,6 +46,62 @@ import org.junit.rules.TestName
 
 @OptIn(ExperimentalLayoutApi::class)
 class SearchImeMotionTest {
+    companion object {
+        private fun nativeShell(command: String): String = ParcelFileDescriptor.AutoCloseInputStream(
+            InstrumentationRegistry.getInstrumentation().uiAutomation.executeShellCommand(command)
+        ).bufferedReader().use { it.readText().trim() }
+
+        // Own policy before Activity creation and restore it only after every Activity is disposed.
+        // A method-body finally can reconfigure the IME while its editor/Back callbacks still live.
+        @JvmField @ClassRule val nativePolicies: TestRule = object : TestRule {
+            override fun apply(base: Statement, description: Description) = object : Statement() {
+                override fun evaluate() {
+                    val settings = listOf("secure show_ime_with_hard_keyboard", "global animator_duration_scale",
+                        "global transition_animation_scale", "global window_animation_scale")
+                    val changed = linkedMapOf<String, String>()
+                    val events = mutableListOf<String>()
+                    var failure: Throwable? = null
+                    try {
+                        for (setting in settings) {
+                            val original = nativeShell("settings get $setting")
+                            check(original == "null" || original.toFloatOrNull() != null)
+                            if (original.toFloatOrNull() != 1f) {
+                                changed[setting] = original
+                                nativeShell("settings put $setting 1")
+                            }
+                            assertEquals("Native policy precedes Activity creation", 1f,
+                                nativeShell("settings get $setting").toFloat(), 0f)
+                            events += "${SystemClock.uptimeMillis()} before-activities $setting=1 original=$original"
+                        }
+                        base.evaluate()
+                    } catch (caught: Throwable) { failure = caught }
+                    finally {
+                        for ((setting, original) in changed.entries.reversed()) {
+                            try {
+                                if (original == "null") nativeShell("settings delete $setting")
+                                else nativeShell("settings put $setting $original")
+                                assertEquals("Restore native policy after Activity disposal", original,
+                                    nativeShell("settings get $setting"))
+                                events += "${SystemClock.uptimeMillis()} after-activities $setting=$original"
+                            } catch (caught: Throwable) {
+                                if (failure == null) failure = caught else failure.addSuppressed(caught)
+                            }
+                        }
+                        try {
+                            val directory = nativeEvidenceDirectory("search-ime-policy",
+                                InstrumentationRegistry.getInstrumentation().targetContext.getExternalFilesDir(null))
+                            java.io.File(directory, "class-policy-api${android.os.Build.VERSION.SDK_INT}.txt")
+                                .writeText(events.joinToString("\n", postfix = "\n") + "failure=$failure\n")
+                        } catch (caught: Throwable) {
+                            if (failure == null) failure = caught else failure.addSuppressed(caught)
+                        }
+                    }
+                    failure?.let { throw it }
+                }
+            }
+        }
+    }
+
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
     @get:Rule val name = TestName()
     private var visible by mutableStateOf(false)
@@ -52,6 +116,7 @@ class SearchImeMotionTest {
     private val samples = mutableListOf<SearchMorphSample>()
     private val keyboardSetup = mutableListOf<String>()
     private val motionTimeline = mutableListOf<String>()
+    private var nativeActionReturnGate: java.util.concurrent.CountDownLatch? = null
     private var nativeReturnProbe: NativeReturnProbe? = null
     private val nativeReturnFrames = mutableListOf<Pair<SearchMorphSample, NativeReturnEvidence>>()
 
@@ -186,13 +251,33 @@ class SearchImeMotionTest {
     }
 
     @After fun recordPlacedFrames() {
-        val additional = InstrumentationRegistry.getArguments().getString("additionalTestOutputDir")?.takeIf { it.isNotBlank() }
-        val root = additional?.let { java.io.File(it) } ?: requireNotNull(compose.activity.getExternalFilesDir(null))
-        val directory = java.io.File(root, "search-ime-motion").apply { mkdirs() }
-        java.io.File(directory, "${name.methodName}.txt").writeText(compose.runOnUiThread { samples.toList() }.joinToString("\n"))
-        java.io.File(directory, "${name.methodName}-keyboard-setup.txt").writeText(keyboardSetup.joinToString("\n"))
-        java.io.File(directory, "${name.methodName}-timeline.txt").writeText(
-            compose.runOnUiThread { motionTimeline.toList() }.joinToString("\n"))
+        try {
+            if (::anchor.isInitialized) {
+                motionTimeline += "${SystemClock.uptimeMillis()} fixture-cleanup-start"
+                compose.mainClock.autoAdvance = true
+                compose.runOnIdle { visible = false }
+                compose.waitUntil(5000) { compose.runOnIdle { !anchor.modalPresent } }
+                compose.waitUntil(5000) { compose.runOnUiThread { popupView?.isAttachedToWindow != true } }
+                // Drain editing/return effects before releasing the native IME owner or policy.
+                compose.waitForIdle()
+                if (compose.runOnUiThread { samples.any { it.ime > 0 || it.nativeIme > 0 } }) awaitNativeHideEnd()
+                else compose.waitUntil(5000) { compose.runOnIdle {
+                    val host = compose.activity.window.decorView
+                    val insets = ViewCompat.getRootWindowInsets(host)
+                    host.hasWindowFocus() && insets?.isVisible(WindowInsetsCompat.Type.ime()) == false &&
+                        insets.getInsets(WindowInsetsCompat.Type.ime()).bottom == 0
+                } }
+                motionTimeline += "${SystemClock.uptimeMillis()} fixture-native-owner-retired"
+            }
+        } finally {
+            val additional = InstrumentationRegistry.getArguments().getString("additionalTestOutputDir")?.takeIf { it.isNotBlank() }
+            val root = additional?.let { java.io.File(it) } ?: requireNotNull(compose.activity.getExternalFilesDir(null))
+            val directory = java.io.File(root, "search-ime-motion").apply { mkdirs() }
+            java.io.File(directory, "${name.methodName}.txt").writeText(compose.runOnUiThread { samples.toList() }.joinToString("\n"))
+            java.io.File(directory, "${name.methodName}-keyboard-setup.txt").writeText(keyboardSetup.joinToString("\n"))
+            java.io.File(directory, "${name.methodName}-timeline.txt").writeText(
+                compose.runOnUiThread { motionTimeline.toList() }.joinToString("\n"))
+        }
     }
 
     private fun fixture(showKeyboard: Boolean, reduced: Boolean = false, initialQuery: String = "", deferKeyboard: Boolean = false, initialExtraContentHeight: Int = 0) {
@@ -213,6 +298,7 @@ class SearchImeMotionTest {
             }, LocalReducedMotion provides reduced,
                 LocalSearchMorphObserver provides {
                     samples += it
+                    if (!it.opening && it.progress in .01f.. .99f) nativeActionReturnGate?.countDown()
                     motionTimeline += "${SystemClock.uptimeMillis()} $it"
                     nativeReturnProbe?.snapshot()?.let { evidence ->
                         nativeReturnFrames += it to evidence
@@ -235,6 +321,7 @@ class SearchImeMotionTest {
                     val ime = WindowInsets.ime.getBottom(density)
                     val source = WindowInsets.imeAnimationSource.getBottom(density)
                     val target = WindowInsets.imeAnimationTarget.getBottom(density)
+                    val hiddenImeConsumed by rememberUpdatedState(ime == 0 && source == 0 && target == 0)
                     SideEffect { popupView = view; keyboardSettled = ime == target && source == target }
                     LaunchedEffect(visible, focusedWindow, ready) {
                         if (visible && focusedWindow) {
@@ -244,6 +331,15 @@ class SearchImeMotionTest {
                                 // The delayed fixture releases input only after observing
                                 // the fallback endpoint, independent of CI wall-clock load.
                                 snapshotFlow { keyboardAllowed }.first { it }
+                                // The warmup editor's hide can reach this new popup after attach.
+                                // Consume it before focus can arm the measured editor's hide detector.
+                                do {
+                                    withFrameNanos { }
+                                    val native = ViewCompat.getRootWindowInsets(view)
+                                    val hidden = native?.isVisible(WindowInsetsCompat.Type.ime()) == false &&
+                                        native.getInsets(WindowInsetsCompat.Type.ime()).bottom == 0
+                                } while (!hiddenImeConsumed || !hidden)
+                                motionTimeline += "${SystemClock.uptimeMillis()} measured-editor-focus-after-native-and-compose-hide"
                                 focus.requestFocus(); keyboard?.show()
                             } else keyboard?.hide()
                         }
@@ -270,7 +366,9 @@ class SearchImeMotionTest {
         try {
             compose.waitUntil(wallTimeoutMillis) {
                 compose.mainClock.advanceTimeBy(32)
-                val satisfied = compose.runOnUiThread(predicate)
+                // Native callbacks can queue editing/animation effects after the frame tick.
+                // Drain them before sampling, rather than reading an older placed frame.
+                val satisfied = compose.runOnIdle(predicate)
                 if (!satisfied && compose.mainClock.currentTime - start >= virtualTimeoutMillis)
                     throw ComposeTimeoutException("Animation exceeded its ${virtualTimeoutMillis}ms virtual budget")
                 satisfied
@@ -393,12 +491,9 @@ class SearchImeMotionTest {
                 sample.progress < .99f && (sample.ime > 0 || sample.imeSource > sample.imeTarget || hostOverlap)
             }
             assertTrue("Return moves before the native keyboard hide settles", overlap >= 0)
-            // A closing popup can lose IME control before disposal. Its cached current
-            // inset may rebound after onEnd, even though the active host is hidden.
-            // Control release alone is insufficient: require real native window closure
-            // and terminal zero insets on the surviving, focused activity as well.
-            assertTrue("Observe native hide control release after moving overlap",
-                returning.drop(overlap + 1).any { it.imeSource == 0 && it.imeTarget == 0 })
+            // The independently clocked return can dispose the popup before native onEnd.
+            // Its retired inset snapshots cannot witness that later control release:
+            // require native window closure and terminal zero insets on the focused host.
             awaitNativeHideEnd()
         }
         all.drop(all.indexOfLast { it.opening && it.ime > 0 } + 1)
@@ -437,7 +532,7 @@ class SearchImeMotionTest {
         }
     }
 
-    private fun exerciseDismissal(outside: Boolean, reduced: Boolean = false) = withDockedKeyboard {
+    private fun exerciseDismissal(outside: Boolean, reduced: Boolean = false, awaitFirstReturn: Boolean = false) = withDockedKeyboard {
         fixture(true, reduced)
         try {
             val home = compose.runOnUiThread { anchor.bounds }
@@ -459,16 +554,25 @@ class SearchImeMotionTest {
                 }
             }
             android.util.Log.i("SearchImeMotionTest", "Native dismissal requested outside=$outside uptime=${SystemClock.uptimeMillis()}")
-            if (outside) {
-                val device = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
-                assertTrue(raised.left > 2f)
-                assertTrue(device.click(2, raised.center.y.toInt()))
-            } else pressSystemBack()
-            android.util.Log.i("SearchImeMotionTest", "Native dismissal input returned uptime=${SystemClock.uptimeMillis()}")
-            closed()
+            val returnGate = java.util.concurrent.CountDownLatch(1).takeIf { awaitFirstReturn }
+            compose.runOnUiThread { nativeActionReturnGate = returnGate }
+            nativeDismissal {
+                if (outside) {
+                    val device = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
+                    assertTrue(raised.left > 2f)
+                    assertTrue(device.click(2, raised.center.y.toInt()))
+                } else pressSystemBack()
+                returnGate?.let { gate ->
+                    assertTrue("Native input completion must not starve the first placed return frame",
+                        gate.await(5, java.util.concurrent.TimeUnit.SECONDS))
+                }
+                android.util.Log.i("SearchImeMotionTest", "Native dismissal input returned uptime=${SystemClock.uptimeMillis()}")
+            }
             verifyReturn(raised, home, reduced)
         } finally {
             compose.runOnUiThread {
+                nativeActionReturnGate?.countDown()
+                nativeActionReturnGate = null
                 nativeReturnProbe?.dispose()
                 nativeReturnProbe = null
                 visible = false
@@ -477,11 +581,55 @@ class SearchImeMotionTest {
         }
     }
 
+    private fun nativeDismissal(action: () -> Unit) = runBlocking {
+        // Android input/IME use wall time; our return spring uses the paused Compose clock.
+        // Idle waits can span native frames, so let them advance the spring during this phase.
+        val previousAutoAdvance = compose.mainClock.autoAdvance
+        compose.mainClock.autoAdvance = true
+        try { supervisorScope {
+            val input = async(Dispatchers.IO) { action() }
+            var failure: Throwable? = null
+            try { closed() } catch (caught: Throwable) { failure = caught }
+            finally {
+                compose.runOnUiThread { nativeActionReturnGate?.countDown() }
+                try { input.await() } catch (caught: Throwable) {
+                    if (failure == null) failure = caught else failure.addSuppressed(caught)
+                }
+            }
+            failure?.let { throw it }
+        } } finally { compose.mainClock.autoAdvance = previousAutoAdvance }
+    }
+
+    @Test fun nativeInputCompletionDoesNotStarveTheFirstPlacedReturnFrame() =
+        exerciseDismissal(outside = true, awaitFirstReturn = true)
+
+    @Test fun nativeKeyboardPolicyRemainsOwnedUntilTheEditorWindowRetires() {
+        try {
+            withDockedKeyboard {
+                fixture(true)
+                compose.onNodeWithTag("list-search-pill").performTouchInput { click() }
+                opened()
+                awaitDockedKeyboard()
+                opened()
+            }
+            assertTrue("The measured editor window has not retired yet",
+                compose.runOnUiThread { popupView?.isAttachedToWindow == true })
+            assertEquals("Keep keyboard policy until the editing window retires", "1",
+                shell("settings get secure show_ime_with_hard_keyboard"))
+            for (setting in listOf("animator_duration_scale", "transition_animation_scale", "window_animation_scale"))
+                assertEquals("Keep native animation policy until the editing window retires", 1f,
+                    shell("settings get global $setting").toFloat(), 0f)
+        } finally {
+            compose.runOnUiThread { visible = false }
+            compose.mainClock.autoAdvance = true
+        }
+    }
+
     @Test fun independentOpeningAndEmptyNativeBackHaveOneDirectReturn() = exerciseDismissal(outside = false)
     @Test fun outsidePointerDismissalDoesNotFollowTheKeyboardDown() = exerciseDismissal(outside = true)
     @Test fun reducedMotionShapesImmediatelyThenAnchorsAndSnapsDirectlyHome() = exerciseDismissal(outside = false, reduced = true)
 
-    @Test fun absentKeyboardOpeningCanBeCancelledAndReopenedWithoutStaleReadiness() = withNativeAnimations {
+    @Test fun absentKeyboardOpeningCanBeCancelledAndReopenedWithoutStaleReadiness() {
         fixture(false)
         try {
             compose.onNodeWithTag("list-search-pill").performTouchInput { click() }
@@ -513,7 +661,7 @@ class SearchImeMotionTest {
         }
     }
 
-    @Test fun disposingWhileKeyboardPreparationIsPendingRestoresThePill() = withNativeAnimations {
+    @Test fun disposingWhileKeyboardPreparationIsPendingRestoresThePill() {
         fixture(false)
         try {
             compose.onNodeWithTag("list-search-pill").performTouchInput { click() }
@@ -661,17 +809,14 @@ class SearchImeMotionTest {
             compose.onNode(hasSetTextAction()).assertTextContains("Keep this").assertIsNotFocused()
             val positions = compose.runOnUiThread { samples.filter { it.opening }.map { it.bounds }.distinct() }
             assertTrue("Retained panel recenters through intermediate rectangles", positions.size > 2)
-            pressSystemBack()
-            closed()
+            nativeDismissal { pressSystemBack() }
         } finally {
             compose.runOnUiThread { visible = false }
             compose.mainClock.autoAdvance = true
         }
     }
 
-    private fun shell(command: String): String = ParcelFileDescriptor.AutoCloseInputStream(
-        InstrumentationRegistry.getInstrumentation().uiAutomation.executeShellCommand(command)
-    ).bufferedReader().use { it.readText().trim() }
+    private fun shell(command: String): String = nativeShell(command)
 
     private fun awaitDockedKeyboard() {
         advanceUntil {
@@ -686,39 +831,10 @@ class SearchImeMotionTest {
 
     private fun prepareDockedKeyboard() = prepareNativeDockedKeyboard(compose, keyboardSetup, ::shell)
 
-    private fun withDockedKeyboard(block: () -> Unit) = withNativeAnimations {
-        val key = "show_ime_with_hard_keyboard"
-        val original = shell("settings get secure $key")
-        check(original == "null" || original.matches(Regex("-?[0-9]+")))
-        try {
-            shell("settings put secure $key 1")
-            assertEquals("1", shell("settings get secure $key"))
-            keyboardSetup += "${SystemClock.uptimeMillis()} configured $key=1 (original=$original)"
-            prepareDockedKeyboard()
-            block()
-        } finally {
-            if (original == "null") shell("settings delete secure $key") else shell("settings put secure $key $original")
-            assertEquals("Restore native keyboard policy", original, shell("settings get secure $key"))
-        }
+    private fun withDockedKeyboard(block: () -> Unit) {
+        assertEquals("Class policy owns the native editor", "1", shell("settings get secure show_ime_with_hard_keyboard"))
+        prepareDockedKeyboard()
+        block()
     }
 
-    private fun withNativeAnimations(block: () -> Unit) {
-        // API26's full-suite runner normally disables system animations. These
-        // fixtures explicitly exercise overlapping native IME and app motion.
-        val scales = listOf("animator_duration_scale", "transition_animation_scale", "window_animation_scale")
-            .associateWith { shell("settings get global $it") }
-        check(scales.values.all { it == "null" || it.toFloatOrNull() != null })
-        try {
-            scales.keys.forEach {
-                shell("settings put global $it 1")
-                assertEquals(1f, shell("settings get global $it").toFloat(), 0f)
-            }
-            block()
-        } finally {
-            scales.forEach { (name, value) ->
-                if (value == "null") shell("settings delete global $name") else shell("settings put global $name $value")
-                assertEquals("Restore native animation scale $name", value, shell("settings get global $name"))
-            }
-        }
-    }
 }
