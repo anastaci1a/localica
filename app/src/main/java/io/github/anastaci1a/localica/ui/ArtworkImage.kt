@@ -32,8 +32,8 @@ internal fun ArtworkImage(artwork: ImageBitmap?, loading: Boolean, modifier: Mod
     val present = artwork != null
     LaunchedEffect(present, reducedMotion) {
         reveal.animateTo(if (present) 1f else 0f, tween(if (reducedMotion) 0 else 300, easing = FastOutSlowInEasing))
-        // The item's text finished with the art (#526).
-        if (present) currentTextReveal?.release()
+        // The item's text and action finish with the art (#526, #588).
+        if (present) currentTextReveal?.let { it.release(); it.releaseMenu() }
     }
     // Art that replaces a loading shimmer fades in over that shimmer until the reveal completes (#524).
     // Only known-missing art shows the still placeholder and its icon.
@@ -41,7 +41,11 @@ internal fun ArtworkImage(artwork: ImageBitmap?, loading: Boolean, modifier: Mod
     if (artwork == null) revealsOverLoading[0] = loading
     val placeholderLoading = if (artwork == null) loading else revealsOverLoading[0]
     // Text waits exactly while the shimmer shows or the art reveals over it (#526).
-    textReveal?.let { it.reveal = reveal; it.hold(placeholderLoading && expectsArtwork) }
+    textReveal?.let {
+        it.reveal = reveal
+        it.hold(placeholderLoading && expectsArtwork)
+        it.holdMenu(placeholderLoading)
+    }
     Box(modifier.clip(shape), contentAlignment = Alignment.Center) {
         ArtworkPlaceholderHost(artwork, reveal, placeholderLoading, emptyText, tintUris, Modifier.matchParentSize())
         if (!loading && artwork == null && emptyText != null) Text(emptyText)
