@@ -152,7 +152,7 @@ class PinchRecognitionContinuityTest {
                         BrowserScreen(LibraryUiState(snapshot, loading = false), PlaylistState(), route, {}, {}, {},
                             { _, _, _ -> fail("Pinching must not start playback") }, null, null, true, false,
                             queryDispatcher = Dispatchers.Unconfined)
-                        PresentationMarker { stage }
+                        PresentationMarker(composeStage = true) { stage }
                     }
                 }
             } }
