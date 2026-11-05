@@ -73,10 +73,45 @@ def expected_for(root, api):
     omissions = []
     # Reviewed API-specific contracts, not missing-ID waivers. Keep exact
     # file/method/annotation guards; every other SDK filter fails closed.
+    # Optical-detail contracts require runtime shaders; None coverage runs on both APIs.
     sdk_contracts = {
-        'ScopedSearchOpticsTest': ('searchLensRedrawsWhenItsListBackdropArrivesLater', 33),
-        'FloatingImeLifecycleTest': ('actualFloatingWindowPreservesEditingAndEndsOnceAcrossFocusAndReopen', 30),
-        'GlassRendererSwitchingTest': ('modernSwitchingDoesNotReplaceAnUnavailableRequestedHomeWithThePrimary', 33),
+        'ScopedSearchOpticsTest': [
+            ('searchLensRedrawsWhenItsListBackdropArrivesLater', 33),
+        ],
+        'FloatingImeLifecycleTest': [
+            ('actualFloatingWindowPreservesEditingAndEndsOnceAcrossFocusAndReopen', 30),
+        ],
+        'GlassAppearanceTest': [
+            ('frostedPanelsStillScatterTheParentScene', 33),
+            ('blurTintAndShadowChangeIndependentlyWhileForegroundStaysSharp', 33),
+        ],
+        'GlassOpticsTest': [
+            ('changingDepthBendsARecordedGridAndKeepsTheOutsideUntouched', 33),
+        ],
+        'GlassReadabilityTest': [
+            ('entireGlassUsesTheBoundedCurveWithoutTintingItsForeground', 33),
+        ],
+        'LiquidGlassTest': [
+            ('tintLiftsShadowsMoreThanHighlightsWithoutBleachingYellow', 33),
+            ('lightPillTransmitsAndRefreshesSceneWithoutBlurringForeground', 33),
+            ('darkBubbleTransmitsAndRefreshesSceneWithoutBlurringForeground', 33),
+        ],
+        'LyricsReturnBackdropTest': [
+            ('movingAndReemphasizingGlyphsRefreshesTheActualReturnLens', 33),
+            ('movingPlayerViewportKeepsTheActiveReturnLensRegisteredThroughReversal', 33),
+            ('overlappingDocumentsShareTheReturnSourceAndFadeAfterCompositing', 33),
+            ('interruptedPanelSourcesAndSongsReopenWithFreshSamplingAndWorkingReturn', 33),
+        ],
+        'NestedGlassRegistrationTest': [
+            ('transformedGlassSamplesItsSceneThroughForwardReverseFitAndScrolling', 33),
+        ],
+        'SeekCancelGlassTest': [
+            ('cancelTargetRefractsTheUiBehindItAndOnlyTheSceneRecordingDoesSo', 33),
+        ],
+        'SelectorRegistrationTest': [
+            ('centerLandmarkStaysRegisteredThroughHorizontalAndVerticalDeformation', 33),
+            ('centerLandmarkStaysRegisteredInsideOffsetModal', 33),
+        ],
     }
     for path in inv['all_source_sha256']:
         text = (root/path).read_text()
@@ -84,16 +119,18 @@ def expected_for(root, api):
             cls = Path(path).stem
             require(cls in sdk_contracts and path == 'app/src/androidTest/java/io/github/anastaci1a/localica/' + cls + '.kt',
                     'Unreviewed SDK-filtered source')
-            method, minimum = sdk_contracts[cls]
-            declaration = (r'@Test\s+@androidx\.test\.filters\.SdkSuppress\(minSdkVersion = ' +
-                           str(minimum) + r'\)\s+fun ' + re.escape(method) + r'\(')
-            require(re.search(declaration, text), 'Changed SDK exclusion declaration')
-            require(text.count('SdkSuppress') == 1, 'Additional SDK exclusions require review')
-            sdk_id = 'io.github.anastaci1a.localica.' + cls + '#' + method
-            require(sdk_id in inv['runtime_methods'], 'SDK exclusion lacks source method')
-            if int(api) < minimum:
-                omissions.append({'id': sdk_id, 'reason': 'Reviewed minSdkVersion=' + str(minimum) + ' annotation',
-                                  'source': path, 'source_sha256': inv['all_source_sha256'][path]})
+            reviewed = sdk_contracts[cls]
+            require(text.count('SdkSuppress') == len(reviewed), 'Additional SDK exclusions require review')
+            for method, minimum in reviewed:
+                annotation = r'@androidx\.test\.filters\.SdkSuppress\(minSdkVersion = ' + str(minimum) + r'\)'
+                declaration = (r'(?:@Test\s+' + annotation + r'|' + annotation + r'\s+@Test)' +
+                               r'\s+fun ' + re.escape(method) + r'\(')
+                require(re.search(declaration, text), 'Changed SDK exclusion declaration')
+                sdk_id = 'io.github.anastaci1a.localica.' + cls + '#' + method
+                require(sdk_id in inv['runtime_methods'], 'SDK exclusion lacks source method')
+                if int(api) < minimum:
+                    omissions.append({'id': sdk_id, 'reason': 'Reviewed minSdkVersion=' + str(minimum) + ' annotation',
+                                      'source': path, 'source_sha256': inv['all_source_sha256'][path]})
     return inv, omissions, set(inv['runtime_methods']) - {x['id'] for x in omissions}
 
 
