@@ -24,14 +24,14 @@ object ArtworkSaver {
     /** API 29+ saves through MediaStore with no permission; API 26-28 need WRITE_EXTERNAL_STORAGE. */
     val needsLegacyPermission: Boolean get() = Build.VERSION.SDK_INT < Build.VERSION_CODES.Q
 
-    suspend fun save(context: Context, uri: String, artist: String?, album: String?): ArtworkSaveResult = withContext(Dispatchers.IO) {
+    suspend fun save(context: Context, uri: String, artist: String?, album: String?, legacyDirectory: File? = null): ArtworkSaveResult = withContext(Dispatchers.IO) {
         try {
             val bytes = ArtworkReader(context).originalBytes(uri) ?: return@withContext ArtworkSaveResult.NoArtwork
             val format = sniff(bytes)
             val (a, b) = if (artist.isNullOrBlank() && album.isNullOrBlank()) tagNames(context, uri) else artist to album
             val name = fileName(a, b, format.extension)
             val saved = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) saveMediaStore(context, name, format.mime, bytes)
-                else saveLegacy(context, name, format.mime, bytes)
+                else saveLegacy(context, name, format.mime, bytes, legacyDirectory)
             saved?.let { ArtworkSaveResult.Saved(it) } ?: ArtworkSaveResult.Failed("no target")
         } catch (cancelled: CancellationException) { throw cancelled }
         catch (e: Exception) { ArtworkSaveResult.Failed(e.toString()) }
@@ -88,8 +88,8 @@ object ArtworkSaver {
     }
 
     @Suppress("DEPRECATION")
-    private fun saveLegacy(context: Context, name: String, mime: String, bytes: ByteArray): String? {
-        val dir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+    private fun saveLegacy(context: Context, name: String, mime: String, bytes: ByteArray, directory: File?): String? {
+        val dir = directory ?: Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
         if (!dir.isDirectory && !dir.mkdirs()) error("Downloads unavailable: ${dir.path}")
         val stem = name.substringBeforeLast('.')
         val ext = name.substringAfterLast('.')
