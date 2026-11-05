@@ -11,6 +11,7 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.PixelMap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.SemanticsProperties
@@ -42,6 +43,19 @@ class PinchRecognitionContinuityTest {
     @Test fun galleryInwardWithoutSelection() = inspect(true, false, false)
     @Test fun galleryOutwardWithSelections() = inspect(true, true, true)
     @Test fun galleryInwardWithSelections() = inspect(true, false, true)
+
+    @Test fun artworkLocatorExcludesMatchingRedGlassOutsideTheCover() {
+        val bitmap = Bitmap.createBitmap(100, 100, Bitmap.Config.ARGB_8888).apply {
+            eraseColor(android.graphics.Color.RED)
+            android.graphics.Canvas(this).apply {
+                drawRect(20f, 20f, 80f, 80f, android.graphics.Paint().apply { color = android.graphics.Color.BLUE })
+                drawRect(30f, 30f, 70f, 70f, android.graphics.Paint().apply { color = android.graphics.Color.RED })
+            }
+        }
+        try {
+            assertEquals(Rect(20f, 20f, 80f, 80f), paintedArt(bitmap.asImageBitmap().toPixelMap(), Offset(50f, 50f)))
+        } finally { bitmap.recycle() }
+    }
 
     @Test fun firstTrackingFramePreservesThePresentedGeometry() = runBlocking {
         for (finger in listOf(.05f, .086f)) {
@@ -84,10 +98,17 @@ class PinchRecognitionContinuityTest {
             if (selected) select(route.collection, tracks.take(2).map { SongRow(it.id, it) })
         }
         val red = Bitmap.createBitmap(768, 768, Bitmap.Config.ARGB_8888).apply { eraseColor(android.graphics.Color.RED) }
+        // The glass deliberately keeps its red palette. An opaque blue border separates
+        // the cover's real outer edge from equally red selection material behind it.
+        val marked = red.copy(Bitmap.Config.ARGB_8888, true).apply {
+            android.graphics.Canvas(this).drawRect(0f, 0f, 768f, 768f, android.graphics.Paint().apply {
+                color = android.graphics.Color.BLUE; style = android.graphics.Paint.Style.STROKE; strokeWidth = 154f
+            })
+        }
         val green = Bitmap.createBitmap(768, 768, Bitmap.Config.ARGB_8888).apply { eraseColor(android.graphics.Color.GREEN) }
         val artwork = BrowseArtworkScope().apply {
             tracks.forEachIndexed { index, track ->
-                hold(track.id, listOf(track.uri), ArtworkCache.CachedArtwork(if (index == 0) red else green, 768))
+                hold(track.id, listOf(track.uri), ArtworkCache.CachedArtwork(if (index == 0) marked else green, 768))
             }
             keepVisual(tracks.first().uri, PlayerVisual(red.asImageBitmap(), runBlocking { playerPalette(red) }))
         }
@@ -214,14 +235,23 @@ class PinchRecognitionContinuityTest {
 
     private fun paintedArt(pixels: PixelMap, seed: Offset): Rect {
         fun red(x: Int, y: Int): Boolean = pixels[x, y].let { it.red > .9f && it.green < .1f && it.blue < .1f }
+        fun blue(x: Int, y: Int): Boolean = pixels[x, y].let { it.blue > .9f && it.red < .1f && it.green < .1f }
         val x = seed.x.toInt().coerceIn(0, pixels.width - 1)
         val y = seed.y.toInt().coerceIn(0, pixels.height - 1)
         assertTrue("Presented artwork remains visible at the actual part centre $seed", red(x, y))
-        var left = x; var right = x; var top = y; var bottom = y
-        while (left > 0 && red(left - 1, y)) left--
-        while (right + 1 < pixels.width && red(right + 1, y)) right++
-        while (top > 0 && red(x, top - 1)) top--
-        while (bottom + 1 < pixels.height && red(x, bottom + 1)) bottom++
+        fun edge(dx: Int, dy: Int): Int {
+            fun inside(step: Int) = x + step * dx in 0 until pixels.width && y + step * dy in 0 until pixels.height
+            fun matches(step: Int, predicate: (Int, Int) -> Boolean) = inside(step) && predicate(x + step * dx, y + step * dy)
+            var step = 0
+            while (matches(step + 1, ::red)) step++
+            val border = (step + 1..step + 3).firstOrNull { matches(it, ::blue) }
+            assertNotNull("The opaque artwork border must remain visible toward ($dx,$dy) from $seed", border)
+            step = requireNotNull(border)
+            while (matches(step + 1, ::blue)) step++
+            return if (dx != 0) x + step * dx else y + step * dy
+        }
+        val left = edge(-1, 0); val right = edge(1, 0)
+        val top = edge(0, -1); val bottom = edge(0, 1)
         return Rect(left.toFloat(), top.toFloat(), right + 1f, bottom + 1f)
     }
 
