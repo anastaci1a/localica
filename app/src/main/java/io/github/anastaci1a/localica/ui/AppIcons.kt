@@ -59,6 +59,7 @@ internal enum class AppIcon(val id: String, @DrawableRes val builtin: Int) {
     ActionRevert("action.revert", R.drawable.ic_revert),
     ActionReverse("action.reverse", R.drawable.ic_reverse),
     ActionSave("action.save", R.drawable.ic_save),
+    ActionSaveArtwork("action.save_artwork", R.drawable.ic_download),
     ActionSettings("action.settings", R.drawable.ic_settings),
     ActionShuffle("action.shuffle", R.drawable.ic_shuffle),
     ActionRepeat("action.repeat", R.drawable.ic_repeat),
