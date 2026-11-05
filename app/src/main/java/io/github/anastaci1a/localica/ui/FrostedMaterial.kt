@@ -89,6 +89,7 @@ internal class FrostedBackdrop(val layer: GraphicsLayer, dark: Boolean,
     var recordedSize = IntSize.Zero
     // Main-thread diagnostic: completed live recordings, so tests can prove a held frame was not re-recorded.
     var recordings = 0
+    val recordedFrames = kotlinx.coroutines.channels.Channel<Unit>(kotlinx.coroutines.channels.Channel.CONFLATED)
     val recorded get() = recordedGeneration != null
     fun refresh() { revision++ }
 
@@ -121,6 +122,11 @@ internal class FrostedBackdrop(val layer: GraphicsLayer, dark: Boolean,
         request: Int, draws: BackdropReadbackDraws?): Boolean {
         if (rendererGeneration != renderer) return false
         snapshotReadbackRequest = request; snapshotDraws = draws
+        // Reading an average can redraw its producer through a parent recording.
+        // Equal thumbnail pixels must not publish new observable state forever.
+        val previous = completed?.takeIf { it.renderer == renderer }?.snapshot
+        if (previous != null && previous.width == snapshot.width && previous.height == snapshot.height &&
+            previous.asAndroidBitmap().sameAs(snapshot.asAndroidBitmap())) return true
         completed = GlassBackdropCapture(renderer, snapshot, fallback)
         return true
     }
@@ -224,19 +230,19 @@ internal fun rememberFrostedBackdrop(key: Any?, enabled: Boolean = true, dark: B
     LaunchedEffect(source, enabled, sampled, graphicsContext) {
         if (thumbnail != null && enabled && sampled) {
             var completedRecording = -1
-            while (true) {
-                withFrameNanos { }
+            for (frame in source.recordedFrames) {
                 if (!source.recorded || source.readbackPending || source.recordings == completedRecording ||
                     source.size.width <= 0 || source.size.height <= 0 || source.layer.isReleased) continue
                 val request = source.readbackRequest + 1
                 val ticket = source.readbackBarrier?.begin(request)
                 source.readbackRequest = request
                 try {
-                withFrameNanos { }; withFrameNanos { }
+                if (ticket != null) { withFrameNanos { }; withFrameNanos { } }
                 val draws = ticket?.awaitDraws()
                 if (ticket != null && (draws == null || !ticket.isCurrent())) continue
                 val extent = source.size
                 val generation = source.rendererGeneration
+                val recording = source.recordings
                 thumbnail.record(currentDensity, currentDirection, IntSize(32, 32)) {
                     scale(32f / extent.width, 32f / extent.height, Offset.Zero) {
                         drawLayer(source.layer)
@@ -248,7 +254,7 @@ internal fun rememberFrostedBackdrop(key: Any?, enabled: Boolean = true, dark: B
                 val pixels = withContext(Dispatchers.Default) { softwareGlassSnapshot(image, IntSize(32, 32)) }
                 currentCoroutineContext().ensureActive()
                 if (valid()) source.publish(generation, pixels, pixels, request, draws)
-                completedRecording = source.recordings
+                completedRecording = recording
                 } finally { ticket?.close() }
             }
         }
@@ -307,6 +313,7 @@ internal fun Modifier.recordFrostedBackdrop(source: FrostedBackdrop, backing: Fr
                 }
                 source.recordedSize = extent
                 source.recordings++
+                source.recordedFrames.trySend(Unit)
                 source.recordedGeneration = renderer.takeIf { backing == null || backing.recorded }
                 if (request != null) onRecorded?.invoke(request)
             }
