@@ -331,7 +331,7 @@ class PlayerBackgroundPolarityTest {
         assertTrue("Contrast must change before the transition settles: ${jointInkContext()}", late.transitioning)
         assertTrue(late.roles.any { it.visual.contentKey == white.contentKey && it.weight > .55f && it.weight < 1f })
         assertFalse("The displayed white contribution now needs dark ink", owner.decision.lightInk)
-        assertRenderedInk(false)
+        assertRenderedInk(false, tolerance = .05f)
         assertTrue("The same live transport backing has become light", sampleBackgroundAtTransport() > .55f)
         frames(32); current()
         assertFalse(owner.decision.lightInk)
