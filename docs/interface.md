@@ -400,7 +400,9 @@ System interruption or failed persistence restores order, selection and the pane
 
 The mini-player appears whenever an active queue has a current song, including paused playback. Inset its artwork/title together inside the leading curve. Use black filled Previous/Play/Pause/Next icons. Pause appears only while playing or buffering with playback requested. Paused skips retain Play.
 
-The settled Play triangle uses a single filled contour. It morphs into Pause. Skips use two rounded triangles without an end bar, with a staggered directional nudge. Secondary metadata defaults to Album Artist with Artist fallback. Artist-first is configurable. The body is one rounded tap target. Transport remains independent.
+The settled Play triangle uses a single filled contour. It morphs into Pause using configurable endpoint shapes. Skips scroll overlapping rounded triangles one step, crossfading departing and arriving elements symmetrically. Repeated presses preserve presented position and velocity. The 380 ms normal cycle has a longer settle; Faster shortens it and Reduce motion snaps.
+
+Secondary metadata defaults to Album Artist with Artist fallback. Artist-first is configurable. The body is one rounded tap target. Transport remains independent.
 
 Tap/swipe up expands one shared outline containing glass, artwork, text and transport. The expanded player follows device-reported corner radii. Absent or unavailable physical geometry stays square. Queue keeps the shared rounded panel contour for its material, content clip and border throughout opening, closing and reversal, independently of physical window clipping.
 
