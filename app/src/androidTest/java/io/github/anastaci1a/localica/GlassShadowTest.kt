@@ -197,14 +197,21 @@ class GlassShadowTest {
                     val opacity = if (sample == 3) .2f else 1f
                     if (!reference) glassShadows(listOf(body to opacity), .8f, .6f, geometry)
                     else {
-                        // Generic union path, at the SAME host origin and continuous profile.
+                        // Generic union path at the same host origin, composited as one
+                        // transparent field just like the primitive and retained paths.
                         geometry.update(listOf(body), (4f + .6f * 28f).dp.toPx(), 2.dp.toPx())
                         clipPath(geometry.body,
                             androidx.compose.ui.graphics.ClipOp.Difference) {
-                            geometry.rings.forEachIndexed { index, ring ->
-                                val alpha = glassShadowRingAlpha(index, geometry.rings.size, .8f * opacity)
-                                if (alpha > 0f) drawPath(ring, Color.Black.copy(alpha = alpha))
-                            }
+                            val canvas = drawContext.canvas
+                            val bounds = androidx.compose.ui.geometry.Rect(body.left, body.top, body.right, body.bottom)
+                                .inflate((6f + .6f * 28f).dp.toPx() + 1f)
+                            canvas.saveLayer(bounds, androidx.compose.ui.graphics.Paint())
+                            try {
+                                geometry.rings.forEachIndexed { index, ring ->
+                                    val alpha = glassShadowRingAlpha(index, geometry.rings.size, .8f * opacity)
+                                    if (alpha > 0f) drawPath(ring, Color.Black.copy(alpha = alpha))
+                                }
+                            } finally { canvas.restore() }
                         }
                     }
                 })
