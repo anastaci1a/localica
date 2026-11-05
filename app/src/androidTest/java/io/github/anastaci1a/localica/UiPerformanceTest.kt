@@ -106,7 +106,8 @@ class UiPerformanceTest {
                 }
             }
             for (size in ListSize.densityOrder) measure("list-${size.name.lowercase()}",
-                { launchBrowse(BrowseStyle(listSize = size)) }) { scroll() }
+                { launchBrowse(BrowseStyle(listSize = size), if (size == ListSize.Tracklist)
+                    BrowseRoute(MainTab.Queues, MediaRef(MediaKind.Queue, queue.id), queue.name) else BrowseRoute(MainTab.Songs)) }) { scroll() }
             for (columns in 1..5) measure("gallery-$columns", { launchBrowse(BrowseStyle(
                 presentation = Presentation.Standard, itemsPerRow = columns)) }) { scroll() }
             measure("subview-scroll", { launchApp() }, {
@@ -185,7 +186,9 @@ class UiPerformanceTest {
 
     private fun launchBrowse(style: BrowseStyle, route: BrowseRoute = BrowseRoute(MainTab.Songs)) {
         BrowsePreferences(context).write(route, style, false)
-        launch { BrowserScreen(library, PlaylistState(), route, {}, {}, {}, { _, _, _ -> }, null, null, true, false) }
+        check(BrowsePreferences(context).read(route).listSize == style.listSize) { "Requested list size is unsupported by fixture route" }
+        launch { BrowserScreen(library, PlaylistState(), route, {}, {}, {}, { _, _, _ -> }, null, null, true, false,
+            queueState = QueueUiState(QueueLibrary(listOf(queue), queue.id), loading = false)) }
         awaitTag("browser-list")
     }
     private fun launchSearch() {
