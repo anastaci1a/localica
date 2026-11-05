@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.MotionDurationScale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.platform.testTag
@@ -15,7 +16,9 @@ import org.junit.Rule
 import org.junit.Test
 
 class TransportScrollTest {
-    @get:Rule val compose = localicaComposeRule()
+    @get:Rule val compose = localicaComposeRule(effectContext = object : MotionDurationScale {
+        override val scaleFactor = 1f
+    })
 
     @Test fun skipCrossfadesTheDepartingTriangleAtMiniAndFullSizes() {
         compose.setContent {
