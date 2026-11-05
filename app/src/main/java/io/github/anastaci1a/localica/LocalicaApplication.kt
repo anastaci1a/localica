@@ -23,6 +23,8 @@ class LocalicaApplication : Application() {
     }
     override fun onCreate() {
         super.onCreate()
+        io.github.anastaci1a.localica.diagnostics.Diagnostics.mirrorToLogcat =
+            applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0
         val startup = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         startup.launch {
             // The first read of a preferences file blocks its caller until the XML is loaded. Load the

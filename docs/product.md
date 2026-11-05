@@ -53,7 +53,7 @@ Repeat and Shuffle are global persisted modes, initially off:
 
 Shuffle traverses occurrence IDs without changing visible order or repeating before exhaustion.
 
-Each shuffle traversal retains visited membership, history cursor and concrete future, shared by transport, preloading and artwork. Back/forward retrace actual visits across repeat cycles and restarts. Explicit selection replaces forward history without re-enabling visited occurrences. Selection after exhaustion starts a new cycle.
+Each shuffle traversal retains visited membership, history cursor and concrete future, shared by transport, preloading and artwork. Back/forward retrace actual visits across repeat cycles and restarts. Explicit selection replaces retraceable forward history without re-enabling visited occurrences. Selection after exhaustion starts a new cycle.
 
 Turning Shuffle off preserves the current occurrence, position and Repeat mode. Next, Previous and autoplay immediately follow the saved visible queue order, including after Back through shuffled history. Projecting neighbors never records them as played.
 
@@ -61,11 +61,13 @@ Turning Shuffle on starts a fresh traversal at the current occurrence, without m
 
 Play Next inserts each requested batch immediately after the current occurrence in both visible order and playback, including before shuffled forward history. Newer batches precede earlier requests; each batch retains its requested order. Keep occurrence identities, current visit and position. Scheduled visits become visited only on arrival and survive saved restoration.
 
+Unplayed Play Next batches remain next-up after explicit selection or an in-flight decoder arrival. Inserting while retracing an earlier cycle schedules into the active traversal cycle without repeating there. With no current occurrence, the first inserted item becomes current and the rest remain next-up.
+
 **Randomize queue order** persists a new order and displays Manual ascending. In the active queue, playing or paused, put the current occurrence first and shuffle the rest. Inactive queues shuffle fully. Preserve occurrence IDs, duplicates, cursor and playback state.
 
 [Mutable-list presentation](interface.md#overrides-and-mutable-lists) owns viewport movement after reorder operations.
 
-Advanced Repeat supports song-end Stop / Load next paused / Next / Repeat and queue-end Stop / Next queue / Repeat, with reset-to-first and reshuffle options. The player's [action controls](interface.md#player-actions) expose these settings.
+Advanced Repeat supports song-end Stop / Load next paused / Next / Repeat and queue-end Stop / Next queue / Repeat, with reset-to-first and reshuffle options. The player's [action controls](interface.md#player-actions) expose these settings. Retraced history and scheduled Play Next visits retain the song-end choice; only advancing beyond the active traversal invokes queue-end behavior.
 
 ## Metadata and artwork editing
 

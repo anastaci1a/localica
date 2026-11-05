@@ -18,8 +18,9 @@ import kotlin.math.min
 /** Playback frost and selection glass have one footprint, independent of their material. */
 internal val MediaSelectionGap = 16.dp
 
-/** Artwork never touches its outline: at least this inset, even where the layout has none. */
-internal val MediaOutlineMinimumInset = 2.dp
+/** The one padding between an item's content (a cover's top edge, a text line's bottom) and its selection
+ * outline, for every item style (#558): 1.75x the former 2 dp minimum inset. */
+internal val MediaOutlinePadding = 3.5.dp
 
 /** Rows without artwork (numbered and text-only sizes) share one modest radius. */
 internal val ArtlessOutlineCorner = 10.dp
@@ -38,19 +39,16 @@ internal val ArtlessOutlineCorner = 10.dp
 }
 
 /**
- * The outline shares the artwork corners' arc centres: its inset is the artwork's
- * smaller distance to the item edge (at least [minimumInset]), and its radius is the
- * artwork radius plus that inset. Everything else in [content] stays inside the same inset.
- * The outline may extend past the item by at most [minimumInset], never into a neighbour.
+ * The outline shares the artwork corners' arc centres: its inset is always [padding], and its radius is the
+ * artwork radius plus that padding. Everything else in [content] stays inside the same padding.
+ * The outline may extend past the item by at most [padding], never into a neighbour.
  */
 internal fun mediaItemOutline(box: Rect, content: Rect, art: Rect?, artCorner: Float,
-    minimumInset: Float, artlessCorner: Float): MediaItemOutline {
+    padding: Float, artlessCorner: Float): MediaItemOutline {
     if (art == null || art.width <= 0f || art.height <= 0f)
         return MediaItemOutline(box, min(artlessCorner, box.minDimension / 2f).coerceAtLeast(0f))
-    val horizontal = min(art.left - box.left, box.right - art.right)
-    val vertical = min(art.top - box.top, box.bottom - art.bottom)
-    val inset = max(min(horizontal, vertical), minimumInset)
-    val limit = box.inflate(minimumInset)
+    val inset = padding
+    val limit = box.inflate(padding)
     val bounds = Rect(min(content.left, art.left) - inset, min(content.top, art.top) - inset,
         max(content.right, art.right) + inset, max(content.bottom, art.bottom) + inset).intersect(limit)
     return MediaItemOutline(bounds, min(artCorner + inset, bounds.minDimension / 2f).coerceAtLeast(0f))
@@ -74,7 +72,7 @@ internal fun browsePartsOutline(width: Float, height: Float, art: Rect?, artCorn
         .reduceOrNull { a, b -> Rect(min(a.left, b.left), min(a.top, b.top), max(a.right, b.right), max(a.bottom, b.bottom)) }
         ?: Rect(0f, 0f, width, height)
     return mediaItemOutline(Rect(0f, 0f, width, height), content, art, artCorner,
-        MediaOutlineMinimumInset.value * density, ArtlessOutlineCorner.value * density)
+        MediaOutlinePadding.value * density, ArtlessOutlineCorner.value * density)
 }
 
 /** A pinch endpoint's outline in its own coordinates. Its box is symmetric around the
@@ -95,7 +93,7 @@ internal fun paddedItemOutline(size: Size, art: Rect?, artCorner: Float, padding
     direction: LayoutDirection = LayoutDirection.Ltr): MediaItemOutline {
     val box = Rect(Offset.Zero, size)
     val content = Rect(padding.left, padding.top, size.width - padding.right, size.height - padding.bottom)
-    val outline = mediaItemOutline(box, content, art, artCorner, MediaOutlineMinimumInset.value * density, ArtlessOutlineCorner.value * density)
+    val outline = mediaItemOutline(box, content, art, artCorner, MediaOutlinePadding.value * density, ArtlessOutlineCorner.value * density)
     return if (direction == LayoutDirection.Rtl) outline.mirrored(size.width) else outline
 }
 
