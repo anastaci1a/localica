@@ -32,4 +32,11 @@ internal data class BrowseCellGeometry(val columns: Int) {
         (cellWidth - 2 * (cardInset * density).roundToInt()).coerceAtLeast(0)
     fun contentWidth(cellWidth: Int, density: Float): Int =
         (cardWidth(cellWidth, density) - 2 * (contentInset * density).roundToInt()).coerceAtLeast(0)
+
+    companion object {
+        /** A horizontal album carousel is one dense gallery row (#573): each tile insets its cover by
+         * [cardInset], tiles touch, and the row keeps [gridInset], so neighbouring covers share
+         * [GalleryGapDp] and their outlines join like gallery neighbours. */
+        val Carousel = BrowseCellGeometry(columns = 2)
+    }
 }

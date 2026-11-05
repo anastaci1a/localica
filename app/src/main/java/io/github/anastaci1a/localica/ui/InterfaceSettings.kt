@@ -27,7 +27,6 @@ internal fun InterfaceSettingsControls(value: InterfaceSettings, section: String
                 Text("Selected", color = NavigationAccent)
             }
             ActionTextButton(onClick = { onChange(value.copy(grayTone = InterfaceSettings().grayTone)) }) { Text("Reset gray tone") }
-            IconPackSettings()
         }
         "Glass" -> GlassSettingsControls(value.glass) { onChange(value.copy(glass = it)) }
         "Motion" -> {
