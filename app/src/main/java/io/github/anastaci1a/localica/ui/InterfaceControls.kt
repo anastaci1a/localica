@@ -429,7 +429,7 @@ internal fun GlassFilterChoice(checked: Boolean, onClick: () -> Unit, label: Str
     val selection by animateControlStateFloat(if (checked) .09f else 0f, checked, "Filter selection")
     Box(Modifier.heightIn(min = 48.dp).wrapContentHeight(Alignment.CenterVertically)) {
         LiquidGlassSurface(Modifier.height(40.dp).ownButtonDrag(enabled).toggleable(checked, enabled = enabled, role = Role.Checkbox, onValueChange = { onClick() })
-            .semantics { selected = checked }.graphicsLayer { alpha = opacity },
+            .semantics { selected = checked }.glassShadowOpacity { opacity },
             tint = Color.Black.copy(alpha = selection), pressFeedback = enabled) {
             Text(label, Modifier.align(Alignment.Center).padding(horizontal = 14.dp), style = MaterialTheme.typography.labelLarge)
         }
