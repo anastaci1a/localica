@@ -6,6 +6,21 @@ import org.junit.Test
 import kotlin.math.*
 
 class AnalyticSelectionOutlineTest {
+    @Test fun retainedBodiesProduceTheSameContactsAsFreshGeometryWhenInputsChange() {
+        val cached=AnalyticSelectionOutline()
+        for(frame in 0..120) {
+            val gap=if(frame%3==0)28f else 16f
+            val regions=List(12) { i ->
+                val dx=if(i==5)sin(frame*.07f)*10f else 0f
+                val dy=if(i==5)cos(frame*.09f)*8f else 0f
+                SelectionRegion(Rect(i%3*73f+dx,i/3*73f+dy,i%3*73f+72f+dx,i/3*73f+72f+dy),
+                    if(frame%5==0 && i==2)8f else 12f)
+            }.let { if(frame%7==0)it.reversed() else it }
+            val progress=(frame%100)/100f
+            assertEquals("frame=$frame",AnalyticSelectionOutline().inspect(regions,gap) { _,_->progress },
+                cached.inspect(regions,gap) { _,_->progress })
+        }
+    }
     @Test fun fadingLobesKeepFilletsNearTheirItems() {
         for(frame in 0..120) {
             val t=frame/120f
