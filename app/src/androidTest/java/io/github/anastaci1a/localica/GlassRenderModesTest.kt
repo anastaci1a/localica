@@ -8,6 +8,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.platform.testTag
@@ -71,6 +72,40 @@ class GlassRenderModesTest {
         compose.runOnIdle { changed = true }
         compose.waitUntil(15_000) { center().green > .2f && center().blue < .12f }
         assertEquals("None does not execute refraction or blur, even with maximum saved blur", 0, optical.get())
+    }
+
+    @Test fun noneSamplesTheTransformedFootprintWhileTheSourceStaysMounted() {
+        val runtime = GlassRendererRuntime(GlassRendererMode.None)
+        var shift by mutableFloatStateOf(0f)
+        lateinit var source: FrostedBackdrop
+        val colors = listOf(Color.Red, Color.Green, Color.Blue)
+        compose.setContent { CompositionLocalProvider(LocalGlassRendererRuntime provides runtime) { LocalicaTheme {
+            CompositionLocalProvider(LocalGlassAppearance provides GlassAppearance(whiteTint = 0f, contrast = 0f)) {
+                source = rememberFrostedBackdrop(Unit, dark = false)
+                Box(Modifier.size(240.dp, 100.dp)) {
+                    Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(source)) {
+                        colors.forEachIndexed { index, color -> drawRect(color,
+                            Offset(index * size.width / 3, 0f), Size(size.width / 3, size.height)) }
+                    }
+                    LiquidGlassSurface(Modifier.size(80.dp, 80.dp).graphicsLayer {
+                        translationX = shift.dp.toPx(); scaleX = .75f; scaleY = .8f
+                    }.testTag("moving-average"), source, cornerRadius = 12.dp,
+                        pressFeedback = false, shadow = false)
+                }
+            }
+        } } }
+        compose.waitUntil(15_000) { source.recorded && (Build.VERSION.SDK_INT >= 33 || source.snapshot != null) }
+        val owner = source
+        for (index in listOf(0, 1, 2, 1, 0)) {
+            compose.runOnIdle { shift = index * 80f }
+            val pixels = compose.onNodeWithTag("moving-average").captureToImage().toPixelMap()
+            val actual = pixels[pixels.width / 2, pixels.height / 2]
+            val expected = colors[index]
+            assertEquals("Red at translated footprint $index", expected.red, actual.red, .04f)
+            assertEquals("Green at translated footprint $index", expected.green, actual.green, .04f)
+            assertEquals("Blue at translated footprint $index", expected.blue, actual.blue, .04f)
+            assertSame(owner, source)
+        }
     }
 
     @Test fun switchingAndReversingNeverDropsTheBackingOrReplacesTheSurface() {
