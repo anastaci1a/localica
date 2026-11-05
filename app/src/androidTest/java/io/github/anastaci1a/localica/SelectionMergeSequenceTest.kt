@@ -11,6 +11,10 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.asAndroidPath
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.anastaci1a.localica.ui.*
+import io.github.anastaci1a.localica.browse.BrowseStyle
+import io.github.anastaci1a.localica.browse.BrowseCellGeometry
+import io.github.anastaci1a.localica.browse.ListSize
+import io.github.anastaci1a.localica.browse.Presentation
 import org.junit.Assert.*
 import org.junit.Test
 import java.io.File
@@ -36,12 +40,13 @@ class SelectionMergeSequenceTest {
         }
         return IntArray(420*280).also { bitmap.getPixels(it,0,420,0,0,420,280); bitmap.recycle() }
     }
-    private fun sequence(name: String,width: Float,height: Float,vertical: Boolean,drag: Boolean) {
+    private fun sequence(name: String,width: Float,height: Float,vertical: Boolean,drag: Boolean,
+        corner: Float=12f,steps: Int=120) {
         val csv = StringBuilder("density,rtl,frame,separation,progress,changedCoverage\n")
         for (density in listOf(1f,1.75f,2.625f)) for (rtl in listOf(false,true)) {
             var previous: IntArray? = null
             val frames = mutableListOf<IntArray>()
-            val outbound = (0..120).map { it/120f }
+            val outbound = (0..steps).map { it/steps.toFloat() }
             val positions = outbound + outbound.reversed()
             for ((frame,t) in positions.withIndex()) {
                 val separation = -4f+20f*t
@@ -50,20 +55,21 @@ class SelectionMergeSequenceTest {
                 val b = if (vertical) a.translate(Offset(0f,height+separation)) else a.translate(Offset(width+separation,0f))
                 val regions = listOf(a,b).map {
                     val r = if (rtl) Rect(400f-it.right,it.top,400f-it.left,it.bottom) else it
-                    SelectionRegion(Rect(r.left*density,r.top*density,r.right*density,r.bottom*density),12f*density)
+                    SelectionRegion(Rect(r.left*density,r.top*density,r.right*density,r.bottom*density),corner*density)
                 }
                 val pixels = coverage(regions,density,progress)
                 val old = previous
                 val changed = if (old == null) 0f else pixels.indices.sumOf { abs((pixels[it] ushr 24)-(old[it] ushr 24)).toDouble()/255 }.toFloat()
-                if (changed >= (width+height)*1.2f && old != null) {
+                val bound=(width+height)*1.2f*120/steps
+                if (changed >= bound && old != null) {
                     for ((label,imagePixels) in listOf("before" to old,"after" to pixels)) {
                         val image = Bitmap.createBitmap(imagePixels,420,280,Bitmap.Config.ARGB_8888)
                         File(output,"$name-failed-$frame-$label.png").outputStream().use { image.compress(Bitmap.CompressFormat.PNG,100,it) }
                         image.recycle()
                     }
                 }
-                assertTrue("$name frame=$frame density=$density rtl=$rtl changed=$changed",changed < (width+height)*1.2f)
-                if (frame > 120) assertArrayEquals("Reversal must reproduce its exact outline",frames[241-frame],pixels)
+                assertTrue("$name frame=$frame density=$density rtl=$rtl changed=$changed",changed < bound)
+                if (frame > steps) assertArrayEquals("Reversal must reproduce its exact outline",frames[2*steps+1-frame],pixels)
                 else frames += pixels
                 if (density == 1f && !rtl && frame % 12 == 0) {
                     val image = Bitmap.createBitmap(pixels,420,280,Bitmap.Config.ARGB_8888)
@@ -81,6 +87,21 @@ class SelectionMergeSequenceTest {
     @Test fun listConnectDisconnectAndReverse() = sequence("list",320f,72f,true,false)
     @Test fun galleryConnectDisconnectAndReverse() = sequence("gallery",96f,96f,false,false)
     @Test fun dragStartReleaseAndCancelReverse() = sequence("drag",240f,72f,true,true)
+    @Test fun everyBrowseSizeConnectsAndDisconnectsUsingItsMeasuredOutline() {
+        val styles=ListSize.entries.map { BrowseStyle(listSize=it) }+
+            Presentation.entries.filter { it!=Presentation.List }.map { BrowseStyle(presentation=it) }
+        for(style in styles) {
+            val columns=when(style.presentation) { Presentation.List->1;Presentation.Compact->6;Presentation.Standard->4;Presentation.Large->2 }
+            val width=if(columns==1)320 else BrowseCellGeometry(columns).artworkWidth(360,1f)
+            val metrics=BrowseItemMetrics(style,columns,width,1f,style.listSize==ListSize.Tracklist)
+            val information=min(60,metrics.informationLimit)
+            val placement=metrics.place(20,information,16)
+            val outline=metrics.outline(placement,width,metrics.titleWidth(information),20,information,16,
+                artwork=true,rtl=false,density=1f)
+            sequence("measured-${style.presentation}-${style.listSize}",outline.bounds.width,outline.bounds.height,
+                columns==1,false,outline.corner,40)
+        }
+    }
 
     @Test fun twelveItemFlightAndLandingPreserveItemsAndReverseEveryFrame() {
         val frames=mutableListOf<IntArray>()
