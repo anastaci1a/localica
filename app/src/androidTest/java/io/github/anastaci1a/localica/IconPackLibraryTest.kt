@@ -54,8 +54,8 @@ class IconPackLibraryTest {
         context.getSharedPreferences("icon-packs", 0).edit().clear().commit()
         IconPacks.load(app)
     }
-    private fun png() = ByteArrayOutputStream().also { out ->
-        val bitmap = Bitmap.createBitmap(96, 96, Bitmap.Config.ARGB_8888)
+    private fun png(size: Int = 96) = ByteArrayOutputStream().also { out ->
+        val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
         bitmap.eraseColor(android.graphics.Color.BLACK)
         bitmap.compress(Bitmap.CompressFormat.PNG, 100, out); bitmap.recycle()
     }.toByteArray()
@@ -70,6 +70,22 @@ class IconPackLibraryTest {
     private fun import(name: String = "First", id: String = "menu.pin", extra: Boolean = false): String {
         IconPacks.import(context, pack(name, id, extra).inputStream())
         return requireNotNull(IconPacks.activeId.value)
+    }
+
+    @Test fun largeSourceImagesStayStoredWhileDecodedLibraryMasksAreBounded() {
+        val source = ByteArrayOutputStream().also { out -> ZipOutputStream(out).use { zip ->
+            zip.putNextEntry(ZipEntry("pack.json")); zip.write("""{"name":"Large","version":"1"}""".toByteArray()); zip.closeEntry()
+            zip.putNextEntry(ZipEntry("icons/menu.pin.png")); zip.write(png(1024)); zip.closeEntry()
+        } }.toByteArray()
+        IconPacks.import(context, source.inputStream())
+        val id = requireNotNull(IconPacks.activeId.value)
+        assertEquals(192, IconPacks.masks.value.getValue("menu.pin").width)
+        val bounds = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        android.graphics.BitmapFactory.decodeFile(File(root, "icon-packs/$id/icons/menu.pin.png").path, bounds)
+        assertEquals(1024, bounds.outWidth)
+        IconPacks.load(context)
+        assertEquals(192, IconPacks.masks.value.getValue("menu.pin").width)
+        assertEquals(android.graphics.Color.BLACK, IconPacks.masks.value.getValue("menu.pin").getPixel(96, 96))
     }
 
     @Test fun switchUsesCachedImagesAfterBothSourceUrisAreRemoved() {
