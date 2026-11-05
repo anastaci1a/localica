@@ -40,6 +40,8 @@ class SongMenuIconsTest {
                 BrowseRoute(MainTab.Library, null, null), {}, {}, {}, { _, _, _ -> },
                 null, null, true, false, reducedMotion = true, queryDispatcher = Dispatchers.Unconfined)
         } }
+        compose.waitUntil(5000) { compose.onAllNodesWithContentDescription("Actions for Song 0").fetchSemanticsNodes().isNotEmpty() }
+        compose.awaitExpectedWindowFocus(compose.onNodeWithContentDescription("Actions for Song 0"))
         compose.onNodeWithContentDescription("Actions for Song 0").performClick()
         compose.waitUntil(5000) { compose.onAllNodesWithText("Information").fetchSemanticsNodes().isNotEmpty() }
         labelsInOrder(listOf("Information", "Select song", "Play next", "Add to current queue", "Add to a queue", "Add to playlist"))
