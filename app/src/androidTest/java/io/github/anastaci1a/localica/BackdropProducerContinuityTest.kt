@@ -11,6 +11,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.*
+import androidx.compose.ui.graphics.layer.GraphicsLayer
 import androidx.compose.ui.platform.*
 import androidx.compose.ui.test.*
 import androidx.compose.ui.unit.*
@@ -39,6 +40,8 @@ class BackdropProducerContinuityTest {
         var color by mutableStateOf(Color.Red)
         var stage by mutableIntStateOf(0)
         val release = CompletableDeferred<Unit>()
+        val copied = CompletableDeferred<Unit>()
+        var pinnedParent: GraphicsLayer? = null
         var owned: Deferred<ImageBitmap?>? = null
         var sampled: ImageBitmap? = null
         var failure: Throwable? = null
@@ -88,11 +91,24 @@ class BackdropProducerContinuityTest {
             compose.runOnUiThread {
                 owned = scope.async(start = CoroutineStart.UNDISPATCHED) {
                     source.withPinnedRecording({ true }) {
-                        release.await()
-                        RetainedLayerReadback().capture(source.layer, graphics, density, direction)
+                        source.readback.capture(source.layer, graphics, density, direction, copy = { parent ->
+                            pinnedParent = parent
+                            val image = RetainedLayerReadback().capture(parent, graphics, density, direction)
+                            copied.complete(Unit)
+                            release.await()
+                            image
+                        })
                     }
                 }
                 assertTrue(source.readbackPending)
+            }
+            // Hold the real retained parent after native pixels exist, before ownership is released.
+            compose.mainClock.autoAdvance = true
+            compose.waitUntil(5000) { copied.isCompleted || owned?.isCompleted == true }
+            if (!copied.isCompleted) runBlocking { requireNotNull(owned).await() }
+            compose.mainClock.autoAdvance = false
+            compose.runOnUiThread {
+                assertFalse(requireNotNull(pinnedParent).isReleased)
                 color = Color.Green
             }
             val held = frame("held")
@@ -114,7 +130,10 @@ class BackdropProducerContinuityTest {
             val pixels = sampled.toPixelMap()
             export(pixels, File(output, "sampler.png"))
             assertColor(Color.Red, pixels)
-            compose.runOnUiThread { assertFalse(source.readbackPending) }
+            compose.runOnUiThread {
+                assertFalse(source.readbackPending)
+                assertTrue(requireNotNull(pinnedParent).isReleased)
+            }
             assertColor(Color.Green, frame("released"))
             compose.runOnUiThread { assertTrue(source.recordings > recordings) }
         } catch (caught: Throwable) {
