@@ -25,6 +25,8 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.layout.layout
+import kotlin.math.roundToInt
 import io.github.anastaci1a.localica.browse.BrowserItem
 import io.github.anastaci1a.localica.library.TrackSort
 import kotlinx.coroutines.awaitCancellation
@@ -125,7 +127,14 @@ internal fun BrowseScrollbar(state: LazyGridState, items: List<BrowserItem>, sor
             }) {
             Box(Modifier.align(Alignment.TopEnd).offset(x = (-4).dp)
                 .graphicsLayer { translationY = position(); scaleX = grip; scaleY = grip; transformOrigin = TransformOrigin(1f, 0f) }
-                .width(ScrollbarGrip.RestWidthDp.dp).height(with(density) { model.thumbSize(track, minThumb, track * ScrollbarGrip.MaxTrackShare).toDp() }).testTag("browse-scrollbar-thumb")
+                .width(ScrollbarGrip.RestWidthDp.dp)
+                // The resting length follows the model; it is read while measuring, so it never recomposes.
+                .layout { measurable, constraints ->
+                    fraction()
+                    val h = model.thumbSize(track, minThumb, track * ScrollbarGrip.MaxTrackShare).roundToInt()
+                    val p = measurable.measure(constraints.copy(minHeight = h, maxHeight = h))
+                    layout(p.width, p.height) { p.place(0, 0) }
+                }.testTag("browse-scrollbar-thumb")
                 .background(if (dragging) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(8.dp)))
         }
         // Grid item 0 is the list header; browser items start at grid index 1.

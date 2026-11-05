@@ -49,6 +49,12 @@ class ScrollbarContinuityTest {
     }
 
     private fun thumb() = compose.onNodeWithTag("browse-scrollbar-thumb").fetchSemanticsNode().boundsInRoot
+    // The point of the thumb at fraction f of the track is where the finger or scroll position really is.
+    private fun covered(): Float {
+        val t = thumb(); val b = compose.onNodeWithTag("browse-scrollbar").fetchSemanticsNode().boundsInRoot
+        val f = ((t.top - b.top) / (b.height - t.height)).coerceIn(0f, 1f)
+        return t.top + f * t.height
+    }
     private fun bar() = compose.onNodeWithTag("browse-scrollbar")
 
     private fun sweep(step: Float, forward: Boolean) {
@@ -59,7 +65,7 @@ class ScrollbarContinuityTest {
         while (guard++ < 4000) {
             compose.runOnIdle { scope.launch { state.scrollBy(if (forward) step else -step) } }
             compose.mainClock.advanceTimeByFrame(); compose.waitForIdle()
-            tops += thumb().top
+            tops += covered()
             val done = compose.runOnIdle { if (forward) !state.canScrollForward else !state.canScrollBackward }
             if (done) break
         }
@@ -119,10 +125,10 @@ class ScrollbarContinuityTest {
             y += 4f * density
             bar().performTouchInput { moveTo(Offset(centerX, y)) }
             compose.mainClock.advanceTimeByFrame(); compose.waitForIdle()
-            tops += thumb().center.y
+            tops += covered()
         }
         bar().performTouchInput { up() }
-        for (k in 0 until 20) { compose.mainClock.advanceTimeByFrame(); compose.waitForIdle(); tops += thumb().center.y }
+        for (k in 0 until 20) { compose.mainClock.advanceTimeByFrame(); compose.waitForIdle(); tops += covered() }
         compose.mainClock.autoAdvance = true
         val deltas = tops.zipWithNext { a, b -> b - a }
         assertTrue("thumb never jumps while dragging or releasing: ${deltas.max()}", deltas.max() <= 12f * density)
