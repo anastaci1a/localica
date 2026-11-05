@@ -762,6 +762,29 @@ class WorkflowContract(unittest.TestCase):
                     self.assertIn(uploads[0]['if'], ('failure()', 'always()'))
                     self.assertEqual('warn', uploads[0]['with']['if-no-files-found'])
 
+    def test_api26_avoids_guest_kernel_dma_path_in_every_emulator_lane(self):
+        import yaml
+        for filename in ('android.yml', 'prototype.yml'):
+            workflow = yaml.safe_load((ROOT/'.github/workflows'/filename).read_text())
+            lanes = 0
+            for name, job in workflow['jobs'].items():
+                for step in job.get('steps', []):
+                    if not step.get('uses', '').startswith('reactivecircus/android-emulator-runner@'):
+                        continue
+                    lanes += 1
+                    options = step['with']['emulator-options']
+                    with self.subTest(workflow=filename, job=name):
+                        api = str(step['with']['api-level'])
+                        if api == '26':
+                            self.assertIn('-feature -GLDMA', options)
+                        elif api == '36':
+                            self.assertNotIn('GLDMA', options)
+                        else:
+                            self.assertEqual('${{ matrix.api }}', api)
+                            self.assertIn("${{ matrix.api == 26 && '-feature -GLDMA' || '' }}", options)
+                        self.assertIn('-memory 3072', options)
+            self.assertEqual(3 if filename == 'android.yml' else 4, lanes)
+
     def test_opt_in_only_and_five_required_jobs(self):
         import yaml
         workflow=yaml.safe_load((ROOT/'.github/workflows/prototype.yml').read_text())
