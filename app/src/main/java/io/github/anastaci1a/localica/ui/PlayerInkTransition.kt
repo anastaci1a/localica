@@ -20,7 +20,7 @@ import kotlin.math.abs
 internal class PlayerInkTransition(initial: Color) {
     /** What one resolution leaves behind; applying it is separate so composition never mutates. */
     internal data class Step(val shown: Color, val target: Color, val start: Color, val startProgress: Float, val lastEnd: Float,
-        val light: Float = lightOf(shown), val startLight: Float = light, val clock: Int = 0)
+        val light: Float = lightOf(shown), val startLight: Float = light, val clock: Int = 0, val lastProgress: Float = Float.NaN)
 
     private var committed = Step(initial, initial, initial, 0f, Float.NaN)
 
@@ -35,19 +35,23 @@ internal class PlayerInkTransition(initial: Color) {
         val animating = abs(progress - end) > SETTLED
         val s = committed
         val targetLight = lightOf(inkTarget)
-        if (!animating) return Step(inkTarget, inkTarget, inkTarget, s.startProgress, end, targetLight, targetLight, clock)
+        if (!animating) return Step(inkTarget, inkTarget, inkTarget, s.startProgress, end, targetLight, targetLight, clock, progress)
         var start = s.start; var startLight = s.startLight; var startProgress = s.startProgress; var target = s.target
         if (inkTarget != target) {
             start = s.shown; startLight = s.light; startProgress = progress; target = inkTarget
-        } else if (s.shown != target && (s.lastEnd != end || s.clock != clock || (if (end > .5f) progress < startProgress - SETTLED else progress > startProgress + SETTLED))) {
+        } else if (s.shown != target && (s.lastEnd != end || s.clock != clock || regressed(progress, s.lastProgress, end))) {
             // The animation reversed, another clock took over, or the same clock restarted (a new song during a change):
             // continue from the displayed ink rather than jumping.
             start = s.shown; startLight = s.light; startProgress = progress
         }
         val fraction = ink(progress, end, startProgress)
         return Step(lerp(start, target, fraction), target, start, startProgress, end,
-            startLight + (targetLight - startLight) * fraction, startLight, clock)
+            startLight + (targetLight - startLight) * fraction, startLight, clock, progress)
     }
+
+    /** The clock ran backwards against its direction: a new change restarted it. */
+    private fun regressed(progress: Float, last: Float, end: Float) =
+        !last.isNaN() && (if (end > .5f) progress < last - SETTLED else progress > last + SETTLED)
 
     fun commit(step: Step) { committed = step }
 
