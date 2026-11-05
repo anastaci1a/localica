@@ -79,7 +79,7 @@ class BackdropProducerContinuityTest {
                         if (backed) drawRect(color, Offset(size.width / 4f, size.height / 4f), Size(size.width / 2f, size.height / 2f))
                         else drawRect(color)
                     }
-                    PresentationMarker { stage }
+                    PresentationMarker(composeStage = true) { stage }
                 }
             } }
             compose.waitForIdle()
