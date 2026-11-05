@@ -38,6 +38,8 @@ internal class ScrollbarModel {
     var position = 0f; private set
     var remaining = 0f; private set
     var viewport = 1f; private set
+    private var seen = false
+    private var shownRemaining = 0f
 
     /** Scrollable distance in the model's units. */
     val scrollable get() = position + remaining
@@ -70,11 +72,13 @@ internal class ScrollbarModel {
         var before = 0f
         for (i in 0 until firstLine) before += if (extent[i].isNaN()) average else extent[i]
         position = before + frame.firstScrollOffset
-        remaining = if (frame.atEnd) 0f else {
+        val raw = if (frame.atEnd) 0f else {
             var after = (lastLineBottom - frame.windowEnd).coerceAtLeast(0).toFloat()
             for (i in lastIndex + 1 until frame.totalItems) after += if (extent[i].isNaN()) average else extent[i]
             after
         }
+        remaining = smoothed(raw, position - lastPosition)
+        lastPosition = position
         return fraction
     }
 
@@ -108,6 +112,24 @@ internal class ScrollbarModel {
 
     private fun lastItemTarget(): Pair<Int, Int> = (extent.size - 1) to 0
 
+    private var lastPosition = 0f
+
+    /**
+     * Estimates of unmeasured items change as items are measured. The change is carried as an error that
+     * decays with scrolled distance relative to the distance left, so it is gone when the end arrives.
+     */
+    private fun smoothed(raw: Float, moved: Float): Float {
+        val jump = !seen || kotlin.math.abs(moved) > 2 * viewport
+        seen = true
+        val shown = if (jump || raw == 0f) raw else {
+            val cap = minOf(.004f * (position + raw), raw / 2f)
+            val error = ((shownRemaining - moved - raw) * (1f - minOf(1f, kotlin.math.abs(moved) / (maxOf(raw, viewport) / 3f)))).coerceIn(-cap, cap)
+            (raw + error).coerceAtLeast(0f)
+        }
+        shownRemaining = shown
+        return shown
+    }
+
     private fun record(index: Int, share: Float, first: Int) {
         val old = extent[index]
         if (old.isNaN()) { measuredCount++; measuredSum += share } else measuredSum += share - old
@@ -118,7 +140,7 @@ internal class ScrollbarModel {
     private fun reset(total: Int) {
         extent = FloatArray(total) { Float.NaN }
         lineFirst = IntArray(total) { -1 }
-        measuredSum = 0.0; measuredCount = 0
+        measuredSum = 0.0; measuredCount = 0; seen = false
     }
 }
 
