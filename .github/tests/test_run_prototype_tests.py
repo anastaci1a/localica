@@ -704,6 +704,7 @@ class WorkflowContract(unittest.TestCase):
             self.assertIn('app/build/outputs/connected_android_test_additional_output/',paths)
             self.assertIn('app/build/outputs/androidTest-results/',paths)
             self.assertIn('prototype-evidence/',paths)
+            self.assertIn('prototype-iterations/',paths)
             self.assertEqual(60,jobs[f'compatibility_{api}']['timeout-minutes'])
         self.assertEqual(20,jobs['build']['timeout-minutes'])
         self.assertEqual(10,jobs['evidence']['timeout-minutes'])
