@@ -120,8 +120,8 @@ class HomeSelectionTest {
                     PlaybackState(connected = true), {}, {}, {}, {}, {}, {}, playlist = playlistState)
             } }
             compose.onNodeWithContentDescription("Playlists").performClick()
-            compose.waitUntil(5000) { compose.onAllNodesWithContentDescription("Actions for Scope mix").fetchSemanticsNodes().isNotEmpty() }
-            compose.onNodeWithContentDescription("Actions for Scope mix").performClick()
+
+            compose.awaitRowActions("Scope mix").performClick()
             compose.onNodeWithText("Select all songs").performClick()
             compose.onNodeWithText("2 selected").assertIsDisplayed()
             compose.waitUntil(5000) { compose.onAllNodesWithTag("glass-morph-surface").fetchSemanticsNodes().isEmpty() }

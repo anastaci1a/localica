@@ -64,9 +64,10 @@ class BrowseInteractionTest {
                 BrowserScreen(LibraryUiState(loading = false), PlaylistState(listOf(playlist), false),
                     route, {}, {}, {}, { _, _, _ -> plays++ }, null, null, true, false)
             } } }
-            compose.waitUntil(5000) { compose.onAllNodesWithContentDescription("Actions for Held").fetchSemanticsNodes().isNotEmpty() }
+
+            compose.awaitRowActions("Held")
             compose.onNodeWithTag("browser-list").performScrollToKey(playlist.entries.single().id)
-            val dots = compose.onNodeWithContentDescription("Actions for Held")
+            val dots = compose.awaitRowActions("Held")
             var held = false
             try {
                 dots.performTouchInput { down(center); held = true; advanceEventTime(650); moveTo(center) }
@@ -103,8 +104,8 @@ class BrowseInteractionTest {
                     tracks = listOf(track)), loading = false), PlaylistState(loading = false),
                     route, {}, {}, {}, { _, _, _ -> plays++ }, null, null, true, false)
             } } }
-            compose.waitUntil(5000) { compose.onAllNodesWithContentDescription("Actions for Held").fetchSemanticsNodes().isNotEmpty() }
-            compose.onNodeWithContentDescription("Actions for Held").performTouchInput { longClick() }
+
+            compose.awaitRowActions("Held").performTouchInput { longClick() }
             compose.onNodeWithText("Select song").assertIsDisplayed()
             compose.onNodeWithText("Information").assertIsDisplayed()
             compose.runOnIdle { assertFalse(session.active); assertEquals(0, plays) }
