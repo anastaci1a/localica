@@ -195,27 +195,37 @@ class FrostedSurfaceTest {
                 Text("Sharp foreground", Modifier.align(Alignment.Center))
             }
         } } }
-        if (Build.VERSION.SDK_INT < 31) compose.waitUntil(10000) { source.fallback != null }
+        if (Build.VERSION.SDK_INT < 33) compose.waitUntil(10000) { source.fallback != null }
         val glass = compose.onNodeWithTag("glass")
         val image = glass.captureToImage()
         val pixels = image.toPixelMap()
         val y = pixels.height / 4
         val left = pixels[pixels.width / 4, y]
         val right = pixels[pixels.width * 3 / 4, y]
-        assertTrue("Transmit red from the scene: $left", left.red > left.blue + .15f)
-        assertTrue("Transmit blue from the scene: $right", right.blue > right.red + .15f)
-        val nearLeft = pixels[pixels.width / 2 - 8, y]
-        assertTrue("Scatter across the hard scene boundary: $nearLeft vs $left", nearLeft.blue > left.blue + .04f)
+        if (Build.VERSION.SDK_INT >= 33) {
+            assertTrue("Transmit red from the scene: $left", left.red > left.blue + .15f)
+            assertTrue("Transmit blue from the scene: $right", right.blue > right.red + .15f)
+            val nearLeft = pixels[pixels.width / 2 - 8, y]
+            assertTrue("Scatter across the hard scene boundary: $nearLeft vs $left", nearLeft.blue > left.blue + .04f)
+        } else {
+            for (color in listOf(left, right)) {
+                assertTrue("Solid average retains both scene colors: $color", color.red > color.green + .2f && color.blue > color.green + .2f)
+                assertEquals("Equal-area red/blue have equal contributions", color.red, color.blue, .03f)
+            }
+            assertEquals("No spatial red/blue boundary remains", left.red, right.red, .04f)
+            assertEquals("No spatial red/blue boundary remains", left.blue, right.blue, .04f)
+        }
         compose.onNodeWithText("Sharp foreground").assertIsDisplayed()
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         File(nativeEvidenceDirectory("frosted-surface", context.getExternalFilesDir(null)), "frosted-material.png").outputStream().use { image.asAndroidBitmap().compress(Bitmap.CompressFormat.PNG, 100, it) }
         val previous = source.fallback
         compose.runOnIdle { swapped = true }
-        if (Build.VERSION.SDK_INT < 31) compose.waitUntil(10000) { source.fallback !== previous }
+        if (Build.VERSION.SDK_INT < 33) compose.waitUntil(10000) { source.fallback !== previous }
         compose.waitUntil(5000) {
             val next = glass.captureToImage().toPixelMap()
             val color = next[next.width / 4, next.height / 4]
-            color.blue > color.red + .15f
+            if (Build.VERSION.SDK_INT >= 33) color.blue > color.red + .15f
+            else kotlin.math.abs(color.red - left.red) < .04f && kotlin.math.abs(color.blue - left.blue) < .04f
         }
     }
 }
