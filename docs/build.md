@@ -90,7 +90,7 @@ Fresh `native-live-evidence` is always uploaded, including on failure. Existing 
 
 ### Measured native shards
 
-The seven native shards per API assign whole classes by measured duration, longest first. The [duration profile](../.github/test-evidence/class-durations.csv) is the per-class median of the complete device reports of runs 41771741272, 41766949579 and 41762838145 (issue #550).
+The eight native shards per API assign whole classes by measured duration, longest first. The [duration profile](../.github/test-evidence/class-durations.csv) is the per-class total of the complete device reports of v0.32.0's full run 41939345197 (issue #591; earlier profile: runs 41771741272, 41766949579 and 41762838145, issue #550). Rebuild it with `python3 .github/test-evidence/refresh_durations.py --output .github/test-evidence/class-durations.csv RUN_DIR...`, where each RUN_DIR holds one run's downloaded `device-reports-api-*` artifacts (several runs give the per-class median). A new class with no entry is budgeted at the median per-method cost, so refresh after adding slow classes: an unmeasured 6-minute class unbalanced a v0.32.0 shard by several minutes.
 
 Refresh it from the latest full run's `device-reports-*` artifacts when shard times drift; the budget is build 10 minutes, slowest shard 22 minutes, whole run 40 minutes.
 
@@ -102,7 +102,9 @@ Risk preflight retains its existing method partition. Weighted remainder shards 
 
 The opt-in `prototype.yml` lane builds an explicitly uncertified development APK through manual dispatch or an explicit reusable-workflow call. Select up to 73 affected behavior classes (4096 characters maximum including the three mandatory regression classes) and describe coverage and limitations.
 
-The focused jobs allow 60 minutes without trimming selected methods. This is a capacity allowance, not a measured speedup. Search IME, search-focus and contrast coverage is mandatory on API 26/36. Build/JVM/lint/signature and both preserved-data compatibility jobs also remain required. Known issues never waive failures.
+Full native shards and focused prototype jobs time out after 35 minutes. A timed-out shard fails the summary even if its XML is complete; rerun failed jobs to retry it.
+
+Search IME, search-focus and contrast coverage is mandatory on API 26/36. Build/JVM/lint/signature and both preserved-data compatibility jobs also remain required. Known issues never waive failures.
 
 The decision manifest records the exact SHA, APK identity, selected coverage and that complete native suites were not run. Prototype results do not certify a release.
 
@@ -138,13 +140,13 @@ Jaudiotagger 3.0.1 uses LGPL 2.1+. Bundle its notice/license and include its sou
 
 The [Android workflow](../.github/workflows/android.yml) builds application changes on main/PR and tests API 26/36. Match its two virtual CPU cores and 3,072 MiB emulator RAM locally.
 
-The `static-checks` job runs unit tests, lint and the release build in parallel with the `build` job, which only produces the APKs; the summary and verified-run reuse require both.
+Three jobs start together: `test-apks` builds the debug app and instrumentation APKs that every shard installs, `build` builds only the R8 delivery APK (smoke tests and the release artifact), and `static-checks` runs unit tests, lint and the release build. The shards wait only for `test-apks`; the summary and verified-run reuse require all three.
 
-One producer builds the native debug app/test APKs, metadata, class inventory and standalone runtime binding before replacing the delivery artifact. Every shard verifies their source/run identity and digests, then runs AGP instrumentation with build dependency actions disabled. APK hashes are checked again after instrumentation.
+One producer (`test-apks`) builds the native debug app/test APKs, metadata, class inventory and standalone runtime binding; the separate `build` job produces the delivery artifact. Every shard verifies their source/run identity and digests, then runs AGP instrumentation with build dependency actions disabled. APK hashes are checked again after instrumentation.
 
 Documentation-only changes use the separate documentation workflow.
 
-The native job splits each API suite into seven AndroidJUnitRunner shards (`numShards`/`shardIndex`) on separate emulators with the same profile. Evidence and report artifacts end in `-shard-N`.
+The native job splits each API suite into eight AndroidJUnitRunner shards (`numShards`/`shardIndex`) on separate emulators with the same profile. Evidence and report artifacts end in `-shard-N`.
 
 `device-tests-summary` downloads every shard XML. It fails unless each API's union equals the source inventory exactly once, skipped assumptions included, and every shard passed. With `risk_classes`, each shard runs its slice of those classes first, then its slice of the remainder.
 

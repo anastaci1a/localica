@@ -100,7 +100,7 @@ jobs:
   focused_26:
     runs-on: ubuntu-24.04
     # Capacity for the complete selected gate, not a throughput optimization.
-    timeout-minutes: 60
+    timeout-minutes: 35
     env:
       AFFECTED_CLASSES: ${{ inputs.affected_classes }}
       TEST_API: '26'
@@ -225,7 +225,7 @@ jobs:
   focused_36:
     runs-on: ubuntu-24.04
     # Capacity for the complete selected gate, not a throughput optimization.
-    timeout-minutes: 60
+    timeout-minutes: 35
     env:
       AFFECTED_CLASSES: ${{ inputs.affected_classes }}
       TEST_API: '36'

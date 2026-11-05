@@ -56,7 +56,7 @@ class ReleaseVerificationTest(unittest.TestCase):
         self.assertIn(f"LOCALICA_DEVICE_SHARDS: '{module.DEVICE_SHARDS}'",text)
         self.assertIn('shard: ['+', '.join(map(str,range(module.DEVICE_SHARDS)))+']',text)
         self.assertIn('static-checks',module.REQUIRED_JOBS)
-        self.assertIn('needs: [device-tests, build, static-checks, verification-reuse]',text)
+        self.assertIn('needs: [device-tests, test-apks, build, static-checks, verification-reuse]',text)
 
     def test_workflow_release_uses_exact_tree_selector(self):
         text=(ROOT/'.github/workflows/android.yml').read_text()
