@@ -78,7 +78,12 @@ internal enum class AppIcon(val id: String, @DrawableRes val builtin: Int) {
 @Composable
 internal fun appIconPainter(icon: AppIcon): Painter {
     val masks by IconPacks.masks.collectAsState()
-    val mask = masks[icon.id]
+    return packIconPainter(icon, masks[icon.id])
+}
+
+/** Explicit pack preview; never resolves through the currently selected pack. */
+@Composable
+internal fun packIconPainter(icon: AppIcon, mask: Bitmap?): Painter {
     val builtin = painterResource(icon.builtin)
     return if (mask == null) builtin else remember(mask) { MaskPainter(mask) }
 }

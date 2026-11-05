@@ -9,6 +9,8 @@ import io.github.anastaci1a.localica.ui.AppIcon
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import org.json.JSONObject
+import org.json.JSONArray
+import java.util.UUID
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.InputStream
@@ -25,41 +27,138 @@ data class IconPackReport(val info: IconPackInfo, val applied: List<String>, val
 
 class IconPackException(message: String) : Exception(message)
 
-/** Process-wide icon pack. The UI resolver reads [masks]; settings read [info]. */
+/** An imported pack owns decoded images; selecting it never opens its source again. */
+data class StoredIconPack(val id: String, val report: IconPackReport, val importedAt: Long,
+    val masks: Map<String, Bitmap>)
+
+class PreparedIconPack internal constructor(val report: IconPackReport,
+    internal val masks: Map<String, Bitmap>, internal val files: Map<String, ByteArray>)
+
+/** Process-wide library and live resolver. Disk operations run off Main. */
 object IconPacks {
     private val maskState = MutableStateFlow<Map<String, Bitmap>>(emptyMap())
     private val infoState = MutableStateFlow<IconPackInfo?>(null)
+    private val libraryState = MutableStateFlow<List<StoredIconPack>>(emptyList())
+    private val activeState = MutableStateFlow<String?>(null)
     val masks: StateFlow<Map<String, Bitmap>> get() = maskState
     val info: StateFlow<IconPackInfo?> get() = infoState
-    private fun directory(context: Context) = File(context.filesDir, "icon-pack")
+    val library: StateFlow<List<StoredIconPack>> get() = libraryState
+    val activeId: StateFlow<String?> get() = activeState
+    private var loadedRoot: String? = null
+    private fun directory(context: Context) = File(context.filesDir, "icon-packs")
+    private fun preferences(context: Context) = context.getSharedPreferences("icon-packs", Context.MODE_PRIVATE)
 
-    /** Loads the stored pack, if any. Call off Main. */
-    fun load(context: Context) {
-        val stored = runCatching { readDirectory(directory(context)) }.getOrNull()
-        maskState.value = stored?.first ?: emptyMap()
-        infoState.value = stored?.second
+    /** Loads all images once per process, and migrates the previous single-pack directory. */
+    @Synchronized fun load(context: Context) {
+        val root = directory(context).also { check(it.isDirectory || it.mkdirs()) }
+        root.listFiles().orEmpty().filter { it.name.endsWith(".old") }.forEach { backup ->
+            val target = File(root, backup.name.removeSuffix(".old"))
+            if (target.exists()) backup.deleteRecursively() else check(backup.renameTo(target))
+        }
+        val legacy = File(context.filesDir, "icon-pack")
+        if (legacy.isDirectory) {
+            val target = File(root, "legacy")
+            if (!target.exists()) {
+                val old = runCatching { readDirectory(legacy) }.getOrNull()
+                if (old != null) {
+                    writeMetadata(legacy, IconPackReport(old.second, old.first.keys.toList(), emptyList(), emptyList()), legacy.lastModified())
+                    check(preferences(context).edit().putString("active", "legacy").commit())
+                    check(legacy.renameTo(target)) { "Could not migrate the icon pack" }
+                }
+            }
+        }
+        libraryState.value = root.listFiles().orEmpty().filter { it.isDirectory && !it.name.contains('.') }
+            .mapNotNull { folder -> runCatching {
+                val stored = readDirectory(folder) ?: return@runCatching null
+                val metadata = File(folder, "report.json").takeIf { it.isFile }?.readText()?.let(::JSONObject)
+                fun strings(key: String): List<String> = metadata?.optJSONArray(key)?.let { array ->
+                    (0 until array.length()).map { array.getString(it) }
+                }.orEmpty()
+                val rejected = metadata?.optJSONArray("rejected")?.let { array ->
+                    (0 until array.length()).map { index -> array.getJSONArray(index).let { it.getString(0) to it.getString(1) } }
+                }.orEmpty()
+                StoredIconPack(folder.name, IconPackReport(stored.second, stored.first.keys.toList(), strings("unknown"), rejected),
+                    metadata?.optLong("importedAt") ?: folder.lastModified(), stored.first)
+            }.getOrNull() }.sortedBy { it.importedAt }
+        loadedRoot = root.absolutePath
+        publish(preferences(context).getString("active", null))
     }
 
-    /** Validates [input] and replaces the stored pack. Throws [IconPackException] when the pack is unusable. */
-    fun import(context: Context, input: InputStream): IconPackReport {
-        val parsed = parse(input)
-        val target = directory(context)
-        val staging = File(context.filesDir, "icon-pack.new").also { it.deleteRecursively(); File(it, "icons").mkdirs() }
-        File(staging, IconPackNames.MANIFEST).writeText(JSONObject().put("name", parsed.report.info.name)
-            .put("version", parsed.report.info.version).apply { parsed.report.info.author?.let { put("author", it) } }.toString())
-        parsed.files.forEach { (id, bytes) -> File(staging, "icons/$id.png").writeBytes(bytes) }
-        target.deleteRecursively()
-        check(staging.renameTo(target)) { "Could not store the icon pack" }
-        maskState.value = parsed.masks
-        infoState.value = parsed.report.info
-        return parsed.report
+    private fun ensureLoaded(context: Context) {
+        if (loadedRoot != directory(context).absolutePath) load(context)
     }
 
-    fun reset(context: Context) {
-        directory(context).deleteRecursively()
-        maskState.value = emptyMap()
-        infoState.value = null
+    fun prepare(input: InputStream): PreparedIconPack = parse(input).let { PreparedIconPack(it.report, it.masks, it.files) }
+
+    @Synchronized fun matching(context: Context, prepared: PreparedIconPack): StoredIconPack? {
+        ensureLoaded(context)
+        return libraryState.value.firstOrNull { it.report.info.name == prepared.report.info.name &&
+            it.report.info.version == prepared.report.info.version }
     }
+
+    /** The caller confirms an existing name/version before committing a prepared import. */
+    @Synchronized fun install(context: Context, prepared: PreparedIconPack): IconPackReport {
+        ensureLoaded(context)
+        val existing = matching(context, prepared)
+        val id = existing?.id ?: UUID.randomUUID().toString()
+        val root = directory(context)
+        val target = File(root, id)
+        val staging = File(root, "$id.new").also { it.deleteRecursively(); check(File(it, "icons").mkdirs()) }
+        val now = System.currentTimeMillis()
+        val info = prepared.report.info
+        File(staging, IconPackNames.MANIFEST).writeText(JSONObject().put("name", info.name)
+            .put("version", info.version).apply { info.author?.let { put("author", it) } }.toString())
+        prepared.files.forEach { (key, bytes) -> File(staging, "icons/$key.png").writeBytes(bytes) }
+        writeMetadata(staging, prepared.report, now)
+        val backup = File(root, "$id.old")
+        check(!target.exists() || target.renameTo(backup)) { "Could not update the icon pack" }
+        if (!staging.renameTo(target)) {
+            backup.renameTo(target)
+            error("Could not store the icon pack")
+        }
+        backup.deleteRecursively()
+        val stored = StoredIconPack(id, prepared.report, now, prepared.masks)
+        libraryState.value = if (existing == null) libraryState.value + stored else libraryState.value.map { if (it.id == id) stored else it }
+        select(context, id)
+        return prepared.report
+    }
+
+    /** Import API for callers that already authorize updating a matching pack. */
+    fun import(context: Context, input: InputStream): IconPackReport = install(context, prepare(input))
+
+    private fun writeMetadata(folder: File, report: IconPackReport, date: Long) {
+        File(folder, "report.json").writeText(JSONObject().put("importedAt", date)
+            .put("applied", JSONArray(report.applied)).put("unknown", JSONArray(report.unknown))
+            .put("rejected", JSONArray().apply { report.rejected.forEach { put(JSONArray(listOf(it.first, it.second))) } }).toString())
+    }
+
+    @Synchronized fun select(context: Context, id: String?) {
+        ensureLoaded(context)
+        require(id == null || libraryState.value.any { it.id == id })
+        preferences(context).edit().putString("active", id).apply()
+        publish(id)
+    }
+
+    private fun publish(id: String?) {
+        val pack = libraryState.value.firstOrNull { it.id == id }
+        maskState.value = pack?.masks ?: emptyMap()
+        infoState.value = pack?.report?.info
+        activeState.value = pack?.id
+    }
+
+    @Synchronized fun delete(context: Context, id: String) {
+        ensureLoaded(context)
+        require(libraryState.value.any { it.id == id })
+        val target = File(directory(context), id)
+        val trash = File(directory(context), "$id.deleted")
+        check(target.renameTo(trash)) { "Could not delete the icon pack" }
+        libraryState.value = libraryState.value.filterNot { it.id == id }
+        if (activeState.value == id) select(context, null)
+        trash.deleteRecursively()
+    }
+
+    /** Restores built-ins without removing imported packs. */
+    fun reset(context: Context) = select(context, null)
 
     /** Writes every built-in icon as a ready-to-edit template pack. */
     fun exportTemplate(context: Context, output: OutputStream) {
