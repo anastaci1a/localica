@@ -119,14 +119,8 @@ jobs:
     name: Prototype build, unit tests and lint
   focused_26:
     runs-on: ubuntu-24.04
-<<<<<<< HEAD
-    # Repeated proofs retain all selected methods and stop on their first failure;
-    # otherwise capacity for the complete selected gate, not a throughput optimization.
-    timeout-minutes: ${{ inputs.repeat > 1 && 360 || 35 }}
-=======
     # Repeated proofs retain all selected methods and stop on their first failure.
     timeout-minutes: ${{ inputs.repeat_methods != '' && 60 || inputs.repeat > 1 && 360 || 60 }}
->>>>>>> origin/maint/prototype-method-repeat
     env:
       AFFECTED_CLASSES: ${{ inputs.affected_classes }}
       PROTOTYPE_METHODS: ${{ inputs.repeat_methods }}
@@ -253,14 +247,8 @@ jobs:
     name: Prototype preserved-data compatibility API 26
   focused_36:
     runs-on: ubuntu-24.04
-<<<<<<< HEAD
-    # Repeated proofs retain all selected methods and stop on their first failure;
-    # otherwise capacity for the complete selected gate, not a throughput optimization.
-    timeout-minutes: ${{ inputs.repeat > 1 && 360 || 35 }}
-=======
     # Repeated proofs retain all selected methods and stop on their first failure.
     timeout-minutes: ${{ inputs.repeat_methods != '' && 60 || inputs.repeat > 1 && 360 || 60 }}
->>>>>>> origin/maint/prototype-method-repeat
     env:
       AFFECTED_CLASSES: ${{ inputs.affected_classes }}
       PROTOTYPE_METHODS: ${{ inputs.repeat_methods }}
