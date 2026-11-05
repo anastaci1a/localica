@@ -89,15 +89,11 @@ internal fun BrowseItemLayout(item: BrowserItem, style: BrowseStyle, geometry: B
                 color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
             if (artworkAlpha > 0f || artwork(style) || from?.let(::artwork) == true)
                 MediaArtwork(item.coverUris, textReveal = textReveal, modifier = Modifier.fillMaxSize()
-                    .then(if (pinch != null) Modifier.retainPinchArtwork(item.key, pinch) { size ->
-                        browseLoadingArtCorner(artCorner.floatValue, size.minDimension,
-                            artist, artistOnlyLoading, loadingReveal?.alpha ?: 1f)
-                    } else Modifier).graphicsLayer {
+                    .then(if (pinch != null) Modifier.retainPinchArtwork(item.key, pinch) else Modifier).graphicsLayer {
                     alpha = artworkAlpha * incomingAlpha * (loadingReveal?.alpha ?: 1f)
                     shape = RoundedCornerShape(browseLoadingArtCorner(artCorner.floatValue, size.minDimension,
                         artist, artistOnlyLoading, loadingReveal?.alpha ?: 1f))
-                    // The viewport applies the same current shape to live and captured pixels.
-                    clip = pinch?.viewportCoordinates?.isAttached != true
+                    clip = true
                 }, shape = androidx.compose.ui.graphics.RectangleShape)
         }
         Box(Modifier.morph().reveal().artworkTextReveal(gatedText, titleLinePx, { artCorner.floatValue }).testTag("browse-text-${item.key}")) {
