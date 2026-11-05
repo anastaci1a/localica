@@ -1,6 +1,6 @@
-<!-- Release: v0.32.0 -->
+<!-- Release: v0.33.0 -->
 
-# Release v0.32.0
+# Release v0.33.0
 
 Android APK for Android 8 or newer. Keeps the existing `.debug` application ID and project development signing key for in-place updates. Separate production signing is not configured.
 
@@ -8,47 +8,41 @@ This is an optimized build (not debuggable, minified with R8, with a baseline pr
 
 ## Changes
 
-- The multi-select pill uses the standard Liquid Glass material everywhere, and its glass and icons follow each menu's light or dark theme. In the Queue drawer it floats over the songs without cutting a new edge into the list.
-- The shadow under selected items becomes a soft white glow on light-themed menus. Its spread matches the Glass shadow spread. A new Glass setting, Lift shadow strength (50-150% of the Glass shadow strength, default 100%), controls it, and the default is much lighter than before.
-- Selection outlines have 1.75× more padding around items, the same in every view.
-- Every gallery size uses one standard gap, between covers and from an item's text to the cover below.
-- Popups expand from and retract into an item's current lifted position and size, in lists, galleries, carousels and the Queue.
-- The ⋯ button in the multi-select pill retracts its popup into a glass button shape, then the glass fades away, the same as list-row ⋯ buttons.
-- The (X) glass that appears while you drag the playback bar refracts the whole player behind it, including the controls and text.
-- While a multi-select is active, Back ends the selection instead of offering to close Localica. Once nothing is selected, Back works normally again.
-- When you pinch to another view size, items that are leaving fade out one after another across the whole pinch, farthest from your fingers first, and reversing the pinch plays it backwards.
-- With a very large queue, Next, Previous and seek respond right after playback starts, instead of waiting for the queue to finish saving.
-- Play Next songs keep their next-up place when you pick another song or a track change was already loading. Going back across a shuffle cycle no longer repeats a song, and Stop here and the repeat modes stay on the song that just ended.
-- The navbar and segmented selectors squash their free-end corners elliptically when you stretch them against an end, and the corners return smoothly to round as you release.
-- Opening or closing lyrics now eases the player theme, including the glass and frost of the controls, instead of switching in a single frame when lyrics use a different light or dark theme.
-- Selected items lift a little more visibly in galleries, staying clear of neighbouring artwork.
-- More → Settings → About and licenses → Export diagnostics shares a small text file of recent pinch and list diagnostics. Use it to capture the rare frozen-list state for #535. Nothing leaves the device unless you share it.
+- Dragging several selected items now shows a live, frosted stack that follows your finger, with the now-playing artwork fading as items are picked up. Autoscroll during a drag keeps the frosted view live.
+- Skip forward and Skip back have a new animation, and the transport and tab icons are refreshed. The song menu icons are refreshed too.
+- Icons are now swappable: an icon registry and importable icon packs are in place (see docs/icon-packs.md).
+- Tapping a Library filter bubble, or changing the full-library search text, scrolls the list back to the top.
+- The player backdrop is graded for contrast with the chosen text and icon colour, with gentler saturation and brightness independent of saturation.
+- In the Queue drawer, song and artwork changes ease on one shared clock, so the artwork, colours and text change together.
+- Dragging the playback bar over the cancel (X) target no longer force-closes the app.
+- Pinching in album, playlist and artist views no longer freezes the list when the destination size has no collection header.
+- Behind the scenes: several flaky tests (search keyboard motion, Library filter, shuffle mode) were fixed, and the build and test pipeline is faster, with bounded shard times and repeatable test proofs.
 
 ## Resolved issues
 
-- https://github.com/anastaci1a/localica/issues/552 - Multi-select pill: standard Liquid Glass material, menu-matched theming, no Queue clipping edge.
-- https://github.com/anastaci1a/localica/issues/553 - Theme-aware selection lift shadow and glow, with a configurable strength.
-- https://github.com/anastaci1a/localica/issues/558 - Selection outline padding increased 1.75×.
-- https://github.com/anastaci1a/localica/issues/561 - One standard gallery gap at every gallery size.
-- https://github.com/anastaci1a/localica/issues/554 - Popup home shapes track the lifted item geometry.
-- https://github.com/anastaci1a/localica/issues/555 - Plain buttons retract their popup into glass, then fade the glass out.
-- https://github.com/anastaci1a/localica/issues/562 - Seek-cancel (X) glass refracts the whole player.
-- https://github.com/anastaci1a/localica/issues/563 - Back during a multi-select ends the selection.
-- https://github.com/anastaci1a/localica/issues/559 - Disappearing items fade in a staggered sequence across the pinch.
-- https://github.com/anastaci1a/localica/issues/214 - Large-queue transport stays responsive while the initial queue save runs.
-- https://github.com/anastaci1a/localica/issues/549 - Play Next edge cases: in-flight changes, forward skips, cycle boundaries, no current entry.
-- https://github.com/anastaci1a/localica/issues/209 - Stretched selectors deform their free-end corners with the stretch.
-- https://github.com/anastaci1a/localica/issues/564 - Lyrics theme changes ease text, icons and materials together.
-- https://github.com/anastaci1a/localica/issues/567 - PlaylistSelectionPlacementTest updated for the new outline padding (test only).
+- https://github.com/anastaci1a/localica/issues/557 - Multi-select drag stack: live recursive frosted panes, visible stacking, now-playing fade.
+- https://github.com/anastaci1a/localica/issues/571 - Transport and tab icons refreshed; new skip-forward/back animation.
+- https://github.com/anastaci1a/localica/issues/572 - Icon registry and importable icon packs.
+- https://github.com/anastaci1a/localica/issues/570 - Song menu action icons refreshed.
+- https://github.com/anastaci1a/localica/issues/568 - Library filter bubbles and full-library search reset the list to the top.
+- https://github.com/anastaci1a/localica/issues/576 - Player backdrop grading for contrast with the chosen ink.
+- https://github.com/anastaci1a/localica/issues/578 - Queue drawer song and artwork changes transition smoothly on one clock.
+- https://github.com/anastaci1a/localica/issues/583 - Seek drag over the cancel target no longer crashes.
+- https://github.com/anastaci1a/localica/issues/535 - Subview pinch without a reachable collection header no longer freezes (partial, see Known issues).
+- https://github.com/anastaci1a/localica/issues/545 - SearchImeMotionTest window-focus flake fixed (test only).
+- https://github.com/anastaci1a/localica/issues/565 - LibraryFilterTest readiness flake fixed (test only).
+- https://github.com/anastaci1a/localica/issues/566 - ShuffleModePlaybackTest cursor-save ordering flake fixed (test only).
+- https://github.com/anastaci1a/localica/issues/591 - CI trim: parallel test and delivery builds, re-measured shards, bounded shard times.
 
 ## Known issues
 
-- The whole-list freeze after a fling followed by a pinch in subviews is still being investigated. If it happens, use Export diagnostics (https://github.com/anastaci1a/localica/issues/535).
-- Selection outlines don't yet merge with smooth concave joins (https://github.com/anastaci1a/localica/issues/556), and the live frosted drag stack is coming in a later release (https://github.com/anastaci1a/localica/issues/557).
+- Crash when holding the artwork in the full-screen player: can't be reproduced yet; logs requested (https://github.com/anastaci1a/localica/issues/575).
+- The #535 fix covers pinching without a reachable collection header; other causes of the whole-list freeze after a fling and pinch in subviews may remain. If it happens, use Export diagnostics (https://github.com/anastaci1a/localica/issues/535).
+- Selection outlines don't yet merge with smooth concave joins (https://github.com/anastaci1a/localica/issues/556).
 
 ## Install
 
-1. Download `localica-v0.32.0-debug.apk` from **Assets** below (Android 8+).
+1. Download `localica-v0.33.0-debug.apk` from **Assets** below (Android 8+).
 2. Open the APK and allow installation from your browser or file manager if prompted. It updates the existing development app.
 3. First use: open **More → Scan music**, choose **Folders to scan**, then **Scan now**.
 
