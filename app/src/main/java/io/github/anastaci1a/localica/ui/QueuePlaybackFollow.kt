@@ -38,6 +38,7 @@ internal class QueuePlaybackFollowCoordinator(initiallyAttached: Boolean = true,
         private set
     var moving by mutableStateOf(false)
         private set
+    private var positioned = restored
     private var entered = restored
     private var restoredObservation = restored
     private var occurrence: String? = null
@@ -51,8 +52,10 @@ internal class QueuePlaybackFollowCoordinator(initiallyAttached: Boolean = true,
                 openingRequest > 0 && openingRequest == consumedOpeningRequest) } == true }
     }
 
-    /** First measurement/opening placement is independent of ongoing follow intent. */
+    /** An explicit reopening remounts; recreation without a fresh opening preserves intent. */
     fun positionedInitially(target: String, currentOwner: Any, openingRequest: Long) {
+        if (positioned && openingRequest > consumedOpeningRequest) attached = true
+        positioned = true
         cancel()
         entered = true
         restoredObservation = false
@@ -73,6 +76,7 @@ internal class QueuePlaybackFollowCoordinator(initiallyAttached: Boolean = true,
         occurrence = target
         if (!automatic) consumeOpening(openingRequest)
         if (automatic && initialEligible && target != null && openingRequest > consumedOpeningRequest) {
+            if (positioned) attached = true
             consumedOpeningRequest = openingRequest
             entered = true
             submit(target, currentOwner, modalGeneration, initialPosition = true)
@@ -101,6 +105,17 @@ internal class QueuePlaybackFollowCoordinator(initiallyAttached: Boolean = true,
         owner = currentOwner
         submit(target, currentOwner, modalGeneration)
         return true
+    }
+
+    /** Already at a physical end: restore intent without admitting another animation. */
+    fun reattachAtBoundary(target: String?, currentOwner: Any) {
+        if (target == null) return
+        cancel()
+        attached = true
+        entered = true
+        restoredObservation = false
+        occurrence = target
+        owner = currentOwner
     }
 
     private fun submit(target: String, currentOwner: Any, generation: Long?, initialPosition: Boolean = false) {

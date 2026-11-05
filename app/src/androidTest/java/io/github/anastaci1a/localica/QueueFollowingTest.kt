@@ -238,7 +238,49 @@ class QueueFollowingTest {
         }
     }
 
-    @Test fun coldAndWarmExplicitQueueOpenDrawCurrentFirstWithoutReattachingDetachedIntent() {
+    @Test fun manualTopAtFirstOccurrenceReattachesWithoutAnotherReturnTap() = boundaryReturn(0, 0)
+
+    @Test fun manualBottomAtLastOccurrenceReattachesWithoutAnotherReturnTap() = boundaryReturn(119, 120)
+
+    private fun boundaryReturn(current: Int, end: Int) {
+        val fixture = fixture(initial = current)
+        list.performScrollToIndex(60)
+        currentReturn.assertIsDisplayed()
+        list.performScrollToIndex(end)
+        awaitCurrent(current)
+        currentReturn.assertDoesNotExist()
+        compose.runOnIdle { fixture.publish(45) }
+        awaitCurrent(45)
+    }
+
+    @Test fun returnArrowMatchesEveryFrameOfItsActualDisplacementNearAndFarFromCurrent() {
+        fixture(initial = 45, reducedMotion = false)
+        for (index in listOf(0, 43, 44, 45, 46, 47, 50, 119)) {
+            list.performScrollToIndex(index)
+            list.performSemanticsAction(SemanticsActions.ScrollBy) { it(0f, 24f) }
+            currentReturn.assertIsDisplayed()
+            val up = currentReturn.fetchSemanticsNode().config[SemanticsProperties.StateDescription] == "Scroll up"
+            val start = position()
+            val samples = mutableListOf(start)
+            compose.mainClock.autoAdvance = false
+            try {
+                currentReturn.performClick()
+                repeat(45) {
+                    compose.mainClock.advanceTimeByFrame()
+                    compose.waitForIdle()
+                    samples += position()
+                }
+            } finally { compose.mainClock.autoAdvance = true }
+            val moves = samples.zipWithNext().map { (a, b) -> b - a }.filter { kotlin.math.abs(it) > .001f }
+            if (moves.isNotEmpty()) {
+                assertEquals("Arrow at index $index must match displacement: $samples", up, samples.last() < start)
+                assertTrue("Every frame must follow the arrow at $index: $samples", moves.all { (it < 0f) == up })
+            }
+            awaitCurrent(45)
+        }
+    }
+
+    @Test fun coldAndWarmExplicitQueueOpenDrawCurrentFirstAndReattachDetachedIntent() {
         val draws = mutableListOf<InitialQueueDraw>()
         queries.held = true
         val fixture = fixture(reducedMotion = false, awaitReady = false, firstDraws = draws)
@@ -263,13 +305,23 @@ class QueueFollowingTest {
         compose.runOnIdle { fixture.openingRequest = 2; fixture.mounted = true }
         assertFirstQueueDraw(draws, 2, 45)
         queries.release()
-        currentReturn.assertIsDisplayed()
-        val opened = position()
+        currentReturn.assertDoesNotExist()
         compose.runOnIdle { fixture.publish(95) }
-        compose.waitForIdle()
-        assertEquals("Explicit opening must not reset detached ongoing-follow intent", opened, position(), 0f)
-        row(95).assertDoesNotExist()
+        awaitCurrent(95)
+        currentReturn.assertDoesNotExist()
+    }
+
+    @Test fun retainedQueueDrawerCloseAndReopenRemountsAndHidesReturnArrow() {
+        val fixture = fixture(queueScreen = true, reducedMotion = false, openingRequest = 1)
+        list.performScrollToIndex(15)
         currentReturn.assertIsDisplayed()
+        compose.runOnIdle { fixture.active = false }
+        compose.runOnIdle { fixture.openingRequest = 2; fixture.active = true }
+        awaitCurrent(45)
+        currentReturn.assertDoesNotExist()
+        compose.runOnIdle { fixture.publish(95) }
+        awaitCurrent(95)
+        currentReturn.assertDoesNotExist()
     }
 
     @Test fun queueScreenFirstRevealPrepositionsBeforeVisibleOwnershipAndReopensAtTheNewCurrent() {
