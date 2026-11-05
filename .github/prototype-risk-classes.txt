@@ -101,6 +101,7 @@ io.github.anastaci1a.localica.LibraryDatabaseTest
 io.github.anastaci1a.localica.LibraryFilterMotionTest
 io.github.anastaci1a.localica.LibraryFilterPresentationTest
 io.github.anastaci1a.localica.LibraryFilterTest
+io.github.anastaci1a.localica.LibraryScrollResetTest
 io.github.anastaci1a.localica.LibraryPlaybackReadTest
 io.github.anastaci1a.localica.LibraryPreferencesTest
 io.github.anastaci1a.localica.LiquidGlassTest
