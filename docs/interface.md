@@ -342,7 +342,9 @@ View offers presentation, list Size or gallery Items per row, extra information 
 
 ## Collection details
 
-Playlist headers use their existing manual cover or canonical automatic cover, independent of displayed sorting/filtering. The shared Play/Shuffle pill acts on displayed occurrences. The bottom-right menu retains playlist-specific edits and mutable semantics. Scoped Search remains optional in View. With Search hidden, reaching the actual top removes Return and lets the next Back leave the detail.
+The floating return arrow in album, artist, Album Artist and playlist details aligns the header Play/Shuffle pill’s bottom with the top-left Back button’s bottom. Its destination uses measured geometry, including density and header changes. Android Back targets the full page top directly.
+
+Playlist headers use their existing manual cover or canonical automatic cover, independent of displayed sorting/filtering. The shared Play/Shuffle pill acts on displayed occurrences. The bottom-right menu retains playlist-specific edits and mutable semantics. Scoped Search remains optional in View. Android Back returns to the page top in one continuous ease; the next Back leaves the detail.
 
 Album, artist and playlist pages use a full-width artwork header beginning below the status bar, with a blurred extension above and a feathered color continuation behind the songs. Artwork travels at 65% of content speed with a continuous offset after the lazy header leaves view. Reduced motion disables parallax.
 
@@ -477,15 +479,17 @@ Queue More omits List view options; global Repeat/Shuffle stay in the player. Br
 
 ### Queue Following
 
-The active queue starts attached, except with touch exploration. Fresh drawer openings position the exact current occurrence before the first row measurement without reattaching a detached route; recreation retains its viewport and follow intent. Natural advancement and manual/external transport ease to the exact current occurrence, including paused playback and duplicate songs.
+The active queue starts attached, except with touch exploration. Fresh drawer openings position the exact current occurrence before the first row measurement. Reopening a detached drawer restores attachment; retained-route recreation without a new opening keeps its viewport and follow intent. Natural advancement and manual/external transport ease to the exact current occurrence, including paused playback and duplicate songs.
 
 User scrolling or return-to-top navigation detaches; retain that intent with the list. Following never steals selection, drag, pinch, modal or hidden-page ownership. Order actions keep their one-shot destinations without changing attachment.
 
+Manually reaching the queue’s start with its first occurrence current, or its end with its last occurrence current, reattaches without motion.
+
 ### Queue Return control
 
-Opening/reopening unfiltered Queue places its exact current occurrence before the first row draw, without catch-up scrolling or changing ongoing follow attachment. Retained-route recreation without a new opening preserves its viewport. A detached queue offers its directional return bubble even when the current occurrence is visible.
+Opening/reopening unfiltered Queue places its exact current occurrence before the first row draw, without catch-up scrolling. Reopening also remounts playback following and hides the return arrow. Retained-route recreation without a new opening preserves its viewport. A detached queue offers its directional return bubble even when the current occurrence is visible.
 
-Return reattaches and eases below the search pill or to the closest possible position. Scoped Queue search keeps its explicit offscreen-current return without automatic following. Selection hides the bubble, drag owns its slot, and exit retains its last direction. A filtered-out current occurrence has no substitute or top target.
+Return reattaches and eases below the search pill or to the closest possible position. Its arrow follows the direction to that same clamped destination. Scoped Queue search keeps its explicit offscreen-current return without automatic following. Selection hides the bubble, drag owns its slot, and exit retains its last direction. A filtered-out current occurrence has no substitute or top target.
 
 ### Player artwork transitions
 
