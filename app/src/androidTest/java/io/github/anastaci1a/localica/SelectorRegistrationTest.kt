@@ -69,7 +69,7 @@ class SelectorRegistrationTest {
         compose.setContent { LocalicaTheme {
             @Composable fun Scene() {
                 sceneView = LocalView.current
-                val source = rememberFrostedBackdrop(Unit, glassBlur = 0f, whiteTint = 0f)
+                val source = rememberFrostedBackdrop(Unit)
                 readySource = source
                 CompositionLocalProvider(LocalFrostedBackdrop provides source,
                     LocalGlassAppearance provides LocalGlassAppearance.current.copy(blur = 0f, whiteTint = 0f, contrast = 0f)) {

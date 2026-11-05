@@ -352,7 +352,7 @@ class LyricsReturnBackdropTest {
                         if (attached) sampledScene = scene
                         else if (sampledScene === scene) sampledScene = null
                     }) {
-                    artwork = rememberFrostedBackdrop(state.art, glassBlur = 0f, whiteTint = 0f)
+                    artwork = rememberFrostedBackdrop(state.art)
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Box(Modifier.size(360.dp, 384.dp).background(Color.Black).testTag(SceneTag)) {
                             Canvas(Modifier.matchParentSize().recordFrostedBackdrop(artwork)) { drawRect(state.art) }

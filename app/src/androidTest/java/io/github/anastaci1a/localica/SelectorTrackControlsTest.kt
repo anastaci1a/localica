@@ -39,7 +39,7 @@ class SelectorTrackControlsTest {
         var source: FrostedBackdrop? = null
         compose.setContent { LocalicaTheme {
             reviewView = LocalView.current
-            val backdrop = rememberFrostedBackdrop(Unit, glassBlur = 0f, whiteTint = 0f)
+            val backdrop = rememberFrostedBackdrop(Unit)
             source = backdrop
             CompositionLocalProvider(LocalGlassAppearance provides GlassAppearance(tabStyle = style,
                 overlayForeground = true, blur = 0f, whiteTint = 0f, contrast = 0f)) {

@@ -45,10 +45,13 @@ class GlassRenderModesTest {
                         Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             LiquidGlassSurface(Modifier.fillMaxWidth().height(60.dp).testTag("plain"), cornerRadius = 12.dp,
                                 pressFeedback = false, shadow = false)
-                            GlassActionButton(R.drawable.ic_revert, "Mode action", Modifier.testTag("action")) { }
+                            GlassActionButton(AppIcon.ActionRevert, "Mode action", Modifier.testTag("action")) { }
                             ListSearchPill("Queue search", {}, Modifier.testTag("queue-search"))
                             SelectionLens(Modifier.fillMaxWidth().height(48.dp).testTag("selector"), remember { Animatable(0f) })
                             FrostedSurface(Modifier.fillMaxWidth().height(60.dp).testTag("drawer"), shadow = false) { }
+                            Box(Modifier.fillMaxWidth().height(64.dp)) {
+                                SeekCancelTarget(remember { SeekCancelTargetState().apply { update(true) } }, false, 0.dp, true)
+                            }
                         }
                     }
                 }
@@ -64,7 +67,7 @@ class GlassRenderModesTest {
             assertEquals(first.red, pixel.red, .035f)
             assertEquals(first.blue, pixel.blue, .035f)
         }
-        for (tag in listOf("action", "queue-search", "selector", "drawer")) compose.onNodeWithTag(tag).assertIsDisplayed()
+        for (tag in listOf("action", "queue-search", "selector", "drawer", "cancel-seek")) compose.onNodeWithTag(tag).assertIsDisplayed()
         compose.runOnIdle { changed = true }
         compose.waitUntil(15_000) { center().green > .2f && center().blue < .12f }
         assertEquals("None does not execute refraction or blur, even with maximum saved blur", 0, optical.get())

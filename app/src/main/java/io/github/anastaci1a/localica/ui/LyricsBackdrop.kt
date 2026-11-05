@@ -101,9 +101,7 @@ internal fun LyricsBackdrop(key: Any?, modifier: Modifier = Modifier, contentAlp
         observer?.invoke(scene, false)
         if (source.readbackBarrier === scene.readback) source.readbackBarrier = null
     } }
-    // Coalesce legacy scroll/opacity changes rather than capturing every frame.
-    // The shared adapter's later settled capture also finishes lyric-emphasis easing.
-    // Observe content changes even if a document's identity stays put.
+    // Invalidate in-flight thumbnails when producer content or placement changes.
     LaunchedEffect(scene) {
         if (Build.VERSION.SDK_INT < 33) snapshotFlow {
             currentAlpha() to scene.layers.map { layer ->
@@ -112,7 +110,6 @@ internal fun LyricsBackdrop(key: Any?, modifier: Modifier = Modifier, contentAlp
             }
         }.collectLatest {
             scene.readback.sceneChanged()
-            delay(150)
             source.refresh()
         }
     }

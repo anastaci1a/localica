@@ -32,7 +32,7 @@ class GlassScrollHoldTest {
         compose.setContent { LocalicaTheme {
             CompositionLocalProvider(LocalGlassAppearance provides GlassAppearance()) {
                 val scroll = rememberScrollState()
-                val source = rememberFrostedBackdrop(Unit, dark = true, glassBlur = 0f, retainRaster = false, whiteTint = 0f)
+                val source = rememberFrostedBackdrop(Unit, dark = true, retainRaster = false)
                 val page = rememberBrowseBackdropScene(source, null, Unit)
                 val viewport = rememberBrowseBackdropLayer(page, masked = true)
                 SideEffect { scene = page }

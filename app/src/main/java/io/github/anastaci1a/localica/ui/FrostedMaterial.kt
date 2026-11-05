@@ -49,7 +49,7 @@ internal data class GlassBackdropCapture(val renderer: GlassRendererGeneration,
 internal class FrostedBackdrop(val layer: GraphicsLayer, dark: Boolean,
     private val renderer: GlassRendererRuntime? = null) {
     val readback = RetainedLayerReadback()
-    private val defaultRenderer = automaticGlassRendererGeneration()
+    private val defaultRenderer = defaultGlassRendererGeneration()
     val rendererGeneration get() = renderer?.generation ?: defaultRenderer
     private val captureLock = Mutex()
     var parent: FrostedBackdrop? = null
@@ -185,8 +185,7 @@ internal fun DrawScope.withBackdropRegistration(registration: BackdropRegistrati
 
 @Composable
 internal fun rememberFrostedBackdrop(key: Any?, enabled: Boolean = true, dark: Boolean = true, lightMix: Float? = null,
-    glassBlur: Float = LocalGlassAppearance.current.blur, retainRaster: Boolean = true,
-    whiteTint: Float = LocalGlassAppearance.current.whiteTint): FrostedBackdrop {
+    retainRaster: Boolean = true): FrostedBackdrop {
     val layer = rememberGraphicsLayer()
     val runtime = LocalGlassRendererRuntime.current
     val source = remember(layer, runtime) { FrostedBackdrop(layer, dark, runtime) }

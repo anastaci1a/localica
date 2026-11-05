@@ -127,7 +127,7 @@ class SwitchTapOpticsTest {
         var checked by mutableStateOf(false)
         var material: FrostedBackdrop? = null
         compose.setContent { LocalicaTheme {
-            val source = rememberFrostedBackdrop(Unit, glassBlur = 0f, whiteTint = 0f)
+            val source = rememberFrostedBackdrop(Unit)
             val anchor = rememberGlassAnchor()
             Box(Modifier.fillMaxSize()) {
                 Canvas(Modifier.matchParentSize().recordFrostedBackdrop(source)) {
@@ -205,7 +205,7 @@ class SwitchTapOpticsTest {
     }
 
     @Composable private fun Sample(tag: String, checked: Boolean, recordingAllowed: Boolean = true, change: (Boolean) -> Unit) {
-        val source = rememberFrostedBackdrop(Unit, enabled = recordingAllowed, glassBlur = 0f, whiteTint = 0f)
+        val source = rememberFrostedBackdrop(Unit, enabled = recordingAllowed)
         SideEffect { backings[tag] = source }
         Box(Modifier.fillMaxWidth().height(96.dp).testTag(tag)) {
             Canvas(Modifier.matchParentSize().recordFrostedBackdrop(source, enabled = recordingAllowed)) {

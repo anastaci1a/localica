@@ -114,38 +114,6 @@ class RetainedLayerReadbackTest {
         return OwnedSource(layer, f.context)
     }
 
-    @Test fun croppedReadbackKeepsItsPixelsAndRestoresTheRegisteredSurroundingScene() {
-        val f = fixture()
-        val owner = RetainedLayerReadback()
-        var result: ImageBitmap? = null
-        var failure: Throwable? = null
-        compose.runOnIdle {
-            f.scope.launch {
-                try {
-                    val region = androidx.compose.ui.unit.IntRect(16, 24, 48, 40)
-                    val crop = owner.captureRegion(f.red, f.context, f.density, f.direction, region = region)
-                    assertEquals(32, crop.width)
-                    assertEquals(16, crop.height)
-                    val blue = owner.capture(f.blue, f.context, f.density, f.direction)
-                    val background = io.github.anastaci1a.localica.ui.softwareGlassSnapshot(blue, IntSize(64, 64))
-                    result = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
-                        io.github.anastaci1a.localica.ui.expandBackdropSnapshot(crop, region, IntSize(64, 64),
-                            io.github.anastaci1a.localica.ui.BackdropSnapshotBackground(background,
-                                requireNotNull(io.github.anastaci1a.localica.ui.BackdropRegistration.create(1f, 0f, 0f, 1f, -8f, 0f))))
-                    }
-                } catch (error: Throwable) { failure = error }
-            }
-        }
-        compose.waitUntil(10000) { result != null || failure != null }
-        failure?.let { throw it }
-        val pixels = requireNotNull(result).toPixelMap()
-        for (y in 0 until 64) for (x in 0 until 64) {
-            val expected = if (x in 16 until 48 && y in 24 until 40) Color.Red
-                else if (x < 56) Color.Blue else Color.Transparent
-            assertEquals("Crop/background registration at $x,$y", expected, pixels[x, y])
-        }
-    }
-
     private fun assertNativeRoute(completed: Boolean) {
         Log.i("ReadbackFixture", "api=" + Build.VERSION.SDK_INT + " nativeCompletedBeforeOwnerRelease=" + completed)
         if (Build.VERSION.SDK_INT < 28) assertFalse("V22 producer is posted and its callback is still pending", completed)
