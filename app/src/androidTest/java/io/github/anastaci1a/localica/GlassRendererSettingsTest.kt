@@ -52,7 +52,7 @@ class GlassRendererSettingsTest {
         }
     }
 
-    @Test fun cancellingPreservesRestoredModernAndExplainsUnsupportedFallback() {
+    @Test fun cancellingPreservesNormalAndExplainsOlderApiFallback() {
         val mode = GlassRendererMode.Normal
         compose.setContent { LocalicaTheme {
             CompositionLocalProvider(LocalReducedMotion provides true) {
@@ -68,7 +68,7 @@ class GlassRendererSettingsTest {
         compose.onNodeWithText(message).assertIsDisplayed()
     }
 
-    @Test fun actualGlassSettingsResetRestoresAutomaticWithTheOtherDefaults() {
+    @Test fun actualGlassSettingsResetRestoresNormalWithTheOtherDefaults() {
         var value by mutableStateOf(GlassAppearance(blur = .7f, depth = .9f, renderer = GlassRendererMode.None))
         var changes = 0
         compose.setContent { LocalicaTheme {

@@ -58,7 +58,7 @@ class NestedGlassRegistrationTest {
             scope = rememberCoroutineScope()
             CompositionLocalProvider(LocalGlassAppearance provides GlassAppearance(
                 blur = 0f, whiteTint = 0f, contrast = 0f, shadowStrength = 0f)) {
-                source = rememberFrostedBackdrop(Unit, dark = false, glassBlur = 0f, whiteTint = 0f)
+                source = rememberFrostedBackdrop(Unit, dark = false)
                 Box(Modifier.size(320.dp, 400.dp).testTag("nested-registration-scene")
                     .onGloballyPositioned { scene = it }) {
                     // Both recordings inherit this transform. Only the foreground has
@@ -206,7 +206,7 @@ class NestedGlassRegistrationTest {
             view = LocalView.current
             CompositionLocalProvider(LocalGlassAppearance provides GlassAppearance(
                 blur = 0f, whiteTint = 0f, contrast = 0f, shadowStrength = 0f)) {
-                val source = rememberFrostedBackdrop(Unit, dark = false, glassBlur = 0f, whiteTint = 0f)
+                val source = rememberFrostedBackdrop(Unit, dark = false)
                 SideEffect { source.materialOnly = true; source.materialCorner = 0f }
                 Box(Modifier.size(320.dp, 240.dp).testTag("scaled-material-scene")) {
                     Box(Modifier.align(Alignment.Center).size(200.dp, 160.dp)) {

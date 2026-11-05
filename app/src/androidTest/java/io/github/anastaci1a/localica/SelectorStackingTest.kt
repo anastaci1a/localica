@@ -41,7 +41,7 @@ class SelectorStackingTest {
             view = LocalView.current
             inputMode = LocalInputModeManager.current
             activity = rememberSelectorTrackActivity()
-            val source = rememberFrostedBackdrop(Unit, glassBlur = 0f, whiteTint = 0f)
+            val source = rememberFrostedBackdrop(Unit)
             backing = source
             var selected by remember { mutableStateOf(MainTab.Songs) }
             val tabs = listOf(MainTab.Home, MainTab.Library, MainTab.Songs)

@@ -30,12 +30,12 @@ internal class GlassRendererRuntime(initial: GlassRendererMode, private val api:
 
 internal val LocalGlassRendererRuntime = staticCompositionLocalOf<GlassRendererRuntime?> { null }
 
-internal fun automaticGlassRendererGeneration() =
+internal fun defaultGlassRendererGeneration() =
     GlassRendererGeneration(effectiveGlassBackend(GlassRendererMode.Normal, Build.VERSION.SDK_INT), 0)
 
 @Composable
 internal fun currentGlassRendererGeneration(): GlassRendererGeneration =
-    LocalGlassRendererRuntime.current?.generation ?: remember { automaticGlassRendererGeneration() }
+    LocalGlassRendererRuntime.current?.generation ?: remember { defaultGlassRendererGeneration() }
 
 /** Retargeting preserves the current material blend while surface geometry stays mounted. */
 @Composable

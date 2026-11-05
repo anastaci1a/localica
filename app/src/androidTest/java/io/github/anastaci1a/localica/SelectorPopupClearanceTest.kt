@@ -80,7 +80,7 @@ class SelectorPopupClearanceTest {
                     popupView = LocalView.current
                     val popupDensity = LocalDensity.current
                     corner = with(popupDensity) { 24.dp.toPx() - ChoiceInnerInset.roundToPx() }
-                    val backing = rememberFrostedBackdrop(Unit, glassBlur = 0f, whiteTint = 0f)
+                    val backing = rememberFrostedBackdrop(Unit)
                     SideEffect { source = backing; popupFontScale = popupDensity.fontScale }
                     Box(Modifier.fillMaxWidth().testTag("popup-clearance-scene")) {
                         // Only the real lens can display red. The recorded red

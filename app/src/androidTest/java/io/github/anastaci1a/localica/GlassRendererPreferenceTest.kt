@@ -45,7 +45,7 @@ class GlassRendererPreferenceTest {
         }
     }
 
-    @Test fun missingAndUnknownRendererNamesRestoreAutomaticWithoutChangingOtherSettings() = withPreferences { context, raw ->
+    @Test fun missingAndUnknownRendererNamesRestoreNormalWithoutChangingOtherSettings() = withPreferences { context, raw ->
         assertEquals(InterfaceSettings(), InterfacePreferences(context).read())
         raw.edit().putBoolean("confirm-exit", true).putFloat("glass-depth", .8f).commit()
         val expected = InterfaceSettings(confirmExit = true, glass = GlassAppearance(depth = .8f))
@@ -56,7 +56,7 @@ class GlassRendererPreferenceTest {
         }
     }
 
-    @Test fun everyRequestedModeRoundTripsAllExistingSettingsAndUnsupportedModernStaysRequested() = withPreferences { context, raw ->
+    @Test fun everyRequestedModeRoundTripsAllExistingSettingsAndNormalStaysRequested() = withPreferences { context, raw ->
         val appearance = GlassAppearance(.7f, .1f, .2f, .8f, .3f, TabLensStyle.Overlay,
             .4f, .2f, 19f, .8f, 1.5f, .3f, 1.25f, .17f, true)
         val original = InterfaceSettings(tabs = listOf(MainTab.Songs, MainTab.Folders), tabHistory = false,

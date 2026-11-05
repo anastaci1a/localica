@@ -238,7 +238,7 @@ fun LocalicaScreen(
     // The eased polarity (foreground and materials share it); the discrete decision only seeds it.
     val playerLightMix = playerBackgroundPolarity.lightMix
     val playerLightInk = playerLightMix >= .5f
-    val playerBackdrop = rememberFrostedBackdrop(listOf(playerVisual, lyricsOpen, settings.glass), expanded && playerFullyOpen, dark = playerLightInk, lightMix = playerLightMix, glassBlur = settings.glass.blur)
+    val playerBackdrop = rememberFrostedBackdrop(listOf(playerVisual, lyricsOpen, settings.glass), expanded && playerFullyOpen, dark = playerLightInk, lightMix = playerLightMix)
     var browseInk by remember { mutableStateOf(androidx.compose.ui.graphics.Color.Black) }
     var pageBackground by remember { mutableStateOf(androidx.compose.ui.graphics.Color(0xFFF9F9FB)) }
     val miniInk by androidx.compose.animation.animateColorAsState(browseInk,
@@ -254,10 +254,10 @@ fun LocalicaScreen(
     val queueSelectionPanel = rememberFloatingSelectionPanel(session.panelVisible, settings.reducedMotion)
     val browseBottomChrome = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() +
         if (hasPlayer) CompactControlSize + bottomChrome + 8.dp else bottomChrome
-    val browseBackdrop = rememberFrostedBackdrop(navigation.route to library.snapshot, !expanded, dark = browseInk == androidx.compose.ui.graphics.Color.White, glassBlur = settings.glass.blur)
+    val browseBackdrop = rememberFrostedBackdrop(navigation.route to library.snapshot, !expanded, dark = browseInk == androidx.compose.ui.graphics.Color.White)
     val modalBackdrop = rememberFrostedBackdrop(listOf(navigation.route, library.snapshot, expanded, queueOpen, playerVisual, settings.glass),
         dark = if (expanded) playerLightInk else browseInk == androidx.compose.ui.graphics.Color.White,
-        lightMix = if (expanded) playerLightMix else null, glassBlur = settings.glass.blur)
+        lightMix = if (expanded) playerLightMix else null)
     val dialogs = LocalGlassDialogs.current
     SideEffect { dialogs?.backdrop = modalBackdrop }
     LaunchedEffect(pager.settledPage) { browseBackdrop.refresh() }

@@ -40,7 +40,7 @@ class SelectorReboundRecordingTest {
     private fun rebound(style: TabLensStyle, foreground: Boolean) {
         compose.setContent { LocalicaTheme {
             view = LocalView.current
-            val backing = rememberFrostedBackdrop(Unit, glassBlur = 0f, whiteTint = 0f)
+            val backing = rememberFrostedBackdrop(Unit)
             source = backing
             CompositionLocalProvider(LocalGlassAppearance provides GlassAppearance(tabStyle = style,
                 overlayForeground = foreground, overlayDarkening = 0f, tabBlur = 0f, tabWhiteTint = 0f,
