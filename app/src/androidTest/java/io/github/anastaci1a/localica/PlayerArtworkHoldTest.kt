@@ -17,9 +17,22 @@ import org.junit.Test
 /** #575: holding the full-screen player's artwork force-closed v0.32.0. Real app tree, real long-press. */
 class PlayerArtworkHoldTest {
     @get:Rule val compose = createComposeRule()
-    private val track = Track("file:///missing.mp3", "Morning light", artist = "Localica", fileName = "morning.mp3", relativePath = "morning.mp3")
-    private val playback = PlaybackState(connected = true, trackId = track.id, trackUri = track.uri, title = track.title,
-        artist = track.artist, durationMs = 125000)
+    private lateinit var track: Track
+    private lateinit var playback: PlaybackState
+
+    /** A real decoded cover, as on the operator's phone: the player and its popups sample artwork pixels. */
+    private fun coverTrack(context: android.content.Context): Track {
+        val directory = java.io.File(context.filesDir, "playlist-covers").apply { mkdirs() }
+        val file = java.io.File(directory, "hold-575.png")
+        val bitmap = android.graphics.Bitmap.createBitmap(600, 600, android.graphics.Bitmap.Config.ARGB_8888)
+        android.graphics.Canvas(bitmap).apply {
+            drawColor(android.graphics.Color.rgb(230, 200, 60))
+            drawCircle(300f, 300f, 200f, android.graphics.Paint().apply { color = android.graphics.Color.rgb(30, 60, 160) })
+        }
+        file.outputStream().use { assertTrue(bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)) }
+        bitmap.recycle()
+        return Track(android.net.Uri.fromFile(file).toString(), "Morning light", artist = "Localica", fileName = file.name, relativePath = file.name)
+    }
 
     @Test fun holdOpensArtworkMenuOverFullBackgroundArtwork() = hold(ArtworkLayout.FullBackground, lyrics = false)
     @Test fun holdOpensArtworkMenuOverFloatingArtwork() = hold(ArtworkLayout.Floating, lyrics = false)
@@ -28,6 +41,9 @@ class PlayerArtworkHoldTest {
 
     private fun hold(layout: ArtworkLayout, lyrics: Boolean) {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
+        track = coverTrack(context)
+        playback = PlaybackState(connected = true, trackId = track.id, trackUri = track.uri, title = track.title,
+            artist = track.artist, durationMs = 125000)
         context.getSharedPreferences("interface", 0).edit().clear().commit()
         InterfacePreferences(context).write(InterfaceSettings(artworkLayout = layout))
         val queue = QueueEdits.create(listOf(track), 0, "Morning")
@@ -40,6 +56,8 @@ class PlayerArtworkHoldTest {
             compose.onNodeWithContentDescription("Show lyrics").performClick()
             compose.waitUntil(5000) { compose.onAllNodesWithTag("lyrics-panel", true).fetchSemanticsNodes().isNotEmpty() }
         }
+        // The cover decodes off the main thread; let it land and the blend settle before the hold.
+        Thread.sleep(1500)
         compose.waitForIdle()
         val art = compose.onNodeWithTag("artwork-gesture", true).fetchSemanticsNode().boundsInRoot
         val title = compose.onAllNodesWithTag("player-lyrics-title-target", true).fetchSemanticsNodes().firstOrNull()?.boundsInRoot
