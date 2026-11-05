@@ -56,6 +56,7 @@ class UiPerformanceTest {
         ?: GlassRendererMode.entries.first { it.name == "Modern" }
     private val windows = mutableSetOf<Window>() // main thread only
     private var scenario: ActivityScenario<ComponentActivity>? = null
+    private var activity: ComponentActivity? = null
     private var tone by mutableFloatStateOf(.4f)
     private var lyrics by mutableStateOf(LyricsResult())
 
@@ -71,8 +72,10 @@ class UiPerformanceTest {
                 .putString("tabs", "Songs,Albums,Home").putString("glass-renderer", glassMode.name)
                 .putFloat("glass-blur", 0f).putFloat("tab-lens-blur", 0f).putBoolean("glass-live-scroll", false).commit()
             PinPreferences(context).write(tracks.take(30).map { MediaRef(MediaKind.Song, it.id) })
+            var measuredScenarios = 0
             fun measure(name: String, launch: () -> Unit, prepare: () -> Unit = {}, action: () -> Unit) {
                 if (!filter.matches(name)) return
+                measuredScenarios++
                 repeat(repetitions + 1) { rep ->
                     try {
                         launch(); prepare(); Thread.sleep(800)
@@ -97,8 +100,8 @@ class UiPerformanceTest {
                         val directory = nativeEvidenceDirectory("ui-performance", context.getExternalFilesDir(null))
                         File(directory, "$name-$rep-api${Build.VERSION.SDK_INT}.json").writeText(report.toString(2))
                     } finally {
-                        scenario?.onActivity { FrameStats.stop() }
-                        scenario?.close(); scenario = null; windows.clear()
+                        if (activity != null) main { FrameStats.stop(); it.setContent {} }
+                        scenario?.close(); scenario = null; activity = null; windows.clear()
                     }
                 }
             }
@@ -112,6 +115,13 @@ class UiPerformanceTest {
             measure("carousel", { launchApp() }, { clickText("Home"); awaitTag("home-pins") }) {
                 val b = bounds { it.tag() == "home-pins" }
                 repeat(4) { check(device.swipe((b.right - 30).toInt(), b.center.y.toInt(), (b.left + 30).toInt(), b.center.y.toInt(), 30)); Thread.sleep(300) }
+            }
+            measure("artist-album-carousel", {
+                val artist = LibraryViews.groups(library.snapshot, SongListView.Artists, LibraryQuery()).first()
+                launchBrowse(BrowseStyle(), BrowseRoute(MainTab.Artists, MediaRef(MediaKind.Artist, artist.id), artist.title))
+            }) {
+                val b = bounds { (it.config.getOrNull(SemanticsProperties.HorizontalScrollAxisRange)?.maxValue?.invoke() ?: 0f) > 0f }
+                repeat(3) { check(device.swipe((b.right - 30).toInt(), b.center.y.toInt(), (b.left + 30).toInt(), b.center.y.toInt(), 30)); Thread.sleep(400) }
             }
             measure("queue-drawer", { launchApp() }, { expand() }) {
                 clickDescription("Open queue"); awaitTag("browser-list"); scroll(); clickDescription("Minimize queue")
@@ -152,12 +162,14 @@ class UiPerformanceTest {
             }
             measure("multi-select-drag", { launchApp() }, { expand(); clickDescription("Open queue") }) {
                 val selected = nodes { all -> all.filter { it.tag()?.startsWith("media-entry:") == true }.take(3)
-                    .map { it.config.getOrNull(SemanticsActions.OnLongClick)?.action?.invoke() ?: false } }
-                check(selected.size == 3 && selected.all { it }) { "Three selectable rows required" }
-                val b = bounds { it.tag()?.startsWith("media-entry:") == true }
+                    .map { it.tag() to (it.config.getOrNull(SemanticsActions.OnLongClick)?.action?.invoke() ?: false) } }
+                check(selected.size == 3 && selected.all { it.second }) { "Three selectable rows required" }
+                main { check(androidx.lifecycle.ViewModelProvider(it)[SessionSelection::class.java].entries.size == 3) }
+                val b = bounds { it.tag() == selected.first().first }
                 drag(b.center.x, b.center.y, b.center.y + 230)
                 device.pressBack()
             }
+            check(measuredScenarios > 0) { "Scenario filter matched nothing: $filter" }
         } finally {
             stores.forEach { (name, values) ->
                 val edit = context.getSharedPreferences(name, 0).edit().clear()
@@ -170,8 +182,7 @@ class UiPerformanceTest {
         }
     }
 
-    private fun launchBrowse(style: BrowseStyle) {
-        val route = BrowseRoute(MainTab.Songs)
+    private fun launchBrowse(style: BrowseStyle, route: BrowseRoute = BrowseRoute(MainTab.Songs)) {
         BrowsePreferences(context).write(route, style, false)
         launch { BrowserScreen(library, PlaylistState(), route, {}, {}, {}, { _, _, _ -> }, null, null, true, false) }
         awaitTag("browser-list")
@@ -188,6 +199,7 @@ class UiPerformanceTest {
     private fun launch(content: @Composable () -> Unit) {
         tone = .4f
         scenario = ActivityScenario.launch(ComponentActivity::class.java)
+        requireNotNull(scenario).onActivity { activity = it }
         main { activity ->
             windows += activity.window
             activity.setContent {
@@ -199,7 +211,13 @@ class UiPerformanceTest {
             }
         }
     }
-    private fun main(block: (ComponentActivity) -> Unit) = requireNotNull(scenario).onActivity(block)
+    // ActivityScenario.onActivity waits for global idle, which search/loading animations need not reach.
+    private fun main(block: (ComponentActivity) -> Unit) {
+        val task = java.util.concurrent.FutureTask { block(requireNotNull(activity)) }
+        check(android.os.Handler(android.os.Looper.getMainLooper()).post(task))
+        try { task.get(30, java.util.concurrent.TimeUnit.SECONDS) }
+        catch (failure: java.util.concurrent.ExecutionException) { throw requireNotNull(failure.cause) }
+    }
     private fun SemanticsNode.tag() = config.getOrNull(SemanticsProperties.TestTag)
     private fun <T> nodes(block: (List<SemanticsNode>) -> T): T {
         var result: T? = null
@@ -256,7 +274,10 @@ class UiPerformanceTest {
         fun send(action: Int, at: Float) { val e = MotionEvent.obtain(down, SystemClock.uptimeMillis(), action, x, at, 0)
             check(instrumentation.uiAutomation.injectInputEvent(e, true)); e.recycle() }
         send(MotionEvent.ACTION_DOWN, y); Thread.sleep(650)
-        repeat(60) { send(MotionEvent.ACTION_MOVE, y + (end - y) * it / 59); Thread.sleep(16) }
+        repeat(60) { frame ->
+            send(MotionEvent.ACTION_MOVE, y + (end - y) * frame / 59); Thread.sleep(16)
+            if (frame == 30) check(nodes { all -> all.any { it.tag() == "drag-foreground" } }) { "Drag overlay did not appear" }
+        }
         send(MotionEvent.ACTION_UP, end)
     }
     private fun pinch(expand: Boolean) {
