@@ -132,7 +132,6 @@ internal fun BrowseItemLayout(item: BrowserItem, style: BrowseStyle, geometry: B
             val (source, target) = measureEndpoints(width)
             titleParagraph.layouts = source.title to target.title
             informationParagraph.layouts = source.information to target.information
-            artCorner.floatValue = source.artCorner + (target.artCorner - source.artCorner) * progress.coerceIn(0f, 1f)
             // One float rectangle per part; truncating size and position separately made
             // cover edges wobble by a pixel against the fractional row translation (#505).
             val rtl = layoutDirection == androidx.compose.ui.unit.LayoutDirection.Rtl
@@ -146,7 +145,12 @@ internal fun BrowseItemLayout(item: BrowserItem, style: BrowseStyle, geometry: B
                 target.infoX, target.infoY, target.information?.size?.width ?: 0, target.information?.size?.height ?: 0)
             val menuRect = rect(source.menuX, source.menuY, source.menuWidth, source.menuHeight,
                 target.menuX, target.menuY, target.menuWidth, target.menuHeight)
-            val art = children[0].measure(artRect.constraints())
+            // A fixed source recording avoids resizing nested native artwork nodes between frames.
+            val stableArtwork = artwork(style) && from?.let(::artwork) == true
+            val art = children[0].measure(if (stableArtwork) Constraints.fixed(source.art, source.art) else artRect.constraints())
+            val desiredCorner = source.artCorner + (target.artCorner - source.artCorner) * progress.coerceIn(0f, 1f)
+            val drawnWidth = artRect.width * artRect.scaleX
+            artCorner.floatValue = if (stableArtwork && drawnWidth > 0f) desiredCorner * art.width / drawnWidth else desiredCorner
             val text = children[1].measure(textRect.constraints())
             val information = children[2].measure(infoRect.constraints())
             val actions = children[3].measure(menuRect.constraints())
@@ -156,7 +160,7 @@ internal fun BrowseItemLayout(item: BrowserItem, style: BrowseStyle, geometry: B
                 outline.value = if (rtl) it.mirrored(constraints.maxWidth.toFloat()) else it
             }
             return@Layout layout(constraints.maxWidth, target.height) {
-                placeMotion(art, artRect)
+                placeMotion(art, artRect, scaleContent = stableArtwork)
                 placeMotion(text, textRect)
                 placeMotion(information, infoRect)
                 placeMotion(actions, menuRect)
