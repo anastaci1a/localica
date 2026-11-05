@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Repeat complete prototype selections, retaining each outcome without retrying failures."""
+"""Independent prototype repetitions; optional exact methods follow one mandatory gate."""
 import hashlib
 import json
 import os
@@ -8,6 +8,9 @@ import re
 import shutil
 import signal
 import subprocess
+
+REQUIRED = {'io.github.anastaci1a.localica.' + cls for cls in
+            ('SearchImeMotionTest', 'ListSearchTest', 'FrostedSurfaceTest')}
 
 
 def repeat_count(value):
@@ -18,6 +21,7 @@ def repeat_count(value):
 
 def main():
     count = repeat_count(os.environ.get('PROTOTYPE_REPEAT', '1'))
+    requested_methods = os.environ.get('PROTOTYPE_METHODS', '')
     root = Path('prototype-evidence')
     archive = Path('prototype-iterations')
     if root.exists() or archive.exists():
@@ -41,18 +45,12 @@ def main():
     def save():
         (archive / 'summary.json').write_text(json.dumps(summary, indent=2) + '\n')
 
-    save()
-    result = 0
-    last = None
-    for item in summary['iterations']:
-        if cancelled:
-            result = 128 + cancelled
-            break
-        folder = archive / f"iteration-{item['iteration']:02d}"
+    def execute(folder, item, overrides):
+        nonlocal child
         folder.mkdir()
         item['status'] = 'running'
         save()
-        env = dict(os.environ, PROTOTYPE_REPEAT='1')
+        env = dict(os.environ, PROTOTYPE_REPEAT='1', **overrides)
         child = subprocess.Popen(['bash', '.github/run-prototype-tests.sh'], env=env)
         if cancelled:
             child.send_signal(cancelled)
@@ -65,7 +63,7 @@ def main():
         item.update(status='passed' if result == 0 else 'failed', exit_code=result)
         if root.exists():
             shutil.move(str(root), folder / 'prototype-evidence')
-        # AGP must execute again, with no prior XML or stale UP-TO-DATE result.
+        # Missing prior outputs force a fresh AGP invocation, with no stale XML.
         for path in ('app/build/outputs/androidTest-results',
                      'app/build/outputs/connected_android_test_additional_output',
                      'app/build/reports/androidTests'):
@@ -78,15 +76,46 @@ def main():
             item.update(status='failed', exit_code=result, error='Missing reconciled receipt')
         if receipt.is_file():
             item['receipt_sha256'] = hashlib.sha256(receipt.read_bytes()).hexdigest()
-        last = folder
         save()
-        print(f"Prototype iteration {item['iteration']}/{count}: {item['status']}", flush=True)
-        if result:
-            break
-    # Keep the existing single-selection receipt layout for delivery reconciliation.
-    # The complete, immutable iteration evidence remains alongside it.
-    if last and (last / 'prototype-evidence').exists():
-        shutil.copytree(last / 'prototype-evidence', root)
+        return result
+
+    save()
+    result = 0
+    last = None
+    gate = None
+    if requested_methods:
+        inventory_file = archive / 'requested-methods.json'
+        subprocess.run(['python3', '.github/test-evidence/source_methods.py', '--classes',
+                        ','.join(sorted(os.environ['AFFECTED_CLASSES'].split(','))), '--output', str(inventory_file)], check=True)
+        complete = json.loads(inventory_file.read_text())
+        # Preserve source identities while restricting runtime expectations to requested methods.
+        subprocess.run(['python3', '.github/prototype-methods.py', str(inventory_file), requested_methods], check=True)
+        candidates = [c for c in complete['classes'] if c['class'] not in REQUIRED]
+        if not candidates:
+            raise ValueError('Select affected coverage beyond the mandatory regression classes')
+        gate_class = min(candidates, key=lambda c: (len(c['methods']), c['class']))['class']
+        summary.update(kind='methods', methods=sorted(requested_methods.split(',')),
+                       gate={'class': gate_class, 'status': 'not-run'})
+        gate = archive / 'mandatory-gate'
+        result = execute(gate, summary['gate'], {'PROTOTYPE_METHODS': '',
+                         'PROTOTYPE_METHOD_ITERATION': 'false', 'AFFECTED_CLASSES': gate_class})
+    if not result:
+        for item in summary['iterations']:
+            if cancelled:
+                result = 128 + cancelled
+                break
+            folder = archive / f"iteration-{item['iteration']:02d}"
+            result = execute(folder, item, {'PROTOTYPE_METHOD_ITERATION':
+                             'true' if requested_methods else 'false'})
+            last = folder
+            print(f"Prototype iteration {item['iteration']}/{count}: {item['status']}", flush=True)
+            if result:
+                break
+    # Default proofs retain the final full selection. Method proofs retain their
+    # mandatory gate at the same path and all exact-method iterations alongside it.
+    baseline = gate or last
+    if baseline and (baseline / 'prototype-evidence').exists():
+        shutil.copytree(baseline / 'prototype-evidence', root)
     else:
         root.mkdir()
     shutil.move(str(archive), root / 'iterations')
