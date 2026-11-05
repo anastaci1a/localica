@@ -271,7 +271,7 @@ internal class HoverPathCache(profile: SelectionOutlineProfile? = null) {
     private var key: Any? = null
     private var origin = Offset(Float.NaN,Float.NaN)
     private var presented = Path()
-    private val contour = SelectionOutlineContour(profile)
+    private val contour = AnalyticSelectionOutline(profile)
     var localPath = Path(); private set
     var rebuilds = 0; private set
     fun path(regions: List<SelectionRegion>, rest: List<SelectionRegion>, gap: Float, strength: (Int, Int) -> Float): Path {
@@ -321,11 +321,11 @@ internal fun hoverComponents(rest: List<Rect>, gap: Float): List<List<Int>> {
 internal fun selectionComponents(regions: List<SelectionRegion>, gap: Float): List<List<SelectionRegion>> =
     hoverComponents(regions.map { it.bounds }, gap).map { group -> group.map { regions[it] } }
 
-/** One compact-support outline, driven by presented geometry and the existing motion progress.
+/** One analytic outline, driven by presented geometry and the existing motion progress.
  * [rest] remains an adapter parameter; it never authorizes a tether across a displayed gap. */
 internal fun connectedSelectionPath(regions: List<SelectionRegion>, gap: Float,
     rest: List<SelectionRegion> = regions, strength: (Int, Int) -> Float = { _, _ -> 1f },
-    contour: SelectionOutlineContour = SelectionOutlineContour()): Path {
+    contour: AnalyticSelectionOutline = AnalyticSelectionOutline()): Path {
     if (regions.isEmpty()) return Path()
     val members = regions.indices.groupBy { SelectionRegion(regions[it].bounds,regions[it].radius(gap)) }
     if (members.size < regions.size) {
@@ -335,23 +335,7 @@ internal fun connectedSelectionPath(regions: List<SelectionRegion>, gap: Float,
             indices[a].maxOf { i -> indices[b].maxOf { j -> strength(min(i,j),max(i,j)) } }
         },contour = contour)
     }
-    val field = SelectionOutlineField(regions,gap,strength = strength)
-    val path = Path().apply { regions.forEach { addRoundRect(it.contour(gap),Path.Direction.Clockwise) } }
-    val connections = Path()
-    // The original item curves are exact. Field evaluation is needed only where two
-    // compact supports intersect; all other pixels already have the analytic outline.
-    contour.beginPatches()
-    for (patch in field.patches) {
-        val members = regions.indices.filter { regions[it].bounds.inflate(gap*.5f).overlaps(patch) }
-        val surface = contour.patch(members.map { regions[it] },gap,patch,
-            { a,b -> strength(members[a],members[b]) })
-        connections.addPath(surface)
-    }
-    contour.endPatches()
-    // Every contour winds clockwise. Non-zero fill is their union without boolean
-    // reconstruction at the many coincident item/patch edges on legacy Skia.
-    path.addPath(connections)
-    return path
+    return contour.path(regions,gap,strength)
 }
 
 /**

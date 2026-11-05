@@ -5,36 +5,61 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.asAndroidPath
 import io.github.anastaci1a.localica.ui.SelectionRegion
 import io.github.anastaci1a.localica.ui.connectedSelectionPath
-import io.github.anastaci1a.localica.ui.SelectionOutlineField
-import io.github.anastaci1a.localica.ui.SelectionOutlineReferenceContour
 import org.junit.Assert.*
 import org.junit.Test
 import kotlin.math.*
 
 /** Geometry proofs run without the compositor, so antialiasing cannot hide a sharp join. */
 class SelectionMergeGeometryTest {
-    @Test fun contactPatchesMatchTheFieldWithinQuarterDpIncludingTriplesAndHoles() {
-        val cases = listOf(
-            listOf(Rect(0f,0f,80f,80f),Rect(40f,40f,120f,120f)),
-            listOf(Rect(0f,0f,80f,80f),Rect(81f,0f,161f,80f)),
-            listOf(Rect(0f,0f,80f,80f),Rect(81f,0f,161f,80f),Rect(0f,81f,80f,161f)),
-            listOf(Rect(0f,0f,80f,80f),Rect(40f,40f,120f,120f),Rect(80f,0f,160f,80f)))
-        fun covered(path: android.graphics.Path,expand: Boolean): Region {
-            val scaled = android.graphics.Path(path).apply { transform(android.graphics.Matrix().apply { setScale(8f,8f) }) }
-            val outline = if (!expand) scaled else android.graphics.Path().also {
-                android.graphics.Paint().apply { style = android.graphics.Paint.Style.FILL_AND_STROKE; strokeWidth = 4.1f
-                    strokeJoin = android.graphics.Paint.Join.ROUND }.getFillPath(scaled,it)
-            }
-            return Region().apply { setPath(outline,Region(-100,-100,1500,1500)) }
+    @Test fun tripleIntersectionsAndCoincidentItemsAreIndependentOfInputOrder() {
+        val regions=listOf(SelectionRegion(Rect(0f,0f,80f,80f),12f),
+            SelectionRegion(Rect(40f,40f,120f,120f),12f),SelectionRegion(Rect(80f,0f,160f,80f),12f))
+        fun pixels(items: List<SelectionRegion>)=Region().apply {
+            setPath(connectedSelectionPath(items,16f).asAndroidPath(),Region(-10,-10,180,140))
         }
-        for ((index,boxes) in cases.withIndex()) {
-            val regions = boxes.map { SelectionRegion(it,12f) }
-            val fast = connectedSelectionPath(regions,16f).asAndroidPath()
-            val reference = SelectionOutlineReferenceContour().path(SelectionOutlineField(regions,16f),.125f).asAndroidPath()
-            val excess = covered(fast,false).apply { op(covered(reference,true),Region.Op.DIFFERENCE) }
-            val missing = covered(reference,false).apply { op(covered(fast,true),Region.Op.DIFFERENCE) }
-            assertTrue("case=$index excess=${excess.bounds}",excess.isEmpty)
-            assertTrue("case=$index missing=${missing.bounds}",missing.isEmpty)
+        val expected=pixels(regions)
+        for(items in listOf(regions.reversed(),listOf(regions[1],regions[2],regions[0]),regions+regions[0])) {
+            val actual=pixels(items)
+            for(x in 0..160)for(y in 0..120) assertEquals("$x,$y",expected.contains(x,y),actual.contains(x,y))
+        }
+    }
+    @Test fun gridKeepsUnselectedHoleAndNeverBridgesDiagonalNeighbours() {
+        for(density in listOf(1f,1.75f,2.625f)) for(progress in listOf(0f,.2f,.5f,1f)) {
+            fun item(x: Int,y: Int)=SelectionRegion(Rect(x*120f*density,y*120f*density,
+                (x*120f+119f)*density,(y*120f+119f)*density),12f*density)
+            fun pixels(regions: List<SelectionRegion>)=Region().apply {
+                setPath(connectedSelectionPath(regions,16f*density,strength={_,_->progress}).asAndroidPath(),Region(-20,-20,1100,1100))
+            }
+            val ring=(0..2).flatMap { y -> (0..2).filter { x -> x!=1 || y!=1 }.map { x -> item(x,y) } }
+            val hole=pixels(ring)
+            assertFalse("The unselected middle cell remains a hole",hole.contains((180*density).toInt(),(180*density).toInt()))
+            for(selected in ring) assertTrue(hole.contains(selected.bounds.center.x.toInt(),selected.bounds.center.y.toInt()))
+            val diagonal=pixels(listOf(item(0,0),item(1,1)))
+            assertFalse("Diagonal-only neighbours stay separate",diagonal.contains((119.5f*density).toInt(),(119.5f*density).toInt()))
+        }
+    }
+    @Test fun vanishingLobesPreserveBothItemInteriors() {
+        for(frame in 65..75) {
+            val t=frame/120f
+            val separation=-4f+20f*t
+            val strength=io.github.anastaci1a.localica.ui.hoverBridgeStrength(true,true,t to t,(1f-t) to (1f-t),1f to 1f)
+            val path=connectedSelectionPath(listOf(SelectionRegion(Rect(16f,16f,256f,88f),12f),
+                SelectionRegion(Rect(16f,88f+separation,256f,160f+separation),12f)),16f,strength={_,_->strength}).asAndroidPath()
+            val samples=path.approximate(.01f)
+            assertTrue("frame=$frame samples=${samples.toList()}",samples.all { it.isFinite() && abs(it)<1000 })
+            val coverage=Region().apply { setPath(path,Region(0,0,400,280)) }
+            assertTrue("frame=$frame samples=${samples.toList()}",coverage.contains(100,50) && coverage.contains(100,140))
+        }
+    }
+    @Test fun concaveFilletMatchesItsFourDpRollingCircle() {
+        val path = connectedSelectionPath(listOf(
+            SelectionRegion(Rect(0f,0f,80f,80f),12f),SelectionRegion(Rect(40f,40f,120f,120f),12f)),16f).asAndroidPath()
+        val scaled = android.graphics.Path(path).apply { transform(android.graphics.Matrix().apply { setScale(16f,16f) }) }
+        val pixels = Region().apply { setPath(scaled,Region(-100,-100,2200,2200)) }
+        for (x in 1281 until 1344) for (y in 577 until 640) {
+            val px=(x+.5f)/16f;val py=(y+.5f)/16f
+            val distance=hypot(px-84f,py-36f)
+            if (abs(distance-4f)>.125f) assertEquals("Fillet at $px,$py",distance>4f,pixels.contains(x,y))
         }
     }
 

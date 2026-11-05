@@ -47,6 +47,50 @@ class HoverSelectionTest {
     private lateinit var scene: SelectionScene
     private lateinit var source: FrostedBackdrop
 
+    @Test fun standardAlbumCarouselUsesSharedOutlineDuringSelectionAndRelease() {
+        var second by mutableStateOf(true)
+        compose.setContent {
+            LocalicaTheme {
+                scene=remember { SelectionScene() }
+                val outline=rememberPaddedItemOutline(112.dp,0.dp,0.dp,0.dp,0.dp)
+                Box(Modifier.size(320.dp,200.dp).testTag("hover-scene")) {
+                    SelectionViewport(Modifier.fillMaxSize(),scene=scene,liftEdges=LiftEdges.Vertical) {
+                        Row(Modifier.padding(24.dp,40.dp),horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                            for(i in 0..1) Canvas(Modifier.size(112.dp).selectionLens(i==0 || second,false,
+                                itemKey=i,outline=outline)) {
+                                drawRect(Color.Black,center-Offset(12.dp.toPx(),12.dp.toPx()),Size(24.dp.toPx(),24.dp.toPx()))
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        compose.waitForIdle()
+        capture()
+        assertEquals(2,scene.lastDrawnRegions.size)
+        val density=compose.density.density
+        val selected=scene.lastDrawnRegions
+        val middle=Offset((selected[0].bounds.center.x+selected[1].bounds.center.x)/2,selected[0].bounds.center.y)
+        fun contains(regions: List<SelectionRegion>,at: Offset)=Region().apply {
+            setPath(connectedSelectionPath(regions,16f*density).asAndroidPath(),Region(0,0,2000,2000))
+        }.contains(at.x.toInt(),at.y.toInt())
+        assertTrue("Gallery-equivalent carousel spacing joins",contains(selected,middle))
+        compose.mainClock.autoAdvance=false
+        try {
+            for(target in listOf(false,true,false)) {
+                compose.runOnIdle { second=target }
+                repeat(18) {
+                    compose.mainClock.advanceTimeByFrame()
+                    capture()
+                    assertTrue("The persistent album never loses its surface",
+                        contains(scene.lastDrawnRegions,selected[0].bounds.center))
+                }
+                assertEquals(if(target)2 else 1,scene.lastDrawnRegions.size)
+                assertEquals(target,contains(scene.lastDrawnRegions,selected[1].bounds.center))
+            }
+        } finally { compose.mainClock.autoAdvance=true }
+    }
+
     /** Backdrop: a red ramp across the first row's leading edge, fine green stripes everywhere. */
     @Composable private fun Fixture(first: Boolean, second: Boolean, rowGap: androidx.compose.ui.unit.Dp = 8.dp, retainSecond: Boolean = false) {
         LocalicaTheme {
