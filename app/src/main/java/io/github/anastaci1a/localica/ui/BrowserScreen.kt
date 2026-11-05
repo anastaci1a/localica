@@ -980,7 +980,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                         if (library.loading) LinearProgressIndicator(Modifier.fillMaxWidth())
                         if (library.snapshot.folders.isEmpty() && route.collection?.kind != MediaKind.Queue) ActionTextButton(onClick = onSettings) { Text("Add music folders") }
                         if (result.items.isEmpty() && !library.loading && !queryPending) Box(Modifier.fillMaxWidth().height(220.dp), contentAlignment = Alignment.Center) {
-                            Icon(androidx.compose.ui.res.painterResource(R.drawable.ic_queue),
+                            Icon(appIconPainter(AppIcon.TabQueues),
                                 if (route.search) "No matching items" else "Empty list", Modifier.size(72.dp),
                                 tint = LocalContentColor.current.copy(alpha = .13f))
                         }
@@ -1043,7 +1043,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                         }
                         val itemMenu: @Composable (Boolean) -> Unit = { showButton ->
                             Box {
-                                if (showButton) ActionIcon(R.drawable.ic_ellipsis, "Actions for " + item.title, anchor = menuAnchor,
+                                if (showButton) ActionIcon(AppIcon.ActionEllipsis, "Actions for " + item.title, anchor = menuAnchor,
                                     quietInputEnabled = displayedStyle.presentation == Presentation.List, quiet = true, onLongClickLabel = holdLabel,
                                     onLongClick = onHold.takeIf { !queryPending && (item.row == null || enabled) }) { menuAnchor.prepareContextPlacement(); contextMenu = item.key }
                                 val menuOpen = contextMenu == item.key
@@ -1201,7 +1201,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                 if (playlist != null || artDetail) Box(Modifier.align(Alignment.BottomEnd).padding(end = 12.dp, bottom = obscuredInset)) {
                     val anchor = rememberGlassAnchor()
                     var open by remember { mutableStateOf(false) }
-                    ActionIcon(R.drawable.ic_ellipsis, if (playlist != null) "Playlist actions" else if (artistDetail) "Artist actions" else "Album actions", anchor = anchor) { open = true }
+                    ActionIcon(AppIcon.ActionEllipsis, if (playlist != null) "Playlist actions" else if (artistDetail) "Artist actions" else "Album actions", anchor = anchor) { open = true }
                     CollectionActions(open, anchor, collectionActionTarget(requireNotNull(route.collection), playlist?.name ?: route.title.orEmpty(), result, playlist?.coverUri),
                         playlists, playlistController, queues, pins, onPin, { open = false },
                         onDeleted = { onRoute(route.copy(collection = null, title = null)) },

@@ -44,7 +44,7 @@ class GalleryMenuInputTest {
             CompositionLocalProvider(LocalContentColor provides Color(0xFF0044FF)) {
                 Box(Modifier.size(64.dp).background(Color.White).testTag("retained-action-scene"),
                     contentAlignment = Alignment.Center) {
-                    ActionIcon(R.drawable.ic_ellipsis, "Retained action", quiet = true,
+                    ActionIcon(AppIcon.ActionEllipsis, "Retained action", quiet = true,
                         quietInputEnabled = inputEnabled, onLongClickLabel = "Hold retained action",
                         onLongClick = { holds++ }) { clicks++ }
                     PresentationMarker(Modifier.align(Alignment.TopStart)) { stage }
