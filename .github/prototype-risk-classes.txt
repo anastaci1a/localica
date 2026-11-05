@@ -337,3 +337,6 @@ io.github.anastaci1a.localica.ArtworkTextSkeletonLinesTest
 io.github.anastaci1a.localica.ArtworkScrollLoadingTest
 
 io.github.anastaci1a.localica.SeekCancelExitTest
+io.github.anastaci1a.localica.BackdropProducerContinuityTest
+io.github.anastaci1a.localica.GlassScrollHoldTest
+io.github.anastaci1a.localica.AssertionReadinessTest
