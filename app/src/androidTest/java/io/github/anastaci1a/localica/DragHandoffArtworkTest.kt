@@ -122,7 +122,14 @@ class DragHandoffArtworkTest {
                 }
             } }
             val ids = playlist.entries.map { it.id }
-            compose.waitUntil(5000) { compose.onAllNodesWithTag("media-${ids[3]}").fetchSemanticsNodes().isNotEmpty() }
+            // The playlist hero is real: arrange the song rows once, as DragReorderTest does.
+            var arranged = false
+            compose.waitUntil(5000) {
+                var ready = false
+                compose.runOnUiThread { ready = selection.visible.any { it.id == ids.first() } }
+                if (!arranged && ready) { compose.onNodeWithTag("browser-list").performScrollToKey(ids.first()); arranged = true }
+                compose.onAllNodesWithTag("media-${ids[4]}").fetchSemanticsNodes().isNotEmpty()
+            }
             if (multiple) {
                 compose.onNodeWithTag("media-${ids[1]}").performTouchInput { longClick() }
                 compose.onNodeWithTag("media-${ids[2]}").performClick()
