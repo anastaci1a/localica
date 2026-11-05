@@ -35,13 +35,21 @@ class RowTextScrollTest {
 
     @Test fun listTextIsCompleteOnFastScroll() = checkScroll(false)
     @Test fun galleryTextIsCompleteOnFastScroll() = checkScroll(true)
+    @Test fun normalListTextIsCompleteOnFastScroll() = checkScroll(false, listSize = ListSize.Normal)
+    @Test fun largeListTextIsCompleteOnFastScroll() = checkScroll(false, listSize = ListSize.Large)
+    @Test fun smallListTextIsCompleteOnFastScroll() = checkScroll(false, listSize = ListSize.Small)
+    @Test fun smallestListTextIsCompleteOnFastScroll() = checkScroll(false, listSize = ListSize.Smallest)
+    @Test fun tracklistTextIsCompleteOnFastScroll() = checkScroll(false, listSize = ListSize.Tracklist)
+    @Test fun singleColumnGalleryTextIsCompleteOnFastScroll() = checkScroll(true, columns = 1)
+    @Test fun threeColumnGalleryTextIsCompleteOnFastScroll() = checkScroll(true, columns = 3)
+    @Test fun fiveColumnGalleryTextIsCompleteOnFastScroll() = checkScroll(true, columns = 5)
 
-    private fun checkScroll(gallery: Boolean) {
+    private fun checkScroll(gallery: Boolean, columns: Int = 2, listSize: ListSize = ListSize.Compact) {
         val items = (0 until 90).map { index -> BrowserItem(MediaRef(MediaKind.Playlist, "scroll-$index"),
             if (index % 2 == 0) "Wide complete title with several words $index" else "Short $index",
             if (index % 2 == 0) "Secondary text across the row" else "Info", emptyList()) }
         val style = BrowseStyle(presentation = if (gallery) Presentation.Standard else Presentation.List,
-            listSize = ListSize.Compact)
+            listSize = listSize)
         var jump: (Int) -> Unit = {}
         compose.setContent { LocalicaTheme {
             CompositionLocalProvider(LocalContentColor provides Color.Black) {
@@ -49,9 +57,9 @@ class RowTextScrollTest {
                     if (gallery) {
                         val state = rememberLazyGridState()
                         SideEffect { jump = { runBlocking { state.scrollToItem(it) } } }
-                        LazyVerticalGrid(GridCells.Fixed(2), Modifier.size(360.dp, 440.dp).background(Color.White), state) {
+                        LazyVerticalGrid(GridCells.Fixed(columns), Modifier.size(360.dp, 440.dp).background(Color.White), state) {
                             items(items.size, key = { items[it].key }) { index ->
-                                BrowseItemLayout(items[index], style, BrowseCellGeometry(2), this@LookaheadScope, false, {}, itemIndex = index)
+                                BrowseItemLayout(items[index], style, BrowseCellGeometry(columns), this@LookaheadScope, false, {}, itemIndex = index)
                             }
                         }
                     } else {
@@ -68,7 +76,8 @@ class RowTextScrollTest {
         } }
         compose.waitForIdle()
         compose.mainClock.autoAdvance = false
-        val output = nativeEvidenceDirectory("row-text-scroll", InstrumentationRegistry.getInstrumentation().targetContext.getExternalFilesDir(null))
+        val mode = if (gallery) "gallery-$columns" else "list-$listSize"
+        val output = nativeEvidenceDirectory("row-text-scroll/$mode", InstrumentationRegistry.getInstrumentation().targetContext.getExternalFilesDir(null))
         val failures = mutableListOf<String>()
         for (index in listOf(22, 48, 12, 64)) {
             compose.runOnIdle { jump(index) }
