@@ -18,6 +18,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalView
 import io.github.anastaci1a.localica.localicaComposeRule as createComposeRule
@@ -67,11 +68,13 @@ class PopupShadowContinuityTest {
         compose.waitForIdle()
         compose.mainClock.autoAdvance = false
         val log = StringBuilder("api=${Build.VERSION.SDK_INT} density=${compose.density.density} strength=$strength\n")
+        val homeContinuity = ShadowFrameProbe()
         val frames = mutableListOf<Pair<Float, Float>>() // progress to gap darkness, per frame
         fun frame(label: String) {
             compose.mainClock.advanceTimeByFrame(); compose.waitForIdle()
             val p = anchor.contact.expansion.value
             val gap = sharedGapDarkness()
+            if (p <= .002f) homeContinuity.observeLuminance(1f - gap / 255f) else homeContinuity.beginSegment()
             frames += p to gap
             log.append("$label p=$p hidden=${anchor.hidden} inModal=${anchor.shadowInModal} window=${popupWindow != null} gap=$gap\n")
         }
@@ -107,6 +110,7 @@ class PopupShadowContinuityTest {
             // At home the popup and trigger fields coincide; only ownership differs.
             val home = frames.filter { it.first <= .002f }
             assertTrue("Sample both home owners: $log", home.size > 20)
+            homeContinuity.assertContinuous(3f / 255f, "popup home ownership")
             val worst = home.maxOf { abs(it.second - rest) }
             var jump = 0f
             for (index in 1 until frames.size) {
@@ -391,6 +395,10 @@ class PopupShadowContinuityTest {
             InstrumentationRegistry.getArguments().getString("popupShadowFrameExports")))
         val on = screenshot()
         exports.verify(on, name, { if (sweptBounds == Rect.Zero) screen else sweptBounds }) {
+            ShadowFrameProbe.assertSpreadEdge(on.asImageBitmap(),
+                Rect(right + 20f*d*sx, screen.center.y - 2*d, right + 22f*d*sx, screen.center.y + 2*d),
+                Rect(right + 22f*d*sx, screen.center.y - 2*d, right + 24f*d*sx, screen.center.y + 2*d),
+                .015f, "popup $name")
             var maximumError = 0f
             var expectedTotal = 0f
             var actualTotal = 0f
@@ -403,17 +411,11 @@ class PopupShadowContinuityTest {
                 assertTrue("Entire padded sample must be on screen", x in 0 until on.width && y in 0 until on.height)
                 val localX = (x + .5f - screen.center.x) / sx + screen.width / 2
                 val localY = (y + .5f - screen.center.y) / sy + screen.height / 2
-                var transmittance = 1f
-                for (ring in 16 downTo 1) {
-                    val t = ring / 16f
-                    val expansion = (4f + .6f * 28f) * d * t
-                    val corner = radius + expansion
-                    val cx = shadowAxisCenter(localX, bounds.width, radius, 0f)
-                    val cy = shadowAxisCenter(localY, bounds.height, radius, 2f*d)
-                    if ((localX - cx)*(localX - cx) + (localY - cy)*(localY - cy) < corner*corner)
-                        transmittance *= 1f - .8f * .07f * (1f - t)*(1f - t)
-                }
-                val expected = 1f - transmittance
+                val cx = shadowAxisCenter(localX, bounds.width, radius, 0f)
+                val cy = shadowAxisCenter(localY, bounds.height, radius, 2f*d)
+                val distance = kotlin.math.sqrt((localX-cx)*(localX-cx) + (localY-cy)*(localY-cy)) - radius
+                val u = (1f-distance/((4f+.6f*28f)*d)).coerceIn(0f,1f)
+                val expected = 1f-kotlin.math.exp(-.34594453f*.8f*u*u*u)
                 val referenceX = (right + 36f*d*sx).roundToInt()
                 assertTrue("The unshadowed reference must remain on screen", referenceX in 0 until on.width)
                 val background = AndroidColor.red(on.getPixel(referenceX, y)).toFloat()
@@ -448,13 +450,11 @@ class PopupShadowContinuityTest {
                         return dx*dx + dy*dy <= (radius + expansion)*(radius + expansion)
                     }
                     if (inside(2f/minOf(sx, sy), 0f)) continue // Exclude antialiased material edge.
-                    var transmission = 1f
-                    for (ring in 16 downTo 1) {
-                        val t = ring/16f
-                        if (inside((4f + .6f*28f)*d*t, 2f*d))
-                            transmission *= 1f - .8f*.07f*(1f-t)*(1f-t)
-                    }
-                    val expected = 1f - transmission
+                    val dx = (abs(lx-screen.width/2)-(screen.width/2-radius)).coerceAtLeast(0f)
+                    val dy = (abs(ly-screen.height/2-2f*d)-(screen.height/2-radius)).coerceAtLeast(0f)
+                    val distance = kotlin.math.sqrt(dx*dx+dy*dy)-radius
+                    val u = (1f-distance/((4f+.6f*28f)*d)).coerceIn(0f,1f)
+                    val expected = 1f-kotlin.math.exp(-.34594453f*.8f*u*u*u)
                     val actual = 1f - AndroidColor.red(on.getPixel(x,y))/background.coerceAtLeast(1f)
                     if (expected < .015f && abs(actual) < .015f) continue
                     val error = abs(actual - expected)
