@@ -103,7 +103,7 @@ internal fun ConnectedSelectionHost(modifier: Modifier = Modifier, contentDrawin
     val graphics = androidx.compose.ui.platform.LocalGraphicsContext.current
     val scope = rememberCoroutineScope()
     val groups = remember { mutableListOf<HoverGroupRenderer>() }
-    DisposableEffect(graphics) { onDispose { groups.forEach { graphics.releaseGraphicsLayer(it.output) }; groups.clear() } }
+    DisposableEffect(graphics) { onDispose { groups.forEach { it.release() }; groups.clear() } }
     val backing = LocalFrostedBackdrop.current
     val hasSelection by remember { derivedStateOf { scene.regions.values.any { it.selected || it.visibility() > 0f } } }
     BackdropLease(backing.takeIf { hasSelection })
@@ -116,6 +116,7 @@ internal fun ConnectedSelectionHost(modifier: Modifier = Modifier, contentDrawin
             // Pager placement also moves unselected rows. Do not subscribe their
             // otherwise reusable display lists to the selection geometry clock.
             if (!hasSelection && scene.retainedHover.isEmpty()) {
+                groups.forEach { it.release() }
                 scene.lastDrawnRegions = emptyList()
                 scene.hover.clear()
                 scene.viewportHover.clear()
@@ -167,13 +168,15 @@ internal fun ConnectedSelectionHost(modifier: Modifier = Modifier, contentDrawin
             val gap = MediaSelectionGap.toPx()
             // Groups join by REST geometry, so growth never changes membership mid-motion.
             val components = hoverComponents(lifts.map { it.rest.bounds }, gap)
-            while (groups.size < components.size) groups += HoverGroupRenderer(graphics.createGraphicsLayer(), scope)
+            while (groups.size < components.size) groups += HoverGroupRenderer(graphics, scope)
+            for(index in components.size until groups.size)groups[index].release()
             components.forEachIndexed { index, members ->
                 val group = groups[index]
-                val parts = members.map { lifts[it] }
+                val orderedMembers=members.sorted()
+                val parts = orderedMembers.map { lifts[it] }
                 val strengths = { a: Int, b: Int -> min(parts[a].progress, parts[b].progress) }
                 val opacity = members.maxOf { opacities[it] }
-                drawHoverGroup(group, parts, strengths, backing, location, blurEffects, recordingDensity, recordingDirection, gap, opacity = opacity, itemOpacity = members.map { opacities[it] }, lift = liftStyle)
+                drawHoverGroup(group, parts, strengths, backing, location, blurEffects, recordingDensity, recordingDirection, gap, opacity = opacity, itemOpacity = orderedMembers.map { opacities[it] }, splitRestComponents = true, lift = liftStyle)
                 members.forEach { member ->
                     val item = hovering.getOrNull(member) ?: return@forEach
                     val lift = lifts[member]
@@ -189,52 +192,68 @@ internal fun ConnectedSelectionHost(modifier: Modifier = Modifier, contentDrawin
     }
 }
 
-/** One merged group's retained resources: blur layer, shadow raster and path cache. */
-internal class HoverGroupRenderer(val output: GraphicsLayer, scope: kotlinx.coroutines.CoroutineScope) {
-    private var graphicsContext: GraphicsContext? = null
-    constructor(graphics: GraphicsContext,scope: kotlinx.coroutines.CoroutineScope): this(graphics.createGraphicsLayer(),scope) {
-        graphicsContext=graphics
-    }
-    fun release() { graphicsContext?.releaseGraphicsLayer(output) }
-    val shadow = RetainedGlassShadow(scope)
-    val path = HoverPathCache()
+/** One surface's retained blur/shadow resources; each active subset has its own recording. */
+internal class HoverSurfaceRenderer(private val graphics: GraphicsContext,scope: kotlinx.coroutines.CoroutineScope) {
+    val output=graphics.createGraphicsLayer()
+    private val lifetime=kotlinx.coroutines.Job(scope.coroutineContext[kotlinx.coroutines.Job])
+    val shadow=RetainedGlassShadow(kotlinx.coroutines.CoroutineScope(scope.coroutineContext+lifetime))
+    fun release() { lifetime.cancel();graphics.releaseGraphicsLayer(output) }
 }
 
-/** Shadow, then the magnified frosted backdrop clipped to the merged outline. Contents are the caller's. */
+internal class HoverGroupRenderer(private val graphics: GraphicsContext,private val scope: kotlinx.coroutines.CoroutineScope) {
+    val outlines=SelectionOpacityPathCache()
+    private val surfaces=mutableMapOf<List<Int>,HoverSurfaceRenderer>()
+    fun surface(members: List<Int>)=surfaces.getOrPut(members) { HoverSurfaceRenderer(graphics,scope) }
+    fun retain(members: Set<List<Int>>) {
+        val unused=surfaces.keys.filter { it !in members }
+        unused.forEach { surfaces.remove(it)?.release() }
+    }
+    fun release() { surfaces.values.forEach { it.release() };surfaces.clear();outlines.clear() }
+}
+
+/** Premultiplied opacity slices expose persistent shadows continuously as neighbours fade. */
 internal fun DrawScope.drawHoverGroup(group: HoverGroupRenderer, parts: List<HoverGeometry>, strength: (Int, Int) -> Float,
     backing: FrostedBackdrop?, location: BackdropLocation, blurEffects: Boolean,
     density: androidx.compose.ui.unit.Density, direction: LayoutDirection, gap: Float,
     sampleOffset: Offset = Offset.Zero, shadow: Boolean = true, opacity: Float = 1f,
-    itemOpacity: List<Float>? = null, maskVisibility: Boolean = true, lift: LiftShadow) {
-    if (parts.isEmpty()) return
-    val progress = parts.maxOf { it.progress } * opacity.coerceIn(0f, 1f)
-    if (progress <= 0f) return
-    val visibility = parts.mapIndexed { i, part ->
-        (part.progress * (itemOpacity?.get(i) ?: opacity).coerceIn(0f, 1f) / progress).coerceIn(0f, 1f)
+    itemOpacity: List<Float>? = null, splitRestComponents: Boolean = false, lift: LiftShadow) {
+    if(parts.isEmpty()) { group.release();return }
+    val progress=parts.maxOf { it.progress }*opacity.coerceIn(0f,1f)
+    if(progress<=0f) { group.release();return }
+    val visibility=parts.mapIndexed { i,part ->
+        (part.progress*(itemOpacity?.get(i) ?: opacity).coerceIn(0f,1f)/progress).coerceIn(0f,1f)
     }
-    if (maskVisibility && visibility.any { it < .9999f }) {
-        // A departing member must fade independently of its still-selected neighbours.
-        // Keep one material/union shadow and mask it once; never redraw foreground here.
-        val padding = if (shadow) (6f + lift.spread * 28f).dp.toPx() + 2f else gap / 2f
-        val bounds = parts.map { it.lifted.bounds }.reduce { a, b -> a.union(b) }.inflate(padding)
-        val canvas = drawContext.canvas
-        canvas.saveLayer(bounds, Paint())
-        drawHoverGroup(group, parts, strength, backing, location, blurEffects, density, direction, gap,
-            sampleOffset, shadow, opacity, itemOpacity, maskVisibility = false, lift = lift)
-        // Complement removal also handles transparent/empty masks correctly on API 26.
-        canvas.saveLayer(bounds, Paint().apply { blendMode = BlendMode.DstOut })
-        drawRect(Color.White, bounds.topLeft, bounds.size)
-        canvas.saveLayer(bounds, Paint().apply { blendMode = BlendMode.DstOut })
-        drawSelectionVisibilityMask(parts.indices.map { parts[it].lifted.bounds to visibility[it] }, padding * 2f)
-        canvas.restore(); canvas.restore(); canvas.restore()
-        return
+    val regions=parts.map { SelectionRegion(it.lifted.bounds,it.lifted.corner) }
+    val rest=parts.map { SelectionRegion(it.rest.bounds,it.rest.corner) }
+    val layers=group.outlines.paths(regions,rest,gap,visibility,splitRestComponents,strength)
+    group.retain(layers.flatMap { layer -> layer.groups.map { it.members } }.toSet())
+    if(layers.isEmpty())return
+    fun DrawScope.paint(layer: SelectionOutlineLayer) {
+        for(outline in layer.groups) drawHoverSurface(group.surface(outline.members),outline.members.map { parts[it] },
+            outline,progress,backing,location,blurEffects,density,direction,sampleOffset,shadow,lift)
     }
-    val regions = parts.map { SelectionRegion(it.lifted.bounds, it.lifted.corner) }
-    val rest = parts.map { SelectionRegion(it.rest.bounds, it.rest.corner) }
-    val path = group.path.path(regions, rest, gap, strength)
-    if (shadow) with(group.shadow) {
-        // Strength alone follows progress, so the shadow deepens linearly with the lift.
-        draw(group.path.localPath,regions.first().bounds.topLeft, lift.strength * progress, lift.spread, color = lift.color)
+    if(layers.size==1 && layers[0].weight==1f) { paint(layers[0]);return }
+    val padding=if(shadow)(6f+lift.spread*28f).dp.toPx()+2f else gap/2f
+    val bounds=regions.map { it.bounds }.reduce { a,b -> a.union(b) }.inflate(padding)
+    val canvas=drawContext.canvas
+    canvas.saveLayer(bounds,Paint())
+    for(layer in layers) {
+        canvas.saveLayer(bounds,Paint().apply { alpha=layer.weight;blendMode=BlendMode.Plus })
+        paint(layer)
+        canvas.restore()
+    }
+    canvas.restore()
+}
+
+/** Every slice uses one analytic path for both its frost mask and shadow caster. */
+private fun DrawScope.drawHoverSurface(surface: HoverSurfaceRenderer,parts: List<HoverGeometry>,
+    outline: SelectionOutlineGroup,progress: Float,backing: FrostedBackdrop?,location: BackdropLocation,
+    blurEffects: Boolean,density: androidx.compose.ui.unit.Density,direction: LayoutDirection,
+    sampleOffset: Offset,shadow: Boolean,lift: LiftShadow) {
+    val path=outline.path
+    val rest=parts.map { SelectionRegion(it.rest.bounds,it.rest.corner) }
+    if(shadow)with(surface.shadow) {
+        draw(outline.localPath,outline.origin,lift.strength*progress,lift.spread,color=lift.color)
     }
     val source = backing?.takeIf { it.recorded && !it.layer.isReleased } ?: return
     val registration = source.location.registrationTo(location) ?: return
@@ -251,7 +270,7 @@ internal fun DrawScope.drawHoverGroup(group: HoverGroupRenderer, parts: List<Hov
             // Blur a crop larger than the outline, then clip: edges sample real backdrop.
             val crop = path.getBounds().inflate(blur * 2f).intersect(Rect(Offset.Zero, size))
             if (!crop.isEmpty) {
-                val output = group.output
+                val output = surface.output
                 output.renderEffect = BlurEffect(blur, blur, TileMode.Clamp)
                 output.record(density, direction, IntSize(ceil(crop.width).toInt(), ceil(crop.height).toInt())) {
                     translate(-crop.left, -crop.top) { magnified { drawLayer(source.layer) } }

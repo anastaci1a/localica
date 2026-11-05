@@ -38,6 +38,10 @@ Mandatory native regressions retain presented-pixel, lifecycle, first/reopened-f
 
 `ScrollPerformanceTest` only measures scrolling. It is skipped by assumption unless `scrollPerformance=true`, set by the Android workflow dispatch input `scroll_performance`. Default runs report its three methods as skipped.
 
+Selection outline benchmarks report geometry and path construction, including mixed-opacity subset paths and unchanged-input caching. API 26 CI requires a median at most 1 ms and a 95th percentile at most 2 ms. API 36 reports timing and its renderer without enforcing that budget.
+
+For local diagnostics under host contention, pass instrumentation argument `selectionOutlineTimingGate=false`. Measurements and cache-correctness assertions still run. CI leaves this argument unset, so the API 26 timing gate remains enabled.
+
 `StartupDiagnosticsSeedTest` also skips by assumption without `startupDiagnostics=disposable-emulator`. Its one method prepares the diagnostic fixture; it is not performance acceptance.
 
 The [startup diagnostic controller source](../tools/startup-diagnostics/run.py) runs in the test package, outside the measured process. Explicit disposable-emulator admission permits fixture seeding and paired process-cold/warm activity launches. It records p50/p95/p99 frame times, accessibility input milestones and optional system traces. Synthetic embedded covers exercise decoding; physical-device acceptance remains open.
