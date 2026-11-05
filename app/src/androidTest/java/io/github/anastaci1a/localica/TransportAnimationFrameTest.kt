@@ -13,6 +13,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.*
 import androidx.compose.ui.unit.dp
 import androidx.test.platform.app.InstrumentationRegistry
@@ -75,7 +76,11 @@ class TransportAnimationFrameTest {
         compose.mainClock.advanceTimeBy(112)
         repeat(3) {
             val before = node.captureToImage()
-            node.performClick()
+            // Touch injection advances event time even with a paused frame clock.
+            // Invoke the same activation at one instant to test the actual handoff.
+            val instant = compose.mainClock.currentTime
+            node.performSemanticsAction(SemanticsActions.OnClick) { it() }
+            assertEquals("Activation must not advance the frame under comparison", instant, compose.mainClock.currentTime)
             same(before, node.captureToImage())
             compose.mainClock.advanceTimeBy(48)
         }
