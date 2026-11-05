@@ -94,13 +94,16 @@ internal fun BrowseItemLayout(item: BrowserItem, style: BrowseStyle, geometry: B
                     clip = true
                 }, shape = androidx.compose.ui.graphics.RectangleShape)
         }
-        Box(Modifier.morph().reveal().artworkTextReveal(gatedText, titleLinePx, { artCorner.floatValue }).testTag("browse-text-${item.key}")) {
+        // Lazy reuse retains animateBounds' previous dimensions. Applying that tween to a
+        // paragraph reveals/reflows it across successive widths when a new row enters.
+        // Measure ordinary text at its final width; explicit pinch text owns its own motion.
+        Box(Modifier.reveal().artworkTextReveal(gatedText, titleLinePx, { artCorner.floatValue }).testTag("browse-text-${item.key}")) {
             if (measureEndpoints != null) BrowsePinchText(titleParagraph, item.title, progress)
             else Text(item.title, style = MaterialTheme.typography.titleMedium.copy(fontSize = titleSize.sp, lineHeight = titleLine.sp,
                 fontWeight = if (numbered(style)) androidx.compose.ui.text.font.FontWeight.Normal else MaterialTheme.typography.titleMedium.fontWeight),
                 maxLines = style.browseTitleLines(), overflow = TextOverflow.Ellipsis)
         }
-        Box(Modifier.morph().reveal().artworkTextReveal(gatedText, infoLinePx, { artCorner.floatValue }, loadingInformation).testTag("browse-info-${item.key}")) {
+        Box(Modifier.reveal().artworkTextReveal(gatedText, infoLinePx, { artCorner.floatValue }, loadingInformation).testTag("browse-info-${item.key}")) {
             if (measureEndpoints != null) BrowsePinchText(informationParagraph,
                 if (showInformation) item.information(style, inheritedInformation) else null, progress,
                 if (trailing(style)) MaterialTheme.colorScheme.onSurfaceVariant else androidx.compose.ui.graphics.Color.Unspecified)
