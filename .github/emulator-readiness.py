@@ -16,16 +16,20 @@ def home_component(text):
 
 def unlocked(policy):
     # KeyguardServiceDelegate.dump() exposes these on both supported APIs.
-    delegate = policy.partition('KeyguardServiceDelegate')[2]
+    delegate = policy.rpartition('KeyguardServiceDelegate')[2]
     return bool(re.search(r'^\s*showing=false\s*$', delegate, re.M) and
                 re.search(r'^\s*inputRestricted=false\s*$', delegate, re.M) and
-                re.search(r'^\s*screenState=SCREEN_STATE_ON\s*$', delegate, re.M) and
-                re.search(r'^\s*interactiveState=INTERACTIVE_STATE_AWAKE\s*$', delegate, re.M))
+                # API 26 prints the enum integers; API 36 prints their names.
+                re.search(r'^\s*screenState=(?:2|SCREEN_STATE_ON)\s*$', delegate, re.M) and
+                re.search(r'^\s*interactiveState=(?:1|INTERACTIVE_STATE_AWAKE)\s*$', delegate, re.M))
 
 
 def focused_home(windows, package):
-    focus = re.findall(r'mCurrentFocus=Window\{([^}\n]+)\}', windows)
-    return any(re.search(r'\b' + re.escape(package) + r'/', value) for value in focus)
+    # A full dump can include an earlier ANR snapshot. The current display state
+    # follows it; a current null/error focus must override a historical launcher.
+    focus = re.findall(r'^\s*mCurrentFocus=(.*)$', windows, re.M)
+    return bool(focus and focus[-1].startswith('Window{') and
+                re.search(r'\b' + re.escape(package) + r'/', focus[-1]))
 
 
 class Device:
