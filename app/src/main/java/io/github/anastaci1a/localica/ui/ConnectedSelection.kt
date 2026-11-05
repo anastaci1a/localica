@@ -329,6 +329,14 @@ internal fun connectedSelectionPath(regions: List<SelectionRegion>, gap: Float,
     rest: List<SelectionRegion> = regions, strength: (Int, Int) -> Float = { _, _ -> 1f },
     contour: SelectionOutlineContour = SelectionOutlineContour()): Path {
     if (regions.isEmpty()) return Path()
+    val members = regions.indices.groupBy { SelectionRegion(regions[it].bounds,regions[it].radius(gap)) }
+    if (members.size < regions.size) {
+        val unique = members.keys.toList()
+        val indices = members.values.toList()
+        return connectedSelectionPath(unique,gap,strength = { a,b ->
+            indices[a].maxOf { i -> indices[b].maxOf { j -> strength(min(i,j),max(i,j)) } }
+        },contour = contour)
+    }
     val field = SelectionOutlineField(regions,gap,strength = strength)
     val path = Path().apply { regions.forEach { addRoundRect(it.contour(gap),Path.Direction.Clockwise) } }
     val connections = Path()

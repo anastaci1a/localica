@@ -7,6 +7,52 @@ import kotlin.math.abs
 
 class SelectionOutlineFieldTest {
     private fun body(x: Float,y: Float=0f) = SelectionRegion(Rect(x,y,x+80f,y+80f),12f)
+    @Test fun straightBandBoundsNeverCoverAnOutsideFieldPoint() {
+        val random = java.util.Random(556)
+        var admitted = 0
+        for (vertical in listOf(false,true)) for (gap in listOf(-4f,.5f,1f,2f,4f,7f))
+            for (strength in listOf(.15f,.3f,.6f,1f)) for (offset in listOf(0f,20f)) {
+                val second = if (vertical) body(offset,80f+gap) else body(80f+gap,offset)
+                val field = SelectionOutlineField(listOf(body(0f),second),16f) { _,_ -> strength }
+                repeat(32) {
+                    val lo = 12f+offset+random.nextFloat()*15f
+                    val hi = lo+random.nextFloat()*15f
+                    val start = 76f+random.nextFloat()*4f
+                    val end = 84f+maxOf(gap,0f)+random.nextFloat()*4f
+                    val box = if (vertical) Rect(lo,start,hi,end) else Rect(start,lo,end,hi)
+                    if (field.connectedBand(box.left,box.top,box.right,box.bottom)) {
+                        admitted++
+                        for (x in 0..8) for (y in 0..8) assertTrue("$box gap=$gap strength=$strength",
+                            field.value(box.left+box.width*x/8f,box.top+box.height*y/8f) <= .0001f)
+                    }
+                }
+            }
+        assertTrue("Exercise both joined and overlapping strips",admitted>100)
+    }
+    @Test fun contactCullingNeverDropsAddedOutlinePixels() {
+        val random = java.util.Random(556)
+        var outside = 0
+        for (offset in listOf(0f,12f,40f,78f)) for (gap in listOf(-12f,.5f,2f,6f))
+            for (strength in listOf(0f,.3f,1f)) {
+                val a = body(0f); val b = body(80f+gap,offset)
+                val field = SelectionOutlineField(listOf(a,b),16f) { _,_ -> strength }
+                val first = SelectionOutlineField(listOf(a),16f)
+                val second = SelectionOutlineField(listOf(b),16f)
+                repeat(64) {
+                    val x = 60f+random.nextFloat()*40f; val y = -10f+random.nextFloat()*110f
+                    val size = .1f+random.nextFloat()*8f
+                    if (!field.changesOutline(x,y,x+size,y+size)) for (i in 0..4) for (j in 0..4) {
+                        val px = x+size*i/4f; val py = y+size*j/4f
+                        if (minOf(first.value(px,py),second.value(px,py)) > .0001f) {
+                            outside++
+                            assertTrue("Culled x=$x y=$y size=$size offset=$offset gap=$gap strength=$strength",
+                                field.value(px,py) > 0f)
+                        }
+                    }
+                }
+            }
+        assertTrue(outside>1000)
+    }
     @Test fun separatedAndDiagonalCellsDoNotConnect() {
         for (gap in listOf(8f,16f,32f)) {
             val field = SelectionOutlineField(listOf(body(0f),body(80f+gap)),16f)
