@@ -1,0 +1,375 @@
+# Release-acceptance full run on the locked-down, on-demand self-hosted runner (issue #592).
+#
+# Not a general CI path: day-to-day and agent CI stay on GitHub-hosted runners (android.yml).
+# This workflow is workflow_dispatch only. Every self-hosted job also requires, in its own `if`,
+# that the actor and triggering actor are the owner and that the ref is main or integration/*.
+# It is never reachable from pull_request or pull_request_target. The runner is a single-job
+# ephemeral JIT runner started by feedback/lead/tools/local-runner.sh for this exact run (the
+# runner's own job-started hook enforces the same rules plus the run id), and the run-name
+# carries the per-launch runner label so the launcher can find the run.
+#
+# The job names, artifacts and provenance match android.yml, so release-verification.py can admit
+# a green exact-tree run of this workflow (it additionally requires self-hosted JIT runner names).
+name: Android local
+run-name: Android local ${{ inputs.runner_label }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      runner_label:
+        description: Per-launch runner label printed by local-runner.sh (do not dispatch by hand)
+        type: string
+        required: true
+      risk_classes:
+        description: Optional comma-separated instrumentation classes to run before the complete device suite
+        type: string
+        required: false
+        default: ''
+      compatibility:
+        description: Run private candidate / legacy-behavior bridge / candidate compatibility gate (required for release admission)
+        type: boolean
+        required: false
+        default: true
+
+permissions:
+  contents: read
+
+env:
+  # Native shards per API; keep the device-tests matrix `shard` list at indices 0..N-1 and
+  # LOCAL_DEVICE_SHARDS in .github/release-verification.py equal to it.
+  LOCALICA_DEVICE_SHARDS: '3'
+
+concurrency:
+  group: android-local-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  guard:
+    # Fails loudly on a hosted runner when a dispatch is outside policy; local jobs repeat the test.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Owner dispatch on main or integration/* only
+        env:
+          EVENT: ${{ github.event_name }}
+          ACTOR: ${{ github.actor }}
+          TRIGGERING_ACTOR: ${{ github.triggering_actor }}
+          REF: ${{ github.ref }}
+        run: |
+          [ "$EVENT" = workflow_dispatch ] && [ "$ACTOR" = anastaci1a ] && [ "$TRIGGERING_ACTOR" = anastaci1a ] || { echo "::error::local runs are owner workflow_dispatch only"; exit 1; }
+          case "$REF" in refs/heads/main|refs/heads/integration/*) ;; *) echo "::error::local runs need main or integration/*"; exit 1;; esac
+
+  build:
+    needs: guard
+    if: ${{ github.event_name == 'workflow_dispatch' && github.actor == 'anastaci1a' && github.triggering_actor == 'anastaci1a' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/integration/')) }}
+    runs-on: [self-hosted, Linux, X64, "${{ inputs.runner_label }}"]
+    timeout-minutes: 40
+    outputs:
+      test-apks-sha256: ${{ steps.test-apks.outputs.sha256 }}
+      delivery-apk-sha256: ${{ steps.delivery-apk.outputs.sha256 }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Restore development signing key
+        env:
+          DEBUG_KEYSTORE: ${{ secrets.ANDROID_DEBUG_KEYSTORE }}
+          KEYSTORE_PATH: ${{ runner.temp }}/localica-debug.keystore
+        run: |
+          test -n "$DEBUG_KEYSTORE"
+          printf '%s' "$DEBUG_KEYSTORE" | base64 --decode > "$KEYSTORE_PATH"
+          chmod 600 "$KEYSTORE_PATH"
+          echo "LOCALICA_DEBUG_KEYSTORE=$KEYSTORE_PATH" >> "$GITHUB_ENV"
+      - name: Build and check
+        # Warm GRADLE_USER_HOME lives on the runner's cache volume. Heap is sized for the 7 GB job container.
+        run: ./gradlew assembleDebug assembleDebugAndroidTest assembleDistribution --no-daemon --max-workers=4 -Dorg.gradle.jvmargs='-Xmx3g -Dfile.encoding=UTF-8' -Pkotlin.daemon.jvm.options=-Xmx2g
+      - name: Freeze shared instrumentation APKs before replacing the delivery APK
+        id: test-apks
+        run: echo "sha256=$(python3 .github/shared-test-apks.py freeze --output native-test-apks)" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: native-test-apks
+          path: native-test-apks/
+          if-no-files-found: error
+      - name: Publish the optimized distribution APK as the canonical artifact
+        run: |
+          out=app/build/outputs/apk
+          ls -l "$out/debug/app-debug.apk" "$out/distribution/app-distribution.apk"
+          cp "$out/distribution/app-distribution.apk" "$out/debug/app-debug.apk"
+      - name: Verify the artifact is not debuggable
+        run: bash .github/verify-non-debuggable.sh app/build/outputs/apk/debug/app-debug.apk
+      - name: Verify development signing certificate
+        run: |
+          expected=$(keytool -exportcert -alias androiddebugkey -keystore "$LOCALICA_DEBUG_KEYSTORE" -storepass android | sha256sum | cut -d ' ' -f 1)
+          actual=$("$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs app/build/outputs/apk/debug/app-debug.apk | sed -n 's/^Signer #1 certificate SHA-256 digest: //p')
+          test "$expected" = "$actual"
+      - name: Record verified APK checksum
+        id: delivery-apk
+        working-directory: app/build/outputs/apk/debug
+        run: |
+          sha256sum app-debug.apk > app-debug.apk.sha256
+          echo "sha256=$(cut -d ' ' -f 1 app-debug.apk.sha256)" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: localica-debug
+          path: |
+            app/build/outputs/apk/debug/app-debug.apk
+            app/build/outputs/apk/debug/app-debug.apk.sha256
+          if-no-files-found: error
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: build-reports
+          path: app/build/reports/
+
+  static-checks:
+    needs: guard
+    if: ${{ github.event_name == 'workflow_dispatch' && github.actor == 'anastaci1a' && github.triggering_actor == 'anastaci1a' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/integration/')) }}
+    runs-on: [self-hosted, Linux, X64, "${{ inputs.runner_label }}"]
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Restore development signing key
+        env:
+          DEBUG_KEYSTORE: ${{ secrets.ANDROID_DEBUG_KEYSTORE }}
+          KEYSTORE_PATH: ${{ runner.temp }}/localica-debug.keystore
+        run: |
+          test -n "$DEBUG_KEYSTORE"
+          printf '%s' "$DEBUG_KEYSTORE" | base64 --decode > "$KEYSTORE_PATH"
+          chmod 600 "$KEYSTORE_PATH"
+          echo "LOCALICA_DEBUG_KEYSTORE=$KEYSTORE_PATH" >> "$GITHUB_ENV"
+      - name: Unit tests, lint and release build
+        run: ./gradlew testDebugUnitTest lintDebug assembleRelease --no-daemon --max-workers=4 -Dorg.gradle.jvmargs='-Xmx3g -Dfile.encoding=UTF-8' -Pkotlin.daemon.jvm.options=-Xmx2g
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: static-check-reports
+          path: app/build/reports/
+
+  device-tests:
+    needs: build
+    if: ${{ github.event_name == 'workflow_dispatch' && github.actor == 'anastaci1a' && github.triggering_actor == 'anastaci1a' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/integration/')) }}
+    runs-on: [self-hosted, Linux, X64, "${{ inputs.runner_label }}"]
+    timeout-minutes: 120
+    env:
+      RISK_CLASSES: ${{ inputs.risk_classes }}
+      TEST_API: ${{ matrix.api }}
+      LOCALICA_SHARD_INDEX: ${{ matrix.shard }}
+      LOCALICA_LIVE_EVIDENCE: 'true'
+      LOCALICA_PREBUILT_TEST_APKS: 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        api: [26, 36]
+        shard: [0, 1, 2]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Put platform-tools on PATH
+        run: echo "$ANDROID_HOME/platform-tools" >> "$GITHUB_PATH"
+      - name: Install pinned live evidence publisher
+        run: npm ci --prefix .github/test-evidence --ignore-scripts --no-audit --no-fund
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: native-test-apks
+          path: native-test-apks
+      - name: Verify and install shared instrumentation APKs
+        env:
+          TEST_APKS_SHA256: ${{ needs.build.outputs.test-apks-sha256 }}
+        run: |
+          python3 .github/shared-test-apks.py verify --bundle native-test-apks --digest "$TEST_APKS_SHA256"
+      - name: Run the shard on a snapshot-booted emulator
+        # Same API, target, profile, GPU, memory and settings as the hosted emulator action; the clean
+        # state is a cached post-boot snapshot instead of a cold boot.
+        run: |
+          bash .github/local/with-emulator.sh "${{ matrix.api }}" -- env LOCALICA_SHARD_COUNT=$LOCALICA_DEVICE_SHARDS bash .github/run-device-tests.sh
+      - name: Preserve native monitoring evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: native-live-evidence-api-${{ matrix.api }}-shard-${{ matrix.shard }}
+          path: native-live-evidence/
+          if-no-files-found: error
+      - name: Preserve focused preflight evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always() && inputs.risk_classes != ''
+        with:
+          name: preflight-reports-api-${{ matrix.api }}-shard-${{ matrix.shard }}
+          path: preflight-reports/
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: device-reports-api-${{ matrix.api }}-shard-${{ matrix.shard }}
+          path: |
+            native-shard-plan.json
+            app/build/reports/androidTests/
+            app/build/outputs/androidTest-results/
+            app/build/outputs/connected_android_test_additional_output/
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: failure()
+        with:
+          name: emulator-logs-api-${{ matrix.api }}-shard-${{ matrix.shard }}
+          path: ${{ runner.temp }}/emulator/
+          if-no-files-found: warn
+
+  device-tests-summary:
+    # Proves the shards ran every inventory test exactly once. Cheap and hosted: it only reads artifacts.
+    if: ${{ always() && github.event_name == 'workflow_dispatch' }}
+    needs: [device-tests, build, static-checks]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: '*-reports-api-*-shard-*'
+          path: shard-reports
+      - name: Verify the shard union equals the source inventory
+        run: |
+          set -uo pipefail
+          status=0
+          for api in 26 36; do
+            args=()
+            count=0
+            for dir in shard-reports/device-reports-api-$api-shard-*; do
+              [ -d "$dir" ] || continue
+              count=$((count + 1))
+            done
+            test "$count" = "$LOCALICA_DEVICE_SHARDS" || { echo "API $api: $count of $LOCALICA_DEVICE_SHARDS shard reports" >&2; status=1; continue; }
+            while IFS= read -r dir; do args+=(--xml-root "$dir"); done < <(find shard-reports -type d -name androidTest-results -path "*-reports-api-$api-shard-*" | sort)
+            python3 .github/test-evidence/full_partition.py union --root "$PWD" --api "$api" --shards "$LOCALICA_DEVICE_SHARDS" "${args[@]}" | tee "union-api-$api.json" || status=1
+          done
+          exit $status
+      - name: Require every shard job to have succeeded
+        if: always()
+        run: |
+          test "${{ needs.device-tests.result }}" = success
+          test "${{ needs.static-checks.result }}" = success
+      - name: Record complete verification provenance
+        env:
+          DELIVERY_APK_SHA256: ${{ needs.build.outputs.delivery-apk-sha256 }}
+        run: python3 .github/release-verification.py record --apk-sha256 "$DELIVERY_APK_SHA256"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: complete-verification
+          path: |
+            verification.json
+            union-api-26.json
+            union-api-36.json
+          if-no-files-found: error
+
+  compatibility:
+    needs: guard
+    if: ${{ inputs.compatibility && github.event_name == 'workflow_dispatch' && github.actor == 'anastaci1a' && github.triggering_actor == 'anastaci1a' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/integration/')) }}
+    runs-on: [self-hosted, Linux, X64, "${{ inputs.runner_label }}"]
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        api: [26, 36]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.sha }}
+      - name: Put platform-tools on PATH
+        run: echo "$ANDROID_HOME/platform-tools" >> "$GITHUB_PATH"
+      - name: Restore existing development signing key
+        env:
+          DEBUG_KEYSTORE: ${{ secrets.ANDROID_DEBUG_KEYSTORE }}
+          KEYSTORE_PATH: ${{ runner.temp }}/compatibility-debug.keystore
+        run: |
+          test -n "$DEBUG_KEYSTORE"
+          printf '%s' "$DEBUG_KEYSTORE" | base64 --decode > "$KEYSTORE_PATH"
+          chmod 600 "$KEYSTORE_PATH"
+          echo "LOCALICA_DEBUG_KEYSTORE=$KEYSTORE_PATH" >> "$GITHUB_ENV"
+      - name: Prepare isolated exact-SHA compatibility archives
+        run: python3 .github/compatibility/prepare.py
+      - name: Build and inspect private compatibility APKs sequentially
+        run: bash .github/compatibility/build.sh
+      - name: Run compatibility on a snapshot-booted emulator
+        run: bash .github/local/with-emulator.sh "${{ matrix.api }}" -- bash .github/compatibility/run.sh
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: compatibility-reports-api-${{ matrix.api }}
+          path: ${{ runner.temp }}/shuffle-compatibility/reports/
+          if-no-files-found: warn
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: compatibility-seed-app-api-${{ matrix.api }}
+          path: |
+            ${{ runner.temp }}/shuffle-compatibility/apks/seed/compatibility-seed-app.apk
+            ${{ runner.temp }}/shuffle-compatibility/apks/seed/compatibility-seed-app.apk.sha256
+          if-no-files-found: warn
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: compatibility-seed-test-api-${{ matrix.api }}
+          path: |
+            ${{ runner.temp }}/shuffle-compatibility/apks/seed/compatibility-seed-test.apk
+            ${{ runner.temp }}/shuffle-compatibility/apks/seed/compatibility-seed-test.apk.sha256
+          if-no-files-found: warn
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: compatibility-bridge-app-api-${{ matrix.api }}
+          path: |
+            ${{ runner.temp }}/shuffle-compatibility/apks/bridge/compatibility-bridge-app.apk
+            ${{ runner.temp }}/shuffle-compatibility/apks/bridge/compatibility-bridge-app.apk.sha256
+          if-no-files-found: warn
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: compatibility-bridge-test-api-${{ matrix.api }}
+          path: |
+            ${{ runner.temp }}/shuffle-compatibility/apks/bridge/compatibility-bridge-test.apk
+            ${{ runner.temp }}/shuffle-compatibility/apks/bridge/compatibility-bridge-test.apk.sha256
+          if-no-files-found: warn
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: compatibility-verify-app-api-${{ matrix.api }}
+          path: |
+            ${{ runner.temp }}/shuffle-compatibility/apks/verify/compatibility-verify-app.apk
+            ${{ runner.temp }}/shuffle-compatibility/apks/verify/compatibility-verify-app.apk.sha256
+          if-no-files-found: warn
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: compatibility-verify-test-api-${{ matrix.api }}
+          path: |
+            ${{ runner.temp }}/shuffle-compatibility/apks/verify/compatibility-verify-test.apk
+            ${{ runner.temp }}/shuffle-compatibility/apks/verify/compatibility-verify-test.apk.sha256
+          if-no-files-found: warn
+
+  distribution-smoke:
+    # Exercises the exact R8 distribution APK that the build job publishes.
+    needs: build
+    if: ${{ github.event_name == 'workflow_dispatch' && github.actor == 'anastaci1a' && github.triggering_actor == 'anastaci1a' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/integration/')) }}
+    runs-on: [self-hosted, Linux, X64, "${{ inputs.runner_label }}"]
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        api: [26, 36]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Put platform-tools on PATH
+        run: echo "$ANDROID_HOME/platform-tools" >> "$GITHUB_PATH"
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: localica-debug
+          path: artifacts
+      - name: Verify the downloaded APK
+        env:
+          VERIFIED_APK_SHA256: ${{ needs.build.outputs.delivery-apk-sha256 }}
+        run: |
+          (cd artifacts && sha256sum --check app-debug.apk.sha256)
+          test "$(sha256sum artifacts/app-debug.apk | cut -d ' ' -f 1)" = "$VERIFIED_APK_SHA256"
+          bash .github/verify-non-debuggable.sh artifacts/app-debug.apk
+      - name: Smoke the distribution APK on a snapshot-booted emulator
+        run: bash .github/local/with-emulator.sh "${{ matrix.api }}" -- bash .github/distribution-smoke.sh artifacts/app-debug.apk distribution-smoke-logcat.txt
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: distribution-smoke-logcat-api-${{ matrix.api }}
+          path: distribution-smoke-logcat*.txt
+          if-no-files-found: warn
