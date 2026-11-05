@@ -43,10 +43,15 @@ internal fun FilteredBackdrop(modifier: Modifier, source: FrostedBackdrop, locat
     val renderer = currentGlassRendererGeneration()
     val none by animateFloatAsState(if (renderer.backend == GlassBackend.None) 1f else 0f,
         spring(dampingRatio = 1f, stiffness = 450f), label = "Glass render mode")
-    Box(modifier) {
-        if (none < 1f) OpticalBackdrop(Modifier.matchParentSize(), source, location, resolution,
+    val blending = none > 0f && none < 1f
+    Box(modifier.graphicsLayer { compositingStrategy = if (blending)
+        androidx.compose.ui.graphics.layer.CompositingStrategy.Offscreen else androidx.compose.ui.graphics.layer.CompositingStrategy.Auto }) {
+        if (none < 1f) OpticalBackdrop(Modifier.matchParentSize().graphicsLayer { alpha = 1f - none }, source, location, resolution,
             padding, homeSource, homeWeight, average, homeBounds, homeFootprint, false, effect)
-        if (none > 0f) OpticalBackdrop(Modifier.matchParentSize().graphicsLayer { alpha = none },
+        if (none > 0f) OpticalBackdrop(Modifier.matchParentSize().graphicsLayer {
+            alpha = none
+            blendMode = if (blending) androidx.compose.ui.graphics.BlendMode.Plus else androidx.compose.ui.graphics.BlendMode.SrcOver
+        },
             source, location, resolution, padding, homeSource, homeWeight,
             average ?: MaterialAverageStyle(0f, GlassTone()), homeBounds, homeFootprint, true, effect)
     }
