@@ -40,7 +40,7 @@ mkdir "$out/traces"
 mapfile -t top_scenarios < "$out/top-scenarios.txt"
 for scenario in "${top_scenarios[@]}"; do
     # Trace passes are separate and never substituted into baseline measurements.
-    adb -s "$serial" shell atrace --async_start -a "$app" -b 32768 gfx view sched freq am wm > "$out/traces/$scenario-start.txt"
+    adb -s "$serial" shell atrace --async_start -a "$app" -b 131072 gfx view sched freq am wm > "$out/traces/$scenario-start.txt"
     if ! run "$scenario" 1 "$out/traces/$scenario-instrumentation.txt"; then
         adb -s "$serial" shell atrace --async_stop > "$out/traces/$scenario-failed.trace"
         exit 1
