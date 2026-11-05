@@ -28,7 +28,7 @@ import io.github.anastaci1a.localica.browse.*
 import io.github.anastaci1a.localica.navigation.BrowseRoute
 
 private data class PinchCaptureDrawing(val key: Any, val pass: Int, val layer: GraphicsLayer,
-    val size: androidx.compose.ui.unit.IntSize = layer.size)
+    val size: androidx.compose.ui.unit.IntSize = layer.size, val corner: Float? = null)
 private object PinchHeaderCaptureKey
 private object PinchHeaderStaticCaptureKey
 
@@ -183,7 +183,7 @@ internal class BrowsePinchMotion {
     val itemAlpha = mutableStateMapOf<Any, Float>()
     val artwork = mutableMapOf<Any, BrowsePinchLayer>()
     val text = mutableMapOf<Any, BrowsePinchLayer>()
-    var viewportCoordinates: LayoutCoordinates? = null
+    var viewportCoordinates by mutableStateOf<LayoutCoordinates?>(null)
     var anchorIndex = 0
     var anchorTop = 0f
     var rowHeight = 64f
@@ -569,7 +569,8 @@ internal fun Modifier.browsePinch(enabled: Boolean, motion: BrowsePinchMotion, s
                     val drawings = (visible.flatMap { entry ->
                         listOfNotNull(motion.retained[entry.key]?.let { PinchCaptureDrawing(entry.key, 0, it) },
                             motion.text[entry.key]?.layer?.let { PinchCaptureDrawing(entry.key, 1, it) },
-                            motion.artwork[entry.key]?.layer?.let { PinchCaptureDrawing(entry.key, 2, it) })
+                            motion.artwork[entry.key]?.let { PinchCaptureDrawing(entry.key, 2, it.layer,
+                                corner = it.corner?.invoke(androidx.compose.ui.geometry.Size(it.layer.size.width.toFloat(), it.layer.size.height.toFloat()))) })
                     } + listOfNotNull(motion.activeHeader?.layer?.let { PinchCaptureDrawing(PinchHeaderCaptureKey, 3, it) },
                         motion.activeHeader?.staticLayer?.let { PinchCaptureDrawing(PinchHeaderStaticCaptureKey, 4, it) }))
                         .filter { !it.layer.isReleased && it.size.width > 0 && it.size.height > 0 }
@@ -597,7 +598,7 @@ internal fun Modifier.browsePinch(enabled: Boolean, motion: BrowsePinchMotion, s
                         } finally { motion.finishReadback() }
                         if (!motion.owns(generation)) return@launch
                         fun parts(pass: Int) = drawings.withIndex().filter { it.value.pass == pass }.associate { (i, drawing) ->
-                            drawing.key to FrozenBrowsePart(image, origins[i], drawing.size)
+                            drawing.key to FrozenBrowsePart(image, origins[i], drawing.size, drawing.corner)
                         }
                         val text = parts(1); val art = parts(2)
                         drawings.forEachIndexed { i, drawing -> if (drawing.pass == 0) {

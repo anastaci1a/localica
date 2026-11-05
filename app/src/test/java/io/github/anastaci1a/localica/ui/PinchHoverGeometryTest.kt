@@ -124,6 +124,24 @@ class PinchHoverGeometryTest {
         } finally { owner.cancelAndJoin() }
     }
 
+    @Test fun capturedArtworkKeepsAbsoluteCornersAndEveryRoundToCirclePhase() {
+        val a = Rect(20f, 40f, 80f, 100f)
+        val b = Rect(30f, 45f, 210f, 225f)
+        val sourceSize = androidx.compose.ui.unit.IntSize(60, 60)
+        val targetSize = androidx.compose.ui.unit.IntSize(180, 180)
+        for (phase in listOf(0f, .25f, .5f, 1f)) for (step in 0..100) {
+            val p = step / 100f
+            val bounds = pinchElementRect(a, b, p)
+            val corner = pinchArtworkCorner(4f, 10f, 4f + 26f * phase, sourceSize, bounds, p)
+            val rounded = 4f + 6f * p
+            assertEquals(rounded + (bounds.size.minDimension / 2f - rounded) * phase, corner, .00001f)
+            assertEquals("Reversal retraces the same corner for a partially revealed artist",
+                corner, pinchArtworkCorner(10f, 4f, 10f + 80f * phase, targetSize, bounds, 1f - p), .00001f)
+            assertEquals("A fixed corner must not scale with the captured bitmap", 8f,
+                pinchArtworkCorner(8f, 8f, null, sourceSize, bounds, p), 0f)
+        }
+    }
+
     private fun outline(style: BrowseStyle, widthDp: Int, density: Float, rtl: Boolean): MediaItemOutline {
         val columns = galleryColumns(style.presentation, widthDp.toFloat(), style.itemsPerRow)
         val geometry = BrowseCellGeometry(columns)
