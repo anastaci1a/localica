@@ -194,6 +194,8 @@ internal fun BoxWithConstraintsScope.QueueSurface(progress: Animatable<Float, *>
         }
         .observeScrollOwnership(scrollOwnership, listPull::cancelPull)
         .nestedScroll(listPull).testTag("queue-surface"), shape = Corners.panel) {
+        val departing by remember { derivedStateOf { progress.targetValue < progress.value || !interactive } }
+        GlassPopupHome(departing) {
         Column(Modifier.fillMaxSize().clipToBounds().padding(bottom = inset)) {
             Box(Modifier.fillMaxWidth().height(CollapsedQueueHeight).clickable(onClickLabel = if (!shown) "Open queue" else "Close queue") {
                 val open = progress.value < .5f
@@ -213,6 +215,7 @@ internal fun BoxWithConstraintsScope.QueueSurface(progress: Animatable<Float, *>
             if (shown || listPull.pulling) {
                 content()
             }
+        }
         }
     }
     }) { measurables, constraints ->
