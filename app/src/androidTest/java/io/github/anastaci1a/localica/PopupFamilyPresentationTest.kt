@@ -421,7 +421,7 @@ class PopupFamilyPresentationTest {
             .put("revision", source.revision).put("requestedReadback", source.readbackRequest)
             .put("publishedReadback", source.snapshotReadbackRequest)
             .put("snapshotIdentity", id(source.snapshot)).put("frostIdentity", id(source.fallback))
-            .put("lensIdentity", id(source.lensSnapshot)).put("drawReceipt", source.snapshotDraws?.toString() ?: "UNKNOWN")
+            .put("lensIdentity", id(source.snapshot)).put("drawReceipt", source.snapshotDraws?.toString() ?: "UNKNOWN")
             .put("unrefractedSurfaceCornersInCandidateSource", projection?.let { corners ->
                 JSONArray(corners.map { JSONArray(listOf(it.x, it.y)) })
             } ?: "UNKNOWN")

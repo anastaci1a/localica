@@ -11,14 +11,14 @@ import org.junit.Test
 class BackdropReadbackTest {
     @Test fun rendererRoundTripRejectsQueuedDrawEvidenceFromTheSameBackend() = runTest {
         val fixture = Fixture()
-        val original = GlassRendererGeneration(GlassBackend.Legacy, 0)
+        val original = GlassRendererGeneration(GlassBackend.None, 0)
         fixture.scene = fixture.scene.copy(geometry = listOf("viewport", original))
         val old = fixture.barrier.begin(9)
         fixture.ready(9)
         val modern = nextGlassRendererGeneration(original,
-            io.github.anastaci1a.localica.navigation.GlassRendererMode.Modern, 36)
+            io.github.anastaci1a.localica.navigation.GlassRendererMode.Normal, 36)
         val returned = nextGlassRendererGeneration(modern,
-            io.github.anastaci1a.localica.navigation.GlassRendererMode.Legacy, 36)
+            io.github.anastaci1a.localica.navigation.GlassRendererMode.None, 36)
         fixture.scene = fixture.scene.copy(geometry = listOf("viewport", returned))
         // Even without an intervening sceneChanged callback, a queued completion
         // rechecks the effective epoch instead of just comparing backend names.
@@ -35,7 +35,7 @@ class BackdropReadbackTest {
 
     @Test fun rendererChangeAfterDrawReadinessCannotPublishOrReleasePendingCompletionEarly() = runTest {
         val fixture = Fixture()
-        fixture.scene = fixture.scene.copy(geometry = listOf("viewport", GlassRendererGeneration(GlassBackend.Legacy, 0)))
+        fixture.scene = fixture.scene.copy(geometry = listOf("viewport", GlassRendererGeneration(GlassBackend.None, 0)))
         val ticket = fixture.barrier.begin(9)
         fixture.ready(9)
         fixture.run(0)
@@ -48,7 +48,7 @@ class BackdropReadbackTest {
                 read = { finish.await(); events += "completed" }, release = { events += "release" })
             if (ticket.isCurrent()) events += "publish"
         }
-        fixture.scene = fixture.scene.copy(geometry = listOf("viewport", GlassRendererGeneration(GlassBackend.Modern, 1)))
+        fixture.scene = fixture.scene.copy(geometry = listOf("viewport", GlassRendererGeneration(GlassBackend.Normal, 1)))
         fixture.barrier.sceneChanged()
         copy.cancel()
         fixture.run(500, evenCancelled = true)

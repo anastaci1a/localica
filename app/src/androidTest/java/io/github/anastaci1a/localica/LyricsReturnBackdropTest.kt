@@ -411,7 +411,7 @@ class LyricsReturnBackdropTest {
             }
         } }
         compose.waitForIdle()
-        if (Build.VERSION.SDK_INT < 33) compose.waitUntil(10_000) { artwork.lensSnapshot != null }
+        if (Build.VERSION.SDK_INT < 33) compose.waitUntil(10_000) { artwork.snapshot != null }
     }
 
     private fun alignCurrentLine(document: ParsedLyrics) {
@@ -503,7 +503,7 @@ class LyricsReturnBackdropTest {
                 val preparation = compose.runOnUiThread {
                     val request = source.readbackRequest
                     val draws = source.snapshotDraws
-                    LegacyPreparation(source.snapshot, source.lensSnapshot, request, source.snapshotReadbackRequest,
+                    LegacyPreparation(source.snapshot, source.snapshot, request, source.snapshotReadbackRequest,
                         !source.layer.isReleased && draws?.request == request && draws.composite == request &&
                             scene.layers.filter { it.alpha() > 0f }.all { layer ->
                                 val producer = draws.producers[layer]
@@ -515,7 +515,7 @@ class LyricsReturnBackdropTest {
                 // Panel and direct fixtures must both publish the completed source,
                 // never merely display a screenshot after a fixed native delay.
                 if (!preparation.drawsCompletedBeforeSnapshot || preparation.snapshotRequest != preparation.request ||
-                    snapshot == null || preparation.lensSnapshot !== snapshot ||
+                    snapshot == null || preparation.snapshot !== snapshot ||
                     requireFresh && snapshot === previous) return@waitUntil false
                 if (!markerRequired) return@waitUntil true
                 val marker = scene.layers.single { it.contentKey() === SourceMarkerKey }.source
@@ -540,7 +540,7 @@ class LyricsReturnBackdropTest {
         } catch (failure: Throwable) {
             throw AssertionError("Legacy source-frame preparation: requested=$requested observed=$observed " +
                 compose.runOnUiThread { "sourceRevision=${scene.source.revision} " +
-                    "samePreparedImage=${scene.source.lensSnapshot === scene.source.snapshot} " +
+                    "samePreparedImage=${scene.source.snapshot === scene.source.snapshot} " +
                     "snapshotDraws=${scene.source.snapshotDraws} lastReadbackAbort=${scene.source.lastReadbackAbort} lastReadbackProgress=${scene.source.lastReadbackProgress} " +
                     "liveProducerDraws=${scene.layers.map { layer ->
                         listOf(layer.hasMask, layer.alpha(), layer.source.recorded,
@@ -608,7 +608,7 @@ class LyricsReturnBackdropTest {
                 if (source != null) {
                     appendLine("sourceOrigin=${source.origin} sourceSize=${source.size} revision=${source.revision} consumers=${source.consumers}")
                     appendLine(compose.runOnUiThread {
-                        "snapshot=${source.snapshot?.let(System::identityHashCode)} lensSnapshot=${source.lensSnapshot?.let(System::identityHashCode)} readbackRequest=${source.readbackRequest} snapshotReadbackRequest=${source.snapshotReadbackRequest} snapshotCompositeRequest=${source.snapshotDraws?.composite} lastReadbackAbort=${source.lastReadbackAbort} lastReadbackProgress=${source.lastReadbackProgress}"
+                        "snapshot=${source.snapshot?.let(System::identityHashCode)} lensSnapshot=${source.snapshot?.let(System::identityHashCode)} readbackRequest=${source.readbackRequest} snapshotReadbackRequest=${source.snapshotReadbackRequest} snapshotCompositeRequest=${source.snapshotDraws?.composite} lastReadbackAbort=${source.lastReadbackAbort} lastReadbackProgress=${source.lastReadbackProgress}"
                     })
                     if (!panelFixture) {
                         appendLine("sourceFrame=${compose.runOnUiThread { sourceFrame(requireNotNull(sampledScene)) }}")

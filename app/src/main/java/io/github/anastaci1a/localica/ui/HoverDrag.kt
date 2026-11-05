@@ -37,13 +37,13 @@ internal class HoverCardFrame(
 @Composable private fun rememberHoverGroupRenderer(): HoverGroupRenderer {
     val graphics = androidx.compose.ui.platform.LocalGraphicsContext.current
     val scope = rememberCoroutineScope()
-    val renderer = remember(graphics) { HoverGroupRenderer(graphics.createGraphicsLayer(), scope) }
-    DisposableEffect(renderer) { onDispose { graphics.releaseGraphicsLayer(renderer.output) } }
+    val renderer = remember(graphics) { HoverGroupRenderer(graphics.createGraphicsLayer(), graphics.createGraphicsLayer(), scope) }
+    DisposableEffect(renderer) { onDispose { graphics.releaseGraphicsLayer(renderer.output); graphics.releaseGraphicsLayer(renderer.flatOutput) } }
     return renderer
 }
 
 private fun blurEffects(renderer: GlassRendererGeneration) =
-    renderer.backend == GlassBackend.Modern && Build.VERSION.SDK_INT >= 31
+    Build.VERSION.SDK_INT >= 33
 
 /** A dragged card reuses the hover outline and frost. The shared underlay owns the outside
  * shadow; a small additional shadow separates panes once they join the stack. */
@@ -52,6 +52,7 @@ internal fun HoverDragCard(modifier: Modifier, frame: HoverCardFrame, backing: F
     stackShadow: () -> Float = { 0f }, content: @Composable BoxScope.() -> Unit) {
     val liftStyle = rememberLiftShadow()
     val renderer = currentGlassRendererGeneration()
+    val averageProgress = glassAverageProgress()
     val group = rememberHoverGroupRenderer()
     val location = remember { BackdropLocation() }
     val density = LocalDensity.current
@@ -63,7 +64,7 @@ internal fun HoverDragCard(modifier: Modifier, frame: HoverCardFrame, backing: F
                 liftStyle.spread, color = liftStyle.color)
         }
         drawHoverGroup(group, listOf(geometry), { _, _ -> 1f }, backing, location, blurEffects(renderer),
-            density, direction, MediaSelectionGap.toPx(), sampleOffset = frame.sampleShift(), shadow = false, lift = liftStyle)
+            density, direction, MediaSelectionGap.toPx(), sampleOffset = frame.sampleShift(), shadow = false, lift = liftStyle, averageProgress = averageProgress.value)
         scale(geometry.scale, geometry.scale, geometry.pivot) { this@drawWithContent.drawContent() }
     }) { content() }
 }
@@ -77,11 +78,12 @@ internal fun HoverDragCard(modifier: Modifier, frame: HoverCardFrame, backing: F
 internal fun HoverDragUnderlay(frames: () -> List<HoverCardFrame>, backing: FrostedBackdrop?, modifier: Modifier) {
     val liftStyle = rememberLiftShadow()
     val renderer = currentGlassRendererGeneration()
+    val averageProgress = glassAverageProgress()
     val shadow = rememberHoverGroupRenderer()
     val bridges = remember { mutableListOf<HoverGroupRenderer>() }
     val graphics = androidx.compose.ui.platform.LocalGraphicsContext.current
     val scope = rememberCoroutineScope()
-    DisposableEffect(graphics) { onDispose { bridges.forEach { graphics.releaseGraphicsLayer(it.output) }; bridges.clear() } }
+    DisposableEffect(graphics) { onDispose { bridges.forEach { graphics.releaseGraphicsLayer(it.output); graphics.releaseGraphicsLayer(it.flatOutput) }; bridges.clear() } }
     val location = remember { BackdropLocation() }
     val density = LocalDensity.current
     val direction = LocalLayoutDirection.current
@@ -121,12 +123,12 @@ internal fun HoverDragUnderlay(frames: () -> List<HoverCardFrame>, backing: Fros
         with(shadow.shadow) {
             draw(bodies + bridgeBodies, liftStyle.strength * (placed.maxOfOrNull { it.progress } ?: 0f) * opacity, liftStyle.spread, color = liftStyle.color)
         }
-        while (bridges.size < joined.size) bridges += HoverGroupRenderer(graphics.createGraphicsLayer(), scope)
+        while (bridges.size < joined.size) bridges += HoverGroupRenderer(graphics.createGraphicsLayer(), graphics.createGraphicsLayer(), scope)
         joined.forEachIndexed { index, bridge ->
             // The cards above cover their own areas; only the joining neck shows here.
             drawHoverGroup(bridges[index], listOf(placed[bridge.a], placed[bridge.b]), { _, _ -> bridge.strength }, backing, location,
                 blurEffects(renderer), density, direction, gap, sampleOffset = cards[bridge.a].sampleShift(), shadow = false,
-                opacity = min(alphas[bridge.a], alphas[bridge.b]), lift = liftStyle)
+                opacity = min(alphas[bridge.a], alphas[bridge.b]), lift = liftStyle, averageProgress = averageProgress.value)
         }
     })
 }

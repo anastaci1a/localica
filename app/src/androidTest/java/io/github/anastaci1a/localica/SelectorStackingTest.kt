@@ -67,7 +67,7 @@ class SelectorStackingTest {
                 }
             }
         } }
-        if (android.os.Build.VERSION.SDK_INT < 33) compose.waitUntil(10000) { backing?.lensSnapshot != null }
+        if (android.os.Build.VERSION.SDK_INT < 33) compose.waitUntil(10000) { backing?.snapshot != null }
         compose.waitForIdle()
     }
 

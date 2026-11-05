@@ -26,10 +26,6 @@ import kotlinx.coroutines.flow.collectLatest
 internal class BrowseBackdropScene(val source: FrostedBackdrop, contentKey: () -> Any?,
     schedule: (Long, () -> Unit) -> (() -> Unit)) {
     val layers = mutableStateListOf<BrowseBackdropLayer>()
-    /** Hold the sampled page while it is scrolling (Modern, "Live glass while scrolling" off). */
-    var holdWhileScrolling by mutableStateOf(false)
-    var scrollingNow: () -> Boolean = { false }
-    val frozen: Boolean get() = holdWhileScrolling && scrollingNow()
     var compositeDraws: Map<Any, BackdropProducerDraws> = emptyMap()
     val readback = BackdropReadback({ Snapshot.withoutReadObservation {
         BackdropReadbackScene(listOf(contentKey(), source.size, source.location.placement, source.rendererGeneration),
@@ -48,18 +44,7 @@ internal val LocalBrowseBackdropObserver = staticCompositionLocalOf<((BrowseBack
 
 @Composable
 internal fun rememberBrowseBackdropScene(source: FrostedBackdrop, backing: FrostedBackdrop?,
-    contentKey: Any?, scrolling: Boolean,
-    liveWhileScrolling: Boolean = LocalGlassAppearance.current.liveScrollGlass): BrowseBackdropScene {
-    val current by rememberUpdatedState(scrolling)
-    return rememberBrowseBackdropScene(source, backing, contentKey, liveWhileScrolling) { current }
-}
-
-/** Read scrolling inside the effect so a scroll start/stop does not recompose the caller. */
-@Composable
-internal fun rememberBrowseBackdropScene(source: FrostedBackdrop, backing: FrostedBackdrop?,
-    contentKey: Any?, liveWhileScrolling: Boolean = LocalGlassAppearance.current.liveScrollGlass,
-    scrolling: () -> Boolean): BrowseBackdropScene {
-    val renderer = currentGlassRendererGeneration()
+    contentKey: Any?): BrowseBackdropScene {
     val currentKey by rememberUpdatedState(contentKey)
     val handler = remember { Handler(Looper.getMainLooper()) }
     val scene = remember(source) { BrowseBackdropScene(source, { currentKey }) { delay, action ->
@@ -69,14 +54,11 @@ internal fun rememberBrowseBackdropScene(source: FrostedBackdrop, backing: Frost
         cancel
     } }
     val observer by rememberUpdatedState(LocalBrowseBackdropObserver.current)
-    val currentScrolling by rememberUpdatedState(scrolling)
     SideEffect {
         source.parent = backing
         source.readbackBarrier = scene.readback
         scene.readback.sceneChanged()
         observer?.invoke(scene, true)
-        scene.scrollingNow = { currentScrolling() }
-        scene.holdWhileScrolling = !liveWhileScrolling && renderer.backend == GlassBackend.Modern
     }
     DisposableEffect(scene) { onDispose {
         scene.readback.dispose()
@@ -89,22 +71,6 @@ internal fun rememberBrowseBackdropScene(source: FrostedBackdrop, backing: Frost
         snapshotFlow { listOf(currentKey, source.size, source.location.placement, source.rendererGeneration,
             scene.layers.map { listOf(it.source.size, it.source.location.placement) }) }
             .collectLatest { scene.readback.sceneChanged() }
-    }
-    // Coalesce movement using the existing 150ms refresh delay plus the adapter’s
-    // 500ms settled interval. Never schedule a CPU readback for each scroll frame.
-    // The adapter still owns both attempts and their safe completion lifetime.
-    LaunchedEffect(scene, contentKey, renderer) {
-        if (renderer.backend == GlassBackend.Legacy) {
-            // Each start/stop restarts the same schedule the scrolling key used to restart.
-            snapshotFlow { currentScrolling() }.collectLatest { moving ->
-                delay(150)
-                source.refresh()
-                while (moving) {
-                    delay(650)
-                    source.refresh()
-                }
-            }
-        }
     }
     return scene
 }
@@ -163,7 +129,7 @@ internal fun BoxScope.BrowseBackdropRecording(scene: BrowseBackdropScene, backin
         Path().apply { addRect(Rect(Offset.Zero, size)) }
     }, readbackRequest = { source.readbackRequest }, onRecorded = {
         scene.readback.compositeRecorded(it, scene.compositeDraws)
-    }, frozen = { scene.frozen }).then(BrowseReadbackDraw(scene.readback))) {
+    }).then(BrowseReadbackDraw(scene.readback))) {
         scene.compositeDraws = emptyMap()
         val included = if (scene.readback.isPending) mutableMapOf<Any, BackdropProducerDraws>() else null
         for (layer in scene.layers) {

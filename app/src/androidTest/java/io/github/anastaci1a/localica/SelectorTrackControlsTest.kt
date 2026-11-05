@@ -58,7 +58,7 @@ class SelectorTrackControlsTest {
                 }
             }
         } }
-        if (android.os.Build.VERSION.SDK_INT < 33) compose.waitUntil(10000) { source?.lensSnapshot != null }
+        if (android.os.Build.VERSION.SDK_INT < 33) compose.waitUntil(10000) { source?.snapshot != null }
         checkPull("tab-track-host", "tab-track-shell", "tab-selector", "tab-option-content-0", false)
     }
 

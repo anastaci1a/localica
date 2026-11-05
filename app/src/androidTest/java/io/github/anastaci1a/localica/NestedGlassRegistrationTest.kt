@@ -92,7 +92,7 @@ class NestedGlassRegistrationTest {
                 }
             }
         } }
-        if (Build.VERSION.SDK_INT < 33) compose.waitUntil(10000) { source.lensSnapshot != null }
+        if (Build.VERSION.SDK_INT < 33) compose.waitUntil(10000) { source.snapshot != null }
         val cell = 24f * compose.density.density
         data class Phase(val x: Float, val y: Float, val scroll: Int,
             val commonX: Float = .88f, val commonY: Float = .92f)

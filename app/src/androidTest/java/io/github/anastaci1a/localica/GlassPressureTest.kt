@@ -200,7 +200,7 @@ class GlassPressureTest {
                 PresentationMarker { presentationStage }
             }
         } }
-        if (android.os.Build.VERSION.SDK_INT < 33) compose.waitUntil(10000) { source?.lensSnapshot != null }
+        if (android.os.Build.VERSION.SDK_INT < 33) compose.waitUntil(10000) { source?.snapshot != null }
         compose.waitForIdle()
     }
 

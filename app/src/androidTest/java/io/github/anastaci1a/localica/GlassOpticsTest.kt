@@ -61,6 +61,7 @@ class GlassOpticsTest {
         assertTrue("Foreground-containing scenes preserve their spatial detail", changed > 100)
     }
 
+    @androidx.test.filters.SdkSuppress(minSdkVersion = 33)
     @Test fun changingDepthBendsARecordedGridAndKeepsTheOutsideUntouched() {
         var depth by mutableFloatStateOf(.6f)
         lateinit var source: FrostedBackdrop
@@ -83,7 +84,7 @@ class GlassOpticsTest {
             }
         } } }
         val node = compose.onNodeWithTag("optics")
-        if (android.os.Build.VERSION.SDK_INT < 33) compose.waitUntil(10000) { source.lensSnapshot != null }
+        if (android.os.Build.VERSION.SDK_INT < 33) compose.waitUntil(10000) { source.snapshot != null }
         val before = node.captureToImage().toPixelMap()
         compose.runOnIdle { depth = 2f }
         val image = node.captureToImage()

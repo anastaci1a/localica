@@ -90,8 +90,7 @@ internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, pagePosition: () 
     }
     val composite = rememberFrostedBackdrop(appearance, dark = source?.dark == true)
     val refractForeground = appearance.tabStyle == TabLensStyle.Overlay && appearance.overlayForeground
-    val legacyOverlay = renderer.backend == GlassBackend.Legacy && appearance.tabStyle == TabLensStyle.Overlay
-    val recordForeground = refractForeground && !legacyOverlay
+    val recordForeground = refractForeground
     val decorated = rememberFrostedBackdrop(appearance, enabled = recordForeground, dark = false)
     val labelStyle = MaterialTheme.typography.labelMedium.copy(fontSize = 12.sp, lineHeight = 16.sp, fontWeight = FontWeight.Medium)
     val textMeasurer = androidx.compose.ui.text.rememberTextMeasurer()
@@ -120,9 +119,6 @@ internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, pagePosition: () 
         val insets = SelectorTrackInsets(0f, inset, inset)
         val atlasGeometry = selectorTrackGeometry(pixels * tabs.size, baseHeight, 0f, 1f,
             false, rtl, reduced, overflow = !fits)
-        val inkAtlas = if (legacyOverlay && refractForeground)
-            rememberFrostedBackdrop(listOf(tabs, width, labelStyle, density.density, density.fontScale),
-                dark = false, glassBlur = 0f, whiteTint = 0f) else null
         val rawTrack = if (fits) androidx.compose.ui.geometry.Rect(rawGeometry.travelStart, rawGeometry.crossStart,
             rawGeometry.travelEnd, rawGeometry.crossStart + rawGeometry.crossExtent)
             else androidx.compose.ui.geometry.Rect(0f, 0f, viewport, baseHeight)
@@ -240,17 +236,6 @@ internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, pagePosition: () 
                 if (appearance.tabStyle == TabLensStyle.Classic) {
                     Box(Modifier.selectorTrackPlacement(selectorFrame.bounds).then(modifier).background(Color.Black.copy(alpha = appearance.classicOpacity),
                         androidx.compose.foundation.shape.GenericShape { size, _ -> addRoundRect(selectorContour.outlineAt(size)) }))
-                } else if (legacyOverlay) {
-                    // Retire retained tone/mesh preparation, not selector gesture or motion state.
-                    key(renderer) {
-                        LegacySelectorLens(modifier, source, inkAtlas, appearance,
-                            selectorFrame, LensGeometry(track, radius), shell.value, selectorBody.value,
-                            tabs.indices.map { index -> SelectorInkSlot(
-                                atlasGeometry.slot(index, tabs.size, insets, false, rtl).cell,
-                                geometry.slot(index, tabs.size, insets, false, rtl).cell) },
-                            MaterialTheme.colorScheme.onSurfaceVariant, NavigationAccent,
-                            shellOrigin = { composite.origin - recording.topLeft })
-                    }
                 } else CompositionLocalProvider(LocalGlassAppearance provides appearance.copy(
                     blur = if (appearance.tabStyle == TabLensStyle.Overlay) 0f else appearance.tabBlur,
                     whiteTint = if (appearance.tabStyle == TabLensStyle.Overlay) 0f else appearance.tabWhiteTint,
@@ -265,11 +250,6 @@ internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, pagePosition: () 
                 }
             }
             Box(Modifier.width(width * tabs.size).fillMaxHeight(), contentAlignment = AbsoluteAlignment.TopLeft) {
-                if (inkAtlas != null) {
-                    Box(Modifier.fillMaxSize().recordFrostedBackdrop(inkAtlas, displayCutout = {
-                        Path().apply { addRect(androidx.compose.ui.geometry.Rect(Offset.Zero, size)) }
-                    })) { Labels(Color.White, false, atlas = true) }
-                }
                 if (!refractForeground) Lens()
                 val foregroundRecording = selectorTrackRecordingBounds(geometry.travel, baseHeight, limits.crossClearance)
                 val foregroundContent = androidx.compose.ui.geometry.Rect(

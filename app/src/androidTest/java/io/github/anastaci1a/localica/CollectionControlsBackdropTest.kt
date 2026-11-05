@@ -102,7 +102,7 @@ class CollectionControlsBackdropTest {
             val view = LocalView.current
             val source = rememberFrostedBackdrop(Unit, dark = true, glassBlur = 0f, retainRaster = false, whiteTint = 0f)
             // This test observes the live moving scene; the default setting now holds it while scrolling.
-            val page = rememberBrowseBackdropScene(source, null, Unit, scroll.isScrollInProgress, liveWhileScrolling = true)
+            val page = rememberBrowseBackdropScene(source, null, Unit)
             val viewport = rememberBrowseBackdropLayer(page, masked = true)
             SideEffect {
                 scene = page
@@ -136,7 +136,7 @@ class CollectionControlsBackdropTest {
         } }
         compose.waitUntil(10_000) {
             scene?.let { it.source.recorded && it.layers.single().source.recorded &&
-                (Build.VERSION.SDK_INT >= 33 || firstSnapshot != null && it.source.lensSnapshot != null) } == true
+                (Build.VERSION.SDK_INT >= 33 || firstSnapshot != null && it.source.snapshot != null) } == true
         }
         val page = requireNotNull(scene)
         if (Build.VERSION.SDK_INT < 33) {
@@ -157,7 +157,7 @@ class CollectionControlsBackdropTest {
             compose.waitUntil(10_000) {
                 compose.mainClock.advanceTimeByFrame()
                 moving && (Build.VERSION.SDK_INT >= 33 && page.layers.single().outer >= 0 ||
-                    page.source.snapshot?.let { it !== before && page.source.lensSnapshot === it && chroma(it, true) > .01f } == true)
+                    page.source.snapshot?.let { it !== before && page.source.snapshot === it && chroma(it, true) > .01f } == true)
             }
             // CPU preparation can finish after this predicate's last clock tick.
             // Commit its image into the consumer composition, then await native draw.
@@ -172,7 +172,7 @@ class CollectionControlsBackdropTest {
                 "$label scrollPx=${scrollState?.value} density=$pixelDensity lensRoot=$lensBounds " +
                     "sourceOrigin=${source.origin} sourceSize=${source.size} " +
                     "snapshot=${source.snapshot?.let(System::identityHashCode)} " +
-                    "lensSnapshot=${source.lensSnapshot?.let(System::identityHashCode)} " +
+                    "lensSnapshot=${source.snapshot?.let(System::identityHashCode)} " +
                     "request=${source.readbackRequest} published=${source.snapshotReadbackRequest} draws=${source.snapshotDraws}"
             }
             android.util.Log.i("CollectionBackdropFrame", state("pre-final-capture"))

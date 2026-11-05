@@ -212,7 +212,7 @@ class PlayerTransitionTest {
         // unrelated coating; supply the same recorded backing as the real player.
         compose.waitUntil(5000) {
             if (android.os.Build.VERSION.SDK_INT >= 33) backdrop.layer.size.width > 0
-            else backdrop.lensSnapshot != null
+            else backdrop.snapshot != null
         }
         for (p in listOf(.15f, .5f, .15f)) {
             compose.runOnIdle { scope.launch { progress.snapTo(p) } }

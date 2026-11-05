@@ -5,7 +5,6 @@ import android.graphics.Color
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import io.github.anastaci1a.localica.ui.blurGlassSnapshot
-import io.github.anastaci1a.localica.ui.tintLensSnapshot
 import io.github.anastaci1a.localica.ui.readGlassPixels
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
@@ -92,38 +91,5 @@ class GlassPixelBufferTest {
         }
     }
 
-    @Test fun lensTintMatchesFrozenOriginalAndKeepsZeroTintIdentity() {
-        for ((width, height) in listOf(1 to 1, 3 to 7, 35 to 19)) {
-            val source = pattern(width, height)
-            var ownedHardware: Bitmap? = null
-            try {
-                val hardware = requireNotNull(source.copy(Bitmap.Config.HARDWARE, false))
-                ownedHardware = hardware
-                for (input in listOf(source, hardware)) {
-                    val image = input.asImageBitmap()
-                    for (amount in listOf(-1f, 0f, .001f, .25f, .75f, 1f, 2f)) {
-                        var expected: Bitmap? = null
-                        var actual: Bitmap? = null
-                        try {
-                            val baseline = originalTintLensSnapshot(image, amount)
-                            val prepared = tintLensSnapshot(image, amount)
-                            if (amount <= 0f) {
-                                assertSame(image, baseline)
-                                assertSame(image, prepared)
-                            } else {
-                                val baselineBitmap = baseline.asAndroidBitmap()
-                                val preparedBitmap = prepared.asAndroidBitmap()
-                                expected = baselineBitmap
-                                actual = preparedBitmap
-                                assertEquals(baselineBitmap.width, preparedBitmap.width)
-                                assertEquals(baselineBitmap.height, preparedBitmap.height)
-                                assertArrayEquals(pixels(baselineBitmap), pixels(preparedBitmap))
-                            }
-                            assertFalse(input.isRecycled)
-                        } finally { actual?.recycle(); expected?.recycle() }
-                    }
-                }
-            } finally { ownedHardware?.recycle(); source.recycle() }
-        }
-    }
+
 }

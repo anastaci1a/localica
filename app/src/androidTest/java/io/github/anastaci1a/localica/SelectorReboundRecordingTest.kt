@@ -63,7 +63,7 @@ class SelectorReboundRecordingTest {
                 }
             }
         } }
-        if (Build.VERSION.SDK_INT < 33) compose.waitUntil(10000) { source?.lensSnapshot != null }
+        if (Build.VERSION.SDK_INT < 33) compose.waitUntil(10000) { source?.snapshot != null }
         compose.waitForIdle()
         fun bounds() = compose.onNodeWithTag("tab-selector").fetchSemanticsNode().boundsInRoot
         val rest = bounds()

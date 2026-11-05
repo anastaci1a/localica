@@ -95,7 +95,7 @@ class SelectorRegistrationTest {
             }
             if (modal) GlassMorphPopup(true, rememberGlassAnchor(), {}) { Scene() } else Scene()
         } }
-        if (Build.VERSION.SDK_INT < 33) compose.waitUntil(10000) { readySource?.lensSnapshot != null }
+        if (Build.VERSION.SDK_INT < 33) compose.waitUntil(10000) { readySource?.snapshot != null }
         compose.waitForIdle()
         val momentum = GlassMomentum()
         repeat(180) { momentum.advance(0f, 1f / 60, pressure = -.15f, contact = 1f) }
