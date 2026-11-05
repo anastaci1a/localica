@@ -320,7 +320,7 @@ internal class AnalyticSelectionOutline(private val profile: SelectionOutlinePro
     }
     private var components=emptyList<OutlineComponent>()
     private var cachedBodies=emptyList<OutlineBody>()
-    private var cachedCycles=emptyList<Pair<List<OutlineEdge>,List<OutlineSegment>>>()
+    private var cachedCycles=emptyList<Pair<List<OutlineEdge>,List<OutlineSegment>>?>()
     private var unit=1.0
     private var epsilon=1e-5
     var fillets: List<OutlineFilletProof> = emptyList();private set
@@ -477,25 +477,38 @@ internal class AnalyticSelectionOutline(private val profile: SelectionOutlinePro
             boxes+=lobes.fold(body.bounds) { box,lobe -> OutlineBox(min(box.left,lobe.bounds.left),min(box.top,lobe.bounds.top),
                 max(box.right,lobe.bounds.right),max(box.bottom,lobe.bounds.bottom)) }
         }
-        val cycles=outlines.mapIndexed { index,edges ->
-            cachedCycles.getOrNull(index)?.takeIf { it.first===edges }?.let { return@mapIndexed it.second }
-            val vertices=edges.mapIndexed { i,e -> OutlineVertex(i,e.a) }
-            edges.mapIndexed { i,e ->
-                val a=vertices[i];val b=vertices[(i+1)%vertices.size]
-                OutlineSegment(e,0.0,1.0,a,b).also { a.outgoing+=it;b.incoming+=it }
+        // Most flight contours never meet another boundary. Build their linked
+        // walks only after a visible intersection actually requests a fillet.
+        val cycles=arrayOfNulls<List<OutlineSegment>>(outlines.size)
+        fun cycle(index: Int): List<OutlineSegment> {
+            cycles[index]?.let { return it }
+            val edges=outlines[index]
+            val retained=cachedCycles.getOrNull(index)?.takeIf { it.first===edges }?.second
+            val segments=retained ?: run {
+                val vertices=edges.mapIndexed { i,e -> OutlineVertex(i,e.a) }
+                edges.mapIndexed { i,e ->
+                    val a=vertices[i];val b=vertices[(i+1)%vertices.size]
+                    OutlineSegment(e,0.0,1.0,a,b).also { a.outgoing+=it;b.incoming+=it }
+                }
             }
+            cycles[index]=segments
+            return segments
         }
-        cachedCycles=outlines.indices.map { outlines[it] to cycles[it] }
         val result=mutableListOf<Corner>()
         for(i in bodies.indices)for(j in i+1 until bodies.size) {
             if(!boxes[i].overlaps(boxes[j],epsilon))continue
-            val left=cycles[i].filter { it.edge.bounds.overlaps(boxes[j],epsilon) }
-            val right=cycles[j].filter { it.edge.bounds.overlaps(boxes[i],epsilon) }
-            for(a in left)for(b in right) {
-                edgeIntersections(a.edge,b.edge,epsilon) { ta,tb,p ->
-                    val cross=a.edge.tangent(ta).cross(b.edge.tangent(tb))
+            val left=outlines[i];val right=outlines[j]
+            for(ai in left.indices) {
+              val edgeA=left[ai]
+              if(!edgeA.bounds.overlaps(boxes[j],epsilon))continue
+              for(bi in right.indices) {
+                val edgeB=right[bi]
+                if(!edgeB.bounds.overlaps(boxes[i],epsilon))continue
+                edgeIntersections(edgeA,edgeB,epsilon) { ta,tb,p ->
+                    val cross=edgeA.tangent(ta).cross(edgeB.tangent(tb))
                     if(abs(cross)<1e-7)return@edgeIntersections
-                    if(components.any { it.id!=a.edge.owner && it.id!=b.edge.owner && it.bounds.contains(p) && it.distance(p)<-epsilon })return@edgeIntersections
+                    if(components.any { it.id!=edgeA.owner && it.id!=edgeB.owner && it.bounds.contains(p) && it.distance(p)<-epsilon })return@edgeIntersections
+                    val a=cycle(i)[ai];val b=cycle(j)[bi]
                     val vertex=OutlineVertex(-1,p)
                     val incoming=if(cross<0)a else b;val outgoing=if(cross<0)b else a
                     val at=if(cross<0)ta else tb;val bt=if(cross<0)tb else ta
@@ -506,7 +519,9 @@ internal class AnalyticSelectionOutline(private val profile: SelectionOutlinePro
                 }
             }
         }
-        segmentCount=cycles.sumOf { it.size }
+        }
+        cachedCycles=outlines.indices.map { i -> cycles[i]?.let { outlines[i] to it } }
+        segmentCount=cycles.sumOf { it?.size ?: 0 }
         return result
     }
     private fun request(corner: Corner,bodies: List<OutlineBody>,strength: (Int,Int)->Float): Double {

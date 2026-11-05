@@ -11,6 +11,22 @@ import kotlin.math.*
 
 /** Geometry proofs run without the compositor, so antialiasing cannot hide a sharp join. */
 class SelectionMergeGeometryTest {
+    @Test fun retainedPairStrengthsMatchFreshContoursAcrossReorderResizeAndDuplicateMembers() {
+        val cache=io.github.anastaci1a.localica.ui.HoverPathCache()
+        val base=List(4) { i -> SelectionRegion(Rect(i%2*81f,i/2*81f,i%2*81f+80f,i/2*81f+80f),12f) }
+        val clip=Region(-20,-20,300,300)
+        fun pixels(path: androidx.compose.ui.graphics.Path)=Region().apply { setPath(path.asAndroidPath(),clip) }
+        for((step,items) in listOf(base,base.reversed(),base.take(2),base+base[0],base,base).withIndex()) {
+            fun strength(a: Int,b: Int)=((a*7+b*3+step)%11)/10f
+            val actual=cache.path(items,items,16f,::strength)
+            val expected=connectedSelectionPath(items,16f,strength=::strength)
+            assertEquals("step=$step",pixels(expected),pixels(actual))
+            val rebuilds=cache.rebuilds
+            assertSame(actual,cache.path(items,items,16f,::strength))
+            assertEquals(rebuilds,cache.rebuilds)
+        }
+    }
+
     @Test fun opacitySubsetsReusePathsAndMatchTheRestPartitionAtRemoval() {
         val regions=List(3) { i -> SelectionRegion(Rect(0f,i*73f,120f,i*73f+72f),12f) }
         val cache=io.github.anastaci1a.localica.ui.SelectionOpacityPathCache()
