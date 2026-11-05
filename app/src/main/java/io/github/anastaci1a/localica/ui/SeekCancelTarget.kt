@@ -1,5 +1,9 @@
 package io.github.anastaci1a.localica.ui
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.AnimationVector1D
+import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -32,23 +36,29 @@ internal class SeekCancelTargetState {
     var bottomInset by mutableFloatStateOf(0f)
     var rise by mutableFloatStateOf(0f)
 
-    fun update(active: Boolean) {
+    internal var position: Animatable<Float, AnimationVector1D>? = null
+    private var placedGeneration by mutableIntStateOf(-1)
+    internal var exitPosition by mutableStateOf<Float?>(null)
+
+    fun placed(generation: Int) { placedGeneration = generation }
+
+    fun update(active: Boolean, cancelled: Boolean = false) {
         if (active != this.active) {
             this.active = active
-            // Clear synchronously, before a fresh gesture can send its next event.
-            host = null
-            motion = null
+            // Revoke hit geometry synchronously, but retain the exact drawn placement.
+            // A new gesture must be presented before it can use this target.
             if (active) generation++
+            exitPosition = if (!active && cancelled) position?.value else null
         }
     }
     val placement: IntOffset get() {
         if (host?.isAttached != true) return IntOffset.Zero
         return IntOffset(((hostSize.width - size) / 2f).roundToInt(),
-            (hostSize.height - size - bottomInset + (motion?.offsetY(rise) ?: 0f)).roundToInt())
+            (hostSize.height - size - bottomInset + ((position?.value ?: 1f) * rise)).roundToInt())
     }
     val bounds: Rect? get() {
         if (host?.isAttached != true) return null
-        if (!active || motion?.interactive != true || size <= 0f) return null
+        if (!active || placedGeneration != generation || motion?.interactive != true || size <= 0f) return null
         val at = placement
         return Rect(hostOrigin + Offset(at.x.toFloat(), at.y.toFloat()), Size(size, size))
     }
@@ -57,25 +67,34 @@ internal class SeekCancelTargetState {
 @Composable
 internal fun SeekCancelTarget(state: SeekCancelTargetState, hovered: Boolean, bottomInset: Dp,
     reducedMotion: Boolean, action: String = "seek", tag: String = "cancel-seek") {
-    key(state.generation) {
-        val density = LocalDensity.current
-        val motion = rememberFloatingControlMotion(true, reducedMotion)
-        DisposableEffect(state, motion) {
-            state.motion = motion
-            onDispose { if (state.motion === motion) { state.motion = null; state.host = null } }
-        }
-        SideEffect {
-            state.size = with(density) { CompactControlSize.roundToPx().toFloat() }
-            state.bottomInset = with(density) { bottomInset.toPx() }
-            state.rise = with(density) { FloatingControlRise.toPx() }
-        }
-        Box(Modifier.fillMaxSize().onGloballyPositioned {
-            state.host = it
-            state.hostSize = it.size
-            state.hostOrigin = it.positionInRoot()
-        }) {
-            if (motion.alpha > 0f) DragCancelTarget(hovered, action,
-                Modifier.glassShadowOffset { state.placement }.glassShadowOpacity { motion.alpha }.testTag(tag))
-        }
+    val density = LocalDensity.current
+    val reduced = rememberEffectiveReducedMotion(reducedMotion || LocalReducedMotion.current)
+    val speed = LocalMotionSpeed.current
+    val motion = rememberFloatingControlMotion(state.active, reduced)
+    val position = remember { Animatable(1f) }
+    val destination = if (state.active) 0f else state.exitPosition ?: 1f
+    LaunchedEffect(state.active, destination, reduced, speed) {
+        if (reduced) position.snapTo(destination)
+        else position.animateTo(destination, tween(floatingControlDuration(false, speed), easing = LinearOutSlowInEasing))
+    }
+    DisposableEffect(state, motion) {
+        state.motion = motion
+        state.position = position
+        onDispose { if (state.motion === motion) { state.motion = null; state.position = null; state.host = null } }
+    }
+    val generation = state.generation
+    SideEffect {
+        state.placed(generation)
+        state.size = with(density) { CompactControlSize.roundToPx().toFloat() }
+        state.bottomInset = with(density) { bottomInset.toPx() }
+        state.rise = with(density) { FloatingControlRise.toPx() }
+    }
+    Box(Modifier.fillMaxSize().onGloballyPositioned {
+        state.host = it
+        state.hostSize = it.size
+        state.hostOrigin = it.positionInRoot()
+    }) {
+        if (motion.alpha > 0f) DragCancelTarget(hovered || (!state.active && state.exitPosition != null), action,
+            Modifier.glassShadowOffset { state.placement }.glassShadowOpacity { motion.alpha }.testTag(tag))
     }
 }
