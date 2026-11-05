@@ -99,8 +99,16 @@ class PrepareDeviceTestsTest(unittest.TestCase):
     def test_physical_device_is_rejected_without_mutation(self):
         self.state['qemu']='';self.assert_exit(2);self.assertEqual(0,self.state['mutations'])
 
-    def test_api36_is_untouched(self):
+    def test_api36_preserves_packages_and_suppresses_error_dialogs_before_tests(self):
         self.state['api']='36';self.assert_exit(0);self.assertEqual(0,self.state['mutations'])
+        self.assertEqual('1',self.state.get('settings',{}).get('global/hide_error_dialogs'))
+
+    def test_shared_preparation_dismisses_launcher_anr_before_prototype_or_full(self):
+        self.state['api']='36'
+        self.state['window']='  mCurrentFocus=Window{1 u0 Application Not Responding: com.android.launcher3}\n'
+        self.assert_exit(0)
+        self.assertEqual('',self.state['window'])
+        self.assertEqual(0,self.state['mutations'])
 
     def test_missing_api_is_rejected_without_mutation(self):
         self.state['api']='';self.assert_exit(2);self.assertEqual(0,self.state['mutations'])
@@ -134,7 +142,7 @@ class PrepareDeviceTestsTest(unittest.TestCase):
     def test_focused_error_dialog_is_dismissed_before_instrumentation(self):
         self.state['window']='  mCurrentFocus=Window{1 u0 Application Not Responding: com.android.launcher3}\n'
         r=self.run_script(script='run-device-tests.sh');self.assertEqual(0,r.returncode,r.stdout+r.stderr)
-        self.assertIn('error-dialog check before full: found and dismissed',r.stdout)
+        self.assertIn('error-dialog check before preparation: found and dismissed',r.stdout)
         self.assertIn(['adb','-s','emulator-5554','shell','am','broadcast','-a','android.intent.action.CLOSE_SYSTEM_DIALOGS'],self.commands())
 
     def test_setup_failure_prevents_starting_instrumentation(self):
