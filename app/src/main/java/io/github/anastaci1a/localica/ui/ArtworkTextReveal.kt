@@ -17,18 +17,20 @@ import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.graphicsLayer
 
 /**
- * One artwork reveal drives its item's text (#526). While the art loads, the text waits behind
+ * One artwork reveal drives its item's text (#526) and row action (#588). While the art loads, the text waits behind
  * gray skeleton bars. When the art reveals, the text crossfades in with the same reveal value
  * and finishes with it. Only art known to exist (a stored colour) closes the gate; cached,
  * missing and not-yet-indexed art show text at once, so a slow or failing read never hides it. Once the text has been
  * shown, the gate stays open for that item, so pinches and cache refreshes never replay it.
- * Every read happens in draw or layer phases; no frame recomposes the cell.
+ * Animation frames invalidate drawing; only the menu's visibility boundary changes its input.
  */
 @Stable
 internal class ArtworkTextReveal {
     internal var reveal: Animatable<Float, AnimationVector1D>? = null
     private val gate = mutableStateOf(false)
     private var released = false
+    private val menuGate = mutableStateOf(false)
+    private var menuReleased = false
 
     private var started = false
 
@@ -43,8 +45,19 @@ internal class ArtworkTextReveal {
         released = true
         if (gate.value) gate.value = false
     }
+    // Unlike text, the action waits for unindexed artwork too. Both gates still read
+    // the artwork's single Animatable, and neither can close again after release.
+    internal fun holdMenu(waiting: Boolean) {
+        if (menuReleased) return
+        if (waiting) menuGate.value = true else releaseMenu()
+    }
+    internal fun releaseMenu() {
+        menuReleased = true
+        if (menuGate.value) menuGate.value = false
+    }
     val waiting: Boolean get() = gate.value
     val textAlpha: Float get() = if (!gate.value) 1f else reveal?.value ?: 0f
+    val menuAlpha: Float get() = if (!menuGate.value) 1f else reveal?.value ?: 0f
 }
 
 /** Gray text skeleton under the waiting text, fading as the text fades in. The skeleton keeps
