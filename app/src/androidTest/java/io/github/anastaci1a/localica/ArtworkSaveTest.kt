@@ -40,7 +40,7 @@ class ArtworkSaveTest {
 
     @Before fun grant() {
         if (Build.VERSION.SDK_INT < 29) {
-            val out = instrumentation.uiAutomation.executeShellCommand("pm grant ${context.packageName} android.permission.WRITE_EXTERNAL_STORAGE").let { android.os.ParcelFileDescriptor.AutoCloseInputStream(it).use { s -> String(s.readBytes()) } }
+            val out = instrumentation.uiAutomation.executeShellCommand("pm grant ${instrumentation.context.packageName} android.permission.WRITE_EXTERNAL_STORAGE").let { android.os.ParcelFileDescriptor.AutoCloseInputStream(it).use { s -> String(s.readBytes()) } }
             // The platform remaps external storage access for the uid asynchronously after a grant.
             @Suppress("DEPRECATION") val probe = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "probe-$tag.tmp")
             val deadline = System.currentTimeMillis() + 20_000
