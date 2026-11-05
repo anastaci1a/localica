@@ -38,6 +38,8 @@ Frost and shadow use that same path, including drag launch and landing. Diagonal
 
 A lifted item is drawn only from its own retained recording, which stays in the item's display list throughout; the host adds the lifted drawing and never takes ownership, so no cover or label vanishes on select or deselect.
 
+When neighbours fade independently, complete surface and shadow renderings blend continuously. Persistent selections reveal their own shadows before the departing member disappears. Equal visibilities keep one shared outline.
+
 Selection, the current queue occurrence and held drag cards share one item outline. Its corners are concentric with the artwork's, sharing their arc centres.
 
 Every item style, in lists, galleries, carousels and drag cards, uses one padding $d = 3.5$ dp (1.75 times the former 2 dp minimum) between its content, such as a cover's top edge, and the outline:
