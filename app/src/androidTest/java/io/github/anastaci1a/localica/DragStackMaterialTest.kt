@@ -39,7 +39,7 @@ class DragStackMaterialTest {
             state = remember { object : KeyedDragState<String, Unit>(grid, scope, { it }) {
                 override fun capturePresentation() = Unit
             }.also { it.items = entries } }
-            source = rememberFrostedBackdrop(changed, dark = false, settledRefresh = false, distinctPixels = true)
+            source = rememberFrostedBackdrop(changed, dark = false)
             if (pickupContent) BackdropLease(source)
             Box(Modifier.size(360.dp, 480.dp).testTag("stack-scene").onSizeChanged {
                 state.viewportWidth = it.width; state.viewportHeight = it.height
@@ -76,7 +76,7 @@ class DragStackMaterialTest {
             assertTrue(state.begin(entries.first(), entries.take(count).toSet(), state.bounds().getValue(entries.first()).center))
         }
         compose.waitForIdle()
-        if (android.os.Build.VERSION.SDK_INT < 33) compose.waitUntil(15000) { source.lensSnapshot != null }
+        if (android.os.Build.VERSION.SDK_INT < 33) compose.waitUntil(15000) { source.snapshot != null }
     }
 
     private fun capture(name: String): ImageBitmap {
@@ -94,7 +94,7 @@ class DragStackMaterialTest {
     @Test fun joinedPanesDiscardPickupContentFromTheirFrost() {
         fixture(pickupContent = true)
         if (android.os.Build.VERSION.SDK_INT < 33) {
-            compose.waitUntil(15000) { source.lensSnapshot != null }
+            compose.waitUntil(15000) { source.snapshot != null }
             compose.mainClock.autoAdvance = false
             try {
                 compose.runOnIdle {
