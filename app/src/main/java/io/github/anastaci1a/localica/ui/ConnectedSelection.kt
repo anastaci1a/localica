@@ -143,7 +143,9 @@ internal fun ConnectedSelectionHost(modifier: Modifier = Modifier, contentDrawin
                     }
                 Placed(entry, at, outline.translate(at), entry.visibility().coerceIn(0f, 1f))
             }
-            val hovering = placed.filter { (it.entry.selected || it.progress > 0f) && it.entry.recorded && it.entry.layer?.isReleased == false }
+            // Selection intent can arrive one frame before lift progress. Only a visible lift
+            // contributes glass; zero-progress content still belongs in its resting position.
+            val hovering = placed.filter { it.progress > 0f && it.entry.recorded && it.entry.layer?.isReleased == false }
             val hoveringKeys = hovering.mapNotNullTo(mutableSetOf()) { it.entry.itemKey }
             scene.hover.keys.retainAll(hoveringKeys)
             scene.viewportHover.keys.retainAll(hoveringKeys)
@@ -401,7 +403,7 @@ internal fun Modifier.selectionLens(isSelected: Boolean, partial: Boolean,
         if (entry.selected || entry.visibility() > 0f) androidx.compose.runtime.snapshots.Snapshot.withoutReadObservation { scene?.placement = (scene?.placement ?: 0) + 1 }
     }.drawWithContent {
         if (scene == null) { drawContent(); return@drawWithContent }
-        val hovering = entry.selected || visibility.value > 0f
+        val hovering = visibility.value > 0f
         // At rest and while hovering, the content is drawn only through this one retained layer,
         // and the layer always stays in this item's own display list (#574). A RenderNode that is
         // moved between display lists, or left out of every list for a frame, loses its recording;
