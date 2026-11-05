@@ -2,17 +2,56 @@ package io.github.anastaci1a.localica
 
 import android.os.Looper
 import io.github.anastaci1a.localica.localicaComposeRule as createComposeRule
+import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.test.onNodeWithText
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
 
 class TestComposeDispatcherTest {
     @get:Rule val compose = createComposeRule()
+
+    @Test fun backgroundReturnKeepsEffectsAndRecompositionOnUi() {
+        val started = CompletableDeferred<Unit>()
+        val release = CompletableDeferred<Unit>()
+        val finished = CompletableDeferred<Unit>()
+        val ready = mutableStateOf(false)
+        compose.setContent {
+            BasicText(if (ready.value) "Worker completed" else "Waiting for worker")
+            SideEffect { assertSame("Composition stays on Main", Looper.getMainLooper(), Looper.myLooper()) }
+            LaunchedEffect(Unit) {
+                withContext(Dispatchers.Default) { started.complete(Unit); release.await() }
+                assertSame("Returning from worker preparation resumes on Main", Looper.getMainLooper(), Looper.myLooper())
+                ready.value = true
+                finished.complete(Unit)
+            }
+        }
+        compose.waitUntil(5000) { started.isCompleted }
+        compose.mainClock.autoAdvance = false
+        val before = compose.mainClock.currentTime
+        try {
+            runBlocking(Dispatchers.Default) { release.complete(Unit) }
+            compose.waitUntil(5000) { finished.isCompleted }
+            compose.runOnIdle {
+                assertTrue(ready.value)
+                assertEquals("Worker completion cannot advance a paused frame", before, compose.mainClock.currentTime)
+            }
+            compose.mainClock.advanceTimeByFrame()
+            compose.onNodeWithText("Worker completed").assertExists()
+        } finally {
+            release.complete(Unit)
+            compose.mainClock.autoAdvance = true
+        }
+    }
 
     @Test fun idleDrainsWorkerEmissionsOnUiWithoutAdvancingPausedClock() {
         val state = MutableStateFlow(0)
