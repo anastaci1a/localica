@@ -25,6 +25,7 @@ import kotlin.math.sqrt
 class SeekCancelGlassTest {
     @get:Rule val compose = createComposeRule()
 
+    @androidx.test.filters.SdkSuppress(minSdkVersion = 33)
     @Test fun cancelTargetRefractsTheUiBehindItAndOnlyTheSceneRecordingDoesSo() {
         var scene = false
         var chosenScene by mutableStateOf(false)

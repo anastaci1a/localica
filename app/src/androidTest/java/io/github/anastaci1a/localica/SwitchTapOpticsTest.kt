@@ -93,7 +93,7 @@ class SwitchTapOpticsTest {
             for (at in listOf(16L, 48L, 96L, 160L, 240L)) {
                 compose.mainClock.advanceTimeBy(at - elapsed); elapsed = at
                 val visibleBackdrop = capture("tap-$mode-$faster-$at", "tap")
-                if (at == 160L) assertTrue("Automatic travel must retain a refracted backdrop band ($mode, faster=$faster)", visibleBackdrop > 10)
+                if (at == 160L) assertTrue("Automatic travel must retain the average-colour backdrop band ($mode, faster=$faster)", visibleBackdrop > 10)
                 recordProfile("held-$mode-$faster-$at", "held")
             }
             compose.runOnIdle { assertTrue(tapped); assertTrue(held) }
@@ -309,14 +309,13 @@ class SwitchTapOpticsTest {
             }
         } finally { bitmap.recycle() }
     }
-    @Test fun warmedLegacyShortTapAndReversalRetainPixelsAndReportObservedCaptureWork() {
+    @Test fun warmedNoneShortTapAndReversalRetainPixelsWithoutOpticalWork() {
         var checked by mutableStateOf(false)
         val callbacks = mutableListOf<Boolean>()
-        val allocations = IntArray(LensAllocation.entries.size)
+        var opticalWork = 0
         var draws = 0
         val drawObserver: () -> Unit = { draws++ }
-        val allocationObserver: (LensAllocation) -> Unit = { allocations[it.ordinal]++ }
-        val runtime = GlassRendererRuntime(GlassRendererMode.Legacy)
+        val runtime = GlassRendererRuntime(GlassRendererMode.None)
         val tag = "capture-work"
         compose.setContent {
             CompositionLocalProvider(LocalGlassRendererRuntime provides runtime) {
@@ -324,7 +323,7 @@ class SwitchTapOpticsTest {
                     view = LocalView.current
                     pixelDensity = LocalDensity.current.density
                     CompositionLocalProvider(LocalMotionSpeed provides (4f / 3f), LocalReducedMotion provides false,
-                        LocalControlLensDraw provides drawObserver, LocalControlLensAllocation provides allocationObserver) {
+                        LocalControlLensDraw provides drawObserver, LocalGlassOpticalWork provides { opticalWork++ }) {
                         Box(Modifier.width(280.dp)) {
                             Sample(tag, checked) { callbacks += it; checked = it }
                         }
@@ -360,9 +359,7 @@ class SwitchTapOpticsTest {
             val source = backings.getValue(tag)
             android.util.Log.i("SwitchCaptureWork", "phase=$name api=${android.os.Build.VERSION.SDK_INT} " +
                 "clock=${compose.mainClock.currentTime} checked=$checked callbacks=$callbacks " +
-                "capture=${allocations[LensAllocation.CaptureBitmap.ordinal]} " +
-                "shader=${allocations[LensAllocation.BitmapShader.ordinal]} " +
-                "raster=${allocations[LensAllocation.SoftwareRaster.ordinal]} draws=$draws " +
+                "opticalWork=$opticalWork draws=$draws " +
                 "rawReady=${source.snapshot != null} recorded=${source.recorded} consumers=${source.consumers} " +
                 "green=${pixels?.first} outsideTrackGreen=${pixels?.second} white=${pixels?.third} " +
                 "markerReadbacksIncluded=true")
@@ -385,11 +382,12 @@ class SwitchTapOpticsTest {
             held = true
             switch.performTouchInput { down(center) }
             awaitRecording(tag)
-            // Explicit Legacy needs the raw image even on APIs with a recorded layer.
+            // Older APIs average a tiny readback; newer APIs average directly on the GPU.
             compose.waitUntil(10_000) {
                 compose.mainClock.advanceTimeByFrame()
                 val source = backings[tag]
-                source != null && source.recorded && !source.layer.isReleased && source.snapshot != null
+                source != null && source.recorded && !source.layer.isReleased &&
+                    (android.os.Build.VERSION.SDK_INT >= 33 || source.snapshot != null)
             }
             compose.mainClock.advanceTimeBy(320)
             val primed = sample("work-priming-held")
@@ -406,7 +404,7 @@ class SwitchTapOpticsTest {
             compose.runOnIdle {
                 assertFalse(checked)
                 assertEquals(listOf(true, false), callbacks)
-                assertNotNull("Warmed source remains sampleable", backings.getValue(tag).snapshot)
+                assertTrue("Warmed source remains sampleable", backings.getValue(tag).recorded)
             }
             row.assertIsOff()
             settled("settled-warmed-off")
@@ -443,9 +441,10 @@ class SwitchTapOpticsTest {
                 assertEquals("Settling releases the prewarm lease", 0, backings.getValue(tag).consumers)
             }
             settled("settled-work-off")
-            val stopped = compose.runOnIdle { allocations.toList() to draws }
+            val stopped = compose.runOnIdle { opticalWork to draws }
             compose.mainClock.advanceTimeBy(500)
-            compose.runOnIdle { assertEquals("Rest adds no optical draw or explicit lens allocation", stopped, allocations.toList() to draws) }
+            compose.runOnIdle { assertEquals("Rest adds no optical draw or explicit lens allocation", stopped, opticalWork to draws) }
+            compose.runOnIdle { assertEquals("None never invokes the optical filter", 0, opticalWork) }
             phase("final-idle")
         } catch (failure: Throwable) { primary = failure; throw failure }
         finally {

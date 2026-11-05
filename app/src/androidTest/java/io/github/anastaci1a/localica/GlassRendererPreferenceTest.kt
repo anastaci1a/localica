@@ -32,6 +32,19 @@ class GlassRendererPreferenceTest {
         }
     }
 
+    @Test fun retiredModesMigrateAndRetiredScrollSettingIsRemoved() = withPreferences { context, raw ->
+        for (name in listOf("Automatic", "Modern", "Legacy")) for (scroll in listOf(false, true)) {
+            raw.edit().clear().putString("glass-renderer", name)
+                .putBoolean("glass-live-scroll", scroll).putBoolean("confirm-exit", true).commit()
+            val restored = InterfacePreferences(context).read()
+            assertEquals("Normal", restored.glass.renderer.name)
+            assertEquals("Normal", raw.getString("glass-renderer", null))
+            assertFalse(raw.contains("glass-live-scroll"))
+            assertTrue(restored.confirmExit)
+            assertEquals(restored, InterfacePreferences(context).read())
+        }
+    }
+
     @Test fun missingAndUnknownRendererNamesRestoreAutomaticWithoutChangingOtherSettings() = withPreferences { context, raw ->
         assertEquals(InterfaceSettings(), InterfacePreferences(context).read())
         raw.edit().putBoolean("confirm-exit", true).putFloat("glass-depth", .8f).commit()
@@ -57,28 +70,15 @@ class GlassRendererPreferenceTest {
             val restored = InterfacePreferences(context).read()
             assertEquals(requested, restored)
             assertEquals(mode.name, raw.getString("glass-renderer", null))
-            if (mode == GlassRendererMode.Modern) {
-                assertEquals(GlassBackend.Legacy, effectiveGlassBackend(restored.glass.renderer, 26))
-                assertEquals(GlassRendererMode.Modern, InterfacePreferences(context).read().glass.renderer)
-                assertEquals("Modern", raw.getString("glass-renderer", null))
+            if (mode == GlassRendererMode.Normal) {
+                assertEquals(GlassBackend.None, effectiveGlassBackend(restored.glass.renderer, 26))
+                assertEquals(GlassRendererMode.Normal, InterfacePreferences(context).read().glass.renderer)
+                assertEquals("Normal", raw.getString("glass-renderer", null))
             }
         }
         InterfacePreferences(context).write(InterfaceSettings())
         assertEquals(InterfaceSettings(), InterfacePreferences(context).read())
-        assertEquals("Automatic", raw.getString("glass-renderer", null))
-    }
-
-    @Test fun liveScrollGlassDefaultsOffAndRoundTripsWithoutChangingOtherSettings() = withPreferences { context, raw ->
-        assertFalse(GlassAppearance().liveScrollGlass)
-        assertFalse(InterfacePreferences(context).read().glass.liveScrollGlass)
-        assertFalse("Read must not write a default", raw.contains("glass-live-scroll"))
-        val on = InterfaceSettings(confirmExit = true, glass = GlassAppearance(depth = .8f, renderer = GlassRendererMode.Legacy, liveScrollGlass = true))
-        InterfacePreferences(context).write(on)
-        assertTrue(raw.getBoolean("glass-live-scroll", false))
-        assertEquals(on, InterfacePreferences(context).read())
-        InterfacePreferences(context).write(on.copy(glass = on.glass.copy(liveScrollGlass = false)))
-        assertFalse(raw.getBoolean("glass-live-scroll", true))
-        assertEquals(on.copy(glass = on.glass.copy(liveScrollGlass = false)), InterfacePreferences(context).read())
+        assertEquals("Normal", raw.getString("glass-renderer", null))
     }
 
     @Test fun rendererPersistencePreservesTheExistingContrastMigration() = withPreferences { context, raw ->
@@ -87,11 +87,11 @@ class GlassRendererPreferenceTest {
                 .putString("glass-renderer", "Modern").commit()
             val restored = InterfacePreferences(context).read()
             assertEquals(expected, restored.glass.contrast, 0f)
-            assertEquals(GlassRendererMode.Modern, restored.glass.renderer)
+            assertEquals(GlassRendererMode.Normal, restored.glass.renderer)
             InterfacePreferences(context).write(restored)
             assertFalse(raw.contains("glass-contrast"))
             assertEquals(expected, raw.getFloat("glass-contrast-trim", -1f), 0f)
-            assertEquals("Modern", raw.getString("glass-renderer", null))
+            assertEquals("Normal", raw.getString("glass-renderer", null))
         }
     }
 }

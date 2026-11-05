@@ -45,8 +45,6 @@ internal fun shadowStrengthReadout(strength: Float): Int =
 internal fun GlassSettingsControls(value: GlassAppearance, onChange: (GlassAppearance) -> Unit) {
     Text("Tune floating glass and the navigation selector.")
     GlassRendererPreference(value.renderer) { onChange(value.copy(renderer = it)) }
-    BooleanPreference("Live glass while scrolling", value.liveScrollGlass) { onChange(value.copy(liveScrollGlass = it)) }
-    Text("Off holds glass controls on the last frame until scrolling stops, which scrolls more smoothly. On re-blurs the moving list every frame. Affects the Modern renderer.", style = MaterialTheme.typography.bodySmall)
     var previewLightInk by remember { mutableStateOf(false) }
     CompositionLocalProvider(LocalGlassAppearance provides value) {
         Box(Modifier.fillMaxWidth().height(180.dp), contentAlignment = Alignment.Center) {
@@ -110,17 +108,10 @@ internal fun GlassSettingsControls(value: GlassAppearance, onChange: (GlassAppea
 
 @Composable
 internal fun GlassRendererPreference(value: GlassRendererMode, onChange: (GlassRendererMode) -> Unit) {
-    val modernAvailable = android.os.Build.VERSION.SDK_INT >= 33
-    val choices = if (modernAvailable) GlassRendererMode.entries else
-        listOf(GlassRendererMode.Automatic, GlassRendererMode.Legacy)
-    ChoicePreference("Glass renderer", value, choices, { it.label }, popup = true, onSelect = onChange)
-    val explanation = when {
-        value == GlassRendererMode.Modern && !modernAvailable ->
-            "Modern is saved, but this Android version uses Legacy. Modern requires Android 13 or later."
-        value == GlassRendererMode.Automatic ->
-            "Automatic uses ${effectiveGlassBackend(value, android.os.Build.VERSION.SDK_INT).name} on this device."
-        else -> "Using ${value.label} on this device."
-    }
+    ChoicePreference("Glass renderer", value, GlassRendererMode.entries, { it.label }, popup = true, onSelect = onChange)
+    val explanation = if (value == GlassRendererMode.Normal && android.os.Build.VERSION.SDK_INT < 33)
+        "Normal uses solid average colour on this Android version. Refraction requires Android 13 or later."
+    else "Using "+value.label+" on this device."
     Text(explanation, style = MaterialTheme.typography.bodySmall)
 }
 

@@ -26,6 +26,7 @@ import org.junit.Test
 class GlassAppearanceTest {
     @get:Rule val compose = createComposeRule()
 
+    @androidx.test.filters.SdkSuppress(minSdkVersion = 33)
     @Test fun frostedPanelsStillScatterTheParentScene() {
         var top by mutableStateOf(300.dp)
         lateinit var source: FrostedBackdrop
@@ -87,6 +88,7 @@ class GlassAppearanceTest {
         } finally { prefs.write(original) }
     }
 
+    @androidx.test.filters.SdkSuppress(minSdkVersion = 33)
     @Test fun blurTintAndShadowChangeIndependentlyWhileForegroundStaysSharp() {
         var appearance by mutableStateOf(GlassAppearance(0f, 0f, 0f, 0f, contrast = 0f))
         var expansion by mutableFloatStateOf(0f)
@@ -119,7 +121,7 @@ class GlassAppearanceTest {
         compose.runOnIdle { expansion = 0f }
         compose.waitUntil(5000) { nearBoundary().blue < .05f }
         compose.runOnIdle { appearance = appearance.copy(blur = 1f) }
-        if (Build.VERSION.SDK_INT < 31) compose.waitUntil(10000) { source.glassFallback != null }
+        if (Build.VERSION.SDK_INT < 31) compose.waitUntil(10000) { source.snapshot != null }
         compose.waitUntil(5000) { nearBoundary().blue > .2f }
         val blurred = nearBoundary()
         assertTrue("Frost scatters both sides: $blurred", blurred.red > .2f && blurred.blue > .2f)

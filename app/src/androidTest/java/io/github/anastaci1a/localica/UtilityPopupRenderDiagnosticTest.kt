@@ -350,7 +350,7 @@ class UtilityPopupRenderDiagnosticTest {
     }
 
     private fun rasterRefs(source: FrostedBackdrop): List<Any?> = listOf(
-        source.snapshot, source.fallback, source.glassFallback, source.lensSnapshot, source.lensFrostSnapshot)
+        source.snapshot, source.fallback, source.snapshot, source.snapshot, source.snapshot)
 
     private data class NativeLayout(val origin: Offset, val width: Int, val height: Int,
         val attached: Boolean, val layoutRequested: Boolean) {
@@ -598,7 +598,7 @@ class UtilityPopupRenderDiagnosticTest {
             .put("groupEntries", group.entries.size).put("activeGroupBodies", group.entries.values.count { it.anchor?.shadowInModal != true })
             .put("browseRecorded", browseSource.recorded).put("modalRecorded", modalSource.recorded)
             .put("browseRevision", browseSource.revision).put("modalRevision", modalSource.revision)
-            .put("browseRasterReady", browseSource.lensSnapshot != null).put("modalRasterReady", modalSource.lensSnapshot != null)
+            .put("browseRasterReady", browseSource.snapshot != null).put("modalRasterReady", modalSource.snapshot != null)
             .put("rasterIdentityOrder", "snapshot,fallback,glassFallback,lensSnapshot,lensFrostSnapshot")
             .put("browseRasterIdentities", JSONArray(rasterRefs(browseSource).map { it?.let(System::identityHashCode) ?: JSONObject.NULL }))
             .put("modalRasterIdentities", JSONArray(rasterRefs(modalSource).map { it?.let(System::identityHashCode) ?: JSONObject.NULL }))

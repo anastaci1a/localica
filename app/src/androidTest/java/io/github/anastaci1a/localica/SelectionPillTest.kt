@@ -72,7 +72,7 @@ class SelectionPillTest {
             }
         } } }
         compose.runOnIdle { session.select(null, tracks.take(3).map { SongRow(it.id, it) }) }
-        if (android.os.Build.VERSION.SDK_INT < 33) compose.waitUntil(10000) { backdrop.glassFallback != null }
+        if (android.os.Build.VERSION.SDK_INT < 33) compose.waitUntil(10000) { backdrop.snapshot != null }
         compose.waitForIdle()
     }
 

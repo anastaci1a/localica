@@ -13,7 +13,6 @@ import kotlin.math.ceil
 
 /** Optional instrumentation; no snapshot writes or work when no observer is installed. */
 internal val LocalControlLensDraw = staticCompositionLocalOf<(() -> Unit)?> { null }
-internal val LocalControlLensAllocation = staticCompositionLocalOf<((LensAllocation) -> Unit)?> { null }
 
 /** Draw the track once. Only the lens replaces pixels with the sampled track/backdrop.
  * A settled white thumb has no recording, backdrop subscription or optical renderer. */
@@ -25,7 +24,10 @@ internal fun GlassControlScene(modifier: Modifier, horizontalPadding: Dp = 20.dp
     prepare: () -> Boolean = { false },
     scene: DrawScope.() -> Unit) {
     val renderer = currentGlassRendererGeneration()
-    val modern = renderer.backend == GlassBackend.Modern && Build.VERSION.SDK_INT >= 33
+    val modern = Build.VERSION.SDK_INT >= 33
+    val none by androidx.compose.animation.core.animateFloatAsState(
+        if (renderer.backend == GlassBackend.None) 1f else 0f,
+        androidx.compose.animation.core.spring(1f, 450f), label = "Control render mode")
     val currentActive by rememberUpdatedState(active)
     val optical by remember { derivedStateOf { currentActive() > 0f } }
     val currentPrepare by rememberUpdatedState(prepare)
@@ -33,13 +35,13 @@ internal fun GlassControlScene(modifier: Modifier, horizontalPadding: Dp = 20.dp
     if (sampled) BackdropLease(source)
     val location = remember { BackdropLocation() }
     val lens = remember { lazy { if (Build.VERSION.SDK_INT >= 33) LensRenderer() else null } }
-    val mesh = remember { lazy { LensMeshRenderer() } }
+    val averageRenderer = remember { if (Build.VERSION.SDK_INT >= 33) MaterialAverageRenderer() else null }
+    val averageLayer = if (optical && modern) rememberGraphicsLayer() else null
     val rim = remember { GlassRimCache() }
     val layer = if (optical && modern) rememberGraphicsLayer() else null
-    val softwareCapture = if (optical && !modern && Build.VERSION.SDK_INT < 29)
-        remember { SoftwareControlCapture() } else null
+    val averageBitmap = if (optical && !modern) remember { ImageBitmap(8, 8) } else null
     val onLensDraw = LocalControlLensDraw.current
-    val onAllocation = LocalControlLensAllocation.current
+    val opticalWork = LocalGlassOpticalWork.current
     Canvas(modifier.backdropLocation(location)) {
         val shape = geometry()
         if (!optical) {
@@ -71,28 +73,36 @@ internal fun GlassControlScene(modifier: Modifier, horizontalPadding: Dp = 20.dp
         }
         clipPath(silhouette, ClipOp.Difference) { scene() }
         onLensDraw?.invoke()
-        if (layer != null && modern) {
+        if (layer != null && modern && none < 1f) {
+            opticalWork?.invoke()
             layer.renderEffect = lens.value?.effect(shifted, 0f, 1.35f * thickness, flattening = flattening)
             layer.record(Density(density, fontScale), layoutDirection, extent) { recordScene() }
             clipPath(silhouette) { translate(origin.x, origin.y) { drawLayer(layer) } }
-        } else {
-            fun drawCapture(image: ImageBitmap, mutable: Boolean, content: Int = 0) {
-                clipPath(silhouette) {
-                    with(mesh.value) { draw(shape, image, extent, -origin, 1.35f * thickness,
-                        flattening = flattening, mutableSoftwareSnapshot = mutable,
-                        contentGeneration = content, onAllocation = onAllocation) }
+        }
+        if (none > 0f) {
+            if (averageLayer != null && averageRenderer != null && Build.VERSION.SDK_INT >= 33) {
+                averageLayer.renderEffect = averageRenderer.effect()
+                averageLayer.alpha = none
+                averageLayer.record(Density(density, fontScale), layoutDirection, IntSize(8, 8)) {
+                    scale(8f / shape.bounds.width, 8f / shape.bounds.height, Offset.Zero) {
+                        translate(-pad, -pad) { recordScene() }
+                    }
                 }
-            }
-            if (softwareCapture != null) {
-                softwareCapture.withScene(extent, Density(density, fontScale), layoutDirection, onAllocation,
-                    record = { recordScene() }, consume = { drawCapture(it, true, softwareCapture.generation) })
+                clipPath(silhouette) { translate(shape.bounds.left, shape.bounds.top) {
+                    scale(shape.bounds.width / 8f, shape.bounds.height / 8f, Offset.Zero) { drawLayer(averageLayer) }
+                } }
             } else {
-                // Hardware mesh drawing can retain shader input beyond this call.
-                val image = ImageBitmap(extent.width, extent.height)
-                onAllocation?.invoke(LensAllocation.CaptureBitmap)
-                CanvasDrawScope().draw(Density(density, fontScale), layoutDirection, Canvas(image),
-                    Size(extent.width.toFloat(), extent.height.toFloat())) { recordScene() }
-                drawCapture(image, false)
+                if (averageBitmap != null) {
+                    averageBitmap.asAndroidBitmap().eraseColor(android.graphics.Color.TRANSPARENT)
+                    CanvasDrawScope().draw(Density(density, fontScale), layoutDirection, Canvas(averageBitmap), Size(8f, 8f)) {
+                        scale(8f / shape.bounds.width, 8f / shape.bounds.height, Offset.Zero) {
+                            translate(-pad, -pad) { recordScene() }
+                        }
+                    }
+                    val image = averageBitmap.asAndroidBitmap()
+                    val average = averageGlassColor { x, y -> image.getPixel(x, y) }
+                    clipPath(silhouette) { drawRect(average, alpha = none) }
+                }
             }
         }
         drawRoundRect(face(), shape.bounds.topLeft, shape.bounds.size, CornerRadius(shape.corner))

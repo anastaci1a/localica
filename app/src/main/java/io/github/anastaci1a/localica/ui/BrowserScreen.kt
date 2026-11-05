@@ -498,8 +498,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
         retainRaster = false)
     val backdropBacking = if (artDetail) collectionSource else surroundingBackdrop
     val backdropScene = rememberBrowseBackdropScene(listBackdrop, backdropBacking,
-        listOf(presentation, validAlbums, if (artDetail) hero else surroundingBackdrop?.fallback),
-        liveWhileScrolling = LocalGlassAppearance.current.liveScrollGlass || reorder.drag != null) { gridState.isScrollInProgress }
+        listOf(presentation, validAlbums, if (artDetail) hero else surroundingBackdrop?.fallback))
     val maskedBackdrop = (showSearchPill || showFilters) && !artDetail
     val viewportBackdrop = if (needsListBackdrop) rememberBrowseBackdropLayer(backdropScene, maskedBackdrop) else null
     // #535 (b): the always-on stuck-state watchdog and phase trail feed the in-app diagnostics buffer.

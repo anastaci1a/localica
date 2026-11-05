@@ -112,7 +112,7 @@ class SelectorPopupClearanceTest {
                 }
             }
         } }
-        if (Build.VERSION.SDK_INT < 33) compose.waitUntil(10000) { source?.lensSnapshot != null }
+        if (Build.VERSION.SDK_INT < 33) compose.waitUntil(10000) { source?.snapshot != null }
         compose.waitForIdle()
         assertEquals("The real dialog content must use the requested font scale", fontScale, popupFontScale, .001f)
     }

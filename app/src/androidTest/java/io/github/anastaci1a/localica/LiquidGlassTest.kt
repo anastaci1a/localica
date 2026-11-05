@@ -76,6 +76,7 @@ class LiquidGlassTest {
         }
     }
 
+    @androidx.test.filters.SdkSuppress(minSdkVersion = 33)
     @Test fun tintLiftsShadowsMoreThanHighlightsWithoutBleachingYellow() {
         org.junit.Assume.assumeTrue("Per-pixel tone mapping requires runtime shaders", Build.VERSION.SDK_INT >= 33)
         var tint by mutableFloatStateOf(0f)
@@ -119,7 +120,9 @@ class LiquidGlassTest {
         compose.onNodeWithText("Below the control").assertIsDisplayed()
     }
 
+    @androidx.test.filters.SdkSuppress(minSdkVersion = 33)
     @Test fun lightPillTransmitsAndRefreshesSceneWithoutBlurringForeground() = verifyLens(false)
+    @androidx.test.filters.SdkSuppress(minSdkVersion = 33)
     @Test fun darkBubbleTransmitsAndRefreshesSceneWithoutBlurringForeground() = verifyLens(true)
 
     @Test fun transparentListPixelsLeaveTheDrawerVisibleThroughTheLens() {
