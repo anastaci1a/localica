@@ -321,3 +321,5 @@ io.github.anastaci1a.localica.TransportScrollTest
 io.github.anastaci1a.localica.TransportAnimationFrameTest
 io.github.anastaci1a.localica.PlayerSeekCancelCrashTest
 io.github.anastaci1a.localica.ArtworkSaveTest
+io.github.anastaci1a.localica.ScrollbarContinuityTest
+io.github.anastaci1a.localica.ScrollbarScreenshotTest
