@@ -272,7 +272,7 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
 
         if (visible && source != null && Build.VERSION.SDK_INT < 33) {
             AverageBackdrop(Modifier.matchParentSize(), source, location,
-                MaterialAverageStyle(appearance.whiteTint * (1f - panel), tone), homeSource, homeWeight)
+                MaterialAverageStyle(appearance.whiteTint * (1f - panel), tone), homeSource, homeWeight, homeBounds, homeFootprint)
         }
         Canvas(Modifier.matchParentSize()) {
             drawRect(tone.color(tint))

@@ -13,8 +13,12 @@ import androidx.compose.ui.graphics.lerp
 /** The same 8×8 premultiplied average as MaterialAverageRenderer, using the shared
  * tiny readback on Android versions without runtime shaders. No optical filtering. */
 internal fun FrostedBackdrop.averageColor(location: BackdropLocation, bounds: Rect): Color? {
-    val image = snapshot?.asAndroidBitmap() ?: return null
     val mapping = location.registrationTo(this.location) ?: return null
+    return averageColor(mapping, bounds)
+}
+
+private fun FrostedBackdrop.averageColor(mapping: BackdropRegistration, bounds: Rect): Color? {
+    val image = snapshot?.asAndroidBitmap() ?: return null
     if (size.width <= 0 || size.height <= 0) return null
     return averageGlassColor { x, y ->
         val point = mapping.map(Offset(bounds.left + bounds.width * (x + .5f) / 8,
@@ -48,14 +52,29 @@ internal fun MaterialAverageStyle.color(mean: Color): Color {
 
 @Composable
 internal fun AverageBackdrop(modifier: Modifier, source: FrostedBackdrop, location: BackdropLocation,
-    style: MaterialAverageStyle, home: FrostedBackdrop? = null, homeWeight: () -> Float = { 0f }) {
+    style: MaterialAverageStyle, home: FrostedBackdrop? = null, homeWeight: () -> Float = { 0f },
+    homeBounds: (() -> Rect)? = null, homeFootprint: (() -> HomeBackdropFootprint?)? = null) {
     BackdropLease(source)
     BackdropLease(home?.takeUnless { it === source })
     Canvas(modifier) {
         val bounds = Rect(Offset.Zero, size)
         val primary = source.averageColor(location, bounds) ?: return@Canvas
         val weight = homeWeight().coerceIn(0f, 1f)
-        val color = home?.averageColor(location, bounds)?.let { lerp(primary, it, weight) } ?: primary
+        val homeColor = if (home != null && weight > 0f) {
+            val footprint = homeFootprint?.invoke()
+            if (homeFootprint != null && footprint == null) return@Canvas
+            val logicalBounds = if (homeFootprint == null) homeBounds?.invoke()?.takeUnless { it.isEmpty } else null
+            val sourceToScreen = home.location.registrationToScreen()
+            val mapping = when {
+                footprint != null -> footprint.sourceToLocal(sourceToScreen)?.inverse()
+                logicalBounds != null -> BackdropRegistration.create(1f, 0f, 0f, 1f,
+                    logicalBounds.left, logicalBounds.top)?.followedBy(sourceToScreen?.inverse() ?: return@Canvas)
+                else -> location.registrationTo(home.location)
+            } ?: return@Canvas
+            home.averageColor(mapping, Rect(Offset.Zero, footprint?.size ?: logicalBounds?.size ?: size))
+                ?: return@Canvas
+        } else primary
+        val color = lerp(primary, homeColor, weight)
         drawRect(style.color(color))
     }
 }
