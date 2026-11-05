@@ -85,12 +85,13 @@ internal fun BrowseScrollbar(state: LazyGridState, items: List<BrowserItem>, sor
         val minThumb = with(density) { ScrollbarGrip.MinHeightDp.dp.toPx() }
         var dragFraction by remember { mutableFloatStateOf(0f) }
         var dragY by remember { mutableFloatStateOf(0f) }
+        var grab by remember { mutableFloatStateOf(0f) }
         fun thumb(): Float { fraction(); return model.thumbSize(track, minThumb, track * ScrollbarGrip.MaxTrackShare) * grip }
                 fun displayed() = if (dragging) dragFraction else (fraction() + release.value).coerceIn(0f, 1f)
         fun position() = ScrollbarGrip.top(displayed(), track, thumb())
         fun seek(y: Float) {
             dragY = y
-            dragFraction = ((y - thumb() / 2) / (track - thumb()).coerceAtLeast(1f)).coerceIn(0f, 1f)
+            dragFraction = ((y - grab - thumb() / 2) / (track - thumb()).coerceAtLeast(1f)).coerceIn(0f, 1f)
             target = model.target(dragFraction).first
             request(dragFraction)
         }
@@ -117,7 +118,12 @@ internal fun BrowseScrollbar(state: LazyGridState, items: List<BrowserItem>, sor
             }
             .pointerInput(model) {
                 try {
-                    detectVerticalDragGestures(onDragStart = { dragging = true; seek(it.y) },
+                    detectVerticalDragGestures(onDragStart = {
+                            // Grabbing the thumb keeps its offset under the finger; elsewhere the thumb comes to the finger.
+                            val top = position()
+                            grab = if (it.y in top..(top + thumb())) it.y - (top + thumb() / 2) else 0f
+                            dragging = true; seek(it.y)
+                        },
                         onDragEnd = ::endDrag, onDragCancel = ::endDrag) { change, delta ->
                         change.consume(); seek(dragY + delta)
                     }

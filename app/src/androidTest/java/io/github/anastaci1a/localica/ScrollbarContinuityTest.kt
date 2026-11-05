@@ -118,9 +118,10 @@ class ScrollbarContinuityTest {
         host()
         val barBounds = bar().fetchSemanticsNode().boundsInRoot
         val tops = mutableListOf<Float>()
-        bar().performTouchInput { down(Offset(centerX, 24f * density)) }
+        val grabY = thumb().center.y - barBounds.top
+        bar().performTouchInput { down(Offset(centerX, grabY)) }
         compose.mainClock.autoAdvance = false
-        var y = 24f * density
+        var y = grabY
         repeat(60) {
             y += 4f * density
             bar().performTouchInput { moveTo(Offset(centerX, y)) }
