@@ -65,17 +65,24 @@ class PinchRetargetTest {
             fun bounds() = compose.onNodeWithTag("browse-art-$uri", true).fetchSemanticsNode().boundsInRoot
             // Half-coverage against either light or dark backing, including antialiased edges.
             fun red(c: Color) = c.red - maxOf(c.green, c.blue) > .5f
+            var frameState = "No frame observed"
             fun frame(): Rect {
+                frameState = "Waiting for idle and artwork semantics"
                 compose.waitForIdle()
                 val laid = bounds()
+                frameState = "Capture requested; laid=$laid"
                 val image = compose.onNodeWithTag("retarget-window").captureToImage()
                 val pixels = image.toPixelMap()
                 val x = laid.center.x.toInt(); val y = laid.center.y.toInt()
-                assertTrue("Cover remains painted at $laid", red(pixels[x, y]))
+                frameState = "laid=$laid; image=${pixels.width}x${pixels.height}; sample=($x,$y)"
+                val centre = pixels[x, y]
+                frameState += "; centre=$centre"
+                assertTrue("Cover remains painted at $laid", red(centre))
                 var left = x; while (left > 0 && red(pixels[left - 1, y])) left--
                 var right = x; while (right < pixels.width - 1 && red(pixels[right + 1, y])) right++
                 var top = y; while (top > 0 && red(pixels[x, top - 1])) top--
                 var bottom = y; while (bottom < pixels.height - 1 && red(pixels[x, bottom + 1])) bottom++
+                frameState += "; painted=$left,$top..${right + 1},${bottom + 1}"
                 if (abs(laid.width - (right + 1f - left)) > 1.5f || abs(laid.height - (bottom + 1f - top)) > 1.5f) {
                     File(context.cacheDir, "retarget-$fromList-$reverse.png").outputStream().use {
                         image.asAndroidBitmap().compress(Bitmap.CompressFormat.PNG, 100, it)
@@ -88,7 +95,8 @@ class PinchRetargetTest {
                 assertEquals("Painted top matches laid top", laid.top, top.toFloat(), 1f)
                 return laid
             }
-            compose.waitUntil(5000) { runCatching { frame() }.isSuccess }
+            compose.waitForAssertion(5000, "PinchRetarget initial artwork (list=$fromList, reverse=$reverse)",
+                { frameState }) { frame() }
             val firstOutward = fromList
             val secondOutward = if (reverse) !firstOutward else firstOutward
             val widthDp = list.fetchSemanticsNode().boundsInRoot.width /
