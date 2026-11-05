@@ -107,7 +107,7 @@ class ShadowContinuityTest {
             CompositionLocalProvider(LocalGlassAppearance provides GlassAppearance(shadowStrength = 1f, shadowSpread = 1f)) {
                 Box(Modifier.size(240.dp).background(Color.White).testTag("press-shadow-scene"),
                     contentAlignment = androidx.compose.ui.Alignment.Center) {
-                    GlassActionButton(R.drawable.ic_more, "Press", Modifier.width(160.dp).glassAnchor(anchor).testTag("press-shadow")) {}
+                    GlassActionButton(AppIcon.ActionMore, "Press", Modifier.width(160.dp).glassAnchor(anchor).testTag("press-shadow")) {}
                 }
             }
         } }
@@ -163,7 +163,7 @@ class ShadowContinuityTest {
                     SideEffect { expectedOpacity = opacity }
                     Box(Modifier.width(160.dp).testTag("shadow-button"), propagateMinConstraints = true) {
                         when (context) {
-                            "button" -> GlassActionButton(R.drawable.ic_more, "Actions", enabled = enabled) {}
+                            "button" -> GlassActionButton(AppIcon.ActionMore, "Actions", enabled = enabled) {}
                             "filter" -> GlassFilterChoice(false, {}, "Filter", enabled)
                             "settings" -> SettingsLink("Settings", enabled = enabled) {}
                             "bubble" -> {
