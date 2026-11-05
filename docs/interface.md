@@ -16,6 +16,8 @@ The lift shadow follows the menu's theming: dark under dark-icon menus, a white 
 
 Side-adjacent selections share one hovering outline. Diagonal gallery neighbors and unselected holes stay separate. Partial groups retain accessible state without a pane/checkmark. Inset album choices and preserve readable baselines.
 
+A lifted item is drawn only from its own retained recording, which stays in the item's display list throughout; the host adds the lifted drawing and never takes ownership, so no cover or label vanishes on select or deselect.
+
 Selection, the current queue occurrence and held drag cards share one item outline. Its corners are concentric with the artwork's, sharing their arc centres. Every item style, in lists, galleries, carousels and drag cards, uses one padding $d = 3.5$ dp (1.75 times the former 2 dp minimum) between its content, such as a cover's top edge, and the outline:
 
 $$
@@ -213,6 +215,8 @@ These three dense sizes keep one-line extra information immediately before the o
 Normal/Large halve the inter-cover gap, retaining cover sizes and horizontal geometry. Gallery **Items per row** snaps to 1–5. Preserve legacy presets until changed. Use smaller text/tighter padding at three or more columns, with an overlaid scrollbar.
 
 Every gallery size uses one fixed 8 dp gap, independent of zoom: between neighbouring covers and from the bottom of an item's lowest text line to the next cover. Outer margins stay 16 dp.
+
+Album carousels (Home pins and an artist's album choices) are one dense gallery row with the same gap and margins: covers sit 8 dp apart and their outlines 1 dp apart.
 
 In all lists, including queues and album details, pinch outward through Smallest list → Small list → Tracklist where offered → Compact list → Normal list → Large list → Gallery 5 → 4 → 3 → 2 → 1, and inward to reverse.
 
