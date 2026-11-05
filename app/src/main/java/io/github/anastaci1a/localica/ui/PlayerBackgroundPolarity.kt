@@ -59,7 +59,7 @@ internal val LocalArtworkBackgroundRole = staticCompositionLocalOf<Any?> { null 
 internal data class ArtworkBackgroundFrame(val roles: List<ArtworkBackgroundRole>,
     val frozenVisible: Boolean, val liveBlur: Boolean, val transitioning: Boolean,
     /** The blend's own reveal fraction, 0 at an artwork change and 1 once the new artwork is fully shown: the one clock the ink and materials follow with the backdrop (#578). */
-    val clock: Float = 1f))
+    val clock: Float = 1f)
 
 /** Returned paint images, not requested palette images: tone preparation may retain an older image. */
 internal data class PlayerBackdropDescriptor(val palette: PlayerPalette, val wash: Bitmap?, val softWash: Bitmap?,
