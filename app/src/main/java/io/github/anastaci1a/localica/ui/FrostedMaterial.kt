@@ -112,10 +112,15 @@ internal class FrostedBackdrop(val layer: GraphicsLayer, dark: Boolean,
      * wait here but cannot clear another generation's pending-recording freeze. */
     suspend fun captureCurrent(graphics: androidx.compose.ui.graphics.GraphicsContext,
         density: androidx.compose.ui.unit.Density, direction: androidx.compose.ui.unit.LayoutDirection,
-        valid: () -> Boolean): ImageBitmap? = captureLock.withLock {
+        valid: () -> Boolean): ImageBitmap? = withPinnedRecording(valid) {
+        readback.capture(layer, graphics, density, direction)
+    }
+
+    /** Pin the sampling recording for the complete native ownership interval. */
+    suspend fun <T> withPinnedRecording(valid: () -> Boolean, copy: suspend () -> T): T? = captureLock.withLock {
         if (!valid()) return@withLock null
         readbackPending = true
-        try { readback.capture(layer, graphics, density, direction) }
+        try { copy() }
         finally {
             readbackPending = false
             if (!layer.isReleased) layer.compositingStrategy = desiredCompositing
