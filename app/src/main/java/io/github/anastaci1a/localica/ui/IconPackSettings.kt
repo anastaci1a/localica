@@ -5,61 +5,138 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
-import io.github.anastaci1a.localica.icons.IconPackException
-import io.github.anastaci1a.localica.icons.IconPacks
+import androidx.compose.ui.unit.dp
+import io.github.anastaci1a.localica.icons.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.text.DateFormat
+import java.util.Date
 
-/** Settings → Interface → Appearance → Icon pack. Changes apply live through the shared icon resolver. */
+/** Settings library. Source documents are opened only while preparing an import. */
 @Composable
-internal fun IconPackSettings() {
+internal fun IconPackSettings(onView: (String?) -> Unit) {
     val context = LocalContext.current.applicationContext
     val scope = rememberCoroutineScope()
-    val info by IconPacks.info.collectAsState()
+    val library by IconPacks.library.collectAsState()
+    val active by IconPacks.activeId.collectAsState()
     var message by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
+    var updating by remember { mutableStateOf<PreparedIconPack?>(null) }
+    var deleting by remember { mutableStateOf<StoredIconPack?>(null) }
+    fun install(prepared: PreparedIconPack) {
+        scope.launch {
+            busy = true
+            message = withContext(Dispatchers.IO) {
+                runCatching { IconPacks.install(context, prepared) }.fold(
+                    { "Imported “${it.info.name}”: ${it.applied.size} icons. View icons for the complete import report." },
+                    { "Couldn’t store this pack. The previous pack is kept." })
+            }
+            busy = false
+        }
+    }
     val importer = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) scope.launch {
             busy = true
-            message = withContext(Dispatchers.IO) {
-                try {
-                    val report = requireNotNull(context.contentResolver.openInputStream(uri)) { "The file could not be opened" }
-                        .use { IconPacks.import(context, it) }
-                    buildString {
-                        append("Replaced ${report.applied.size} of ${io.github.anastaci1a.localica.ui.AppIcon.entries.size} icons from “${report.info.name}”; the rest keep the built-in icons.")
-                        if (report.unknown.isNotEmpty()) append("\nIgnored unknown ids: ${report.unknown.joinToString()}.")
-                        if (report.rejected.isNotEmpty()) append("\nRejected: " + report.rejected.joinToString { "${it.first} (${it.second})" } + ".")
-                    }
-                } catch (problem: IconPackException) { "Couldn’t import this pack: ${problem.message}." }
-                catch (_: Exception) { "Couldn’t import this pack." }
-            }
+            val result = withContext(Dispatchers.IO) { runCatching {
+                requireNotNull(context.contentResolver.openInputStream(uri)).use(IconPacks::prepare)
+            } }
             busy = false
+            result.fold({ prepared ->
+                if (IconPacks.matching(context, prepared) != null) updating = prepared else install(prepared)
+            }, { message = "Couldn’t import this pack" + (if (it is IconPackException) ": ${it.message}." else ".") })
         }
     }
     val exporter = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/zip")) { uri ->
         if (uri != null) scope.launch {
             busy = true
             message = withContext(Dispatchers.IO) {
-                try {
-                    requireNotNull(context.contentResolver.openOutputStream(uri)).use { IconPacks.exportTemplate(context, it) }
-                    "Exported the built-in icons as a template pack."
-                } catch (_: Exception) { "Couldn’t export the template." }
+                runCatching { requireNotNull(context.contentResolver.openOutputStream(uri)).use { IconPacks.exportTemplate(context, it) } }
+                    .fold({ "Exported the built-in icons as a template pack." }, { "Couldn’t export the template." })
             }
             busy = false
         }
     }
-    SettingsHeading("Icon pack")
-    Text(info?.let { "Using “${it.name}” ${it.version}" + (it.author?.let { author -> " by $author" } ?: "") } ?: "Using the built-in icons",
+    Text(if (active == null) "Using the built-in icons" else "Using “${library.firstOrNull { it.id == active }?.report?.info?.name.orEmpty()}”",
         modifier = Modifier.testTag("icon-pack-status"))
+    IconPackRow(null, active == null, !busy, { IconPacks.reset(context) }, { onView(null) })
+    library.forEach { pack ->
+        IconPackRow(pack, pack.id == active, !busy, { IconPacks.select(context, pack.id) }, { onView(pack.id) }, { deleting = pack })
+    }
     ActionTextButton(enabled = !busy, onClick = { importer.launch(arrayOf("application/zip", "application/x-zip-compressed", "application/octet-stream")) }) { Text("Import icon pack") }
-    ActionTextButton(enabled = !busy && info != null, onClick = { scope.launch { withContext(Dispatchers.IO) { IconPacks.reset(context) } } }) { Text("Reset to built-in icons") }
     ActionTextButton(enabled = !busy, onClick = { exporter.launch("localica-icon-template.zip") }) { Text("Export built-in icons as a template") }
+    updating?.let { prepared ->
+        GlassAlertDialog({ updating = null }, title = { Text("Update ${prepared.report.info.name}?") },
+            text = { Text("Version ${prepared.report.info.version} is already in your library. Replace its icons with this import?") },
+            confirmButton = { ActionTextButton({ updating = null; install(prepared) }) { Text("Update") } },
+            dismissButton = { ActionTextButton({ updating = null }) { Text("Cancel") } })
+    }
+    deleting?.let { pack ->
+        GlassAlertDialog({ deleting = null }, title = { Text("Delete ${pack.report.info.name}?") },
+            text = { Text("Remove this pack from your library? If it is active, Localica will use the built-in icons.") },
+            confirmButton = { ActionTextButton({
+                deleting = null
+                scope.launch {
+                    busy = true
+                    message = withContext(Dispatchers.IO) { runCatching { IconPacks.delete(context, pack.id) }.exceptionOrNull()?.let { "Couldn’t delete this pack." } }
+                    busy = false
+                }
+            }) { Text("Delete") } }, dismissButton = { ActionTextButton({ deleting = null }) { Text("Cancel") } })
+    }
     message?.let { text ->
-        GlassAlertDialog({ message = null }, title = { Text("Icon pack") }, text = { Text(text) },
+        GlassAlertDialog({ message = null }, title = { Text("Icon packs") }, text = { Text(text) },
             confirmButton = { ActionTextButton({ message = null }) { Text("Close") } })
+    }
+}
+
+@Composable
+private fun IconPackRow(pack: StoredIconPack?, selected: Boolean, enabled: Boolean,
+    onSelect: () -> Unit, onView: () -> Unit, onDelete: (() -> Unit)? = null) {
+    val info = pack?.report?.info
+    SettingsLink(info?.name ?: "Built-in icons", listOfNotNull(
+        if (selected) "Active" else null, info?.version?.let { "Version $it" }, info?.author,
+        if (pack == null) "${AppIcon.entries.size} icons" else "${pack.masks.size} of ${AppIcon.entries.size} icons replaced"
+    ).joinToString(" · "), enabled = enabled, onClick = onSelect)
+    Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        val icons = if (pack == null) AppIcon.entries.take(4) else pack.masks.keys.take(4).mapNotNull(AppIcon::byId)
+        icons.forEach { icon -> Icon(packIconPainter(icon, pack?.masks?.get(icon.id)), null, Modifier.size(24.dp)) }
+    }
+    Row {
+        ActionTextButton(onView, enabled = enabled) { Text("View icons") }
+        if (onDelete != null) ActionTextButton(onDelete, enabled = enabled) { Text("Delete") }
+    }
+}
+
+/** Every registry id appears, including those a partial pack leaves to the built-in set. */
+@Composable
+internal fun IconPackViewer(id: String?) {
+    val library by IconPacks.library.collectAsState()
+    val pack = library.firstOrNull { it.id == id }
+    if (id != null && pack == null) { Text("This pack is no longer in your library."); return }
+    Text(pack?.report?.info?.let { listOfNotNull(it.name, "Version ${it.version}", it.author).joinToString(" · ") } ?: "Built-in icons")
+    pack?.let { Text("Imported ${DateFormat.getDateTimeInstance().format(Date(it.importedAt))}", style = MaterialTheme.typography.bodySmall) }
+    Text("Pack icon · Built-in icon", style = MaterialTheme.typography.bodySmall)
+    AppIcon.entries.groupBy { it.id.substringBefore('.') }.forEach { (area, icons) ->
+        SettingsHeading(when (area) { "tab" -> "Tabs"; "transport" -> "Transport"; "menu" -> "Song menu"; else -> "Actions" })
+        icons.forEach { icon ->
+            val mask = pack?.masks?.get(icon.id)
+            Row(Modifier.fillMaxWidth().padding(vertical = 8.dp).testTag("pack-icon-${icon.id}"),
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Icon(packIconPainter(icon, mask), "Pack: ${icon.id}", Modifier.size(24.dp))
+                Icon(packIconPainter(icon, null), "Built-in: ${icon.id}", Modifier.size(24.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(icon.id)
+                    Text(if (mask != null) "Reassigned" else if (pack == null) "Built-in" else "Built-in (fallback)", style = MaterialTheme.typography.bodySmall)
+                }
+            }
+        }
+    }
+    pack?.report?.let { report ->
+        if (report.unknown.isNotEmpty()) { SettingsHeading("Unknown ids"); report.unknown.forEach { Text(it) } }
+        if (report.rejected.isNotEmpty()) { SettingsHeading("Rejected entries"); report.rejected.forEach { Text("${it.first}: ${it.second}") } }
     }
 }
