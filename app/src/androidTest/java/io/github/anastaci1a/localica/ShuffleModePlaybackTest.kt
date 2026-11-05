@@ -126,6 +126,11 @@ class ShuffleModePlaybackTest {
         val nativeAt = AtomicLong()
         val drawnAt = AtomicLong()
         val gate = f.dao.arm()
+        // Native preparation can checkpoint a cursor before the button is pressed.
+        // Make that ordering deterministic instead of relying on runner timing.
+        f.main { f.player.seekTo(1234) }
+        f.check { gate.entered.isCompleted || f.dao.committed?.active?.positionMs == 1234L }
+        assertFalse("A pre-click cursor checkpoint must not claim the requested mode's save gate", gate.entered.isCompleted)
         val before = f.dao.committed!!
         f.main {
             f.player.addListener(object : Player.Listener {
