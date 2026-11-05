@@ -36,6 +36,10 @@ class SelectionMergeGeometryTest {
             for(selected in ring) assertTrue(hole.contains(selected.bounds.center.x.toInt(),selected.bounds.center.y.toInt()))
             val diagonal=pixels(listOf(item(0,0),item(1,1)))
             assertFalse("Diagonal-only neighbours stay separate",diagonal.contains((119.5f*density).toInt(),(119.5f*density).toInt()))
+            val overlappingBoxes=pixels(listOf(item(0,0),SelectionRegion(
+                Rect(114f*density,114f*density,233f*density,233f*density),12f*density)))
+            assertFalse("Overlapping bounding boxes do not authorize a diagonal bridge between separated rounded corners",
+                overlappingBoxes.contains((116.5f*density).toInt(),(116.5f*density).toInt()))
         }
     }
     @Test fun vanishingLobesPreserveBothItemInteriors() {
