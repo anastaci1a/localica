@@ -105,20 +105,24 @@ internal fun PinnedHome(library: LibraryUiState, playlists: PlaylistState, pins:
             Text("Pinned", style = MaterialTheme.typography.titleLarge)
             if (pins.isEmpty()) Text("Hold a song, album, or playlist and choose Pin to Home.")
         } }
-        item { SelectionViewport(liftEdges = LiftEdges.Vertical) { overscroll -> LazyRow(state = carousel, overscrollEffect = overscroll,
+        item {
+            // Covers one gallery gap apart, the row inset as a dense gallery (#573).
+            val cell = BrowseCellGeometry.Carousel
+            val inset = cell.cardInset.dp
+            SelectionViewport(liftEdges = LiftEdges.Vertical) { overscroll -> LazyRow(state = carousel, overscrollEffect = overscroll,
             modifier = Modifier.nestedScroll(HorizontalGestureOwner)
-                .controlScrollParent(carousel, ControlScrollAxis.Horizontal).testTag("home-pins"), contentPadding = PaddingValues(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                .controlScrollParent(carousel, ControlScrollAxis.Horizontal).testTag("home-pins"), contentPadding = PaddingValues(horizontal = cell.gridInset.dp, vertical = 16.dp)) {
             items(items, key = { it.key }) { item -> Box {
-                val pinOutline = rememberPaddedItemOutline(160.dp, 0.dp, 0.dp, 0.dp, 0.dp)
+                val pinOutline = rememberPaddedItemOutline(160.dp, inset, 0.dp, inset, 0.dp)
                 val anchor = rememberGlassAnchor()
                 val selectedCount = session.selectedCount(item)
-                Column(Modifier.width(160.dp).clip(Corners.card).testTag("pin-${item.key}")
+                Column(Modifier.width(160.dp + inset * 2).clip(Corners.card).testTag("pin-${item.key}")
                     .selectionLens(selectedCount > 0, item.row == null && selectedCount > 0 && selectedCount < item.songs.size, outline = pinOutline, anchor = anchor)
                     .combinedClickable(enabled = currentOrder, onClick = {
                         if (item.row != null && session.active) session.toggle(null, item.row)
                         else onOpen(item, songs)
                     },
-                    onLongClickLabel = "Pinned item actions", onLongClick = { menu = item.ref })) {
+                    onLongClickLabel = "Pinned item actions", onLongClick = { menu = item.ref }).padding(horizontal = inset)) {
                     MediaArtwork(item.coverUris, Modifier.fillMaxWidth().aspectRatio(1f).contextMenuAnchor(anchor, item.ref.kind in setOf(MediaKind.Artist, MediaKind.AlbumArtist)), shape = artworkShape(item.ref.kind))
                     Text(item.title, style = MaterialTheme.typography.titleMedium, maxLines = 2)
                     Text(item.ref.kind.label, style = MaterialTheme.typography.bodySmall)
