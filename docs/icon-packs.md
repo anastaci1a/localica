@@ -26,9 +26,9 @@ Rules:
 - A pack may contain any subset of the ids below. Missing ids silently keep the built-in icon; that is never an error.
 - Images are square, at least 96 px and at most 1024 px, at most 2 MB each.
 - Images are alpha masks: only transparency matters. Draw in any single color on a transparent background.
-- The app tints masks with theme colors, following light and dark appearance, the accent and the page ink.
+- The app tints them with its theme colors, so packs follow light and dark appearance, the accent and the page ink.
 - Unknown ids are ignored and listed in the import report.
-- Non-square, undersized, oversized or undecodable images are rejected individually and listed; the rest of the pack still applies.
+- Images that are not square, too small or large, or not decodable are rejected individually and listed; the rest of the pack still applies.
 - A pack without a valid `pack.json`, or with no usable icon, is refused and the current icons stay.
 - Notification small icons are system-rendered and cannot be replaced.
 - Fit the glyph inside the image with a small margin; the built-in icons use about 10 percent.
