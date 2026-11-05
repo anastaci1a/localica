@@ -1149,6 +1149,85 @@ class PlaybackIntentTest {
         assertPlayback(false)
     }
 
+    @Test fun playNextSurvivesDecoderArrivalWhileActivationResolvesUris() = fixture(rawPlayer = true, duplicateOccurrences = true) {
+        queues.settings(QueueSettings(shuffle = true)); barrier()
+        val before = queues.state.value.library.active!!
+        val oldNext = before.journey!!.next!!
+        val gate = store.gateNextSnapshot()
+        val done = CompletableDeferred<Boolean>()
+        queues.act(listOf(track, track), SongTap.PlayNext) { done.complete(it) }
+        gate.entered.await()
+        val inserted = queues.state.value.library.active!!.entries.filterNot { entry -> before.entries.any { it.id == entry.id } }.map { it.id }
+        assertEquals(2, inserted.size)
+        withContext(Dispatchers.Main) {
+            val index = (0 until player.mediaItemCount).first { player.getMediaItemAt(it).queueVisit == oldNext.token }
+            player.seekTo(index, 700)
+        }
+        gate.release.complete(Unit)
+        assertTrue(withTimeout(5000) { done.await() }); barrier()
+        val after = queues.state.value.library.active!!
+        assertEquals(oldNext, after.journey!!.current)
+        assertEquals(inserted, after.journey!!.history.drop(after.journey!!.cursor + 1).take(2).map { it.entryId })
+        withContext(Dispatchers.Main) {
+            assertEquals(inserted.first(), player.getMediaItemAt(player.nextMediaItemIndex).mediaId)
+            assertFalse(player.playWhenReady)
+            assertEquals(700L, player.currentPosition)
+        }
+    }
+
+    @Test fun playNextWithoutCurrentEntryStartsAtFirstAddedVisit() = fixture(attach = false, noCurrent = true, duplicateOccurrences = true) {
+        queues.settings(QueueSettings(shuffle = true)); barrier()
+        assertNull(queues.state.value.library.active!!.currentEntryId)
+        val done = CompletableDeferred<Boolean>()
+        queues.act(listOf(track, track), SongTap.PlayNext) { done.complete(it) }
+        assertTrue(withTimeout(5000) { done.await() })
+        val active = queues.state.value.library.active!!
+        val added = active.entries.take(2).map { it.id }
+        assertEquals(added.first(), active.currentEntryId)
+        assertEquals(active.currentEntryId, active.journey!!.current!!.entryId)
+        assertEquals(setOf(added.first()), active.journey!!.visited)
+        assertEquals(added.last(), active.journey!!.next!!.entryId)
+        queues.attach(player.engine); barrier()
+        withContext(Dispatchers.Main) {
+            assertEquals(active.currentEntryId, player.currentMediaItem!!.mediaId)
+            assertEquals(added.last(), player.getMediaItemAt(player.nextMediaItemIndex).mediaId)
+        }
+    }
+
+    @Test fun stopHereDoesNotTreatPendingPlayNextInActiveCycleAsQueueEnd() = stopAtPlayNextHistoryBoundary(false)
+    @Test fun stopHereDoesNotTreatReturnFromScheduledVisitToOldHistoryAsQueueEnd() = stopAtPlayNextHistoryBoundary(true)
+
+    private fun stopAtPlayNextHistoryBoundary(leavingScheduled: Boolean) = fixture(rawPlayer = true, duplicateOccurrences = true) {
+        queues.settings(QueueSettings(shuffle = true,
+            advancedRepeat = AdvancedRepeat(songEnd = SongEnd.Stop, queueEnd = QueueEnd.Repeat)))
+        barrier()
+        repeat(4) { queues.next(); barrier() }
+        assertEquals(1L, queues.state.value.library.active!!.journey!!.cycle)
+        repeat(4) { queues.previous(alwaysSong = true); barrier() }
+        assertEquals(0L, queues.state.value.library.active!!.journey!!.current!!.cycle)
+        val done = CompletableDeferred<Boolean>()
+        queues.act(listOf(track, track), SongTap.PlayNext) { done.complete(it) }
+        assertTrue(withTimeout(5000) { done.await() })
+        if (leavingScheduled) repeat(2) { queues.next(); barrier() }
+        val journey = queues.state.value.library.active!!.journey!!
+        val current = journey.current!!
+        assertEquals(if (leavingScheduled) 1L else 0L, current.cycle)
+        assertEquals(if (leavingScheduled) 0L else 1L, journey.next!!.cycle)
+        awaitMain { player.engine.playbackState == Player.STATE_READY && player.duration > 300 }
+        withContext(Dispatchers.Main) {
+            player.engine.seekTo(player.duration - 80)
+            player.engine.play()
+        }
+        awaitMain { !player.engine.playWhenReady }
+        barrier()
+        assertEquals("Stop here must retain the ended visit when retracing the active traversal", current,
+            queues.state.value.library.active!!.journey!!.current)
+        withContext(Dispatchers.Main) {
+            assertEquals(current.token, player.currentMediaItem!!.queueVisit)
+            assertFalse(player.playWhenReady)
+        }
+    }
+
     private class CountingTracks(private val values: List<Track>) : AbstractList<Track>() {
         val reads = AtomicInteger()
         override val size get() = values.size
@@ -1163,7 +1242,7 @@ class PlaybackIntentTest {
     }
 
     private fun fixture(attach: Boolean = true, blockRestore: Boolean = false, rawPlayer: Boolean = false,
-        duplicateOccurrences: Boolean = false, permissions: FolderPermissions? = null, test: suspend Fixture.() -> Unit) = runBlocking {
+        duplicateOccurrences: Boolean = false, noCurrent: Boolean = false, permissions: FolderPermissions? = null, test: suspend Fixture.() -> Unit) = runBlocking {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
         val id = java.util.UUID.randomUUID().toString()
@@ -1172,7 +1251,7 @@ class PlaybackIntentTest {
         instrumentation.context.assets.open(file.name).use { input -> file.outputStream().use(input::copyTo) }
         val track = Track(Uri.fromFile(file).toString(), "First", fileName = file.name, relativePath = file.name)
         val first = ListeningQueue(name = "First", entries = if (duplicateOccurrences)
-            (0..2).map { QueueEntry("duplicate-$it", track, "origin-$it") } else listOf(QueueEntry(track = track)))
+            (0..2).map { QueueEntry("duplicate-$it", track, "origin-$it") } else listOf(QueueEntry(track = track))).let { if (noCurrent) it.copy(currentEntryId = null) else it }
         val secondFile = File(directory, "second.mp3").also { file.copyTo(it) }
         val secondUri = Uri.fromFile(secondFile).toString()
         val second = ListeningQueue(name = "Second", entries = listOf(QueueEntry(track = track.copy(uri = secondUri, id = secondUri))))

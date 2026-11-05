@@ -54,7 +54,7 @@ class SelectorTrackContourTest {
         }
     }
 
-    @Test fun bothAxesAndRtlRetainTheDisplayedTrackFrameWithoutNewDeformation() {
+    @Test fun bothAxesAndRtlRetainTheDisplayedBoundsAndContactCorners() {
         for (vertical in listOf(false, true)) for (rtl in listOf(false, true))
             for (wall in listOf(-1f, 1f)) for (pull in listOf(0f, .02f, .04f)) {
                 val geometry = selectorTrackGeometry(360f, 64f, pull, wall, vertical, rtl,
@@ -64,12 +64,16 @@ class SelectorTrackContourTest {
                     geometry.crossExtent / 2f)
                 val contour = frame.contour()
                 assertEquals(frame.bounds, contour.bounds)
-                assertEquals(RoundRect(frame.bounds, CornerRadius(frame.corner)), contour.outline)
+                assertEquals(pull == 0f, contour.isUniform)
+                val contact = if (vertical) {
+                    if (frame.wall < 0f) contour.outline.topLeftCornerRadius else contour.outline.bottomLeftCornerRadius
+                } else if (frame.wall < 0f) contour.outline.topLeftCornerRadius else contour.outline.topRightCornerRadius
+                assertEquals(CornerRadius(frame.corner), contact)
                 assertTrue(contour.contains(frame.bounds.center))
             }
     }
 
-    @Test fun copyAndTranslationCannotBypassTheUniformFiniteContract() {
+    @Test fun copyAndTranslationCannotBypassTheFiniteCornerContract() {
         val contour = SelectorTrackContour.uniform(Rect(0f, 0f, 80f, 56f), 20f)
         for (corner in listOf(Float.NaN, Float.POSITIVE_INFINITY, -1f)) {
             assertThrows(IllegalArgumentException::class.java) {
@@ -79,9 +83,9 @@ class SelectorTrackContourTest {
         for (point in listOf(Offset(Float.NaN, 20f), Offset(20f, Float.POSITIVE_INFINITY))) {
             assertFalse(contour.contains(point))
         }
-        assertThrows(IllegalArgumentException::class.java) {
-            contour.copy(outline = RoundRect(Rect(0f, 0f, 80f, 56f), CornerRadius(20f, 10f)))
-        }
+        val elliptical = contour.copy(outline = RoundRect(Rect(0f, 0f, 80f, 56f), CornerRadius(20f, 10f)))
+        assertFalse(elliptical.isUniform)
+        assertTrue(elliptical.contains(elliptical.bounds.center))
         assertThrows(IllegalArgumentException::class.java) {
             contour.copy(outline = RoundRect(Rect(0f, 0f, 80f, 56f), CornerRadius(100f)))
         }

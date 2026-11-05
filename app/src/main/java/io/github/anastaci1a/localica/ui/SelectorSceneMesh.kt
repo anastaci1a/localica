@@ -57,11 +57,17 @@ internal class SelectorSceneMesh {
         if (key != next) {
             frameBuilds++
             val previousShape = key?.geometry?.selector
-            val shapeChanged = previousShape?.bounds?.size != geometry.selector.bounds.size ||
+            val localContour = geometry.selectorContour?.outlineAt(geometry.selector.bounds.size)
+            val previousContour = previousShape?.let { previous ->
+                key?.geometry?.selectorContour?.outlineAt(previous.bounds.size)
+            }
+            val shapeChanged = previousContour != localContour || previousShape?.bounds?.size != geometry.selector.bounds.size ||
                 previousShape?.corner != geometry.selector.corner || key?.density != density
             if (shapeChanged) {
                 meshBuilds++
-                val mesh = curvedLensMesh(geometry.selector.copy(bounds =
+                val mesh = if (localContour != null) outlinedLensMesh(listOf(localContour), density) { point ->
+                    geometry.selectorField(point + geometry.selector.bounds.topLeft)
+                } else curvedLensMesh(geometry.selector.copy(bounds =
                     androidx.compose.ui.geometry.Rect(Offset.Zero, geometry.selector.bounds.size)), density)
                 vertices = mesh.vertices; indices = mesh.indices
                 // Deformation can change coordinates without changing mesh capacity.

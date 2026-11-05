@@ -86,7 +86,7 @@ internal fun LyricsBackdrop(key: Any?, modifier: Modifier = Modifier, contentAlp
     val currentAlpha by rememberUpdatedState(contentAlpha)
     val visible by remember { derivedStateOf { currentAlpha() > 0f } }
     val source = rememberFrostedBackdrop(listOf(key, backing, backing?.fallback, backing?.revision),
-        enabled = visible, dark = backing?.dark == true, retainRaster = false)
+        enabled = visible, dark = backing?.dark == true, lightMix = backing?.lightMix, retainRaster = false)
     val handler = remember { Handler(Looper.getMainLooper()) }
     val scene = remember(source) { LyricsBackdropScene(source, { currentAlpha() }) { delay, action ->
         val runnable = Runnable { action() }

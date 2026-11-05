@@ -55,6 +55,8 @@ A revisioned intent mailbox records accepted play/pause before actor suspension 
 
 Start queues before persisting full contents. Loaded selections seek without rebuilding/querying. Serialize writes and recover/retry from durable state. Capture cursors on events, every five seconds and at service destruction.
 
+After native activation, service the contiguous eligible transport prefix while its ordered save waits. Stop at the first structural command or an edit/recovery hold. Creation and structural success receipts still require their commits. Later cursor snapshots remain behind the initial receipt.
+
 Controlled shutdown retains player cleanup until the final detach write completes, fails or reaches two seconds. Task removal defers stopping an inactive service through this barrier; ongoing playback keeps Media3’s policy. No disk wait blocks Main. Android destruction retains asynchronous cleanup ownership but cannot prevent process termination.
 
 A successful final receipt makes that position restorable. Timeout or write failure falls back to the last committed checkpoint. Abrupt termination also restores the last committed checkpoint: five seconds is the capture cadence, not a disk deadline when the actor, scheduler or storage stalls.
