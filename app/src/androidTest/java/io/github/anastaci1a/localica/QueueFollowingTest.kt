@@ -280,7 +280,7 @@ class QueueFollowingTest {
         }
     }
 
-    @Test fun coldAndWarmExplicitQueueOpenDrawCurrentFirstWithoutReattachingDetachedIntent() {
+    @Test fun coldAndWarmExplicitQueueOpenDrawCurrentFirstAndReattachDetachedIntent() {
         val draws = mutableListOf<InitialQueueDraw>()
         queries.held = true
         val fixture = fixture(reducedMotion = false, awaitReady = false, firstDraws = draws)
@@ -305,13 +305,23 @@ class QueueFollowingTest {
         compose.runOnIdle { fixture.openingRequest = 2; fixture.mounted = true }
         assertFirstQueueDraw(draws, 2, 45)
         queries.release()
-        currentReturn.assertIsDisplayed()
-        val opened = position()
+        currentReturn.assertDoesNotExist()
         compose.runOnIdle { fixture.publish(95) }
-        compose.waitForIdle()
-        assertEquals("Explicit opening must not reset detached ongoing-follow intent", opened, position(), 0f)
-        row(95).assertDoesNotExist()
+        awaitCurrent(95)
+        currentReturn.assertDoesNotExist()
+    }
+
+    @Test fun retainedQueueDrawerCloseAndReopenRemountsAndHidesReturnArrow() {
+        val fixture = fixture(queueScreen = true, reducedMotion = false, openingRequest = 1)
+        list.performScrollToIndex(15)
         currentReturn.assertIsDisplayed()
+        compose.runOnIdle { fixture.active = false }
+        compose.runOnIdle { fixture.openingRequest = 2; fixture.active = true }
+        awaitCurrent(45)
+        currentReturn.assertDoesNotExist()
+        compose.runOnIdle { fixture.publish(95) }
+        awaitCurrent(95)
+        currentReturn.assertDoesNotExist()
     }
 
     @Test fun queueScreenFirstRevealPrepositionsBeforeVisibleOwnershipAndReopensAtTheNewCurrent() {
