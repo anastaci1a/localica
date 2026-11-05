@@ -79,9 +79,11 @@ private fun OpticalBackdrop(modifier: Modifier, source: FrostedBackdrop, locatio
     val averageSource = if (average != null && (forceAverage || source.materialOnly)) rememberGraphicsLayer() else null
     val averageHome = if (average != null && (forceAverage || homeSource?.materialOnly == true)) rememberGraphicsLayer() else null
     layer.clip = true
-    // Isolate unchanged filters from ancestor recordings; source RenderNode changes
-    // still invalidate the sampled result, while sibling motion reuses this drawing.
+    // Keep sibling motion isolated, but explicitly invalidate consumers in another
+    // window when their source records new content.
     Canvas(modifier.graphicsLayer()) {
+        location.observeRecordingAcrossWindows(source)
+        homeSource?.let { location.observeRecordingAcrossWindows(it) }
         // A list may load after this floating control's first draw. Observe the
         // first recording explicitly: GraphicsLayer.size is not snapshot state,
         // and returning before drawLayer otherwise installs no dependency.

@@ -42,16 +42,12 @@ internal class HoverCardFrame(
     return renderer
 }
 
-private fun blurEffects(renderer: GlassRendererGeneration) =
-    Build.VERSION.SDK_INT >= 33
-
 /** A dragged card reuses the hover outline and frost. The shared underlay owns the outside
  * shadow; a small additional shadow separates panes once they join the stack. */
 @Composable
 internal fun HoverDragCard(modifier: Modifier, frame: HoverCardFrame, backing: FrostedBackdrop?,
     stackShadow: () -> Float = { 0f }, content: @Composable BoxScope.() -> Unit) {
     val liftStyle = rememberLiftShadow()
-    val renderer = currentGlassRendererGeneration()
     val averageProgress = glassAverageProgress()
     val group = rememberHoverGroupRenderer()
     val location = remember { BackdropLocation() }
@@ -63,7 +59,7 @@ internal fun HoverDragCard(modifier: Modifier, frame: HoverCardFrame, backing: F
             draw(listOf(geometry.lifted.contour to 1f), .22f * liftStyle.strength * stackShadow(),
                 liftStyle.spread, color = liftStyle.color)
         }
-        drawHoverGroup(group, listOf(geometry), { _, _ -> 1f }, backing, location, blurEffects(renderer),
+        drawHoverGroup(group, listOf(geometry), { _, _ -> 1f }, backing, location, Build.VERSION.SDK_INT >= 33,
             density, direction, MediaSelectionGap.toPx(), sampleOffset = frame.sampleShift(), shadow = false, lift = liftStyle, averageProgress = averageProgress.value)
         scale(geometry.scale, geometry.scale, geometry.pivot) { this@drawWithContent.drawContent() }
     }) { content() }
@@ -77,7 +73,6 @@ internal fun HoverDragCard(modifier: Modifier, frame: HoverCardFrame, backing: F
 @Composable
 internal fun HoverDragUnderlay(frames: () -> List<HoverCardFrame>, backing: FrostedBackdrop?, modifier: Modifier) {
     val liftStyle = rememberLiftShadow()
-    val renderer = currentGlassRendererGeneration()
     val averageProgress = glassAverageProgress()
     val shadow = rememberHoverGroupRenderer()
     val bridges = remember { mutableListOf<HoverGroupRenderer>() }
@@ -127,7 +122,7 @@ internal fun HoverDragUnderlay(frames: () -> List<HoverCardFrame>, backing: Fros
         joined.forEachIndexed { index, bridge ->
             // The cards above cover their own areas; only the joining neck shows here.
             drawHoverGroup(bridges[index], listOf(placed[bridge.a], placed[bridge.b]), { _, _ -> bridge.strength }, backing, location,
-                blurEffects(renderer), density, direction, gap, sampleOffset = cards[bridge.a].sampleShift(), shadow = false,
+                Build.VERSION.SDK_INT >= 33, density, direction, gap, sampleOffset = cards[bridge.a].sampleShift(), shadow = false,
                 opacity = min(alphas[bridge.a], alphas[bridge.b]), lift = liftStyle, averageProgress = averageProgress.value)
         }
     })

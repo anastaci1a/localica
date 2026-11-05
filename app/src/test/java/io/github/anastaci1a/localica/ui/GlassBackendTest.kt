@@ -8,15 +8,15 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class GlassBackendTest {
-    @Test fun automaticRetainsPlatformDefaultsAndLegacyIsAlwaysAvailable() {
+    @Test fun normalUsesPlatformSupportAndNoneIsAlwaysAvailable() {
         for (api in listOf(26, 28, 31, 32, 33, 36)) {
-            val automatic = if (api >= 33) GlassBackend.Normal else GlassBackend.None
-            assertEquals(automatic, effectiveGlassBackend(GlassRendererMode.Normal, api))
+            val normal = if (api >= 33) GlassBackend.Normal else GlassBackend.None
+            assertEquals(normal, effectiveGlassBackend(GlassRendererMode.Normal, api))
             assertEquals(GlassBackend.None, effectiveGlassBackend(GlassRendererMode.None, api))
         }
     }
 
-    @Test fun unsupportedModernPreferencesResolveSafely() {
+    @Test fun unsupportedNormalPreferencesResolveToNone() {
         for (api in 26..32) assertEquals(GlassBackend.None,
             effectiveGlassBackend(GlassRendererMode.Normal, api))
         assertEquals(GlassBackend.Normal, effectiveGlassBackend(GlassRendererMode.Normal, 33))
@@ -33,7 +33,7 @@ class GlassBackendTest {
         }
     }
 
-    @Test fun automaticIsAppendedWithoutChangingExistingPositionalArgumentsOrDefaults() {
+    @Test fun normalIsTheDefaultAndPositionalArgumentsRemainStable() {
         assertEquals(GlassRendererMode.Normal, GlassAppearance().renderer)
         assertEquals(GlassRendererMode.Normal, InterfaceSettings().glass.renderer)
         val positional = GlassAppearance(.7f, .1f, .2f, .8f, .3f, TabLensStyle.Overlay,

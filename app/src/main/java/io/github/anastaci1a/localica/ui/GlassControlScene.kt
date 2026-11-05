@@ -49,6 +49,7 @@ internal fun GlassControlScene(modifier: Modifier, horizontalPadding: Dp = 20.dp
             drawRoundRect(face(), shape.bounds.topLeft, shape.bounds.size, CornerRadius(shape.corner))
             return@Canvas
         }
+        if (modern) source?.let { location.observeRecordingAcrossWindows(it) }
         val silhouette = rim.roundedPath(shape.bounds, shape.corner)
         // The capture is limited to the thumb, including reachable refraction pixels.
         val pad = horizontalPadding.toPx()

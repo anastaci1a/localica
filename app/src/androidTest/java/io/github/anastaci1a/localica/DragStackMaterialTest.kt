@@ -29,7 +29,6 @@ class DragStackMaterialTest {
     private lateinit var state: KeyedDragState<String, Unit>
     private lateinit var source: FrostedBackdrop
     private var changed by mutableStateOf(false)
-    private val panes = mutableMapOf<Int, FrostedBackdrop>()
     private val entries = listOf("first", "second", "third", "fourth")
 
     private fun fixture(pickupContent: Boolean = false) {
@@ -60,8 +59,7 @@ class DragStackMaterialTest {
                         Box(Modifier.fillMaxWidth().height(72.dp))
                     }
                 }
-                CompositionLocalProvider(LocalFrostedBackdrop provides source,
-                    LocalDragPaneObserver provides { index, pane -> panes[index] = pane }) {
+                CompositionLocalProvider(LocalFrostedBackdrop provides source) {
                     KeyedDragOverlay(state, !pickupContent, { "Dragging $it" }) { item, _ ->
                         if (pickupContent && item != entries.first()) Canvas(Modifier.fillMaxSize()) { drawRect(Color.Magenta) }
                     }
@@ -93,52 +91,7 @@ class DragStackMaterialTest {
 
     @Test fun joinedPanesDiscardPickupContentFromTheirFrost() {
         fixture(pickupContent = true)
-        if (android.os.Build.VERSION.SDK_INT < 33) {
-            compose.waitUntil(15000) { source.snapshot != null }
-            compose.mainClock.autoAdvance = false
-            try {
-                compose.runOnIdle {
-                    assertTrue(state.begin(entries.first(), entries.take(3).toSet(), state.bounds().getValue(entries.first()).center))
-                }
-                // Coroutine delays use the Compose clock too. Reach the 200 ms
-                // paused-pointer refresh while pickup is still animating.
-                repeat(14) {
-                    compose.mainClock.advanceTimeByFrame()
-                    compose.onNodeWithTag("stack-scene").captureToImage()
-                }
-                val bottom = requireNotNull(panes[2])
-                // Service the paused-pointer capture before finishing the pickup animation.
-                // Otherwise that later refresh could hide a missing pickup-phase dependency.
-                compose.waitUntil(15000) { bottom.revision > 0 && bottom.readbackRequest >= 2 }
-                repeat(2) {
-                    compose.mainClock.advanceTimeByFrame()
-                    compose.onNodeWithTag("stack-scene").captureToImage()
-                }
-                compose.waitUntil(15000) { bottom.snapshotReadbackRequest >= 2 }
-                fun hasPickupContent(image: ImageBitmap): Boolean {
-                    val pixels = image.toPixelMap()
-                    val d = image.width / 360f
-                    return (0 until (230 * d).toInt()).any { y ->
-                        pixels[(180 * d).toInt(), y].let { it.red > .7f && it.blue > .7f && it.green < .3f }
-                    }
-                }
-                assertTrue("Seed the native cache with the still-visible pickup content", hasPickupContent(requireNotNull(bottom.snapshot)))
-                // Native readback needs rendered frames, not only virtual animation time.
-                repeat(25) {
-                    compose.mainClock.advanceTimeByFrame()
-                    compose.onNodeWithTag("stack-scene").captureToImage()
-                }
-                compose.mainClock.autoAdvance = true
-                var last: ImageBitmap? = null
-                var stale = true
-                compose.waitUntil(15000) {
-                    bottom.snapshot?.let { current ->
-                        if (current !== last) { stale = hasPickupContent(current); last = current }
-                    }
-                    !stale
-                }
-            } finally { compose.mainClock.autoAdvance = true }
-        } else begin(3)
+        begin(3)
         compose.waitUntil(15000) {
             val image = compose.onNodeWithTag("stack-scene").captureToImage()
             val d = image.width / 360f
@@ -188,15 +141,20 @@ class DragStackMaterialTest {
         compose.runOnIdle { state.finish(cancel = true, reducedMotion = true) { _, _, _ -> fail("Cancel cannot save") } }
         compose.waitUntil(10000) { state.drag == null }
         begin(3)
-        // Legacy prepares the recursive snapshots asynchronously. Pixel convergence, not a delay,
-        // owns readiness; the endpoint must differ from independently sampled identical panes.
+        // Normal recursively filters the panes; None has already removed spatial detail.
         try {
             compose.waitUntil(15000) {
-                contrast(compose.onNodeWithTag("stack-scene").captureToImage()) < one - .015f
+                contrast(compose.onNodeWithTag("stack-scene").captureToImage()) <
+                    if (android.os.Build.VERSION.SDK_INT >= 33) one - .015f else .015f
             }
         } finally { capture("recursive-endpoint") }
         val stack = capture("recursive-three-panes")
-        assertTrue("Recursive frost reduces stripe contrast: one=$one stack=${contrast(stack)}", contrast(stack) < one - .015f)
+        if (android.os.Build.VERSION.SDK_INT >= 33) {
+            assertTrue("Recursive frost reduces stripe contrast: one=$one stack=${contrast(stack)}", contrast(stack) < one - .015f)
+        } else {
+            assertTrue("One None pane already averages away the stripes", one < .015f)
+            assertTrue("Stacking None panes retains a uniform fill", contrast(stack) < .015f)
+        }
         val top = compose.onNodeWithTag("drag-stack").fetchSemanticsNode().boundsInRoot
         val back = compose.onNodeWithTag("drag-card-third").fetchSemanticsNode().boundsInRoot
         assertEquals("Stack panes retain equal widths", top.width, back.width, .5f)

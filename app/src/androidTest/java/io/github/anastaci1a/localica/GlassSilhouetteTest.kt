@@ -86,7 +86,10 @@ class GlassSilhouetteTest {
             Box(Modifier.size(280.dp, 160.dp)) {
                 Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(backing)) {
                     val tile = 13.dp.toPx()
-                    val colors = listOf(Color(0xFF8BC7BD), Color(0xFFF0C06F), Color(0xFF7D91C9), Color(0xFFCD83A7))
+                    // A joined None surface and two separate surfaces have different
+                    // averaging footprints. Use one color to isolate the shape/rim handoff.
+                    val colors = if (android.os.Build.VERSION.SDK_INT < 33) List(4) { Color(0xFF8BC7BD) }
+                        else listOf(Color(0xFF8BC7BD), Color(0xFFF0C06F), Color(0xFF7D91C9), Color(0xFFCD83A7))
                     for (y in 0..(size.height / tile).toInt()) for (x in 0..(size.width / tile).toInt()) {
                         drawRect(colors[(x + 3 * y) % colors.size], Offset(x * tile, y * tile), Size(tile, tile))
                     }

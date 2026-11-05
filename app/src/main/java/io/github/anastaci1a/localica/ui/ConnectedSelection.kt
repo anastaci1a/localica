@@ -97,9 +97,8 @@ internal fun ConnectedSelectionHost(modifier: Modifier = Modifier, contentDrawin
     scene: SelectionScene = remember { SelectionScene() }, liftEdges: LiftEdges = LiftEdges.Horizontal,
     content: @Composable () -> Unit) {
     val liftStyle = rememberLiftShadow()
-    val renderer = currentGlassRendererGeneration()
     val averageProgress = glassAverageProgress()
-    // RenderEffect blur needs API 31; the Legacy backend crossfades its prepared frost instead.
+    // Older Android uses the shared solid-average path.
     val blurEffects = Build.VERSION.SDK_INT >= 33
     val graphics = androidx.compose.ui.platform.LocalGraphicsContext.current
     val scope = rememberCoroutineScope()
@@ -235,6 +234,7 @@ internal fun DrawScope.drawHoverGroup(group: HoverGroupRenderer, parts: List<Hov
             RoundRect(it.first, CornerRadius.Zero) to 1f }, lift.strength * progress, lift.spread, color = lift.color)
     }
     val source = backing?.takeIf { it.recorded && !it.layer.isReleased } ?: return
+    if (blurEffects) location.observeRecordingAcrossWindows(source)
     val registration = source.location.registrationTo(location) ?: return
     val restBounds = rest.map { it.bounds }.reduce { a, b -> a.union(b) }
     val liftedBounds = parts.map { it.lifted.bounds }.reduce { a, b -> a.union(b) }
