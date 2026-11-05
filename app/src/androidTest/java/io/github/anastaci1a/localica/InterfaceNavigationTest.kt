@@ -161,7 +161,7 @@ class InterfaceNavigationTest {
             compose.onNodeWithTag("player-surface").performClick()
             compose.onNodeWithContentDescription("Open queue").performClick()
         }
-        compose.onNodeWithContentDescription("Actions for Evening").performClick()
+        compose.awaitRowActions("Evening").performClick()
         compose.onNodeWithText("Information").performClick()
         compose.onNodeWithTag("song-information-$action").performScrollTo().performClick()
         compose.waitUntil(5000) { compose.onAllNodesWithContentDescription("Collapse player").fetchSemanticsNodes().isEmpty() }
