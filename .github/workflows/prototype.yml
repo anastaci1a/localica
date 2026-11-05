@@ -130,6 +130,11 @@ jobs:
         df -h "$HOME"
     - name: Compile instrumentation APKs before starting emulator
       run: ./gradlew assembleDebug assembleDebugAndroidTest --no-daemon --max-workers=2
+    - name: Restore the exact SDK system image revision
+      id: emulator-image-cache
+      uses: ./.github/actions/system-image-cache
+      with:
+        api: 26
     - uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
       with:
         api-level: 26
@@ -141,9 +146,22 @@ jobs:
         script: |
           adb shell wm size reset
           adb shell wm density reset
-          sleep 60
+          python3 .github/emulator-readiness.py
           bash .github/test-evidence/environment.sh >> prototype-runner-environment.txt
           bash .github/run-prototype-tests.sh
+    - name: Cache the installed SDK system image
+      if: always() && steps.emulator-image-cache.outputs.cache-hit != 'true'
+      uses: ./.github/actions/system-image-cache
+      with:
+        api: 26
+        mode: save
+    - name: Preserve emulator readiness observations
+      if: always()
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      with:
+        name: emulator-readiness-${{ github.job }}-${{ strategy.job-index }}
+        path: emulator-readiness.json
+        if-no-files-found: warn
     - name: Capture host diagnostics on emulator failure
       if: failure()
       run: |
@@ -196,6 +214,11 @@ jobs:
         sudo rm -rf /usr/share/dotnet
     - name: Build and inspect private compatibility APKs sequentially
       run: bash .github/compatibility/build.sh
+    - name: Restore the exact SDK system image revision
+      id: emulator-image-cache
+      uses: ./.github/actions/system-image-cache
+      with:
+        api: 26
     - uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
       with:
         api-level: 26
@@ -207,9 +230,22 @@ jobs:
         script: |
           adb shell wm size reset
           adb shell wm density reset
-          sleep 60
+          python3 .github/emulator-readiness.py
           bash .github/test-evidence/environment.sh >> prototype-runner-environment.txt
           bash .github/compatibility/run.sh
+    - name: Cache the installed SDK system image
+      if: always() && steps.emulator-image-cache.outputs.cache-hit != 'true'
+      uses: ./.github/actions/system-image-cache
+      with:
+        api: 26
+        mode: save
+    - name: Preserve emulator readiness observations
+      if: always()
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      with:
+        name: emulator-readiness-${{ github.job }}-${{ strategy.job-index }}
+        path: emulator-readiness.json
+        if-no-files-found: warn
     - name: Preserve compatibility runner identity
       if: always()
       run: |
@@ -255,6 +291,11 @@ jobs:
         df -h "$HOME"
     - name: Compile instrumentation APKs before starting emulator
       run: ./gradlew assembleDebug assembleDebugAndroidTest --no-daemon --max-workers=2
+    - name: Restore the exact SDK system image revision
+      id: emulator-image-cache
+      uses: ./.github/actions/system-image-cache
+      with:
+        api: 36
     - uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
       with:
         api-level: 36
@@ -266,9 +307,22 @@ jobs:
         script: |
           adb shell wm size 720x1280
           adb shell wm density 280
-          sleep 60
+          python3 .github/emulator-readiness.py
           bash .github/test-evidence/environment.sh >> prototype-runner-environment.txt
           bash .github/run-prototype-tests.sh
+    - name: Cache the installed SDK system image
+      if: always() && steps.emulator-image-cache.outputs.cache-hit != 'true'
+      uses: ./.github/actions/system-image-cache
+      with:
+        api: 36
+        mode: save
+    - name: Preserve emulator readiness observations
+      if: always()
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      with:
+        name: emulator-readiness-${{ github.job }}-${{ strategy.job-index }}
+        path: emulator-readiness.json
+        if-no-files-found: warn
     - name: Capture host diagnostics on emulator failure
       if: failure()
       run: |
@@ -321,6 +375,11 @@ jobs:
         sudo rm -rf /usr/share/dotnet
     - name: Build and inspect private compatibility APKs sequentially
       run: bash .github/compatibility/build.sh
+    - name: Restore the exact SDK system image revision
+      id: emulator-image-cache
+      uses: ./.github/actions/system-image-cache
+      with:
+        api: 36
     - uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
       with:
         api-level: 36
@@ -332,9 +391,22 @@ jobs:
         script: |
           adb shell wm size 720x1280
           adb shell wm density 280
-          sleep 60
+          python3 .github/emulator-readiness.py
           bash .github/test-evidence/environment.sh >> prototype-runner-environment.txt
           bash .github/compatibility/run.sh
+    - name: Cache the installed SDK system image
+      if: always() && steps.emulator-image-cache.outputs.cache-hit != 'true'
+      uses: ./.github/actions/system-image-cache
+      with:
+        api: 36
+        mode: save
+    - name: Preserve emulator readiness observations
+      if: always()
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      with:
+        name: emulator-readiness-${{ github.job }}-${{ strategy.job-index }}
+        path: emulator-readiness.json
+        if-no-files-found: warn
     - name: Preserve compatibility runner identity
       if: always()
       run: |

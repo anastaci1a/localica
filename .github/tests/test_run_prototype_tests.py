@@ -667,7 +667,13 @@ class WorkflowContract(unittest.TestCase):
                 if 'run' in step:
                     subprocess.run(['bash','-n'],input=step['run'],text=True,check=True)
                 if 'uses' in step:
-                    self.assertRegex(step['uses'],r'@[0-9a-f]{40}$')
+                    if step['uses'] == './.github/actions/system-image-cache':
+                        action = yaml.safe_load((ROOT/'.github/actions/system-image-cache/action.yml').read_text())
+                        for nested in action['runs']['steps']:
+                            if 'uses' in nested:
+                                self.assertRegex(nested['uses'], r'@[0-9a-f]{40}$')
+                    else:
+                        self.assertRegex(step['uses'],r'@[0-9a-f]{40}$')
 
 
 
