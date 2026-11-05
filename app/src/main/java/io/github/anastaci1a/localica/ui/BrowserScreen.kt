@@ -755,10 +755,12 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     // A completed manual trip to the current occurrence's physical end is a return.
     // Never replay a deferred target, move under a contact, or attach a scoped search.
     val boundaryCurrent = remember(result.items, playingEntryId) { result.items.indexOfFirst { it.row?.id == playingEntryId } }
-    val boundaryReturnReady = manualQueueReturn && !returnToList.pending && followEligible && !modalBlocked && !queryPending &&
-        !route.search && route.text.isBlank() && !gridState.isScrollInProgress &&
+    val boundaryReached by remember(gridState, boundaryCurrent, result.items.size, latestTopInset) { derivedStateOf {
         boundaryCurrent >= 0 && (boundaryCurrent == 0 || boundaryCurrent == result.items.lastIndex) &&
-        ListScrollTarget.below(boundaryCurrent + 1, latestTopInset).direction(gridState) == 0
+            ListScrollTarget.below(boundaryCurrent + 1, latestTopInset).direction(gridState) == 0
+    } }
+    val boundaryReturnReady = manualQueueReturn && !returnToList.pending && followEligible && !modalBlocked && !queryPending &&
+        !route.search && route.text.isBlank() && !gridState.isScrollInProgress && boundaryReached
     SideEffect {
         if (boundaryReturnReady) {
             playbackFollow.reattachAtBoundary(playingEntryId, followOwner)
