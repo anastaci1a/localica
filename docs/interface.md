@@ -2,6 +2,24 @@
 
 ## Shared controls and motion
 
+### Icon set
+
+The song-menu icon set is the reference for future icons: 24 dp vectors, 1.8 stroke (filled trash), rounded caps and joins.
+
+| Action | Resource |
+| --- | --- |
+| Pin to Home / Unpin | `ic_menu_pin` |
+| Remove from playlist or queue, Delete playlist, Remove image | `ic_menu_trash` |
+| Add to playlist | `ic_menu_playlist_add` |
+| Play next | `ic_menu_play_next` |
+| Add to current queue, Add to a queue, Add to queue (selection) | `ic_menu_queue_add` |
+| Information | `ic_menu_info` |
+| Download (unused) | `ic_download` |
+| Share (unused) | `ic_share` |
+| Station (unused) | `ic_station` |
+| Favorite (unused) | `ic_star` |
+| Suggest less (unused) | `ic_thumb_down` |
+
 ### Materials and controls
 
 Floating pills, mini-player, filter/search bars and circular controls share Liquid Glass: curved refraction, illuminated edges and crisp foregrounds. The Queue uses one continuous denser textured neutral-frost surface behind its header and list. Popups use the same material and inherited adaptive contrast.
