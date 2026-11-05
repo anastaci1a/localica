@@ -455,7 +455,7 @@ internal class AnalyticSelectionOutline(private val profile: SelectionOutlinePro
                 edgeIntersections(a.edge,b.edge,epsilon) { ta,tb,p ->
                     val cross=a.edge.tangent(ta).cross(b.edge.tangent(tb))
                     if(abs(cross)<1e-7)return@edgeIntersections
-                    if(components.any { it.parent!=i && it.parent!=j && it.bounds.contains(p) && it.distance(p)<-epsilon })return@edgeIntersections
+                    if(components.any { it.id!=a.edge.owner && it.id!=b.edge.owner && it.bounds.contains(p) && it.distance(p)<-epsilon })return@edgeIntersections
                     val vertex=OutlineVertex(-1,p)
                     val incoming=if(cross<0)a else b;val outgoing=if(cross<0)b else a
                     val at=if(cross<0)ta else tb;val bt=if(cross<0)tb else ta
@@ -505,7 +505,22 @@ internal class AnalyticSelectionOutline(private val profile: SelectionOutlinePro
                 depth=max(depth,min(circleDepth,capReach*2))
             }
         }
-        return 4*unit*outlineEase(depth/(4*unit))
+        var radius=4*unit*outlineEase(depth/(4*unit))
+        val normalA=corner.incoming.edge.outward(corner.incoming.end)
+        val normalB=corner.outgoing.edge.outward(corner.outgoing.start)
+        val bisector=sqrt(max((1+normalA.dot(normalB))/2,0.0))
+        for(component in components) {
+            if(component.parent==a || component.parent==b)continue
+            // A third selection continuously closes the available exterior wedge.
+            // Reserve its clearance before solving contacts, avoiding repeated
+            // infeasible large-radius trials near a three-way intersection.
+            val p=corner.vertex.point;val box=component.bounds
+            val boxDistance=hypot(max(max(box.left-p.x,p.x-box.right),0.0),max(max(box.top-p.y,p.y-box.bottom),0.0))
+            if(boxDistance*bisector/(1+bisector)*.9>=radius)continue
+            val clearance=max(component.distance(corner.vertex.point),0.0)
+            radius=min(radius,clearance*bisector/(1+bisector)*.9)
+        }
+        return radius
     }
     private fun candidate(corner: Corner,first: List<OutlineSide>,second: List<OutlineSide>,radius: Double): OutlineFillet? {
         var best: OutlineFillet?=null;var bestTravel=Double.POSITIVE_INFINITY

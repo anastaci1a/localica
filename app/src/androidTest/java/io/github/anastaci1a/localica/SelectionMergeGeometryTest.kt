@@ -46,9 +46,9 @@ class SelectionMergeGeometryTest {
             val path=connectedSelectionPath(listOf(SelectionRegion(Rect(16f,16f,256f,88f),12f),
                 SelectionRegion(Rect(16f,88f+separation,256f,160f+separation),12f)),16f,strength={_,_->strength}).asAndroidPath()
             val samples=path.approximate(.01f)
-            assertTrue("frame=$frame samples=${samples.toList()}",samples.all { it.isFinite() && abs(it)<1000 })
+            assertTrue("frame=$frame samples=${samples.size}",samples.all { it.isFinite() && abs(it)<1000 })
             val coverage=Region().apply { setPath(path,Region(0,0,400,280)) }
-            assertTrue("frame=$frame samples=${samples.toList()}",coverage.contains(100,50) && coverage.contains(100,140))
+            assertTrue("frame=$frame samples=${samples.size}",coverage.contains(100,50) && coverage.contains(100,140))
         }
     }
     @Test fun concaveFilletMatchesItsFourDpRollingCircle() {
