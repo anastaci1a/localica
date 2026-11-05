@@ -65,6 +65,9 @@ class BrowsePositionTest {
                 val initiallyReady = compose.onAllNodes(catalogRows).fetchSemanticsNodes().isNotEmpty()
                 File(evidence, "catalog-readiness.txt").appendText("$filter initiallyReady=$initiallyReady\n")
                 compose.waitUntil(5000) { compose.onAllNodes(catalogRows).fetchSemanticsNodes().isNotEmpty() }
+                val headerBounds = compose.onNodeWithTag("library-filters").fetchSemanticsNode().boundsInRoot
+                val scrollbarBounds = compose.onNodeWithTag("browse-scrollbar").fetchSemanticsNode().boundsInRoot
+                assertTrue("Scrollbar hit strip must not cover $filter controls", scrollbarBounds.top >= headerBounds.bottom)
                 for (hardware in listOf(false, true)) {
                     android.util.Log.i("BrowsePositionTest", "Restoring $filter; hardware=$hardware")
                     val title = "$prefix 060"

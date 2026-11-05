@@ -1194,8 +1194,12 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                     }
                 }
             } }
+            // The enlarged scrollbar hit strip must start below fixed header controls,
+            // otherwise it wins hit testing over right-edge filter/search taps.
             if (loadedResult != null) BrowseScrollbar(gridState, result.items, displayedStyle.sort,
-                Modifier.align(Alignment.CenterEnd).padding(bottom = obscuredInset), onUserScroll = ::userScroll)
+                Modifier.align(Alignment.CenterEnd).padding(
+                    top = if (showFilters || (showSearchPill && !artDetail)) pillSlotHeight else 0.dp,
+                    bottom = obscuredInset), onUserScroll = ::userScroll)
             if (route.collection?.kind in setOf(MediaKind.Playlist, MediaKind.Album, MediaKind.Artist, MediaKind.AlbumArtist) && !route.search) {
                 val playlist = playlists.playlists.firstOrNull { it.id == route.collection?.id }
                 if (playlist != null || artDetail) Box(Modifier.align(Alignment.BottomEnd).padding(end = 12.dp, bottom = obscuredInset)) {
