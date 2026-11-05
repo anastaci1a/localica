@@ -1,10 +1,21 @@
 #!/usr/bin/env bash
 # Fast-only hosted prototype checks. Never use this result as release certification.
 set -euo pipefail
+repetitions=${PROTOTYPE_REPEAT:-1}
+[[ "$repetitions" =~ ^([1-9]|[12][0-9]|30)$ ]] || { echo 'PROTOTYPE_REPEAT must be 1 through 30' >&2; exit 2; }
+method_iteration=${PROTOTYPE_METHOD_ITERATION:-false}
+[[ "$method_iteration" == true || "$method_iteration" == false ]] || exit 2
+if [[ "$method_iteration" == false ]] && { (( repetitions > 1 )) || [[ -n "${PROTOTYPE_METHODS:-}" ]]; }; then
+  exec python3 .github/run-prototype-repeat.py
+fi
 classes=${AFFECTED_CLASSES:-}
 required=io.github.anastaci1a.localica.SearchImeMotionTest
 focus_regression=io.github.anastaci1a.localica.ListSearchTest
 contrast_regression=io.github.anastaci1a.localica.FrostedSurfaceTest
+if [[ "$method_iteration" == true ]]; then
+  [[ -n "${PROTOTYPE_METHODS:-}" ]] || exit 2
+  required=''; focus_regression=''; contrast_regression=''
+fi
 [[ -n "$classes" && ${#classes} -le 4096 ]] || { echo 'Supply nonempty affected behavior classes (maximum 4096 characters)' >&2; exit 2; }
 pattern='^io\.github\.anastaci1a\.localica\.[A-Za-z_][A-Za-z0-9_]*(,io\.github\.anastaci1a\.localica\.[A-Za-z_][A-Za-z0-9_]*)*$'
 [[ "$classes" =~ $pattern ]] || { echo 'Invalid affected class selector' >&2; exit 2; }
@@ -14,6 +25,7 @@ IFS=, read -r -a selected <<< "$classes"
 declare -A seen=()
 affected=0
 for name in "${selected[@]}" "$required" "$focus_regression" "$contrast_regression"; do
+  [[ -n "$name" ]] || continue
   grep -Fxq "$name" .github/prototype-risk-classes.txt || { echo "Class is not in the reviewed inventory: $name" >&2; exit 2; }
   [[ "$name" == "$required" || "$name" == "$focus_regression" || "$name" == "$contrast_regression" ]] || affected=1
   seen["$name"]=1
@@ -31,6 +43,12 @@ selector=$(printf '%s\n' "${!seen[@]}" | LC_ALL=C sort | paste -sd, -)
 mkdir prototype-evidence
 printf '%s\n' "$selector" > prototype-evidence/selectors.txt
 python3 .github/test-evidence/source_methods.py --classes "$selector" --output prototype-evidence/expected-methods.json
+instrument_selector=$selector
+required_selector=$(printf '%s\n' "$required" "$focus_regression" "$contrast_regression" | sed '/^$/d' | paste -sd, -)
+if [[ "$method_iteration" == true ]]; then
+  python3 .github/prototype-methods.py prototype-evidence/expected-methods.json "$PROTOTYPE_METHODS"
+  instrument_selector=$PROTOTYPE_METHODS
+fi
 printf 'candidate_sha=%s\napi=%s\nrelease_certified=false\n' "$GITHUB_SHA" "$TEST_API" > prototype-evidence/context.txt
 # These APKs are independently compiled test inputs, NOT the canonical signed delivery APK.
 sha256sum app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk > prototype-evidence/test-input-apks.sha256
@@ -53,13 +71,13 @@ stop_child() {
 trap 'stop_child TERM 143' TERM
 trap 'stop_child INT 130' INT
 set +e
-python3 .github/test-evidence/supervise.py --output prototype-evidence/live --run-id "$GITHUB_RUN_ID" --attempt "$GITHUB_RUN_ATTEMPT" --sha "$GITHUB_SHA" --api "$TEST_API" --lane prototype -- ./gradlew connectedDebugAndroidTest --no-daemon --max-workers=2 "-Pandroid.testInstrumentationRunnerArguments.class=$selector" &
+python3 .github/test-evidence/supervise.py --output prototype-evidence/live --run-id "$GITHUB_RUN_ID" --attempt "$GITHUB_RUN_ATTEMPT" --sha "$GITHUB_SHA" --api "$TEST_API" --lane prototype -- ./gradlew connectedDebugAndroidTest --no-daemon --max-workers=2 "-Pandroid.testInstrumentationRunnerArguments.class=$instrument_selector" &
 child=$!
 wait "$child"
 result=$?
 set -e
 [[ "$result" == 0 ]] || exit "$result"
-python3 - "$selector" "$required,$focus_regression,$contrast_regression" <<'PYXML'
+python3 - "$selector" "$required_selector" <<'PYXML'
 import hashlib, json, pathlib, re, sys, xml.etree.ElementTree as ET
 if not __debug__:
     raise SystemExit("Optimized Python cannot disable prototype reconciliation")
@@ -78,7 +96,7 @@ source_bytes = (root/'expected-methods.json').read_bytes()
 source_inventory = json.loads(source_bytes)
 assert set(source_inventory['selectors']) == selected
 expected_methods = set(source_inventory['runtime_methods'])
-required = set(sys.argv[2].split(','))
+required = set(filter(None, sys.argv[2].split(',')))
 # AGP's observed XML serializes assumptions as <skipped />. Its EXISTING per-method
 # logcat carries the reason. Never infer that reason from a count or source predicate.
 package = 'io.github.anastaci1a.localica.'
