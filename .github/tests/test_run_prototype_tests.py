@@ -744,6 +744,24 @@ class WorkflowContract(unittest.TestCase):
         self.assertIn('app/build/outputs/androidTest-results/', paths)
         self.assertIn('app/build/reports/androidTests/', paths)
 
+    def test_native_emulator_failures_retain_crash_database_and_kernel_output(self):
+        import yaml
+        for filename, jobs in [('android.yml', ('device-tests',)),
+                               ('prototype.yml', ('focused_26', 'focused_36'))]:
+            workflow = yaml.safe_load((ROOT/'.github/workflows'/filename).read_text())
+            for job in jobs:
+                with self.subTest(workflow=filename, job=job):
+                    steps = workflow['jobs'][job]['steps']
+                    emulator = next(step for step in steps if step.get('uses', '').startswith(
+                        'reactivecircus/android-emulator-runner@'))
+                    self.assertIn('-show-kernel', emulator['with']['emulator-options'])
+                    uploads = [step for step in steps if step.get('uses', '').startswith(
+                        'actions/upload-artifact@') and step.get('with', {}).get('path') ==
+                        '/tmp/android-runner/emu-crash-*/']
+                    self.assertEqual(1, len(uploads), 'Missing retained emulator crash database')
+                    self.assertIn(uploads[0]['if'], ('failure()', 'always()'))
+                    self.assertEqual('warn', uploads[0]['with']['if-no-files-found'])
+
     def test_opt_in_only_and_five_required_jobs(self):
         import yaml
         workflow=yaml.safe_load((ROOT/'.github/workflows/prototype.yml').read_text())
