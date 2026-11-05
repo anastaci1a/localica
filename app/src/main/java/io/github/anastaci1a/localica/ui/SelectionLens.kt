@@ -22,6 +22,7 @@ internal fun SelectionLens(modifier: Modifier, motion: Animatable<Float, Animati
     placement: ((GlassShape) -> SelectorTrackLens)? = null, deformation: State<GlassShape>? = null) {
     val body = deformation ?: rememberGlassBody({ motion.value }, pressure, contact)
     val frame = placement?.invoke(body.value)
+    val silhouette = rememberSelectorSilhouette(frame?.contour())
     val density = androidx.compose.ui.platform.LocalDensity.current
     CompositionLocalProvider(LocalGlassAppearance provides if (preserveAppearance) LocalGlassAppearance.current else LocalGlassAppearance.current.copy(blur = 0f, whiteTint = 0f, shadowStrength = .04f, contrast = 0f)) {
         // Caller semantics and observers belong to the placed surface, not to the
@@ -29,7 +30,7 @@ internal fun SelectionLens(modifier: Modifier, motion: Animatable<Float, Animati
         LiquidGlassSurface(if (frame == null) modifier.selectorDeformation({ body.value }, vertical, wall)
             else Modifier.selectorTrackPlacement(frame.bounds).then(modifier), source = source, pressFeedback = false, shadow = false,
             cornerRadius = frame?.let { with(density) { it.corner.toDp() } } ?: cornerRadius, tint = tint,
-            body = { body.value }, depthScale = depthScale,
+            body = { body.value }, depthScale = depthScale, silhouette = silhouette,
             inkOverride = if (preserveAppearance) androidx.compose.ui.graphics.Color.Black else null) { Box(Modifier.matchParentSize().testTag("elastic-lens-face")) }
     }
 }
@@ -55,4 +56,19 @@ private fun GlassShape.selectorScale(vertical: Boolean, size: Size, allowance: F
     return Offset(
         scaleX(vertical).coerceIn(if (vertical) 2f - allowanceX else .5f, allowanceX),
         scaleY(vertical).coerceIn(if (!vertical) 2f - allowanceY else .5f, allowanceY))
+}
+
+/** Ordinary/resting selectors keep their scalar material path. Deformed corners use
+ * the existing silhouette adapter, blended continuously from that same optical crown. */
+@Composable
+internal fun rememberSelectorSilhouette(contour: SelectorTrackContour?): GlassSilhouette? {
+    if (contour == null || contour.isUniform) return null
+    val current by rememberUpdatedState(contour)
+    return remember {
+        GlassSilhouette { size ->
+            val scale = minOf(size.width / current.bounds.width, size.height / current.bounds.height)
+            GlassSilhouetteGeometry(listOf(current.outlineAt(size)), fieldWeight = current.opticalWeight,
+                corner = current.maximumRadius * scale)
+        }
+    }
 }

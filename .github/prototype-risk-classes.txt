@@ -93,6 +93,8 @@ io.github.anastaci1a.localica.InterfaceControlsTest
 io.github.anastaci1a.localica.InterfaceNavigationTest
 io.github.anastaci1a.localica.KeyedDragTest
 io.github.anastaci1a.localica.LargeQueueTransportTest
+io.github.anastaci1a.localica.QueueInitialSaveProfileTest
+io.github.anastaci1a.localica.InitialSaveTransportTest
 io.github.anastaci1a.localica.LegacyReadbackGrallocBoundsTest
 io.github.anastaci1a.localica.LensMeshSamplingTest
 io.github.anastaci1a.localica.LibraryDatabaseTest
@@ -135,6 +137,7 @@ io.github.anastaci1a.localica.NavigationTest
 io.github.anastaci1a.localica.OrderCommitPersistenceTest
 io.github.anastaci1a.localica.OrderedJourneyDatabaseTest
 io.github.anastaci1a.localica.PinchArtworkContinuityTest
+io.github.anastaci1a.localica.PinchDiagnosticsRecorderTest
 io.github.anastaci1a.localica.PinchFadeTest
 io.github.anastaci1a.localica.PinchItemPlacementLifecycleTest
 io.github.anastaci1a.localica.PinchOnsetTest
@@ -276,6 +279,8 @@ io.github.anastaci1a.localica.WorkflowPersistenceTest
 io.github.anastaci1a.localica.LyricsArtworkEntryTest
 io.github.anastaci1a.localica.PlayerArtworkSpacingTest
 io.github.anastaci1a.localica.PlayerLyricsForegroundTest
+io.github.anastaci1a.localica.PlayerLyricsMaterialEaseTest
+io.github.anastaci1a.localica.PlayerLyricsThemeEaseTest
 io.github.anastaci1a.localica.SoftwareControlCaptureTest
 io.github.anastaci1a.localica.DirectComposeDispatcherTest
 io.github.anastaci1a.localica.TestComposeDispatcherTest
@@ -292,3 +297,11 @@ io.github.anastaci1a.localica.ItemOutlinePixelTest
 io.github.anastaci1a.localica.GlassRendererSwitchingTest
 io.github.anastaci1a.localica.PlayerArtworkLayerTest
 io.github.anastaci1a.localica.PlayerArtworkOpticsTest
+io.github.anastaci1a.localica.LiftShadowTest
+io.github.anastaci1a.localica.SelectionPillMaterialTest
+io.github.anastaci1a.localica.PopupHomeShapeTest
+io.github.anastaci1a.localica.SeekCancelGlassTest
+io.github.anastaci1a.localica.PlaybackShutdownTest
+io.github.anastaci1a.localica.SelectionBackTest
+io.github.anastaci1a.localica.GalleryLiftFrameTest
+io.github.anastaci1a.localica.SelectorFreeCornerPixelTest

@@ -10,17 +10,19 @@ Related controls morph into their panels and return as one visible surface: crea
 
 Selected media hover: in one 220 ms ease-out the outline grows, a shadow deepens, and the surface shows the same backdrop region magnified with a slight frost. Content scales with it. Deselection is the same ease-out in reverse, and interruptions continue from the current appearance. Liquid Glass remains for controls.
 
-One uniform scale preserves artwork/outline corner centres. Growth takes at most a quarter of each neighbour gap, capped at 4 dp per side. The tighter axis limits both axes; lifted items never overlap neighbours.
+One uniform scale preserves artwork/outline corner centres. Growth takes at most a quarter of the gap to each neighbour's content (its cover or row content, not its outline), capped at 4 dp per side, and always leaves at least 1 dp of clearance to that content. The tighter axis limits both axes; lifted items never overlap neighbours.
+
+The lift shadow follows the menu's theming: dark under dark-icon menus, a white glow under light-icon menus. Both use Glass shadow spread and share the Lift shadow strength setting.
 
 Side-adjacent selections share one hovering outline. Diagonal gallery neighbors and unselected holes stay separate. Partial groups retain accessible state without a pane/checkmark. Inset album choices and preserve readable baselines.
 
-Selection, the current queue occurrence and held drag cards share one item outline. Its corners are concentric with the artwork's, sharing their arc centres. The inset $d$ is the artwork's smaller distance to the item edge, at least 2 dp:
+Selection, the current queue occurrence and held drag cards share one item outline. Its corners are concentric with the artwork's, sharing their arc centres. Every item style, in lists, galleries, carousels and drag cards, uses one padding $d = 3.5$ dp (1.75 times the former 2 dp minimum) between its content, such as a cover's top edge, and the outline:
 
 $$
 r_{\text{outline}} = r_{\text{artwork}} + d
 $$
 
-Artwork always stays inside, and the outline extends at most 2 dp beyond its item. Rows without artwork use a 10 dp radius.
+Artwork always stays inside, and the outline extends at most $d$ beyond its item. Rows without artwork use a 10 dp radius.
 
 Sort/settings choices share a moving clear lens with tap/drag control. Settings sliders and switches follow the [shared control specification](#settings-controls). Use deeper glass for controls that morph into menus, carrying the same depth into their flyouts. The tab bar stays flatter because it retains its shape.
 
@@ -68,7 +70,9 @@ Presses, morphs and selectors share interruptible deformation driven by accelera
 
 Navigation and horizontal/vertical choice tracks share overdrag geometry: the track stretches along travel within a shared 4 dp limit independent of length, its contents deform and realign proportionally, and the selector’s gap to the moving wall progressively closes.
 
-A held selector retains its resting cross-axis extent. Touching an already moving selector eases from the displayed contour. Contact corners stay circular and concentric with the enclosing track. The free end absorbs compression. Contact flattens the lens.
+A held selector retains its resting cross-axis extent. Touching an already moving selector eases from the displayed contour. Contact corners stay circular and concentric with the enclosing track.
+
+The free-end corners flatten along the travel axis as the presented contact gap closes, retaining their cross-axis radius. They return smoothly to round as compression relaxes. Contact flattens the lens.
 
 Release couples width and height in opposite phase with bounded physical excursions. The enclosing wall and lens share the configured timing and retain their visible contour on re-touch. One selector presentation owns the released geometry while optical depth continues independently.
 
@@ -96,6 +100,12 @@ Browsing/settings stay light, with a pink selected-tab accent, shared neutral gr
 
 Settings categories are Interface, Playback and queues, Library and tags, About/licenses, with icons, summaries and chevrons. Search appears only at the root. Both Back controls reverse the page entrance direction.
 
+**Settings → About and licenses → Export diagnostics** opens a glass dialog, then the Android share sheet with one text file: app version, device model, Android version, export time and the diagnostics trail. Nothing leaves the device unless the user picks a share target; there is no network path.
+
+The trail is an in-memory ring of the last 500 lines (about 256 KB), lost when the process ends. It holds stuck-pinch dumps (a pinch transaction, readback or zoom anchor outliving its gesture by 2 s), their recoveries, pill cancellations of a live pinch, and a compact trail of pinch, transaction and readback phase changes.
+
+A healthy idle app records nothing. Debuggable builds also mirror each line to logcat.
+
 **Interface → Glass** provides live persistent controls and reset, with a draggable preview that compresses at its edges and morphs between a pill and dialog:
 
 | Control | Range / treatment |
@@ -105,6 +115,7 @@ Settings categories are Interface, Playback and queues, Library and tags, About/
 | Blur / white tint | Clear through frosted; defaults use light scattering/tint. |
 | Shape damping / resting depth | Damping 2–40 (default 8); depth 0.6–2 (default 1.35). Footprint and lensing share the same response. |
 | Shadow strength / spread | Off through visible; tight through broad; default very subtle and broad. |
+| Lift shadow strength | 50–150% of Glass shadow strength in plain 5% steps (default 100%), for the lift shadow under selected and floating items. Its spread is exactly Glass shadow spread. |
 | Adaptive contrast | [Adaptive contrast rules](#adaptive-contrast). |
 | Navigation selector | Adjustable glass has independent blur/tint; Clear overlay has 0–50% darkening (default off) and optional icon/text refraction (default off). Classic gray pill has adjustable opacity (default 10%) and no glass deformation. |
 | Sliders and switches | White opaque resting thumbs morph into clear unblurred glass on contact; independent expansion 1–2× (default 1.75×). |
@@ -119,7 +130,7 @@ Adaptive contrast also applies to player color continuations, Queue frost and ne
 
 A choice is current only after matching tone preparation completes. Unmeasured, frozen, native-blurred, moving-cover and partial-player backgrounds retain the last verified decision (white ink before any verification), explicitly without claiming current coverage. Tone preparation, sampling, composition and native presentation are asynchronous, so this does not guarantee atomic ink and background presentation.
 
-A foreground change that arrives while lyrics open or close eases with that animation's progress instead of switching in one frame.
+A light/dark polarity change that arrives while lyrics open or close eases with that animation's progress instead of switching in one frame, and reverses with it. One fraction drives the foreground (text and icons) and the materials: glass control ink and tone, panel frost and coating, the backdrops that follow the player's ink and the panel theme. The player publishes it as `PlayerBackgroundPolarityState.lightMix`, and every surface that follows the player's ink reads it instead of the discrete decision. Under Reduced Motion the lyrics clock has no duration, so the polarity snaps with the layout. Expanding and collapsing with lyrics open keeps the last verified polarity, so nothing changes during that motion.
 
 Blur, texture and the artwork continuation remain unchanged.
 
@@ -169,9 +180,9 @@ Require at least twice as much horizontal as vertical intent, without changing c
 
 ### Back
 
-First end focused text editing and hide keyboard/cursor while preserving the draft. Then dismiss topmost popup/dialog → visible queue/playlist selection → queue overlay, artwork viewer or lyrics → player → current main-tab list to the top → applicable list filter reset → detail/search history → tab visits → exit.
+First end focused text editing and hide keyboard/cursor while preserving the draft. Then dismiss topmost popup/dialog → visible media selection → queue overlay, artwork viewer or lyrics → player → current main-tab list to the top → applicable list filter reset → detail/search history → tab visits → exit.
 
-Each press takes one applicable step. List scrolling/filter reset also applies within details, without returning to the tab root. Detail/search return restores the parent query, first item and pixel offset after matching results load.
+Each system Back or committed Back gesture takes one applicable step. List scrolling/filter reset also applies within details, without returning to the tab root. Detail/search return restores the parent query, first item and pixel offset after matching results load.
 
 ### Lifecycle
 
@@ -201,13 +212,17 @@ These three dense sizes keep one-line extra information immediately before the o
 
 Normal/Large halve the inter-cover gap, retaining cover sizes and horizontal geometry. Gallery **Items per row** snaps to 1–5. Preserve legacy presets until changed. Use smaller text/tighter padding at three or more columns, with an overlaid scrollbar.
 
+Every gallery size uses one fixed 8 dp gap, independent of zoom: between neighbouring covers and from the bottom of an item's lowest text line to the next cover. Outer margins stay 16 dp.
+
 In all lists, including queues and album details, pinch outward through Smallest list → Small list → Tracklist where offered → Compact list → Normal list → Large list → Gallery 5 → 4 → 3 → 2 → 1, and inward to reverse.
 
 Change one adjacent view per gesture, requiring all fingers to lift before another step. A 4% span change picks the direction. Geometry then follows the full finger distance, easing out that gap over 100 ms. Reversing restores items virtualized out by the destination. All text draws below a separate artwork pass. Within each pass earlier items draw on top.
 
 Pinches during settlement retain the shown progress. Reversals reuse the frozen endpoints. Further adjacent steps preserve their input until the preceding handoff permits a fresh capture, including gestures already released. Modal interruption discards pending steps.
 
-Departing items stop moving and resizing when their fade completes. Farther journeys fade sooner; reverse arrivals use the same spatial fade window. Elements retrace the same fade in either direction. View controls fade over 120 ms. Live items retain ordinary geometry progression.
+Departing items retain their bounded movement and resizing. Whole-item fades span the eased geometry transition, with evenly spaced starts and equal widths overlapping by half. Items farthest from the pinch focus fade first; arrivals mirror departures. A single item fades over the full transition. Reversals retrace every alpha.
+
+View controls fade over 120 ms. Live items retain ordinary geometry progression.
 
 Keep source-viewport decoded artwork through capture, reflow and release. Resolution upgrades blend without exposing the background. Release settles before saving.
 
@@ -327,11 +342,11 @@ Other items use Select song / Select all songs in their shared menu. The bulk ac
 
 Retain source occurrence identities and selection order across routes, tabs, queries, sorting, rotation and backgrounding. Select-all appends in collection order. Reselect appends last. Preserve distinct occurrences for playlists/queues and deduplicate files for editing. Fresh sessions start empty.
 
-The panel is one compact glass pill: close, count, Play next, Add to playlist, More and a divided collapse. More morphs into a menu with Play now, Add to queue, New queue, Edit tags, Remove from the source, Select all and Select range.
+The panel is one compact glass pill: close, count, Play next, Add to playlist, More and a divided collapse. It uses the standard Liquid Glass pill material in Library tabs, subviews and the Queue, with material, icons and its More menu following the page's light or dark ink. In the Queue it floats above the list without shortening it, so the items gain no new bottom clip edge; the list end pads by the pill's occupancy. More morphs into a menu with Play now, Add to queue, New queue, Edit tags, Remove from the source, Select all and Select range.
 
 Collapsing morphs the same surface into a minimized count pill; tapping it morphs back. Size, foreground and appearance share the interruptible glass spring, honor animation speed and Reduce motion, and immediately release input on outgoing faces.
 
-Close, mutable-list Back or successful actions exit. Cancel/failure/empty selection retains the mode. Collapsing retains selection. Remove-from-source requires one editable source. No separate selection-basket screen. Playlist chooser marks existing membership accessibly while allowing duplicates.
+Close, [Back](#back) or successful actions exit. Cancel/failure/empty selection retains the mode. Collapsing retains selection. Remove-from-source requires one editable source. No separate selection-basket screen. Playlist chooser marks existing membership accessibly while allowing duplicates.
 
 In a complete, manual, unfiltered queue/playlist, hold-drag moves the held occurrence or selected occurrences from that source, preserving their source order even when nonconsecutive. Cross-source selections and filtered views cannot reorder. Applying a saved-order sort does not disable subsequent dragging.
 

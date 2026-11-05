@@ -7,6 +7,7 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.test.*
@@ -18,6 +19,7 @@ import io.github.anastaci1a.localica.playback.PlaybackState
 import io.github.anastaci1a.localica.ui.*
 import org.jaudiotagger.audio.AudioFileIO
 import org.jaudiotagger.tag.images.AndroidArtwork
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
@@ -28,7 +30,11 @@ import kotlin.math.abs
 class PlayerBackdropTest {
     @get:Rule val compose = createComposeRule()
 
-    @Test fun coverColorsContinueBelowTheArtworkWithoutAFlatBand() {
+    @Test fun coverColorsContinueBelowTheArtworkWithoutAFlatBand() = verifyBackdrop(prepared = true)
+
+    @Test fun coldMountPresentsTheEmbeddedCoverAndItsColorContinuation() = verifyBackdrop(prepared = false)
+
+    private fun verifyBackdrop(prepared: Boolean) {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
         val audio = File(context.cacheDir, "player-wash.mp3")
@@ -49,27 +55,70 @@ class PlayerBackdropTest {
             }.apply { binaryData = bytes; mimeType = "image/png"; width = 384; height = 384; pictureType = 3 }); commit() }
             ArtworkCache.invalidate()
             val state = PlaybackState(connected = true, trackUri = audio.toURI().toString(), title = "Color study", artist = "Localica", durationMs = 180000)
+            // Strict geometry checks start ready; the separate cold case uses the default
+            // asynchronous player path and its own end-to-end readiness budget.
+            val visual = if (prepared) runBlocking { PlayerVisualCache.read(context, state.trackUri!!) } else null
+            if (prepared) {
+                assertNotNull("The embedded fixture cover must decode", visual?.artwork)
+                assertNotNull("The fixture must include its prepared color continuation", visual?.palette?.wash)
+            }
             compose.setContent { LocalicaTheme { BoxWithConstraints(Modifier.fillMaxSize()) {
-                PlayerSurface(state, true, {}, InterfaceSettings(reducedMotion = true), remember { Animatable(1f) }, {}, {}, {}, {}, {}, {})
+                PlayerSurface(state, true, {}, InterfaceSettings(reducedMotion = true), remember { Animatable(1f) }, {}, {}, {}, {}, {}, {}, visual = visual)
             } } }
             val player = compose.onNodeWithTag("player-surface")
-            // Artwork decoding and background filtering happen outside Compose's idle clock.
-            compose.waitUntil(10000) {
-                val pixels = player.captureToImage().toPixelMap()
-                val c = pixels[pixels.width / 2, pixels.height / 6]
-                val bounds = player.fetchSemanticsNode().boundsInRoot
-                val art = compose.onNodeWithTag("player-artwork").fetchSemanticsNode().boundsInRoot
-                val y = (art.bottom - bounds.top + 12).toInt().coerceIn(0, pixels.height - 1)
-                val wash = pixels[pixels.width / 8, y]
-                c.blue > c.red * 1.4f && wash.red > wash.blue * 1.4f
+            val output = InstrumentationRegistry.getArguments().getString("additionalTestOutputDir")
+                ?.let(::File) ?: context.getExternalFilesDir(null) ?: context.cacheDir
+            output.mkdirs()
+            if (!prepared) {
+                var last: ImageBitmap? = null
+                try {
+                    // Actual pixels acknowledge decode, palette preparation and presentation;
+                    // a cache hit alone does not establish that the cold player has drawn.
+                    compose.waitUntil(30_000) {
+                        val image = player.captureToImage().also { last = it }
+                        val pixels = image.toPixelMap()
+                        val coverColor = pixels[pixels.width / 2, pixels.height / 6]
+                        val bounds = player.fetchSemanticsNode().boundsInRoot
+                        val art = compose.onNodeWithTag("player-artwork").fetchSemanticsNode().boundsInRoot
+                        val y = (art.bottom - bounds.top + 12).toInt().coerceIn(0, pixels.height - 1)
+                        val washColor = pixels[pixels.width / 8, y]
+                        coverColor.blue > coverColor.red * 1.4f && washColor.red > washColor.blue * 1.4f
+                    }
+                } catch (failure: Throwable) {
+                    android.util.Log.e("PlayerBackdropTest", "Cold mount preparation: " + PlayerVisualCache.peek(state.trackUri!!))
+                    runCatching {
+                        last?.asAndroidBitmap()?.let { bitmap ->
+                            File(output, "player-cold-timeout.png").outputStream().use {
+                                bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)
+                            }
+                        }
+                        instrumentation.uiAutomation.takeScreenshot()?.let { bitmap ->
+                            try {
+                                File(output, "player-cold-native-timeout.png").outputStream().use {
+                                    bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)
+                                }
+                            } finally { bitmap.recycle() }
+                        }
+                    }.exceptionOrNull()?.let(failure::addSuppressed)
+                    throw failure
+                }
+                File(output, "player-cold-ready.png").outputStream().use {
+                    requireNotNull(last).asAndroidBitmap().compress(Bitmap.CompressFormat.PNG, 100, it)
+                }
+                return
             }
             val image = player.captureToImage()
-            File(context.getExternalFilesDir(null), "player-artwork-wash.png").outputStream().use {
+            File(output, "player-artwork-wash.png").outputStream().use {
                 image.asAndroidBitmap().compress(Bitmap.CompressFormat.PNG, 100, it)
             }
             val pixels = image.toPixelMap()
             val bounds = player.fetchSemanticsNode().boundsInRoot
             val art = compose.onNodeWithTag("player-artwork").fetchSemanticsNode().boundsInRoot
+            val coverColor = pixels[pixels.width / 2, pixels.height / 6]
+            assertTrue("The prepared blue cover must be presented", coverColor.blue > coverColor.red * 1.4f)
+            val washY = (art.bottom - bounds.top + 12).toInt().coerceIn(0, pixels.height - 1)
+            val washColor = pixels[pixels.width / 8, washY]
+            assertTrue("The prepared orange continuation must be presented", washColor.red > washColor.blue * 1.4f)
             val unclipped = compose.onNodeWithTag("player-artwork").getUnclippedBoundsInRoot()
             assertEquals("Keep the cover's aspect ratio", (unclipped.right - unclipped.left).value,
                 (unclipped.bottom - unclipped.top).value, 1f)

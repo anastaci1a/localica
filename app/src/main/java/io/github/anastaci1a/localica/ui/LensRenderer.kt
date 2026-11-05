@@ -190,14 +190,14 @@ internal class LensRenderer {
             float grazing = 1.0 - normal.z;
             grazing = grazing * grazing * grazing;
             float reflection = (0.018 * (1.0 - normal.z) + 0.26 * grazing) * illumination * power;
-            float white = tone.z > 0.5 ? 1.0 - tone.x : 1.0;
-            float black = tone.z > 0.5 ? 0.0 : tone.x;
+            float white = mix(1.0, 1.0 - tone.x, tone.z);
+            float black = mix(tone.x, 0.0, tone.z);
             color = mix(color, float3(white), reflection * max(facing, 0.0));
             color = mix(color, float3(black), reflection * max(-facing, 0.0) * 0.3);
             // Environmental light still reflects when this recording is translucent
             // (for example an unpainted row over its parent's background).
             float reflected = reflection * max(facing, 0.0) * (1.0 - alpha);
-            float reflectedTone = tone.z > 0.5 ? 1.0 - tone.x : 1.0;
+            float reflectedTone = mix(1.0, 1.0 - tone.x, tone.z);
             return half4(half3(color * alpha + reflected * reflectedTone), half(alpha + reflected));
         }
     """.trimIndent())
@@ -222,7 +222,7 @@ internal class LensRenderer {
             atlas?.output?.width ?: 0f, atlas?.output?.height ?: 0f,
             atlas?.backdrop?.width ?: 0f, atlas?.backdrop?.height ?: 0f,
             atlas?.backdropOffset?.x ?: 0f, atlas?.backdropOffset?.y ?: 0f, flattening,
-            tone.trim, tone.weight, if (tone.lightInk) 1f else 0f,
+            tone.trim, tone.weight, tone.lightMix,
             fieldWeight.coerceIn(0f, 1f), if (circles == null) 0f else 1f,
             circles?.first?.x ?: 0f, circles?.first?.y ?: 0f,
             circles?.second?.x ?: 0f, circles?.second?.y ?: 0f, splitInner ?: -1f)
@@ -239,7 +239,7 @@ internal class LensRenderer {
         shader.setFloatUniform("power", power)
         shader.setFloatUniform("whiteTint", whiteTint)
         shader.setFloatUniform("illumination", illumination)
-        shader.setFloatUniform("tone", tone.trim, tone.weight, if (tone.lightInk) 1f else 0f)
+        shader.setFloatUniform("tone", tone.trim, tone.weight, tone.lightMix)
         shader.setFloatUniform("foregroundOffset", atlas?.foregroundY ?: 0f)
         shader.setFloatUniform("outputSize", atlas?.output?.width ?: 0f, atlas?.output?.height ?: 0f)
         shader.setFloatUniform("backdropSize", atlas?.backdrop?.width ?: 0f, atlas?.backdrop?.height ?: 0f)

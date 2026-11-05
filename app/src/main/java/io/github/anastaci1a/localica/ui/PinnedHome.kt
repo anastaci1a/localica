@@ -113,7 +113,7 @@ internal fun PinnedHome(library: LibraryUiState, playlists: PlaylistState, pins:
                 val anchor = rememberGlassAnchor()
                 val selectedCount = session.selectedCount(item)
                 Column(Modifier.width(160.dp).clip(Corners.card).testTag("pin-${item.key}")
-                    .selectionLens(selectedCount > 0, item.row == null && selectedCount > 0 && selectedCount < item.songs.size, outline = pinOutline)
+                    .selectionLens(selectedCount > 0, item.row == null && selectedCount > 0 && selectedCount < item.songs.size, outline = pinOutline, anchor = anchor)
                     .combinedClickable(enabled = currentOrder, onClick = {
                         if (item.row != null && session.active) session.toggle(null, item.row)
                         else onOpen(item, songs)

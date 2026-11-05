@@ -209,6 +209,11 @@ internal class CollectionPinchHeader(val motion: BrowsePinchMotion, val grid: La
         pin?.release(); pin = null
         revision++
     }
+    /** Debug-build stuck-state report (#535 b); reads state only. */
+    fun diagnostics(): String = "generation=$generation endpoint=${endpointStyle?.let { "${it.presentation}/${it.listSize}" }} " +
+        "destinationMeasured=${target.isCompleted} handed=${handed.isCompleted} frozen=${frozen != null} " +
+        "request=$request handoffRequest=$serialAtHandoff source=$sourceBounds destination=$targetBounds " +
+        "live=${coordinates?.takeIf { it.isAttached && viewport?.isAttached == true }?.let(::rect)} pinned=${pin != null}"
     /** A pending native read must keep the pin, just like its atlas and artwork lease. */
     fun detachPin(): (() -> Unit)? {
         val held = pin ?: return null

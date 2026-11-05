@@ -46,6 +46,8 @@ internal class SelectionEntry {
     /** The cell's own fades (entry sweep, drag handoff) that its in-place drawing would get. */
     var alpha: () -> Float = { 1f }
     var recorded = false
+    /** This item's last drawn lift in its own coordinates while it hovers; null at rest (#554). */
+    var presented: HoverGeometry? = null
 }
 
 @Stable internal class SelectionScene {
@@ -94,6 +96,7 @@ internal fun ConnectedSelectionHost(modifier: Modifier = Modifier, contentDrawin
     observePlacement: () -> Unit = {}, visibleItemKeys: (() -> Set<Any>)? = null,
     scene: SelectionScene = remember { SelectionScene() }, liftEdges: LiftEdges = LiftEdges.Horizontal,
     content: @Composable () -> Unit) {
+    val liftStyle = rememberLiftShadow()
     val renderer = currentGlassRendererGeneration()
     // RenderEffect blur needs API 31; the Legacy backend crossfades its prepared frost instead.
     val blurEffects = renderer.backend == GlassBackend.Modern && Build.VERSION.SDK_INT >= 31
@@ -149,9 +152,11 @@ internal fun ConnectedSelectionHost(modifier: Modifier = Modifier, contentDrawin
             val cap = HoverLift.MaxLift.toPx()
             val others = placed.map { it.rest.bounds } + scene.retainedHover.map { it.first.rest.bounds }
             val liveLifts = hovering.map { item ->
-                hoverGeometry(item.rest, hoverRoom(item.rest.bounds, others, viewport, liftEdges, cap), item.progress)
+                hoverGeometry(item.rest, hoverRoom(item.rest.bounds, others, viewport, liftEdges, cap,
+                    neighbourInset = MediaOutlinePadding.toPx(), clearance = HoverLift.Clearance.toPx()), item.progress)
             }
             hovering.forEachIndexed { index, item ->
+                item.entry.presented = liveLifts[index].translate(-item.at)
                 item.entry.itemKey?.let { scene.hover[it] = liveLifts[index].translate(-item.at); scene.viewportHover[it] = liveLifts[index] }
             }
             val lifts = liveLifts + scene.retainedHover.map { it.first }
@@ -166,7 +171,7 @@ internal fun ConnectedSelectionHost(modifier: Modifier = Modifier, contentDrawin
                 val parts = members.map { lifts[it] }
                 val strengths = { a: Int, b: Int -> min(parts[a].progress, parts[b].progress) }
                 val opacity = members.maxOf { opacities[it] }
-                drawHoverGroup(group, parts, strengths, backing, location, blurEffects, recordingDensity, recordingDirection, gap, opacity = opacity, itemOpacity = members.map { opacities[it] })
+                drawHoverGroup(group, parts, strengths, backing, location, blurEffects, recordingDensity, recordingDirection, gap, opacity = opacity, itemOpacity = members.map { opacities[it] }, lift = liftStyle)
                 members.forEach { member ->
                     val item = hovering.getOrNull(member) ?: return@forEach
                     val lift = lifts[member]
@@ -193,7 +198,7 @@ internal fun DrawScope.drawHoverGroup(group: HoverGroupRenderer, parts: List<Hov
     backing: FrostedBackdrop?, location: BackdropLocation, blurEffects: Boolean,
     density: androidx.compose.ui.unit.Density, direction: LayoutDirection, gap: Float,
     sampleOffset: Offset = Offset.Zero, shadow: Boolean = true, opacity: Float = 1f,
-    itemOpacity: List<Float>? = null, maskVisibility: Boolean = true) {
+    itemOpacity: List<Float>? = null, maskVisibility: Boolean = true, lift: LiftShadow) {
     if (parts.isEmpty()) return
     val progress = parts.maxOf { it.progress } * opacity.coerceIn(0f, 1f)
     if (progress <= 0f) return
@@ -203,12 +208,12 @@ internal fun DrawScope.drawHoverGroup(group: HoverGroupRenderer, parts: List<Hov
     if (maskVisibility && visibility.any { it < .9999f }) {
         // A departing member must fade independently of its still-selected neighbours.
         // Keep one material/union shadow and mask it once; never redraw foreground here.
-        val padding = if (shadow) (6f + HoverLift.ShadowSpread * 28f).dp.toPx() + 2f else gap / 2f
+        val padding = if (shadow) (6f + lift.spread * 28f).dp.toPx() + 2f else gap / 2f
         val bounds = parts.map { it.lifted.bounds }.reduce { a, b -> a.union(b) }.inflate(padding)
         val canvas = drawContext.canvas
         canvas.saveLayer(bounds, Paint())
         drawHoverGroup(group, parts, strength, backing, location, blurEffects, density, direction, gap,
-            sampleOffset, shadow, opacity, itemOpacity, maskVisibility = false)
+            sampleOffset, shadow, opacity, itemOpacity, maskVisibility = false, lift = lift)
         // Complement removal also handles transparent/empty masks correctly on API 26.
         canvas.saveLayer(bounds, Paint().apply { blendMode = BlendMode.DstOut })
         drawRect(Color.White, bounds.topLeft, bounds.size)
@@ -223,7 +228,7 @@ internal fun DrawScope.drawHoverGroup(group: HoverGroupRenderer, parts: List<Hov
     if (shadow) with(group.shadow) {
         // Strength alone follows progress, so the shadow deepens linearly with the lift.
         draw(parts.map { it.lifted.contour to 1f } + group.path.bridges.map {
-            RoundRect(it.first, CornerRadius.Zero) to 1f }, HoverLift.ShadowStrength * progress, HoverLift.ShadowSpread)
+            RoundRect(it.first, CornerRadius.Zero) to 1f }, lift.strength * progress, lift.spread, color = lift.color)
     }
     val source = backing?.takeIf { it.recorded && !it.layer.isReleased } ?: return
     val registration = source.location.registrationTo(location) ?: return
@@ -361,12 +366,13 @@ internal fun connectedSelectionPath(regions: List<SelectionRegion>, gap: Float,
 internal fun Modifier.selectionLens(isSelected: Boolean, partial: Boolean,
     itemKey: Any? = null, outline: ((Size, LayoutDirection) -> MediaItemOutline?)? = null,
     handle: SelectionHoverHandle? = null, alpha: () -> Float = { 1f },
-    visualSize: (Size) -> Size = { it }): Modifier {
+    anchor: GlassAnchor? = null, visualSize: (Size) -> Size = { it }): Modifier {
     val scene = LocalSelectionScene.current
     val direction = LocalLayoutDirection.current
     val token = remember { Any() }
     val entry = remember { SelectionEntry() }
     val layer = androidx.compose.ui.graphics.rememberGraphicsLayer()
+    val view = androidx.compose.ui.platform.LocalView.current
     val visibility = androidx.compose.animation.core.animateFloatAsState(if (isSelected && !partial) 1f else 0f,
         hoverMotionSpec(LocalReducedMotion.current), label = "Selection hover")
     SideEffect {
@@ -378,6 +384,9 @@ internal fun Modifier.selectionLens(isSelected: Boolean, partial: Boolean,
         entry.layer = layer
         entry.alpha = alpha
         handle?.progress = { visibility.value }
+        // Popups homed on this item follow its lift (#554), however the item is keyed.
+        anchor?.presentation = { entry.presented?.let { lift -> entry.coordinates?.takeIf { it.isAttached }
+            ?.let { GlassLift(lift.scale, it.backdropPosition(view) + lift.pivot) } } }
         val selected = isSelected && !partial
         if (entry.selected != selected) { entry.selected = selected; androidx.compose.runtime.snapshots.Snapshot.withoutReadObservation { scene?.placement = (scene?.placement ?: 0) + 1 } }
         // Registration is identity-stable; rewrite only a missing or replaced entry.
@@ -395,7 +404,7 @@ internal fun Modifier.selectionLens(isSelected: Boolean, partial: Boolean,
         // A retained child display list can otherwise acknowledge its recording a frame late.
         val hovering = scene != null && (entry.selected || visibility.value > 0f)
         if (!hovering) {
-            entry.recorded = false
+            entry.recorded = false; entry.presented = null
             drawContent()
             return@drawWithContent
         }

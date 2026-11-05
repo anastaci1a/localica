@@ -59,11 +59,11 @@ class GalleryGeometryTest {
                 val last = compose.onNodeWithTag("browse-art-geometry:${columns - 1}", true).fetchSemanticsNode().boundsInRoot
                 assertEquals(16 * density, first.left - viewport.left, 2f)
                 assertEquals(16 * density, viewport.right - last.right, 2f)
-                val expectedWidth = if (columns >= 3) (viewport.width - 24 * density) / columns - 8 * density
+                val expectedWidth = if (columns >= 2) (viewport.width - 24 * density) / columns - 8 * density
                     else viewport.width / columns - 32 * density
                 assertEquals(expectedWidth, first.width, 2f)
                 galleryWidths[columns] = first.width
-                if (columns >= 3) {
+                if (columns >= 2) {
                     val second = compose.onNodeWithTag("browse-art-geometry:1", true).fetchSemanticsNode().boundsInRoot
                     assertEquals(8 * density, second.left - first.right, 2f)
                 }
