@@ -160,6 +160,10 @@ The player publishes it as `PlayerBackgroundPolarityState.lightMix`, and every s
 
 Under Reduced Motion the lyrics clock has no duration, so the polarity snaps with the layout. Expanding and collapsing with lyrics open keeps the last verified polarity, so nothing changes during that motion.
 
+Artwork changes drive surface palette tints from the same reveal fraction as the backdrop, ink and Queue materials. Rapid skips continue from the presented palette; Reduce motion snaps every channel.
+
+With brightness trim enabled, a backdrop waits for its grade and matching prepared pixels before its first drawing. Outgoing artwork retains its prepared grade when the blend creates a new role. The owned neutral placeholder gradient already meets white-ink contrast and draws immediately with zero grading shift.
+
 Blur, texture and the artwork continuation remain unchanged.
 
 ### Settings controls

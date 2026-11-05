@@ -166,6 +166,7 @@ io.github.anastaci1a.localica.PlayerFeedbackTest
 io.github.anastaci1a.localica.PlayerGestureTest
 io.github.anastaci1a.localica.PlayerLayoutTest
 io.github.anastaci1a.localica.PlayerMeasuredBoundsTest
+io.github.anastaci1a.localica.PlayerPausedConnectionTest
 io.github.anastaci1a.localica.PlayerPausedSkipTest
 io.github.anastaci1a.localica.PlayerRefinementTest
 io.github.anastaci1a.localica.PlayerSeekHapticsTest

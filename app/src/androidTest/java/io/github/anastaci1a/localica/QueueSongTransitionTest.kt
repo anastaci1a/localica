@@ -2,11 +2,15 @@ package io.github.anastaci1a.localica
 
 import android.graphics.Bitmap
 import androidx.compose.animation.core.Animatable
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.Text
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.colorspace.ColorSpaces
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.platform.LocalDensity
@@ -18,6 +22,7 @@ import io.github.anastaci1a.localica.playback.PlaybackState
 import io.github.anastaci1a.localica.ui.*
 import kotlin.math.abs
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.CompletableDeferred
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
@@ -37,7 +42,10 @@ class QueueSongTransitionTest {
     @Volatile private var queueInk = Float.NaN
     @Volatile private var backdropMix = Float.NaN
 
-    private class Frame(val mix: Float, val queue: Float, val backdrop: Float, val shot: Float)
+    @Volatile private var surfaceTint = Float.NaN
+    private var preparationBarrier: (suspend () -> Unit)? = null
+
+    private class Frame(val mix: Float, val queue: Float, val backdrop: Float, val shot: Float, val clock: Float, val tint: Float, val incoming: Float)
     private val frames = ArrayList<Frame>()
 
     private fun cover(color: Int, key: String): PlayerVisual {
@@ -47,19 +55,24 @@ class QueueSongTransitionTest {
     private val white = cover(android.graphics.Color.rgb(246, 244, 240), "white")
     private val black = cover(android.graphics.Color.rgb(12, 12, 16), "black")
 
-    private fun mount(first: PlayerVisual) {
+    private fun mount(first: PlayerVisual, awaitReady: Boolean = true, queueShown: Boolean = true) {
         visual = first
         compose.setContent { LocalicaTheme {
-            CompositionLocalProvider(LocalDensity provides Density(1f), LocalReducedMotion provides reduced) {
-                BoxWithConstraints(Modifier.fillMaxSize()) {
+            CompositionLocalProvider(LocalDensity provides Density(1f), LocalReducedMotion provides reduced,
+                LocalPlayerBackgroundPreparationBarrier provides preparationBarrier) {
+                BoxWithConstraints(Modifier.fillMaxSize().background(if (queueShown) Color.Transparent else Color.Magenta)) {
                     val mix = owner.lightMix
-                    val queue = remember { Animatable(1f) }
+                    val queue = remember { Animatable(if (queueShown) 1f else 0f) }
                     val backdrop = rememberFrostedBackdrop(Unit, enabled = false, dark = mix >= .5f, lightMix = mix, retainRaster = false)
                     SideEffect { backdropMix = backdrop.lightMix }
                     PlayerSurface(PlaybackState(connected = true, title = "Now and then", artist = "Artist", durationMs = 120000),
                         true, {}, settings, remember { Animatable(1f) }, {}, {}, {}, {}, {}, {},
-                        visual = visual, backgroundPolarity = owner, queueProgress = queue) { Text("Controls") }
-                    GlassPanelTheme(mix) {
+                        visual = visual, backgroundPolarity = owner, queueProgress = queue) {
+                        val tint = MaterialTheme.colorScheme.surface.convert(ColorSpaces.Oklab).red
+                        SideEffect { surfaceTint = tint }
+                        Text("Controls")
+                    }
+                    if (queueShown) GlassPanelTheme(mix) {
                         QueueSurface(queue, settings, {}, playerProgress = { 1f }) {
                             val ink = LocalContentColor.current
                             SideEffect { queueInk = ink.red }
@@ -69,15 +82,15 @@ class QueueSongTransitionTest {
                 }
             }
         } }
-        compose.waitUntil(10000) { owner.decision.confidence == PlayerBackgroundConfidence.Current && owner.frame != null }
+        if (awaitReady) compose.waitUntil(10000) { owner.decision.confidence == PlayerBackgroundConfidence.Current && owner.frame != null }
         compose.waitForIdle()
     }
 
-    private fun gutter(): Float {
+    private fun gutter(green: Boolean = false): Float {
         val pixels = compose.onRoot().captureToImage().toPixelMap()
         var sum = 0f; var n = 0
         for (y in (pixels.height * .55f).toInt() until (pixels.height * .8f).toInt() step 6)
-            for (x in (pixels.width * .01f).toInt() until (pixels.width * .045f).toInt()) { sum += pixels[x, y].red; n++ }
+            for (x in (pixels.width * .01f).toInt() until (pixels.width * .045f).toInt()) { sum += if (green) pixels[x, y].green else pixels[x, y].red; n++ }
         return sum / n
     }
 
@@ -85,7 +98,11 @@ class QueueSongTransitionTest {
         compose.mainClock.advanceTimeByFrame(); compose.waitForIdle()
         // Let off-thread preparation of the new artwork's samples land between frames.
         Thread.sleep(12)
-        frames += Frame(owner.lightMix, (queueInk - .1255f) / .8745f, backdropMix, gutter())
+        val artworkFrame = owner.frame
+        val incoming = artworkFrame?.roles?.firstOrNull { it.incoming && !it.soft }?.visual?.palette?.bottom
+            ?.convert(ColorSpaces.Oklab)?.red ?: Float.NaN
+        frames += Frame(owner.lightMix, (queueInk - .1255f) / .8745f, backdropMix, gutter(),
+            artworkFrame?.clock ?: 1f, surfaceTint, incoming)
     }
 
     private fun assertOneClock(name: String, toLight: Boolean) {
@@ -109,6 +126,20 @@ class QueueSongTransitionTest {
         fraction.zipWithNext().forEachIndexed { i, (a, b) ->
             assertTrue("$name: backdrop jump at $i: $a -> $b", abs(b - a) <= .3f)
             assertTrue("$name: backdrop not monotonic at $i", b >= a - .02f)
+        }
+        val startTint = (if (toLight) white else black).palette.bottom.convert(ColorSpaces.Oklab).red
+        val endTint = (if (toLight) black else white).palette.bottom.convert(ColorSpaces.Oklab).red
+        val tintFraction = frames.map { (it.tint - startTint) / (endTint - startTint) }
+        // Before admission, clock=1 still belongs to the outgoing artwork. Pair the
+        // fraction with the target from the same immutable frame bundle.
+        val clocks = frames.map { if (abs(it.incoming - endTint) < .001f) it.clock else 0f }
+        frames.forEachIndexed { i, _ ->
+            val previous = clocks.getOrNull(i - 1) ?: clocks[i]
+            assertTrue("$name: surface tint left the artwork clock at $i: ${tintFraction[i]} vs ${clocks[i]}",
+                minOf(abs(tintFraction[i] - clocks[i]), abs(tintFraction[i] - previous)) <= .05f)
+        }
+        tintFraction.zipWithNext().forEach { (a, b) ->
+            assertTrue("$name: surface tint jump or reversal: $a -> $b", b >= a - .001f && b - a <= .3f)
         }
         val inkFraction = mix.map { if (toLight) it else 1f - it }
         fun first(values: List<Float>, level: Float) = values.indexOfFirst { it > level }
@@ -141,6 +172,7 @@ class QueueSongTransitionTest {
         record(70)
         frames.zipWithNext().forEachIndexed { i, (a, b) ->
             assertTrue("polarity jump at $i: ${a.mix} -> ${b.mix}", abs(b.mix - a.mix) <= .3f)
+            assertTrue("surface tint jump at $i: ${a.tint} -> ${b.tint}", abs(b.tint - a.tint) <= .3f)
             assertTrue("queue ink jump at $i: ${a.queue} -> ${b.queue}", abs(b.queue - a.queue) <= .3f)
             assertTrue("backdrop jump at $i: ${a.shot} -> ${b.shot}", abs(b.shot - a.shot) <= .3f)
         }
@@ -154,7 +186,34 @@ class QueueSongTransitionTest {
         record(12)
         frames.forEach { f -> listOf(f.mix, f.backdrop).forEach { assertTrue("snap, not ease: $it", it == 0f || it == 1f) } }
         assertEquals(1f, frames.last().mix, 0f)
+        val endpoints = listOf(white, black).map { it.palette.bottom.convert(ColorSpaces.Oklab).red }
+        assertTrue("surface tint snaps with artwork", frames.all { f -> endpoints.any { abs(it - f.tint) < .02f } })
+        assertEquals(endpoints.last(), frames.last().tint, .02f)
         val shots = frames.map { it.shot }
         assertTrue("backdrop snapped, never eased: $shots", shots.all { abs(it - shots.first()) < .05f || abs(it - shots.last()) < .05f })
     }
+
+    @Test fun firstOpenNeverPresentsAnUngradedBackdropWhilePreparationIsPending() {
+        val ready = CompletableDeferred<Unit>()
+        preparationBarrier = { ready.await() }
+        compose.mainClock.autoAdvance = false
+        try {
+            mount(white, awaitReady = false, queueShown = false)
+            repeat(4) {
+                compose.mainClock.advanceTimeByFrame()
+                assertTrue("No grade may bypass the preparation barrier", owner.roleGrades.isEmpty())
+                assertTrue("First frame $it must hold the raw white backdrop", gutter(green = true) < .2f)
+            }
+            ready.complete(Unit)
+            for (i in 0 until 60) {
+                compose.mainClock.advanceTimeByFrame()
+                Thread.sleep(10)
+                if (owner.roleGrades.isNotEmpty()) break
+            }
+            assertTrue("Preparation must release the backdrop", owner.roleGrades.isNotEmpty())
+            compose.mainClock.advanceTimeByFrame()
+            assertTrue("The graded backdrop is now drawn", gutter(green = true) > .75f)
+        } finally { ready.complete(Unit); compose.mainClock.autoAdvance = true }
+    }
+
 }
