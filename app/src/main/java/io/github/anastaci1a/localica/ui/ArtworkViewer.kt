@@ -44,7 +44,7 @@ internal fun ArtworkViewer(uri: String, artist: String? = null, album: String? =
             val message = when (val r = ArtworkSaver.save(context.applicationContext, uri, artist, album)) {
                 is ArtworkSaveResult.Saved -> "Saved to Downloads: ${r.name}"
                 ArtworkSaveResult.NoArtwork -> "No artwork to save"
-                ArtworkSaveResult.Failed -> "Could not save artwork"
+                is ArtworkSaveResult.Failed -> "Could not save artwork"
             }
             Toast.makeText(context.applicationContext, message, Toast.LENGTH_SHORT).show()
         }
