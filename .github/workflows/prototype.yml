@@ -159,7 +159,7 @@ jobs:
         target: google_apis
         arch: x86_64
         profile: pixel_2
-        emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -memory 3072 -show-kernel
+        emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -memory 3072 -show-kernel -feature -GLDMA
         disable-animations: true
         script: |
           adb shell wm size reset
@@ -233,7 +233,7 @@ jobs:
         target: google_apis
         arch: x86_64
         profile: pixel_2
-        emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -memory 3072
+        emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -memory 3072 -feature -GLDMA
         disable-animations: true
         script: |
           adb shell wm size reset
