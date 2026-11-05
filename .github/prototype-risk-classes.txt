@@ -322,3 +322,4 @@ io.github.anastaci1a.localica.PlayerSeekCancelCrashTest
 io.github.anastaci1a.localica.RowTextScrollTest
 io.github.anastaci1a.localica.RowMenuRevealTest
 io.github.anastaci1a.localica.ArtworkTextSkeletonLinesTest
+io.github.anastaci1a.localica.ArtworkScrollLoadingTest
