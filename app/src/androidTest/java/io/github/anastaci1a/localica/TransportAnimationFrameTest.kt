@@ -105,6 +105,7 @@ class TransportAnimationFrameTest {
         compose.mainClock.advanceTimeBy(160)
         same(rest, node.captureToImage())
         compose.runOnIdle { speed = 2f }
+        compose.mainClock.advanceTimeByFrame()
         node.performClick()
         compose.mainClock.advanceTimeBy(304)
         same(rest, node.captureToImage())
