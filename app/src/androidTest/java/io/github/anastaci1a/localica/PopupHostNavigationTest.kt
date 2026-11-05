@@ -9,6 +9,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogWindowProvider
+import androidx.compose.ui.test.*
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.UiDevice
 import io.github.anastaci1a.localica.ui.*
@@ -31,7 +32,6 @@ class PopupHostNavigationTest {
         var popupView: View? = null
         var parentView: View? = null
         var parentProgress = 1f
-        var destinationEntered = false
         compose.setContent { LocalicaTheme {
             CompositionLocalProvider(LocalGlassMorphWorkObserver provides { phase, window, progress ->
                 if (phase == "geometry" && progress != null && window ===
@@ -51,16 +51,14 @@ class PopupHostNavigationTest {
                     }
                 }
             }
-            val shownPage = page
-            if (settings) SettingsPage(if (shownPage) "Motion" else "Settings", { page = false }, navigationDepth = if (page) 1 else 0) {
-                if (shownPage) Body() else {
-                    SideEffect { destinationEntered = true }
-                    Box(Modifier.fillMaxSize().background(Color.Blue))
-                }
-            }
+            if (settings) FolderSettings(LibraryUiState(), { page = false }, {}, {}, interfaceContent = { Body() })
             else if (page) GlassDialog({ page = false }, GlassPlacement.Page) { Body() }
             }
         } }
+        if (settings) {
+            compose.onNodeWithText("Interface").performClick()
+            compose.onNodeWithText("Glass").performClick()
+        }
         compose.mainClock.autoAdvance = false
         compose.mainClock.advanceTimeBy(1600)
         compose.runOnIdle { open = true }
@@ -79,13 +77,14 @@ class PopupHostNavigationTest {
         assertTrue("Return is in flight before navigation", anchor.modalPresent && anchor.contact.expansion.value > 0f)
         val before = redFrame()
         assertTrue("Fixture presents popup foreground before navigation: $before", before.pixels > 100)
-        back(parentView) { !page }
+        back(parentView) { settings || !page }
         var transitionStarted = false
         for (frame in 0 until 20) {
             compose.mainClock.advanceTimeByFrame()
             compose.waitForIdle()
             assertTrue("Popup remains continuous while the host admits navigation", redFrame().pixels > 100)
-            transitionStarted = if (settings) destinationEntered else parentProgress < .995f
+            transitionStarted = if (settings) compose.onAllNodesWithText("Interface").fetchSemanticsNodes().isNotEmpty()
+                else parentProgress < .995f
             if (transitionStarted) break
         }
         assertTrue("The host must begin its outgoing transition", transitionStarted)
