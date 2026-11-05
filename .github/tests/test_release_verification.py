@@ -144,4 +144,65 @@ class ProducerArchiveTest(unittest.TestCase):
                     with self.assertRaises(ValueError): module.select()
             finally: os.chdir(old)
 
+
+class LocalRunnerAdmissionTest(unittest.TestCase):
+    """A green exact-tree android-local.yml run is admitted only with owner dispatch and JIT runner provenance."""
+    def setUp(self):
+        self.sha, self.tree = 'a'*40, 'b'*40
+        self.run = dict(id=42, run_attempt=1, head_sha=self.sha, head_branch='integration/v0.33.0', status='completed',
+                        conclusion='success', event='workflow_dispatch', path=module.LOCAL_WORKFLOW,
+                        actor={'login':'anastaci1a'}, triggering_actor={'login':'anastaci1a'},
+                        repository={'full_name':'anastaci1a/localica'}, head_repository={'full_name':'anastaci1a/localica'})
+        self.jobs = [dict(name=name, conclusion='success', head_sha=self.sha, run_id=42, run_attempt=1,
+                          runner_name='GitHub Actions 1' if name in module.LOCAL_HOSTED_JOBS else 'localica-jit-ljit-0123456789-1',
+                          labels=['ubuntu-24.04'] if name in module.LOCAL_HOSTED_JOBS else ['self-hosted','Linux','X64','ljit-0123456789'])
+                     for name in module.LOCAL_REQUIRED_JOBS]
+        self.receipt = dict(schema_version=1, sha=self.sha, tree=self.tree, run_id='42', attempt='1',
+                            scope='complete_native_union', apk_sha256='c'*64)
+        self.unions = {api: dict(api=api, shards=module.LOCAL_DEVICE_SHARDS, xml_roots=module.LOCAL_DEVICE_SHARDS, expected=10,
+                                 executed_once=10, passed=9, skipped=1, failure=0, error=0) for api in ('26','36')}
+
+    def validate(self):
+        module.validate(self.run, self.jobs, self.receipt, self.unions, 'anastaci1a/localica', self.tree, {'26':10,'36':10})
+
+    def test_owner_dispatch_on_jit_runners_is_eligible(self):
+        self.validate()
+        self.run['head_branch'] = 'main'
+        self.validate()
+
+    def test_untrusted_dispatch_or_runner_provenance_rejected(self):
+        for target, key, value in ((self.run,'event','push'), (self.run,'head_branch','maint/local-runner'),
+                                   (self.run,'head_branch','feature/integration/x'),
+                                   (self.run['actor'],'login','someone'), (self.run['triggering_actor'],'login','someone'),
+                                   (self.jobs[0],'runner_name','persistent-runner-1'), (self.jobs[0],'labels',['ubuntu-24.04']),
+                                   (self.unions['26'],'shards',module.DEVICE_SHARDS)):
+            with self.subTest(key=key, value=value):
+                original = target[key]; target[key] = value
+                with self.assertRaises(ValueError): self.validate()
+                target[key] = original
+        self.validate()
+
+    def test_local_workflow_is_dispatch_only_with_owner_guards_and_matching_shards(self):
+        import yaml
+        text = (ROOT/'.github/workflows/android-local.yml').read_text()
+        workflow = yaml.safe_load(text)
+        triggers = workflow.get(True, workflow.get('on'))
+        self.assertEqual(['workflow_dispatch'], list(triggers))
+        self.assertNotIn('pull_request', str(workflow['jobs']))
+        self.assertIn(f"LOCALICA_DEVICE_SHARDS: '{module.LOCAL_DEVICE_SHARDS}'", text)
+        self.assertIn('shard: ['+', '.join(map(str,range(module.LOCAL_DEVICE_SHARDS)))+']', text)
+        names = set(workflow['jobs'])
+        self.assertEqual({'guard','build','static-checks','device-tests','device-tests-summary','compatibility','distribution-smoke'}, names)
+        for name, job in workflow['jobs'].items():
+            runs_on = job['runs-on']
+            if name in ('guard','device-tests-summary'):
+                self.assertEqual('ubuntu-24.04', runs_on)
+                continue
+            self.assertEqual(['self-hosted','Linux','X64','${{ inputs.runner_label }}'], runs_on)
+            condition = job['if']
+            for needle in ("github.event_name == 'workflow_dispatch'", "github.actor == 'anastaci1a'",
+                           "github.triggering_actor == 'anastaci1a'", "github.ref == 'refs/heads/main'",
+                           "startsWith(github.ref, 'refs/heads/integration/')"):
+                self.assertIn(needle, condition, name)
+
 if __name__ == '__main__': unittest.main()

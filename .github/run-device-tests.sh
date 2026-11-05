@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 # Hosted disposable emulator only; never used by compatibility's preserved-data phases.
 set -euo pipefail
+# A fresh disposable emulator: GitHub-hosted, or the locked-down single-job JIT runner image (issue #592).
+disposable_emulator_runner() {
+  [[ ${RUNNER_ENVIRONMENT:-} == github-hosted ]] ||
+    [[ ${RUNNER_ENVIRONMENT:-} == self-hosted && ${LOCALICA_JIT_RUNNER:-} == 1 && ${LOCALICA_EPHEMERAL_RUNNER:-} == localica-kvm ]]
+}
 classes=${RISK_CLASSES:-}
 reports="$PWD/preflight-reports"
 live=${LOCALICA_LIVE_EVIDENCE:-false}
@@ -98,7 +103,7 @@ focused_error_dialog() {
 }
 guard_error_dialogs() {
   local lane=$1 setting ns key value found
-  [[ ${GITHUB_ACTIONS:-} == true && ${RUNNER_ENVIRONMENT:-} == github-hosted ]] || return 0
+  [[ ${GITHUB_ACTIONS:-} == true ]] && disposable_emulator_runner || return 0
   [[ $(dialog_adb shell getprop ro.kernel.qemu 2>/dev/null | tr -d '\r') == 1 ]] || return 0
   if [[ -z "$dialogs_ready" ]]; then
     dialogs_ready=yes
@@ -194,7 +199,7 @@ for name in "${selected[@]}"; do
   [[ -f "$source.kt" || -f "$source.java" ]] || { echo "Missing instrumentation source: $name" >&2; exit 2; }
 done
 # Refuse data clearing unless this really is the disposable GitHub-hosted emulator.
-[[ ${GITHUB_ACTIONS:-} == true && ${RUNNER_ENVIRONMENT:-} == github-hosted ]] || { echo 'Preflight requires a GitHub-hosted runner' >&2; exit 2; }
+[[ ${GITHUB_ACTIONS:-} == true ]] && disposable_emulator_runner || { echo 'Preflight requires a GitHub-hosted runner' >&2; exit 2; }
 [[ $(adb shell getprop ro.kernel.qemu | tr -d '\r') == 1 ]] || { echo 'Preflight requires an emulator' >&2; exit 2; }
 source .github/prepare-device-tests.sh
 install_live_signals

@@ -20,6 +20,20 @@ REQUIRED_JOBS = (
     'distribution-smoke (26)', 'distribution-smoke (36)',
 ) + tuple(f'device-tests ({api}, {shard})' for api in (26, 36) for shard in range(DEVICE_SHARDS))
 
+# Locked-down local runner (issue #592): a separate workflow with its own shard count. Its runs are
+# admitted only when owner-dispatched on main or integration/* and the self-hosted jobs ran on
+# single-job JIT runners created by feedback/lead/tools/local-runner.sh.
+LOCAL_WORKFLOW = '.github/workflows/android-local.yml'
+LOCAL_DEVICE_SHARDS = 3  # keep equal to LOCALICA_DEVICE_SHARDS and the device-tests matrix in android-local.yml
+LOCAL_OWNER = 'anastaci1a'
+LOCAL_RUNNER_PREFIX = 'localica-jit-'
+LOCAL_REQUIRED_JOBS = (
+    'build', 'static-checks', 'device-tests-summary', 'compatibility (26)', 'compatibility (36)',
+    'distribution-smoke (26)', 'distribution-smoke (36)',
+) + tuple(f'device-tests ({api}, {shard})' for api in (26, 36) for shard in range(LOCAL_DEVICE_SHARDS))
+LOCAL_HOSTED_JOBS = ('device-tests-summary',)
+WORKFLOW_PATHS = ('.github/workflows/android.yml', LOCAL_WORKFLOW)
+
 
 def require(condition, reason):
     if not condition:
@@ -45,23 +59,32 @@ def pages(path, key):
 
 def validate(run, jobs, receipt, unions, repository, tree, expected):
     require(run['repository']['full_name'] == run['head_repository']['full_name'] == repository, 'Untrusted repository')
-    require(run['path'] == '.github/workflows/android.yml', 'Wrong workflow')
+    require(run['path'] in WORKFLOW_PATHS, 'Wrong workflow')
+    local = run['path'] == LOCAL_WORKFLOW
+    required_jobs, shards = (LOCAL_REQUIRED_JOBS, LOCAL_DEVICE_SHARDS) if local else (REQUIRED_JOBS, DEVICE_SHARDS)
+    if local:
+        require(run['event'] == 'workflow_dispatch', 'Local runs are workflow_dispatch only')
+        require(run['actor']['login'] == run['triggering_actor']['login'] == LOCAL_OWNER, 'Local run not dispatched by the owner')
+        require(run['head_branch'] == 'main' or run['head_branch'].startswith('integration/'), 'Local run outside main or integration/*')
     require(run['event'] in ('push', 'workflow_dispatch'), 'Untrusted event')
     require(run['status'] == 'completed' and run['conclusion'] == 'success', 'Run is not fully green')
     require(receipt['schema_version'] == 1 and receipt['scope'] == 'complete_native_union', 'Not complete native evidence')
     require(receipt['sha'] == run['head_sha'] and receipt['tree'] == tree, 'Source/tree mismatch')
     require(receipt['run_id'] == str(run['id']) and receipt['attempt'] == str(run['run_attempt']), 'Stale producer receipt')
     require(re.fullmatch('[0-9a-f]{64}', receipt['apk_sha256']), 'Invalid APK identity')
-    for name in REQUIRED_JOBS:
+    for name in required_jobs:
         matching = [job for job in jobs if job['name'] == name]
         require(len(matching) == 1, 'Missing/duplicate required job: ' + name)
         job = matching[0]
         require(job['conclusion'] == 'success' and job['head_sha'] == run['head_sha']
                 and job['run_id'] == run['id'] and job['run_attempt'] == run['run_attempt'],
                 'Unsuccessful or stale required job: ' + name)
+        if local and name not in LOCAL_HOSTED_JOBS:
+            require(str(job.get('runner_name', '')).startswith(LOCAL_RUNNER_PREFIX) and 'self-hosted' in job.get('labels', []),
+                    'Local job did not run on a single-job JIT runner: ' + name)
     for api in ('26', '36'):
         union = unions[api]
-        require(union['api'] == api and union['shards'] == DEVICE_SHARDS and union['xml_roots'] >= DEVICE_SHARDS, 'Missing shard union')
+        require(union['api'] == api and union['shards'] == shards and union['xml_roots'] >= shards, 'Missing shard union')
         require(union['expected'] == union['executed_once'] == expected[api] > 0, 'Incomplete native union')
         require(union['failure'] == union['error'] == 0, 'Native failures')
         require(union['passed'] + union['skipped'] == expected[api], 'Inconsistent union outcomes')
@@ -97,7 +120,15 @@ def select():
     require(relation['status'] in ('ahead', 'identical'), 'Tagged commit is outside main')
     expected = {api: len(expected_for(Path.cwd(), api)[2]) for api in ('26','36')}
     # Bounded recent history; missing/expired evidence fails closed and requires a new full run.
-    runs = gh(f'repos/{repository}/actions/workflows/android.yml/runs?status=success&per_page=100')['workflow_runs']
+    runs = []
+    for workflow in ('android.yml', 'android-local.yml'):
+        try:
+            runs += gh(f'repos/{repository}/actions/workflows/{workflow}/runs?status=success&per_page=100')['workflow_runs']
+        except subprocess.CalledProcessError:
+            if workflow == 'android.yml':
+                raise
+            # The local workflow may not exist yet (404): no local producers.
+    runs.sort(key=lambda item: item.get('created_at', ''), reverse=True)
     for candidate in runs:
         if candidate['event'] not in ('push', 'workflow_dispatch'):
             continue
