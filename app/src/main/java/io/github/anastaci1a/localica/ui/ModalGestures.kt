@@ -3,6 +3,8 @@ package io.github.anastaci1a.localica.ui
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
+import android.os.Handler
+import android.os.Looper
 import android.view.MotionEvent
 import android.view.Window
 import androidx.compose.foundation.MutatePriority
@@ -87,6 +89,8 @@ internal class ModalGestureScope(
             state.stopScroll(MutatePriority.PreventUserInput)
         }
 
+    // State/epoch cancellation is synchronous, including late registrations during apply.
+    // Native event dispatch must defer at the window boundary (cancelContact).
     fun registerCancellation(cancel: () -> Unit): () -> Unit {
         cancellations += cancel
         if (blocked) cancel()
@@ -192,7 +196,7 @@ internal class ModalPointerStream {
 }
 
 /** Observe the complete native stream, including pointers outside any Compose hit path. */
-private class ModalGestureWindowCallback(
+internal class ModalGestureWindowCallback(
     private val original: Window.Callback,
     private val owner: ModalGestureScope,
 ) : Window.Callback by original {
@@ -201,9 +205,13 @@ private class ModalGestureWindowCallback(
     private var dispatching = false
     private var cancelPending = false
     private var disposed = false
+    private val handler = Handler(Looper.getMainLooper())
+    private val cancelDispatch = Runnable { if (!disposed && cancelPending) dispatchCancel() }
 
     override fun dispatchTouchEvent(event: MotionEvent): Boolean {
         if (disposed) return original.dispatchTouchEvent(event)
+        // Deliver cancellation before a later event can replace or recycle its source.
+        if (cancelPending) dispatchCancel()
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> stream.down(event.getPointerId(0), owner.blocked)
             MotionEvent.ACTION_POINTER_DOWN -> stream.pointerDown(event.getPointerId(event.actionIndex))
@@ -234,10 +242,13 @@ private class ModalGestureWindowCallback(
         if (!stream.active || stream.quarantined) return
         stream.cancel()
         cancelPending = true
-        if (!dispatching) dispatchCancel()
+        // Registration and modal activation can run inside DisposableEffect/applyChanges.
+        // Quarantine now, but never re-enter Compose touch/layout from that apply phase.
+        if (!dispatching) handler.post(cancelDispatch)
     }
     private fun dispatchCancel() {
         cancelPending = false
+        handler.removeCallbacks(cancelDispatch)
         lastEvent?.let { source ->
             val cancel = MotionEvent.obtain(source)
             cancel.action = MotionEvent.ACTION_CANCEL
@@ -249,6 +260,8 @@ private class ModalGestureWindowCallback(
     }
     fun dispose() {
         disposed = true
+        cancelPending = false
+        handler.removeCallbacks(cancelDispatch)
         lastEvent?.recycle()
         lastEvent = null
     }

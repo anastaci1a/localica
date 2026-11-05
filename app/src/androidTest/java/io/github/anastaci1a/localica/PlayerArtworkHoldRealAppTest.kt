@@ -6,7 +6,6 @@ import android.net.Uri
 import android.os.SystemClock
 import android.view.InputDevice
 import android.view.MotionEvent
-import android.view.accessibility.AccessibilityNodeInfo
 import androidx.test.core.app.ActivityScenario
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.By
@@ -70,25 +69,6 @@ class PlayerArtworkHoldRealAppTest {
         TagCodec.edit(file, TagPatch(artwork = ArtworkChange.Replace(CoverImage(bytes, "image/jpeg", 900, 900))))
         return Track(Uri.fromFile(file).toString(), "Hold $name", artist = "Localica", album = "Five seventy five",
             fileName = file.name, relativePath = file.name, id = "hold-575-$name")
-    }
-
-    private fun node(root: AccessibilityNodeInfo?, matches: (AccessibilityNodeInfo) -> Boolean): AccessibilityNodeInfo? {
-        root ?: return null
-        if (matches(root)) return root
-        for (index in 0 until root.childCount) node(root.getChild(index), matches)?.let { return it }
-        return null
-    }
-    private fun findAction(actionId: Int, label: String): AccessibilityNodeInfo? =
-        node(instrumentation.uiAutomation.rootInActiveWindow) { info ->
-            info.isVisibleToUser && info.actionList.any { it.id == actionId && it.label?.toString() == label }
-        }
-    private fun awaitNode(timeoutMs: Long, actionId: Int, label: String): AccessibilityNodeInfo {
-        val deadline = SystemClock.uptimeMillis() + timeoutMs
-        while (SystemClock.uptimeMillis() < deadline) {
-            findAction(actionId, label)?.let { return it }
-            SystemClock.sleep(100)
-        }
-        fail("No visible node with action '$label'"); error("unreachable")
     }
 
     /** Window hierarchy and screenshot into the app's external files, pulled with the evidence. */
