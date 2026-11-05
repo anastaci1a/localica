@@ -26,12 +26,12 @@ import kotlin.math.sqrt
 class SeekCancelGlassTest {
     @get:Rule val compose = createComposeRule()
 
-    @androidx.test.filters.SdkSuppress(minSdkVersion = 33)
     @Test fun cancelTargetRefractsTheUiBehindItAndOnlyTheSceneRecordingDoesSo() = verifyScene(GlassRendererMode.Normal)
 
     @Test fun cancelTargetUsesUniformAverageWithMatchingDrawSource() = verifyScene(GlassRendererMode.None)
 
     private fun verifyScene(mode: GlassRendererMode) {
+        val optical = mode == GlassRendererMode.Normal && android.os.Build.VERSION.SDK_INT >= 33
         val runtime = GlassRendererRuntime(mode)
         var drawn: GlassSurfaceDrawObservation? = null
         var chosenScene by mutableStateOf(false)
@@ -47,7 +47,7 @@ class SeekCancelGlassTest {
             Box(Modifier.size(300.dp)) {
                 // The scene: artwork plus UI (high-contrast stripes), recorded as one composite.
                 Box(Modifier.fillMaxSize().recordFrostedBackdrop(sceneRecording)) {
-                    Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(artRecording)) { drawRect(if (mode == GlassRendererMode.None) Color(0xFF404040) else Color(0xFF808080)) }
+                    Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(artRecording)) { drawRect(if (optical) Color(0xFF808080) else Color(0xFF404040)) }
                     Canvas(Modifier.fillMaxSize()) {
                         val stripe = 6.dp.toPx()
                         var x = 0f; var i = 0
@@ -75,9 +75,11 @@ class SeekCancelGlassTest {
                 compose.runOnIdle {
                     val cpu = android.os.Build.VERSION.SDK_INT < 33
                     val painting = drawn?.source
-                    selected === source && source.recorded && (!cpu || source.snapshot != null) &&
+                    selected === source && source.recorded &&
+                        (!cpu || (source.snapshot != null && source.snapshotReadbackRequest >= 0)) &&
                         painting?.identity == System.identityHashCode(source) && painting.recorded &&
-                        (!cpu || painting.snapshotIdentity == System.identityHashCode(source.snapshot))
+                        (!cpu || (painting.snapshotIdentity == System.identityHashCode(source.snapshot) &&
+                            painting.publishedReadback == source.snapshotReadbackRequest))
                 }
             }
             compose.waitForIdle()
@@ -98,10 +100,10 @@ class SeekCancelGlassTest {
         compose.runOnIdle { assertSame("A fully open player refracts its scene", sceneRecording, selected) }
         awaitSource(sceneRecording)
         val withUi = sample()
-        if (mode == GlassRendererMode.Normal) {
+        if (optical) {
             assertTrue("The UI behind the X is refracted: scene=$withUi artwork-only=$artOnly", withUi.first > artOnly.first + .03f)
         } else {
-            assertTrue("None has no stripe detail: $withUi", withUi.first < .04f)
+            assertTrue("$mode has no stripe detail on this API: $withUi", withUi.first < .04f)
             assertTrue("The averaged scene replaces the darker artwork: scene=$withUi artwork=$artOnly", withUi.second > artOnly.second + .1f)
         }
         compose.runOnIdle { progress = .5f }; compose.waitForIdle()
