@@ -86,6 +86,30 @@ class TransportAnimationFrameTest {
         assertEquals(5, calls)
     }
 
+    @Test fun fasterSettingShortensTheActualButtonCycle() {
+        var speed by mutableFloatStateOf(4f / 3f)
+        compose.setContent {
+            CompositionLocalProvider(LocalMotionSpeed provides speed) {
+                TransportButton(TransportGlyph.Next, false, "Next", {},
+                    Modifier.size(100.dp).background(Color.White).testTag("skip"), 100.dp,
+                    Color.Black, true, false)
+            }
+        }
+        compose.mainClock.autoAdvance = false
+        val node = compose.onNodeWithTag("skip")
+        val rest = node.captureToImage()
+        node.performClick()
+        compose.mainClock.advanceTimeBy(304)
+        assertFalse("Normal cycle is still settling at 304 ms",
+            rest.asAndroidBitmap().sameAs(node.captureToImage().asAndroidBitmap()))
+        compose.mainClock.advanceTimeBy(160)
+        same(rest, node.captureToImage())
+        compose.runOnIdle { speed = 2f }
+        node.performClick()
+        compose.mainClock.advanceTimeBy(304)
+        same(rest, node.captureToImage())
+    }
+
     @Test fun configurablePlayPauseEndpointsKeepTheMorphAndSinglePlayContour() {
         var playing by mutableStateOf(false)
         val custom = PlayPauseShapes(
