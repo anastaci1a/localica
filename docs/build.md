@@ -156,6 +156,8 @@ The native job splits each API suite into eight AndroidJUnitRunner shards (`numS
 
 API 36 uses explicit `lavapipe`, 720×1280 at 280 dpi, and normal system animations: automatic software/SwiftShader caused rendering crashes. Zero-duration system transitions stalled launcher/Back/picker flows. Compose assertions control their own clock. Keep Actions pinned by commit.
 
+API 26 disables the optional GLDMA transfer path with `-feature -GLDMA`. This targets the `goldfish_pipe_dma_clear_lock` guest-kernel panic observed during repeated display captures (#607). Renderer, memory, capture coverage and assertions remain unchanged. Repeated native verification determines whether this mitigation is sufficient.
+
 Full and focused native jobs stream guest kernel messages into workflow logs and retain the emulator crash database on failure when present. An absent host crash report does not rule out a guest reboot. Preserve the original test logs and host diagnostics when investigating device loss.
 
 On disposable GitHub-hosted API 26 emulators, the native runner temporarily disables preinstalled Google Search before instrumentation. Its unrelated JobScheduler crash can obstruct Localica. Cleanup restores its prior enabled state after verifying device and package ownership. Google Search data is preserved. Physical devices are untouched. Localica crashes and all assertions remain fatal.
