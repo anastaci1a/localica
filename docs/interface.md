@@ -70,7 +70,9 @@ Presses, morphs and selectors share interruptible deformation driven by accelera
 
 Navigation and horizontal/vertical choice tracks share overdrag geometry: the track stretches along travel within a shared 4 dp limit independent of length, its contents deform and realign proportionally, and the selector’s gap to the moving wall progressively closes.
 
-A held selector retains its resting cross-axis extent. Touching an already moving selector eases from the displayed contour. Contact corners stay circular and concentric with the enclosing track. The free end absorbs compression. Contact flattens the lens.
+A held selector retains its resting cross-axis extent. Touching an already moving selector eases from the displayed contour. Contact corners stay circular and concentric with the enclosing track.
+
+The free-end corners flatten along the travel axis as the presented contact gap closes, retaining their cross-axis radius. They return smoothly to round as compression relaxes. Contact flattens the lens.
 
 Release couples width and height in opposite phase with bounded physical excursions. The enclosing wall and lens share the configured timing and retain their visible contour on re-touch. One selector presentation owns the released geometry while optical depth continues independently.
 

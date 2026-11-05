@@ -19,6 +19,7 @@ internal fun LegacySelectorLens(modifier: Modifier, source: FrostedBackdrop?, in
     val renderer = remember { SelectorSceneMesh() }
     val rim = remember { GlassRimCache() }
     val contour = remember(frame) { frame.contour() }
+    val silhouette = rememberSelectorSilhouette(contour)
     val location = remember { BackdropLocation() }
     val tone = GlassTone(appearance.contrast, appearance.contrastWeight, false)
     val prepared = rememberToneSnapshot(source?.lensSnapshot ?: source?.glassFallback ?: source?.snapshot, tone)
@@ -31,7 +32,8 @@ internal fun LegacySelectorLens(modifier: Modifier, source: FrostedBackdrop?, in
             appearance.depth * BottomPillDepthScale * shellBody.thickness,
             appearance.depth * BottomPillDepthScale * selectorBody.thickness,
             ((1f - shellBody.thickness) / .18f).coerceIn(0f, 1f),
-            ((1f - selectorBody.thickness) / .18f).coerceIn(0f, 1f))
+            ((1f - selectorBody.thickness) / .18f).coerceIn(0f, 1f),
+            selectorContour = contour.takeUnless { it.isUniform }, selectorSilhouette = silhouette?.frame(frame.bounds.size))
         val clip = Path().apply { addRoundRect(contour.outline) }
         translate(-frame.bounds.left, -frame.bounds.top) {
             clipPath(clip) {
@@ -41,7 +43,7 @@ internal fun LegacySelectorLens(modifier: Modifier, source: FrostedBackdrop?, in
                         normalInk.toArgb(), selectedInk.toArgb(), tone)
                 }
                 drawRect(Color.Black.copy(alpha = appearance.overlayDarkening), frame.bounds.topLeft, frame.bounds.size)
-                drawGlassRim(frame.bounds, frame.corner, cache = rim)
+                drawGlassRim(frame.bounds, frame.corner, path = clip, cache = rim)
             }
         }
     }
