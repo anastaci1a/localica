@@ -103,7 +103,7 @@ class GlassForegroundTest {
                                     .clickable { open = true }.testTag("artwork-trigger")) { Text("Artwork") }
                                 else {
                                     anchor.captureInk()
-                                    GlassActionButton(R.drawable.ic_info, "Open sheet",
+                                    GlassActionButton(AppIcon.ActionInfo, "Open sheet",
                                         Modifier.padding(32.dp).glassAnchor(anchor).testTag("artwork-trigger")) { open = true }
                                 }
                             }
@@ -114,7 +114,7 @@ class GlassForegroundTest {
                                     text = {
                                         Column {
                                             ForegroundProbe("Parent")
-                                            GlassActionButton(R.drawable.ic_info, "Open nested") { nested = true }
+                                            GlassActionButton(AppIcon.ActionInfo, "Open nested") { nested = true }
                                             if (nested) GlassAlertDialog(onDismissRequest = { nested = false },
                                                 title = { Text("Nested sheet") }, text = { ForegroundProbe("Nested") },
                                                 confirmButton = { ActionTextButton(onClick = { nested = false }) { Text("Close nested") } })

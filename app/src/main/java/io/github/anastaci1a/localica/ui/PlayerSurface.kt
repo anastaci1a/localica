@@ -30,7 +30,6 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.semantics
@@ -422,9 +421,9 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
                     onLongClick = { artworkAction(settings.artworkHold, editArtwork) }) else Modifier)) {
                 GlassMenu(artworkMenu, rememberGlassAnchor(), { artworkMenu = false }) {
                     val menuEditArtwork = presentedArtworkEdit()
-                    ActionMenuItem("View artwork", icon = R.drawable.ic_albums, onClick = { artworkMenu = false; viewing = true })
-                    if (menuEditArtwork != null && track != null) ActionMenuItem("Change artwork", icon = R.drawable.ic_albums, onClick = { artworkMenu = false; menuEditArtwork(track) })
-                    ActionMenuItem("Configure tap action", icon = R.drawable.ic_settings, onClick = { artworkMenu = false; configureTap = true })
+                    ActionMenuItem("View artwork", icon = AppIcon.TabAlbums, onClick = { artworkMenu = false; viewing = true })
+                    if (menuEditArtwork != null && track != null) ActionMenuItem("Change artwork", icon = AppIcon.TabAlbums, onClick = { artworkMenu = false; menuEditArtwork(track) })
+                    ActionMenuItem("Configure tap action", icon = AppIcon.ActionSettings, onClick = { artworkMenu = false; configureTap = true })
                 }
             }
             if (lyricProgress > 0f) CompositionLocalProvider(LocalFrostedBackdrop provides lyricBackdrop) { LyricsPanel(track, sampled.positionMs, settings.reducedMotion, onSeek,
@@ -471,7 +470,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
                 }
                 CompositionLocalProvider(LocalFrostedBackdrop provides lyricBackdrop) {
                     Box(Modifier.align(Alignment.TopStart).padding(start = 16.dp)) {
-                        ActionIcon(R.drawable.ic_down, "Collapse player") { settle(false) }
+                        ActionIcon(AppIcon.ActionDown, "Collapse player") { settle(false) }
                     }
                     Box(Modifier.align(Alignment.TopEnd).padding(end = 16.dp)) {
                         LyricsHeaderActions(lyricsOpen, lyricProgress, sourcesAnchor, sourcesPreparation,

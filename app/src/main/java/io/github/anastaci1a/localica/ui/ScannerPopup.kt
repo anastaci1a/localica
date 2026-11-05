@@ -62,7 +62,7 @@ internal fun ScannerPopup(state: LibraryUiState, onDismiss: () -> Unit, onStart:
     GlassAlertDialog(onDismissRequest = onDismiss, title = {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text("Scan music", Modifier.weight(1f))
-            ActionIcon(R.drawable.ic_settings, "Scanner") { onSettings("Scanner") }
+            ActionIcon(AppIcon.ActionSettings, "Scanner") { onSettings("Scanner") }
         }
     }, text = {
         Column(Modifier.testTag("scanner-body").controlVerticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -80,7 +80,7 @@ internal fun ScannerPopup(state: LibraryUiState, onDismiss: () -> Unit, onStart:
                 ActionTextButton(onClick = onCancel, enabled = state.scanning) { Text("Cancel scan") }
             }
             Text("${state.snapshot.tracks.size} songs in your library")
-            SettingsLink("Folders to scan", "${state.snapshot.folders.size} selected", R.drawable.ic_folder) { onSettings("Folders to scan") }
+            SettingsLink("Folders to scan", "${state.snapshot.folders.size} selected", AppIcon.TabFolders) { onSettings("Folders to scan") }
             SettingsLink("Metadata read failures", "${state.snapshot.metadataFailures.map { it.trackId }.distinct().size} songs") { failuresOpen = true }
         }
     }, confirmButton = { ActionTextButton(onClick = onDismiss) { Text("Close") } })

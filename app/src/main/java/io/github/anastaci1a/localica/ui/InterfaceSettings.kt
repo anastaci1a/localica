@@ -21,12 +21,13 @@ internal fun InterfaceSettingsControls(value: InterfaceSettings, section: String
                 { onChange(value.copy(grayTone = it)) }, Modifier.semantics { contentDescription = "Gray tone" }, low = "Darker", high = "Lighter")
             Row(Modifier.fillMaxWidth().height(64.dp), horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically) {
-                Icon(androidx.compose.ui.res.painterResource(io.github.anastaci1a.localica.R.drawable.ic_library), null,
+                Icon(appIconPainter(AppIcon.TabLibrary), null,
                     Modifier.size(30.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 Text("Secondary text", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Text("Selected", color = NavigationAccent)
             }
             ActionTextButton(onClick = { onChange(value.copy(grayTone = InterfaceSettings().grayTone)) }) { Text("Reset gray tone") }
+            IconPackSettings()
         }
         "Glass" -> GlassSettingsControls(value.glass) { onChange(value.copy(glass = it)) }
         "Motion" -> {

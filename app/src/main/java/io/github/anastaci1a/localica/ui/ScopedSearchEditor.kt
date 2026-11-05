@@ -17,7 +17,6 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -47,7 +46,7 @@ internal data class ScopedSearchEditorParameters(
 @Composable internal fun ScopedSearchEditor(input: ScopedSearchEditorParameters, onFocus: (Boolean) -> Unit = {}) {
     ClearableTextField(input.value, input.onValue, singleLine = true,
         placeholder = { Text(input.label, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-        leadingIcon = { Icon(painterResource(R.drawable.ic_search), null) },
+        leadingIcon = { Icon(appIconPainter(AppIcon.ActionSearch), null) },
         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
         keyboardActions = KeyboardActions(onSearch = { input.onSearch() }),
         colors = TextFieldDefaults.colors(focusedContainerColor = Color.Transparent,

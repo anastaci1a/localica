@@ -15,7 +15,6 @@ import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -48,7 +47,7 @@ internal fun ListSearchPill(label: String, onClick: () -> Unit, modifier: Modifi
 @Composable
 private fun SearchPillFace(label: String) {
     Row(Modifier.fillMaxSize().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-        Icon(painterResource(R.drawable.ic_search), null, Modifier.size(20.dp), tint = LocalContentColor.current.copy(alpha = .8f))
+        Icon(appIconPainter(AppIcon.ActionSearch), null, Modifier.size(20.dp), tint = LocalContentColor.current.copy(alpha = .8f))
         Spacer(Modifier.width(10.dp))
         Text(label, style = MaterialTheme.typography.bodyMedium, color = LocalContentColor.current.copy(alpha = .8f),
             maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -65,7 +64,7 @@ internal fun GlassSearchField(value: String, onValue: (String) -> Unit, label: S
         ClearableTextField(value, onValue, fieldModifier.fillMaxWidth().semantics { contentDescription = "$label input" }, enabled = enabled,
             singleLine = true, placeholder = { Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis) },
             leadingIcon = if (showSearchIcon) {
-                { Icon(painterResource(R.drawable.ic_search), null, Modifier.size(22.dp).testTag("glass-search-icon")) }
+                { Icon(appIconPainter(AppIcon.ActionSearch), null, Modifier.size(22.dp).testTag("glass-search-icon")) }
             } else null,
             keyboardOptions = keyboardOptions, keyboardActions = keyboardActions,
             colors = TextFieldDefaults.colors(focusedContainerColor = Color.Transparent, unfocusedContainerColor = Color.Transparent,

@@ -14,7 +14,6 @@ import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.layout.Layout
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.R
@@ -101,12 +100,12 @@ internal fun CollectionHeaderActionPresentation(owner: CollectionPinchHeader, so
                     CompositionLocalProvider(LocalContentColor provides captured.spec.foreground) {
                         Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
                             Box(Modifier.weight(1f).fillMaxHeight(), contentAlignment = Alignment.Center) {
-                                Icon(painterResource(R.drawable.ic_play), null, Modifier.size(30.dp))
+                                Icon(appIconPainter(AppIcon.TransportPlay), null, Modifier.size(30.dp))
                             }
                             if (captured.spec.split) {
                                 CompositionLocalProvider(LocalContentColor provides captured.spec.divider) { GlassPillDivider() }
                                 Box(Modifier.weight(1f).fillMaxHeight(), contentAlignment = Alignment.Center) {
-                                    Icon(painterResource(R.drawable.ic_shuffle), null, Modifier.size(30.dp))
+                                    Icon(appIconPainter(AppIcon.ActionShuffle), null, Modifier.size(30.dp))
                                 }
                             }
                         }

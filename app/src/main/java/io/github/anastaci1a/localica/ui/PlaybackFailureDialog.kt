@@ -5,7 +5,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.R
 import io.github.anastaci1a.localica.playback.PlaybackProblem
@@ -18,7 +17,7 @@ internal fun PlaybackFailureDialog(state: PlaybackState, canSkip: Boolean, onRet
     val problem = state.problem ?: return
     if (dismissed) return
     GlassAlertDialog(onDismissRequest = { dismissed = true },
-        icon = { Icon(painterResource(R.drawable.ic_info), null, Modifier.size(28.dp)) },
+        icon = { Icon(appIconPainter(AppIcon.ActionInfo), null, Modifier.size(28.dp)) },
         title = { Text(if (problem == PlaybackProblem.Connection) "Playback disconnected" else "Couldn't play this song") },
         text = { Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             if (state.title.isNotBlank()) Text(state.title, style = MaterialTheme.typography.titleSmall)

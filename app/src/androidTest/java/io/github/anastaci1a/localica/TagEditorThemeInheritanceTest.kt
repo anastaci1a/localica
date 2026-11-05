@@ -137,7 +137,7 @@ class TagEditorThemeInheritanceTest {
                 SideEffect { callbackIdentities += callback }
                 CompositionLocalProvider(LocalGlassAppearance provides appearance(lightInk)) { GlassPanelTheme(lightInk) {
                     val anchor = rememberGlassAnchor()
-                    ActionIcon(R.drawable.ic_edit, "Open launch menu", anchor = anchor) { open = true }
+                    ActionIcon(AppIcon.ActionEdit, "Open launch menu", anchor = anchor) { open = true }
                     CollectionActions(open, anchor, item, PlaylistState(), null, null, emptyList(), {}, { open = false })
                 } }
             }

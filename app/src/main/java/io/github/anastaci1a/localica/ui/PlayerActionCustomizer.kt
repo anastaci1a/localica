@@ -162,7 +162,7 @@ internal fun PlayerActionCustomizer(value: PlayerActionSettings, onChange: (Play
             Column(Modifier.fillMaxSize().padding(horizontal = 20.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("Player actions", Modifier.weight(1f), style = MaterialTheme.typography.titleLarge)
-                    ActionIcon(R.drawable.ic_close, "Close customization", onClick = onDismiss)
+                    ActionIcon(AppIcon.ActionClose, "Close customization", onClick = onDismiss)
                 }
                 OrderedGlassBubbles(listOf("Centered", "2 rows", "Compact"), buildSet {
                     if (value.centered) add("Centered")
