@@ -176,6 +176,14 @@ private data class RetainedPinchPlacement(val key: Any, val item: FrozenBrowseIt
     val targetWidth: Float, val targetHeight: Float, val alpha: Float, val index: Int,
     val geometryProgress: Float)
 
+private fun RetainedPinchPlacement.artworkBounds(rightToLeft: Boolean): Rect? {
+    val content = item.content ?: return null
+    val rect = pinchArtworkRect(content.source, content.target, geometryProgress)
+    val width = item.size.width + (targetWidth - item.size.width) * geometryProgress
+    val left = origin.x + if (rightToLeft) width - rect.right else rect.left
+    return Rect(left, origin.y + rect.top, left + rect.width, origin.y + rect.bottom)
+}
+
 /** [indices] is the existing last-wins map for these same [items]. Reuse it for
  * unique keys; malformed duplicate input must retain indexOf's first match. */
 internal fun <T> retainedPinchItemIndices(items: List<T>, indices: Map<String, Int>,
@@ -237,12 +245,15 @@ internal fun Modifier.pinchRetainedOverlay(motion: BrowsePinchMotion, grid: Lazy
             visible.filter { it.key !in motion.bounds && (it.key in motion.artwork || it.key in motion.text) }
                 .associate { entry -> entry.key to (Offset(entry.offset.x + entry.size.width / 2f,
                     entry.offset.y + entry.size.height / 2f) - focus).getDistance() })
+        val liveSource = linkedMapOf<Any, RetainedPinchPlacement>()
         fun drawLive(part: BrowsePinchLayer, key: Any, artwork: Boolean = false) {
             val viewport = motion.viewportCoordinates
             val coordinates = part.coordinates ?: return
             if (viewport?.isAttached != true || !coordinates.isAttached || part.layer.isReleased ||
                 part.layer.size.width <= 0 || part.layer.size.height <= 0) return
-            val bounds = viewport.localBoundingBoxOf(coordinates, clipBounds = false)
+            val placement = liveSource[key].takeIf { artwork }
+            val bounds = placement?.artworkBounds(motion.rightToLeft)
+                ?: viewport.localBoundingBoxOf(coordinates, clipBounds = false)
             val incoming = arrivals[key]?.alpha(p, arriving = true) ?: 1f
             part.layer.alpha = (motion.itemAlpha[key] ?: 1f) * incoming
             // A resized cover re-records its layer later in this frame (its own render node is
@@ -265,7 +276,13 @@ internal fun Modifier.pinchRetainedOverlay(motion: BrowsePinchMotion, grid: Lazy
                         scale(bounds.width / recorded.width, bounds.height / recorded.height, Offset.Zero) { drawLayer(part.layer) }
                     }
                 }
-                if (artwork) clipPinchArtwork(bounds, part.corner?.invoke(bounds.size) ?: 0f) { paint() }
+                val content = captured?.content
+                val tile = captured?.artwork
+                val corner = if (placement != null && content != null && tile != null)
+                    pinchArtworkCorner(content.source.artCorner, content.target.artCorner,
+                        tile.corner, tile.size, bounds, placement.geometryProgress)
+                else part.corner?.invoke(bounds.size) ?: 0f
+                if (artwork) clipPinchArtwork(bounds, corner) { paint() }
                 else paint()
             }
         }
@@ -293,7 +310,6 @@ internal fun Modifier.pinchRetainedOverlay(motion: BrowsePinchMotion, grid: Lazy
             val sourceVerticalInset = (BrowseCellGeometry(motion.sourceColumns).cardVerticalInset(requireNotNull(motion.visualSource)) * motion.pixelDensity).roundToInt()
             val targetVerticalInset = (geometry.cardVerticalInset(requireNotNull(motion.target)) * motion.pixelDensity).roundToInt()
             motion.bounds.forEach { (key, old) ->
-                if (key in liveKeys) return@forEach
                 val image = motion.frozen[key] ?: return@forEach
                 val index = indices.retainedPinchItemIndex(key)
                 if (index < 0) return@forEach
@@ -305,12 +321,13 @@ internal fun Modifier.pinchRetainedOverlay(motion: BrowsePinchMotion, grid: Lazy
                 val sourceOrigin = Offset(old.left + sourceInset, old.top + sourceVerticalInset)
                 val targetOrigin = Offset(x + targetInset, y + targetVerticalInset)
                 val fadeWindow = browsePinchFadeWindow((targetOrigin - sourceOrigin).getDistance(), motion.viewportWidth)
-                val exitProgress = browsePinchGeometryProgress(true, p, fadeWindow)
+                val exitProgress = if (key in liveKeys) p else browsePinchGeometryProgress(true, p, fadeWindow)
                 // Position and every part's dimensions stop on the same spatial frame.
                 val origin = sourceOrigin + (targetOrigin - sourceOrigin) * exitProgress
-                retained[key] = RetainedPinchPlacement(key, image, origin, (width - 2 * targetInset).coerceAtLeast(0f),
+                val placement = RetainedPinchPlacement(key, image, origin, (width - 2 * targetInset).coerceAtLeast(0f),
                     image.content?.target?.height?.toFloat() ?: (pitch - 2 * targetVerticalInset).coerceAtLeast(0f),
                     1f, index, exitProgress)
+                if (key in liveKeys) liveSource[key] = placement else retained[key] = placement
             }
         }
         // Reuse the validated placements: scheduling must not add catalog lookups.
@@ -425,14 +442,8 @@ internal fun Modifier.pinchRetainedOverlay(motion: BrowsePinchMotion, grid: Lazy
                 if (frozen != null) {
                     val content = frozen.item.content ?: return@forEach
                     val art = frozen.item.artwork ?: return@forEach
-                    val rect = pinchArtworkRect(content.source, content.target, frozen.geometryProgress)
-                    val cardWidth = frozen.item.size.width + (frozen.targetWidth - frozen.item.size.width) * frozen.geometryProgress
-                    val x = if (motion.rightToLeft) cardWidth - rect.right else rect.left
-                    // Independently rounded origin and side moved the far edge back and forth (#505).
-                    val left = frozen.origin.x + x
-                    val top = frozen.origin.y + rect.top
+                    val bounds = frozen.artworkBounds(motion.rightToLeft) ?: return@forEach
                     val lift = retainedLift(frozen)
-                    val bounds = Rect(left, top, left + rect.width, top + rect.height)
                     val corner = pinchArtworkCorner(content.source.artCorner, content.target.artCorner,
                         art.corner, art.size, bounds, frozen.geometryProgress)
                     scale(lift?.scale ?: 1f, lift?.scale ?: 1f, lift?.pivot?.plus(frozen.origin) ?: Offset.Zero) {
