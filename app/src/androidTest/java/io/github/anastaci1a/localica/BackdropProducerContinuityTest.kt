@@ -41,6 +41,7 @@ class BackdropProducerContinuityTest {
         val release = CompletableDeferred<Unit>()
         var owned: Deferred<ImageBitmap?>? = null
         var sampled: ImageBitmap? = null
+        var failure: Throwable? = null
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val root = InstrumentationRegistry.getArguments().getString("additionalTestOutputDir")?.let(::File)
             ?: requireNotNull(context.getExternalFilesDir(null))
@@ -106,18 +107,31 @@ class BackdropProducerContinuityTest {
                 assertEquals(size, source.layer.size)
                 release.complete(Unit)
             }
-            sampled = requireNotNull(runBlocking { withTimeout(5000) { requireNotNull(owned).await() } })
+            compose.mainClock.autoAdvance = true
+            compose.waitUntil(5000) { owned?.isCompleted == true }
+            sampled = requireNotNull(runBlocking { requireNotNull(owned).await() })
+            compose.mainClock.autoAdvance = false
             val pixels = sampled.toPixelMap()
             export(pixels, File(output, "sampler.png"))
             assertColor(Color.Red, pixels)
             compose.runOnUiThread { assertFalse(source.readbackPending) }
             assertColor(Color.Green, frame("released"))
             compose.runOnUiThread { assertTrue(source.recordings > recordings) }
+        } catch (caught: Throwable) {
+            failure = caught
+            throw caught
         } finally {
-            compose.runOnUiThread { release.complete(Unit) }
-            compose.mainClock.autoAdvance = true
-            if (sampled == null && owned != null) sampled = runBlocking { withTimeout(5000) { owned?.await() } }
-            sampled?.asAndroidBitmap()?.recycle()
+            try {
+                compose.runOnUiThread { release.complete(Unit) }
+                compose.mainClock.autoAdvance = true
+                if (owned != null) {
+                    compose.waitUntil(5000) { owned?.isCompleted == true }
+                    if (sampled == null) sampled = runBlocking { owned?.await() }
+                }
+                sampled?.asAndroidBitmap()?.recycle()
+            } catch (cleanup: Throwable) {
+                if (failure == null) throw cleanup else failure.addSuppressed(cleanup)
+            }
         }
     }
 
