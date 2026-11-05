@@ -104,6 +104,12 @@ class ReadinessTests(unittest.TestCase):
         self.assertFalse(ready.unlocked('KeyguardServiceDelegate\nshowing=false'))
         self.assertFalse(ready.focused_home('mFocusedApp=com.android.launcher3/.Launcher', 'com.android.launcher3'))
 
+    def test_historical_anr_launcher_does_not_override_current_focus(self):
+        historical = 'mCurrentFocus=Window{old u0 com.android.launcher3/.Launcher}\n'
+        for current in ('null', 'Window{now u0 Application Error: com.android.launcher3}'):
+            self.assertFalse(ready.focused_home(historical + 'mCurrentFocus=' + current,
+                                                'com.android.launcher3'))
+
     def test_adb_call_uses_remaining_deadline_not_an_unbounded_wait(self):
         with mock.patch.object(ready.time, 'monotonic', return_value=98), \
                 mock.patch.object(ready.subprocess, 'run') as command:
