@@ -270,7 +270,7 @@ internal fun DrawScope.glassShadows(bodies: List<Pair<RoundRect, Float>>, streng
 internal class RetainedGlassShadow(private val scope: CoroutineScope) {
     private val geometry = GlassShadowGeometry()
     private data class Key(val bodies: List<Pair<RoundRect, Float>>, val strength: Float,
-        val spread: Float, val density: Float, val receiver: GlassShadowReceiver?, val color: Color)
+        val spread: Float, val density: Float, val color: Color)
     private data class Raster(val key: Key, val image: ImageBitmap, val inset: Offset)
     private var requested: Key? = null
     private var preparation: Job? = null
@@ -279,18 +279,20 @@ internal class RetainedGlassShadow(private val scope: CoroutineScope) {
     fun DrawScope.draw(bodies: List<Pair<RoundRect, Float>>, strength: Float, spread: Float,
         receiver: GlassShadowReceiver? = null, exclusion: GlassShadowExclusion? = null, color: Color = Color.Black) {
         if (bodies.isEmpty() || strength <= 0f) return
+        // Software textures change the nonlinear popup/home receiver response.
+        // Keep it native and in the caller's coordinates: normalizing a fractional
+        // origin also changes legacy clip coverage around an offscreen layer.
+        if (receiver != null && glassReceiverTouchesShadow(receiver, bodies.map { it.first },
+                (4f + spread * 28f).dp.toPx(), 2.dp.toPx())) {
+            glassShadows(bodies, strength, spread, geometry, receiver = receiver, exclusion = exclusion, color = color)
+            return
+        }
         val origin = Offset(bodies.minOf { it.first.left }, bodies.minOf { it.first.top })
         val normalized = bodies.map { (r, alpha) -> RoundRect(r.left - origin.x, r.top - origin.y,
             r.right - origin.x, r.bottom - origin.y, r.topLeftCornerRadius, r.topRightCornerRadius,
             r.bottomRightCornerRadius, r.bottomLeftCornerRadius) to alpha }
-        val response = receiver?.let { GlassShadowReceiver(it.bounds.translate(-origin),it.mask,it.sampleBounds.translate(-origin)) }
-            ?.takeIf { glassReceiverTouchesShadow(it,normalized.map { body -> body.first },
-                (4f+spread*28f).dp.toPx(),2.dp.toPx()) }
-        val key = Key(normalized, strength, spread, density, response, color)
-        // Receiver response belongs to the native popup/home interaction. Its
-        // nonlinear per-ring mask cannot be baked by the software compositor at
-        // matching precision. Keep it live; ordinary settled fields still cache.
-        if (response == null && key != requested) {
+        val key = Key(normalized, strength, spread, density, color)
+        if (key != requested) {
             requested = key
             preparation?.cancel()
             val padding = (4f + spread * 28f).dp.toPx() + 2.dp.toPx() + 2f
@@ -311,7 +313,7 @@ internal class RetainedGlassShadow(private val scope: CoroutineScope) {
                     ImageBitmap(extent.width, extent.height).also { next ->
                         CanvasDrawScope().draw(metrics, direction, Canvas(next),
                             Size(extent.width.toFloat(), extent.height.toFloat())) {
-                            translate(-inset.x, -inset.y) { glassShadows(normalized, strength, spread, GlassShadowGeometry(), excludeInterior = false, receiver = key.receiver, color = color, rasterizing = true) }
+                            translate(-inset.x, -inset.y) { glassShadows(normalized, strength, spread, GlassShadowGeometry(), excludeInterior = false, color = color, rasterizing = true) }
                         }
                     }
                 }
@@ -331,7 +333,7 @@ internal class RetainedGlassShadow(private val scope: CoroutineScope) {
                 }
             }
         } else translate(origin.x, origin.y) {
-            glassShadows(normalized, strength, spread, geometry, receiver = key.receiver,
+            glassShadows(normalized, strength, spread, geometry,
                 exclusion = exclusion, exclusionTranslation = -origin, color = color)
         }
     }
