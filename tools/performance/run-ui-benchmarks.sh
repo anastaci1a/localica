@@ -37,7 +37,8 @@ run '.*' 3 "$out/instrumentation.txt"
 adb -s "$serial" pull "$remote/ui-performance/." "$out/"
 node "$(dirname "$0")/summarize-ui.mjs" "$out"
 mkdir "$out/traces"
-while IFS= read -r scenario; do
+mapfile -t top_scenarios < "$out/top-scenarios.txt"
+for scenario in "${top_scenarios[@]}"; do
     # Trace passes are separate and never substituted into baseline measurements.
     adb -s "$serial" shell atrace --async_start -a "$app" -b 32768 gfx view sched freq am wm > "$out/traces/$scenario-start.txt"
     if ! run "$scenario" 1 "$out/traces/$scenario-instrumentation.txt"; then
@@ -45,4 +46,4 @@ while IFS= read -r scenario; do
         exit 1
     fi
     adb -s "$serial" exec-out atrace --async_stop -z > "$out/traces/$scenario.ctrace"
-done < "$out/top-scenarios.txt"
+done
