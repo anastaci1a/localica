@@ -17,10 +17,15 @@ adb -s "$serial" shell wm size > "$out/size.txt"
 adb -s "$serial" shell wm density > "$out/density.txt"
 run() {
     local selection=$1 reps=$2 log=$3
+    local selector=()
+    if [[ $selection != '.*' ]]; then
+        [[ $selection =~ ^[a-z0-9-]+$ ]] || return 1
+        selector=(-e uiPerformanceScenario "$selection")
+    fi
     adb -s "$serial" shell am instrument -w -r \
         -e class io.github.anastaci1a.localica.UiPerformanceTest \
         -e uiPerformance true -e uiPerformanceSource "$source_sha" \
-        -e uiPerformanceScenario "$selection" -e uiPerformanceRepetitions "$reps" \
+        "${selector[@]}" -e uiPerformanceRepetitions "$reps" \
         -e additionalTestOutputDir "$remote" "$runner" > "$log" 2>&1
     if ! grep -q 'OK (1 test)' "$log" || grep -Eq 'FAILURES|INSTRUMENTATION_FAILED|Process crashed' "$log"; then
         cat "$log" >&2; return 1
