@@ -270,7 +270,8 @@ internal fun Modifier.pinchRetainedOverlay(motion: BrowsePinchMotion, grid: Lazy
                     if (tile != null && content != null) {
                         // Native children may replay preceding dimensions while their layout advances.
                         // Both live and virtualized source items use the already-owned source pixels.
-                        drawMotionImage(tile.image, tile.origin, tile.size, bounds, part.layer.alpha *
+                        // The captured pixels already include the source entry/reveal alpha.
+                        drawMotionImage(tile.image, tile.origin, tile.size, bounds,
                             browseViewVisibility(content.source.artwork, content.target.artwork, p))
                     } else translate(bounds.left, bounds.top) {
                         scale(bounds.width / recorded.width, bounds.height / recorded.height, Offset.Zero) { drawLayer(part.layer) }
@@ -317,7 +318,9 @@ internal fun Modifier.pinchRetainedOverlay(motion: BrowsePinchMotion, grid: Lazy
                 val width = geometry.cellWidth(motion.viewportWidth.toInt(), motion.pixelDensity, column).toFloat()
                 val leading = geometry.cellLeft(motion.viewportWidth.toInt(), motion.pixelDensity, column).toFloat()
                 val x = if (motion.rightToLeft) motion.viewportWidth - leading - width else leading
-                val y = row.offset.y + (index / motion.targetColumns - rowIndex / motion.targetColumns) * pitch
+                // Visible rows may have different text heights; only virtualized rows need projection.
+                val y = visible.firstOrNull { it.key == key }?.offset?.y?.toFloat()
+                    ?: row.offset.y + (index / motion.targetColumns - rowIndex / motion.targetColumns) * pitch
                 val sourceOrigin = Offset(old.left + sourceInset, old.top + sourceVerticalInset)
                 val targetOrigin = Offset(x + targetInset, y + targetVerticalInset)
                 val fadeWindow = browsePinchFadeWindow((targetOrigin - sourceOrigin).getDistance(), motion.viewportWidth)
