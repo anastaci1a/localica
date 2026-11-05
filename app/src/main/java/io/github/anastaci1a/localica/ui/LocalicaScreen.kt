@@ -236,8 +236,10 @@ fun LocalicaScreen(
     // Older Android snapshots must never capture the expanding mini-player's
     // browsing glass and stretch it into the Queue’s artwork material.
     val playerBackgroundPolarity = remember { PlayerBackgroundPolarityState() }
-    val playerLightInk = playerBackgroundPolarity.decision.lightInk
-    val playerBackdrop = rememberFrostedBackdrop(listOf(playerVisual, lyricsOpen, settings.glass), expanded && playerFullyOpen, dark = playerLightInk, glassBlur = settings.glass.blur)
+    // The eased polarity (foreground and materials share it); the discrete decision only seeds it.
+    val playerLightMix = playerBackgroundPolarity.lightMix
+    val playerLightInk = playerLightMix >= .5f
+    val playerBackdrop = rememberFrostedBackdrop(listOf(playerVisual, lyricsOpen, settings.glass), expanded && playerFullyOpen, dark = playerLightInk, lightMix = playerLightMix, glassBlur = settings.glass.blur)
     var browseInk by remember { mutableStateOf(androidx.compose.ui.graphics.Color.Black) }
     var pageBackground by remember { mutableStateOf(androidx.compose.ui.graphics.Color(0xFFF9F9FB)) }
     val miniInk by androidx.compose.animation.animateColorAsState(browseInk,
@@ -255,7 +257,8 @@ fun LocalicaScreen(
         if (hasPlayer) CompactControlSize + bottomChrome + 8.dp else bottomChrome
     val browseBackdrop = rememberFrostedBackdrop(navigation.route to library.snapshot, !expanded, dark = browseInk == androidx.compose.ui.graphics.Color.White, glassBlur = settings.glass.blur)
     val modalBackdrop = rememberFrostedBackdrop(listOf(navigation.route, library.snapshot, expanded, queueOpen, playerVisual, settings.glass),
-        dark = if (expanded) playerLightInk else browseInk == androidx.compose.ui.graphics.Color.White, glassBlur = settings.glass.blur)
+        dark = if (expanded) playerLightInk else browseInk == androidx.compose.ui.graphics.Color.White,
+        lightMix = if (expanded) playerLightMix else null, glassBlur = settings.glass.blur)
     val dialogs = LocalGlassDialogs.current
     SideEffect { dialogs?.backdrop = modalBackdrop }
     LaunchedEffect(pager.settledPage) { browseBackdrop.refresh() }
@@ -397,7 +400,7 @@ fun LocalicaScreen(
                 count = "${(queues.library.active?.entries?.indexOfFirst { it.id == queues.library.active?.currentEntryId } ?: -1) + 1} / ${queues.library.active?.entries?.size ?: 0}")
         }
         if (hasPlayer && playerVisible) CompositionLocalProvider(LocalFrostedBackdrop provides playerBackdrop) {
-        GlassPanelTheme(playerLightInk) {
+        GlassPanelTheme(playerLightMix) {
         PlayerClippedOverlay({ progress.value }, bottomChrome) {
         QueueSurface(queueProgress, settings, { queueOpen = it }, playerProgress = { progress.value },
             onOpeningContact = { queueOpeningRequest++ }) {
@@ -420,7 +423,7 @@ fun LocalicaScreen(
     androidx.activity.compose.BackHandler(expanded) { if (lyricsOpen) lyricsOpen = false else expanded = false }
     androidx.activity.compose.BackHandler(queueOpen || queueVisible) { queueOpen = false; navigationScope.launch { queueProgress.animateTo(0f, androidx.compose.animation.core.tween(settings.motionDuration(400))) } }
     androidx.activity.compose.BackHandler(session.active && (!expanded || queueOpen || queueVisible)) { session.clear() }
-    GlassPanelTheme(if (playerVisible) playerLightInk else browseInk == androidx.compose.ui.graphics.Color.White) {
+    GlassPanelTheme(if (playerVisible) playerLightMix else if (browseInk == androidx.compose.ui.graphics.Color.White) 1f else 0f) {
     if (settingsOpen) FolderSettings(library,
         onDismiss = { settingsOpen = false; if (returnToScanner) { scannerOpen = true; returnToScanner = false } }, onChooseFolder, onRemoveFolder,
         extraContent = {

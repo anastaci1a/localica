@@ -60,7 +60,11 @@ internal class FrostedBackdrop(val layer: GraphicsLayer, dark: Boolean,
     var materialOnly by mutableStateOf(false)
     var materialCorner by mutableFloatStateOf(0f)
     var consumers by mutableIntStateOf(0)
-    var dark by mutableStateOf(dark)
+    /** How far the scene's ink is toward light ink (1) from dark ink (0); fractional while a polarity change eases. */
+    var lightMix by mutableFloatStateOf(if (dark) 1f else 0f)
+    var dark: Boolean
+        get() = lightMix >= .5f
+        set(value) { lightMix = if (value) 1f else 0f }
     val location = BackdropLocation()
     var origin: Offset
         get() = location.position()
@@ -203,7 +207,7 @@ internal fun DrawScope.withBackdropRegistration(registration: BackdropRegistrati
 }
 
 @Composable
-internal fun rememberFrostedBackdrop(key: Any?, enabled: Boolean = true, dark: Boolean = true,
+internal fun rememberFrostedBackdrop(key: Any?, enabled: Boolean = true, dark: Boolean = true, lightMix: Float? = null,
     glassBlur: Float = LocalGlassAppearance.current.blur, retainRaster: Boolean = true,
     whiteTint: Float = LocalGlassAppearance.current.whiteTint): FrostedBackdrop {
     val layer = rememberGraphicsLayer()
@@ -219,7 +223,7 @@ internal fun rememberFrostedBackdrop(key: Any?, enabled: Boolean = true, dark: B
     SideEffect {
         source.compositing(if (retainRaster && sampled) androidx.compose.ui.graphics.layer.CompositingStrategy.Offscreen
             else androidx.compose.ui.graphics.layer.CompositingStrategy.Auto)
-        source.dark = dark
+        source.lightMix = lightMix ?: if (dark) 1f else 0f
     }
     // Legacy consumers read back only when the scene/size/backend changes,
     // then scatter a small snapshot off the main thread; never blur on each gesture frame.
@@ -372,22 +376,30 @@ internal fun FrostedSurface(modifier: Modifier = Modifier, shape: Shape = Corner
     val renderer = currentGlassRendererGeneration()
     if (renderer.backend == GlassBackend.Legacy) BackdropLease(source)
     val location = remember { BackdropLocation() }
-    val dark = source?.dark == true
+    val lightMix = source?.lightMix ?: 0f
+    val dark = lightMix >= .5f
     val appearance = LocalGlassAppearance.current.normalized()
-    val tone = GlassTone(appearance.contrast, appearance.contrastWeight, dark)
+    val tone = GlassTone.mixed(appearance.contrast, appearance.contrastWeight, lightMix)
     val toneRenderer = remember { lazy { if (Build.VERSION.SDK_INT >= 33) GlassToneRenderer() else null } }
-    val tonedFallback = key(renderer) { rememberToneSnapshot(source?.fallback ?: source?.snapshot, tone) }
+    // Legacy pixels are prepared at the two polarity endpoints and cross-faded while the polarity eases;
+    // the endpoint being left is only prepared once the mix is between them.
+    val fallbackImage = source?.fallback ?: source?.snapshot
+    val primaryImage = key(renderer) { rememberToneSnapshot(fallbackImage, tone.endpoint(tone.lightInk)) }
+    val oppositeImage = key(renderer) { rememberToneSnapshot(fallbackImage?.takeIf {
+        renderer.backend == GlassBackend.Legacy && lightMix > 0f && lightMix < 1f }, tone.endpoint(!tone.lightInk)) }
+    val tonedDark = if (tone.lightInk) oppositeImage else primaryImage
+    val tonedLight = if (tone.lightInk) primaryImage else oppositeImage
     val fallbackColor = tone.color(MaterialTheme.colorScheme.surface)
-    val foreground = if (dark) Color.White else MaterialTheme.colorScheme.onSurface
+    val foreground = lerp(MaterialTheme.colorScheme.onSurface, Color.White, lightMix)
     // Descendant lenses sample the finished panel material, never the art below it.
     // Keep controls outside this recording to prevent feedback through nested lenses.
     val material = rememberFrostedBackdrop(source?.fallback to tone,
-        enabled = renderer.backend == GlassBackend.Legacy || LocalGlassAppearance.current.blur > 0f, dark = dark)
+        enabled = renderer.backend == GlassBackend.Legacy || LocalGlassAppearance.current.blur > 0f, dark = dark, lightMix = lightMix)
     val density = LocalDensity.current
     SideEffect { material.parent = source; material.materialOnly = true; material.materialCorner = with(density) { 28.dp.toPx() } }
     Box(modifier.then(if (shadow) Modifier.shadow(if (compact) 3.dp else 8.dp, shape, clip = false) else Modifier).clip(shape)
         .backdropLocation(location)
-        .border(1.dp, Brush.linearGradient(listOf(Color.White.copy(alpha = if (dark) .38f else .8f),
+        .border(1.dp, Brush.linearGradient(listOf(Color.White.copy(alpha = .8f + (.38f - .8f) * lightMix),
             Color.White.copy(alpha = .06f), Color.White.copy(alpha = .17f))), shape)) {
         Box(Modifier.matchParentSize().recordFrostedBackdrop(material)) {
         if (source != null) {
@@ -399,14 +411,16 @@ internal fun FrostedSurface(modifier: Modifier = Modifier, shape: Shape = Corner
             } else Canvas(Modifier.matchParentSize()) {
                 source.location.registrationTo(location)?.let { registration ->
                     withBackdropRegistration(registration) {
-                        tonedFallback?.let { drawImage(it, dstSize = source.size, filterQuality = FilterQuality.Medium) }
+                        if (tonedDark != null) drawImage(tonedDark, dstSize = source.size, filterQuality = FilterQuality.Medium)
+                        tonedLight?.let { drawImage(it, dstSize = source.size, filterQuality = FilterQuality.Medium,
+                            alpha = if (tonedDark == null) 1f else lightMix) }
                     }
                 }
             }
         }
         Canvas(Modifier.matchParentSize()) {
             if (source == null) drawRect(fallbackColor)
-            drawFrostCoating(dark, tone.color(tint), 1f, compact)
+            drawFrostCoating(lightMix, tone.color(tint), 1f, compact)
         }
         }
         CompositionLocalProvider(LocalContentColor provides foreground, LocalFrostedBackdrop provides material) { content() }
@@ -415,13 +429,17 @@ internal fun FrostedSurface(modifier: Modifier = Modifier, shape: Shape = Corner
 
 /** Identical panel finish for static frost and the continuous end of a glass morph. */
 internal fun DrawScope.drawFrostCoating(dark: Boolean, tint: Color,
+    amount: Float, compact: Boolean = false) = drawFrostCoating(if (dark) 1f else 0f, tint, amount, compact)
+
+/** [lightMix] is the light-ink fraction (0 dark ink, 1 light ink); the grain eases between its two strengths. */
+internal fun DrawScope.drawFrostCoating(lightMix: Float, tint: Color,
     amount: Float, compact: Boolean = false) {
     drawRect(tint.copy(alpha = tint.alpha * amount))
     drawRect(Brush.radialGradient(listOf(Color.White.copy(alpha = .075f * amount), Color.Transparent),
         center = Offset(size.width * .12f, 0f), radius = maxOf(size.width, size.height) * .9f))
     drawRect(Brush.verticalGradient(listOf(Color.White.copy(alpha = .055f * amount), Color.Transparent, Color.Black.copy(alpha = .08f * amount))))
     drawImage(frostGrain, dstSize = IntSize(size.width.toInt().coerceAtLeast(1), size.height.toInt().coerceAtLeast(1)),
-        filterQuality = FilterQuality.Medium, alpha = amount * if (dark) .5f else .3f)
+        filterQuality = FilterQuality.Medium, alpha = amount * (.3f + (.5f - .3f) * lightMix.coerceIn(0f, 1f)))
 }
 
 private val frostGrain: ImageBitmap by lazy {
