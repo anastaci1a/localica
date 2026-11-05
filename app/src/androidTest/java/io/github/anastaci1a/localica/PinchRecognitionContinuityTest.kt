@@ -57,6 +57,27 @@ class PinchRecognitionContinuityTest {
         } finally { bitmap.recycle() }
     }
 
+    @Test fun artworkLocatorTracksFractionalEdgesWithoutTwoPixelQuantization() {
+        val heights = listOf(107.8f, 108f).map { height ->
+            val bitmap = Bitmap.createBitmap(160, 160, Bitmap.Config.ARGB_8888).apply {
+                eraseColor(android.graphics.Color.RED)
+                android.graphics.Canvas(this).apply {
+                    val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
+                    paint.color = android.graphics.Color.BLUE
+                    drawRect(20f, 80f - height / 2f, 128f, 80f + height / 2f, paint)
+                    paint.color = android.graphics.Color.RED
+                    drawRect(30f, 36f, 118f, 124f, paint)
+                }
+            }
+            try {
+                paintedArt(bitmap.asImageBitmap().toPixelMap(), Offset(74f, 80f)).height.also {
+                    assertEquals("Resolve the fractional cover edge", height, it, .25f)
+                }
+            } finally { bitmap.recycle() }
+        }
+        assertEquals("Subpixel growth cannot become a two-pixel size jump", .2f, heights[1] - heights[0], .25f)
+    }
+
     @Test fun firstTrackingFramePreservesThePresentedGeometry() = runBlocking {
         for (finger in listOf(.05f, .086f)) {
             val clock = BroadcastFrameClock()
@@ -235,24 +256,43 @@ class PinchRecognitionContinuityTest {
 
     private fun paintedArt(pixels: PixelMap, seed: Offset): Rect {
         fun red(x: Int, y: Int): Boolean = pixels[x, y].let { it.red > .9f && it.green < .1f && it.blue < .1f }
-        fun blue(x: Int, y: Int): Boolean = pixels[x, y].let { it.blue > .9f && it.red < .1f && it.green < .1f }
+        fun blue(x: Int, y: Int): Float = pixels[x, y].let { it.blue - maxOf(it.red, it.green) }
+        fun opaqueBlue(x: Int, y: Int): Float = pixels[x, y].let { minOf(it.blue - .9f, .1f - it.red, .1f - it.green) }
         val x = seed.x.toInt().coerceIn(0, pixels.width - 1)
         val y = seed.y.toInt().coerceIn(0, pixels.height - 1)
         assertTrue("Presented artwork remains visible at the actual part centre $seed", red(x, y))
-        fun edge(dx: Int, dy: Int): Int {
+        fun edge(dx: Int, dy: Int): Float {
             fun inside(step: Int) = x + step * dx in 0 until pixels.width && y + step * dy in 0 until pixels.height
             fun matches(step: Int, predicate: (Int, Int) -> Boolean) = inside(step) && predicate(x + step * dx, y + step * dy)
             var step = 0
             while (matches(step + 1, ::red)) step++
-            val border = (step + 1..step + 3).firstOrNull { matches(it, ::blue) }
+            val border = (step + 1..step + 3).firstOrNull { matches(it) { x, y -> opaqueBlue(x, y) > 0f } }
             assertNotNull("The opaque artwork border must remain visible toward ($dx,$dy) from $seed", border)
             step = requireNotNull(border)
-            while (matches(step + 1, ::blue)) step++
-            return if (dx != 0) x + step * dx else y + step * dy
+            while (matches(step + 1) { x, y -> opaqueBlue(x, y) > 0f }) step++
+            val background = if (inside(step + 3)) blue(x + (step + 3) * dx, y + (step + 3) * dy) else 1f
+            // A sharp edge resolves at half coverage. During the later settle a cover
+            // can cross the viewport fade; there, retain its visible opaque contour.
+            val sharp = background < .5f
+            val crossing = if (sharp) (1f + background) / 2f else 0f
+            fun score(at: Int) = if (sharp) blue(x + at * dx, y + at * dy) else opaqueBlue(x + at * dx, y + at * dy)
+            while (inside(step + 1) && score(step + 1) > crossing) step++
+            if (!inside(step + 1)) return when {
+                dx < 0 || dy < 0 -> 0f
+                dx > 0 -> pixels.width.toFloat()
+                else -> pixels.height.toFloat()
+            }
+            // Interpolate between pixel centres at the colour crossing. Counting only
+            // opaque pixels can turn symmetric subpixel growth into a two-pixel jump.
+            val inner = score(step)
+            val outer = score(step + 1)
+            assertTrue("The pixels bracket the visible artwork edge", inner >= crossing && outer <= crossing)
+            val fraction = (inner - crossing) / (inner - outer)
+            return if (dx != 0) x + .5f + (step + fraction) * dx else y + .5f + (step + fraction) * dy
         }
         val left = edge(-1, 0); val right = edge(1, 0)
         val top = edge(0, -1); val bottom = edge(0, 1)
-        return Rect(left.toFloat(), top.toFloat(), right + 1f, bottom + 1f)
+        return Rect(left, top, right, bottom)
     }
 
     private fun export(pixels: PixelMap, region: Rect, file: File) {
