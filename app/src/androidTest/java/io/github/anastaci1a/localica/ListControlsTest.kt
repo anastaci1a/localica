@@ -81,12 +81,7 @@ class ListControlsTest {
         compose.onNodeWithContentDescription("Current song").assertIsDisplayed()
         val selected = compose.onNodeWithTag("media-${queue.entries[70].id}")
         compose.awaitExpectedWindowFocus(selected)
-        // Scrolling can expose an unindexed row before its artwork read finishes.
-        // #588 withholds the invisible action's semantics until reveal. Wait before
-        // measuring the physical hold's exclusion area, then retain all hit checks.
-        val menu = compose.onNodeWithContentDescription("Actions for Z song 070")
-        awaitDisplayed(menu)
-        menu.assertHasClickAction()
+        val menu = compose.awaitRowActions("Z song 070")
         val row = selected.fetchSemanticsNode()
         val rowBounds = row.boundsInRoot
         val rootBounds = compose.onRoot().fetchSemanticsNode().boundsInRoot
