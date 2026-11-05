@@ -177,7 +177,10 @@ class IconPackLibraryTest {
     @Test fun listSelectsLiveAndDeleteRequiresConfirmation() {
         val first = import()
         import("Second", "transport.play")
-        compose.setContent { androidx.compose.runtime.CompositionLocalProvider(
+        compose.setContent {
+            val registryOwner = androidx.activity.compose.LocalActivityResultRegistryOwner.current
+            androidx.compose.runtime.CompositionLocalProvider(
+            androidx.activity.compose.LocalActivityResultRegistryOwner provides registryOwner,
             androidx.compose.ui.platform.LocalContext provides context) {
             LocalicaTheme { Column(Modifier.verticalScroll(rememberScrollState())) { IconPackSettings {} } }
         } }
