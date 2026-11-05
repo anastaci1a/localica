@@ -81,10 +81,10 @@ internal class BrowsePinchMotion {
         val clock = progress
         if (caughtUp) {
             tracking?.cancel()
-            // A snap animation writes inside the next frame callback, before that frame's
-            // composition and layout; a write after the frame callback lands a frame late.
+            // Publish pointer-driven reversals before the frame begins. A snap animation's
+            // frame callback can run after layout has already consumed the preceding value.
             tracking = scope.launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) {
-                clock.animateTo(fingerProgress, androidx.compose.animation.core.snap())
+                clock.snapTo(fingerProgress)
             }
             return
         }

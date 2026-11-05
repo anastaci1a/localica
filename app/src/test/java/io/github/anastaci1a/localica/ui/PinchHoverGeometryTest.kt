@@ -7,6 +7,11 @@ import org.junit.Assert.*
 import org.junit.Test
 import kotlin.math.roundToInt
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancelAndJoin
+import androidx.compose.runtime.BroadcastFrameClock
 
 class PinchHoverGeometryTest {
     @Test fun everyAdjacentStyleKeepsCapturedLiftAtRecognitionAndOrdinaryLiftAtHandoff() {
@@ -97,6 +102,26 @@ class PinchHoverGeometryTest {
             motion.progress.snapTo(.3f)
             assertEquals("A new transaction cannot rewind the preceding layout", terminal, retired.value, 0f)
         }
+    }
+
+    @Test fun caughtUpReversalPublishesBeforeTheNextLayoutFrame() = runBlocking {
+        val clock = BroadcastFrameClock()
+        val owner = Job()
+        val scope = CoroutineScope(owner + Dispatchers.Unconfined + clock)
+        val motion = BrowsePinchMotion()
+        try {
+            motion.beginGeometry()
+            motion.held = true
+            motion.destinationReady = true
+            motion.fingerProgress = .086f
+            motion.followFingers(scope)
+            repeat(9) { clock.sendFrame(1_000_000_000L + it * 16_666_667L) }
+            assertEquals(.086f, motion.progress.value, .000001f)
+            motion.fingerProgress = 0f
+            motion.followFingers(scope)
+            assertEquals("Layout and drawing must enter the next frame with the same reversal value",
+                0f, motion.progress.value, .000001f)
+        } finally { owner.cancelAndJoin() }
     }
 
     private fun outline(style: BrowseStyle, widthDp: Int, density: Float, rtl: Boolean): MediaItemOutline {
