@@ -64,7 +64,10 @@ class ArtistCollectionActionsTest {
                 compose.onNodeWithText("All albums").performClick()
                 for ((index, name) in chosen.withIndex()) {
                     carousel.performScrollToNode(hasText(name))
-                    val album = compose.onNodeWithText(name)
+                    // Finding a lazy item accepts a narrow visible sliver. Bring the actual
+                    // touch target into view before long-pressing: with gallery-sized gaps,
+                    // the third album's sliver can sit underneath the floating actions button.
+                    val album = compose.onNodeWithText(name).performScrollTo()
                     if (index == 0) album.performClick() else album.performTouchInput { longClick() }
                 }
             }
