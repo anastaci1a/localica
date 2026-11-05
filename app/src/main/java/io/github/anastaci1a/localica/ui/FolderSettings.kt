@@ -18,7 +18,8 @@ import io.github.anastaci1a.localica.scanner.ScanPreferences
 private data class SettingsDestination(val title: String, val parent: String?, val icon: AppIcon, val summary: String)
 private val settingsDestinations = listOf(
     SettingsDestination("Interface", null, AppIcon.ActionSettings, "Navigation, player, glass, and motion"),
-    SettingsDestination("Appearance", "Interface", AppIcon.TabLibrary, "Typography, interface gray, and icon pack"),
+    SettingsDestination("Appearance", "Interface", AppIcon.TabLibrary, "Typography and interface gray"),
+    SettingsDestination("Icon packs", null, AppIcon.TabLibrary, "Import, switch, and view icons"),
     SettingsDestination("Glass", "Interface", AppIcon.ActionSettings, "Blur, white tint, and floating shadows"),
     SettingsDestination("Navigation", "Interface", AppIcon.TabHome, "Main tabs, Back history, and exit confirmation"),
     SettingsDestination("Player", "Interface", AppIcon.TabAlbums, "Artwork, gestures, and player actions"),
@@ -56,6 +57,7 @@ fun FolderSettings(state: LibraryUiState, onDismiss: () -> Unit, onChooseFolder:
     interfaceContent: @Composable (String) -> Unit = {}, playbackContent: @Composable (String) -> Unit = {},
     aboutContent: @Composable () -> Unit = {}, initialCategory: String? = null, onFullScan: () -> Unit = {}, onQuickScan: () -> Unit = {}, libraryFiltersContent: @Composable () -> Unit = {}) {
     var path by rememberSaveable(stateSaver = settingsPathSaver) { mutableStateOf(settingsPath(initialCategory)) }
+    var iconPackId by rememberSaveable { mutableStateOf<String?>(null) }
     var search by rememberSaveable { mutableStateOf("") }
     var folderUri by rememberSaveable { mutableStateOf<String?>(null) }
     var removing by remember { mutableStateOf<FolderSelection?>(null) }
@@ -89,6 +91,8 @@ fun FolderSettings(state: LibraryUiState, onDismiss: () -> Unit, onChooseFolder:
                         SettingsLink(child.title, child.summary, child.icon) { path = path + child.title }
                     }
                     "Navigation", "Player", "Motion", "Glass", "Appearance" -> interfaceContent(page)
+                    "Icon packs" -> IconPackSettings { id -> iconPackId = id; path = path + "Pack icons" }
+                    "Pack icons" -> IconPackViewer(iconPackId)
                     "Playback and queues" -> {
                         playbackContent(page)
                         SettingsLink("Song tap behavior", "Default action and per-list overrides", AppIcon.TabSongs) { path = path + "Song tap behavior" }
