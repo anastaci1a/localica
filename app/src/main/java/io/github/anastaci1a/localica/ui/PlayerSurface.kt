@@ -96,7 +96,11 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     // During an artwork change the ink eases toward the destination cover's ink on the blend's own clock (#578);
     // settled, the ordinary decision applies.
     val blendClock = polarity.artworkClock
-    val lightInk = (if (blendClock < 1f) polarity.destinationLightInk else null) ?: inkDecision.lightInk
+    // After the clock ends the destination keeps the ink until the settled decision is current, so the end of the ease
+    // never snaps back to the previous cover's ink while the new measurement is still being prepared.
+    val inkDestination = polarity.destinationLightInk
+    val lightInk = if (inkDestination != null && (blendClock < 1f || inkDecision.confidence != PlayerBackgroundConfidence.Current)) inkDestination
+        else inkDecision.lightInk
     val inkTarget = if (lightInk) Color.White else Color.Black
     val paletteDuration = settings.motionDuration(550)
     val palette = animatedPlayerPalette(artwork.palette, paletteDuration)

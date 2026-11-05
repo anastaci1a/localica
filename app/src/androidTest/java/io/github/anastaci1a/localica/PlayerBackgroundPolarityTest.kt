@@ -142,8 +142,10 @@ class PlayerBackgroundPolarityTest {
         val y = (transport.top - bounds.top + 3).toInt().coerceIn(0, image.height - 1)
         return image[x, y].red
     }
-    private fun assertRenderedInk(light: Boolean) {
-        assertEquals(if (light) Color.White else Color.Black, ink)
+    // [tolerance] admits the ink easing on the artwork blend's clock (#578): a nearly finished ease is not yet exact.
+    private fun assertRenderedInk(light: Boolean, tolerance: Float = 0f) {
+        if (tolerance > 0f) assertEquals(if (light) 1f else 0f, ink.red, tolerance)
+        else assertEquals(if (light) Color.White else Color.Black, ink)
         val image = compose.onNodeWithContentDescription("Play").captureToImage().toPixelMap()
         var inkPixels = 0
         for (y in image.height / 4 until image.height * 3 / 4) for (x in image.width / 4 until image.width * 3 / 4) {

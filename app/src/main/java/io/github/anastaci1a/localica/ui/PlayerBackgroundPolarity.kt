@@ -105,9 +105,12 @@ internal data class PlayerBackgroundGeometry(val size: Size, val cover: Rect, va
     var destinationLightInk by mutableStateOf<Boolean?>(null); private set
     /** The artwork blend clock (1 when settled): drives the same ease as the lyrics clock for song changes. */
     var artworkClock by mutableFloatStateOf(1f); private set
+    /** The settled decision is current again: it, not the transition's remembered destination, owns the ink. */
+    internal fun settled() { if (destinationLightInk != null) destinationLightInk = null }
     internal fun presentGrades(grades: Map<Any, BackdropRoleGrade>, destination: Boolean?) {
         if (roleGrades != grades) roleGrades = grades
-        if (destinationLightInk != destination) destinationLightInk = destination
+        // Kept past the end of the transition until the settled decision is current (see [settled]).
+        if (destination != null && destinationLightInk != destination) destinationLightInk = destination
     }
     /** Holds [decision] at a fixed polarity so a presentation test controls exactly when it changes. */
     private var pinned: Boolean? = null
@@ -128,7 +131,6 @@ internal data class PlayerBackgroundGeometry(val size: Size, val cover: Rect, va
     fun frame(value: ArtworkBackgroundFrame) {
         if (frame != value) frame = value
         if (artworkClock != value.clock) artworkClock = value.clock
-        if (value.clock >= 1f && destinationLightInk != null) destinationLightInk = null
     }
     fun backdrop(identity: Any, value: PlayerBackdropDescriptor) {
         if (backdrops[identity] != value) backdrops[identity] = value
@@ -241,6 +243,7 @@ private fun BackgroundSampleRole.paintReady(geometry: PlayerBackgroundGeometry, 
                 return@SideEffect
             }
             owner.current(choice.lightInk)
+            if (!frame.transitioning) owner.settled()
             val mean = choice.mean
             // Use the current descriptor's provenance for these same prepared pixels. The equality
             // guard above still requires every original sampling input to match. Never retain frame,
