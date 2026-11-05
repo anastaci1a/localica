@@ -113,6 +113,14 @@ class ReadinessTests(unittest.TestCase):
         self.assertFalse(ready.unlocked('KeyguardServiceDelegate\nshowing=false'))
         self.assertFalse(ready.focused_home('mFocusedApp=com.android.launcher3/.Launcher', 'com.android.launcher3'))
 
+    def test_failed_focus_retains_the_observed_obstruction(self):
+        result, _, _ = self.run_gate([{'focus': 'Application Error: com.android.launcher3'}])
+        self.assertFalse(result['ready'])
+        self.assertEqual(['Window{abc u0 Application Error: com.android.launcher3}'],
+                         result['samples'][-1]['current_focus_entries'])
+        self.assertIn('Application Error: com.android.launcher3', result['last_window_dump'])
+        self.assertIn('home_launch_result', result['samples'][0])
+
     def test_historical_anr_launcher_does_not_override_current_focus(self):
         historical = 'mCurrentFocus=Window{old u0 com.android.launcher3/.Launcher}\n'
         for current in ('null', 'Window{now u0 Application Error: com.android.launcher3}'):
