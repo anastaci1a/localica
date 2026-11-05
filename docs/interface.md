@@ -206,6 +206,8 @@ Library/Playlists have an aligned circular + matching the mini-player's height. 
 
 ## Browsing and search
 
+Library filter changes, including Back clearing a filter, start the resulting list at the top. Full-library search query or scope changes also start at the top.
+
 Use shared catalog/content/search templates. Dedicated catalog tabs and corresponding Library filters share sort/view preferences, without page overrides. Existing Library filter overrides take precedence during migration. Collections and search retain optional overrides and reset. Search text does not create another override. Album catalogs and contents are separate types.
 
 List **Size** offers Smallest, Small, Compact, Normal (default), and Large (18 sp titles). Album, playlist and queue contents also offer Tracklist between Small and Compact. Tracklist uses a track number (displayed position outside albums) beside the normal title/subtitle layout, without a cover. Normal/Large covers match Gallery 5/3 respectively.
