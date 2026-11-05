@@ -132,7 +132,7 @@ The suite selects None when available. Older sources use Modern with blur disabl
 
 Frame duration percentiles use nearest rank. Jank means duration exceeds the sampled display refresh period. Missed vsyncs are duration-based estimates. Deadline misses are reported separately on API 31+. Listener drops, overflow and incomplete native delivery remain explicit.
 
-Emulators are proxies. On a physical device, open More → Settings → About and licenses. Start frame capture, repeat an action, return to stop capture, then Export diagnostics. Capture stops after two minutes or Activity destruction; a new capture replaces the previous sample.
+Emulators are proxies. For pure-UI comparison, select None when available. On a physical device, open More → Settings → About and licenses. Start frame capture, repeat an action, return to stop capture, then Export diagnostics. Capture stops after two minutes or Activity destruction; a new capture replaces the previous sample.
 
 Capture is opt-in, bounded and process-local. Export includes app/device identity, renderer settings and per-Window summaries, without music titles, paths or search text. It excludes system keyboard frames. Received Window timings do not measure presentation latency.
 
