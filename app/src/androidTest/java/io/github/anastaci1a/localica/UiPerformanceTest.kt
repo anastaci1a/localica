@@ -149,12 +149,12 @@ class UiPerformanceTest {
                         "fixture", "Fixture", LrcParser.parse(List(100) { "Synthetic lyric line $it" }.joinToString("\n")))))
                 }; Thread.sleep(600) }
             }
-            measure("search-typing", { launchApp() }, { clickDescription("Search library"); awaitEditor() }) {
+            measure("search-typing", { launchSearch() }, { awaitEditor() }) {
                 for (text in listOf("S", "So", "Song", "Song 01", "Song 019", "")) {
                     val accepted = nodes { all -> all.lastOrNull { it.boundsInWindow.width > 0 && it.boundsInWindow.height > 0 && it.config.getOrNull(SemanticsActions.SetText)?.action != null }
                         ?.config?.getOrNull(SemanticsActions.SetText)?.action
                         ?.invoke(androidx.compose.ui.text.AnnotatedString(text)) ?: false }
-                    check(accepted) { "Search editor rejected text; " + nodes { all -> all.map { it.config.toString() }.joinToString("; ") } }; Thread.sleep(180)
+                    check(accepted) { "Search editor rejected text" }; Thread.sleep(180)
                 }
             }
             measure("pinch-sizes", { launchBrowse(BrowseStyle(listSize = ListSize.Smallest)) }) {
@@ -187,6 +187,13 @@ class UiPerformanceTest {
         BrowsePreferences(context).write(route, style, false)
         launch { BrowserScreen(library, PlaylistState(), route, {}, {}, {}, { _, _, _ -> }, null, null, true, false) }
         awaitTag("browser-list")
+    }
+    private fun launchSearch() {
+        BrowsePreferences(context).write(BrowseRoute(MainTab.Songs), BrowseStyle(), false)
+        launch {
+            var route by remember { mutableStateOf(BrowseRoute(MainTab.Songs, search = true, globalSearch = true)) }
+            BrowserScreen(library, PlaylistState(), route, { route = it }, {}, {}, { _, _, _ -> }, null, null, true, false)
+        }
     }
     private fun launchApp() {
         BrowsePreferences(context).write(BrowseRoute(MainTab.Songs), BrowseStyle(), false)
@@ -236,7 +243,7 @@ class UiPerformanceTest {
             if (nodes { all -> all.any { it.config.getOrNull(SemanticsActions.SetText)?.action != null && it.boundsInWindow.height > 0 } }) return
             Thread.sleep(50)
         }
-        error("Search editor missing; " + nodes { all -> all.map { it.config.toString() }.joinToString("; ") })
+        error("Search editor missing")
     }
     private fun awaitTag(tag: String) {
         val until = SystemClock.uptimeMillis() + 30_000
