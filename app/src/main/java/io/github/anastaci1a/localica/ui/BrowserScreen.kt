@@ -589,6 +589,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     // owns its query/occurrence structure, not unrelated live playback bookkeeping.
     val returnOwner = remember(route, style, library.snapshot, playlists.playlists,
         mutableQueue?.entries, mutableQueue?.order, libraryFilters, selectedAlbums) { Any() }
+    var manualQueueReturn by remember(returnOwner) { mutableStateOf(false) }
     var presentedReturnOwner by remember { mutableStateOf<Any?>(null) }
     SideEffect { if (!queryPending && loadedResult != null) presentedReturnOwner = returnOwner }
     // A cursor-only refresh need not blink a still-valid control. Genuine query or
@@ -605,7 +606,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
         selectionVisible && !playerOpen && !session.active && !localSearchOpen,
         backEnabled = listBackEnabled && !route.search && !localSearchOpen && !playerOpen,
         action = returnAction,
-        onSubmit = { orderScroll.cancel(); playbackFollow.userScroll() },
+        onSubmit = { manualQueueReturn = false; orderScroll.cancel(); playbackFollow.userScroll() },
         ready = {
             snapshotFlow { readyToScroll }.first { it }
             withFrameNanos { }; withFrameNanos { }
@@ -690,9 +691,8 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
             followOwner, followEligible && !modalBlocked && modalOwner?.blocked != true, modalOwner?.generation,
             automatic = !route.search, openingRequest = queueOpeningRequest, initialEligible = initialEligible)
     }
-    var manualQueueReturn by remember(followOwner) { mutableStateOf(false) }
     fun userScroll() {
-        manualQueueReturn = true
+        manualQueueReturn = route.collection?.kind == MediaKind.Queue
         artistFilterRange.interrupt()
         orderScroll.cancel()
         returnToList.cancel()
@@ -754,11 +754,12 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     // A completed manual trip to the current occurrence's physical end is a return.
     // Never replay a deferred target, move under a contact, or attach a scoped search.
     val boundaryCurrent = result.items.indexOfFirst { it.row?.id == playingEntryId }
+    val boundaryReturnReady = manualQueueReturn && followEligible && !modalBlocked && !queryPending &&
+        !route.search && route.text.isBlank() && !gridState.isScrollInProgress &&
+        boundaryCurrent >= 0 && ((boundaryCurrent == 0 && !gridState.canScrollBackward) ||
+            (boundaryCurrent == result.items.lastIndex && !gridState.canScrollForward))
     SideEffect {
-        if (manualQueueReturn && followEligible && !modalBlocked && !queryPending &&
-            !route.search && route.text.isBlank() && !gridState.isScrollInProgress &&
-            boundaryCurrent >= 0 && ((boundaryCurrent == 0 && !gridState.canScrollBackward) ||
-                (boundaryCurrent == result.items.lastIndex && !gridState.canScrollForward))) {
+        if (boundaryReturnReady) {
             playbackFollow.reattachAtBoundary(playingEntryId, followOwner)
             manualQueueReturn = false
         }
@@ -1165,6 +1166,16 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
             val returnDirection by remember(returnTarget, gridState) { derivedStateOf {
                 returnTarget?.direction(gridState) ?: 0
             } }
+            // Scoped search retains its explicit offscreen-only offer; alignment
+            // and visibility are distinct, but every offered arrow uses the target.
+            val hiddenBottom = with(density) { obscuredInset.toPx() }
+            val currentOffscreen by remember(playingIndex, latestTopInset, hiddenBottom) { derivedStateOf {
+                val layout = gridState.layoutInfo
+                val current = layout.visibleItemsInfo.firstOrNull { it.index == playingIndex }
+                playingIndex != null && (current == null ||
+                    current.offset.y + current.size.height <= latestTopInset ||
+                    current.offset.y >= layout.viewportEndOffset - hiddenBottom)
+            } }
             // Active queues retain their occurrence return. Other current song lists,
             // including inactive queues, return to their own top without changing filters.
             val playbackReturn = route.collection?.kind == MediaKind.Queue && playingEntryId != null
@@ -1180,7 +1191,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
             } }
             val showReturn = selectionVisible && !playerOpen && !localSearchOpen && returnListMatches &&
                 !session.active && reorder.drag == null && !returning &&
-                (if (playbackReturn) playingIndex != null && (if (route.search) returnDirection != 0 else !playbackFollow.attached)
+                (if (playbackReturn) playingIndex != null && (if (route.search) currentOffscreen else !playbackFollow.attached)
                     else hasSongItems && (if (artDetail) songsPastTop else gridState.canScrollBackward))
             // A drag owns this slot exclusively; retire a half-faded return drawing
             // instead of overlapping its replacement X during a quick hold-and-move.
