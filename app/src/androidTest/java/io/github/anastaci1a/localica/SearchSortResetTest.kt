@@ -5,7 +5,10 @@ import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.StateRestorationTester
-import io.github.anastaci1a.localica.localicaComposeRule as createComposeRule
+import io.github.anastaci1a.localica.localicaAndroidComposeRule as createAndroidComposeRule
+import androidx.activity.ComponentActivity
+import androidx.core.view.WindowCompat
+import android.view.WindowManager
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.anastaci1a.localica.browse.*
 import io.github.anastaci1a.localica.library.*
@@ -13,11 +16,19 @@ import io.github.anastaci1a.localica.navigation.*
 import io.github.anastaci1a.localica.playlist.PlaylistState
 import io.github.anastaci1a.localica.ui.*
 import org.junit.Assert.*
+import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 
 class SearchSortResetTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
+
+    @Before fun prepareWindow() {
+        compose.activityRule.scenario.onActivity {
+            WindowCompat.setDecorFitsSystemWindows(it.window, false)
+            it.window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
+        }
+    }
 
     @Test fun globalResetSurvivesResultBackRecreationAndPreferenceNotifications() = resetSearch(true)
     @Test fun scopedResetSurvivesResultBackRecreationAndPreferenceNotifications() = resetSearch(false)
