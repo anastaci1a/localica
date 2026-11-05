@@ -272,7 +272,7 @@ jobs:
           target: ${{ matrix.api == 36 && 'default' || 'google_apis' }}
           arch: x86_64
           profile: pixel_2
-          emulator-options: -no-window -gpu ${{ matrix.api == 36 && 'lavapipe' || 'swiftshader_indirect' }} -no-snapshot -noaudio -no-boot-anim -memory 3072
+          emulator-options: -no-window -gpu ${{ matrix.api == 36 && 'lavapipe' || 'swiftshader_indirect' }} -no-snapshot -noaudio -no-boot-anim -memory 3072 -show-kernel ${{ matrix.api == 26 && '-feature -GLDMA' || '' }}
           # Keep API 36 system transitions at normal speed while verifying Back and DocumentsUI.
           # Its cold CI launcher stalls with forced zero-duration transitions; Compose tests own their clock.
           disable-animations: ${{ matrix.api < 36 }}
@@ -328,6 +328,8 @@ jobs:
         if: failure()
         with:
           name: emulator-crashes-api-${{ matrix.api }}-shard-${{ matrix.shard }}
+          path: /tmp/android-runner/emu-crash-*/
+          if-no-files-found: warn
 
 
   device-tests-summary:
@@ -430,7 +432,7 @@ jobs:
           target: ${{ matrix.api == 36 && 'default' || 'google_apis' }}
           arch: x86_64
           profile: pixel_2
-          emulator-options: -no-window -gpu ${{ matrix.api == 36 && 'lavapipe' || 'swiftshader_indirect' }} -no-snapshot -noaudio -no-boot-anim -memory 3072
+          emulator-options: -no-window -gpu ${{ matrix.api == 36 && 'lavapipe' || 'swiftshader_indirect' }} -no-snapshot -noaudio -no-boot-anim -memory 3072 ${{ matrix.api == 26 && '-feature -GLDMA' || '' }}
           disable-animations: ${{ matrix.api < 36 }}
           script: |
             adb shell wm size ${{ matrix.api == 36 && '720x1280' || 'reset' }}
@@ -604,7 +606,7 @@ jobs:
           target: ${{ matrix.api == 36 && 'default' || 'google_apis' }}
           arch: x86_64
           profile: pixel_2
-          emulator-options: -no-window -gpu ${{ matrix.api == 36 && 'lavapipe' || 'swiftshader_indirect' }} -no-snapshot -noaudio -no-boot-anim -memory 3072
+          emulator-options: -no-window -gpu ${{ matrix.api == 36 && 'lavapipe' || 'swiftshader_indirect' }} -no-snapshot -noaudio -no-boot-anim -memory 3072 ${{ matrix.api == 26 && '-feature -GLDMA' || '' }}
           disable-animations: ${{ matrix.api < 36 }}
           script: |
             adb shell wm size ${{ matrix.api == 36 && '720x1280' || 'reset' }}

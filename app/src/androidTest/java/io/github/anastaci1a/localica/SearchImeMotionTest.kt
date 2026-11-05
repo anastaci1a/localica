@@ -133,6 +133,13 @@ class SearchImeMotionTest {
         val targetIme: Int?,
         val activeHideIds: List<Int>,
     ) {
+        // The popup may release its insets before Android applies the hide to the
+        // surviving host. That host is still unfocused until the popup retires.
+        // A return placed in this interval is already ahead of the native hide;
+        // requiring onStart/focus would reject an independently faster return.
+        val precedesNativeHide: Boolean get() = requested != null && uptime >= requested &&
+            attached && targetVisible == true && targetIme != null && targetIme > navigation
+
         val overlapsNativeHide: Boolean get() = requested != null && progressAt != null &&
             progressAt >= requested && uptime >= progressAt && attached && focused &&
             targetVisible == false && targetIme == 0 && ime > navigation && activeHideIds.isNotEmpty()
@@ -484,9 +491,9 @@ class SearchImeMotionTest {
             val overlap = returning.indexOfFirst { sample ->
                 // A released popup can report all-zero insets before the surviving
                 // activity's native hide has even started. Count independently observed
-                // native overlap only on this exact intermediate placed return frame.
+                // native evidence only on this exact intermediate placed return frame.
                 val hostOverlap = sample.progress >= .01f && nativeFrames.any { (placed, evidence) ->
-                    placed === sample && evidence.overlapsNativeHide
+                    placed === sample && (evidence.precedesNativeHide || evidence.overlapsNativeHide)
                 }
                 sample.progress < .99f && (sample.ime > 0 || sample.imeSource > sample.imeTarget || hostOverlap)
             }
