@@ -5,7 +5,6 @@ import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
@@ -21,9 +20,9 @@ internal val LocalHeldItemOutline = compositionLocalOf<MediaItemOutlineHolder?> 
 @Composable
 internal fun GlassDragBubble(modifier: Modifier = Modifier, landing: () -> Float = { 0f },
     shadow: Boolean = true, outline: (() -> MediaItemOutline)? = null, content: @Composable BoxScope.() -> Unit) {
-    fun Modifier.landingFade() = graphicsLayer {
+    @Composable fun Modifier.landingFade() = glassShadowOpacity {
         val finish = landing().coerceIn(0f, 1f)
-        alpha = 1f - finish
+        1f - finish
     }
     if (outline == null) {
         LiquidGlassSurface(modifier.landingFade(), cornerRadius = 16.dp, pressFeedback = false, shadow = shadow, content = content)

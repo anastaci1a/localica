@@ -19,7 +19,8 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.offset
 import kotlin.math.ceil
 import kotlin.math.floor
-import kotlin.math.pow
+import kotlin.math.roundToInt
+import kotlin.math.exp
 import kotlinx.coroutines.*
 
 /** Reserve the same extent that the shadow renderer actually draws. */
@@ -78,7 +79,7 @@ internal class GlassShadowExclusion(private val bodies: List<RoundRect>, private
     private val path = Path()
     /** Neighbor ring [index] in caster space, matching glassShadows' ring expansion. */
     fun ring(index: Int, reach: Float, offsetY: Float, translation: Offset = Offset.Zero): Path? {
-        val expansion = reach * (16 - index) / 16f
+        val expansion = glassShadowRingExpansion(index, reach)
         path.reset()
         var any = false
         bodies.forEach { r ->
@@ -128,6 +129,7 @@ internal val LocalSurfaceShadows = staticCompositionLocalOf<GlassShadowGroup?> {
 }
 
 internal class GlassShadowGeometry {
+    val layerPaint = Paint()
     private var receiverSampler: GlassShadowReceiverBrush? = null
     internal fun receiverBrush(receiver: GlassShadowReceiver): ShaderBrush {
         val sampler = receiverSampler ?: GlassShadowReceiverBrush().also { receiverSampler = it }
@@ -159,14 +161,34 @@ internal class GlassShadowGeometry {
             rings = emptyList()
         }
         // Uniform shadows draw primitives; materialize paths only for a path consumer.
-        if (needRings) rings = (16 downTo 1).map { outline(reach * it / 16f, shift) }
+        if (needRings) rings = List(glassShadowRingCount(reach)) { outline(glassShadowRingExpansion(it, reach), shift) }
     }
+}
+
+/** One sample per physical pixel prevents broad, visible terraces at high density.
+ * The integrated cubic optical density has zero slope at the outer edge and keeps
+ * the former field's total opacity. Settled fields still use one retained texture. */
+internal fun glassShadowRingCount(reach: Float): Int = ceil(reach).toInt().coerceIn(16, 128)
+internal fun glassShadowRingExpansion(index: Int, reach: Float): Float =
+    reach * (1f - (index + .5f) / glassShadowRingCount(reach))
+private fun glassShadowRingCoverage(step: Int, count: Int, strength: Float): Int {
+    val u = step.toFloat() / count
+    return ((1f - exp(-.34594453f * strength * u * u * u)) * 255f).roundToInt().coerceIn(0, 255)
+}
+internal fun glassShadowRingAlpha(index: Int, count: Int, strength: Float): Float {
+    val previous = glassShadowRingCoverage(index, count, strength)
+    val next = glassShadowRingCoverage(index + 1, count, strength)
+    // Quantize cumulative coverage, not each tiny increment: otherwise low-alpha
+    // outer rings all round to zero before they can form the visible tail.
+    return if (previous == 255) 0f else
+        (255f * (next - previous) / (255 - previous)).roundToInt() / 255f
 }
 
 /** Draw the union once: neighboring shadows never accumulate opacity. */
 internal fun DrawScope.glassShadows(bodies: List<Pair<RoundRect, Float>>, strength: Float, spread: Float, cache: GlassShadowGeometry,
     excludeInterior: Boolean = true, receiver: GlassShadowReceiver? = null,
-    exclusion: GlassShadowExclusion? = null, exclusionTranslation: Offset = Offset.Zero, color: Color = Color.Black) {
+    exclusion: GlassShadowExclusion? = null, exclusionTranslation: Offset = Offset.Zero, color: Color = Color.Black,
+    rasterizing: Boolean = false) {
     if (strength <= 0f || bodies.isEmpty()) return
     val opacity = bodies.maxOf { it.second }.coerceIn(0f, 1f)
     val reach = (4f + spread * 28f).dp.toPx()
@@ -174,6 +196,10 @@ internal fun DrawScope.glassShadows(bodies: List<Pair<RoundRect, Float>>, streng
     val outlines = bodies.map { it.first }
     val response = receiver?.takeIf { glassReceiverTouchesShadow(it,outlines,reach,shift) }
     val brush = response?.let { cache.receiverBrush(it) }
+    // A retained uniform field can write its cumulative alpha directly. Src
+    // avoids software source-over's repeated truncation of small increments.
+    val cumulative = rasterizing && response == null
+    val blend = if (cumulative) BlendMode.Src else BlendMode.SrcOver
     // One uniform, already-valid outline needs no generic path fill. Keep the
     // original path for clipping and for shapes requiring radius normalization:
     // platform rectXY and per-corner path normalization need not be equivalent.
@@ -193,23 +219,24 @@ internal fun DrawScope.glassShadows(bodies: List<Pair<RoundRect, Float>>, streng
         val tint = color.copy(alpha = alpha)
         if (uniform == null) {
             val ring = cache.rings[index]
-            if (brush == null) drawPath(ring, tint) else drawPath(ring, brush, alpha = alpha)
+            if (brush == null) drawPath(ring, tint, blendMode = blend) else drawPath(ring, brush, alpha = alpha)
         } else {
-            val expansion = reach * (16 - index) / 16f
+            val expansion = glassShadowRingExpansion(index, reach)
             val left = uniform.left - expansion
             val top = uniform.top - expansion + shift
             val right = uniform.right + expansion
             val bottom = uniform.bottom + expansion + shift
             val corner = CornerRadius(uniform.topLeftCornerRadius.x + expansion,
                 uniform.topLeftCornerRadius.y + expansion)
-            if (brush == null) drawRoundRect(tint, Offset(left, top), Size(right - left, bottom - top), corner)
+            if (brush == null) drawRoundRect(tint, Offset(left, top), Size(right - left, bottom - top), corner, blendMode = blend)
             else drawRoundRect(brush, Offset(left, top), Size(right-left,bottom-top), corner, alpha = alpha)
         }
     }
     fun DrawScope.rings() {
-        repeat(16) { index ->
-            val t = (16 - index) / 16f
-            val alpha = strength * opacity * .07f * (1f - t).pow(2)
+        val count = glassShadowRingCount(reach)
+        repeat(count) { index ->
+            val alpha = if (cumulative) glassShadowRingCoverage(index + 1, count, strength * opacity) / 255f
+                else glassShadowRingAlpha(index, count, strength * opacity)
             if (alpha > 0f) {
                 // Where a neighbor's identical ring is already drawn below, apply
                 // that ring once (weight 0, the shared union) up to independently.
@@ -223,14 +250,29 @@ internal fun DrawScope.glassShadows(bodies: List<Pair<RoundRect, Float>>, streng
             }
         }
     }
-    if (excludeInterior) clipPath(cache.body, ClipOp.Difference) { rings() } else rings()
+    // Live drawing and retained textures represent the same transparent
+    // field. Blending every ring into the page would round differently for
+    // each background and pop when the cached texture becomes ready.
+    fun DrawScope.field() {
+        val canvas = drawContext.canvas
+        if (!rasterizing) {
+            val bounds = Rect(outlines.minOf { it.left }, outlines.minOf { it.top },
+                outlines.maxOf { it.right }, outlines.maxOf { it.bottom }).inflate(reach + shift + 1f)
+            canvas.saveLayer(bounds, cache.layerPaint)
+        }
+        try { rings() } finally { if (!rasterizing) canvas.restore() }
+    }
+    // Resolve the cutout in destination coordinates, before the temporary layer.
+    // Legacy clipping inside that layer rounds a few contour pixels differently
+    // from the cached texture's destination clip, exposing a handoff fringe.
+    if (excludeInterior) clipPath(cache.body, ClipOp.Difference) { field() } else field()
 }
 /** Retain the complete, padded shadow texture. Scrolling an unchanged surface only
- * translates this texture; it does not replay sixteen overlapping path fills. */
+ * translates this texture; it does not replay overlapping path fills. */
 internal class RetainedGlassShadow(private val scope: CoroutineScope) {
     private val geometry = GlassShadowGeometry()
     private data class Key(val bodies: List<Pair<RoundRect, Float>>, val strength: Float,
-        val spread: Float, val density: Float, val receiver: GlassShadowReceiver?, val color: Color)
+        val spread: Float, val density: Float, val color: Color)
     private data class Raster(val key: Key, val image: ImageBitmap, val inset: Offset)
     private var requested: Key? = null
     private var preparation: Job? = null
@@ -239,14 +281,19 @@ internal class RetainedGlassShadow(private val scope: CoroutineScope) {
     fun DrawScope.draw(bodies: List<Pair<RoundRect, Float>>, strength: Float, spread: Float,
         receiver: GlassShadowReceiver? = null, exclusion: GlassShadowExclusion? = null, color: Color = Color.Black) {
         if (bodies.isEmpty() || strength <= 0f) return
+        // Software textures change the nonlinear popup/home receiver response.
+        // Keep it native and in the caller's coordinates: normalizing a fractional
+        // origin also changes legacy clip coverage around an offscreen layer.
+        if (receiver != null && glassReceiverTouchesShadow(receiver, bodies.map { it.first },
+                (4f + spread * 28f).dp.toPx(), 2.dp.toPx())) {
+            glassShadows(bodies, strength, spread, geometry, receiver = receiver, exclusion = exclusion, color = color)
+            return
+        }
         val origin = Offset(bodies.minOf { it.first.left }, bodies.minOf { it.first.top })
         val normalized = bodies.map { (r, alpha) -> RoundRect(r.left - origin.x, r.top - origin.y,
             r.right - origin.x, r.bottom - origin.y, r.topLeftCornerRadius, r.topRightCornerRadius,
             r.bottomRightCornerRadius, r.bottomLeftCornerRadius) to alpha }
-        val response = receiver?.let { GlassShadowReceiver(it.bounds.translate(-origin),it.mask,it.sampleBounds.translate(-origin)) }
-            ?.takeIf { glassReceiverTouchesShadow(it,normalized.map { body -> body.first },
-                (4f+spread*28f).dp.toPx(),2.dp.toPx()) }
-        val key = Key(normalized, strength, spread, density, response, color)
+        val key = Key(normalized, strength, spread, density, color)
         if (key != requested) {
             requested = key
             preparation?.cancel()
@@ -264,12 +311,11 @@ internal class RetainedGlassShadow(private val scope: CoroutineScope) {
             preparation = scope.launch {
                 delay(48)
                 val image = withContext(Dispatchers.Default) {
-                    // Preserve the low-opacity accumulation instead of rounding
-                    // every ring into an 8-bit transparent intermediate.
-                    ImageBitmap(extent.width, extent.height, ImageBitmapConfig.F16).also { next ->
+                    // Write cumulative coverage without repeated software blending.
+                    ImageBitmap(extent.width, extent.height).also { next ->
                         CanvasDrawScope().draw(metrics, direction, Canvas(next),
                             Size(extent.width.toFloat(), extent.height.toFloat())) {
-                            translate(-inset.x, -inset.y) { glassShadows(normalized, strength, spread, GlassShadowGeometry(), excludeInterior = false, receiver = key.receiver, color = color) }
+                            translate(-inset.x, -inset.y) { glassShadows(normalized, strength, spread, GlassShadowGeometry(), excludeInterior = false, color = color, rasterizing = true) }
                         }
                     }
                 }
@@ -289,7 +335,7 @@ internal class RetainedGlassShadow(private val scope: CoroutineScope) {
                 }
             }
         } else translate(origin.x, origin.y) {
-            glassShadows(normalized, strength, spread, geometry, receiver = key.receiver,
+            glassShadows(normalized, strength, spread, geometry,
                 exclusion = exclusion, exclusionTranslation = -origin, color = color)
         }
     }

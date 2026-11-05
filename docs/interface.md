@@ -24,6 +24,8 @@ The song-menu icon set is the reference for future icons: 24 dp vectors, 1.8 str
 
 Floating pills, mini-player, filter/search bars and circular controls share Liquid Glass: curved refraction, illuminated edges and crisp foregrounds. The Queue uses one continuous denser textured neutral-frost surface behind its header and list. Popups use the same material and inherited adaptive contrast.
 
+Glass shadows keep their full spread during placement and fades. Their falloff reaches the background smoothly, without visible rings.
+
 Related controls morph into their panels and return as one visible surface: creation, More, sorting, search and queue/lyric-source selectors. Hidden sources accept no input. a visibly restored source can immediately reverse the current return motion with one owner, without a settling lock or cooldown.
 
 Selected media hover: in one 220 ms ease-out the outline grows, a shadow deepens, and the surface shows the same backdrop region magnified with a slight frost. Content scales with it. Deselection is the same ease-out in reverse, and interruptions continue from the current appearance. Liquid Glass remains for controls.

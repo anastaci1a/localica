@@ -40,7 +40,7 @@ class GlassShadowTest {
         assertTrue(cache.rings.isEmpty())
         cache.update(bodies, 12f, 2f)
         org.junit.Assert.assertSame(body, cache.body)
-        org.junit.Assert.assertEquals(16, cache.rings.size)
+        org.junit.Assert.assertEquals(glassShadowRingCount(12f), cache.rings.size)
         val rings = cache.rings
         cache.update(bodies, 12f, 2f, needRings = false)
         cache.update(bodies, 12f, 2f)
@@ -73,7 +73,7 @@ class GlassShadowTest {
         val asymmetric = RoundRect(30f, 30f, 90f, 70f, CornerRadius(8f), CornerRadius(12f),
             CornerRadius(6f), CornerRadius(10f))
         render(asymmetric)
-        org.junit.Assert.assertEquals(16, cache.rings.size)
+        org.junit.Assert.assertEquals(glassShadowRingCount(20.8f), cache.rings.size)
         render(uniform)
         assertTrue("New uniform geometry must discard obsolete ring paths", cache.rings.isEmpty())
     }
@@ -117,8 +117,9 @@ class GlassShadowTest {
         for (y in 0 until disjoint.height) for (x in 0 until disjoint.width)
             assertTrue("Disjoint receiver keeps original path",abs(disjoint[x,y].red-baseline[x,y].red)<=1f/255)
         compose.runOnIdle { mode=1; retainedMode=true }
-        compose.waitUntil(5000) { retained.rasterizations > 0 }
         val cached = compose.onNodeWithTag("weighted-shadow").captureToImage().toPixelMap()
+        org.junit.Assert.assertEquals("A popup/home receiver keeps its native response instead of swapping to software pixels",
+            0, retained.rasterizations)
         var difference = 0f; var maximum = 0f
         for (y in 0 until cached.height) for (x in 0 until cached.width) {
             val delta=abs(cached[x,y].red-weighted[x,y].red);difference+=delta;maximum=maxOf(maximum,delta)
@@ -130,6 +131,8 @@ class GlassShadowTest {
             compose.onNodeWithTag("weighted-shadow").captureToImage()
         }
         org.junit.Assert.assertEquals("Motion only remaps immutable receiver",maskCount,field.rasterizations)
+        compose.runOnIdle { mode = 0 }
+        compose.waitUntil(5000) { retained.rasterizations > 0 }
         compose.runOnIdle {
             val home=androidx.compose.ui.geometry.Rect(100f,200f,1300f,230f)
             val first=requireNotNull(field.receiver(home,15f,androidx.compose.ui.geometry.Size(180f,90f),1f,1f,0f))
@@ -194,15 +197,21 @@ class GlassShadowTest {
                     val opacity = if (sample == 3) .2f else 1f
                     if (!reference) glassShadows(listOf(body to opacity), .8f, .6f, geometry)
                     else {
-                        // Frozen pre-primitive operation sequence, at the SAME host origin.
+                        // Generic union path at the same host origin, composited as one
+                        // transparent field just like the primitive and retained paths.
                         geometry.update(listOf(body), (4f + .6f * 28f).dp.toPx(), 2.dp.toPx())
                         clipPath(geometry.body,
                             androidx.compose.ui.graphics.ClipOp.Difference) {
-                            geometry.rings.forEachIndexed { index, ring ->
-                                val t = (16 - index) / 16f
-                                val alpha = .8f * opacity * .07f * ((1f - t) * (1f - t))
-                                if (alpha > 0f) drawPath(ring, Color.Black.copy(alpha = alpha))
-                            }
+                            val canvas = drawContext.canvas
+                            val bounds = androidx.compose.ui.geometry.Rect(body.left, body.top, body.right, body.bottom)
+                                .inflate((6f + .6f * 28f).dp.toPx() + 1f)
+                            canvas.saveLayer(bounds, androidx.compose.ui.graphics.Paint())
+                            try {
+                                geometry.rings.forEachIndexed { index, ring ->
+                                    val alpha = glassShadowRingAlpha(index, geometry.rings.size, .8f * opacity)
+                                    if (alpha > 0f) drawPath(ring, Color.Black.copy(alpha = alpha))
+                                }
+                            } finally { canvas.restore() }
                         }
                     }
                 })
