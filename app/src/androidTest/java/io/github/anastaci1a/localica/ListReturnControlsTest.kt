@@ -143,15 +143,17 @@ class ListReturnControlsTest {
         val inset = firstTop - viewportTop
         val indices = playlist.entries.mapIndexed { index, entry -> "media-" + entry.id to index }.toMap()
         return {
-            val header = compose.onAllNodesWithTag("browse-full-span", true).fetchSemanticsNodes().singleOrNull()
-            if (header != null) viewportTop - header.positionInRoot.y
-            else {
-                val node = compose.onAllNodes(SemanticsMatcher("Actual media row") {
-                    it.config.getOrNull(SemanticsProperties.TestTag) in indices
-                }, true).fetchSemanticsNodes().first()
-                val index = indices.getValue(node.config[SemanticsProperties.TestTag])
-                headerHeight + index * stride + inset - (node.positionInRoot.y - viewportTop)
-            }
+            val viewport = list.fetchSemanticsNode().boundsInRoot
+            // A freshly recomposed lazy header can have semantics before placement.
+            // Follow a fully visible row near the viewport center instead of that
+            // transient node; all these fixture rows have one measured stride.
+            val node = compose.onAllNodes(SemanticsMatcher("Actual media row") {
+                it.config.getOrNull(SemanticsProperties.TestTag) in indices
+            }, true).fetchSemanticsNodes().filter {
+                it.boundsInRoot.height > 0f && it.boundsInRoot.overlaps(viewport)
+            }.minByOrNull { kotlin.math.abs(it.boundsInRoot.center.y - viewport.center.y) }!!
+            val index = indices.getValue(node.config[SemanticsProperties.TestTag])
+            headerHeight + index * stride + inset - (node.positionInRoot.y - viewportTop)
         }
     }
 
