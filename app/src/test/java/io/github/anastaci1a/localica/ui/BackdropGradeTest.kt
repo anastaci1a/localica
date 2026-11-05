@@ -20,6 +20,16 @@ class BackdropGradeTest {
     private val covers = listOf(0xD8B4BD, 0x8E7F82, 0x3A0CA3, 0xFFE600, 0xFF2D95, 0x00FF40, 0x808080, 0xF4F4F2, 0x0A0A0C,
         0x7A1F1F, 0x1F6F4A, 0x5AA0E6, 0xC8C0F0, 0x2B2B3A)
 
+    @Test fun neutralPlaceholderNeedsNoGradeBeforeItsFirstFrame() {
+        val colors = listOf(NeutralPalette.top, NeutralPalette.middle, NeutralPalette.bottom)
+        for (color in colors) {
+            val sample = doubleArrayOf(color.red.toDouble(), color.green.toDouble(), color.blue.toDouble())
+            assertTrue("The owned neutral backing must support cold white ink", contrast(sample, true) >= BackdropGrade.TARGET)
+            assertEquals(0f, shiftOf(sample, true), 0f)
+        }
+        assertEquals(BackdropRoleGrade(true, 0f), PlayerBackgroundPolarityState().grade(null, PlayerVisual()))
+    }
+
     @Test fun readableBackdropsAreUnchanged() {
         // Pink behind dark ink is already 8.5:1; the old curve darkened it to a mauve.
         val pink = rgb(0xD8B4BD)

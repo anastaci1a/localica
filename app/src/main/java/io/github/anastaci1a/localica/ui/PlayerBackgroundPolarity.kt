@@ -105,6 +105,10 @@ internal data class PlayerBackgroundGeometry(val size: Size, val cover: Rect, va
     // a remounted outgoing role never loses the grade it was already drawing.
     private val visualGrades = mutableStateMapOf<PlayerVisual, BackdropRoleGrade>()
     fun grade(identity: Any?, visual: PlayerVisual): BackdropRoleGrade? = roleGrades[identity] ?: visualGrades[visual]
+        // The owned neutral gradient already meets white-ink contrast. Missing artwork
+        // cannot provide the cover pixels required by the sampler; never hide this
+        // known backing indefinitely while waiting for a grade that cannot arrive.
+        ?: if (visual.artwork == null && visual.palette == NeutralPalette) BackdropRoleGrade(true, 0f) else null
     /** The ink the artwork transition is travelling to, once known; null when settled or not yet measured. */
     var destinationLightInk by mutableStateOf<Boolean?>(null); private set
     /** The artwork blend clock (1 when settled): drives the same ease as the lyrics clock for song changes. */
