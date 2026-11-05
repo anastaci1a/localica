@@ -59,6 +59,9 @@ internal class FrostedBackdrop(val layer: GraphicsLayer, dark: Boolean,
     private var desiredCompositing = androidx.compose.ui.graphics.layer.CompositingStrategy.Auto
     var readbackPending by mutableStateOf(false)
         private set
+    /** Wake the display even when a copy starts and finishes between frames. */
+    var readbackCompletions by mutableIntStateOf(0)
+        private set
     var parent: FrostedBackdrop? = null
     var materialOnly by mutableStateOf(false)
     var materialCorner by mutableFloatStateOf(0f)
@@ -115,13 +118,19 @@ internal class FrostedBackdrop(val layer: GraphicsLayer, dark: Boolean,
      * wait here but cannot clear another generation's pending-recording freeze. */
     suspend fun captureCurrent(graphics: androidx.compose.ui.graphics.GraphicsContext,
         density: androidx.compose.ui.unit.Density, direction: androidx.compose.ui.unit.LayoutDirection,
-        valid: () -> Boolean, region: androidx.compose.ui.unit.IntRect? = null): ImageBitmap? = captureLock.withLock {
+        valid: () -> Boolean, region: androidx.compose.ui.unit.IntRect? = null): ImageBitmap? = withPinnedRecording(valid) {
+        readback.captureRegion(layer, graphics, density, direction, region)
+    }
+
+    /** Pin the sampling recording for the complete native ownership interval. */
+    suspend fun <T> withPinnedRecording(valid: () -> Boolean, copy: suspend () -> T): T? = captureLock.withLock {
         if (!valid()) return@withLock null
         readbackPending = true
-        try { readback.captureRegion(layer, graphics, density, direction, region) }
+        try { copy() }
         finally {
-            readbackPending = false
             if (!layer.isReleased) layer.compositingStrategy = desiredCompositing
+            readbackCompletions++
+            readbackPending = false
         }
     }
 
@@ -346,6 +355,7 @@ internal fun Modifier.recordFrostedBackdrop(source: FrostedBackdrop, backing: Fr
     displayBacking: Boolean = true): Modifier {
     val renderer = currentGlassRendererGeneration()
     BackdropLease(backing.takeIf { enabled })
+    val displayedReadback = remember(source) { intArrayOf(0) }
     return backdropLocation(source.location)
         .onSizeChanged { source.size = it }
         .graphicsLayer()
@@ -362,16 +372,21 @@ internal fun Modifier.recordFrostedBackdrop(source: FrostedBackdrop, backing: Fr
             // Retained children keep their separate owner/readiness contracts.
             // Read in draw so the first live frame after a hold is drawn without recomposition.
             val hold = frozen?.invoke() == true && source.recorded && !source.layer.isReleased && source.recordedSize == extent
+            val completedReadback = source.readbackCompletions
+            val resuming = completedReadback != displayedReadback[0]
+            fun DrawScope.paintProducer() {
+                clipRect(right = viewport.width, bottom = viewport.height) {
+                    if (backing != null && backing.recorded && !backing.layer.isReleased) {
+                        backing.location.registrationTo(source.location)?.let { registration ->
+                            clipRect { withBackdropRegistration(registration) { drawLayer(backing.layer) } }
+                        }
+                    }
+                    this@drawWithContent.drawContent()
+                }
+            }
             if (!source.readbackPending && !hold) {
                 source.layer.record(size = if (renderer.backend == GlassBackend.Modern) glassLayerExtent(extent) else extent) {
-                    clipRect(right = viewport.width, bottom = viewport.height) {
-                        if (backing != null && backing.recorded && !backing.layer.isReleased) {
-                            backing.location.registrationTo(source.location)?.let { registration ->
-                                clipRect { withBackdropRegistration(registration) { drawLayer(backing.layer) } }
-                            }
-                        }
-                        this@drawWithContent.drawContent()
-                    }
+                    paintProducer()
                 }
                 source.recordedSize = extent
                 source.recordings++
@@ -385,8 +400,16 @@ internal fun Modifier.recordFrostedBackdrop(source: FrostedBackdrop, backing: Fr
                 return@drawWithContent
             }
             val cutout = displayCutout?.invoke(this)
-            if (cutout == null) drawLayer(source.layer)
-            else clipPath(cutout, ClipOp.Difference) { drawLayer(source.layer) }
+            // Pin the sampler, not the visible producer. A pending native copy must not
+            // replay the preceding geometry while its live children have advanced.
+            // The first resumed recording can precede its nested native layer updates;
+            // paint that frame live before reusing the sampling layer.
+            fun DrawScope.displayProducer() {
+                if ((source.readbackPending || resuming) && !hold) paintProducer() else drawLayer(source.layer)
+            }
+            if (cutout == null) displayProducer()
+            else clipPath(cutout, ClipOp.Difference) { displayProducer() }
+            if (!source.readbackPending && !hold) displayedReadback[0] = completedReadback
         }
 }
 
