@@ -754,11 +754,11 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     // Letting that effect borrow it would retire the same request on key replacement.
     // A completed manual trip to the current occurrence's physical end is a return.
     // Never replay a deferred target, move under a contact, or attach a scoped search.
-    val boundaryCurrent = result.items.indexOfFirst { it.row?.id == playingEntryId }
+    val boundaryCurrent = remember(result.items, playingEntryId) { result.items.indexOfFirst { it.row?.id == playingEntryId } }
     val boundaryReturnReady = manualQueueReturn && !returnToList.pending && followEligible && !modalBlocked && !queryPending &&
         !route.search && route.text.isBlank() && !gridState.isScrollInProgress &&
-        boundaryCurrent >= 0 && ((boundaryCurrent == 0 && !gridState.canScrollBackward) ||
-            (boundaryCurrent == result.items.lastIndex && !gridState.canScrollForward))
+        boundaryCurrent >= 0 && (boundaryCurrent == 0 || boundaryCurrent == result.items.lastIndex) &&
+        ListScrollTarget.below(boundaryCurrent + 1, latestTopInset).direction(gridState) == 0
     SideEffect {
         if (boundaryReturnReady) {
             playbackFollow.reattachAtBoundary(playingEntryId, followOwner)
