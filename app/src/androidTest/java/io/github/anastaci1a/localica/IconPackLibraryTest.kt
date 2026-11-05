@@ -7,7 +7,7 @@ import android.net.Uri
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.MaterialTheme
+import io.github.anastaci1a.localica.ui.LocalicaTheme
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -149,7 +149,7 @@ class IconPackLibraryTest {
     @Test fun viewerListsEveryReassignedAndFallbackIdAndImportProblems() {
         val first = import(extra = true)
         IconPacks.load(context)
-        compose.setContent { MaterialTheme { Column(Modifier.verticalScroll(rememberScrollState())) { IconPackViewer(first) } } }
+        compose.setContent { LocalicaTheme { Column(Modifier.verticalScroll(rememberScrollState())) { IconPackViewer(first) } } }
         AppIcon.entries.forEach { compose.onNodeWithTag("pack-icon-${it.id}").assertExists() }
         compose.onAllNodesWithText("Reassigned").assertCountEquals(1)
         compose.onAllNodesWithText("Built-in (fallback)").assertCountEquals(AppIcon.entries.size - 1)
@@ -163,7 +163,7 @@ class IconPackLibraryTest {
         import("Second", "transport.play")
         compose.setContent { androidx.compose.runtime.CompositionLocalProvider(
             androidx.compose.ui.platform.LocalContext provides context) {
-            MaterialTheme { Column(Modifier.verticalScroll(rememberScrollState())) { IconPackSettings {} } }
+            LocalicaTheme { Column(Modifier.verticalScroll(rememberScrollState())) { IconPackSettings {} } }
         } }
         compose.onNodeWithText("First").performScrollTo().performClick()
         compose.runOnIdle { assertEquals(first, IconPacks.activeId.value) }
