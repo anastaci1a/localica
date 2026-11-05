@@ -51,6 +51,7 @@ io.github.anastaci1a.localica.CoverImagesTest
 io.github.anastaci1a.localica.CurrentSongHighlightGeometryTest
 io.github.anastaci1a.localica.DeviceCornersTest
 io.github.anastaci1a.localica.DialogChromeLayoutTest
+io.github.anastaci1a.localica.DragHandoffArtworkTest
 io.github.anastaci1a.localica.DragReorderTest
 io.github.anastaci1a.localica.EffectiveMotionWindowTest
 io.github.anastaci1a.localica.EffectiveReducedMotionTest
