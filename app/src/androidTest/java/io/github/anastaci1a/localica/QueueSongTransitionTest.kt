@@ -2,21 +2,27 @@ package io.github.anastaci1a.localica
 
 import android.graphics.Bitmap
 import androidx.compose.animation.core.Animatable
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.Text
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.*
+import androidx.compose.runtime.snapshots.Snapshot
+import androidx.test.platform.graphics.HardwareRendererCompat
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.colorspace.ColorSpaces
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.graphics.toPixelMap
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.*
 import androidx.compose.ui.unit.Density
-import io.github.anastaci1a.localica.localicaComposeRule as createComposeRule
+import androidx.compose.ui.unit.dp
+import kotlin.math.roundToInt
+import io.github.anastaci1a.localica.localicaAndroidComposeRule as createComposeRule
 import io.github.anastaci1a.localica.navigation.*
 import io.github.anastaci1a.localica.playback.PlaybackState
 import io.github.anastaci1a.localica.ui.*
@@ -34,7 +40,7 @@ import org.junit.Test
  * the player, and the Queue under a panel theme that reads the player's shared presented polarity.
  */
 class QueueSongTransitionTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = createComposeRule<androidx.activity.ComponentActivity>()
     private val owner = PlayerBackgroundPolarityState()
     private val settings = InterfaceSettings(artworkLayout = ArtworkLayout.FullBackground, glass = GlassAppearance(contrast = .3f))
     private var visual by mutableStateOf<PlayerVisual?>(null)
@@ -43,6 +49,12 @@ class QueueSongTransitionTest {
     @Volatile private var backdropMix = Float.NaN
 
     @Volatile private var surfaceTint = Float.NaN
+    private lateinit var captureView: android.view.View
+    private var captureStage by mutableIntStateOf(0)
+    @Volatile private var drawnStage = -1
+    // Adjacent stages must remain distinct even with the screenshot channel tolerance.
+    private fun markerCode(stage: Int) = 20 + (stage % 24) * 8
+
     private var preparationBarrier: (suspend () -> Unit)? = null
 
     private class Frame(val mix: Float, val queue: Float, val backdrop: Float, val shot: Float, val clock: Float, val tint: Float, val incoming: Float)
@@ -61,6 +73,7 @@ class QueueSongTransitionTest {
             CompositionLocalProvider(LocalDensity provides Density(1f), LocalReducedMotion provides reduced,
                 LocalPlayerBackgroundPreparationBarrier provides preparationBarrier) {
                 BoxWithConstraints(Modifier.fillMaxSize().background(if (queueShown) Color.Transparent else Color.Magenta)) {
+                    captureView = LocalView.current
                     val mix = owner.lightMix
                     val queue = remember { Animatable(if (queueShown) 1f else 0f) }
                     val backdrop = rememberFrostedBackdrop(Unit, enabled = false, dark = mix >= .5f, lightMix = mix, retainRaster = false)
@@ -79,6 +92,11 @@ class QueueSongTransitionTest {
                             Text("Queue row")
                         }
                     }
+                    // Independent compositor-frame receipt; never a predicate on the optics under test.
+                    Canvas(Modifier.align(Alignment.TopStart).size(8.dp)) {
+                        drawRect(Color(markerCode(captureStage) / 255f, 1f, 0f))
+                        drawnStage = captureStage
+                    }
                 }
             }
         } }
@@ -87,11 +105,73 @@ class QueueSongTransitionTest {
     }
 
     private fun gutter(green: Boolean = false): Float {
-        val pixels = compose.onRoot().captureToImage().toPixelMap()
-        var sum = 0f; var n = 0
-        for (y in (pixels.height * .55f).toInt() until (pixels.height * .8f).toInt() step 6)
-            for (x in (pixels.width * .01f).toInt() until (pixels.width * .045f).toInt()) { sum += if (green) pixels[x, y].green else pixels[x, y].red; n++ }
-        return sum / n
+        val enabled = HardwareRendererCompat.isDrawingEnabled()
+        if (!enabled) HardwareRendererCompat.setDrawingEnabled(true)
+        return try { captureGutter(green) } finally {
+            if (!enabled) HardwareRendererCompat.setDrawingEnabled(false)
+        }
+    }
+
+    private fun captureGutter(green: Boolean): Float {
+        // captureToImage forces a second native redraw and has a fixed two-second
+        // acknowledgement timeout. With a paused test clock, that is not a receipt
+        // for the frame just requested. Keep the clock fixed and observe our marker
+        // in the window buffer instead; no retry can skip an artwork frame.
+        val clock = compose.mainClock.currentTime
+        val paused = !compose.mainClock.autoAdvance
+        val stage = compose.runOnIdle {
+            ++captureStage
+            // A paused Compose clock does not promise another snapshot apply pass.
+            // Flush the draw-only mutation and schedule Android's native traversal.
+            Snapshot.sendApplyNotifications()
+            captureView.invalidate()
+            captureStage
+        }
+        val bounds = compose.onRoot().fetchSemanticsNode().boundsInRoot
+        val origin = IntArray(2)
+        compose.runOnIdle { captureView.getLocationInWindow(origin) }
+        val left = origin[0] + bounds.left.roundToInt()
+        val top = origin[1] + bounds.top.roundToInt()
+        val width = bounds.width.roundToInt(); val height = bounds.height.roundToInt()
+        // Copy only the marker and original gutter samples, at native resolution.
+        // Full-display UiAutomation captures repeatedly allocate multi-megabyte
+        // SurfaceFlinger buffers; the API 26 guest rebooted during repeated captures.
+        val cropWidth = maxOf(8, (width * .045f).toInt())
+        val cropHeight = maxOf(8, (height * .8f).toInt())
+        val crop = android.graphics.Rect(left, top, left + cropWidth, top + cropHeight)
+        val window = compose.activity.window
+        var result = Float.NaN
+        var observed = 0
+        try { compose.waitUntil(5000) {
+            val screen = copyNativeWindowOnce(window,
+                Bitmap.createBitmap(cropWidth, cropHeight, Bitmap.Config.ARGB_8888),
+                "Queue frame copy timed out at marker $stage", crop
+            ) { code -> "Queue frame copy failed at marker $stage: $code" }
+            try {
+                val marker = screen.getPixel(2, 2)
+                observed = marker
+                val presented = abs(android.graphics.Color.red(marker) - markerCode(stage)) <= 1 &&
+                    android.graphics.Color.green(marker) > 250 && android.graphics.Color.blue(marker) < 5
+                if (presented) {
+                    var sum = 0f; var n = 0
+                    for (y in (height * .55f).toInt() until (height * .8f).toInt() step 6)
+                        for (x in (width * .01f).toInt() until (width * .045f).toInt()) {
+                            val pixel = screen.getPixel(x, y)
+                            sum += (if (green) android.graphics.Color.green(pixel) else android.graphics.Color.red(pixel)) / 255f
+                            n++
+                        }
+                    result = sum / n
+                }
+                presented
+            } finally { screen.recycle() }
+        } } catch (failure: Throwable) {
+            android.util.Log.e("QueueFrameCapture", "stage=$stage drawn=$drawnStage observed=$observed origin=$left,$top size=$width,$height")
+            runCatching { recordPresentationFailure(compose, "queue-marker-$stage", captureView, null, null) }
+                .onFailure { failure.addSuppressed(it) }
+            throw failure
+        }
+        if (paused) assertEquals("Capturing a presented frame must not advance artwork time", clock, compose.mainClock.currentTime)
+        return result
     }
 
     private fun record(count: Int) = repeat(count) {
