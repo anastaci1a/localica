@@ -7,7 +7,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 /** Shared list step only. The tab caller, not Back, owns any preceding root navigation. */
 @Composable
 internal fun ListReturnActions(request: Int, owner: Any, active: Boolean, backEnabled: Boolean,
-    action: ListReturnAction, onSubmit: () -> Unit = {}, ready: suspend () -> Unit, execute: suspend (ListReturnAction) -> Unit): ListReturnCommand {
+    action: ListReturnAction, onSubmit: () -> Unit = {}, onRetarget: (ListReturnAction) -> Boolean = { false }, ready: suspend () -> Unit, execute: suspend (ListReturnAction) -> Unit): ListReturnCommand {
     val scope = rememberCoroutineScope()
     var pending by remember { mutableStateOf(false) }
     val executor = remember(scope) { ListReturnExecutor(scope) { pending = it } }
@@ -17,6 +17,7 @@ internal fun ListReturnActions(request: Int, owner: Any, active: Boolean, backEn
     val currentExecute by rememberUpdatedState(execute)
     val currentAction by rememberUpdatedState(action)
     val currentSubmit by rememberUpdatedState(onSubmit)
+    val currentRetarget by rememberUpdatedState(onRetarget)
     var consumed by rememberSaveable { mutableIntStateOf(0) }
     DisposableEffect(owner, active) { onDispose { executor.cancel() } }
     OnModalGestureCancellation { executor.cancel() }
@@ -24,6 +25,7 @@ internal fun ListReturnActions(request: Int, owner: Any, active: Boolean, backEn
         val token = owner
         if (!currentActive || currentOwner !== token) return
         currentSubmit()
+        if (pending && currentRetarget(captured ?: currentAction)) return
         executor.submit({ currentActive && currentOwner === token }, { currentReady() },
             { captured ?: currentAction }, { currentExecute(it) })
     }

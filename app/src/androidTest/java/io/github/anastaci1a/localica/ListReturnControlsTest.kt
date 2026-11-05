@@ -146,11 +146,11 @@ class ListReturnControlsTest {
             val header = compose.onAllNodesWithTag("browse-full-span", true).fetchSemanticsNodes().singleOrNull()
             if (header != null) viewportTop - header.positionInRoot.y
             else {
-            val node = compose.onAllNodes(SemanticsMatcher("Actual media row") {
-                it.config.getOrNull(SemanticsProperties.TestTag) in indices
-            }, true).fetchSemanticsNodes().first()
-            val index = indices.getValue(node.config[SemanticsProperties.TestTag])
-            headerHeight + index * stride + inset - (node.positionInRoot.y - viewportTop)
+                val node = compose.onAllNodes(SemanticsMatcher("Actual media row") {
+                    it.config.getOrNull(SemanticsProperties.TestTag) in indices
+                }, true).fetchSemanticsNodes().first()
+                val index = indices.getValue(node.config[SemanticsProperties.TestTag])
+                headerHeight + index * stride + inset - (node.positionInRoot.y - viewportTop)
             }
         }
     }
@@ -189,6 +189,35 @@ class ListReturnControlsTest {
         val last = samples.indexOfLast { it > .001f }
         assertTrue("One bounded 500 ms curve, without a second ease: $samples", last - first <= 33)
         compose.runOnIdle { assertEquals(0, state.ordinaryBack) }
+    }
+
+    @Test fun backDuringFloatingReturnRetargetsWithoutASecondReadinessGapOrEase() {
+        val playlist = PlaylistEdits.append(ManualPlaylist(name = "Retarget Back"), tracks)
+        val fixture = fixture(BrowseRoute(MainTab.Playlists, MediaRef(MediaKind.Playlist, playlist.id)),
+            playlists = PlaylistState(listOf(playlist), loading = false), listBackEnabled = true, reducedMotion = false)
+        awaitRow(playlist.entries.first().id)
+        val pixels = playlistPixels(playlist)
+        list.performScrollToIndex(65)
+        compose.awaitExpectedWindowFocus(list)
+        compose.onNodeWithContentDescription("Return to top").assertIsDisplayed()
+        compose.mainClock.autoAdvance = false
+        val samples = mutableListOf(pixels())
+        try {
+            compose.onNodeWithContentDescription("Return to top").performClick()
+            repeat(12) {
+                compose.mainClock.advanceTimeByFrame(); compose.waitForIdle(); samples += pixels()
+            }
+            pressSystemBack()
+            repeat(33) {
+                compose.mainClock.advanceTimeByFrame(); compose.waitForIdle(); samples += pixels()
+            }
+        } finally { compose.mainClock.autoAdvance = true }
+        assertEquals(0f, samples.last(), .01f)
+        assertTrue("Retargeted frames stay monotonic: $samples", samples.zipWithNext().all { (a, b) -> b <= a + .01f })
+        assertTrue("Back must keep the running curve without a readiness pause: $samples",
+            (12..15).all { samples[it] - samples[it + 1] > 1f })
+        assertEquals("Retarget shares the original completion deadline", 0f, samples[38], .01f)
+        compose.runOnIdle { assertEquals(0, fixture.ordinaryBack) }
     }
 
     @Test fun shortAndEmptyPlaylistsNeverOfferAnUnreachableSongReturn() {

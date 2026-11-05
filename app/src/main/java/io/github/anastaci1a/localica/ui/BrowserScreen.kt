@@ -608,11 +608,25 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
         listReturnAction(gridState.canScrollBackward, gridState.isScrollInProgress, clearableFilter)
     } }
     DisposableEffect(playbackFollow) { onDispose { playbackFollow.cancel() } }
+    var movingReturn by remember { mutableStateOf<ListReturnAction?>(null) }
+    val currentReturnTarget by rememberUpdatedState<(ListReturnAction) -> ListScrollTarget> { action ->
+        when {
+            action == ListReturnAction.ScrollSongs -> collectionHome
+            artDetail && collectionHeaderHeight > 0 && result.items.isNotEmpty() -> collectionTop
+            else -> ListScrollTarget(0)
+        }
+    }
     val returnToList = ListReturnActions(scrollToTopRequest, returnOwner,
         selectionVisible && !playerOpen && !session.active && !localSearchOpen,
         backEnabled = listBackEnabled && !route.search && !localSearchOpen && !playerOpen,
         action = returnAction,
         onSubmit = { orderScroll.cancel(); playbackFollow.userScroll() },
+        onRetarget = { action ->
+            if (movingReturn != null && action in setOf(ListReturnAction.ScrollTop, ListReturnAction.ScrollSongs)) {
+                movingReturn = action
+                true
+            } else false
+        },
         ready = {
             snapshotFlow { readyToScroll }.first { it }
             withFrameNanos { }; withFrameNanos { }
@@ -624,12 +638,10 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                 ListReturnAction.ScrollTop, ListReturnAction.ScrollSongs -> scrollOwnership.during {
                     artworkTransit.during(!reducedMotion &&
                         gridState.firstVisibleItemIndex > gridState.layoutInfo.visibleItemsInfo.size * 2) {
-                        val target = when {
-                            action == ListReturnAction.ScrollSongs -> collectionHome
-                            artDetail && collectionHeaderHeight > 0 && result.items.isNotEmpty() -> collectionTop
-                            else -> ListScrollTarget(0)
-                        }
-                        gridState.easeToTarget(target, reducedMotion)
+                        movingReturn = action
+                        try {
+                            gridState.easeToTarget({ currentReturnTarget(movingReturn ?: action) }, reducedMotion)
+                        } finally { movingReturn = null }
                     }
                 }
                 ListReturnAction.None -> Unit
