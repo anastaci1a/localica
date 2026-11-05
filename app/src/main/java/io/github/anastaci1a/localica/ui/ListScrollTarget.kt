@@ -26,6 +26,11 @@ internal data class ListScrollTarget(val index: Int, val offset: Int = 0) {
     fun direction(state: LazyGridState): Int = sign(displacement(state)).toInt()
 
     companion object {
+        /** Anchor to the first ordinary row so distance estimation includes the measured
+         * full-span header even while that unusually tall item is recycled. */
+        fun header(headerHeight: Int, scroll: Float = 0f) =
+            ListScrollTarget(1, scroll.roundToInt() - headerHeight)
+
         fun below(index: Int, inset: Float) = ListScrollTarget(index, -inset.roundToInt())
     }
 }
