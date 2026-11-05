@@ -228,6 +228,8 @@ Change one adjacent view per gesture, requiring all fingers to lift before anoth
 
 Shared pinch geometry carries the captured selection lift into both live and retained items. Reversing restores items virtualized out by the destination. All text draws below a separate artwork pass. Within each pass earlier items draw on top.
 
+Live and retained source artwork share captured pixels and current clipping geometry during a pinch. Live recordings keep updating for release.
+
 Pinches during settlement retain the shown progress. Reversals reuse the frozen endpoints. Further adjacent steps preserve their input until the preceding handoff permits a fresh capture, including gestures already released. Modal interruption discards pending steps.
 
 Departing items retain their bounded movement and resizing. Whole-item fades span the eased geometry transition, with evenly spaced starts and equal widths overlapping by half. Items farthest from the pinch focus fade first; arrivals mirror departures. A single item fades over the full transition. Reversals retrace every alpha.
