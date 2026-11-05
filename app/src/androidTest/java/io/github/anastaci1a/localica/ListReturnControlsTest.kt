@@ -8,6 +8,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
 import io.github.anastaci1a.localica.localicaComposeRule as createComposeRule
@@ -138,20 +139,45 @@ class ListReturnControlsTest {
         val state = fixture(BrowseRoute(MainTab.Playlists, MediaRef(MediaKind.Playlist, playlist.id)),
             playlists = PlaylistState(listOf(playlist), loading = false), listBackEnabled = true, reducedMotion = false)
         awaitRow(playlist.entries.first().id)
+        val headerHeight = compose.onNodeWithTag("browse-full-span", true).fetchSemanticsNode().size.height.toFloat()
+        list.performScrollToIndex(1)
+        val viewportTop = list.fetchSemanticsNode().positionInRoot.y
+        val firstTop = row(playlist.entries[0].id).fetchSemanticsNode().positionInRoot.y
+        val stride = row(playlist.entries[1].id).fetchSemanticsNode().positionInRoot.y - firstTop
+        val inset = firstTop - viewportTop
+        val indices = playlist.entries.mapIndexed { index, entry -> "media-" + entry.id to index }.toMap()
+        fun pixels(): Float {
+            val header = compose.onAllNodesWithTag("browse-full-span", true).fetchSemanticsNodes().singleOrNull()
+            if (header != null) return viewportTop - header.positionInRoot.y
+            val node = compose.onAllNodes(SemanticsMatcher("Actual media row") {
+                it.config.getOrNull(SemanticsProperties.TestTag) in indices
+            }, true).fetchSemanticsNodes().first()
+            val index = indices.getValue(node.config[SemanticsProperties.TestTag])
+            return headerHeight + index * stride + inset - (node.positionInRoot.y - viewportTop)
+        }
         list.performScrollToIndex(65)
         compose.awaitExpectedWindowFocus(list)
         compose.mainClock.autoAdvance = false
-        val samples = mutableListOf(position())
+        val samples = mutableListOf(pixels())
         try {
             pressSystemBack()
             repeat(45) {
                 compose.mainClock.advanceTimeByFrame()
                 compose.waitForIdle()
-                samples += position()
+                samples += pixels()
             }
         } finally { compose.mainClock.autoAdvance = true }
         assertEquals("One ease reaches the page top", 0f, samples.last(), .01f)
         assertTrue("No reversal: $samples", samples.zipWithNext().all { (a, b) -> b <= a + .001f })
+        val deltas = samples.zipWithNext().map { (a, b) -> a - b }
+        val headerFrames = samples.indices.filter { samples[it] in 2f..headerHeight }
+        for (index in headerFrames.drop(1)) {
+            // The final approach must keep decelerating through the hero; an underestimated
+            // header produces a new burst here even if semantic item indices look monotonic.
+            if (index >= 2 && index < deltas.size && samples[index] < headerHeight * .8f)
+                assertTrue("No second acceleration through the header: $samples",
+                    deltas[index] <= deltas[index - 1] + 3f)
+        }
         val first = samples.indexOfFirst { it < samples.first() - .001f }
         val last = samples.indexOfLast { it > .001f }
         assertTrue("One bounded 500 ms curve, without a second ease: $samples", last - first <= 33)
