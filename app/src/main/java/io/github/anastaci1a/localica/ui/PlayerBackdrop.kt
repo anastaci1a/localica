@@ -83,15 +83,17 @@ internal fun PlayerBackdrop(palette: PlayerPalette, modifier: Modifier = Modifie
     var softWashProvenance: ToneSnapshotProvenance? = null
     var washReceipt: ToneSnapshotReceipt<android.graphics.Bitmap>? = null
     var softWashReceipt: ToneSnapshotReceipt<android.graphics.Bitmap>? = null
-    val wash = rememberToneSnapshot(remember(palette.wash) { palette.wash?.asImageBitmap() }, tone,
-        onProvenance = if (onBackgroundDescriptor != null) ({ washProvenance = it }) else null,
-        onReceipt = if (onBackgroundDescriptor != null) ({ washReceipt = it }) else null)?.asAndroidBitmap()
-    val softWash = rememberToneSnapshot(remember(palette.softWash) { palette.softWash?.asImageBitmap() }, tone,
-        onProvenance = if (onBackgroundDescriptor != null) ({ softWashProvenance = it }) else null,
-        onReceipt = if (onBackgroundDescriptor != null) ({ softWashReceipt = it }) else null)?.asAndroidBitmap()
-    // Expose exactly the retained tone outputs used below, not their requested raw inputs.
+    val wash = rememberToneSnapshot(remember(palette.wash) { palette.wash?.asImageBitmap() }, tone)?.asAndroidBitmap()
+    val softWash = rememberToneSnapshot(remember(palette.softWash) { palette.softWash?.asImageBitmap() }, tone)?.asAndroidBitmap()
+    // The ink decision measures the UNGRADED backdrop (#576): the grade depends on the chosen ink, so measuring
+    // graded pixels would be circular. These untoned snapshots are the raw palette images the sampler reads.
+    val measured = GlassTone()
+    val rawWash = if (onBackgroundDescriptor != null) rememberToneSnapshot(remember(palette.wash) { palette.wash?.asImageBitmap() }, measured,
+        onProvenance = { washProvenance = it }, onReceipt = { washReceipt = it })?.asAndroidBitmap() else null
+    val rawSoftWash = if (onBackgroundDescriptor != null) rememberToneSnapshot(remember(palette.softWash) { palette.softWash?.asImageBitmap() }, measured,
+        onProvenance = { softWashProvenance = it }, onReceipt = { softWashReceipt = it })?.asAndroidBitmap() else null
     if (onBackgroundDescriptor != null) {
-        val descriptor = PlayerBackdropDescriptor(palette, wash, softWash, playerGrain, tone,
+        val descriptor = PlayerBackdropDescriptor(palette, rawWash, rawSoftWash, playerGrain, measured,
             washProvenance, softWashProvenance, washReceipt, softWashReceipt)
         SideEffect { onBackgroundDescriptor(descriptor) }
     }

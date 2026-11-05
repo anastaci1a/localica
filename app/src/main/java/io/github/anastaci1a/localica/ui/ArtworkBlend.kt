@@ -52,7 +52,8 @@ internal fun ArtworkBlend(visual: PlayerVisual, modifier: Modifier, duration: In
                 ArtworkBlendState(target, held.occurrence) else held
             return@LaunchedEffect
         }
-        if (immediate || occurrence == null && target.contentKey != null && target.contentKey == previous.incoming.contentKey) {
+        // Reduced Motion snaps the whole change (backdrop, ink and materials share this one clock): no transition at all.
+        if (immediate || reduced || occurrence == null && target.contentKey != null && target.contentKey == previous.incoming.contentKey) {
             blend = ArtworkBlendState(target, occurrence)
         } else if (target != previous.incoming || occurrence != previous.occurrence) {
             var outgoing = previous.incoming
@@ -96,8 +97,8 @@ internal fun ArtworkBlend(visual: PlayerVisual, modifier: Modifier, duration: In
                     fun live(frame: PlayerVisual, weight: Float, slot: Int) {
                         val presented = if (visual.loading && frame.artwork == null) frame.copy(loading = true) else frame
                         val soft = presented.softArtwork
-                        add(ArtworkBackgroundRole(backgroundRoles[slot], presented, weight * if (soft != null) 1f - softWeight else 1f))
-                        if (soft != null && softWeight > 0f) add(ArtworkBackgroundRole(backgroundRoles[slot + 1], presented.copy(artwork = soft), weight * softWeight))
+                        add(ArtworkBackgroundRole(backgroundRoles[slot], presented, weight * if (soft != null) 1f - softWeight else 1f, incoming = slot >= 2))
+                        if (soft != null && softWeight > 0f) add(ArtworkBackgroundRole(backgroundRoles[slot + 1], presented.copy(artwork = soft), weight * softWeight, incoming = slot >= 2, soft = true))
                     }
                     if (transitioning && composed.frozen == null) live(composed.outgoing, 1f - incomingWeight, 0)
                     live(if (immediate) target else composed.incoming, incomingWeight, 2)
@@ -105,7 +106,7 @@ internal fun ArtworkBlend(visual: PlayerVisual, modifier: Modifier, duration: In
                 ArtworkBackgroundFrame(roles,
                     transitioning && composed.frozen != null && incomingWeight < 1f,
                     Build.VERSION.SDK_INT >= 31 && blur() > .001f,
-                    transitioning)
+                    transitioning, reveal())
             }.collect { observer(it) }
         }
     }
