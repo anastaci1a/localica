@@ -255,6 +255,13 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     var collectionMenu by remember { mutableStateOf(false) }
     val collectionMenuAnchor = rememberGlassAnchor()
     val gridState = rememberLazyGridState()
+    var collectionHeaderHeight by androidx.compose.runtime.saveable.rememberSaveable(route.key) { mutableIntStateOf(0) }
+    var collectionActionBottom by androidx.compose.runtime.saveable.rememberSaveable(route.key) { mutableFloatStateOf(0f) }
+    var collectionBackBottom by remember { mutableFloatStateOf(0f) }
+    var listViewportTop by remember { mutableFloatStateOf(0f) }
+    val collectionHome = ListScrollTarget.header(collectionHeaderHeight,
+        (collectionActionBottom - (collectionBackBottom - listViewportTop)).coerceAtLeast(0f))
+    val collectionTop = ListScrollTarget.header(collectionHeaderHeight)
     val artistFilterRange = remember(route.key) { ArtistFilterRange() }
     fun chooseArtistAlbums(ids: List<String>) {
         if (ids == selectedAlbums) return
@@ -617,8 +624,12 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                 ListReturnAction.ScrollTop, ListReturnAction.ScrollSongs -> scrollOwnership.during {
                     artworkTransit.during(!reducedMotion &&
                         gridState.firstVisibleItemIndex > gridState.layoutInfo.visibleItemsInfo.size * 2) {
-                        if (action == ListReturnAction.ScrollSongs) gridState.easeToItem(1, reducedMotion)
-                        else gridState.easeToTop(reducedMotion)
+                        val target = when {
+                            action == ListReturnAction.ScrollSongs -> collectionHome
+                            artDetail && collectionHeaderHeight > 0 && result.items.isNotEmpty() -> collectionTop
+                            else -> ListScrollTarget(0)
+                        }
+                        gridState.easeToTarget(target, reducedMotion)
                     }
                 }
                 ListReturnAction.None -> Unit
@@ -841,7 +852,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                     } while (event.changes.any { it.pressed })
                 } finally { listContact = false }
             }
-        }.onGloballyPositioned { reorder.viewportOrigin = it.positionInRoot() }.onSizeChanged {
+        }.onGloballyPositioned { reorder.viewportOrigin = it.positionInRoot(); listViewportTop = it.positionInRoot().y }.onSizeChanged {
             reorder.viewportHeight = it.height; reorder.viewportWidth = it.width
         }) {
             val viewportWidth = constraints.maxWidth
@@ -949,6 +960,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                 item(key = "browser-notice", contentType = "notice", span = { GridItemSpan(maxLineSpan) }) {
                     // Grid gutters belong to tiles; full-span headers keep their viewport alignment.
                     Column(Modifier.requiredWidth(with(density) { viewportWidth.toDp() }).testTag("browse-full-span")
+                        .onSizeChanged { if (artDetail) collectionHeaderHeight = it.height }
                         .then(if (pinchHeader != null) Modifier.collectionPinchHeader(pinchHeader, displayedStyle) else Modifier)) {
                         if (artDetail) {
                             CompositionLocalProvider(LocalFrostedBackdrop provides collectionSource) {
@@ -958,7 +970,8 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                                     onPlay = { onPlay(result.rows, 0, result.scope) }, onShuffle = {
                                         if (queues != null) queues.randomizedQueue(result.rows.map { it.track }, route.title ?: "Collection", result.rows.map { it.sourcePlaylistId })
                                         else onPlay(result.rows.shuffled(), 0, result.scope)
-                                    }, playlist = playlistDetail, pinchHeader = pinchHeader)
+                                    }, playlist = playlistDetail, pinchHeader = pinchHeader,
+                                    onActionBottom = { collectionActionBottom = it })
                                 if (artistDetail) ArtistAlbumChoices(albums, validAlbums, ::chooseArtistAlbums)
                                 if ((artistDetail || playlistDetail) && showSearchPill) Box(Modifier.fillMaxWidth().then(searchSlotLayout)
                                     .onSizeChanged { measuredSearchSlotHeight = it.height }.clipToBounds()) {
@@ -1164,14 +1177,8 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
             // including inactive queues, return to their own top without changing filters.
             val playbackReturn = route.collection?.kind == MediaKind.Queue && playingEntryId != null
             val returning = returnToList.pending || (playbackReturn && playbackFollow.request != null)
-            // Item 0 is the complete image header; item 1 starts the songs,
-            // including their own leading spacing. Do not offer a return while only
-            // the hero is offscreen. Back/tab navigation still owns the page top.
-            val songsPastTop by remember(gridState) { derivedStateOf {
-                val layout = gridState.layoutInfo
-                val firstSong = layout.visibleItemsInfo.firstOrNull { it.index == 1 }
-                firstSong?.let { it.offset.y < layout.viewportStartOffset + layout.beforeContentPadding }
-                    ?: (gridState.firstVisibleItemIndex > 1)
+            val songsPastTop by remember(gridState, collectionHome) { derivedStateOf {
+                collectionHome.displacement(gridState) < -1f
             } }
             val showReturn = selectionVisible && !playerOpen && !localSearchOpen && returnListMatches &&
                 !session.active && reorder.drag == null && !returning &&
@@ -1222,7 +1229,8 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
 
     if (artDetail) CompositionLocalProvider(LocalFrostedBackdrop provides listBackdrop) {
         CollectionToolbar(gridState, reorder.viewportWidth, route.title.orEmpty(), collectionMenuAnchor,
-            onBack, { view -> collectionView = view; collectionMenu = true }, backdropScene, pinchHeader) {
+            onBack, { view -> collectionView = view; collectionMenu = true }, backdropScene, pinchHeader,
+            onBackBottom = { collectionBackBottom = it }) {
             if (collectionMenu) CompositionLocalProvider(LocalGlassOrigin provides collectionMenuAnchor) { sortingPanel(initialView = collectionView) }
         }
     }
