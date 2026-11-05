@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.SemanticsProperties
@@ -57,9 +56,7 @@ class ListReturnControlsTest {
         var ordinaryBack = 0
         var topRequest by mutableIntStateOf(0)
         var densityScale by mutableFloatStateOf(1f)
-        @Volatile var drawSerial = 0
-        @Volatile var scrollFrame: BrowseScrollFrame? = null
-        var view: android.view.View? = null
+        val scrollProbe = BrowseScrollFrameProbe()
         var insetPx = 0f
         var dragHost: SongDragHost? = null
     }
@@ -76,10 +73,9 @@ class ListReturnControlsTest {
             fixture.insetPx = with(LocalDensity.current) { inset.toPx() }
             val dragHost = if (foregroundDrag) remember { SongDragHost() } else LocalSongDragHost.current
             fixture.dragHost = dragHost
-            fixture.view = LocalView.current
             val nativeDensity = LocalDensity.current
             CompositionLocalProvider(LocalDensity provides androidx.compose.ui.unit.Density(nativeDensity.density * fixture.densityScale, nativeDensity.fontScale),
-                LocalBrowseScrollFrameObserver provides { frame -> fixture.scrollFrame = frame; fixture.drawSerial++ },
+                LocalBrowseScrollFrameProbe provides fixture.scrollProbe,
                 LocalSessionSelection provides fixture.selection, LocalBrowseObscuredInset provides inset,
                 LocalSongDragHost provides dragHost) {
                 Box(Modifier.fillMaxSize().testTag("return-host")) {
@@ -140,10 +136,10 @@ class ListReturnControlsTest {
     }
 
     private fun presentedFrame(fixture: Fixture): BrowseScrollFrame {
-        val serial = fixture.drawSerial
-        compose.runOnUiThread { requireNotNull(fixture.view).invalidate() }
-        compose.waitUntil(5000) { fixture.drawSerial > serial }
-        return requireNotNull(fixture.scrollFrame)
+        val serial = fixture.scrollProbe.serial
+        compose.runOnUiThread { fixture.scrollProbe.request++ }
+        compose.waitUntil(5000) { fixture.scrollProbe.serial > serial }
+        return requireNotNull(fixture.scrollProbe.frame)
     }
 
     private fun playlistPixels(fixture: Fixture): () -> Float {

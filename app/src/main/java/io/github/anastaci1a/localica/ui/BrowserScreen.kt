@@ -64,7 +64,12 @@ import kotlin.math.roundToInt
 
 /** Optional screen and per-cell work evidence (kind, route or item key); no behavior depends on it. */
 internal data class BrowseScrollFrame(val index: Int, val offset: Int, val headerHeight: Int?, val rowHeight: Int?)
-internal val LocalBrowseScrollFrameObserver = staticCompositionLocalOf<((BrowseScrollFrame) -> Unit)?> { null }
+internal class BrowseScrollFrameProbe {
+    var request by mutableIntStateOf(0)
+    @Volatile var serial = 0
+    @Volatile var frame: BrowseScrollFrame? = null
+}
+internal val LocalBrowseScrollFrameProbe = staticCompositionLocalOf<BrowseScrollFrameProbe?> { null }
 
 internal val LocalBrowseCellWorkObserver = staticCompositionLocalOf<((String, Any) -> Unit)?> { null }
 
@@ -109,7 +114,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     val searchEditor = remember(editorGeneration) { ScopedSearchEditorSession() }
     DisposableEffect(searchEditor) { onDispose { searchEditor.retire() } }
     fun retireSearchEditor() { searchEditor.retire(); editorGeneration++ }
-    val scrollFrameObserver = LocalBrowseScrollFrameObserver.current
+    val scrollFrameProbe = LocalBrowseScrollFrameProbe.current
     val screenWork = LocalBrowseCellWorkObserver.current
     if (screenWork != null) SideEffect { screenWork("screen", route.key) }
     val obscuredInset = LocalBrowseObscuredInset.current
@@ -935,12 +940,14 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
             LazyVerticalGrid(state = gridState, overscrollEffect = overscroll, columns = GridCells.Fixed(columns), modifier = (if (popupDismiss != null) Modifier.fillMaxWidth() else Modifier.fillMaxSize())
                 .then(if (showSearchPill) searchSlotGridLayout else Modifier)
                 .longScrollFade(gridState)
-                .then(if (scrollFrameObserver == null) Modifier else Modifier.drawWithContent {
+                .then(if (scrollFrameProbe == null) Modifier else Modifier.drawWithContent {
+                    scrollFrameProbe.request // Explicit test readback also redraws settled cached layers.
                     drawContent()
                     val layout = gridState.layoutInfo
-                    scrollFrameObserver(BrowseScrollFrame(gridState.firstVisibleItemIndex, gridState.firstVisibleItemScrollOffset,
+                    scrollFrameProbe.frame = BrowseScrollFrame(gridState.firstVisibleItemIndex, gridState.firstVisibleItemScrollOffset,
                         layout.visibleItemsInfo.firstOrNull { it.index == 0 }?.size?.height,
-                        layout.visibleItemsInfo.firstOrNull { it.index > 0 }?.size?.height))
+                        layout.visibleItemsInfo.firstOrNull { it.index > 0 }?.size?.height)
+                    scrollFrameProbe.serial++
                 })
                 .controlScrollParent(gridState, ControlScrollAxis.Vertical)
                 .nestedScroll(userScrollConnection)
