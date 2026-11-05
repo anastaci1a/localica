@@ -132,7 +132,8 @@ class PlayerArtworkHoldRealAppTest {
                 }
                 // Wait for expansion and asynchronous artwork decoding before sending native input.
                 SystemClock.sleep(2500)
-                val artworkBounds = requireNotNull(bounds)
+                val artworkBounds = device.findObjects(By.longClickable(true)).map { it.visibleBounds }
+                    .filter { it.width() > 100 && it.height() > 100 }.maxBy { it.width() * it.height() }
                 // Upper-middle of the cover: on the cover in both layouts, clear of the title block that overlaps a
                 // full-background cover's lower part.
                 fingerHold(artworkBounds.exactCenterX(), artworkBounds.top + artworkBounds.height() * .35f, durationMs = 1100)
