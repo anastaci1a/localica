@@ -40,7 +40,8 @@ class TestComposeDispatcherTest {
         val before = compose.mainClock.currentTime
         try {
             runBlocking(Dispatchers.Default) { release.complete(Unit) }
-            compose.waitUntil(5000) { finished.isCompleted }
+            // A worker may finish after waitUntil's initial queue drain.
+            compose.waitUntil(5000) { compose.runOnIdle { finished.isCompleted } }
             compose.runOnIdle {
                 assertTrue(ready.value)
                 assertEquals("Worker completion cannot advance a paused frame", before, compose.mainClock.currentTime)
