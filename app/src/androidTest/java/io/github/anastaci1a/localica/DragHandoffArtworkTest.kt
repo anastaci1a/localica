@@ -5,6 +5,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.test.*
 import io.github.anastaci1a.localica.localicaComposeRule as createComposeRule
@@ -49,28 +51,61 @@ class DragHandoffArtworkTest {
             kotlin.math.abs(c.green - (argb shr 8 and 0xFF) / 255f) < .16f &&
             kotlin.math.abs(c.blue - (argb and 0xFF) / 255f) < .16f
 
-    /** Pixels of each colour anywhere in the window, from one capture. */
-    private fun counts(indices: List<Int>): IntArray {
-        val map = compose.onRoot().captureToImage().toPixelMap()
+    private data class Frame(val covers: IntArray, val titles: IntArray, val image: ImageBitmap)
+
+    /** Cover colours and title ink from the same presented frame, including both handoff owners. */
+    private fun counts(indices: List<Int>): Frame {
+        val root = compose.onRoot()
+        val origin = root.fetchSemanticsNode().boundsInRoot.topLeft
+        val titleBounds = indices.map { index ->
+            compose.onAllNodesWithText("Song $index", useUnmergedTree = true).fetchSemanticsNodes()
+                .map { it.boundsInRoot.translate(-origin).inflate(4 * compose.density.density) }.distinct()
+        }
+        val image = root.captureToImage()
+        val map = image.toPixelMap()
         val result = IntArray(indices.size)
         for (y in 0 until map.height step 2) for (x in 0 until map.width step 2) {
             val c = map[x, y]
             indices.forEachIndexed { i, colour -> if (near(c, colours[colour])) result[i]++ }
         }
-        return result
+        val titles = IntArray(indices.size) { i ->
+            titleBounds[i].maxOfOrNull { bounds ->
+                var ink = 0
+                for (y in bounds.top.toInt().coerceAtLeast(0) until bounds.bottom.toInt().coerceAtMost(map.height))
+                    for (x in bounds.left.toInt().coerceAtLeast(0) until bounds.right.toInt().coerceAtMost(map.width)) {
+                        val c = map[x, y]
+                        if (.2126f * c.red + .7152f * c.green + .0722f * c.blue < .4f) ink++
+                    }
+                ink
+            } ?: 0
+        }
+        return Frame(result, titles, image)
     }
 
-    private fun drag(rowTag: (Int) -> String, moved: List<Int>, target: Int) {
+    private fun drag(scenario: String, rowTag: (Int) -> String, moved: List<Int>, target: Int) {
         val failures = mutableListOf<String>()
-        lateinit var base: IntArray
-        compose.waitUntil(10000) { base = counts(moved); base.all { it > 20 } }
+        lateinit var base: Frame
+        compose.waitUntil(10000) { base = counts(moved); base.covers.all { it > 20 } && base.titles.all { it > 20 } }
         val list = compose.onNodeWithTag("browser-list").fetchSemanticsNode().boundsInRoot
         val from = compose.onNodeWithTag(rowTag(moved.first())).fetchSemanticsNode().boundsInRoot.center - list.topLeft
         val to = compose.onNodeWithTag(rowTag(target)).fetchSemanticsNode().boundsInRoot.center - list.topLeft
         // Trailing cards fly under the top card, so per frame the top card's cover must stay; all settle.
         fun check(label: String, all: Boolean = false) {
             val now = counts(moved)
-            (if (all) now.indices else 0..0).forEach { if (now[it] < base[it] * .5f) failures += "$label: cover ${moved[it]} has ${now[it]} of ${base[it]}" }
+            val before = failures.size
+            (if (all) now.covers.indices else 0..0).forEach {
+                if (now.covers[it] < base.covers[it] * .5f)
+                    failures += "$label: cover ${moved[it]} has ${now.covers[it]} of ${base.covers[it]}"
+                if (now.titles[it] < base.titles[it] * .35f)
+                    failures += "$label: title ${moved[it]} has ${now.titles[it]} of ${base.titles[it]} ink pixels"
+            }
+            if (failures.size > before && before < 8) {
+                val context = InstrumentationRegistry.getInstrumentation().targetContext
+                val dir = nativeEvidenceDirectory("drag-handoff", context.cacheDir)
+                File(dir, "$scenario-${label.replace(' ', '-')}.png").outputStream().use {
+                    now.image.asAndroidBitmap().compress(Bitmap.CompressFormat.PNG, 100, it)
+                }
+            }
         }
         compose.mainClock.autoAdvance = false
         var held = false
@@ -79,10 +114,12 @@ class DragHandoffArtworkTest {
             // Every frame through recognition, pickup and the first flight.
             repeat(60) { frame -> compose.mainClock.advanceTimeByFrame(); check("pickup frame ${frame + 1}") }
             compose.onNodeWithTag("browser-list").performTouchInput { moveTo(from + Offset(0f, 30f)) }
+            check("pickup boundary")
             repeat(10) { frame -> compose.mainClock.advanceTimeByFrame(); check("move frame ${frame + 1}") }
             compose.onNodeWithTag("browser-list").performTouchInput { moveTo(to) }
             repeat(6) { compose.mainClock.advanceTimeByFrame() }
             compose.onNodeWithTag("browser-list").performTouchInput { up(); held = false }
+            check("release boundary")
             repeat(60) { frame -> compose.mainClock.advanceTimeByFrame(); check("landing frame ${frame + 1}") }
         } finally {
             if (held) compose.onNodeWithTag("browser-list").performTouchInput { cancel() }
@@ -135,7 +172,7 @@ class DragHandoffArtworkTest {
                 compose.onNodeWithTag("media-${ids[2]}").performClick()
                 compose.waitForIdle()
             }
-            drag({ "media-${ids[it]}" }, if (multiple) listOf(1, 2) else listOf(1), 4)
+            drag("playlist-$multiple", { "media-${ids[it]}" }, if (multiple) listOf(1, 2) else listOf(1), 4)
         } finally { compose.runOnIdle { selection.clear() }; scope.cancel(); db.close() }
     }
 
@@ -165,7 +202,7 @@ class DragHandoffArtworkTest {
                 compose.onNodeWithTag("media-${entries[2].id}").performClick()
                 compose.waitForIdle()
             }
-            drag({ "media-${entries[it].id}" }, if (multiple) listOf(1, 2) else listOf(1), 4)
+            drag("queue-$multiple", { "media-${entries[it].id}" }, if (multiple) listOf(1, 2) else listOf(1), 4)
         } finally { compose.runOnIdle { selection.clear() } }
     }
 
