@@ -49,23 +49,31 @@ private fun blurEffects(renderer: GlassRendererGeneration) =
  * shadow; a small additional shadow separates panes once they join the stack. */
 @Composable
 internal fun HoverDragCard(modifier: Modifier, frame: HoverCardFrame, backing: FrostedBackdrop?,
-    stackShadow: () -> Float = { 0f }, content: @Composable BoxScope.() -> Unit) {
+    stackShadow: () -> Float = { 0f }, contentAlpha: () -> Float = frame.alpha,
+    content: @Composable BoxScope.() -> Unit) {
     val liftStyle = rememberLiftShadow()
     val renderer = currentGlassRendererGeneration()
     val group = rememberHoverGroupRenderer()
     val location = remember { BackdropLocation() }
     val density = LocalDensity.current
     val direction = LocalLayoutDirection.current
-    Box(modifier.graphicsLayer { alpha = frame.alpha().coerceIn(0f, 1f) }.backdropLocation(location).drawWithContent {
-        val geometry = frame.geometry()
-        with(group.shadow) {
-            draw(listOf(geometry.lifted.contour to 1f), .22f * liftStyle.strength * stackShadow(),
-                liftStyle.spread, color = liftStyle.color)
-        }
-        drawHoverGroup(group, listOf(geometry), { _, _ -> 1f }, backing, location, blurEffects(renderer),
-            density, direction, MediaSelectionGap.toPx(), sampleOffset = frame.sampleShift(), shadow = false, lift = liftStyle)
-        scale(geometry.scale, geometry.scale, geometry.pivot) { this@drawWithContent.drawContent() }
-    }) { content() }
+    Box(modifier.backdropLocation(location)) {
+        // Material and foreground have different handoff owners: frost/shadow fades
+        // into the list, while its cover and text stay opaque until the row is ready.
+        Box(Modifier.matchParentSize().graphicsLayer { alpha = frame.alpha().coerceIn(0f, 1f) }.drawWithContent {
+            val geometry = frame.geometry()
+            with(group.shadow) {
+                draw(listOf(geometry.lifted.contour to 1f), .22f * liftStyle.strength * stackShadow(),
+                    liftStyle.spread, color = liftStyle.color)
+            }
+            drawHoverGroup(group, listOf(geometry), { _, _ -> 1f }, backing, location, blurEffects(renderer),
+                density, direction, MediaSelectionGap.toPx(), sampleOffset = frame.sampleShift(), shadow = false, lift = liftStyle)
+        })
+        Box(Modifier.graphicsLayer { alpha = contentAlpha().coerceIn(0f, 1f) }.drawWithContent {
+            val geometry = frame.geometry()
+            scale(geometry.scale, geometry.scale, geometry.pivot) { this@drawWithContent.drawContent() }
+        }) { content() }
+    }
 }
 
 /**

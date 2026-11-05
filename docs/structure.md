@@ -225,6 +225,8 @@ Browse rows compose `CollectionActions` from their first opening and keep it wit
 
 `BrowseCellGeometry` and `BrowseItemMetrics` share grid insets and row layout across browsing, pinch and lifted cards. Full-span headers retain viewport alignment. Lifted items reuse the browse presentation and land on measured content bounds. Drag stacks update once per display frame with bounded absolute positions and drawing-layer translation, avoiding per-frame content recomposition/measurement.
 
+Drag start publishes its foreground owner in the same event that removes the source rows. During landing, material and shadow may fade, but covers and text remain opaque until the destination rows take over.
+
 Edge scrolling uses elapsed frame time. Stack, cancel target and list clipping have separate foreground layers.
 
 ### Surfaces and windows

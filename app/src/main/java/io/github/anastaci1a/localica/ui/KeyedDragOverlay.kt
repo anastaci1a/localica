@@ -224,7 +224,10 @@ internal fun <T : Any, P> BoxScope.KeyedDragOverlay(state: KeyedDragState<T, P>,
                     layout(width, height) { child.place(0, 0) }
                 }
                 .testTag(if (index == 0) "drag-stack" else "drag-card-$itemKey"),
-                frame, paneBacking, stackShadow = { flightProgress() * (1f - if (drag.dropping) drag.landing.value else 0f) }) {
+                frame, paneBacking, stackShadow = { flightProgress() * (1f - if (drag.dropping) drag.landing.value else 0f) },
+                // Complementary source-over fades expose the backdrop at mid-handoff.
+                // Keep the outgoing foreground opaque above the warming destination row.
+                contentAlpha = { if (drag.dropping && destination != null) alpha else frame.alpha() }) {
                 if (index == 0 || !lifted || drag.dropping) CompositionLocalProvider(LocalHeldItemOutline provides holder) { content(item, drag.presentation) }
             }
         }
