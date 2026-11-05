@@ -245,6 +245,8 @@ internal fun DrawScope.drawHoverGroup(group: HoverGroupRenderer, parts: List<Hov
     }) { withBackdropRegistration(registration, draw) }
     val blur = HoverLift.Blur.toPx() * progress
     clipPath(path) {
+        val blending = averageProgress > 0f && averageProgress < 1f
+        if (blending) drawContext.canvas.saveLayer(path.getBounds(), Paint())
         if (blurEffects && averageProgress < 1f && blur > .5f) {
             // Blur a crop larger than the outline, then clip: edges sample real backdrop.
             val crop = path.getBounds().inflate(blur * 2f).intersect(Rect(Offset.Zero, size))
@@ -254,13 +256,13 @@ internal fun DrawScope.drawHoverGroup(group: HoverGroupRenderer, parts: List<Hov
                 output.record(density, direction, IntSize(ceil(crop.width).toInt(), ceil(crop.height).toInt())) {
                     translate(-crop.left, -crop.top) { magnified { drawLayer(source.layer) } }
                 }
-                translate(crop.left, crop.top) { drawLayer(output.also { it.alpha = progress }) }
+                translate(crop.left, crop.top) { drawLayer(output.also { it.alpha = progress * (1f - averageProgress) }) }
             }
         } else if (!blurEffects) {
             val average = source.averageColor(location, path.getBounds())
             if (average != null) drawPath(path, average, alpha = progress)
         } else if (averageProgress < 1f) {
-            drawContext.canvas.saveLayer(path.getBounds(), Paint().apply { alpha = progress })
+            drawContext.canvas.saveLayer(path.getBounds(), Paint().apply { alpha = progress * (1f - averageProgress) })
             magnified { drawLayer(source.layer) }
             drawContext.canvas.restore()
         }
@@ -274,10 +276,12 @@ internal fun DrawScope.drawHoverGroup(group: HoverGroupRenderer, parts: List<Hov
                 }
             }
             output.alpha = progress * averageProgress
+            output.blendMode = if (blending) BlendMode.Plus else BlendMode.SrcOver
             translate(crop.left, crop.top) {
                 scale(crop.width / 8f, crop.height / 8f, Offset.Zero) { drawLayer(output) }
             }
         }
+        if (blending) drawContext.canvas.restore()
     }
 }
 

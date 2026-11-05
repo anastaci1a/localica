@@ -108,6 +108,47 @@ class GlassRenderModesTest {
         }
     }
 
+    @Test fun switchingTranslucentMaterialNeverStacksTwoCompleteRenderers() {
+        val runtime = GlassRendererRuntime(GlassRendererMode.Normal)
+        var stage by mutableIntStateOf(0)
+        lateinit var view: android.view.View
+        lateinit var source: FrostedBackdrop
+        compose.setContent { CompositionLocalProvider(LocalGlassRendererRuntime provides runtime) { LocalicaTheme {
+            CompositionLocalProvider(LocalGlassAppearance provides GlassAppearance(blur = 0f, whiteTint = 0f,
+                contrast = 0f, shadowStrength = 0f)) {
+                view = androidx.compose.ui.platform.LocalView.current
+                source = rememberFrostedBackdrop(Unit, dark = false)
+                Box(Modifier.size(120.dp).testTag("transparent-switch")) {
+                    Canvas(Modifier.fillMaxSize()) { drawRect(Color.Black) }
+                    Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(source)) { drawRect(Color.Blue.copy(alpha = .5f)) }
+                    LiquidGlassSurface(Modifier.fillMaxSize(), source, cornerRadius = 12.dp,
+                        pressFeedback = false, shadow = false)
+                    PresentationMarker { stage }
+                }
+            }
+        } } }
+        compose.waitUntil(15_000) { source.recorded && (Build.VERSION.SDK_INT >= 33 || source.snapshot != null) }
+        compose.mainClock.autoAdvance = false
+        fun sample(): Color {
+            val token = compose.runOnIdle { stage = stage % 30 + 1; stage }
+            compose.mainClock.advanceTimeByFrame()
+            val pixels = capturePresentedPopupPixels(compose, compose.onNodeWithTag("transparent-switch"), token) { view }
+            return pixels[pixels.width / 2, pixels.height / 2]
+        }
+        try {
+            val baseline = sample()
+            for (mode in listOf(GlassRendererMode.None, GlassRendererMode.Normal)) {
+                compose.runOnIdle { runtime.request(mode) }
+                repeat(45) { frame ->
+                    val actual = sample()
+                    assertEquals("Uniform translucent blue must retain opacity: $mode frame=$frame", baseline.blue, actual.blue, .035f)
+                    assertEquals(baseline.red, actual.red, .035f)
+                    assertEquals(baseline.green, actual.green, .035f)
+                }
+            }
+        } finally { compose.mainClock.autoAdvance = true }
+    }
+
     @Test fun switchingAndReversingNeverDropsTheBackingOrReplacesTheSurface() {
         val runtime = GlassRendererRuntime(GlassRendererMode.Normal)
         var stage by mutableIntStateOf(0)

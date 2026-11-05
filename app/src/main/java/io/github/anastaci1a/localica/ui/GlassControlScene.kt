@@ -73,8 +73,11 @@ internal fun GlassControlScene(modifier: Modifier, horizontalPadding: Dp = 20.dp
         }
         clipPath(silhouette, ClipOp.Difference) { scene() }
         onLensDraw?.invoke()
+        val blending = none > 0f && none < 1f
+        if (blending) drawContext.canvas.saveLayer(shape.bounds, Paint())
         if (layer != null && modern && none < 1f) {
             opticalWork?.invoke()
+            layer.alpha = 1f - none
             layer.renderEffect = lens.value?.effect(shifted, 0f, 1.35f * thickness, flattening = flattening)
             layer.record(Density(density, fontScale), layoutDirection, extent) { recordScene() }
             clipPath(silhouette) { translate(origin.x, origin.y) { drawLayer(layer) } }
@@ -83,6 +86,7 @@ internal fun GlassControlScene(modifier: Modifier, horizontalPadding: Dp = 20.dp
             if (averageLayer != null && averageRenderer != null && Build.VERSION.SDK_INT >= 33) {
                 averageLayer.renderEffect = averageRenderer.effect()
                 averageLayer.alpha = none
+                averageLayer.blendMode = if (blending) BlendMode.Plus else BlendMode.SrcOver
                 averageLayer.record(Density(density, fontScale), layoutDirection, IntSize(8, 8)) {
                     scale(8f / shape.bounds.width, 8f / shape.bounds.height, Offset.Zero) {
                         translate(-pad, -pad) { recordScene() }
@@ -105,6 +109,7 @@ internal fun GlassControlScene(modifier: Modifier, horizontalPadding: Dp = 20.dp
                 }
             }
         }
+        if (blending) drawContext.canvas.restore()
         drawRoundRect(face(), shape.bounds.topLeft, shape.bounds.size, CornerRadius(shape.corner))
         drawGlassRim(shape.bounds, shape.corner, path = silhouette, opacity = active(), cache = rim)
     }
