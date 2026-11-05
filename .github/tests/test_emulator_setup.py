@@ -110,6 +110,14 @@ class ReadinessTests(unittest.TestCase):
             self.assertFalse(ready.focused_home(historical + 'mCurrentFocus=' + current,
                                                 'com.android.launcher3'))
 
+    def test_api26_numeric_and_api36_named_awake_states(self):
+        prefix = 'KeyguardServiceDelegate\n showing=false\n inputRestricted=false\n'
+        for state in ('screenState=2\ninteractiveState=1',
+                      'screenState=SCREEN_STATE_ON\ninteractiveState=INTERACTIVE_STATE_AWAKE'):
+            self.assertTrue(ready.unlocked(prefix + state))
+        for state in ('screenState=1\ninteractiveState=1', 'screenState=2\ninteractiveState=2'):
+            self.assertFalse(ready.unlocked(prefix + state))
+
     def test_adb_call_uses_remaining_deadline_not_an_unbounded_wait(self):
         with mock.patch.object(ready.time, 'monotonic', return_value=98), \
                 mock.patch.object(ready.subprocess, 'run') as command:

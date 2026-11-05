@@ -19,8 +19,9 @@ def unlocked(policy):
     delegate = policy.rpartition('KeyguardServiceDelegate')[2]
     return bool(re.search(r'^\s*showing=false\s*$', delegate, re.M) and
                 re.search(r'^\s*inputRestricted=false\s*$', delegate, re.M) and
-                re.search(r'^\s*screenState=SCREEN_STATE_ON\s*$', delegate, re.M) and
-                re.search(r'^\s*interactiveState=INTERACTIVE_STATE_AWAKE\s*$', delegate, re.M))
+                # API 26 prints the enum integers; API 36 prints their names.
+                re.search(r'^\s*screenState=(?:2|SCREEN_STATE_ON)\s*$', delegate, re.M) and
+                re.search(r'^\s*interactiveState=(?:1|INTERACTIVE_STATE_AWAKE)\s*$', delegate, re.M))
 
 
 def focused_home(windows, package):
