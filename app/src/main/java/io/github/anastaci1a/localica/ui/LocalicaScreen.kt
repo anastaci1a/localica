@@ -288,7 +288,8 @@ fun LocalicaScreen(
             val pageRoute = navigation.stacks[tab]?.lastOrNull() ?: remember(tab) { BrowseRoute(tab) }
             val route = pageRoute
             val routeArtwork = artworkStore.scope(route.key)
-            GlassPopupNavigation(route.key, Modifier.fillMaxSize(), departing = page != pager.targetPage) {
+            GlassPopupNavigation(route to routeArtwork, Modifier.fillMaxSize(), departing = page != pager.targetPage,
+                contentKey = { it.first.key }) { (route, routeArtwork) ->
             val sortAnchor = rememberGlassAnchor()
             // Collection pages own their hero, navigation controls and status-bar inset.
             // Playlists use that same presentation, not the legacy shell heading.

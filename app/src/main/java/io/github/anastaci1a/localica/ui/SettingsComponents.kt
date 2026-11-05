@@ -18,6 +18,13 @@ import io.github.anastaci1a.localica.R
 @Composable
 internal fun SettingsPage(title: String, onBack: () -> Unit, onClose: () -> Unit = onBack,
     backLabel: String = "Back from settings", navigationDepth: Int = 0, onSystemBack: () -> Unit = onBack, content: @Composable ColumnScope.() -> Unit) {
+    SettingsNavigationPage(title, { it }, onBack, onClose, backLabel, navigationDepth, onSystemBack) { content() }
+}
+
+@Composable
+internal fun <T : Any> SettingsNavigationPage(target: T, title: (T) -> String, onBack: () -> Unit, onClose: () -> Unit = onBack,
+    backLabel: String = "Back from settings", navigationDepth: Int = 0, onSystemBack: () -> Unit = onBack,
+    content: @Composable ColumnScope.(T) -> Unit) {
     var previousDepth by remember { mutableIntStateOf(navigationDepth) }
     var direction by remember { mutableFloatStateOf(1f) }
     if (navigationDepth != previousDepth) {
@@ -25,16 +32,16 @@ internal fun SettingsPage(title: String, onBack: () -> Unit, onClose: () -> Unit
         previousDepth = navigationDepth
     }
     GlassDialog(onSystemBack, GlassPlacement.Page) {
-        GlassPopupNavigation(title, Modifier.fillMaxSize(), direction) {
+        GlassPopupNavigation(target, Modifier.fillMaxSize(), direction) { shown ->
         Surface(Modifier.fillMaxSize()) {
             Column(Modifier.fillMaxSize().safeDrawingPadding()) {
                 Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp).heightIn(min = 64.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                     ActionIcon(AppIcon.ActionBack, backLabel, onClick = onBack)
-                    Text(title, Modifier.weight(1f), style = MaterialTheme.typography.titleLarge)
+                    Text(title(shown), Modifier.weight(1f), style = MaterialTheme.typography.titleLarge)
                     ActionIcon(AppIcon.ActionClose, "Close settings", onClick = onClose)
                 }
-                Column(Modifier.weight(1f), content = content)
+                Column(Modifier.weight(1f)) { content(shown) }
             }
         }
         }
