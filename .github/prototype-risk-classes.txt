@@ -155,6 +155,7 @@ io.github.anastaci1a.localica.PlaybackStatisticsTest
 io.github.anastaci1a.localica.PlaybackTest
 io.github.anastaci1a.localica.PlayerActionSlotsTest
 io.github.anastaci1a.localica.PlayerArtworkChoiceInputTest
+io.github.anastaci1a.localica.PlayerBackdropGradingTest
 io.github.anastaci1a.localica.PlayerBackdropTest
 io.github.anastaci1a.localica.PlayerBackgroundImageMappingTest
 io.github.anastaci1a.localica.PlayerBackgroundPolarityTest
@@ -188,6 +189,7 @@ io.github.anastaci1a.localica.PrivateQueueBoundaryTest
 io.github.anastaci1a.localica.QuarantinedSourceReopenTest
 io.github.anastaci1a.localica.QueueBrowsingTest
 io.github.anastaci1a.localica.QueueContinuousPlaybackTest
+io.github.anastaci1a.localica.QueueSongTransitionTest
 io.github.anastaci1a.localica.QueueContourTest
 io.github.anastaci1a.localica.QueueCreationOffMainTest
 io.github.anastaci1a.localica.QueueDatabaseTest

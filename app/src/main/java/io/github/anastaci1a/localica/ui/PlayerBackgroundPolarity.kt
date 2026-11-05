@@ -50,10 +50,16 @@ internal class PlayerBackgroundPublication {
 }
 
 /** Immutable description of the roles actually composed by ArtworkBlend. No clock ownership. */
-internal data class ArtworkBackgroundRole(val identity: Any, val visual: PlayerVisual, val weight: Float)
+/** [incoming] roles are the artwork the blend is travelling to; [soft] ones are its transitional blur overlay. */
+internal data class ArtworkBackgroundRole(val identity: Any, val visual: PlayerVisual, val weight: Float,
+    val incoming: Boolean = true, val soft: Boolean = false)
+/** The grade of one prepared backdrop role: the ink its own region wants and the lightness shift that ink needs (#576). */
+internal data class BackdropRoleGrade(val lightInk: Boolean, val shift: Float)
 internal val LocalArtworkBackgroundRole = staticCompositionLocalOf<Any?> { null }
 internal data class ArtworkBackgroundFrame(val roles: List<ArtworkBackgroundRole>,
-    val frozenVisible: Boolean, val liveBlur: Boolean, val transitioning: Boolean)
+    val frozenVisible: Boolean, val liveBlur: Boolean, val transitioning: Boolean,
+    /** The blend's own reveal fraction, 0 at an artwork change and 1 once the new artwork is fully shown: the one clock the ink and materials follow with the backdrop (#578). */
+    val clock: Float = 1f)
 
 /** Returned paint images, not requested palette images: tone preparation may retain an older image. */
 internal data class PlayerBackdropDescriptor(val palette: PlayerPalette, val wash: Bitmap?, val softWash: Bitmap?,
@@ -89,6 +95,23 @@ internal data class PlayerBackgroundGeometry(val size: Size, val cover: Rect, va
      */
     var lightMix by mutableFloatStateOf(1f); private set
     fun presentLightMix(value: Float) { if (lightMix != value) lightMix = value }
+    /**
+     * Per backdrop role (#576/#578): the ink that role's own region wants and its lightness shift. Each role is graded
+     * for itself, so a crossfade between two covers blends two correctly graded backdrops and a song change never
+     * re-prepares pixels per frame. Held until a new preparation completes.
+     */
+    var roleGrades by mutableStateOf<Map<Any, BackdropRoleGrade>>(emptyMap()); private set
+    /** The ink the artwork transition is travelling to, once known; null when settled or not yet measured. */
+    var destinationLightInk by mutableStateOf<Boolean?>(null); private set
+    /** The artwork blend clock (1 when settled): drives the same ease as the lyrics clock for song changes. */
+    var artworkClock by mutableFloatStateOf(1f); private set
+    /** The settled decision is current again: it, not the transition's remembered destination, owns the ink. */
+    internal fun settled() { if (destinationLightInk != null) destinationLightInk = null }
+    internal fun presentGrades(grades: Map<Any, BackdropRoleGrade>, destination: Boolean?) {
+        if (roleGrades != grades) roleGrades = grades
+        // Kept past the end of the transition until the settled decision is current (see [settled]).
+        if (destination != null && destinationLightInk != destination) destinationLightInk = destination
+    }
     /** Holds [decision] at a fixed polarity so a presentation test controls exactly when it changes. */
     private var pinned: Boolean? = null
     internal fun pin(lightInk: Boolean?) { pinned = lightInk; if (lightInk != null) decision = PlayerBackgroundDecision(lightInk, PlayerBackgroundConfidence.Current, null) }
@@ -102,10 +125,13 @@ internal data class PlayerBackgroundGeometry(val size: Size, val cover: Rect, va
         if (measured !== next) measured = next
     }
     fun detach() {
-        coordinates.clear(); measured = emptyMap(); frame = null; backdrops.clear()
+        coordinates.clear(); measured = emptyMap(); frame = null; backdrops.clear(); roleGrades = emptyMap(); destinationLightInk = null; artworkClock = 1f
         unavailable(PlayerBackgroundUnavailable.Unmeasured)
     }
-    fun frame(value: ArtworkBackgroundFrame) { if (frame != value) frame = value }
+    fun frame(value: ArtworkBackgroundFrame) {
+        if (frame != value) frame = value
+        if (artworkClock != value.clock) artworkClock = value.clock
+    }
     fun backdrop(identity: Any, value: PlayerBackdropDescriptor) {
         if (backdrops[identity] != value) backdrops[identity] = value
         // Only current/outgoing and their soft roles are needed. No unbounded visit history.
@@ -160,6 +186,15 @@ private fun BackgroundSampleRole.paintReady(geometry: PlayerBackgroundGeometry, 
 @Composable internal fun ObservePlayerBackgroundPolarity(owner: PlayerBackgroundPolarityState,
     geometry: PlayerBackgroundGeometry?, unsupported: PlayerBackgroundUnavailable?, requestedTone: GlassTone) {
     val frame = owner.frame
+    // Grading and the transition's destination ink need only each role's own prepared pixels, not a settled or
+    // unblurred composite, so they are available all through an artwork change (#578).
+    val gradeReason = unsupported ?: when {
+        frame == null || geometry == null -> PlayerBackgroundUnavailable.Unmeasured
+        !validBackgroundGeometry(geometry) -> PlayerBackgroundUnavailable.InvalidGeometry
+        frame.roles.any { owner.backdrops[it.identity] == null } -> PlayerBackgroundUnavailable.MissingRole
+        frame.roles.any { role -> owner.backdrops[role.identity]?.tone != requestedTone } -> PlayerBackgroundUnavailable.Preparing
+        else -> null
+    }
     val reason = unsupported ?: when {
         frame == null || geometry == null -> PlayerBackgroundUnavailable.Unmeasured
         !validBackgroundGeometry(geometry) -> PlayerBackgroundUnavailable.InvalidGeometry
@@ -172,7 +207,7 @@ private fun BackgroundSampleRole.paintReady(geometry: PlayerBackgroundGeometry, 
         frame.roles.any { role -> owner.backdrops[role.identity]?.tone != requestedTone } -> PlayerBackgroundUnavailable.Preparing
         else -> null
     }
-    val request = if (reason == null && geometry != null && frame != null)
+    val request = if (gradeReason == null && geometry != null && frame != null)
         BackgroundRequest(geometry, frame.roles.map { BackgroundSampleRole(it.identity, it.visual, requireNotNull(owner.backdrops[it.identity])) }) else null
     var prepared by remember { mutableStateOf<PreparedBackground?>(null) }
     var failed by remember { mutableStateOf<BackgroundRequest?>(null) }
@@ -185,9 +220,14 @@ private fun BackgroundSampleRole.paintReady(geometry: PlayerBackgroundGeometry, 
         }
     }
     val ready = prepared?.takeIf { it.request == request }
+    val grades = remember(ready) { ready?.let(::gradeRoles) }
     val failure = reason ?: if (failed == request && request != null) PlayerBackgroundUnavailable.UnreadableImage else PlayerBackgroundUnavailable.Preparing
     SideEffect {
-        if (ready != null && frame != null) {
+        if (ready != null && frame != null && grades != null) {
+            val destination = frame.roles.firstOrNull { it.incoming && !it.soft }?.takeIf { frame.transitioning }
+            owner.presentGrades(grades, destination?.let { grades[it.identity]?.lightInk })
+        }
+        if (ready != null && frame != null && reason == null) {
             val weights = ready.request.roles.map { role ->
                 frame.roles.filter { it.identity == role.identity }.sumOf { it.weight.toDouble() }.toFloat()
             }
@@ -203,6 +243,7 @@ private fun BackgroundSampleRole.paintReady(geometry: PlayerBackgroundGeometry, 
                 return@SideEffect
             }
             owner.current(choice.lightInk)
+            if (!frame.transitioning) owner.settled()
             val mean = choice.mean
             // Use the current descriptor's provenance for these same prepared pixels. The equality
             // guard above still requires every original sampling input to match. Never retain frame,
@@ -448,3 +489,14 @@ private suspend fun prepareBackground(request: BackgroundRequest): PreparedBackg
     }
     return PreparedBackground(request, samples, areas)
 }
+
+/** Each prepared role is graded for itself (#576): its own mean decides its ink with the ordinary contrast rule and
+ * its lightness shift for that ink. Weights never enter, so a crossfade only mixes already graded backdrops. */
+private fun gradeRoles(prepared: PreparedBackground): Map<Any, BackdropRoleGrade> =
+    prepared.request.roles.mapIndexedNotNull { index, role ->
+        var mean: BackgroundMean? = null
+        val light = backgroundLightInk(listOf(prepared.samples[index] to 1f), prepared.weights) { mean = it }
+        val m = mean ?: return@mapIndexedNotNull null
+        val shift = BackdropGrade.lightnessShift(m.red.coerceIn(0.0, 1.0), m.green.coerceIn(0.0, 1.0), m.blue.coerceIn(0.0, 1.0), light)
+        role.identity to BackdropRoleGrade(light, if (shift.isFinite()) shift else 0f)
+    }.toMap()
