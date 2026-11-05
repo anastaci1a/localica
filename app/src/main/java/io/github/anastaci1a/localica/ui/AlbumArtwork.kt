@@ -40,6 +40,7 @@ internal fun MediaArtwork(uris: List<String>, modifier: Modifier, provider: Cove
     val resumeStagger = remember { BooleanArray(1) }
     if (deferred) resumeStagger[0] = true
     val loaded by produceState<Pair<Triple<List<String>, Int, Long>?, ArtworkCache.CachedArtwork?>>(null to null, request, provider, deferred) {
+        if (uris == listOf("song:70")) android.util.Log.i("Artwork588", "effect request=$request deferred=$deferred cached=$cached")
         if (pixels > 0 && !deferred) {
             val warm = cached?.takeIf { it.edge >= pixels || it.bitmap == null }
             if (warm == null && resumeStagger[0]) {
@@ -54,6 +55,7 @@ internal fun MediaArtwork(uris: List<String>, modifier: Modifier, provider: Cove
                         if (provider === EmbeddedCoverProvider && uris.size == 1) ArtworkColors.offer(uris[0], bitmap)
                     }
                 }, pixels))
+            if (uris == listOf("song:70")) android.util.Log.i("Artwork588", "loaded request=$request value=$value")
         }
     }
     val sameContent = loaded.first?.first == uris && loaded.first?.third == revision
@@ -71,6 +73,9 @@ internal fun MediaArtwork(uris: List<String>, modifier: Modifier, provider: Cove
     val indexedMissing = provider === EmbeddedCoverProvider && ArtworkColors.peek(uris) == ArtworkColors.MISSING
     val loading = cached == null && uris.isNotEmpty() && artwork == null && !indexedMissing &&
         (deferred || pixels == 0 || loaded.first != request)
+    SideEffect {
+        if (uris == listOf("song:70")) android.util.Log.i("Artwork588", "compose request=$request deferred=$deferred cached=$cached loaded=$loaded loading=$loading indexed=$indexedMissing")
+    }
     ArtworkImage(artwork, loading, measured, shape, contentScale, tintUris = uris, textReveal = textReveal,
         expectsArtwork = provider === EmbeddedCoverProvider && ArtworkColors.peek(uris).let { it != null && it != ArtworkColors.MISSING })
 }
