@@ -64,6 +64,7 @@ object ArtworkSaver {
         } catch (_: Exception) { null to null } finally { retriever.release() }
     }
 
+    @androidx.annotation.RequiresApi(Build.VERSION_CODES.Q)
     private fun saveMediaStore(context: Context, name: String, mime: String, bytes: ByteArray): String? {
         val resolver = context.contentResolver
         val values = ContentValues().apply {
