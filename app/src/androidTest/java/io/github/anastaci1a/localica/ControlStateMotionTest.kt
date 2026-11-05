@@ -197,11 +197,11 @@ class ControlStateMotionTest {
         var enabled by mutableStateOf(true)
         var calls = 0
         compose.setContent { LocalicaTheme { Column(Modifier.width(300.dp)) {
-            ActionIcon(R.drawable.ic_shuffle, "Glass icon", enabled = enabled) { calls++ }
-            ActionIcon(R.drawable.ic_shuffle, "Quiet icon", enabled = enabled, quiet = true) { calls++ }
-            ActionIcon(R.drawable.ic_shuffle, "Plain icon", enabled = enabled, glass = false) { calls++ }
-            GlassActionButton(R.drawable.ic_shuffle, "Glass action", enabled = enabled) { calls++ }
-            ActionMenuItem("Menu action", enabled, icon = R.drawable.ic_more) { calls++ }
+            ActionIcon(AppIcon.ActionShuffle, "Glass icon", enabled = enabled) { calls++ }
+            ActionIcon(AppIcon.ActionShuffle, "Quiet icon", enabled = enabled, quiet = true) { calls++ }
+            ActionIcon(AppIcon.ActionShuffle, "Plain icon", enabled = enabled, glass = false) { calls++ }
+            GlassActionButton(AppIcon.ActionShuffle, "Glass action", enabled = enabled) { calls++ }
+            ActionMenuItem("Menu action", enabled, icon = AppIcon.ActionMore) { calls++ }
             SettingsLink("Settings action", enabled = enabled) { calls++ }
             InterfaceCheckbox(false, { calls++ }, Modifier.testTag("checkbox"), enabled)
             GlassFilterChoice(false, { calls++ }, "Filter action", enabled)

@@ -8,7 +8,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.R
@@ -23,7 +22,7 @@ internal fun DragCancelTarget(hovered: Boolean, action: String, modifier: Modifi
         stateDescription = if (hovered) "Cancel $action" else "Drag here to cancel"
     }, tint = color, pressFeedback = false) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Icon(painterResource(R.drawable.ic_close), null, Modifier.size(26.dp),
+            Icon(appIconPainter(AppIcon.ActionClose), null, Modifier.size(26.dp),
                 tint = if (hovered) MaterialTheme.colorScheme.onError else LocalContentColor.current)
         }
     }

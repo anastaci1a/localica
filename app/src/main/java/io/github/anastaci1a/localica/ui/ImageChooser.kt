@@ -72,17 +72,17 @@ internal fun ImageChooser(workflow: ArtworkWorkflow, onDismiss: () -> Unit, onCh
             }
             if (!hasPermission) {
             Text("Allow photo access to also see recent device photos.", style = MaterialTheme.typography.bodySmall)
-            GlassActionButton(R.drawable.ic_albums, "Allow recent photos", Modifier.fillMaxWidth()) { permission.launch(when {
+            GlassActionButton(AppIcon.TabAlbums, "Allow recent photos", Modifier.fillMaxWidth()) { permission.launch(when {
                 Build.VERSION.SDK_INT >= 34 -> arrayOf(Manifest.permission.READ_MEDIA_IMAGES, Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED)
                 Build.VERSION.SDK_INT >= 33 -> arrayOf(Manifest.permission.READ_MEDIA_IMAGES)
                 else -> arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
             }) }
             }
             HorizontalDivider(Modifier.padding(vertical = 4.dp))
-            GlassActionButton(io.github.anastaci1a.localica.R.drawable.ic_albums, "Open gallery", Modifier.fillMaxWidth()) {
+            GlassActionButton(AppIcon.TabAlbums, "Open gallery", Modifier.fillMaxWidth()) {
                 gallery.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
             }
-            GlassActionButton(R.drawable.ic_folder, "Browse files", Modifier.fillMaxWidth()) { files.launch(arrayOf("image/*")) }
+            GlassActionButton(AppIcon.TabFolders, "Browse files", Modifier.fillMaxWidth()) { files.launch(arrayOf("image/*")) }
         }
     }, confirmButton = {}, dismissButton = { ActionTextButton(onClick = onDismiss) { Text("Cancel") } })
     workflow.cropUri?.let { uri ->

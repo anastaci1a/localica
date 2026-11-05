@@ -32,6 +32,7 @@ class LocalicaApplication : Application() {
             // here so those Main reads find them in memory. Values and write paths are unchanged.
             for (name in STARTUP_PREFERENCES) runCatching { getSharedPreferences(name, MODE_PRIVATE).contains("") }
         }
+        startup.launch { io.github.anastaci1a.localica.icons.IconPacks.load(this@LocalicaApplication) }
         startup.launch { startArtworkColors(this) }
         startup.launch {
             // The registry starts fail-closed before any service can create/open a source.

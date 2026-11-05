@@ -86,10 +86,10 @@ internal fun ArtworkViewerContent(artwork: ImageBitmap?, loading: Boolean, onDis
         }
         Box(Modifier.matchParentSize().safeDrawingPadding().padding(16.dp)) {
             Box(Modifier.align(Alignment.TopStart)) {
-                ActionIcon(R.drawable.ic_close, "Close artwork", onClick = onDismiss)
+                ActionIcon(AppIcon.ActionClose, "Close artwork", onClick = onDismiss)
             }
             Box(Modifier.align(Alignment.BottomEnd)) {
-                ActionIcon(if (zoomed) R.drawable.ic_eye else R.drawable.ic_plus,
+                ActionIcon(if (zoomed) AppIcon.ActionEye else AppIcon.ActionPlus,
                     if (zoomed) "Reset zoom" else "Zoom in", enabled = artwork != null,
                     onClick = { if (zoomed) state.reset() else state.zoomTo(2f) })
             }

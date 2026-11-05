@@ -43,7 +43,7 @@ class TouchProtectionTest {
     @Composable private fun Content(control: Control) {
         val activate = { activations++ }
         when (control) {
-            Control.GlassButton -> Box(Modifier.testTag(control.tag)) { GlassActionButton(R.drawable.ic_plus, "Glass") { activate() } }
+            Control.GlassButton -> Box(Modifier.testTag(control.tag)) { GlassActionButton(AppIcon.ActionPlus, "Glass") { activate() } }
             Control.PopupOpener -> Box(Modifier.testTag(control.tag)) { SettingsLink("Selector style") { activate() } }
             Control.TextButton -> ActionTextButton({ activate() }, Modifier.testTag(control.tag)) { Text("Text") }
             Control.SwitchRow -> BooleanPreference("Switch", false) { activate() }
@@ -248,7 +248,7 @@ class TouchProtectionTest {
         compose.setContent { LocalicaTheme { BoxWithConstraints(Modifier.fillMaxSize()) {
             QueueSurface(progress, InterfaceSettings(), { settled += it }) {
                 Row(Modifier.fillMaxWidth().padding(16.dp)) {
-                    Box(Modifier.testTag("queue-pill")) { GlassActionButton(R.drawable.ic_plus, "Queue selector") {} }
+                    Box(Modifier.testTag("queue-pill")) { GlassActionButton(AppIcon.ActionPlus, "Queue selector") {} }
                     ActionIconButton({}, Modifier.testTag("queue-more")) { Text("More") }
                 }
                 Box(Modifier.weight(1f).fillMaxWidth())

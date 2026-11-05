@@ -61,17 +61,17 @@ internal fun SelectionActions(rows: List<SongRow>, selected: Set<String>, onSele
     fun act(action: SongTap) { menu = false
         queues?.act(chosen.map { it.track }, action, chosen.map { it.sourcePlaylistId }) { if (it) onSelection(emptySet()) } }
     @Composable fun FrequentActions() {
-        ActionIcon(io.github.anastaci1a.localica.R.drawable.ic_queue, "Play next", enabled = chosen.isNotEmpty() && queues != null,
+        ActionIcon(AppIcon.TabQueues, "Play next", enabled = chosen.isNotEmpty() && queues != null,
             glass = false) { act(SongTap.PlayNext) }
-        ActionIcon(io.github.anastaci1a.localica.R.drawable.ic_playlist_add, "Add to playlist", enabled = chosen.isNotEmpty(),
+        ActionIcon(AppIcon.ActionPlaylistAdd, "Add to playlist", enabled = chosen.isNotEmpty(),
             glass = false) { adding = chosen.map { it.track } }
-        ActionIcon(io.github.anastaci1a.localica.R.drawable.ic_ellipsis, "More selection actions", anchor = moreAnchor,
+        ActionIcon(AppIcon.ActionEllipsis, "More selection actions", anchor = moreAnchor,
             glass = false) { menu = true }
     }
     @Composable fun Collapse() {
         if (onCollapse != null) {
             GlassPillDivider()
-            ActionIcon(io.github.anastaci1a.localica.R.drawable.ic_down, "Collapse selection", glass = false, onClick = onCollapse)
+            ActionIcon(AppIcon.ActionDown, "Collapse selection", glass = false, onClick = onCollapse)
         }
     }
     Box(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp), contentAlignment = Alignment.Center) {
@@ -82,7 +82,7 @@ internal fun SelectionActions(rows: List<SongRow>, selected: Set<String>, onSele
                         onClickLabel = "Expand selection", onClick = controlActivation(true, onExpand)) else Modifier)
                     .padding(horizontal = 18.dp).testTag("selection-minimized"),
                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Icon(androidx.compose.ui.res.painterResource(io.github.anastaci1a.localica.R.drawable.ic_queue), null, Modifier.size(20.dp))
+                    Icon(appIconPainter(AppIcon.TabQueues), null, Modifier.size(20.dp))
                     Text("${chosen.size} selected", style = MaterialTheme.typography.labelLarge)
                 }
             }) {
@@ -91,7 +91,7 @@ internal fun SelectionActions(rows: List<SongRow>, selected: Set<String>, onSele
                     Column {
                         Row(Modifier.fillMaxWidth().heightIn(min = CompactControlSize).padding(horizontal = 4.dp),
                             verticalAlignment = Alignment.CenterVertically) {
-                            ActionIcon(io.github.anastaci1a.localica.R.drawable.ic_close, "Close selection", glass = false) { onSelection(emptySet()) }
+                            ActionIcon(AppIcon.ActionClose, "Close selection", glass = false) { onSelection(emptySet()) }
                             Text("${chosen.size} selected", Modifier.weight(1f).padding(horizontal = 4.dp), maxLines = 1,
                                 overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, style = MaterialTheme.typography.titleMedium)
                             if (!stacked) FrequentActions()
@@ -105,19 +105,19 @@ internal fun SelectionActions(rows: List<SongRow>, selected: Set<String>, onSele
         }
     }
     GlassMenu(menu && !minimized, moreAnchor, { menu = false }) {
-        ActionMenuItem("Play now", enabled = chosen.isNotEmpty() && queues != null, icon = io.github.anastaci1a.localica.R.drawable.ic_play) { act(SongTap.PlayNow) }
-        ActionMenuItem("Add to queue", enabled = chosen.isNotEmpty() && queues != null, icon = io.github.anastaci1a.localica.R.drawable.ic_queue) { act(SongTap.Append) }
-        ActionMenuItem("New queue", enabled = chosen.isNotEmpty() && queues != null, icon = io.github.anastaci1a.localica.R.drawable.ic_queue) { act(SongTap.NewQueue) }
-        if (editTags != null) ActionMenuItem("Edit tags", enabled = chosen.isNotEmpty(), icon = io.github.anastaci1a.localica.R.drawable.ic_edit) {
+        ActionMenuItem("Play now", enabled = chosen.isNotEmpty() && queues != null, icon = AppIcon.TransportPlay) { act(SongTap.PlayNow) }
+        ActionMenuItem("Add to queue", enabled = chosen.isNotEmpty() && queues != null, icon = AppIcon.MenuQueueAdd) { act(SongTap.Append) }
+        ActionMenuItem("New queue", enabled = chosen.isNotEmpty() && queues != null, icon = AppIcon.TabQueues) { act(SongTap.NewQueue) }
+        if (editTags != null) ActionMenuItem("Edit tags", enabled = chosen.isNotEmpty(), icon = AppIcon.ActionEdit) {
             menu = false; editTags(chosen.map { it.track }.distinctBy { it.id }) { if (it) onSelection(emptySet()) }
         }
-        if (onRemove != null) ActionMenuItem(removeLabel, enabled = chosen.isNotEmpty(), icon = io.github.anastaci1a.localica.R.drawable.ic_close) {
+        if (onRemove != null) ActionMenuItem(removeLabel, enabled = chosen.isNotEmpty(), icon = AppIcon.ActionClose) {
             menu = false; onRemove { if (it) onSelection(emptySet()) }
         }
-        ActionMenuItem("Select all", icon = io.github.anastaci1a.localica.R.drawable.ic_queue) {
+        ActionMenuItem("Select all", icon = AppIcon.TabQueues) {
             menu = false; onAll?.invoke() ?: onSelection(rows.map { it.id }.toSet())
         }
-        if (onRange != null) ActionMenuItem("Select range", icon = io.github.anastaci1a.localica.R.drawable.ic_queue) { menu = false; onRange() }
+        if (onRange != null) ActionMenuItem("Select range", icon = AppIcon.TabQueues) { menu = false; onRange() }
     }
     adding?.let { tracks -> AddToPlaylistDialog(tracks, playlistState, playlists,
         onDismiss = { adding = null }, onAdded = { adding = null; onSelection(emptySet()) }) }
