@@ -216,6 +216,9 @@ class ShadowContinuityTest {
                 }
             }
         } }
+        // The target is shown only while its drag is active (#584); hold it at rest.
+        compose.runOnIdle { state.update(true) }
+        compose.waitUntil(5000) { compose.onAllNodesWithTag("cancel-seek").fetchSemanticsNodes().isNotEmpty() }
         compose.waitForIdle()
         val scene = compose.onNodeWithTag("shadow-scene")
         val root = scene.fetchSemanticsNode().boundsInRoot
