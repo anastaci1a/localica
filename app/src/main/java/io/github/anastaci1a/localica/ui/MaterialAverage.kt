@@ -48,7 +48,7 @@ internal class MaterialAverageRenderer {
         if (style == previous) return requireNotNull(cached)
         previous = style
         shader.setFloatUniform("whiteTint", style.whiteTint)
-        shader.setFloatUniform("tone", style.tone.trim, style.tone.weight, if (style.tone.lightInk) 1f else 0f)
+        shader.setFloatUniform("tone", style.tone.trim, style.tone.weight, style.tone.lightMix)
         return android.graphics.RenderEffect.createRuntimeShaderEffect(shader, "scene").asComposeRenderEffect().also { cached = it }
     }
 }
