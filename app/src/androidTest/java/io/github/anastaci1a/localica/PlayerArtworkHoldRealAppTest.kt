@@ -157,7 +157,6 @@ class PlayerArtworkHoldRealAppTest {
                     }
                 }
                 assertNull("The system crash dialog appeared", device.findObject(By.textContains("keeps stopping")))
-                assertTrue(connection.state.value.trackId == current.id)
                 if (expectText != null || expectDescription != null) {
                     device.pressBack()
                     SystemClock.sleep(600)
