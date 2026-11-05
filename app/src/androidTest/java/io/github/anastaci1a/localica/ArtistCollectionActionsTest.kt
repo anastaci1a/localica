@@ -60,6 +60,9 @@ class ArtistCollectionActionsTest {
                     .performScrollToIndex(0)
                 val carousel = compose.onNode(hasScrollToIndexAction() and
                     SemanticsMatcher.keyIsDefined(SemanticsProperties.HorizontalScrollAxisRange))
+                // Scroll the outer grid too: an album's nearest scroll parent is only the
+                // horizontal carousel, whose bottom can be under the floating actions button.
+                carousel.performScrollTo()
                 carousel.performScrollToNode(hasText("All albums"))
                 compose.onNodeWithText("All albums").performClick()
                 for ((index, name) in chosen.withIndex()) {
