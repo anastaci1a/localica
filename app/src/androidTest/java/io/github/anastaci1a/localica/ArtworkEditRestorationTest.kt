@@ -118,6 +118,46 @@ class ArtworkEditRestorationTest {
         }
         compose.awaitExpectedWindowFocus(compose.onNodeWithTag("artwork-crop"))
     }
+    private fun assertRestoredChooserDisplayed() {
+        val gallery = compose.onNodeWithText("Open gallery")
+        try {
+            gallery.assertIsDisplayed()
+        } catch (failure: AssertionError) {
+            // Preserve the first assertion failure; observe without waiting or retrying.
+            fun capture(block: () -> Unit) {
+                runCatching(block).exceptionOrNull()?.let(failure::addSuppressed)
+            }
+            capture {
+                val node = gallery.fetchSemanticsNode()
+                val view = (node.root as androidx.compose.ui.platform.ViewRootForTest).view
+                val state = compose.runOnUiThread {
+                    val rect = android.graphics.Rect()
+                    val visible = view.getGlobalVisibleRect(rect)
+                    val insets = androidx.core.view.ViewCompat.getRootWindowInsets(view)
+                    "attached=${view.isAttachedToWindow} focused=${view.hasWindowFocus()} " +
+                        "shown=${view.isShown} size=${view.width}x${view.height} " +
+                        "visible=$visible rect=$rect ime=${insets?.isVisible(androidx.core.view.WindowInsetsCompat.Type.ime())}"
+                }
+                android.util.Log.e("ArtworkRestoration", "restored chooser bounds=${node.boundsInRoot} native=$state")
+            }
+            capture {
+                val tree = compose.onAllNodes(isRoot(), useUnmergedTree = true).printToString(maxDepth = Int.MAX_VALUE)
+                val sanitized = Regex("(?:file|content)://[^\\s,)]+").replace(tree, "<image-uri>")
+                sanitized.chunked(3000).forEachIndexed { index, chunk ->
+                    android.util.Log.e("ArtworkRestoration", "restored chooser tree part=$index $chunk")
+                }
+            }
+            capture {
+                android.util.Log.e("ArtworkRestoration", InstrumentationRegistry.getInstrumentation()
+                    .uiAutomation.windows.joinToString { window ->
+                        "id=${window.id} type=${window.type} focused=${window.isFocused} " +
+                            "active=${window.isActive} package=${window.root?.packageName}"
+                    })
+            }
+            throw failure
+        }
+    }
+
     private fun recreate() { compose.activityRule.scenario.recreate(); compose.waitForIdle() }
     private fun assertZoom(value: Float) {
         assertEquals(value, compose.onNodeWithContentDescription("Crop zoom").fetchSemanticsNode()
@@ -131,7 +171,7 @@ class ArtworkEditRestorationTest {
         compose.onNodeWithContentDescription("Choose artwork").performScrollTo().performClick()
         repeat(2) {
             recreate()
-            compose.onNodeWithText("Open gallery").assertIsDisplayed()
+            assertRestoredChooserDisplayed()
         }
         chooseRecent()
         compose.onNodeWithContentDescription("Crop zoom").performSemanticsAction(SemanticsActions.SetProgress) { it(2f) }
