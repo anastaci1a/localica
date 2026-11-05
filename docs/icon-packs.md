@@ -1,6 +1,18 @@
 # Icon packs
 
-An icon pack replaces any of the app's icons. Import one in **Settings → Interface → Appearance → Icon pack**; the change applies immediately. **Reset to built-in icons** removes it. **Export built-in icons as a template** writes a pack containing every icon, ready to edit.
+Import a pack in **Settings → Icon packs**. Each pack stays in internal storage after import; its original ZIP is no longer needed. Tap a pack to apply it throughout the app immediately. The built-in set is always available.
+
+The list shows each pack's name, version, author, replacement count and preview icons. **View icons** compares every registered id with its built-in image, grouped by area. Missing images are labeled **Built-in (fallback)**. Unknown ids and rejected images appear separately.
+
+Importing the same name and version offers to update the existing entry. Cancel leaves it unchanged. Deleting a pack requires confirmation; deleting the active pack restores built-in icons. Selecting built-in icons keeps the library. An existing single pack migrates into the library and remains active.
+
+**Export built-in icons as a template** writes every built-in icon, ready to edit.
+
+## Storage
+
+Imported packs live under `filesDir/icon-packs/<id>/`, with their manifest, accepted images, import date and validation report. Updates stage a complete directory before replacing an entry. The previous directory remains recoverable until replacement succeeds. Decoded images are retained in memory; switching never reopens source documents or decodes stored images.
+
+Cached masks use at most 192 × 192 pixels per icon. Accepted source images retain their original resolution in storage.
 
 ## Format
 
@@ -13,8 +25,10 @@ Rules:
 
 - A pack may contain any subset of the ids below. Missing ids silently keep the built-in icon; that is never an error.
 - Images are square, at least 96 px and at most 1024 px, at most 2 MB each.
-- Images are alpha masks: only transparency matters. The app tints them with its theme colors, so packs follow light and dark appearance, the accent and the page ink. Draw in any single color on a transparent background.
-- Unknown ids are ignored and listed in the import summary. Images that are not square, too small or large, or not decodable are rejected individually and listed; the rest of the pack still applies.
+- Images are alpha masks: only transparency matters. Draw in any single color on a transparent background.
+- The app tints masks with theme colors, following light and dark appearance, the accent and the page ink.
+- Unknown ids are ignored and listed in the import report.
+- Non-square, undersized, oversized or undecodable images are rejected individually and listed; the rest of the pack still applies.
 - A pack without a valid `pack.json`, or with no usable icon, is refused and the current icons stay.
 - Notification small icons are system-rendered and cannot be replaced.
 - Fit the glyph inside the image with a small margin; the built-in icons use about 10 percent.
