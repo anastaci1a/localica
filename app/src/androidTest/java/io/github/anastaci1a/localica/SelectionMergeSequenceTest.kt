@@ -167,11 +167,18 @@ class SelectionMergeSequenceTest {
             hoverBridgeStrength(abs(a%3-b%3)+abs(a/3-b/3)==1,false,
                 lastProgress to lastProgress,0f to 0f,1f to 1f)
         val gap=if(flight)16f*density else 16f
-        val changing = LongArray(500)
-        val timings=StringBuilder("frame,progress,totalNs,arrangementNs,roundingNs,pathNs,fillets\n")
+        // Preserve the absolute budget, but do not let one cold/noisy window own it.
+        // Every window contains the same five complete motion cycles; use the median, never the best.
+        val rounds = 5
+        val framesPerRound = 500
+        val warmup = 500
+        val iterations = warmup + rounds * framesPerRound
+        val changing = Array(rounds) { LongArray(framesPerRound) }
+        val cpu = Array(rounds) { LongArray(framesPerRound) }
+        val timings=StringBuilder("round,frame,progress,totalNs,cpuNs,arrangementNs,roundingNs,pathNs,fillets\n")
         var last = regions(0)
         var visibility=List(12) { 1f }
-        for (i in 0 until 1000) {
+        for (i in 0 until iterations) {
             last = regions(i)
             lastProgress = if(flight) androidx.compose.animation.core.FastOutSlowInEasing.transform((i%100)/99f) else .2f+.6f*(i%100)/100f
             // A missing landing destination fades one card while eleven remain present.
@@ -179,12 +186,17 @@ class SelectionMergeSequenceTest {
             visibility=List(12) { member -> if(mixedOpacity && member==5)1f-lastProgress else 1f }
             val arrangement=profile.arrangementNanos;val rounding=profile.roundingNanos
             val path=profile.pathNanos;val fillets=profile.curves
+            val cpuStart = android.os.Debug.threadCpuTimeNanos()
             val start = SystemClock.elapsedRealtimeNanos()
             cache.paths(last,last,gap,visibility,strength=::strength)
-            if (i >= 500) {
-                val elapsed=SystemClock.elapsedRealtimeNanos()-start
-                changing[i-500] = elapsed
-                timings.append("$i,$lastProgress,$elapsed,${profile.arrangementNanos-arrangement},${profile.roundingNanos-rounding},${profile.pathNanos-path},${profile.curves-fillets}\n")
+            val elapsed=SystemClock.elapsedRealtimeNanos()-start
+            val cpuElapsed=android.os.Debug.threadCpuTimeNanos()-cpuStart
+            if (i >= warmup) {
+                val round=(i-warmup)/framesPerRound
+                val frame=(i-warmup)%framesPerRound
+                changing[round][frame] = elapsed
+                cpu[round][frame] = cpuElapsed
+                timings.append("$round,$i,$lastProgress,$elapsed,$cpuElapsed,${profile.arrangementNanos-arrangement},${profile.roundingNanos-rounding},${profile.pathNanos-path},${profile.curves-fillets}\n")
             }
         }
         val cached = LongArray(500)
@@ -196,7 +208,11 @@ class SelectionMergeSequenceTest {
             cached[i] = SystemClock.elapsedRealtimeNanos()-start
         }
         assertEquals("Unchanged inputs must reuse the contour",settledRebuilds,cache.rebuilds)
-        changing.sort(); cached.sort()
+        changing.forEach { it.sort() }; cpu.forEach { it.sort() }; cached.sort()
+        val medians=changing.map { it[framesPerRound/2] }
+        val tails=changing.map { it[framesPerRound*95/100] }
+        val median=medians.sorted()[rounds/2]
+        val tail=tails.sorted()[rounds/2]
         val gated=Build.VERSION.SDK_INT==26 && InstrumentationRegistry.getArguments().getString("selectionOutlineTimingGate")!="false"
         val renderer=runCatching {
             val fd=InstrumentationRegistry.getInstrumentation().uiAutomation.executeShellCommand("dumpsys SurfaceFlinger")
@@ -204,13 +220,13 @@ class SelectionMergeSequenceTest {
                 reader.lineSequence().filter { it.contains("GLES:") || it.contains("GL_RENDERER") }.joinToString(" | ").trim()
             }
         }.getOrDefault("unavailable").ifBlank { "unavailable" }
-        val report = "workload=$name api=${Build.VERSION.SDK_INT} device-density=$density geometry-density=${if(flight)density else 1f} items=12 opacity-levels=${if(mixedOpacity)2 else 1} gated=$gated renderer=$renderer changing-p50-ns=${changing[250]} changing-p95-ns=${changing[475]} changing-max-ns=${changing.last()} cache-p50-ns=${cached[250]} cache-p95-ns=${cached[475]} rebuilds=${cache.rebuilds} geometry-mean-ns=${profile.evaluationNanos/1000} primitives-per-frame=${profile.samples/1000} segments-per-frame=${profile.cells/1000} fillets-per-frame=${profile.curves/1000} arrangement-mean-ns=${profile.arrangementNanos/1000} rounding-mean-ns=${profile.roundingNanos/1000} path-mean-ns=${profile.pathNanos/1000}"
+        val report = "workload=$name api=${Build.VERSION.SDK_INT} device-density=$density geometry-density=${if(flight)density else 1f} items=12 opacity-levels=${if(mixedOpacity)2 else 1} gated=$gated renderer=$renderer rounds=$rounds frames-per-round=$framesPerRound aggregation=median-of-window-percentiles changing-p50-ns=$median changing-p95-ns=$tail changing-max-ns=${changing.maxOf { it.last() }} window-p50-ns=${medians.joinToString(",")} window-p95-ns=${tails.joinToString(",")} window-cpu-p50-ns=${cpu.joinToString(",") { it[framesPerRound/2].toString() }} cache-p50-ns=${cached[250]} cache-p95-ns=${cached[475]} rebuilds=${cache.rebuilds} geometry-mean-ns=${profile.evaluationNanos/iterations} primitives-per-frame=${profile.samples/iterations} segments-per-frame=${profile.cells/iterations} fillets-per-frame=${profile.curves/iterations} arrangement-mean-ns=${profile.arrangementNanos/iterations} rounding-mean-ns=${profile.roundingNanos/iterations} path-mean-ns=${profile.pathNanos/iterations}"
         File(output,"performance-$name-api${Build.VERSION.SDK_INT}.txt").writeText(report)
         File(output,"performance-$name-frames-api${Build.VERSION.SDK_INT}.csv").writeText(timings.toString())
         android.util.Log.i("SelectionOutlinePerformance",report)
         if(gated) {
-            assertTrue(report,changing[250] <= 1_000_000)
-            assertTrue(report,changing[475] <= 2_000_000)
+            assertTrue(report,median <= 1_000_000)
+            assertTrue(report,tail <= 2_000_000)
             assertTrue(report,cached[250] <= 1_000_000 && cached[475] <= 2_000_000)
         }
     }
