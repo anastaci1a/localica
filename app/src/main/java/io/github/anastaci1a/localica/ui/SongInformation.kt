@@ -91,7 +91,7 @@ internal fun SongInformation(track: Track, onDismiss: () -> Unit, onEdit: (() ->
                 SongInformationRow("Qualified plays", track.playCount.toString(), AppIcon.TransportPlay)
             }
         })
-    if (viewingArtwork) ArtworkViewer(track.uri) { viewingArtwork = false }
+    if (viewingArtwork) ArtworkViewer(track.uri, track.albumArtist ?: track.artist, track.album) { viewingArtwork = false }
 }
 
 /** A single full-width action owner; labels and values share the same leading icon inset. */
