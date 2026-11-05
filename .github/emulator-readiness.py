@@ -54,7 +54,11 @@ def wait_ready(device, deadline, clock=time.monotonic, sleep=time.sleep):
         sample = {'elapsed_remaining': round(deadline - clock(), 2)}
         try:
             sample['boot'] = device.call('shell', 'getprop', 'sys.boot_completed') == '1'
-            sample['boot_animation_stopped'] = device.call('shell', 'getprop', 'init.svc.bootanim') == 'stopped'
+            # With -no-boot-anim the image may never start this optional service.
+            # An absent service is not a boot failure; actual focus and frames below
+            # must still prove the launcher is ready. Preserve the raw diagnostic.
+            sample['boot_animation_state'] = device.call('shell', 'getprop', 'init.svc.bootanim')
+            sample['boot_animation_stopped'] = sample['boot_animation_state'] in ('', 'stopped')
             sample['package_manager'] = device.call('shell', 'pm', 'path', 'android').startswith('package:')
             if all(sample[key] for key in ('boot', 'boot_animation_stopped', 'package_manager')):
                 if home is None:

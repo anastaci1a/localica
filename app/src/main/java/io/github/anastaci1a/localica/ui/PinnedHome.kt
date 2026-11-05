@@ -125,9 +125,9 @@ internal fun PinnedHome(library: LibraryUiState, playlists: PlaylistState, pins:
                 }
                 CollectionActions(currentOrder && menu == item.ref, anchor, item, playlists, playlistController, queues, pins, onPin, { menu = null },
                     onInformationPresented = { track, presentation -> collectionLookup.cancel(); info = SongInformationRequest(track, presentation) }, extra = {
-                    ActionMenuItem("Move earlier", icon = R.drawable.ic_drag, enabled = pins.indexOf(item.ref) > 0,
+                    ActionMenuItem("Move earlier", icon = AppIcon.ActionDrag, enabled = pins.indexOf(item.ref) > 0,
                         onClick = { onMove(item.ref, -1); menu = null })
-                    ActionMenuItem("Move later", icon = R.drawable.ic_drag, enabled = pins.indexOf(item.ref) < pins.lastIndex,
+                    ActionMenuItem("Move later", icon = AppIcon.ActionDrag, enabled = pins.indexOf(item.ref) < pins.lastIndex,
                         onClick = { onMove(item.ref, 1); menu = null })
                 })
             } }

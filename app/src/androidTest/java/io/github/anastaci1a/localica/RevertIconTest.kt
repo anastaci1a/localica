@@ -1,5 +1,6 @@
 package io.github.anastaci1a.localica
 
+import io.github.anastaci1a.localica.ui.AppIcon
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
@@ -11,7 +12,7 @@ class RevertIconTest {
     @Test fun arrowheadPointsAlongTheCounterclockwiseRingAtActionIconSizes() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         for (size in listOf(24, 48, 96)) {
-            val icon = requireNotNull(context.getDrawable(R.drawable.ic_revert))
+            val icon = requireNotNull(context.getDrawable(AppIcon.ActionRevert.builtin))
             val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
             try {
                 icon.setBounds(0, 0, size, size)

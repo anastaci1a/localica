@@ -107,7 +107,7 @@ internal fun LyricsPanel(track: Track?, positionMs: Long, reducedMotion: Boolean
         originPreparation = originPreparation) {
         menuSources.forEach { item ->
             Box(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)) {
-                GlassActionButton(R.drawable.ic_lyrics,
+                GlassActionButton(AppIcon.ActionLyrics,
                     item.label + if (item.document.synced) " · synced" else "",
                     Modifier.fillMaxWidth(), enabled = sourcesOpen && track?.id == menuTrack, onClick = {
                         if (sourcesOpen && track?.id == menuTrack) {
@@ -139,7 +139,7 @@ internal fun LyricsPanel(track: Track?, positionMs: Long, reducedMotion: Boolean
                             Box(Modifier.fillMaxWidth().wrapContentHeight(Alignment.Top, unbounded = true)
                                 .height(stableHeight).offset(y = contentOffset), contentAlignment = Alignment.Center) {
                                 // A prior song's empty state is no longer authoritative once another read starts.
-                                if (presentation == LyricsPresentation.Missing) Icon(androidx.compose.ui.res.painterResource(io.github.anastaci1a.localica.R.drawable.ic_lyrics),
+                                if (presentation == LyricsPresentation.Missing) Icon(appIconPainter(AppIcon.ActionLyrics),
                                     "No local lyrics", Modifier.size(56.dp).testTag("empty-lyrics"), tint = ink.copy(alpha = .22f))
                             }
                         }

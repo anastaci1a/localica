@@ -82,8 +82,9 @@ class PlayerBackgroundPolarityTest {
                         if (production != null && role != null) {
                             SideEffect { productionRole = role.identity; productionBackdrop = production }
                             Row(Modifier.align(androidx.compose.ui.Alignment.TopStart)) {
-                                val baselineTone = GlassTone(settings.glass.contrast, settings.glass.contrastWeight,
-                                    !visual.palette.isLight())
+                                // #576: the sampler measures the UNGRADED backing whatever the trim, so the ink choice cannot
+                                // depend on (or feed back from) the grade painted for it.
+                                val baselineTone = GlassTone()
                                 PlayerBackdrop(production.palette, Modifier.size(96.dp).testTag("baseline-wash"),
                                     fullArtBlend = 1f, artTop = 0f, artHeight = 96f, artLeft = 0f, artWidth = 96f,
                                     tone = baselineTone, onBackgroundDescriptor = { baselineBackdrop = it })
@@ -141,8 +142,10 @@ class PlayerBackgroundPolarityTest {
         val y = (transport.top - bounds.top + 3).toInt().coerceIn(0, image.height - 1)
         return image[x, y].red
     }
-    private fun assertRenderedInk(light: Boolean) {
-        assertEquals(if (light) Color.White else Color.Black, ink)
+    // [tolerance] admits the ink easing on the artwork blend's clock (#578): a nearly finished ease is not yet exact.
+    private fun assertRenderedInk(light: Boolean, tolerance: Float = 0f) {
+        if (tolerance > 0f) assertEquals(if (light) 1f else 0f, ink.red, tolerance)
+        else assertEquals(if (light) Color.White else Color.Black, ink)
         val image = compose.onNodeWithContentDescription("Play").captureToImage().toPixelMap()
         var inkPixels = 0
         for (y in image.height / 4 until image.height * 3 / 4) for (x in image.width / 4 until image.width * 3 / 4) {
@@ -186,7 +189,7 @@ class PlayerBackgroundPolarityTest {
 
     @Test fun zeroTrimControlHasIdenticalBackingForBothToneDirections() = compareBacking(0f)
 
-    @Test fun nonzeroTrimPreservesThePre473BackingWhenInkDiffersFromPalettePolarity() = compareBacking(.5f)
+    @Test fun nonzeroTrimStillMeasuresTheUngradedBackingWhenInkDiffersFromPalettePolarity() = compareBacking(.5f)
 
     private fun compareBacking(trim: Float) {
         settings = settings.copy(glass = settings.glass.copy(contrast = trim))
@@ -222,7 +225,7 @@ class PlayerBackgroundPolarityTest {
         for (y in 0 until baseline.height) for (x in 0 until baseline.width) {
             if (baseline[x, y] != selected[x, y]) changed++
         }
-        assertEquals("Changing ink must not retone the existing backing; changed pixels=$changed", 0, changed)
+        assertEquals("The measured backing must be the ungraded one; changed pixels=$changed", 0, changed)
     }
 
     @Test fun whiteCoverBlackLowerBorderUsesDirectAndContinuationFootprintsAtShortTallAndTranslatedInsets() {
@@ -328,7 +331,7 @@ class PlayerBackgroundPolarityTest {
         assertTrue("Contrast must change before the transition settles: ${jointInkContext()}", late.transitioning)
         assertTrue(late.roles.any { it.visual.contentKey == white.contentKey && it.weight > .55f && it.weight < 1f })
         assertFalse("The displayed white contribution now needs dark ink", owner.decision.lightInk)
-        assertRenderedInk(false)
+        assertRenderedInk(false, tolerance = .05f)
         assertTrue("The same live transport backing has become light", sampleBackgroundAtTransport() > .55f)
         frames(32); current()
         assertFalse(owner.decision.lightInk)

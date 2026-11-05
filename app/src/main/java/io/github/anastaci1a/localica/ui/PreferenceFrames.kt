@@ -8,7 +8,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Dp
@@ -20,14 +19,14 @@ internal val LocalCompactPreferenceFrames = androidx.compose.runtime.composition
 
 /** Stateless field faces shared by live controls and popup envelope measurement. */
 @Composable
-internal fun SettingsLinkFace(title: String, summary: String?, icon: Int?, modifier: Modifier = Modifier,
+internal fun SettingsLinkFace(title: String, summary: String?, icon: AppIcon?, modifier: Modifier = Modifier,
     headlineStyle: TextStyle = MaterialTheme.typography.bodyLarge,
     summaryStyle: TextStyle = MaterialTheme.typography.bodyMedium,
     colors: ListItemColors = ListItemDefaults.colors(containerColor = Color.Transparent)) {
     ListItem(headlineContent = { Text(title, style = headlineStyle) },
         supportingContent = summary?.let { { Text(it, style = summaryStyle) } },
-        leadingContent = icon?.let { { Icon(painterResource(it), null, Modifier.size(24.dp)) } },
-        trailingContent = { Icon(painterResource(R.drawable.ic_back), null, Modifier.size(20.dp).rotate(180f)) },
+        leadingContent = icon?.let { { Icon(appIconPainter(it), null, Modifier.size(24.dp)) } },
+        trailingContent = { Icon(appIconPainter(AppIcon.ActionBack), null, Modifier.size(20.dp).rotate(180f)) },
         colors = colors, modifier = modifier.heightIn(min = 64.dp))
 }
 
@@ -101,10 +100,10 @@ internal fun TextButtonMeasurement(label: String, labelStyle: TextStyle? = null)
 }
 
 @Composable
-internal fun GlassChoiceFace(label: String, icon: Int? = null, tab: Boolean = false, labelStyle: TextStyle? = null) {
+internal fun GlassChoiceFace(label: String, icon: AppIcon? = null, tab: Boolean = false, labelStyle: TextStyle? = null) {
     Row(Modifier.padding(horizontal = ChoiceLabelHorizontalInset), verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        icon?.let { Icon(painterResource(it), null, Modifier.size(24.dp)) }
+        icon?.let { Icon(appIconPainter(it), null, Modifier.size(24.dp)) }
         Text(label, style = labelStyle ?: if (tab) MaterialTheme.typography.titleMedium else MaterialTheme.typography.bodyLarge,
             maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
     }
@@ -112,7 +111,7 @@ internal fun GlassChoiceFace(label: String, icon: Int? = null, tab: Boolean = fa
 
 /** Pure equal-cell geometry without selector/input owners. */
 @Composable
-internal fun GlassChoicesMeasurement(labels: List<String>, icons: List<Int>? = null, tab: Boolean = false,
+internal fun GlassChoicesMeasurement(labels: List<String>, icons: List<AppIcon>? = null, tab: Boolean = false,
     horizontal: Boolean = true, cellHeight: Dp? = null, labelStyle: TextStyle? = null,
     outerVerticalInset: Dp = ChoiceOuterVerticalInset) {
     if (labels.isEmpty()) return

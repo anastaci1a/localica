@@ -255,6 +255,23 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     var collectionMenu by remember { mutableStateOf(false) }
     val collectionMenuAnchor = rememberGlassAnchor()
     val gridState = rememberLazyGridState()
+    val scrollScope = rememberCoroutineScope()
+    val reorder = remember(route.key) { SongDragState(gridState, scrollScope) }
+    val scrollResetInput = when {
+        route.globalSearch -> Triple(true, route.filter, route.text)
+        route.tab == MainTab.Library && route.collection == null && !route.search ->
+            Triple(false, route.filter, "")
+        else -> null
+    }
+    // A fresh mount restores its route's saved viewport. Only an input change
+    // within that page must discard LazyGrid's retained item/key anchor.
+    var previousScrollResetInput by remember(route.key) { mutableStateOf(scrollResetInput) }
+    SideEffect {
+        if (previousScrollResetInput != scrollResetInput) {
+            previousScrollResetInput = scrollResetInput
+            gridState.requestScrollToItem(0)
+        }
+    }
     val artistFilterRange = remember(route.key) { ArtistFilterRange() }
     fun chooseArtistAlbums(ids: List<String>) {
         if (ids == selectedAlbums) return
@@ -481,7 +498,8 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
         retainRaster = false)
     val backdropBacking = if (artDetail) collectionSource else surroundingBackdrop
     val backdropScene = rememberBrowseBackdropScene(listBackdrop, backdropBacking,
-        listOf(presentation, validAlbums, if (artDetail) hero else surroundingBackdrop?.fallback)) { gridState.isScrollInProgress }
+        listOf(presentation, validAlbums, if (artDetail) hero else surroundingBackdrop?.fallback),
+        liveWhileScrolling = LocalGlassAppearance.current.liveScrollGlass || reorder.drag != null) { gridState.isScrollInProgress }
     val maskedBackdrop = (showSearchPill || showFilters) && !artDetail
     val viewportBackdrop = if (needsListBackdrop) rememberBrowseBackdropLayer(backdropScene, maskedBackdrop) else null
     // #535 (b): the always-on stuck-state watchdog and phase trail feed the in-app diagnostics buffer.
@@ -515,7 +533,6 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
             }
         }
     }
-    val scrollScope = rememberCoroutineScope()
     val artworkTransit = remember { ArtworkTransit() }
     val latestBrowse by rememberUpdatedState(browse)
     val latestReducedMotion by rememberUpdatedState(rememberEffectiveReducedMotion(reducedMotion || LocalReducedMotion.current))
@@ -628,10 +645,12 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
         session.clear()
     }
     BindSelectionScope(session, route.collection, result.rows, selectionVisible && !localSearchOpen)
-    val reorder = remember(route.key) { SongDragState(gridState, scrollScope) }
     // The selection host publishes hover lifts; a drag starts its cards from them (#533).
     val selectionScene = remember(route.key) { SelectionScene() }
-    SideEffect { reorder.hoverLift = { key -> selectionScene.hover[key] }; reorder.hoverBacking = backdropBacking }
+    SideEffect {
+        reorder.hoverLift = { key -> selectionScene.hover[key] }; reorder.hoverBacking = backdropBacking
+        reorder.currentSongKey = playingEntryId.takeIf { route.collection?.kind == MediaKind.Queue }
+    }
     val dragHost = LocalSongDragHost.current
     val floatingControlClearance = if (route.collection?.kind == MediaKind.Queue) 12.dp else 0.dp
     SideEffect {
@@ -980,7 +999,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                         if (library.loading) LinearProgressIndicator(Modifier.fillMaxWidth())
                         if (library.snapshot.folders.isEmpty() && route.collection?.kind != MediaKind.Queue) ActionTextButton(onClick = onSettings) { Text("Add music folders") }
                         if (result.items.isEmpty() && !library.loading && !queryPending) Box(Modifier.fillMaxWidth().height(220.dp), contentAlignment = Alignment.Center) {
-                            Icon(androidx.compose.ui.res.painterResource(R.drawable.ic_queue),
+                            Icon(appIconPainter(AppIcon.TabQueues),
                                 if (route.search) "No matching items" else "Empty list", Modifier.size(72.dp),
                                 tint = LocalContentColor.current.copy(alpha = .13f))
                         }
@@ -1043,7 +1062,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                         }
                         val itemMenu: @Composable (Boolean) -> Unit = { showButton ->
                             Box {
-                                if (showButton) ActionIcon(R.drawable.ic_ellipsis, "Actions for " + item.title, anchor = menuAnchor,
+                                if (showButton) ActionIcon(AppIcon.ActionEllipsis, "Actions for " + item.title, anchor = menuAnchor,
                                     quietInputEnabled = displayedStyle.presentation == Presentation.List, quiet = true, onLongClickLabel = holdLabel,
                                     onLongClick = onHold.takeIf { !queryPending && (item.row == null || enabled) }) { menuAnchor.prepareContextPlacement(); contextMenu = item.key }
                                 val menuOpen = contextMenu == item.key
@@ -1201,7 +1220,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                 if (playlist != null || artDetail) Box(Modifier.align(Alignment.BottomEnd).padding(end = 12.dp, bottom = obscuredInset)) {
                     val anchor = rememberGlassAnchor()
                     var open by remember { mutableStateOf(false) }
-                    ActionIcon(R.drawable.ic_ellipsis, if (playlist != null) "Playlist actions" else if (artistDetail) "Artist actions" else "Album actions", anchor = anchor) { open = true }
+                    ActionIcon(AppIcon.ActionEllipsis, if (playlist != null) "Playlist actions" else if (artistDetail) "Artist actions" else "Album actions", anchor = anchor) { open = true }
                     CollectionActions(open, anchor, collectionActionTarget(requireNotNull(route.collection), playlist?.name ?: route.title.orEmpty(), result, playlist?.coverUri),
                         playlists, playlistController, queues, pins, onPin, { open = false },
                         onDeleted = { onRoute(route.copy(collection = null, title = null)) },

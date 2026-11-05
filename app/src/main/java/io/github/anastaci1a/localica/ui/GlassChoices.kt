@@ -26,7 +26,7 @@ import kotlin.math.roundToInt
 
 /** One moving lens, with the same targets for tapping, dragging and accessibility. */
 @Composable
-internal fun GlassChoices(labels: List<String>, selected: Int, modifier: Modifier = Modifier, horizontal: Boolean = false, icons: List<Int>? = null, role: Role = Role.RadioButton, cellHeight: Dp? = null,
+internal fun GlassChoices(labels: List<String>, selected: Int, modifier: Modifier = Modifier, horizontal: Boolean = false, icons: List<AppIcon>? = null, role: Role = Role.RadioButton, cellHeight: Dp? = null,
     labelStyle: TextStyle? = null, outerVerticalInset: Dp = ChoiceOuterVerticalInset, onSelect: (Int) -> Unit) {
     if (labels.isEmpty()) return
     val position = remember { Animatable(selected.toFloat()) }

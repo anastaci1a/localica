@@ -12,7 +12,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.R
@@ -33,12 +32,12 @@ internal fun SettingsPage(title: String, onBack: () -> Unit, onClose: () -> Unit
             Column(Modifier.fillMaxSize().safeDrawingPadding()) {
                 Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp).heightIn(min = 64.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    ActionIcon(R.drawable.ic_back, backLabel, onClick = onBack)
+                    ActionIcon(AppIcon.ActionBack, backLabel, onClick = onBack)
                     androidx.compose.animation.Crossfade(title, Modifier.weight(1f),
                         androidx.compose.animation.core.tween(if (reduced) 0 else (220 / speed).toInt()), label = "Settings heading") {
                         Text(it, style = MaterialTheme.typography.titleLarge)
                     }
-                    ActionIcon(R.drawable.ic_close, "Close settings", onClick = onClose)
+                    ActionIcon(AppIcon.ActionClose, "Close settings", onClick = onClose)
                 }
                 key(title) {
                     var entered by remember { mutableStateOf(false) }
@@ -53,7 +52,7 @@ internal fun SettingsPage(title: String, onBack: () -> Unit, onClose: () -> Unit
 }
 
 @Composable
-internal fun SettingsLink(title: String, summary: String? = null, icon: Int? = null, enabled: Boolean = true, anchor: GlassAnchor? = null,
+internal fun SettingsLink(title: String, summary: String? = null, icon: AppIcon? = null, enabled: Boolean = true, anchor: GlassAnchor? = null,
     onClick: () -> Unit) {
     anchor?.captureInk()
     // Retained modal foreground keeps the source composition’s ink and typography.

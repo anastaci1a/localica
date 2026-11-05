@@ -93,7 +93,7 @@ internal fun PlayerArtworkFrame(visual: PlayerVisual, modifier: Modifier, shape:
         androidx.compose.foundation.Canvas(Modifier.matchParentSize()) { drawRect(visual.palette.middle) }
         if (visual.artwork != null) Image(visual.artwork, stringResource(R.string.album_artwork), Modifier.fillMaxSize(), contentScale = contentScale)
         else if (visual.loading) ArtworkPlaceholder(true, Modifier.matchParentSize(), showIcon = false, tintUris = listOfNotNull(visual.loadingUri))
-        else androidx.compose.material3.Icon(androidx.compose.ui.res.painterResource(R.drawable.ic_music), "No artwork",
+        else androidx.compose.material3.Icon(appIconPainter(AppIcon.TabSongs), "No artwork",
             Modifier.align(androidx.compose.ui.Alignment.Center).fillMaxSize(.3f), tint = androidx.compose.ui.graphics.Color.White.copy(alpha = .4f))
     }
 }

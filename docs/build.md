@@ -90,7 +90,7 @@ Fresh `native-live-evidence` is always uploaded, including on failure. Existing 
 
 ### Measured native shards
 
-The eight native shards per API assign whole classes by measured duration, longest first. The [duration profile](../.github/test-evidence/class-durations.csv) records the complete device reports of v0.32.0's full run 41939345197 (#591). Its predecessor used runs 41771741272, 41766949579 and 41762838145 (#550).
+The eight native shards per API assign whole classes by measured duration, longest first. The [duration profile](../.github/test-evidence/class-durations.csv) records v0.33.0's complete run 41980502454 (#598). Previous profiles used v0.32.0 run 41939345197 (#591) and runs 41771741272, 41766949579 and 41762838145 (#550).
 
 Each complete run generates a profile in `complete-verification` for the next [release preparation](#release-preparation). The refresh helper also accepts multiple run directories and takes each class's median duration. Refresh after adding slow classes: an unmeasured six-minute class unbalanced a v0.32.0 shard. The budget is build 10 minutes, slowest shard 22 minutes, whole run 40 minutes.
 
@@ -99,6 +99,8 @@ Each device artifact retains `native-shard-plan.json`: source/profile hashes, cl
 Risk preflight retains its existing method partition. Weighted remainder shards exclude those risk classes. The summary still requires every API-qualified method exactly once, including recorded skips; missing, extra, repeated or failed outcomes cannot certify the full suite.
 
 ### Opt-in prototypes
+
+Each prototype occupies at most two runners: one chain runs build and both compatibility checks; the other runs both focused APIs. A failed check does not skip later checks in its chain. Release coordination still holds new prototype dispatches until release shards start, reducing competition for the runner pool.
 
 The opt-in `prototype.yml` lane builds an explicitly uncertified development APK through manual dispatch or an explicit reusable-workflow call. Select up to 73 affected behavior classes (4096 characters maximum including the three mandatory regression classes) and describe coverage and limitations.
 

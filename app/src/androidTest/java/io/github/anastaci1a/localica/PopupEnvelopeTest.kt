@@ -98,15 +98,15 @@ class PopupEnvelopeTest {
                     Sample("face-slider") { SliderPreferenceFrame("Items per row: 5", null, null, null) { Spacer(Modifier.fillMaxWidth().height(InterfaceSliderHeight)) } }
                     Sample("live-switch") { BooleanPreference("Save only for this list", false) {} }
                     Sample("face-switch") { BooleanPreferenceFrame("Save only for this list") { Spacer(Modifier.size(InterfaceSwitchWidth, InterfaceSwitchHeight)) } }
-                    Sample("live-action") { GlassActionButton(R.drawable.ic_shuffle, "Randomize") {} }
-                    Sample("face-action") { Box(Modifier.heightIn(min = CompactControlSize)) { GlassActionButtonFace(R.drawable.ic_shuffle, "Randomize") } }
+                    Sample("live-action") { GlassActionButton(AppIcon.ActionShuffle, "Randomize") {} }
+                    Sample("face-action") { Box(Modifier.heightIn(min = CompactControlSize)) { GlassActionButtonFace(AppIcon.ActionShuffle, "Randomize") } }
                     Sample("live-strip") { GlassActionRow {
-                        GlassActionButton(R.drawable.ic_shuffle, "Randomize") {}
-                        GlassActionButton(R.drawable.ic_revert, "Revert") {}
+                        GlassActionButton(AppIcon.ActionShuffle, "Randomize") {}
+                        GlassActionButton(AppIcon.ActionRevert, "Revert") {}
                     } }
                     Sample("face-strip") { GlassActionRowMeasurement {
-                        GlassActionButtonFace(R.drawable.ic_shuffle, "Randomize", Modifier.heightIn(min = CompactControlSize))
-                        GlassActionButtonFace(R.drawable.ic_revert, "Revert", Modifier.heightIn(min = CompactControlSize))
+                        GlassActionButtonFace(AppIcon.ActionShuffle, "Randomize", Modifier.heightIn(min = CompactControlSize))
+                        GlassActionButtonFace(AppIcon.ActionRevert, "Revert", Modifier.heightIn(min = CompactControlSize))
                     } }
                     val labels = listOf("Compact", "Normal", "Large")
                     Sample("live-choice") { ChoicePreference("Size", "Normal", labels, { it }) {} }

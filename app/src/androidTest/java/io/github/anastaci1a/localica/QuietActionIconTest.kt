@@ -24,7 +24,7 @@ class QuietActionIconTest {
         compose.setContent { LocalicaTheme {
             anchor = rememberGlassAnchor()
             if (gallery) Box(Modifier.size(96.dp).contextMenuAnchor(anchor))
-            else ActionIcon(R.drawable.ic_ellipsis, "Song actions", anchor = anchor, quiet = true) {}
+            else ActionIcon(AppIcon.ActionEllipsis, "Song actions", anchor = anchor, quiet = true) {}
         } }
         repeat(3) {
             compose.runOnIdle { assertEquals(16.dp, anchor.cornerRadius); gallery = false }
@@ -43,7 +43,7 @@ class QuietActionIconTest {
         var parentHolds = 0
         compose.setContent { LocalicaTheme {
             Box(Modifier.combinedClickable(onClick = {}, onLongClick = { parentHolds++ })) {
-                ActionIcon(R.drawable.ic_ellipsis, "Song actions", quiet = true,
+                ActionIcon(AppIcon.ActionEllipsis, "Song actions", quiet = true,
                     onLongClickLabel = "Select song", onLongClick = { holds++ }) { taps++ }
             }
         } }
@@ -64,7 +64,7 @@ class QuietActionIconTest {
             scroll = rememberScrollState()
             Column(Modifier.height(400.dp).controlVerticalScroll(scroll)) {
                 Spacer(Modifier.height(100.dp))
-                ActionIcon(R.drawable.ic_ellipsis, "Song actions", quiet = true,
+                ActionIcon(AppIcon.ActionEllipsis, "Song actions", quiet = true,
                     onLongClick = { holds++ }) { taps++ }
                 Spacer(Modifier.height(800.dp))
             }

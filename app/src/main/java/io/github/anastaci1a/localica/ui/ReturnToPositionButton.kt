@@ -9,7 +9,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -31,7 +30,7 @@ internal fun ReturnToPositionButton(up: Boolean, label: String, visible: Boolean
         .clickable(role = Role.Button, onClickLabel = label, onClick = activate)
         else Modifier.clearAndSetSemantics { }
     LiquidGlassSurface(Modifier.size(CompactControlSize).clip(CircleShape).then(input), pressFeedback = visible) {
-        Icon(painterResource(R.drawable.ic_arrow_down), label,
+        Icon(appIconPainter(AppIcon.ActionArrowDown), label,
             Modifier.align(Alignment.Center).size(24.dp).graphicsLayer { rotationZ = if (direction) 180f else 0f })
     }
 }

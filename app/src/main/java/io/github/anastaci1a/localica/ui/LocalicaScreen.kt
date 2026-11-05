@@ -23,7 +23,6 @@ import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.R
@@ -274,7 +273,9 @@ fun LocalicaScreen(
         LocalBrowseObscuredInset provides (browseBottomChrome + selectionPanel.clearance)) {
     BoxWithConstraints(Modifier.fillMaxSize().recordFrostedBackdrop(modalBackdrop).background(MaterialTheme.colorScheme.background).bottomGlassShadowHost(bottomShadows).testTag("browse-background").windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))) {
         val inset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+        val screenScope = this
         val queueSelectionMaxHeight = maxHeight / 3
+        SongDragScene(dragHost, Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize()
             // The opaque full player covers this entire scene. Keep its composition,
             // scroll state and cached recording, but do not submit hidden pixels.
@@ -295,7 +296,7 @@ fun LocalicaScreen(
                     Modifier else Modifier.statusBarsPadding())) {
                 if (!collectionChrome) Row(Modifier.zIndex(2f).fillMaxWidth().heightIn(min = 56.dp).padding(horizontal = 12.dp),
                     horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                    if ((navigation.stacks[tab]?.size ?: 1) > 1) ActionIcon(R.drawable.ic_back, "Back") { back() }
+                    if ((navigation.stacks[tab]?.size ?: 1) > 1) ActionIcon(AppIcon.ActionBack, "Back") { back() }
                     androidx.compose.animation.Crossfade(if (route.search) "Search" else route.title ?: route.tab.label,
                         modifier = Modifier.weight(1f), animationSpec = androidx.compose.animation.core.tween(settings.motionDuration(220)), label = "Page heading") { title ->
                         Text(title, style = MaterialTheme.typography.titleLarge, modifier = Modifier.testTag("page-heading"))
@@ -363,8 +364,8 @@ fun LocalicaScreen(
                 onSearch = { navigation = navigation.commitSearch().open(BrowseRoute(navigation.active, search = true, globalSearch = true)) },
                 onMore = { moreOpen = true })
             GlassMenu(moreOpen, utilityAnchor, { moreOpen = false }) {
-                ActionMenuItem("Scan music", icon = R.drawable.ic_folder, onClick = { moreOpen = false; scannerOpen = true })
-                ActionMenuItem("Settings", icon = R.drawable.ic_settings, onClick = { moreOpen = false; settingsCategory = null; settingsOpen = true })
+                ActionMenuItem("Scan music", icon = AppIcon.TabFolders, onClick = { moreOpen = false; scannerOpen = true })
+                ActionMenuItem("Settings", icon = AppIcon.ActionSettings, onClick = { moreOpen = false; settingsCategory = null; settingsOpen = true })
             }
         }
         // The pill is a standard Liquid Glass pill over the page: it samples the browse backdrop and takes the
@@ -373,13 +374,13 @@ fun LocalicaScreen(
         GlassPanelTheme(browseInk == androidx.compose.ui.graphics.Color.White) {
         FloatingSelectionPanel(selectionPanel, Modifier.align(Alignment.BottomCenter)
             .padding(horizontal = 8.dp).padding(bottom = browseBottomChrome)
-            .fillMaxWidth().heightIn(max = maxHeight / 2)) {
+            .fillMaxWidth().heightIn(max = screenScope.maxHeight / 2)) {
             Column(Modifier.controlVerticalScroll(rememberScrollState())) {
                 SessionSelectionPanel(session, queueController, playlistController, playlist, dragging = dragHost.state?.drag != null)
             }
         }
         } }
-        if (hasPlayer) PlayerSurface(player, expanded, { expanded = it }, settings, progress,
+        if (hasPlayer) screenScope.PlayerSurface(player, expanded, { expanded = it }, settings, progress,
             onToggle, onSeek, onPrevious, onNext, ::openQueue, { expanded = false },
             lyricsOpen, { lyricsOpen = it }, playerTracks.lyrics,
             { settings = it; preferences.write(it) }, actionRows = if (playerActions.twoRows) 2 else 1, queueProgress = queueProgress, frostedBackdrop = playerBackdrop, glassBackdrop = browseBackdrop, visual = playerVisual,
@@ -401,8 +402,8 @@ fun LocalicaScreen(
         }
         if (hasPlayer && playerVisible) CompositionLocalProvider(LocalFrostedBackdrop provides playerBackdrop) {
         GlassPanelTheme(playerLightMix) {
-        PlayerClippedOverlay({ progress.value }, bottomChrome) {
-        QueueSurface(queueProgress, settings, { queueOpen = it }, playerProgress = { progress.value },
+        screenScope.PlayerClippedOverlay({ progress.value }, bottomChrome) {
+        screenScope.QueueSurface(queueProgress, settings, { queueOpen = it }, playerProgress = { progress.value },
             onOpeningContact = { queueOpeningRequest++ }) {
             Box(Modifier.weight(1f)) { CompositionLocalProvider(LocalBrowseObscuredInset provides queueSelectionPanel.clearance) {
             queueDrawerState.SaveableStateProvider("player-queue") { QueueScreen(queues, queueController, library,
@@ -416,8 +417,6 @@ fun LocalicaScreen(
             } } }
         }
         } } }
-        CompositionLocalProvider(LocalFrostedBackdrop provides if (queueVisible) playerBackdrop else browseBackdrop) {
-            ForegroundSongDragOverlay(dragHost)
         }
     }
     androidx.activity.compose.BackHandler(expanded) { if (lyricsOpen) lyricsOpen = false else expanded = false }

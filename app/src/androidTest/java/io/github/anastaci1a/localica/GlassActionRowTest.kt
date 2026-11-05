@@ -43,9 +43,9 @@ class GlassActionRowTest {
             LocalReducedMotion provides true, LocalLayoutDirection provides direction) {
             Box(Modifier.width(328.dp).padding(vertical = 30.dp)) {
                 GlassActionRow(Modifier.testTag("actions")) {
-                    GlassActionButton(R.drawable.ic_shuffle, "Randomize", onClick = { visible = true })
+                    GlassActionButton(AppIcon.ActionShuffle, "Randomize", onClick = { visible = true })
                     GlassPresence(visible) {
-                        GlassActionButton(R.drawable.ic_revert, "Revert", onClick = { visible = false })
+                        GlassActionButton(AppIcon.ActionRevert, "Revert", onClick = { visible = false })
                     }
                 }
             }
@@ -85,11 +85,11 @@ class GlassActionRowTest {
                     Column(Modifier.verticalScroll(rememberScrollState())) {
                         Spacer(Modifier.height(48.dp))
                         GlassActionRow(Modifier.testTag("actions")) {
-                            GlassActionButton(R.drawable.ic_shuffle, "Randomize", onClick = {
+                            GlassActionButton(AppIcon.ActionShuffle, "Randomize", onClick = {
                                 randomizations++; visible = true
                             })
                             GlassPresence(visible) {
-                                GlassActionButton(R.drawable.ic_revert, "Revert", onClick = {
+                                GlassActionButton(AppIcon.ActionRevert, "Revert", onClick = {
                                     reversions++; visible = false
                                 })
                             }
