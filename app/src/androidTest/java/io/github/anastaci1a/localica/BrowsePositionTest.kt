@@ -15,6 +15,7 @@ import io.github.anastaci1a.localica.ui.*
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
+import java.io.File
 
 class BrowsePositionTest {
     @get:Rule val compose = createComposeRule()
@@ -53,14 +54,29 @@ class BrowsePositionTest {
                 LocalicaScreen(LibraryUiState(LibrarySnapshot(folders, tracks), loading = false), PlaybackState(connected = true),
                     {}, {}, {}, {}, {}, {}, playlist = PlaylistState(playlists, false))
             } }
+            val evidence = nativeEvidenceDirectory("catalog-back-position", context.getExternalFilesDir(null))
+            val device = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
             val types = listOf("Albums" to "Album", "Artists" to "Artist", "Album Artists" to "Album artist", "Folders" to "Folder", "Playlists" to "Playlist")
             for ((filter, prefix) in types) {
                 compose.onNodeWithText(filter, useUnmergedTree = true).performScrollTo().performClick()
+                // Catalog queries run off Main. A browser-list tag alone does not identify
+                // which filter has reached layout; await this catalog before walking it.
+                val catalogRows = hasText("$prefix ", substring = true) and hasAnyAncestor(hasTestTag("browser-list"))
+                val initiallyReady = compose.onAllNodes(catalogRows).fetchSemanticsNodes().isNotEmpty()
+                File(evidence, "catalog-readiness.txt").appendText("$filter initiallyReady=$initiallyReady\n")
+                compose.waitUntil(5000) { compose.onAllNodes(catalogRows).fetchSemanticsNodes().isNotEmpty() }
                 for (hardware in listOf(false, true)) {
                     android.util.Log.i("BrowsePositionTest", "Restoring $filter; hardware=$hardware")
                     val title = "$prefix 060"
-                    compose.scrollToUncoveredItem(hasText(title))
+                    try {
+                        compose.scrollToUncoveredItem(hasText(title))
+                    } catch (failure: AssertionError) {
+                        device.takeScreenshot(File(evidence, "$filter-hardware$hardware-search-failed.png"))
+                        File(evidence, "$filter-hardware$hardware-search-failed.txt").writeText(compose.onRoot().printToString())
+                        throw failure
+                    }
                     val before = compose.onNodeWithText(title).fetchSemanticsNode().boundsInRoot
+                    device.takeScreenshot(File(evidence, "$filter-hardware$hardware-before.png"))
                     compose.onNodeWithText(title).performClick()
                     compose.onNodeWithTag("browser-list").performScrollToIndex(1)
                     // Browse queries run on Dispatchers.Default, outside Compose's idle clock.
@@ -91,7 +107,10 @@ class BrowsePositionTest {
                         throw AssertionError("$filter / hardware=$hardware: ${compose.onRoot().printToString()}", failure)
                     }
                     compose.onNodeWithText(title).assertIsDisplayed()
-                    assertEquals("$filter / hardware=$hardware", before, compose.onNodeWithText(title).fetchSemanticsNode().boundsInRoot)
+                    val after = compose.onNodeWithText(title).fetchSemanticsNode().boundsInRoot
+                    device.takeScreenshot(File(evidence, "$filter-hardware$hardware-after.png"))
+                    File(evidence, "restored-bounds.txt").appendText("$filter hardware=$hardware before=$before after=$after\n")
+                    assertEquals("$filter / hardware=$hardware", before, after)
                 }
             }
         } finally { context.getSharedPreferences("interface", 0).edit().clear().commit() }
