@@ -24,15 +24,16 @@ internal object FrameStats {
     private var glass = ""
     private var effectiveGlass = ""
     private var windowLimitReached = false
+    private var timeLimitReached = false
     private val windows = IdentityHashMap<Window, Window.OnFrameMetricsAvailableListener>()
     private val samples = mutableListOf<Pair<String, FrameTiming>>()
-    private val timeout = Runnable { stop() }
+    private val timeout = Runnable { timeLimitReached = true; stop() }
     private var owner: Activity? = null
 
     @Synchronized fun start(activity: Activity) {
         check(Looper.myLooper() == Looper.getMainLooper())
         check(!recording.value && worker == null) { "A capture is still closing" }
-        samples.clear(); windowLimitReached = false
+        samples.clear(); windowLimitReached = false; timeLimitReached = false
         owner = activity
         environment = DiagnosticsExport.environment(activity).toString()
         glass = io.github.anastaci1a.localica.navigation.InterfacePreferences(activity).read().glass.toString()
@@ -84,6 +85,7 @@ internal object FrameStats {
         val end = if (recording.value) System.nanoTime() else ended
         return JSONObject().put("schema", 1).put("environment", environment).put("glass", glass)
             .put("effectiveGlass", effectiveGlass).put("windowLimitReached", windowLimitReached)
+            .put("timeLimitReached", timeLimitReached)
             .put("recording", recording.value).put("durationMs", if (started == 0L) 0 else (end - started) / 1e6)
             .put("scope", "Received app Window frames; excludes system IME. Native tail may be incomplete.")
             .put("jankDefinition", "TOTAL_DURATION > sampled display refresh period; not presentation latency")

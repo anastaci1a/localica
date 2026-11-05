@@ -8,7 +8,7 @@ const files = fs.readdirSync(directory).filter(name => name.endsWith('.json'));
 const runs = files.map(name => ({ file: name, ...JSON.parse(fs.readFileSync(path.join(directory, name), 'utf8')) }))
     .filter(run => run.scenario && !run.warmup);
 if (!runs.length) throw new Error('No measured scenarios');
-if (runs.some(run => run.windowLimitReached)) throw new Error('Window capture limit reached');
+if (runs.some(run => run.windowLimitReached || run.timeLimitReached)) throw new Error('Capture limit reached');
 for (const key of ['api', 'source', 'glassMode', 'songs', 'seed']) {
     if (new Set(runs.map(run => run[key])).size !== 1) throw new Error(`Mixed ${key}; use separate directories`);
 }
