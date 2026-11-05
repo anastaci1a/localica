@@ -690,12 +690,12 @@ class WorkflowContract(unittest.TestCase):
             self.assertEqual('always()',preserve['if'])
             self.assertIn('reports/prototype-runner-environment.txt',preserve['run'])
 
-    def test_full_selected_gate_retains_time_budget_and_original_menu_images(self):
+    def test_selected_gate_bounds_hangs_and_retains_original_menu_images(self):
         import yaml
         jobs=yaml.safe_load((ROOT/'.github/workflows/prototype.yml').read_text())['jobs']
         for api in (26,36):
             job=jobs[f'focused_{api}']
-            self.assertEqual("${{ inputs.repeat_methods != '' && 60 || inputs.repeat > 1 && 360 || 60 }}",job['timeout-minutes'])
+            self.assertEqual("${{ inputs.repeat_methods != '' && 60 || inputs.repeat > 1 && 360 || 35 }}",job['timeout-minutes'])
             upload=next(s for s in job['steps']
                 if s.get('with',{}).get('name')==f'prototype-focused-api-{api}')
             self.assertEqual('always()',upload['if'])
@@ -707,6 +707,29 @@ class WorkflowContract(unittest.TestCase):
             self.assertEqual(60,jobs[f'compatibility_{api}']['timeout-minutes'])
         self.assertEqual(20,jobs['build']['timeout-minutes'])
         self.assertEqual(10,jobs['evidence']['timeout-minutes'])
+
+    def test_full_shards_bound_hangs_and_summary_rejects_non_success(self):
+        import yaml
+        jobs = yaml.safe_load((ROOT/'.github/workflows/android.yml').read_text())['jobs']
+        shards = jobs['device-tests']
+        self.assertEqual(35, shards['timeout-minutes'])
+        self.assertFalse(shards['strategy']['fail-fast'])
+        self.assertFalse(shards.get('continue-on-error', False))
+        summary = jobs['device-tests-summary']
+        self.assertIn('always()', summary['if'])
+        self.assertIn('device-tests', summary['needs'])
+        gate = next(step for step in summary['steps']
+                    if step.get('name') == 'Require every shard job to have succeeded')
+        self.assertEqual('always()', gate['if'])
+        self.assertFalse(gate.get('continue-on-error', False))
+        # GitHub exposes timed-out jobs as failure (or cancellation) in needs.result.
+        for shard_result in ('success', 'failure', 'cancelled', 'skipped'):
+            for static_result in ('success', 'failure'):
+                with self.subTest(shard=shard_result, static=static_result):
+                    script = gate['run'].replace('${{ needs.device-tests.result }}', shard_result)
+                    script = script.replace('${{ needs.static-checks.result }}', static_result)
+                    result = subprocess.run(['bash', '-e', '-c', script], capture_output=True)
+                    self.assertEqual(shard_result == static_result == 'success', result.returncode == 0)
 
     def test_android_full_gate_retains_complete_additional_output_and_xml(self):
         import yaml
@@ -742,7 +765,13 @@ class WorkflowContract(unittest.TestCase):
                 if 'run' in step:
                     subprocess.run(['bash','-n'],input=step['run'],text=True,check=True)
                 if 'uses' in step:
-                    self.assertRegex(step['uses'],r'@[0-9a-f]{40}$')
+                    if step['uses'] == './.github/actions/system-image-cache':
+                        action = yaml.safe_load((ROOT/'.github/actions/system-image-cache/action.yml').read_text())
+                        for nested in action['runs']['steps']:
+                            if 'uses' in nested:
+                                self.assertRegex(nested['uses'], r'@[0-9a-f]{40}$')
+                    else:
+                        self.assertRegex(step['uses'],r'@[0-9a-f]{40}$')
 
 
 

@@ -46,7 +46,7 @@ permissions:
 
 env:
   # Native shards per API; keep the device-tests matrix `shard` list at indices 0..N-1.
-  LOCALICA_DEVICE_SHARDS: '7'
+  LOCALICA_DEVICE_SHARDS: '8'
 
 concurrency:
   group: android-${{ github.ref }}
@@ -84,13 +84,49 @@ jobs:
           path: verified-provenance.json
           if-no-files-found: error
 
-  build:
+  test-apks:
+    # Debug app and instrumentation APKs only; the R8 distribution APK is built in parallel by `build`.
     needs: verification-reuse
     if: ${{ !cancelled() && !startsWith(github.ref, 'refs/tags/') && needs.verification-reuse.outputs.reused != 'true' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     outputs:
       test-apks-sha256: ${{ steps.test-apks.outputs.sha256 }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4
+      - name: Restore development signing key
+        if: github.event_name != 'pull_request'
+        env:
+          DEBUG_KEYSTORE: ${{ secrets.ANDROID_DEBUG_KEYSTORE }}
+          KEYSTORE_PATH: ${{ runner.temp }}/localica-debug.keystore
+        run: |
+          test -n "$DEBUG_KEYSTORE"
+          printf '%s' "$DEBUG_KEYSTORE" | base64 --decode > "$KEYSTORE_PATH"
+          chmod 600 "$KEYSTORE_PATH"
+          echo "LOCALICA_DEBUG_KEYSTORE=$KEYSTORE_PATH" >> "$GITHUB_ENV"
+      - name: Build and check
+        # Test APK producers only; unit tests and lint run in static-checks, the R8 APK in build.
+        run: ./gradlew assembleDebug assembleDebugAndroidTest --no-daemon --max-workers=4 -Dorg.gradle.jvmargs='-Xmx6g -Dfile.encoding=UTF-8'
+      - name: Freeze shared instrumentation APKs
+        id: test-apks
+        run: echo "sha256=$(python3 .github/shared-test-apks.py freeze --output native-test-apks)" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: native-test-apks
+          path: native-test-apks/
+          if-no-files-found: error
+
+  build:
+    needs: verification-reuse
+    if: ${{ !cancelled() && !startsWith(github.ref, 'refs/tags/') && needs.verification-reuse.outputs.reused != 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    outputs:
       delivery-apk-sha256: ${{ steps.delivery-apk.outputs.sha256 }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -110,20 +146,13 @@ jobs:
           chmod 600 "$KEYSTORE_PATH"
           echo "LOCALICA_DEBUG_KEYSTORE=$KEYSTORE_PATH" >> "$GITHUB_ENV"
       - name: Build and check
-        # APK producers only; unit tests, lint and the release variant run in parallel in static-checks.
-        run: ./gradlew assembleDebug assembleDebugAndroidTest assembleDistribution --no-daemon --max-workers=4 -Dorg.gradle.jvmargs='-Xmx6g -Dfile.encoding=UTF-8'
-      - name: Freeze shared instrumentation APKs before replacing the delivery APK
-        id: test-apks
-        run: echo "sha256=$(python3 .github/shared-test-apks.py freeze --output native-test-apks)" >> "$GITHUB_OUTPUT"
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: native-test-apks
-          path: native-test-apks/
-          if-no-files-found: error
+        # The R8 delivery APK only; the debug/instrumentation APKs come from test-apks, and unit tests and lint from static-checks.
+        run: ./gradlew assembleDistribution --no-daemon --max-workers=4 -Dorg.gradle.jvmargs='-Xmx6g -Dfile.encoding=UTF-8'
       - name: Publish the optimized distribution APK as the canonical artifact
         run: |
           out=app/build/outputs/apk
-          ls -l "$out/debug/app-debug.apk" "$out/distribution/app-distribution.apk"
+          ls -l "$out/distribution/app-distribution.apk"
+          mkdir -p "$out/debug"
           cp "$out/distribution/app-distribution.apk" "$out/debug/app-debug.apk"
       - name: Verify the artifact is not debuggable
         run: bash .github/verify-non-debuggable.sh app/build/outputs/apk/debug/app-debug.apk
@@ -185,12 +214,11 @@ jobs:
           path: app/build/reports/
 
   device-tests:
-    needs: build
+    needs: test-apks
     if: ${{ !startsWith(github.ref, 'refs/tags/') }}
     runs-on: ubuntu-24.04
-    # Allow native suites plus SDK/build/emulator startup without cutting coverage.
-    # Keep every test and its assertion timeout unchanged.
-    timeout-minutes: 140
+    # Normal shards take 13–19 minutes; bound hangs without trimming coverage.
+    timeout-minutes: 35
     env:
       RISK_CLASSES: ${{ github.event_name == 'workflow_dispatch' && inputs.risk_classes || '' }}
       TEST_API: ${{ matrix.api }}
@@ -202,7 +230,7 @@ jobs:
       fail-fast: false
       matrix:
         api: [26, 36]
-        shard: [0, 1, 2, 3, 4, 5, 6]
+        shard: [0, 1, 2, 3, 4, 5, 6, 7]
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
@@ -231,9 +259,14 @@ jobs:
           path: native-test-apks
       - name: Verify and install shared instrumentation APKs
         env:
-          TEST_APKS_SHA256: ${{ needs.build.outputs.test-apks-sha256 }}
+          TEST_APKS_SHA256: ${{ needs.test-apks.outputs.test-apks-sha256 }}
         run: |
           python3 .github/shared-test-apks.py verify --bundle native-test-apks --digest "$TEST_APKS_SHA256"
+      - name: Restore the exact SDK system image revision
+        id: emulator-image-cache
+        uses: ./.github/actions/system-image-cache
+        with:
+          api: ${{ matrix.api }}
       - uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2
         with:
           api-level: ${{ matrix.api }}
@@ -250,8 +283,21 @@ jobs:
           script: |
             adb shell wm size ${{ matrix.api == 36 && '720x1280' || 'reset' }}
             adb shell wm density ${{ matrix.api == 36 && '280' || 'reset' }}
-            sleep 60
+            python3 .github/emulator-readiness.py
             LOCALICA_SHARD_COUNT=$LOCALICA_DEVICE_SHARDS bash .github/run-device-tests.sh
+      - name: Cache the installed SDK system image
+        if: always() && steps.emulator-image-cache.outputs.cache-hit != 'true'
+        uses: ./.github/actions/system-image-cache
+        with:
+          api: ${{ matrix.api }}
+          mode: save
+      - name: Preserve emulator readiness observations
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: emulator-readiness-${{ github.job }}-${{ strategy.job-index }}
+          path: emulator-readiness.json
+          if-no-files-found: warn
       - name: Preserve native monitoring evidence
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
@@ -290,7 +336,7 @@ jobs:
     # Proves the shards ran every inventory test exactly once. The tag release job checks this job
     # by name instead of the individual shard jobs.
     if: ${{ always() && !startsWith(github.ref, 'refs/tags/') && needs.verification-reuse.outputs.reused != 'true' }}
-    needs: [device-tests, build, static-checks, verification-reuse]
+    needs: [device-tests, test-apks, build, static-checks, verification-reuse]
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -315,12 +361,15 @@ jobs:
             python3 .github/test-evidence/full_partition.py union --root "$PWD" --api "$api" --shards "$LOCALICA_DEVICE_SHARDS" "${args[@]}" | tee "union-api-$api.json" || status=1
           done
           exit $status
+      # A timed-out shard makes the matrix result non-success, even if XML is complete.
       - name: Require every shard job to have succeeded
         if: always()
         run: |
           test "${{ needs.device-tests.result }}" = success
           test "${{ needs.static-checks.result }}" = success
 
+      - name: Refresh the timing profile for the next release
+        run: python3 .github/test-evidence/refresh_durations.py --output class-durations.csv shard-reports
       - name: Record complete verification provenance
         env:
           DELIVERY_APK_SHA256: ${{ needs.build.outputs.delivery-apk-sha256 }}
@@ -332,6 +381,7 @@ jobs:
             verification.json
             union-api-26.json
             union-api-36.json
+            class-durations.csv
           if-no-files-found: error
 
   compatibility:
@@ -371,6 +421,11 @@ jobs:
           sudo rm -rf /usr/share/dotnet
       - name: Build and inspect private compatibility APKs sequentially
         run: bash .github/compatibility/build.sh
+      - name: Restore the exact SDK system image revision
+        id: emulator-image-cache
+        uses: ./.github/actions/system-image-cache
+        with:
+          api: ${{ matrix.api }}
       - uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2
         with:
           api-level: ${{ matrix.api }}
@@ -382,8 +437,21 @@ jobs:
           script: |
             adb shell wm size ${{ matrix.api == 36 && '720x1280' || 'reset' }}
             adb shell wm density ${{ matrix.api == 36 && '280' || 'reset' }}
-            sleep 60
+            python3 .github/emulator-readiness.py
             bash .github/compatibility/run.sh
+      - name: Cache the installed SDK system image
+        if: always() && steps.emulator-image-cache.outputs.cache-hit != 'true'
+        uses: ./.github/actions/system-image-cache
+        with:
+          api: ${{ matrix.api }}
+          mode: save
+      - name: Preserve emulator readiness observations
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: emulator-readiness-${{ github.job }}-${{ strategy.job-index }}
+          path: emulator-readiness.json
+          if-no-files-found: warn
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:
@@ -527,6 +595,11 @@ jobs:
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
+      - name: Restore the exact SDK system image revision
+        id: emulator-image-cache
+        uses: ./.github/actions/system-image-cache
+        with:
+          api: ${{ matrix.api }}
       - uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2
         with:
           api-level: ${{ matrix.api }}
@@ -538,8 +611,21 @@ jobs:
           script: |
             adb shell wm size ${{ matrix.api == 36 && '720x1280' || 'reset' }}
             adb shell wm density ${{ matrix.api == 36 && '280' || 'reset' }}
-            sleep 60
+            python3 .github/emulator-readiness.py
             bash .github/distribution-smoke.sh artifacts/app-debug.apk distribution-smoke-logcat.txt
+      - name: Cache the installed SDK system image
+        if: always() && steps.emulator-image-cache.outputs.cache-hit != 'true'
+        uses: ./.github/actions/system-image-cache
+        with:
+          api: ${{ matrix.api }}
+          mode: save
+      - name: Preserve emulator readiness observations
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: emulator-readiness-${{ github.job }}-${{ strategy.job-index }}
+          path: emulator-readiness.json
+          if-no-files-found: warn
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:
