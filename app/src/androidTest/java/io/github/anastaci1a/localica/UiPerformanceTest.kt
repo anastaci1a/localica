@@ -78,6 +78,10 @@ class UiPerformanceTest {
                 measuredScenarios++
                 repeat(repetitions + 1) { rep ->
                     try {
+                        // Every repetition, including isolated trace passes, starts from the same styles.
+                        listOf("browse-style", "library-query").forEach {
+                            check(context.getSharedPreferences(it, 0).edit().clear().commit())
+                        }
                         launch(); prepare(); Thread.sleep(800)
                         main { activity -> FrameStats.start(activity); windows.forEach { FrameStats.attach(it) } }
                         val cookie = name.hashCode()
