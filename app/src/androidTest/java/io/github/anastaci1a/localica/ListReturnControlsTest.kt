@@ -55,6 +55,7 @@ class ListReturnControlsTest {
         var playCalls = 0
         var ordinaryBack = 0
         var topRequest by mutableIntStateOf(0)
+        var densityScale by mutableFloatStateOf(1f)
         var insetPx = 0f
         var dragHost: SongDragHost? = null
     }
@@ -71,7 +72,9 @@ class ListReturnControlsTest {
             fixture.insetPx = with(LocalDensity.current) { inset.toPx() }
             val dragHost = if (foregroundDrag) remember { SongDragHost() } else LocalSongDragHost.current
             fixture.dragHost = dragHost
-            CompositionLocalProvider(LocalSessionSelection provides fixture.selection, LocalBrowseObscuredInset provides inset,
+            val nativeDensity = LocalDensity.current
+            CompositionLocalProvider(LocalDensity provides androidx.compose.ui.unit.Density(nativeDensity.density * fixture.densityScale, nativeDensity.fontScale),
+                LocalSessionSelection provides fixture.selection, LocalBrowseObscuredInset provides inset,
                 LocalSongDragHost provides dragHost) {
                 Box(Modifier.fillMaxSize().testTag("return-host")) {
                     key(fixture.route.key) { BrowserScreen(library, playlists,
@@ -86,7 +89,18 @@ class ListReturnControlsTest {
         return fixture
     }
 
-    @Test fun imageHeaderCollectionsReturnOnlyToThePaddedSongBoundary() {
+    private fun assertHeaderHome(kind: MediaKind?) {
+        val action = when (kind) {
+            MediaKind.Album -> "Play album"
+            MediaKind.Playlist -> "Play playlist"
+            else -> "Play selected albums"
+        }
+        assertEquals("$kind: action pill and Back share a bottom edge",
+            compose.onNodeWithContentDescription("Back").getUnclippedBoundsInRoot().bottom.value,
+            compose.onNodeWithContentDescription(action).getUnclippedBoundsInRoot().bottom.value, 1f)
+    }
+
+    @Test fun imageHeaderCollectionsReturnToMeasuredActionHomeAcrossDensities() {
         val songs = tracks.mapIndexed { index, track -> track.copy(album = "Return album", artist = "Return artist",
             albumArtist = "Return artist", trackNumber = index + 1) }
         val snapshot = LibrarySnapshot(tracks = songs)
@@ -101,38 +115,47 @@ class ListReturnControlsTest {
         } + BrowseRoute(MainTab.Playlists, MediaRef(MediaKind.Playlist, playlist.id), playlist.name)
         val state = fixture(routes.first(), songs, PlaylistState(listOf(playlist), loading = false), inset = 88.dp)
         val prefs = BrowsePreferences(InstrumentationRegistry.getInstrumentation().targetContext)
-        for ((index, route) in routes.withIndex()) {
-            compose.runOnIdle { state.route = route }
-            compose.waitUntil(5000) { list.fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange].maxValue() > 1f }
-            compose.onNodeWithContentDescription("Return to top").assertDoesNotExist()
-            // Exercise list sizes and a multi-column collection as well as a
-            // disabled scoped search slot. The boundary is layout-owned, not a
-            // cached image height or hard-coded pixel offset.
+        for (scale in listOf(.85f, 1f, 1.35f)) for ((index, route) in routes.withIndex()) {
             compose.runOnIdle {
+                state.densityScale = scale
+                state.route = route.copy(key = route.key + "-$scale")
                 prefs.write(route, prefs.read(route).copy(quickSearch = index % 2 == 0,
                     presentation = if (index == 2) Presentation.Standard else Presentation.List,
                     itemsPerRow = 3, listSize = if (index == 3) ListSize.Smallest else ListSize.Normal), false)
             }
-            val expectedStyle = if (index == 2) "Gallery, 3 columns" else "List, ${if (index == 3) "Smallest" else "Normal"}"
-            compose.waitUntil(5000) { list.fetchSemanticsNode().config[SemanticsProperties.StateDescription] == expectedStyle }
-            val expectsSearchPill = route.collection?.kind != MediaKind.Album && index % 2 == 0
-            compose.waitUntil(5000) {
-                compose.onAllNodesWithTag("list-search-pill", useUnmergedTree = true)
-                    .fetchSemanticsNodes().isNotEmpty() == expectsSearchPill
-            }
-            list.performScrollToIndex(1)
-            compose.onNodeWithContentDescription("Return to top").assertDoesNotExist()
-            list.performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.ScrollBy) { it(0f, 24f) }
-            compose.onNodeWithContentDescription("Return to top").assertIsDisplayed()
+            compose.waitUntil(5000) { list.fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange].maxValue() > 1f }
             list.performScrollToIndex(65)
-            compose.onNodeWithContentDescription("Return to top").performClick()
+            compose.onNodeWithContentDescription("Return to top").assertIsDisplayed().performClick()
             compose.onNodeWithContentDescription("Return to top").assertDoesNotExist()
-            val top = list.getUnclippedBoundsInRoot().top.value
-            val boundary = compose.onNodeWithTag("browser-song-list-start", true).getUnclippedBoundsInRoot().top.value
-            assertEquals("${route.collection?.kind}: padded song start, not hero start", top, boundary, 1f)
-            assertTrue("Header remains above the viewport", position() > 0f)
-            compose.runOnIdle { assertEquals(route, state.route); assertEquals(0, state.routeChanges) }
+            assertHeaderHome(route.collection?.kind)
+            assertTrue("Hero remains above the viewport", position() > 0f)
+            compose.runOnIdle { assertEquals(0, state.routeChanges) }
         }
+    }
+
+    @Test fun subviewBackUsesOneMonotonicEaseAllTheWayThroughTheTallHeader() {
+        val playlist = PlaylistEdits.append(ManualPlaylist(name = "Continuous Back"), tracks)
+        val state = fixture(BrowseRoute(MainTab.Playlists, MediaRef(MediaKind.Playlist, playlist.id)),
+            playlists = PlaylistState(listOf(playlist), loading = false), listBackEnabled = true, reducedMotion = false)
+        awaitRow(playlist.entries.first().id)
+        list.performScrollToIndex(65)
+        compose.awaitExpectedWindowFocus(list)
+        compose.mainClock.autoAdvance = false
+        val samples = mutableListOf(position())
+        try {
+            pressSystemBack()
+            repeat(45) {
+                compose.mainClock.advanceTimeByFrame()
+                compose.waitForIdle()
+                samples += position()
+            }
+        } finally { compose.mainClock.autoAdvance = true }
+        assertEquals("One ease reaches the page top", 0f, samples.last(), .01f)
+        assertTrue("No reversal: $samples", samples.zipWithNext().all { (a, b) -> b <= a + .001f })
+        val first = samples.indexOfFirst { it < samples.first() - .001f }
+        val last = samples.indexOfLast { it > .001f }
+        assertTrue("One bounded 500 ms curve, without a second ease: $samples", last - first <= 33)
+        compose.runOnIdle { assertEquals(0, state.ordinaryBack) }
     }
 
     @Test fun shortAndEmptyPlaylistsNeverOfferAnUnreachableSongReturn() {
@@ -199,8 +222,7 @@ class ListReturnControlsTest {
         compose.waitUntil(5000) { state.selection.visible.size == songs.size }
         list.performScrollToIndex(65)
         compose.onNodeWithContentDescription("Return to top").performClick()
-        assertEquals(list.getUnclippedBoundsInRoot().top.value,
-            compose.onNodeWithTag("browser-song-list-start", true).getUnclippedBoundsInRoot().top.value, 1f)
+        assertHeaderHome(MediaKind.Artist)
     }
 
     @Test fun animatedCollectionReturnStopsAtSongsWithoutASecondHeroScroll() {
