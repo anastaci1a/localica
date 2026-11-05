@@ -26,6 +26,8 @@ class RunnerContract(unittest.TestCase):
         for d in ['.github/test-evidence', 'bin', 'app/src/androidTest/java/io/github/anastaci1a/localica', 'app/build/outputs/apk/debug', 'app/build/outputs/apk/androidTest/debug']:
             (self.root/d).mkdir(parents=True, exist_ok=True)
         shutil.copyfile(ROOT/'.github/run-prototype-tests.sh', self.root/'runner.sh')
+        for helper in ('run-prototype-tests.sh', 'run-prototype-repeat.py', 'prototype-methods.py'):
+            shutil.copyfile(ROOT/'.github'/helper, self.root/'.github'/helper)
         (self.root/'.github/prototype-risk-classes.txt').write_text(REQUIRED+'\n'+FOCUS+'\n'+CONTRAST+'\n'+AFFECTED+'\n')
         for cls in [REQUIRED,FOCUS,CONTRAST,AFFECTED]:
             (self.root/('app/src/androidTest/java/'+cls.replace('.','/')+'.kt')).write_text('package io.github.anastaci1a.localica\nclass '+cls.rsplit('.',1)[1]+' { @org.junit.Test fun regression() {} }\n')
@@ -69,10 +71,12 @@ if mode=='exit7': sys.exit(7)
 if mode=='silent': sys.exit(0)
 if mode=='observed': print(classes[0]+' > regression[emulator-5554 - 16] FAILED',flush=True)
 root=pathlib.Path('app/build/outputs/androidTest-results/connected/debug');root.mkdir(parents=True,exist_ok=True)
-for i,cls in enumerate(classes):
+for i,selector in enumerate(classes):
+    cls, _, method = selector.partition('#')
+    method = method or 'regression'
     if mode=='missing-class' and i==1: continue
     suite=E.Element('testsuite',tests='1')
-    case=E.SubElement(suite,'testcase',classname=cls,name='regression')
+    case=E.SubElement(suite,'testcase',classname=cls,name=method)
     if mode=='xml-failure' and i==0:E.SubElement(case,'failure')
     if mode=='all-skipped' and i==0:E.SubElement(case,'skipped')
     if os.environ.get('SKIP_CLASS')==cls:
@@ -96,11 +100,45 @@ for i,cls in enumerate(classes):
 ''')
         self.env = dict(os.environ, PATH=str(self.root/'bin')+os.pathsep+os.environ['PATH'], AFFECTED_CLASSES=AFFECTED, TEST_API='36', GITHUB_SHA=SHA, GITHUB_RUN_ID='1', GITHUB_RUN_ATTEMPT='1', GITHUB_ACTIONS='true', RUNNER_ENVIRONMENT='github-hosted')
 
+    def test_exact_method_proof_runs_mandatory_gate_once(self):
+        self.run_case(PROTOTYPE_REPEAT='2', PROTOTYPE_METHODS=AFFECTED+'#regression', _timeout=30)
+        root = self.root/'prototype-evidence'
+        summary = json.loads((root/'iterations/summary.json').read_text())
+        self.assertEqual('methods', summary['kind'])
+        self.assertEqual('passed', summary['gate']['status'])
+        gate = json.loads((root/'reconciled-tests.json').read_text())
+        self.assertEqual({REQUIRED, FOCUS, CONTRAST, AFFECTED}, set(gate['selectors']))
+        for item in summary['iterations']:
+            self.assertEqual('passed', item['status'])
+            receipt = json.loads((root/f"iterations/iteration-{item['iteration']:02d}/prototype-evidence/reconciled-tests.json").read_text())
+            self.assertEqual({AFFECTED+'#regression': 'passed'}, receipt['methods'])
+            self.assertEqual([], receipt['required_selectors'])
+        self.assertEqual(3, (self.root/'lifecycle').read_text().count('setup'))
+
+    def test_method_selection_rejects_unknown_source_method(self):
+        self.run_case(1, PROTOTYPE_METHODS=AFFECTED+'#unknown')
+        self.assertFalse((self.root/'lifecycle').exists())
+
+    def test_method_selection_rejects_duplicate_and_missing_class(self):
+        for methods in (AFFECTED+'#regression,'+AFFECTED+'#regression', REQUIRED+'#regression'):
+            result = subprocess.run(['bash', 'runner.sh'], cwd=self.root,
+                env=dict(self.env, PROTOTYPE_METHODS=methods), capture_output=True, text=True)
+            self.assertNotEqual(0, result.returncode)
+            self.assertFalse((self.root/'lifecycle').exists())
+            shutil.rmtree(self.root/'prototype-iterations')
+
+    def test_method_only_failure_is_retained_without_a_retry(self):
+        # A silent failure of the mandatory gate also prevents method iterations.
+        self.run_case(7, PROTOTYPE_REPEAT='2', PROTOTYPE_METHODS=AFFECTED+'#regression', MODE='exit7')
+        summary=json.loads((self.root/'prototype-evidence/iterations/summary.json').read_text())
+        self.assertEqual('failed', summary['gate']['status'])
+        self.assertTrue(all(item['status']=='not-run' for item in summary['iterations']))
+
     def executable(self,path,text):
         target=self.root/path;target.write_text(text);target.chmod(0o755)
 
-    def run_case(self, expected=0, **env):
-        result=subprocess.run(['bash','runner.sh'],cwd=self.root,env=dict(self.env,**env),capture_output=True,text=True,timeout=12)
+    def run_case(self, expected=0, _timeout=12, **env):
+        result=subprocess.run(['bash','runner.sh'],cwd=self.root,env=dict(self.env,**env),capture_output=True,text=True,timeout=_timeout)
         self.assertEqual(expected,result.returncode,result.stdout+'\n'+result.stderr)
         return result
 
@@ -464,7 +502,7 @@ p=pathlib.Path(sys.argv[sys.argv.index('--state-dir')+1]);p.mkdir();(p/'complete
 
 
 class WorkflowContract(unittest.TestCase):
-    def decision(self, failed=False, missing=False, wrong_sha=False, contradictory=False, malformed=False, partial_methods=False, skipped_required_method=False, build_attempt="1", decision_attempt="1", build_run="1", wrong_digest=False, repetitions=1, bad_iteration=False, missing_iteration=False):
+    def decision(self, failed=False, missing=False, wrong_sha=False, contradictory=False, malformed=False, partial_methods=False, skipped_required_method=False, build_attempt="1", decision_attempt="1", build_run="1", wrong_digest=False, repetitions=1, bad_iteration=False, missing_iteration=False, method_mode=False, missing_gate=False, bad_method=False, duplicate_command=False):
         import yaml, hashlib
         workflow=yaml.safe_load((ROOT/'.github/workflows/prototype.yml').read_text())
         script=workflow['jobs']['evidence']['steps'][1]['run']
@@ -513,16 +551,49 @@ class WorkflowContract(unittest.TestCase):
                             if bad_iteration and index == 1:
                                 item['status'] = 'failed'
                             summary['iterations'].append(item)
+                        if method_mode:
+                            summary.update(kind='methods', methods=[AFFECTED+'#regression'], gate={
+                                'class': AFFECTED, 'status': 'failed' if missing_gate else 'passed', 'exit_code': 0,
+                                'receipt_sha256': hashlib.sha256((focused/'reconciled-tests.json').read_bytes()).hexdigest()})
+                            method_inventory={'selectors':[AFFECTED], 'runtime_methods':[AFFECTED+'#regression']}
+                            method_bytes=json.dumps(method_inventory).encode()
+                            (iterations/'requested-methods.json').write_bytes(method_bytes)
+                            for item in summary['iterations']:
+                                folder=iterations/f"iteration-{item['iteration']:02d}"/'prototype-evidence'
+                                repeated=json.loads((folder/'reconciled-tests.json').read_text())
+                                repeated.update(selectors=[AFFECTED], required_selectors=[],
+                                    methods={AFFECTED+'#regression':'failed' if bad_method else 'passed'},
+                                    counts={AFFECTED:{'passed':1,'failed':0,'errors':0,'skipped':0}},
+                                    source_inventory_sha256=hashlib.sha256(method_bytes).hexdigest())
+                                (folder/'expected-methods.json').write_bytes(method_bytes)
+                                (folder/'reconciled-tests.json').write_text(json.dumps(repeated))
+                                item['receipt_sha256']=hashlib.sha256((folder/'reconciled-tests.json').read_bytes()).hexdigest()
+                                observed=folder/'live/observed'
+                                observed.mkdir(parents=True)
+                                (observed/'manifest.json').write_text(json.dumps({'sha':SHA,'api':str(api),
+                                    'status':'completed','child_returncode':0,'observer_exit_status':0,'observed_failure_lines':0,
+                                    'command_id':'same' if duplicate_command else str(item['iteration'])}))
                         if missing_iteration:
                             summary['iterations'].pop(0)
                         (iterations/'summary.json').write_text(json.dumps(summary))
                     compatibility=evidence/f'prototype-compatibility-api-{api}';compatibility.mkdir()
                     (compatibility/'provenance.json').write_text(json.dumps({'source_sha':SHA}))
-            env=dict(os.environ,PROTOTYPE_REPEAT=str(repetitions),CHECKS=json.dumps(checks),KNOWN_ISSUES='Not a release',AFFECTED_CLASSES=AFFECTED,COVERAGE_REASON='Queue regression',GITHUB_SHA=SHA,GITHUB_REF='refs/heads/test',GITHUB_RUN_ID='1',GITHUB_RUN_ATTEMPT=decision_attempt,GITHUB_STEP_SUMMARY=str(root/'summary'))
+            env=dict(os.environ,PROTOTYPE_METHODS=AFFECTED+'#regression' if method_mode else '',PROTOTYPE_REPEAT=str(repetitions),CHECKS=json.dumps(checks),KNOWN_ISSUES='Not a release',AFFECTED_CLASSES=AFFECTED,COVERAGE_REASON='Queue regression',GITHUB_SHA=SHA,GITHUB_REF='refs/heads/test',GITHUB_RUN_ID='1',GITHUB_RUN_ATTEMPT=decision_attempt,GITHUB_STEP_SUMMARY=str(root/'summary'))
             result=subprocess.run(['bash','-c',script],cwd=root,env=env,capture_output=True,text=True)
             out=root/'prototype-delivery'
             manifest=json.loads((out/'manifest.json').read_text()) if (out/'manifest.json').exists() else None
             return result,manifest,list(out.glob('*.apk'))
+
+    def test_method_delivery_requires_gate_and_exact_repeated_methods(self):
+        result, manifest, apks = self.decision(repetitions=2, method_mode=True)
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertTrue(manifest['ready_for_prototype_delivery'])
+        self.assertEqual([AFFECTED+'#regression'], manifest['requested_methods'])
+        for mismatch in ('missing_gate', 'bad_method', 'duplicate_command', 'missing_iteration'):
+            with self.subTest(mismatch=mismatch):
+                result, manifest, apks = self.decision(repetitions=2, method_mode=True, **{mismatch: True})
+                self.assertFalse(manifest['ready_for_prototype_delivery'])
+                self.assertEqual([], apks)
 
     def test_repeated_delivery_requires_every_iteration(self):
         result, manifest, apks = self.decision(repetitions=3)
@@ -624,7 +695,7 @@ class WorkflowContract(unittest.TestCase):
         jobs=yaml.safe_load((ROOT/'.github/workflows/prototype.yml').read_text())['jobs']
         for api in (26,36):
             job=jobs[f'focused_{api}']
-            self.assertEqual('${{ inputs.repeat > 1 && 360 || 60 }}',job['timeout-minutes'])
+            self.assertEqual("${{ inputs.repeat_methods != '' && 60 || inputs.repeat > 1 && 360 || 60 }}",job['timeout-minutes'])
             upload=next(s for s in job['steps']
                 if s.get('with',{}).get('name')==f'prototype-focused-api-{api}')
             self.assertEqual('always()',upload['if'])
@@ -653,7 +724,7 @@ class WorkflowContract(unittest.TestCase):
         import yaml
         workflow=yaml.safe_load((ROOT/'.github/workflows/prototype.yml').read_text())
         self.assertEqual({'workflow_dispatch','workflow_call'},set(workflow['on']))
-        self.assertEqual({'affected_classes','coverage_reason','known_issues','repeat'},set(workflow['on']['workflow_call']['inputs']))
+        self.assertEqual({'affected_classes','coverage_reason','known_issues','repeat','repeat_methods'},set(workflow['on']['workflow_call']['inputs']))
         self.assertEqual({'ANDROID_DEBUG_KEYSTORE'},set(workflow['on']['workflow_call']['secrets']))
         self.assertEqual({'contents':'read'},workflow['permissions'])
         jobs=workflow['jobs']
