@@ -689,17 +689,19 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     val dragHost = LocalSongDragHost.current
     val floatingControlClearance = if (route.collection?.kind == MediaKind.Queue) 12.dp else 0.dp
     SideEffect {
-        if (reorder.drag != null) {
+        reorder.onDragStarted = {
             dragHost?.cancelBottomMargin = floatingControlClearance
             dragHost?.source = if (needsListBackdrop) listBackdrop else if (artDetail) collectionSource else surroundingBackdrop
             dragHost?.state = reorder; dragHost?.reducedMotion = reducedMotion
         }
-        else if (dragHost?.state === reorder) {
-            dragHost.state = null
-            dragHost.cancelBottomMargin = 0.dp
-        }
+        if (reorder.drag != null) reorder.onDragStarted()
+        // Keep the foreground owner attached through the return to the resting rows.
+        // Its shared overlay observes drag == null directly; a later SideEffect must
+        // not remove and rebuild that owner across the pickup/landing frame boundary.
     }
-    DisposableEffect(reorder, dragHost) { onDispose { if (dragHost?.state === reorder) {
+    DisposableEffect(reorder, dragHost) { onDispose {
+        reorder.onDragStarted = {}
+        if (dragHost?.state === reorder) {
         dragHost.state = null
         dragHost.cancelBottomMargin = 0.dp
     } } }
