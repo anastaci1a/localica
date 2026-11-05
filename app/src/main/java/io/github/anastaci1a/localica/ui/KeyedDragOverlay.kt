@@ -24,12 +24,7 @@ import androidx.compose.ui.unit.constrainHeight
 import kotlin.math.roundToInt
 import androidx.compose.ui.zIndex
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.delay
 import kotlin.math.exp
-
-/** Passive test observation of the recursive capture graph. */
-internal val LocalDragPaneObserver = staticCompositionLocalOf<((Int, FrostedBackdrop) -> Unit)?> { null }
 
 @Composable
 internal fun <T : Any, P> BoxScope.KeyedDragOverlay(state: KeyedDragState<T, P>, reducedMotion: Boolean,
@@ -118,20 +113,17 @@ internal fun <T : Any, P> BoxScope.KeyedDragOverlay(state: KeyedDragState<T, P>,
     HoverDragUnderlay({ drag.moving.mapNotNull { frames[state.keyOf(it)] } }, backing, Modifier.matchParentSize().zIndex(2f))
     val cards = remember(drag, lifted, drag.destinations) { drag.moving.withIndex().filter { (index, item) -> index < 3 ||
         (!lifted && state.keyOf(item) in drag.initialBounds) || (drag.dropping && state.keyOf(item) in drag.destinations.orEmpty()) } }
-    val paneObserver = LocalDragPaneObserver.current
     var previousPane = backing
     cards.reversed().forEach { (index, item) -> key(drag, state.keyOf(item)) {
         val paneBacking = previousPane
         // The top pane still samples its backing even though no later pane needs its recording.
         if (index == 0) BackdropLease(paneBacking)
-        // Propagate the prepared endpoint once; finishing pickup also removes lower-pane contents.
-        val paneScene = if (index > 0) rememberFrostedBackdrop(Triple(drag, lifted, paneBacking?.snapshot),
+        // Capture after the pane records its changed content/backing, not when composition
+        // first sees the new backing (which can precede that draw).
+        val paneScene = if (index > 0) rememberFrostedBackdrop(drag,
             // Consumers already clip to their pane. Avoid a full-viewport offscreen raster
             // that redraws everything outside those clips whenever a card moves.
             dark = backing?.dark == true, retainRaster = false) else null
-        SideEffect {
-            if (paneScene != null) paneObserver?.invoke(index, paneScene)
-        }
         previousPane = paneScene
         val itemKey = state.keyOf(item)
         val destination = drag.destinations?.get(itemKey)

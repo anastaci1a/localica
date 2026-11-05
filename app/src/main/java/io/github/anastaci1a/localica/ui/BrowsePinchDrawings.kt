@@ -186,7 +186,6 @@ internal fun Modifier.pinchRetainedOverlay(motion: BrowsePinchMotion, grid: Lazy
     val fadeFocus = remember(motion) { PinchFadeFocus() }
     val recordingDensity = androidx.compose.ui.platform.LocalDensity.current
     val direction = androidx.compose.ui.platform.LocalLayoutDirection.current
-    val renderer = currentGlassRendererGeneration()
     val averageProgress = glassAverageProgress()
     val blur = android.os.Build.VERSION.SDK_INT >= 33
     DisposableEffect(graphics) { onDispose { groups.forEach { graphics.releaseGraphicsLayer(it.output); graphics.releaseGraphicsLayer(it.flatOutput) } } }

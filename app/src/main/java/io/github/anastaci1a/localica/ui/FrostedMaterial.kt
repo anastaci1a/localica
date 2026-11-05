@@ -82,8 +82,8 @@ internal class FrostedBackdrop(val layer: GraphicsLayer, dark: Boolean,
     var lastReadbackProgress: String? = null
     var recordedGeneration by mutableStateOf<GlassRendererGeneration?>(null)
     var recordedSize = IntSize.Zero
-    // Main-thread diagnostic: completed live recordings, so tests can prove a held frame was not re-recorded.
-    var recordings = 0
+    // Completed live recordings invalidate retained consumers, including those in another window.
+    var recordings by mutableIntStateOf(0)
     val recordedFrames = kotlinx.coroutines.channels.Channel<Unit>(kotlinx.coroutines.channels.Channel.CONFLATED)
     val recorded get() = recordedGeneration != null
     fun refresh() { revision++; recordedFrames.trySend(Unit) }
@@ -122,6 +122,13 @@ internal val LocalBackdropRefresh = staticCompositionLocalOf<() -> Unit> { {} }
     var placement by mutableIntStateOf(0)
     var transformRevision by mutableIntStateOf(0)
     var fallback by mutableStateOf(Offset.Zero)
+    fun observeRecordingAcrossWindows(source: FrostedBackdrop) {
+        val target = coordinates?.takeIf { it.isAttached } ?: return
+        val origin = source.location.coordinates?.takeIf { it.isAttached } ?: return
+        // In one window RenderNode dependencies already propagate source changes.
+        if (target.findRootCoordinates() !== origin.findRootCoordinates()) source.recordings
+    }
+
     fun position(): Offset {
         placement
         val previous = fallback
@@ -270,6 +277,10 @@ internal fun Modifier.recordFrostedBackdrop(source: FrostedBackdrop, backing: Fr
                 drawContent()
                 return@drawWithContent
             }
+            // Retained children and consumers in another window need explicit draw invalidation.
+            val dependency = backing ?: source.parent
+            if (Build.VERSION.SDK_INT < 33) dependency?.snapshot
+            else dependency?.let { source.location.observeRecordingAcrossWindows(it) }
             val request = readbackRequest?.invoke()
             val viewport = size
             val extent = IntSize(size.width.toInt(), size.height.toInt())
@@ -284,7 +295,7 @@ internal fun Modifier.recordFrostedBackdrop(source: FrostedBackdrop, backing: Fr
                 }
             }
             source.recordedSize = extent
-            source.recordings++
+            androidx.compose.runtime.snapshots.Snapshot.withoutReadObservation { source.recordings++ }
             source.recordedFrames.trySend(Unit)
             source.recordedGeneration = renderer.takeIf { backing == null || backing.recorded }
             if (request != null) onRecorded?.invoke(request)

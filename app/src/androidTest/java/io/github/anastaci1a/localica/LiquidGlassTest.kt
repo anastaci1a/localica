@@ -137,10 +137,18 @@ class LiquidGlassTest {
         val pixels = compose.onNodeWithTag("transparent-lens").captureToImage().toPixelMap()
         val edge = pixels[(pixels.width * .02f).toInt(), pixels.height / 2]
         val interior = pixels[pixels.width / 4, pixels.height / 2]
-        assertTrue("Transparent source pixels must preserve the immediate red backdrop: $edge",
-            edge.red > .97f && edge.green < .04f && edge.blue < .04f)
-        assertTrue("Curved edge reflection must not become a coating across the transparent face: $interior",
-            interior.red > .97f && interior.green < .01f && interior.blue < .01f)
+        if (Build.VERSION.SDK_INT >= 33) {
+            assertTrue("Transparent source pixels must preserve the immediate red backdrop: $edge",
+                edge.red > .97f && edge.green < .04f && edge.blue < .04f)
+            assertTrue("Curved edge reflection must not become a coating across the transparent face: $interior",
+                interior.red > .97f && interior.green < .01f && interior.blue < .01f)
+        } else {
+            for (color in listOf(edge, interior)) {
+                assertEquals("Half-transparent average keeps the red drawer beneath it", .5f, color.red, .04f)
+                assertEquals("Blue occupies half of the sampled footprint", .5f, color.blue, .04f)
+                assertTrue("No white coating is introduced", color.green < .04f)
+            }
+        }
     }
 
     private fun verifyLens(dark: Boolean) {

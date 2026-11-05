@@ -7,12 +7,12 @@ import org.junit.Test
 class GlassRendererGenerationTest {
     @Test fun returningToTheSameBackendCannotAdmitAnEarlierGeneration() {
         val first = GlassRendererGeneration(GlassBackend.Normal, 0L)
-        val legacy = nextGlassRendererGeneration(first, GlassRendererMode.None, 36)
-        val returned = nextGlassRendererGeneration(legacy, GlassRendererMode.Normal, 36)
-        assertEquals(GlassRendererGeneration(GlassBackend.None, 1L), legacy)
+        val none = nextGlassRendererGeneration(first, GlassRendererMode.None, 36)
+        val returned = nextGlassRendererGeneration(none, GlassRendererMode.Normal, 36)
+        assertEquals(GlassRendererGeneration(GlassBackend.None, 1L), none)
         assertEquals(GlassRendererGeneration(GlassBackend.Normal, 2L), returned)
-        assertNotEquals("A previous Modern capture is not current after A→B→A", first, returned)
-        assertNotEquals("A previous Legacy capture is not current after B→A→B", legacy,
+        assertNotEquals("A previous Normal capture is not current after A→B→A", first, returned)
+        assertNotEquals("A previous None capture is not current after B→A→B", none,
             nextGlassRendererGeneration(returned, GlassRendererMode.None, 36))
     }
 
@@ -20,11 +20,10 @@ class GlassRendererGenerationTest {
         for (api in listOf(33, 36)) {
             val current = GlassRendererGeneration(GlassBackend.Normal, 7L)
             assertSame(current, nextGlassRendererGeneration(current, GlassRendererMode.Normal, api))
-            assertSame(current, nextGlassRendererGeneration(current, GlassRendererMode.Normal, api))
         }
     }
 
-    @Test fun unsupportedModernDoesNotTurnLegacyIntoANewCaptureGeneration() {
+    @Test fun unsupportedNormalDoesNotTurnNoneIntoANewCaptureGeneration() {
         for (api in listOf(26, 28, 29, 32)) {
             val current = GlassRendererGeneration(GlassBackend.None, 4L)
             for (mode in GlassRendererMode.entries)
