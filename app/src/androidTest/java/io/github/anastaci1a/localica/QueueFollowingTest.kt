@@ -238,6 +238,47 @@ class QueueFollowingTest {
         }
     }
 
+    @Test fun manualTopAtFirstOccurrenceReattachesWithoutAnotherReturnTap() = boundaryReturn(0, 0)
+
+    @Test fun manualBottomAtLastOccurrenceReattachesWithoutAnotherReturnTap() = boundaryReturn(119, 120)
+
+    private fun boundaryReturn(current: Int, end: Int) {
+        val fixture = fixture(initial = current)
+        list.performScrollToIndex(60)
+        currentReturn.assertIsDisplayed()
+        list.performScrollToIndex(end)
+        awaitCurrent(current)
+        currentReturn.assertDoesNotExist()
+        compose.runOnIdle { fixture.publish(45) }
+        awaitCurrent(45)
+    }
+
+    @Test fun returnArrowMatchesEveryFrameOfItsActualDisplacementNearAndFarFromCurrent() {
+        fixture(initial = 45, reducedMotion = false)
+        for (index in listOf(0, 43, 44, 45, 46, 47, 50, 119)) {
+            list.performScrollToIndex(index)
+            currentReturn.assertIsDisplayed()
+            val up = currentReturn.fetchSemanticsNode().config[SemanticsProperties.StateDescription] == "Scroll up"
+            val start = position()
+            val samples = mutableListOf(start)
+            compose.mainClock.autoAdvance = false
+            try {
+                currentReturn.performClick()
+                repeat(45) {
+                    compose.mainClock.advanceTimeByFrame()
+                    compose.waitForIdle()
+                    samples += position()
+                }
+            } finally { compose.mainClock.autoAdvance = true }
+            val moves = samples.zipWithNext().map { (a, b) -> b - a }.filter { kotlin.math.abs(it) > .001f }
+            if (moves.isNotEmpty()) {
+                assertEquals("Arrow at index $index must match displacement: $samples", up, samples.last() < start)
+                assertTrue("Every frame must follow the arrow at $index: $samples", moves.all { (it < 0f) == up })
+            }
+            awaitCurrent(45)
+        }
+    }
+
     @Test fun coldAndWarmExplicitQueueOpenDrawCurrentFirstWithoutReattachingDetachedIntent() {
         val draws = mutableListOf<InitialQueueDraw>()
         queries.held = true
