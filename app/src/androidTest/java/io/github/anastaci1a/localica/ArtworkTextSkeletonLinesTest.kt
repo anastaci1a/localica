@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.toPixelMap
@@ -81,13 +82,15 @@ class ArtworkTextSkeletonLinesTest {
                 assertEquals("Fixture wraps $part as intended", expectedLines, layout.lineCount)
                 val wrapper = compose.onNodeWithTag("browse-$part-${item.key}", true)
                 val paragraph = compose.onNodeWithText(label, useUnmergedTree = true)
-                val origin = paragraph.fetchSemanticsNode().boundsInRoot.topLeft - wrapper.fetchSemanticsNode().boundsInRoot.topLeft
+                val paragraphCoordinates = paragraph.fetchSemanticsNode().layoutInfo.coordinates
+                val wrapperCoordinates = wrapper.fetchSemanticsNode().layoutInfo.coordinates
+                val origin = wrapperCoordinates.localPositionOf(paragraphCoordinates, Offset.Zero)
                 val image = wrapper.captureToImage()
                 val output = nativeEvidenceDirectory("text-skeleton-lines",
                     InstrumentationRegistry.getInstrumentation().targetContext.getExternalFilesDir(null))
                 val prefix = "${style.presentation}-${style.listSize}-rtl$rtl-$part"
                 File(output, "$prefix.png").outputStream().use { image.asAndroidBitmap().compress(Bitmap.CompressFormat.PNG, 100, it) }
-                File(output, "$prefix-metrics.txt").writeText("paragraph-offset=$origin\n" + (0 until layout.lineCount).joinToString("\n") {
+                File(output, "$prefix-metrics.txt").writeText("paragraph-offset=$origin layout-size=${layout.size} paragraph-size=${paragraphCoordinates.size} wrapper-size=${wrapperCoordinates.size}\n" + (0 until layout.lineCount).joinToString("\n") {
                     "line=$it left=${layout.getLineLeft(it)} right=${layout.getLineRight(it)} top=${layout.getLineTop(it)} bottom=${layout.getLineBottom(it)}"
                 })
                 val pixels = image.toPixelMap()
