@@ -921,7 +921,8 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                 } else Modifier)
                 .then(if (maskedBackdrop && viewportBackdrop != null) Modifier.browseBackdropMaskWitness(backdropScene, viewportBackdrop) else Modifier),
                 contentDrawing = Modifier.onPlaced { pinchHeader?.viewport = it }
-                    .collectionPinchOverlay(pinchHeader).pinchRetainedOverlay(pinchMotion, gridState, pinchIndices, selectionScene),
+                    .collectionPinchOverlay(pinchHeader).graphicsLayer()
+                    .pinchRetainedOverlay(pinchMotion, gridState, pinchIndices, selectionScene),
                 scene = selectionScene) { overscroll ->
             LazyVerticalGrid(state = gridState, overscrollEffect = overscroll, columns = GridCells.Fixed(columns), modifier = (if (popupDismiss != null) Modifier.fillMaxWidth() else Modifier.fillMaxSize())
                 .then(if (showSearchPill) searchSlotGridLayout else Modifier)

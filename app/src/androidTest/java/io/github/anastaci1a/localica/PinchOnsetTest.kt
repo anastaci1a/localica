@@ -47,7 +47,11 @@ class PinchOnsetTest {
             val times = mutableListOf<Long>()
             for (frame in 1..36) {
                 val half = start - frame * 2f
-                list.performTouchInput { moveTo(0, Offset(centerX - half, centerY)); moveTo(1, Offset(centerX + half, centerY)) }
+                list.performTouchInput {
+                    updatePointerTo(0, Offset(centerX - half, centerY))
+                    updatePointerTo(1, Offset(centerX + half, centerY))
+                    move(delayMillis = 0)
+                }
                 compose.mainClock.advanceTimeByFrame()
                 // Let the render-thread readback finish within the frame, as on a device.
                 compose.waitForIdle()
@@ -63,6 +67,9 @@ class PinchOnsetTest {
             val shown = widths.map { (it - source) / (target - source) }
             val implied = spans.map { pinchProgress(it, false) }
             val log = shown.indices.joinToString("\n") { "${it + 1} +${times[it] - times[0]} ms finger %.3f shown %.3f".format(implied[it], shown[it]) }
+            times.zipWithNext().forEach { (a, b) ->
+                assertEquals("Sample every display frame without implicit pointer-time advances\n$log", 16L, b - a)
+            }
             android.util.Log.i("PinchOnsetTest", "4 to 5 per row, progress per frame:\n$log")
             // The 4% direction threshold stays; travel before it is not discarded.
             val recognized = spans.indexOfFirst { it <= 1f / 1.04f }
