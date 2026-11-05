@@ -16,6 +16,7 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.testTag
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
@@ -80,9 +81,8 @@ internal fun BrowseItemLayout(item: BrowserItem, style: BrowseStyle, geometry: B
     val menuRevealed by remember(textReveal, artworkAlpha, loadingReveal) {
         derivedStateOf { textReveal.menuAlpha(artworkAlpha) * (loadingReveal?.alpha ?: 1f) > 0f }
     }
-    val textDensity = androidx.compose.ui.platform.LocalDensity.current
-    val titleLinePx = with(textDensity) { titleLine.sp.toPx() }
-    val infoLinePx = with(textDensity) { infoLine.toPx() }
+    var titleLayout by remember(item.key) { mutableStateOf<TextLayoutResult?>(null) }
+    var informationLayout by remember(item.key) { mutableStateOf<TextLayoutResult?>(null) }
     Layout(modifier = Modifier.fillMaxWidth().then(if (pinch != null) Modifier.retainPinchText(item.key, pinch) else Modifier)
         .graphicsLayer { alpha = incomingAlpha }, content = {
         Box(Modifier.morph().then(if (gallery && artworkAnchor != null) Modifier.contextMenuAnchor(artworkAnchor,
@@ -101,19 +101,20 @@ internal fun BrowseItemLayout(item: BrowserItem, style: BrowseStyle, geometry: B
         // Lazy reuse retains animateBounds' previous dimensions. Applying that tween to a
         // paragraph reveals/reflows it across successive widths when a new row enters.
         // Measure ordinary text at its final width; explicit pinch text owns its own motion.
-        Box(Modifier.reveal().artworkTextReveal(gatedText, titleLinePx, { artCorner.floatValue }).testTag("browse-text-${item.key}")) {
+        Box(Modifier.reveal().artworkTextReveal(gatedText, { titleLayout }, { artCorner.floatValue }).testTag("browse-text-${item.key}")) {
             if (measureEndpoints != null) BrowsePinchText(titleParagraph, item.title, progress)
             else Text(item.title, style = MaterialTheme.typography.titleMedium.copy(fontSize = titleSize.sp, lineHeight = titleLine.sp,
                 fontWeight = if (numbered(style)) androidx.compose.ui.text.font.FontWeight.Normal else MaterialTheme.typography.titleMedium.fontWeight),
-                maxLines = style.browseTitleLines(), overflow = TextOverflow.Ellipsis)
+                maxLines = style.browseTitleLines(), overflow = TextOverflow.Ellipsis, onTextLayout = { titleLayout = it })
         }
-        Box(Modifier.reveal().artworkTextReveal(gatedText, infoLinePx, { artCorner.floatValue }, loadingInformation).testTag("browse-info-${item.key}")) {
+        Box(Modifier.reveal().artworkTextReveal(gatedText, { informationLayout }, { artCorner.floatValue }, loadingInformation).testTag("browse-info-${item.key}")) {
             if (measureEndpoints != null) BrowsePinchText(informationParagraph,
                 if (showInformation) item.information(style, inheritedInformation) else null, progress,
                 if (trailing(style)) MaterialTheme.colorScheme.onSurfaceVariant else androidx.compose.ui.graphics.Color.Unspecified)
             else if (showInformation) item.information(style, inheritedInformation)?.let { Text(it,
                 color = if (trailing(style)) MaterialTheme.colorScheme.onSurfaceVariant else androidx.compose.ui.graphics.Color.Unspecified,
-                style = MaterialTheme.typography.bodySmall, maxLines = if (gallery) 2 else 1, overflow = TextOverflow.Ellipsis) }
+                style = MaterialTheme.typography.bodySmall, maxLines = if (gallery) 2 else 1, overflow = TextOverflow.Ellipsis,
+                onTextLayout = { informationLayout = it }) }
         }
         // Retain outgoing menu pixels, not an input shield. Even a zero-width
         // gallery slot can acquire a minimum touch target and swallow list drags.
