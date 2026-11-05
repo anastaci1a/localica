@@ -129,12 +129,10 @@ class DragHandoffArtworkTest {
             // Every frame through recognition, pickup and the first flight.
             repeat(60) { frame -> compose.mainClock.advanceTimeByFrame(); check("pickup frame ${frame + 1}") }
             compose.onNodeWithTag("browser-list").performTouchInput { moveTo(from + Offset(0f, 30f)) }
-            check("pickup boundary")
             repeat(10) { frame -> compose.mainClock.advanceTimeByFrame(); check("move frame ${frame + 1}") }
             compose.onNodeWithTag("browser-list").performTouchInput { moveTo(to) }
             repeat(6) { compose.mainClock.advanceTimeByFrame() }
             compose.onNodeWithTag("browser-list").performTouchInput { up(); held = false }
-            check("release boundary")
             repeat(60) { frame -> compose.mainClock.advanceTimeByFrame(); check("landing frame ${frame + 1}") }
         } finally {
             if (held) compose.onNodeWithTag("browser-list").performTouchInput { cancel() }

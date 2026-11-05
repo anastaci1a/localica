@@ -50,6 +50,8 @@ internal abstract class KeyedDragState<T : Any, P>(val grid: LazyGridState, priv
     /** The backdrop behind the list (not the list itself) that cards carry as their cutout. */
     var hoverBacking: FrostedBackdrop? = null
     protected abstract fun capturePresentation(): P
+    /** Publish an external drawing owner in the same event that removes the source rows. */
+    var onDragStarted: () -> Unit = {}
     var viewportCoordinates: LayoutCoordinates? = null
     val itemCoordinates = mutableMapOf<String, LayoutCoordinates>()
     fun visualBounds() = bounds() + itemCoordinates.filterValues { it.isAttached }.mapValues { (_, coordinates) ->
@@ -104,6 +106,7 @@ internal abstract class KeyedDragState<T : Any, P>(val grid: LazyGridState, priv
         if (moving.isEmpty()) return false
         drag = KeyedDrag(items, moving, keyOf, rects.filterKeys { it in selected }, point - held.topLeft, point, held.size, capturePresentation(),
             moving.mapNotNull { item -> keyOf(item).let { key -> hoverLift(key)?.let { key to it } } }.toMap())
+        onDragStarted()
         return true
     }
     fun move(point: Offset) { drag?.takeUnless { it.dropping }?.let { it.pointer = point
