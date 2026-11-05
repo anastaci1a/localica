@@ -65,16 +65,25 @@ class PopupHostNavigationTest {
         else compose.runOnIdle { open = false }
         compose.mainClock.advanceTimeBy(32)
         assertTrue("Return is in flight before navigation", anchor.modalPresent && anchor.contact.expansion.value > 0f)
-        val before = redPixels()
-        assertTrue("Fixture presents popup foreground before navigation: $before", before > 100)
+        val before = redFrame()
+        assertTrue("Fixture presents popup foreground before navigation: $before", before.pixels > 100)
         back(parentView) { !page }
-        compose.mainClock.advanceTimeBy(256)
-        val after = redPixels()
-        assertEquals("Popup cannot outlive its outgoing host layer over the destination", 0, after)
+        compose.mainClock.advanceTimeBy(16)
+        assertTrue("Navigation preserves the popup in the first outgoing frame", redFrame().pixels > 100)
+        assertTrue("The same native popup keeps retracting", popupView?.isAttachedToWindow == true)
+        compose.mainClock.advanceTimeBy(32)
+        val during = redFrame()
+        assertTrue("Outgoing popup fades continuously with its host: $before -> $during",
+            during.peak in 1 until before.peak)
+        compose.mainClock.advanceTimeBy(208)
+        val after = redFrame()
+        assertEquals("Popup cannot outlive its outgoing host layer over the destination", 0, after.pixels)
         compose.mainClock.advanceTimeBy(1600)
     }
 
-    private fun redPixels(): Int {
+    private data class RedFrame(val pixels: Int, val peak: Int)
+
+    private fun redFrame(): RedFrame {
         compose.waitForIdle()
         val automation = InstrumentationRegistry.getInstrumentation().uiAutomation
         // Native window drawing is independent of the paused Compose clock.
@@ -82,11 +91,14 @@ class PopupHostNavigationTest {
         val bitmap = requireNotNull(automation.takeScreenshot())
         return try {
             var count = 0
+            var peak = 0
             for (y in 0 until bitmap.height step 2) for (x in 0 until bitmap.width step 2) {
                 val c = bitmap.getPixel(x, y)
-                if (android.graphics.Color.red(c) > 160 && android.graphics.Color.green(c) < 80 && android.graphics.Color.blue(c) < 80) count++
+                val excess = android.graphics.Color.red(c) - maxOf(android.graphics.Color.green(c), android.graphics.Color.blue(c))
+                peak = maxOf(peak, excess)
+                if (android.graphics.Color.red(c) > 80 && excess > 32) count++
             }
-            count
+            RedFrame(count, peak)
         } finally { bitmap.recycle() }
     }
 }
