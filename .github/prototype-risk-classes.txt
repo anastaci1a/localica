@@ -301,3 +301,4 @@ io.github.anastaci1a.localica.PopupHomeShapeTest
 io.github.anastaci1a.localica.SeekCancelGlassTest
 io.github.anastaci1a.localica.PlaybackShutdownTest
 io.github.anastaci1a.localica.SelectionBackTest
+io.github.anastaci1a.localica.GalleryLiftFrameTest

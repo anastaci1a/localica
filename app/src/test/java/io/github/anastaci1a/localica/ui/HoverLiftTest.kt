@@ -27,6 +27,23 @@ class HoverLiftTest {
             (below.top - lifted.bottom) / (below.top - rest.bottom) >= .75f)
     }
 
+    @Test fun growthIsMeasuredAgainstNeighbourContentAndKeepsClearance() {
+        // Gallery covers: outlines 1 dp apart, each outline 3.5 dp outside its content (density 1).
+        val rest = Rect(100f, 0f, 211f, 157f)
+        val left = Rect(-11f, 0f, 99f, 157f)
+        val below = Rect(100f, 158f, 211f, 315f)
+        val outlineOnly = hoverRoom(rest, listOf(left, rest, below), null, LiftEdges.Horizontal, 4f)
+        assertEquals(.25f, outlineOnly.left, .001f)
+        val room = hoverRoom(rest, listOf(left, rest, below), null, LiftEdges.Horizontal, 4f, neighbourInset = 3.5f, clearance = 1f)
+        // Gap to the neighbour's content is 1 + 3.5 = 4.5: a quarter is 1.125, leaving 3.375 >= 1.
+        assertEquals(1.125f, room.left, .001f)
+        assertEquals(1.125f, room.bottom, .001f)
+        for (clearance in listOf(1f, 3f, 4f, 6f)) {
+            val r = hoverRoom(rest, listOf(left, rest), null, LiftEdges.Horizontal, 40f, neighbourInset = 3.5f, clearance = clearance)
+            assertTrue("clearance $clearance leaves ${4.5f - r.left}", 4.5f - r.left >= minOf(clearance, 4.5f) - .001f)
+        }
+    }
+
     @Test fun growthIsCappedAndScrollAxisEdgesDoNotShrinkItWhileScrolling() {
         val rest = Rect(20f, -40f, 700f, 106f) // Partly scrolled off the top.
         val room = hoverRoom(rest, listOf(rest), Rect(0f, 0f, 720f, 1280f), LiftEdges.Horizontal, cap)
