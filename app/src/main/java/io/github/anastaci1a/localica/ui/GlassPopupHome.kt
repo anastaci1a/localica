@@ -108,18 +108,19 @@ private fun GlassPopupHome(home: GlassPopupHome, content: @Composable () -> Unit
     }
 }
 
-private class GlassPopupPage(val key: Any, content: @Composable () -> Unit) {
-    var content by mutableStateOf(content)
+private class GlassPopupPage<T : Any>(val key: Any, target: T) {
+    var target by mutableStateOf(target)
     var home by mutableStateOf<GlassPopupHome?>(null)
 }
 
 /** Retain the actual outgoing screen, including its popup home, until its fade ends. */
 @Composable
-internal fun GlassPopupNavigation(key: Any, modifier: Modifier = Modifier, direction: Float = 1f,
-    departing: Boolean = false, content: @Composable () -> Unit) {
-    val page = remember(key) { GlassPopupPage(key, content) }
+internal fun <T : Any> GlassPopupNavigation(target: T, modifier: Modifier = Modifier, direction: Float = 1f,
+    departing: Boolean = false, contentKey: (T) -> Any = { it }, content: @Composable (T) -> Unit) {
+    val key = contentKey(target)
+    val page = remember(key) { GlassPopupPage(key, target) }
     var displayed by remember { mutableStateOf(page) }
-    SideEffect { page.content = content }
+    SideEffect { page.target = target }
     LaunchedEffect(page) {
         // Admit the overlay-free native recording and acknowledge its first inline
         // draw before moving either screen. This also avoids a one-frame source cycle.
@@ -137,6 +138,6 @@ internal fun GlassPopupNavigation(key: Any, modifier: Modifier = Modifier, direc
         }) { shown ->
         val home = rememberGlassPopupHome(departing || shown !== page)
         SideEffect { shown.home = home }
-        GlassPopupHome(home) { shown.content() }
+        GlassPopupHome(home) { content(shown.target) }
     }
 }

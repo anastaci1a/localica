@@ -119,9 +119,7 @@ internal class GlassAnchor {
 internal fun rememberGlassAnchor(deferContextPlacement: Boolean = false): GlassAnchor {
     val ink = LocalContentColor.current
     val home = LocalGlassPopupHome.current
-    val anchor = remember { GlassAnchor().also { it.ink = ink; it.contextPlacementTracked = !deferContextPlacement } }
-    SideEffect { anchor.popupHome = home }
-    return anchor
+    return remember { GlassAnchor().also { it.ink = ink; it.contextPlacementTracked = !deferContextPlacement; it.popupHome = home } }
 }
 
 /** Optional evidence of each published context-trigger placement; no behavior depends on it. */
@@ -137,7 +135,8 @@ internal val LocalContextAnchorPlacementObserver = staticCompositionLocalOf<((Re
     val density = LocalDensity.current
     val clearance = with(density) { LocalBrowseObscuredInset.current.toPx() }
     val observer = LocalContextAnchorPlacementObserver.current
-    SideEffect { anchor.source = source; anchor.quiet = true; anchor.contextual = true; anchor.bottomClearance = clearance; anchor.face = null }
+    val home = LocalGlassPopupHome.current
+    SideEffect { anchor.popupHome = home; anchor.source = source; anchor.quiet = true; anchor.contextual = true; anchor.bottomClearance = clearance; anchor.face = null }
     fun publish(coordinates: LayoutCoordinates) {
         anchor.bounds = Rect(coordinates.backdropPosition(view), Size(coordinates.size.width.toFloat(), coordinates.size.height.toFloat()))
         val location = IntArray(2)
@@ -182,6 +181,8 @@ internal fun GlassAnchor.captureInk() {
 @Composable
 internal fun Modifier.glassAnchor(anchor: GlassAnchor): Modifier {
     val view = LocalView.current
+    val home = LocalGlassPopupHome.current
+    SideEffect { anchor.popupHome = home }
     DisposableEffect(anchor) { anchor.triggerMounted = true; onDispose { anchor.triggerMounted = false } }
     return then(GlassDepthMarker(anchor)).backdropLocation(anchor.samplingLocation).onGloballyPositioned {
         anchor.bounds = Rect(it.backdropPosition(view), Size(it.size.width.toFloat(), it.size.height.toFloat()))
