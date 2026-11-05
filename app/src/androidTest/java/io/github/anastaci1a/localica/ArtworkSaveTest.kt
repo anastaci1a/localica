@@ -39,7 +39,7 @@ class ArtworkSaveTest {
     private val saved = mutableListOf<String>()
 
     @Before fun grant() {
-        if (Build.VERSION.SDK_INT < 29) instrumentation.uiAutomation.grantRuntimePermission(context.packageName, android.Manifest.permission.WRITE_EXTERNAL_STORAGE)
+        if (Build.VERSION.SDK_INT < 29) instrumentation.uiAutomation.executeShellCommand("pm grant ${context.packageName} android.permission.WRITE_EXTERNAL_STORAGE").close()
     }
 
     @After fun cleanup() {
