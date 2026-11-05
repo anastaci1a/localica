@@ -569,9 +569,18 @@ class DragReorderTest {
         stack.assert(hasAnyAncestor(hasTestTag("drag-foreground")))
         val card = stack.fetchSemanticsNode().boundsInRoot
         assertTrue("Card must extend beyond the clipped list into the footer", card.bottom > footer.top)
+        val title = compose.onNode(hasText("Song 1") and hasAnyAncestor(hasTestTag("drag-stack")), useUnmergedTree = true)
+        title.assertIsDisplayed()
+        val ink = title.fetchSemanticsNode().boundsInRoot.intersect(footer)
+        assertFalse("The dragged title must overlap the footer", ink.isEmpty)
+        saveDragFrame("stack-over-footer")
         val image = compose.onRoot().captureToImage().toPixelMap()
-        assertNotEquals("Selection footer must not paint over the card", Color.Magenta.toArgb(),
-            image[(card.right - 16).toInt(), footer.center.y.toInt()].toArgb())
+        // A uniform magenta backdrop can remain magenta through live frost. Test
+        // the card's foreground ink, which an overpainted footer would erase.
+        val visibleInk = (ink.top.toInt() until ink.bottom.toInt()).sumOf { y ->
+            (ink.left.toInt() until ink.right.toInt()).count { x -> image[x, y].toArgb() != Color.Magenta.toArgb() }
+        }
+        assertTrue("Selection footer must not paint over the dragged title: $visibleInk visible pixels", visibleInk > 8)
         compose.onNodeWithTag("browser-list").performTouchInput { cancel() }
     }
     @Test fun releasingOnForegroundCancelTargetRestoresOrder() = fixture { controller, playlist ->
