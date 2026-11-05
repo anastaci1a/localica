@@ -497,7 +497,7 @@ Image picker: rounded previews of readable previous choices. Optional device-pho
 
 Bulk jobs: Continue in background and Stop after current file. **Settings → Library and tags → Tag jobs and recovery → Tag editing jobs** shows progress/recent per-file outcomes.
 
-The artwork viewer centers fitted artwork across the full page. Safe Close and contextual Zoom/Reset controls overlay the image. Pan bounds follow the fitted image. Released pans decelerate. Re-grab, reset, zoom or reduced motion stops travel. Recreation preserves zoom and the visible image center.
+The artwork viewer centers fitted artwork across the full page. Safe Close and Save (to Downloads, original file format) controls overlay the image; zoom is by pinch or the accessibility Zoom actions. Pan bounds follow the fitted image. Released pans decelerate. Re-grab, reset, zoom or reduced motion stops travel. Recreation preserves zoom and the visible image center.
 
 Mode icons visibly reflect state without filled hitboxes or ripples: dim when off, full strength when active, visible 1 for Repeat one, distinct Stop/Next paused/Next queue indicators and accessible announcements. Hold Repeat for Simple/Advanced options. Tapping returns to the ordinary cycle.
 

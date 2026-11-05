@@ -63,6 +63,7 @@ Rules:
 | `action.revert` | Revert order |
 | `action.reverse` | Reverse order |
 | `action.save` | Save |
+| `action.save_artwork` | Save artwork to Downloads (artwork viewer) |
 | `action.settings` | Settings |
 | `action.shuffle` | Shuffle |
 | `action.repeat` | Repeat |

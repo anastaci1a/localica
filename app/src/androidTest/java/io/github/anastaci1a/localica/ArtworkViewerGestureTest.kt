@@ -84,13 +84,13 @@ class ArtworkViewerGestureTest {
                 compose.awaitExpectedWindowFocus(entry)
                 entry.performTouchInput { click(center) }
                 compose.waitUntil(10000) {
-                    compose.onAllNodesWithContentDescription("Zoom in").fetchSemanticsNodes().any {
+                    compose.onAllNodesWithContentDescription("Save artwork").fetchSemanticsNodes().any {
                         !it.config.contains(androidx.compose.ui.semantics.SemanticsProperties.Disabled)
                     }
                 }
                 compose.awaitExpectedWindowFocus(viewport())
                 viewport().assert(SemanticsMatcher.expectValue(androidx.compose.ui.semantics.SemanticsProperties.StateDescription, "100% zoom"))
-                compose.onNodeWithContentDescription("Zoom in").performTouchInput { click(center) }
+                action("Zoom in")
                 viewport().assert(SemanticsMatcher.expectValue(androidx.compose.ui.semantics.SemanticsProperties.StateDescription, "200% zoom"))
                 viewport().performTouchInput {
                     down(center); moveBy(Offset(width * .12f, 0f), delayMillis = 50); up()
@@ -127,7 +127,7 @@ class ArtworkViewerGestureTest {
 
     @Test fun accessibleZoomAndCompactResetKeepNonSquareBoundsAndLandscapeLayout() {
         fixture(portraitArt = true, landscape = true)
-        compose.onNodeWithContentDescription("Zoom in").performClick()
+        action("Zoom in")
         assertEquals(2f, transform().scale, 0f)
         action("Zoom in")
         action("Zoom out")
@@ -136,7 +136,7 @@ class ArtworkViewerGestureTest {
         }
         assertEquals("Portrait art still fits the landscape width at 2x", 0f, transform().offset.x, 0f)
         assertTrue(transform().offset.y > 0f)
-        compose.onNodeWithContentDescription("Reset zoom").performClick()
+        action("Reset zoom")
         assertEquals(ArtworkTransform(), transform())
         zoom()
         action("Reset zoom")
@@ -290,7 +290,7 @@ class ArtworkViewerGestureTest {
         val page = compose.onNodeWithTag("artwork-viewer").fetchSemanticsNode().boundsInRoot
         assertEquals("Controls overlay the full image viewport", page, viewport().fetchSemanticsNode().boundsInRoot)
         val close = compose.onNodeWithContentDescription("Close artwork").assertIsDisplayed().assertIsEnabled().fetchSemanticsNode().boundsInRoot
-        val reset = compose.onNodeWithContentDescription("Reset zoom").assertIsDisplayed().assertIsEnabled().fetchSemanticsNode().boundsInRoot
+        val reset = compose.onNodeWithContentDescription("Save artwork").assertIsDisplayed().assertIsEnabled().fetchSemanticsNode().boundsInRoot
         val target = with(compose.density) { 48.dp.toPx() }
         val padding = with(compose.density) { 16.dp.toPx() }
         for (bounds in listOf(close, reset)) {
@@ -428,7 +428,7 @@ class ArtworkViewerGestureTest {
             compose.waitForIdle()
             assertCenter(center)
             assertEquals("An unloaded image cannot retain a stale pixel-space translation", Offset.Zero, current().offset)
-            compose.onNodeWithContentDescription("Reset zoom").assertIsNotEnabled()
+            compose.onNodeWithContentDescription("Save artwork").assertIsNotEnabled()
             assertTrue(viewport().fetchSemanticsNode().config[SemanticsActions.CustomActions].isEmpty())
             compose.runOnIdle { wide.value = true }
             compose.mainClock.advanceTimeBy(32)
