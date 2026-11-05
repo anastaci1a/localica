@@ -15,6 +15,18 @@ class QueuePlaybackFollowTest {
     private fun QueuePlaybackFollowCoordinator.observe(target: String? = "first", eligible: Boolean = true,
         owner: Any = this@QueuePlaybackFollowTest.owner, generation: Long = 0) = observe(target, owner, eligible, generation)
 
+    @Test fun boundaryReturnRestoresIntentWithoutASecondMotion() {
+        val state = QueuePlaybackFollowCoordinator()
+        state.observe()
+        state.userScroll()
+        assertFalse(state.attached)
+        state.reattachAtBoundary("first", owner)
+        assertTrue(state.attached)
+        assertNull(state.request)
+        state.observe("second")
+        assertEquals("second", state.request?.occurrenceId)
+    }
+
     @Test fun initialPlacementConsumesAdmissionWithoutChangingLaterTransitionEasing() {
         val state = QueuePlaybackFollowCoordinator()
         assertEquals("first", state.initialTarget("first", owner, true, 0))

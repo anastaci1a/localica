@@ -257,6 +257,7 @@ class QueueFollowingTest {
         fixture(initial = 45, reducedMotion = false)
         for (index in listOf(0, 43, 44, 45, 46, 47, 50, 119)) {
             list.performScrollToIndex(index)
+            list.performSemanticsAction(SemanticsActions.ScrollBy) { it(0f, 24f) }
             currentReturn.assertIsDisplayed()
             val up = currentReturn.fetchSemanticsNode().config[SemanticsProperties.StateDescription] == "Scroll up"
             val start = position()
