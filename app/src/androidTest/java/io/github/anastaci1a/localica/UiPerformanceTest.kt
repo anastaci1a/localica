@@ -79,8 +79,7 @@ class UiPerformanceTest {
                 repeat(repetitions + 1) { rep ->
                     try {
                         launch(); prepare(); Thread.sleep(800)
-                        main { FrameStats.start(it) }
-                        windows.toList().forEach { window -> main { FrameStats.attach(window) } }
+                        main { activity -> FrameStats.start(activity); windows.forEach { FrameStats.attach(it) } }
                         val cookie = name.hashCode()
                         if (Build.VERSION.SDK_INT >= 29) android.os.Trace.beginAsyncSection("ui600:$name:$rep", cookie)
                         else android.os.Trace.beginSection("ui600:$name:$rep")
@@ -95,6 +94,7 @@ class UiPerformanceTest {
                             .put("api", Build.VERSION.SDK_INT).put("glassMode", glassMode.name)
                             .put("glassFallback", glassMode.name != "None").put("artwork", "placeholders; no media I/O")
                             .put("source", args.getString("uiPerformanceSource") ?: "unspecified")
+                        check(!report.getBoolean("timeLimitReached")) { "$name exceeded the capture time limit" }
                         val frames = report.getJSONArray("windows")
                         check((0 until frames.length()).sumOf { frames.getJSONObject(it).getInt("frames") } > 0) { "$name produced no frames" }
                         val directory = nativeEvidenceDirectory("ui-performance", context.getExternalFilesDir(null))
