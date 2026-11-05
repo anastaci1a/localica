@@ -76,11 +76,7 @@ class SearchSortResetTest {
             }
             val reset = compose.onNodeWithText("Use list-type defaults").assertIsDisplayed().assertIsEnabled()
             compose.awaitExpectedWindowFocus(reset)
-            val view = (reset.fetchSemanticsNode().root as androidx.compose.ui.platform.ViewRootForTest).view
-            compose.runOnUiThread {
-                val insets = androidx.core.view.ViewCompat.getRootWindowInsets(view)
-                record("before-click focus=${view.hasWindowFocus()} ime=${insets?.getInsets(androidx.core.view.WindowInsetsCompat.Type.ime())?.bottom} overridden=${preferences.overridden(search)}")
-            }
+            record("before-click")
             reset.performClick()
             compose.waitUntil(5000) { compose.onAllNodesWithTag("glass-morph-surface").fetchSemanticsNodes().isEmpty() }
             compose.runOnIdle {
