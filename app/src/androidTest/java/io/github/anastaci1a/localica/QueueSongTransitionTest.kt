@@ -2,20 +2,25 @@ package io.github.anastaci1a.localica
 
 import android.graphics.Bitmap
 import androidx.compose.animation.core.Animatable
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.Text
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.colorspace.ColorSpaces
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.graphics.toPixelMap
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.*
 import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.dp
+import androidx.test.platform.app.InstrumentationRegistry
+import kotlin.math.roundToInt
 import io.github.anastaci1a.localica.localicaComposeRule as createComposeRule
 import io.github.anastaci1a.localica.navigation.*
 import io.github.anastaci1a.localica.playback.PlaybackState
@@ -43,6 +48,9 @@ class QueueSongTransitionTest {
     @Volatile private var backdropMix = Float.NaN
 
     @Volatile private var surfaceTint = Float.NaN
+    private lateinit var captureView: android.view.View
+    private var captureStage by mutableIntStateOf(0)
+
     private var preparationBarrier: (suspend () -> Unit)? = null
 
     private class Frame(val mix: Float, val queue: Float, val backdrop: Float, val shot: Float, val clock: Float, val tint: Float, val incoming: Float)
@@ -61,6 +69,7 @@ class QueueSongTransitionTest {
             CompositionLocalProvider(LocalDensity provides Density(1f), LocalReducedMotion provides reduced,
                 LocalPlayerBackgroundPreparationBarrier provides preparationBarrier) {
                 BoxWithConstraints(Modifier.fillMaxSize().background(if (queueShown) Color.Transparent else Color.Magenta)) {
+                    captureView = LocalView.current
                     val mix = owner.lightMix
                     val queue = remember { Animatable(if (queueShown) 1f else 0f) }
                     val backdrop = rememberFrostedBackdrop(Unit, enabled = false, dark = mix >= .5f, lightMix = mix, retainRaster = false)
@@ -79,6 +88,10 @@ class QueueSongTransitionTest {
                             Text("Queue row")
                         }
                     }
+                    // Independent compositor-frame receipt; never a predicate on the optics under test.
+                    Canvas(Modifier.align(Alignment.TopStart).size(8.dp)) {
+                        drawRect(Color((captureStage % 200 + 20) / 255f, 1f, 0f))
+                    }
                 }
             }
         } }
@@ -87,11 +100,40 @@ class QueueSongTransitionTest {
     }
 
     private fun gutter(green: Boolean = false): Float {
-        val pixels = compose.onRoot().captureToImage().toPixelMap()
-        var sum = 0f; var n = 0
-        for (y in (pixels.height * .55f).toInt() until (pixels.height * .8f).toInt() step 6)
-            for (x in (pixels.width * .01f).toInt() until (pixels.width * .045f).toInt()) { sum += if (green) pixels[x, y].green else pixels[x, y].red; n++ }
-        return sum / n
+        // captureToImage forces a second native redraw and has a fixed two-second
+        // acknowledgement timeout. With a paused test clock, that is not a receipt
+        // for the frame just requested. Keep the clock fixed and observe our marker
+        // in the compositor screenshot instead; no retry can skip an artwork frame.
+        val stage = compose.runOnIdle { ++captureStage }
+        val bounds = compose.onRoot().fetchSemanticsNode().boundsInRoot
+        val origin = IntArray(2)
+        compose.runOnIdle { captureView.getLocationOnScreen(origin) }
+        val left = origin[0] + bounds.left.roundToInt()
+        val top = origin[1] + bounds.top.roundToInt()
+        val width = bounds.width.roundToInt(); val height = bounds.height.roundToInt()
+        var result = Float.NaN
+        compose.waitUntil(5000) {
+            val screen = InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot()
+                ?: return@waitUntil false
+            try {
+                check(left >= 0 && top >= 0 && left + width <= screen.width && top + height <= screen.height)
+                val marker = screen.getPixel(left + 2, top + 2)
+                val presented = abs(android.graphics.Color.red(marker) - (stage % 200 + 20)) <= 1 &&
+                    android.graphics.Color.green(marker) > 250 && android.graphics.Color.blue(marker) < 5
+                if (presented) {
+                    var sum = 0f; var n = 0
+                    for (y in (height * .55f).toInt() until (height * .8f).toInt() step 6)
+                        for (x in (width * .01f).toInt() until (width * .045f).toInt()) {
+                            val pixel = screen.getPixel(left + x, top + y)
+                            sum += (if (green) android.graphics.Color.green(pixel) else android.graphics.Color.red(pixel)) / 255f
+                            n++
+                        }
+                    result = sum / n
+                }
+                presented
+            } finally { screen.recycle() }
+        }
+        return result
     }
 
     private fun record(count: Int) = repeat(count) {
