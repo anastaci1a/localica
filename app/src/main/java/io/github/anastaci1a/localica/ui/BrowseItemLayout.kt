@@ -76,10 +76,9 @@ internal fun BrowseItemLayout(item: BrowserItem, style: BrowseStyle, geometry: B
     // One artwork reveal drives the text (#526); pinches keep their own text handling.
     val textReveal = remember(item.key) { ArtworkTextReveal() }
     val gatedText = textReveal.takeIf { from == null && artwork(style) }
-    val gatedMenu = textReveal.takeIf { artwork(style) || from?.let(::artwork) == true }
     // Only the zero crossing changes composition. Opacity remains a layer-phase read.
-    val menuRevealed by remember(gatedMenu, loadingReveal) {
-        derivedStateOf { (gatedMenu?.menuAlpha ?: 1f) * (loadingReveal?.alpha ?: 1f) > 0f }
+    val menuRevealed by remember(textReveal, artworkAlpha, loadingReveal) {
+        derivedStateOf { textReveal.menuAlpha(artworkAlpha) * (loadingReveal?.alpha ?: 1f) > 0f }
     }
     val textDensity = androidx.compose.ui.platform.LocalDensity.current
     val titleLinePx = with(textDensity) { titleLine.sp.toPx() }
@@ -123,7 +122,7 @@ internal fun BrowseItemLayout(item: BrowserItem, style: BrowseStyle, geometry: B
         // windows), so it needs no fade layer. The layer and the outgoing button
         // enter and leave together; no drawn child ever changes its parent layer.
         val menuDrawn = !gallery || menuAlpha > 0f
-        Box(Modifier.morph().reveal().then(if (menuDrawn) Modifier.graphicsLayer { alpha = menuAlpha * (gatedMenu?.menuAlpha ?: 1f) } else Modifier).then(if (gallery)
+        Box(Modifier.morph().reveal().then(if (menuDrawn) Modifier.graphicsLayer { alpha = menuAlpha * textReveal.menuAlpha(artworkAlpha) } else Modifier).then(if (gallery)
             // Keep the layout witness inside the clear boundary; a later testTag
             // modifier would be cleared along with the outgoing action semantics.
             Modifier.clearAndSetSemantics { testTag = menuTag } else Modifier.testTag(menuTag))) { menu(menuDrawn && menuAlpha > 0f && menuRevealed) }
