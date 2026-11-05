@@ -92,11 +92,11 @@ internal fun PlayerSeekBar(value: Float, onValueChange: (Float) -> Unit, valueRa
                 report(true, over)
             } }
     }
-    fun end() {
+    fun end(cancelled: Boolean = false) {
         pointerInRoot = null
         touching = false
         start = null
-        report(false, false)
+        report(false, cancelled)
     }
     // The playback bar follows the shared slider touch model (#538, #539).
     val touch = Modifier.sliderContact(enabled) { contact ->
@@ -135,7 +135,7 @@ internal fun PlayerSeekBar(value: Float, onValueChange: (Float) -> Unit, valueRa
                 start?.let { interaction.tryEmit(DragInteraction.Stop(it)) }
                 if (over) cancel() else finished()
                 touchPreview.release()
-                end()
+                end(over)
             }
             is SliderContact.Tap -> {
                 // A tap seeks to the tap point.

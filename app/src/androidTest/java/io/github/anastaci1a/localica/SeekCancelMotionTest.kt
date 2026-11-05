@@ -252,6 +252,7 @@ class SeekCancelMotionTest {
         }
         compose.mainClock.advanceTimeByFrame()
         compose.runOnIdle { assertEquals("First scrub cancels; the fresh unplaced target cannot cancel the second", 1, commits.size) }
+        compose.mainClock.advanceTimeBy(500)
         compose.onNodeWithTag("cancel-seek").assertDoesNotExist()
         seek.performTouchInput { down(center); moveTo(Offset(width * .8f, centerY)); cancel() }
         compose.mainClock.advanceTimeByFrame()

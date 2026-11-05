@@ -298,7 +298,9 @@ Scrolled song lists offer a bottom-center return-to-top control without clearing
 
 Queue return and foreground song-drag cancel controls share 12 dp clearance below the circle. Activating Return removes its drawing and input immediately while that return command owns readiness or motion. Cancellation restores normal visibility from the current list state. Return and drag/seek-cancel controls otherwise fade in while rising, continuing through reversals.
 
-Faster animations shortens the entrance and Reduce motion snaps. Moving cancel hit regions follow the visible target, and hidden or replaced controls immediately relinquish input.
+Seek and slider cancel targets reverse their rise on ordinary release. Release over X fades it in place. Both exits retain the release placement and continue through a new drag without disappearing between frames.
+
+Faster animations shortens the entrance and exit; Reduce motion snaps. Moving cancel hit regions follow the visible target. Released or replaced controls immediately relinquish input while their drawing may finish exiting.
 
 Library root has no top search box: bottom Search opens a global-search page. Selecting a glass filter bubble moves it to the far left. The previous selection returns to its configured position, with neighbors yielding progressively and scrolling following the selected bubble.
 

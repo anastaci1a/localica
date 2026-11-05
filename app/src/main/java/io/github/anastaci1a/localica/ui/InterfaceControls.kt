@@ -141,8 +141,8 @@ internal fun InterfaceSlider(value: Float, onValueChange: (Float) -> Unit, modif
         if (!hovered) change(sliderValue(snapped, valueRange, curve))
         return stepOf(snapped)
     }
-    fun end() {
-        if (touchPreview.owned) host?.end()
+    fun end(cancelled: Boolean = hovered) {
+        if (touchPreview.owned) host?.end(cancelled)
         contact = false; hovered = false; pressure = 0f; finger = null; pointerInRoot = null
         feedback = null
     }
@@ -192,7 +192,7 @@ internal fun InterfaceSlider(value: Float, onValueChange: (Float) -> Unit, modif
                     feedback?.move(track(point))
                     feedback?.finish(true)
                 }
-                end()
+                end(over)
                 touchPreview.release()
             }
             is SliderContact.Tap -> {
