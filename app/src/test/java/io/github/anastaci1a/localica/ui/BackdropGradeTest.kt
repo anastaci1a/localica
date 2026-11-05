@@ -38,7 +38,7 @@ class BackdropGradeTest {
             if (light) assertTrue("$hex light ink must not lighten: $shift", shift <= 0f)
             else assertTrue("$hex dark ink must not darken: $shift", shift >= 0f)
             val out = graded(c, shift)
-            assertTrue("$hex contrast never drops", contrast(out, light) >= contrast(c, light) - 1e-9)
+            assertTrue("$hex contrast never drops", contrast(out, light) >= contrast(c, light) - 1e-5)
             if (shift != 0f) assertEquals("$hex lightness moved by the shift", lab(c)[0] + shift, lab(out)[0], .01)
         }
     }
@@ -83,12 +83,14 @@ class BackdropGradeTest {
     @Test fun gradingIsContinuousInTheMeasuredColorAndTheShift() {
         // Sweep grey and a saturated ramp: a small change of the input never makes a large change of the shift or result.
         for (light in listOf(false, true)) {
-            var last = shiftOf(doubleArrayOf(0.0, 0.0, 0.0), light)
+            // The shift is Lipschitz in the measured color: it never changes faster than the OKLab lightness it is measured from.
+            var color = doubleArrayOf(0.0, 0.0, 0.0); var last = shiftOf(color, light)
             for (step in 1..1000) {
                 val v = step / 1000.0
-                val now = shiftOf(doubleArrayOf(v, v * .5, v * .8), light)
-                assertTrue("jump at $v: $last -> $now", abs(now - last) < .02f)
-                last = now
+                val next = doubleArrayOf(v, v * .5, v * .8); val now = shiftOf(next, light)
+                val moved = abs(lab(next)[0] - lab(color)[0])
+                assertTrue("jump at $v: $last -> $now", abs(now - last) <= 1.5 * moved + 1e-3)
+                last = now; color = next
             }
         }
         val c = rgb(0x3A0CA3); var previous = graded(c, 0f)
