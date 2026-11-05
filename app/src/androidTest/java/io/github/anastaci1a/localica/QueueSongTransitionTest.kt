@@ -97,7 +97,10 @@ class QueueSongTransitionTest {
             assertTrue("$name: polarity not monotonic at $i", if (toLight) b >= a - 1e-3f else b <= a + 1e-3f)
         }
         // The Queue's theme reads the same eased fraction (its capture trails the polarity read by up to a frame).
-        frames.forEachIndexed { i, f -> assertTrue("$name: queue ink $i ${f.queue} vs polarity ${f.mix}", abs(f.queue - f.mix) <= .2f) }
+        frames.forEachIndexed { i, f ->
+            val previous = frames.getOrNull(i - 1)?.mix ?: f.mix
+            assertTrue("$name: queue ink $i ${f.queue} vs polarity ${f.mix} (previous $previous)", minOf(abs(f.queue - f.mix), abs(f.queue - previous)) <= .05f)
+        }
         assertTrue("$name: materials follow ${frames.map { it.backdrop }}", frames.all { abs(it.backdrop - it.mix) <= .3f })
         // The backdrop crossfade shares that start and end.
         val from = shot.first(); val to = shot.last()
