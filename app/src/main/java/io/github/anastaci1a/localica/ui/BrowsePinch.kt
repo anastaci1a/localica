@@ -6,7 +6,6 @@ import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.graphics.layer.GraphicsLayer
 import kotlin.math.max
 import kotlin.math.roundToInt
-import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.calculateCentroid
@@ -28,7 +27,7 @@ import io.github.anastaci1a.localica.browse.*
 import io.github.anastaci1a.localica.navigation.BrowseRoute
 
 private data class PinchCaptureDrawing(val key: Any, val pass: Int, val layer: GraphicsLayer,
-    val size: androidx.compose.ui.unit.IntSize = layer.size, val corner: Float? = null)
+    val size: androidx.compose.ui.unit.IntSize = layer.size)
 private object PinchHeaderCaptureKey
 private object PinchHeaderStaticCaptureKey
 
@@ -61,13 +60,13 @@ internal data class BrowseZoomAnchor(val route: BrowseRoute, val style: BrowseSt
 @Stable
 internal class BrowsePinchMotion {
     val beyondBounds = BrowseBeyondBounds()
-    var progress by mutableStateOf(Animatable(1f))
+    var progress by mutableStateOf(BrowsePinchProgress(1f))
         private set
     /** Retired layout keeps its terminal clock while the next transaction starts at zero. */
     fun beginGeometry() {
         tracking?.cancel(); tracking = null
         caughtUp = false
-        progress = Animatable(0f)
+        progress = BrowsePinchProgress(0f)
     }
     var held by mutableStateOf(false)
     var fingerProgress = 0f
@@ -79,6 +78,7 @@ internal class BrowsePinchMotion {
     fun followFingers(scope: CoroutineScope) {
         if (!held || capturing || !destinationReady) return
         val clock = progress
+        clock.follow(fingerProgress)
         if (caughtUp) {
             tracking?.cancel()
             // Publish pointer-driven reversals before the frame begins. A snap animation's
@@ -90,23 +90,7 @@ internal class BrowsePinchMotion {
         }
         if (tracking?.isActive == true) return
         tracking = scope.launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) {
-            val from = clock.value
-            var start = -1L
-            do {
-                var t = 0f
-                var update: kotlinx.coroutines.Job? = null
-                withFrameNanos { now ->
-                    // Write inside the frame callback, before both layout and drawing observe it.
-                    // Resuming the outer coroutine first lets those phases see different progress.
-                    if (start < 0) start = now
-                    t = ((now - start) / 1_000_000f / PinchCatchUpMillis).coerceAtMost(1f)
-                    update = launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) {
-                        clock.snapTo(from + (fingerProgress - from) * androidx.compose.animation.core.FastOutSlowInEasing.transform(t))
-                    }
-                }
-                update?.join()
-            } while (t < 1f)
-            caughtUp = true
+            clock.catchUp { if (progress === clock) caughtUp = true }
         }
     }
     var capture: kotlinx.coroutines.Job? = null
@@ -183,7 +167,7 @@ internal class BrowsePinchMotion {
     val itemAlpha = mutableStateMapOf<Any, Float>()
     val artwork = mutableMapOf<Any, BrowsePinchLayer>()
     val text = mutableMapOf<Any, BrowsePinchLayer>()
-    var viewportCoordinates by mutableStateOf<LayoutCoordinates?>(null)
+    var viewportCoordinates: LayoutCoordinates? = null
     var anchorIndex = 0
     var anchorTop = 0f
     var rowHeight = 64f
@@ -569,8 +553,7 @@ internal fun Modifier.browsePinch(enabled: Boolean, motion: BrowsePinchMotion, s
                     val drawings = (visible.flatMap { entry ->
                         listOfNotNull(motion.retained[entry.key]?.let { PinchCaptureDrawing(entry.key, 0, it) },
                             motion.text[entry.key]?.layer?.let { PinchCaptureDrawing(entry.key, 1, it) },
-                            motion.artwork[entry.key]?.let { PinchCaptureDrawing(entry.key, 2, it.layer,
-                                corner = it.corner?.invoke(androidx.compose.ui.geometry.Size(it.layer.size.width.toFloat(), it.layer.size.height.toFloat()))) })
+                            motion.artwork[entry.key]?.layer?.let { PinchCaptureDrawing(entry.key, 2, it) })
                     } + listOfNotNull(motion.activeHeader?.layer?.let { PinchCaptureDrawing(PinchHeaderCaptureKey, 3, it) },
                         motion.activeHeader?.staticLayer?.let { PinchCaptureDrawing(PinchHeaderStaticCaptureKey, 4, it) }))
                         .filter { !it.layer.isReleased && it.size.width > 0 && it.size.height > 0 }
@@ -598,7 +581,7 @@ internal fun Modifier.browsePinch(enabled: Boolean, motion: BrowsePinchMotion, s
                         } finally { motion.finishReadback() }
                         if (!motion.owns(generation)) return@launch
                         fun parts(pass: Int) = drawings.withIndex().filter { it.value.pass == pass }.associate { (i, drawing) ->
-                            drawing.key to FrozenBrowsePart(image, origins[i], drawing.size, drawing.corner)
+                            drawing.key to FrozenBrowsePart(image, origins[i], drawing.size)
                         }
                         val text = parts(1); val art = parts(2)
                         drawings.forEachIndexed { i, drawing -> if (drawing.pass == 0) {
