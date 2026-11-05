@@ -541,7 +541,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
                 .testTag("player-seek-row").onGloballyPositioned { polarity.measure("seek", it) }.graphicsLayer { alpha = rowMotion.seekAlpha }) {
                 PlayerSeekControls(sampled, onSeek, artworkVisit, onSeekRequest = onSeekRequest, position = seekPosition,
                     cancelTarget = { scrubCancel.bounds },
-                    onDrag = { active, hovered -> scrubCancel.update(active); scrubOverCancel = active && hovered })
+                    onDrag = { active, hovered -> scrubCancel.update(active, hovered); scrubOverCancel = active && hovered })
             }
             if (rowMotion.actionsAlpha > 0f) Box(Modifier.offset(x = contentInset, y = actionsY)
                 .width(contentWidth).height(48.dp * actionRows).testTag("player-actions-row").onGloballyPositioned { polarity.measure("actions", it) }.graphicsLayer { alpha = rowMotion.actionsAlpha }
@@ -565,7 +565,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     // The complete player composite (artwork, wash, controls, text) as recorded by the Surface above.
     // This target must stay outside that Surface's content: inside it, the Surface records the X into
     // the very layer the X's lens draws, a RenderNode cycle that overflows the API 33+ RenderThread (#583).
-    if (scrubDragging) CompositionLocalProvider(LocalFrostedBackdrop provides seekCancelBackdrop(frostedBackdrop, lyricBackdrop, p),
+    CompositionLocalProvider(LocalFrostedBackdrop provides seekCancelBackdrop(frostedBackdrop, lyricBackdrop, p),
         LocalContentColor provides foreground) {
         SeekCancelTarget(scrubCancel, scrubOverCancel,
             navigationInset + CollapsedQueueHeight + 20.dp, settings.reducedMotion)
