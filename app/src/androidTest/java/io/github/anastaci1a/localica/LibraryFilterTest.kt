@@ -12,9 +12,11 @@ import io.github.anastaci1a.localica.ui.*
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.RuleChain
 
 class LibraryFilterTest {
-    @get:Rule val compose = createComposeRule()
+    private val compose = createComposeRule()
+    @get:Rule val rules: RuleChain = RuleChain.outerRule(BrowsePreferenceIsolation()).around(compose)
     @Test fun holdingFilterOpensSharedSettingsAndChoicesOrderAndHiddenFilterPersist() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val filterPrefs = LibraryFilterPreferences(context)
