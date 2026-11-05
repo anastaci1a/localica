@@ -115,10 +115,15 @@ internal class FrostedBackdrop(val layer: GraphicsLayer, dark: Boolean,
      * wait here but cannot clear another generation's pending-recording freeze. */
     suspend fun captureCurrent(graphics: androidx.compose.ui.graphics.GraphicsContext,
         density: androidx.compose.ui.unit.Density, direction: androidx.compose.ui.unit.LayoutDirection,
-        valid: () -> Boolean, region: androidx.compose.ui.unit.IntRect? = null): ImageBitmap? = captureLock.withLock {
+        valid: () -> Boolean, region: androidx.compose.ui.unit.IntRect? = null): ImageBitmap? = withPinnedRecording(valid) {
+        readback.captureRegion(layer, graphics, density, direction, region)
+    }
+
+    /** Pin the sampling recording for the complete native ownership interval. */
+    suspend fun <T> withPinnedRecording(valid: () -> Boolean, copy: suspend () -> T): T? = captureLock.withLock {
         if (!valid()) return@withLock null
         readbackPending = true
-        try { readback.captureRegion(layer, graphics, density, direction, region) }
+        try { copy() }
         finally {
             readbackPending = false
             if (!layer.isReleased) layer.compositingStrategy = desiredCompositing
@@ -362,16 +367,19 @@ internal fun Modifier.recordFrostedBackdrop(source: FrostedBackdrop, backing: Fr
             // Retained children keep their separate owner/readiness contracts.
             // Read in draw so the first live frame after a hold is drawn without recomposition.
             val hold = frozen?.invoke() == true && source.recorded && !source.layer.isReleased && source.recordedSize == extent
+            fun DrawScope.paintProducer() {
+                clipRect(right = viewport.width, bottom = viewport.height) {
+                    if (backing != null && backing.recorded && !backing.layer.isReleased) {
+                        backing.location.registrationTo(source.location)?.let { registration ->
+                            clipRect { withBackdropRegistration(registration) { drawLayer(backing.layer) } }
+                        }
+                    }
+                    this@drawWithContent.drawContent()
+                }
+            }
             if (!source.readbackPending && !hold) {
                 source.layer.record(size = if (renderer.backend == GlassBackend.Modern) glassLayerExtent(extent) else extent) {
-                    clipRect(right = viewport.width, bottom = viewport.height) {
-                        if (backing != null && backing.recorded && !backing.layer.isReleased) {
-                            backing.location.registrationTo(source.location)?.let { registration ->
-                                clipRect { withBackdropRegistration(registration) { drawLayer(backing.layer) } }
-                            }
-                        }
-                        this@drawWithContent.drawContent()
-                    }
+                    paintProducer()
                 }
                 source.recordedSize = extent
                 source.recordings++
@@ -385,8 +393,13 @@ internal fun Modifier.recordFrostedBackdrop(source: FrostedBackdrop, backing: Fr
                 return@drawWithContent
             }
             val cutout = displayCutout?.invoke(this)
-            if (cutout == null) drawLayer(source.layer)
-            else clipPath(cutout, ClipOp.Difference) { drawLayer(source.layer) }
+            // Pin the sampler, not the visible producer. A pending native copy must not
+            // replay the preceding geometry while its live children have advanced.
+            fun DrawScope.displayProducer() {
+                if (source.readbackPending && !hold) paintProducer() else drawLayer(source.layer)
+            }
+            if (cutout == null) displayProducer()
+            else clipPath(cutout, ClipOp.Difference) { displayProducer() }
         }
 }
 
