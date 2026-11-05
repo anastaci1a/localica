@@ -606,11 +606,12 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
         selectionVisible && !playerOpen && !session.active && !localSearchOpen,
         backEnabled = listBackEnabled && !route.search && !localSearchOpen && !playerOpen,
         action = returnAction,
-        onSubmit = { manualQueueReturn = false; orderScroll.cancel(); playbackFollow.userScroll() },
+        onSubmit = { orderScroll.cancel(); playbackFollow.userScroll() },
         ready = {
             snapshotFlow { readyToScroll }.first { it }
             withFrameNanos { }; withFrameNanos { }
         }, execute = { action ->
+            manualQueueReturn = false
             localSearchOpen = false
             when (action) {
                 ListReturnAction.ClearFilter -> if (artistDetail) selectedAlbums = emptyList()
@@ -754,7 +755,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     // A completed manual trip to the current occurrence's physical end is a return.
     // Never replay a deferred target, move under a contact, or attach a scoped search.
     val boundaryCurrent = result.items.indexOfFirst { it.row?.id == playingEntryId }
-    val boundaryReturnReady = manualQueueReturn && followEligible && !modalBlocked && !queryPending &&
+    val boundaryReturnReady = manualQueueReturn && !returnToList.pending && followEligible && !modalBlocked && !queryPending &&
         !route.search && route.text.isBlank() && !gridState.isScrollInProgress &&
         boundaryCurrent >= 0 && ((boundaryCurrent == 0 && !gridState.canScrollBackward) ||
             (boundaryCurrent == result.items.lastIndex && !gridState.canScrollForward))
