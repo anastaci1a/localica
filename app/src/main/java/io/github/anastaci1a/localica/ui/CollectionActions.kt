@@ -41,7 +41,7 @@ import kotlinx.coroutines.*
         val editTags = presentedTagEdit()
         val presentation = currentTagEditorPresentation()
         item.row?.let { row ->
-            ActionMenuItem("Information", icon = R.drawable.ic_info, enabled = onInformationPresented != null || onInformation != null, onClick = {
+            ActionMenuItem("Information", icon = R.drawable.ic_menu_info, enabled = onInformationPresented != null || onInformation != null, onClick = {
                 onDismiss()
                 if (onInformationPresented != null) onInformationPresented(row.track, presentation) else onInformation?.invoke(row.track)
             })
@@ -56,18 +56,18 @@ import kotlinx.coroutines.*
             ActionMenuItem("New queue", icon = R.drawable.ic_queue, enabled = queues != null, onClick = { act(SongTap.NewQueue) })
             ActionMenuItem("Play now", icon = R.drawable.ic_play, enabled = queues != null, onClick = { act(SongTap.PlayNow) })
         }
-        ActionMenuItem("Play next", icon = R.drawable.ic_play, enabled = item.songs.isNotEmpty() && queues != null, onClick = { act(SongTap.PlayNext) })
-        ActionMenuItem("Add to current queue", icon = R.drawable.ic_queue, enabled = item.songs.isNotEmpty() && queues != null, onClick = { act(SongTap.Append) })
-        ActionMenuItem("Add to a queue", icon = R.drawable.ic_queue, enabled = item.songs.isNotEmpty() && queues != null, onClick = { onDismiss(); queuePicker = true })
-        ActionMenuItem("Add to playlist", icon = R.drawable.ic_playlist_add, enabled = item.songs.isNotEmpty() && controller != null, onClick = { onDismiss(); adding = true })
+        ActionMenuItem("Play next", icon = R.drawable.ic_menu_play_next, enabled = item.songs.isNotEmpty() && queues != null, onClick = { act(SongTap.PlayNext) })
+        ActionMenuItem("Add to current queue", icon = R.drawable.ic_menu_queue_add, enabled = item.songs.isNotEmpty() && queues != null, onClick = { act(SongTap.Append) })
+        ActionMenuItem("Add to a queue", icon = R.drawable.ic_menu_queue_add, enabled = item.songs.isNotEmpty() && queues != null, onClick = { onDismiss(); queuePicker = true })
+        ActionMenuItem("Add to playlist", icon = R.drawable.ic_menu_playlist_add, enabled = item.songs.isNotEmpty() && controller != null, onClick = { onDismiss(); adding = true })
         if (item.ref.kind in io.github.anastaci1a.localica.home.PinEdits.supported) {
             HorizontalDivider(Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
-            ActionMenuItem(if (item.ref in pins) "Unpin from Home" else "Pin to Home", icon = R.drawable.ic_home, onClick = { onPin(item.ref); onDismiss() })
+            ActionMenuItem(if (item.ref in pins) "Unpin from Home" else "Pin to Home", icon = R.drawable.ic_menu_pin, onClick = { onPin(item.ref); onDismiss() })
         }
         if (item.ref.kind == MediaKind.Playlist) {
             HorizontalDivider(Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
             val customCover = playlists.playlists.firstOrNull { it.id == item.ref.id }?.coverUri
-            ActionMenuItem(if (customCover != null) "Remove playlist image" else "Set playlist image", icon = if (customCover != null) R.drawable.ic_trash else R.drawable.ic_albums,
+            ActionMenuItem(if (customCover != null) "Remove playlist image" else "Set playlist image", icon = if (customCover != null) R.drawable.ic_menu_trash else R.drawable.ic_albums,
                 enabled = controller != null && !busy, onClick = {
                     onDismiss()
                     if (customCover == null) artwork.choose()
@@ -80,12 +80,12 @@ import kotlinx.coroutines.*
                     }
                 })
             ActionMenuItem("Rename playlist", icon = R.drawable.ic_edit, enabled = controller != null, onClick = { onDismiss(); renaming = true })
-            ActionMenuItem("Delete playlist", icon = R.drawable.ic_trash, enabled = controller != null, onClick = { onDismiss(); deleting = true })
+            ActionMenuItem("Delete playlist", icon = R.drawable.ic_menu_trash, enabled = controller != null, onClick = { onDismiss(); deleting = true })
         }
         extra()
         if (onRemove != null) {
             HorizontalDivider(Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
-            ActionMenuItem(if (selectionTarget.source?.kind == MediaKind.Queue) "Remove from queue" else "Remove from playlist", icon = R.drawable.ic_trash,
+            ActionMenuItem(if (selectionTarget.source?.kind == MediaKind.Queue) "Remove from queue" else "Remove from playlist", icon = R.drawable.ic_menu_trash,
                 onClick = { onDismiss(); onRemove() })
         }
     }

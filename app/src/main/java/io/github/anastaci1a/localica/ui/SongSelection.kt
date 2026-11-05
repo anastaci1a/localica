@@ -106,7 +106,7 @@ internal fun SelectionActions(rows: List<SongRow>, selected: Set<String>, onSele
     }
     GlassMenu(menu && !minimized, moreAnchor, { menu = false }) {
         ActionMenuItem("Play now", enabled = chosen.isNotEmpty() && queues != null, icon = io.github.anastaci1a.localica.R.drawable.ic_play) { act(SongTap.PlayNow) }
-        ActionMenuItem("Add to queue", enabled = chosen.isNotEmpty() && queues != null, icon = io.github.anastaci1a.localica.R.drawable.ic_queue) { act(SongTap.Append) }
+        ActionMenuItem("Add to queue", enabled = chosen.isNotEmpty() && queues != null, icon = io.github.anastaci1a.localica.R.drawable.ic_menu_queue_add) { act(SongTap.Append) }
         ActionMenuItem("New queue", enabled = chosen.isNotEmpty() && queues != null, icon = io.github.anastaci1a.localica.R.drawable.ic_queue) { act(SongTap.NewQueue) }
         if (editTags != null) ActionMenuItem("Edit tags", enabled = chosen.isNotEmpty(), icon = io.github.anastaci1a.localica.R.drawable.ic_edit) {
             menu = false; editTags(chosen.map { it.track }.distinctBy { it.id }) { if (it) onSelection(emptySet()) }
