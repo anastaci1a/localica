@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 # Fast-only hosted prototype checks. Never use this result as release certification.
 set -euo pipefail
+repetitions=${PROTOTYPE_REPEAT:-1}
+[[ "$repetitions" =~ ^([1-9]|[12][0-9]|30)$ ]] || { echo 'PROTOTYPE_REPEAT must be 1 through 30' >&2; exit 2; }
+if (( repetitions > 1 )); then
+  exec python3 .github/run-prototype-repeat.py
+fi
 classes=${AFFECTED_CLASSES:-}
 required=io.github.anastaci1a.localica.SearchImeMotionTest
 focus_regression=io.github.anastaci1a.localica.ListSearchTest
