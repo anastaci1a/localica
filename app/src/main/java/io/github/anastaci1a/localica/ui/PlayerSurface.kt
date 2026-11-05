@@ -106,7 +106,8 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     // A request may precede blend admission. Keep its palette with the old frame until
     // the blend publishes the new target and its reset clock together.
     val paletteTarget = polarity.frame?.roles?.firstOrNull { it.incoming && !it.soft }?.visual?.palette ?: artwork.palette
-    val palette = animatedPlayerPalette(paletteTarget, blendClock)
+    val aspect by animateFloatAsState(artwork.palette.aspect, tween(paletteDuration), label = "Cover proportions")
+    val palette = animatedPlayerPalette(paletteTarget, blendClock).copy(aspect = aspect)
     val lyricVisibility by animateFloatAsState(if (lyricsOpen) 1f else 0f, tween(settings.motionDuration(550)), label = "Lyrics layout")
     // A light/dark foreground change during the lyrics animation eases with its progress.
     val inkTransition = remember { PlayerInkTransition(inkTarget) }
