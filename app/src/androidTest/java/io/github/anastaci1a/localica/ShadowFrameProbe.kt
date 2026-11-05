@@ -9,7 +9,7 @@ import kotlin.math.ceil
 import kotlin.math.floor
 
 /** Samples the same screen-space shadow region on every presented frame. */
-internal class ShadowFrameProbe(private val region: Rect) {
+internal class ShadowFrameProbe(private val region: Rect = Rect.Zero) {
     private var previous: Float? = null
     var maximumDelta = 0f; private set
     val luminances = mutableListOf<Float>()
@@ -27,11 +27,19 @@ internal class ShadowFrameProbe(private val region: Rect) {
             sum += .2126f * c.red + .7152f * c.green + .0722f * c.blue
         }
         val mean = sum / ((right - left) * (bottom - top))
+        return observeLuminance(mean)
+    }
+
+    /** For synchronized native-window probes that already subtract their background. */
+    fun observeLuminance(mean: Float): Float {
+        require(mean.isFinite())
         previous?.let { maximumDelta = maxOf(maximumDelta, abs(mean - it)) }
         previous = mean
         luminances += mean
         return mean
     }
+
+    fun beginSegment() { previous = null }
 
     fun assertContinuous(limit: Float, context: String) {
         assertTrue("$context shadow jump=$maximumDelta limit=$limit frames=$luminances", maximumDelta <= limit)

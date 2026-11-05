@@ -6,6 +6,8 @@
 
 Floating pills, mini-player, filter/search bars and circular controls share Liquid Glass: curved refraction, illuminated edges and crisp foregrounds. The Queue uses one continuous denser textured neutral-frost surface behind its header and list. Popups use the same material and inherited adaptive contrast.
 
+Glass shadows keep their full spread during placement and fades. Their falloff reaches the background smoothly, without visible rings.
+
 Related controls morph into their panels and return as one visible surface: creation, More, sorting, search and queue/lyric-source selectors. Hidden sources accept no input. a visibly restored source can immediately reverse the current return motion with one owner, without a settling lock or cooldown.
 
 Selected media hover: in one 220 ms ease-out the outline grows, a shadow deepens, and the surface shows the same backdrop region magnified with a slight frost. Content scales with it. Deselection is the same ease-out in reverse, and interruptions continue from the current appearance. Liquid Glass remains for controls.
@@ -16,7 +18,9 @@ The lift shadow follows the menu's theming: dark under dark-icon menus, a white 
 
 Side-adjacent selections share one hovering outline. Diagonal gallery neighbors and unselected holes stay separate. Partial groups retain accessible state without a pane/checkmark. Inset album choices and preserve readable baselines.
 
-Selection, the current queue occurrence and held drag cards share one item outline. Its corners are concentric with the artwork's, sharing their arc centres. Every item style, in lists, galleries, carousels and drag cards, uses one padding $d = 3.5$ dp (1.75 times the former 2 dp minimum) between its content, such as a cover's top edge, and the outline:
+Selection, the current queue occurrence and held drag cards share one item outline. Its corners are concentric with the artwork's, sharing their arc centres.
+
+Every item style, in lists, galleries, carousels and drag cards, uses one padding $d = 3.5$ dp (1.75 times the former 2 dp minimum) between its content, such as a cover's top edge, and the outline:
 
 $$
 r_{\text{outline}} = r_{\text{artwork}} + d
@@ -130,7 +134,13 @@ Adaptive contrast also applies to player color continuations, Queue frost and ne
 
 A choice is current only after matching tone preparation completes. Unmeasured, frozen, native-blurred, moving-cover and partial-player backgrounds retain the last verified decision (white ink before any verification), explicitly without claiming current coverage. Tone preparation, sampling, composition and native presentation are asynchronous, so this does not guarantee atomic ink and background presentation.
 
-A light/dark polarity change that arrives while lyrics open or close eases with that animation's progress instead of switching in one frame, and reverses with it. One fraction drives the foreground (text and icons) and the materials: glass control ink and tone, panel frost and coating, the backdrops that follow the player's ink and the panel theme. The player publishes it as `PlayerBackgroundPolarityState.lightMix`, and every surface that follows the player's ink reads it instead of the discrete decision. Under Reduced Motion the lyrics clock has no duration, so the polarity snaps with the layout. Expanding and collapsing with lyrics open keeps the last verified polarity, so nothing changes during that motion.
+A light/dark polarity change that arrives while lyrics open or close eases with that animation's progress instead of switching in one frame, and reverses with it.
+
+One fraction drives the foreground (text and icons) and the materials: glass control ink and tone, panel frost and coating, the backdrops that follow the player's ink and the panel theme.
+
+The player publishes it as `PlayerBackgroundPolarityState.lightMix`, and every surface that follows the player's ink reads it instead of the discrete decision.
+
+Under Reduced Motion the lyrics clock has no duration, so the polarity snaps with the layout. Expanding and collapsing with lyrics open keeps the last verified polarity, so nothing changes during that motion.
 
 Blur, texture and the artwork continuation remain unchanged.
 
@@ -342,7 +352,9 @@ Other items use Select song / Select all songs in their shared menu. The bulk ac
 
 Retain source occurrence identities and selection order across routes, tabs, queries, sorting, rotation and backgrounding. Select-all appends in collection order. Reselect appends last. Preserve distinct occurrences for playlists/queues and deduplicate files for editing. Fresh sessions start empty.
 
-The panel is one compact glass pill: close, count, Play next, Add to playlist, More and a divided collapse. It uses the standard Liquid Glass pill material in Library tabs, subviews and the Queue, with material, icons and its More menu following the page's light or dark ink. In the Queue it floats above the list without shortening it, so the items gain no new bottom clip edge; the list end pads by the pill's occupancy. More morphs into a menu with Play now, Add to queue, New queue, Edit tags, Remove from the source, Select all and Select range.
+The panel is one compact glass pill: close, count, Play next, Add to playlist, More and a divided collapse. It uses the standard Liquid Glass pill material in Library tabs, subviews and the Queue, with material, icons and its More menu following the page's light or dark ink.
+
+In the Queue it floats above the list without shortening it, so the items gain no new bottom clip edge; the list end pads by the pill's occupancy. More morphs into a menu with Play now, Add to queue, New queue, Edit tags, Remove from the source, Select all and Select range.
 
 Collapsing morphs the same surface into a minimized count pill; tapping it morphs back. Size, foreground and appearance share the interruptible glass spring, honor animation speed and Reduce motion, and immediately release input on outgoing faces.
 
