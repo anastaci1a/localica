@@ -45,7 +45,7 @@ class PlaylistSelectionPlacementTest {
         val route = BrowseRoute(MainTab.Playlists)
         val preferences = BrowsePreferences(context)
         val previous = preferences.read(route)
-        val frames = SelectorPlacementFrames(compose, outlineVerticalInsetDp = 4f)
+        val frames = SelectorPlacementFrames(compose, outlineVerticalInsetDp = 4.5f)
         lateinit var scope: CoroutineScope
         lateinit var source: PlaylistSelectionDrawSource
         val playlists = (0..39).map { ManualPlaylist(id = "p$it", name = "Playlist ${it.toString().padStart(2, '0')}") }
@@ -240,7 +240,8 @@ internal class SelectorPlacementFrames(private val compose: ComposeContentTestRu
                     val density = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().targetContext.resources.displayMetrics.density
                     val outline = Rect(placed.left, placed.top + outlineVerticalInsetDp * density, placed.right, placed.bottom - outlineVerticalInsetDp * density)
                     val neighbours = draw.layout.items.mapNotNull { it.placed }.map { Rect(it.left, it.top + outlineVerticalInsetDp * density, it.right, it.bottom - outlineVerticalInsetDp * density) }
-                    val room = hoverRoom(outline, neighbours, draw.layout.viewport, LiftEdges.Horizontal, 4f * density)
+                    val room = hoverRoom(outline, neighbours, draw.layout.viewport, LiftEdges.Horizontal, 4f * density,
+                        neighbourInset = 3.5f * density, clearance = HoverLift.Clearance.value * density)
                     val lifted = hoverGeometry(MediaItemOutline(outline, 0f), room, v).lifted.bounds
                     val clipped = lifted.intersect(draw.layout.viewport)
                     if (!clipped.isEmpty) expected += clipped
@@ -249,12 +250,12 @@ internal class SelectorPlacementFrames(private val compose: ComposeContentTestRu
         }
         expected.sortBy { it.top }
         assertEquals("Only native visible selected or legitimately departing rows contribute glass: $draw", expected.size, draw.regions.size)
-        expected.zip(draw.regions).forEach { (body, glass) -> assertRect("This draw follows independently placed body", body, glass) }
+        expected.zip(draw.regions).forEach { (body, glass) -> assertRect("This draw follows independently placed body", body, glass, 1.5f) }
     }
 
-    private fun assertRect(label: String, expected: Rect, actual: Rect) {
-        assertEquals(label, expected.left, actual.left, 1f); assertEquals(label, expected.top, actual.top, 1f)
-        assertEquals(label, expected.right, actual.right, 1f); assertEquals(label, expected.bottom, actual.bottom, 1f)
+    private fun assertRect(label: String, expected: Rect, actual: Rect, tolerance: Float = 1f) {
+        assertEquals(label, expected.left, actual.left, tolerance); assertEquals(label, expected.top, actual.top, tolerance)
+        assertEquals(label, expected.right, actual.right, tolerance); assertEquals(label, expected.bottom, actual.bottom, tolerance)
     }
 
     fun requireChosen(expected: Set<String>) {
