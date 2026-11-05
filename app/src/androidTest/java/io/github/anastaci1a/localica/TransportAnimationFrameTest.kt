@@ -6,6 +6,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.MotionDurationScale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
@@ -22,7 +23,9 @@ import org.junit.Rule
 import org.junit.Test
 
 class TransportAnimationFrameTest {
-    @get:Rule val compose = localicaComposeRule()
+    @get:Rule val compose = localicaComposeRule(effectContext = object : MotionDurationScale {
+        override val scaleFactor = 1f
+    })
 
     private fun same(a: ImageBitmap, b: ImageBitmap, tolerance: Float = 0f) {
         val x = a.toPixelMap()
