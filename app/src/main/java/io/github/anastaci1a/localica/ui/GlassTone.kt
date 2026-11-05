@@ -12,17 +12,39 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlin.math.pow
 
-/** Ordered compression: no brightness inversion, including at maximum trim/weight. */
-internal data class GlassTone(val trim: Float = 0f, val weight: Float = 2f, val lightInk: Boolean = false) {
-    fun channel(value: Float): Float {
-        val x = value.coerceIn(0f, 1f)
+/** Ordered compression: no brightness inversion, including at maximum trim/weight.
+ * [lightInk] is the polarity being approached and [arrival] how far the tone has travelled to it from the opposite
+ * polarity (1 = arrived). Both polarities are exact endpoints; between them the mapping is their linear mix, so a
+ * polarity change can ease with an animation instead of switching in one frame. */
+internal data class GlassTone(val trim: Float = 0f, val weight: Float = 2f, val lightInk: Boolean = false, val arrival: Float = 1f) {
+    /** 0 is the dark-ink (lifted) endpoint and 1 the light-ink (compressed) endpoint. */
+    val lightMix: Float get() = (if (lightInk) arrival else 1f - arrival).coerceIn(0f, 1f)
+    /** The tone pinned at one polarity; only these tones have prepared pixels. */
+    fun endpoint(light: Boolean) = if (lightInk == light && arrival == 1f) this else copy(lightInk = light, arrival = 1f)
+    private fun endpointChannel(x: Float, light: Boolean): Float {
         val t = trim.coerceIn(0f, .5f)
         val p = weight.coerceIn(1f, 2f)
-        return if (lightInk) x - t * x.pow(p) else x + t * (1f - x).pow(p)
+        return if (light) x - t * x.pow(p) else x + t * (1f - x).pow(p)
+    }
+    fun channel(value: Float): Float {
+        val x = value.coerceIn(0f, 1f)
+        val m = lightMix
+        return when {
+            m >= 1f -> endpointChannel(x, true)
+            m <= 0f -> endpointChannel(x, false)
+            else -> endpointChannel(x, false) + (endpointChannel(x, true) - endpointChannel(x, false)) * m
+        }
     }
     fun color(color: Color) = Color(channel(color.red), channel(color.green), channel(color.blue), color.alpha)
     /** Same rounded 8-bit stage as the prepared image, before bitmap filtering. */
     fun byteChannel(value: Int): Int = (channel(value / 255f) * 255f + .5f).toInt()
+    companion object {
+        /** A tone at any point between the dark-ink (0) and light-ink (1) endpoints. */
+        fun mixed(trim: Float, weight: Float, lightMix: Float): GlassTone {
+            val m = lightMix.coerceIn(0f, 1f)
+            return if (m >= .5f) GlassTone(trim, weight, true, m) else GlassTone(trim, weight, false, 1f - m)
+        }
+    }
 }
 
 /** Older adapters share bounded prepared pixels, never a readback or per-frame CPU filter. */
@@ -161,9 +183,11 @@ internal const val GlassColorShader = """
         color = mix(color, float3(1), tint);
         color = clamp(color, 0.0, 1.0);
         if (tone.x > 0.0) {
-            float3 end = tone.z > 0.5 ? color : 1.0 - color;
-            float3 weighted = tone.y == 2.0 ? end * end : tone.y == 1.0 ? end : pow(end, float3(tone.y));
-            color += weighted * (tone.z > 0.5 ? -tone.x : tone.x);
+            // tone.z is the light-ink mix: 0 and 1 are the two exact polarities, between them their blend.
+            float3 darkEnd = 1.0 - color;
+            float3 darkWeighted = tone.y == 2.0 ? darkEnd * darkEnd : tone.y == 1.0 ? darkEnd : pow(darkEnd, float3(tone.y));
+            float3 lightWeighted = tone.y == 2.0 ? color * color : tone.y == 1.0 ? color : pow(color, float3(tone.y));
+            color += mix(darkWeighted * tone.x, -lightWeighted * tone.x, clamp(tone.z, 0.0, 1.0));
         }
         return color;
     }
@@ -182,7 +206,7 @@ internal class GlassToneRenderer {
         }
     """)
     fun effect(tone: GlassTone, blur: Float): RenderEffect {
-        shader.setFloatUniform("tone", tone.trim, tone.weight, if (tone.lightInk) 1f else 0f)
+        shader.setFloatUniform("tone", tone.trim, tone.weight, tone.lightMix)
         val effect = android.graphics.RenderEffect.createRuntimeShaderEffect(shader, "scene")
         return android.graphics.RenderEffect.createChainEffect(effect,
             android.graphics.RenderEffect.createBlurEffect(blur.coerceAtLeast(.01f), blur.coerceAtLeast(.01f), android.graphics.Shader.TileMode.CLAMP)).asComposeRenderEffect()

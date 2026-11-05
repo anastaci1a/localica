@@ -24,8 +24,20 @@ data class StoredQueue(@Embedded val queue: QueueRecord,
     @Relation(parentColumn = "id", entityColumn = "queueId") val visits: List<VisitRecord>,
     @Relation(parentColumn = "id", entityColumn = "queueId") val cycleMembers: List<CycleMemberRecord>)
 
+/** Opt-in transaction-body measurements; the caller times DAO return for commit/admission. */
+internal data class QueueSaveStage(val name: String, val rows: Int, val nanos: Long)
+
 @Dao
 abstract class QueueDao {
+    @Volatile internal var saveStageObserver: ((QueueSaveStage) -> Unit)? = null
+    private inline fun <T> measureSave(name: String, rows: Int = 0, block: () -> T): T {
+        val observer = saveStageObserver ?: return block()
+        val started = System.nanoTime()
+        try { return block() } finally {
+            // A diagnostic sink cannot fail an otherwise successful transaction.
+            try { observer(QueueSaveStage(name, rows, System.nanoTime() - started)) } catch (_: Exception) { }
+        }
+    }
     private val database: RoomDatabase?
     constructor(database: RoomDatabase) { this.database = database }
     // Pure test DAOs override the SQL boundary; Room selects the non-null owning database constructor.
@@ -67,51 +79,69 @@ abstract class QueueDao {
     }
 
     /** Cursor updates write only queue metadata; edits replace only the changed queue's entries. */
-    @Transaction open suspend fun save(before: QueueLibrary, after: QueueLibrary) {
+    @Transaction open suspend fun save(before: QueueLibrary, after: QueueLibrary): Unit = measureSave("transaction-body") {
         before.queues.filter { old -> after.queues.none { it.id == old.id } }.forEach { deleteQueue(it.id) }
         for ((ordinal, queue) in after.queues.withIndex()) {
             val previous = before.queues.firstOrNull { it.id == queue.id }
             if (previous == queue && before.queues.indexOf(previous) == ordinal) continue
             if (previous != null && previous.order == queue.order) {
-                check(updateQueueMetadata(QueueMetadataRecord(queue.id, queue.name, queue.createdAt, queue.currentEntryId,
-                    queue.positionMs, queue.shuffle, queue.repeat.name, ordinal, queue.lastActivatedAt)) == 1) {
+                check(measureSave("queue-metadata", 1) {
+                    updateQueueMetadata(QueueMetadataRecord(queue.id, queue.name, queue.createdAt, queue.currentEntryId,
+                        queue.positionMs, queue.shuffle, queue.repeat.name, ordinal, queue.lastActivatedAt))
+                } == 1) {
                     "The saved queue is missing"
                 }
             } else {
-                upsertQueue(QueueRecord(queue.id, queue.name, queue.createdAt, queue.currentEntryId,
-                    queue.positionMs, queue.shuffle, queue.repeat.name, ordinal, queue.lastActivatedAt, SavedOrderCodec.encode(queue.order)))
+                val order = measureSave("order-encode", queue.order.manual.size) { SavedOrderCodec.encode(queue.order) }
+                measureSave("queue-upsert", 1) {
+                    upsertQueue(QueueRecord(queue.id, queue.name, queue.createdAt, queue.currentEntryId,
+                        queue.positionMs, queue.shuffle, queue.repeat.name, ordinal, queue.lastActivatedAt, order))
+                }
             }
             if (previous?.journey != queue.journey) saveJourney(queue.id, previous?.journey, queue.journey)
             if (previous?.entries != queue.entries) {
-                clearEntries(queue.id)
-                insertEntries(queue.entries.mapIndexed { index, entry ->
-                    EntryRecord(entry.id, queue.id, index, TrackSnapshot.encode(entry.track), entry.sourcePlaylistId) })
+                measureSave("entries-clear") { clearEntries(queue.id) }
+                val entries = measureSave("tracks-encode", queue.entries.size) {
+                    queue.entries.mapIndexed { index, entry ->
+                        EntryRecord(entry.id, queue.id, index, TrackSnapshot.encode(entry.track), entry.sourcePlaylistId) }
+                }
+                measureSave("entries-insert", entries.size) { insertEntries(entries) }
             }
         }
-        upsertActive(ActiveQueueRecord(queueId = after.activeId))
+        measureSave("active-upsert", 1) { upsertActive(ActiveQueueRecord(queueId = after.activeId)) }
     }
 
     /** Keep ordinary cursor checkpoints small; only changed visits/membership touch their tables. */
     private suspend fun saveJourney(id: String, before: QueueJourney?, after: QueueJourney?) {
-        if (after == null) clearJourney(id) else upsertJourney(after.record(id))
+        measureSave("journey-record", if (after == null) 0 else 1) {
+            if (after == null) clearJourney(id) else upsertJourney(after.record(id))
+        }
         if (before?.history != after?.history || before?.future != after?.future) {
-            val oldVisits = before?.visitRecords(id).orEmpty().associateBy { it.token }
-            val newVisits = after?.visitRecords(id).orEmpty().associateBy { it.token }
+            val (oldVisits, newVisits) = measureSave("visits-project") {
+                before?.visitRecords(id).orEmpty().associateBy { it.token } to
+                    after?.visitRecords(id).orEmpty().associateBy { it.token }
+            }
             (oldVisits.keys - newVisits.keys).chunked(500).forEach { deleteVisits(id, it) }
             val (retained, added) = newVisits.values.filter { oldVisits[it.token] != it }.partition { it.token in oldVisits }
-            updateOrRepair(retained, ::updateVisits, ::upsertVisits)
-            if (added.isNotEmpty()) upsertVisits(added)
+            measureSave("visits-write", retained.size + added.size) {
+                updateOrRepair(retained, ::updateVisits, ::upsertVisits)
+                if (added.isNotEmpty()) upsertVisits(added)
+            }
         }
         if (before?.plans != after?.plans || before?.visited != after?.visited || before?.cycle != after?.cycle) {
-            val oldMembers = before?.cycleRecords(id).orEmpty().associateBy { it.cycle to it.entryId }
-            val newMembers = after?.cycleRecords(id).orEmpty().associateBy { it.cycle to it.entryId }
+            val (oldMembers, newMembers) = measureSave("cycle-project") {
+                before?.cycleRecords(id).orEmpty().associateBy { it.cycle to it.entryId } to
+                    after?.cycleRecords(id).orEmpty().associateBy { it.cycle to it.entryId }
+            }
             (oldMembers.keys - newMembers.keys).groupBy({ it.first }, { it.second }).forEach { (cycle, entries) ->
                 entries.chunked(500).forEach { deleteCycleMembers(id, cycle, it) }
             }
             val (retained, added) = newMembers.values.filter { oldMembers[it.cycle to it.entryId] != it }
                 .partition { it.cycle to it.entryId in oldMembers }
-            updateOrRepair(retained, ::updateCycleMembers, ::upsertCycleMembers)
-            if (added.isNotEmpty()) upsertCycleMembers(added)
+            measureSave("cycle-write", retained.size + added.size) {
+                updateOrRepair(retained, ::updateCycleMembers, ::upsertCycleMembers)
+                if (added.isNotEmpty()) upsertCycleMembers(added)
+            }
         }
     }
 

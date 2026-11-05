@@ -396,10 +396,10 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     var zoomAnchor by remember(route.key) { mutableStateOf<BrowseZoomAnchor?>(null) }
     LaunchedEffect(zoomAnchor, queryPending, displayedStyle) {
         fun headerPhase(phase: String) {
-            if (pinchHeader != null && headerFrameObserver != null) android.util.Log.i("CollectionHeaderAnchor",
+            if (pinchHeader != null) io.github.anastaci1a.localica.diagnostics.Diagnostics.info("CollectionHeaderAnchor",
                 "phase=$phase anchor=${zoomAnchor != null} pending=$queryPending " +
                     "styleMatches=${zoomAnchor?.style == displayedStyle} rows=${result.items.size} " +
-                    "capturing=${pinchMotion.capturing} held=${pinchMotion.held}")
+                    "capturing=${pinchMotion.capturing} held=${pinchMotion.held}", alsoLog = headerFrameObserver != null)
         }
         headerPhase("admission")
         val anchor = zoomAnchor ?: return@LaunchedEffect
@@ -484,6 +484,23 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
         listOf(presentation, validAlbums, if (artDetail) hero else surroundingBackdrop?.fallback)) { gridState.isScrollInProgress }
     val maskedBackdrop = (showSearchPill || showFilters) && !artDetail
     val viewportBackdrop = if (needsListBackdrop) rememberBrowseBackdropLayer(backdropScene, maskedBackdrop) else null
+    // #535 (b): the always-on stuck-state watchdog and phase trail feed the in-app diagnostics buffer.
+    // Both observe state transitions through snapshot flows, so a healthy run does no per-frame work.
+    PinchBreadcrumbs { pinchMotion.breadcrumb() }
+    StuckStateWatchdog(
+        lingering = {
+            pinchMotion.source != null && !pinchMotion.held || pinchMotion.readbackPending ||
+                zoomAnchor != null && pinchMotion.source == null ||
+                listBackdrop.readbackPending || viewportBackdrop?.source?.readbackPending == true
+        },
+        lingeringReport = {
+            "${pinchMotion.diagnostics()} anchor=$zoomAnchor queryPending=$queryPending " +
+                "displayed=${displayedStyle.presentation}/${displayedStyle.listSize} " +
+                "scrolling=${gridState.isScrollInProgress} first=${gridState.firstVisibleItemIndex}/" +
+                "${gridState.firstVisibleItemScrollOffset} listRecordingHeld=${listBackdrop.readbackPending}/" +
+                "${viewportBackdrop?.source?.readbackPending}"
+        },
+        recoveredReport = { pinchMotion.diagnostics() })
     val refreshBackdrop = LocalBackdropRefresh.current
     // Observe scroll start/stop in the effect, not this screen's composition.
     val currentRefreshBackdrop by rememberUpdatedState(refreshBackdrop)
@@ -1072,7 +1089,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                                 visible = { hover.progress() <= 0f }) { size ->
                                 pinchMotion.highlightSize(item.key, itemIndex, size)
                             }
-                            .selectionLens(selectedCount > 0, partiallySelected, itemKey = item.key, outline = { _, _ -> itemOutline.value },
+                            .selectionLens(selectedCount > 0, partiallySelected, itemKey = item.key, anchor = menuAnchor, outline = { _, _ -> itemOutline.value },
                                 handle = hover, alpha = { pinchMotion.itemAlpha[item.key] ?: 1f }) { size ->
                                 pinchMotion.highlightSize(item.key, itemIndex, size)
                             }
@@ -1196,8 +1213,10 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
             }
         }
         }
-        if (LocalSessionSelection.current == null) SelectionPanelVisibility(session.panelVisible, reducedMotion = reducedMotion) {
-            SessionSelectionPanel(session, queues, playlistController, playlists, dragging = reorder.drag != null)
+        if (LocalSessionSelection.current == null) CompositionLocalProvider(LocalFrostedBackdrop provides listBackdrop) {
+            SelectionPanelVisibility(session.panelVisible, reducedMotion = reducedMotion) {
+                SessionSelectionPanel(session, queues, playlistController, playlists, dragging = reorder.drag != null)
+            }
         }
     }
 

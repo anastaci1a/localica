@@ -39,7 +39,7 @@ class MediaItemOutlineTest {
                 val item = item(style, columns, viewport, density, rtl)
                 val outline = item.outline
                 val art = item.art ?: continue
-                val minimum = MediaOutlineMinimumInset.value * density
+                val minimum = MediaOutlinePadding.value * density
                 // Containment with a visible inset on every side.
                 assertTrue("Artwork leaves the outline: $label $art ${outline.bounds}",
                     art.left - outline.bounds.left >= minimum - .01f && outline.bounds.right - art.right >= minimum - .01f &&
@@ -67,6 +67,23 @@ class MediaItemOutlineTest {
                 assertTrue("Outline leaves the card by at most the minimum inset: $label",
                     outline.bounds.left >= item.box.left - minimum - .01f && outline.bounds.right <= item.box.right + minimum + .01f &&
                         outline.bounds.top >= item.box.top - minimum - .01f && outline.bounds.bottom <= item.box.bottom + minimum + .01f)
+            }
+        }
+    }
+
+    @Test fun outlinePaddingIsOneStandardValueIn1_75TimesTheFormerTwoDpForEveryItemStyle() {
+        assertEquals(1.75f * 2f, MediaOutlinePadding.value, 0f)
+        for (density in listOf(1f, 1.75f, 2.625f, 3f)) for (viewport in listOf(320, 360, 411, 600)) for (rtl in listOf(false, true)) {
+            for ((style, columns) in styles()) {
+                val item = item(style, columns, viewport, density, rtl)
+                val art = item.art ?: continue
+                val padding = MediaOutlinePadding.value * density
+                val b = item.outline.bounds
+                val label = "${style.presentation}/${style.listSize}/$columns density=$density viewport=$viewport rtl=$rtl"
+                assertEquals("top: $label", padding, art.top - b.top, .01f)
+                assertEquals("leading: $label", padding, (if (rtl) b.right - art.right else art.left - b.left), .01f)
+                // Text and the trailing action stay inside the same padding: the bottom is never tighter.
+                assertTrue("bottom: $label", b.bottom - art.bottom >= padding - .01f)
             }
         }
     }
@@ -113,19 +130,19 @@ class MediaItemOutlineTest {
     }
 
     @Test fun paddedSurfacesShareTheRule() {
-        // Artist carousel: 112 dp artwork centred in 12 dp padding gives a 20 dp radius on the card.
+        // Artist carousel: 112 dp artwork in 12 dp padding. Content keeps the one 3.5 dp outline padding (#558).
         val density = 2f
         val carousel = paddedItemOutline(Size(136f * density, 170f * density),
             Rect(12f * density, 12f * density, 124f * density, 124f * density), 8f * density,
             Rect(12f * density, 12f * density, 12f * density, 12f * density), density)
-        assertEquals(Rect(0f, 0f, 136f * density, 170f * density), carousel.bounds)
-        assertEquals(20f * density, carousel.corner, .01f)
-        // Playlist chooser row: 44 dp artwork, 4 dp/8 dp padding gives a 4 dp concentric inset.
+        assertEquals(Rect(8.5f * density, 8.5f * density, 127.5f * density, 161.5f * density), carousel.bounds)
+        assertEquals(11.5f * density, carousel.corner, .01f)
+        // Playlist chooser row: 44 dp artwork, 4 dp/8 dp padding, the same 3.5 dp outline padding.
         val row = paddedItemOutline(Size(280f * density, 60f * density),
             Rect(4f * density, 8f * density, 48f * density, 52f * density), 8f * density,
             Rect(4f * density, 8f * density, 4f * density, 8f * density), density)
-        assertEquals(Rect(0f, 4f * density, 280f * density, 56f * density), row.bounds)
-        assertEquals(12f * density, row.corner, .01f)
+        assertEquals(Rect(.5f * density, 4.5f * density, 279.5f * density, 55.5f * density), row.bounds)
+        assertEquals(11.5f * density, row.corner, .01f)
     }
 
     private fun inside(contour: androidx.compose.ui.geometry.RoundRect, point: Offset): Boolean {
