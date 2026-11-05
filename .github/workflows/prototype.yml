@@ -182,6 +182,7 @@ jobs:
           app/build/outputs/connected_android_test_additional_output/
 
           prototype-evidence/
+          prototype-iterations/
           prototype-runner-environment.txt
         if-no-files-found: error
     name: Prototype focused API 26
@@ -309,6 +310,7 @@ jobs:
           app/build/outputs/connected_android_test_additional_output/
 
           prototype-evidence/
+          prototype-iterations/
           prototype-runner-environment.txt
         if-no-files-found: error
     name: Prototype focused API 36
