@@ -12,9 +12,9 @@ internal class BrowseItemMetrics(val style: BrowseStyle, columns: Int, val width
     val gallery = style.presentation != Presentation.List
     val trailing = !gallery && style.listSize.trailingInformation
     val inset = px(BrowseCellGeometry(columns).contentInset)
-    val verticalInset = when { gallery -> px(8); trailing -> 0; else -> px(2) }
-    /** Gallery text sits 8 dp above the next cover (was 16 dp: this bottom inset plus the next top inset). */
-    private val bottomInset = if (gallery) 0 else verticalInset
+    /** Gallery items add no vertical inset: the only space from a text line to the next cover is the
+     * two outer card paddings, which total [GalleryGapDp] at every size (#561). */
+    val verticalInset = when { gallery -> 0; trailing -> 0; else -> px(2) }
     private val listGeometry = BrowseCellGeometry(1)
     private val viewport = width + 2 * (px(listGeometry.cardInset) + px(listGeometry.contentInset))
     private val normalArt = BrowseCellGeometry(5).artworkWidth(viewport, density)
@@ -81,7 +81,7 @@ internal class BrowseItemMetrics(val style: BrowseStyle, columns: Int, val width
             if (trailing) inset + width - menu - infoWidth else titleX,
             verticalInset + if (trailing) (row - infoHeight) / 2 else titleY + titleHeight,
             inset + width - menu, verticalInset + if (gallery) art else (row - menuHeight) / 2,
-            menuHeight, row + verticalInset + bottomInset)
+            menuHeight, row + 2 * verticalInset)
     }
 
     private fun px(dp: Int) = (dp * density).roundToInt()

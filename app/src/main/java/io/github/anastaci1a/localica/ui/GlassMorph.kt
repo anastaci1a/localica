@@ -53,8 +53,20 @@ import kotlin.math.roundToInt
 internal data class GlassOriginPresentation(val shape: GlassShape, val vertical: Boolean,
     val horizontalShift: Float)
 
+/** How the screen currently shows an anchor's resting layout bounds: a uniform scale about [pivot]
+ * in the same coordinate space, as when a selected item lifts (#554). */
+internal data class GlassLift(val scale: Float, val pivot: Offset) {
+    fun map(rect: Rect) = Rect(pivot + (rect.topLeft - pivot) * scale, pivot + (rect.bottomRight - pivot) * scale)
+}
+
 @Stable
 internal class GlassAnchor {
+    /** Live presented transform of [bounds], supplied by whatever moves the trigger in draw rather
+     * than layout (the selection lift). Null when it is drawn where it is laid out. */
+    var presentation: (() -> GlassLift?)? = null
+    /** Home geometry for every morph, expand and retract: the trigger as presented, not as laid out. */
+    val presentedBounds: Rect get() = bounds.takeIf { it == Rect.Zero } ?: presentation?.invoke()?.map(bounds) ?: bounds
+    val presentedScale: Float get() = presentation?.invoke()?.scale ?: 1f
     // Optional source-owned draw pose, evaluated against its home height in px.
     var originPresentation: ((Float) -> GlassOriginPresentation)? = null
     val contact = GlassContact()
@@ -346,7 +358,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
             else owner.retarget(visible, reduced, speed, now)
             if (visible && !present) {
                 // Mount only for measurement. No native modal ownership yet.
-                origin = anchor.bounds
+                origin = anchor.presentedBounds
                 source = ambientSource ?: anchor.source
                 present = true
             }
@@ -378,7 +390,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                                 }
                                 if (!current(frame)) return@LaunchedEffect
                                 val window = modalWindow ?: return@LaunchedEffect
-                                origin = anchor.bounds
+                                origin = anchor.presentedBounds
                                 originFootprint = anchor.samplingFootprint()
                                 measuredHome = anchor.samplingLocation.coordinates?.isAttached == true
                                 source?.refresh()
@@ -443,7 +455,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                 searchFocusRequest = null
                 searchShapeStarted = false
                 searchOpeningPositioned = false
-                val from = searchMotion.rendered.takeIf { present && it.width > 0f } ?: anchor.bounds
+                val from = searchMotion.rendered.takeIf { present && it.width > 0f } ?: anchor.presentedBounds
                 searchFlight = SearchMorphFlight(from, progress.value.coerceIn(0f, 1f), opening = true)
             } else {
                 beginSearchReturn()
@@ -467,7 +479,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                 if (originPreparation != null) withFrameNanos { }
                 if (!present && anchor.bounds == Rect.Zero) withFrameNanos { }
                 if (!present) {
-                    origin = anchor.bounds; source = ambientSource ?: anchor.source
+                    origin = anchor.presentedBounds; source = ambientSource ?: anchor.source
                 }
                 // Reopening an existing unready window is a new sampling admission too.
                 originFootprint = anchor.samplingFootprint()
@@ -711,11 +723,11 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                     else availableHeight) - margin * 2).roundToInt().coerceAtLeast(1)
                 // Closing follows the restored trigger. Opening keeps the pre-collapse location.
                 val livePreparedOrigin = continuousOrigin != null
-                val start = (if (visible && !livePreparedOrigin) origin else anchor.bounds).translate(-windowOrigin)
+                val start = (if (visible && !livePreparedOrigin) origin else anchor.presentedBounds).translate(-windowOrigin)
                 val detached = page || (origin == Rect.Zero && anchor.bounds == Rect.Zero)
                 val startWidth = start.width.takeIf { it > 0f } ?: targetWidth.toFloat()
                 val startHeight = start.height.takeIf { it > 0f } ?: with(density) { CompactControlSize.toPx() }
-                val homeRadius = anchor.cornerRadius ?: with(density) { (startHeight / 2).toDp() }
+                val homeRadius = anchor.cornerRadius?.let { it * anchor.presentedScale } ?: with(density) { (startHeight / 2).toDp() }
                 val radius = if (page) 0.dp else if (detached) 28.dp else homeRadius * (1f - geometry) + 28.dp * geometry
                 SideEffect { if (hasViewport) anchor.contact.vertical = kotlin.math.abs(targetHeight - startHeight) > kotlin.math.abs(targetWidth - startWidth) }
                 val dark = panelDark
@@ -768,7 +780,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                     if (it.opening && visible) {
                         if (searchShapeStarted && searchFlight?.opening == true) searchOpeningShape.value else it.from
                     }
-                    else it.rectangle(p, anchor.bounds)
+                    else it.rectangle(p, anchor.presentedBounds)
                 }
                     ?: searchMotion.rendered.takeIf { holdImeBack && it.width > 0f }
                     ?: searchPlacement.value.takeIf { placement == GlassPlacement.Search && it.width > 0f })?.translate(-windowOrigin)
@@ -792,7 +804,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                             searchMotion.rendered = bounds
                             searchMotion.lastIme = imeHeight
                             searchMotion.observer?.invoke(SearchMorphSample(p, visible, bounds,
-                                flight, if (visible) searchTarget else anchor.bounds,
+                                flight, if (visible) searchTarget else anchor.presentedBounds,
                                 imeHeight, imeSource, imeTarget, openingBottom, searchOpeningShape.value.takeIf { flight?.opening == true }, availableHeight.toFloat(),
                                 surfaceOpacity = surfaceOpacity(), nativeIme = nativeIme, windowFocused = windowFocused,
                                 slotFraction = slotFraction, slotTravel = slotTravel, slotReturnFrom = slotReturnFrom,
@@ -815,13 +827,13 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                         if (wellStrength > 0f && !page && !detached && !anchor.contextual && placement != GlassPlacement.Search &&
                             anchor.hidden && admittedDraw && surfaceOpacity() == 1f &&
                             coordinates?.isAttached == true) {
-                            val home = anchor.bounds.translate(-coordinates.backdropPosition(view))
+                            val home = anchor.presentedBounds.translate(-coordinates.backdropPosition(view))
                             val caster = glassWellCaster(size, radius.toPx(), shape.scaleX(vertical),
                                 shape.scaleY(vertical), pose?.horizontalShift ?: 0f)
                             with(originWell) { draw(home, homeRadius.toPx(), caster, wellStrength) }
                             shadowReceiver[0] = receiverField.receiver(home,homeRadius.toPx(),size,
                                 shape.scaleX(vertical),shape.scaleY(vertical),pose?.horizontalShift ?: 0f,
-                                physicalSize = anchor.bounds.size)
+                                physicalSize = anchor.presentedBounds.size)
                         }
                         // The trigger's window keeps drawing its neighbors' shared shadow.
                         // At home this field must equal that union, not stack over it.
@@ -863,7 +875,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                             else {
                                 LiquidGlassSurface(Modifier.fillMaxSize(), source = source,
                                     homeSource = anchor.source, homeWeight = { val home = (1f - p / .5f).coerceIn(0f, 1f); home * home * (3f - 2f * home) },
-                                    homeBounds = { if (visible && !livePreparedOrigin) origin else anchor.bounds },
+                                    homeBounds = { if (visible && !livePreparedOrigin) origin else anchor.presentedBounds },
                                     homeFootprint = if (!measuredHome) null else ({
                                         if (visible && !livePreparedOrigin) originFootprint
                                         else if (anchor.samplingLocation.coordinates?.isAttached == true) anchor.samplingFootprint()

@@ -236,8 +236,10 @@ fun LocalicaScreen(
     // Older Android snapshots must never capture the expanding mini-player's
     // browsing glass and stretch it into the Queue’s artwork material.
     val playerBackgroundPolarity = remember { PlayerBackgroundPolarityState() }
-    val playerLightInk = playerBackgroundPolarity.decision.lightInk
-    val playerBackdrop = rememberFrostedBackdrop(listOf(playerVisual, lyricsOpen, settings.glass), expanded && playerFullyOpen, dark = playerLightInk, glassBlur = settings.glass.blur)
+    // The eased polarity (foreground and materials share it); the discrete decision only seeds it.
+    val playerLightMix = playerBackgroundPolarity.lightMix
+    val playerLightInk = playerLightMix >= .5f
+    val playerBackdrop = rememberFrostedBackdrop(listOf(playerVisual, lyricsOpen, settings.glass), expanded && playerFullyOpen, dark = playerLightInk, lightMix = playerLightMix, glassBlur = settings.glass.blur)
     var browseInk by remember { mutableStateOf(androidx.compose.ui.graphics.Color.Black) }
     var pageBackground by remember { mutableStateOf(androidx.compose.ui.graphics.Color(0xFFF9F9FB)) }
     val miniInk by androidx.compose.animation.animateColorAsState(browseInk,
@@ -249,11 +251,14 @@ fun LocalicaScreen(
     val bottomChrome = 8.dp + 72.dp * chromeVisibility
     val selectionPanel = rememberFloatingSelectionPanel(
         session.panelVisible && !expanded, settings.reducedMotion)
+    // The Queue drawer's pill floats above its list (#552); its occupancy also pads the list end.
+    val queueSelectionPanel = rememberFloatingSelectionPanel(session.panelVisible, settings.reducedMotion)
     val browseBottomChrome = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() +
         if (hasPlayer) CompactControlSize + bottomChrome + 8.dp else bottomChrome
     val browseBackdrop = rememberFrostedBackdrop(navigation.route to library.snapshot, !expanded, dark = browseInk == androidx.compose.ui.graphics.Color.White, glassBlur = settings.glass.blur)
     val modalBackdrop = rememberFrostedBackdrop(listOf(navigation.route, library.snapshot, expanded, queueOpen, playerVisual, settings.glass),
-        dark = if (expanded) playerLightInk else browseInk == androidx.compose.ui.graphics.Color.White, glassBlur = settings.glass.blur)
+        dark = if (expanded) playerLightInk else browseInk == androidx.compose.ui.graphics.Color.White,
+        lightMix = if (expanded) playerLightMix else null, glassBlur = settings.glass.blur)
     val dialogs = LocalGlassDialogs.current
     SideEffect { dialogs?.backdrop = modalBackdrop }
     LaunchedEffect(pager.settledPage) { browseBackdrop.refresh() }
@@ -364,6 +369,10 @@ fun LocalicaScreen(
                 ActionMenuItem("Settings", icon = R.drawable.ic_settings, onClick = { moreOpen = false; settingsCategory = null; settingsOpen = true })
             }
         }
+        // The pill is a standard Liquid Glass pill over the page: it samples the browse backdrop and takes the
+        // page's ink for its material, icons and menu, like the mini-player and utility pill (#552).
+        CompositionLocalProvider(LocalFrostedBackdrop provides browseBackdrop) {
+        GlassPanelTheme(browseInk == androidx.compose.ui.graphics.Color.White) {
         FloatingSelectionPanel(selectionPanel, Modifier.align(Alignment.BottomCenter)
             .padding(horizontal = 8.dp).padding(bottom = browseBottomChrome)
             .fillMaxWidth().heightIn(max = screenScope.maxHeight / 2)) {
@@ -371,6 +380,7 @@ fun LocalicaScreen(
                 SessionSelectionPanel(session, queueController, playlistController, playlist, dragging = dragHost.state?.drag != null)
             }
         }
+        } }
         if (hasPlayer) screenScope.PlayerSurface(player, expanded, { expanded = it }, settings, progress,
             onToggle, onSeek, onPrevious, onNext, ::openQueue, { expanded = false },
             lyricsOpen, { lyricsOpen = it }, playerTracks.lyrics,
@@ -392,27 +402,28 @@ fun LocalicaScreen(
                 count = "${(queues.library.active?.entries?.indexOfFirst { it.id == queues.library.active?.currentEntryId } ?: -1) + 1} / ${queues.library.active?.entries?.size ?: 0}")
         }
         if (hasPlayer && playerVisible) CompositionLocalProvider(LocalFrostedBackdrop provides playerBackdrop) {
-        GlassPanelTheme(playerLightInk) {
+        GlassPanelTheme(playerLightMix) {
         screenScope.PlayerClippedOverlay({ progress.value }, bottomChrome) {
         screenScope.QueueSurface(queueProgress, settings, { queueOpen = it }, playerProgress = { progress.value },
             onOpeningContact = { queueOpeningRequest++ }) {
-            Box(Modifier.weight(1f)) { CompositionLocalProvider(LocalBrowseObscuredInset provides 0.dp) {
+            Box(Modifier.weight(1f)) { CompositionLocalProvider(LocalBrowseObscuredInset provides queueSelectionPanel.clearance) {
             queueDrawerState.SaveableStateProvider("player-queue") { QueueScreen(queues, queueController, library,
                 playlist, playlistController, playback.connected, pins, ::pin, reducedMotion = settings.reducedMotion, isPlaying = playback.isPlaying, onOpen = ::openCollection, onMinimize = { queueOpen = false },
                 selectionVisible = queueOpen && expanded, playerOpen = !queueOpen || !expanded,
-                openingRequest = queueOpeningRequest) } } }
-            SelectionPanelVisibility(session.panelVisible, reducedMotion = settings.reducedMotion) {
+                openingRequest = queueOpeningRequest) } }
+            // Floats over the list: it never shortens the viewport, so the items gain no new bottom clip edge.
+            FloatingSelectionPanel(queueSelectionPanel, Modifier.align(Alignment.BottomCenter)) {
             Column(Modifier.heightIn(max = queueSelectionMaxHeight).controlVerticalScroll(rememberScrollState())) {
                 SessionSelectionPanel(session, queueController, playlistController, playlist, dragging = dragHost.state?.drag != null)
-            } }
+            } } }
         }
         } } }
         }
     }
     androidx.activity.compose.BackHandler(expanded) { if (lyricsOpen) lyricsOpen = false else expanded = false }
     androidx.activity.compose.BackHandler(queueOpen || queueVisible) { queueOpen = false; navigationScope.launch { queueProgress.animateTo(0f, androidx.compose.animation.core.tween(settings.motionDuration(400))) } }
-    androidx.activity.compose.BackHandler((queueOpen || queueVisible) && session.active) { session.clear() }
-    GlassPanelTheme(if (playerVisible) playerLightInk else browseInk == androidx.compose.ui.graphics.Color.White) {
+    androidx.activity.compose.BackHandler(session.active && (!expanded || queueOpen || queueVisible)) { session.clear() }
+    GlassPanelTheme(if (playerVisible) playerLightMix else if (browseInk == androidx.compose.ui.graphics.Color.White) 1f else 0f) {
     if (settingsOpen) FolderSettings(library,
         onDismiss = { settingsOpen = false; if (returnToScanner) { scannerOpen = true; returnToScanner = false } }, onChooseFolder, onRemoveFolder,
         extraContent = {
@@ -432,6 +443,7 @@ fun LocalicaScreen(
         }, aboutContent = {
             Text("Localica", style = MaterialTheme.typography.headlineSmall)
             Text("Offline music, organized your way.")
+            DiagnosticsExportAction()
             LibraryLicenses()
         }, initialCategory = settingsCategory, onFullScan = onScanAll, onQuickScan = onQuickScan, libraryFiltersContent = {
             LibraryFilterSettings(libraryFilters) { libraryFilters = it; libraryFilterPreferences.write(it) }

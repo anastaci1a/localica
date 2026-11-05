@@ -138,9 +138,9 @@ Jaudiotagger 3.0.1 uses LGPL 2.1+. Bundle its notice/license and include its sou
 
 The [Android workflow](../.github/workflows/android.yml) builds application changes on main/PR and tests API 26/36. Match its two virtual CPU cores and 3,072 MiB emulator RAM locally.
 
-The `static-checks` job runs unit tests, lint and the release build in parallel with the `build` job, which only produces the APKs; the summary and verified-run reuse require both. One producer builds the native debug app/test APKs, metadata, class inventory and standalone runtime binding before replacing the delivery artifact.
+The `static-checks` job runs unit tests, lint and the release build in parallel with the `build` job, which only produces the APKs; the summary and verified-run reuse require both.
 
-Every shard verifies their source/run identity and digests, then runs AGP instrumentation with build dependency actions disabled. APK hashes are checked again after instrumentation.
+One producer builds the native debug app/test APKs, metadata, class inventory and standalone runtime binding before replacing the delivery artifact. Every shard verifies their source/run identity and digests, then runs AGP instrumentation with build dependency actions disabled. APK hashes are checked again after instrumentation.
 
 Documentation-only changes use the separate documentation workflow.
 
@@ -156,7 +156,13 @@ On disposable GitHub-hosted API 26 emulators, the native runner temporarily disa
 
 Distributed APKs are the non-debuggable, R8-minified `distribution` variant. It keeps the `.debug` application ID and development key for in-place updates, and the artifact keeps the `app-debug.apk` name. CI and releases fail if the manifest is debuggable. Separate production signing is not configured.
 
-Device tests and compatibility run the `debug` variant. R8 keeps all of jaudiotagger because it loads classes by name.
+Device tests and compatibility run the `debug` variant. R8 keeps all of jaudiotagger because it loads classes by name. The diagnostics export needs no keep rules: its `FileProvider` is manifest-declared and the recorder is referenced directly.
+
+### Capturing a rare freeze without adb
+
+Use any build, including the R8 `distribution` APK. After a freeze, wait at least 2 s so the watchdog records the stuck state, then recover with the Sort/View pill or Back.
+
+Open **More → Settings → About and licenses → Export diagnostics**, tap **Export** and share the text file with the developer. Export before closing the app, because the buffer lives only for the current process. Debug builds also log to `adb logcat -d -s PinchDiagnostics:* CollectionHeaderAnchor:*`.
 
 The `distribution-smoke` job installs the exact published APK on API 26 and 36, waits for the main activity, then runs 600 seeded monkey events. It fails on crashes, ANRs, class-linkage errors or a dead process, and uploads the logcat.
 
