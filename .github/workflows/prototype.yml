@@ -8,6 +8,11 @@ name: Prototype (not release certified)
         required: false
         default: 1
         type: number
+      repeat_methods:
+        description: Optional comma-separated Class#method witnesses; mandatory regressions run once before these repetitions
+        required: false
+        default: ''
+        type: string
       affected_classes:
         description: Comma-separated affected behavior test classes; IME, focus and contrast regressions are added automatically
         required: true
@@ -28,6 +33,11 @@ name: Prototype (not release certified)
         required: false
         default: 1
         type: number
+      repeat_methods:
+        description: Optional comma-separated Class#method witnesses; mandatory regressions run once before these repetitions
+        required: false
+        default: ''
+        type: string
       affected_classes:
         required: true
         type: string
@@ -114,9 +124,10 @@ jobs:
     runs-on: ubuntu-24.04
     # Repeated proofs retain all selected methods and stop on their first failure;
     # otherwise capacity for the complete selected gate, not a throughput optimization.
-    timeout-minutes: ${{ inputs.repeat > 1 && 360 || 35 }}
+    timeout-minutes: ${{ inputs.repeat_methods != '' && 60 || inputs.repeat > 1 && 360 || 35 }}
     env:
       AFFECTED_CLASSES: ${{ inputs.affected_classes }}
+      PROTOTYPE_METHODS: ${{ inputs.repeat_methods }}
       PROTOTYPE_REPEAT: ${{ inputs.repeat }}
       TEST_API: '26'
     steps:
@@ -193,6 +204,7 @@ jobs:
           app/build/outputs/connected_android_test_additional_output/
 
           prototype-evidence/
+          prototype-iterations/
           prototype-runner-environment.txt
         if-no-files-found: error
     name: Prototype focused API 26
@@ -281,9 +293,10 @@ jobs:
     runs-on: ubuntu-24.04
     # Repeated proofs retain all selected methods and stop on their first failure;
     # otherwise capacity for the complete selected gate, not a throughput optimization.
-    timeout-minutes: ${{ inputs.repeat > 1 && 360 || 35 }}
+    timeout-minutes: ${{ inputs.repeat_methods != '' && 60 || inputs.repeat > 1 && 360 || 35 }}
     env:
       AFFECTED_CLASSES: ${{ inputs.affected_classes }}
+      PROTOTYPE_METHODS: ${{ inputs.repeat_methods }}
       PROTOTYPE_REPEAT: ${{ inputs.repeat }}
       TEST_API: '36'
     steps:
@@ -360,6 +373,7 @@ jobs:
           app/build/outputs/connected_android_test_additional_output/
 
           prototype-evidence/
+          prototype-iterations/
           prototype-runner-environment.txt
         if-no-files-found: error
     name: Prototype focused API 36
@@ -461,6 +475,7 @@ jobs:
         path: evidence
     - name: Record passed, failed and not-run checks
       env:
+        PROTOTYPE_METHODS: ${{ inputs.repeat_methods }}
         PROTOTYPE_REPEAT: ${{ inputs.repeat }}
         CHECKS: ${{ toJSON(needs) }}
         KNOWN_ISSUES: ${{ inputs.known_issues }}
@@ -492,6 +507,7 @@ jobs:
             'ready_for_prototype_delivery': False, 'validation_errors': [],
             'focused_evidence': {}, 'compatibility_evidence': {},
             'requested_iterations': int(os.environ.get('PROTOTYPE_REPEAT', '1')),
+            'requested_methods': list(filter(None, os.environ.get('PROTOTYPE_METHODS', '').split(','))),
         }
         errors = manifest['validation_errors']
         canonical = root / 'prototype-build-internal-unvalidated'
@@ -518,19 +534,29 @@ jobs:
             if receipt.exists():
                 try:
                     data = json.loads(receipt.read_text())
+                    requested_methods = manifest['requested_methods']
+                    required = set(manifest['required_regression_classes'])
+                    api_expected = expected
+                    if requested_methods:
+                        summary = json.loads((focused / 'iterations/summary.json').read_text())
+                        gate_class = summary['gate']['class']
+                        assert gate_class in manifest['requested_affected_classes'] and gate_class not in required
+                        assert summary['gate']['status'] == 'passed' and summary['gate']['exit_code'] == 0
+                        assert hashlib.sha256(receipt.read_bytes()).hexdigest() == summary['gate']['receipt_sha256']
+                        api_expected = required | {gate_class}
                     assert data['sha'] == manifest['sha'] and str(data['api']) == str(api)
-                    assert set(data['selectors']) == expected and set(data['counts']) == expected
+                    assert set(data['selectors']) == api_expected and set(data['counts']) == api_expected
                     source_bytes = (focused / 'expected-methods.json').read_bytes()
                     source_inventory = json.loads(source_bytes)
                     assert hashlib.sha256(source_bytes).hexdigest() == data['source_inventory_sha256']
-                    assert set(source_inventory['selectors']) == expected
+                    assert set(source_inventory['selectors']) == api_expected
                     assert set(data['methods']) == set(source_inventory['runtime_methods'])
                     required = set(manifest['required_regression_classes'])
                     assert set(data['required_selectors']) == required
-                    derived = {c: {'passed': 0, 'failed': 0, 'errors': 0, 'skipped': 0} for c in expected}
+                    derived = {c: {'passed': 0, 'failed': 0, 'errors': 0, 'skipped': 0} for c in api_expected}
                     for method, outcome in data['methods'].items():
                         cls, name = method.rsplit('#', 1)
-                        assert cls in expected and name and outcome in derived[cls]
+                        assert cls in api_expected and name and outcome in derived[cls]
                         derived[cls][outcome] += 1
                         assert cls not in required or outcome == 'passed'
                     assert derived == data['counts']
@@ -539,7 +565,7 @@ jobs:
                     data['independent_test_apk_hashes'] = (focused / 'test-input-apks.sha256').read_text()
                     repetitions = manifest['requested_iterations']
                     assert 1 <= repetitions <= 30
-                    if repetitions > 1:
+                    if repetitions > 1 and not requested_methods:
                         iteration_root = focused / 'iterations'
                         summary = json.loads((iteration_root / 'summary.json').read_text())
                         assert summary['sha'] == manifest['sha'] and str(summary['api']) == str(api)
@@ -557,6 +583,45 @@ jobs:
                             assert repeated['source_inventory_sha256'] == data['source_inventory_sha256']
                             assert (folder / 'test-input-apks.sha256').read_bytes() == (focused / 'test-input-apks.sha256').read_bytes()
                         data['repetition_summary'] = summary
+                    if requested_methods:
+                        iteration_root = focused / 'iterations'
+                        assert summary['kind'] == 'methods'
+                        assert summary['sha'] == manifest['sha'] and str(summary['api']) == str(api)
+                        assert summary['requested'] == repetitions
+                        assert summary['methods'] == sorted(requested_methods)
+                        assert len(requested_methods) == len(set(requested_methods))
+                        requested_classes = {method.rsplit('#', 1)[0] for method in requested_methods}
+                        assert requested_classes == set(manifest['requested_affected_classes'])
+                        inventory_bytes = (iteration_root / 'requested-methods.json').read_bytes()
+                        method_inventory = json.loads(inventory_bytes)
+                        assert set(method_inventory['runtime_methods']) == set(requested_methods)
+                        assert set(method_inventory['selectors']) == requested_classes
+                        assert [item['iteration'] for item in summary['iterations']] == list(range(1, repetitions + 1))
+                        command_ids = set()
+                        for item in summary['iterations']:
+                            assert item['status'] == 'passed' and item['exit_code'] == 0
+                            folder = iteration_root / f"iteration-{item['iteration']:02d}" / 'prototype-evidence'
+                            raw = (folder / 'reconciled-tests.json').read_bytes()
+                            assert hashlib.sha256(raw).hexdigest() == item['receipt_sha256']
+                            repeated = json.loads(raw)
+                            assert repeated['sha'] == manifest['sha'] and str(repeated['api']) == str(api)
+                            assert set(repeated['selectors']) == requested_classes
+                            assert repeated['methods'] == {method: 'passed' for method in requested_methods}
+                            method_counts = {c: {'passed': 0, 'failed': 0, 'errors': 0, 'skipped': 0} for c in requested_classes}
+                            for method in requested_methods:
+                                method_counts[method.rsplit('#', 1)[0]]['passed'] += 1
+                            assert repeated['counts'] == method_counts
+                            source_bytes = (folder / 'expected-methods.json').read_bytes()
+                            assert hashlib.sha256(source_bytes).hexdigest() == repeated['source_inventory_sha256']
+                            assert json.loads(source_bytes) == method_inventory
+                            assert (folder / 'test-input-apks.sha256').read_bytes() == (focused / 'test-input-apks.sha256').read_bytes()
+                            observed = json.loads((folder / 'live/observed/manifest.json').read_text())
+                            assert observed['status'] == 'completed' and observed['child_returncode'] == 0
+                            assert observed['observer_exit_status'] == 0 and observed['observed_failure_lines'] == 0
+                            assert observed['sha'] == manifest['sha'] and str(observed['api']) == str(api)
+                            assert observed['command_id'] not in command_ids
+                            command_ids.add(observed['command_id'])
+                        data['method_repetition_summary'] = summary
                     manifest['focused_evidence'][str(api)] = data
                 except (AssertionError, KeyError, ValueError, TypeError, OSError) as error:
                     errors.append(f'Focused API {api} evidence is not passing: ' + type(error).__name__)

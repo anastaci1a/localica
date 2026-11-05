@@ -59,6 +59,7 @@ internal enum class AppIcon(val id: String, @DrawableRes val builtin: Int) {
     ActionRevert("action.revert", R.drawable.ic_revert),
     ActionReverse("action.reverse", R.drawable.ic_reverse),
     ActionSave("action.save", R.drawable.ic_save),
+    ActionSaveArtwork("action.save_artwork", R.drawable.ic_download),
     ActionSettings("action.settings", R.drawable.ic_settings),
     ActionShuffle("action.shuffle", R.drawable.ic_shuffle),
     ActionRepeat("action.repeat", R.drawable.ic_repeat),
@@ -78,7 +79,12 @@ internal enum class AppIcon(val id: String, @DrawableRes val builtin: Int) {
 @Composable
 internal fun appIconPainter(icon: AppIcon): Painter {
     val masks by IconPacks.masks.collectAsState()
-    val mask = masks[icon.id]
+    return packIconPainter(icon, masks[icon.id])
+}
+
+/** Explicit pack preview; never resolves through the currently selected pack. */
+@Composable
+internal fun packIconPainter(icon: AppIcon, mask: Bitmap?): Painter {
     val builtin = painterResource(icon.builtin)
     return if (mask == null) builtin else remember(mask) { MaskPainter(mask) }
 }

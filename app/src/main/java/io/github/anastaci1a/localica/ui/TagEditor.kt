@@ -178,7 +178,7 @@ internal fun TagEditorDialog(state: TagEditorState, controller: TagEditingContro
         }
     }
     if (choosing) ImageChooser(artwork, { artwork.cancelChooser(); if (state.artworkOnly && imageUri == null) controller.close() }) { artwork.chosen(it); removeImage = false }
-    if (viewing) ArtworkViewer(state.tracks.first().uri) { viewing = false }
+    if (viewing) ArtworkViewer(state.tracks.first().uri, state.tracks.first().let { it.albumArtist ?: it.artist }, state.tracks.first().album) { viewing = false }
     if (confirming) GlassAlertDialog(onDismissRequest = { confirming = false }, title = { Text("Save changes to ${state.tracks.size} files?") },
         text = { Column(Modifier.heightIn(max = 360.dp).controlVerticalScroll(rememberScrollState())) { changed.forEach { name -> Text("${EditField.valueOf(name).label}: ${JSONObject(values).getString(name).ifBlank { "Remove tag" }.take(160)}") }
             if (removeImage) Text("Remove artwork") else if (imageUri != null) Text("Replace artwork")
