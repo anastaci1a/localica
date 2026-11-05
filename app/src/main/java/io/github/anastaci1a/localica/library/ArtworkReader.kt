@@ -25,7 +25,16 @@ class ArtworkReader(private val context: Context) {
                 if (file.canonicalFile.parentFile == java.io.File(context.filesDir, "playlist-covers").canonicalFile && file.length() <= 16 * 1024 * 1024)
                     return@withContext decodeArtwork(file.readBytes(), edge)?.also(upload)
             }
-            val bytes = platformPicture(uri) ?: supplementalPicture(uri)
+            val platform = platformPicture(uri)
+            if (platform == null) {
+                // Missing/revoked sources cannot benefit from another decoder. Media3
+                // retries their I/O failures, occupying the shared artwork permits and
+                // leaving newly scrolled rows on the shimmer. Keep fallback decoding
+                // for readable formats that the platform retriever cannot handle.
+                context.contentResolver.openAssetFileDescriptor(parsed, "r")?.use { }
+                    ?: return@withContext null
+            }
+            val bytes = platform ?: supplementalPicture(uri)
                 ?: runCatching { ContainerTags.read(context, uri)?.firstArtwork?.binaryData }.getOrNull()
             bytes?.let { decodeArtwork(it, edge) }?.also(upload)
         } catch (cancelled: CancellationException) { throw cancelled }
