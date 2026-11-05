@@ -52,9 +52,9 @@ internal class SliderCancelHost(private val scope: CoroutineScope) {
 
     fun over(pointInRoot: Offset): Boolean = target.bounds?.contains(pointInRoot) == true
 
-    fun end() {
+    fun end(cancelled: Boolean = hovered) {
+        target.update(false, cancelled)
         hovered = false
-        target.update(false)
         scope.launch(start = CoroutineStart.UNDISPATCHED) { move(0f) }
     }
 
@@ -89,7 +89,7 @@ internal fun SliderCancelLayer(host: SliderCancelHost, bottomInset: Dp) {
         host.layerOrigin = it.positionInRoot()
         host.layerSize = it.size
     }) {
-        if (host.target.active) SeekCancelTarget(host.target, host.hovered, bottomInset, reduced,
+        SeekCancelTarget(host.target, host.hovered, bottomInset, reduced,
             action = "change", tag = "cancel-slider")
     }
 }

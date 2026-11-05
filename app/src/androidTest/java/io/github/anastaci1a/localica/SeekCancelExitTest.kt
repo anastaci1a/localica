@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
 import androidx.compose.ui.unit.dp
@@ -63,11 +64,98 @@ class SeekCancelExitTest {
                 if (cancel) assertEquals("Cancel fades at the release position", at.top, next.top, 1f)
                 else assertTrue("Normal exit moves only down: $previous -> ${next.top}", next.top >= previous - 1f)
                 previous = next.top
-                target.captureToImage() // Force a rendered frame, not only an unpresented layout.
+                val pixels = target.captureToImage().toPixelMap()
+                var low = 1f
+                var high = 0f
+                for (y in 0 until pixels.height) for (x in 0 until pixels.width) {
+                    val c = pixels[x, y]
+                    val brightness = (c.red + c.green + c.blue) / 3f
+                    low = minOf(low, brightness); high = maxOf(high, brightness)
+                }
+                assertTrue("The X remains drawn on release frame $it", high - low > .02f)
             }
             if (!cancel) assertTrue("Normal release reverses the rise", previous > at.top + 1f)
             compose.mainClock.advanceTimeBy(500)
             target.assertDoesNotExist()
         } finally { compose.mainClock.autoAdvance = true }
     }
+
+    @Test fun exitAlphaIsMonotonicAndNewDragContinuesFromThePresentedFrame() {
+        val target = SeekCancelTargetState()
+        compose.setContent { LocalicaTheme { Box(Modifier.fillMaxSize()) {
+            SeekCancelTarget(target, false, 20.dp, false)
+        } } }
+        compose.mainClock.autoAdvance = false
+        try {
+            for (cancel in listOf(false, true)) {
+                compose.runOnIdle { target.update(true) }
+                compose.mainClock.advanceTimeBy(500)
+                var lastAlpha = 1f
+                compose.runOnIdle { target.update(false, cancel); assertNull(target.bounds) }
+                repeat(8) {
+                    compose.mainClock.advanceTimeByFrame()
+                    compose.runOnIdle {
+                        val alpha = target.motion!!.alpha
+                        assertTrue("Exit cannot disappear or brighten early", alpha > 0f && alpha <= lastAlpha)
+                        lastAlpha = alpha
+                    }
+                }
+                val at = compose.onNodeWithTag("cancel-seek").fetchSemanticsNode().boundsInRoot
+                compose.runOnIdle {
+                    target.update(true)
+                    assertNull("A fresh gesture cannot reuse the last hit rectangle", target.bounds)
+                    assertEquals("Retarget retains alpha synchronously", lastAlpha, target.motion!!.alpha, .001f)
+                }
+                compose.mainClock.advanceTimeByFrame()
+                val resumed = compose.onNodeWithTag("cancel-seek").fetchSemanticsNode().boundsInRoot
+                assertEquals("Reentry does not restart at the bottom", at.top, resumed.top, 2f)
+                compose.mainClock.advanceTimeBy(500)
+                compose.runOnIdle { assertEquals(1f, target.motion!!.alpha, .001f); assertNotNull(target.bounds) }
+            }
+        } finally { compose.mainClock.autoAdvance = true }
+    }
+
+    @Test fun reducedMotionRemovesBothReleasePathsImmediately() {
+        val target = SeekCancelTargetState()
+        compose.setContent { LocalicaTheme { Box(Modifier.fillMaxSize()) {
+            SeekCancelTarget(target, false, 20.dp, true)
+        } } }
+        compose.mainClock.autoAdvance = false
+        try {
+            for (cancel in listOf(false, true)) {
+                compose.runOnIdle { target.update(true) }
+                compose.mainClock.advanceTimeByFrame()
+                compose.onNodeWithTag("cancel-seek").assertExists()
+                compose.runOnIdle { target.update(false, cancel); assertNull(target.bounds) }
+                compose.mainClock.advanceTimeByFrame()
+                compose.onNodeWithTag("cancel-seek").assertDoesNotExist()
+            }
+        } finally { compose.mainClock.autoAdvance = true }
+    }
+
+
+    @Test fun cancellationDuringEntranceFadesAtThePartiallyRaisedPosition() {
+        val target = SeekCancelTargetState()
+        compose.setContent { LocalicaTheme { Box(Modifier.fillMaxSize()) {
+            SeekCancelTarget(target, true, 20.dp, false)
+        } } }
+        compose.mainClock.autoAdvance = false
+        try {
+            compose.runOnIdle { target.update(true) }
+            compose.mainClock.advanceTimeBy(96)
+            val node = compose.onNodeWithTag("cancel-seek")
+            val at = node.fetchSemanticsNode().boundsInRoot
+            var alpha = 0f
+            compose.runOnIdle { alpha = target.motion!!.alpha; target.update(false, true) }
+            repeat(8) {
+                compose.mainClock.advanceTimeByFrame()
+                assertEquals("A partial entrance must not finish rising on cancel", at.top, node.fetchSemanticsNode().boundsInRoot.top, 1f)
+                compose.runOnIdle {
+                    assertTrue(target.motion!!.alpha > 0f && target.motion!!.alpha <= alpha)
+                    alpha = target.motion!!.alpha
+                }
+            }
+        } finally { compose.mainClock.autoAdvance = true }
+    }
+
 }
