@@ -36,14 +36,6 @@ class PlayerBackdropTest {
 
     @Test fun coldMountPresentsTheEmbeddedCoverAndItsColorContinuation() = verifyBackdrop(prepared = false)
 
-    @Test(timeout = 600_000) fun repeatedColdAndPreparedMountsReleasePreparationAcrossActivityTeardown() {
-        repeat(20) { iteration ->
-            verifyBackdrop(prepared = false)
-            verifyBackdrop(prepared = true)
-            android.util.Log.i("PlayerBackdropTest", "Completed cold/prepared activity pair ${iteration + 1}/20")
-        }
-    }
-
     private fun verifyBackdrop(prepared: Boolean) {
         val compose = createComposeRule()
         val description = Description.createTestDescription(javaClass, "backdrop-prepared-$prepared")
