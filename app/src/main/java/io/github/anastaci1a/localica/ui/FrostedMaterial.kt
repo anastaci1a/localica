@@ -49,8 +49,6 @@ internal data class GlassBackdropCapture(val renderer: GlassRendererGeneration,
 internal class FrostedBackdrop(val layer: GraphicsLayer, dark: Boolean,
     private val renderer: GlassRendererRuntime? = null) {
     val readback = RetainedLayerReadback()
-    var readbackRegion: (() -> androidx.compose.ui.unit.IntRect?)? = null
-    var readbackBackground: (() -> BackdropSnapshotBackground?)? = null
     private val defaultRenderer = automaticGlassRendererGeneration()
     val rendererGeneration get() = renderer?.generation ?: defaultRenderer
     private val captureLock = Mutex()
@@ -91,27 +89,23 @@ internal class FrostedBackdrop(val layer: GraphicsLayer, dark: Boolean,
     var recordings = 0
     val recordedFrames = kotlinx.coroutines.channels.Channel<Unit>(kotlinx.coroutines.channels.Channel.CONFLATED)
     val recorded get() = recordedGeneration != null
-    fun refresh() { revision++ }
+    fun refresh() { revision++; recordedFrames.trySend(Unit) }
 
     fun compositing(strategy: androidx.compose.ui.graphics.layer.CompositingStrategy) {
         desiredCompositing = strategy
         if (!readbackPending && !layer.isReleased) layer.compositingStrategy = strategy
     }
 
-    // Start the replacement's existing draw-readiness budget only after a retired
-    // native copy releases its recording freeze. Do not consume both attempts
-    // against a frozen old generation and then leave the new backend unprepared.
-    suspend fun awaitNativeCapture() { captureLock.withLock { } }
-
     /** Serialize native ownership, not merely publication. A replacement effect may
      * wait here but cannot clear another generation's pending-recording freeze. */
     suspend fun captureCurrent(graphics: androidx.compose.ui.graphics.GraphicsContext,
         density: androidx.compose.ui.unit.Density, direction: androidx.compose.ui.unit.LayoutDirection,
-        valid: () -> Boolean, region: androidx.compose.ui.unit.IntRect? = null, captureLayer: GraphicsLayer = layer): ImageBitmap? = captureLock.withLock {
+        valid: () -> Boolean, captureLayer: GraphicsLayer = layer, record: () -> Unit = {}): ImageBitmap? = captureLock.withLock {
         if (!valid()) return@withLock null
+        record()
         val freezesSource = captureLayer === layer
         if (freezesSource) readbackPending = true
-        try { readback.captureRegion(captureLayer, graphics, density, direction, region) }
+        try { readback.capture(captureLayer, graphics, density, direction) }
         finally {
             if (freezesSource) readbackPending = false
             if (!layer.isReleased) layer.compositingStrategy = desiredCompositing
@@ -207,8 +201,7 @@ internal fun DrawScope.withBackdropRegistration(registration: BackdropRegistrati
 @Composable
 internal fun rememberFrostedBackdrop(key: Any?, enabled: Boolean = true, dark: Boolean = true, lightMix: Float? = null,
     glassBlur: Float = LocalGlassAppearance.current.blur, retainRaster: Boolean = true,
-    whiteTint: Float = LocalGlassAppearance.current.whiteTint,
-    settledRefresh: Boolean = true, distinctPixels: Boolean = false): FrostedBackdrop {
+    whiteTint: Float = LocalGlassAppearance.current.whiteTint): FrostedBackdrop {
     val layer = rememberGraphicsLayer()
     val runtime = LocalGlassRendererRuntime.current
     val renderer = currentGlassRendererGeneration()
@@ -227,11 +220,13 @@ internal fun rememberFrostedBackdrop(key: Any?, enabled: Boolean = true, dark: B
     // Older Android has no runtime shader. Read a tiny shared scene thumbnail;
     // consumers average their own footprint without blur or mesh preparation.
     val thumbnail = if (Build.VERSION.SDK_INT < 33) rememberGraphicsLayer() else null
-    LaunchedEffect(source, enabled, sampled, graphicsContext) {
+    LaunchedEffect(source, key, enabled, sampled, graphicsContext) {
         if (thumbnail != null && enabled && sampled) {
+            source.recordedFrames.trySend(Unit)
             var completedRecording = -1
+            var completedRevision = -1
             for (frame in source.recordedFrames) {
-                if (!source.recorded || source.readbackPending || source.recordings == completedRecording ||
+                if (!source.recorded || source.readbackPending || source.recordings == completedRecording && source.revision == completedRevision ||
                     source.size.width <= 0 || source.size.height <= 0 || source.layer.isReleased) continue
                 val request = source.readbackRequest + 1
                 val ticket = source.readbackBarrier?.begin(request)
@@ -242,18 +237,18 @@ internal fun rememberFrostedBackdrop(key: Any?, enabled: Boolean = true, dark: B
                 if (ticket != null && (draws == null || !ticket.isCurrent())) continue
                 val extent = source.size
                 val generation = source.rendererGeneration
-                thumbnail.record(currentDensity, currentDirection, IntSize(32, 32)) {
-                    scale(32f / extent.width, 32f / extent.height, Offset.Zero) {
-                        drawLayer(source.layer)
-                    }
-                }
-                fun valid() = source.recorded && !source.layer.isReleased && !thumbnail.isReleased
+                fun valid() = source.recorded && source.size == extent && !source.layer.isReleased && !thumbnail.isReleased
                 val image = source.captureCurrent(graphicsContext, currentDensity, currentDirection, ::valid,
-                    captureLayer = thumbnail) ?: continue
+                    captureLayer = thumbnail, record = {
+                        thumbnail.record(currentDensity, currentDirection, IntSize(32, 32)) {
+                            scale(32f / extent.width, 32f / extent.height, Offset.Zero) { drawLayer(source.layer) }
+                        }
+                    }) ?: continue
                 val pixels = withContext(Dispatchers.Default) { softwareGlassSnapshot(image, IntSize(32, 32)) }
                 currentCoroutineContext().ensureActive()
                 if (valid()) source.publish(generation, pixels, pixels, request, draws)
                 completedRecording = source.recordings
+                completedRevision = source.revision
                 } finally { ticket?.close() }
             }
         }

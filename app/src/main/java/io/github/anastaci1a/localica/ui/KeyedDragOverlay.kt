@@ -125,39 +125,14 @@ internal fun <T : Any, P> BoxScope.KeyedDragOverlay(state: KeyedDragState<T, P>,
         // The top pane still samples its backing even though no later pane needs its recording.
         if (index == 0) BackdropLease(paneBacking)
         // Propagate the prepared endpoint once; finishing pickup also removes lower-pane contents.
-        val paneScene = if (index > 0) rememberFrostedBackdrop(Triple(drag, lifted, paneBacking?.lensSnapshot),
+        val paneScene = if (index > 0) rememberFrostedBackdrop(Triple(drag, lifted, paneBacking?.snapshot),
             // Consumers already clip to their pane. Avoid a full-viewport offscreen raster
             // that redraws everything outside those clips whenever a card moves.
-            dark = backing?.dark == true, retainRaster = false, whiteTint = 0f, settledRefresh = false, distinctPixels = true) else null
+            dark = backing?.dark == true, retainRaster = false, whiteTint = 0f) else null
         SideEffect {
             if (paneScene != null) paneObserver?.invoke(index, paneScene)
-            paneScene?.readbackBackground = {
-                paneBacking?.snapshot?.let { image ->
-                    paneBacking.location.registrationTo(paneScene.location)?.let { BackdropSnapshotBackground(image, it) }
-                }
-            }
-            paneScene?.readbackRegion = {
-                val bounds = frames.values.map { it.geometry().lifted.bounds.translate(it.position()) }
-                if (bounds.isEmpty()) null else {
-                    // Include every pane, its sampling displacement, blur and outside shadow.
-                    val room = with(density) { 96.dp.toPx() }
-                    androidx.compose.ui.unit.IntRect(
-                        kotlin.math.floor(bounds.minOf { it.left } - room).toInt().coerceIn(0, state.viewportWidth - 1),
-                        kotlin.math.floor(bounds.minOf { it.top } - room).toInt().coerceIn(0, state.viewportHeight - 1),
-                        kotlin.math.ceil(bounds.maxOf { it.right } + room).toInt().coerceIn(1, state.viewportWidth),
-                        kotlin.math.ceil(bounds.maxOf { it.bottom } + room).toInt().coerceIn(1, state.viewportHeight))
-                }
-            }
         }
         previousPane = paneScene
-        LaunchedEffect(drag, paneScene) {
-            if (paneScene == null) return@LaunchedEffect
-            snapshotFlow { drag.pointer to drag.dropping }.collectLatest {
-                // Legacy preparation follows a paused or completed movement, never a readback per frame.
-                delay(200)
-                paneScene.refresh()
-            }
-        }
         val itemKey = state.keyOf(item)
         val destination = drag.destinations?.get(itemKey)
         val holder = outlineHolder(item)
