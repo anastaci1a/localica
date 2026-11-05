@@ -194,7 +194,6 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
     content: (@Composable BoxScope.() -> Unit)? = null) {
     val renderer = currentGlassRendererGeneration()
     val drawObserver = LocalGlassSurfaceDrawObserver.current
-    val samplingObserver = LocalBackdropSamplingObserver.current
     // Do not create diagnostic state, closures, geometry or modifiers for ordinary/null callers.
     val observedShadowGroup = if (drawObserver == null) null else LocalSurfaceShadows.current
     val observedShadowAppearance = if (drawObserver == null) null else LocalGlassAppearance.current
