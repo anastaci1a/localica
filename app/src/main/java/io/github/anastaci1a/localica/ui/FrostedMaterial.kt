@@ -52,9 +52,6 @@ internal class FrostedBackdrop(val layer: GraphicsLayer, dark: Boolean,
     private val defaultRenderer = automaticGlassRendererGeneration()
     val rendererGeneration get() = renderer?.generation ?: defaultRenderer
     private val captureLock = Mutex()
-    private var desiredCompositing = androidx.compose.ui.graphics.layer.CompositingStrategy.Auto
-    var readbackPending by mutableStateOf(false)
-        private set
     var parent: FrostedBackdrop? = null
     var materialOnly by mutableStateOf(false)
     var materialCorner by mutableFloatStateOf(0f)
@@ -91,25 +88,13 @@ internal class FrostedBackdrop(val layer: GraphicsLayer, dark: Boolean,
     val recorded get() = recordedGeneration != null
     fun refresh() { revision++; recordedFrames.trySend(Unit) }
 
-    fun compositing(strategy: androidx.compose.ui.graphics.layer.CompositingStrategy) {
-        desiredCompositing = strategy
-        if (!readbackPending && !layer.isReleased) layer.compositingStrategy = strategy
-    }
-
-    /** Serialize native ownership, not merely publication. A replacement effect may
-     * wait here but cannot clear another generation's pending-recording freeze. */
+    /** Serialize the thumbnail record and native copy through cancellation. */
     suspend fun captureCurrent(graphics: androidx.compose.ui.graphics.GraphicsContext,
         density: androidx.compose.ui.unit.Density, direction: androidx.compose.ui.unit.LayoutDirection,
-        valid: () -> Boolean, captureLayer: GraphicsLayer = layer, record: () -> Unit = {}): ImageBitmap? = captureLock.withLock {
+        valid: () -> Boolean, captureLayer: GraphicsLayer, record: () -> Unit): ImageBitmap? = captureLock.withLock {
         if (!valid()) return@withLock null
         record()
-        val freezesSource = captureLayer === layer
-        if (freezesSource) readbackPending = true
-        try { readback.capture(captureLayer, graphics, density, direction) }
-        finally {
-            if (freezesSource) readbackPending = false
-            if (!layer.isReleased) layer.compositingStrategy = desiredCompositing
-        }
+        readback.capture(captureLayer, graphics, density, direction)
     }
 
     fun publish(renderer: GlassRendererGeneration, snapshot: ImageBitmap, fallback: ImageBitmap,
@@ -204,7 +189,6 @@ internal fun rememberFrostedBackdrop(key: Any?, enabled: Boolean = true, dark: B
     whiteTint: Float = LocalGlassAppearance.current.whiteTint): FrostedBackdrop {
     val layer = rememberGraphicsLayer()
     val runtime = LocalGlassRendererRuntime.current
-    val renderer = currentGlassRendererGeneration()
     val source = remember(layer, runtime) { FrostedBackdrop(layer, dark, runtime) }
     val graphicsContext = LocalGraphicsContext.current
     val currentDensity by rememberUpdatedState(LocalDensity.current)
@@ -213,8 +197,8 @@ internal fun rememberFrostedBackdrop(key: Any?, enabled: Boolean = true, dark: B
     // Sampled scenes retain pixels so sibling lenses never replay all their children.
     val sampled = source.consumers > 0
     SideEffect {
-        source.compositing(if (retainRaster && sampled) androidx.compose.ui.graphics.layer.CompositingStrategy.Offscreen
-            else androidx.compose.ui.graphics.layer.CompositingStrategy.Auto)
+        if (!source.layer.isReleased) source.layer.compositingStrategy = if (retainRaster && sampled) androidx.compose.ui.graphics.layer.CompositingStrategy.Offscreen
+            else androidx.compose.ui.graphics.layer.CompositingStrategy.Auto
         source.lightMix = lightMix ?: if (dark) 1f else 0f
     }
     // Older Android has no runtime shader. Read a tiny shared scene thumbnail;
@@ -226,7 +210,7 @@ internal fun rememberFrostedBackdrop(key: Any?, enabled: Boolean = true, dark: B
             var completedRecording = -1
             var completedRevision = -1
             for (frame in source.recordedFrames) {
-                if (!source.recorded || source.readbackPending || source.recordings == completedRecording && source.revision == completedRevision ||
+                if (!source.recorded || source.recordings == completedRecording && source.revision == completedRevision ||
                     source.size.width <= 0 || source.size.height <= 0 || source.layer.isReleased) continue
                 val request = source.readbackRequest + 1
                 val ticket = source.readbackBarrier?.begin(request)
@@ -290,27 +274,21 @@ internal fun Modifier.recordFrostedBackdrop(source: FrostedBackdrop, backing: Fr
             val request = readbackRequest?.invoke()
             val viewport = size
             val extent = IntSize(size.width.toInt(), size.height.toInt())
-            // Native ownership outlives cancellation. Do not mutate the retained
-            // own recording while a copy (including a retired generation's copy) is pending.
-            // Retained children keep their separate owner/readiness contracts.
-            // Read in draw so the first live frame after a hold is drawn without recomposition.
-            if (!source.readbackPending) {
-                source.layer.record(size = if (Build.VERSION.SDK_INT >= 33) glassLayerExtent(extent) else extent) {
-                    clipRect(right = viewport.width, bottom = viewport.height) {
-                        if (backing != null && backing.recorded && !backing.layer.isReleased) {
-                            backing.location.registrationTo(source.location)?.let { registration ->
-                                clipRect { withBackdropRegistration(registration) { drawLayer(backing.layer) } }
-                            }
+            source.layer.record(size = if (Build.VERSION.SDK_INT >= 33) glassLayerExtent(extent) else extent) {
+                clipRect(right = viewport.width, bottom = viewport.height) {
+                    if (backing != null && backing.recorded && !backing.layer.isReleased) {
+                        backing.location.registrationTo(source.location)?.let { registration ->
+                            clipRect { withBackdropRegistration(registration) { drawLayer(backing.layer) } }
                         }
-                        this@drawWithContent.drawContent()
                     }
+                    this@drawWithContent.drawContent()
                 }
-                source.recordedSize = extent
-                source.recordings++
-                source.recordedFrames.trySend(Unit)
-                source.recordedGeneration = renderer.takeIf { backing == null || backing.recorded }
-                if (request != null) onRecorded?.invoke(request)
             }
+            source.recordedSize = extent
+            source.recordings++
+            source.recordedFrames.trySend(Unit)
+            source.recordedGeneration = renderer.takeIf { backing == null || backing.recorded }
+            if (request != null) onRecorded?.invoke(request)
             // A transparent optical overlay replaces the source beneath its body;
             // retain the complete source for sampling, omit only its direct display.
             if (!displayBacking) {
