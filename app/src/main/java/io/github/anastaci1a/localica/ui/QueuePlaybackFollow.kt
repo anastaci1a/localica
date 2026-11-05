@@ -103,6 +103,17 @@ internal class QueuePlaybackFollowCoordinator(initiallyAttached: Boolean = true,
         return true
     }
 
+    /** Already at a physical end: restore intent without admitting another animation. */
+    fun reattachAtBoundary(target: String?, currentOwner: Any) {
+        if (target == null) return
+        cancel()
+        attached = true
+        entered = true
+        restoredObservation = false
+        occurrence = target
+        owner = currentOwner
+    }
+
     private fun submit(target: String, currentOwner: Any, generation: Long?, initialPosition: Boolean = false) {
         cancel()
         request = QueuePlaybackFollowRequest(target, currentOwner, generation, initialPosition)
