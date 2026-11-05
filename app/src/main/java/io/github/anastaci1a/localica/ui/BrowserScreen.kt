@@ -257,6 +257,21 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     val gridState = rememberLazyGridState()
     val scrollScope = rememberCoroutineScope()
     val reorder = remember(route.key) { SongDragState(gridState, scrollScope) }
+    val scrollResetInput = when {
+        route.globalSearch -> Triple(true, route.filter, route.text)
+        route.tab == MainTab.Library && route.collection == null && !route.search ->
+            Triple(false, route.filter, "")
+        else -> null
+    }
+    // A fresh mount restores its route's saved viewport. Only an input change
+    // within that page must discard LazyGrid's retained item/key anchor.
+    var previousScrollResetInput by remember(route.key) { mutableStateOf(scrollResetInput) }
+    SideEffect {
+        if (previousScrollResetInput != scrollResetInput) {
+            previousScrollResetInput = scrollResetInput
+            gridState.requestScrollToItem(0)
+        }
+    }
     val artistFilterRange = remember(route.key) { ArtistFilterRange() }
     fun chooseArtistAlbums(ids: List<String>) {
         if (ids == selectedAlbums) return
