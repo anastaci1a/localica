@@ -106,6 +106,7 @@ internal sealed class OutlineComponent(val id: Int,val parent: Int) {
 }
 
 internal class OutlineBody(id: Int,parent: Int,val box: Rect,val corner: Double): OutlineComponent(id,parent) {
+    private val contour=RoundRect(box,CornerRadius(corner.toFloat()))
     override val bounds=OutlineBox(box.left.toDouble(),box.top.toDouble(),box.right.toDouble(),box.bottom.toDouble())
     val cx=(bounds.left+bounds.right)/2;val cy=(bounds.top+bounds.bottom)/2
     val hx=(bounds.right-bounds.left)/2-corner;val hy=(bounds.bottom-bounds.top)/2-corner
@@ -118,7 +119,7 @@ internal class OutlineBody(id: Int,parent: Int,val box: Rect,val corner: Double)
         val x=abs(p.x-cx)-hx;val y=abs(p.y-cy)-hy
         return hypot(max(x,0.0),max(y,0.0))+min(max(x,y),0.0)-corner
     }
-    override fun emit(path: Path) { path.addRoundRect(RoundRect(box,CornerRadius(corner.toFloat())),Path.Direction.Clockwise) }
+    override fun emit(path: Path) { path.addRoundRect(contour,Path.Direction.Clockwise) }
     override val edges: List<OutlineEdge> = buildList {
         val l=bounds.left;val t=bounds.top;val r=bounds.right;val b=bounds.bottom;val c=corner
         fun line(x1: Double,y1: Double,x2: Double,y2: Double) {
@@ -246,15 +247,40 @@ private data class OutlineSide(val segment: OutlineSegment,val from: Double,val 
     val low get()=min(from,to)
     val high get()=max(from,to)
 }
+private const val OUTLINE_WALK_LIMIT=8
+private class OutlineChain(start: OutlineSegment,private val backwards: Boolean) {
+    private val sides=mutableListOf<OutlineSide>()
+    private var next: OutlineSegment?=start
+    operator fun get(index: Int): OutlineSide=requireNotNull(getOrNull(index))
+    fun getOrNull(index: Int): OutlineSide? {
+        if(index !in 0 until OUTLINE_WALK_LIMIT)return null
+        while(sides.size<=index) {
+            val segment=next ?: return null
+            if(sides.any { it.segment===segment }) { next=null;return null }
+            sides+=OutlineSide(segment,if(backwards)segment.end else segment.start,if(backwards)segment.start else segment.end)
+            val vertex=if(backwards)segment.a else segment.b
+            val candidates=if(backwards)vertex.incoming else vertex.outgoing
+            next=when(candidates.size) {
+                0->null
+                1->candidates[0]
+                else->{
+                    val tangent=segment.edge.tangent(if(backwards)segment.start else segment.end)
+                    candidates.maxBy { it.edge.tangent(if(backwards)it.end else it.start).dot(tangent) }
+                }
+            }
+        }
+        return sides[index]
+    }
+}
 internal data class OutlineFilletProof(val center: OutlinePoint,val radius: Double,val a: OutlinePoint,val b: OutlinePoint,
     val tangentA: OutlinePoint,val tangentB: OutlinePoint)
-private class OutlineFillet(val first: List<OutlineSide>,val second: List<OutlineSide>,val indexA: Int,val indexB: Int,
+private class OutlineFillet(val first: OutlineChain,val second: OutlineChain,val indexA: Int,val indexB: Int,
     val ta: Double,val tb: Double,val center: OutlinePoint,val radius: Double) {
     private val a=first[indexA].segment.edge.point(ta)
     private val b=second[indexB].segment.edge.point(tb)
     val proof=OutlineFilletProof(center,radius,a,b,first[indexA].segment.edge.tangent(ta),second[indexB].segment.edge.tangent(tb))
     fun emit(path: Path) {
-        val corner=first.first().segment.edge.point(first.first().from)
+        val corner=first[0].segment.edge.point(first[0].from)
         path.moveTo(corner.x.toFloat(),corner.y.toFloat())
         fun inside(edge: OutlineEdge,from: Double,to: Double) {
             // These return edges are covered by the original component. A chord
@@ -285,6 +311,7 @@ internal class AnalyticSelectionOutline(private val profile: SelectionOutlinePro
         val parentB get()=max(incoming.edge.parent,outgoing.edge.parent)
     }
     private var components=emptyList<OutlineComponent>()
+    private var cachedBodies=emptyList<OutlineBody>()
     private var unit=1.0
     private var epsilon=1e-5
     var fillets: List<OutlineFilletProof> = emptyList();private set
@@ -469,19 +496,6 @@ internal class AnalyticSelectionOutline(private val profile: SelectionOutlinePro
         segmentCount=cycles.sumOf { it.size }
         return result
     }
-    private fun follow(start: OutlineSegment,backwards: Boolean): List<OutlineSide> {
-        val result=mutableListOf<OutlineSide>();var next=start
-        repeat(8) {
-            if(result.any { it.segment===next })return result
-            result+=OutlineSide(next,if(backwards)next.end else next.start,if(backwards)next.start else next.end)
-            val at=if(backwards)next.a else next.b
-            val candidates=if(backwards)at.incoming else at.outgoing
-            if(candidates.isEmpty())return result
-            val tangent=next.edge.tangent(if(backwards)next.start else next.end)
-            next=candidates.maxBy { it.edge.tangent(if(backwards)it.end else it.start).dot(tangent) }
-        }
-        return result
-    }
     private fun request(corner: Corner,bodies: List<OutlineBody>,strength: (Int,Int)->Float): Double {
         val a=corner.parentA;val b=corner.parentB
         if(a==b)return 4*unit
@@ -522,20 +536,21 @@ internal class AnalyticSelectionOutline(private val profile: SelectionOutlinePro
         }
         return radius
     }
-    private fun candidate(corner: Corner,first: List<OutlineSide>,second: List<OutlineSide>,radius: Double): OutlineFillet? {
+    private fun candidate(corner: Corner,first: OutlineChain,second: OutlineChain,radius: Double): OutlineFillet? {
         var best: OutlineFillet?=null;var bestTravel=Double.POSITIVE_INFINITY
-        for(total in 0 until first.size+second.size-1) {
-          for(i in first.indices) {
+        for(total in 0 until (2*OUTLINE_WALK_LIMIT-1)) {
+          for(i in 0..min(total,OUTLINE_WALK_LIMIT-1)) {
             val j=total-i
-            if(j !in second.indices)continue
-            val a=first[i].segment.edge;val b=second[j].segment.edge
+            val sideA=first.getOrNull(i) ?: continue
+            val sideB=second.getOrNull(j) ?: continue
+            val a=sideA.segment.edge;val b=sideB.segment.edge
             val ca=a.offset(radius) ?: continue;val cb=b.offset(radius) ?: continue
             curveIntersections(ca,cb) { center ->
                 fun contact(edge: OutlineEdge,curve: OutlineCurve): OutlinePoint = if(edge.center==null)
                     center-edge.normal*radius else edge.center+(center-edge.center)*(edge.radius/curve.radius)
                 val pa=contact(a,ca);val pb=contact(b,cb)
                 val ta=a.parameter(pa);val tb=b.parameter(pb)
-                if(ta<first[i].low-1e-8 || ta>first[i].high+1e-8 || tb<second[j].low-1e-8 || tb>second[j].high+1e-8)return@curveIntersections
+                if(ta<sideA.low-1e-8 || ta>sideA.high+1e-8 || tb<sideB.low-1e-8 || tb>sideB.high+1e-8)return@curveIntersections
                 val angle=atan2(pa.y-center.y,pa.x-center.x)
                 val end=atan2(pb.y-center.y,pb.x-center.x)
                 val sweep=-positiveAngle(angle-end)
@@ -543,7 +558,7 @@ internal class AnalyticSelectionOutline(private val profile: SelectionOutlinePro
                 val travel=(pa-corner.vertex.point).length()+(pb-corner.vertex.point).length()
                 if(travel>=bestTravel)return@curveIntersections
                 if(components.any { it.bounds.contains(center,radius) && it.distance(center)<radius-epsilon*.25 })return@curveIntersections
-                best=OutlineFillet(first,second,i,j,ta.coerceIn(first[i].low,first[i].high),tb.coerceIn(second[j].low,second[j].high),center,radius)
+                best=OutlineFillet(first,second,i,j,ta.coerceIn(sideA.low,sideA.high),tb.coerceIn(sideB.low,sideB.high),center,radius)
                 bestTravel=travel
             }
           }
@@ -558,7 +573,12 @@ internal class AnalyticSelectionOutline(private val profile: SelectionOutlinePro
     private fun prepare(regions: List<SelectionRegion>,gap: Float,strength: (Int,Int)->Float): List<OutlineFillet> {
         val started=if(profile!=null)System.nanoTime() else 0L
         unit=gap.toDouble()/16;epsilon=unit*1e-5
-        val bodies=regions.mapIndexed { i,r -> OutlineBody(i,i,r.bounds,r.radius(gap).toDouble()) }
+        val bodies=regions.mapIndexed { i,r ->
+            val radius=r.radius(gap).toDouble()
+            cachedBodies.getOrNull(i)?.takeIf { it.box==r.bounds && it.corner==radius }
+                ?: OutlineBody(i,i,r.bounds,radius)
+        }
+        cachedBodies=bodies
         components=addLobes(bodies,strength);lobeCount=components.size-bodies.size
         segmentCount=0
         val corners=parametricCorners(bodies) ?: if(components.size>8)localCorners(bodies) else corners(components)
@@ -567,7 +587,7 @@ internal class AnalyticSelectionOutline(private val profile: SelectionOutlinePro
         for(corner in corners) {
             val radius=request(corner,bodies,strength)
             if(radius<=unit*1e-5)continue
-            val first=follow(corner.incoming,true);val second=follow(corner.outgoing,false)
+            val first=OutlineChain(corner.incoming,true);val second=OutlineChain(corner.outgoing,false)
             var patch=candidate(corner,first,second,radius)
             if(patch==null) {
                 var low=0.0;var high=radius
