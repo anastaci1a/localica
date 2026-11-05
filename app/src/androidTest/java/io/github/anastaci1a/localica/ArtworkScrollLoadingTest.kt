@@ -53,11 +53,12 @@ class ArtworkScrollLoadingTest {
         val bitmap = Bitmap.createBitmap(32, 32, Bitmap.Config.ARGB_8888).apply { eraseColor(android.graphics.Color.RED) }
         val items = (0..99).map { index ->
             val file = File.createTempFile("scroll-art-588-", ".png", directory).also { files += it }
-            // Alternate successful images with undecodable files through the real reader.
+            // Missing audio sources take the normal metadata-reader path, unlike
+            // an undecodable custom cover in playlist-covers (which returns early).
             if (index % 2 == 0) file.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
-            else file.writeText("not an image")
+            val source = if (index % 2 == 0) file else File(context.cacheDir, "missing-audio-${file.name}.mp3")
             BrowserItem(MediaRef(MediaKind.Playlist, "scroll-art-$index"), "Artwork row %03d".format(index), null,
-                emptyList(), coverUri = android.net.Uri.fromFile(file).toString())
+                emptyList(), coverUri = android.net.Uri.fromFile(source).toString())
         }
         bitmap.recycle()
         val style = BrowseStyle(presentation = if (listSize == null) Presentation.Standard else Presentation.List,

@@ -7,6 +7,12 @@ import io.github.anastaci1a.localica.library.AndroidDocuments
 import io.github.anastaci1a.localica.library.ArtworkReader
 import io.github.anastaci1a.localica.library.decodeArtwork
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withTimeout
+import io.github.anastaci1a.localica.library.ArtworkCache
 import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -59,6 +65,28 @@ class EmbeddedTagsTest {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         assertNull(ArtworkReader(context).read("file:///missing.mp3"))
         assertNull(decodeArtwork(byteArrayOf(1, 2, 3, 4)))
+    }
+
+    @Test fun unreadableSourcesReleaseArtworkDecodePermitsPromptly() = runBlocking {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val sources = (0..11).map { index -> when (index % 3) {
+            0 -> Uri.fromFile(File(context.cacheDir, "absent-artwork-${java.util.UUID.randomUUID()}.mp3")).toString()
+            1 -> "content://io.github.anastaci1a.localica.absent/artwork/$index"
+            else -> "unavailable-song:$index"
+        } }
+        ArtworkCache.invalidate()
+        try {
+            // More requests than decode permits: one retrying read must not strand
+            // the next viewport's known-unreadable sources behind it.
+            withTimeout(5000) {
+                coroutineScope {
+                    sources.map { uri -> async(Dispatchers.IO) {
+                        assertNull(uri, ArtworkCache.read(context, uri, 128))
+                    } }.awaitAll()
+                }
+            }
+            sources.forEach { assertNotNull("Completed missing artwork is cached", ArtworkCache.peek(listOf(it))) }
+        } finally { ArtworkCache.invalidate() }
     }
     @Test fun listedModificationTimePreservesTagsAndUnknownHintsReadTheFile() = runBlocking {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
