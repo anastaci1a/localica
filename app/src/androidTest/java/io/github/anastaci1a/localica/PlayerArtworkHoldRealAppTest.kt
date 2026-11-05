@@ -73,7 +73,9 @@ class PlayerArtworkHoldRealAppTest {
 
     /** Window hierarchy and screenshot into the app's external files, pulled with the evidence. */
     private fun evidence(name: String) {
-        val dir = File(context.getExternalFilesDir(null), "hold-575").apply { mkdirs() }
+        val base = InstrumentationRegistry.getArguments().getString("additionalTestOutputDir")?.let(::File)
+            ?: context.getExternalFilesDir(null)
+        val dir = File(base, "hold-575").apply { mkdirs() }
         runCatching { device.dumpWindowHierarchy(File(dir, "$name.xml")) }
         runCatching { device.takeScreenshot(File(dir, "$name.png")) }
     }
@@ -102,7 +104,7 @@ class PlayerArtworkHoldRealAppTest {
         val preferences = InterfacePreferences(context)
         val original = preferences.read()
         context.getSharedPreferences("interface", 0).edit().clear().commit()
-        preferences.write(settings)
+        preferences.write(settings.copy(expandOnPlay = true))
         val tracks = listOf(coveredTone("before", 20f), coveredTone("current", 200f), coveredTone("after", 300f))
         val current = tracks[1]
         var playback: PlaybackConnection? = null
@@ -117,24 +119,23 @@ class PlayerArtworkHoldRealAppTest {
                 instrumentation.runOnMainSync { connection.playFromList(tracks, current.id) }
                 await(15000) { connection.state.value.let { it.trackId == current.id && it.isPlaying && it.durationMs != null } }
                 assertNull(connection.state.value.problem)
-                // Tap the mini-player (its title) with real input, then wait for the full player's header.
-                val mini = device.wait(Until.findObject(By.text(current.title)), 15000)
-                if (mini == null) evidence("no-mini-player")
-                assertNotNull("The mini-player did not appear", mini)
-                mini.click()
-                if (device.wait(Until.findObject(By.desc("Show lyrics")), 10000) == null) evidence("no-full-player")
-                assertNotNull("The full player did not open", device.findObject(By.desc("Show lyrics")))
-                // The embedded cover decodes off the main thread and the palette blend settles.
+                // playFromList publishes a player request; expandOnPlay opens the player itself.
+                // Tapping the title here would open lyrics and remove the artwork hold target.
+                assertNotNull("The full player did not open", device.wait(Until.findObject(By.desc("Collapse player")), 15000))
+                assertNotNull("Lyrics unexpectedly open", device.wait(Until.findObject(By.desc("Show lyrics")), 5000))
+                var bounds: android.graphics.Rect? = null
+                await(10000) {
+                    bounds = device.findObjects(By.longClickable(true)).map { it.visibleBounds }
+                        .filter { it.width() > 100 && it.height() > 100 }
+                        .maxByOrNull { it.width() * it.height() }
+                    bounds != null
+                }
+                // Wait for expansion and asynchronous artwork decoding before sending native input.
                 SystemClock.sleep(2500)
-                // The cover is the only large long-clickable surface in the full player.
-                device.wait(Until.hasObject(By.longClickable(true)), 5000)
-                val artwork = device.findObjects(By.longClickable(true)).maxByOrNull { it.visibleBounds.width() * it.visibleBounds.height() }
-                if (artwork == null) evidence("no-artwork")
-                val bounds = requireNotNull(artwork) { "No long-clickable artwork" }.visibleBounds
-                assertTrue("Artwork bounds $bounds", bounds.width() > 100 && bounds.height() > 100)
+                val artworkBounds = requireNotNull(bounds)
                 // Upper-middle of the cover: on the cover in both layouts, clear of the title block that overlaps a
                 // full-background cover's lower part.
-                fingerHold(bounds.exactCenterX(), bounds.top + bounds.height() * .35f, durationMs = 1100)
+                fingerHold(artworkBounds.exactCenterX(), artworkBounds.top + artworkBounds.height() * .35f, durationMs = 1100)
                 val still = scenario.state
                 assertTrue("Activity state after the hold: $still", still == androidx.lifecycle.Lifecycle.State.RESUMED ||
                     still == androidx.lifecycle.Lifecycle.State.STARTED)
