@@ -79,16 +79,71 @@ class CarouselSelectionArtworkTest {
         }
     }
 
-    private fun visibleCells(tags: List<Pair<Int, SemanticsNodeInteraction>>): List<Pair<Int, Rect>> {
+    /** Fully on-screen cells only; lazy rows do not compose offscreen tiles. */
+    private fun visibleCells(matchers: List<Pair<Int, SemanticsMatcher>>): List<Pair<Int, Rect>> {
         val root = compose.onRoot().fetchSemanticsNode().boundsInRoot
-        return tags.map { (colour, node) -> colour to node.fetchSemanticsNode().boundsInRoot }
-            .filter { (_, bounds) -> bounds.left >= root.left && bounds.right <= root.right && bounds.width > 0f }
+        return matchers.mapNotNull { (colour, matcher) ->
+            compose.onAllNodes(matcher).fetchSemanticsNodes().firstOrNull()?.let { colour to it.boundsInRoot }
+        }.filter { (_, bounds) -> bounds.left >= root.left && bounds.right <= root.right && bounds.width > 0f }
     }
 
     private fun baseline(cells: List<Pair<Int, Rect>>): IntArray {
         lateinit var counts: IntArray
         compose.waitUntil(10000) { counts = counts(cells); counts.all { it > 50 } }
         return counts
+    }
+
+    /** Horizontal extent of each resting cover's colour on its middle row, then the gaps between neighbours (#573). */
+    private fun assertGalleryGap(cells: List<Pair<Int, Rect>>) {
+        val map = compose.onRoot().captureToImage().toPixelMap()
+        val runs = cells.map { (colour, bounds) ->
+            var top = Int.MAX_VALUE; var bottom = -1
+            for (y in bounds.top.toInt().coerceAtLeast(0) until bounds.bottom.toInt().coerceAtMost(map.height))
+                if (near(map[bounds.center.x.toInt(), y], colours[colour])) { top = minOf(top, y); bottom = y }
+            assertTrue("cover $colour is drawn", bottom >= 0)
+            val y = (top + bottom) / 2
+            var left = Int.MAX_VALUE; var right = -1
+            for (x in (bounds.left.toInt() - 4).coerceAtLeast(0) until (bounds.right.toInt() + 4).coerceAtMost(map.width))
+                if (near(map[x, y], colours[colour])) { left = minOf(left, x); right = x }
+            left to right
+        }.sortedBy { it.first }
+        val density = InstrumentationRegistry.getInstrumentation().targetContext.resources.displayMetrics.density
+        val gallery = 2 * (io.github.anastaci1a.localica.browse.BrowseCellGeometry.Carousel.cardInset * density + .5f).toInt()
+        runs.zipWithNext().forEach { (a, b) ->
+            val gap = b.first - a.second - 1
+            assertEquals("cover-to-cover gap $gap px is the gallery gap $gallery px (density $density): $runs", gallery.toFloat(), gap.toFloat(), 1.5f)
+        }
+    }
+
+    @Test fun artistAlbumCarouselCoversShareTheGalleryGap() {
+        val names = listOf("First", "Second", "Third", "Fourth")
+        val albums = LibraryViews.groups(LibrarySnapshot(tracks = names.mapIndexed { i, name ->
+            Track(cover(i), name, album = name, artist = "Artist", albumArtist = "Artist", fileName = "$i", relativePath = "$i", id = "carousel:$i")
+        }), SongListView.Albums, LibraryQuery())
+        // One explicit album keeps the others (and their covers) at rest.
+        val resting = albums.last()
+        compose.setContent { LocalicaTheme { ArtistAlbumChoices(albums, listOf(resting.id)) {} } }
+        compose.onNode(hasScrollToIndexAction()).performScrollToIndex(1)
+        compose.waitForIdle()
+        val cells = visibleCells(names.mapIndexed { i, name -> i to hasText(name) }).filter { names[it.first] != resting.title }
+        assertTrue("Two resting neighbours are visible: $cells", cells.size >= 2)
+        baseline(cells)
+        compose.mainClock.advanceTimeBy(600)
+        assertGalleryGap(cells)
+    }
+
+    @Test fun homeCarouselCoversShareTheGalleryGap() {
+        val tracks = (0..3).map { Track(cover(it), "Pinned $it", album = "Album $it", fileName = "$it.mp3", relativePath = "$it.mp3", id = "home-573-$it") }
+        val snapshot = LibrarySnapshot(folders = listOf(FolderSelection("root", "Music")), tracks = tracks)
+        compose.setContent { LocalicaTheme {
+            PinnedHome(LibraryUiState(snapshot, loading = false), PlaylistState(loading = false), tracks.map { MediaRef(MediaKind.Song, it.id) },
+                {}, {}, { _, _ -> }, {}, { _, _ -> })
+        } }
+        compose.waitUntil(5000) { compose.onAllNodesWithTag("pin-${tracks[1].id}").fetchSemanticsNodes().isNotEmpty() }
+        val cells = visibleCells((0..3).map { it to hasTestTag("pin-${tracks[it].id}") })
+        assertTrue("Two neighbours are visible: $cells", cells.size >= 2)
+        baseline(cells)
+        assertGalleryGap(cells)
     }
 
     @Test fun artistAlbumCarouselKeepsEveryCoverThroughSingleAdjacentAndRapidToggles() {
@@ -103,7 +158,7 @@ class CarouselSelectionArtworkTest {
         } }
         compose.onNode(hasScrollToIndexAction()).performScrollToIndex(1)
         compose.waitForIdle()
-        val cells = visibleCells(names.mapIndexed { i, name -> i to compose.onNodeWithText(name) })
+        val cells = visibleCells(names.mapIndexed { i, name -> i to hasText(name) })
         assertTrue("At least two adjacent covers are fully visible: $cells", cells.size >= 2)
         val base = baseline(cells)
         val first = ids.getValue(names[cells[0].first]); val second = ids.getValue(names[cells[1].first])
@@ -145,8 +200,7 @@ class CarouselSelectionArtworkTest {
             }
         } }
         compose.waitUntil(5000) { compose.onAllNodesWithTag("pin-${tracks[1].id}").fetchSemanticsNodes().isNotEmpty() }
-        fun pin(i: Int) = compose.onNodeWithTag("pin-${tracks[i].id}")
-        val cells = visibleCells((0..3).map { it to pin(it) })
+        val cells = visibleCells((0..3).map { it to hasTestTag("pin-${tracks[it].id}") })
         assertTrue("At least two adjacent covers are fully visible: $cells", cells.size >= 2)
         val base = baseline(cells)
         val a = SongRow(tracks[cells[0].first].id, tracks[cells[0].first]); val b = SongRow(tracks[cells[1].first].id, tracks[cells[1].first])
