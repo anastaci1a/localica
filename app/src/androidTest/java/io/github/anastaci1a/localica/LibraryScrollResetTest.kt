@@ -161,8 +161,15 @@ class LibraryScrollResetTest {
         assertTop("The clearing Back cannot restore the older unfiltered offset")
     }
 
-    @Test fun backFromASubviewRestoresTheParentItemAndPixelOffset() {
-        fixture(BrowseRoute(MainTab.Library, filter = MediaKind.Album))
+    @Test fun backFromASubviewRestoresTheParentItemAndPixelOffset() =
+        verifyParentBack(BrowseRoute(MainTab.Library, filter = MediaKind.Album))
+
+    @Test fun backFromFullLibrarySearchRestoresTheParentQueryAndPixelOffset() =
+        verifyParentBack(BrowseRoute(MainTab.Library, search = true, globalSearch = true,
+            filter = MediaKind.Album, text = "Track", queryCommitted = true))
+
+    private fun verifyParentBack(root: BrowseRoute) {
+        fixture(root)
         scrollDown()
         val aligned = position()
         compose.onNodeWithTag("browser-list").performSemanticsAction(
@@ -178,6 +185,7 @@ class LibraryScrollResetTest {
         pressSystemBack()
         compose.waitUntil(5000) { compose.runOnIdle { navigation.value.route.collection == null } }
         awaitRows()
+        compose.runOnIdle { assertEquals("Subview Back preserves the parent query and scope", root, navigation.value.route) }
         assertEquals("Subview Back restores the parent first item and pixel offset", before, position(), .0001f)
         assertTrue("Subview Back must preserve a genuinely scrolled parent", position() > 10f)
     }
