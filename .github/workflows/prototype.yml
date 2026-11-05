@@ -122,7 +122,8 @@ jobs:
     name: Prototype build, unit tests and lint
   focused_26:
     runs-on: ubuntu-24.04
-    # Repeated proofs retain all selected methods and stop on their first failure.
+    # Repeated proofs retain all selected methods and stop on their first failure;
+    # otherwise capacity for the complete selected gate, not a throughput optimization.
     timeout-minutes: ${{ inputs.repeat_methods != '' && 60 || inputs.repeat > 1 && 360 || 35 }}
     env:
       AFFECTED_CLASSES: ${{ inputs.affected_classes }}
@@ -203,6 +204,7 @@ jobs:
           app/build/outputs/connected_android_test_additional_output/
 
           prototype-evidence/
+          prototype-iterations/
           prototype-runner-environment.txt
         if-no-files-found: error
     name: Prototype focused API 26
@@ -289,7 +291,8 @@ jobs:
     needs: focused_26
     if: ${{ !cancelled() }}
     runs-on: ubuntu-24.04
-    # Repeated proofs retain all selected methods and stop on their first failure.
+    # Repeated proofs retain all selected methods and stop on their first failure;
+    # otherwise capacity for the complete selected gate, not a throughput optimization.
     timeout-minutes: ${{ inputs.repeat_methods != '' && 60 || inputs.repeat > 1 && 360 || 35 }}
     env:
       AFFECTED_CLASSES: ${{ inputs.affected_classes }}
@@ -370,6 +373,7 @@ jobs:
           app/build/outputs/connected_android_test_additional_output/
 
           prototype-evidence/
+          prototype-iterations/
           prototype-runner-environment.txt
         if-no-files-found: error
     name: Prototype focused API 36

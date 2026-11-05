@@ -130,12 +130,13 @@ class MediaItemOutlineTest {
     }
 
     @Test fun paddedSurfacesShareTheRule() {
-        // Artist carousel: 112 dp artwork in 12 dp padding. Content keeps the one 3.5 dp outline padding (#558).
+        // Artist carousel: 112 dp artwork in the gallery card inset across and 12 dp above and below (#573).
+        // Content keeps the one 3.5 dp outline padding (#558), so neighbouring outlines are 1 dp apart like a gallery's.
         val density = 2f
-        val carousel = paddedItemOutline(Size(136f * density, 170f * density),
-            Rect(12f * density, 12f * density, 124f * density, 124f * density), 8f * density,
-            Rect(12f * density, 12f * density, 12f * density, 12f * density), density)
-        assertEquals(Rect(8.5f * density, 8.5f * density, 127.5f * density, 161.5f * density), carousel.bounds)
+        val carousel = paddedItemOutline(Size(120f * density, 170f * density),
+            Rect(4f * density, 12f * density, 116f * density, 124f * density), 8f * density,
+            Rect(4f * density, 12f * density, 4f * density, 12f * density), density)
+        assertEquals(Rect(.5f * density, 8.5f * density, 119.5f * density, 161.5f * density), carousel.bounds)
         assertEquals(11.5f * density, carousel.corner, .01f)
         // Playlist chooser row: 44 dp artwork, 4 dp/8 dp padding, the same 3.5 dp outline padding.
         val row = paddedItemOutline(Size(280f * density, 60f * density),

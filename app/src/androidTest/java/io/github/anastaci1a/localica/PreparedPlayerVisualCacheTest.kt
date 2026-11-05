@@ -49,6 +49,32 @@ class PreparedPlayerVisualCacheTest {
         assertEquals(android.graphics.Color.BLUE, current.artwork!!.asAndroidBitmap().getPixel(0, 0))
     }
 
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    @Test(timeout = 10000) fun cancelledUiSchedulerCannotStrandTheSharedPreparationLock() = runBlocking {
+        val scheduler = kotlinx.coroutines.test.TestCoroutineScheduler()
+        val dispatcher = kotlinx.coroutines.test.StandardTestDispatcher(scheduler)
+        val entered = CompletableDeferred<Unit>()
+        val cache = PreparedPlayerVisualCache(CoverProvider { _, uris, _ ->
+            if (uris.single() == "disposed-ui") { entered.complete(Unit); awaitCancellation() }
+            image(android.graphics.Color.BLUE)
+        })
+        val owner = CoroutineScope(SupervisorJob() + dispatcher)
+        val obsolete = owner.launch { cache.read(context, "disposed-ui") }
+        try {
+            scheduler.runCurrent()
+            withTimeout(2000) { entered.await() }
+            obsolete.cancel()
+            // Activity teardown can stop pumping the old Compose scheduler. A new
+            // reader must not need that scheduler to release the process-wide lock.
+            val next = withTimeout(2000) { cache.read(context, "next-activity") }
+            assertNotNull(next.artwork)
+            assertNull(cache.peek("disposed-ui"))
+        } finally {
+            owner.cancel()
+            scheduler.runCurrent()
+        }
+    }
+
     @Test(timeout = 10000) fun missingAndFailedCoversAreReadyCachedResultsNotAnEndlessLoad() = runBlocking {
         val calls = AtomicInteger()
         val cache = PreparedPlayerVisualCache(CoverProvider { _, uris, _ ->

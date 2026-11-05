@@ -220,8 +220,12 @@ class LargeQueueTransportTest {
             assertEquals(9000L, stored.positionMs)
             val provider = context.contentResolver.call(probe, "stats", null, null)!!
             val opened = provider.getStringArrayList("documents")!!
-            assertTrue(opened.containsAll(listOf("scale-6500.mp3", "scale-6501.mp3")))
-            Log.i("QueueScale", "documents=13000 sharedBytes=true providerOpens=${provider.getInt("opens")} distinctOpened=${opened.size} readBytes=unmeasured")
+            Log.i("QueueScale", "documents=13000 sharedBytes=true providerOpens=${provider.getInt("opens")} distinctOpened=${opened.size} opened=$opened readBytes=unmeasured")
+            assertTrue("Ready destination must have opened its document: $opened", "scale-6501.mp3" in opened)
+            // Pending Next can replace the initial source before its asynchronous open.
+            // Only the control waits for that source to become ready before submitting Next.
+            if (!pendingSave) assertTrue("Ready initial source must have opened its document: $opened",
+                "scale-6500.mp3" in opened)
         } finally {
             try {
                 instrumentation.runOnMainSync { createdPlayer?.let { createdQueues?.detach(it); it.release() } }

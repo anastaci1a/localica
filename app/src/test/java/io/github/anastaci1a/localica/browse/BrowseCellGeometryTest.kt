@@ -40,6 +40,26 @@ class BrowseCellGeometryTest {
             }
         }
     }
+    @Test fun carouselCoversShareTheGalleryGapAndEdgeAtEveryDensity() {
+        // #573: touching carousel tiles each inset their cover by the gallery card inset.
+        val carousel = BrowseCellGeometry.Carousel
+        for (density in listOf(.75f, 1f, 1.5f, 2f, 2.625f, 2.75f, 3f, 3.5f, 4f)) for (art in listOf(112, 160)) {
+            val tile = ((art + 2 * carousel.cardInset) * density).roundToInt()
+            val pad = (carousel.cardInset * density).roundToInt()
+            val row = (carousel.gridInset * density).roundToInt()
+            fun coverLeft(k: Int) = row + k * tile + pad
+            fun coverRight(k: Int) = row + k * tile + tile - pad
+            val gallery = BrowseCellGeometry(3)
+            val viewport = (360 * density).roundToInt()
+            val galleryGap = gallery.cellLeft(viewport, density, 1) + (gallery.cardInset * density).roundToInt() -
+                (gallery.cellLeft(viewport, density, 0) + gallery.cellWidth(viewport, density, 0) - (gallery.cardInset * density).roundToInt())
+            for (k in 0..3) assertEquals("density $density art $art", galleryGap, coverLeft(k + 1) - coverRight(k))
+            assertEquals(GalleryGapDp * density, galleryGap.toFloat(), 1f)
+            // The first cover sits where a dense gallery's first cover does.
+            assertEquals(gallery.cellLeft(viewport, density, 0) + (gallery.cardInset * density).roundToInt(), coverLeft(0))
+        }
+    }
+
     @Test fun smallestUsesFifteenPercentOfOrdinaryOuterPadding() {
         val geometry = BrowseCellGeometry(1)
         val smallest = BrowseStyle(listSize = ListSize.Smallest)
