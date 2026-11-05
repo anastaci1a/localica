@@ -328,3 +328,4 @@ io.github.anastaci1a.localica.IconPackLibraryRegressionTest
 io.github.anastaci1a.localica.IconPackLibraryTest
 
 io.github.anastaci1a.localica.SelectionMergeGeometryTest
+io.github.anastaci1a.localica.SelectionMergeSequenceTest
