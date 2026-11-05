@@ -98,8 +98,8 @@ class GlassRenderModesTest {
             for (mode in listOf(GlassRendererMode.None, GlassRendererMode.Normal, GlassRendererMode.None)) {
                 compose.runOnIdle { runtime.request(mode) }
                 repeat(12) {
+                    val token = compose.runOnIdle { stage = stage % 30 + 1; stage }
                     compose.mainClock.advanceTimeByFrame()
-                    val token = compose.runOnIdle { ++stage }
                     val pixels = capturePresentedPopupPixels(compose, compose.onNodeWithTag("switch-frame"), token) { view }
                     val c = pixels[pixels.width / 3, pixels.height / 2]
                     assertTrue("Backing vanished during mode switch: $mode frame=$it color=$c", c.red > .35f && c.blue > .35f)
