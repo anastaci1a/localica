@@ -9,6 +9,8 @@ import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.Text
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.*
+import androidx.compose.runtime.snapshots.Snapshot
+import androidx.test.platform.graphics.HardwareRendererCompat
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -50,6 +52,7 @@ class QueueSongTransitionTest {
     @Volatile private var surfaceTint = Float.NaN
     private lateinit var captureView: android.view.View
     private var captureStage by mutableIntStateOf(0)
+    @Volatile private var drawnStage = -1
     // Adjacent stages must remain distinct even with the screenshot channel tolerance.
     private fun markerCode(stage: Int) = 20 + (stage % 24) * 8
 
@@ -93,6 +96,7 @@ class QueueSongTransitionTest {
                     // Independent compositor-frame receipt; never a predicate on the optics under test.
                     Canvas(Modifier.align(Alignment.TopStart).size(8.dp)) {
                         drawRect(Color(markerCode(captureStage) / 255f, 1f, 0f))
+                        drawnStage = captureStage
                     }
                 }
             }
@@ -102,11 +106,28 @@ class QueueSongTransitionTest {
     }
 
     private fun gutter(green: Boolean = false): Float {
+        val enabled = HardwareRendererCompat.isDrawingEnabled()
+        if (!enabled) HardwareRendererCompat.setDrawingEnabled(true)
+        return try { captureGutter(green) } finally {
+            if (!enabled) HardwareRendererCompat.setDrawingEnabled(false)
+        }
+    }
+
+    private fun captureGutter(green: Boolean): Float {
         // captureToImage forces a second native redraw and has a fixed two-second
         // acknowledgement timeout. With a paused test clock, that is not a receipt
         // for the frame just requested. Keep the clock fixed and observe our marker
         // in the compositor screenshot instead; no retry can skip an artwork frame.
-        val stage = compose.runOnIdle { ++captureStage }
+        val clock = compose.mainClock.currentTime
+        val paused = !compose.mainClock.autoAdvance
+        val stage = compose.runOnIdle {
+            ++captureStage
+            // A paused Compose clock does not promise another snapshot apply pass.
+            // Flush the draw-only mutation and schedule Android's native traversal.
+            Snapshot.sendApplyNotifications()
+            captureView.invalidate()
+            captureStage
+        }
         val bounds = compose.onRoot().fetchSemanticsNode().boundsInRoot
         val origin = IntArray(2)
         compose.runOnIdle { captureView.getLocationOnScreen(origin) }
@@ -114,12 +135,14 @@ class QueueSongTransitionTest {
         val top = origin[1] + bounds.top.roundToInt()
         val width = bounds.width.roundToInt(); val height = bounds.height.roundToInt()
         var result = Float.NaN
-        compose.waitUntil(5000) {
+        var observed = 0
+        try { compose.waitUntil(5000) {
             val screen = InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot()
                 ?: return@waitUntil false
             try {
                 check(left >= 0 && top >= 0 && left + width <= screen.width && top + height <= screen.height)
                 val marker = screen.getPixel(left + 2, top + 2)
+                observed = marker
                 val presented = abs(android.graphics.Color.red(marker) - markerCode(stage)) <= 1 &&
                     android.graphics.Color.green(marker) > 250 && android.graphics.Color.blue(marker) < 5
                 if (presented) {
@@ -134,7 +157,13 @@ class QueueSongTransitionTest {
                 }
                 presented
             } finally { screen.recycle() }
+        } } catch (failure: Throwable) {
+            android.util.Log.e("QueueFrameCapture", "stage=$stage drawn=$drawnStage observed=$observed origin=$left,$top size=$width,$height")
+            runCatching { recordPresentationFailure(compose, "queue-marker-$stage", captureView, null, null) }
+                .onFailure { failure.addSuppressed(it) }
+            throw failure
         }
+        if (paused) assertEquals("Capturing a presented frame must not advance artwork time", clock, compose.mainClock.currentTime)
         return result
     }
 
