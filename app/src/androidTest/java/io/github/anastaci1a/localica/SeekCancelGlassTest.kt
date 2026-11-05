@@ -26,14 +26,15 @@ class SeekCancelGlassTest {
     @get:Rule val compose = createComposeRule()
 
     @Test fun cancelTargetRefractsTheUiBehindItAndOnlyTheSceneRecordingDoesSo() {
-        var scene = false
+        var drawn: GlassSurfaceDrawObservation? = null
         var chosenScene by mutableStateOf(false)
         var progress by mutableFloatStateOf(1f)
         var selected: FrostedBackdrop? = null
         lateinit var artRecording: FrostedBackdrop
         lateinit var sceneRecording: FrostedBackdrop
         val state = SeekCancelTargetState()
-        compose.setContent { LocalicaTheme { CompositionLocalProvider(LocalReducedMotion provides true) {
+        compose.setContent { LocalicaTheme { CompositionLocalProvider(LocalReducedMotion provides true,
+            LocalGlassSurfaceDrawObserver provides { drawn = it }) {
             artRecording = rememberFrostedBackdrop("art", dark = false)
             sceneRecording = rememberFrostedBackdrop("scene", dark = false)
             Box(Modifier.size(300.dp)) {
@@ -60,6 +61,24 @@ class SeekCancelGlassTest {
         } } }
         compose.runOnIdle { state.update(true) }
         compose.waitForIdle()
+        fun awaitSource(source: FrostedBackdrop) {
+            // Compose idleness does not include the Legacy renderer's off-thread
+            // readback and lens preparation. A cold surface otherwise exposes the
+            // scene stripes beneath it, even when its selected recording is gray.
+            compose.waitUntil(10000) {
+                compose.runOnIdle {
+                    val legacy = source.rendererGeneration.backend == GlassBackend.Legacy
+                    val painting = drawn?.source
+                    val rasterReady = !legacy || (source.snapshot != null && source.fallback != null &&
+                        source.lensSnapshot != null && source.lensFrostSnapshot != null)
+                    selected === source && source.recorded && rasterReady &&
+                        painting?.identity == System.identityHashCode(source) && painting.recorded &&
+                        (!legacy || (painting.snapshotIdentity == System.identityHashCode(source.snapshot) &&
+                            painting.lensIdentity == System.identityHashCode(source.lensSnapshot)))
+                }
+            }
+            compose.waitForIdle()
+        }
         fun spread(): Float {
             val pixels = compose.onNodeWithTag("cancel-seek").captureToImage().toPixelMap()
             val y = pixels.height * 85 / 100 // below the X glyph, inside the circle
@@ -70,9 +89,11 @@ class SeekCancelGlassTest {
             return sqrt(values.map { (it - mean) * (it - mean) }.average().toFloat())
         }
         compose.runOnIdle { chosenScene = false }; compose.waitForIdle()
+        awaitSource(artRecording)
         val artOnly = spread()
         compose.runOnIdle { chosenScene = true }; compose.waitForIdle()
         compose.runOnIdle { assertSame("A fully open player refracts its scene", sceneRecording, selected) }
+        awaitSource(sceneRecording)
         val withUi = spread()
         assertTrue("The UI behind the X is refracted by the scene recording: scene=$withUi artwork-only=$artOnly", withUi > artOnly + .03f)
         compose.runOnIdle { progress = .5f }; compose.waitForIdle()
