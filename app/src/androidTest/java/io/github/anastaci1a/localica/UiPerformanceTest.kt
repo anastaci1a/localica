@@ -122,10 +122,10 @@ class UiPerformanceTest {
             measure("popup-open-close", { launchApp() }) {
                 repeat(3) { clickDescription("More"); Thread.sleep(400); device.pressBack(); Thread.sleep(500) }
             }
-            measure("lyrics-open-close", { launchApp() }, { expand() }) {
-                clickDescription("Show lyrics"); Thread.sleep(500)
-                repeat(4) { main { tone = if (tone < .5f) 1f else 0f }; Thread.sleep(400) }
-                clickDescription("Hide lyrics")
+            measure("lyrics-open-close", { launchApp() }, {
+                expand(); clickDescription("Show lyrics"); Thread.sleep(500); clickDescription("Hide lyrics")
+            }) {
+                repeat(3) { clickDescription("Show lyrics"); Thread.sleep(500); clickDescription("Hide lyrics") }
             }
             measure("lyrics-content-theme", {
                 lyrics = LyricsResult(listOf(LyricSource("fixture", "Fixture", LrcParser.parse(
@@ -146,9 +146,9 @@ class UiPerformanceTest {
                     check(accepted) { "Search editor missing" }; Thread.sleep(180)
                 }
             }
-            measure("pinch-sizes", { launchBrowse(BrowseStyle()) }) {
-                repeat(4) { pinch(expand = true); Thread.sleep(500) }
-                repeat(4) { pinch(expand = false); Thread.sleep(500) }
+            measure("pinch-sizes", { launchBrowse(BrowseStyle(listSize = ListSize.Smallest)) }) {
+                repeat(9) { pinch(expand = true); Thread.sleep(500) }
+                repeat(9) { pinch(expand = false); Thread.sleep(500) }
             }
             measure("multi-select-drag", { launchApp() }, { expand(); clickDescription("Open queue") }) {
                 val selected = nodes { all -> all.filter { it.tag()?.startsWith("media-entry:") == true }.take(3)
@@ -220,12 +220,20 @@ class UiPerformanceTest {
         error("Missing $tag")
     }
     private fun click(match: (SemanticsNode) -> Boolean) {
-        check(nodes { all ->
-            var node = all.lastOrNull { match(it) && it.boundsInWindow.width > 0 && it.boundsInWindow.height > 0 }
-            while (node != null && node.config.getOrNull(SemanticsActions.OnClick)?.action == null) node = node.parent
-            node?.config?.getOrNull(SemanticsActions.OnClick)?.action?.invoke() ?: false
-        }) { "Click target missing" }
-        Thread.sleep(650)
+        val until = SystemClock.uptimeMillis() + 10_000
+        while (SystemClock.uptimeMillis() < until) {
+            val clicked = nodes { all -> all.asReversed().firstNotNullOfOrNull { candidate ->
+                if (!match(candidate) || candidate.boundsInWindow.width <= 0 || candidate.boundsInWindow.height <= 0) null
+                else {
+                    var node: SemanticsNode? = candidate
+                    while (node != null && node.config.getOrNull(SemanticsActions.OnClick)?.action == null) node = node.parent
+                    node?.config?.getOrNull(SemanticsActions.OnClick)?.action
+                }
+            }?.invoke() ?: false }
+            if (clicked) { Thread.sleep(650); return }
+            Thread.sleep(50)
+        }
+        error("Click target missing; visible semantics=" + nodes { all -> all.map { it.config.toString() }.joinToString("; ") })
     }
     private fun clickText(text: String) = click { it.config.getOrNull(SemanticsProperties.Text)?.any { t -> t.text == text } == true }
     private fun clickDescription(text: String) = click { it.config.getOrNull(SemanticsProperties.ContentDescription)?.contains(text) == true }
