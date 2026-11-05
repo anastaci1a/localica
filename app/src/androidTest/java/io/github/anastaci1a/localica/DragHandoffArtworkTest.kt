@@ -51,10 +51,10 @@ class DragHandoffArtworkTest {
             kotlin.math.abs(c.green - (argb shr 8 and 0xFF) / 255f) < .16f &&
             kotlin.math.abs(c.blue - (argb and 0xFF) / 255f) < .16f
 
-    private data class Frame(val covers: IntArray, val titles: IntArray, val image: ImageBitmap)
+    private data class Frame(val covers: IntArray, val titles: IntArray, val lightInk: BooleanArray, val image: ImageBitmap)
 
     /** Cover colours and title ink from the same presented frame, including both handoff owners. */
-    private fun counts(indices: List<Int>): Frame {
+    private fun counts(indices: List<Int>, lightInk: BooleanArray? = null): Frame {
         val root = compose.onRoot()
         val origin = root.fetchSemanticsNode().boundsInRoot.topLeft
         val titleBounds = indices.map { index ->
@@ -68,18 +68,33 @@ class DragHandoffArtworkTest {
             val c = map[x, y]
             indices.forEachIndexed { i, colour -> if (near(c, colours[colour])) result[i]++ }
         }
+        // Playlist detail inherits white ink over its coloured artwork backdrop; queue
+        // rows can use dark ink. Infer the baseline polarity from the title's surrounding
+        // background, then hold it fixed so an empty frame cannot redefine the probe.
+        fun luminance(x: Int, y: Int): Float {
+            val c = map[x, y]
+            return .2126f * c.red + .7152f * c.green + .0722f * c.blue
+        }
+        val polarity = lightInk ?: BooleanArray(indices.size) { i ->
+            titleBounds[i].firstOrNull()?.let { bounds ->
+                val y = bounds.top.toInt().coerceIn(0, map.height - 1)
+                val left = bounds.left.toInt().coerceIn(0, map.width - 1)
+                val right = bounds.right.toInt().coerceIn(left + 1, map.width)
+                (left until right).map { x -> luminance(x, y) }.average() < .5
+            } ?: false
+        }
         val titles = IntArray(indices.size) { i ->
             titleBounds[i].maxOfOrNull { bounds ->
                 var ink = 0
                 for (y in bounds.top.toInt().coerceAtLeast(0) until bounds.bottom.toInt().coerceAtMost(map.height))
                     for (x in bounds.left.toInt().coerceAtLeast(0) until bounds.right.toInt().coerceAtMost(map.width)) {
-                        val c = map[x, y]
-                        if (.2126f * c.red + .7152f * c.green + .0722f * c.blue < .4f) ink++
+                        val light = luminance(x, y)
+                        if (if (polarity[i]) light > .65f else light < .4f) ink++
                     }
                 ink
             } ?: 0
         }
-        return Frame(result, titles, image)
+        return Frame(result, titles, polarity, image)
     }
 
     private fun drag(scenario: String, rowTag: (Int) -> String, moved: List<Int>, target: Int) {
@@ -91,7 +106,7 @@ class DragHandoffArtworkTest {
         val to = compose.onNodeWithTag(rowTag(target)).fetchSemanticsNode().boundsInRoot.center - list.topLeft
         // Trailing cards fly under the top card, so per frame the top card's cover must stay; all settle.
         fun check(label: String, all: Boolean = false) {
-            val now = counts(moved)
+            val now = counts(moved, base.lightInk)
             val before = failures.size
             (if (all) now.covers.indices else 0..0).forEach {
                 if (now.covers[it] < base.covers[it] * .5f)
