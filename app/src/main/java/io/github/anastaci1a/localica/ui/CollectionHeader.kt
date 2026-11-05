@@ -118,18 +118,21 @@ internal fun ArtistAlbumChoices(albums: List<LibraryGroup>, selectedIds: List<St
     val scroll = androidx.compose.foundation.lazy.rememberLazyListState()
     val haptics = rememberControlHaptics()
     val indication = LocalIndication.current
-    // 112 dp artwork centred in 12 dp padding: the shared concentric outline (#532).
-    val albumOutline = rememberPaddedItemOutline(112.dp, 12.dp, 12.dp, 12.dp, 12.dp, centred = true)
+    // 112 dp covers one gallery gap apart (#573): touching tiles inset each cover by the gallery
+    // card inset; the shared concentric outline (#532) keeps its 12 dp vertical padding.
+    val cell = io.github.anastaci1a.localica.browse.BrowseCellGeometry.Carousel
+    val inset = cell.cardInset.dp
+    val albumOutline = rememberPaddedItemOutline(112.dp, inset, 12.dp, inset, 12.dp, centred = true)
     Column(Modifier.fillMaxWidth()) {
         Text("Albums", Modifier.padding(horizontal = 20.dp, vertical = 8.dp), style = MaterialTheme.typography.titleSmall)
         SelectionViewport(Modifier.fillMaxWidth(), observePlacement = { scroll.layoutInfo; Unit },
             visibleItemKeys = { scroll.layoutInfo.visibleItemsInfo.mapTo(mutableSetOf()) { it.key } }, liftEdges = LiftEdges.Vertical) { overscroll ->
         LazyRow(Modifier.modalScroll(scroll).nestedScroll(HorizontalGestureOwner), state = scroll, overscrollEffect = overscroll,
             // Vertical room lets a selected album rise without its shadow meeting the clip (#533).
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            contentPadding = PaddingValues(horizontal = cell.gridInset.dp, vertical = 8.dp)) {
             item(key = "all-albums") {
-                Column(Modifier.width(136.dp).selectionLens(selectedIds.isEmpty(), false, itemKey = "all-albums", outline = albumOutline).toggleable(selectedIds.isEmpty(), role = Role.Checkbox, onValueChange = { onSelection(emptyList()) })
-                    .semantics { selected = selectedIds.isEmpty() }.padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                Column(Modifier.width(112.dp + inset * 2).selectionLens(selectedIds.isEmpty(), false, itemKey = "all-albums", outline = albumOutline).toggleable(selectedIds.isEmpty(), role = Role.Checkbox, onValueChange = { onSelection(emptyList()) })
+                    .semantics { selected = selectedIds.isEmpty() }.padding(horizontal = inset, vertical = 12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     Box(Modifier.size(112.dp)) {
                         Icon(painterResource(R.drawable.ic_albums), null, Modifier.align(Alignment.Center).size(36.dp))
                     }
@@ -138,7 +141,7 @@ internal fun ArtistAlbumChoices(albums: List<LibraryGroup>, selectedIds: List<St
             }
             items(albums, key = { it.id }) { album ->
                 val selected = ArtistAlbumSelection.shownSelected(selectedIds, album.id)
-                Column(Modifier.width(136.dp).selectionLens(selected, false, itemKey = album.id, outline = albumOutline).combinedClickable(
+                Column(Modifier.width(112.dp + inset * 2).selectionLens(selected, false, itemKey = album.id, outline = albumOutline).combinedClickable(
                     interactionSource = null, indication = indication, role = Role.Checkbox,
                     hapticFeedbackEnabled = false, onClickLabel = "Select only this album",
                     onClick = { onSelection(ArtistAlbumSelection.only(album.id)) },
@@ -148,7 +151,7 @@ internal fun ArtistAlbumChoices(albums: List<LibraryGroup>, selectedIds: List<St
                     }).semantics {
                         this.selected = selected
                         toggleableState = if (selected) ToggleableState.On else ToggleableState.Off
-                    }.padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    }.padding(horizontal = inset, vertical = 12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     MediaArtwork(listOfNotNull(album.tracks.firstOrNull()?.uri), Modifier.size(112.dp))
                     Text(album.title, Modifier.padding(top = 8.dp), maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                         style = MaterialTheme.typography.labelLarge, textAlign = TextAlign.Center)
