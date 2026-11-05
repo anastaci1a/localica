@@ -7,6 +7,7 @@ import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
@@ -199,7 +200,8 @@ internal fun Modifier.pinchRetainedOverlay(motion: BrowsePinchMotion, grid: Lazy
         if (scene?.geometryResolver === geometryResolver) scene?.geometryResolver = null
         scene?.retainedHover = emptyList()
     } }
-    return backdropLocation(location).onGloballyPositioned { motion.viewportCoordinates = it }.drawWithContent {
+    // Keep geometry-clock reads in this producer, including inside an ancestor sampling recording.
+    return graphicsLayer().backdropLocation(location).onGloballyPositioned { motion.viewportCoordinates = it }.drawWithContent {
         // Publish retained bodies before the host draws its one joined shadow/surface.
         val visible = grid.layoutInfo.visibleItemsInfo
         val p = motion.progress.value.coerceIn(0f, 1f)
