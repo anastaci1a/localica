@@ -6,6 +6,7 @@ import io.github.anastaci1a.localica.browse.*
 import org.junit.Assert.*
 import org.junit.Test
 import kotlin.math.roundToInt
+import kotlinx.coroutines.runBlocking
 
 class PinchHoverGeometryTest {
     @Test fun everyAdjacentStyleKeepsCapturedLiftAtRecognitionAndOrdinaryLiftAtHandoff() {
@@ -82,6 +83,19 @@ class PinchHoverGeometryTest {
                 assertEquals(local.lifted.bounds.right, viewport.lifted.bounds.right, .0001f)
                 assertEquals(local.lifted.bounds.bottom, viewport.lifted.bounds.bottom, .0001f)
             }
+        }
+    }
+
+    @Test fun retiredGeometryClocksKeepTheirTerminalValueUntilOldLayoutRetires() = runBlocking {
+        for (terminal in listOf(0f, 1f)) {
+            val motion = BrowsePinchMotion()
+            motion.progress.snapTo(terminal)
+            val retired = motion.progress
+            motion.beginGeometry()
+            assertNotSame(retired, motion.progress)
+            assertEquals(0f, motion.progress.value, 0f)
+            motion.progress.snapTo(.3f)
+            assertEquals("A new transaction cannot rewind the preceding layout", terminal, retired.value, 0f)
         }
     }
 
