@@ -305,3 +305,4 @@ io.github.anastaci1a.localica.PlaybackShutdownTest
 io.github.anastaci1a.localica.SelectionBackTest
 io.github.anastaci1a.localica.GalleryLiftFrameTest
 io.github.anastaci1a.localica.SelectorFreeCornerPixelTest
+io.github.anastaci1a.localica.ScrollbarContinuityTest
