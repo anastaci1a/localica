@@ -90,10 +90,10 @@ internal class BrowsePinchMotion {
                 withFrameNanos { now ->
                     // Write inside the frame callback, before both layout and drawing observe it.
                     // Resuming the outer coroutine first lets those phases see different progress.
-                    if (start < 0) start = now - PinchFrameNanos
+                    if (start < 0) start = now
                     t = ((now - start) / 1_000_000f / PinchCatchUpMillis).coerceAtMost(1f)
                     update = launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) {
-                        progress.snapTo(from + (fingerProgress - from) * androidx.compose.animation.core.LinearOutSlowInEasing.transform(t))
+                        progress.snapTo(from + (fingerProgress - from) * androidx.compose.animation.core.FastOutSlowInEasing.transform(t))
                     }
                 }
                 update?.join()
@@ -226,6 +226,11 @@ internal class BrowsePinchMotion {
         clearTransaction()
     }
     var pixelDensity = 1f
+    fun resolveHover(key: Any?, current: HoverGeometry, geometryProgress: Float = progress.value): HoverGeometry {
+        if (key == null || visualSource == null) return current
+        val captured = frozen[key]?.content?.hover ?: return current
+        return interpolateHoverGeometry(captured, current, geometryProgress)
+    }
     fun highlightSize(key: Any, index: Int, target: androidx.compose.ui.geometry.Size): androidx.compose.ui.geometry.Size {
         if (visualSource == null) return target
         val inset = (BrowseCellGeometry(sourceColumns).cardInset * pixelDensity).roundToInt()
@@ -288,7 +293,6 @@ internal fun pinchContentTranslation(sourceStart: Float, targetStart: Float,
 
 /** Linear finger distance; returning to the starting span restores the source. */
 internal const val PinchCatchUpMillis = 100f
-private const val PinchFrameNanos = 16_666_667L
 
 internal fun pinchProgress(scale: Float, outward: Boolean): Float =
     ((if (outward) scale - 1f else 1f - scale) / if (outward) .8f else .45f).coerceIn(0f, 1f)

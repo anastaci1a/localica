@@ -16,7 +16,9 @@ The lift shadow follows the menu's theming: dark under dark-icon menus, a white 
 
 Side-adjacent selections share one hovering outline. Diagonal gallery neighbors and unselected holes stay separate. Partial groups retain accessible state without a pane/checkmark. Inset album choices and preserve readable baselines.
 
-Selection, the current queue occurrence and held drag cards share one item outline. Its corners are concentric with the artwork's, sharing their arc centres. Every item style, in lists, galleries, carousels and drag cards, uses one padding $d = 3.5$ dp (1.75 times the former 2 dp minimum) between its content, such as a cover's top edge, and the outline:
+Selection, the current queue occurrence and held drag cards share one item outline. Its corners are concentric with the artwork's, sharing their arc centres.
+
+Every item style, in lists, galleries, carousels and drag cards, uses one padding $d = 3.5$ dp (1.75 times the former 2 dp minimum) between its content, such as a cover's top edge, and the outline:
 
 $$
 r_{\text{outline}} = r_{\text{artwork}} + d
@@ -216,7 +218,9 @@ Every gallery size uses one fixed 8 dp gap, independent of zoom: between neighbo
 
 In all lists, including queues and album details, pinch outward through Smallest list → Small list → Tracklist where offered → Compact list → Normal list → Large list → Gallery 5 → 4 → 3 → 2 → 1, and inward to reverse.
 
-Change one adjacent view per gesture, requiring all fingers to lift before another step. A 4% span change picks the direction. Geometry then follows the full finger distance, easing out that gap over 100 ms. Reversing restores items virtualized out by the destination. All text draws below a separate artwork pass. Within each pass earlier items draw on top.
+Change one adjacent view per gesture, requiring all fingers to lift before another step. A 4% span change picks the direction. The first presented frame keeps the source, then geometry catches up to the full finger distance over 100 ms.
+
+Shared pinch geometry carries the captured selection lift into both live and retained items. Reversing restores items virtualized out by the destination. All text draws below a separate artwork pass. Within each pass earlier items draw on top.
 
 Pinches during settlement retain the shown progress. Reversals reuse the frozen endpoints. Further adjacent steps preserve their input until the preceding handoff permits a fresh capture, including gestures already released. Modal interruption discards pending steps.
 
@@ -342,7 +346,9 @@ Other items use Select song / Select all songs in their shared menu. The bulk ac
 
 Retain source occurrence identities and selection order across routes, tabs, queries, sorting, rotation and backgrounding. Select-all appends in collection order. Reselect appends last. Preserve distinct occurrences for playlists/queues and deduplicate files for editing. Fresh sessions start empty.
 
-The panel is one compact glass pill: close, count, Play next, Add to playlist, More and a divided collapse. It uses the standard Liquid Glass pill material in Library tabs, subviews and the Queue, with material, icons and its More menu following the page's light or dark ink. In the Queue it floats above the list without shortening it, so the items gain no new bottom clip edge; the list end pads by the pill's occupancy. More morphs into a menu with Play now, Add to queue, New queue, Edit tags, Remove from the source, Select all and Select range.
+The panel is one compact glass pill: close, count, Play next, Add to playlist, More and a divided collapse. It uses the standard Liquid Glass pill material in Library tabs, subviews and the Queue, with material, icons and its More menu following the page's light or dark ink.
+
+In the Queue it floats above the list without shortening it, so the items gain no new bottom clip edge; the list end pads by the pill's occupancy. More morphs into a menu with Play now, Add to queue, New queue, Edit tags, Remove from the source, Select all and Select range.
 
 Collapsing morphs the same surface into a minimized count pill; tapping it morphs back. Size, foreground and appearance share the interruptible glass spring, honor animation speed and Reduce motion, and immediately release input on outgoing faces.
 
