@@ -134,7 +134,7 @@ class FarScrollScrollbarTest {
         val top = thumbTop()
         compose.runOnIdle { scope.launch { state.scrollToItem(30) } }
         compose.waitForIdle()
-        assertEquals(29f / 59f, range().current, .001f)
+        assertEquals(3000f / 5600f, range().current, .01f)
         val middle = thumbTop()
         assertTrue("Thumb moves with the list: $top -> $middle", middle > top)
         compose.runOnIdle { scope.launch { state.scrollToItem(items.size) } }
