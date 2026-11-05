@@ -314,7 +314,9 @@ View offers presentation, list Size or gallery Items per row, extra information 
 
 ## Collection details
 
-Playlist headers use their existing manual cover or canonical automatic cover, independent of displayed sorting/filtering. The shared Play/Shuffle pill acts on displayed occurrences. The bottom-right menu retains playlist-specific edits and mutable semantics. Scoped Search remains optional in View. With Search hidden, reaching the actual top removes Return and lets the next Back leave the detail.
+The floating return arrow in album, artist, Album Artist and playlist details aligns the header Play/Shuffle pill’s bottom with the top-left Back button’s bottom. Its destination uses measured geometry, including density and header changes. Android Back targets the full page top directly.
+
+Playlist headers use their existing manual cover or canonical automatic cover, independent of displayed sorting/filtering. The shared Play/Shuffle pill acts on displayed occurrences. The bottom-right menu retains playlist-specific edits and mutable semantics. Scoped Search remains optional in View. Android Back returns to the page top in one continuous ease; the next Back leaves the detail.
 
 Album, artist and playlist pages use a full-width artwork header beginning below the status bar, with a blurred extension above and a feathered color continuation behind the songs. Artwork travels at 65% of content speed with a continuous offset after the lazy header leaves view. Reduced motion disables parallax.
 
