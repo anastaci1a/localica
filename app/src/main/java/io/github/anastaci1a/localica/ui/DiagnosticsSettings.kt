@@ -16,10 +16,11 @@ internal fun DiagnosticsExportAction() {
     var failed by remember { mutableStateOf(false) }
     val context = LocalContext.current
     ActionTextButton(onClick = { open = true }) { Text("Export diagnostics") }
+    FrameStatsActions()
     if (open) GlassAlertDialog(onDismissRequest = { open = false }, title = { Text("Export diagnostics") },
         text = {
             Text("Saves the app version, device model, Android version and the last ${Diagnostics.ring.size} recorded pinch and " +
-                "transition events to a text file, then opens the share sheet. Nothing is sent unless you choose where to share it.",
+                "transition events and any opt-in frame capture to a text file, then opens the share sheet. Nothing is sent unless you choose where to share it.",
                 style = MaterialTheme.typography.bodyMedium)
         },
         confirmButton = { ActionTextButton(onClick = {
@@ -30,4 +31,22 @@ internal fun DiagnosticsExportAction() {
     if (failed) GlassAlertDialog(onDismissRequest = { failed = false }, title = { Text("Could not export") },
         text = { Text("The diagnostics file could not be created or shared.") },
         confirmButton = { ActionTextButton(onClick = { failed = false }) { Text("Close") } })
+}
+
+@Composable
+private fun FrameStatsActions() {
+    val context = LocalContext.current
+    val activity = remember(context) {
+        var current = context
+        while (current is android.content.ContextWrapper && current !is android.app.Activity) current = current.baseContext
+        current as? android.app.Activity
+    }
+    val recording by io.github.anastaci1a.localica.diagnostics.FrameStats.recording
+    if (activity != null) {
+        Text("Record up to two minutes of frame timings while you repeat an action. Stop here, then export diagnostics. No song names or search text are captured.")
+        ActionTextButton(onClick = {
+            if (recording) io.github.anastaci1a.localica.diagnostics.FrameStats.stop()
+            else io.github.anastaci1a.localica.diagnostics.FrameStats.start(activity)
+        }) { Text(if (recording) "Stop frame capture" else "Start frame capture") }
+    }
 }
