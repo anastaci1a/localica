@@ -24,7 +24,7 @@ class TransportScrollTest {
         compose.setContent {
             CompositionLocalProvider(LocalMotionSpeed provides (4f / 3f)) {
                 Row {
-                    listOf(24, 40).forEach { side ->
+                    listOf(24, 34, 40).forEach { side ->
                         TransportButton(TransportGlyph.Next, false, "Next $side", {},
                             Modifier.size(side.dp).background(Color.White).testTag("skip-$side"),
                             side.dp, Color.Black, true, false)
@@ -33,7 +33,7 @@ class TransportScrollTest {
             }
         }
         compose.mainClock.autoAdvance = false
-        for (side in listOf(24, 40)) {
+        for (side in listOf(24, 34, 40)) {
             val node = compose.onNodeWithTag("skip-$side")
             val start = node.captureToImage().toPixelMap()
             node.performClick()
