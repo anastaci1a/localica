@@ -85,6 +85,14 @@ class ReadinessTests(unittest.TestCase):
         self.assertTrue(result['ready'])
         self.assertEqual([1, 2, 0, 1, 2, 3], [s['stable_samples'] for s in result['samples']])
 
+    def test_disabled_boot_animation_service_still_requires_live_focus_and_frames(self):
+        result, _, _ = self.run_gate([{'bootanim': ''}])
+        self.assertTrue(result['ready'])
+        self.assertEqual(3, len(result['samples']))
+        self.assertEqual('', result['samples'][-1]['boot_animation_state'])
+        result, _, _ = self.run_gate([{'bootanim': '', 'focus': 'Application Error'}])
+        self.assertFalse(result['ready'])
+
     def test_animation_must_settle_before_success(self):
         png = b'\x89PNG\r\n\x1a\n'
         result, _, _ = self.run_gate([{'frame': png + b'one'}, {'frame': png + b'two'}, {}, {}, {}])
