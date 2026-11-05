@@ -11,7 +11,6 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.Layout
@@ -29,7 +28,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 
 @Composable
-internal fun GlassActionButton(icon: Int, label: String, modifier: Modifier = Modifier, enabled: Boolean = true, onClick: () -> Unit) {
+internal fun GlassActionButton(icon: AppIcon, label: String, modifier: Modifier = Modifier, enabled: Boolean = true, onClick: () -> Unit) {
     val opacity by animateControlStateFloat(if (enabled) 1f else .38f, enabled, "Glass action availability")
     androidx.compose.runtime.CompositionLocalProvider(LocalGlassContactName provides label) {
     LiquidGlassSurface(modifier.alpha(opacity).heightIn(min = CompactControlSize).ownButtonDrag(enabled)
@@ -40,10 +39,10 @@ internal fun GlassActionButton(icon: Int, label: String, modifier: Modifier = Mo
 }
 
 @Composable
-internal fun GlassActionButtonFace(icon: Int, label: String, modifier: Modifier = Modifier) {
+internal fun GlassActionButtonFace(icon: AppIcon, label: String, modifier: Modifier = Modifier) {
     Row(modifier.padding(horizontal = 18.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        Icon(painterResource(icon), null, Modifier.size(24.dp))
+        Icon(appIconPainter(icon), null, Modifier.size(24.dp))
         // Scrolling action strips measure with infinite width. Bound both the
         // live and measurement paragraphs to the same natural text width.
         Text(label, Modifier.width(IntrinsicSize.Max), style = MaterialTheme.typography.labelLarge)
@@ -90,11 +89,11 @@ internal fun GlassActionRow(modifier: Modifier = Modifier, content: @Composable 
         Row(Modifier.fillMaxWidth().then(if (scroll.maxValue == 0) Modifier.clearAndSetSemantics { } else Modifier),
             horizontalArrangement = Arrangement.End) {
             ActionIconButton(onClick = { move(false) }, enabled = scroll.canScrollBackward) {
-                Icon(painterResource(R.drawable.ic_back), "Previous actions",
+                Icon(appIconPainter(AppIcon.ActionBack), "Previous actions",
                     Modifier.graphicsLayer { scaleX = if (rtl) -1f else 1f })
             }
             ActionIconButton(onClick = { move(true) }, enabled = scroll.canScrollForward) {
-                Icon(painterResource(R.drawable.ic_back), "More actions",
+                Icon(appIconPainter(AppIcon.ActionBack), "More actions",
                     Modifier.graphicsLayer { scaleX = if (rtl) 1f else -1f })
             }
         }

@@ -161,8 +161,8 @@ private fun QueueSelectorRow(queue: ListeningQueue, number: Int, chosen: Boolean
                 }
             }
             Row(actionsModifier) {
-                ActionIcon(R.drawable.ic_edit, "Rename ${queue.name}", enabled = enabled, glass = false, quiet = true, onClick = onRename)
-                ActionIcon(R.drawable.ic_close, "Delete ${queue.name}", enabled = enabled, glass = false, quiet = true, onClick = onDelete)
+                ActionIcon(AppIcon.ActionEdit, "Rename ${queue.name}", enabled = enabled, glass = false, quiet = true, onClick = onRename)
+                ActionIcon(AppIcon.ActionClose, "Delete ${queue.name}", enabled = enabled, glass = false, quiet = true, onClick = onDelete)
             }
         }
     }

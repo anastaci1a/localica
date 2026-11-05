@@ -49,7 +49,7 @@ internal fun TagRecoverySettings(controller: TagEditingController) {
     val state by controller.state.collectAsState()
     var confirming by remember { mutableStateOf(false) }
     SettingsLink("Tag editing jobs", if (state.busy) "${state.results.size} of ${state.tracks.size} files checked" else "Recent outcomes and interrupted work",
-        icon = io.github.anastaci1a.localica.R.drawable.ic_edit, onClick = controller::showJobs)
+        icon = AppIcon.ActionEdit, onClick = controller::showJobs)
     if (state.recovery != null) ActionTextButton(onClick = { confirming = true }) { Text("Recover tag edit: ${state.recovery}") }
     if (confirming) GlassAlertDialog(onDismissRequest = { confirming = false }, title = { Text(if (state.recoveryProblem == null) "Restore original file?" else "Retry tag recovery?") },
         text = { Text(state.recoveryProblem ?: "This replaces ${state.recovery} with the copy saved before its interrupted edit.") },
@@ -129,8 +129,8 @@ internal fun TagEditorDialog(state: TagEditorState, controller: TagEditingContro
                         }
                         CompositionLocalProvider(LocalFrostedBackdrop provides artworkBackdrop) {
                         Row(Modifier.align(Alignment.BottomCenter).padding(8.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            ActionIcon(io.github.anastaci1a.localica.R.drawable.ic_edit, "Choose artwork", enabled = !state.busy) { artwork.choose() }
-                            ActionIcon(io.github.anastaci1a.localica.R.drawable.ic_trash, "Remove artwork from selected songs", enabled = !state.busy) { removeImage = true; artwork.clearImage() }
+                            ActionIcon(AppIcon.ActionEdit, "Choose artwork", enabled = !state.busy) { artwork.choose() }
+                            ActionIcon(AppIcon.ActionTrash, "Remove artwork from selected songs", enabled = !state.busy) { removeImage = true; artwork.clearImage() }
                         }
                         }
                     }

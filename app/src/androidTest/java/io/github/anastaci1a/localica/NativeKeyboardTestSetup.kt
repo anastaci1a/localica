@@ -111,6 +111,13 @@ internal fun prepareNativeDockedKeyboard(
         awaitNativeInputView(shown = true, timeoutMillis = 15000)
     } catch (error: Throwable) {
         failure = error
+        // An external focused window can reject the warmup before an editor connection exists.
+        // Preserve that owner instead of diagnosing every later readiness failure as search motion.
+        runCatching {
+            record("native-editor-preparation-failed")
+            keyboardSetup += nativeInputMethodState()
+            keyboardSetup += shell("dumpsys -t 2 window windows")
+        }.exceptionOrNull()?.let(error::addSuppressed)
         throw error
     } finally {
         try {

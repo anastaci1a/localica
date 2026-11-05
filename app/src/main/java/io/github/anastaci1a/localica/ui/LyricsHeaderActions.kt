@@ -10,7 +10,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.R
@@ -66,7 +65,7 @@ internal fun LyricsHeaderActions(lyricsOpen: Boolean, reveal: Float, anchor: Gla
         contacts.update(separated)
         anchor.quiet = false
         anchor.depthScale = RaisedGlassDepthScale
-        anchor.face = { Icon(painterResource(R.drawable.ic_lyrics), null, Modifier.size(24.dp)) }
+        anchor.face = { Icon(appIconPainter(AppIcon.ActionLyrics), null, Modifier.size(24.dp)) }
     }
     val source = LocalFrostedBackdrop.current
     SideEffect { anchor.source = source }
@@ -74,7 +73,7 @@ internal fun LyricsHeaderActions(lyricsOpen: Boolean, reveal: Float, anchor: Gla
     @Composable fun leftAction() {
         anchor.captureInk()
         ActionIconButton(if (lyricsOpen) onSources else onShow, Modifier.fillMaxSize()) {
-            Icon(painterResource(R.drawable.ic_lyrics), if (lyricsOpen) "Lyrics sources" else "Show lyrics", Modifier.size(24.dp))
+            Icon(appIconPainter(AppIcon.ActionLyrics), if (lyricsOpen) "Lyrics sources" else "Show lyrics", Modifier.size(24.dp))
         }
     }
     @Composable fun rightAction() {
@@ -82,11 +81,11 @@ internal fun LyricsHeaderActions(lyricsOpen: Boolean, reveal: Float, anchor: Gla
         val foreground = controlStateColor(lyricsOpen, colors.contentColor, colors.disabledContentColor,
             "Action icon availability")
         if (lyricsOpen) ActionIconButton(onHide, Modifier.fillMaxSize()) {
-            Icon(painterResource(R.drawable.ic_eye_off), "Hide lyrics", Modifier.size(24.dp), tint = foreground)
+            Icon(appIconPainter(AppIcon.ActionEyeOff), "Hide lyrics", Modifier.size(24.dp), tint = foreground)
         } else Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             // Keep the closing glyph, not a disabled button whose hit region can
             // cover Show lyrics as the two circles overlap during contraction.
-            Icon(painterResource(R.drawable.ic_eye_off), null, Modifier.size(24.dp), tint = foreground)
+            Icon(appIconPainter(AppIcon.ActionEyeOff), null, Modifier.size(24.dp), tint = foreground)
         }
     }
     Box(Modifier.width(width).height(CompactControlSize).preparedOrigin(preparation, progress)

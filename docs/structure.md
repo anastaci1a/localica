@@ -215,9 +215,11 @@ Pinch progress updates inside the frame callback so placement and drawing observ
 
 Collection headers resolve beyond-bounds measurement through Compose’s public modifier-node ancestor lookup. Attached header and item nodes provide the current grid ancestor; detaching a node removes its lookup, so virtualized headers use live items without retaining a stale provider.
 
+That measurement reaches only two viewports of items. A header beyond it in either the source or the destination view is offscreen, so the pinch proceeds without it instead of waiting for geometry that can't arrive.
+
 Initial placement corrects the measured fractional anchor. Current-row decoration follows interpolated content bounds without changing lazy measurement or hit targets. Retained outgoing menu drawings are non-interactive. Empty gallery slots never consume pointer input.
 
-`CollectionActions` owns song/collection menus across rows, artwork holds and Home, with source-specific removal appended. `ActionMenuItem` requires an explicit icon independent of its label. Song-information links share an off-Main lookup that rejects dismissed, replaced-source or superseded requests. `GlassDragBubble` owns lifted/landing material for song stacks and action customization.
+`CollectionActions` owns song/collection menus across rows, artwork holds and Home, with source-specific removal appended. `ActionMenuItem` requires an explicit icon independent of its label. Song-information links share an off-Main lookup that rejects dismissed, replaced-source or superseded requests. `HoverDragCard` owns song-stack material; `GlassDragBubble` owns action-customization material.
 
 Browse rows compose `CollectionActions` from their first opening and keep it with the row. Gallery artwork publishes its menu origin only when opening. Resting cells keep coordinate references instead of per-frame global-position callbacks; only the loading reveal follows positions while it runs.
 

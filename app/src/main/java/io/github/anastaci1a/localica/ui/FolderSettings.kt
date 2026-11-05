@@ -15,23 +15,23 @@ import io.github.anastaci1a.localica.library.FolderSelection
 import io.github.anastaci1a.localica.library.scanFolderLabels
 import io.github.anastaci1a.localica.scanner.ScanPreferences
 
-private data class SettingsDestination(val title: String, val parent: String?, val icon: Int, val summary: String)
+private data class SettingsDestination(val title: String, val parent: String?, val icon: AppIcon, val summary: String)
 private val settingsDestinations = listOf(
-    SettingsDestination("Interface", null, R.drawable.ic_settings, "Navigation, player, glass, and motion"),
-    SettingsDestination("Appearance", "Interface", R.drawable.ic_library, "Typography and interface gray"),
-    SettingsDestination("Glass", "Interface", R.drawable.ic_settings, "Blur, white tint, and floating shadows"),
-    SettingsDestination("Navigation", "Interface", R.drawable.ic_home, "Main tabs, Back history, and exit confirmation"),
-    SettingsDestination("Player", "Interface", R.drawable.ic_albums, "Artwork, gestures, and player actions"),
-    SettingsDestination("Motion", "Interface", R.drawable.ic_next, "Animation speed and reduced motion"),
-    SettingsDestination("Playback and queues", null, R.drawable.ic_play, "Preloading, queue switching, and retention"),
-    SettingsDestination("Song tap behavior", "Playback and queues", R.drawable.ic_music, "Default action and per-list overrides"),
-    SettingsDestination("Library and tags", null, R.drawable.ic_library, "Folders, scanner configuration, tag jobs and recovery"),
-    SettingsDestination("Library filters", "Library and tags", R.drawable.ic_library, "Visible filters, their order, and unfiltered collections"),
-    SettingsDestination("Folders to scan", "Library and tags", R.drawable.ic_folder, "Choose music folders and excluded subfolders"),
-    SettingsDestination("Scanner", "Library and tags", R.drawable.ic_search, "Quick Scan, full scan, startup scans, subfolders and short files"),
-    SettingsDestination("Metadata read failures", "Scanner", R.drawable.ic_info, "Files with incomplete metadata"),
-    SettingsDestination("Tag jobs and recovery", "Library and tags", R.drawable.ic_music, "Background jobs, outcomes and interrupted tag edits"),
-    SettingsDestination("About and licenses", null, R.drawable.ic_info, "Version, source code, help, diagnostics export, and open-source licenses"),
+    SettingsDestination("Interface", null, AppIcon.ActionSettings, "Navigation, player, glass, and motion"),
+    SettingsDestination("Appearance", "Interface", AppIcon.TabLibrary, "Typography, interface gray, and icon pack"),
+    SettingsDestination("Glass", "Interface", AppIcon.ActionSettings, "Blur, white tint, and floating shadows"),
+    SettingsDestination("Navigation", "Interface", AppIcon.TabHome, "Main tabs, Back history, and exit confirmation"),
+    SettingsDestination("Player", "Interface", AppIcon.TabAlbums, "Artwork, gestures, and player actions"),
+    SettingsDestination("Motion", "Interface", AppIcon.TransportNext, "Animation speed and reduced motion"),
+    SettingsDestination("Playback and queues", null, AppIcon.TransportPlay, "Preloading, queue switching, and retention"),
+    SettingsDestination("Song tap behavior", "Playback and queues", AppIcon.TabSongs, "Default action and per-list overrides"),
+    SettingsDestination("Library and tags", null, AppIcon.TabLibrary, "Folders, scanner configuration, tag jobs and recovery"),
+    SettingsDestination("Library filters", "Library and tags", AppIcon.TabLibrary, "Visible filters, their order, and unfiltered collections"),
+    SettingsDestination("Folders to scan", "Library and tags", AppIcon.TabFolders, "Choose music folders and excluded subfolders"),
+    SettingsDestination("Scanner", "Library and tags", AppIcon.ActionSearch, "Quick Scan, full scan, startup scans, subfolders and short files"),
+    SettingsDestination("Metadata read failures", "Scanner", AppIcon.ActionInfo, "Files with incomplete metadata"),
+    SettingsDestination("Tag jobs and recovery", "Library and tags", AppIcon.TabSongs, "Background jobs, outcomes and interrupted tag edits"),
+    SettingsDestination("About and licenses", null, AppIcon.ActionInfo, "Version, source code, help, diagnostics export, and open-source licenses"),
 )
 private fun settingsTitle(title: String): String = when (title) {
     "Interface and gestures" -> "Interface"
@@ -91,7 +91,7 @@ fun FolderSettings(state: LibraryUiState, onDismiss: () -> Unit, onChooseFolder:
                     "Navigation", "Player", "Motion", "Glass", "Appearance" -> interfaceContent(page)
                     "Playback and queues" -> {
                         playbackContent(page)
-                        SettingsLink("Song tap behavior", "Default action and per-list overrides", R.drawable.ic_music) { path = path + "Song tap behavior" }
+                        SettingsLink("Song tap behavior", "Default action and per-list overrides", AppIcon.TabSongs) { path = path + "Song tap behavior" }
                     }
                     "Song tap behavior" -> playbackContent(page)
                     "About and licenses" -> aboutContent()
@@ -102,7 +102,7 @@ fun FolderSettings(state: LibraryUiState, onDismiss: () -> Unit, onChooseFolder:
                         LibraryNotice(state)
                         state.snapshot.folders.forEach { folder ->
                             val count = state.snapshot.tracks.count { track -> track.locations.any { it.folderUri == folder.uri } }
-                            SettingsLink(folderLabels.getValue(folder.uri), if (folder.uri in state.unavailableFolders) "Access lost · select this folder again" else "$count songs", R.drawable.ic_folder) {
+                            SettingsLink(folderLabels.getValue(folder.uri), if (folder.uri in state.unavailableFolders) "Access lost · select this folder again" else "$count songs", AppIcon.TabFolders) {
                                 folderUri = folder.uri; path = path + "Folder options"
                             }
                         }

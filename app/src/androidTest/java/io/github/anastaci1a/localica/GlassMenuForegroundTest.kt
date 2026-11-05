@@ -66,7 +66,7 @@ class GlassMenuForegroundTest {
                         CompositionLocalProvider(LocalContentColor provides ink) {
                             if (anchored) {
                                 anchor.captureInk()
-                                GlassActionButton(R.drawable.ic_info, "Open menu",
+                                GlassActionButton(AppIcon.ActionInfo, "Open menu",
                                     Modifier.padding(32.dp).glassAnchor(anchor).testTag("menu-trigger")) { open = true }
                             } else ActionTextButton({ open = true }, Modifier.testTag("menu-trigger")) { Text("Open menu") }
                         }
