@@ -10,9 +10,10 @@ internal data class ListScrollTarget(val index: Int, val offset: Int = 0) {
         val layout = state.layoutInfo
         if (index !in 0 until layout.totalItemsCount) return 0f
         val item = layout.visibleItemsInfo.firstOrNull { it.index == index }
-        val distance = item?.let { it.offset.y - layout.beforeContentPadding + offset }?.toFloat()
-            ?: if (index < state.firstVisibleItemIndex) -Float.MAX_VALUE else Float.MAX_VALUE
         val first = layout.visibleItemsInfo.firstOrNull { it.index == 0 }
+        val itemTop = item?.offset?.y ?: first?.takeIf { index == 1 }?.let { it.offset.y + it.size.height }
+        val distance = itemTop?.let { it - layout.beforeContentPadding + offset }?.toFloat()
+            ?: if (index < state.firstVisibleItemIndex) -Float.MAX_VALUE else Float.MAX_VALUE
         val last = layout.visibleItemsInfo.lastOrNull { it.index == layout.totalItemsCount - 1 }
         val minimum = if (!state.canScrollBackward) 0f else first?.let {
             (it.offset.y - layout.beforeContentPadding).toFloat()
