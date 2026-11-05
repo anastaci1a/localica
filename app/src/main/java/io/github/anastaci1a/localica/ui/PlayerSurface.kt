@@ -95,8 +95,9 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     val inkFrame = if (inkObserver != null) polarity.frame else null
     val lightInk = inkDecision.lightInk
     val inkTarget = if (lightInk) Color.White else Color.Black
-    // Preserve the pre-#473 wash policy; foreground selection must not retone the background.
-    val tone = GlassTone(settings.glass.contrast, settings.glass.contrastWeight, !artwork.palette.isLight())
+    // The backdrop grade (#576) is the one lightness shift measured against the chosen ink. The ink itself is decided
+    // from the ungraded backdrop, so grading cannot feed back into the decision. Brightness trim Off disables grading.
+    val tone = GlassTone(shift = if (settings.glass.contrast > 0f) polarity.backdropShift else 0f)
     val paletteDuration = settings.motionDuration(550)
     val palette = animatedPlayerPalette(artwork.palette, paletteDuration)
     val lyricVisibility by animateFloatAsState(if (lyricsOpen) 1f else 0f, tween(settings.motionDuration(550)), label = "Lyrics layout")
@@ -340,7 +341,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
         artSwipe.active || swipeOffset != 0f -> PlayerBackgroundUnavailable.MovingCover
         controlNames.any { polarity.measured[it] == null } -> PlayerBackgroundUnavailable.Unmeasured
         else -> null
-    }, tone)
+    }, GlassTone())
     val baseColors = MaterialTheme.colorScheme
     GlassPanelTheme(lightMix) {
     val playerColors = MaterialTheme.colorScheme
