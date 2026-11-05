@@ -29,11 +29,6 @@ class SearchSortResetTest {
         fun record(event: String) {
             trace += "${android.os.SystemClock.uptimeMillis()} $event"
         }
-        record("inherited=${store.all}")
-        val listener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
-            record("preference $key=${store.all[key]}")
-        }
-        store.registerOnSharedPreferenceChangeListener(listener)
         store.edit().clear().commit()
         val preferences = BrowsePreferences(context)
         val root = BrowseRoute(MainTab.Albums)
@@ -61,15 +56,17 @@ class SearchSortResetTest {
                 LocalicaTheme {
                     key(route.key) {
                         BrowserScreen(LibraryUiState(snapshot, loading = false), PlaylistState(loading = false), route,
-                            { record("route sort=${it.querySort} ascending=${it.queryAscending}"); navigation.value = navigation.value.update(it) },
+                            { navigation.value = navigation.value.update(it); record("route ${navigation.value.route}") },
                             { item -> navigation.value = navigation.value.open(BrowseRoute(MainTab.Albums, item.ref, item.title)) },
                             {}, { _, _, _ -> }, null, null, true, false,
                             sorting = sorting, onSortDismiss = {
-                                record("sort-dismiss overridden=${preferences.overridden(search)} route=${navigation.value.route.querySort}")
+                                val overridden = preferences.overridden(search)
+                                record("sort-dismiss overridden=$overridden route=${navigation.value.route}")
+                                if (overridden) record("dismiss-stack=" + Throwable().stackTrace.take(18).joinToString(" <- "))
                                 sorting = false
                             }, reducedMotion = true,
-                            onSearchEdit = { navigation.value = navigation.value.editSearch(it) },
-                            onSearchCommit = { navigation.value = navigation.value.commitSearch() },
+                            onSearchEdit = { navigation.value = navigation.value.editSearch(it); record("search-edit ${navigation.value.route}") },
+                            onSearchCommit = { navigation.value = navigation.value.commitSearch(); record("search-commit ${navigation.value.route}") },
                             onBack = { navigation.value = navigation.value.back(false)!! })
                     }
                 }
@@ -80,7 +77,7 @@ class SearchSortResetTest {
             reset.performClick()
             compose.waitUntil(5000) { compose.onAllNodesWithTag("glass-morph-surface").fetchSemanticsNodes().isEmpty() }
             compose.runOnIdle {
-                assertFalse("Reset trace=${trace.joinToString(" | ")} remaining=${store.all}", preferences.overridden(search))
+                assertFalse("Reset trace=${trace.joinToString(" | ")} route=${navigation.value.route} remaining=${store.all}", preferences.overridden(search))
                 assertEquals(TrackSort.Title, preferences.read(search).sort)
                 assertEquals(search.copy(querySort = TrackSort.Title, queryAscending = true), navigation.value.route)
                 assertEquals(older, navigation.value.stacks.getValue(MainTab.Albums)[1])
@@ -125,7 +122,6 @@ class SearchSortResetTest {
             }
         } finally {
             android.util.Log.i("SearchSortReset", trace.joinToString(" | "))
-            store.unregisterOnSharedPreferenceChangeListener(listener)
             store.edit().clear().commit()
         }
     }
