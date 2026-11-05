@@ -6,7 +6,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
@@ -76,7 +75,7 @@ internal fun SeekCancelTarget(state: SeekCancelTargetState, hovered: Boolean, bo
             state.hostOrigin = it.positionInRoot()
         }) {
             if (motion.alpha > 0f) DragCancelTarget(hovered, action,
-                Modifier.offset { state.placement }.graphicsLayer { alpha = motion.alpha }.testTag(tag))
+                Modifier.glassShadowOffset { state.placement }.glassShadowOpacity { motion.alpha }.testTag(tag))
         }
     }
 }
