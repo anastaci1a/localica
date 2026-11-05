@@ -294,7 +294,10 @@ private fun Rect.union(other: Rect) = Rect(min(left, other.left), min(top, other
 
 /** Rebuild the merged outline only when its relative geometry or bridge strengths change. */
 internal class HoverPathCache(profile: SelectionOutlineProfile? = null) {
-    private var key: Any? = null
+    private var previousRegions: List<SelectionRegion>? = null
+    private var previousGap = Float.NaN
+    private var previousStrengths = FloatArray(0)
+    private var nextStrengths = FloatArray(0)
     private var origin = Offset(Float.NaN,Float.NaN)
     private var presented = Path()
     private val contour = AnalyticSelectionOutline(profile)
@@ -304,13 +307,26 @@ internal class HoverPathCache(profile: SelectionOutlineProfile? = null) {
         if (regions.isEmpty()) return Path()
         val at = regions.first().bounds.topLeft
         val local = localLensRegions(regions, at)
-        val strengths = regions.indices.flatMap { a -> (a + 1 until regions.size).map { b -> strength(a, b) } }
-        val next = local to (strengths to gap)
-        val changed = next != key
+        val count=regions.size
+        val pairCount=count*(count-1)/2
+        if(nextStrengths.size!=pairCount)nextStrengths=FloatArray(pairCount)
+        var changed=local!=previousRegions || gap.toBits()!=previousGap.toBits() || previousStrengths.size!=pairCount
+        var index=0
+        for(a in regions.indices)for(b in a+1 until count) {
+            val value=strength(a,b)
+            nextStrengths[index]=value
+            if(index>=previousStrengths.size || value.toBits()!=previousStrengths[index].toBits())changed=true
+            index++
+        }
         if (changed) {
-            key = next
+            previousRegions=local;previousGap=gap
+            val old=previousStrengths;previousStrengths=nextStrengths;nextStrengths=old
             rebuilds++
-            localPath = connectedSelectionPath(local, gap, strength = strength, contour = contour)
+            // Capture each pair once; geometry and its cache key use the same snapshot.
+            localPath = connectedSelectionPath(local, gap, strength = { a,b ->
+                val lo=min(a,b);val hi=max(a,b)
+                previousStrengths[lo*(2*count-lo-1)/2+hi-lo-1]
+            }, contour = contour)
         }
         if (changed || at != origin) {
             origin = at
