@@ -13,12 +13,14 @@ import kotlinx.coroutines.CoroutineDispatcher
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.RuleChain
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
 import kotlin.coroutines.CoroutineContext
 
 class BrowseRetentionTest {
-    @get:Rule val compose = createComposeRule()
+    private val compose = createComposeRule()
+    @get:Rule val rules: RuleChain = RuleChain.outerRule(BrowsePreferenceIsolation()).around(compose)
 
     @Test fun returningHomeKeepsPinnedResultsWithoutRepeatingTheQuery() {
         val tasks = LinkedBlockingQueue<Runnable>()
