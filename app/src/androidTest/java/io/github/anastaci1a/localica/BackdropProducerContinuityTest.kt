@@ -34,8 +34,9 @@ class BackdropProducerContinuityTest {
     @Test fun producerAdvancesWhileItsSamplingRecordingIsPinned() = inspect(false)
     @Test fun liveProducerPreservesBackingAndDisplayCutoutWhilePinned() = inspect(true)
     @Test fun nestedProducerKeepsItsGeometryAcrossNativeCopyCompletion() = inspect(false, true)
+    @Test fun nestedProducerKeepsItsGeometryAcrossQueuedCopyCompletion() = inspect(false, true, false)
 
-    private fun inspect(backed: Boolean, nested: Boolean = false) {
+    private fun inspect(backed: Boolean, nested: Boolean = false, inlineCompletion: Boolean = true) {
         lateinit var source: FrostedBackdrop
         lateinit var graphics: GraphicsContext
         lateinit var density: Density
@@ -51,12 +52,12 @@ class BackdropProducerContinuityTest {
         var owned: Deferred<ImageBitmap?>? = null
         var sampled: ImageBitmap? = null
         var failure: Throwable? = null
-        val nativeContext = if (nested) android.os.Handler(android.os.Looper.getMainLooper())
+        val nativeContext = if (nested && inlineCompletion) android.os.Handler(android.os.Looper.getMainLooper())
             .asCoroutineDispatcher().immediate else kotlin.coroutines.EmptyCoroutineContext
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val root = InstrumentationRegistry.getArguments().getString("additionalTestOutputDir")?.let(::File)
             ?: requireNotNull(context.getExternalFilesDir(null))
-        val output = File(root, "backdrop-producer/${if (nested) "nested" else backed}").also { it.mkdirs() }
+        val output = File(root, "backdrop-producer/${if (nested) "nested-$inlineCompletion" else backed}").also { it.mkdirs() }
         try {
             compose.setContent { LocalicaTheme {
                 source = rememberFrostedBackdrop("producer", enabled = false, dark = false)
@@ -156,7 +157,7 @@ class BackdropProducerContinuityTest {
                 assertEquals(size, source.layer.size)
                 release.complete(Unit)
                 if (nested) {
-                    assertFalse("Native completion precedes the resumed geometry frame", source.readbackPending)
+                    if (inlineCompletion) assertFalse("Native completion precedes the resumed geometry frame", source.readbackPending)
                     edge = 70
                 }
             }
