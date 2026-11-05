@@ -149,11 +149,12 @@ class UiPerformanceTest {
                         "fixture", "Fixture", LrcParser.parse(List(100) { "Synthetic lyric line $it" }.joinToString("\n")))))
                 }; Thread.sleep(600) }
             }
-            measure("search-typing", { launchApp() }, { clickDescription("Search library"); Thread.sleep(700) }) {
+            measure("search-typing", { launchApp() }, { clickDescription("Search library"); awaitEditor() }) {
                 for (text in listOf("S", "So", "Song", "Song 01", "Song 019", "")) {
-                    val accepted = nodes { all -> all.firstNotNullOfOrNull { it.config.getOrNull(SemanticsActions.SetText)?.action }
+                    val accepted = nodes { all -> all.lastOrNull { it.boundsInWindow.width > 0 && it.boundsInWindow.height > 0 && it.config.getOrNull(SemanticsActions.SetText)?.action != null }
+                        ?.config?.getOrNull(SemanticsActions.SetText)?.action
                         ?.invoke(androidx.compose.ui.text.AnnotatedString(text)) ?: false }
-                    check(accepted) { "Search editor missing" }; Thread.sleep(180)
+                    check(accepted) { "Search editor rejected text; " + nodes { all -> all.map { it.config.toString() }.joinToString("; ") } }; Thread.sleep(180)
                 }
             }
             measure("pinch-sizes", { launchBrowse(BrowseStyle(listSize = ListSize.Smallest)) }) {
@@ -228,6 +229,14 @@ class UiPerformanceTest {
                 .flatMap { it.semanticsOwner.getAllSemanticsNodes(mergingEnabled = false) })
         }
         @Suppress("UNCHECKED_CAST") return result as T
+    }
+    private fun awaitEditor() {
+        val until = SystemClock.uptimeMillis() + 15_000
+        while (SystemClock.uptimeMillis() < until) {
+            if (nodes { all -> all.any { it.config.getOrNull(SemanticsActions.SetText)?.action != null && it.boundsInWindow.height > 0 } }) return
+            Thread.sleep(50)
+        }
+        error("Search editor missing; " + nodes { all -> all.map { it.config.toString() }.joinToString("; ") })
     }
     private fun awaitTag(tag: String) {
         val until = SystemClock.uptimeMillis() + 30_000
