@@ -331,3 +331,4 @@ io.github.anastaci1a.localica.IconPackLibraryTest
 
 io.github.anastaci1a.localica.BackdropProducerContinuityTest
 io.github.anastaci1a.localica.GlassScrollHoldTest
+io.github.anastaci1a.localica.PresentationMarkerTest
