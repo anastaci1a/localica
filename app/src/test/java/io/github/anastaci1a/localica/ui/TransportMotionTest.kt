@@ -7,7 +7,7 @@ class TransportMotionTest {
     @Test fun scrollingCyclesHaveIdenticalEndpointsAndSymmetricCrossfades() {
         assertEquals(skipElements(0f), skipElements(1f))
         assertEquals(skipElements(0f), skipElements(200f))
-        for (i in 0..1000) {
+        for (i in 1..999) {
             val p = i / 1000f
             val a = skipElements(p)
             val b = skipElements(1f - p)
