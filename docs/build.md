@@ -90,7 +90,9 @@ Fresh `native-live-evidence` is always uploaded, including on failure. Existing 
 
 ### Measured native shards
 
-The eight native shards per API assign whole classes by measured duration, longest first. The [duration profile](../.github/test-evidence/class-durations.csv) is the per-class total of the complete device reports of v0.32.0's full run 41939345197 (issue #591; earlier profile: runs 41771741272, 41766949579 and 41762838145, issue #550). Rebuild it with `python3 .github/test-evidence/refresh_durations.py --output .github/test-evidence/class-durations.csv RUN_DIR...`, where each RUN_DIR holds one run's downloaded `device-reports-api-*` artifacts (several runs give the per-class median). A new class with no entry is budgeted at the median per-method cost, so refresh after adding slow classes: an unmeasured 6-minute class unbalanced a v0.32.0 shard by several minutes.
+The eight native shards per API assign whole classes by measured duration, longest first. The [duration profile](../.github/test-evidence/class-durations.csv) is the per-class total of the complete device reports of v0.32.0's full run 41939345197 (issue #591; earlier profile: runs 41771741272, 41766949579 and 41762838145, issue #550).
+
+Rebuild it with `python3 .github/test-evidence/refresh_durations.py --output .github/test-evidence/class-durations.csv RUN_DIR...`, where each RUN_DIR holds one run's downloaded `device-reports-api-*` artifacts (several runs give the per-class median). A new class with no entry is budgeted at the median per-method cost, so refresh after adding slow classes: an unmeasured 6-minute class unbalanced a v0.32.0 shard by several minutes.
 
 Refresh it from the latest full run's `device-reports-*` artifacts when shard times drift; the budget is build 10 minutes, slowest shard 22 minutes, whole run 40 minutes.
 
