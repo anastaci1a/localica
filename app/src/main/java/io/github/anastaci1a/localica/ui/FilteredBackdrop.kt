@@ -45,7 +45,7 @@ internal fun FilteredBackdrop(modifier: Modifier, source: FrostedBackdrop, locat
         spring(dampingRatio = 1f, stiffness = 450f), label = "Glass render mode")
     val blending = none > 0f && none < 1f
     Box(modifier.graphicsLayer { compositingStrategy = if (blending)
-        androidx.compose.ui.graphics.layer.CompositingStrategy.Offscreen else androidx.compose.ui.graphics.layer.CompositingStrategy.Auto }) {
+        androidx.compose.ui.graphics.CompositingStrategy.Offscreen else androidx.compose.ui.graphics.CompositingStrategy.Auto }) {
         if (none < 1f) OpticalBackdrop(Modifier.matchParentSize().graphicsLayer { alpha = 1f - none }, source, location, resolution,
             padding, homeSource, homeWeight, average, homeBounds, homeFootprint, false, effect)
         if (none > 0f) OpticalBackdrop(Modifier.matchParentSize().graphicsLayer {
