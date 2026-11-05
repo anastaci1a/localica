@@ -123,7 +123,9 @@ internal class PreparedPlayerVisualCache(private val provider: CoverProvider, bu
         currentCoroutineContext().ensureActive()
         // Unrelated cold preparation must not delay a complete memory-cache hit.
         peek(uri)?.let { return it }
-        return preparation.withLock {
+        // The process-wide lock must not depend on a caller's UI/test scheduler
+        // to run cancellation cleanup after that UI has been disposed.
+        return kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { preparation.withLock {
             val key = synchronized(cache) { Key(uri, currentRevision()) }
             peek(uri, key.revision)?.let { return@withLock it }
             val bitmap = try { provider.load(context, listOf(uri), 768) }
@@ -158,7 +160,7 @@ internal class PreparedPlayerVisualCache(private val provider: CoverProvider, bu
             currentCoroutineContext().ensureActive()
             synchronized(cache) { if (key.revision == currentRevision()) cache.put(key, result) }
             result
-        }
+        } }
     }
 }
 
