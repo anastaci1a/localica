@@ -15,6 +15,18 @@ class QueuePlaybackFollowTest {
     private fun QueuePlaybackFollowCoordinator.observe(target: String? = "first", eligible: Boolean = true,
         owner: Any = this@QueuePlaybackFollowTest.owner, generation: Long = 0) = observe(target, owner, eligible, generation)
 
+    @Test fun boundaryReturnRestoresIntentWithoutASecondMotion() {
+        val state = QueuePlaybackFollowCoordinator()
+        state.observe()
+        state.userScroll()
+        assertFalse(state.attached)
+        state.reattachAtBoundary("first", owner)
+        assertTrue(state.attached)
+        assertNull(state.request)
+        state.observe("second")
+        assertEquals("second", state.request?.occurrenceId)
+    }
+
     @Test fun initialPlacementConsumesAdmissionWithoutChangingLaterTransitionEasing() {
         val state = QueuePlaybackFollowCoordinator()
         assertEquals("first", state.initialTarget("first", owner, true, 0))
@@ -27,15 +39,19 @@ class QueuePlaybackFollowTest {
         assertEquals("second", state.request!!.occurrenceId)
     }
 
-    @Test fun freshDetachedOpenPositionsCurrentButRecreationDoesNotReplayOrReattach() {
+    @Test fun explicitReopenRemountsWhileRetainedRecreationKeepsDetachedIntent() {
         val state = QueuePlaybackFollowCoordinator(false, openingRequest = 1)
+        state.positionedInitially("first", owner, 1)
+        assertFalse("Cold accessibility admission keeps its initial intent", state.attached)
+        state.userScroll()
         assertEquals("second", state.initialTarget("second", owner, true, 2))
         state.positionedInitially("second", owner, 2)
-        assertFalse(state.attached)
-        assertEquals(2L, state.consumedOpeningRequest)
-        state.observe("third")
+        assertTrue(state.attached)
         assertNull(state.request)
-        val restored = QueuePlaybackFollowCoordinator(state.attached, state.consumedOpeningRequest)
+        state.observe("third")
+        assertEquals("third", state.request?.occurrenceId)
+        state.userScroll()
+        val restored = QueuePlaybackFollowCoordinator(state.attached, state.consumedOpeningRequest, restored = true)
         assertNull(restored.initialTarget("third", owner, true, 2))
         restored.observe("third")
         assertNull(restored.request)

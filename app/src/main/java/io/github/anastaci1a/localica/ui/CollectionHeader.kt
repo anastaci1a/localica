@@ -20,6 +20,10 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.semantics.Role
@@ -69,10 +73,11 @@ internal fun CollectionBackdrop(visual: PlayerVisual, artTop: Float, modifier: M
 @Composable
 internal fun CollectionHeader(title: String, subtitle: String?, visual: PlayerVisual, artist: Boolean,
     enabled: Boolean, onPlay: () -> Unit, onShuffle: () -> Unit, playlist: Boolean = false,
-    pinchHeader: CollectionPinchHeader? = null) {
+    pinchHeader: CollectionPinchHeader? = null, onActionBottom: (Float) -> Unit = {}) {
+    var headerCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
     BoxWithConstraints(Modifier.fillMaxWidth()) {
         val imageHeight = maxWidth
-        Box(Modifier.fillMaxWidth().height(imageHeight + 112.dp)) {
+        Box(Modifier.fillMaxWidth().height(imageHeight + 112.dp).onGloballyPositioned { headerCoordinates = it }) {
             Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(horizontal = 24.dp, vertical = 16.dp),
                 horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(title, style = MaterialTheme.typography.headlineMedium, textAlign = TextAlign.Center)
@@ -88,7 +93,11 @@ internal fun CollectionHeader(title: String, subtitle: String?, visual: PlayerVi
                 }
                 // The outer wrapper owns every action pixel, including overflow
                 // shadow. It adds neither a pointer handler nor a semantic action.
-                Box(Modifier.onPlaced {
+                Box(Modifier.onGloballyPositioned { action ->
+                    headerCoordinates?.takeIf { it.isAttached }?.let { header ->
+                        onActionBottom(header.localPositionOf(action, Offset.Zero).y + action.size.height)
+                    }
+                }.onPlaced {
                     pinchHeader?.actionCoordinates = it
                     pinchHeader?.actionPlacedRequest = pinchHeader?.request ?: -1
                 }.drawWithContent {
@@ -190,7 +199,7 @@ internal fun CollectionBackground(visual: PlayerVisual, grid: LazyGridState, sou
 @Composable
 internal fun BoxScope.CollectionToolbar(grid: LazyGridState, width: Int, title: String, anchor: GlassAnchor,
     onBack: () -> Unit, onOptions: (Boolean) -> Unit, backdropScene: BrowseBackdropScene? = null,
-    pinchHeader: CollectionPinchHeader? = null, menu: @Composable () -> Unit) {
+    pinchHeader: CollectionPinchHeader? = null, onBackBottom: (Float) -> Unit = {}, menu: @Composable () -> Unit) {
     val fade = remember(grid, width, pinchHeader) { derivedStateOf {
         val header = grid.layoutInfo.visibleItemsInfo.firstOrNull { it.key == "browser-notice" }
         val presentedTop = pinchHeader?.presentedTop()
@@ -208,7 +217,9 @@ internal fun BoxScope.CollectionToolbar(grid: LazyGridState, width: Int, title: 
         })
     Row(Modifier.align(Alignment.TopCenter).fillMaxWidth().statusBarsPadding().padding(12.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        ActionIcon(AppIcon.ActionBack, "Back", onClick = onBack)
+        Box(Modifier.onGloballyPositioned { onBackBottom(it.positionInRoot().y + it.size.height) }) {
+            ActionIcon(AppIcon.ActionBack, "Back", onClick = onBack)
+        }
         Text(title, Modifier.weight(1f).graphicsLayer { alpha = fade.value }
             .then(if (!titled) Modifier.clearAndSetSemantics {} else Modifier), maxLines = 1,
             overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, style = MaterialTheme.typography.titleMedium)
