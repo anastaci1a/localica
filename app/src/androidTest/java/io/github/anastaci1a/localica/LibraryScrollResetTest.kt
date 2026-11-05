@@ -170,10 +170,12 @@ class LibraryScrollResetTest {
         compose.waitForIdle()
         val before = position()
         assertTrue("The parent must include a nonzero pixel offset", before > aligned)
-        val album = compose.onNodeWithText("Track album 045")
+        // Rows draw behind the floating filters; open one below that input strip.
+        val album = compose.onNodeWithText("Track album 048")
         album.assertIsDisplayed().performClick()
         compose.waitUntil(5000) { compose.runOnIdle { navigation.value.route.collection != null } }
-        compose.onNodeWithContentDescription("Back").assertIsDisplayed().performClick()
+        compose.onNodeWithContentDescription("Back").assertIsDisplayed()
+        pressSystemBack()
         compose.waitUntil(5000) { compose.runOnIdle { navigation.value.route.collection == null } }
         awaitRows()
         assertEquals("Subview Back restores the parent first item and pixel offset", before, position(), .0001f)
