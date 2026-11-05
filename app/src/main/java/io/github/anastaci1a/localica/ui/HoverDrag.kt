@@ -37,8 +37,8 @@ internal class HoverCardFrame(
 @Composable private fun rememberHoverGroupRenderer(): HoverGroupRenderer {
     val graphics = androidx.compose.ui.platform.LocalGraphicsContext.current
     val scope = rememberCoroutineScope()
-    val renderer = remember(graphics) { HoverGroupRenderer(graphics.createGraphicsLayer(), scope) }
-    DisposableEffect(renderer) { onDispose { graphics.releaseGraphicsLayer(renderer.output) } }
+    val renderer = remember(graphics) { HoverGroupRenderer(graphics, scope) }
+    DisposableEffect(renderer) { onDispose { renderer.release() } }
     return renderer
 }
 
@@ -102,8 +102,8 @@ internal fun HoverDragUnderlay(frames: () -> List<HoverCardFrame>, backing: Fros
                 cards[i].flight() to cards[j].flight(), cards[i].landing() to cards[j].landing(),
                 placed[i].progress to placed[j].progress)
         }
-        // One field, one path: cards above carry their own backdrop, and this surface supplies
-        // the concave necks and the shared shadow. No strength cutoff removes a finite bridge.
+        // Each opacity slice shares its analytic frost and shadow path. Cards above carry
+        // their own backdrop. No strength cutoff removes a finite bridge.
         drawHoverGroup(shadow,placed,{ a,b -> strengths[min(a,b)][max(a,b)] },backing,location,
             blurEffects(renderer),density,direction,gap,sampleOffset = cards.first().sampleShift(),
             opacity = alphas.maxOrNull() ?: 0f,itemOpacity = alphas,lift = liftStyle)

@@ -98,11 +98,11 @@ class HoverSelectionTest {
 
     /** Backdrop: a red ramp across the first row's leading edge, fine green stripes everywhere. */
     @Composable private fun Fixture(first: Boolean, second: Boolean, rowGap: androidx.compose.ui.unit.Dp = 8.dp, retainSecond: Boolean = false,
-        measuredOutline: Boolean = false) {
+        measuredOutline: Boolean = false,third: Boolean? = null) {
         LocalicaTheme {
             val outline=rememberPaddedItemOutline(48.dp,0.dp,null,0.dp,0.dp).takeIf { measuredOutline }
             source = rememberFrostedBackdrop(Unit, dark = false)
-            Box(Modifier.size(360.dp, 320.dp).testTag("hover-scene")) {
+            Box(Modifier.size(360.dp, if(third==null)320.dp else 420.dp).testTag("hover-scene")) {
                 Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(source)) {
                     val stripe = 3.dp.toPx()
                     val rampStart = 24.dp.toPx() - 8.dp.toPx()
@@ -127,6 +127,10 @@ class HoverSelectionTest {
                             Spacer(Modifier.height(rowGap))
                             if (retainSecond) Spacer(Modifier.fillMaxWidth().height(72.dp))
                             else Box(Modifier.fillMaxWidth().height(72.dp).selectionLens(second, false, itemKey = "second",outline=outline))
+                            if(third!=null) {
+                                Spacer(Modifier.height(rowGap))
+                                Box(Modifier.fillMaxWidth().height(72.dp).selectionLens(third,false,itemKey="third",outline=outline))
+                            }
                         }
                     }
                 }
@@ -275,6 +279,8 @@ class HoverSelectionTest {
         try {
             compose.runOnIdle { second = false }
             val widths = mutableListOf(full)
+            val means=mutableListOf(((24*d).toInt() until ((360-24)*d).toInt()).map { joined[it,gapY].blue }.average())
+            val progressValues=mutableListOf(1f)
             val trace=StringBuilder("frame,progress,width,meanBlue,probeY\n")
             repeat(18) { frame ->
                 compose.mainClock.advanceTimeByFrame()
@@ -284,14 +290,50 @@ class HoverSelectionTest {
                 widths += joinedWidth(pixels)
                 val mean=((24*d).toInt() until ((360-24)*d).toInt()).map { pixels[it,gapY].blue }.average()
                 val progress=scene.regions.values.single { it.itemKey=="second" }.visibility()
+                means+=mean;progressValues+=progress
                 trace.append("$frame,$progress,${widths.last()},$mean,$gapY\n")
             }
             File(output,"padded-bridge-api${android.os.Build.VERSION.SDK_INT}.csv").writeText(trace.toString())
             assertTrue("The join parts once deselected: $widths", widths.last() < full / 4)
-            widths.zipWithNext().forEach { (a, b) ->
-                assertTrue("No single-frame jump while parting: $widths", a - b <= full * .45f)
+            val contrast=means.first()-means.last()
+            assertTrue("The probe exposes the persistent neighbour's shadow",contrast>.05)
+            for(i in means.indices.drop(1)) {
+                val expected=means.last()+progressValues[i]*contrast
+                assertEquals("Premultiplied shadow handoff at frame $i",expected,means[i],.025)
+                val allowed=abs(progressValues[i]-progressValues[i-1])*contrast+.015
+                assertTrue("No final-frame shadow pop: $means",abs(means[i]-means[i-1])<=allowed)
             }
         } finally { compose.mainClock.autoAdvance = true }
+    }
+
+    @Test fun aDepartingMiddleMemberRevealsTheSameShadowWhenItsRestGroupSplits() {
+        var middle by mutableStateOf(true)
+        compose.setContent { Fixture(true,middle,measuredOutline=true,third=true) }
+        compose.waitForIdle()
+        val first=capture()
+        val density=first.width/360f
+        val y=(scene.viewportHover.getValue("first").lifted.bounds.bottom+density).toInt()
+        fun mean(pixels: PixelMap)=((24*density).toInt() until (336*density).toInt()).map { pixels[it,y].blue }.average()
+        val values=mutableListOf(mean(first))
+        val progress=mutableListOf(1f)
+        compose.mainClock.autoAdvance=false
+        try {
+            compose.runOnIdle { middle=false }
+            repeat(18) { frame ->
+                compose.mainClock.advanceTimeByFrame()
+                val image=compose.onNodeWithTag("hover-scene").captureToImage()
+                save(image,"middle-member-$frame")
+                values+=mean(image.toPixelMap())
+                progress+=scene.regions.values.single { it.itemKey=="second" }.visibility()
+            }
+            val contrast=values.first()-values.last()
+            assertTrue(contrast>.05)
+            for(i in 1 until values.size) {
+                assertEquals("The persistent partition has the same endpoint",values.last()+progress[i]*contrast,values[i],.025)
+                assertTrue("No group-split shadow pop: $values",abs(values[i]-values[i-1])<=abs(progress[i]-progress[i-1])*contrast+.015)
+            }
+            assertEquals(2,scene.lastDrawnRegions.size)
+        } finally { compose.mainClock.autoAdvance=true }
     }
 
     @Test fun aDepartingMemberFadesItsFrostWhileItsNeighbourStaysLifted() {

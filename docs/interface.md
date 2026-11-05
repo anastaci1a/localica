@@ -36,6 +36,8 @@ Side-adjacent selections share one hovering outline. Tangent lobes and rounded c
 
 Frost and shadow use that same path, including drag launch and landing. Diagonal gallery neighbors and unselected holes stay separate. Partial groups retain accessible state without a pane/checkmark. Inset album choices and preserve readable baselines.
 
+When neighbours fade independently, complete surface and shadow renderings blend continuously. Persistent selections reveal their own shadows before the departing member disappears. Equal visibilities keep one shared outline.
+
 Selection, the current queue occurrence and held drag cards share one item outline. Its corners are concentric with the artwork's, sharing their arc centres.
 
 Every item style, in lists, galleries, carousels and drag cards, uses one padding $d = 3.5$ dp (1.75 times the former 2 dp minimum) between its content, such as a cover's top edge, and the outline:

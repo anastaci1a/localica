@@ -11,6 +11,23 @@ import kotlin.math.*
 
 /** Geometry proofs run without the compositor, so antialiasing cannot hide a sharp join. */
 class SelectionMergeGeometryTest {
+    @Test fun opacitySubsetsReusePathsAndMatchTheRestPartitionAtRemoval() {
+        val regions=List(3) { i -> SelectionRegion(Rect(0f,i*73f,120f,i*73f+72f),12f) }
+        val cache=io.github.anastaci1a.localica.ui.SelectionOpacityPathCache()
+        fun draw(p: Float)=cache.paths(regions,regions,16f,listOf(1f,p,1f),splitRestComponents=true) { _,_->1f }
+        val first=draw(.4f)
+        assertEquals(listOf(1,2),first.map { it.groups.size })
+        val builds=cache.rebuilds
+        val next=draw(.3f)
+        assertEquals(builds,cache.rebuilds)
+        assertSame(first[0].groups[0].path,next[0].groups[0].path)
+        val removed=draw(0f)
+        assertEquals(1,removed.size)
+        assertEquals(listOf(listOf(0),listOf(2)),removed.single().groups.map { it.members })
+        assertEquals(builds,cache.rebuilds)
+        draw(.2f)
+        assertEquals("Only the evicted full-group path must rebuild",builds+1,cache.rebuilds)
+    }
     @Test fun tripleIntersectionsAndCoincidentItemsAreIndependentOfInputOrder() {
         val regions=listOf(SelectionRegion(Rect(0f,0f,80f,80f),12f),
             SelectionRegion(Rect(40f,40f,120f,120f),12f),SelectionRegion(Rect(80f,0f,160f,80f),12f))
