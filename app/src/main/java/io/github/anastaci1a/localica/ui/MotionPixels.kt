@@ -67,12 +67,11 @@ private fun motionScale(value: Float) = if (abs(value - 1f) <= 1e-6f) 1f else va
 internal fun Rect.mirrored(width: Float) = Rect(width - right, top, width - left, bottom)
 
 /** Measure at [rect]'s whole-pixel size; place to cover [rect] exactly (parent, absolute coordinates). */
-internal fun Placeable.PlacementScope.placeMotion(placeable: Placeable, rect: MotionPixelRect, scaleContent: Boolean = false) =
+internal fun Placeable.PlacementScope.placeMotion(placeable: Placeable, rect: MotionPixelRect) =
     placeable.placeWithLayer(rect.left, rect.top) {
         transformOrigin = TransformOrigin(0f, 0f)
         translationX = rect.translationX; translationY = rect.translationY
-        scaleX = if (scaleContent && placeable.width > 0) rect.scaleX * rect.width / placeable.width else rect.scaleX
-        scaleY = if (scaleContent && placeable.height > 0) rect.scaleY * rect.height / placeable.height else rect.scaleY
+        scaleX = rect.scaleX; scaleY = rect.scaleY
     }
 
 internal fun MotionPixelRect.constraints() = Constraints.fixed(width, height)

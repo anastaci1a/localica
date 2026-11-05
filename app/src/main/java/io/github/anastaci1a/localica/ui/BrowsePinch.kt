@@ -61,7 +61,14 @@ internal data class BrowseZoomAnchor(val route: BrowseRoute, val style: BrowseSt
 @Stable
 internal class BrowsePinchMotion {
     val beyondBounds = BrowseBeyondBounds()
-    val progress = Animatable(1f)
+    var progress by mutableStateOf(Animatable(1f))
+        private set
+    /** Retired layout keeps its terminal clock while the next transaction starts at zero. */
+    fun beginGeometry() {
+        tracking?.cancel(); tracking = null
+        caughtUp = false
+        progress = Animatable(0f)
+    }
     var held by mutableStateOf(false)
     var fingerProgress = 0f
     var tracking: kotlinx.coroutines.Job? = null
@@ -71,18 +78,19 @@ internal class BrowsePinchMotion {
      * a tween on every event kept the view a tween behind the fingers (#520). */
     fun followFingers(scope: CoroutineScope) {
         if (!held || capturing || !destinationReady) return
+        val clock = progress
         if (caughtUp) {
             tracking?.cancel()
             // A snap animation writes inside the next frame callback, before that frame's
             // composition and layout; a write after the frame callback lands a frame late.
             tracking = scope.launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) {
-                progress.animateTo(fingerProgress, androidx.compose.animation.core.snap())
+                clock.animateTo(fingerProgress, androidx.compose.animation.core.snap())
             }
             return
         }
         if (tracking?.isActive == true) return
         tracking = scope.launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) {
-            val from = progress.value
+            val from = clock.value
             var start = -1L
             do {
                 var t = 0f
@@ -93,7 +101,7 @@ internal class BrowsePinchMotion {
                     if (start < 0) start = now
                     t = ((now - start) / 1_000_000f / PinchCatchUpMillis).coerceAtMost(1f)
                     update = launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) {
-                        progress.snapTo(from + (fingerProgress - from) * androidx.compose.animation.core.FastOutSlowInEasing.transform(t))
+                        clock.snapTo(from + (fingerProgress - from) * androidx.compose.animation.core.FastOutSlowInEasing.transform(t))
                     }
                 }
                 update?.join()
@@ -499,7 +507,7 @@ internal fun Modifier.browsePinch(enabled: Boolean, motion: BrowsePinchMotion, s
                 motion.anchorIndex = first.index - 1; motion.anchorTop = first.offset.y.toFloat()
                 motion.rowHeight = first.size.height.toFloat()
             }
-            scope.launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) { motion.progress.snapTo(0f) }
+            motion.beginGeometry()
             val nearest = gridState.layoutInfo.visibleItemsInfo.filter { it.key != "browser-notice" }.minByOrNull {
                 val x = it.offset.x + sourceInset + it.size.width / 2f - midpoint.x
                 val y = it.offset.y + it.size.height / 2f - midpoint.y
