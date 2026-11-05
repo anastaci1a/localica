@@ -151,6 +151,9 @@ internal data class PlayerBackgroundGeometry(val size: Size, val cover: Rect, va
     }
 }
 
+/** Optional suspension seam for deterministic first-frame preparation tests. */
+internal val LocalPlayerBackgroundPreparationBarrier = staticCompositionLocalOf<(suspend () -> Unit)?> { null }
+
 private data class BackgroundPaintInputs(val palette: PlayerPalette, val wash: Bitmap?, val softWash: Bitmap?,
     val grain: Bitmap, val tone: GlassTone)
 private data class BackgroundSampleRole(val identity: Any, val visual: PlayerVisual, val backdrop: PlayerBackdropDescriptor) {
@@ -211,9 +214,11 @@ private fun BackgroundSampleRole.paintReady(geometry: PlayerBackgroundGeometry, 
         BackgroundRequest(geometry, frame.roles.map { BackgroundSampleRole(it.identity, it.visual, requireNotNull(owner.backdrops[it.identity])) }) else null
     var prepared by remember { mutableStateOf<PreparedBackground?>(null) }
     var failed by remember { mutableStateOf<BackgroundRequest?>(null) }
-    LaunchedEffect(request) {
+    val preparationBarrier = LocalPlayerBackgroundPreparationBarrier.current
+    LaunchedEffect(request, preparationBarrier) {
         prepared = null; failed = null
         if (request != null) {
+            preparationBarrier?.invoke()
             val result = withContext(Dispatchers.Default) { prepareBackground(request) }
             currentCoroutineContext().ensureActive()
             if (result == null) failed = request else prepared = result
