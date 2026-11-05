@@ -314,3 +314,5 @@ io.github.anastaci1a.localica.SelectorFreeCornerPixelTest
 io.github.anastaci1a.localica.SongMenuIconsTest
 io.github.anastaci1a.localica.IconPackTest
 io.github.anastaci1a.localica.IconPackResolverTest
+io.github.anastaci1a.localica.TransportScrollTest
+io.github.anastaci1a.localica.TransportAnimationFrameTest
