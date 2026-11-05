@@ -97,7 +97,7 @@ class HoverSelectionTest {
     @Composable private fun Fixture(first: Boolean, second: Boolean, rowGap: androidx.compose.ui.unit.Dp = 8.dp, retainSecond: Boolean = false,
         measuredOutline: Boolean = false) {
         LocalicaTheme {
-            val outline=rememberPaddedItemOutline(null,0.dp,null,0.dp,0.dp).takeIf { measuredOutline }
+            val outline=rememberPaddedItemOutline(48.dp,0.dp,null,0.dp,0.dp).takeIf { measuredOutline }
             source = rememberFrostedBackdrop(Unit, dark = false)
             Box(Modifier.size(360.dp, 320.dp).testTag("hover-scene")) {
                 Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(source)) {
@@ -254,6 +254,9 @@ class HoverSelectionTest {
         save(compose.onNodeWithTag("hover-scene").captureToImage(), "hover-joined")
         val d = joined.width / 360f
         assertEquals("Both rows hover", 2, scene.lastDrawnRegions.size)
+        val firstRest=scene.viewportHover.getValue("first").rest.bounds
+        val secondRest=scene.viewportHover.getValue("second").rest.bounds
+        assertEquals("8 dp content spacing minus two 3.5 dp outlines",d,secondRest.top-firstRest.bottom,.05f*d)
         // Standard 8 dp content spacing leaves a 1 dp outline gap before lift.
         // Probe beyond the persistent item's lifted edge: its own surface remains
         // over the middle of that gap after its neighbour has faded away.
@@ -269,10 +272,18 @@ class HoverSelectionTest {
         try {
             compose.runOnIdle { second = false }
             val widths = mutableListOf(full)
-            repeat(18) {
+            val trace=StringBuilder("frame,progress,width,meanBlue,probeY\n")
+            repeat(18) { frame ->
                 compose.mainClock.advanceTimeByFrame()
-                widths += joinedWidth(capture())
+                val image=compose.onNodeWithTag("hover-scene").captureToImage()
+                save(image,"padded-bridge-$frame")
+                val pixels=image.toPixelMap()
+                widths += joinedWidth(pixels)
+                val mean=((24*d).toInt() until ((360-24)*d).toInt()).map { pixels[it,gapY].blue }.average()
+                val progress=scene.regions.values.single { it.itemKey=="second" }.visibility()
+                trace.append("$frame,$progress,${widths.last()},$mean,$gapY\n")
             }
+            File(output,"padded-bridge-api${android.os.Build.VERSION.SDK_INT}.csv").writeText(trace.toString())
             assertTrue("The join parts once deselected: $widths", widths.last() < full / 4)
             widths.zipWithNext().forEach { (a, b) ->
                 assertTrue("No single-frame jump while parting: $widths", a - b <= full * .45f)
