@@ -82,8 +82,9 @@ class PlayerBackgroundPolarityTest {
                         if (production != null && role != null) {
                             SideEffect { productionRole = role.identity; productionBackdrop = production }
                             Row(Modifier.align(androidx.compose.ui.Alignment.TopStart)) {
-                                val baselineTone = GlassTone(settings.glass.contrast, settings.glass.contrastWeight,
-                                    !visual.palette.isLight())
+                                // #576: the sampler measures the UNGRADED backing whatever the trim, so the ink choice cannot
+                                // depend on (or feed back from) the grade painted for it.
+                                val baselineTone = GlassTone()
                                 PlayerBackdrop(production.palette, Modifier.size(96.dp).testTag("baseline-wash"),
                                     fullArtBlend = 1f, artTop = 0f, artHeight = 96f, artLeft = 0f, artWidth = 96f,
                                     tone = baselineTone, onBackgroundDescriptor = { baselineBackdrop = it })
@@ -186,7 +187,7 @@ class PlayerBackgroundPolarityTest {
 
     @Test fun zeroTrimControlHasIdenticalBackingForBothToneDirections() = compareBacking(0f)
 
-    @Test fun nonzeroTrimPreservesThePre473BackingWhenInkDiffersFromPalettePolarity() = compareBacking(.5f)
+    @Test fun nonzeroTrimStillMeasuresTheUngradedBackingWhenInkDiffersFromPalettePolarity() = compareBacking(.5f)
 
     private fun compareBacking(trim: Float) {
         settings = settings.copy(glass = settings.glass.copy(contrast = trim))
@@ -222,7 +223,7 @@ class PlayerBackgroundPolarityTest {
         for (y in 0 until baseline.height) for (x in 0 until baseline.width) {
             if (baseline[x, y] != selected[x, y]) changed++
         }
-        assertEquals("Changing ink must not retone the existing backing; changed pixels=$changed", 0, changed)
+        assertEquals("The measured backing must be the ungraded one; changed pixels=$changed", 0, changed)
     }
 
     @Test fun whiteCoverBlackLowerBorderUsesDirectAndContinuationFootprintsAtShortTallAndTranslatedInsets() {
