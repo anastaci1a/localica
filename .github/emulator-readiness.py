@@ -50,6 +50,7 @@ def wait_ready(device, deadline, clock=time.monotonic, sleep=time.sleep):
     previous = None
     stable = 0
     samples = []
+    last_windows = ''
     while clock() < deadline:
         sample = {'elapsed_remaining': round(deadline - clock(), 2)}
         try:
@@ -72,12 +73,15 @@ def wait_ready(device, deadline, clock=time.monotonic, sleep=time.sleep):
                     # Wait for the launcher draw after wm size/density changes.
                     launch = device.call('shell', 'am', 'start', '-W', '-n', candidate,
                                          '-a', 'android.intent.action.MAIN', '-c', 'android.intent.category.HOME')
+                    sample['home_launch_result'] = launch[:4096]
                     if 'Error:' in launch:
                         raise ValueError('HOME launch failed: ' + launch)
                     home = candidate
                 sample['home'] = home
                 # API 36 puts current focus in the displays section, not `windows`.
                 windows = device.call('shell', 'dumpsys', 'window')
+                last_windows = windows[:262144]
+                sample['current_focus_entries'] = re.findall(r'^\s*mCurrentFocus=(.*)$', windows, re.M)
                 sample['unlocked'] = unlocked(windows)
                 sample['focused_home'] = focused_home(windows, home.split('/')[0])
                 if sample['unlocked'] and sample['focused_home']:
@@ -100,7 +104,7 @@ def wait_ready(device, deadline, clock=time.monotonic, sleep=time.sleep):
         remaining = deadline - clock()
         if remaining > 0:
             sleep(min(.5, remaining))
-    return {'ready': False, 'samples': samples}
+    return {'ready': False, 'samples': samples, 'last_window_dump': last_windows}
 
 
 def main():
