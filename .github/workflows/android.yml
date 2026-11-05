@@ -188,9 +188,8 @@ jobs:
     needs: build
     if: ${{ !startsWith(github.ref, 'refs/tags/') }}
     runs-on: ubuntu-24.04
-    # Allow native suites plus SDK/build/emulator startup without cutting coverage.
-    # Keep every test and its assertion timeout unchanged.
-    timeout-minutes: 140
+    # Normal shards take 13–19 minutes; bound hangs without trimming coverage.
+    timeout-minutes: 35
     env:
       RISK_CLASSES: ${{ github.event_name == 'workflow_dispatch' && inputs.risk_classes || '' }}
       TEST_API: ${{ matrix.api }}
@@ -315,6 +314,7 @@ jobs:
             python3 .github/test-evidence/full_partition.py union --root "$PWD" --api "$api" --shards "$LOCALICA_DEVICE_SHARDS" "${args[@]}" | tee "union-api-$api.json" || status=1
           done
           exit $status
+      # A timed-out shard makes the matrix result non-success, even if XML is complete.
       - name: Require every shard job to have succeeded
         if: always()
         run: |
