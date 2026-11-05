@@ -6,9 +6,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
 import io.github.anastaci1a.localica.localicaComposeRule as createComposeRule
@@ -57,6 +57,9 @@ class ListReturnControlsTest {
         var ordinaryBack = 0
         var topRequest by mutableIntStateOf(0)
         var densityScale by mutableFloatStateOf(1f)
+        @Volatile var drawSerial = 0
+        @Volatile var scrollFrame: BrowseScrollFrame? = null
+        var view: android.view.View? = null
         var insetPx = 0f
         var dragHost: SongDragHost? = null
     }
@@ -73,8 +76,10 @@ class ListReturnControlsTest {
             fixture.insetPx = with(LocalDensity.current) { inset.toPx() }
             val dragHost = if (foregroundDrag) remember { SongDragHost() } else LocalSongDragHost.current
             fixture.dragHost = dragHost
+            fixture.view = LocalView.current
             val nativeDensity = LocalDensity.current
             CompositionLocalProvider(LocalDensity provides androidx.compose.ui.unit.Density(nativeDensity.density * fixture.densityScale, nativeDensity.fontScale),
+                LocalBrowseScrollFrameObserver provides { frame -> fixture.scrollFrame = frame; fixture.drawSerial++ },
                 LocalSessionSelection provides fixture.selection, LocalBrowseObscuredInset provides inset,
                 LocalSongDragHost provides dragHost) {
                 Box(Modifier.fillMaxSize().testTag("return-host")) {
@@ -134,26 +139,21 @@ class ListReturnControlsTest {
         }
     }
 
-    private fun playlistPixels(playlist: ManualPlaylist): () -> Float {
-        val headerHeight = compose.onNodeWithTag("browse-full-span", true).fetchSemanticsNode().size.height.toFloat()
+    private fun presentedFrame(fixture: Fixture): BrowseScrollFrame {
+        val serial = fixture.drawSerial
+        compose.runOnUiThread { requireNotNull(fixture.view).invalidate() }
+        compose.waitUntil(5000) { fixture.drawSerial > serial }
+        return requireNotNull(fixture.scrollFrame)
+    }
+
+    private fun playlistPixels(fixture: Fixture): () -> Float {
+        val header = requireNotNull(presentedFrame(fixture).headerHeight)
         list.performScrollToIndex(1)
-        val viewportTop = list.fetchSemanticsNode().positionInRoot.y
-        val firstTop = row(playlist.entries[0].id).fetchSemanticsNode().positionInRoot.y
-        val stride = row(playlist.entries[1].id).fetchSemanticsNode().positionInRoot.y - firstTop
-        val inset = firstTop - viewportTop
-        val indices = playlist.entries.mapIndexed { index, entry -> "media-" + entry.id to index }.toMap()
+        val stride = requireNotNull(presentedFrame(fixture).rowHeight)
         return {
-            val viewport = list.fetchSemanticsNode().boundsInRoot
-            // A freshly recomposed lazy header can have semantics before placement.
-            // Follow a fully visible row near the viewport center instead of that
-            // transient node; all these fixture rows have one measured stride.
-            val node = compose.onAllNodes(SemanticsMatcher("Actual media row") {
-                it.config.getOrNull(SemanticsProperties.TestTag) in indices
-            }, true).fetchSemanticsNodes().filter {
-                it.boundsInRoot.height > 0f && it.boundsInRoot.overlaps(viewport)
-            }.minByOrNull { kotlin.math.abs(it.boundsInRoot.center.y - viewport.center.y) }!!
-            val index = indices.getValue(node.config[SemanticsProperties.TestTag])
-            headerHeight + index * stride + inset - (node.positionInRoot.y - viewportTop)
+            val frame = presentedFrame(fixture)
+            if (frame.index == 0) frame.offset.toFloat()
+            else (header + (frame.index - 1) * stride + frame.offset).toFloat()
         }
     }
 
@@ -163,7 +163,7 @@ class ListReturnControlsTest {
             playlists = PlaylistState(listOf(playlist), loading = false), listBackEnabled = true, reducedMotion = false)
         awaitRow(playlist.entries.first().id)
         val headerHeight = compose.onNodeWithTag("browse-full-span", true).fetchSemanticsNode().size.height.toFloat()
-        val pixels = playlistPixels(playlist)
+        val pixels = playlistPixels(state)
         list.performScrollToIndex(65)
         compose.awaitExpectedWindowFocus(list)
         compose.mainClock.autoAdvance = false
@@ -198,7 +198,7 @@ class ListReturnControlsTest {
         val fixture = fixture(BrowseRoute(MainTab.Playlists, MediaRef(MediaKind.Playlist, playlist.id)),
             playlists = PlaylistState(listOf(playlist), loading = false), listBackEnabled = true, reducedMotion = false)
         awaitRow(playlist.entries.first().id)
-        val pixels = playlistPixels(playlist)
+        val pixels = playlistPixels(fixture)
         list.performScrollToIndex(65)
         compose.awaitExpectedWindowFocus(list)
         compose.onNodeWithContentDescription("Return to top").assertIsDisplayed()
@@ -291,10 +291,10 @@ class ListReturnControlsTest {
 
     @Test fun animatedCollectionReturnStopsAtMeasuredHomeWithoutASecondHeroScroll() {
         val playlist = PlaylistEdits.append(ManualPlaylist(name = "Animated return"), tracks)
-        fixture(BrowseRoute(MainTab.Playlists, MediaRef(MediaKind.Playlist, playlist.id)),
+        val state = fixture(BrowseRoute(MainTab.Playlists, MediaRef(MediaKind.Playlist, playlist.id)),
             playlists = PlaylistState(listOf(playlist), loading = false), reducedMotion = false)
         awaitRow(playlist.entries.first().id)
-        val pixels = playlistPixels(playlist)
+        val pixels = playlistPixels(state)
         list.performScrollToIndex(65)
         // Let the real return control enter before freezing animation time.
         compose.onNodeWithContentDescription("Return to top").assertIsDisplayed()
