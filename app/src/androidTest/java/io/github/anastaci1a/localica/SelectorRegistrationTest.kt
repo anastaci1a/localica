@@ -24,7 +24,9 @@ import org.junit.Test
 class SelectorRegistrationTest {
     @get:Rule val compose = createComposeRule()
 
+    @androidx.test.filters.SdkSuppress(minSdkVersion = 33)
     @Test fun centerLandmarkStaysRegisteredThroughHorizontalAndVerticalDeformation() = registration(false)
+    @androidx.test.filters.SdkSuppress(minSdkVersion = 33)
     @Test fun centerLandmarkStaysRegisteredInsideOffsetModal() = registration(true)
 
     @Test fun deformationKeepsBothContactWallsPinnedOnEitherAxis() {

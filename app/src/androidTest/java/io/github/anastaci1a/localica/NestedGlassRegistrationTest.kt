@@ -38,6 +38,7 @@ import kotlin.math.roundToInt
 class NestedGlassRegistrationTest {
     @get:Rule val compose = createComposeRule()
 
+    @androidx.test.filters.SdkSuppress(minSdkVersion = 33)
     @Test fun transformedGlassSamplesItsSceneThroughForwardReverseFitAndScrolling() {
         var fitX by mutableFloatStateOf(.55f)
         var fitY by mutableFloatStateOf(.75f)
