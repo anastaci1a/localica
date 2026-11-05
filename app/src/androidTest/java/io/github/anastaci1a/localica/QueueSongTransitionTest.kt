@@ -21,9 +21,8 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.*
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
-import androidx.test.platform.app.InstrumentationRegistry
 import kotlin.math.roundToInt
-import io.github.anastaci1a.localica.localicaComposeRule as createComposeRule
+import io.github.anastaci1a.localica.localicaAndroidComposeRule as createComposeRule
 import io.github.anastaci1a.localica.navigation.*
 import io.github.anastaci1a.localica.playback.PlaybackState
 import io.github.anastaci1a.localica.ui.*
@@ -41,7 +40,7 @@ import org.junit.Test
  * the player, and the Queue under a panel theme that reads the player's shared presented polarity.
  */
 class QueueSongTransitionTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = createComposeRule<androidx.activity.ComponentActivity>()
     private val owner = PlayerBackgroundPolarityState()
     private val settings = InterfaceSettings(artworkLayout = ArtworkLayout.FullBackground, glass = GlassAppearance(contrast = .3f))
     private var visual by mutableStateOf<PlayerVisual?>(null)
@@ -117,7 +116,7 @@ class QueueSongTransitionTest {
         // captureToImage forces a second native redraw and has a fixed two-second
         // acknowledgement timeout. With a paused test clock, that is not a receipt
         // for the frame just requested. Keep the clock fixed and observe our marker
-        // in the compositor screenshot instead; no retry can skip an artwork frame.
+        // in the window buffer instead; no retry can skip an artwork frame.
         val clock = compose.mainClock.currentTime
         val paused = !compose.mainClock.autoAdvance
         val stage = compose.runOnIdle {
@@ -130,18 +129,26 @@ class QueueSongTransitionTest {
         }
         val bounds = compose.onRoot().fetchSemanticsNode().boundsInRoot
         val origin = IntArray(2)
-        compose.runOnIdle { captureView.getLocationOnScreen(origin) }
+        compose.runOnIdle { captureView.getLocationInWindow(origin) }
         val left = origin[0] + bounds.left.roundToInt()
         val top = origin[1] + bounds.top.roundToInt()
         val width = bounds.width.roundToInt(); val height = bounds.height.roundToInt()
+        // Copy only the marker and original gutter samples, at native resolution.
+        // Full-display UiAutomation captures repeatedly allocate multi-megabyte
+        // SurfaceFlinger buffers; the API 26 guest rebooted during repeated captures.
+        val cropWidth = maxOf(8, (width * .045f).toInt())
+        val cropHeight = maxOf(8, (height * .8f).toInt())
+        val crop = android.graphics.Rect(left, top, left + cropWidth, top + cropHeight)
+        val window = compose.activity.window
         var result = Float.NaN
         var observed = 0
         try { compose.waitUntil(5000) {
-            val screen = InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot()
-                ?: return@waitUntil false
+            val screen = copyNativeWindowOnce(window,
+                Bitmap.createBitmap(cropWidth, cropHeight, Bitmap.Config.ARGB_8888),
+                "Queue frame copy timed out at marker $stage", crop
+            ) { code -> "Queue frame copy failed at marker $stage: $code" }
             try {
-                check(left >= 0 && top >= 0 && left + width <= screen.width && top + height <= screen.height)
-                val marker = screen.getPixel(left + 2, top + 2)
+                val marker = screen.getPixel(2, 2)
                 observed = marker
                 val presented = abs(android.graphics.Color.red(marker) - markerCode(stage)) <= 1 &&
                     android.graphics.Color.green(marker) > 250 && android.graphics.Color.blue(marker) < 5
@@ -149,7 +156,7 @@ class QueueSongTransitionTest {
                     var sum = 0f; var n = 0
                     for (y in (height * .55f).toInt() until (height * .8f).toInt() step 6)
                         for (x in (width * .01f).toInt() until (width * .045f).toInt()) {
-                            val pixel = screen.getPixel(left + x, top + y)
+                            val pixel = screen.getPixel(x, y)
                             sum += (if (green) android.graphics.Color.green(pixel) else android.graphics.Color.red(pixel)) / 255f
                             n++
                         }
