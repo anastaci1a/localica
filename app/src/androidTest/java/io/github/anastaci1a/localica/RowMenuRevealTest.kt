@@ -116,17 +116,67 @@ class RowMenuRevealTest {
             .apply { eraseColor(android.graphics.Color.RED) }, 768))
         val item = BrowserItem(MediaRef(MediaKind.Playlist, "menu-cached"), "Cached", null, emptyList(), coverUri = uri)
         show(item, retention)
-        assertTrue(ink(compose.onNodeWithTag("browse-menu-${item.key}", true).captureToImage()) > 5f)
-        compose.onNodeWithContentDescription("Reveal actions").performClick()
-        assertEquals(1, clicks)
+        assertReadyMenuAcceptsTouch(item)
     }
 
     @Test fun rowsWithoutArtworkShowTheirMenuImmediately() {
         val item = BrowserItem(MediaRef(MediaKind.Playlist, "menu-no-art"), "No artwork", null, emptyList())
         show(item, size = ListSize.Small)
+        assertReadyMenuAcceptsTouch(item)
+    }
+
+    @Test fun emptyArtworkSlotShowsItsMenuOnTheFirstFrame() {
+        val item = BrowserItem(MediaRef(MediaKind.Playlist, "menu-empty"), "Empty", null, emptyList())
+        show(item)
+        assertReadyMenuAcceptsTouch(item)
+    }
+
+    @Test fun cachedMissingArtworkShowsItsMenuOnTheFirstFrame() {
+        val uri = cover()
+        val retention = BrowseArtworkScope()
+        retention.hold("missing", listOf(uri), ArtworkCache.CachedArtwork(null, 768))
+        val item = BrowserItem(MediaRef(MediaKind.Playlist, "menu-cached-missing"), "Missing", null, emptyList(), coverUri = uri)
+        show(item, retention)
+        assertReadyMenuAcceptsTouch(item)
+    }
+
+    @Test fun indexedMissingArtworkShowsItsMenuOnTheFirstFrame() {
+        val uri = cover()
+        ArtworkColors.publish(mapOf(uri to ArtworkColors.MISSING))
+        val item = BrowserItem(MediaRef(MediaKind.Playlist, "menu-indexed-missing"), "Missing", null, emptyList(), coverUri = uri)
+        show(item)
+        assertReadyMenuAcceptsTouch(item)
+    }
+
+    @Test fun failedArtworkReadReleasesTheMenuWithoutAnImageFade() = checkFailedArtwork(deleted = true)
+
+    @Test fun undecodableArtworkReleasesTheMenuWithoutAnImageFade() = checkFailedArtwork(deleted = false)
+
+    private fun checkFailedArtwork(deleted: Boolean) {
+        val uri = cover()
+        val file = File(android.net.Uri.parse(uri).path!!)
+        if (deleted) assertTrue(file.delete()) else file.writeText("not an image")
+        val item = BrowserItem(MediaRef(MediaKind.Playlist, "menu-failed"), "Failed", null, emptyList(), coverUri = uri)
+        show(item)
+        compose.waitUntil(5000) { ArtworkCache.peek(listOf(uri)) != null }
+        assertNull("The real reader completed with no image", ArtworkCache.peek(listOf(uri))!!.bitmap)
+        compose.waitUntil(5000) {
+            compose.mainClock.advanceTimeByFrame()
+            compose.onAllNodesWithContentDescription("Reveal actions").fetchSemanticsNodes().isNotEmpty()
+        }
+        val menu = compose.onNodeWithTag("browse-menu-${item.key}", true)
+        val firstInk = ink(menu.captureToImage())
+        assertReadyMenuAcceptsTouch(item)
+        compose.mainClock.advanceTimeBy(320)
+        assertEquals("Failed artwork opens the menu at full opacity, without an image fade", firstInk, ink(menu.captureToImage()), 1f)
+    }
+
+    private fun assertReadyMenuAcceptsTouch(item: BrowserItem) {
         assertTrue(ink(compose.onNodeWithTag("browse-menu-${item.key}", true).captureToImage()) > 5f)
-        compose.onNodeWithContentDescription("Reveal actions").performClick()
-        assertEquals(1, clicks)
+        val action = compose.onNodeWithContentDescription("Reveal actions").assertIsDisplayed().assertHasClickAction()
+        compose.awaitExpectedWindowFocus(action)
+        action.performTouchInput { click() }
+        assertEquals("Visible menu accepts real touch input", 1, clicks)
     }
 
     @Test fun rowsWithoutArtworkWaitForTheirContentRevealBeforeAcceptingInput() {
