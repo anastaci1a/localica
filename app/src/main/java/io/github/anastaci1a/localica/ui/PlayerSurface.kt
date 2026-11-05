@@ -561,12 +561,14 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
 
         }
     }
-    // The complete player composite (artwork, wash, controls, text) as recorded by the Surface above;
-    // this target is a sibling of that Surface, so it never samples itself (#562).
-    if (scrubDragging) CompositionLocalProvider(LocalFrostedBackdrop provides seekCancelBackdrop(frostedBackdrop, lyricBackdrop, p)) {
+    }
+    // The complete player composite (artwork, wash, controls, text) as recorded by the Surface above.
+    // This target must stay outside that Surface's content: inside it, the Surface records the X into
+    // the very layer the X's lens draws, a RenderNode cycle that overflows the API 33+ RenderThread (#583).
+    if (scrubDragging) CompositionLocalProvider(LocalFrostedBackdrop provides seekCancelBackdrop(frostedBackdrop, lyricBackdrop, p),
+        LocalContentColor provides foreground) {
         SeekCancelTarget(scrubCancel, scrubOverCancel,
             navigationInset + CollapsedQueueHeight + 20.dp, settings.reducedMotion)
-    }
     }
     }
     if (viewing && sampled.trackUri != null) ArtworkViewer(sampled.trackUri) { viewing = false }
