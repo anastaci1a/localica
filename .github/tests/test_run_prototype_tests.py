@@ -695,11 +695,7 @@ class WorkflowContract(unittest.TestCase):
         jobs=yaml.safe_load((ROOT/'.github/workflows/prototype.yml').read_text())['jobs']
         for api in (26,36):
             job=jobs[f'focused_{api}']
-<<<<<<< HEAD
-            self.assertEqual('${{ inputs.repeat > 1 && 360 || 35 }}',job['timeout-minutes'])
-=======
             self.assertEqual("${{ inputs.repeat_methods != '' && 60 || inputs.repeat > 1 && 360 || 60 }}",job['timeout-minutes'])
->>>>>>> origin/maint/prototype-method-repeat
             upload=next(s for s in job['steps']
                 if s.get('with',{}).get('name')==f'prototype-focused-api-{api}')
             self.assertEqual('always()',upload['if'])
