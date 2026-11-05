@@ -29,7 +29,7 @@ class PlayerInkArtworkClockTest {
         val t = PlayerInkTransition(Color.Black)
         var last = 0f
         (0..10).forEach { last = step(t, Color.White, it / 20f) }
-        assertTrue(last in .1f...9f)
+        assertTrue(last in .1f..0.9f)
         // A new change: the clock restarts at 0 and the destination flips back.
         (0..12).forEach { val v = step(t, Color.Black, it / 20f); assertTrue("jump $last -> $v", abs(v - last) <= .2f); last = v }
         assertEquals(0f, last, 1e-6f)
