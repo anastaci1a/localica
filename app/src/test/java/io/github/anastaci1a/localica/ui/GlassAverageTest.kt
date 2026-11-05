@@ -10,7 +10,7 @@ class GlassAverageTest {
         val average = averageGlassColor { x, _ -> if (x < 4) 0xFFFF0000.toInt() else 0x000000FF }
         assertEquals(1f, average.red, .00001f)
         assertEquals(0f, average.blue, .00001f)
-        assertEquals(.5f, average.alpha, .00001f)
+        assertEquals(128f / 255f, average.alpha, .00001f)
         assertEquals(Color.Transparent, averageGlassColor { _, _ -> 0x00FFFFFF })
     }
 

@@ -242,7 +242,6 @@ internal fun rememberFrostedBackdrop(key: Any?, enabled: Boolean = true, dark: B
                 if (ticket != null && (draws == null || !ticket.isCurrent())) continue
                 val extent = source.size
                 val generation = source.rendererGeneration
-                val recording = source.recordings
                 thumbnail.record(currentDensity, currentDirection, IntSize(32, 32)) {
                     scale(32f / extent.width, 32f / extent.height, Offset.Zero) {
                         drawLayer(source.layer)
@@ -254,7 +253,7 @@ internal fun rememberFrostedBackdrop(key: Any?, enabled: Boolean = true, dark: B
                 val pixels = withContext(Dispatchers.Default) { softwareGlassSnapshot(image, IntSize(32, 32)) }
                 currentCoroutineContext().ensureActive()
                 if (valid()) source.publish(generation, pixels, pixels, request, draws)
-                completedRecording = recording
+                completedRecording = source.recordings
                 } finally { ticket?.close() }
             }
         }
