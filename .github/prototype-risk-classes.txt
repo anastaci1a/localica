@@ -35,6 +35,7 @@ io.github.anastaci1a.localica.BrowseRetentionTest
 io.github.anastaci1a.localica.BrowseScrollContinuityTest
 io.github.anastaci1a.localica.BrowseSortRevertTest
 io.github.anastaci1a.localica.ButtonGestureTest
+io.github.anastaci1a.localica.CarouselSelectionArtworkTest
 io.github.anastaci1a.localica.ChoiceControlsTest
 io.github.anastaci1a.localica.CollectionArtworkPreferencesTest
 io.github.anastaci1a.localica.CollectionControlsBackdropTest
