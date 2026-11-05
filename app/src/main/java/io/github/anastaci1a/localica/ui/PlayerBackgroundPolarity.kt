@@ -89,6 +89,13 @@ internal data class PlayerBackgroundGeometry(val size: Size, val cover: Rect, va
      */
     var lightMix by mutableFloatStateOf(1f); private set
     fun presentLightMix(value: Float) { if (lightMix != value) lightMix = value }
+    /**
+     * The OKLab lightness shift that grades the artwork backdrop for the chosen ink (#576), from the measured region
+     * behind the text and controls. Held at its last value while a new measurement is pending, so the backdrop never
+     * flashes ungraded between tracks.
+     */
+    var backdropShift by mutableFloatStateOf(0f); private set
+    internal fun presentBackdropShift(value: Float) { if (backdropShift != value) backdropShift = value }
     /** Holds [decision] at a fixed polarity so a presentation test controls exactly when it changes. */
     private var pinned: Boolean? = null
     internal fun pin(lightInk: Boolean?) { pinned = lightInk; if (lightInk != null) decision = PlayerBackgroundDecision(lightInk, PlayerBackgroundConfidence.Current, null) }
@@ -204,6 +211,7 @@ private fun BackgroundSampleRole.paintReady(geometry: PlayerBackgroundGeometry, 
             }
             owner.current(choice.lightInk)
             val mean = choice.mean
+            owner.presentBackdropShift(BackdropGrade.lightnessShift(mean.red, mean.green, mean.blue, choice.lightInk))
             // Use the current descriptor's provenance for these same prepared pixels. The equality
             // guard above still requires every original sampling input to match. Never retain frame,
             // visual, descriptor or bitmap references just to explain a future failure.
