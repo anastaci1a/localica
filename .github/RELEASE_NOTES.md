@@ -1,6 +1,6 @@
-<!-- Release: v0.33.0 -->
+<!-- Release: v0.33.1 -->
 
-# Release v0.33.0
+# Release v0.33.1
 
 Android APK for Android 8 or newer. Keeps the existing `.debug` application ID and project development signing key for in-place updates. Separate production signing is not configured.
 
@@ -8,41 +8,32 @@ This is an optimized build (not debuggable, minified with R8, with a baseline pr
 
 ## Changes
 
-- Dragging several selected items now shows a live, frosted stack that follows your finger, with the now-playing artwork fading as items are picked up. Autoscroll during a drag keeps the frosted view live.
-- Skip forward and Skip back have a new animation, and the transport and tab icons are refreshed. The song menu icons are refreshed too.
-- Icons are now swappable: an icon registry and importable icon packs are in place (see docs/icon-packs.md).
-- Tapping a Library filter bubble, or changing the full-library search text, scrolls the list back to the top.
-- The player backdrop is graded for contrast with the chosen text and icon colour, with gentler saturation and brightness independent of saturation.
-- In the Queue drawer, song and artwork changes ease on one shared clock, so the artwork, colours and text change together.
-- Dragging the playback bar over the cancel (X) target no longer force-closes the app.
-- Pinching in album, playlist and artist views no longer freezes the list when the destination size has no collection header.
-- Behind the scenes: several flaky tests (search keyboard motion, Library filter, shuffle mode) were fixed, and the build and test pipeline is faster, with bounded shard times and repeatable test proofs.
+- Album carousels no longer randomly hide artwork when you select or deselect an album, and carousel albums use the standard gallery gap.
+- The scrollbar shows one continuous position in every list, with no jump at the end of the list.
+- The album art viewer now has a Save button (to Downloads) in place of the + button.
+- Icon packs now live in an internal library: a pack list, instant switching between packs, and a viewer that shows each pack's icons.
+- Behind the scenes: flaky tests (search and sort reset, player backdrop hang, large-queue transport) were fixed, and prototype CI can repeat exact test methods.
 
 ## Resolved issues
 
-- https://github.com/anastaci1a/localica/issues/557 - Multi-select drag stack: live recursive frosted panes, visible stacking, now-playing fade.
-- https://github.com/anastaci1a/localica/issues/571 - Transport and tab icons refreshed; new skip-forward/back animation.
-- https://github.com/anastaci1a/localica/issues/572 - Icon registry and importable icon packs.
-- https://github.com/anastaci1a/localica/issues/570 - Song menu action icons refreshed.
-- https://github.com/anastaci1a/localica/issues/568 - Library filter bubbles and full-library search reset the list to the top.
-- https://github.com/anastaci1a/localica/issues/576 - Player backdrop grading for contrast with the chosen ink.
-- https://github.com/anastaci1a/localica/issues/578 - Queue drawer song and artwork changes transition smoothly on one clock.
-- https://github.com/anastaci1a/localica/issues/583 - Seek drag over the cancel target no longer crashes.
-- https://github.com/anastaci1a/localica/issues/535 - Subview pinch without a reachable collection header no longer freezes (partial, see Known issues).
-- https://github.com/anastaci1a/localica/issues/545 - SearchImeMotionTest window-focus flake fixed (test only).
-- https://github.com/anastaci1a/localica/issues/565 - LibraryFilterTest readiness flake fixed (test only).
-- https://github.com/anastaci1a/localica/issues/566 - ShuffleModePlaybackTest cursor-save ordering flake fixed (test only).
-- https://github.com/anastaci1a/localica/issues/591 - CI trim: parallel test and delivery builds, re-measured shards, bounded shard times.
+- https://github.com/anastaci1a/localica/issues/574 - Album carousel artwork no longer hides on select/deselect.
+- https://github.com/anastaci1a/localica/issues/573 - Album carousel uses the standard gallery gap.
+- https://github.com/anastaci1a/localica/issues/582 - Continuous scrollbar position with no jump at the list end.
+- https://github.com/anastaci1a/localica/issues/585 - Album art viewer Save (to Downloads) replaces the + button.
+- https://github.com/anastaci1a/localica/issues/597 - Icon pack library: pack list, instant switching and a per-pack icon viewer.
+- https://github.com/anastaci1a/localica/issues/581 - SearchSortResetTest.globalReset flake fixed (test only).
+- https://github.com/anastaci1a/localica/issues/586 - PlayerBackdropTest API 26 shard hang fixed (test only).
+- https://github.com/anastaci1a/localica/issues/602 - LargeQueueTransportTest provider-open expectation fixed (test only).
 
 ## Known issues
 
 - Crash when holding the artwork in the full-screen player: can't be reproduced yet; logs requested (https://github.com/anastaci1a/localica/issues/575).
-- The #535 fix covers pinching without a reachable collection header; other causes of the whole-list freeze after a fling and pinch in subviews may remain. If it happens, use Export diagnostics (https://github.com/anastaci1a/localica/issues/535).
+- The whole-list freeze after a fling and pinch in subviews may still occur in rare cases. If it happens, use Export diagnostics (https://github.com/anastaci1a/localica/issues/535).
 - Selection outlines don't yet merge with smooth concave joins (https://github.com/anastaci1a/localica/issues/556).
 
 ## Install
 
-1. Download `localica-v0.33.0-debug.apk` from **Assets** below (Android 8+).
+1. Download `localica-v0.33.1-debug.apk` from **Assets** below (Android 8+).
 2. Open the APK and allow installation from your browser or file manager if prompted. It updates the existing development app.
 3. First use: open **More → Scan music**, choose **Folders to scan**, then **Scan now**.
 
