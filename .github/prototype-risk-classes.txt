@@ -340,3 +340,4 @@ io.github.anastaci1a.localica.SeekCancelExitTest
 io.github.anastaci1a.localica.BackdropProducerContinuityTest
 io.github.anastaci1a.localica.GlassScrollHoldTest
 io.github.anastaci1a.localica.AssertionReadinessTest
+io.github.anastaci1a.localica.ShadowContinuityTest
