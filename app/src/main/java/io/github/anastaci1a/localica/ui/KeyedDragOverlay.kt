@@ -128,7 +128,7 @@ internal fun <T : Any, P> BoxScope.KeyedDragOverlay(state: KeyedDragState<T, P>,
         val paneScene = if (index > 0) rememberFrostedBackdrop(Triple(drag, lifted, paneBacking?.snapshot),
             // Consumers already clip to their pane. Avoid a full-viewport offscreen raster
             // that redraws everything outside those clips whenever a card moves.
-            dark = backing?.dark == true, retainRaster = false, whiteTint = 0f) else null
+            dark = backing?.dark == true, retainRaster = false) else null
         SideEffect {
             if (paneScene != null) paneObserver?.invoke(index, paneScene)
         }

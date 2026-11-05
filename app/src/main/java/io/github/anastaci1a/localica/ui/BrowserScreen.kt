@@ -507,15 +507,13 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     StuckStateWatchdog(
         lingering = {
             pinchMotion.source != null && !pinchMotion.held || pinchMotion.readbackPending ||
-                zoomAnchor != null && pinchMotion.source == null ||
-                listBackdrop.readbackPending || viewportBackdrop?.source?.readbackPending == true
+                zoomAnchor != null && pinchMotion.source == null
         },
         lingeringReport = {
             "${pinchMotion.diagnostics()} anchor=$zoomAnchor queryPending=$queryPending " +
                 "displayed=${displayedStyle.presentation}/${displayedStyle.listSize} " +
                 "scrolling=${gridState.isScrollInProgress} first=${gridState.firstVisibleItemIndex}/" +
-                "${gridState.firstVisibleItemScrollOffset} listRecordingHeld=${listBackdrop.readbackPending}/" +
-                "${viewportBackdrop?.source?.readbackPending}"
+                "${gridState.firstVisibleItemScrollOffset}"
         },
         recoveredReport = { pinchMotion.diagnostics() })
     val refreshBackdrop = LocalBackdropRefresh.current
