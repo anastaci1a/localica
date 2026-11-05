@@ -25,6 +25,15 @@ class SearchSortResetTest {
     private fun resetSearch(global: Boolean) {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val store = context.getSharedPreferences("browse-style", 0)
+        val trace = java.util.concurrent.ConcurrentLinkedQueue<String>()
+        fun record(event: String) {
+            trace += "${android.os.SystemClock.uptimeMillis()} $event"
+        }
+        record("inherited=${store.all}")
+        val listener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            record("preference $key=${store.all[key]}")
+        }
+        store.registerOnSharedPreferenceChangeListener(listener)
         store.edit().clear().commit()
         val preferences = BrowsePreferences(context)
         val root = BrowseRoute(MainTab.Albums)
@@ -52,10 +61,13 @@ class SearchSortResetTest {
                 LocalicaTheme {
                     key(route.key) {
                         BrowserScreen(LibraryUiState(snapshot, loading = false), PlaylistState(loading = false), route,
-                            { navigation.value = navigation.value.update(it) },
+                            { record("route sort=${it.querySort} ascending=${it.queryAscending}"); navigation.value = navigation.value.update(it) },
                             { item -> navigation.value = navigation.value.open(BrowseRoute(MainTab.Albums, item.ref, item.title)) },
                             {}, { _, _, _ -> }, null, null, true, false,
-                            sorting = sorting, onSortDismiss = { sorting = false }, reducedMotion = true,
+                            sorting = sorting, onSortDismiss = {
+                                record("sort-dismiss overridden=${preferences.overridden(search)} route=${navigation.value.route.querySort}")
+                                sorting = false
+                            }, reducedMotion = true,
                             onSearchEdit = { navigation.value = navigation.value.editSearch(it) },
                             onSearchCommit = { navigation.value = navigation.value.commitSearch() },
                             onBack = { navigation.value = navigation.value.back(false)!! })
@@ -64,10 +76,15 @@ class SearchSortResetTest {
             }
             val reset = compose.onNodeWithText("Use list-type defaults").assertIsDisplayed().assertIsEnabled()
             compose.awaitExpectedWindowFocus(reset)
+            val view = (reset.fetchSemanticsNode().root as androidx.compose.ui.platform.ViewRootForTest).view
+            compose.runOnUiThread {
+                val insets = androidx.core.view.ViewCompat.getRootWindowInsets(view)
+                record("before-click focus=${view.hasWindowFocus()} ime=${insets?.getInsets(androidx.core.view.WindowInsetsCompat.Type.ime())?.bottom} overridden=${preferences.overridden(search)}")
+            }
             reset.performClick()
             compose.waitUntil(5000) { compose.onAllNodesWithTag("glass-morph-surface").fetchSemanticsNodes().isEmpty() }
             compose.runOnIdle {
-                assertFalse(preferences.overridden(search))
+                assertFalse("Reset trace=${trace.joinToString(" | ")} remaining=${store.all}", preferences.overridden(search))
                 assertEquals(TrackSort.Title, preferences.read(search).sort)
                 assertEquals(search.copy(querySort = TrackSort.Title, queryAscending = true), navigation.value.route)
                 assertEquals(older, navigation.value.stacks.getValue(MainTab.Albums)[1])
@@ -110,6 +127,10 @@ class SearchSortResetTest {
                 assertEquals(older, navigation.value.stacks.getValue(MainTab.Albums)[1])
                 assertFalse(preferences.overridden(search))
             }
-        } finally { store.edit().clear().commit() }
+        } finally {
+            android.util.Log.i("SearchSortReset", trace.joinToString(" | "))
+            store.unregisterOnSharedPreferenceChangeListener(listener)
+            store.edit().clear().commit()
+        }
     }
 }
