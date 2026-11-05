@@ -244,8 +244,8 @@ internal fun <T : Any, P> BoxScope.KeyedDragOverlay(state: KeyedDragState<T, P>,
         DragCancelTarget(drag.overCancel, "move",
             Modifier.align(Alignment.BottomCenter)
                 // Read late-published panel occupancy during placement, as hit testing does.
-                .offset { IntOffset(0, state.cancelOffsetY) }
-                .graphicsLayer { alpha = cancelMotion.alpha }
+                .glassShadowOffset { IntOffset(0, state.cancelOffsetY) }
+                .glassShadowOpacity { cancelMotion.alpha }
                 .size(with(density) { cancelSize.toDp() })
                 .zIndex(10f).testTag("cancel-drag"))
     }

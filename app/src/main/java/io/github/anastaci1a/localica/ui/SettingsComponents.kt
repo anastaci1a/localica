@@ -9,7 +9,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.semantics.Role
@@ -64,7 +63,7 @@ internal fun SettingsLink(title: String, summary: String? = null, icon: AppIcon?
     }
     SideEffect { if (anchor != null) anchor.face = { Foreground() } }
     val opacity by animateControlStateFloat(if (enabled) 1f else .45f, enabled, "Settings link availability")
-    LiquidGlassSurface(Modifier.fillMaxWidth().alpha(opacity)
+    LiquidGlassSurface(Modifier.fillMaxWidth().glassShadowOpacity { opacity }
         .then(if (anchor == null) Modifier else Modifier.glassAnchor(anchor)), cornerRadius = 20.dp, pressFeedback = enabled) {
         Foreground(Modifier.ownButtonDrag(enabled).clickable(enabled, role = Role.Button, onClick = controlActivation(enabled, onClick)))
     }

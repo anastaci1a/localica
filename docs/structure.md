@@ -282,6 +282,8 @@ Floating list controls sample the finished viewport after its fade and scrolling
 
 Retain padded textures excluding transparent interiors; use rounded primitives for one valid uniform body and union paths otherwise. Shadows inherit their owner's transform, fade and clipping; only siblings moving together share a union (bottom chrome/filter strips), never whole pages or modal descendants. Pad scrolling clips for the gradient's reach. Popup and trigger transfer exclusive ownership at handoff.
 
+Adapt falloff samples to the physical spread and quantize cumulative opacity. Composite the live shadow as one transparent field to match the retained texture. Both paths resolve the interior cutout in destination coordinates before isolating the field. Keep popup/home receiver responses native; software accumulation changes their nonlinear shading.
+
 Geometry changes invalidate the texture; translation reuses it.
 
 #### Backings and navigation selectors
