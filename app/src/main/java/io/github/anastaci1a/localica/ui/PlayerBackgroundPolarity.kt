@@ -101,6 +101,10 @@ internal data class PlayerBackgroundGeometry(val size: Size, val cover: Rect, va
      * re-prepares pixels per frame. Held until a new preparation completes.
      */
     var roleGrades by mutableStateOf<Map<Any, BackdropRoleGrade>>(emptyMap()); private set
+    // Blend roles change on admission and settlement. Retain grades by owned visual so
+    // a remounted outgoing role never loses the grade it was already drawing.
+    private val visualGrades = mutableStateMapOf<PlayerVisual, BackdropRoleGrade>()
+    fun grade(identity: Any?, visual: PlayerVisual): BackdropRoleGrade? = roleGrades[identity] ?: visualGrades[visual]
     /** The ink the artwork transition is travelling to, once known; null when settled or not yet measured. */
     var destinationLightInk by mutableStateOf<Boolean?>(null); private set
     /** The artwork blend clock (1 when settled): drives the same ease as the lyrics clock for song changes. */
@@ -109,6 +113,9 @@ internal data class PlayerBackgroundGeometry(val size: Size, val cover: Rect, va
     internal fun settled() { if (destinationLightInk != null) destinationLightInk = null }
     internal fun presentGrades(grades: Map<Any, BackdropRoleGrade>, destination: Boolean?) {
         if (roleGrades != grades) roleGrades = grades
+        frame?.roles?.forEach { role -> grades[role.identity]?.let { visualGrades[role.visual] = it } }
+        if (visualGrades.size > 8) visualGrades.keys.filter { visual -> frame?.roles?.none { it.visual == visual } != false }
+            .take(visualGrades.size - 8).forEach { visualGrades.remove(it) }
         // Kept past the end of the transition until the settled decision is current (see [settled]).
         if (destination != null && destinationLightInk != destination) destinationLightInk = destination
     }
@@ -125,7 +132,7 @@ internal data class PlayerBackgroundGeometry(val size: Size, val cover: Rect, va
         if (measured !== next) measured = next
     }
     fun detach() {
-        coordinates.clear(); measured = emptyMap(); frame = null; backdrops.clear(); roleGrades = emptyMap(); destinationLightInk = null; artworkClock = 1f
+        coordinates.clear(); measured = emptyMap(); frame = null; backdrops.clear(); roleGrades = emptyMap(); visualGrades.clear(); destinationLightInk = null; artworkClock = 1f
         unavailable(PlayerBackgroundUnavailable.Unmeasured)
     }
     fun frame(value: ArtworkBackgroundFrame) {
@@ -191,7 +198,9 @@ private fun BackgroundSampleRole.paintReady(geometry: PlayerBackgroundGeometry, 
     val frame = owner.frame
     // Grading and the transition's destination ink need only each role's own prepared pixels, not a settled or
     // unblurred composite, so they are available all through an artwork change (#578).
-    val gradeReason = unsupported ?: when {
+    // Partial expansion still has measurable owned pixels; prepare its grade before
+    // the backdrop contributes, while the settled ink policy below stays unchanged.
+    val gradeReason = unsupported?.takeUnless { it == PlayerBackgroundUnavailable.PartialPlayer } ?: when {
         frame == null || geometry == null -> PlayerBackgroundUnavailable.Unmeasured
         !validBackgroundGeometry(geometry) -> PlayerBackgroundUnavailable.InvalidGeometry
         frame.roles.any { owner.backdrops[it.identity] == null } -> PlayerBackgroundUnavailable.MissingRole
