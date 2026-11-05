@@ -110,10 +110,12 @@ class UiPerformanceTest {
                     BrowseRoute(MainTab.Queues, MediaRef(MediaKind.Queue, queue.id), queue.name) else BrowseRoute(MainTab.Songs)) }) { scroll() }
             for (columns in 1..5) measure("gallery-$columns", { launchBrowse(BrowseStyle(
                 presentation = Presentation.Standard, itemsPerRow = columns)) }) { scroll() }
-            measure("subview-scroll", { launchApp() }, {
-                clickText("Albums"); clickTagPrefix("media-"); awaitTag("browser-list")
+            measure("subview-scroll", {
+                val album = LibraryViews.groups(library.snapshot, SongListView.Albums, LibraryQuery()).first()
+                launchBrowse(BrowseStyle(listSize = ListSize.Large),
+                    BrowseRoute(MainTab.Albums, MediaRef(MediaKind.Album, album.id), album.title))
             }) { scroll() }
-            measure("carousel", { launchApp() }, { clickText("Home"); awaitTag("home-pins") }) {
+            measure("carousel", { launchApp(home = true) }) {
                 val b = bounds { it.tag() == "home-pins" }
                 repeat(4) { check(device.swipe((b.right - 30).toInt(), b.center.y.toInt(), (b.left + 30).toInt(), b.center.y.toInt(), 30)); Thread.sleep(300) }
             }
@@ -198,14 +200,13 @@ class UiPerformanceTest {
             BrowserScreen(library, PlaylistState(), route, { route = it }, {}, {}, { _, _, _ -> }, null, null, true, false)
         }
     }
-    private fun launchApp() {
+    private fun launchApp(home: Boolean = false) {
+        context.getSharedPreferences("interface", 0).edit().putString("tabs", if (home) "Home" else "Songs").commit()
         BrowsePreferences(context).write(BrowseRoute(MainTab.Songs), BrowseStyle(), false)
         launch { LocalicaScreen(library, PlaybackState(connected = true, trackId = tracks[0].id,
             trackUri = "fixture", title = tracks[0].title, durationMs = 180_000), {}, {}, {}, {}, {}, {},
             queues = QueueUiState(QueueLibrary(listOf(queue), queue.id), loading = false)) }
-        awaitTag("home-pins")
-        clickText("Songs")
-        awaitTag("browser-list")
+        awaitTag(if (home) "home-pins" else "browser-list")
     }
     private fun launch(content: @Composable () -> Unit) {
         tone = .4f
@@ -272,9 +273,7 @@ class UiPerformanceTest {
         }
         error("Click target missing; visible semantics=" + nodes { all -> all.map { it.config.toString() }.joinToString("; ") })
     }
-    private fun clickText(text: String) = click { it.config.getOrNull(SemanticsProperties.Text)?.any { t -> t.text == text } == true }
     private fun clickDescription(text: String) = click { it.config.getOrNull(SemanticsProperties.ContentDescription)?.contains(text) == true }
-    private fun clickTagPrefix(prefix: String) = click { it.tag()?.startsWith(prefix) == true }
     private fun bounds(match: (SemanticsNode) -> Boolean): Rect = nodes { all -> checkNotNull(all.lastOrNull { match(it) && it.boundsInWindow.height > 0 }).boundsInWindow }
     private fun expand() { click { it.config.getOrNull(SemanticsActions.OnClick)?.label == "Expand player" }; Thread.sleep(600) }
     private fun scroll() {
