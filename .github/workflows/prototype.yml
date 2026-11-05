@@ -159,7 +159,7 @@ jobs:
         target: google_apis
         arch: x86_64
         profile: pixel_2
-        emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -memory 3072
+        emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -memory 3072 -show-kernel
         disable-animations: true
         script: |
           adb shell wm size reset
@@ -167,6 +167,13 @@ jobs:
           sleep 60
           bash .github/test-evidence/environment.sh >> prototype-runner-environment.txt
           bash .github/run-prototype-tests.sh
+    - name: Preserve emulator crash database
+      if: failure()
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: prototype-emulator-crashes-api-26
+        path: /tmp/android-runner/emu-crash-*/
+        if-no-files-found: warn
     - name: Capture host diagnostics on emulator failure
       if: failure()
       run: |
@@ -288,7 +295,7 @@ jobs:
         target: default
         arch: x86_64
         profile: pixel_2
-        emulator-options: -no-window -gpu lavapipe -no-snapshot -noaudio -no-boot-anim -memory 3072
+        emulator-options: -no-window -gpu lavapipe -no-snapshot -noaudio -no-boot-anim -memory 3072 -show-kernel
         disable-animations: false
         script: |
           adb shell wm size 720x1280
@@ -296,6 +303,13 @@ jobs:
           sleep 60
           bash .github/test-evidence/environment.sh >> prototype-runner-environment.txt
           bash .github/run-prototype-tests.sh
+    - name: Preserve emulator crash database
+      if: failure()
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: prototype-emulator-crashes-api-36
+        path: /tmp/android-runner/emu-crash-*/
+        if-no-files-found: warn
     - name: Capture host diagnostics on emulator failure
       if: failure()
       run: |
