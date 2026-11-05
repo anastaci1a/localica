@@ -20,7 +20,7 @@ import kotlin.math.abs
 internal class PlayerInkTransition(initial: Color) {
     /** What one resolution leaves behind; applying it is separate so composition never mutates. */
     internal data class Step(val shown: Color, val target: Color, val start: Color, val startProgress: Float, val lastEnd: Float,
-        val light: Float = lightOf(shown), val startLight: Float = light)
+        val light: Float = lightOf(shown), val startLight: Float = light, val clock: Int = 0)
 
     private var committed = Step(initial, initial, initial, 0f, Float.NaN)
 
@@ -30,22 +30,23 @@ internal class PlayerInkTransition(initial: Color) {
      * visibility (0 closed, 1 open); [open] is the mode being animated toward. Publish the result
      * with [commit] from a SideEffect.
      */
-    fun resolve(inkTarget: Color, progress: Float, open: Boolean): Step {
+    fun resolve(inkTarget: Color, progress: Float, open: Boolean, clock: Int = 0): Step {
         val end = if (open) 1f else 0f
         val animating = abs(progress - end) > SETTLED
         val s = committed
         val targetLight = lightOf(inkTarget)
-        if (!animating) return Step(inkTarget, inkTarget, inkTarget, s.startProgress, end, targetLight, targetLight)
+        if (!animating) return Step(inkTarget, inkTarget, inkTarget, s.startProgress, end, targetLight, targetLight, clock)
         var start = s.start; var startLight = s.startLight; var startProgress = s.startProgress; var target = s.target
         if (inkTarget != target) {
             start = s.shown; startLight = s.light; startProgress = progress; target = inkTarget
-        } else if (s.lastEnd != end && s.shown != target) {
-            // The animation reversed: continue from the displayed ink rather than jumping.
+        } else if (s.shown != target && (s.lastEnd != end || s.clock != clock || (if (end > .5f) progress < startProgress - SETTLED else progress > startProgress + SETTLED))) {
+            // The animation reversed, another clock took over, or the same clock restarted (a new song during a change):
+            // continue from the displayed ink rather than jumping.
             start = s.shown; startLight = s.light; startProgress = progress
         }
         val fraction = ink(progress, end, startProgress)
         return Step(lerp(start, target, fraction), target, start, startProgress, end,
-            startLight + (targetLight - startLight) * fraction, startLight)
+            startLight + (targetLight - startLight) * fraction, startLight, clock)
     }
 
     fun commit(step: Step) { committed = step }

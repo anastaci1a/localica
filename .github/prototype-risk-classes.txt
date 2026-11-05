@@ -188,6 +188,7 @@ io.github.anastaci1a.localica.PrivateQueueBoundaryTest
 io.github.anastaci1a.localica.QuarantinedSourceReopenTest
 io.github.anastaci1a.localica.QueueBrowsingTest
 io.github.anastaci1a.localica.QueueContinuousPlaybackTest
+io.github.anastaci1a.localica.QueueSongTransitionTest
 io.github.anastaci1a.localica.QueueContourTest
 io.github.anastaci1a.localica.QueueCreationOffMainTest
 io.github.anastaci1a.localica.QueueDatabaseTest

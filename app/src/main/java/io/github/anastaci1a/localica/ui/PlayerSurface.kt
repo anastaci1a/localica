@@ -93,17 +93,20 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     val inkDecision = polarity.decision
     // Do not subscribe the ordinary player to the sampling-frame clock for diagnostics.
     val inkFrame = if (inkObserver != null) polarity.frame else null
-    val lightInk = inkDecision.lightInk
+    // During an artwork change the ink eases toward the destination cover's ink on the blend's own clock (#578);
+    // settled, the ordinary decision applies.
+    val blendClock = polarity.artworkClock
+    val lightInk = (if (blendClock < 1f) polarity.destinationLightInk else null) ?: inkDecision.lightInk
     val inkTarget = if (lightInk) Color.White else Color.Black
-    // The backdrop grade (#576) is the one lightness shift measured against the chosen ink. The ink itself is decided
-    // from the ungraded backdrop, so grading cannot feed back into the decision. Brightness trim Off disables grading.
-    val tone = GlassTone(shift = if (settings.glass.contrast > 0f) polarity.backdropShift else 0f)
     val paletteDuration = settings.motionDuration(550)
     val palette = animatedPlayerPalette(artwork.palette, paletteDuration)
     val lyricVisibility by animateFloatAsState(if (lyricsOpen) 1f else 0f, tween(settings.motionDuration(550)), label = "Lyrics layout")
     // A light/dark foreground change during the lyrics animation eases with its progress.
     val inkTransition = remember { PlayerInkTransition(inkTarget) }
-    val inkStep = inkTransition.resolve(inkTarget, lyricVisibility, lyricsOpen)
+    val lyricsAnimating = kotlin.math.abs(lyricVisibility - (if (lyricsOpen) 1f else 0f)) > PlayerInkTransition.SETTLED
+    val artworkEasing = !lyricsAnimating && blendClock < 1f
+    val inkStep = if (artworkEasing) inkTransition.resolve(inkTarget, blendClock, true, clock = 1)
+        else inkTransition.resolve(inkTarget, lyricVisibility, lyricsOpen)
     val playerInk = inkStep.shown
     // Every material that follows the player's ink (the glass backdrops and the panel theme below) reads the same
     // eased polarity as the foreground, and the shared state exposes it to the surfaces outside this composable.
@@ -402,17 +405,20 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
                 immediate = artSwipe.active || artworkVisit != null && artSwipe.handoff == artworkVisit, opacityBlend = lyricsOpen || settings.artworkTransition != io.github.anastaci1a.localica.navigation.ArtworkTransition.BlurThrough,
                 onBackgroundFrame = polarity::frame) { frame ->
                 val backgroundRole = LocalArtworkBackgroundRole.current
+                // Each role carries its own grade (#576): the crossfade blends two correctly graded backdrops. Brightness trim
+                // Off disables grading.
+                val roleTone = GlassTone(shift = if (settings.glass.contrast > 0f) backgroundRole?.let { polarity.roleGrades[it]?.shift } ?: 0f else 0f)
                 val destination = artSwipe.destination
                 val neighborOffset = swipeOffset - (if (swipeOffset < 0f) -1f else 1f) * artPixels
                 if (backgroundReveal > 0f) Box(Modifier.fillMaxSize().graphicsLayer { alpha = backgroundReveal }) {
                     PlayerBackdrop(frame.palette, Modifier.fillMaxSize(), backgroundProgress * (1f - lyricProgress),
                         with(density) { artY.toPx() }, with(density) { artHeight.toPx() },
-                        with(density) { artX.toPx() } + swipeOffset, artPixels, softness = maxOf(1f - coverBlend, swipeFeather / .9f), tone = tone,
+                        with(density) { artX.toPx() } + swipeOffset, artPixels, softness = maxOf(1f - coverBlend, swipeFeather / .9f), tone = roleTone,
                         onBackgroundDescriptor = { descriptor -> backgroundRole?.let { polarity.backdrop(it, descriptor) } })
                     if (destination != null) PlayerBackdrop(destination.visual.palette,
                         Modifier.fillMaxSize().graphicsLayer { alpha = swipeFraction }, backgroundProgress,
                         with(density) { artY.toPx() }, with(density) { artHeight.toPx() },
-                        with(density) { artX.toPx() } + neighborOffset, artPixels, softness = maxOf(1f - coverBlend, swipeFeather / .9f), tone = tone)
+                        with(density) { artX.toPx() } + neighborOffset, artPixels, softness = maxOf(1f - coverBlend, swipeFeather / .9f), tone = roleTone)
                 }
             }
             Box(Modifier.motionBounds(artX, artY, artWidth, artHeight).testTag("artwork-gesture")
