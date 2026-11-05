@@ -21,6 +21,8 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.rememberGraphicsLayer
+import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.input.pointer.pointerInput
@@ -61,6 +63,7 @@ internal data class GlassLift(val scale: Float, val pivot: Offset) {
 
 @Stable
 internal class GlassAnchor {
+    var popupHome: GlassPopupHome? = null
     /** Live presented transform of [bounds], supplied by whatever moves the trigger in draw rather
      * than layout (the selection lift). Null when it is drawn where it is laid out. */
     var presentation: (() -> GlassLift?)? = null
@@ -115,7 +118,10 @@ internal class GlassAnchor {
 @Composable
 internal fun rememberGlassAnchor(deferContextPlacement: Boolean = false): GlassAnchor {
     val ink = LocalContentColor.current
-    return remember { GlassAnchor().also { it.ink = ink; it.contextPlacementTracked = !deferContextPlacement } }
+    val home = LocalGlassPopupHome.current
+    val anchor = remember { GlassAnchor().also { it.ink = ink; it.contextPlacementTracked = !deferContextPlacement } }
+    SideEffect { anchor.popupHome = home }
+    return anchor
 }
 
 /** Optional evidence of each published context-trigger placement; no behavior depends on it. */
@@ -250,6 +256,14 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
     fitContent: Boolean = placement == GlassPlacement.Menu,
     originPreparation: GlassOriginPreparation? = null, searchDismissOnImeBack: Boolean = false,
     content: @Composable () -> Unit) {
+    val popupHome = LocalGlassPopupHome.current
+    val requestedVisible = visible
+    @Suppress("NAME_SHADOWING")
+    val visible = requestedVisible && popupHome?.departing != true
+    // The screen layer supplies departing motion; the return keeps its original basis.
+    val returningHome = if (popupHome?.departing == true) remember(popupHome) { anchor.presentedBounds }
+        else null
+    val childHome = rememberGlassPopupHome(!visible)
     val reduced = LocalReducedMotion.current
     val originWell = remember { GlassOriginWell() }
     val receiverField = remember { GlassShadowReceiverField() }
@@ -506,6 +520,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
             searchOpeningShape.snapTo(requireNotNull(searchFlight).from)
             searchShapeStarted = true
         }
+        if (!visible) snapshotFlow { childHome.handedOff }.first { it }
         if (reduced) progress.snapTo(if (visible) 1f else 0f)
         else progress.animateTo(if (visible) 1f else 0f,
             glassMorphSpring(speed))
@@ -542,7 +557,20 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
         if (placement == GlassPlacement.Search) { val token = anchor.searchSlot.begin(); anchor.searchSlot.settle(token, 0f) }
         anchor.hidden = false; anchor.modalPresent = false; anchor.shadowInModal = false; anchor.contact.modal = false
     } }
-    if (!present) return
+    if (!present || popupHome?.mounted == false) return
+    // Prepare the home scene while native presentation is still active. Legacy
+    // readback must be ready before its window joins the outgoing screen layer.
+    BackdropLease(popupHome?.backdrop)
+    val departingSource = popupHome?.takeIf { it.departing }?.backdrop
+    val homeSampleReady = departingSource?.recorded == true &&
+        (currentGlassRendererGeneration().backend != GlassBackend.Legacy || departingSource.fallback != null)
+    val samplingSource = departingSource.takeIf { homeSampleReady } ?: source
+    val flightLayer = rememberGraphicsLayer()
+    val popupFlight = remember(flightLayer) { GlassPopupFlight(flightLayer) }
+    DisposableEffect(popupHome, popupFlight) {
+        popupHome?.flights?.add(popupFlight)
+        onDispose { popupHome?.flights?.remove(popupFlight) }
+    }
     // The full-scene recording can span pages with different ink. Its material
     // metadata must not override an explicit trigger. Detached menus instead
     // follow current ambient ink, rather than their anchor's remembered seed.
@@ -626,6 +654,20 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
         // A dragged slider rises the whole window body clear of its cancel target (#539).
         val sliderCancel = rememberSliderCancelHost()
         Box(Modifier.fillMaxSize()
+            .onGloballyPositioned { popupFlight.origin = it.backdropPosition(view) }
+            .drawWithContent {
+                if (popupHome == null) drawContent()
+                else {
+                    flightLayer.record { this@drawWithContent.drawContent() }
+                    androidx.compose.runtime.snapshots.Snapshot.withoutReadObservation {
+                        popupFlight.revision++
+                        popupFlight.prepared = popupHome.departing && homeSampleReady && samplingSource === popupHome.backdrop
+                        if (!popupHome.departing) popupFlight.handedOff = false
+                    }
+                    if (!popupHome.departing || !popupFlight.handedOff) drawLayer(flightLayer)
+                }
+            }
+            .then(if (popupHome?.departing == true) Modifier.clearAndSetSemantics { } else Modifier)
             .then(if (continuousOrigin != null) Modifier
                 .drawWithContent { if (admittedDraw) drawContent() }
                 .then(if (!admittedDraw) Modifier.clearAndSetSemantics { } else Modifier)
@@ -723,7 +765,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                     else availableHeight) - margin * 2).roundToInt().coerceAtLeast(1)
                 // Closing follows the restored trigger. Opening keeps the pre-collapse location.
                 val livePreparedOrigin = continuousOrigin != null
-                val start = (if (visible && !livePreparedOrigin) origin else anchor.presentedBounds).translate(-windowOrigin)
+                val start = (if (visible && !livePreparedOrigin) origin else returningHome ?: anchor.presentedBounds).translate(-windowOrigin)
                 val detached = page || (origin == Rect.Zero && anchor.bounds == Rect.Zero)
                 val startWidth = start.width.takeIf { it > 0f } ?: targetWidth.toFloat()
                 val startHeight = start.height.takeIf { it > 0f } ?: with(density) { CompactControlSize.toPx() }
@@ -731,13 +773,13 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                 val radius = if (page) 0.dp else if (detached) 28.dp else homeRadius * (1f - geometry) + 28.dp * geometry
                 SideEffect { if (hasViewport) anchor.contact.vertical = kotlin.math.abs(targetHeight - startHeight) > kotlin.math.abs(targetWidth - startWidth) }
                 val dark = panelDark
-                val material = rememberFrostedBackdrop(listOf(source?.fallback, p == 1f, LocalGlassAppearance.current), dark = dark)
-                SideEffect { material.parent = source; material.materialOnly = true; material.materialCorner = with(density) { radius.toPx() } }
+                val material = rememberFrostedBackdrop(listOf(samplingSource?.fallback, p == 1f, LocalGlassAppearance.current), dark = dark)
+                SideEffect { material.parent = samplingSource; material.materialOnly = true; material.materialCorner = with(density) { radius.toPx() } }
                 // This recording is sampled only by a later nested modal. Its
                 // material already has a shared raster; don't allocate and redraw
                 // another full-panel texture throughout every opening/closing.
                 val completePanel = rememberFrostedBackdrop(p == 1f, dark = dark, retainRaster = false)
-                SideEffect { completePanel.parent = source }
+                SideEffect { completePanel.parent = samplingSource }
                 fun mix(a: Float, b: Float) = a + (b - a) * geometry
                 // Read readiness in composition even for committed queries, whose
                 // IME-dismissal branch below is disabled. A SideEffect-only read
@@ -780,7 +822,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                     if (it.opening && visible) {
                         if (searchShapeStarted && searchFlight?.opening == true) searchOpeningShape.value else it.from
                     }
-                    else it.rectangle(p, anchor.presentedBounds)
+                    else it.rectangle(p, returningHome ?: anchor.presentedBounds)
                 }
                     ?: searchMotion.rendered.takeIf { holdImeBack && it.width > 0f }
                     ?: searchPlacement.value.takeIf { placement == GlassPlacement.Search && it.width > 0f })?.translate(-windowOrigin)
@@ -866,16 +908,17 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                         .clearGlassReceiverShadow(LocalGlassAppearance.current.shadowStrength *
                             (if (anchor.quiet) (p / .14f).coerceIn(0f, 1f) else if (detached) p else 1f),
                             shadowSpread, radius, exclusion = { shadowExclusion[0] }, receiver = { shadowReceiver[0] })
-                        .clip(RoundedCornerShape(radius)).recordFrostedBackdrop(completePanel).testTag("glass-morph-surface")
+                        .clip(RoundedCornerShape(radius)).glassPopupHome(childHome)
+                        .recordFrostedBackdrop(completePanel).testTag("glass-morph-surface")
                         .pointerInput(Unit) { detectTapGestures { } }, content = {
                         Box(Modifier.graphicsLayer {
                             if (anchor.quiet) { val t = (p / .25f).coerceIn(0f, 1f); alpha = t * t * (3f - 2f * t) }
                         }.recordFrostedBackdrop(material)) {
                             if (page) Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface))
                             else {
-                                LiquidGlassSurface(Modifier.fillMaxSize(), source = source,
+                                LiquidGlassSurface(Modifier.fillMaxSize(), source = samplingSource,
                                     homeSource = anchor.source, homeWeight = { val home = (1f - p / .5f).coerceIn(0f, 1f); home * home * (3f - 2f * home) },
-                                    homeBounds = { if (visible && !livePreparedOrigin) origin else anchor.presentedBounds },
+                                    homeBounds = { if (visible && !livePreparedOrigin) origin else returningHome ?: anchor.presentedBounds },
                                     homeFootprint = if (!measuredHome) null else ({
                                         if (visible && !livePreparedOrigin) originFootprint
                                         else if (anchor.samplingLocation.coordinates?.isAttached == true) anchor.samplingFootprint()
@@ -905,6 +948,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                                 LocalPopupScrollEdges provides !page,
                                 LocalSurfaceShadows provides null, LocalBottomShadows provides null,
                                 LocalGlassOrigin provides null,
+                                LocalGlassPopupHome provides childHome,
                                 LocalSearchOpeningReady provides reportSearchOpening.takeIf { placement == GlassPlacement.Search },
                                 LocalSearchReturnStart provides (if (placement == GlassPlacement.Search) ::beginSearchReturn else null),
                                 LocalGlassPanelReady provides (visible && admittedDraw && (placement == GlassPlacement.Search || p >= .9f))) {

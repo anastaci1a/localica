@@ -53,7 +53,8 @@ class PopupHostNavigationTest {
         compose.mainClock.autoAdvance = false
         compose.mainClock.advanceTimeBy(1600)
         compose.runOnIdle { open = true }
-        compose.advanceMorphOpening(if (expanding) 480 else 3200, anchor) { popupView }
+        compose.advanceMorphOpening(if (expanding) 720 else 3200, anchor) { popupView }
+        if (expanding) assertTrue("Back interrupts an unfinished expansion", anchor.contact.expansion.value < .99f)
         fun back(view: View?, condition: () -> Boolean) {
             compose.waitUntil(5000) { view?.hasWindowFocus() == true }
             UiDevice.getInstance(InstrumentationRegistry.getInstrumentation()).pressKeyCode(android.view.KeyEvent.KEYCODE_BACK)
