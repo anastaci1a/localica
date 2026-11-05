@@ -39,7 +39,7 @@ class ArtworkSaveTest {
     private val saved = mutableListOf<String>()
 
     @Before fun grant() {
-        if (Build.VERSION.SDK_INT < 29) instrumentation.uiAutomation.executeShellCommand("pm grant ${context.packageName} android.permission.WRITE_EXTERNAL_STORAGE").close()
+        if (Build.VERSION.SDK_INT < 29) instrumentation.uiAutomation.executeShellCommand("pm grant ${context.packageName} android.permission.WRITE_EXTERNAL_STORAGE").let { android.os.ParcelFileDescriptor.AutoCloseInputStream(it).use { s -> s.readBytes() } }
     }
 
     @After fun cleanup() {
