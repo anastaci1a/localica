@@ -14,14 +14,20 @@ class SharedApksTest(unittest.TestCase):
     def test_workflow_builds_once_and_binds_every_shard(self):
         import yaml
         jobs = yaml.safe_load((ROOT/'.github/workflows/android.yml').read_text())['jobs']
-        build = '\n'.join(step.get('run', '') for step in jobs['build']['steps'])
+        producer = '\n'.join(step.get('run', '') for step in jobs['test-apks']['steps'])
+        delivery = '\n'.join(step.get('run', '') for step in jobs['build']['steps'])
         shard = '\n'.join(step.get('run', '') for step in jobs['device-tests']['steps'])
-        self.assertIn('assembleDebugAndroidTest', build)
+        self.assertIn('assembleDebugAndroidTest', producer)
+        self.assertIn('shared-test-apks.py freeze', producer)
+        # The R8 delivery APK builds in parallel with, not before, the instrumentation APKs.
+        self.assertNotIn('assembleDistribution', producer)
+        self.assertIn('assembleDistribution', delivery)
+        self.assertNotIn('assembleDebugAndroidTest', delivery)
+        self.assertNotIn('shared-test-apks.py', delivery)
         self.assertNotIn('assembleDebug', shard)
-        self.assertEqual('build', jobs['device-tests']['needs'])
+        self.assertEqual('test-apks', jobs['device-tests']['needs'])
         self.assertIn('shared-test-apks.py verify', shard)
-        self.assertIn('needs.build.outputs.test-apks-sha256', str(jobs['device-tests']))
-        self.assertLess(build.index('shared-test-apks.py freeze'), build.index('cp "$out/distribution'))
+        self.assertIn('needs.test-apks.outputs.test-apks-sha256', str(jobs['device-tests']))
 
     def test_archive_rejects_changed_bytes_metadata_identity_and_manifest(self):
         helper = ROOT/'.github/shared-test-apks.py'
