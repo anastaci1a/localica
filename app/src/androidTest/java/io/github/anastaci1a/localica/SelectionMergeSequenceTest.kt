@@ -41,7 +41,7 @@ class SelectionMergeSequenceTest {
         return IntArray(420*280).also { bitmap.getPixels(it,0,420,0,0,420,280); bitmap.recycle() }
     }
     private fun sequence(name: String,width: Float,height: Float,vertical: Boolean,drag: Boolean,
-        corner: Float=12f,steps: Int=120) {
+        corner: Float=12f,steps: Int=120,regionFactory: ((Rect,Float)->List<Rect>)?=null) {
         val csv = StringBuilder("density,rtl,frame,separation,progress,changedCoverage\n")
         for (density in listOf(1f,1.75f,2.625f)) for (rtl in listOf(false,true)) {
             var previous: IntArray? = null
@@ -53,7 +53,7 @@ class SelectionMergeSequenceTest {
                 val progress = if (drag) hoverBridgeStrength(true,true,t to t,(1f-t) to (1f-t),1f to 1f) else 1f
                 val a = Rect(16f,16f,16f+width,16f+height)
                 val b = if (vertical) a.translate(Offset(0f,height+separation)) else a.translate(Offset(width+separation,0f))
-                val regions = listOf(a,b).map {
+                val regions = (regionFactory?.invoke(a,separation) ?: listOf(a,b)).map {
                     val r = if (rtl) Rect(400f-it.right,it.top,400f-it.left,it.bottom) else it
                     SelectionRegion(Rect(r.left*density,r.top*density,r.right*density,r.bottom*density),corner*density)
                 }
@@ -87,6 +87,11 @@ class SelectionMergeSequenceTest {
     @Test fun listConnectDisconnectAndReverse() = sequence("list",320f,72f,true,false)
     @Test fun galleryConnectDisconnectAndReverse() = sequence("gallery",96f,96f,false,false)
     @Test fun dragStartReleaseAndCancelReverse() = sequence("drag",240f,72f,true,true)
+    @Test fun overlappingLobesOnOneFaceConnectAndDisconnectWithoutChangingTopologyAbruptly() {
+        sequence("forked",240f,72f,true,false,regionFactory={ a,gap -> listOf(a,
+            Rect(a.left,a.bottom+gap,a.left+160,a.bottom+gap+72),
+            Rect(a.left+80,a.bottom+gap,a.right,a.bottom+gap+72)) })
+    }
     @Test fun everyBrowseSizeConnectsAndDisconnectsUsingItsMeasuredOutline() {
         val styles=ListSize.entries.map { BrowseStyle(listSize=it) }+
             Presentation.entries.filter { it!=Presentation.List }.map { BrowseStyle(presentation=it) }

@@ -53,12 +53,15 @@ class HoverSelectionTest {
             LocalicaTheme {
                 scene=remember { SelectionScene() }
                 val outline=rememberPaddedItemOutline(112.dp,0.dp,0.dp,0.dp,0.dp)
-                Box(Modifier.size(320.dp,200.dp).testTag("hover-scene")) {
+                Box(Modifier.size(320.dp,240.dp).testTag("hover-scene")) {
                     SelectionViewport(Modifier.fillMaxSize(),scene=scene,liftEdges=LiftEdges.Vertical) {
                         Row(Modifier.padding(24.dp,40.dp),horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-                            for(i in 0..1) Canvas(Modifier.size(112.dp).selectionLens(i==0 || second,false,
+                            for(i in 0..1) Column(Modifier.width(112.dp).selectionLens(i==0 || second,false,
                                 itemKey=i,outline=outline)) {
-                                drawRect(Color.Black,center-Offset(12.dp.toPx(),12.dp.toPx()),Size(24.dp.toPx(),24.dp.toPx()))
+                                Canvas(Modifier.size(112.dp)) {
+                                    drawRect(Color.Black,center-Offset(12.dp.toPx(),12.dp.toPx()),Size(24.dp.toPx(),24.dp.toPx()))
+                                }
+                                androidx.compose.material3.Text("Album $i",Modifier.height(32.dp))
                             }
                         }
                     }
