@@ -3,6 +3,11 @@ name: Prototype (not release certified)
 'on':
   workflow_dispatch:
     inputs:
+      repeat:
+        description: Independent iterations of the complete selected gate (1-30); stops on first failure
+        required: false
+        default: 1
+        type: number
       affected_classes:
         description: Comma-separated affected behavior test classes; IME, focus and contrast regressions are added automatically
         required: true
@@ -18,6 +23,11 @@ name: Prototype (not release certified)
         type: string
   workflow_call:
     inputs:
+      repeat:
+        description: Independent iterations of the complete selected gate (1-30); stops on first failure
+        required: false
+        default: 1
+        type: number
       affected_classes:
         required: true
         type: string
@@ -99,10 +109,11 @@ jobs:
     name: Prototype build, unit tests and lint
   focused_26:
     runs-on: ubuntu-24.04
-    # Capacity for the complete selected gate, not a throughput optimization.
-    timeout-minutes: 60
+    # Repeated proofs retain all selected methods and stop on their first failure.
+    timeout-minutes: ${{ inputs.repeat > 1 && 360 || 60 }}
     env:
       AFFECTED_CLASSES: ${{ inputs.affected_classes }}
+      PROTOTYPE_REPEAT: ${{ inputs.repeat }}
       TEST_API: '26'
     steps:
     - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -224,10 +235,11 @@ jobs:
     name: Prototype preserved-data compatibility API 26
   focused_36:
     runs-on: ubuntu-24.04
-    # Capacity for the complete selected gate, not a throughput optimization.
-    timeout-minutes: 60
+    # Repeated proofs retain all selected methods and stop on their first failure.
+    timeout-minutes: ${{ inputs.repeat > 1 && 360 || 60 }}
     env:
       AFFECTED_CLASSES: ${{ inputs.affected_classes }}
+      PROTOTYPE_REPEAT: ${{ inputs.repeat }}
       TEST_API: '36'
     steps:
     - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -366,6 +378,7 @@ jobs:
         path: evidence
     - name: Record passed, failed and not-run checks
       env:
+        PROTOTYPE_REPEAT: ${{ inputs.repeat }}
         CHECKS: ${{ toJSON(needs) }}
         KNOWN_ISSUES: ${{ inputs.known_issues }}
         AFFECTED_CLASSES: ${{ inputs.affected_classes }}
@@ -395,6 +408,7 @@ jobs:
             'native_test_apks': 'Independent same-SHA builds, not asserted identical to canonical signed delivery APK',
             'ready_for_prototype_delivery': False, 'validation_errors': [],
             'focused_evidence': {}, 'compatibility_evidence': {},
+            'requested_iterations': int(os.environ.get('PROTOTYPE_REPEAT', '1')),
         }
         errors = manifest['validation_errors']
         canonical = root / 'prototype-build-internal-unvalidated'
@@ -440,6 +454,26 @@ jobs:
                     assert all(value['passed'] > 0 and value['failed'] == 0 and value['errors'] == 0
                                for value in data['counts'].values())
                     data['independent_test_apk_hashes'] = (focused / 'test-input-apks.sha256').read_text()
+                    repetitions = manifest['requested_iterations']
+                    assert 1 <= repetitions <= 30
+                    if repetitions > 1:
+                        iteration_root = focused / 'iterations'
+                        summary = json.loads((iteration_root / 'summary.json').read_text())
+                        assert summary['sha'] == manifest['sha'] and str(summary['api']) == str(api)
+                        assert summary['requested'] == repetitions
+                        assert [item['iteration'] for item in summary['iterations']] == list(range(1, repetitions + 1))
+                        for item in summary['iterations']:
+                            assert item['status'] == 'passed' and item['exit_code'] == 0
+                            folder = iteration_root / f"iteration-{item['iteration']:02d}" / 'prototype-evidence'
+                            raw = (folder / 'reconciled-tests.json').read_bytes()
+                            assert hashlib.sha256(raw).hexdigest() == item['receipt_sha256']
+                            repeated = json.loads(raw)
+                            assert repeated['sha'] == manifest['sha'] and str(repeated['api']) == str(api)
+                            assert repeated['selectors'] == data['selectors']
+                            assert repeated['methods'] == data['methods'] and repeated['counts'] == data['counts']
+                            assert repeated['source_inventory_sha256'] == data['source_inventory_sha256']
+                            assert (folder / 'test-input-apks.sha256').read_bytes() == (focused / 'test-input-apks.sha256').read_bytes()
+                        data['repetition_summary'] = summary
                     manifest['focused_evidence'][str(api)] = data
                 except (AssertionError, KeyError, ValueError, TypeError, OSError) as error:
                     errors.append(f'Focused API {api} evidence is not passing: ' + type(error).__name__)

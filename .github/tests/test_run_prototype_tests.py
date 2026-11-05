@@ -464,7 +464,7 @@ p=pathlib.Path(sys.argv[sys.argv.index('--state-dir')+1]);p.mkdir();(p/'complete
 
 
 class WorkflowContract(unittest.TestCase):
-    def decision(self, failed=False, missing=False, wrong_sha=False, contradictory=False, malformed=False, partial_methods=False, skipped_required_method=False, build_attempt="1", decision_attempt="1", build_run="1", wrong_digest=False):
+    def decision(self, failed=False, missing=False, wrong_sha=False, contradictory=False, malformed=False, partial_methods=False, skipped_required_method=False, build_attempt="1", decision_attempt="1", build_run="1", wrong_digest=False, repetitions=1, bad_iteration=False, missing_iteration=False):
         import yaml, hashlib
         workflow=yaml.safe_load((ROOT/'.github/workflows/prototype.yml').read_text())
         script=workflow['jobs']['evidence']['steps'][1]['run']
@@ -500,13 +500,40 @@ class WorkflowContract(unittest.TestCase):
                         (focused/'reconciled-tests.json').write_text(json.dumps(data))
                     if malformed:(focused/'reconciled-tests.json').write_text('{broken')
                     (focused/'test-input-apks.sha256').write_text('independently-built-test-inputs')
+                    if repetitions > 1:
+                        iterations = focused/'iterations'
+                        iterations.mkdir()
+                        summary = {'sha': SHA, 'api': str(api), 'requested': repetitions, 'iterations': []}
+                        for index in range(1, repetitions + 1):
+                            folder = iterations/f'iteration-{index:02d}'/'prototype-evidence'
+                            shutil.copytree(focused, folder, ignore=shutil.ignore_patterns('iterations'))
+                            raw = (folder/'reconciled-tests.json').read_bytes()
+                            item = {'iteration': index, 'status': 'passed', 'exit_code': 0,
+                                    'receipt_sha256': hashlib.sha256(raw).hexdigest()}
+                            if bad_iteration and index == 1:
+                                item['status'] = 'failed'
+                            summary['iterations'].append(item)
+                        if missing_iteration:
+                            summary['iterations'].pop(0)
+                        (iterations/'summary.json').write_text(json.dumps(summary))
                     compatibility=evidence/f'prototype-compatibility-api-{api}';compatibility.mkdir()
                     (compatibility/'provenance.json').write_text(json.dumps({'source_sha':SHA}))
-            env=dict(os.environ,CHECKS=json.dumps(checks),KNOWN_ISSUES='Not a release',AFFECTED_CLASSES=AFFECTED,COVERAGE_REASON='Queue regression',GITHUB_SHA=SHA,GITHUB_REF='refs/heads/test',GITHUB_RUN_ID='1',GITHUB_RUN_ATTEMPT=decision_attempt,GITHUB_STEP_SUMMARY=str(root/'summary'))
+            env=dict(os.environ,PROTOTYPE_REPEAT=str(repetitions),CHECKS=json.dumps(checks),KNOWN_ISSUES='Not a release',AFFECTED_CLASSES=AFFECTED,COVERAGE_REASON='Queue regression',GITHUB_SHA=SHA,GITHUB_REF='refs/heads/test',GITHUB_RUN_ID='1',GITHUB_RUN_ATTEMPT=decision_attempt,GITHUB_STEP_SUMMARY=str(root/'summary'))
             result=subprocess.run(['bash','-c',script],cwd=root,env=env,capture_output=True,text=True)
             out=root/'prototype-delivery'
             manifest=json.loads((out/'manifest.json').read_text()) if (out/'manifest.json').exists() else None
             return result,manifest,list(out.glob('*.apk'))
+
+    def test_repeated_delivery_requires_every_iteration(self):
+        result, manifest, apks = self.decision(repetitions=3)
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertTrue(manifest['ready_for_prototype_delivery'])
+        self.assertEqual(3, manifest['requested_iterations'])
+        for mismatch in ('bad_iteration', 'missing_iteration'):
+            with self.subTest(mismatch=mismatch):
+                result, manifest, apks = self.decision(repetitions=3, **{mismatch: True})
+                self.assertFalse(manifest['ready_for_prototype_delivery'])
+                self.assertEqual([], apks)
 
     def test_delivery_requires_all_five_green_and_exact_evidence(self):
         result,manifest,apks=self.decision()
@@ -597,7 +624,7 @@ class WorkflowContract(unittest.TestCase):
         jobs=yaml.safe_load((ROOT/'.github/workflows/prototype.yml').read_text())['jobs']
         for api in (26,36):
             job=jobs[f'focused_{api}']
-            self.assertEqual(60,job['timeout-minutes'])
+            self.assertEqual('${{ inputs.repeat > 1 && 360 || 60 }}',job['timeout-minutes'])
             upload=next(s for s in job['steps']
                 if s.get('with',{}).get('name')==f'prototype-focused-api-{api}')
             self.assertEqual('always()',upload['if'])
@@ -626,7 +653,7 @@ class WorkflowContract(unittest.TestCase):
         import yaml
         workflow=yaml.safe_load((ROOT/'.github/workflows/prototype.yml').read_text())
         self.assertEqual({'workflow_dispatch','workflow_call'},set(workflow['on']))
-        self.assertEqual({'affected_classes','coverage_reason','known_issues'},set(workflow['on']['workflow_call']['inputs']))
+        self.assertEqual({'affected_classes','coverage_reason','known_issues','repeat'},set(workflow['on']['workflow_call']['inputs']))
         self.assertEqual({'ANDROID_DEBUG_KEYSTORE'},set(workflow['on']['workflow_call']['secrets']))
         self.assertEqual({'contents':'read'},workflow['permissions'])
         jobs=workflow['jobs']
