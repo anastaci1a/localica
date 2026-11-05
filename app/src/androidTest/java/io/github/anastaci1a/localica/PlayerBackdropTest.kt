@@ -11,6 +11,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.test.*
+import androidx.compose.ui.test.junit4.ComposeContentTestRule
 import io.github.anastaci1a.localica.localicaComposeRule as createComposeRule
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.anastaci1a.localica.library.ArtworkCache
@@ -20,21 +21,41 @@ import io.github.anastaci1a.localica.ui.*
 import org.jaudiotagger.audio.AudioFileIO
 import org.jaudiotagger.tag.images.AndroidArtwork
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import org.junit.Assert.*
-import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.Timeout
+import org.junit.runner.Description
+import org.junit.runners.model.Statement
 import java.io.ByteArrayOutputStream
 import java.io.File
 import kotlin.math.abs
 
 class PlayerBackdropTest {
-    @get:Rule val compose = createComposeRule()
-
     @Test fun coverColorsContinueBelowTheArtworkWithoutAFlatBand() = verifyBackdrop(prepared = true)
 
     @Test fun coldMountPresentsTheEmbeddedCoverAndItsColorContinuation() = verifyBackdrop(prepared = false)
 
+    @Test(timeout = 600_000) fun repeatedColdAndPreparedMountsReleasePreparationAcrossActivityTeardown() {
+        repeat(20) { iteration ->
+            verifyBackdrop(prepared = false)
+            verifyBackdrop(prepared = true)
+            android.util.Log.i("PlayerBackdropTest", "Completed cold/prepared activity pair ${iteration + 1}/20")
+        }
+    }
+
     private fun verifyBackdrop(prepared: Boolean) {
+        val compose = createComposeRule()
+        val description = Description.createTestDescription(javaClass, "backdrop-prepared-$prepared")
+        val body = object : Statement() {
+            override fun evaluate() = verifyBackdrop(compose, prepared)
+        }
+        // Include activity launch, screenshot/idling and rule teardown in the wall
+        // clock budget: waitUntil alone cannot bound a blocking predicate or setup.
+        Timeout.seconds(90).apply(compose.apply(body, description), description).evaluate()
+    }
+
+    private fun verifyBackdrop(compose: ComposeContentTestRule, prepared: Boolean) {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
         val audio = File(context.cacheDir, "player-wash.mp3")
@@ -57,7 +78,9 @@ class PlayerBackdropTest {
             val state = PlaybackState(connected = true, trackUri = audio.toURI().toString(), title = "Color study", artist = "Localica", durationMs = 180000)
             // Strict geometry checks start ready; the separate cold case uses the default
             // asynchronous player path and its own end-to-end readiness budget.
-            val visual = if (prepared) runBlocking { PlayerVisualCache.read(context, state.trackUri!!) } else null
+            val visual = if (prepared) runBlocking {
+                withTimeout(15_000) { PlayerVisualCache.read(context, state.trackUri!!) }
+            } else null
             if (prepared) {
                 assertNotNull("The embedded fixture cover must decode", visual?.artwork)
                 assertNotNull("The fixture must include its prepared color continuation", visual?.palette?.wash)
