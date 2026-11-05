@@ -10,6 +10,7 @@ import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.Canvas as UiCanvas
@@ -67,6 +68,35 @@ class ShadowContinuityTest {
     }
 
     @Test fun buttonAvailabilityDoesNotCutItsShadowAtEitherEndpoint() = availability("button")
+
+    @Test fun retainedUnionKeepsTheInteriorCutoutOnTheSamePixels() {
+        var moving by mutableStateOf(false)
+        lateinit var shadow: RetainedGlassShadow
+        compose.setContent {
+            val scope = rememberCoroutineScope()
+            shadow = remember { RetainedGlassShadow(scope) }
+            Box(Modifier.size(240.dp).background(Color.White).testTag("union-shadow")
+                .drawBehind {
+                    val bodies = listOf(60f, 110f).map { top ->
+                        androidx.compose.ui.geometry.RoundRect(60.dp.toPx() + .25f, top.dp.toPx() + .75f,
+                            160.dp.toPx() + .25f, (top + 40).dp.toPx() + .75f,
+                            androidx.compose.ui.geometry.CornerRadius(20.dp.toPx())) to 1f
+                    }
+                    val exclusion = if (moving) GlassShadowExclusion(emptyList(),
+                        androidx.compose.ui.geometry.Offset.Zero, size, 1f, 1f, 0f, 1f) else null
+                    with(shadow) { draw(bodies, 1f, 1f, exclusion = exclusion) }
+                })
+        }
+        compose.waitUntil(5000) { shadow.rasterizations > 0 }
+        val scene = compose.onNodeWithTag("union-shadow")
+        val retained = scene.captureToImage().toPixelMap()
+        compose.runOnIdle { moving = true }
+        val live = scene.captureToImage().toPixelMap()
+        var maximum = 0f
+        for (y in 0 until live.height) for (x in 0 until live.width)
+            maximum = maxOf(maximum, kotlin.math.abs(live[x, y].red - retained[x, y].red))
+        assertTrue("The same contour pixels must be cut out: maximum delta=$maximum", maximum <= .03f)
+    }
     @Test fun filterAvailabilityDoesNotCutItsShadowAtEitherEndpoint() = availability("filter")
     @Test fun settingsAvailabilityDoesNotCutItsShadowAtEitherEndpoint() = availability("settings")
     @Test fun dragBubbleLandingDoesNotCutItsShadowAtEitherEndpoint() = availability("bubble")

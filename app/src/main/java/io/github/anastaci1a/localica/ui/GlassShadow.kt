@@ -253,17 +253,19 @@ internal fun DrawScope.glassShadows(bodies: List<Pair<RoundRect, Float>>, streng
     // Live drawing and retained textures represent the same transparent
     // field. Blending every ring into the page would round differently for
     // each background and pop when the cached texture becomes ready.
-    val canvas = drawContext.canvas
-    if (!rasterizing) {
-        val bounds = Rect(outlines.minOf { it.left }, outlines.minOf { it.top },
-            outlines.maxOf { it.right }, outlines.maxOf { it.bottom }).inflate(reach + shift + 1f)
-        canvas.saveLayer(bounds, cache.layerPaint)
+    fun DrawScope.field() {
+        val canvas = drawContext.canvas
+        if (!rasterizing) {
+            val bounds = Rect(outlines.minOf { it.left }, outlines.minOf { it.top },
+                outlines.maxOf { it.right }, outlines.maxOf { it.bottom }).inflate(reach + shift + 1f)
+            canvas.saveLayer(bounds, cache.layerPaint)
+        }
+        try { rings() } finally { if (!rasterizing) canvas.restore() }
     }
-    try {
-        if (excludeInterior) clipPath(cache.body, ClipOp.Difference) { rings() } else rings()
-    } finally {
-        if (!rasterizing) canvas.restore()
-    }
+    // Resolve the cutout in destination coordinates, before the temporary layer.
+    // Legacy clipping inside that layer rounds a few contour pixels differently
+    // from the cached texture's destination clip, exposing a handoff fringe.
+    if (excludeInterior) clipPath(cache.body, ClipOp.Difference) { field() } else field()
 }
 /** Retain the complete, padded shadow texture. Scrolling an unchanged surface only
  * translates this texture; it does not replay overlapping path fills. */
