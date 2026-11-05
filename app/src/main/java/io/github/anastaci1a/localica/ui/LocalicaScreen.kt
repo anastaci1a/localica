@@ -23,7 +23,6 @@ import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.R
@@ -295,7 +294,7 @@ fun LocalicaScreen(
                     Modifier else Modifier.statusBarsPadding())) {
                 if (!collectionChrome) Row(Modifier.zIndex(2f).fillMaxWidth().heightIn(min = 56.dp).padding(horizontal = 12.dp),
                     horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                    if ((navigation.stacks[tab]?.size ?: 1) > 1) ActionIcon(R.drawable.ic_back, "Back") { back() }
+                    if ((navigation.stacks[tab]?.size ?: 1) > 1) ActionIcon(AppIcon.ActionBack, "Back") { back() }
                     androidx.compose.animation.Crossfade(if (route.search) "Search" else route.title ?: route.tab.label,
                         modifier = Modifier.weight(1f), animationSpec = androidx.compose.animation.core.tween(settings.motionDuration(220)), label = "Page heading") { title ->
                         Text(title, style = MaterialTheme.typography.titleLarge, modifier = Modifier.testTag("page-heading"))
@@ -363,8 +362,8 @@ fun LocalicaScreen(
                 onSearch = { navigation = navigation.commitSearch().open(BrowseRoute(navigation.active, search = true, globalSearch = true)) },
                 onMore = { moreOpen = true })
             GlassMenu(moreOpen, utilityAnchor, { moreOpen = false }) {
-                ActionMenuItem("Scan music", icon = R.drawable.ic_folder, onClick = { moreOpen = false; scannerOpen = true })
-                ActionMenuItem("Settings", icon = R.drawable.ic_settings, onClick = { moreOpen = false; settingsCategory = null; settingsOpen = true })
+                ActionMenuItem("Scan music", icon = AppIcon.TabFolders, onClick = { moreOpen = false; scannerOpen = true })
+                ActionMenuItem("Settings", icon = AppIcon.ActionSettings, onClick = { moreOpen = false; settingsCategory = null; settingsOpen = true })
             }
         }
         // The pill is a standard Liquid Glass pill over the page: it samples the browse backdrop and takes the
@@ -461,7 +460,7 @@ fun LocalicaScreen(
         PlayerActionCustomizer(playerActions, { playerActions = it; actionPreferences.write(it) }, { customizeActions = false; customizeAppearance = null }, settings.reducedMotion)
     }
     if (songInfo && indexedTrack != null) SongInformation(indexedTrack, { playerCollectionLookup.cancel(); songInfo = false }, folders = library.snapshot.folders, onAction = { playerAction(it) })
-    if (viewArt && indexedTrack != null) ArtworkViewer(indexedTrack.uri) { viewArt = false }
+    if (viewArt && indexedTrack != null) ArtworkViewer(indexedTrack.uri, indexedTrack.albumArtist ?: indexedTrack.artist, indexedTrack.album) { viewArt = false }
     if (addPlaying && indexedTrack != null) AddToPlaylistDialog(listOf(indexedTrack), playlist, playlistController, { addPlaying = false }, { addPlaying = false })
     if (playerMore) GlassDialog({ playerMore = false }, GlassPlacement.Sheet) {
         val editTags = presentedTagEdit()

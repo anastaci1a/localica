@@ -37,7 +37,7 @@ internal fun LibraryFilterBubbles(filters: List<LibraryFilter>, selected: MediaK
         tag = { "filter-${it.name}" }, onSelect = { onSelect(it.kind.takeUnless { kind -> kind == selected }) },
         onLongClick = { menu = it }) { filter, anchor ->
         GlassMenu(menu == filter, anchor, { menu = null }) {
-            ActionMenuItem("Edit library filters and order", icon = R.drawable.ic_edit, onClick = { menu = null; onConfigure() })
+            ActionMenuItem("Edit library filters and order", icon = AppIcon.ActionEdit, onClick = { menu = null; onConfigure() })
         }
     }
 }

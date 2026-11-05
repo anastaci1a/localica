@@ -10,7 +10,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.R
@@ -55,10 +54,10 @@ internal fun SongInformation(track: Track, onDismiss: () -> Unit, onEdit: (() ->
                     .ownButtonDrag().clickable(role = Role.Button, onClickLabel = "View artwork",
                         interactionSource = null, indication = null,
                         onClick = controlActivation { viewingArtwork = true }))
-                SongInformationRow("File name", track.fileName, R.drawable.ic_music)
+                SongInformationRow("File name", track.fileName, AppIcon.TabSongs)
                 val location = songInformationLocation(track)
                 val folderAction = PlayerAction.Folder.takeIf { location != null && roots.any { it.uri == location.folderUri } }
-                SongInformationRow("Location", songLocationText(track, labels), R.drawable.ic_folder, folderAction) {
+                SongInformationRow("Location", songLocationText(track, labels), AppIcon.TabFolders, folderAction) {
                     onDismiss(); onAction(it)
                 }
                 SongInformationDivider()
@@ -72,10 +71,10 @@ internal fun SongInformation(track: Track, onDismiss: () -> Unit, onEdit: (() ->
                             else -> null
                         }
                         val icon = when (field) {
-                            EditField.Album -> R.drawable.ic_albums
-                            EditField.Artist, EditField.AlbumArtist, EditField.Composer, EditField.Lyricist -> R.drawable.ic_artist
-                            EditField.Comment -> R.drawable.ic_lyrics
-                            else -> R.drawable.ic_music
+                            EditField.Album -> AppIcon.TabAlbums
+                            EditField.Artist, EditField.AlbumArtist, EditField.Composer, EditField.Lyricist -> AppIcon.TabArtists
+                            EditField.Comment -> AppIcon.ActionLyrics
+                            else -> AppIcon.TabSongs
                         }
                         SongInformationRow(if (field == EditField.Title) "Title" else field.label, value, icon, action) {
                             onDismiss(); onAction(it)
@@ -84,20 +83,20 @@ internal fun SongInformation(track: Track, onDismiss: () -> Unit, onEdit: (() ->
                 }
                 track.durationMs?.let {
                     SongInformationDivider()
-                    SongInformationRow("Duration", formatTime(it), R.drawable.ic_info)
+                    SongInformationRow("Duration", formatTime(it), AppIcon.ActionInfo)
                 }
                 SongInformationDivider()
-                track.addedAt?.let { SongInformationRow("Added to library", informationDate(it), R.drawable.ic_library) }
-                track.modifiedAt?.let { SongInformationRow("Modified", informationDate(it), R.drawable.ic_info) }
-                SongInformationRow("Qualified plays", track.playCount.toString(), R.drawable.ic_play)
+                track.addedAt?.let { SongInformationRow("Added to library", informationDate(it), AppIcon.TabLibrary) }
+                track.modifiedAt?.let { SongInformationRow("Modified", informationDate(it), AppIcon.ActionInfo) }
+                SongInformationRow("Qualified plays", track.playCount.toString(), AppIcon.TransportPlay)
             }
         })
-    if (viewingArtwork) ArtworkViewer(track.uri) { viewingArtwork = false }
+    if (viewingArtwork) ArtworkViewer(track.uri, track.albumArtist ?: track.artist, track.album) { viewingArtwork = false }
 }
 
 /** A single full-width action owner; labels and values share the same leading icon inset. */
 @Composable
-internal fun SongInformationRow(label: String, value: String, icon: Int, action: PlayerAction? = null,
+internal fun SongInformationRow(label: String, value: String, icon: AppIcon, action: PlayerAction? = null,
     onAction: (PlayerAction) -> Unit = {}) {
     val activation = controlActivation { if (action != null) onAction(action) }
     val target = if (action == null) Modifier else Modifier.ownButtonDrag().clickable(
@@ -105,7 +104,7 @@ internal fun SongInformationRow(label: String, value: String, icon: Int, action:
     ListItem(modifier = Modifier.fillMaxWidth().testTag("song-information-$label").then(target),
         headlineContent = { Text(label, style = MaterialTheme.typography.labelLarge) },
         supportingContent = { Text(value, style = MaterialTheme.typography.bodyMedium) },
-        leadingContent = { Icon(painterResource(icon), null, Modifier.size(24.dp)) },
+        leadingContent = { Icon(appIconPainter(icon), null, Modifier.size(24.dp)) },
         colors = ListItemDefaults.colors(containerColor = Color.Transparent))
 }
 

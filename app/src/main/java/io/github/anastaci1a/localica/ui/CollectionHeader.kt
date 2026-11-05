@@ -26,7 +26,6 @@ import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.selected
@@ -108,13 +107,13 @@ internal fun CollectionHeader(title: String, subtitle: String?, visual: PlayerVi
                 if (split) LiquidGlassSurface(Modifier.height(64.dp)) {
                     describeAction()
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        ActionIconButton(onPlay, Modifier.size(72.dp, 64.dp), enabled = enabled) { Icon(painterResource(R.drawable.ic_play), if (playlist) "Play playlist" else "Play selected albums", Modifier.size(30.dp)) }
+                        ActionIconButton(onPlay, Modifier.size(72.dp, 64.dp), enabled = enabled) { Icon(appIconPainter(AppIcon.TransportPlay), if (playlist) "Play playlist" else "Play selected albums", Modifier.size(30.dp)) }
                         GlassPillDivider()
-                        ActionIconButton(onShuffle, Modifier.size(72.dp, 64.dp), enabled = enabled) { Icon(painterResource(R.drawable.ic_shuffle), if (playlist) "Shuffle playlist" else "Shuffle selected albums", Modifier.size(30.dp)) }
+                        ActionIconButton(onShuffle, Modifier.size(72.dp, 64.dp), enabled = enabled) { Icon(appIconPainter(AppIcon.ActionShuffle), if (playlist) "Shuffle playlist" else "Shuffle selected albums", Modifier.size(30.dp)) }
                     }
                 } else LiquidGlassSurface(Modifier.size(64.dp)) {
                     describeAction()
-                    ActionIconButton(onPlay, Modifier.fillMaxSize(), enabled = enabled) { Icon(painterResource(R.drawable.ic_play), "Play album", Modifier.size(30.dp)) }
+                    ActionIconButton(onPlay, Modifier.fillMaxSize(), enabled = enabled) { Icon(appIconPainter(AppIcon.TransportPlay), "Play album", Modifier.size(30.dp)) }
                 }
                 }
             }
@@ -140,7 +139,7 @@ internal fun ArtistAlbumChoices(albums: List<LibraryGroup>, selectedIds: List<St
                 Column(Modifier.width(136.dp).selectionLens(selectedIds.isEmpty(), false, itemKey = "all-albums", outline = albumOutline).toggleable(selectedIds.isEmpty(), role = Role.Checkbox, onValueChange = { onSelection(emptyList()) })
                     .semantics { selected = selectedIds.isEmpty() }.padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     Box(Modifier.size(112.dp)) {
-                        Icon(painterResource(R.drawable.ic_albums), null, Modifier.align(Alignment.Center).size(36.dp))
+                        Icon(appIconPainter(AppIcon.TabAlbums), null, Modifier.align(Alignment.Center).size(36.dp))
                     }
                     Text("All albums", Modifier.padding(top = 8.dp), style = MaterialTheme.typography.labelLarge)
                 }
@@ -216,7 +215,7 @@ internal fun BoxScope.CollectionToolbar(grid: LazyGridState, width: Int, title: 
     Row(Modifier.align(Alignment.TopCenter).fillMaxWidth().statusBarsPadding().padding(12.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         Box(Modifier.onGloballyPositioned { onBackBottom(it.positionInRoot().y + it.size.height) }) {
-            ActionIcon(R.drawable.ic_back, "Back", onClick = onBack)
+            ActionIcon(AppIcon.ActionBack, "Back", onClick = onBack)
         }
         Text(title, Modifier.weight(1f).graphicsLayer { alpha = fade.value }
             .then(if (!titled) Modifier.clearAndSetSemantics {} else Modifier), maxLines = 1,

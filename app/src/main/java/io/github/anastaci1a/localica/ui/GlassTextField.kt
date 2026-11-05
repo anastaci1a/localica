@@ -13,7 +13,6 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.R
 
@@ -37,7 +36,7 @@ import io.github.anastaci1a.localica.R
             if (value.isNotEmpty() || visible > 0f) ActionIconButton(enabled = enabled && value.isNotEmpty(),
                 onClick = { onValueChange(""); focus.requestFocus(); keyboard?.show() },
                 modifier = Modifier.graphicsLayer { alpha = visible }) {
-                Icon(painterResource(R.drawable.ic_close), "Clear text", Modifier.size(22.dp))
+                Icon(appIconPainter(AppIcon.ActionClose), "Clear text", Modifier.size(22.dp))
             }
         }, singleLine = singleLine, minLines = minLines, maxLines = maxLines,
         isError = isError, enabled = enabled, keyboardOptions = keyboardOptions,

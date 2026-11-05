@@ -42,7 +42,7 @@ internal fun PlaylistCreationButton(library: LibrarySnapshot, state: PlaylistSta
     val menuSource = LocalFrostedBackdrop.current
     SideEffect {
         menuAnchor.source = menuSource
-        menuAnchor.face = { Icon(androidx.compose.ui.res.painterResource(R.drawable.ic_plus), null, Modifier.size(24.dp)) }
+        menuAnchor.face = { Icon(appIconPainter(AppIcon.ActionPlus), null, Modifier.size(24.dp)) }
     }
     val picker = rememberLauncherForActivityResult(LocalPlaylistPicker()) { uri ->
         if (uri != null) loadJob = scope.launch {
@@ -74,12 +74,12 @@ internal fun PlaylistCreationButton(library: LibrarySnapshot, state: PlaylistSta
         LiquidGlassSurface(Modifier.size(CompactControlSize).glassAnchor(menuAnchor).clickable { menu = true }) {
             menuAnchor.captureInk()
             Box(Modifier.fillMaxSize(), contentAlignment = androidx.compose.ui.Alignment.Center) {
-                Icon(androidx.compose.ui.res.painterResource(R.drawable.ic_plus), "Add playlist", Modifier.size(24.dp))
+                Icon(appIconPainter(AppIcon.ActionPlus), "Add playlist", Modifier.size(24.dp))
             }
         }
         GlassMenu(menu, menuAnchor, { menu = false }) {
-            ActionMenuItem("Create playlist", icon = R.drawable.ic_playlist, enabled = !state.loading && !loading, onClick = { menu = false; naming = true })
-            ActionMenuItem("Import playlist from file", icon = R.drawable.ic_playlist, enabled = !state.loading && !loading,
+            ActionMenuItem("Create playlist", icon = AppIcon.TabPlaylists, enabled = !state.loading && !loading, onClick = { menu = false; naming = true })
+            ActionMenuItem("Import playlist from file", icon = AppIcon.TabPlaylists, enabled = !state.loading && !loading,
                 onClick = { menu = false; picker.launch(arrayOf("*/*")) })
         }
     }

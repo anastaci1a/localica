@@ -4,7 +4,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
@@ -21,6 +20,6 @@ internal fun ReorderHandle(label: String, onMove: (Int) -> Unit, modifier: Modif
             CustomAccessibilityAction("Move down") { move(1); true })
         else emptyList()
     }, contentAlignment = androidx.compose.ui.Alignment.Center) {
-        Icon(painterResource(R.drawable.ic_drag), null, Modifier.size(24.dp))
+        Icon(appIconPainter(AppIcon.ActionDrag), null, Modifier.size(24.dp))
     }
 }

@@ -2,6 +2,24 @@
 
 ## Shared controls and motion
 
+### Icon set
+
+The song-menu icon set is the reference for future icons: 24 dp vectors, 1.8 stroke (filled trash), rounded caps and joins.
+
+| Action | Resource |
+| --- | --- |
+| Pin to Home / Unpin | `ic_menu_pin` |
+| Remove from playlist or queue, Delete playlist, Remove image | `ic_menu_trash` |
+| Add to playlist | `ic_menu_playlist_add` |
+| Play next | `ic_menu_play_next` |
+| Add to current queue, Add to a queue, Add to queue (selection) | `ic_menu_queue_add` |
+| Information | `ic_menu_info` |
+| Download (unused) | `ic_download` |
+| Share (unused) | `ic_share` |
+| Station (unused) | `ic_station` |
+| Favorite (unused) | `ic_star` |
+| Suggest less (unused) | `ic_thumb_down` |
+
 ### Materials and controls
 
 Floating pills, mini-player, filter/search bars and circular controls share Liquid Glass: curved refraction, illuminated edges and crisp foregrounds. The Queue uses one continuous denser textured neutral-frost surface behind its header and list. Popups use the same material and inherited adaptive contrast.
@@ -495,7 +513,7 @@ Image picker: rounded previews of readable previous choices. Optional device-pho
 
 Bulk jobs: Continue in background and Stop after current file. **Settings → Library and tags → Tag jobs and recovery → Tag editing jobs** shows progress/recent per-file outcomes.
 
-The artwork viewer centers fitted artwork across the full page. Safe Close and contextual Zoom/Reset controls overlay the image. Pan bounds follow the fitted image. Released pans decelerate. Re-grab, reset, zoom or reduced motion stops travel. Recreation preserves zoom and the visible image center.
+The artwork viewer centers fitted artwork across the full page. Safe Close and Save (to Downloads, original file format) controls overlay the image; zoom is by pinch or the accessibility Zoom actions. Pan bounds follow the fitted image. Released pans decelerate. Re-grab, reset, zoom or reduced motion stops travel. Recreation preserves zoom and the visible image center.
 
 Mode icons visibly reflect state without filled hitboxes or ripples: dim when off, full strength when active, visible 1 for Repeat one, distinct Stop/Next paused/Next queue indicators and accessible announcements. Hold Repeat for Simple/Advanced options. Tapping returns to the ordinary cycle.
 

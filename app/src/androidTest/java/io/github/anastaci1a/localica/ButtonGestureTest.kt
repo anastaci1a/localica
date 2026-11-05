@@ -28,7 +28,7 @@ class ButtonGestureTest {
             scroll = rememberScrollState()
             Column(Modifier.height(450.dp).controlVerticalScroll(scroll)) {
                 Spacer(Modifier.height(100.dp))
-                GlassActionButton(R.drawable.ic_plus, "Glass action") { clicks++ }
+                GlassActionButton(AppIcon.ActionPlus, "Glass action") { clicks++ }
                 SettingsLink("Setting action") { clicks++ }
                 ActionTextButton({ clicks++ }) { Text("Text action") }
                 ActionIconButton({ clicks++ }, Modifier.testTag("icon-action")) { Text("Icon") }

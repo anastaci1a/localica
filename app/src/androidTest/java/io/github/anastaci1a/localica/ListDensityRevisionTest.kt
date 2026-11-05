@@ -62,7 +62,7 @@ class ListDensityRevisionTest {
                         Box(Modifier.fillMaxWidth().padding(horizontal = geometry.cardInset.dp,
                             vertical = geometry.cardVerticalInset(style).dp)) {
                             BrowseItemLayout(entry, style, geometry, this@LookaheadScope, true,
-                                menu = { ActionIcon(R.drawable.ic_ellipsis, "Density revision actions $index", quiet = true) { clicks++ } })
+                                menu = { ActionIcon(AppIcon.ActionEllipsis, "Density revision actions $index", quiet = true) { clicks++ } })
                         }
                     }
                 }

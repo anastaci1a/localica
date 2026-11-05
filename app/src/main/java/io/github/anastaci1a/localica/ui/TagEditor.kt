@@ -49,7 +49,7 @@ internal fun TagRecoverySettings(controller: TagEditingController) {
     val state by controller.state.collectAsState()
     var confirming by remember { mutableStateOf(false) }
     SettingsLink("Tag editing jobs", if (state.busy) "${state.results.size} of ${state.tracks.size} files checked" else "Recent outcomes and interrupted work",
-        icon = io.github.anastaci1a.localica.R.drawable.ic_edit, onClick = controller::showJobs)
+        icon = AppIcon.ActionEdit, onClick = controller::showJobs)
     if (state.recovery != null) ActionTextButton(onClick = { confirming = true }) { Text("Recover tag edit: ${state.recovery}") }
     if (confirming) GlassAlertDialog(onDismissRequest = { confirming = false }, title = { Text(if (state.recoveryProblem == null) "Restore original file?" else "Retry tag recovery?") },
         text = { Text(state.recoveryProblem ?: "This replaces ${state.recovery} with the copy saved before its interrupted edit.") },
@@ -129,8 +129,8 @@ internal fun TagEditorDialog(state: TagEditorState, controller: TagEditingContro
                         }
                         CompositionLocalProvider(LocalFrostedBackdrop provides artworkBackdrop) {
                         Row(Modifier.align(Alignment.BottomCenter).padding(8.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            ActionIcon(io.github.anastaci1a.localica.R.drawable.ic_edit, "Choose artwork", enabled = !state.busy) { artwork.choose() }
-                            ActionIcon(io.github.anastaci1a.localica.R.drawable.ic_trash, "Remove artwork from selected songs", enabled = !state.busy) { removeImage = true; artwork.clearImage() }
+                            ActionIcon(AppIcon.ActionEdit, "Choose artwork", enabled = !state.busy) { artwork.choose() }
+                            ActionIcon(AppIcon.ActionTrash, "Remove artwork from selected songs", enabled = !state.busy) { removeImage = true; artwork.clearImage() }
                         }
                         }
                     }
@@ -178,7 +178,7 @@ internal fun TagEditorDialog(state: TagEditorState, controller: TagEditingContro
         }
     }
     if (choosing) ImageChooser(artwork, { artwork.cancelChooser(); if (state.artworkOnly && imageUri == null) controller.close() }) { artwork.chosen(it); removeImage = false }
-    if (viewing) ArtworkViewer(state.tracks.first().uri) { viewing = false }
+    if (viewing) ArtworkViewer(state.tracks.first().uri, state.tracks.first().let { it.albumArtist ?: it.artist }, state.tracks.first().album) { viewing = false }
     if (confirming) GlassAlertDialog(onDismissRequest = { confirming = false }, title = { Text("Save changes to ${state.tracks.size} files?") },
         text = { Column(Modifier.heightIn(max = 360.dp).controlVerticalScroll(rememberScrollState())) { changed.forEach { name -> Text("${EditField.valueOf(name).label}: ${JSONObject(values).getString(name).ifBlank { "Remove tag" }.take(160)}") }
             if (removeImage) Text("Remove artwork") else if (imageUri != null) Text("Replace artwork")

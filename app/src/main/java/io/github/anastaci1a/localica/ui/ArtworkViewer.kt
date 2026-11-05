@@ -23,12 +23,41 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.R
+import android.Manifest
+import android.content.pm.PackageManager
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import io.github.anastaci1a.localica.library.ArtworkReader
+import io.github.anastaci1a.localica.library.ArtworkSaveResult
+import io.github.anastaci1a.localica.library.ArtworkSaver
+import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
 @Composable
-internal fun ArtworkViewer(uri: String, onDismiss: () -> Unit) {
+internal fun ArtworkViewer(uri: String, artist: String? = null, album: String? = null, onDismiss: () -> Unit) {
     val context = LocalContext.current
+    val saveScope = rememberCoroutineScope()
+    val save = {
+        saveScope.launch {
+            val message = when (val r = ArtworkSaver.save(context.applicationContext, uri, artist, album)) {
+                is ArtworkSaveResult.Saved -> "Saved to Downloads: ${r.name}"
+                ArtworkSaveResult.NoArtwork -> "No artwork to save"
+                is ArtworkSaveResult.Failed -> "Could not save artwork"
+            }
+            Toast.makeText(context.applicationContext, message, Toast.LENGTH_SHORT).show()
+        }
+        Unit
+    }
+    val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) save() else Toast.makeText(context.applicationContext, "Storage permission is needed to save artwork", Toast.LENGTH_SHORT).show()
+    }
+    val onSave = {
+        if (ArtworkSaver.needsLegacyPermission && ContextCompat.checkSelfPermission(context, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED)
+            permission.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+        else save()
+    }
     val cover by produceState<Pair<String?, android.graphics.Bitmap?>>(null to null, uri) {
         value = uri to ArtworkReader(context).read(uri, 2048)
     }
@@ -40,7 +69,7 @@ internal fun ArtworkViewer(uri: String, onDismiss: () -> Unit) {
             CompositionLocalProvider(LocalFrostedBackdrop provides backdrop, LocalContentColor provides Color.White) {
                 key(uri) {
                     ArtworkViewerContent(cover.second?.takeIf { cover.first == uri }?.asImageBitmap(),
-                        cover.first != uri, onDismiss, tintUris = listOf(uri))
+                        cover.first != uri, onDismiss, tintUris = listOf(uri), onSave = onSave)
                 }
             }
         }
@@ -50,7 +79,7 @@ internal fun ArtworkViewer(uri: String, onDismiss: () -> Unit) {
 /** Only the controls respect safe insets; the centered image owns the entire page. */
 @Composable
 internal fun ArtworkViewerContent(artwork: ImageBitmap?, loading: Boolean, onDismiss: () -> Unit,
-    modifier: Modifier = Modifier, state: ArtworkViewerState = rememberArtworkViewerState(), tintUris: List<String>? = null) {
+    modifier: Modifier = Modifier, state: ArtworkViewerState = rememberArtworkViewerState(), tintUris: List<String>? = null, onSave: () -> Unit = {}) {
     val scope = rememberCoroutineScope()
     val reducedMotion by rememberUpdatedState(LocalReducedMotion.current)
     val stopSpeed = with(LocalDensity.current) { 5.dp.toPx() }
@@ -62,7 +91,6 @@ internal fun ArtworkViewerContent(artwork: ImageBitmap?, loading: Boolean, onDis
     val zoomIn = controlActivation { state.zoomTo(state.transform.scale + 1f) }
     val zoomOut = controlActivation { state.zoomTo(state.transform.scale - 1f) }
     val reset = controlActivation { state.reset() }
-    val zoomed by remember(state) { derivedStateOf { state.transform.scale > 1f } }
     Box(modifier.fillMaxSize().testTag("artwork-viewer")) {
         Box(Modifier.fillMaxSize().clipToBounds().testTag("artwork-viewer-viewport")
             .onSizeChanged { state.updateGeometry(Size(it.width.toFloat(), it.height.toFloat()), imageSize) }
@@ -86,12 +114,10 @@ internal fun ArtworkViewerContent(artwork: ImageBitmap?, loading: Boolean, onDis
         }
         Box(Modifier.matchParentSize().safeDrawingPadding().padding(16.dp)) {
             Box(Modifier.align(Alignment.TopStart)) {
-                ActionIcon(R.drawable.ic_close, "Close artwork", onClick = onDismiss)
+                ActionIcon(AppIcon.ActionClose, "Close artwork", onClick = onDismiss)
             }
             Box(Modifier.align(Alignment.BottomEnd)) {
-                ActionIcon(if (zoomed) R.drawable.ic_eye else R.drawable.ic_plus,
-                    if (zoomed) "Reset zoom" else "Zoom in", enabled = artwork != null,
-                    onClick = { if (zoomed) state.reset() else state.zoomTo(2f) })
+                ActionIcon(AppIcon.ActionSaveArtwork, "Save artwork", enabled = artwork != null, onClick = onSave)
             }
         }
     }

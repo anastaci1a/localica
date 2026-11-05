@@ -49,7 +49,7 @@ class SmallestTitleGapTest {
                         Box(Modifier.fillMaxWidth().testTag("gap-row-$index").padding(
                             horizontal = geometry.cardInset.dp, vertical = geometry.cardVerticalInset(style).dp)) {
                             BrowseItemLayout(entry, style, geometry, this@LookaheadScope, true,
-                                menu = { ActionIcon(R.drawable.ic_ellipsis, "Gap actions $index", quiet = true) { clicks += index } },
+                                menu = { ActionIcon(AppIcon.ActionEllipsis, "Gap actions $index", quiet = true) { clicks += index } },
                                 trackNumber = if (numbered) "${index + 1}" else null)
                         }
                     }
