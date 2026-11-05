@@ -17,16 +17,22 @@ spec.loader.exec_module(guard_fixture)
 SHA = 'c8d5f906505c0d5dd6b67509d98760ef0a6ef96c'
 SELECTED = 'io.github.anastaci1a.localica.SelectedTest'
 FULL_ARGS = ['connectedDebugAndroidTest', '--no-daemon', '--max-workers=2']
+# These tests assert ordering, receipts and exit status, not host throughput.
+# One runner may execute two phases; each supervisor permits 20s publisher drain
+# plus 5s termination grace. Leave room for interpreter startup and restoration
+# on a shared host while retaining a finite bound for an actually stuck fixture.
+RUNNER_TIMEOUT_SECONDS = 120
+EVENT_TIMEOUT_SECONDS = 60
 
 GRADLE = r'''#!/usr/bin/env python3
 import json, os, pathlib, signal, sys
 root=pathlib.Path(os.environ['MOCK_ROOT']);p=root/'state.json';s=json.loads(p.read_text())
 s['gradle']+=1
 s.setdefault('gradleArgs',[]).append(sys.argv[1:]);p.write_text(json.dumps(s))
-(root/('gradle-started-'+str(s['gradle']))).write_text('started')
 def cancelled(sig, frame):
     (root/'gradle-cancelled').write_text(str(sig));sys.exit(128+sig)
 signal.signal(signal.SIGTERM,cancelled);signal.signal(signal.SIGINT,cancelled)
+(root/('gradle-started-'+str(s['gradle']))).write_text('started')
 if os.environ.get('MOCK_BLOCK')=='true':
     while True:signal.pause()
 for folder in ('app/build/reports/androidTests','app/build/outputs/androidTest-results','app/build/outputs/connected_android_test_additional_output'):
@@ -53,7 +59,8 @@ import json, os, pathlib, sys, time
 args=sys.argv[2:];options=dict(zip(args[::2],args[1::2]))
 source=pathlib.Path(options['--evidence-dir']);state=pathlib.Path(options['--state-dir']);state.mkdir()
 (state/'argv.json').write_text(json.dumps(sys.argv[1:]))
-for _ in range(1000):
+deadline=time.monotonic()+float(os.environ['MOCK_EVENT_TIMEOUT'])
+while time.monotonic()<deadline:
     try:observed=json.loads((source/'manifest.json').read_text())
     except (OSError,ValueError):time.sleep(.01);continue
     if observed['status']!='running':break
@@ -112,6 +119,7 @@ if a==['get-serialno']:""")
         self.env = dict(os.environ, PATH=str(self.root)+os.pathsep+os.environ['PATH'], MOCK_ROOT=str(self.root),
                         GITHUB_ACTIONS='true', RUNNER_ENVIRONMENT='github-hosted', TEST_API='26',
                         GITHUB_RUN_ID='123', GITHUB_RUN_ATTEMPT='1', GITHUB_SHA=SHA,
+                        MOCK_EVENT_TIMEOUT=str(EVENT_TIMEOUT_SECONDS),
                         ANDROID_SERIAL='emulator-5554', RISK_CLASSES='', LOCALICA_LIVE_EVIDENCE='true')
         self.proc = None
 
@@ -124,11 +132,11 @@ if a==['get-serialno']:""")
 
     def finish(self, expected):
         try:
-            out, err = self.proc.communicate(timeout=15)
+            out, err = self.proc.communicate(timeout=RUNNER_TIMEOUT_SECONDS)
         except subprocess.TimeoutExpired:
             os.killpg(self.proc.pid, signal.SIGKILL)
             self.proc.communicate()
-            self.fail('Owned stub runner did not terminate')
+            self.fail(f'Owned stub runner did not terminate within {RUNNER_TIMEOUT_SECONDS}s')
         self.assertEqual(expected, self.proc.returncode, out+'\n'+err)
         self.state = json.loads((self.root/'state.json').read_text())
 
@@ -332,7 +340,7 @@ if a==['get-serialno']:""")
 
     def check_cancel(self, selector, sig=signal.SIGTERM):
         self.start(RISK_CLASSES=selector,MOCK_BLOCK='true')
-        deadline=time.monotonic()+5
+        deadline=time.monotonic()+EVENT_TIMEOUT_SECONDS
         while not (self.root/'gradle-started-1').exists():
             if self.proc.poll() is not None or time.monotonic()>deadline:
                 self.finish(0)
