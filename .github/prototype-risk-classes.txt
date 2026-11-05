@@ -319,3 +319,6 @@ io.github.anastaci1a.localica.IconPackResolverTest
 io.github.anastaci1a.localica.TransportScrollTest
 io.github.anastaci1a.localica.TransportAnimationFrameTest
 io.github.anastaci1a.localica.PlayerSeekCancelCrashTest
+
+io.github.anastaci1a.localica.IconPackLibraryRegressionTest
+io.github.anastaci1a.localica.IconPackLibraryTest
