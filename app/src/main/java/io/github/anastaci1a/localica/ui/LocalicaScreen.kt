@@ -120,6 +120,7 @@ fun LocalicaScreen(
     var viewArt by remember { mutableStateOf(false) }
     var addPlaying by remember { mutableStateOf(false) }
     var playerMore by remember { mutableStateOf(false) }
+    var playerDialogAppearance by remember { mutableStateOf<GlassDialogAppearance?>(null) }
     var moreOpen by remember { mutableStateOf(false) }
     var viewOptions by remember { mutableStateOf(false) }
     var settingsCategory by remember { mutableStateOf<String?>(null) }
@@ -286,6 +287,9 @@ fun LocalicaScreen(
             val tab = settings.tabs[page]
             val pageRoute = navigation.stacks[tab]?.lastOrNull() ?: remember(tab) { BrowseRoute(tab) }
             val route = pageRoute
+            val routeArtwork = artworkStore.scope(route.key)
+            GlassPopupNavigation(route to routeArtwork, Modifier.fillMaxSize(), departing = page != pager.targetPage,
+                contentKey = { it.first.key }) { (route, routeArtwork) ->
             val sortAnchor = rememberGlassAnchor()
             // Collection pages own their hero, navigation controls and status-bar inset.
             // Playlists use that same presentation, not the legacy shell heading.
@@ -308,7 +312,7 @@ fun LocalicaScreen(
                 Box(Modifier.weight(1f)) {
             // Routes retain saved state, but must not recycle live drawing/focus nodes from
             // a different grid or text field through SaveableStateProvider's ReusableContent.
-            key(route.key) { CompositionLocalProvider(LocalBrowseArtwork provides artworkStore.scope(route.key)) { holder.SaveableStateProvider(route.key) {
+            key(route.key) { CompositionLocalProvider(LocalBrowseArtwork provides routeArtwork) { holder.SaveableStateProvider(route.key) {
                 if (route.tab == MainTab.Queues && !route.search && (route.collection == null || route.collection.kind == MediaKind.Queue)) QueueScreen(queues, queueController, library,
                     playlist, playlistController, playback.connected, pins, ::pin, listBackEnabled = true, scrollToTopRequest = scrollRequests[tab] ?: 0, reducedMotion = settings.reducedMotion, selectionVisible = page == pager.settledPage && !queueVisible, isPlaying = playback.isPlaying,
                     onOpen = ::openCollection, playerOpen = expanded || playerVisible)
@@ -330,9 +334,12 @@ fun LocalicaScreen(
                     sortingRoute == route.key, { sortingRoute = null }, playingTrackId = playback.trackId, presentationOnly = viewOptions, selectionVisible = page == pager.settledPage,
                     onSearchEdit = { navigation = navigation.editSearch(it) }, onSearchCommit = { navigation = navigation.commitSearch() },
                     libraryFilters = libraryFilters, onFilterSettings = { settingsCategory = "Library filters"; settingsOpen = true },
-                    listBackEnabled = true, scrollToTopRequest = scrollRequests[tab] ?: 0, reducedMotion = settings.reducedMotion, sortOrigin = sortAnchor, onBack = ::back, onAppearance = { ink, background -> browseInk = ink; pageBackground = background })
+                    listBackEnabled = true, scrollToTopRequest = scrollRequests[tab] ?: 0, reducedMotion = settings.reducedMotion, sortOrigin = sortAnchor, onBack = ::back, onAppearance = { ink, background ->
+                        if (navigation.route.key == route.key) { browseInk = ink; pageBackground = background }
+                    })
             } } }
                 }
+            }
             }
             }
         }
@@ -395,9 +402,9 @@ fun LocalicaScreen(
                 PlayerAction.Lyrics -> if (lyricsOpen) "Hide lyrics" else "Show lyrics"
                 PlayerAction.Pin -> if (currentTrack?.let { MediaRef(MediaKind.Song, it.id) in pins } == true) "Unpin from Home" else "Pin to Home"
                 else -> action.label
-            } }, { playerAction(it, editTags) }, { customizeAppearance = actionAppearance; customizeActions = true }, shuffle = queues.settings.shuffle, repeat = queues.settings.repeat,
+            } }, { playerDialogAppearance = actionAppearance; playerAction(it, editTags) }, { customizeAppearance = actionAppearance; customizeActions = true }, shuffle = queues.settings.shuffle, repeat = queues.settings.repeat,
                 lyricsOpen = lyricsOpen, pinned = currentTrack?.let { MediaRef(MediaKind.Song, it.id) in pins } == true,
-                onRepeatOptions = { repeatOptions = true }, advancedRepeat = queues.settings.advancedRepeat,
+                onRepeatOptions = { playerDialogAppearance = actionAppearance; repeatOptions = true }, advancedRepeat = queues.settings.advancedRepeat,
                 count = "${(queues.library.active?.entries?.indexOfFirst { it.id == queues.library.active?.currentEntryId } ?: -1) + 1} / ${queues.library.active?.entries?.size ?: 0}")
         }
         if (hasPlayer && playerVisible) CompositionLocalProvider(LocalFrostedBackdrop provides playerBackdrop) {
@@ -455,6 +462,7 @@ fun LocalicaScreen(
     if (exitPrompt) GlassAlertDialog(onDismissRequest = { exitPrompt = false }, title = { Text("Close Localica?") },
         text = { Text("Playback will continue.") }, confirmButton = { ActionTextButton(onClick = { exitPrompt = false; exit() }) { Text("Close") } },
         dismissButton = { ActionTextButton(onClick = { exitPrompt = false }) { Text("Cancel") } })
+    CompositionLocalProvider(LocalGlassDialogAppearance provides playerDialogAppearance) {
     if (repeatOptions) RepeatOptionsDialog(queues.settings, { repeatOptions = false }) { queueController?.settings(it) }
     if (customizeActions) CompositionLocalProvider(LocalGlassDialogAppearance provides customizeAppearance) {
         PlayerActionCustomizer(playerActions, { playerActions = it; actionPreferences.write(it) }, { customizeActions = false; customizeAppearance = null }, settings.reducedMotion)
@@ -468,6 +476,7 @@ fun LocalicaScreen(
             PlayerAction.entries.filterNot { it == PlayerAction.More }
                 .forEach { action -> ActionTextButton(onClick = { playerMore = false; playerAction(action, editTags) }) { Text(action.label) } }
         }
+    }
     }
     QueueDialogs(queues, queueController)
     PlaybackFailureDialog(playback, playback.hasNext, onRetryPlayback) { onNext(); onRetryPlayback() }

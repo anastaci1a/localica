@@ -11,7 +11,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.rotate
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.R
@@ -19,6 +18,13 @@ import io.github.anastaci1a.localica.R
 @Composable
 internal fun SettingsPage(title: String, onBack: () -> Unit, onClose: () -> Unit = onBack,
     backLabel: String = "Back from settings", navigationDepth: Int = 0, onSystemBack: () -> Unit = onBack, content: @Composable ColumnScope.() -> Unit) {
+    SettingsNavigationPage(title, { it }, onBack, onClose, backLabel, navigationDepth, onSystemBack) { content() }
+}
+
+@Composable
+internal fun <T : Any> SettingsNavigationPage(target: T, title: (T) -> String, onBack: () -> Unit, onClose: () -> Unit = onBack,
+    backLabel: String = "Back from settings", navigationDepth: Int = 0, onSystemBack: () -> Unit = onBack,
+    content: @Composable ColumnScope.(T) -> Unit) {
     var previousDepth by remember { mutableIntStateOf(navigationDepth) }
     var direction by remember { mutableFloatStateOf(1f) }
     if (navigationDepth != previousDepth) {
@@ -26,27 +32,18 @@ internal fun SettingsPage(title: String, onBack: () -> Unit, onClose: () -> Unit
         previousDepth = navigationDepth
     }
     GlassDialog(onSystemBack, GlassPlacement.Page) {
+        GlassPopupNavigation(target, Modifier.fillMaxSize(), direction) { shown ->
         Surface(Modifier.fillMaxSize()) {
-            val reduced = LocalReducedMotion.current
-            val speed = LocalMotionSpeed.current
             Column(Modifier.fillMaxSize().safeDrawingPadding()) {
                 Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp).heightIn(min = 64.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                     ActionIcon(AppIcon.ActionBack, backLabel, onClick = onBack)
-                    androidx.compose.animation.Crossfade(title, Modifier.weight(1f),
-                        androidx.compose.animation.core.tween(if (reduced) 0 else (220 / speed).toInt()), label = "Settings heading") {
-                        Text(it, style = MaterialTheme.typography.titleLarge)
-                    }
+                    Text(title(shown), Modifier.weight(1f), style = MaterialTheme.typography.titleLarge)
                     ActionIcon(AppIcon.ActionClose, "Close settings", onClick = onClose)
                 }
-                key(title) {
-                    var entered by remember { mutableStateOf(false) }
-                    LaunchedEffect(Unit) { entered = true }
-                    val reveal by androidx.compose.animation.core.animateFloatAsState(if (entered) 1f else 0f,
-                        androidx.compose.animation.core.tween(if (reduced) 0 else (240 / speed).toInt()), label = "Settings page")
-                    Column(Modifier.weight(1f).graphicsLayer { alpha = reveal; translationX = direction * 16.dp.toPx() * (1f - reveal) }, content = content)
-                }
+                Column(Modifier.weight(1f)) { content(shown) }
             }
+        }
         }
     }
 }

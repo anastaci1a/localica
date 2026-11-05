@@ -349,6 +349,8 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
         else -> null
     }, GlassTone())
     val baseColors = MaterialTheme.colorScheme
+    val popupHome = rememberGlassPopupHome(!expanded)
+    CompositionLocalProvider(LocalGlassPopupHome provides popupHome) {
     GlassPanelTheme(lightMix) {
     val playerColors = MaterialTheme.colorScheme
     MaterialTheme(colorScheme = playerColors.copy(onSurface = foreground,
@@ -366,6 +368,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
         // is insufficient: an asynchronous capture can still see the previous recording.
         .then(if (frostedBackdrop != null) Modifier.recordFrostedBackdrop(frostedBackdrop, enabled = p >= .99f) else Modifier),
         shape = surfaceFrame.shape, color = Color.Transparent, contentColor = foreground) {
+        Box(Modifier.fillMaxSize().glassPopupHome(popupHome)) {
         if (workObserver != null) SideEffect { workObserver("surface-content", null) }
         if (inkObserver != null) {
             // Read inside Surface's actual provider, including when the actions row is absent.
@@ -376,7 +379,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
         if (backgroundReveal < 1f) LiquidGlassSurface(Modifier.fillMaxSize(), source = glassBackdrop,
             cornerRadius = surfaceCorner, frostProgress = glassFrost, pressFeedback = false, shadow = false,
             depthScale = RaisedGlassDepthScale + (1f - RaisedGlassDepthScale) * p)
-        Column(Modifier.fillMaxSize().controlVerticalScroll(playerScroll, enabled = p > 0.99f && virtualHeight > maxHeight)) {
+        Column(Modifier.fillMaxSize().controlVerticalScroll(playerScroll, enabled = p > 0.99f && virtualHeight > this@PlayerSurface.maxHeight)) {
         Box(Modifier.fillMaxWidth().height(virtualHeight).clipToBounds().testTag("player-background-space")
             .onGloballyPositioned { polarity.measure("background", it) }
             .then(if (!expanded) Modifier.clickable(onClickLabel = "Expand player") { settle(true) } else Modifier)) {
@@ -562,6 +565,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
         }
     }
     }
+    }
     // The complete player composite (artwork, wash, controls, text) as recorded by the Surface above.
     // This target must stay outside that Surface's content: inside it, the Surface records the X into
     // the very layer the X's lens draws, a RenderNode cycle that overflows the API 33+ RenderThread (#583).
@@ -576,6 +580,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
         text = { Column { ArtworkAction.entries.forEach { value -> ActionTextButton(onClick = {
             onSettings(settings.copy(artworkTap = value)); configureTap = false
         }) { Text(value.label) } } } }, confirmButton = { ActionTextButton(onClick = { configureTap = false }) { Text("Close") } })
+}
 }
 }
 
