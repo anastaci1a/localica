@@ -37,7 +37,7 @@ class SongMenuIconsTest {
         val tracks = (0..2).map { Track("menu:$it", "Song $it", artist = "Artist", fileName = "$it.mp3", relativePath = "$it.mp3") }
         compose.setContent { LocalicaTheme {
             BrowserScreen(LibraryUiState(LibrarySnapshot(tracks = tracks), loading = false), PlaylistState(),
-                BrowseRoute(MainTab.Library, null, null), {}, {}, {}, { _, _, _ -> },
+                BrowseRoute(MainTab.Songs, null, null), {}, {}, {}, { _, _, _ -> },
                 null, null, true, false, reducedMotion = true, queryDispatcher = Dispatchers.Unconfined)
         } }
         compose.waitUntil(5000) { compose.onAllNodesWithContentDescription("Actions for Song 0").fetchSemanticsNodes().isNotEmpty() }
