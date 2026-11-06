@@ -77,6 +77,8 @@ fun LocalicaScreen(
     // key callback can outlive a settings update and disagree with the new count.
     val tabs = { settings.tabs }
     val pager = rememberPagerState(initialPage = settings.tabs.indexOf(navigation.active).coerceAtLeast(0)) { tabs().size }
+    val pagePopupHomes = remember { mutableStateMapOf<MainTab, GlassPopupHome>() }
+    var requestedTab by remember { mutableStateOf<MainTab?>(null) }
     val navigationScope = rememberCoroutineScope()
     var scrollRequests by rememberSaveable { mutableStateOf(emptyMap<MainTab, Int>()) }
     val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
@@ -84,6 +86,7 @@ fun LocalicaScreen(
     LaunchedEffect(navigation.active, settings.tabs) {
         val target = settings.tabs.indexOf(navigation.active).coerceAtLeast(0)
         if (pager.currentPage != target) {
+            pagePopupHomes[settings.tabs[pager.currentPage]]?.awaitHandoff()
             if (settings.reducedMotion) pager.scrollToPage(target)
             else pager.animateScrollToPage(target, animationSpec = androidx.compose.animation.core.tween(settings.motionDuration(400)))
         }
@@ -120,6 +123,7 @@ fun LocalicaScreen(
     var viewArt by remember { mutableStateOf(false) }
     var addPlaying by remember { mutableStateOf(false) }
     var playerMore by remember { mutableStateOf(false) }
+    var playerDialogAppearance by remember { mutableStateOf<GlassDialogAppearance?>(null) }
     var moreOpen by remember { mutableStateOf(false) }
     var viewOptions by remember { mutableStateOf(false) }
     var settingsCategory by remember { mutableStateOf<String?>(null) }
@@ -135,8 +139,19 @@ fun LocalicaScreen(
     var exitPrompt by remember { mutableStateOf(false) }
     var consumedRequest by rememberSaveable { mutableLongStateOf(queues.playerRequest) }
     val queueProgress = remember { androidx.compose.animation.core.Animatable(if (queueOpen) 1f else 0f) }
-    LaunchedEffect(queueOpen) { queueProgress.animateTo(if (queueOpen) 1f else 0f, androidx.compose.animation.core.tween(settings.motionDuration(400))) }
     val progress = remember { androidx.compose.animation.core.Animatable(if (expanded) 1f else 0f) }
+    val browsePopupHome = rememberGlassPopupHome(expanded || settingsOpen)
+    var settingsPresented by remember { mutableStateOf(false) }
+    LaunchedEffect(settingsOpen) {
+        if (settingsOpen) browsePopupHome.awaitHandoff()
+        settingsPresented = settingsOpen
+    }
+    val playerPopupHome = rememberGlassPopupHome(!expanded)
+    val queuePopupHome = rememberGlassPopupHome(!queueOpen || !expanded, playerPopupHome)
+    LaunchedEffect(queueOpen) {
+        if (!queueOpen) queuePopupHome.awaitHandoff()
+        queueProgress.animateTo(if (queueOpen) 1f else 0f, androidx.compose.animation.core.tween(settings.motionDuration(400)))
+    }
     val playerVisible by remember { derivedStateOf { progress.value > 0f } }
     val playerCoversBrowse by remember { derivedStateOf { progress.value >= .5f } }
     val playerFullyOpen by remember { derivedStateOf { progress.value >= .99f } }
@@ -178,7 +193,7 @@ fun LocalicaScreen(
             ?: io.github.anastaci1a.localica.library.ArtworkCache.peek(item.coverUris), item)
         navigation = navigation.open(route)
         queueOpen = false; expanded = false; songInfo = false
-        navigationScope.launch { queueProgress.animateTo(0f, androidx.compose.animation.core.tween(settings.motionDuration(400))) }
+        navigationScope.launch { queuePopupHome.awaitHandoff(); queueProgress.animateTo(0f, androidx.compose.animation.core.tween(settings.motionDuration(400))) }
     }
     val livePlayerOccurrence by rememberUpdatedState(queues.library.activeId to queues.library.active?.currentEntryId)
     val playerCollectionLookup = rememberCollectionLookup(library.snapshot, playlist.playlists, browseSorts, onOpen = ::openCollection)
@@ -276,6 +291,8 @@ fun LocalicaScreen(
         val screenScope = this
         val queueSelectionMaxHeight = maxHeight / 3
         SongDragScene(dragHost, Modifier.fillMaxSize()) {
+        CompositionLocalProvider(LocalGlassPopupHome provides browsePopupHome) {
+        Box(Modifier.fillMaxSize().glassPopupHome(browsePopupHome)) {
         Column(Modifier.fillMaxSize()
             // The opaque full player covers this entire scene. Keep its composition,
             // scroll state and cached recording, but do not submit hidden pixels.
@@ -286,6 +303,11 @@ fun LocalicaScreen(
             val tab = settings.tabs[page]
             val pageRoute = navigation.stacks[tab]?.lastOrNull() ?: remember(tab) { BrowseRoute(tab) }
             val route = pageRoute
+            val routeArtwork = artworkStore.scope(route.key)
+            GlassPopupNavigation(route to routeArtwork, Modifier.fillMaxSize(), departing = page != pager.targetPage || tab != (requestedTab ?: navigation.active),
+                onHome = { pagePopupHomes[tab] = it },
+                // Query history changes results inside one continuing editor host.
+                contentKey = { if (it.first.search) Triple(it.first.tab, it.first.collection, it.first.globalSearch) else it.first.key }) { (route, routeArtwork) ->
             val sortAnchor = rememberGlassAnchor()
             // Collection pages own their hero, navigation controls and status-bar inset.
             // Playlists use that same presentation, not the legacy shell heading.
@@ -308,7 +330,7 @@ fun LocalicaScreen(
                 Box(Modifier.weight(1f)) {
             // Routes retain saved state, but must not recycle live drawing/focus nodes from
             // a different grid or text field through SaveableStateProvider's ReusableContent.
-            key(route.key) { CompositionLocalProvider(LocalBrowseArtwork provides artworkStore.scope(route.key)) { holder.SaveableStateProvider(route.key) {
+            key(route.key) { CompositionLocalProvider(LocalBrowseArtwork provides routeArtwork) { holder.SaveableStateProvider(route.key) {
                 if (route.tab == MainTab.Queues && !route.search && (route.collection == null || route.collection.kind == MediaKind.Queue)) QueueScreen(queues, queueController, library,
                     playlist, playlistController, playback.connected, pins, ::pin, listBackEnabled = true, scrollToTopRequest = scrollRequests[tab] ?: 0, reducedMotion = settings.reducedMotion, selectionVisible = page == pager.settledPage && !queueVisible, isPlaying = playback.isPlaying,
                     onOpen = ::openCollection, playerOpen = expanded || playerVisible)
@@ -319,7 +341,9 @@ fun LocalicaScreen(
                             if (item.row != null) queueController?.tap(songs.map { it.track }, songs.indexOfFirst { it.id == item.row.id }, sourceName = "Pinned songs")
                             else openCollection(item)
                         }, ::pin, { ref, offset -> pins = PinEdits.move(pins, ref, offset); pinPreferences.write(pins) }, listBackEnabled = true, scrollToTopRequest = scrollRequests[tab] ?: 0, reducedMotion = settings.reducedMotion, selectionVisible = page == pager.settledPage, playlistController = playlistController, queues = queueController, playerOpen = expanded)
-                } else BrowserScreen(library, playlist, route, { navigation = navigation.update(it) },
+                } else BrowserScreen(library, playlist, route, {
+                    if (navigation.active == tab && navigation.stacks[tab]?.lastOrNull()?.key == route.key) navigation = navigation.update(it)
+                },
                     ::openCollection,
                     { settingsCategory = "Folders to scan"; settingsOpen = true }, { rows, index, scope ->
                         if (index >= 0) {
@@ -330,9 +354,12 @@ fun LocalicaScreen(
                     sortingRoute == route.key, { sortingRoute = null }, playingTrackId = playback.trackId, presentationOnly = viewOptions, selectionVisible = page == pager.settledPage,
                     onSearchEdit = { navigation = navigation.editSearch(it) }, onSearchCommit = { navigation = navigation.commitSearch() },
                     libraryFilters = libraryFilters, onFilterSettings = { settingsCategory = "Library filters"; settingsOpen = true },
-                    listBackEnabled = true, scrollToTopRequest = scrollRequests[tab] ?: 0, reducedMotion = settings.reducedMotion, sortOrigin = sortAnchor, onBack = ::back, onAppearance = { ink, background -> browseInk = ink; pageBackground = background })
+                    listBackEnabled = true, scrollToTopRequest = scrollRequests[tab] ?: 0, reducedMotion = settings.reducedMotion, sortOrigin = sortAnchor, onBack = ::back, onAppearance = { ink, background ->
+                        if (navigation.route.key == route.key) { browseInk = ink; pageBackground = background }
+                    })
             } } }
                 }
+            }
             }
             }
         }
@@ -349,10 +376,14 @@ fun LocalicaScreen(
                     scrollRequests = scrollRequests + (tab to ((scrollRequests[tab] ?: 0) + 1))
                 }) { tab ->
                     keyboard?.hide(); focusManager.clearFocus()
+                    requestedTab = tab
                     navigationScope.launch {
-                        val index = settings.tabs.indexOf(tab)
-                        if (settings.reducedMotion) pager.scrollToPage(index)
-                        else pager.animateScrollToPage(index, animationSpec = androidx.compose.animation.core.spring(dampingRatio = .85f, stiffness = 380f))
+                        try {
+                            pagePopupHomes[settings.tabs[pager.currentPage]]?.awaitHandoff()
+                            val index = settings.tabs.indexOf(tab)
+                            if (settings.reducedMotion) pager.scrollToPage(index)
+                            else pager.animateScrollToPage(index, animationSpec = androidx.compose.animation.core.spring(dampingRatio = .85f, stiffness = 380f))
+                        } finally { requestedTab = null }
                     }
                 }
 
@@ -380,11 +411,13 @@ fun LocalicaScreen(
             }
         }
         } }
+        } }
         if (hasPlayer) screenScope.PlayerSurface(player, expanded, { expanded = it }, settings, progress,
             onToggle, onSeek, onPrevious, onNext, ::openQueue, { expanded = false },
             lyricsOpen, { lyricsOpen = it }, playerTracks.lyrics,
             { settings = it; preferences.write(it) }, actionRows = if (playerActions.twoRows) 2 else 1, queueProgress = queueProgress, frostedBackdrop = playerBackdrop, glassBackdrop = browseBackdrop, visual = playerVisual,
             onSeekRequest = onSeekRequest, sampleState = playerSample, backgroundPolarity = playerBackgroundPolarity, artworkVisit = journey?.current?.token, previousArtwork = previousArtwork, nextArtwork = nextArtwork,
+            providedPopupHome = playerPopupHome, openingPopupHome = browsePopupHome,
             bottomChrome = bottomChrome, miniForeground = miniInk, onArtworkVisit = queueController?.let { controller -> { token, complete -> controller.swipeTo(token, complete) } }) {
             val editTags = presentedTagEdit()
             val actionAppearance = currentGlassDialogAppearance()
@@ -395,16 +428,16 @@ fun LocalicaScreen(
                 PlayerAction.Lyrics -> if (lyricsOpen) "Hide lyrics" else "Show lyrics"
                 PlayerAction.Pin -> if (currentTrack?.let { MediaRef(MediaKind.Song, it.id) in pins } == true) "Unpin from Home" else "Pin to Home"
                 else -> action.label
-            } }, { playerAction(it, editTags) }, { customizeAppearance = actionAppearance; customizeActions = true }, shuffle = queues.settings.shuffle, repeat = queues.settings.repeat,
+            } }, { playerDialogAppearance = actionAppearance; playerAction(it, editTags) }, { customizeAppearance = actionAppearance; customizeActions = true }, shuffle = queues.settings.shuffle, repeat = queues.settings.repeat,
                 lyricsOpen = lyricsOpen, pinned = currentTrack?.let { MediaRef(MediaKind.Song, it.id) in pins } == true,
-                onRepeatOptions = { repeatOptions = true }, advancedRepeat = queues.settings.advancedRepeat,
+                onRepeatOptions = { playerDialogAppearance = actionAppearance; repeatOptions = true }, advancedRepeat = queues.settings.advancedRepeat,
                 count = "${(queues.library.active?.entries?.indexOfFirst { it.id == queues.library.active?.currentEntryId } ?: -1) + 1} / ${queues.library.active?.entries?.size ?: 0}")
         }
         if (hasPlayer && playerVisible) CompositionLocalProvider(LocalFrostedBackdrop provides playerBackdrop) {
         GlassPanelTheme(playerLightMix) {
         screenScope.PlayerClippedOverlay({ progress.value }, bottomChrome) {
         screenScope.QueueSurface(queueProgress, settings, { queueOpen = it }, playerProgress = { progress.value },
-            onOpeningContact = { queueOpeningRequest++ }) {
+            onOpeningContact = { queueOpeningRequest++ }, providedPopupHome = queuePopupHome) {
             Box(Modifier.weight(1f)) { CompositionLocalProvider(LocalBrowseObscuredInset provides queueSelectionPanel.clearance) {
             queueDrawerState.SaveableStateProvider("player-queue") { QueueScreen(queues, queueController, library,
                 playlist, playlistController, playback.connected, pins, ::pin, reducedMotion = settings.reducedMotion, isPlaying = playback.isPlaying, onOpen = ::openCollection, onMinimize = { queueOpen = false },
@@ -420,10 +453,10 @@ fun LocalicaScreen(
         }
     }
     androidx.activity.compose.BackHandler(expanded) { if (lyricsOpen) lyricsOpen = false else expanded = false }
-    androidx.activity.compose.BackHandler(queueOpen || queueVisible) { queueOpen = false; navigationScope.launch { queueProgress.animateTo(0f, androidx.compose.animation.core.tween(settings.motionDuration(400))) } }
+    androidx.activity.compose.BackHandler(queueOpen || queueVisible) { queueOpen = false; navigationScope.launch { queuePopupHome.awaitHandoff(); queueProgress.animateTo(0f, androidx.compose.animation.core.tween(settings.motionDuration(400))) } }
     androidx.activity.compose.BackHandler(session.active && (!expanded || queueOpen || queueVisible)) { session.clear() }
     GlassPanelTheme(if (playerVisible) playerLightMix else if (browseInk == androidx.compose.ui.graphics.Color.White) 1f else 0f) {
-    if (settingsOpen) FolderSettings(library,
+    if (settingsPresented) FolderSettings(library,
         onDismiss = { settingsOpen = false; if (returnToScanner) { scannerOpen = true; returnToScanner = false } }, onChooseFolder, onRemoveFolder,
         extraContent = {
             (context.applicationContext as? io.github.anastaci1a.localica.LocalicaApplication)?.let { TagRecoverySettings(it.tagEditing) }
@@ -455,6 +488,7 @@ fun LocalicaScreen(
     if (exitPrompt) GlassAlertDialog(onDismissRequest = { exitPrompt = false }, title = { Text("Close Localica?") },
         text = { Text("Playback will continue.") }, confirmButton = { ActionTextButton(onClick = { exitPrompt = false; exit() }) { Text("Close") } },
         dismissButton = { ActionTextButton(onClick = { exitPrompt = false }) { Text("Cancel") } })
+    CompositionLocalProvider(LocalGlassDialogAppearance provides playerDialogAppearance) {
     if (repeatOptions) RepeatOptionsDialog(queues.settings, { repeatOptions = false }) { queueController?.settings(it) }
     if (customizeActions) CompositionLocalProvider(LocalGlassDialogAppearance provides customizeAppearance) {
         PlayerActionCustomizer(playerActions, { playerActions = it; actionPreferences.write(it) }, { customizeActions = false; customizeAppearance = null }, settings.reducedMotion)
@@ -468,6 +502,7 @@ fun LocalicaScreen(
             PlayerAction.entries.filterNot { it == PlayerAction.More }
                 .forEach { action -> ActionTextButton(onClick = { playerMore = false; playerAction(action, editTags) }) { Text(action.label) } }
         }
+    }
     }
     QueueDialogs(queues, queueController)
     PlaybackFailureDialog(playback, playback.hasNext, onRetryPlayback) { onNext(); onRetryPlayback() }
