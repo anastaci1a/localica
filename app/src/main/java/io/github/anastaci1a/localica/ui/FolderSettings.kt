@@ -16,6 +16,7 @@ import io.github.anastaci1a.localica.library.scanFolderLabels
 import io.github.anastaci1a.localica.scanner.ScanPreferences
 
 private data class SettingsDestination(val title: String, val parent: String?, val icon: AppIcon, val summary: String)
+private data class SettingsPageRoute(val title: String, val folderUri: String?, val iconPackId: String?)
 private val settingsDestinations = listOf(
     SettingsDestination("Interface", null, AppIcon.ActionSettings, "Navigation, player, glass, and motion"),
     SettingsDestination("Appearance", "Interface", AppIcon.TabLibrary, "Typography and interface gray"),
@@ -67,10 +68,12 @@ fun FolderSettings(state: LibraryUiState, onDismiss: () -> Unit, onChooseFolder:
     val holder = rememberSaveableStateHolder()
     val context = LocalContext.current
     val preferences = remember(context) { ScanPreferences(context) }
-    val pageKey = (page ?: "root") + if (page == "Folder options") folderUri.orEmpty() else ""
     fun back() { if (path.isEmpty()) onDismiss() else path = path.dropLast(1) }
-    SettingsPage(page ?: "Settings", ::back, onDismiss, navigationDepth = path.size,
-        onSystemBack = { if (initialCategory != null && path == settingsPath(initialCategory)) onDismiss() else back() }) {
+    val route = SettingsPageRoute(page ?: "Settings", folderUri.takeIf { page == "Folder options" }, iconPackId.takeIf { page == "Pack icons" })
+    SettingsNavigationPage(route, { it.title }, ::back, onDismiss, navigationDepth = path.size,
+        onSystemBack = { if (initialCategory != null && path == settingsPath(initialCategory)) onDismiss() else back() }) { shown ->
+        val page = shown.title.takeUnless { it == "Settings" }
+        val pageKey = (page ?: "root") + shown.folderUri.orEmpty() + shown.iconPackId.orEmpty()
         if (page == null) GlassSearchField(search, { search = it }, "Search settings",
             modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp))
         key(pageKey) { holder.SaveableStateProvider(pageKey) {
@@ -92,7 +95,7 @@ fun FolderSettings(state: LibraryUiState, onDismiss: () -> Unit, onChooseFolder:
                     }
                     "Navigation", "Player", "Motion", "Glass", "Appearance" -> interfaceContent(page)
                     "Icon packs" -> IconPackSettings { id -> iconPackId = id; path = path + "Pack icons" }
-                    "Pack icons" -> IconPackViewer(iconPackId)
+                    "Pack icons" -> IconPackViewer(shown.iconPackId)
                     "Playback and queues" -> {
                         playbackContent(page)
                         SettingsLink("Song tap behavior", "Default action and per-list overrides", AppIcon.TabSongs) { path = path + "Song tap behavior" }
@@ -114,7 +117,7 @@ fun FolderSettings(state: LibraryUiState, onDismiss: () -> Unit, onChooseFolder:
                         ActionButton(onClick = onChooseFolder, enabled = !state.loading && !state.scanning && !state.updatingFolders,
                             modifier = Modifier.fillMaxWidth()) { Text(if (state.snapshot.folders.isEmpty()) "Choose folder" else "Add folder") }
                     }
-                    "Folder options" -> state.snapshot.folders.firstOrNull { it.uri == folderUri }?.let { folder ->
+                    "Folder options" -> state.snapshot.folders.firstOrNull { it.uri == shown.folderUri }?.let { folder ->
                         Text(folderLabels.getValue(folder.uri), style = MaterialTheme.typography.titleMedium)
                         Text("Removing a folder only removes it from Localica. Audio files are kept.")
                         ExcludedFoldersPreference(folder, preferences, !state.scanning && !state.updatingFolders)
