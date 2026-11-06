@@ -65,6 +65,8 @@ class UiPerformanceTest {
         assumeTrue("Pass uiPerformance=true on an owned disposable test device", args.getString("uiPerformance") == "true")
         val repetitions = (args.getString("uiPerformanceRepetitions")?.toInt() ?: 3).also { require(it in 1..10) }
         val protocolLegacy = args.getString("uiPerformanceProtocolLegacy") == "true"
+        val deferredExport = args.getString("uiPerformanceDeferExport") == "true"
+        check(!deferredExport || args.getString("uiPerformanceInstrumentationSource")?.matches(Regex("[a-f0-9]{40}")) == true)
         check(!protocolLegacy || args.getString("uiPerformanceSource") == "dba7f1203be022b60060a8c602224f862630405e")
         val warmup = args.getString("uiPerformanceWarmup") != "false"
         val firstRep = args.getString("uiPerformanceStartRep")?.toInt() ?: 0
@@ -106,15 +108,24 @@ class UiPerformanceTest {
                             main { FrameStats.stop() }
                         }
                         Thread.sleep(300)
+                        if (deferredExport) {
+                            // Keep FrameTiming's in-memory capture after Stop, retire the actual
+                            // scene, then serialize before launching/admitting the next scene.
+                            main { it.setContent {} }
+                            scenario?.close(); scenario = null; activity = null; windows.clear()
+                        }
                         val report = JSONObject(FrameStats.report()).put("scenario", name).put("rep", rep)
                             .put("warmup", warmup && rep == 0).put("protocolLegacy", protocolLegacy).put("seed", seed).put("songs", tracks.size)
                             .put("api", Build.VERSION.SDK_INT).put("glassMode", glassMode.name)
                             .put("glassFallback", false).put("requestedGlass", "None").put("observedSceneBackend", effectiveMode)
-                            .put("scriptVersion", "stage0-v1").put("actions", org.json.JSONArray(events))
+                            .put("scriptVersion", if (deferredExport) "stage0-parity-deferred-v1" else "stage0-v1")
+                            .put("deferredExport", deferredExport).put("instrumentationSource", args.getString("uiPerformanceInstrumentationSource"))
+                            .put("actions", org.json.JSONArray(events))
                             .put("artwork", "placeholders; no media I/O")
                             .put("source", args.getString("uiPerformanceSource") ?: "unspecified")
                         check(report.getString("effectiveGlass") == "None")
-                        if (!protocolLegacy) check(report.getString("source") == BuildConfig.SOURCE_SHA && report.getString("buildSource") == BuildConfig.SOURCE_SHA)
+                        if (!protocolLegacy) check(report.getString("source") == report.getString("buildSource") &&
+                            (deferredExport || report.getString("buildSource") == BuildConfig.SOURCE_SHA))
                         check(!report.getBoolean("windowLimitReached"))
                         check(!report.getBoolean("timeLimitReached")) { "$name exceeded the capture time limit" }
                         val frames = report.getJSONArray("windows")
