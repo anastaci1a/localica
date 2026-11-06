@@ -228,8 +228,7 @@ class ModalGestureTakeoverTest {
         compose.runOnUiThread { popup = false }
         await { !rootOwner.blocked }
         pump(1000)
-        touch.down(0, area.center + Offset(0f, 140f))
-        touch.move(0, area.center, 12); touch.move(0, area.center + Offset(0f, -140f), 12); touch.up(0)
+        touch.fling(area.center + Offset(0f, 140f), area.center, area.center + Offset(0f, -140f))
         await { grid.isScrollInProgress }
         compose.runOnUiThread { popup = true }
         await { rootOwner.blocked && !grid.isScrollInProgress }
@@ -394,6 +393,13 @@ class ModalGestureTakeoverTest {
             points.remove(id)
         }
         fun cancel() { if (points.isNotEmpty()) { send(MotionEvent.ACTION_CANCEL); points.clear() } }
+        fun fling(start: Offset, middle: Offset, end: Offset) = compose.runOnUiThread {
+            // Keep the velocity witness in one native dispatch turn. Separate
+            // instrumentation round trips can exceed VelocityTracker's history
+            // horizon under rendering load, turning this fling into a slow drag.
+            down(0, start)
+            move(0, middle, 12); move(0, end, 12); up(0)
+        }
         private fun send(action: Int, delay: Long = 16) {
             eventTime = maxOf(eventTime + delay, android.os.SystemClock.uptimeMillis(), downTime)
             val properties = points.keys.map { id -> MotionEvent.PointerProperties().apply { this.id = id; toolType = MotionEvent.TOOL_TYPE_FINGER } }.toTypedArray()
