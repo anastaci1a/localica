@@ -143,6 +143,8 @@ internal val LocalBackdropRefresh = staticCompositionLocalOf<() -> Unit> { {} }
 
 /** Resolve both sides of sampling in the same draw frame, including scroll placement. */
 @Stable internal class BackdropLocation {
+    /** A projected modal samples its home in the pre-departure screen basis. */
+    var retainedRegistration: BackdropRegistration? = null
     var coordinates: LayoutCoordinates? = null
     var windowOffset by mutableStateOf(Offset.Zero)
     var placement by mutableIntStateOf(0)
@@ -150,6 +152,7 @@ internal val LocalBackdropRefresh = staticCompositionLocalOf<() -> Unit> { {} }
     var fallback by mutableStateOf(Offset.Zero)
     fun position(): Offset {
         placement
+        retainedRegistration?.let { return it.map(Offset.Zero) }
         val previous = fallback
         return coordinates?.takeIf { it.isAttached }?.let { it.positionInRoot() + windowOffset } ?: previous
     }
@@ -160,7 +163,8 @@ internal val LocalBackdropRefresh = staticCompositionLocalOf<() -> Unit> { {} }
         transformRevision; consumer.transformRevision
         val source = coordinates?.takeIf { it.isAttached } ?: return null
         val target = consumer.coordinates?.takeIf { it.isAttached } ?: return null
-        if (source.findRootCoordinates() === target.findRootCoordinates()) {
+        if (retainedRegistration == null && consumer.retainedRegistration == null &&
+            source.findRootCoordinates() === target.findRootCoordinates()) {
             return BackdropRegistration.fromMapping(source.size.width.toFloat(), source.size.height.toFloat()) {
                 target.localPositionOf(source, it)
             }
@@ -174,6 +178,7 @@ internal val LocalBackdropRefresh = staticCompositionLocalOf<() -> Unit> { {} }
     fun registrationToScreen(): BackdropRegistration? {
         placement
         transformRevision
+        retainedRegistration?.let { return it }
         val attached = coordinates?.takeIf { it.isAttached } ?: return null
         val offset = windowOffset
         return BackdropRegistration.fromMapping(attached.size.width.toFloat(), attached.size.height.toFloat()) {
