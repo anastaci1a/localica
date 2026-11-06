@@ -19,6 +19,16 @@ class SettingsLinkMorphTest {
 
     private lateinit var popupView: android.view.View
 
+    private fun advanceReturn(durationMillis: Long) {
+        // Preserve the original clock budget while allowing the native popup to
+        // process each frame, just as advanceMorphOpening does on admission.
+        val start = compose.mainClock.currentTime
+        while (compose.mainClock.currentTime - start < durationMillis) {
+            compose.mainClock.advanceTimeByFrame()
+            compose.waitForIdle()
+        }
+    }
+
     // Distinctive foreground ink separates text/icon pixels from the neutral
     // material and empty popup. Semantics alone cannot detect a missing fade.
     private fun returningInk(): Float {
@@ -52,11 +62,11 @@ class SettingsLinkMorphTest {
         assertTrue(anchor.hidden)
         val expanded = returningInk()
         compose.runOnIdle { open = false }
-        compose.mainClock.advanceTimeBy(320)
+        advanceReturn(320)
         assertTrue("The live trigger is still hidden during this frame", anchor.hidden)
         val early = returningInk()
-        assertTrue("The returning modal must already contain trigger ink", early > expanded + 1f)
-        compose.mainClock.advanceTimeBy(160)
+        assertTrue("The returning modal must already contain trigger ink: expanded=$expanded early=$early progress=${anchor.contact.expansion.value}", early > expanded + 1f)
+        advanceReturn(160)
         val late = returningInk()
         assertTrue("Trigger ink fades in before the final handoff", late > early)
         compose.runOnIdle { open = true }
@@ -64,7 +74,7 @@ class SettingsLinkMorphTest {
         assertTrue("Reopening retains one modal-owned trigger", anchor.hidden)
         assertTrue("Expanded content does not retain trigger ink", returningInk() < early)
         compose.runOnIdle { open = false }
-        compose.mainClock.advanceTimeBy(1500)
+        advanceReturn(1500)
         assertFalse(anchor.hidden)
         compose.onAllNodesWithTag("glass-morph-surface").assertCountEquals(0)
         compose.onNodeWithText("Sort by").assertIsDisplayed()
@@ -101,15 +111,15 @@ class SettingsLinkMorphTest {
         compose.runOnIdle { childOpen = true }
         compose.advanceMorphOpening(1500, child) { if (::popupView.isInitialized) popupView else null }
         compose.runOnIdle { childOpen = false }
-        compose.mainClock.advanceTimeBy(400)
+        advanceReturn(400)
         assertTrue(child.hidden)
         assertTrue("Nested return retains the parent's foreground palette", returningInk() > 1f)
-        compose.mainClock.advanceTimeBy(1500)
+        advanceReturn(1500)
         assertFalse(child.hidden)
         assertTrue(parent.hidden)
         compose.onNodeWithText("Selector style").assertIsDisplayed()
         compose.runOnIdle { parentOpen = false }
-        compose.mainClock.advanceTimeBy(1500)
+        advanceReturn(1500)
         assertFalse(parent.hidden)
         compose.onNodeWithText("Settings").assertIsDisplayed()
     }

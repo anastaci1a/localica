@@ -22,25 +22,34 @@ import org.junit.Test
 
 class SlidingTabsTest {
     @get:Rule val compose = createComposeRule()
-    @Test fun optionalForegroundRefractionChangesOnlyTheSelectedInk() {
+    @Test fun optionalForegroundRefractionChangesOnlyTheSelectedInk() = inspectForeground(io.github.anastaci1a.localica.navigation.GlassRendererMode.Normal)
+    @Test fun noneKeepsSelectedInkWhenForegroundSamplingIsEnabled() = inspectForeground(io.github.anastaci1a.localica.navigation.GlassRendererMode.None)
+
+    private fun inspectForeground(mode: io.github.anastaci1a.localica.navigation.GlassRendererMode) {
+        val runtime = GlassRendererRuntime(mode)
+        val normal = effectiveGlassBackend(mode, android.os.Build.VERSION.SDK_INT) == GlassBackend.Normal
         var foreground by mutableStateOf(false)
-        compose.setContent { LocalicaTheme {
+        val samples = java.util.concurrent.atomic.AtomicInteger()
+        compose.setContent { CompositionLocalProvider(LocalGlassRendererRuntime provides runtime) { LocalicaTheme {
             CompositionLocalProvider(LocalGlassAppearance provides GlassAppearance(tabStyle = TabLensStyle.Overlay,
-                overlayForeground = foreground, whiteTint = 0f, blur = 0f, contrast = 0f, shadowStrength = 0f)) {
+                overlayForeground = foreground, whiteTint = 0f, blur = 0f, contrast = 0f, shadowStrength = 0f),
+                LocalBackdropSamplingObserver provides { samples.incrementAndGet() }) {
                 val source = rememberFrostedBackdrop(Unit, dark = false)
                 Box(Modifier.size(300.dp, 64.dp).testTag("foreground-tabs")) {
                     Box(Modifier.fillMaxSize().recordFrostedBackdrop(source).background(Color.White))
                     SlidingTabs(listOf(MainTab.Home, MainTab.Library), MainTab.Home, { 0f }, source = source) {}
                 }
             }
-        } }
+        } } }
         val node = compose.onNodeWithTag("foreground-tabs")
+        compose.waitUntil(8000) { samples.get() > 0 }
         val before = node.captureToImage().toPixelMap()
+        val previousSamples = samples.get()
         compose.runOnIdle { foreground = true }
-        // The legacy renderer prepares its shared scene off the UI thread.
-        // Compose idleness alone does not mean that readback has finished.
+        // A completed sample, not composition idleness, owns thumbnail readiness.
+        compose.waitUntil(8000) { samples.get() > previousSamples }
         var after = node.captureToImage().toPixelMap()
-        compose.waitUntil(8000) {
+        if (normal) compose.waitUntil(8000) {
             after = node.captureToImage().toPixelMap()
             var refracted = 0
             for (y in 0 until before.height) for (x in 0 until before.width / 2)
@@ -52,7 +61,21 @@ class SlidingTabsTest {
             val error = kotlin.math.abs(before[x, y].green - after[x, y].green)
             if (error > .1f) { if (x < before.width / 2) changed++ else outside++ }
         }
-        assertTrue("Opting in must visibly refract the selected foreground", changed > 40)
+        if (normal) {
+            assertTrue("Opting in must visibly refract the selected foreground", changed > 40)
+        } else {
+            fun ink(image: androidx.compose.ui.graphics.PixelMap): Int {
+                var count = 0
+                for (y in 0 until image.height) for (x in 0 until image.width / 2) {
+                    val color = image[x, y]
+                    if (kotlin.math.abs(color.red - NavigationAccent.red) < .02f &&
+                        kotlin.math.abs(color.green - NavigationAccent.green) < .02f &&
+                        kotlin.math.abs(color.blue - NavigationAccent.blue) < .02f) count++
+                }
+                return count
+            }
+            assertTrue("None keeps selected foreground ink above the solid material", ink(before) > 40 && ink(after) >= ink(before) * .95f)
+        }
         assertTrue("Other tab labels stay untouched: $outside", outside < 10)
         compose.onAllNodesWithContentDescription("Home").assertCountEquals(1)
         compose.onAllNodesWithContentDescription("Library").assertCountEquals(1)

@@ -756,6 +756,7 @@ class GlassMorphTest {
 
     @Test fun popupSamplesTheCorrectScreenCoordinatesAndNestedControlsSampleItsMaterial() {
         var open by mutableStateOf(false)
+        var changed by mutableStateOf(false)
         lateinit var source: FrostedBackdrop
         lateinit var material: FrostedBackdrop
         compose.setContent { LocalicaTheme { CompositionLocalProvider(LocalReducedMotion provides true) {
@@ -763,8 +764,8 @@ class GlassMorphTest {
                 val anchor = rememberGlassAnchor()
                 source = rememberFrostedBackdrop(Unit, dark = true)
                 Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(source)) {
-                    drawRect(Color.Red, size = Size(size.width / 2, size.height))
-                    drawRect(Color.Blue, topLeft = Offset(size.width / 2, 0f), size = Size(size.width / 2, size.height))
+                    drawRect(if (changed) Color.Green else Color.Red, size = Size(size.width / 2, size.height))
+                    drawRect(if (changed) Color.Green else Color.Blue, topLeft = Offset(size.width / 2, 0f), size = Size(size.width / 2, size.height))
                 }
                 val list = rememberFrostedBackdrop(Unit, dark = true)
                 Canvas(Modifier.padding(top = 320.dp).fillMaxWidth().height(100.dp).recordFrostedBackdrop(list)) { drawRect(Color.Green) }
@@ -798,17 +799,41 @@ class GlassMorphTest {
             try {
                 val sample = shot.asImageBitmap().toPixelMap()[(material.origin.x + material.size.width / 4).toInt(),
                     (material.origin.y + material.size.height / 3).toInt()]
-                sample.red < .85f && sample.red > sample.blue + .2f
+                sample.red < .85f && if (android.os.Build.VERSION.SDK_INT >= 33) sample.red > sample.blue + .2f
+                    else sample.red > .03f && sample.blue > .03f && kotlin.math.abs(sample.red - sample.blue) < .05f
             } finally { shot.recycle() }
         }
         val screenshot = automation.takeScreenshot()
         val pixels = screenshot.asImageBitmap().toPixelMap()
         val left = pixels[(material.origin.x + material.size.width / 4).toInt(), (material.origin.y + material.size.height / 3).toInt()]
         val right = pixels[(material.origin.x + material.size.width * 3 / 4).toInt(), (material.origin.y + material.size.height / 3).toInt()]
-        assertTrue("Correctly positioned red backdrop: $left", left.red > left.blue + .2f)
-        assertTrue("Correctly positioned blue backdrop: $right", right.blue > right.red + .2f)
+        if (android.os.Build.VERSION.SDK_INT >= 33) {
+            assertTrue("Correctly positioned red backdrop: $left", left.red > left.blue + .2f)
+            assertTrue("Correctly positioned blue backdrop: $right", right.blue > right.red + .2f)
+        } else {
+            assertTrue("None combines the red and blue halves", left.red > .03f && left.blue > .03f)
+            for (color in listOf(left, right)) {
+                assertTrue("Both sides sample the red/blue modal scene, not the green list: $color",
+                    color.red > color.green + .1f && color.blue > color.green + .1f)
+            }
+        }
         val nearBoundary = pixels[(material.origin.x + material.size.width / 2 - 4).toInt(), (material.origin.y + material.size.height / 3).toInt()]
         assertTrue("Scatter pixels above the list's recorded bounds: $nearBoundary", nearBoundary.blue > .03f)
         compose.onNodeWithTag("nested-lens").assertIsDisplayed()
+        compose.runOnIdle { changed = true }
+        if (android.os.Build.VERSION.SDK_INT < 33) compose.waitUntil(10_000) {
+            material.snapshot?.toPixelMap()?.let { image ->
+                val color = image[image.width / 4, image.height / 3]
+                color.green > maxOf(color.red, color.blue) + .1f
+            } == true
+        }
+        compose.waitUntil(10_000) {
+            val shot = automation.takeScreenshot()
+            try {
+                val color = shot.asImageBitmap().toPixelMap()[(material.origin.x + material.size.width / 4).toInt(),
+                    (material.origin.y + material.size.height / 3).toInt()]
+                color.green > maxOf(color.red, color.blue) + .1f
+            } finally { shot.recycle() }
+        }
     }
 }

@@ -50,7 +50,7 @@ import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.roundToInt
 
-/** Real lyric text and the real return control, on both the legacy and native lens paths.
+/** Real lyric text and the real return control, with Normal refraction on Android 13+.
  * Chroma separates lyric ink from the neutral arrow, edge illumination and shadow. */
 class LyricsReturnBackdropTest {
     @get:Rule val compose = createComposeRule()
@@ -59,10 +59,8 @@ class LyricsReturnBackdropTest {
     private var stage by mutableIntStateOf(0)
     private var sampledScene by mutableStateOf<LyricsBackdropScene?>(null)
     private var sampleOrigin by mutableStateOf(Offset.Zero)
-    private var lastSnapshot: ImageBitmap? = null
     private var panelFixture = false
     private lateinit var fixtureState: Scene
-    private val sourceFrameIds = mutableMapOf<Any, Int>()
 
     private data class ViewportPose(val surfaceTop: Float, val titleTop: Float) {
         val viewport get() = playerLyricsViewport(titleTop, topInset = 24f)
@@ -82,6 +80,7 @@ class LyricsReturnBackdropTest {
         var pose by mutableStateOf<ViewportPose?>(null)
     }
 
+    @androidx.test.filters.SdkSuppress(minSdkVersion = 33)
     @Test fun movingAndReemphasizingGlyphsRefreshesTheActualReturnLens() {
         val state = Scene()
         mount(state)
@@ -111,20 +110,20 @@ class LyricsReturnBackdropTest {
         // control. A cached pre-scroll source would still contain the green M.
         val distance = button.width * 1.4f
         scrollBy(distance)
-        val moved = capture("scrolled-away", expectFresh = true)
-        assertTrue("Settled legacy and modern sources must follow scrolling",
+        val moved = capture("scrolled-away")
+        assertTrue("Settled sources must follow scrolling",
             green(moved, button) < green(deep, button) * .25f + .005f)
         scrollBy(-distance)
-        val returned = capture("scrolled-back", expectFresh = true)
+        val returned = capture("scrolled-back")
         assertEquals("The source remains registered after reversing the scroll",
             green(deep, button), green(returned, button), .025f)
 
         compose.runOnIdle { state.position = 31_000L }
-        val reemphasized = capture("new-active-line", expectFresh = true)
+        val reemphasized = capture("new-active-line")
         assertTrue("The old current line must refresh to red inactive ink", red(reemphasized, button) > .015f)
         assertTrue("No stale green emphasis may remain", green(reemphasized, button) < .015f)
         compose.runOnIdle { state.document = document(' ') }
-        val blank = capture("blank-document", expectFresh = true)
+        val blank = capture("blank-document")
         assertTrue("Blank-document negative control must remove sampled lyric detail",
             green(blank, button) < .015f && red(blank, button) < .015f)
         val blankProbe = localBounds(compose.onNodeWithTag(ProbeTag))
@@ -137,9 +136,9 @@ class LyricsReturnBackdropTest {
         val steady = capture("blank-still-stable")
         assertTrue("An idle control cannot accumulate its own arrow or rim in its source",
             interiorDifference(blank, steady, button) < .003f)
-        if (Build.VERSION.SDK_INT < 33) assertLegacyReadbackBecomesIdle(requireNotNull(sampledScene))
     }
 
+    @androidx.test.filters.SdkSuppress(minSdkVersion = 33)
     @Test fun movingPlayerViewportKeepsTheActiveReturnLensRegisteredThroughReversal() {
         val poses = listOf(ViewportPose(0f, 348f), ViewportPose(0f, 332f), ViewportPose(48f, 332f))
         val state = Scene().apply { pose = poses.first() }
@@ -159,20 +158,10 @@ class LyricsReturnBackdropTest {
             compose.runOnIdle { state.pose = pose; state.depth = .6f }
             compose.onNodeWithContentDescription(ReturnLabel).assertIsDisplayed()
             updateSampleOrigin()
-            // Capture with optics still enabled, before toggling the negative
-            // control: reacquiring a lease must not conceal a stale motion frame.
-            // Only a pose that resizes the viewport changes the source-local pixels and
-            // must publish a fresh Legacy readback. A pure translation of the player moves
-            // the source and its return lens together; the source-local snapshot stays
-            // valid and only the draw-time registration moves, which the optical
-            // assertions below verify at the translated pose and on reversal.
-            val resized = index > 0 && sequence[index - 1].titleTop != pose.titleTop
-            val shallow = capture("viewport-$index-shallow", expectFresh = resized)
+            val shallow = capture("viewport-$index-shallow")
             val button = returnBounds()
             val probe = localBounds(compose.onNodeWithTag(ProbeTag))
             assertSame("Viewport motion must retain the active sampling scene", source, requireNotNull(sampledScene).source)
-            if (Build.VERSION.SDK_INT < 33)
-                assertTrue("The moving return control must keep its legacy sampling lease", source.consumers > 0)
             val viewport = compose.onNodeWithTag("lyrics-viewport", true).getUnclippedBoundsInRoot()
             val root = compose.onNodeWithTag(SceneTag).getUnclippedBoundsInRoot()
             assertEquals("The viewport top stays mounted inside the player", pose.surfaceTop + 24f,
@@ -213,6 +202,7 @@ class LyricsReturnBackdropTest {
         selected.assertIsDisplayed().assertIsSelected()
     }
 
+    @androidx.test.filters.SdkSuppress(minSdkVersion = 33)
     @Test fun overlappingDocumentsShareTheReturnSourceAndFadeAfterCompositing() {
         val state = Scene()
         mount(state)
@@ -223,7 +213,7 @@ class LyricsReturnBackdropTest {
         assertTrue("Outgoing green glyph pixels must intersect the sampled interior", green(direct, button) > .008f)
         assertTrue("Incoming red glyph pixels must intersect the sampled interior", red(direct, button) > .008f)
         compose.runOnIdle { state.optics = true }
-        val shallow = capture("overlap-shallow", expectFresh = true)
+        val shallow = capture("overlap-shallow")
         val probe = localBounds(compose.onNodeWithTag(ProbeTag))
         assertTrue("The actual shared source contains both documents", green(shallow, probe) > .008f && red(shallow, probe) > .008f)
         compose.runOnIdle { state.depth = 2f }
@@ -236,7 +226,7 @@ class LyricsReturnBackdropTest {
             green(deep, referenceBounds()) < .015f && red(deep, referenceBounds()) < .015f)
 
         compose.runOnIdle { state.alpha = .5f }
-        val half = capture("overlap-half-reveal", expectFresh = true)
+        val half = capture("overlap-half-reveal")
         val overlap = interior(deep, probe).filter { point ->
             deep[point.x.toInt(), point.y.toInt()].let { it.green > .08f && it.red > .04f }
         }
@@ -250,6 +240,7 @@ class LyricsReturnBackdropTest {
         }
     }
 
+    @androidx.test.filters.SdkSuppress(minSdkVersion = 33)
     @Test fun interruptedPanelSourcesAndSongsReopenWithFreshSamplingAndWorkingReturn() {
         val sparse = document('|', dense = true)
         val state = Scene().apply { document = sparse }
@@ -275,7 +266,7 @@ class LyricsReturnBackdropTest {
         capture("interrupted-crossfade-settled", expectReturn = false)
         compose.onAllNodesWithTag("lyric-lines").assertCountEquals(1)
         alignCurrentLine(state.document)
-        val replacement = capture("replacement-song", expectFresh = true)
+        val replacement = capture("replacement-song")
         assertTrue("The replacement song has fresh sampled glyphs", green(replacement, returnBounds()) > .02f)
         assertTrue("The clean sparse baseline must distinguish a stale dense W source",
             interiorDifference(cleanSparse, replacement, returnBounds()) > .025f)
@@ -286,7 +277,7 @@ class LyricsReturnBackdropTest {
         }
         compose.waitForIdle()
         alignCurrentLine(state.document)
-        val reopened = capture("reopened-song", expectFresh = true)
+        val reopened = capture("reopened-song")
         assertTrue("The reopened scene samples the new document", green(reopened, returnBounds()) > .01f)
         assertEquals("The clean and reopened samples need identical viewport, row and lens placement",
             cleanGeometry, panelGeometry(state.document))
@@ -323,14 +314,17 @@ class LyricsReturnBackdropTest {
         assertEquals("The displayed lyric glyphs have one reveal-alpha owner",
             .5f, uncoveredGreen(half, button) / uncoveredGreen(full, button), .04f)
 
+        // Older Android presents a uniform average rather than glyph detail.
+        if (Build.VERSION.SDK_INT < 33) return
+
         // Also inspect the real source used by the actual return control, rather
         // than mistaking the correctly faded direct glyphs for correct sampling.
         compose.runOnIdle { state.art = Color.Blue; state.alpha = 1f; state.optics = true }
-        val sampledFull = capture("source-full-reveal", expectFresh = true)
+        val sampledFull = capture("source-full-reveal")
         val probe = localBounds(compose.onNodeWithTag(ProbeTag))
         assertTrue("The real sampled source must contain glyphs", green(sampledFull, probe) > .04f)
         compose.runOnIdle { state.alpha = .5f }
-        val sampledHalf = capture("source-half-reveal", expectFresh = true)
+        val sampledHalf = capture("source-half-reveal")
         assertEquals("The sampled lyric composition has exactly one reveal-alpha owner",
             .5f, green(sampledHalf, probe) / green(sampledFull, probe), .04f)
         assertTrue("Sampling must preserve artwork beneath transparent glyphs",
@@ -352,7 +346,7 @@ class LyricsReturnBackdropTest {
                         if (attached) sampledScene = scene
                         else if (sampledScene === scene) sampledScene = null
                     }) {
-                    artwork = rememberFrostedBackdrop(state.art, glassBlur = 0f, whiteTint = 0f)
+                    artwork = rememberFrostedBackdrop(state.art)
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Box(Modifier.size(360.dp, 384.dp).background(Color.Black).testTag(SceneTag)) {
                             Canvas(Modifier.matchParentSize().recordFrostedBackdrop(artwork)) { drawRect(state.art) }
@@ -382,7 +376,6 @@ class LyricsReturnBackdropTest {
                                                     LyricsLines(incoming, state.position, true, {}, Modifier.fillMaxSize(), sourceAlpha = { .5f })
                                                 }
                                             }
-                                            SourceFrameMarker(scene)
                                         }
                                     }
                                 }
@@ -411,7 +404,7 @@ class LyricsReturnBackdropTest {
             }
         } }
         compose.waitForIdle()
-        if (Build.VERSION.SDK_INT < 33) compose.waitUntil(10_000) { artwork.lensSnapshot != null }
+        if (Build.VERSION.SDK_INT < 33) compose.waitUntil(10_000) { artwork.snapshot != null }
     }
 
     private fun alignCurrentLine(document: ParsedLyrics) {
@@ -451,136 +444,11 @@ class LyricsReturnBackdropTest {
         compose.waitForIdle()
     }
 
-    private data class SourceFrame(val id: Int, val marker: Color, val sampled: Color)
-
-    private fun sourceFrame(scene: LyricsBackdropScene): SourceFrame {
-        val key = listOf(fixtureState.art, fixtureState.alpha, scene.layers.filter { it.contentKey() !== SourceMarkerKey }.map { layer ->
-            listOf(layer.source.recorded, layer.source.size, layer.source.location.placement,
-                layer.alpha(), layer.contentKey())
-        })
-        val id = sourceFrameIds.getOrPut(key) { sourceFrameIds.size + 1 }
-        check(id < 4096)
-        val marker = Color((id and 15) * 17, (id shr 4 and 15) * 17, (id shr 8 and 15) * 17)
-        return SourceFrame(id, marker, marker.copy(alpha = fixtureState.alpha).compositeOver(fixtureState.art))
-    }
-
-    @Composable private fun SourceFrameMarker(scene: LyricsBackdropScene) {
-        val recording = rememberGraphicsLayer()
-        val source = remember(recording) { FrostedBackdrop(recording, false).apply { size = IntSize(8, 8) } }
-        val layer = remember(source) { LyricsBackdropLayer(source, { 1f }, { SourceMarkerKey }, hasMask = false) }
-        DisposableEffect(scene, layer) {
-            scene.layers.add(layer)
-            scene.readback.sceneChanged()
-            onDispose { scene.layers.remove(layer); scene.readback.sceneChanged() }
-        }
-        // Record only, outside every tested return footprint. This marker has no
-        // onPlaced/onSizeChanged observer: its key, alpha, size and placement counter
-        // stay constant, so it cannot request refresh in place of real lyric changes.
-        Canvas(Modifier.wrapContentSize(Alignment.TopStart, unbounded = true).size(8.dp)) {
-            val request = scene.source.readbackRequest
-            scene.source.location.placement
-            source.location.coordinates = scene.source.location.coordinates
-            source.location.windowOffset = scene.source.location.windowOffset
-            source.layer.record(size = source.size) { drawRect(sourceFrame(scene).marker) }
-            source.recordedSize = source.size
-            source.recordedGeneration = source.rendererGeneration
-            scene.recorded(layer, request)
-        }
-    }
-
-    private data class LegacyPreparation(val snapshot: ImageBitmap?, val lensSnapshot: ImageBitmap?,
-        val request: Int, val snapshotRequest: Int, val drawsCompletedBeforeSnapshot: Boolean)
-
-    private fun awaitLegacySample(scene: LyricsBackdropScene, previous: ImageBitmap?, requireFresh: Boolean,
-        markerRequired: Boolean = true) {
-        var requested = 0
-        var observed = Color.Transparent
-        try {
-            compose.waitUntil(if (markerRequired) 10_000 else 2_000) {
-                compose.mainClock.advanceTimeByFrame()
-                val frame = if (markerRequired) compose.runOnUiThread { sourceFrame(scene) } else null
-                val source = scene.source
-                val preparation = compose.runOnUiThread {
-                    val request = source.readbackRequest
-                    val draws = source.snapshotDraws
-                    LegacyPreparation(source.snapshot, source.lensSnapshot, request, source.snapshotReadbackRequest,
-                        !source.layer.isReleased && draws?.request == request && draws.composite == request &&
-                            scene.layers.filter { it.alpha() > 0f }.all { layer ->
-                                val producer = draws.producers[layer]
-                                producer?.outer == request && producer.mask == request.takeIf { layer.hasMask }
-                            })
-                }
-                val snapshot = preparation.snapshot
-                requested = frame?.id ?: preparation.request
-                // Panel and direct fixtures must both publish the completed source,
-                // never merely display a screenshot after a fixed native delay.
-                if (!preparation.drawsCompletedBeforeSnapshot || preparation.snapshotRequest != preparation.request ||
-                    snapshot == null || preparation.lensSnapshot !== snapshot ||
-                    requireFresh && snapshot === previous) return@waitUntil false
-                if (!markerRequired) return@waitUntil true
-                val marker = scene.layers.single { it.contentKey() === SourceMarkerKey }.source
-                assertEquals("Diagnostic recording size is fixed", IntSize(8, 8), marker.size)
-                assertEquals("Diagnostic placement must never request a source refresh", 0, marker.location.placement)
-                val markerBounds = Rect(marker.origin, androidx.compose.ui.geometry.Size(8f, 8f))
-                val button = returnBounds()
-                assertFalse("Frame marker must remain beyond the return lens's sampling neighborhood",
-                    markerBounds.overlaps(Rect(sampleOrigin, androidx.compose.ui.geometry.Size(button.width, button.height)).inflate(button.width)))
-                val offset = marker.origin - source.origin + Offset(4f, 4f)
-                val x = (offset.x * snapshot.width / source.size.width.coerceAtLeast(1)).toInt()
-                val y = (offset.y * snapshot.height / source.size.height.coerceAtLeast(1)).toInt()
-                // Zero blur/tint means preparation publishes the very same image.
-                // Its marker identifies the real layer's requested content/placement,
-                // not merely a different but still pre-alignment bitmap.
-                if (x !in 0 until snapshot.width || y !in 0 until snapshot.height) false
-                else {
-                    observed = snapshot.toPixelMap(startX = x, startY = y, width = 1, height = 1)[0, 0]
-                    maxChannelDifference(observed.toArgb(), requireNotNull(frame).sampled.toArgb()) <= 1
-                }
-            }
-        } catch (failure: Throwable) {
-            throw AssertionError("Legacy source-frame preparation: requested=$requested observed=$observed " +
-                compose.runOnUiThread { "sourceRevision=${scene.source.revision} " +
-                    "samePreparedImage=${scene.source.lensSnapshot === scene.source.snapshot} " +
-                    "snapshotDraws=${scene.source.snapshotDraws} lastReadbackAbort=${scene.source.lastReadbackAbort} lastReadbackProgress=${scene.source.lastReadbackProgress} " +
-                    "liveProducerDraws=${scene.layers.map { layer ->
-                        listOf(layer.hasMask, layer.alpha(), layer.source.recorded,
-                            layer.recordedReadbackRequest, layer.maskedReadbackRequest)
-                    }}" }, failure)
-        }
-    }
-
-    private fun assertLegacyReadbackBecomesIdle(scene: LyricsBackdropScene) {
-        var lastRequest = compose.runOnUiThread { scene.source.readbackRequest }
-        var quietSince = SystemClock.uptimeMillis()
-        try {
-            // Longer than the 150ms coalescing + 500ms settled capture. This runs
-            // after the optical assertions, never as a wait for their desired ink.
-            compose.waitUntil(5_000) {
-                compose.mainClock.advanceTimeByFrame()
-                val request = compose.runOnUiThread { scene.source.readbackRequest }
-                if (request != lastRequest) {
-                    lastRequest = request
-                    quietSince = SystemClock.uptimeMillis()
-                }
-                SystemClock.uptimeMillis() - quietSince >= 1_000
-            }
-        } catch (failure: Throwable) {
-            throw AssertionError("Readback draw invalidation must not schedule another capture: request=$lastRequest " +
-                "revision=${scene.source.revision}", failure)
-        }
-    }
-
-    private fun capture(label: String, settle: Boolean = true, expectFresh: Boolean = false,
+    private fun capture(label: String, settle: Boolean = true,
         expectReturn: Boolean = true): PixelMap {
         if (settle) {
             compose.mainClock.advanceTimeBy(800)
             compose.waitForIdle()
-            // Wait for prepared-snapshot identity, never for the optical result.
-            // This also fails if settled scrolling/emphasis stops requesting a refresh.
-            requireNotNull(sampledScene) { "The mounted lyrics source must be observable" }
-                .takeIf { Build.VERSION.SDK_INT < 33 && it.source.consumers > 0 }?.let { scene ->
-                awaitLegacySample(scene, lastSnapshot, requireFresh = expectFresh, markerRequired = !panelFixture)
-            }
         }
         compose.runOnIdle { stage = (stage + 1) % 32 }
         val pixels = capturePresentedPopupPixels(compose, compose.onNodeWithTag(SceneTag), stage) { view }
@@ -608,10 +476,9 @@ class LyricsReturnBackdropTest {
                 if (source != null) {
                     appendLine("sourceOrigin=${source.origin} sourceSize=${source.size} revision=${source.revision} consumers=${source.consumers}")
                     appendLine(compose.runOnUiThread {
-                        "snapshot=${source.snapshot?.let(System::identityHashCode)} lensSnapshot=${source.lensSnapshot?.let(System::identityHashCode)} readbackRequest=${source.readbackRequest} snapshotReadbackRequest=${source.snapshotReadbackRequest} snapshotCompositeRequest=${source.snapshotDraws?.composite} lastReadbackAbort=${source.lastReadbackAbort} lastReadbackProgress=${source.lastReadbackProgress}"
+                        "snapshot=${source.snapshot?.let(System::identityHashCode)} readbackRequest=${source.readbackRequest} snapshotReadbackRequest=${source.snapshotReadbackRequest} snapshotCompositeRequest=${source.snapshotDraws?.composite} lastReadbackAbort=${source.lastReadbackAbort} lastReadbackProgress=${source.lastReadbackProgress}"
                     })
                     if (!panelFixture) {
-                        appendLine("sourceFrame=${compose.runOnUiThread { sourceFrame(requireNotNull(sampledScene)) }}")
                         appendLine("probeGreen=${green(pixels, localBounds(compose.onNodeWithTag(ProbeTag)))}")
                     }
                     compose.runOnUiThread {
@@ -622,7 +489,6 @@ class LyricsReturnBackdropTest {
                 }
             })
         } finally { bitmap.recycle() }
-        sampledScene?.source?.let { lastSnapshot = it.snapshot }
         return pixels
     }
 
@@ -706,7 +572,6 @@ class LyricsReturnBackdropTest {
     }.average().toFloat()
 
     private companion object {
-        val SourceMarkerKey = Any()
         const val ProbeTag = "actual-return-source-footprint"
         const val SceneTag = "lyrics-sampling-scene"
         const val ReturnLabel = "Return to current line"

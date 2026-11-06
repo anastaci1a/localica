@@ -84,27 +84,6 @@ class LensGeometryTest {
         }
     }
 
-    @Test fun contourMeshSamplesTheSameSurfaceWithoutFoldedTriangles() {
-        for (shape in listOf(LensGeometry(Rect(0f, 0f, 260f, 64f), 32f),
-            LensGeometry(Rect(13f, 27f, 333f, 427f), 24f),
-            LensGeometry(Rect(0f, 0f, 96f, 96f), 48f))) {
-            val mesh = curvedLensMesh(shape, 1f)
-            assertEquals(mesh.fields.size * 2, mesh.vertices.size)
-            for (i in mesh.fields.indices) {
-                val point = Offset(mesh.vertices[2 * i], mesh.vertices[2 * i + 1])
-                assertEquals(shape.field(point).distance, mesh.fields[i].distance, .001f)
-            }
-            for (i in mesh.indices.indices step 3) {
-                fun point(index: Int): Offset {
-                    val vertex = mesh.indices[index].toInt()
-                    assertTrue(vertex in mesh.fields.indices)
-                    return Offset(mesh.vertices[2 * vertex], mesh.vertices[2 * vertex + 1])
-                }
-                val a = point(i); val b = point(i + 1) - a; val c = point(i + 2) - a
-                assertTrue("Contour triangles must not fold over", b.x * c.y - b.y * c.x >= -.001f)
-            }
-        }
-    }
 
     @Test fun sampledGradientsProduceTheSameNormalizedSurfaceAsTheShader() {
         val flat = lensRay(LensField(0f, Offset.Zero), 50f, 1.35f)

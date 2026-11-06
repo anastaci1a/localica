@@ -1,6 +1,9 @@
 package io.github.anastaci1a.localica.ui
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.Box
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -30,7 +33,6 @@ internal fun glassLayerExtent(size: IntSize): IntSize {
     return IntSize(capacity(size.width), capacity(size.height))
 }
 
-/** Filter only a bounded low-resolution backing; sharp foregrounds never enter this pass. */
 @Composable
 internal fun FilteredBackdrop(modifier: Modifier, source: FrostedBackdrop, location: BackdropLocation,
     resolution: Float, padding: Float = 0f, homeSource: FrostedBackdrop? = null,
@@ -38,6 +40,32 @@ internal fun FilteredBackdrop(modifier: Modifier, source: FrostedBackdrop, locat
     homeBounds: (() -> androidx.compose.ui.geometry.Rect)? = null,
     homeFootprint: (() -> HomeBackdropFootprint?)? = null,
     effect: (Size, Float, Float) -> RenderEffect?) {
+    val renderer = currentGlassRendererGeneration()
+    val none by animateFloatAsState(if (renderer.backend == GlassBackend.None) 1f else 0f,
+        spring(dampingRatio = 1f, stiffness = 450f), label = "Glass render mode")
+    val blending = none > 0f && none < 1f
+    Box(modifier.graphicsLayer { compositingStrategy = if (blending)
+        androidx.compose.ui.graphics.CompositingStrategy.Offscreen else androidx.compose.ui.graphics.CompositingStrategy.Auto }) {
+        if (none < 1f) OpticalBackdrop(Modifier.matchParentSize().graphicsLayer { alpha = 1f - none }, source, location, resolution,
+            padding, homeSource, homeWeight, average, homeBounds, homeFootprint, false, effect)
+        if (none > 0f) OpticalBackdrop(Modifier.matchParentSize().graphicsLayer {
+            alpha = none
+            blendMode = if (blending) androidx.compose.ui.graphics.BlendMode.Plus else androidx.compose.ui.graphics.BlendMode.SrcOver
+        },
+            source, location, resolution, padding, homeSource, homeWeight,
+            average ?: MaterialAverageStyle(0f, GlassTone()), homeBounds, homeFootprint, true, effect)
+    }
+}
+
+/** Filter only a bounded low-resolution backing; sharp foregrounds never enter this pass. */
+@Composable
+private fun OpticalBackdrop(modifier: Modifier, source: FrostedBackdrop, location: BackdropLocation,
+    resolution: Float, padding: Float = 0f, homeSource: FrostedBackdrop? = null,
+    homeWeight: () -> Float = { 0f }, average: MaterialAverageStyle? = null,
+    homeBounds: (() -> androidx.compose.ui.geometry.Rect)? = null,
+    homeFootprint: (() -> HomeBackdropFootprint?)? = null,
+    forceAverage: Boolean, effect: (Size, Float, Float) -> RenderEffect?) {
+    val opticalWork = LocalGlassOpticalWork.current
     val samplingObserver by rememberUpdatedState(LocalHomeBackdropSamplingObserver.current)
     val drawObserver = LocalBackdropSamplingObserver.current
     BackdropLease(source)
@@ -45,15 +73,17 @@ internal fun FilteredBackdrop(modifier: Modifier, source: FrostedBackdrop, locat
     val layer = rememberGraphicsLayer()
     val primary = if (homeSource != null) rememberGraphicsLayer() else null
     val home = if (primary != null) rememberGraphicsLayer() else null
-    val canUseAverage = average != null && (source.materialOnly || homeSource?.materialOnly == true)
+    val canUseAverage = average != null && (forceAverage || source.materialOnly || homeSource?.materialOnly == true)
     val averageRenderer = remember(canUseAverage) { if (android.os.Build.VERSION.SDK_INT >= 33 && canUseAverage) MaterialAverageRenderer() else null }
     val rawAverageRenderer = remember(canUseAverage) { if (android.os.Build.VERSION.SDK_INT >= 33 && canUseAverage) MaterialAverageRenderer() else null }
-    val averageSource = if (average != null && source.materialOnly) rememberGraphicsLayer() else null
-    val averageHome = if (average != null && homeSource?.materialOnly == true) rememberGraphicsLayer() else null
+    val averageSource = if (average != null && (forceAverage || source.materialOnly)) rememberGraphicsLayer() else null
+    val averageHome = if (average != null && (forceAverage || homeSource?.materialOnly == true)) rememberGraphicsLayer() else null
     layer.clip = true
-    // Isolate unchanged filters from ancestor recordings; source RenderNode changes
-    // still invalidate the sampled result, while sibling motion reuses this drawing.
+    // Keep sibling motion isolated, but explicitly invalidate consumers in another
+    // window when their source records new content.
     Canvas(modifier.graphicsLayer()) {
+        location.observeRecordingAcrossWindows(source)
+        homeSource?.let { location.observeRecordingAcrossWindows(it) }
         // A list may load after this floating control's first draw. Observe the
         // first recording explicitly: GraphicsLayer.size is not snapshot state,
         // and returning before drawLayer otherwise installs no dependency.
@@ -90,8 +120,8 @@ internal fun FilteredBackdrop(modifier: Modifier, source: FrostedBackdrop, locat
             homeExtent.width <= 0f || homeExtent.height <= 0f) return@Canvas
         val homeCorners = if (footprint != null) footprint.cornersInSource(homeToScreen)
             else homeToFootprint?.inverse()?.corners(Rect(Offset.Zero, homeExtent))
-        val flatSource = homeSource == null && averageRenderer != null && source.canAverage(localToSource.corners(viewportBounds))
-        val flatHome = averageRenderer != null && homeSource != null && homeCorners?.let(homeSource::canAverage) == true
+        val flatSource = averageRenderer != null && (forceAverage || homeSource == null && source.canAverage(localToSource.corners(viewportBounds)))
+        val flatHome = averageRenderer != null && homeSource != null && (forceAverage || homeCorners?.let(homeSource::canAverage) == true)
         samplingObserver?.let { observer ->
             androidx.compose.runtime.snapshots.Snapshot.withoutReadObservation {
                 observer(HomeBackdropSamplingFrame(footprint, homeCorners, flatHome, blend))
@@ -130,6 +160,7 @@ internal fun FilteredBackdrop(modifier: Modifier, source: FrostedBackdrop, locat
         val extent = IntSize(ceil((size.width + 2 * padding) * r).toInt().coerceAtLeast(1),
             ceil((size.height + 2 * padding) * r).toInt().coerceAtLeast(1))
         val allocation = glassLayerExtent(extent)
+        opticalWork?.invoke()
         layer.renderEffect = effect(Size(extent.width.toFloat(), extent.height.toFloat()), r, flatWeight)
         // A morph keeps its averaged home source while gradually admitting the detailed
         // destination. Endpoint appearance and return handoff use the same color mapping.

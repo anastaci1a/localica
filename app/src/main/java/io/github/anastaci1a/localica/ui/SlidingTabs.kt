@@ -23,8 +23,6 @@ import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ClipOp
-import androidx.compose.ui.graphics.layer.drawLayer
-import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
@@ -90,8 +88,8 @@ internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, pagePosition: () 
     }
     val composite = rememberFrostedBackdrop(appearance, dark = source?.dark == true)
     val refractForeground = appearance.tabStyle == TabLensStyle.Overlay && appearance.overlayForeground
-    val legacyOverlay = renderer.backend == GlassBackend.Legacy && appearance.tabStyle == TabLensStyle.Overlay
-    val recordForeground = refractForeground && !legacyOverlay
+    val average = glassAverageProgress()
+    val recordForeground = refractForeground
     val decorated = rememberFrostedBackdrop(appearance, enabled = recordForeground, dark = false)
     val labelStyle = MaterialTheme.typography.labelMedium.copy(fontSize = 12.sp, lineHeight = 16.sp, fontWeight = FontWeight.Medium)
     val textMeasurer = androidx.compose.ui.text.rememberTextMeasurer()
@@ -120,9 +118,6 @@ internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, pagePosition: () 
         val insets = SelectorTrackInsets(0f, inset, inset)
         val atlasGeometry = selectorTrackGeometry(pixels * tabs.size, baseHeight, 0f, 1f,
             false, rtl, reduced, overflow = !fits)
-        val inkAtlas = if (legacyOverlay && refractForeground)
-            rememberFrostedBackdrop(listOf(tabs, width, labelStyle, density.density, density.fontScale),
-                dark = false, glassBlur = 0f, whiteTint = 0f) else null
         val rawTrack = if (fits) androidx.compose.ui.geometry.Rect(rawGeometry.travelStart, rawGeometry.crossStart,
             rawGeometry.travelEnd, rawGeometry.crossStart + rawGeometry.crossExtent)
             else androidx.compose.ui.geometry.Rect(0f, 0f, viewport, baseHeight)
@@ -146,8 +141,7 @@ internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, pagePosition: () 
         val selectorFrame = if (coupled) geometry.lens(lens.value, tabs.size, insets,
             false, rtl, GlassShape(), radius, presentation = frame) else rawFrame
         val selectorContour = remember(selectorFrame) { selectorFrame.contour() }
-        // Fixed padded recording dimensions avoid size-driven legacy recapture on
-        // each deformation frame. Dynamic legacy foreground freshness is gated separately.
+        // Fixed padded recording dimensions avoid size-driven captures during deformation.
         val recording = selectorTrackRecordingBounds(viewport, baseHeight, limits.crossClearance)
         Box(Modifier.selectorTrackPlacement(recording).recordFrostedBackdrop(composite), contentAlignment = AbsoluteAlignment.TopLeft) {
             LiquidGlassSurface(Modifier.selectorTrackPlacement(track.translate(-recording.topLeft))
@@ -240,17 +234,6 @@ internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, pagePosition: () 
                 if (appearance.tabStyle == TabLensStyle.Classic) {
                     Box(Modifier.selectorTrackPlacement(selectorFrame.bounds).then(modifier).background(Color.Black.copy(alpha = appearance.classicOpacity),
                         androidx.compose.foundation.shape.GenericShape { size, _ -> addRoundRect(selectorContour.outlineAt(size)) }))
-                } else if (legacyOverlay) {
-                    // Retire retained tone/mesh preparation, not selector gesture or motion state.
-                    key(renderer) {
-                        LegacySelectorLens(modifier, source, inkAtlas, appearance,
-                            selectorFrame, LensGeometry(track, radius), shell.value, selectorBody.value,
-                            tabs.indices.map { index -> SelectorInkSlot(
-                                atlasGeometry.slot(index, tabs.size, insets, false, rtl).cell,
-                                geometry.slot(index, tabs.size, insets, false, rtl).cell) },
-                            MaterialTheme.colorScheme.onSurfaceVariant, NavigationAccent,
-                            shellOrigin = { composite.origin - recording.topLeft })
-                    }
                 } else CompositionLocalProvider(LocalGlassAppearance provides appearance.copy(
                     blur = if (appearance.tabStyle == TabLensStyle.Overlay) 0f else appearance.tabBlur,
                     whiteTint = if (appearance.tabStyle == TabLensStyle.Overlay) 0f else appearance.tabWhiteTint,
@@ -265,23 +248,13 @@ internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, pagePosition: () 
                 }
             }
             Box(Modifier.width(width * tabs.size).fillMaxHeight(), contentAlignment = AbsoluteAlignment.TopLeft) {
-                if (inkAtlas != null) {
-                    Box(Modifier.fillMaxSize().recordFrostedBackdrop(inkAtlas, displayCutout = {
-                        Path().apply { addRect(androidx.compose.ui.geometry.Rect(Offset.Zero, size)) }
-                    })) { Labels(Color.White, false, atlas = true) }
-                }
                 if (!refractForeground) Lens()
                 val foregroundRecording = selectorTrackRecordingBounds(geometry.travel, baseHeight, limits.crossClearance)
                 val foregroundContent = androidx.compose.ui.geometry.Rect(
                     0f, 0f, geometry.travel, baseHeight).translate(-foregroundRecording.topLeft)
                 Box(if (recordForeground) Modifier.selectorTrackPlacement(foregroundRecording)
-                    .recordFrostedBackdrop(decorated).drawWithContent {
-                        if (composite.recorded && !composite.layer.isReleased) {
-                            val delta = composite.origin - decorated.origin
-                            translate(delta.x, delta.y) { drawLayer(composite.layer) }
-                        }
-                        drawContent()
-                    } else Modifier.fillMaxSize(), contentAlignment = AbsoluteAlignment.TopLeft) {
+                    .recordFrostedBackdrop(decorated, composite, displayBacking = false)
+                    else Modifier.fillMaxSize(), contentAlignment = AbsoluteAlignment.TopLeft) {
                     // Record padded visual overflow without changing the gesture or
                     // scrolling host. Both sample origin and label coordinates move once.
                     Box(if (recordForeground) Modifier.selectorTrackPlacement(foregroundContent)
@@ -290,7 +263,14 @@ internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, pagePosition: () 
                         Labels(NavigationAccent, false)
                     }
                 }
-                if (refractForeground) Lens()
+                if (refractForeground) {
+                    Lens()
+                    // None averages material, not the foreground labels. Restore the
+                    // selected ink continuously as the optical renderer blends out.
+                    Box(Modifier.fillMaxSize().graphicsLayer { alpha = average.value }) {
+                        Labels(NavigationAccent, false)
+                    }
+                }
             }
         }
         }

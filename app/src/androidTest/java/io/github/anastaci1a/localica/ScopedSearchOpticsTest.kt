@@ -105,8 +105,14 @@ class ScopedSearchOpticsTest {
         val reds = (before.height / 3 until before.height * 2 / 3).flatMap { y ->
             (before.width / 3 until before.width * 2 / 3).map { x -> before[x, y].red }
         }
-        assertTrue("The actual source must present a spatial pattern before comparing refraction",
-            reds.isNotEmpty() && reds.maxOrNull()!! - reds.minOrNull()!! > .15f)
+        if (android.os.Build.VERSION.SDK_INT >= 33) {
+            assertTrue("The actual source must present a spatial pattern before comparing refraction",
+                reds.isNotEmpty() && reds.maxOrNull()!! - reds.minOrNull()!! > .15f)
+        } else {
+            val clear = (before.width * 3 / 4 until before.width * 4 / 5).map { before[it, before.height / 2] }
+            assertTrue("None presents a solid average behind the search foreground",
+                clear.maxOf { it.red } - clear.minOf { it.red } < .035f)
+        }
         compose.runOnIdle { depth = 2f }
         val image = pill.captureToImage()
         val after = image.toPixelMap()
@@ -117,6 +123,8 @@ class ScopedSearchOpticsTest {
         var changed = 0
         for (y in 0 until before.height) for (x in 0 until before.width)
             if (kotlin.math.abs(before[x, y].red - after[x, y].red) > .15f) changed++
-        assertTrue("Scoped search needs spatial refraction, changed=$changed", changed > before.width * before.height / 20)
+        if (android.os.Build.VERSION.SDK_INT >= 33)
+            assertTrue("Scoped search needs spatial refraction, changed=$changed", changed > before.width * before.height / 20)
+        else org.junit.Assert.assertEquals("None ignores optical depth", 0, changed)
     }
 }

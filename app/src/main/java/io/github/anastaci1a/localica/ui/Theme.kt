@@ -104,7 +104,7 @@ fun LocalicaTheme(grayTone: Float = .4f, content: @Composable () -> Unit) {
     // contexts must keep this live reference even after their declaration is gone.
     val inheritedRenderer = LocalGlassRendererRuntime.current
     val renderer = inheritedRenderer ?: remember {
-        GlassRendererRuntime(io.github.anastaci1a.localica.navigation.GlassRendererMode.Automatic)
+        GlassRendererRuntime(io.github.anastaci1a.localica.navigation.GlassRendererMode.Normal)
     }
     val level = .18f + .36f * grayTone.normalizedGrayTone()
     val gray = Color(level, level, level + .012f)

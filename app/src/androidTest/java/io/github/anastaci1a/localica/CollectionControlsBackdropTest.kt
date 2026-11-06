@@ -92,21 +92,19 @@ class CollectionControlsBackdropTest {
     @Test fun firstPublishedAndMovingSceneContainGlyphsRatherThanOnlyTheirBackground() {
         var scene: BrowseBackdropScene? = null
         var firstSnapshot: ImageBitmap? = null
-        var moving = false
         var scrollState: ScrollState? = null
+        fun moving() = scrollState?.isScrollInProgress == true
         var pixelDensity = 0f
         var rootView: android.view.View? = null
         compose.setContent { LocalicaTheme {
             val scroll = rememberScrollState()
             val density = LocalDensity.current.density
             val view = LocalView.current
-            val source = rememberFrostedBackdrop(Unit, dark = true, glassBlur = 0f, retainRaster = false, whiteTint = 0f)
-            // This test observes the live moving scene; the default setting now holds it while scrolling.
-            val page = rememberBrowseBackdropScene(source, null, Unit, scroll.isScrollInProgress, liveWhileScrolling = true)
+            val source = rememberFrostedBackdrop(Unit, dark = true, retainRaster = false)
+            val page = rememberBrowseBackdropScene(source, null, Unit)
             val viewport = rememberBrowseBackdropLayer(page, masked = true)
             SideEffect {
                 scene = page
-                moving = scroll.isScrollInProgress
                 scrollState = scroll
                 pixelDensity = density
                 rootView = view
@@ -136,7 +134,7 @@ class CollectionControlsBackdropTest {
         } }
         compose.waitUntil(10_000) {
             scene?.let { it.source.recorded && it.layers.single().source.recorded &&
-                (Build.VERSION.SDK_INT >= 33 || firstSnapshot != null && it.source.lensSnapshot != null) } == true
+                (Build.VERSION.SDK_INT >= 33 || firstSnapshot != null && it.source.snapshot != null) } == true
         }
         val page = requireNotNull(scene)
         if (Build.VERSION.SDK_INT < 33) {
@@ -156,8 +154,8 @@ class CollectionControlsBackdropTest {
             contact = true
             compose.waitUntil(10_000) {
                 compose.mainClock.advanceTimeByFrame()
-                moving && (Build.VERSION.SDK_INT >= 33 && page.layers.single().outer >= 0 ||
-                    page.source.snapshot?.let { it !== before && page.source.lensSnapshot === it && chroma(it, true) > .01f } == true)
+                moving() && (Build.VERSION.SDK_INT >= 33 && page.layers.single().outer >= 0 ||
+                    page.source.snapshot?.let { it !== before && page.source.snapshot === it && chroma(it, true) > .01f } == true)
             }
             // CPU preparation can finish after this predicate's last clock tick.
             // Commit its image into the consumer composition, then await native draw.
@@ -165,14 +163,14 @@ class CollectionControlsBackdropTest {
             compose.waitForIdle()
             if (Build.VERSION.SDK_INT < 33) assertPaired(page)
             // The real drag remains acquired; no finger-up or settled refresh has run.
-            assertTrue("The observation is during scrolling, not a settled refresh", moving)
+            assertTrue("The observation is during scrolling, not a settled refresh", moving())
             val lensBounds = compose.onNodeWithTag("content-lens").fetchSemanticsNode().boundsInRoot
             fun state(label: String) = compose.runOnUiThread {
                 val source = page.source
                 "$label scrollPx=${scrollState?.value} density=$pixelDensity lensRoot=$lensBounds " +
                     "sourceOrigin=${source.origin} sourceSize=${source.size} " +
                     "snapshot=${source.snapshot?.let(System::identityHashCode)} " +
-                    "lensSnapshot=${source.lensSnapshot?.let(System::identityHashCode)} " +
+                    "lensSnapshot=${source.snapshot?.let(System::identityHashCode)} " +
                     "request=${source.readbackRequest} published=${source.snapshotReadbackRequest} draws=${source.snapshotDraws}"
             }
             android.util.Log.i("CollectionBackdropFrame", state("pre-final-capture"))

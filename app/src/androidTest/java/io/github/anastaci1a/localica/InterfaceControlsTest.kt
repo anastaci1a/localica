@@ -1,5 +1,6 @@
 package io.github.anastaci1a.localica
 
+import android.os.Build
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -106,7 +107,7 @@ class InterfaceControlsTest {
             // even when its lens is between the committed quarter-step values.
             for (x in pixels.width / 8..pixels.width * 48 / 100) {
                 val c = pixels[x, pixels.height / 2]
-                assertTrue("No moving cutout gap at fraction $fraction, x=$x: $c", c.red > c.green + .1f)
+                assertTrue("No moving cutout gap at fraction $fraction, x=$x: $c", c.red > c.green + if (Build.VERSION.SDK_INT >= 33) .1f else .015f)
             }
         }
         slider.performTouchInput { up() }
@@ -124,7 +125,7 @@ class InterfaceControlsTest {
         assertTrue(bounds.width > bounds.height * 1.3f)
         val pixels = thumb.captureToImage().toPixelMap()
         val active = pixels[(pixels.width * .4f).toInt(), pixels.height / 2]
-        assertTrue("Active track remains visible through the clear center: $active", active.red > active.green + .12f)
+        assertSampledTrack(active)
         compose.onNodeWithTag("slider").performTouchInput { up() }
         compose.onNodeWithTag("slider").performSemanticsAction(SemanticsActions.SetProgress) { it(.8f) }
         compose.runOnIdle { assertEquals(.8f, value, .001f) }
@@ -140,8 +141,17 @@ class InterfaceControlsTest {
         compose.onNodeWithTag("settings-slider-scene", useUnmergedTree = true).performTouchInput { up() }
         for (percent in 20..40 step 5) {
             val ink = pixels[pixels.width * percent / 100, pixels.height / 2]
-            assertTrue("The active track must still refract through the thumb: $ink", ink.red > ink.green + .12f)
+            assertSampledTrack(ink)
             assertTrue("One 80% red track, not two overlaid copies: $ink", ink.green > .31f)
+        }
+    }
+
+    private fun assertSampledTrack(color: Color) {
+        if (Build.VERSION.SDK_INT >= 33) {
+            assertTrue("The active track refracts through the thumb: $color", color.red > color.green + .12f)
+        } else {
+            assertTrue("None averages the red track with its white surroundings: $color",
+                color.red > color.green + .015f && color.green > .85f && color.blue > .85f)
         }
     }
 
@@ -211,7 +221,7 @@ class InterfaceControlsTest {
         val pixels = compose.onNodeWithTag("settings-slider-thumb", useUnmergedTree = true).captureToImage().toPixelMap()
         compose.onNodeWithTag("rtl-slider").performTouchInput { up() }
         val active = pixels[(pixels.width * .6f).toInt(), pixels.height / 2]
-        assertTrue("RTL active track is visible on the right: $active", active.red > active.green + .12f)
+        assertSampledTrack(active)
         compose.onNodeWithTag("rtl-slider").performTouchInput { swipe(center, Offset(4f, center.y), 350) }
         compose.runOnIdle { assertTrue(value > .9f) }
         compose.onNodeWithTag("settings-switch", useUnmergedTree = true).performTouchInput {

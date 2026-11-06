@@ -185,7 +185,7 @@ class GlassPressureTest {
         var source: FrostedBackdrop? = null
         compose.setContent { LocalicaTheme {
             pressureView = LocalView.current
-            val backing = rememberFrostedBackdrop(Unit, glassBlur = 0f, whiteTint = 0f)
+            val backing = rememberFrostedBackdrop(Unit)
             source = backing
             Box(Modifier.width(284.dp).padding(top = 100.dp).testTag("pressure-scene")) {
                 // Record a distinct scene, then cover its direct presentation.
@@ -200,7 +200,7 @@ class GlassPressureTest {
                 PresentationMarker { presentationStage }
             }
         } }
-        if (android.os.Build.VERSION.SDK_INT < 33) compose.waitUntil(10000) { source?.lensSnapshot != null }
+        if (android.os.Build.VERSION.SDK_INT < 33) compose.waitUntil(10000) { source?.snapshot != null }
         compose.waitForIdle()
     }
 

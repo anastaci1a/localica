@@ -119,7 +119,7 @@ class UtilityPopupRenderDiagnosticTest {
         report = JSONObject().put("scene", scene.name).put("api", Build.VERSION.SDK_INT)
             .put("outputRoute", if (additionalOutput != null) "additionalTestOutputDir" else "external-files")
             .put("density", compose.density.density)
-            .put("interpretation", "App-shadow-on/off pairs are intended controls for configured app shadows, including recorded backdrops. Existing source metadata cannot prove completion of a particular legacy raster revision: fresh prepared identities and endpoint quiescence reduce, but cannot exclude, stale material sampling. These pairs do not by themselves prove cause. Residual edges can still be material/refraction/rim, scrim or native-window effects. A bright contour is not by itself the reported straight stripe. Compare central top/bottom scans with all four corner normals. No optical fix or shadow accumulation is presumed.")
+            .put("interpretation", "App-shadow-on/off pairs are intended controls for configured app shadows, including recorded backdrops. Completed thumbnail requests and endpoint quiescence establish readback readiness, not atomic native presentation. These pairs do not by themselves prove cause. Residual edges can still be material/refraction/rim, scrim or native-window effects. A bright contour is not by itself the reported straight stripe. Compare central top/bottom scans with all four corner normals. No optical fix or shadow accumulation is presumed.")
             .put("frames", records).put("closingTrace", trace).put("observedEndpointQuiescence", endpointObservations)
         compose.setContent { Fixture(scene) }
         compose.waitForIdle()
@@ -130,9 +130,9 @@ class UtilityPopupRenderDiagnosticTest {
         try {
             settleEndpoint()
             val rest = capture("rest", save = true)
-            var beforeOpenRaster = rasterRefs(modalSource)
+            var beforeOpenRequest = modalSource.snapshotReadbackRequest
             compose.onNodeWithContentDescription("More").performClick()
-            settleEndpoint(beforeOpenRaster)
+            settleEndpoint(beforeOpenRequest)
             compose.onNodeWithText("Scan music").assertExists()
             compose.onNodeWithText("Settings").assertExists()
             val firstOpen = capture("first-open", save = true)
@@ -144,14 +144,14 @@ class UtilityPopupRenderDiagnosticTest {
                 capture("reverse-$cycle-closing", save = cycle == 9)
                 assertTrue("This must interrupt a live return", anchor.modalPresent)
                 assertTrue("Close has travelled away from the expanded endpoint", anchor.contact.expansion.value < 1f)
-                beforeOpenRaster = rasterRefs(modalSource)
+                beforeOpenRequest = modalSource.snapshotReadbackRequest
                 compose.runOnIdle { open = true }
                 advance(96)
                 capture("reverse-$cycle-reopening", save = false)
                 assertTrue("Reopening keeps the same modal lifetime", anchor.modalPresent)
                 assertSame("Interrupted reversal cannot allocate a second dialog", firstWindow, popupWindow)
             }
-            settleEndpoint(beforeOpenRaster)
+            settleEndpoint(beforeOpenRequest)
             val repeatedOpen = capture("repeated-open", save = true)
             assertMatchedGeometry(firstOpen, repeatedOpen, "expanded before/after repeated interruptions")
 
@@ -161,7 +161,7 @@ class UtilityPopupRenderDiagnosticTest {
             // Request reopen at the draw acknowledgement, without another frame.
             // Close may release logical ownership before the reopen effect runs,
             // while Compose still retains this same native window.
-            beforeOpenRaster = rasterRefs(modalSource)
+            beforeOpenRequest = modalSource.snapshotReadbackRequest
             compose.runOnIdle { open = true }
             advanceFrame()
             capture("reopen-during-ack", save = true)
@@ -180,7 +180,7 @@ class UtilityPopupRenderDiagnosticTest {
             assertTrue("The modal keeps shadow ownership on the second reopened frame", anchor.shadowInModal)
             assertEquals("No duplicate bottom-group body appears on the second reopened frame", 2,
                 group.entries.values.count { it.anchor?.shadowInModal != true })
-            settleEndpoint(beforeOpenRaster)
+            settleEndpoint(beforeOpenRequest)
 
             compose.runOnIdle { open = false }
             awaitRestoredDrawAcknowledgement()
@@ -212,9 +212,9 @@ class UtilityPopupRenderDiagnosticTest {
             settleEndpoint()
             val noShadowRest = capture("app-shadow-off-rest", save = true)
             assertMatchedGeometry(returned, noShadowRest, "closed app-shadow control")
-            beforeOpenRaster = rasterRefs(modalSource)
+            beforeOpenRequest = modalSource.snapshotReadbackRequest
             compose.onNodeWithContentDescription("More").performClick()
-            settleEndpoint(beforeOpenRaster)
+            settleEndpoint(beforeOpenRequest)
             val noShadowOpen = capture("app-shadow-off-open", save = true)
             assertMatchedGeometry(firstOpen, noShadowOpen, "expanded app-shadow control")
             report.put("matchedPairs", JSONArray().put("first-open / repeated-open")
@@ -350,7 +350,7 @@ class UtilityPopupRenderDiagnosticTest {
     }
 
     private fun rasterRefs(source: FrostedBackdrop): List<Any?> = listOf(
-        source.snapshot, source.fallback, source.glassFallback, source.lensSnapshot, source.lensFrostSnapshot)
+        source.snapshot, source.fallback)
 
     private data class NativeLayout(val origin: Offset, val width: Int, val height: Int,
         val attached: Boolean, val layoutRequested: Boolean) {
@@ -390,28 +390,28 @@ class UtilityPopupRenderDiagnosticTest {
         .put("sceneBounds", scene.json()).put("safeBounds", safe.json())
         .put("pageMarkerBounds", pageMarker.json()).put("revealMarkerBounds", revealMarker.json())
 
-    private fun settleEndpoint(previousModal: List<Any?>? = null) {
+    private fun settleEndpoint(previousModal: Int? = null) {
         advance(12000)
-        val legacy = Build.VERSION.SDK_INT < 33
+        val thumbnail = Build.VERSION.SDK_INT < 33
         var last = emptyList<Any?>()
         var lastLayout: EndpointLayout? = null
         var unchangedSince = SystemClock.uptimeMillis()
         var unchangedFrameSince = compose.mainClock.currentTime
         var stableSamples = 0
         var layoutChanges = 0
-        val observation = JSONObject().put("requestedOpen", open).put("legacyRasterRequired", legacy)
-            .put("freshModalRequired", legacy && previousModal != null)
+        val observation = JSONObject().put("requestedOpen", open).put("thumbnailRequired", thumbnail)
+            .put("freshModalRequired", thumbnail && previousModal != null)
         endpointObservations.put(observation)
         // Endpoint-only, both APIs: virtual time alone cannot finish native inset/
-        // layout callbacks or legacy readback/scatter/tint. Observe unchanged layout
+        // layout callbacks or thumbnail readback. Observe unchanged layout
         // across real UI turns as well as clock time. Never wait for an expected
         // alignment or pixel result, and never use this in frozen transition captures.
         compose.mainClock.autoAdvance = true
         try {
             compose.waitUntil(10000) {
                 val layout = endpointLayout()
-                val browse = if (legacy) rasterRefs(browseSource) else emptyList()
-                val modal = if (legacy && open) rasterRefs(modalSource) else emptyList()
+                val browse = if (thumbnail) rasterRefs(browseSource) else emptyList()
+                val modal = if (thumbnail && open) rasterRefs(modalSource) else emptyList()
                 val current = browse + modal
                 if (lastLayout == null) observation.put("firstLayout", layout.json())
                 else if (layout != lastLayout) layoutChanges++
@@ -421,8 +421,8 @@ class UtilityPopupRenderDiagnosticTest {
                     stableSamples = 0
                 }
                 stableSamples++
-                val refreshed = !legacy || !open || previousModal == null ||
-                    modal.indices.all { modal[it] !== previousModal[it] }
+                val refreshed = !thumbnail || !open || previousModal == null ||
+                    modalSource.snapshotReadbackRequest > previousModal
                 layout.ready && browseSource.recorded && (!open || modalSource.recorded) &&
                     current.all { it != null } && refreshed && SystemClock.uptimeMillis() - unchangedSince >= 200 &&
                     compose.mainClock.currentTime - unchangedFrameSince >= 600 && stableSamples >= 4
@@ -598,8 +598,8 @@ class UtilityPopupRenderDiagnosticTest {
             .put("groupEntries", group.entries.size).put("activeGroupBodies", group.entries.values.count { it.anchor?.shadowInModal != true })
             .put("browseRecorded", browseSource.recorded).put("modalRecorded", modalSource.recorded)
             .put("browseRevision", browseSource.revision).put("modalRevision", modalSource.revision)
-            .put("browseRasterReady", browseSource.lensSnapshot != null).put("modalRasterReady", modalSource.lensSnapshot != null)
-            .put("rasterIdentityOrder", "snapshot,fallback,glassFallback,lensSnapshot,lensFrostSnapshot")
+            .put("browseRasterReady", browseSource.snapshot != null).put("modalRasterReady", modalSource.snapshot != null)
+            .put("rasterIdentityOrder", "snapshot,fallback")
             .put("browseRasterIdentities", JSONArray(rasterRefs(browseSource).map { it?.let(System::identityHashCode) ?: JSONObject.NULL }))
             .put("modalRasterIdentities", JSONArray(rasterRefs(modalSource).map { it?.let(System::identityHashCode) ?: JSONObject.NULL }))
             .put("browseSize", "${browseSource.size.width}x${browseSource.size.height}")

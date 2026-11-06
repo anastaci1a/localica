@@ -97,13 +97,13 @@ internal fun ConnectedSelectionHost(modifier: Modifier = Modifier, contentDrawin
     scene: SelectionScene = remember { SelectionScene() }, liftEdges: LiftEdges = LiftEdges.Horizontal,
     content: @Composable () -> Unit) {
     val liftStyle = rememberLiftShadow()
-    val renderer = currentGlassRendererGeneration()
-    // RenderEffect blur needs API 31; the Legacy backend crossfades its prepared frost instead.
-    val blurEffects = renderer.backend == GlassBackend.Modern && Build.VERSION.SDK_INT >= 31
+    val averageProgress = glassAverageProgress()
+    // Older Android uses the shared solid-average path.
+    val blurEffects = Build.VERSION.SDK_INT >= 33
     val graphics = androidx.compose.ui.platform.LocalGraphicsContext.current
     val scope = rememberCoroutineScope()
     val groups = remember { mutableListOf<HoverGroupRenderer>() }
-    DisposableEffect(graphics) { onDispose { groups.forEach { graphics.releaseGraphicsLayer(it.output) }; groups.clear() } }
+    DisposableEffect(graphics) { onDispose { groups.forEach { graphics.releaseGraphicsLayer(it.output); graphics.releaseGraphicsLayer(it.flatOutput) }; groups.clear() } }
     val backing = LocalFrostedBackdrop.current
     val hasSelection by remember { derivedStateOf { scene.regions.values.any { it.selected || it.visibility() > 0f } } }
     BackdropLease(backing.takeIf { hasSelection })
@@ -167,13 +167,13 @@ internal fun ConnectedSelectionHost(modifier: Modifier = Modifier, contentDrawin
             val gap = MediaSelectionGap.toPx()
             // Groups join by REST geometry, so growth never changes membership mid-motion.
             val components = hoverComponents(lifts.map { it.rest.bounds }, gap)
-            while (groups.size < components.size) groups += HoverGroupRenderer(graphics.createGraphicsLayer(), scope)
+            while (groups.size < components.size) groups += HoverGroupRenderer(graphics.createGraphicsLayer(), graphics.createGraphicsLayer(), scope)
             components.forEachIndexed { index, members ->
                 val group = groups[index]
                 val parts = members.map { lifts[it] }
                 val strengths = { a: Int, b: Int -> min(parts[a].progress, parts[b].progress) }
                 val opacity = members.maxOf { opacities[it] }
-                drawHoverGroup(group, parts, strengths, backing, location, blurEffects, recordingDensity, recordingDirection, gap, opacity = opacity, itemOpacity = members.map { opacities[it] }, lift = liftStyle)
+                drawHoverGroup(group, parts, strengths, backing, location, blurEffects, recordingDensity, recordingDirection, gap, opacity = opacity, itemOpacity = members.map { opacities[it] }, lift = liftStyle, averageProgress = averageProgress.value)
                 members.forEach { member ->
                     val item = hovering.getOrNull(member) ?: return@forEach
                     val lift = lifts[member]
@@ -190,9 +190,10 @@ internal fun ConnectedSelectionHost(modifier: Modifier = Modifier, contentDrawin
 }
 
 /** One merged group's retained resources: blur layer, shadow raster and path cache. */
-internal class HoverGroupRenderer(val output: GraphicsLayer, scope: kotlinx.coroutines.CoroutineScope) {
+internal class HoverGroupRenderer(val output: GraphicsLayer, val flatOutput: GraphicsLayer, scope: kotlinx.coroutines.CoroutineScope) {
     val shadow = RetainedGlassShadow(scope)
     val path = HoverPathCache()
+    val average = if (Build.VERSION.SDK_INT >= 33) MaterialAverageRenderer() else null
 }
 
 /** Shadow, then the magnified frosted backdrop clipped to the merged outline. Contents are the caller's. */
@@ -200,7 +201,7 @@ internal fun DrawScope.drawHoverGroup(group: HoverGroupRenderer, parts: List<Hov
     backing: FrostedBackdrop?, location: BackdropLocation, blurEffects: Boolean,
     density: androidx.compose.ui.unit.Density, direction: LayoutDirection, gap: Float,
     sampleOffset: Offset = Offset.Zero, shadow: Boolean = true, opacity: Float = 1f,
-    itemOpacity: List<Float>? = null, maskVisibility: Boolean = true, lift: LiftShadow) {
+    itemOpacity: List<Float>? = null, maskVisibility: Boolean = true, lift: LiftShadow, averageProgress: Float = 0f) {
     if (parts.isEmpty()) return
     val progress = parts.maxOf { it.progress } * opacity.coerceIn(0f, 1f)
     if (progress <= 0f) return
@@ -215,7 +216,7 @@ internal fun DrawScope.drawHoverGroup(group: HoverGroupRenderer, parts: List<Hov
         val canvas = drawContext.canvas
         canvas.saveLayer(bounds, Paint())
         drawHoverGroup(group, parts, strength, backing, location, blurEffects, density, direction, gap,
-            sampleOffset, shadow, opacity, itemOpacity, maskVisibility = false, lift = lift)
+            sampleOffset, shadow, opacity, itemOpacity, maskVisibility = false, lift = lift, averageProgress = averageProgress)
         // Complement removal also handles transparent/empty masks correctly on API 26.
         canvas.saveLayer(bounds, Paint().apply { blendMode = BlendMode.DstOut })
         drawRect(Color.White, bounds.topLeft, bounds.size)
@@ -233,6 +234,7 @@ internal fun DrawScope.drawHoverGroup(group: HoverGroupRenderer, parts: List<Hov
             RoundRect(it.first, CornerRadius.Zero) to 1f }, lift.strength * progress, lift.spread, color = lift.color)
     }
     val source = backing?.takeIf { it.recorded && !it.layer.isReleased } ?: return
+    if (blurEffects) location.observeRecordingAcrossWindows(source)
     val registration = source.location.registrationTo(location) ?: return
     val restBounds = rest.map { it.bounds }.reduce { a, b -> a.union(b) }
     val liftedBounds = parts.map { it.lifted.bounds }.reduce { a, b -> a.union(b) }
@@ -243,7 +245,9 @@ internal fun DrawScope.drawHoverGroup(group: HoverGroupRenderer, parts: List<Hov
     }) { withBackdropRegistration(registration, draw) }
     val blur = HoverLift.Blur.toPx() * progress
     clipPath(path) {
-        if (blurEffects && blur > .5f) {
+        val blending = averageProgress > 0f && averageProgress < 1f
+        if (blending) drawContext.canvas.saveLayer(path.getBounds(), Paint())
+        if (blurEffects && averageProgress < 1f && blur > .5f) {
             // Blur a crop larger than the outline, then clip: edges sample real backdrop.
             val crop = path.getBounds().inflate(blur * 2f).intersect(Rect(Offset.Zero, size))
             if (!crop.isEmpty) {
@@ -252,18 +256,32 @@ internal fun DrawScope.drawHoverGroup(group: HoverGroupRenderer, parts: List<Hov
                 output.record(density, direction, IntSize(ceil(crop.width).toInt(), ceil(crop.height).toInt())) {
                     translate(-crop.left, -crop.top) { magnified { drawLayer(source.layer) } }
                 }
-                translate(crop.left, crop.top) { drawLayer(output.also { it.alpha = progress }) }
+                translate(crop.left, crop.top) { drawLayer(output.also { it.alpha = progress * (1f - averageProgress) }) }
             }
-        } else {
-            val frost = (source.glassFallback ?: source.fallback).takeIf { !blurEffects }
-            drawContext.canvas.saveLayer(path.getBounds().inflate(1f), Paint().apply { alpha = progress })
-            magnified {
-                drawLayer(source.layer)
-                if (frost != null) drawImage(frost, dstSize = source.size, alpha = HoverLift.LegacyFrost * progress,
-                    filterQuality = FilterQuality.Medium)
-            }
+        } else if (!blurEffects) {
+            val average = source.averageColor(location, path.getBounds())
+            if (average != null) drawPath(path, average, alpha = progress)
+        } else if (averageProgress < 1f) {
+            drawContext.canvas.saveLayer(path.getBounds(), Paint().apply { alpha = progress * (1f - averageProgress) })
+            magnified { drawLayer(source.layer) }
             drawContext.canvas.restore()
         }
+        if (blurEffects && averageProgress > 0f && Build.VERSION.SDK_INT >= 33) {
+            val crop = path.getBounds()
+            val output = group.flatOutput
+            output.renderEffect = group.average?.effect()
+            output.record(density, direction, IntSize(8, 8)) {
+                scale(8f / crop.width, 8f / crop.height, Offset.Zero) {
+                    translate(-crop.left, -crop.top) { magnified { drawLayer(source.layer) } }
+                }
+            }
+            output.alpha = progress * averageProgress
+            output.blendMode = if (blending) BlendMode.Plus else BlendMode.SrcOver
+            translate(crop.left, crop.top) {
+                scale(crop.width / 8f, crop.height / 8f, Offset.Zero) { drawLayer(output) }
+            }
+        }
+        if (blending) drawContext.canvas.restore()
     }
 }
 

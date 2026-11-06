@@ -256,8 +256,6 @@ class DragReorderTest {
                     assertEquals(if (multiple) setOf(ids[1], ids[2]) else setOf(ids[1]), transaction.keys)
                     if (edgeScroll) {
                         assertTrue(owner.grid.firstVisibleItemIndex > originalScroll)
-                        val scene = requireNotNull(fixtureBackdrops[fixtureDragHost.source])
-                        assertFalse("Drag sampling stays live during edge scroll even with live glass disabled", scene.frozen)
                     }
                 }
                 queries.release()

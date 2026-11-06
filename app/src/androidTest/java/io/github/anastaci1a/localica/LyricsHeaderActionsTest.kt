@@ -63,7 +63,7 @@ class LyricsHeaderActionsTest {
             }
         } }
         compose.waitForIdle()
-        if (android.os.Build.VERSION.SDK_INT < 33) compose.waitUntil(10000) { backing.lensSnapshot != null }
+        if (android.os.Build.VERSION.SDK_INT < 33) compose.waitUntil(10000) { backing.snapshot != null }
         fun capture(name: String) {
             val bitmap = compose.onNodeWithTag("player-lyrics-pill").captureToImage().asAndroidBitmap()
             val folder = nativeEvidenceDirectory("lyrics-header-actions",

@@ -26,10 +26,8 @@ internal object HoverLift {
     val MaxLift = 4.dp
     /** Growth never leaves less than this to a neighbour's content. */
     val Clearance = 1.dp
-    /** Frost blur radius at full lift (Modern renderer). */
+    /** Frost blur radius at full lift (Normal renderer). */
     val Blur = 6.dp
-    /** Legacy renderers crossfade their prepared frosted backdrop to this opacity. */
-    const val LegacyFrost = .45f
 }
 
 /**

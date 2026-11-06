@@ -49,6 +49,8 @@ class FilterSwitchResetTest {
     private fun nodes(prefix: String, unmerged: Boolean) = compose.onAllNodes(SemanticsMatcher(prefix) {
         it.config.getOrNull(SemanticsProperties.TestTag)?.startsWith(prefix) == true
     }, useUnmergedTree = unmerged).fetchSemanticsNodes()
+        // Prefetched offscreen rows can publish semantics before they have visible bounds.
+        .filter { !it.boundsInRoot.isEmpty }
 
     private fun tag(node: SemanticsNode) = node.config[SemanticsProperties.TestTag]
     /** Playlist covers, keyed by item: the artwork box inside each merged card. */

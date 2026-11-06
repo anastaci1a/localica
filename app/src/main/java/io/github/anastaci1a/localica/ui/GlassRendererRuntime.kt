@@ -30,9 +30,18 @@ internal class GlassRendererRuntime(initial: GlassRendererMode, private val api:
 
 internal val LocalGlassRendererRuntime = staticCompositionLocalOf<GlassRendererRuntime?> { null }
 
-internal fun automaticGlassRendererGeneration() =
-    GlassRendererGeneration(effectiveGlassBackend(GlassRendererMode.Automatic, Build.VERSION.SDK_INT), 0)
+internal fun defaultGlassRendererGeneration() =
+    GlassRendererGeneration(effectiveGlassBackend(GlassRendererMode.Normal, Build.VERSION.SDK_INT), 0)
 
 @Composable
 internal fun currentGlassRendererGeneration(): GlassRendererGeneration =
-    LocalGlassRendererRuntime.current?.generation ?: remember { automaticGlassRendererGeneration() }
+    LocalGlassRendererRuntime.current?.generation ?: remember { defaultGlassRendererGeneration() }
+
+/** Retargeting preserves the current material blend while surface geometry stays mounted. */
+@Composable
+internal fun glassAverageProgress(): State<Float> = androidx.compose.animation.core.animateFloatAsState(
+    if (currentGlassRendererGeneration().backend == GlassBackend.None) 1f else 0f,
+    androidx.compose.animation.core.spring(1f, 450f), label = "Glass render mode")
+
+/** Counts optical work at invocation, without retaining scenes or scheduling frames. */
+internal val LocalGlassOpticalWork = staticCompositionLocalOf<(() -> Unit)?> { null }

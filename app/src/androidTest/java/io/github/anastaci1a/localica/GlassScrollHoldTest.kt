@@ -21,20 +21,19 @@ import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
 
-/** The page recording that Modern glass samples is held while scrolling unless live glass is enabled. */
+/** Shared page recordings keep following scroll on every supported Android version. */
 class GlassScrollHoldTest {
     @get:Rule val compose = createComposeRule()
-    private val holds = Build.VERSION.SDK_INT >= 33 // Legacy keeps its own coalesced refresh path.
 
     private class Fixture(val scene: BrowseBackdropScene)
 
-    private fun mount(live: Boolean): Fixture {
+    private fun mount(): Fixture {
         var scene: BrowseBackdropScene? = null
         compose.setContent { LocalicaTheme {
-            CompositionLocalProvider(LocalGlassAppearance provides GlassAppearance(liveScrollGlass = live)) {
+            CompositionLocalProvider(LocalGlassAppearance provides GlassAppearance()) {
                 val scroll = rememberScrollState()
-                val source = rememberFrostedBackdrop(Unit, dark = true, glassBlur = 0f, retainRaster = false, whiteTint = 0f)
-                val page = rememberBrowseBackdropScene(source, null, Unit, scroll.isScrollInProgress)
+                val source = rememberFrostedBackdrop(Unit, dark = true, retainRaster = false)
+                val page = rememberBrowseBackdropScene(source, null, Unit)
                 val viewport = rememberBrowseBackdropLayer(page, masked = true)
                 SideEffect { scene = page }
                 Box(Modifier.size(320.dp, 360.dp)) {
@@ -60,7 +59,7 @@ class GlassScrollHoldTest {
                 compose.onNodeWithTag("scroll").performTouchInput { moveBy(Offset(0f, -40f)) }
                 compose.mainClock.advanceTimeByFrame()
             }
-            // The hold is installed on the frame after scrolling begins; measure from here.
+            // Measure after drag recognition.
             val begun = recordings(f)
             repeat(10) {
                 compose.onNodeWithTag("scroll").performTouchInput { moveBy(Offset(0f, -30f)) }
@@ -71,24 +70,11 @@ class GlassScrollHoldTest {
         } finally { compose.mainClock.autoAdvance = true }
     }
 
-    @Test fun defaultOffDoesNotRerecordTheMovingPageAndRefreshesAfterScrolling() {
-        val f = mount(false)
-        scrollFrames(f) { begun ->
-            assertTrue(compose.runOnUiThread { f.scene.frozen } == holds)
-            if (holds) assertEquals("The held page is not re-recorded during scrolling", begun, recordings(f))
-        }
-        compose.waitUntil(10_000) { !compose.runOnUiThread { f.scene.frozen } }
-        val held = recordings(f)
-        compose.onNodeWithTag("scroll").performTouchInput { swipeDown() }
-        compose.waitUntil(10_000) { recordings(f) > held }
-    }
-
     @Test fun liveGlassKeepsRecordingEveryScrollFrame() {
-        val f = mount(true)
+        val f = mount()
         var last = recordings(f)
         var advanced = 0
         scrollFrames(f) { _ ->
-            assertFalse(compose.runOnUiThread { f.scene.frozen })
             val now = recordings(f)
             if (now > last) advanced++
             last = now
