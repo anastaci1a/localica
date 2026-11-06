@@ -100,9 +100,29 @@ internal fun hoverGeometry(rest: MediaItemOutline, room: Rect, progress: Float):
     val ey = min(room.top, room.bottom).coerceAtLeast(0f) * p
     val scale = if (b.width <= 0f || b.height <= 0f) 1f else
         max(1f, min((b.width + 2f * ex) / b.width, (b.height + 2f * ey) / b.height))
+    return hoverGeometryAtScale(rest, room, p, scale)
+}
+
+/** The outline and every content pass use this same uniform transform. */
+internal fun hoverGeometryAtScale(rest: MediaItemOutline, room: Rect, progress: Float, scale: Float): HoverGeometry {
+    val b = rest.bounds
+    if (scale == 1f) return HoverGeometry(rest, rest, room, 1f, b.center, progress.coerceIn(0f, 1f))
     val half = Offset(b.width * scale / 2f, b.height * scale / 2f)
     val lifted = MediaItemOutline(Rect(b.center - half, b.center + half), rest.corner * scale)
-    return HoverGeometry(rest, lifted, room, scale, b.center, p)
+    return HoverGeometry(rest, lifted, room, scale, b.center, progress.coerceIn(0f, 1f))
+}
+
+/** Reflow can replace neighbouring layout slots before their presented geometry changes.
+ * Start from the captured transform, then resolve the current layout's transform on the
+ * same progress as its parts. Independent selection animation keeps its own live phase. */
+internal fun interpolateHoverGeometry(source: HoverGeometry, current: HoverGeometry, progress: Float): HoverGeometry {
+    val p = progress.coerceIn(0f, 1f)
+    if (p == 1f) return current
+    val sourceScale = if (source.progress > 0f)
+        1f + (source.scale - 1f) * (current.progress / source.progress)
+    else hoverGeometry(source.rest, source.room, current.progress).scale
+    return hoverGeometryAtScale(current.rest, current.room, current.progress,
+        sourceScale + (current.scale - sourceScale) * p)
 }
 
 /** Maps a group's rest bounds onto its lifted bounds: the same backdrop region, magnified. */

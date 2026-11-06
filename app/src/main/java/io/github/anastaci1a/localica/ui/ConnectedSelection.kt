@@ -60,6 +60,8 @@ internal class SelectionEntry {
      * starts its cards from exactly this geometry. Plain state, written while drawing. */
     val hover = mutableMapOf<Any, HoverGeometry>()
     val viewportHover = mutableMapOf<Any, HoverGeometry>()
+    /** A surrounding geometry transition resolves the same transform for all content passes. */
+    var geometryResolver: ((Any?, HoverGeometry) -> HoverGeometry)? = null
     /** Virtualized pinch items join live bodies under the same surface and shadow. */
     var retainedHover: List<Pair<HoverGeometry, Float>> = emptyList()
 }
@@ -155,8 +157,9 @@ internal fun ConnectedSelectionHost(modifier: Modifier = Modifier, contentDrawin
             val cap = HoverLift.MaxLift.toPx()
             val others = placed.map { it.rest.bounds } + scene.retainedHover.map { it.first.rest.bounds }
             val liveLifts = hovering.map { item ->
-                hoverGeometry(item.rest, hoverRoom(item.rest.bounds, others, viewport, liftEdges, cap,
+                val current = hoverGeometry(item.rest, hoverRoom(item.rest.bounds, others, viewport, liftEdges, cap,
                     neighbourInset = MediaOutlinePadding.toPx(), clearance = HoverLift.Clearance.toPx()), item.progress)
+                scene.geometryResolver?.invoke(item.entry.itemKey, current) ?: current
             }
             hovering.forEachIndexed { index, item ->
                 item.entry.presented = liveLifts[index].translate(-item.at)

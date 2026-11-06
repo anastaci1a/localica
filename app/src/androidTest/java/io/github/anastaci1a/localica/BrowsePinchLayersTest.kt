@@ -403,6 +403,8 @@ class BrowsePinchLayersTest {
                 }
             }
             Box(Modifier.size(200.dp, 250.dp).testTag("index-scene").background(Color.Black)
+                // Observe the actual overlay pass inside its recording boundary.
+                .graphicsLayer()
                 .drawWithContent {
                     val before = indices.reads.size
                     drawContent()

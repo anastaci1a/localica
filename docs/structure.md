@@ -203,6 +203,8 @@ Prepare bounded current/neighbor artwork bundles and soft edges off Main. Revisi
 
 Readbacks serialize per source under process-owned read jobs and retain a dedicated layer parent until native copying completes, including after caller cancellation or publication expiry. Deadlines cannot release pending native work. Release and cancellation checks run on the owning UI thread. Pinch atlases preserve exact pixels with separated regions.
 
+Native copies pin sampling recordings. Visible producers draw live while a copy is pending; normal recording resumes when ownership ends. Explicit holds remain sampling-only.
+
 One expansion progress controls persistent artwork/title/transport geometry and masks. Observe frame progress in its owning control or placement/draw phase. Root navigation observes threshold crossings. Move a fixed Queue viewport instead of remeasuring its list throughout expansion. Scale fixed-size glyphs. Avoid stepped font sizes. Combine cover-edge masks in one offscreen layer. Settled artwork draws directly.
 
 Blend covers with color continuation and retain a snapshot source only during interruptible transitions. Blur-through uses a live blur on API 31+ and prepared soft-cover endpoints on older Android. Neither filters fresh bitmaps each animation frame.

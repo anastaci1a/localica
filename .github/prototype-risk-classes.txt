@@ -314,6 +314,8 @@ io.github.anastaci1a.localica.PopupHomeShapeTest
 io.github.anastaci1a.localica.SeekCancelGlassTest
 io.github.anastaci1a.localica.PlaybackShutdownTest
 io.github.anastaci1a.localica.SelectionBackTest
+
+io.github.anastaci1a.localica.PinchRecognitionContinuityTest
 io.github.anastaci1a.localica.GalleryLiftFrameTest
 io.github.anastaci1a.localica.SelectorFreeCornerPixelTest
 io.github.anastaci1a.localica.SongMenuIconsTest
@@ -349,3 +351,7 @@ io.github.anastaci1a.localica.GlassModeFrameTimingTest
 
 io.github.anastaci1a.localica.SelectionMergeGeometryTest
 io.github.anastaci1a.localica.SelectionMergeSequenceTest
+
+io.github.anastaci1a.localica.BackdropProducerContinuityTest
+io.github.anastaci1a.localica.GlassScrollHoldTest
+io.github.anastaci1a.localica.PresentationMarkerTest
