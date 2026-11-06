@@ -84,6 +84,15 @@ class SeekCancelExitTest {
                 val description = "frame=$it elapsed=${requestedClock - releaseClock} " +
                     "requestedClock=$requestedClock capturedClock=$capturedClock " +
                     "bounds=$next pixels=${pixels.width}x${pixels.height} low=$low high=$high"
+                if (!player && cancel && it == 9 && high - low > .02f) runCatching {
+                    // The primary witness has already been copied. No extra UI turn precedes it.
+                    val view = (target.fetchSemanticsNode().root as androidx.compose.ui.platform.ViewRootForTest).view
+                    val state = compose.runOnUiThread { nativeState(view, nativeWindow(view)) }
+                    val folder = nativeEvidenceDirectory("seek-cancel-exit-native",
+                        androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().targetContext.cacheDir)
+                    java.io.File(folder, "slider-cancel-frame-9.txt").writeText("$description\n$state")
+                    android.util.Log.i("SeekCancelExitNative", "$description\n$state")
+                }.onFailure { android.util.Log.e("SeekCancelExitNative", "Native evidence unavailable", it) }
                 if (high - low <= .02f || requestedClock != capturedClock) runCatching {
                     val folder = nativeEvidenceDirectory("seek-cancel-exit-failure",
                         androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().targetContext.cacheDir)
@@ -106,35 +115,8 @@ class SeekCancelExitTest {
                     save(target.captureToImage(), "redrawn")
                     android.util.Log.e("SeekCancelExitFrame", "Failure-only redraw clock=${compose.mainClock.currentTime}")
                     val view = (target.fetchSemanticsNode().root as androidx.compose.ui.platform.ViewRootForTest).view
-                    val window = compose.runOnUiThread {
-                        var context = view.context
-                        while (context is android.content.ContextWrapper && context !is android.app.Activity) {
-                            context = context.baseContext
-                        }
-                        (context as android.app.Activity).window
-                    }
-                    fun nativeState(): String = compose.runOnUiThread {
-                        fun describe(v: android.view.View?): String {
-                            if (v == null) return "absent"
-                            val screen = IntArray(2).also(v::getLocationOnScreen)
-                            val inWindow = IntArray(2).also(v::getLocationInWindow)
-                            val visible = android.graphics.Rect().also(v::getWindowVisibleDisplayFrame)
-                            return "${v.javaClass.simpleName} size=${v.width}x${v.height} " +
-                                "screen=${screen.contentToString()} window=${inWindow.contentToString()} " +
-                                "alpha=${v.alpha} visibility=${v.visibility} background=${v.background} " +
-                                "color=${(v.background as? android.graphics.drawable.ColorDrawable)?.color} " +
-                                "visible=$visible insets=${v.rootWindowInsets}"
-                        }
-                        val decor = window.decorView
-                        "clock=${compose.mainClock.currentTime} metrics=${view.resources.displayMetrics} " +
-                            "flags=${window.attributes.flags} sysUi=${decor.systemUiVisibility} " +
-                            "navColor=${window.navigationBarColor} " +
-                            "contrast=${if (android.os.Build.VERSION.SDK_INT >= 29) window.isNavigationBarContrastEnforced else null}\n" +
-                            "compose=${describe(view)}\ndecor=${describe(decor)}\n" +
-                            "navigation=${describe(decor.findViewById(android.R.id.navigationBarBackground))}\n" +
-                            "status=${describe(decor.findViewById(android.R.id.statusBarBackground))}"
-                    }
-                    java.io.File(folder, "$stem-native.txt").writeText(nativeState())
+                    val window = compose.runOnUiThread { nativeWindow(view) }
+                    java.io.File(folder, "$stem-native.txt").writeText(compose.runOnUiThread { nativeState(view, window) })
                     androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().uiAutomation
                         .takeScreenshot()?.let { screenshot ->
                             java.io.File(folder, "$stem-screen.png").outputStream().use {
@@ -148,7 +130,7 @@ class SeekCancelExitTest {
                         try {
                             compose.runOnUiThread { window.isNavigationBarContrastEnforced = false }
                             save(target.captureToImage(), "navigation-contrast-off")
-                            java.io.File(folder, "$stem-native-contrast-off.txt").writeText(nativeState())
+                            java.io.File(folder, "$stem-native-contrast-off.txt").writeText(compose.runOnUiThread { nativeState(view, window) })
                         } finally {
                             compose.runOnUiThread { window.isNavigationBarContrastEnforced = contrast }
                         }
@@ -161,6 +143,40 @@ class SeekCancelExitTest {
             compose.mainClock.advanceTimeBy(500)
             target.assertDoesNotExist()
         } finally { compose.mainClock.autoAdvance = true }
+    }
+
+    private fun nativeWindow(view: android.view.View): android.view.Window {
+        var context = view.context
+        while (context is android.content.ContextWrapper && context !is android.app.Activity) {
+            context = context.baseContext
+        }
+        return (context as android.app.Activity).window
+    }
+
+    private fun nativeState(view: android.view.View, window: android.view.Window): String {
+        fun describe(v: android.view.View?): String {
+            if (v == null) return "absent"
+            val screen = IntArray(2).also(v::getLocationOnScreen)
+            val inWindow = IntArray(2).also(v::getLocationInWindow)
+            val visible = android.graphics.Rect().also(v::getWindowVisibleDisplayFrame)
+            return "${v.javaClass.simpleName} size=${v.width}x${v.height} " +
+                "screen=${screen.contentToString()} window=${inWindow.contentToString()} " +
+                "top=${v.top} bottom=${v.bottom} translationY=${v.translationY} scrollY=${v.scrollY} " +
+                "padding=${v.paddingLeft},${v.paddingTop},${v.paddingRight},${v.paddingBottom} " +
+                "alpha=${v.alpha} visibility=${v.visibility} background=${v.background} " +
+                "color=${(v.background as? android.graphics.drawable.ColorDrawable)?.color} " +
+                "visible=$visible insets=${v.rootWindowInsets}"
+        }
+        val decor = window.decorView
+        return "clock=${compose.mainClock.currentTime} metrics=${view.resources.displayMetrics} " +
+            "systemMetrics=${android.content.res.Resources.getSystem().displayMetrics} " +
+            "navigationMode=${android.provider.Settings.Secure.getString(view.context.contentResolver, "navigation_mode")} " +
+            "flags=${window.attributes.flags} sysUi=${decor.systemUiVisibility} " +
+            "navColor=${window.navigationBarColor} " +
+            "contrast=${if (android.os.Build.VERSION.SDK_INT >= 29) window.isNavigationBarContrastEnforced else null}\n" +
+            "compose=${describe(view)}\ndecor=${describe(decor)}\n" +
+            "navigation=${describe(decor.findViewById(android.R.id.navigationBarBackground))}\n" +
+            "status=${describe(decor.findViewById(android.R.id.statusBarBackground))}"
     }
 
     @Test fun exitAlphaIsMonotonicAndNewDragContinuesFromThePresentedFrame() {
