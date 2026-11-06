@@ -23,6 +23,7 @@ This is an optimized build (not debuggable, minified with R8, with a baseline pr
 - https://github.com/anastaci1a/localica/issues/609 - Contain retracting popups within their original host.
 - https://github.com/anastaci1a/localica/issues/615 - Stabilize modal gesture admission and drag cleanup tests.
 - https://github.com/anastaci1a/localica/issues/619 - Accept complete release evidence with the class-duration profile.
+- https://github.com/anastaci1a/localica/issues/621 - Preserve popup material refresh during backdrop pixel updates.
 
 ## Known issues
 
