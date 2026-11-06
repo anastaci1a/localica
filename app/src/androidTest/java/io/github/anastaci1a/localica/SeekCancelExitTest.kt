@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
@@ -27,7 +28,13 @@ class SeekCancelExitTest {
 
     private fun release(player: Boolean, cancel: Boolean) {
         var value by mutableFloatStateOf(.2f)
+        var renderer = "unmounted"
+        var cancelHost: SliderCancelHost? = null
+        var fixtureView: android.view.View? = null
         compose.setContent { LocalicaTheme {
+            val runtime = LocalGlassRendererRuntime.current
+            val view = androidx.compose.ui.platform.LocalView.current
+            SideEffect { renderer = runtime?.generation.toString(); fixtureView = view }
             BoxWithConstraints(Modifier.fillMaxSize()) {
                 if (player) PlayerSurface(
                     PlaybackState(connected = true, title = "Exit fixture", positionMs = 20000, durationMs = 100000),
@@ -35,6 +42,7 @@ class SeekCancelExitTest {
                     {}, {}, {}, {}, {}, {}, visual = PlayerVisual())
                 else {
                     val host = rememberSliderCancelHost()
+                    SideEffect { cancelHost = host }
                     CompositionLocalProvider(LocalSliderCancelHost provides host) {
                         InterfaceSlider(value, { value = it }, Modifier.width(300.dp).testTag("slider"))
                         SliderCancelLayer(host, 20.dp)
@@ -55,6 +63,7 @@ class SeekCancelExitTest {
                 compose.mainClock.advanceTimeBy(300)
             }
             slider.performTouchInput { up() }
+            val releaseClock = compose.mainClock.currentTime
             var previous = at.top
             // Every presented frame of the early exit must retain the original placement.
             repeat(12) {
@@ -64,7 +73,17 @@ class SeekCancelExitTest {
                 if (cancel) assertEquals("Cancel fades at the release position", at.top, next.top, 1f)
                 else assertTrue("Normal exit moves only down: $previous -> ${next.top}", next.top >= previous - 1f)
                 previous = next.top
-                val pixels = target.captureToImage().toPixelMap()
+                val requestedClock = compose.mainClock.currentTime
+                val wall = android.os.SystemClock.uptimeMillis()
+                val before = compose.runOnUiThread {
+                    "renderer=$renderer alpha=${cancelHost?.target?.motion?.alpha} " +
+                        "active=${cancelHost?.target?.active} hovered=${cancelHost?.hovered} " +
+                        "view=${fixtureView?.width}x${fixtureView?.height} focus=${fixtureView?.hasWindowFocus()} " +
+                        "drawing=${androidx.test.platform.graphics.HardwareRendererCompat.isDrawingEnabled()}"
+                }
+                val image = target.captureToImage()
+                val pixels = image.toPixelMap()
+                val captureClock = compose.mainClock.currentTime
                 var low = 1f
                 var high = 0f
                 for (y in 0 until pixels.height) for (x in 0 until pixels.width) {
@@ -72,7 +91,18 @@ class SeekCancelExitTest {
                     val brightness = (c.red + c.green + c.blue) / 3f
                     low = minOf(low, brightness); high = maxOf(high, brightness)
                 }
-                assertTrue("The X remains drawn on release frame $it", high - low > .02f)
+                val description = "player=$player cancel=$cancel frame=$it clock=$requestedClock " +
+                    "elapsed=${requestedClock - releaseClock} capturedClock=$captureClock " +
+                    "wallMs=${android.os.SystemClock.uptimeMillis() - wall} bounds=$next " +
+                    "pixels=${pixels.width}x${pixels.height} low=$low high=$high $before"
+                android.util.Log.i("SeekCancelExitProbe", description)
+                val directory = nativeEvidenceDirectory("seek-cancel-exit-probe",
+                    androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().targetContext.cacheDir)
+                java.io.File(directory, "player-$player-cancel-$cancel-frame-$it.png").outputStream().use {
+                    image.asAndroidBitmap().compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
+                }
+                assertEquals("Native capture must hold the requested release frame: $description", requestedClock, captureClock)
+                assertTrue("The X remains drawn on release frame $it: $description", high - low > .02f)
             }
             if (!cancel) assertTrue("Normal release reverses the rise", previous > at.top + 1f)
             compose.mainClock.advanceTimeBy(500)
