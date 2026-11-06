@@ -564,11 +564,11 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
     if (!present || popupHome?.mounted == false) return
     val departingSource = popupHome?.backdrop.takeIf { returningInline || popupFlight.wasProjected }
     // Navigation keeps the native window in place until this scene is ready.
-    // Ordinary popup input must not continuously capture a full-screen legacy
+    // Ordinary popup input must not continuously capture the full-screen
     // backdrop: that readback can starve drag cleanup and fresh fling admission.
     BackdropLease(departingSource)
     val homeSampleReady = departingSource?.recorded == true &&
-        (currentGlassRendererGeneration().backend != GlassBackend.Legacy || departingSource.fallback != null)
+        (android.os.Build.VERSION.SDK_INT >= 33 || departingSource.fallback != null)
     val samplingSource = departingSource.takeIf { homeSampleReady } ?: source
     val flightLayer = rememberGraphicsLayer()
     DisposableEffect(popupHome, popupFlight, flightLayer) {
