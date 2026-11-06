@@ -9,7 +9,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.toPixelMap
-import androidx.compose.foundation.background
+import androidx.compose.ui.draw.drawBehind
 import androidx.test.platform.app.InstrumentationRegistry
 import java.io.File
 import kotlinx.coroutines.flow.first
@@ -77,7 +77,7 @@ class PlayerLyricsThemeEaseTest {
                         }
                     }
                     if (realDecision) Box(Modifier.align(Alignment.TopEnd).size(12.dp).testTag("ink-pixel")
-                        .background(pixelInk))
+                        .drawBehind { drawRect(pixelInk) })
                 }
             }
         } }
@@ -142,8 +142,16 @@ class PlayerLyricsThemeEaseTest {
         // Model a sampler starved by changing geometry. No decision is pinned:
         // the genuine new result is released only after the layout has settled.
         fun begin(open: Boolean) { compose.runOnIdle { sampleHeld = true; lyrics = open } }
-        fun release() { compose.runOnIdle { sampleHeld = false }
-            compose.waitUntil(10000) { owner.decision.confidence == PlayerBackgroundConfidence.Current } }
+        fun release() {
+            compose.runOnIdle { sampleHeld = false }
+            val deadline = android.os.SystemClock.elapsedRealtime() + 10000
+            do {
+                // Publishing the prepared result runs in a composition SideEffect.
+                // Manual time must flush that composition as well as the worker.
+                capture("sample-settlement", 1)
+            } while (owner.decision.confidence != PlayerBackgroundConfidence.Current && android.os.SystemClock.elapsedRealtime() < deadline)
+            if (owner.decision.confidence != PlayerBackgroundConfidence.Current) failures += "released sampler did not settle"
+        }
         begin(true); capture("open", 40)
         if (inkComposition?.lyricsProgress != 1f) failures += "opening did not reach the lyrics endpoint"
         release()
