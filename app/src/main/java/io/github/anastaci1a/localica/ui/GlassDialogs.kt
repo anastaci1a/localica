@@ -14,7 +14,7 @@ import androidx.compose.ui.unit.dp
 /** Appearance captured at an action whose dialog is declared in another composition scope.
  * This carries no geometry: detached children keep their existing presentation. */
 internal class GlassDialogAppearance(private val inkState: State<androidx.compose.ui.graphics.Color>,
-    private val backdropState: State<FrostedBackdrop?>) {
+    private val backdropState: State<FrostedBackdrop?>, val popupHome: GlassPopupHome?) {
     val ink get() = inkState.value
     val backdrop get() = backdropState.value
 }
@@ -24,7 +24,8 @@ internal val LocalGlassDialogAppearance = compositionLocalOf<GlassDialogAppearan
 internal fun currentGlassDialogAppearance(): GlassDialogAppearance {
     val ink = rememberUpdatedState(LocalContentColor.current)
     val backdrop = rememberUpdatedState(LocalModalBackdrop.current ?: LocalFrostedBackdrop.current)
-    return remember { GlassDialogAppearance(ink, backdrop) }
+    val home = LocalGlassPopupHome.current
+    return remember(home) { GlassDialogAppearance(ink, backdrop, home) }
 }
 
 /** Retain closing dialogs even when their conditional caller has left composition. */
@@ -43,6 +44,7 @@ internal class GlassDialogEntry(val anchor: GlassAnchor, locals: CompositionLoca
     var content by mutableStateOf(content)
     var fitContent by mutableStateOf(false)
     var appearance by mutableStateOf<GlassDialogAppearance?>(null)
+    var popupHome by mutableStateOf<GlassPopupHome?>(null)
 }
 
 internal val LocalGlassDialogs = staticCompositionLocalOf<GlassDialogs?> { null }
@@ -61,7 +63,8 @@ internal fun GlassDialogHost(content: @Composable () -> Unit) {
             // view/focus locals; replacing those with Activity locals breaks keyboard input.
             CompositionLocalProvider(entry.locals) {
                 CompositionLocalProvider(LocalModalBackdrop provides
-                    (entry.appearance?.backdrop ?: LocalModalBackdrop.current)) {
+                    (entry.appearance?.backdrop ?: LocalModalBackdrop.current),
+                    LocalGlassPopupHome provides entry.popupHome) {
                     GlassMorphPopup(entry.mounted, entry.anchor, { if (entry.mounted) entry.dismiss() },
                         entry.placement, darkOverride = entry.dark, fitContent = entry.fitContent, content = entry.content)
                 }
@@ -84,6 +87,7 @@ internal fun GlassDialog(onDismiss: () -> Unit, placement: GlassPlacement = Glas
     val trigger = LocalGlassOrigin.current?.takeUnless { placement == GlassPlacement.Page }
     val origin = trigger ?: rememberGlassAnchor()
     val appearance = LocalGlassDialogAppearance.current.takeIf { trigger == null }
+    val popupHome = trigger?.popupHome ?: appearance?.popupHome ?: LocalGlassPopupHome.current
     val source = appearance?.backdrop ?: LocalModalBackdrop.current ?: LocalFrostedBackdrop.current ?: host.backdrop
     val locals = currentCompositionLocalContext
     // Dialog declarations may live outside the artwork theme containing their trigger.
@@ -107,6 +111,7 @@ internal fun GlassDialog(onDismiss: () -> Unit, placement: GlassPlacement = Glas
         entry.locals = locals; entry.dismiss = onDismiss; entry.dark = dark
         entry.content = resolvedContent
         entry.appearance = appearance
+        entry.popupHome = popupHome
         entry.fitContent = fitContent
     }
     DisposableEffect(host, entry) {
