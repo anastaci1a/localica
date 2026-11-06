@@ -36,8 +36,8 @@ class PlayerArtworkHoldRealAppTest {
 
     @Test fun menuHoldOverPlayingEmbeddedCover() =
         hold(InterfaceSettings(), expectText = "Configure tap action")
-    @Test fun menuHoldOverFloatingCoverWithLegacyRenderer() =
-        hold(InterfaceSettings(artworkLayout = ArtworkLayout.Floating, glass = GlassAppearance(renderer = GlassRendererMode.Legacy)),
+    @Test fun menuHoldOverFloatingCoverWithNoneRenderer() =
+        hold(InterfaceSettings(artworkLayout = ArtworkLayout.Floating, glass = GlassAppearance(renderer = GlassRendererMode.None)),
             expectText = "Configure tap action")
     @Test fun menuHoldWithCarouselTransitionAndNoSwipe() =
         hold(InterfaceSettings(artworkTransition = ArtworkTransition.Carousel, artworkSwipe = false), expectText = "Configure tap action")
