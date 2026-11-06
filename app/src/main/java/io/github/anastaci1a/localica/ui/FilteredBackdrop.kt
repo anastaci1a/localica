@@ -52,7 +52,7 @@ internal fun FilteredBackdrop(modifier: Modifier, source: FrostedBackdrop, locat
             alpha = none
             blendMode = if (blending) androidx.compose.ui.graphics.BlendMode.Plus else androidx.compose.ui.graphics.BlendMode.SrcOver
         },
-            source, location, resolution, padding, homeSource, homeWeight,
+            source.noneMaterialSource(), location, resolution, padding, homeSource?.noneMaterialSource(), homeWeight,
             average ?: MaterialAverageStyle(0f, GlassTone()), homeBounds, homeFootprint, true, effect)
     }
 }
@@ -76,6 +76,10 @@ private fun OpticalBackdrop(modifier: Modifier, source: FrostedBackdrop, locatio
     val canUseAverage = average != null && (forceAverage || source.materialOnly || homeSource?.materialOnly == true)
     val averageRenderer = remember(canUseAverage) { if (android.os.Build.VERSION.SDK_INT >= 33 && canUseAverage) MaterialAverageRenderer() else null }
     val rawAverageRenderer = remember(canUseAverage) { if (android.os.Build.VERSION.SDK_INT >= 33 && canUseAverage) MaterialAverageRenderer() else null }
+    val areaSource = if (forceAverage) rememberMaterialAreaReduction() else null
+    val areaHome = if (forceAverage && homeSource != null) rememberMaterialAreaReduction() else null
+    val areaSourceRenderer = remember(forceAverage) { if (forceAverage && android.os.Build.VERSION.SDK_INT >= 33) MaterialAverageRenderer(true) else null }
+    val areaHomeRenderer = remember(forceAverage) { if (forceAverage && android.os.Build.VERSION.SDK_INT >= 33) MaterialAverageRenderer(true) else null }
     val averageSource = if (average != null && (forceAverage || source.materialOnly)) rememberGraphicsLayer() else null
     val averageHome = if (average != null && (forceAverage || homeSource?.materialOnly == true)) rememberGraphicsLayer() else null
     layer.clip = true
@@ -128,6 +132,53 @@ private fun OpticalBackdrop(modifier: Modifier, source: FrostedBackdrop, locatio
             }
         }
         drawObserver?.let { observeBackdropSampling(it, location, localToSource, viewportBounds) }
+        if (forceAverage && average != null && areaSource != null && averageSource != null && areaSourceRenderer != null) {
+            fun androidx.compose.ui.graphics.drawscope.DrawScope.reduce(backing: FrostedBackdrop,
+                reduction: MaterialAreaReduction, output: androidx.compose.ui.graphics.layer.GraphicsLayer,
+                renderer: MaterialAverageRenderer, home: Boolean = false) {
+                if (backing.materialOnly) {
+                    // None panels are uniform. Reuse their finished colour without
+                    // another averaging chain or another application of tint/tone.
+                    output.renderEffect = null
+                    output.record(size = IntSize(1, 1)) {
+                        scale(1f / backing.size.width, 1f / backing.size.height, Offset.Zero) { drawLayer(backing.layer) }
+                    }
+                    return
+                }
+                val registration = (if (home) homeToFootprint else sourceToLocal) ?: return
+                val footprint = if (home) homeExtent else size
+                val corners = registration.corners(Rect(0f, 0f, backing.size.width.toFloat(), backing.size.height.toFloat()))
+                val covered = Rect(corners.minOf { it.x }, corners.minOf { it.y },
+                    corners.maxOf { it.x }, corners.maxOf { it.y }).intersect(Rect(Offset.Zero, footprint))
+                if (covered.isEmpty) return
+                val extent = IntSize(ceil(covered.width).toInt(), ceil(covered.height).toInt())
+                val padded = materialReductionExtent(extent)
+                val result = with(reduction) { record(extent) {
+                    clipRect(right = covered.width, bottom = covered.height) {
+                        translate(-covered.left, -covered.top) {
+                            withBackdropRegistration(registration) { drawLayer(backing.layer) }
+                        }
+                    }
+                } }
+                output.renderEffect = renderer.effect(average,
+                    (if (average.opaque) covered.width * covered.height else footprint.width * footprint.height) /
+                        (padded.width.toFloat() * padded.height))
+                output.record(size = IntSize(1, 1)) { drawLayer(result) }
+            }
+            if (blend < 1f) reduce(source, areaSource, averageSource, areaSourceRenderer)
+            if (blend > 0f && homeSource != null && areaHome != null && averageHome != null && areaHomeRenderer != null)
+                reduce(homeSource, areaHome, averageHome, areaHomeRenderer, true)
+            layer.renderEffect = null
+            averageSource.alpha = 1f - blend
+            averageHome?.alpha = blend
+            averageHome?.blendMode = androidx.compose.ui.graphics.BlendMode.Plus
+            layer.record(size = IntSize(1, 1)) {
+                if (blend < 1f) drawLayer(averageSource)
+                if (blend > 0f && averageHome != null) drawLayer(averageHome)
+            }
+            scale(size.width, size.height, Offset.Zero) { drawLayer(layer) }
+            return@Canvas
+        }
         val flatWeight = (if (flatSource) 1f - blend else 0f) + (if (flatHome) blend else 0f)
         val entirelyFlat = flatWeight >= 1f
         val viewport = size

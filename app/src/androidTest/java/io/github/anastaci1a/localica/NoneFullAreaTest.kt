@@ -7,6 +7,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.platform.LocalDensity
@@ -49,6 +50,26 @@ class NoneFullAreaTest {
             assertEquals("Full 257x129 area mean at x=$x", expected, actual.red, .02f)
             assertEquals(expected, actual.green, .02f)
             assertEquals(expected, actual.blue, .02f)
+            if (Build.VERSION.SDK_INT < 33) assertLegacyAreaBound(actual.red, expected,
+                Rect(0f, 0f, 257f, 129f), 512, 256)
         }
     }
+}
+
+/** Independent geometric bound: count the covered area of every cut boundary cell.
+ * Both native fixtures contain black and white boundary pixels, so contrast is one. */
+internal fun assertLegacyAreaBound(actual: Float, expected: Float, footprint: Rect,
+    paddedWidth: Int, paddedHeight: Int) {
+    val cellWidth = paddedWidth / 32f
+    val cellHeight = paddedHeight / 32f
+    var boundaryArea = 0f
+    for (y in 0 until 32) for (x in 0 until 32) {
+        val cell = Rect(x * cellWidth, y * cellHeight, (x + 1) * cellWidth, (y + 1) * cellHeight)
+        val overlap = cell.intersect(footprint)
+        if (!overlap.isEmpty && overlap.width * overlap.height < cellWidth * cellHeight)
+            boundaryArea += overlap.width * overlap.height
+    }
+    val fraction = boundaryArea / (footprint.width * footprint.height)
+    assertTrue("Legacy mean error ${kotlin.math.abs(actual - expected)} exceeds boundary-area fraction $fraction × contrast 1",
+        kotlin.math.abs(actual - expected) <= fraction)
 }
