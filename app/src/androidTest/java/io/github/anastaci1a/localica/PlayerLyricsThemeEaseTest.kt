@@ -139,8 +139,8 @@ class PlayerLyricsThemeEaseTest {
             val expected = lerp(Color.Black, Color.White, progress).red
             rows += listOf(leg, index, progress, ink.contentColor.red, owner.lightMix, pixel,
                 owner.decision.lightInk, owner.decision.confidence).joinToString(",")
-            if (abs(ink.contentColor.red - expected) > .035f || abs(owner.lightMix - progress) > .035f ||
-                abs(pixel - expected) > .04f) failures += rows.last()
+            if (abs(ink.contentColor.red - expected) > .01f || abs(owner.lightMix - progress) > .001f ||
+                abs(pixel - expected) > .02f) failures += rows.last()
         }
         // Model a sampler starved by changing geometry. No decision is pinned:
         // the genuine new result is released only after the layout has settled.
