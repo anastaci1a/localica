@@ -26,6 +26,7 @@ class NoneFullAreaTest {
 
     @Test fun oddFootprintIncludesEveryPixelInsteadOfSixtyFourPointSamples() {
         lateinit var source: FrostedBackdrop
+        var whiteWidth by mutableIntStateOf(8)
         compose.setContent { CompositionLocalProvider(
             LocalDensity provides Density(1f),
             LocalGlassRendererRuntime provides remember { GlassRendererRuntime(GlassRendererMode.None) },
@@ -35,7 +36,7 @@ class NoneFullAreaTest {
             Box(Modifier.size(257.dp, 129.dp)) {
                 Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(source)) {
                     drawRect(Color.Black)
-                    for (x in 0 until 257) if (x % 32 < 8) drawRect(Color.White, Offset(x.toFloat(), 0f), Size(1f, size.height))
+                    for (x in 0 until 257) if (x % 32 < whiteWidth) drawRect(Color.White, Offset(x.toFloat(), 0f), Size(1f, size.height))
                 }
                 LiquidGlassSurface(Modifier.fillMaxSize().testTag("mean"), source,
                     cornerRadius = 0.dp, pressFeedback = false, shadow = false)
@@ -52,6 +53,19 @@ class NoneFullAreaTest {
             assertEquals(expected, actual.blue, .02f)
             if (Build.VERSION.SDK_INT < 33) assertLegacyAreaBound(actual.red, expected,
                 Rect(0f, 0f, 257f, 129f), 512, 256)
+        }
+        // Keep the same surface mounted while its backdrop changes. A retained
+        // reduction must refresh its input rather than freeze the first mean.
+        for (width in listOf(16, 24, 8)) {
+            compose.runOnIdle { whiteWidth = width }
+            val nextExpected = (8 * width + 1) / 257f
+            compose.waitUntil(15_000) {
+                val pixels = compose.onNodeWithTag("mean").captureToImage().toPixelMap()
+                listOf(pixels.width / 4, pixels.width / 2, pixels.width * 3 / 4).all { x ->
+                    val pixel = pixels[x, pixels.height / 2]
+                    listOf(pixel.red, pixel.green, pixel.blue).all { kotlin.math.abs(it - nextExpected) < .02f }
+                }
+            }
         }
     }
 }

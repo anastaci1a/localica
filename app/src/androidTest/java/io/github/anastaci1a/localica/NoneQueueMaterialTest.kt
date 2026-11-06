@@ -73,7 +73,13 @@ class NoneQueueMaterialTest {
         }
         val first = capture("black-player").toPixelMap()
         // captureToImage retains the full layout height, including offscreen blank pixels.
-        val visibleHeight = compose.onNodeWithTag("queue-surface").fetchSemanticsNode().boundsInRoot.height.toInt().coerceAtMost(first.height)
+        val drawerNode = compose.onNodeWithTag("queue-surface").fetchSemanticsNode()
+        val (sourceTop, drawerTop) = compose.runOnIdle {
+            source.location.coordinates!!.localToRoot(Offset.Zero).y to
+                drawerNode.layoutInfo.coordinates.localToRoot(Offset.Zero).y
+        }
+        val visibleHeight = (sourceTop + source.size.height - drawerTop).toInt().coerceIn(0, first.height)
+        assertTrue("The drawer must expose pixels inside the source viewport", visibleHeight > 24)
         compose.runOnIdle { playerWhite = true }
         val second = capture("white-player").toPixelMap()
         var maximum = 0f
@@ -85,9 +91,7 @@ class NoneQueueMaterialTest {
         assertTrue("Player controls must not show through the None drawer at progress=$fraction: maximum channel delta=$maximum", maximum < .025f)
         val expected = .5f + .15f * .5f * .5f
         if (Build.VERSION.SDK_INT < 33) {
-            val bounds = compose.onNodeWithTag("queue-surface").fetchSemanticsNode().boundsInRoot
-            val sourceTop = compose.runOnIdle { source.location.coordinates!!.localToRoot(Offset.Zero).y }
-            val footprint = Rect(0f, (bounds.top - sourceTop).coerceAtLeast(0f), source.size.width.toFloat(), source.size.height.toFloat())
+            val footprint = Rect(0f, (drawerTop - sourceTop).coerceAtLeast(0f), source.size.width.toFloat(), source.size.height.toFloat())
             fun padded(value: Int): Int {
                 var extent = 1
                 while (extent < value) extent *= 2
