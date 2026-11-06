@@ -12,6 +12,7 @@ import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.foundation.background
 import androidx.test.platform.app.InstrumentationRegistry
 import java.io.File
+import kotlinx.coroutines.flow.first
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
@@ -44,6 +45,7 @@ class PlayerLyricsThemeEaseTest {
         glass = GlassAppearance(contrast = .3f)))
     @Volatile private var inkComposition: PlayerInkComposition? = null
     private var pixelInk by mutableStateOf(Color.Black)
+    private var sampleHeld by mutableStateOf(false)
     /** Latest drawn ink of every glass surface, by surface identity. */
     private val glassInk = ConcurrentHashMap<Int, Float>()
 
@@ -59,7 +61,11 @@ class PlayerLyricsThemeEaseTest {
         } else kotlinx.coroutines.runBlocking { playerPalette(bitmap) }
         val visual = PlayerVisual(bitmap.asImageBitmap(), palette, contentKey = "gray")
         compose.setContent { LocalicaTheme {
+            val preparationBarrier: (suspend () -> Unit)? = if (realDecision) remember {
+                suspend { snapshotFlow { sampleHeld }.first { !it }; Unit }
+            } else null
             CompositionLocalProvider(LocalDensity provides Density(1f),
+                LocalPlayerBackgroundPreparationBarrier provides preparationBarrier,
                 LocalPlayerInkCompositionObserver provides { inkComposition = it; if (realDecision) pixelInk = it.contentColor },
                 LocalGlassSurfaceDrawObserver provides { glassInk[it.surfaceIdentity] = Color(it.inkArgb).red }) {
                 BoxWithConstraints(Modifier.fillMaxSize()) {
@@ -119,7 +125,7 @@ class PlayerLyricsThemeEaseTest {
         compose.waitUntil(10000) { owner.decision.confidence == PlayerBackgroundConfidence.Current &&
             inkComposition?.contentColor?.red == 0f }
         compose.mainClock.autoAdvance = false
-        val rows = mutableListOf<String>("leg,frame,progress,ink,material,pixel")
+        val rows = mutableListOf<String>("leg,frame,progress,ink,material,pixel,sampledLight,sampleConfidence")
         val failures = mutableListOf<String>()
         fun capture(leg: String, count: Int) = repeat(count) { index ->
             frame()
@@ -128,22 +134,29 @@ class PlayerLyricsThemeEaseTest {
             val ink = requireNotNull(inkComposition)
             val progress = ink.lyricsProgress
             val expected = lerp(Color.Black, Color.White, progress).red
-            rows += listOf(leg, index, progress, ink.contentColor.red, owner.lightMix, pixel).joinToString(",")
+            rows += listOf(leg, index, progress, ink.contentColor.red, owner.lightMix, pixel,
+                owner.decision.lightInk, owner.decision.confidence).joinToString(",")
             if (abs(ink.contentColor.red - expected) > .035f || abs(owner.lightMix - progress) > .035f ||
                 abs(pixel - expected) > .04f) failures += rows.last()
         }
-        openLyrics(true); capture("open", 40)
+        // Model a sampler starved by changing geometry. No decision is pinned:
+        // the genuine new result is released only after the layout has settled.
+        fun begin(open: Boolean) { compose.runOnIdle { sampleHeld = true; lyrics = open } }
+        fun release() { compose.runOnIdle { sampleHeld = false }
+            compose.waitUntil(10000) { owner.decision.confidence == PlayerBackgroundConfidence.Current } }
+        begin(true); capture("open", 40)
         if (inkComposition?.lyricsProgress != 1f) failures += "opening did not reach the lyrics endpoint"
-        compose.waitUntil(10000) { owner.decision.confidence == PlayerBackgroundConfidence.Current }
+        release()
         capture("open-settled", 4)
-        openLyrics(false); capture("close", 40)
+        begin(false); capture("close", 40)
         if (inkComposition?.lyricsProgress != 0f) failures += "closing did not reach the player endpoint"
-        compose.waitUntil(10000) { owner.decision.confidence == PlayerBackgroundConfidence.Current }
+        release()
         capture("close-settled", 4)
-        openLyrics(true); capture("partial-open", 12)
+        begin(true); capture("partial-open", 12)
         if (requireNotNull(inkComposition).lyricsProgress !in .05f..0.95f) failures += "reversal did not interrupt intermediate progress"
         openLyrics(false); capture("reverse", 40)
         if (inkComposition?.lyricsProgress != 0f) failures += "reversal did not return to the player endpoint"
+        release(); capture("reverse-settled", 4)
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val root = InstrumentationRegistry.getArguments().getString("additionalTestOutputDir")?.let(::File)
             ?: requireNotNull(instrumentation.targetContext.getExternalFilesDir(null))
