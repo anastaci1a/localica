@@ -129,6 +129,25 @@ class ProvenanceContractTest {
         """).run().expectErrorCount(2)
     }
 
+    @Test fun onlyNamedSpecProviderAndGlassIngressAreAllowed() {
+        val runtime = kotlin("src/test/CompositionLocal.kt", """
+            package androidx.compose.runtime
+            class ProvidableCompositionLocal<T>
+            fun <T> staticCompositionLocalOf(defaultFactory: () -> T) = ProvidableCompositionLocal<T>()
+        """).indented()
+        val glass = kotlin("src/test/Glass.kt", """
+            package io.github.anastaci1a.localica.navigation
+            class GlassAppearance { val blur = .2f; fun normalized() = this }
+        """).indented()
+        val imports = "package io.github.anastaci1a.localica.ui.spec\nimport androidx.compose.runtime.staticCompositionLocalOf\n"
+        task(UiRuleId.UiLayerDependency, imports + "val LocalUiSpec = staticCompositionLocalOf { ResolvedUiSpec() }", runtime).run().expectClean()
+        task(UiRuleId.UiLayerDependency, imports + "val OtherProvider = staticCompositionLocalOf { ResolvedUiSpec() }", runtime).run().expectErrorCount(2)
+        task(UiRuleId.UiLayerDependency, imports + "val LocalUiSpec = staticCompositionLocalOf { ResolvedUiSpec() }; val OtherProvider = staticCompositionLocalOf { ResolvedUiSpec() }", runtime).run().expectErrorCount(1)
+        val navigation = "io.github.anastaci1a.localica.navigation.GlassAppearance"
+        task(UiRuleId.UiLayerDependency, "package io.github.anastaci1a.localica.ui.spec\nfun uiSpec() = $navigation().normalized().blur", glass).run().expectClean()
+        task(UiRuleId.UiLayerDependency, "package io.github.anastaci1a.localica.ui.spec\nfun bad() = $navigation().normalized().blur", glass).run().expectErrorCount(3)
+    }
+
     @Test fun suppressionAuditCannotBeSuppressedOrForgedByStrings() {
         task(UiRuleId.UnreviewedUiEscape, """
             @file:Suppress("UnreviewedUiEscape")
