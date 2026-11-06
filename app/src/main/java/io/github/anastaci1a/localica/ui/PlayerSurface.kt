@@ -52,7 +52,7 @@ internal fun playerHandleColor(ink: Color): Color =
 /** Provider composition evidence, not a draw/presentation acknowledgement. The sampling
  * frame and decision are captured with the composition that selected the supplied ink. */
 internal data class PlayerInkComposition(val decision: PlayerBackgroundDecision,
-    val frame: ArtworkBackgroundFrame?, val contentColor: Color)
+    val frame: ArtworkBackgroundFrame?, val contentColor: Color, val lyricsProgress: Float = 0f)
 internal val LocalPlayerInkCompositionObserver = staticCompositionLocalOf<((PlayerInkComposition) -> Unit)?> { null }
 
 internal val LocalPlayerWorkObserver = staticCompositionLocalOf<((String, Float?) -> Unit)?> { null }
@@ -384,7 +384,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
         if (workObserver != null) SideEffect { workObserver("surface-content", null) }
         if (inkObserver != null) {
             // Read inside Surface's actual provider, including when the actions row is absent.
-            val observed = PlayerInkComposition(inkDecision, inkFrame, LocalContentColor.current)
+            val observed = PlayerInkComposition(inkDecision, inkFrame, LocalContentColor.current, lyricVisibility)
             SideEffect { inkObserver(observed) }
         }
         val editArtwork = presentedArtworkEdit()
