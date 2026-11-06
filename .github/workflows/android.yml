@@ -203,6 +203,8 @@ jobs:
           printf '%s' "$DEBUG_KEYSTORE" | base64 --decode > "$KEYSTORE_PATH"
           chmod 600 "$KEYSTORE_PATH"
           echo "LOCALICA_DEBUG_KEYSTORE=$KEYSTORE_PATH" >> "$GITHUB_ENV"
+      - name: Check immutable UI debt
+        run: bash .github/run-ui-lint.sh app/build/reports/ui-lint
       - name: Unit tests, lint and release build
         run: ./gradlew testDebugUnitTest lintDebug assembleRelease --no-daemon --max-workers=4 -Dorg.gradle.jvmargs='-Xmx6g -Dfile.encoding=UTF-8'
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
