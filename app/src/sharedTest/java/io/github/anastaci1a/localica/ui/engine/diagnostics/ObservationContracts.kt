@@ -4,7 +4,7 @@ import io.github.anastaci1a.localica.ui.engine.diagnostics.fixture.*
 
 /** Frozen event shapes; the imports deliberately stay test-only until the A2 hook-adoption steps. */
 internal enum class SegmentKind { Rest, Eased, Damped, Driven }
-internal enum class JoinPolicy { Continuous, DrivenRelease, Reduced, Initial }
+internal enum class JoinPolicy { Continuous, DrivenRelease, DrivenInput, Reduced, Initial }
 internal data class MotionRegistration(val id: Long, val transitionKey: String, val range: Float, val value: MotionValue)
 internal data class MotionJoin(
     val id: Long, val epoch: Long, val stamp: FrameStamp, val before: Kinematic, val after: Kinematic,
