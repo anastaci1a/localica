@@ -38,7 +38,10 @@ class PopupHostNavigationTest {
     @Test fun libraryBackDuringRetractKeepsBothOpticalSourcesOutsideThePopup() = navigate(settings = false, expanding = false, library = true)
     @Test fun libraryBackDuringExpandKeepsBothOpticalSourcesOutsideThePopup() = navigate(settings = false, expanding = true, library = true)
 
-    private fun navigate(settings: Boolean, expanding: Boolean, library: Boolean = false) {
+    @Test fun playlistEditorCancellationLeavesPopupBackUsable() = navigate(settings = false, expanding = true, playlistEditor = true)
+
+    private fun navigate(settings: Boolean, expanding: Boolean, library: Boolean = false, playlistEditor: Boolean = false) {
+        var naming by mutableStateOf(playlistEditor)
         var page by mutableStateOf(true)
         var open by mutableStateOf(false)
         lateinit var anchor: GlassAnchor
@@ -87,8 +90,21 @@ class PopupHostNavigationTest {
                 }
             } else if (settings) FolderSettings(LibraryUiState(), { page = false }, {}, {}, interfaceContent = { Body() })
             else if (page) GlassDialog({ page = false }, GlassPlacement.Page) { Body() }
+            if (naming) AddToPlaylistDialog(emptyList(), io.github.anastaci1a.localica.playlist.PlaylistState(loading = false), null, { naming = false }, { naming = false })
             }
         } }
+        if (playlistEditor) {
+            val input = compose.onNodeWithContentDescription("New playlist name input")
+            input.performClick().performTextInput("Draft")
+            val inputView = (input.fetchSemanticsNode().root as androidx.compose.ui.platform.ViewRootForTest).view
+            val visibleIme = InstrumentationRegistry.getArguments().getString("popupHostVisibleIme") == "true"
+            compose.waitUntil(10_000) { compose.runOnUiThread {
+                inputView.hasWindowFocus() && inputView.context.getSystemService(android.view.inputmethod.InputMethodManager::class.java).isAcceptingText &&
+                    (!visibleIme || androidx.core.view.ViewCompat.getRootWindowInsets(inputView)?.isVisible(androidx.core.view.WindowInsetsCompat.Type.ime()) == true)
+            } }
+            compose.onNodeWithText("Cancel").performClick()
+            compose.waitForIdle()
+        }
         if (settings) {
             compose.onNodeWithText("Interface").performClick()
             compose.onNodeWithText("Glass").performClick()
