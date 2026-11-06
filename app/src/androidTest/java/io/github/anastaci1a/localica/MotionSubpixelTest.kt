@@ -131,7 +131,7 @@ class MotionSubpixelTest {
             fun frame(): Frame {
                 val bounds = laid("browse-art-$uri")
                 val title = laid("browse-text-$uri")
-                val image = compose.onNodeWithTag("window").captureToImage().toPixelMap()
+                val image = compose.onNodeWithTag("window").captureNativeFrame().toPixelMap()
                 val x = bounds.center.x.toInt(); val y = bounds.center.y.toInt()
                 assertTrue("Cover must be painted at $bounds", red(image[x, y]))
                 var left = x; while (left > 0 && red(image[left - 1, y])) left--
@@ -231,7 +231,7 @@ class MotionSubpixelTest {
             assertTrue("Within a pixel of full size both edges land together at $p: $full / $window",
                 full.left == window.left && full.right == window.right || full.left > window.left && full.right < window.right)
             if (p < 1f) continue
-            val image = compose.onNodeWithTag("window").captureToImage().toPixelMap()
+            val image = compose.onNodeWithTag("window").captureNativeFrame().toPixelMap()
             for (y in (image.height / 4) until (image.height * 3 / 4) step 8) for ((edge, inner) in
                 listOf(0 to 4, image.width - 1 to image.width - 5)) {
                 val outer = image[edge, y]
