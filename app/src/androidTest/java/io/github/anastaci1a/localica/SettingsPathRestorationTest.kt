@@ -15,7 +15,8 @@ import org.junit.Test
 class SettingsPathRestorationTest {
     @get:Rule val compose = createComposeRule()
 
-    private fun restoreLegacyPath(category: String, aliases: Map<String, String>) {
+    private fun restoreLegacyPath(category: String, aliases: Map<String, String> = emptyMap(),
+        legacyPath: (List<String>) -> List<String> = { it }) {
         val restoration = StateRestorationTester(compose)
         var restoredPaths = 0
         restoration.setContent { LocalicaTheme {
@@ -25,11 +26,14 @@ class SettingsPathRestorationTest {
                     override fun consumeRestored(key: String): Any? {
                         val saved = registry.consumeRestored(key)
                         val path = (saved as? MutableState<*>)?.value as? List<*>
-                        if (path != null && path.all { it is String } && path.any { it in aliases }) {
+                        if (path != null && path.all { it is String }) {
+                            val titles = path.filterIsInstance<String>()
+                            val migrated = legacyPath(titles.map { aliases[it] ?: it })
+                            if (migrated == titles) return saved
                             restoredPaths++
                             // Keep the real default MutableState/List saved representation,
-                            // replacing only the title spellings an older app persisted.
-                            return mutableStateOf(path.map { aliases[it] ?: it })
+                            // Recreate the titles and ancestors an older app persisted.
+                            return mutableStateOf(migrated)
                         }
                         return saved
                     }
@@ -83,5 +87,47 @@ class SettingsPathRestorationTest {
         compose.onNodeWithContentDescription("Back from settings").performClick()
         compose.onNodeWithText("Interface", substring = false).assertIsDisplayed()
         compose.onNodeWithText("Navigation", substring = false).assertHasClickAction()
+    }
+
+    @Test fun legacyRootIconPacksRestoresAndBackReturnsToInterface() {
+        restoreLegacyPath("Icon packs", legacyPath = { it.drop(1) })
+        compose.onNodeWithText("Icon packs", substring = false).assertIsDisplayed()
+        compose.onNodeWithText("Built-in icons", substring = false).assertIsDisplayed()
+        androidx.test.uiautomator.UiDevice.getInstance(
+            androidx.test.platform.app.InstrumentationRegistry.getInstrumentation()).pressBack()
+        compose.waitForIdle()
+        compose.onNodeWithText("Interface", substring = false).assertIsDisplayed()
+        compose.onNodeWithText("Icon packs", substring = false).assertHasClickAction()
+    }
+
+    @Test fun legacyRootPackViewerRestoresAndBackVisitsBothParents() {
+        restoreLegacyPath("Pack icons", legacyPath = { it.drop(1) })
+        compose.onNodeWithText("Pack icons", substring = false).assertIsDisplayed()
+        compose.onNodeWithTag("pack-icon-tab.home").assertExists()
+        compose.onNodeWithContentDescription("Back from settings").performClick()
+        compose.onNodeWithText("Icon packs", substring = false).assertIsDisplayed()
+        compose.onNodeWithText("Built-in icons", substring = false).assertIsDisplayed()
+        compose.onNodeWithContentDescription("Back from settings").performClick()
+        compose.onNodeWithText("Interface", substring = false).assertIsDisplayed()
+    }
+
+    @Test fun iconPacksOpensUnderInterfaceAndSearchKeepsItsParentAfterRestore() {
+        val restoration = StateRestorationTester(compose)
+        restoration.setContent { LocalicaTheme {
+            FolderSettings(LibraryUiState(loading = false), {}, {}, {})
+        } }
+        compose.onNodeWithText("Icon packs", substring = false).assertDoesNotExist()
+        compose.onNodeWithText("Interface", substring = false).performClick()
+        compose.onNodeWithText("Icon packs", substring = false).performScrollTo().performClick()
+        compose.onNodeWithText("Built-in icons", substring = false).assertIsDisplayed()
+        compose.onAllNodesWithText("View icons", substring = false)[0].performScrollTo().performClick()
+        compose.onNodeWithText("Pack icons", substring = false).assertIsDisplayed()
+        restoration.emulateSavedInstanceStateRestore()
+        compose.onNodeWithTag("pack-icon-tab.home").assertExists()
+        repeat(3) { compose.onNodeWithContentDescription("Back from settings").performClick() }
+        compose.onNodeWithText("Search settings").performTextInput("Icon packs")
+        compose.onNodeWithText("Icon packs", substring = false).performClick()
+        compose.onNodeWithContentDescription("Back from settings").performClick()
+        compose.onNodeWithText("Interface", substring = false).assertIsDisplayed()
     }
 }
