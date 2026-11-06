@@ -47,11 +47,62 @@ class HoverSelectionTest {
     private lateinit var scene: SelectionScene
     private lateinit var source: FrostedBackdrop
 
+    @Test fun standardAlbumCarouselUsesSharedOutlineDuringSelectionAndRelease() {
+        var second by mutableStateOf(true)
+        compose.setContent {
+            LocalicaTheme {
+                scene=remember { SelectionScene() }
+                val outline=rememberPaddedItemOutline(112.dp,0.dp,0.dp,0.dp,0.dp)
+                Box(Modifier.size(320.dp,240.dp).testTag("hover-scene")) {
+                    SelectionViewport(Modifier.fillMaxSize(),scene=scene,liftEdges=LiftEdges.Vertical) {
+                        Row(Modifier.padding(24.dp,40.dp),horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                            for(i in 0..1) Column(Modifier.width(112.dp).selectionLens(i==0 || second,false,
+                                itemKey=i,outline=outline)) {
+                                Canvas(Modifier.size(112.dp)) {
+                                    drawRect(Color.Black,center-Offset(12.dp.toPx(),12.dp.toPx()),Size(24.dp.toPx(),24.dp.toPx()))
+                                }
+                                androidx.compose.material3.Text("Album $i",Modifier.height(32.dp))
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        compose.waitForIdle()
+        capture()
+        assertEquals(2,scene.lastDrawnRegions.size)
+        val density=compose.density.density
+        val selected=scene.lastDrawnRegions
+        val firstCenter=scene.viewportHover.getValue(0).lifted.bounds.center
+        val secondCenter=scene.viewportHover.getValue(1).lifted.bounds.center
+        val middle=Offset((selected[0].bounds.center.x+selected[1].bounds.center.x)/2,selected[0].bounds.center.y)
+        fun contains(regions: List<SelectionRegion>,at: Offset)=Region().apply {
+            setPath(connectedSelectionPath(regions,16f*density).asAndroidPath(),Region(0,0,2000,2000))
+        }.contains(at.x.toInt(),at.y.toInt())
+        assertTrue("Gallery-equivalent carousel spacing joins",contains(selected,middle))
+        compose.mainClock.autoAdvance=false
+        try {
+            for(target in listOf(false,true,false)) {
+                compose.runOnIdle { second=target }
+                repeat(18) {
+                    compose.mainClock.advanceTimeByFrame()
+                    capture()
+                    assertTrue("The persistent album never loses its surface",
+                        contains(scene.lastDrawnRegions,firstCenter))
+                }
+                assertEquals(if(target)2 else 1,scene.lastDrawnRegions.size)
+                assertEquals(target,contains(scene.lastDrawnRegions,secondCenter))
+            }
+        } finally { compose.mainClock.autoAdvance=true }
+    }
+
     /** Backdrop: a red ramp across the first row's leading edge, fine green stripes everywhere. */
-    @Composable private fun Fixture(first: Boolean, second: Boolean, rowGap: androidx.compose.ui.unit.Dp = 8.dp, retainSecond: Boolean = false) {
+    @Composable private fun Fixture(first: Boolean, second: Boolean, rowGap: androidx.compose.ui.unit.Dp = 8.dp, retainSecond: Boolean = false,
+        measuredOutline: Boolean = false,third: Boolean? = null) {
         LocalicaTheme {
+            val outline=rememberPaddedItemOutline(48.dp,0.dp,null,0.dp,0.dp).takeIf { measuredOutline }
             source = rememberFrostedBackdrop(Unit, dark = false)
-            Box(Modifier.size(360.dp, 320.dp).testTag("hover-scene")) {
+            Box(Modifier.size(360.dp, if(third==null)320.dp else 420.dp).testTag("hover-scene")) {
                 Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(source)) {
                     val stripe = 3.dp.toPx()
                     val rampStart = 24.dp.toPx() - 8.dp.toPx()
@@ -68,14 +119,18 @@ class HoverSelectionTest {
                     ConnectedSelectionHost(Modifier.fillMaxSize()) {
                         scene = checkNotNull(LocalSelectionScene.current)
                         Column(Modifier.padding(horizontal = 24.dp, vertical = 80.dp)) {
-                            Canvas(Modifier.fillMaxWidth().height(72.dp).selectionLens(first, false, itemKey = "first")) {
+                            Canvas(Modifier.fillMaxWidth().height(72.dp).selectionLens(first, false, itemKey = "first",outline=outline)) {
                                 // Content: a centred square whose drawn width reveals the content scale.
                                 val side = 32.dp.toPx()
                                 drawRect(Color.Black, Offset((size.width - side) / 2f, (size.height - side) / 2f), Size(side, side))
                             }
                             Spacer(Modifier.height(rowGap))
                             if (retainSecond) Spacer(Modifier.fillMaxWidth().height(72.dp))
-                            else Box(Modifier.fillMaxWidth().height(72.dp).selectionLens(second, false, itemKey = "second"))
+                            else Box(Modifier.fillMaxWidth().height(72.dp).selectionLens(second, false, itemKey = "second",outline=outline))
+                            if(third!=null) {
+                                Spacer(Modifier.height(rowGap))
+                                Box(Modifier.fillMaxWidth().height(72.dp).selectionLens(third,false,itemKey="third",outline=outline))
+                            }
                         }
                     }
                 }
@@ -200,14 +255,19 @@ class HoverSelectionTest {
 
     @Test fun adjacentSelectionsShareOneOutlineAndDeselectionNarrowsTheJoinContinuously() {
         var second by mutableStateOf(true)
-        compose.setContent { Fixture(true, second) }
+        compose.setContent { Fixture(true, second,measuredOutline=true) }
         compose.waitForIdle()
         val joined = capture()
         save(compose.onNodeWithTag("hover-scene").captureToImage(), "hover-joined")
         val d = joined.width / 360f
         assertEquals("Both rows hover", 2, scene.lastDrawnRegions.size)
-        // The 8 dp gap between the rows is inside the joined outline: no shadow seam there.
-        val gapY = (80 * d + 72 * d + 4 * d).toInt()
+        val firstRest=scene.viewportHover.getValue("first").rest.bounds
+        val secondRest=scene.viewportHover.getValue("second").rest.bounds
+        assertEquals("8 dp content spacing minus two 3.5 dp outlines",d,secondRest.top-firstRest.bottom,.05f*d)
+        // Standard 8 dp content spacing leaves a 1 dp outline gap before lift.
+        // Probe beyond the persistent item's lifted edge: its own surface remains
+        // over the middle of that gap after its neighbour has faded away.
+        val gapY = (scene.viewportHover.getValue("first").lifted.bounds.bottom+d).toInt()
         fun joinedWidth(pixels: PixelMap): Int {
             var count = 0
             for (x in (24 * d).toInt() until ((360 - 24) * d).toInt()) if (pixels[x, gapY].blue > .55f) count++
@@ -219,15 +279,61 @@ class HoverSelectionTest {
         try {
             compose.runOnIdle { second = false }
             val widths = mutableListOf(full)
-            repeat(18) {
+            val means=mutableListOf(((24*d).toInt() until ((360-24)*d).toInt()).map { joined[it,gapY].blue }.average())
+            val progressValues=mutableListOf(1f)
+            val trace=StringBuilder("frame,progress,width,meanBlue,probeY\n")
+            repeat(18) { frame ->
                 compose.mainClock.advanceTimeByFrame()
-                widths += joinedWidth(capture())
+                val image=compose.onNodeWithTag("hover-scene").captureToImage()
+                save(image,"padded-bridge-$frame")
+                val pixels=image.toPixelMap()
+                widths += joinedWidth(pixels)
+                val mean=((24*d).toInt() until ((360-24)*d).toInt()).map { pixels[it,gapY].blue }.average()
+                val progress=scene.regions.values.single { it.itemKey=="second" }.visibility()
+                means+=mean;progressValues+=progress
+                trace.append("$frame,$progress,${widths.last()},$mean,$gapY\n")
             }
+            File(output,"padded-bridge-api${android.os.Build.VERSION.SDK_INT}.csv").writeText(trace.toString())
             assertTrue("The join parts once deselected: $widths", widths.last() < full / 4)
-            widths.zipWithNext().forEach { (a, b) ->
-                assertTrue("No single-frame jump while parting: $widths", a - b <= full * .45f)
+            val contrast=means.first()-means.last()
+            assertTrue("The probe exposes the persistent neighbour's shadow",contrast>.05)
+            for(i in means.indices.drop(1)) {
+                val expected=means.last()+progressValues[i]*contrast
+                assertEquals("Premultiplied shadow handoff at frame $i",expected,means[i],.025)
+                val allowed=abs(progressValues[i]-progressValues[i-1])*contrast+.015
+                assertTrue("No final-frame shadow pop: $means",abs(means[i]-means[i-1])<=allowed)
             }
         } finally { compose.mainClock.autoAdvance = true }
+    }
+
+    @Test fun aDepartingMiddleMemberRevealsTheSameShadowWhenItsRestGroupSplits() {
+        var middle by mutableStateOf(true)
+        compose.setContent { Fixture(true,middle,measuredOutline=true,third=true) }
+        compose.waitForIdle()
+        val first=capture()
+        val density=first.width/360f
+        val y=(scene.viewportHover.getValue("first").lifted.bounds.bottom+density).toInt()
+        fun mean(pixels: PixelMap)=((24*density).toInt() until (336*density).toInt()).map { pixels[it,y].blue }.average()
+        val values=mutableListOf(mean(first))
+        val progress=mutableListOf(1f)
+        compose.mainClock.autoAdvance=false
+        try {
+            compose.runOnIdle { middle=false }
+            repeat(18) { frame ->
+                compose.mainClock.advanceTimeByFrame()
+                val image=compose.onNodeWithTag("hover-scene").captureToImage()
+                save(image,"middle-member-$frame")
+                values+=mean(image.toPixelMap())
+                progress+=scene.regions.values.single { it.itemKey=="second" }.visibility()
+            }
+            val contrast=values.first()-values.last()
+            assertTrue(contrast>.05)
+            for(i in 1 until values.size) {
+                assertEquals("The persistent partition has the same endpoint",values.last()+progress[i]*contrast,values[i],.025)
+                assertTrue("No group-split shadow pop: $values",abs(values[i]-values[i-1])<=abs(progress[i]-progress[i-1])*contrast+.015)
+            }
+            assertEquals(2,scene.lastDrawnRegions.size)
+        } finally { compose.mainClock.autoAdvance=true }
     }
 
     @Test fun aDepartingMemberFadesItsFrostWhileItsNeighbourStaysLifted() {
@@ -290,7 +396,8 @@ class HoverSelectionTest {
     }
 
     private fun region(vararg rectangles: Rect): Region {
-        val path = connectedSelectionPath(rectangles.map { SelectionRegion(it) }, 16f)
+        // Inputs are content footprints: the shared 3.5 dp padding leaves a 1 dp outline gap.
+        val path = connectedSelectionPath(rectangles.map { SelectionRegion(it.inflate(MediaOutlinePadding.value)) }, 16f)
         return Region().apply { setPath(path.asAndroidPath(), Region(-1000, -1000, 1000, 1000)) }
     }
     @Test fun sideNeighborsJoinWithoutCoveringAnUnselectedHole() {
@@ -300,12 +407,14 @@ class HoverSelectionTest {
         assertTrue(shape.contains(40, 84))
         assertFalse("Unselected tile must remain uncovered", shape.contains(120, 120))
     }
-    @Test fun wideRowsMergeWithoutCircularCapsOrInternalShoulders() {
+    @Test fun wideRowsKeepTheirWidthWithRoundedConcaveJoins() {
         val shape = region(Rect(8f, 240f, 712f, 360f), Rect(8f, 370f, 712f, 490f))
-        assertEquals(android.graphics.Rect(8, 240, 712, 490), shape.bounds)
+        assertTrue(shape.bounds.left in 4..5 && shape.bounds.right in 715..716)
+        assertTrue(shape.bounds.top in 236..237 && shape.bounds.bottom in 493..494)
+        assertTrue("The shared gap joins at the centre", shape.contains(360,365))
         for (y in 330..400) {
-            assertTrue("Continuous left side at $y", shape.contains(10, y))
-            assertTrue("Continuous right side at $y", shape.contains(710, y))
+            assertTrue("Continuous left side at $y", shape.contains(40, y))
+            assertTrue("Continuous right side at $y", shape.contains(680, y))
         }
     }
     @Test fun diagonalNeighborsStaySeparate() {
@@ -314,15 +423,17 @@ class HoverSelectionTest {
         assertFalse(shape.contains(120, 40))
         assertFalse(shape.contains(40, 120))
     }
-    @Test fun aWeakeningBridgePinchesTowardItsMiddle() {
-        val rows = listOf(SelectionRegion(Rect(0f, 0f, 400f, 60f)), SelectionRegion(Rect(0f, 68f, 400f, 128f)))
+    @Test fun aWeakeningFieldPartsContinuouslyBeforeZeroStrength() {
+        val rows = listOf(Rect(0f,0f,400f,60f),Rect(0f,69f,400f,129f))
+            .map { SelectionRegion(it.inflate(MediaOutlinePadding.value)) }
         var previous = Int.MAX_VALUE
         for (strength in listOf(1f, .75f, .5f, .25f, .05f)) {
             val path = connectedSelectionPath(rows, 16f, rows, { _, _ -> strength })
             val shape = Region().apply { setPath(path.asAndroidPath(), Region(-1000, -1000, 1000, 1000)) }
             val width = (0 until 400).count { shape.contains(it, 64) }
-            assertTrue("Bridge narrows with strength: $strength -> $width", width < previous)
-            assertTrue("It stays centred", shape.contains(200, 64))
+            assertTrue("Bridge narrows with strength: $strength -> $width", width <= previous)
+            if (width > 0) assertTrue("It stays centred", shape.contains(200,64))
+            if (strength == 1f) assertTrue("Full strength joins the padded outlines",width > 0)
             previous = width
         }
         val parted = connectedSelectionPath(rows, 16f, rows, { _, _ -> 0f })
