@@ -125,13 +125,13 @@ export function run(argv) {
         requireThat(at !== null, `Ambiguous or stale source anchor ${file}:${loc.line}`);
         const pkg = source.match(/^package\s+([\w.]+)/m)?.[1] || '';
         const symbol = lines.slice(0,at+1).join('\n').match(/\b(?:fun|class|object)\s+(?:<[^>]*>\s*)?([\w.]+)/g)?.at(-1)?.replace(/^.*\s/,'') || path.basename(file,'.kt');
-        const marker = issue.errorLine2?.indexOf('^') ?? +loc.column - 1;
+        const marker = (+loc.column > 0 ? +loc.column - 1 : issue.errorLine2?.search(/[~^]/));
         const ordinal = candidates.indexOf(at);
         const codeSha256 = digest(JSON.stringify([code.trim().replace(/\s+/g,' '), marker - (code.length-code.trimStart().length), ordinal]));
         const identity = JSON.stringify([issue.id,file,pkg+'.'+symbol,codeSha256]);
         return {rule:issue.id,path:file,fqn:pkg+'.'+symbol,codeSha256,originalLine:+loc.line,identity};
     });
-    const after = diagnostics(head); requireThat(new Set(after.map(d=>d.identity)).size === after.length, 'Duplicate diagnostic identities');
+    const after = diagnostics(head); requireThat(new Set(after.map(d=>d.identity)).size === after.length, 'Duplicate diagnostic identities: ' + JSON.stringify(after.filter((d,i)=>after.findIndex(a=>a.identity===d.identity)!==i).slice(0,5)));
     let before = [], bootstrap = null;
     if (command === 'bootstrap') {
         requireThat(/^[a-f0-9]{64}$/.test(o['--registry-sha256']), 'Registry artifact digest');
