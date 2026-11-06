@@ -12,6 +12,8 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.layer.GraphicsLayer
+import androidx.compose.ui.graphics.layer.drawLayer
+import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.Alignment
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -27,17 +29,18 @@ import org.junit.Rule
 import org.junit.Test
 import java.io.File
 
-/** A real pending ownership interval, independent of native copy timing or optical polling. */
+/** Hold the separate #600 capture through #560 live geometry and native ownership completion. */
 class BackdropProducerContinuityTest {
     @get:Rule val compose = localicaComposeRule()
 
-    @Test fun producerAdvancesWhileItsSamplingRecordingIsPinned() = inspect(false)
-    @Test fun liveProducerPreservesBackingAndDisplayCutoutWhilePinned() = inspect(true)
+    @Test fun producerAdvancesWhileItsSeparateCaptureIsOwned() = inspect(false)
+    @Test fun liveProducerPreservesBackingAndDisplayCutoutDuringCapture() = inspect(true)
     @Test fun nestedProducerKeepsItsGeometryAcrossNativeCopyCompletion() = inspect(false, true)
     @Test fun nestedProducerKeepsItsGeometryAcrossQueuedCopyCompletion() = inspect(false, true, false)
 
     private fun inspect(backed: Boolean, nested: Boolean = false, inlineCompletion: Boolean = true) {
         lateinit var source: FrostedBackdrop
+        lateinit var captureLayer: GraphicsLayer
         lateinit var graphics: GraphicsContext
         lateinit var density: Density
         lateinit var direction: LayoutDirection
@@ -61,6 +64,7 @@ class BackdropProducerContinuityTest {
         try {
             compose.setContent { LocalicaTheme {
                 source = rememberFrostedBackdrop("producer", enabled = false, dark = false)
+                captureLayer = rememberGraphicsLayer()
                 val backing = rememberFrostedBackdrop("backing", enabled = false, dark = false)
                 graphics = LocalGraphicsContext.current
                 density = LocalDensity.current
@@ -108,25 +112,27 @@ class BackdropProducerContinuityTest {
                 while (top > 0 && green(x, top - 1)) top--
                 while (bottom + 1 < pixels.height && green(x, bottom + 1)) bottom++
                 val measured = compose.onNodeWithTag("producer-art").fetchSemanticsNode().boundsInRoot
-                assertEquals("Nested width follows layout; pending=${source.readbackPending}", measured.width, (right - left + 1).toFloat(), 1.25f)
-                assertEquals("Nested height follows layout; pending=${source.readbackPending}", measured.height, (bottom - top + 1).toFloat(), 1.25f)
+                assertEquals("Nested width follows layout; pending=${owned?.isCompleted == false}", measured.width, (right - left + 1).toFloat(), 1.25f)
+                assertEquals("Nested height follows layout; pending=${owned?.isCompleted == false}", measured.height, (bottom - top + 1).toFloat(), 1.25f)
             }
             assertColor(Color.Red, frame("source"))
             val recordings = compose.runOnUiThread { source.recordings }
-            val size = compose.runOnUiThread { source.layer.size }
+            val captureSize = IntSize(32, 32)
             compose.runOnUiThread {
                 owned = scope.async(context = nativeContext, start = CoroutineStart.UNDISPATCHED) {
-                    source.withPinnedRecording({ true }) {
-                        source.readback.capture(source.layer, graphics, density, direction, copy = { parent ->
+                    source.captureCurrent(graphics, density, direction, { true }, captureLayer,
+                        record = { captureLayer.record(density, direction, captureSize) {
+                            scale(32f / source.size.width, 32f / source.size.height, Offset.Zero) { drawLayer(source.layer) }
+                        } },
+                        copy = { parent ->
                             pinnedParent = parent
                             val image = RetainedLayerReadback().capture(parent, graphics, density, direction)
                             copied.complete(Unit)
                             release.await()
                             image
                         })
-                    }
                 }
-                assertTrue(source.readbackPending)
+                assertFalse(requireNotNull(owned).isCompleted)
             }
             // Hold the real retained parent after native pixels exist, before ownership is released.
             compose.mainClock.autoAdvance = true
@@ -152,18 +158,18 @@ class BackdropProducerContinuityTest {
                 assertColor(Color.Yellow, held, .06f)
             }
             compose.runOnUiThread {
-                assertTrue("The sampler still owns its immutable recording", source.readbackPending)
-                assertEquals(recordings, source.recordings)
-                assertEquals(size, source.layer.size)
+                assertFalse("The sampler still owns its separate capture", requireNotNull(owned).isCompleted)
+                assertTrue("The live producer records while native capture is held", source.recordings > recordings)
+                assertEquals(captureSize, captureLayer.size)
                 release.complete(Unit)
                 if (nested) {
-                    if (inlineCompletion) assertFalse("Native completion precedes the resumed geometry frame", source.readbackPending)
+                    if (inlineCompletion) assertTrue("Native completion precedes the resumed geometry frame", requireNotNull(owned).isCompleted)
                     edge = 70
                 }
             }
             if (nested) {
                 val completed = frame("copy-completion")
-                compose.runOnUiThread { assertFalse("The sampled frame crosses native ownership completion", source.readbackPending) }
+                compose.runOnUiThread { assertTrue("The sampled frame crosses native ownership completion", requireNotNull(owned).isCompleted) }
                 assertGeometry(completed)
             }
             compose.mainClock.autoAdvance = true
@@ -174,7 +180,7 @@ class BackdropProducerContinuityTest {
             export(pixels, File(output, "sampler.png"))
             assertColor(Color.Red, pixels)
             compose.runOnUiThread {
-                assertFalse(source.readbackPending)
+                assertTrue(requireNotNull(owned).isCompleted)
                 assertTrue(requireNotNull(pinnedParent).isReleased)
             }
             if (nested) compose.runOnUiThread { edge = 75 }
