@@ -24,7 +24,7 @@
     "app/src/androidTest/java/io/github/anastaci1a/localica/UiPerformanceTest.kt": "1a7acd0332766ba06187b4fb68df5728b01ae147a22ab60ea2c543b5c9141895",
     "app/src/main/java/io/github/anastaci1a/localica/browse/BrowsePreferences.kt": "185d574d6fa5941d8e5c025fb559d0166ec5829f80870ed3dc626e8f2c76f7d0",
     "app/src/main/java/io/github/anastaci1a/localica/diagnostics/FrameStats.kt": "2506e575ee72e927b302878e050e2eeaa39ea498f190bb4ca6472db312e536d3",
-    "tools/performance/run-ui-benchmarks.sh": "faa0e6dc14548a24a1039c3763ffae63121c8cbb5705b5e3bd8f8da250abc85a",
+    "tools/performance/run-ui-benchmarks.sh": "5dd347ac5361edba9e5ff827abb97d8b813675bebae86a79653445de54531753",
     "tools/performance/frametimeline.pbtxt": "8b1c9f8fa9500cd54d4bc48519ca90bb1877220abda989d9102c73d15a8226ec",
     "tools/performance/none-contract.mjs": "cd2e56c8045e810b94e1c039945735f9b6adef1d285ca83b7072beda1bddec01",
     "tools/performance/freeze-scenarios.mjs": "4424d64986580a04e50c56602b00ec124633d09e675bc660cde28e66378eee38",
