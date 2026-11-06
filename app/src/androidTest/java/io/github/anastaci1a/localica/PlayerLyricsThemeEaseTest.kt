@@ -6,6 +6,12 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.toPixelMap
+import androidx.compose.foundation.background
+import androidx.compose.material3.LocalContentColor
+import androidx.test.platform.app.InstrumentationRegistry
+import java.io.File
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
@@ -43,10 +49,14 @@ class PlayerLyricsThemeEaseTest {
     private class Frame(val foreground: Float, val glass: Map<Int, Float>)
     private val recorded = ArrayList<Frame>()
 
-    private fun mount() {
+    private fun mount(realDecision: Boolean = false) {
         val bitmap = android.graphics.Bitmap.createBitmap(150, 300, android.graphics.Bitmap.Config.ARGB_8888)
             .apply { eraseColor(android.graphics.Color.GRAY) }
-        val visual = PlayerVisual(bitmap.asImageBitmap(), kotlinx.coroutines.runBlocking { playerPalette(bitmap) }, contentKey = "gray")
+        val palette = if (realDecision) {
+            bitmap.eraseColor(android.graphics.Color.WHITE)
+            PlayerPalette(Color.Black, Color.Black, Color.Black, .5f, wash = bitmap)
+        } else kotlinx.coroutines.runBlocking { playerPalette(bitmap) }
+        val visual = PlayerVisual(bitmap.asImageBitmap(), palette, contentKey = "gray")
         compose.setContent { LocalicaTheme {
             CompositionLocalProvider(LocalDensity provides Density(1f),
                 LocalPlayerInkCompositionObserver provides { inkComposition = it },
@@ -57,6 +67,8 @@ class PlayerLyricsThemeEaseTest {
                             expanded, { expanded = it }, settings, remember { Animatable(if (expanded) 1f else 0f) }, {}, {}, {}, {}, {}, {},
                             visual = visual, backgroundPolarity = owner, lyricsOpen = lyrics) {
                             Text("Controls", Modifier.testTag("control-ink"))
+                            if (realDecision) Box(Modifier.size(12.dp).testTag("ink-pixel")
+                                .background(LocalContentColor.current))
                         }
                     }
                 }
@@ -98,6 +110,41 @@ class PlayerLyricsThemeEaseTest {
         assertTrue("some glass control follows the polarity", glass.any { it.max() - it.min() > .3f })
     }
 
+
+    /** No pin: the real sampler must supply BOTH endpoints before the layout moves. */
+    @Test fun sampledThemeTracksEveryLyricsFrameInBothDirectionsAndOnReversal() {
+        settings = settings.copy(glass = settings.glass.copy(contrast = 0f))
+        mount(realDecision = true)
+        compose.waitUntil(10000) { owner.decision.confidence == PlayerBackgroundConfidence.Current &&
+            inkComposition?.contentColor?.red == 0f }
+        compose.mainClock.autoAdvance = false
+        val rows = mutableListOf<String>("leg,frame,progress,ink,material,pixel")
+        val failures = mutableListOf<String>()
+        fun capture(leg: String, count: Int) = repeat(count) { index ->
+            frame()
+            val pixels = compose.onNodeWithTag("ink-pixel").captureNativeFrame().toPixelMap()
+            val pixel = pixels[pixels.width / 2, pixels.height / 2].red
+            val ink = requireNotNull(inkComposition)
+            val progress = ink.lyricsProgress
+            val expected = lerp(Color.Black, Color.White, progress).red
+            rows += listOf(leg, index, progress, ink.contentColor.red, owner.lightMix, pixel).joinToString(",")
+            if (abs(ink.contentColor.red - expected) > .035f || abs(owner.lightMix - progress) > .035f ||
+                abs(pixel - expected) > .04f) failures += rows.last()
+        }
+        openLyrics(true); capture("open", 40)
+        compose.waitUntil(10000) { owner.decision.confidence == PlayerBackgroundConfidence.Current }
+        capture("open-settled", 4)
+        openLyrics(false); capture("close", 40)
+        compose.waitUntil(10000) { owner.decision.confidence == PlayerBackgroundConfidence.Current }
+        capture("close-settled", 4)
+        openLyrics(true); capture("partial-open", 12)
+        openLyrics(false); capture("reverse", 40)
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val root = InstrumentationRegistry.getArguments().getString("additionalTestOutputDir")?.let(::File)
+            ?: requireNotNull(instrumentation.targetContext.getExternalFilesDir(null))
+        File(root, "lyrics-ink-frames.csv").writeText(rows.joinToString("\n"))
+        assertTrue("Ink/material must follow the layout on every captured frame:\n" + failures.joinToString("\n"), failures.isEmpty())
+    }
 
     private fun openingToDark(layout: ArtworkLayout) {
         settings = settings.copy(artworkLayout = layout)
