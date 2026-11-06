@@ -42,7 +42,8 @@ internal class ContinuityObserver(
         val valueError = abs(join.before.value.toDouble() - join.after.value) / range
         val velocityError = abs(join.before.velocity.toDouble() - join.after.velocity) / range
         when (join.policy) {
-            JoinPolicy.Initial -> if (entry.presented || entry.epoch >= 0) bad(join.id, join.stamp, "LateInitialExemption")
+            JoinPolicy.Initial -> if (entry.presented) bad(join.id, join.stamp, "LateInitialExemption")
+            JoinPolicy.DrivenInput -> if (join.afterKind != SegmentKind.Driven) bad(join.id, join.stamp, "InvalidDrivenInput")
             JoinPolicy.Reduced -> Unit // An explicit classified exemption; the real Engine must attest access at hookup.
             JoinPolicy.Continuous -> {
                 if (valueError > 1e-4) bad(join.id, join.stamp, "ValueJump")
@@ -76,7 +77,7 @@ internal class ContinuityObserver(
             if (!ids.add(motion.id)) { bad(motion.id, stamp, "DuplicateActive", "I6"); continue }
             val entry = entries[motion.id]
             if (entry == null) { bad(motion.id, stamp, "UnknownMotion", "I10"); continue }
-            if (older(stamp, entry.stamp)) { bad(motion.id, stamp, "StaleFrame", "I10"); continue }
+            if (entry.stamp != null && stamp.sequence < entry.stamp!!.sequence) { bad(motion.id, stamp, "StaleFrame", "I10"); continue }
             if (motion.presented) entry.presented = true
             if (!finite(entry.registration.value.sampleAt(stamp))) bad(motion.id, stamp, "NonFiniteKinematics", "I10")
         }
@@ -97,5 +98,5 @@ internal class ContinuityObserver(
         try { detach?.invoke() } finally { entries.clear(); lastFrame = null; sink = null; detach = null }
     }
     private fun finite(k: Kinematic) = k.value.isFinite() && k.velocity.isFinite()
-    private fun older(a: FrameStamp, b: FrameStamp?) = b != null && (a.sequence < b.sequence || a.nanos < b.nanos || (a.sequence == b.sequence) != (a.nanos == b.nanos))
+    private fun older(a: FrameStamp, b: FrameStamp?) = b != null && (a.sequence < b.sequence || a.nanos < b.nanos)
 }

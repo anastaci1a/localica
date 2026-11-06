@@ -240,4 +240,26 @@ class ProvenanceContractTest {
         verify(manifest.replace("U13.03a", "U99.99"), "U13.01", 1)
         verify(manifest + "\n" + manifest, "U13.01", 1)
     }
+    @Test fun onlyNamedThemeRootMayProvideUiClock() {
+        val provider=kotlin("src/engine/UiClock.kt", """
+            package io.github.anastaci1a.localica.ui.engine
+            fun ProvideUiClock(content: () -> Unit) { content() }
+        """).indented()
+        fun run(path: String, method: String)=TestLintTask.lint().detector(UiPolicyDetector()).issues(UiRuleId.UiLayerDependency.issue)
+            .allowMissingSdk().testModes(TestMode.DEFAULT).files(*(UiPolicyDetectorTest.stubs+provider+kotlin(path,"""
+                package io.github.anastaci1a.localica.ui
+                import io.github.anastaci1a.localica.ui.engine.ProvideUiClock
+                fun $method() { ProvideUiClock {} }
+            """).indented()).toTypedArray()).run()
+        run("src/Theme.kt","LocalicaTheme").expectClean()
+        run("src/Other.kt","LocalicaTheme").expectErrorCount(2)
+        run("src/Theme.kt","OtherTheme").expectErrorCount(1)
+    }
+
+    @Test fun constructorsAndPreparedChannelHooksStayInsideEngine() {
+        val source="fun bad() = io.github.anastaci1a.localica.ui.engine.MotionFloat()"
+        task(UiRuleId.RawUiMotion,"package io.github.anastaci1a.localica.ui.components\n$source").run().expectErrorCount(1)
+        task(UiRuleId.RawUiMotion,"package io.github.anastaci1a.localica.ui.engine\n$source").run().expectClean()
+    }
+
 }

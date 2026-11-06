@@ -191,6 +191,7 @@ internal class UiPolicyDetector : Detector(), SourceCodeScanner {
             edge(node, "$owner.$name")
             val compose = owner.startsWith("androidx.compose.")
             if (policy) {
+                if (owner.startsWith("$UI.engine.") && ((method.isConstructor && method.containingClass?.name in setOf("UiClock", "MotionFloat", "MotionRect", "MotionColor", "MotionProfileId", "SpringProfileId", "Eased", "Damped", "Rest", "Driven", "EasedPlan", "MotionIntent")) || (name == "copy" && method.containingClass?.name in setOf("MotionProfileId", "SpringProfileId")) || name in setOf("prepare", "prepareSegment", "prepareDrive", "commit", "commitDrive", "commitAtomic", "emit", "emitDrive", "claim", "rawValue", "rawVelocity", "finish", "reduce", "configure", "register", "unregister", "dispose", "ownerClock"))) report(UiRuleId.RawUiMotion, node)
                 if (owner.startsWith("androidx.compose.animation.") ||
                     (name in setOf("animateScrollToItem", "animateScrollBy", "scrollBy") && foundation(owner) && !scrollAllowed(node))) {
                     report(UiRuleId.RawUiMotion, node)

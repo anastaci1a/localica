@@ -6,13 +6,13 @@ import kotlin.random.Random
 
 /** Stage0 registers independent reference fixtures. Production factory coverage starts in U12.01b. */
 internal class CurveRegistry(private val owner: OwnerThread = OwnerThread()) {
-    private data class Entry(val curve: Curve, val joins: FloatArray)
+    private data class Entry(val curve: Curve, val joins: FloatArray,val floatOutput: Boolean=false)
     private val curves = linkedMapOf<String, Entry>()
-    fun register(id: String, curve: Curve, joins: FloatArray) {
+    fun register(id: String, curve: Curve, joins: FloatArray,floatOutput: Boolean=false) {
         owner.check(); require(id.isNotBlank() && joins.all { it.isFinite() && it in -.05f..1.05f })
         val existing = curves[id]
         require(existing == null || existing.curve === curve && existing.joins.contentEquals(joins))
-        if (existing == null) curves[id] = Entry(curve, joins.copyOf())
+        if (existing == null) curves[id] = Entry(curve, joins.copyOf(),floatOutput)
     }
     fun verify(seed: Long, randomPointsPerCurve: Int = 256): List<Violation> {
         owner.check(); require(randomPointsPerCurve in 1..10_000)
@@ -34,7 +34,8 @@ internal class CurveRegistry(private val owner: OwnerThread = OwnerThread()) {
                         else (-3*value+4*curve.at(p+direction*h)-curve.at(p+direction*2*h))/(2*direction*h)
                     val a = derivative(step); val b = derivative(step/2); val c = derivative(step/4)
                     val first = (4*b-a)/3; val second = (4*c-b)/3
-                    val tolerance = max(1e-6,1e-3*max(abs(slope),abs(second)))
+                    val roundoff=if(entry.floatOutput) 32*Math.ulp(max(1f,abs(value).toFloat())).toDouble()/step else 0.0
+                    val tolerance = max(roundoff,max(1e-6,1e-3*max(abs(slope),abs(second))))
                     if (!first.isFinite() || !second.isFinite() || abs(first-second) > tolerance || abs(second-slope) > tolerance) bad("CurveSlopeMismatch",p)
                 }
             }
@@ -45,7 +46,8 @@ internal class CurveRegistry(private val owner: OwnerThread = OwnerThread()) {
                     val left = limit(curve::at, -1.0); val right = limit(curve::at, 1.0)
                     val dl = limit(curve::slope, -1.0); val dr = limit(curve::slope, 1.0)
                     if (!left.isFinite() || !right.isFinite() || abs(left-right) > 1e-4 || abs(curve.at(p)-left) > 1e-4) bad("CurveValueJoin", p)
-                    if (!dl.isFinite() || !dr.isFinite() || abs(dl-dr) > max(1e-6, 1e-3*max(abs(dl),abs(dr)))) bad("CurveVelocityJoin", p)
+                    val rounding=if(entry.floatOutput) 14*abs(curve.slope(p+3*h)-curve.slope(p-3*h))/(6*h)*Math.ulp(p.toFloat())+7*Math.ulp(max(abs(dl),abs(dr)).toFloat()) else 0.0
+                    if (!dl.isFinite() || !dr.isFinite() || abs(dl-dr) > max(rounding,max(1e-6, 1e-3*max(abs(dl),abs(dr))))) bad("CurveVelocityJoin", p)
                 }
             }
         }

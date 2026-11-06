@@ -4,8 +4,8 @@ import androidx.compose.runtime.*
 import io.github.anastaci1a.localica.ui.spec.*
 import kotlin.math.*
 
-@Immutable data class MotionProfileId internal constructor(val name: String)
-@Immutable data class SpringProfileId internal constructor(val name: String)
+@Immutable @ConsistentCopyVisibility data class MotionProfileId internal constructor(val name: String)
+@Immutable @ConsistentCopyVisibility data class SpringProfileId internal constructor(val name: String)
 internal fun motionProfileId(profile: MotionProfile)=MotionProfileId(profile.name)
 internal fun springProfileId(profile: SpringProfile)=SpringProfileId(profile.name)
 @Stable interface MotionValue { fun value(): Float; fun velocity(): Float; fun sample(): Kinematic; fun valueAt(stamp: FrameStamp): Float; fun velocityAt(stamp: FrameStamp): Float; fun sampleAt(stamp: FrameStamp): Kinematic; val target: Float; val settled: Boolean }
@@ -70,9 +70,9 @@ internal data class MotionIntent(val next: Trajectory,val stamp: FrameStamp,val 
     override fun endsAt(stamp: FrameStamp): Boolean { if(stamp.nanos>=started.nanos) past=null; return segment.kind in 1..2 && elapsed(stamp)>=segment.duration }
     override fun finish(stamp: FrameStamp) { val intent=prepareSegment(Rest(target.toDouble()),target,stamp,descriptor); segment=intent.next; started=stamp; past=null; epochState.intValue++; emit(intent) }
     override fun reduce(stamp: FrameStamp) { commit(prepareSegment(Rest(target.toDouble()),target,stamp,policy="Reduced")) }
-    internal fun dispose() { clock.checkMutation(); if(disposed) return; clock.unregister(this); clock.events?.let { sink -> clock.observe { sink.retired(this,clock.presentedStamp) } }; disposed=true }
+    internal fun dispose() { clock.checkMutation(); if(disposed) return; clock.unregister(this); clock.events?.let { sink -> clock.observe { sink.retired(this,clock.stampNow) } }; disposed=true }
 }
 @Composable fun rememberMotionFloat(key: Any,initial: Float,range: Float): MotionFloat { val clock=ownerClock(); val result=remember(clock,key) { MotionFloat(clock,initial,range,key=key) }; require(result.range==range) { "Owner range is immutable" }; DisposableEffect(result) { onDispose { result.dispose() } }; return result }
 @Composable fun rememberNormalizedMotionFloat(key: Any,initial: Float)=rememberMotionFloat(key,initial,1f)
 
-internal fun commitAtomic(entries: List<Pair<MotionFloat,MotionIntent>>,drive: Boolean=false) { require(entries.isNotEmpty() && entries.map { it.first }.distinct().size==entries.size); val clock=entries.first().first.clock; val stamp=entries.first().second.stamp; require(entries.all { it.first.clock===clock && it.second.stamp===stamp }); entries.forEach { (m,i) -> m.validate(i) }; entries.forEach { (m,i) -> if(drive) m.commitDrive(i,false) else m.commit(i,false) }; entries.forEach { (m,i) -> if(drive) m.emitDrive(i) else m.emit(i) } }
+internal fun commitAtomic(entries: List<Pair<MotionFloat,MotionIntent>>,drive: Boolean=false) { require(entries.isNotEmpty() && entries.map { it.first }.distinct().size==entries.size); val clock=entries.first().first.clock; val stamp=entries.first().second.stamp; require(entries.all { it.first.clock===clock && it.second.stamp===stamp }); val plans=entries.mapNotNull { (it.second.next as? Eased)?.plan }; require(plans.isEmpty() || plans.first().stamp===stamp && plans.all { it===plans.first() } && entries.all { it.second.descriptor===plans.first() }) { "Atomic channels require one source plan" }; entries.forEach { (m,i) -> m.validate(i) }; entries.forEach { (m,i) -> if(drive) m.commitDrive(i,false) else m.commit(i,false) }; entries.forEach { (m,i) -> if(drive) m.emitDrive(i) else m.emit(i) } }
