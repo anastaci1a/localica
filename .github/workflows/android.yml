@@ -283,7 +283,7 @@ jobs:
           script: |
             adb shell wm size ${{ matrix.api == 36 && '720x1280' || 'reset' }}
             adb shell wm density ${{ matrix.api == 36 && '280' || 'reset' }}
-            python3 .github/emulator-readiness.py
+            python3 .github/emulator-readiness.py --normalize-navigation
             LOCALICA_SHARD_COUNT=$LOCALICA_DEVICE_SHARDS bash .github/run-device-tests.sh
       - name: Cache the installed SDK system image
         if: always() && steps.emulator-image-cache.outputs.cache-hit != 'true'
@@ -441,7 +441,7 @@ jobs:
           script: |
             adb shell wm size ${{ matrix.api == 36 && '720x1280' || 'reset' }}
             adb shell wm density ${{ matrix.api == 36 && '280' || 'reset' }}
-            python3 .github/emulator-readiness.py
+            python3 .github/emulator-readiness.py --normalize-navigation
             bash .github/compatibility/run.sh
       - name: Cache the installed SDK system image
         if: always() && steps.emulator-image-cache.outputs.cache-hit != 'true'
@@ -617,7 +617,7 @@ jobs:
           script: |
             adb shell wm size ${{ matrix.api == 36 && '720x1280' || 'reset' }}
             adb shell wm density ${{ matrix.api == 36 && '280' || 'reset' }}
-            python3 .github/emulator-readiness.py
+            python3 .github/emulator-readiness.py --normalize-navigation
             bash .github/distribution-smoke.sh artifacts/app-debug.apk distribution-smoke-logcat.txt
       - name: Cache the installed SDK system image
         if: always() && steps.emulator-image-cache.outputs.cache-hit != 'true'
