@@ -18,9 +18,9 @@ import io.github.anastaci1a.localica.scanner.ScanPreferences
 private data class SettingsDestination(val title: String, val parent: String?, val icon: AppIcon, val summary: String)
 private data class SettingsPageRoute(val title: String, val folderUri: String?, val iconPackId: String?)
 private val settingsDestinations = listOf(
-    SettingsDestination("Interface", null, AppIcon.ActionSettings, "Navigation, player, glass, and motion"),
+    SettingsDestination("Interface", null, AppIcon.ActionSettings, "Navigation, player, icons, glass, and motion"),
     SettingsDestination("Appearance", "Interface", AppIcon.TabLibrary, "Typography and interface gray"),
-    SettingsDestination("Icon packs", null, AppIcon.TabLibrary, "Import, switch, and view icons"),
+    SettingsDestination("Icon packs", "Interface", AppIcon.TabLibrary, "Import, switch, and view icons"),
     SettingsDestination("Glass", "Interface", AppIcon.ActionSettings, "Blur, white tint, and floating shadows"),
     SettingsDestination("Navigation", "Interface", AppIcon.TabHome, "Main tabs, Back history, and exit confirmation"),
     SettingsDestination("Player", "Interface", AppIcon.TabAlbums, "Artwork, gestures, and player actions"),
@@ -43,11 +43,21 @@ private fun settingsTitle(title: String): String = when (title) {
 
 // Keep the existing saved List representation, migrating every restored ancestor too.
 private val settingsPathSaver = Saver<List<String>, List<String>>(
-    save = { it }, restore = { path -> path.map(::settingsTitle) })
+    save = { migrateSettingsPath(it) }, restore = { migrateSettingsPath(it) })
+
+private fun migrateSettingsPath(path: List<String>): List<String> {
+    val titles = path.map(::settingsTitle)
+    return when (titles.firstOrNull()) {
+        "Icon packs" -> listOf("Interface") + titles
+        "Pack icons" -> listOf("Interface", "Icon packs") + titles
+        else -> titles
+    }
+}
 
 private fun settingsPath(title: String?): List<String> {
     if (title == null) return emptyList()
     val name = settingsTitle(title)
+    if (name == "Pack icons") return settingsPath("Icon packs") + name
     val destination = settingsDestinations.firstOrNull { it.title == name } ?: return emptyList()
     return settingsPath(destination.parent) + name
 }
@@ -71,7 +81,10 @@ fun FolderSettings(state: LibraryUiState, onDismiss: () -> Unit, onChooseFolder:
     fun back() { if (path.isEmpty()) onDismiss() else path = path.dropLast(1) }
     val route = SettingsPageRoute(page ?: "Settings", folderUri.takeIf { page == "Folder options" }, iconPackId.takeIf { page == "Pack icons" })
     SettingsNavigationPage(route, { it.title }, ::back, onDismiss, navigationDepth = path.size,
-        onSystemBack = { if (initialCategory != null && path == settingsPath(initialCategory)) onDismiss() else back() }) { shown ->
+        onSystemBack = {
+            if (initialCategory != null && initialCategory !in setOf("Icon packs", "Pack icons") &&
+                path == settingsPath(initialCategory)) onDismiss() else back()
+        }) { shown ->
         val page = shown.title.takeUnless { it == "Settings" }
         val pageKey = (page ?: "root") + shown.folderUri.orEmpty() + shown.iconPackId.orEmpty()
         if (page == null) GlassSearchField(search, { search = it }, "Search settings",
