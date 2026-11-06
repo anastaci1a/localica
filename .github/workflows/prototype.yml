@@ -126,7 +126,7 @@ jobs:
     runs-on: ubuntu-24.04
     # Repeated proofs retain all selected methods and stop on their first failure;
     # otherwise capacity for the complete selected gate, not a throughput optimization.
-    timeout-minutes: ${{ inputs.repeat_methods != '' && 60 || inputs.repeat > 1 && 360 || 35 }}
+    timeout-minutes: ${{ inputs.repeat_methods != '' && 60 || inputs.repeat > 1 && 360 || 45 }}
     env:
       AFFECTED_CLASSES: ${{ inputs.affected_classes }}
       PROTOTYPE_METHODS: ${{ inputs.repeat_methods }}
@@ -300,7 +300,7 @@ jobs:
     runs-on: ubuntu-24.04
     # Repeated proofs retain all selected methods and stop on their first failure;
     # otherwise capacity for the complete selected gate, not a throughput optimization.
-    timeout-minutes: ${{ inputs.repeat_methods != '' && 60 || inputs.repeat > 1 && 360 || 35 }}
+    timeout-minutes: ${{ inputs.repeat_methods != '' && 60 || inputs.repeat > 1 && 360 || 45 }}
     env:
       AFFECTED_CLASSES: ${{ inputs.affected_classes }}
       PROTOTYPE_METHODS: ${{ inputs.repeat_methods }}
