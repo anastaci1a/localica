@@ -153,6 +153,48 @@ class ProvenanceContractTest {
         task(UiRuleId.MotionReadInComposition, imports + "@Composable fun Host(content: @Composable () -> Unit) {}\n@Composable fun Bad(v: MotionValue) { Host { v.valueAt(FrameStamp()) } }").run().expectErrorCount(1)
     }
 
+    @Test fun mainActivityUsesTheScreenPolicyByDeclaration() {
+        task(UiRuleId.NonPresetScreenLayout, """
+            package io.github.anastaci1a.localica
+            import androidx.compose.foundation.layout.Column
+            class MainActivity { fun bad() { Column {} } }
+        """).run().expectErrorCount(1)
+        task(UiRuleId.UiLayerDependency, """
+            package io.github.anastaci1a.localica
+            class MainActivity { fun bad(v: io.github.anastaci1a.localica.ui.engine.MotionValue) = v }
+        """).run().expectErrorCount(1)
+        task(UiRuleId.NonPresetScreenLayout, """
+            package io.github.anastaci1a.localica
+            class MainActivity { fun good() { ShellLayout {} } }
+            fun ShellLayout(content: () -> Unit) {}
+        """).run().expectClean()
+    }
+
+    @Test fun allThirteenRulesPinTheirDiagnosticSourceLine() {
+        val engine = "io.github.anastaci1a.localica.ui.engine"
+        val cases = listOf(
+            Triple(UiRuleId.RawUiMotion, "fun bad() = androidx.compose.animation.core.tween()", 2),
+            Triple(UiRuleId.IndependentUiClock, "fun bad() = System.nanoTime()", 2),
+            Triple(UiRuleId.RawPresentationTransform, "import androidx.compose.ui.Modifier\nimport androidx.compose.ui.draw.alpha\nfun bad() = Modifier.alpha(.5f)", 4),
+            Triple(UiRuleId.RawShadowOrZOrder, "import androidx.compose.ui.Modifier\nimport androidx.compose.ui.draw.shadow\nfun bad() = Modifier.shadow(2f)", 4),
+            Triple(UiRuleId.ReplacePersistentShape, "fun bad(s: Boolean) = androidx.compose.runtime.remember(s) { androidx.compose.foundation.shape.RoundedCornerShape(2f) }", 2),
+            Triple(UiRuleId.UnownedSurfaceLifetime, "fun bad(v: Boolean) { if (v) androidx.compose.ui.window.Popup {} }", 2),
+            Triple(UiRuleId.RawMotionMap, "fun bad(v: $engine.MotionValue) = v.value().coerceIn(0f, 1f)", 2),
+            Triple(UiRuleId.MotionReadInComposition, "@androidx.compose.runtime.Composable fun Bad(v: $engine.MotionValue) { v.value() }", 2),
+            Triple(UiRuleId.LiteralUiSpacing, "import androidx.compose.ui.unit.dp\nfun bad() = 8.dp", 3),
+            Triple(UiRuleId.NonPresetScreenLayout, "fun bad() { androidx.compose.foundation.layout.Column {} }", 2),
+            Triple(UiRuleId.UnvalidatedUiSpec, "fun bad() = io.github.anastaci1a.localica.ui.spec.UiSpec()", 2),
+            Triple(UiRuleId.UiLayerDependency, "fun bad() = io.github.anastaci1a.localica.ui.layout.LayoutMarker()", 2),
+            Triple(UiRuleId.UnreviewedUiEscape, "@Suppress(\"RawUiMotion\") fun bad() = 0", 2),
+        )
+        for ((rule, code, line) in cases) {
+            val pkg = if (rule == UiRuleId.NonPresetScreenLayout) "io.github.anastaci1a.localica.ui" else "io.github.anastaci1a.localica.ui.components"
+            task(rule, "package $pkg\n$code").run()
+                .expectMatches("(?s).*Subject.kt:$line: Error: .*\\[" + rule.name + "(?: from [^]]+)?].*1 error.*")
+                .expectErrorCount(1)
+        }
+    }
+
     @Test fun exactLiveAdapterEscapeAndRejections() {
         val source = """
             package io.github.anastaci1a.localica.ui.engine.platform

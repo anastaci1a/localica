@@ -223,7 +223,7 @@ class UiPolicyDetectorTest : LintDetectorTest() {
     }
 
     fun testLayerImportsQualifiedReferencesAndDataLeaf() {
-        check(UiRuleId.UiLayerDependency, "import io.github.anastaci1a.localica.ui.engine.MotionValue\nfun f(v: MotionValue) = v", 1, "spec")
+        check(UiRuleId.UiLayerDependency, "import io.github.anastaci1a.localica.ui.engine.MotionValue\nfun f(v: MotionValue) = v", 2, "spec")
         check(UiRuleId.UiLayerDependency, "fun f() = io.github.anastaci1a.localica.ui.layout.LayoutMarker()", 1, "components")
         check(UiRuleId.UiLayerDependency, "import io.github.anastaci1a.localica.ui.spec.Tokens\nfun f() = Tokens.gap", 0, "engine")
         check(UiRuleId.UiLayerDependency, "import androidx.compose.animation.core.tween\nfun f() = tween()", 2, "spec")

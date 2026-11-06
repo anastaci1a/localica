@@ -7,6 +7,7 @@ import org.jetbrains.uast.*
 import org.jetbrains.kotlin.psi.KtCallExpression
 import org.jetbrains.kotlin.psi.KtAnnotationEntry
 import org.jetbrains.kotlin.psi.KtProperty
+import org.jetbrains.kotlin.psi.KtNamedFunction
 import org.jetbrains.uast.visitor.AbstractUastVisitor
 
 private const val UI = "io.github.anastaci1a.localica.ui"
@@ -34,15 +35,19 @@ internal class UiPolicyDetector : Detector(), SourceCodeScanner {
         UBinaryExpression::class.java, UBinaryExpressionWithType::class.java,
         UParameter::class.java, UMethod::class.java, UAnnotation::class.java, UImportStatement::class.java,
         UTypeReferenceExpression::class.java, UIfExpression::class.java, USwitchExpression::class.java,
+        UVariable::class.java, UClass::class.java,
     )
 
     override fun createUastHandler(context: JavaContext): UElementHandler = Analysis(context)
 
     private class Analysis(val context: JavaContext) : UElementHandler() {
         private val pkg = context.uastFile?.packageName.orEmpty()
-        private val layer = layer(pkg)
+        private val layer = layer(pkg) ?: if (context.uastFile?.classes.orEmpty().any {
+            it.qualifiedName == "io.github.anastaci1a.localica.MainActivity"
+        }) "screens" else null
         private val policy = layer in setOf("components", "layout", "screens")
         private val emitted = mutableSetOf<Pair<UiRuleId, Int>>()
+        private val dependencyRanges = mutableListOf<Triple<String, Int, Int>>()
         private val assignments by lazy {
             val result = mutableMapOf<PsiElement, MutableList<UExpression>>()
             context.uastFile?.accept(object : AbstractUastVisitor() {
@@ -153,7 +158,7 @@ internal class UiPolicyDetector : Detector(), SourceCodeScanner {
         }
 
         override fun visitSimpleNameReferenceExpression(node: USimpleNameReferenceExpression) {
-            if (layer == null) return
+            if (layer == null || parents(node).any { it is UTypeReferenceExpression }) return
             val symbol = node.resolve()
             if (symbol is PsiPackage) return
             val name = symbolName(symbol) ?: return
@@ -243,10 +248,30 @@ internal class UiPolicyDetector : Detector(), SourceCodeScanner {
         }
 
         override fun visitParameter(node: UParameter) {
+            declaredType(node, node.type)
             if (layer in setOf("components", "layout") && mutableKind(node.type) != null) report(UiRuleId.RawMotionMap, node)
         }
 
+        override fun visitVariable(node: UVariable) {
+            val source = node.sourcePsi
+            if (node !is UParameter && (source is PsiField || source is KtProperty && source.typeReference != null)) declaredType(node, node.type)
+        }
+
+        override fun visitClass(node: UClass) {
+            node.javaPsi.superTypes.forEach { declaredType(node, it) }
+        }
+
+        private fun declaredType(node: UElement, type: PsiType?) {
+            val resolved = type as? PsiClassType ?: return
+            val name = resolved.resolve()?.qualifiedName ?: return
+            edge(node, name)
+            if (policy && name.startsWith("androidx.compose.animation.core.")) report(UiRuleId.RawUiMotion, node)
+            resolved.parameters.forEach { declaredType(node, it) }
+        }
+
         override fun visitMethod(node: UMethod) {
+            val source = node.sourcePsi
+            if (source is PsiMethod || source is KtNamedFunction && source.typeReference != null) declaredType(node, node.returnType)
             if (layer == null || !composable(node)) return
             scanComposition(node.uastBody, mutableSetOf())
         }
@@ -516,7 +541,14 @@ internal class UiPolicyDetector : Detector(), SourceCodeScanner {
                 "screens" -> destination == "engine" && !(pkg == UI && context.file.name in setOf("PlayerSurface.kt", "QueueSurface.kt", "LocalicaScreen.kt"))
                 else -> false
             }
-            if (prohibited) report(UiRuleId.UiLayerDependency, node)
+            if (prohibited) {
+                val location = context.getLocation(node)
+                val start = location.start?.offset ?: -1
+                val end = location.end?.offset ?: start
+                if (dependencyRanges.any { (symbol, first, last) -> symbol == target && start <= last && end >= first }) return
+                dependencyRanges.add(Triple(target, start, end))
+                report(UiRuleId.UiLayerDependency, node)
+            }
         }
 
         override fun visitAnnotation(node: UAnnotation) = auditAnnotation(node)
