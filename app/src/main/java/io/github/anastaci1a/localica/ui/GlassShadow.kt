@@ -19,7 +19,6 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.offset
 import kotlin.math.ceil
 import kotlin.math.floor
-import kotlin.math.pow
 import kotlin.math.roundToInt
 import kotlin.math.exp
 import kotlinx.coroutines.*
@@ -268,22 +267,35 @@ internal fun DrawScope.glassShadows(bodies: List<Pair<RoundRect, Float>>, streng
     // from the cached texture's destination clip, exposing a handoff fringe.
     if (excludeInterior) clipPath(cache.body, ClipOp.Difference) { field() } else field()
 }
-/** Expand the shared contour with round joins; mask and shadow have identical holes and necks. */
-private fun DrawScope.glassPathShadow(path: Path, strength: Float, spread: Float, color: Color, excludeInterior: Boolean) {
+/** Paths and round rectangles share the same optical field and live/raster handoff. */
+private fun DrawScope.glassPathShadow(path: Path, strength: Float, spread: Float, color: Color,
+    excludeInterior: Boolean, rasterizing: Boolean = false) {
+    val reach = (4f + spread * 28f).dp.toPx()
+    val shift = 2.dp.toPx()
+    val count = glassShadowRingCount(reach)
     val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
         style = android.graphics.Paint.Style.FILL_AND_STROKE
         strokeJoin = android.graphics.Paint.Join.ROUND
+        if (rasterizing) xfermode = android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.SRC)
     }
-    fun DrawScope.rings() = translate(0f,2.dp.toPx()) {
-        val reach = (4f+spread*28f).dp.toPx()
-        repeat(16) { index ->
-            val t = (16-index)/16f
-            paint.color = color.copy(alpha = (strength*.07f*(1f-t).pow(2)).coerceIn(0f,1f)).toArgb()
-            paint.strokeWidth = reach*t*2f
-            drawContext.canvas.nativeCanvas.drawPath(path.asAndroidPath(),paint)
+    fun DrawScope.rings() = translate(0f, shift) {
+        repeat(count) { index ->
+            val alpha = if (rasterizing) glassShadowRingCoverage(index + 1, count, strength) / 255f
+                else glassShadowRingAlpha(index, count, strength)
+            if (alpha > 0f) {
+                paint.color = color.copy(alpha = alpha).toArgb()
+                paint.strokeWidth = glassShadowRingExpansion(index, reach) * 2f
+                drawContext.canvas.nativeCanvas.drawPath(path.asAndroidPath(), paint)
+            }
         }
     }
-    if (excludeInterior) clipPath(path,ClipOp.Difference) { rings() } else rings()
+    fun DrawScope.field() {
+        val canvas = drawContext.canvas
+        if (!rasterizing) canvas.saveLayer(path.getBounds().inflate(reach + shift + 1f), Paint())
+        try { rings() } finally { if (!rasterizing) canvas.restore() }
+    }
+    // Match primitive shadows: resolve the destination cutout before the temporary field.
+    if (excludeInterior) clipPath(path, ClipOp.Difference) { field() } else field()
 }
 
 /** Retain the complete, padded shadow texture. Scrolling an unchanged surface only
@@ -329,7 +341,7 @@ internal class RetainedGlassShadow(private val scope: CoroutineScope) {
             if (outline == null) {
                 if (rasterizing) glassShadows(normalized,strength,spread,GlassShadowGeometry(),excludeInterior = false,color = color,rasterizing = true)
                 else glassShadows(normalized,strength,spread,geometry,exclusion = exclusion,exclusionTranslation = -origin,color = color)
-            } else glassPathShadow(outline,strength,spread,color,excludeInterior)
+            } else glassPathShadow(outline,strength,spread,color,excludeInterior,rasterizing)
         }
         if (key != requested) {
             requested = key
