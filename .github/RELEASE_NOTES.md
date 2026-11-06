@@ -25,10 +25,10 @@ This is an optimized build (not debuggable, minified with R8, with a baseline pr
 - https://github.com/anastaci1a/localica/issues/619 - Accept complete release evidence with the class-duration profile.
 - https://github.com/anastaci1a/localica/issues/621 - Preserve popup material refresh during backdrop pixel updates.
 - https://github.com/anastaci1a/localica/issues/622 - Retire playlist editor test sessions before Activity disposal.
+- https://github.com/anastaci1a/localica/issues/616 - Match seek-cancel frame fixtures to native system bars and navigation insets.
 
 ## Known issues
 
-- Seek-cancel release can still show the cancel marker on a late frame; diagnostics were added (https://github.com/anastaci1a/localica/issues/616).
 
 - Diagnostics added, not fixed yet: PinchRetargetTest timeouts (https://github.com/anastaci1a/localica/issues/603) and ArtworkEditRestorationTest timeouts (https://github.com/anastaci1a/localica/issues/530).
 - The whole-list freeze after a fling and pinch in subviews may still occur in rare cases. If it happens, use Export diagnostics (https://github.com/anastaci1a/localica/issues/535).
