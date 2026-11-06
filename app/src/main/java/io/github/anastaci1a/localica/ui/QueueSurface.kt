@@ -50,6 +50,7 @@ internal val CollapsedQueueHeight = 64.dp
 internal fun BoxWithConstraintsScope.QueueSurface(progress: Animatable<Float, *>, settings: InterfaceSettings,
     onSettled: (Boolean) -> Unit, playerProgress: () -> Float = { 1f },
     onDragTrace: ((String) -> Unit)? = null, onOpeningContact: (() -> Unit)? = null,
+    providedPopupHome: GlassPopupHome? = null,
     content: @Composable ColumnScope.() -> Unit) {
     val scope = rememberCoroutineScope()
     val inset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
@@ -59,9 +60,18 @@ internal fun BoxWithConstraintsScope.QueueSurface(progress: Animatable<Float, *>
     val distance = with(density) { (top - status).toPx().coerceAtLeast(1f) }
     var start by remember { mutableFloatStateOf(1f) }
     var delta by remember { mutableFloatStateOf(0f) }
+    var closing by remember { mutableStateOf(false) }
+    val currentPlayerProgress by rememberUpdatedState(playerProgress)
+    val interactive by remember { derivedStateOf { currentPlayerProgress() >= .99f } }
+    val departing by remember { derivedStateOf { closing || progress.targetValue < progress.value || !interactive } }
+    val popupHome = providedPopupHome ?: rememberGlassPopupHome(departing)
     fun settle(open: Boolean) {
+        closing = !open
         onSettled(open)
-        scope.launch { progress.animateTo(if (open) 1f else 0f, tween(settings.motionDuration(400))) }
+        scope.launch {
+            if (!open) popupHome.awaitHandoff()
+            progress.animateTo(if (open) 1f else 0f, tween(settings.motionDuration(400)))
+        }
     }
     val currentSettle by rememberUpdatedState<(Boolean) -> Unit>(::settle)
     // Optional test diagnostics observe existing callbacks without adding a pointer node.
@@ -146,8 +156,6 @@ internal fun BoxWithConstraintsScope.QueueSurface(progress: Animatable<Float, *>
         }
     }
     val shown by remember(progress) { derivedStateOf { progress.value > 0f } }
-    val currentPlayerProgress by rememberUpdatedState(playerProgress)
-    val interactive by remember { derivedStateOf { currentPlayerProgress() >= .99f } }
     if (shown) Box(Modifier.fillMaxSize().graphicsLayer { alpha = progress.value * 0.2f }.clickable { settle(false) }) {
         Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.scrim) {}
     }
@@ -194,8 +202,8 @@ internal fun BoxWithConstraintsScope.QueueSurface(progress: Animatable<Float, *>
         }
         .observeScrollOwnership(scrollOwnership, listPull::cancelPull)
         .nestedScroll(listPull).testTag("queue-surface"), shape = Corners.panel) {
-        val departing by remember { derivedStateOf { progress.targetValue < progress.value || !interactive } }
-        GlassPopupHome(departing) {
+        CompositionLocalProvider(LocalGlassPopupHome provides popupHome) {
+        Box(Modifier.fillMaxSize().glassPopupHome(popupHome)) {
         Column(Modifier.fillMaxSize().clipToBounds().padding(bottom = inset)) {
             Box(Modifier.fillMaxWidth().height(CollapsedQueueHeight).clickable(onClickLabel = if (!shown) "Open queue" else "Close queue") {
                 val open = progress.value < .5f
@@ -215,6 +223,7 @@ internal fun BoxWithConstraintsScope.QueueSurface(progress: Animatable<Float, *>
             if (shown || listPull.pulling) {
                 content()
             }
+        }
         }
         }
     }

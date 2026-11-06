@@ -70,10 +70,13 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     onArtworkVisit: ((String, (Boolean) -> Unit) -> Unit)? = null, bottomChrome: androidx.compose.ui.unit.Dp = 80.dp, miniForeground: Color = Color.Black,
     onSeekRequest: ((Long, String?) -> Long)? = null,
     sampleState: (() -> PlaybackState)? = null,
-    backgroundPolarity: PlayerBackgroundPolarityState? = null, actions: @Composable () -> Unit = {}) {
+    backgroundPolarity: PlayerBackgroundPolarityState? = null,
+    providedPopupHome: GlassPopupHome? = null, openingPopupHome: GlassPopupHome? = null,
+    actions: @Composable () -> Unit = {}) {
     val sampled = sampleState?.invoke() ?: state
     val windowWidth = maxWidth
     val scope = rememberCoroutineScope()
+    val popupHome = providedPopupHome ?: rememberGlassPopupHome(!expanded)
     val playerScroll = rememberScrollState()
     LaunchedEffect(expanded) { if (!expanded) playerScroll.scrollTo(0) }
     val density = LocalDensity.current
@@ -154,11 +157,17 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
         ArtworkAction.None -> Unit
     } }
     LaunchedEffect(expanded, settings.reducedMotion, settings.fasterMotion) {
-        if (!dragging) progress.animateTo(if (expanded) 1f else 0f, tween(settings.motionDuration(400), easing = PlayerSettleEasing))
+        if (!dragging) {
+            if (expanded) openingPopupHome?.awaitHandoff() else popupHome.awaitHandoff()
+            progress.animateTo(if (expanded) 1f else 0f, tween(settings.motionDuration(400), easing = PlayerSettleEasing))
+        }
     }
     fun settle(target: Boolean) {
         onExpanded(target)
-        scope.launch { progress.animateTo(if (target) 1f else 0f, tween(settings.motionDuration(400), easing = PlayerSettleEasing)) }
+        scope.launch {
+            if (target) openingPopupHome?.awaitHandoff() else popupHome.awaitHandoff()
+            progress.animateTo(if (target) 1f else 0f, tween(settings.motionDuration(400), easing = PlayerSettleEasing))
+        }
     }
     val dragState = rememberDraggableState { delta ->
         if (owner == VerticalOwner.Undecided) owner = if (startExpanded && (delta < 0f || startQueueProgress > 0f)) VerticalOwner.Queue else VerticalOwner.Player
@@ -349,7 +358,6 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
         else -> null
     }, GlassTone())
     val baseColors = MaterialTheme.colorScheme
-    val popupHome = rememberGlassPopupHome(!expanded)
     CompositionLocalProvider(LocalGlassPopupHome provides popupHome) {
     GlassPanelTheme(lightMix) {
     val playerColors = MaterialTheme.colorScheme
