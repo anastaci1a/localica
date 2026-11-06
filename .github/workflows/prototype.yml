@@ -156,11 +156,16 @@ jobs:
         df -h "$HOME"
     - name: Compile instrumentation APKs before starting emulator
       run: ./gradlew assembleDebug assembleDebugAndroidTest --no-daemon --max-workers=2
+<<<<<<< HEAD
     - name: Restore the exact SDK system image revision
       id: emulator-image-cache
       uses: ./.github/actions/system-image-cache
       with:
         api: 26
+=======
+    - name: Prepare the verified emulator SDK
+      uses: ./.github/actions/emulator-sdk-cache
+>>>>>>> origin/fix/emulator-sdk-cache-613
     - uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
       with:
         api-level: 26
@@ -250,11 +255,16 @@ jobs:
         sudo rm -rf /usr/share/dotnet
     - name: Build and inspect private compatibility APKs sequentially
       run: bash .github/compatibility/build.sh
+<<<<<<< HEAD
     - name: Restore the exact SDK system image revision
       id: emulator-image-cache
       uses: ./.github/actions/system-image-cache
       with:
         api: 26
+=======
+    - name: Prepare the verified emulator SDK
+      uses: ./.github/actions/emulator-sdk-cache
+>>>>>>> origin/fix/emulator-sdk-cache-613
     - uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
       with:
         api-level: 26
@@ -332,11 +342,16 @@ jobs:
         df -h "$HOME"
     - name: Compile instrumentation APKs before starting emulator
       run: ./gradlew assembleDebug assembleDebugAndroidTest --no-daemon --max-workers=2
+<<<<<<< HEAD
     - name: Restore the exact SDK system image revision
       id: emulator-image-cache
       uses: ./.github/actions/system-image-cache
       with:
         api: 36
+=======
+    - name: Prepare the verified emulator SDK
+      uses: ./.github/actions/emulator-sdk-cache
+>>>>>>> origin/fix/emulator-sdk-cache-613
     - uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
       with:
         api-level: 36
@@ -426,11 +441,16 @@ jobs:
         sudo rm -rf /usr/share/dotnet
     - name: Build and inspect private compatibility APKs sequentially
       run: bash .github/compatibility/build.sh
+<<<<<<< HEAD
     - name: Restore the exact SDK system image revision
       id: emulator-image-cache
       uses: ./.github/actions/system-image-cache
       with:
         api: 36
+=======
+    - name: Prepare the verified emulator SDK
+      uses: ./.github/actions/emulator-sdk-cache
+>>>>>>> origin/fix/emulator-sdk-cache-613
     - uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
       with:
         api-level: 36
