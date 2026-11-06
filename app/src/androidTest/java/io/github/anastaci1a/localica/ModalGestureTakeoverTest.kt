@@ -281,8 +281,14 @@ class ModalGestureTakeoverTest {
         touch.down(1, trigger); touch.up(1)
         await { rootOwner.blocked && drag.drag?.dropping != false }
         touch.move(0, start + Offset(0f, 250f)); touch.up(0)
-        await { drag.drag == null }
-        compose.runOnUiThread { assertEquals(0, moves) }
+        // The paused clock owns the 350 ms landing and 220 ms handoff. A cold
+        // renderer can exhaust a wall-clock poll before advancing even 350 ms.
+        // Require cleanup by a fixed animation deadline, independent of draw cost.
+        pump(700)
+        compose.runOnUiThread {
+            assertNull("Cancelled drag must finish landing and handoff within 700 ms", drag.drag)
+            assertEquals(0, moves)
+        }
     }
 
     @Test fun realBrowsePinchTakeoverRestoresSourcePreferenceAndViewportAnchor() {
@@ -360,6 +366,7 @@ class ModalGestureTakeoverTest {
         compose.onAllNodesWithTag(tag).fetchSemanticsNodes().isNotEmpty()
     }
     private fun await(phase: String = "modal transition", condition: () -> Boolean) {
+        val startedClock = compose.mainClock.currentTime
         try {
             compose.waitUntil(5000) {
                 compose.mainClock.advanceTimeByFrame()
@@ -371,7 +378,10 @@ class ModalGestureTakeoverTest {
                     "style=$style source=${motion.source} target=${motion.target} generation=${motion.transaction} " +
                     "held=${motion.held} capturing=${motion.capturing} captureProblem=${motion.captureProblem} " +
                     "progress=${motion.progress.value} finger=${motion.fingerProgress} committed=${motion.committed} " +
-                    "commits=$commits disposed=${motion.disposed}"
+                    "commits=$commits disposed=${motion.disposed} " +
+                    "clockDelta=${compose.mainClock.currentTime - startedClock} " +
+                    "drag=${if (::drag.isInitialized) drag.drag?.let { "dropping=${it.dropping} landing=${it.landing.value} handoff=${it.handoff.value}" } else null} " +
+                    "scroll=${if (::grid.isInitialized) grid.isScrollInProgress else null}"
             }
             throw AssertionError("$phase: $state", failure)
         }
