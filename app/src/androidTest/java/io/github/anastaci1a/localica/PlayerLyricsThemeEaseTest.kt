@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.toPixelMap
@@ -43,6 +44,7 @@ class PlayerLyricsThemeEaseTest {
     private var settings by mutableStateOf(InterfaceSettings(artworkLayout = ArtworkLayout.FullBackground,
         glass = GlassAppearance(contrast = .3f)))
     @Volatile private var inkComposition: PlayerInkComposition? = null
+    private var pixelInk by mutableStateOf(Color.Black)
     /** Latest drawn ink of every glass surface, by surface identity. */
     private val glassInk = ConcurrentHashMap<Int, Float>()
 
@@ -59,7 +61,7 @@ class PlayerLyricsThemeEaseTest {
         val visual = PlayerVisual(bitmap.asImageBitmap(), palette, contentKey = "gray")
         compose.setContent { LocalicaTheme {
             CompositionLocalProvider(LocalDensity provides Density(1f),
-                LocalPlayerInkCompositionObserver provides { inkComposition = it },
+                LocalPlayerInkCompositionObserver provides { inkComposition = it; if (realDecision) pixelInk = it.contentColor },
                 LocalGlassSurfaceDrawObserver provides { glassInk[it.surfaceIdentity] = Color(it.inkArgb).red }) {
                 BoxWithConstraints(Modifier.fillMaxSize()) {
                     BoxWithConstraints(Modifier.width(300.dp).height(minOf(560.dp, maxHeight))) {
@@ -67,10 +69,10 @@ class PlayerLyricsThemeEaseTest {
                             expanded, { expanded = it }, settings, remember { Animatable(if (expanded) 1f else 0f) }, {}, {}, {}, {}, {}, {},
                             visual = visual, backgroundPolarity = owner, lyricsOpen = lyrics) {
                             Text("Controls", Modifier.testTag("control-ink"))
-                            if (realDecision) Box(Modifier.size(12.dp).testTag("ink-pixel")
-                                .background(LocalContentColor.current))
                         }
                     }
+                    if (realDecision) Box(Modifier.align(Alignment.TopEnd).size(12.dp).testTag("ink-pixel")
+                        .background(pixelInk))
                 }
             }
         } }
