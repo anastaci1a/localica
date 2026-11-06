@@ -5,11 +5,10 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.toPixelMap
-import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.test.platform.app.InstrumentationRegistry
 import java.io.File
 import kotlinx.coroutines.flow.first
@@ -44,7 +43,6 @@ class PlayerLyricsThemeEaseTest {
     private var settings by mutableStateOf(InterfaceSettings(artworkLayout = ArtworkLayout.FullBackground,
         glass = GlassAppearance(contrast = .3f)))
     @Volatile private var inkComposition: PlayerInkComposition? = null
-    private var pixelInk by mutableStateOf(Color.Black)
     private var sampleHeld by mutableStateOf(false)
     /** Latest drawn ink of every glass surface, by surface identity. */
     private val glassInk = ConcurrentHashMap<Int, Float>()
@@ -66,7 +64,7 @@ class PlayerLyricsThemeEaseTest {
             } else null
             CompositionLocalProvider(LocalDensity provides Density(1f),
                 LocalPlayerBackgroundPreparationBarrier provides preparationBarrier,
-                LocalPlayerInkCompositionObserver provides { inkComposition = it; if (realDecision) pixelInk = it.contentColor },
+                LocalPlayerInkCompositionObserver provides { inkComposition = it },
                 LocalGlassSurfaceDrawObserver provides { glassInk[it.surfaceIdentity] = Color(it.inkArgb).red }) {
                 BoxWithConstraints(Modifier.fillMaxSize()) {
                     BoxWithConstraints(Modifier.width(300.dp).height(minOf(560.dp, maxHeight))) {
@@ -76,8 +74,6 @@ class PlayerLyricsThemeEaseTest {
                             Text("Controls", Modifier.testTag("control-ink"))
                         }
                     }
-                    if (realDecision) Box(Modifier.align(Alignment.TopEnd).size(12.dp).testTag("ink-pixel")
-                        .drawBehind { drawRect(pixelInk) })
                 }
             }
         } }
@@ -125,12 +121,19 @@ class PlayerLyricsThemeEaseTest {
         compose.waitUntil(10000) { owner.decision.confidence == PlayerBackgroundConfidence.Current &&
             inkComposition?.contentColor?.red == 0f }
         compose.mainClock.autoAdvance = false
-        val rows = mutableListOf<String>("leg,frame,progress,ink,material,pixel,sampledLight,sampleConfidence")
+        val rows = mutableListOf<String>("leg,frame,progress,ink,material,playGlyphPixel,sampledLight,sampleConfidence")
+        val presented = mutableListOf<android.graphics.Bitmap>()
         val failures = mutableListOf<String>()
         fun capture(leg: String, count: Int) = repeat(count) { index ->
             frame()
-            val pixels = compose.onNodeWithTag("ink-pixel").captureNativeFrame().toPixelMap()
-            val pixel = pixels[pixels.width / 2, pixels.height / 2].red
+            // PixelCopy from the real window, cropped to the real transport.
+            // The centre is inside the opaque Play triangle, away from its edges.
+            val image = compose.onNodeWithContentDescription("Play").captureNativeFrame()
+            presented += image.asAndroidBitmap()
+            val pixels = image.toPixelMap()
+            var pixel = 0f
+            for (dy in -1..1) for (dx in -1..1) pixel += pixels[pixels.width / 2 + dx, pixels.height / 2 + dy].red
+            pixel /= 9f
             val ink = requireNotNull(inkComposition)
             val progress = ink.lyricsProgress
             val expected = lerp(Color.Black, Color.White, progress).red
@@ -169,6 +172,13 @@ class PlayerLyricsThemeEaseTest {
         val root = InstrumentationRegistry.getArguments().getString("additionalTestOutputDir")?.let(::File)
             ?: requireNotNull(instrumentation.targetContext.getExternalFilesDir(null))
         File(root, "lyrics-ink-frames.csv").writeText(rows.joinToString("\n"))
+        val first = presented.first()
+        val strip = android.graphics.Bitmap.createBitmap(first.width * 12, first.height * ((presented.size + 11) / 12),
+            android.graphics.Bitmap.Config.ARGB_8888)
+        val canvas = android.graphics.Canvas(strip)
+        presented.forEachIndexed { index, image -> canvas.drawBitmap(image,
+            (index % 12 * first.width).toFloat(), (index / 12 * first.height).toFloat(), null) }
+        File(root, "lyrics-ink-play-strip.png").outputStream().use { strip.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
         assertTrue("Ink/material must follow the layout on every captured frame:\n" + failures.joinToString("\n"), failures.isEmpty())
     }
 
