@@ -116,7 +116,7 @@ class HoverSelectionTest {
         if (android.os.Build.VERSION.SDK_INT < 33) {
             // Legacy frost needs its one readback, taken only while a selection leases the backdrop.
             compose.runOnIdle { chosen = true }
-            compose.waitUntil(10000) { source.lensSnapshot != null }
+            compose.waitUntil(10000) { source.snapshot != null }
             compose.runOnIdle { chosen = false }
         }
         compose.waitForIdle()
@@ -243,7 +243,7 @@ class HoverSelectionTest {
             return values.max() - values.min()
         }
         compose.runOnIdle { first = true; second = true }
-        if (android.os.Build.VERSION.SDK_INT < 33) compose.waitUntil(10000) { source.lensSnapshot != null }
+        if (android.os.Build.VERSION.SDK_INT < 33) compose.waitUntil(10000) { source.snapshot != null }
         compose.waitForIdle()
         val lifted = capture()
         val resting = stripes(baseline, 160f)
@@ -266,7 +266,7 @@ class HoverSelectionTest {
     @Test fun aVirtualizedNeighbourRetainsTheJoinedOutlineAndShadow() {
         var retained by mutableStateOf(false)
         compose.setContent { Fixture(true, true, retainSecond = retained) }
-        if (android.os.Build.VERSION.SDK_INT < 33) compose.waitUntil(10000) { source.lensSnapshot != null }
+        if (android.os.Build.VERSION.SDK_INT < 33) compose.waitUntil(10000) { source.snapshot != null }
         compose.waitForIdle()
         val beforeImage = compose.onNodeWithTag("hover-scene").captureToImage()
         save(beforeImage, "hover-retained-source")

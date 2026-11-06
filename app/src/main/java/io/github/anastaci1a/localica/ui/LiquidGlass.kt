@@ -84,7 +84,7 @@ private fun FrostedBackdrop?.surfaceDrawSource(location: BackdropLocation, exten
         source.materialOnly, source.dark, source.size.width, source.size.height,
         source.layer.size.width, source.layer.size.height, source.revision, source.readbackRequest,
         source.snapshotReadbackRequest, source.snapshotDraws?.request, source.snapshotDraws?.composite,
-        surfaceDrawIdentity(source.snapshot), surfaceDrawIdentity(source.fallback), surfaceDrawIdentity(source.lensSnapshot),
+        surfaceDrawIdentity(source.snapshot), surfaceDrawIdentity(source.fallback), null,
         registration?.let { listOf(it.xx, it.xy, it.yx, it.yy, it.tx, it.ty) },
         registration?.inverse()?.corners(androidx.compose.ui.geometry.Rect(Offset.Zero, extent))?.surfaceDrawScalars())
 }
@@ -194,12 +194,11 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
     content: (@Composable BoxScope.() -> Unit)? = null) {
     val renderer = currentGlassRendererGeneration()
     val drawObserver = LocalGlassSurfaceDrawObserver.current
-    val samplingObserver = LocalBackdropSamplingObserver.current
     // Do not create diagnostic state, closures, geometry or modifiers for ordinary/null callers.
     val observedShadowGroup = if (drawObserver == null) null else LocalSurfaceShadows.current
     val observedShadowAppearance = if (drawObserver == null) null else LocalGlassAppearance.current
     val visible = LocalGlassVisible.current
-    if (visible && renderer.backend == GlassBackend.Legacy) { BackdropLease(source); BackdropLease(homeSource?.takeUnless { it === source }) }
+    if (visible && renderer.backend == GlassBackend.None) { BackdropLease(source); BackdropLease(homeSource?.takeUnless { it === source }) }
     val location = remember { BackdropLocation() }
     var surfaceSize by remember { mutableStateOf(androidx.compose.ui.unit.IntSize.Zero) }
     val view = LocalView.current
@@ -227,7 +226,6 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
         anchor.contact.state.impulseScale = kotlin.math.sqrt(96f * view.resources.displayMetrics.density / surfaceSize.height.coerceAtLeast(1)).coerceIn(1f, 1.8f)
     } }
     val lens = remember { lazy { if (Build.VERSION.SDK_INT >= 33) LensRenderer() else null } }
-    val mesh = remember { lazy { LensMeshRenderer() } }
     val rim = remember { GlassRimCache() }
     val popupRim = if (panel > 0f && silhouette == null) remember { PopupGlassRimCache() } else null
     // Transform the surface and its shadow together in the draw pass; a legacy
@@ -241,7 +239,7 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
             else Modifier.surfaceGlassShadow(cornerRadius, anchor))
         .clip(surfaceClip)
         .backdropLocation(location).onGloballyPositioned { surfaceSize = it.size }, propagateMinConstraints = true) {
-        if (visible && source != null && renderer.backend == GlassBackend.Modern && Build.VERSION.SDK_INT >= 33) {
+        if (visible && source != null && Build.VERSION.SDK_INT >= 33) {
             val density = androidx.compose.ui.platform.LocalDensity.current
             val blur = with(density) { 22.dp.toPx() } * (appearance.blur + (1f - appearance.blur) * frost)
             val padding = with(density) { 32.dp.toPx() }
@@ -271,73 +269,9 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
             }
         }
 
-        if (visible && renderer.backend == GlassBackend.Legacy) {
-        // The tone's polarity may be mid-ease: its prepared endpoint pixels cross-fade by arrival, never per-frame filtering.
-        val endpointTone = tone.endpoint(tone.lightInk)
-        val easing = tone.arrival < 1f
-        val fromTone = tone.endpoint(!tone.lightInk)
-        @Composable fun prepared(backing: FrostedBackdrop?, endpointTone: GlassTone, active: Boolean = true): List<ImageBitmap?> {
-            val clear = backing?.glassFallback ?: backing?.snapshot
-            val frosted = backing?.fallback ?: clear
-            // Morphs blend fixed prepared endpoints; progress must never schedule
-            // a new pixel filter on every animation frame.
-            return listOf(rememberToneSnapshot(clear.takeIf { active }, endpointTone),
-                rememberToneSnapshot((backing?.lensSnapshot ?: clear).takeIf { active && frost < 1f && panel < 1f }, endpointTone),
-                rememberToneSnapshot(frosted.takeIf { active }, endpointTone),
-                rememberToneSnapshot((backing?.lensFrostSnapshot ?: frosted).takeIf { active && frost > 0f && panel < 1f }, endpointTone))
-        }
-        // A coalesced Legacy→Modern→Legacy switch must not reuse the prior epoch's tone result.
-        // Only disposable preparation is keyed; contact and surface motion stay mounted.
-        val (sourceImages, homeImages) = key(renderer) { prepared(source, endpointTone) to prepared(homeSource, endpointTone) }
-        val (sourceFrom, homeFrom) = key(renderer) { prepared(source, fromTone, easing) to prepared(homeSource, fromTone, easing) }
-        Canvas(Modifier.matchParentSize()) {
-            val outline = silhouette?.frame(size)
-            val shape = outline?.geometry ?: LensGeometry(androidx.compose.ui.geometry.Rect(Offset.Zero, size),
-                (cornerRadius?.toPx() ?: size.minDimension / 2f).coerceIn(0f, size.minDimension / 2f))
-            val thickness = body().thickness * (if (pressFeedback || anchor != null) contactShape().thickness else 1f)
-            val depth = appearance.depth * depthScale * thickness
-            val flattening = ((1f - thickness) / .18f).coerceIn(0f, 1f)
-            val home = if (homeSource?.lensSnapshot != null || homeSource?.snapshot != null) homeWeight().coerceIn(0f, 1f) else 0f
-            // Blur and tint are independent endpoints. Premultiplied addition
-            // preserves opacity while either varies, including a source handoff.
-            val samples = mutableListOf<Triple<FrostedBackdrop, ImageBitmap, Float>>()
-            fun samples(backing: FrostedBackdrop?, imagesByRole: List<ImageBitmap?>, weight: Float) {
-                if (backing == null || weight <= 0f) return
-                val images = linkedMapOf<ImageBitmap, Float>()
-                fun add(image: ImageBitmap?, amount: Float) {
-                    if (image != null && amount > 0f) images[image] = (images[image] ?: 0f) + amount * weight
-                }
-                add(imagesByRole[1], (1f - frost) * (1f - panel))
-                add(imagesByRole[0], (1f - frost) * panel)
-                add(imagesByRole[3], frost * (1f - panel))
-                add(imagesByRole[2], frost * panel)
-                images.forEach { (image, amount) -> samples += Triple(backing, image, amount) }
-            }
-            val arrived = tone.arrival.coerceIn(0f, 1f)
-            samples(source, sourceImages, (1f - home) * arrived); samples(homeSource, homeImages, home * arrived)
-            if (arrived < 1f) { samples(source, sourceFrom, (1f - home) * (1f - arrived)); samples(homeSource, homeFrom, home * (1f - arrived)) }
-            val registrations = samples.map { it.first }.distinct().associateWith { backing ->
-                location.registrationTo(backing.location) ?: return@Canvas
-            }
-            if (samplingObserver != null && source != null) registrations[source]?.let {
-                observeBackdropSampling(samplingObserver, location, it,
-                    androidx.compose.ui.geometry.Rect(Offset.Zero, size))
-            }
-            val blending = samples.size > 1
-            if (blending) drawContext.canvas.saveLayer(androidx.compose.ui.geometry.Rect(Offset.Zero, size), Paint())
-            with(mesh.value) {
-                samples.forEachIndexed { index, (backing, image, amount) ->
-                    draw(shape, image, backing.size, Offset.Zero, depth, refraction,
-                        amount, lighting = false, additive = index > 0, flattening = flattening,
-                        field = outline?.let { frame -> { point -> frame.opticalField(point) } }, fieldKey = outline,
-                        outlines = outline?.bodies, registration = registrations.getValue(backing))
-                }
-                if (blending) drawContext.canvas.restore()
-                draw(shape, null, androidx.compose.ui.unit.IntSize.Zero, Offset.Zero, depth, refraction, flattening = flattening, tone = tone,
-                    field = outline?.let { frame -> { point -> frame.opticalField(point) } }, fieldKey = outline,
-                    outlines = outline?.bodies)
-            }
-        }
+        if (visible && source != null && Build.VERSION.SDK_INT < 33) {
+            AverageBackdrop(Modifier.matchParentSize(), source, location,
+                MaterialAverageStyle(appearance.whiteTint * (1f - panel), tone), homeSource, homeWeight, homeBounds, homeFootprint)
         }
         Canvas(Modifier.matchParentSize()) {
             drawRect(tone.color(tint))

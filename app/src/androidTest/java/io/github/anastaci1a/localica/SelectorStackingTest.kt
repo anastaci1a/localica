@@ -41,7 +41,7 @@ class SelectorStackingTest {
             view = LocalView.current
             inputMode = LocalInputModeManager.current
             activity = rememberSelectorTrackActivity()
-            val source = rememberFrostedBackdrop(Unit, glassBlur = 0f, whiteTint = 0f)
+            val source = rememberFrostedBackdrop(Unit)
             backing = source
             var selected by remember { mutableStateOf(MainTab.Songs) }
             val tabs = listOf(MainTab.Home, MainTab.Library, MainTab.Songs)
@@ -67,7 +67,7 @@ class SelectorStackingTest {
                 }
             }
         } }
-        if (android.os.Build.VERSION.SDK_INT < 33) compose.waitUntil(10000) { backing?.lensSnapshot != null }
+        if (android.os.Build.VERSION.SDK_INT < 33) compose.waitUntil(10000) { backing?.snapshot != null }
         compose.waitForIdle()
     }
 

@@ -78,7 +78,11 @@ class FilterBackdropTest {
                 // Color differences exclude black lettering and neutral illumination.
                 if (kotlin.math.abs((a.red - a.blue) - (b.red - b.blue)) > .02f) refracted++
             }
-            assertTrue("Filter optics must move colored source pixels, changed=$refracted", refracted > 30)
+            if (android.os.Build.VERSION.SDK_INT >= 33) {
+                assertTrue("Filter optics must move colored source pixels, changed=$refracted", refracted > 30)
+            } else {
+                org.junit.Assert.assertEquals("None does not move pixels when refraction depth changes", 0, refracted)
+            }
         } finally { prefs.write(route, previous, false) }
     }
 }

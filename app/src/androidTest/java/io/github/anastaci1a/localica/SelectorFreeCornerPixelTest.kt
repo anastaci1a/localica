@@ -62,37 +62,6 @@ class SelectorFreeCornerPixelTest {
         }
     }
 
-    @Test fun layeredNavbarMeshPaintsTheSameEllipticalFreeCornerArea() {
-        var model by mutableStateOf(Model())
-        val image = Bitmap.createBitmap(672, 672, Bitmap.Config.ARGB_8888)
-            .apply { eraseColor(android.graphics.Color.GREEN) }.asImageBitmap()
-        val renderer = SelectorSceneMesh()
-        compose.setContent { CompositionLocalProvider(LocalDensity provides Density(scale)) {
-            Canvas(Modifier.size(224.dp).testTag("corner-mesh")) {
-                drawRect(Color.Black)
-                val current = frame(model)
-                val contour = current.contour()
-                val local = contour.translated(-current.bounds.topLeft)
-                val silhouette = GlassSilhouette {
-                    GlassSilhouetteGeometry(listOf(local.outline), local.opticalWeight, corner = current.corner)
-                }.frame(current.bounds.size)
-                val scene = SelectorSceneGeometry(LensGeometry(Rect(0f, 0f, 672f, 672f), 84f),
-                    LensGeometry(current.bounds, current.corner), emptyList(), .72f, .72f,
-                    selectorContour = contour, selectorSilhouette = silhouette)
-                clipPath(Path().apply { addRoundRect(contour.outline) }) {
-                    with(renderer) { draw(scene, image, IntSize(672, 672), Offset.Zero, null, IntSize.Zero,
-                        android.graphics.Color.GRAY, android.graphics.Color.RED, GlassTone()) }
-                }
-            }
-        } }
-        for (vertical in listOf(false, true)) for (rtl in listOf(false, true)) for (end in listOf(-1f, 1f)) {
-            compose.runOnIdle { model = Model(vertical, rtl, end) }
-            compose.waitForIdle()
-            val current = frame(model)
-            verifyFreePixels(compose.onNodeWithTag("corner-mesh").captureToImage().toPixelMap(),
-                current.contour(), current.corner) { it.green > it.red + .15f && it.green > it.blue + .15f }
-        }
-    }
 
     private fun verifyFreePixels(pixels: PixelMap, contour: SelectorTrackContour, corner: Float,
         painted: (Color) -> Boolean) {

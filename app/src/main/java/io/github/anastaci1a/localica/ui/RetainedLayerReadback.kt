@@ -5,8 +5,6 @@ import androidx.compose.ui.graphics.GraphicsContext
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.layer.GraphicsLayer
 import androidx.compose.ui.graphics.layer.drawLayer
-import androidx.compose.ui.graphics.drawscope.translate
-import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 
@@ -25,12 +23,7 @@ internal class RetainedLayerReadback(private val onStage: ((ReadbackStage) -> Un
     private val completion = ReadbackCompletion()
 
     suspend fun capture(source: GraphicsLayer, graphicsContext: GraphicsContext, density: Density,
-        layoutDirection: LayoutDirection, copy: (suspend (GraphicsLayer) -> ImageBitmap)? = null): ImageBitmap =
-        captureRegion(source, graphicsContext, density, layoutDirection, null, copy)
-
-    suspend fun captureRegion(source: GraphicsLayer, graphicsContext: GraphicsContext, density: Density,
-        layoutDirection: LayoutDirection, region: IntRect? = null,
-        copy: (suspend (GraphicsLayer) -> ImageBitmap)? = null): ImageBitmap {
+        layoutDirection: LayoutDirection, copy: (suspend (GraphicsLayer) -> ImageBitmap)? = null): ImageBitmap {
         check(Looper.myLooper() == Looper.getMainLooper()) { "Layer readbacks belong to the owning UI thread" }
         val readLayer: suspend (GraphicsLayer) -> ImageBitmap = copy ?: { copyLayerBitmap(it, density, layoutDirection) }
         return completion.capture(
@@ -40,12 +33,7 @@ internal class RetainedLayerReadback(private val onStage: ((ReadbackStage) -> Un
             },
             read = { parent ->
                 onStage?.invoke(ReadbackStage.ACQUIRED)
-                val crop = region ?: IntRect(0, 0, source.size.width, source.size.height)
-                require(crop.left >= 0 && crop.top >= 0 && crop.right <= source.size.width &&
-                    crop.bottom <= source.size.height && crop.width > 0 && crop.height > 0)
-                parent.record(density, layoutDirection, crop.size) {
-                    translate(-crop.left.toFloat(), -crop.top.toFloat()) { drawLayer(source) }
-                }
+                parent.record(density, layoutDirection, source.size) { drawLayer(source) }
                 readLayer(parent).also { onStage?.invoke(ReadbackStage.COPIED) }
             },
             release = { parent ->
