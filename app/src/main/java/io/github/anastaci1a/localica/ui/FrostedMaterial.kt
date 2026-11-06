@@ -88,13 +88,16 @@ internal class FrostedBackdrop(val layer: GraphicsLayer, dark: Boolean,
     val recorded get() = recordedGeneration != null
     fun refresh() { revision++; recordedFrames.trySend(Unit) }
 
-    /** Serialize the thumbnail record and native copy through cancellation. */
+    /** Serialize the separate thumbnail through native ownership. The displayed producer
+     * keeps recording live geometry; it must never double as this capture target (#560). */
     suspend fun captureCurrent(graphics: androidx.compose.ui.graphics.GraphicsContext,
         density: androidx.compose.ui.unit.Density, direction: androidx.compose.ui.unit.LayoutDirection,
-        valid: () -> Boolean, captureLayer: GraphicsLayer, record: () -> Unit): ImageBitmap? = captureLock.withLock {
+        valid: () -> Boolean, captureLayer: GraphicsLayer, record: () -> Unit,
+        copy: (suspend (GraphicsLayer) -> ImageBitmap)? = null): ImageBitmap? = captureLock.withLock {
         if (!valid()) return@withLock null
+        check(captureLayer !== layer) { "Capture must not own the displayed producer recording" }
         record()
-        readback.capture(captureLayer, graphics, density, direction)
+        readback.capture(captureLayer, graphics, density, direction, copy)
     }
 
     fun publish(renderer: GlassRendererGeneration, snapshot: ImageBitmap, fallback: ImageBitmap,
