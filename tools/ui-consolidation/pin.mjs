@@ -27,12 +27,13 @@ export function identities(rows) {
         const key = JSON.stringify([r.category, r.revision, r.file, r.line, r.pattern, r.normalized_column]);
         if (keys.has(key)) throw Error('Duplicate category+tuple');
         if (!/^[a-f0-9]{40}$/.test(r.revision) || !/^app\/src\/main\/.+\.kt$/.test(r.file) ||
-            r.file.includes('..') || +r.line < 1 || +r.normalized_column < 1) throw Error('Invalid identity');
+            r.file.includes('..') || !r.category || !r.pattern || !Number.isInteger(+r.line) || !Number.isInteger(+r.normalized_column) || +r.line < 1 || +r.normalized_column < 1) throw Error('Invalid identity');
         keys.add(key);
     }
     return rows;
 }
 export function pin(args) {
+    if (args.length % 2 || new Set(args.filter((_,i)=>i%2===0)).size !== args.length/2) throw Error('Invalid or duplicate pin arguments');
     const options = Object.fromEntries(Array.from({length: args.length / 2}, (_, i) => [args[i * 2], args[i * 2 + 1]]));
     for (const k of ['--source', '--historical', '--architecture', '--source-files', '--toolchain', '--out']) {
         if (!options[k]) throw Error(`Required ${k}; implicit HEAD is forbidden`);
@@ -49,6 +50,7 @@ export function pin(args) {
     const files = str('ls-tree', '-r', '--name-only', ref, 'app/src/main').split('\n').filter(f => f.endsWith('.kt'));
     const blobs = Object.fromEntries(files.map(f => [f, sha256(git('show', `${ref}:${f}`))]));
     const cache = new Map();
+    const successors = [];
     const refreshed = rows.map(r => {
         if (!cache.has(r.file)) {
             const oldLines = git('show', `${r.revision}:${r.file}`).toString().split('\n');
@@ -60,18 +62,20 @@ export function pin(args) {
         const matches = current.flatMap((line, i) => line.trim() === r.snippet ? [i + 1] : []);
         // Unique text successors are candidates, not proof of symbol migration or deletion credit.
         const same = current[+r.line - 1]?.trim() === r.snippet;
+        successors.push({category:r.category,revision:r.revision,file:r.file,line:+r.line,pattern:r.pattern,normalized_column:+r.normalized_column,
+            successorLine: same ? +r.line : matches.length===1 ? matches[0] : null,candidateLines:same ? [+r.line] : matches});
         return {id: Object.fromEntries(['revision', 'file', 'line', 'pattern', 'normalized_column'].map(k =>
             [k, ['line', 'normalized_column'].includes(k) ? +r[k] : r[k]])), category: r.category,
-            status: !blobs[r.file] ? 'RemovedBeforeBaseline' : 'Open', ownerUnit: owner(r), stepId: null,
+            status: !blobs[r.file] ? 'RemovedBeforeBaseline' : 'Open', ownerUnit: 'U14', stepId: null,
             successorFile: blobs[r.file] ? r.file : null, successorSymbol: null,
-            successorLine: same ? +r.line : matches.length === 1 ? matches[0] : null,
-            candidateLines: same ? [+r.line] : matches, causalSha: !blobs[r.file] ? ref : null,
+            causalSha: !blobs[r.file] ? ref : null,
             reason: !blobs[r.file] ? 'Absent at integrated pin; zero migration credit' : same ?
                 'Same snippet/coordinate; ownership remains open' : matches.length === 1 ?
                 'Unique snippet successor; symbol adoption remains open' : 'Changed or ambiguous source; requires adopter review',
-            proofArtifacts: [], creditedRemovedLines: 0};
+            proofArtifacts: []};
     });
     refreshed.sort((a, b) => JSON.stringify(a.id).localeCompare(JSON.stringify(b.id)) || a.category.localeCompare(b.category));
+    successors.sort((a,b)=>JSON.stringify(a).localeCompare(JSON.stringify(b)));
     const out = options['--out'];
     if (fs.existsSync(out)) throw Error('Pin output must be a fresh directory');
     fs.mkdirSync(out, {recursive: true});
@@ -85,24 +89,13 @@ export function pin(args) {
         predecessorMainSha: revisions[0], sourceBlobDigests: blobs,
         excludedPreexistingChangeShas: str('rev-list', `${revisions[0]}..${ref}`).split('\n').sort(), artifacts: []};
     fs.writeFileSync(path.join(out, 'rows.json'), data);
+    fs.writeFileSync(path.join(out, 'successor-candidates.json'), JSON.stringify(successors,null,2)+'\n');
     fs.writeFileSync(path.join(out, 'pin.json'), JSON.stringify(result, null, 2) + '\n');
     fs.writeFileSync(path.join(out, 'refresh.json'), JSON.stringify({rows: rows.length, files: files.length,
-        changedOrAmbiguous: refreshed.filter(r => r.status === 'Open' && !r.successorLine).length,
+        changedOrAmbiguous: successors.filter(r => !r.successorLine).length,
         removedBeforeBaseline: refreshed.filter(r => r.status === 'RemovedBeforeBaseline').map(r => r.id),
         claimedProductionSavings: 0}, null, 2) + '\n');
     return result;
-}
-function owner(r) {
-    const f = path.basename(r.file, '.kt');
-    if (/Marquee|Motion|Spring|Elastic|Momentum/.test(f)) return 'U01';
-    if (/Expansion/.test(f)) return 'U02';
-    if (/Shape|Contour|Silhouette|SplitContact|Pixels/.test(f)) return 'U03';
-    if (/Shadow|Layer|Overlay/.test(f)) return 'U04';
-    if (/Morph|Popup|HomeBackdrop/.test(f)) return 'U07';
-    if (/Artwork|Reveal|Loading|Ink|Blend/.test(f)) return 'U08';
-    if (/Selection/.test(f)) return 'U09';
-    if (/Player|Queue|LocalicaScreen/.test(f)) return 'U10';
-    return r.category === '2-spacing' ? 'U11' : 'U06';
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
     try { pin(process.argv.slice(2)); } catch (e) { console.error(e.message); process.exitCode = 2; }

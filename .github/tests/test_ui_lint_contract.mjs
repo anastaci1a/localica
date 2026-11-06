@@ -62,3 +62,11 @@ test('source-bound bootstrap, substitution, relocation and deletion through real
         result=invoke(['check','--base','HEAD','--head',head,'--stage','0','--completed-steps','completed.json',...common]);assert.equal(result.status,2);
     } finally { fs.rmSync(dir,{recursive:true,force:true}); }
 });
+
+test('source-only production patches trigger policy contracts', () => {
+    const workflow=fs.readFileSync(new URL('../workflows/tooling-contracts.yml',import.meta.url),'utf8');
+    for (const section of workflow.split('  pull_request:')) {
+        assert.match(section, /app\/src\/main\/\*\*/);
+    }
+    assert.match(workflow, /check-ui-lint/);
+});
