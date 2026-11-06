@@ -256,3 +256,5 @@ The generated `app/lint-baseline.xml` records inherited debt. Initial bootstrap 
 Frame export schema 2 retains schema 1 keys and adds an allow-listed scenario tag, frozen build source, capture ID, clock bounds and per-Window identities. Each raw frame sample contains app VSYNC timestamp, work duration, refresh budget and nullable deadline in nanoseconds. Native presentation and tail acknowledgment remain unavailable from FrameMetrics.
 
 The optimized distribution variant is profileable for explicit Perfetto capture. Export occurs after Stop through the existing diagnostics share sheet. No frame listener or trace capture starts before the user chooses Start.
+
+Builds record the checkout’s full Git SHA. For a source archive without Git metadata, pass `-PlocalicaSourceSha=FULL_SOURCE_SHA` from its verified provenance. The compatibility builder supplies the immutable archived candidate SHA.
