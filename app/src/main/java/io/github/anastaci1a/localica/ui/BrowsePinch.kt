@@ -6,7 +6,6 @@ import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.graphics.layer.GraphicsLayer
 import kotlin.math.max
 import kotlin.math.roundToInt
-import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.calculateCentroid
@@ -61,7 +60,14 @@ internal data class BrowseZoomAnchor(val route: BrowseRoute, val style: BrowseSt
 @Stable
 internal class BrowsePinchMotion {
     val beyondBounds = BrowseBeyondBounds()
-    val progress = Animatable(1f)
+    var progress by mutableStateOf(BrowsePinchProgress(1f))
+        private set
+    /** Retired layout keeps its terminal clock while the next transaction starts at zero. */
+    fun beginGeometry() {
+        tracking?.cancel(); tracking = null
+        caughtUp = false
+        progress = BrowsePinchProgress(0f)
+    }
     var held by mutableStateOf(false)
     var fingerProgress = 0f
     var tracking: kotlinx.coroutines.Job? = null
@@ -71,34 +77,20 @@ internal class BrowsePinchMotion {
      * a tween on every event kept the view a tween behind the fingers (#520). */
     fun followFingers(scope: CoroutineScope) {
         if (!held || capturing || !destinationReady) return
+        val clock = progress
+        clock.follow(fingerProgress)
         if (caughtUp) {
             tracking?.cancel()
-            // A snap animation writes inside the next frame callback, before that frame's
-            // composition and layout; a write after the frame callback lands a frame late.
+            // Publish pointer-driven reversals before the frame begins. A snap animation's
+            // frame callback can run after layout has already consumed the preceding value.
             tracking = scope.launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) {
-                progress.animateTo(fingerProgress, androidx.compose.animation.core.snap())
+                clock.snapTo(fingerProgress)
             }
             return
         }
         if (tracking?.isActive == true) return
         tracking = scope.launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) {
-            val from = progress.value
-            var start = -1L
-            do {
-                var t = 0f
-                var update: kotlinx.coroutines.Job? = null
-                withFrameNanos { now ->
-                    // Write inside the frame callback, before both layout and drawing observe it.
-                    // Resuming the outer coroutine first lets those phases see different progress.
-                    if (start < 0) start = now - PinchFrameNanos
-                    t = ((now - start) / 1_000_000f / PinchCatchUpMillis).coerceAtMost(1f)
-                    update = launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) {
-                        progress.snapTo(from + (fingerProgress - from) * androidx.compose.animation.core.LinearOutSlowInEasing.transform(t))
-                    }
-                }
-                update?.join()
-            } while (t < 1f)
-            caughtUp = true
+            clock.catchUp { if (progress === clock) caughtUp = true }
         }
     }
     var capture: kotlinx.coroutines.Job? = null
@@ -226,6 +218,11 @@ internal class BrowsePinchMotion {
         clearTransaction()
     }
     var pixelDensity = 1f
+    fun resolveHover(key: Any?, current: HoverGeometry, geometryProgress: Float = progress.value): HoverGeometry {
+        if (key == null || visualSource == null) return current
+        val captured = frozen[key]?.content?.hover ?: return current
+        return interpolateHoverGeometry(captured, current, geometryProgress)
+    }
     fun highlightSize(key: Any, index: Int, target: androidx.compose.ui.geometry.Size): androidx.compose.ui.geometry.Size {
         if (visualSource == null) return target
         val inset = (BrowseCellGeometry(sourceColumns).cardInset * pixelDensity).roundToInt()
@@ -288,7 +285,6 @@ internal fun pinchContentTranslation(sourceStart: Float, targetStart: Float,
 
 /** Linear finger distance; returning to the starting span restores the source. */
 internal const val PinchCatchUpMillis = 100f
-private const val PinchFrameNanos = 16_666_667L
 
 internal fun pinchProgress(scale: Float, outward: Boolean): Float =
     ((if (outward) scale - 1f else 1f - scale) / if (outward) .8f else .45f).coerceIn(0f, 1f)
@@ -495,7 +491,7 @@ internal fun Modifier.browsePinch(enabled: Boolean, motion: BrowsePinchMotion, s
                 motion.anchorIndex = first.index - 1; motion.anchorTop = first.offset.y.toFloat()
                 motion.rowHeight = first.size.height.toFloat()
             }
-            scope.launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) { motion.progress.snapTo(0f) }
+            motion.beginGeometry()
             val nearest = gridState.layoutInfo.visibleItemsInfo.filter { it.key != "browser-notice" }.minByOrNull {
                 val x = it.offset.x + sourceInset + it.size.width / 2f - midpoint.x
                 val y = it.offset.y + it.size.height / 2f - midpoint.y
