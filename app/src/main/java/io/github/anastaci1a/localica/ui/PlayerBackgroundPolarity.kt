@@ -55,6 +55,11 @@ internal data class ArtworkBackgroundRole(val identity: Any, val visual: PlayerV
     val incoming: Boolean = true, val soft: Boolean = false)
 /** The grade of one prepared backdrop role: the ink its own region wants and the lightness shift that ink needs (#576). */
 internal data class BackdropRoleGrade(val lightInk: Boolean, val shift: Float)
+/** Prepared destinations, with no animation state or clock of their own. */
+internal data class PlayerLyricsInk(val ordinary: Boolean, val lyrics: Boolean,
+    val shifts: Map<Any, Pair<Float, Float>>) {
+    fun shift(identity: Any?, progress: Float): Float? = shifts[identity]?.let { (from, to) -> from + (to - from) * progress }
+}
 internal val LocalArtworkBackgroundRole = staticCompositionLocalOf<Any?> { null }
 internal data class ArtworkBackgroundFrame(val roles: List<ArtworkBackgroundRole>,
     val frozenVisible: Boolean, val liveBlur: Boolean, val transitioning: Boolean,
@@ -95,6 +100,11 @@ internal data class PlayerBackgroundGeometry(val size: Size, val cover: Rect, va
      */
     var lightMix by mutableFloatStateOf(1f); private set
     fun presentLightMix(value: Float) { if (lightMix != value) lightMix = value }
+    // Both destinations are measured before lyrics move. The moving composite's
+    // asynchronous contrast decision cannot supply the destination of its own ease.
+    private var preparedLyricsInk by mutableStateOf<PlayerLyricsInk?>(null)
+    internal val lyricsInk: PlayerLyricsInk? get() = if (pinned == null) preparedLyricsInk else null
+    internal fun presentLyricsInk(value: PlayerLyricsInk?) { preparedLyricsInk = value }
     /**
      * Per backdrop role (#576/#578): the ink that role's own region wants and its lightness shift. Each role is graded
      * for itself, so a crossfade between two covers blends two correctly graded backdrops and a song change never
@@ -136,6 +146,7 @@ internal data class PlayerBackgroundGeometry(val size: Size, val cover: Rect, va
         if (measured !== next) measured = next
     }
     fun detach() {
+        preparedLyricsInk = null
         coordinates.clear(); measured = emptyMap(); frame = null; backdrops.clear(); roleGrades = emptyMap(); visualGrades.clear(); destinationLightInk = null; artworkClock = 1f
         unavailable(PlayerBackgroundUnavailable.Unmeasured)
     }
@@ -198,7 +209,8 @@ private fun BackgroundSampleRole.paintReady(geometry: PlayerBackgroundGeometry, 
  * per-pixel readability guarantee. Geometry changes reuse cached immutable pixel arrays;
  * a blend frame only mixes prepared RGB metadata, without filtering, Bitmap reads or GPU copies. */
 @Composable internal fun ObservePlayerBackgroundPolarity(owner: PlayerBackgroundPolarityState,
-    geometry: PlayerBackgroundGeometry?, unsupported: PlayerBackgroundUnavailable?, requestedTone: GlassTone) {
+    geometry: PlayerBackgroundGeometry?, unsupported: PlayerBackgroundUnavailable?, requestedTone: GlassTone,
+    lyricsEndpoints: Pair<PlayerBackgroundGeometry, PlayerBackgroundGeometry>? = null) {
     val frame = owner.frame
     // Grading and the transition's destination ink need only each role's own prepared pixels, not a settled or
     // unblurred composite, so they are available all through an artwork change (#578).
@@ -225,6 +237,30 @@ private fun BackgroundSampleRole.paintReady(geometry: PlayerBackgroundGeometry, 
     }
     val request = if (gradeReason == null && geometry != null && frame != null)
         BackgroundRequest(geometry, frame.roles.map { BackgroundSampleRole(it.identity, it.visual, requireNotNull(owner.backdrops[it.identity])) }) else null
+    // Endpoint geometry is independent of lyrics visibility, so this preparation
+    // is not cancelled and restarted on every animation frame.
+    val endpointRequests = if (request != null && lyricsEndpoints != null && reason == null && frame?.transitioning == false)
+        lyricsEndpoints.toList().map { BackgroundRequest(it, request.roles) } else null
+    val endpointWeights = if (endpointRequests != null) frame?.roles?.map { it.weight } else null
+    LaunchedEffect(endpointRequests, endpointWeights) {
+        owner.presentLyricsInk(null)
+        if (endpointRequests != null) {
+            val endpoints = withContext(Dispatchers.Default) {
+                endpointRequests.map { endpoint ->
+                    val sample = prepareBackground(endpoint) ?: return@withContext null
+                    if (endpoint.roles.any { !it.paintReady(endpoint.geometry, requestedTone) }) return@withContext null
+                    // A lyrics transition does not change artwork ownership. Artwork
+                    // transitions continue to use their existing blend clock below.
+                    val choice = backgroundSingleContrast(sample.samples.zip(requireNotNull(endpointWeights)), sample.weights)
+                        ?: return@withContext null
+                    choice.lightInk to gradeRoles(sample)
+                }
+            }
+            currentCoroutineContext().ensureActive()
+            if (endpoints != null) owner.presentLyricsInk(PlayerLyricsInk(endpoints[0].first, endpoints[1].first,
+                endpoints[0].second.mapValues { (identity, grade) -> grade.shift to requireNotNull(endpoints[1].second[identity]).shift }))
+        }
+    }
     var prepared by remember { mutableStateOf<PreparedBackground?>(null) }
     var failed by remember { mutableStateOf<BackgroundRequest?>(null) }
     val preparationBarrier = LocalPlayerBackgroundPreparationBarrier.current
