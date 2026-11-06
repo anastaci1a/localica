@@ -52,7 +52,10 @@ android {
     lint { baseline = file("lint-baseline.xml") }
     buildFeatures { compose = true; buildConfig = true }
     defaultConfig {
-        val sourceSha = providers.exec { commandLine("git", "rev-parse", "HEAD") }.standardOutput.asText.get().trim()
+        val sourceSha = providers.gradleProperty("localicaSourceSha").orElse(
+            providers.exec { commandLine("git", "rev-parse", "HEAD") }.standardOutput.asText
+        ).get().trim()
+        require(sourceSha.matches(Regex("[a-f0-9]{40}"))) { "A full source SHA is required" }
         buildConfigField("String", "SOURCE_SHA", "\"$sourceSha\"")
     }
     // Platform-free helpers are test-only, shared by host contracts and device callers.
