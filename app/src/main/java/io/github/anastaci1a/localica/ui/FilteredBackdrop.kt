@@ -160,9 +160,9 @@ private fun OpticalBackdrop(modifier: Modifier, source: FrostedBackdrop, locatio
                         }
                     }
                 } }
-                output.renderEffect = renderer.effect(average,
+                output.renderEffect = if (android.os.Build.VERSION.SDK_INT >= 33) renderer.effect(average,
                     (if (average.opaque) covered.width * covered.height else footprint.width * footprint.height) /
-                        (padded.width.toFloat() * padded.height))
+                        (padded.width.toFloat() * padded.height)) else null
                 output.record(size = IntSize(1, 1)) { drawLayer(result) }
             }
             if (blend < 1f) reduce(source, areaSource, averageSource, areaSourceRenderer)
