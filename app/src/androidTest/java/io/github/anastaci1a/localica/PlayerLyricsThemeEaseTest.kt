@@ -10,7 +10,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.foundation.background
-import androidx.compose.material3.LocalContentColor
 import androidx.test.platform.app.InstrumentationRegistry
 import java.io.File
 import androidx.compose.ui.graphics.asImageBitmap
@@ -134,13 +133,17 @@ class PlayerLyricsThemeEaseTest {
                 abs(pixel - expected) > .04f) failures += rows.last()
         }
         openLyrics(true); capture("open", 40)
+        if (inkComposition?.lyricsProgress != 1f) failures += "opening did not reach the lyrics endpoint"
         compose.waitUntil(10000) { owner.decision.confidence == PlayerBackgroundConfidence.Current }
         capture("open-settled", 4)
         openLyrics(false); capture("close", 40)
+        if (inkComposition?.lyricsProgress != 0f) failures += "closing did not reach the player endpoint"
         compose.waitUntil(10000) { owner.decision.confidence == PlayerBackgroundConfidence.Current }
         capture("close-settled", 4)
         openLyrics(true); capture("partial-open", 12)
+        if (requireNotNull(inkComposition).lyricsProgress !in .05f..0.95f) failures += "reversal did not interrupt intermediate progress"
         openLyrics(false); capture("reverse", 40)
+        if (inkComposition?.lyricsProgress != 0f) failures += "reversal did not return to the player endpoint"
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val root = InstrumentationRegistry.getArguments().getString("additionalTestOutputDir")?.let(::File)
             ?: requireNotNull(instrumentation.targetContext.getExternalFilesDir(null))
