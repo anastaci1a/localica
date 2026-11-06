@@ -1,0 +1,35 @@
+name: Revision-keyed Android system image cache
+description: Restore before emulator setup; save only the matching complete installed revision afterwards.
+inputs:
+  api:
+    required: true
+    description: Supported emulator API (26 or 36)
+  mode:
+    required: false
+    default: restore
+    description: restore before the emulator action, save after it
+outputs:
+  cache-hit:
+    description: Whether the exact image revision was restored
+    value: ${{ steps.restore.outputs.cache-hit }}
+runs:
+  using: composite
+  steps:
+    - name: Resolve image revision
+      id: image
+      shell: bash
+      env:
+        IMAGE_API: ${{ inputs.api }}
+        CACHE_MODE: ${{ inputs.mode }}
+      run: python3 .github/emulator-system-image.py "$CACHE_MODE" --api "$IMAGE_API"
+    - uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+      id: restore
+      if: inputs.mode == 'restore'
+      with:
+        path: ${{ steps.image.outputs.path }}
+        key: ${{ steps.image.outputs.key }}
+    - uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+      if: inputs.mode == 'save' && steps.image.outputs.save == 'true'
+      with:
+        path: ${{ steps.image.outputs.path }}
+        key: ${{ steps.image.outputs.key }}
