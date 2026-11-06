@@ -90,19 +90,17 @@ Fresh `native-live-evidence` is always uploaded, including on failure. Existing 
 
 ### Measured native shards
 
-The eight native shards per API assign whole classes by measured duration, longest first. The [duration profile](../.github/test-evidence/class-durations.csv) is the per-class total of the complete device reports of v0.32.0's full run 41939345197 (issue #591; earlier profile: runs 41771741272, 41766949579 and 41762838145, issue #550).
+The eight native shards per API assign whole classes by measured duration, longest first. The [duration profile](../.github/test-evidence/class-durations.csv) records v0.33.1's complete run 42085439724 (#598). Previous profiles used v0.33.0 run 41980502454 (#598), v0.32.0 run 41939345197 (#591), and earlier measurements (#550).
 
-Rebuild it with `python3 .github/test-evidence/refresh_durations.py --output .github/test-evidence/class-durations.csv RUN_DIR...`, where each RUN_DIR holds one run's downloaded `device-reports-api-*` artifacts (several runs give the per-class median).
-
-A new class with no entry is budgeted at the median per-method cost, so refresh after adding slow classes: an unmeasured 6-minute class unbalanced a v0.32.0 shard by several minutes.
-
-Refresh it from the latest full run's `device-reports-*` artifacts when shard times drift; the budget is build 10 minutes, slowest shard 22 minutes, whole run 40 minutes.
+Each complete run generates a profile in `complete-verification` for the next [release preparation](#release-preparation). The refresh helper also accepts multiple run directories and takes each class's median duration. Refresh after adding slow classes: an unmeasured six-minute class unbalanced a v0.32.0 shard. The budget is build 10 minutes, slowest shard 22 minutes, whole run 40 minutes.
 
 Each device artifact retains `native-shard-plan.json`: source/profile hashes, class assignments, expected methods, estimated loads and fallback costs. New classes use the measured median per-method cost. Historical ScrollPerformance timings apply only when its existing opt-in is enabled; ordinary runs budget its recorded assumptions separately.
 
 Risk preflight retains its existing method partition. Weighted remainder shards exclude those risk classes. The summary still requires every API-qualified method exactly once, including recorded skips; missing, extra, repeated or failed outcomes cannot certify the full suite.
 
 ### Opt-in prototypes
+
+Each prototype occupies at most two runners: one chain runs build and both compatibility checks; the other runs both focused APIs. A failed check does not skip later checks in its chain. Release coordination still holds new prototype dispatches until release shards start, reducing competition for the runner pool.
 
 The opt-in `prototype.yml` lane builds an explicitly uncertified development APK through manual dispatch or an explicit reusable-workflow call. Select up to 73 affected behavior classes (4096 characters maximum including the three mandatory regression classes) and describe coverage and limitations.
 
@@ -176,6 +174,12 @@ The native job splits each API suite into eight AndroidJUnitRunner shards (`numS
 
 API 36 uses explicit `lavapipe`, 720×1280 at 280 dpi, and normal system animations: automatic software/SwiftShader caused rendering crashes. Zero-duration system transitions stalled launcher/Back/picker flows. Compose assertions control their own clock. Keep Actions pinned by commit.
 
+Before instrumentation, the bounded emulator readiness gate checks boot completion, package-manager response, unlocked launcher focus and three stable screenshots after display resizing. It preserves observations in `emulator-readiness.json` and fails after 120 seconds. System images use exact revision cache keys; AVD userdata and snapshots are not cached.
+
+API 26 disables the optional GLDMA transfer path with `-feature -GLDMA`. This targets the `goldfish_pipe_dma_clear_lock` guest-kernel panic observed during repeated display captures (#607). Renderer, memory, capture coverage and assertions remain unchanged. Repeated native verification determines whether this mitigation is sufficient.
+
+Full and focused native jobs stream guest kernel messages into workflow logs and retain the emulator crash database on failure when present. An absent host crash report does not rule out a guest reboot. Preserve the original test logs and host diagnostics when investigating device loss.
+
 On disposable GitHub-hosted API 26 emulators, the native runner temporarily disables preinstalled Google Search before instrumentation. Its unrelated JobScheduler crash can obstruct Localica. Cleanup restores its prior enabled state after verifying device and package ownership. Google Search data is preserved. Physical devices are untouched. Localica crashes and all assertions remain fatal.
 
 `ANDROID_DEBUG_KEYSTORE` holds the base64 development key. CI restores it via `LOCALICA_DEBUG_KEYSTORE` and verifies the APK certificate. Back up the key outside Git. Local builds otherwise use the normal debug key. PRs use a disposable key.
@@ -201,6 +205,10 @@ Update app version/name and increment `versionCode` for every distributed update
 ### Step 2
 
 Review [previews](#previews), current docs and resolved issues. Commit and push.
+
+For every release, refresh `.github/test-evidence/class-durations.csv` from the preceding release's complete producer run before freezing the candidate. Download its `complete-verification` artifact and copy the generated profile. Record the source run in the commit. Never alter the candidate after its exact-tree gate.
+
+For older producers, download `device-reports-api-*` and run `.github/test-evidence/refresh_durations.py --output .github/test-evidence/class-durations.csv <download-directory>`.
 
 ### Step 3
 

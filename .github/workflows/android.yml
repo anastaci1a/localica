@@ -262,6 +262,11 @@ jobs:
           TEST_APKS_SHA256: ${{ needs.test-apks.outputs.test-apks-sha256 }}
         run: |
           python3 .github/shared-test-apks.py verify --bundle native-test-apks --digest "$TEST_APKS_SHA256"
+      - name: Restore the exact SDK system image revision
+        id: emulator-image-cache
+        uses: ./.github/actions/system-image-cache
+        with:
+          api: ${{ matrix.api }}
       - uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2
         with:
           api-level: ${{ matrix.api }}
@@ -269,7 +274,7 @@ jobs:
           target: ${{ matrix.api == 36 && 'default' || 'google_apis' }}
           arch: x86_64
           profile: pixel_2
-          emulator-options: -no-window -gpu ${{ matrix.api == 36 && 'lavapipe' || 'swiftshader_indirect' }} -no-snapshot -noaudio -no-boot-anim -memory 3072
+          emulator-options: -no-window -gpu ${{ matrix.api == 36 && 'lavapipe' || 'swiftshader_indirect' }} -no-snapshot -noaudio -no-boot-anim -memory 3072 -show-kernel ${{ matrix.api == 26 && '-feature -GLDMA' || '' }}
           # Keep API 36 system transitions at normal speed while verifying Back and DocumentsUI.
           # Its cold CI launcher stalls with forced zero-duration transitions; Compose tests own their clock.
           disable-animations: ${{ matrix.api < 36 }}
@@ -278,8 +283,21 @@ jobs:
           script: |
             adb shell wm size ${{ matrix.api == 36 && '720x1280' || 'reset' }}
             adb shell wm density ${{ matrix.api == 36 && '280' || 'reset' }}
-            sleep 60
+            python3 .github/emulator-readiness.py
             LOCALICA_SHARD_COUNT=$LOCALICA_DEVICE_SHARDS bash .github/run-device-tests.sh
+      - name: Cache the installed SDK system image
+        if: always() && steps.emulator-image-cache.outputs.cache-hit != 'true'
+        uses: ./.github/actions/system-image-cache
+        with:
+          api: ${{ matrix.api }}
+          mode: save
+      - name: Preserve emulator readiness observations
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: emulator-readiness-${{ github.job }}-${{ strategy.job-index }}
+          path: emulator-readiness.json
+          if-no-files-found: warn
       - name: Preserve native monitoring evidence
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
@@ -312,6 +330,8 @@ jobs:
         if: failure()
         with:
           name: emulator-crashes-api-${{ matrix.api }}-shard-${{ matrix.shard }}
+          path: /tmp/android-runner/emu-crash-*/
+          if-no-files-found: warn
 
 
   device-tests-summary:
@@ -350,6 +370,8 @@ jobs:
           test "${{ needs.device-tests.result }}" = success
           test "${{ needs.static-checks.result }}" = success
 
+      - name: Refresh the timing profile for the next release
+        run: python3 .github/test-evidence/refresh_durations.py --output class-durations.csv shard-reports
       - name: Record complete verification provenance
         env:
           DELIVERY_APK_SHA256: ${{ needs.build.outputs.delivery-apk-sha256 }}
@@ -361,6 +383,7 @@ jobs:
             verification.json
             union-api-26.json
             union-api-36.json
+            class-durations.csv
           if-no-files-found: error
 
   compatibility:
@@ -400,19 +423,37 @@ jobs:
           sudo rm -rf /usr/share/dotnet
       - name: Build and inspect private compatibility APKs sequentially
         run: bash .github/compatibility/build.sh
+      - name: Restore the exact SDK system image revision
+        id: emulator-image-cache
+        uses: ./.github/actions/system-image-cache
+        with:
+          api: ${{ matrix.api }}
       - uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2
         with:
           api-level: ${{ matrix.api }}
           target: ${{ matrix.api == 36 && 'default' || 'google_apis' }}
           arch: x86_64
           profile: pixel_2
-          emulator-options: -no-window -gpu ${{ matrix.api == 36 && 'lavapipe' || 'swiftshader_indirect' }} -no-snapshot -noaudio -no-boot-anim -memory 3072
+          emulator-options: -no-window -gpu ${{ matrix.api == 36 && 'lavapipe' || 'swiftshader_indirect' }} -no-snapshot -noaudio -no-boot-anim -memory 3072 ${{ matrix.api == 26 && '-feature -GLDMA' || '' }}
           disable-animations: ${{ matrix.api < 36 }}
           script: |
             adb shell wm size ${{ matrix.api == 36 && '720x1280' || 'reset' }}
             adb shell wm density ${{ matrix.api == 36 && '280' || 'reset' }}
-            sleep 60
+            python3 .github/emulator-readiness.py
             bash .github/compatibility/run.sh
+      - name: Cache the installed SDK system image
+        if: always() && steps.emulator-image-cache.outputs.cache-hit != 'true'
+        uses: ./.github/actions/system-image-cache
+        with:
+          api: ${{ matrix.api }}
+          mode: save
+      - name: Preserve emulator readiness observations
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: emulator-readiness-${{ github.job }}-${{ strategy.job-index }}
+          path: emulator-readiness.json
+          if-no-files-found: warn
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:
@@ -556,19 +597,37 @@ jobs:
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
+      - name: Restore the exact SDK system image revision
+        id: emulator-image-cache
+        uses: ./.github/actions/system-image-cache
+        with:
+          api: ${{ matrix.api }}
       - uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2
         with:
           api-level: ${{ matrix.api }}
           target: ${{ matrix.api == 36 && 'default' || 'google_apis' }}
           arch: x86_64
           profile: pixel_2
-          emulator-options: -no-window -gpu ${{ matrix.api == 36 && 'lavapipe' || 'swiftshader_indirect' }} -no-snapshot -noaudio -no-boot-anim -memory 3072
+          emulator-options: -no-window -gpu ${{ matrix.api == 36 && 'lavapipe' || 'swiftshader_indirect' }} -no-snapshot -noaudio -no-boot-anim -memory 3072 ${{ matrix.api == 26 && '-feature -GLDMA' || '' }}
           disable-animations: ${{ matrix.api < 36 }}
           script: |
             adb shell wm size ${{ matrix.api == 36 && '720x1280' || 'reset' }}
             adb shell wm density ${{ matrix.api == 36 && '280' || 'reset' }}
-            sleep 60
+            python3 .github/emulator-readiness.py
             bash .github/distribution-smoke.sh artifacts/app-debug.apk distribution-smoke-logcat.txt
+      - name: Cache the installed SDK system image
+        if: always() && steps.emulator-image-cache.outputs.cache-hit != 'true'
+        uses: ./.github/actions/system-image-cache
+        with:
+          api: ${{ matrix.api }}
+          mode: save
+      - name: Preserve emulator readiness observations
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: emulator-readiness-${{ github.job }}-${{ strategy.job-index }}
+          path: emulator-readiness.json
+          if-no-files-found: warn
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:
