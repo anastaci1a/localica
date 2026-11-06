@@ -98,7 +98,7 @@ internal class BrowsePinchParagraph {
 /** The measured paragraphs themselves are painted, so endpoint rounding and the
  * visible glyphs share one layout. Artwork keeps its existing composition identity. */
 @Composable
-internal fun BrowsePinchText(paragraph: BrowsePinchParagraph, label: String?, progress: Float,
+internal fun BrowsePinchText(paragraph: BrowsePinchParagraph, label: String?, progress: () -> Float,
     color: Color = Color.Unspecified) {
     val foreground = LocalContentColor.current
     Canvas(Modifier.fillMaxSize().clipToBounds().semantics {
@@ -108,7 +108,7 @@ internal fun BrowsePinchText(paragraph: BrowsePinchParagraph, label: String?, pr
         }
     }) {
         val (source, target) = paragraph.layouts ?: return@Canvas
-        drawBrowsePinchParagraph(source, target, progress, size.width, color, foreground)
+        drawBrowsePinchParagraph(source, target, progress(), size.width, color, foreground)
     }
 }
 

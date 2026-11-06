@@ -31,7 +31,9 @@ internal fun BrowseItemLayout(item: BrowserItem, style: BrowseStyle, geometry: B
     outline: MediaItemOutlineHolder? = null) {
     val gallery = style.presentation != Presentation.List
     val from = pinch?.visualSource
-    val progress = if (from != null) requireNotNull(pinch).progress.value else 1f
+    val geometryClock = pinch?.progress.takeIf { from != null }
+    val geometryProgress = remember(geometryClock) { { geometryClock?.value ?: 1f } }
+    val progress = geometryProgress()
     val measureItem = rememberBrowseItemMeasure(item, trackNumber, showInformation, inheritedInformation, itemIndex, mutablePosition)
     val foreground = androidx.compose.material3.LocalContentColor.current
     val secondary = MaterialTheme.colorScheme.onSurfaceVariant
@@ -102,14 +104,14 @@ internal fun BrowseItemLayout(item: BrowserItem, style: BrowseStyle, geometry: B
         // paragraph reveals/reflows it across successive widths when a new row enters.
         // Measure ordinary text at its final width; explicit pinch text owns its own motion.
         Box(Modifier.reveal().artworkTextReveal(gatedText, { titleLayout }, { artCorner.floatValue }).testTag("browse-text-${item.key}")) {
-            if (measureEndpoints != null) BrowsePinchText(titleParagraph, item.title, progress)
+            if (measureEndpoints != null) BrowsePinchText(titleParagraph, item.title, geometryProgress)
             else Text(item.title, style = MaterialTheme.typography.titleMedium.copy(fontSize = titleSize.sp, lineHeight = titleLine.sp,
                 fontWeight = if (numbered(style)) androidx.compose.ui.text.font.FontWeight.Normal else MaterialTheme.typography.titleMedium.fontWeight),
                 maxLines = style.browseTitleLines(), overflow = TextOverflow.Ellipsis, onTextLayout = { titleLayout = it })
         }
         Box(Modifier.reveal().artworkTextReveal(gatedText, { informationLayout }, { artCorner.floatValue }, loadingInformation).testTag("browse-info-${item.key}")) {
             if (measureEndpoints != null) BrowsePinchText(informationParagraph,
-                if (showInformation) item.information(style, inheritedInformation) else null, progress,
+                if (showInformation) item.information(style, inheritedInformation) else null, geometryProgress,
                 if (trailing(style)) MaterialTheme.colorScheme.onSurfaceVariant else androidx.compose.ui.graphics.Color.Unspecified)
             else if (showInformation) item.information(style, inheritedInformation)?.let { Text(it,
                 color = if (trailing(style)) MaterialTheme.colorScheme.onSurfaceVariant else androidx.compose.ui.graphics.Color.Unspecified,
@@ -136,16 +138,17 @@ internal fun BrowseItemLayout(item: BrowserItem, style: BrowseStyle, geometry: B
         }
     }) { children, constraints ->
         if (measureEndpoints != null) {
+            val p = geometryProgress()
             val width = (constraints.maxWidth - geometry.contentInset.dp.roundToPx() * 2).coerceAtLeast(0)
             val (source, target) = measureEndpoints(width)
             titleParagraph.layouts = source.title to target.title
             informationParagraph.layouts = source.information to target.information
-            artCorner.floatValue = source.artCorner + (target.artCorner - source.artCorner) * progress.coerceIn(0f, 1f)
+            artCorner.floatValue = source.artCorner + (target.artCorner - source.artCorner) * p.coerceIn(0f, 1f)
             // One float rectangle per part; truncating size and position separately made
             // cover edges wobble by a pixel against the fractional row translation (#505).
             val rtl = layoutDirection == androidx.compose.ui.unit.LayoutDirection.Rtl
             fun rect(x: Int, y: Int, width: Int, height: Int, x2: Int, y2: Int, width2: Int, height2: Int) =
-                motionPixelRect(browsePinchPartRect(x, y, width, height, x2, y2, width2, height2, progress)
+                motionPixelRect(browsePinchPartRect(x, y, width, height, x2, y2, width2, height2, p)
                     .let { if (rtl) it.mirrored(constraints.maxWidth.toFloat()) else it })
             val artRect = rect(source.artX, source.artY, source.art, source.art, target.artX, target.artY, target.art, target.art)
             val textRect = rect(source.titleX, source.titleY, source.title.size.width, source.title.size.height,
@@ -160,7 +163,7 @@ internal fun BrowseItemLayout(item: BrowserItem, style: BrowseStyle, geometry: B
             val actions = children[3].measure(menuRect.constraints())
             children.drop(4).forEach { it.measure(Constraints.fixed(0, 0)) }
             // The outline follows its parts: both endpoint outlines, interpolated like their rectangles.
-            if (outline != null) mediaItemOutlineLerp(source.outline(density), target.outline(density), progress).let {
+            if (outline != null) mediaItemOutlineLerp(source.outline(density), target.outline(density), p).let {
                 outline.value = if (rtl) it.mirrored(constraints.maxWidth.toFloat()) else it
             }
             return@Layout layout(constraints.maxWidth, target.height) {

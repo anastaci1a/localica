@@ -56,9 +56,12 @@ private fun capturePopupPixelsObserved(rule: ComposeContentTestRule, node: Seman
 
 /** An unrelated opaque marker proves which compositor frame a screenshot contains. */
 @androidx.compose.runtime.Composable
-internal fun PresentationMarker(modifier: Modifier = Modifier, stage: () -> Int) {
+internal fun PresentationMarker(modifier: Modifier = Modifier, composeStage: Boolean = false, stage: () -> Int) {
+    // Layout inputs await composition on a paused clock. A draw-only token can
+    // otherwise appear in an earlier native frame with the previous layout.
+    val composedStage = if (composeStage) stage() else 0
     androidx.compose.foundation.Canvas(modifier.size(8.dp)) {
-        drawRect(androidx.compose.ui.graphics.Color(stage() * 8 / 255f, 1f, 0f))
+        drawRect(androidx.compose.ui.graphics.Color((if (composeStage) composedStage else stage()) * 8 / 255f, 1f, 0f))
     }
 }
 

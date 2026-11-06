@@ -255,7 +255,9 @@ Album carousels (Home pins and an artist's album choices) are one dense gallery 
 
 In all lists, including queues and album details, pinch outward through Smallest list → Small list → Tracklist where offered → Compact list → Normal list → Large list → Gallery 5 → 4 → 3 → 2 → 1, and inward to reverse.
 
-Change one adjacent view per gesture, requiring all fingers to lift before another step. A 4% span change picks the direction. Geometry then follows the full finger distance, easing out that gap over 100 ms. Reversing restores items virtualized out by the destination. All text draws below a separate artwork pass. Within each pass earlier items draw on top.
+Change one adjacent view per gesture, requiring all fingers to lift before another step. A 4% span change picks the direction. The first presented frame keeps the source, then geometry catches up to the full finger distance over 100 ms.
+
+Shared pinch geometry carries the captured selection lift into both live and retained items. Reversing restores items virtualized out by the destination. All text draws below a separate artwork pass. Within each pass earlier items draw on top.
 
 Pinches during settlement retain the shown progress. Reversals reuse the frozen endpoints. Further adjacent steps preserve their input until the preceding handoff permits a fresh capture, including gestures already released. Modal interruption discards pending steps.
 

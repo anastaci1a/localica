@@ -147,7 +147,7 @@ internal class PinchFadeFocus {
     }
 }
 
-private data class RetainedPinchPlacement(val item: FrozenBrowseItem, val origin: Offset,
+private data class RetainedPinchPlacement(val key: Any, val item: FrozenBrowseItem, val origin: Offset,
     val targetWidth: Float, val targetHeight: Float, val alpha: Float, val index: Int,
     val geometryProgress: Float)
 
@@ -189,9 +189,17 @@ internal fun Modifier.pinchRetainedOverlay(motion: BrowsePinchMotion, grid: Lazy
     val averageProgress = glassAverageProgress()
     val blur = android.os.Build.VERSION.SDK_INT >= 33
     DisposableEffect(graphics) { onDispose { groups.forEach { graphics.releaseGraphicsLayer(it.output); graphics.releaseGraphicsLayer(it.flatOutput) } } }
-    SideEffect { motion.hoverLift = { scene?.hover?.get(it) } }
+    val geometryResolver = remember(motion) { { key: Any?, current: HoverGeometry -> motion.resolveHover(key, current) } }
+    SideEffect {
+        motion.hoverLift = { scene?.hover?.get(it) }
+        scene?.geometryResolver = geometryResolver
+    }
     BackdropLease(backing.takeIf { motion.visualSource != null && motion.frozen.values.any { it.content?.hover != null } })
-    DisposableEffect(scene) { onDispose { scene?.retainedHover = emptyList() } }
+    DisposableEffect(scene, geometryResolver) { onDispose {
+        if (scene?.geometryResolver === geometryResolver) scene?.geometryResolver = null
+        scene?.retainedHover = emptyList()
+    } }
+    // Keep geometry-clock reads in this producer, including inside an ancestor sampling recording.
     return backdropLocation(location).onGloballyPositioned { motion.viewportCoordinates = it }.drawWithContent {
         // Publish retained bodies before the host draws its one joined shadow/surface.
         val visible = grid.layoutInfo.visibleItemsInfo
@@ -263,7 +271,7 @@ internal fun Modifier.pinchRetainedOverlay(motion: BrowsePinchMotion, grid: Lazy
                 val exitProgress = browsePinchGeometryProgress(true, p, fadeWindow)
                 // Position and every part's dimensions stop on the same spatial frame.
                 val origin = sourceOrigin + (targetOrigin - sourceOrigin) * exitProgress
-                retained[key] = RetainedPinchPlacement(image, origin, (width - 2 * targetInset).coerceAtLeast(0f),
+                retained[key] = RetainedPinchPlacement(key, image, origin, (width - 2 * targetInset).coerceAtLeast(0f),
                     image.content?.target?.height?.toFloat() ?: (pitch - 2 * targetVerticalInset).coerceAtLeast(0f),
                     1f, index, exitProgress)
             }
@@ -280,7 +288,7 @@ internal fun Modifier.pinchRetainedOverlay(motion: BrowsePinchMotion, grid: Lazy
             val width = size.width + (placed.targetWidth - size.width) * placed.geometryProgress
             val outline = mediaItemOutlineLerp(content.source.outline(density), content.target.outline(density), placed.geometryProgress)
                 .let { if (motion.rightToLeft) it.mirrored(width) else it }
-            return hoverGeometry(outline, hover.room, hover.progress)
+            return motion.resolveHover(placed.key, hoverGeometry(outline, hover.room, hover.progress), placed.geometryProgress)
         }
         val lifted = retained.values.mapNotNull { placed -> retainedLift(placed)?.translate(placed.origin)?.let {
             it to (placed.alpha * (placed.item.content?.opacity ?: 1f))
