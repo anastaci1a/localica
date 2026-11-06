@@ -194,15 +194,6 @@ internal fun ConnectedSelectionHost(modifier: Modifier = Modifier, contentDrawin
 
 /** One merged group's retained resources: blur layer, shadow raster and path cache. */
 internal class HoverGroupRenderer(val output: GraphicsLayer, val flatOutput: GraphicsLayer, scope: kotlinx.coroutines.CoroutineScope) {
-    private var graphicsContext: GraphicsContext? = null
-    constructor(graphics: GraphicsContext, scope: kotlinx.coroutines.CoroutineScope) :
-        this(graphics.createGraphicsLayer(), graphics.createGraphicsLayer(), scope) {
-        graphicsContext = graphics
-    }
-    fun release() {
-        graphicsContext?.releaseGraphicsLayer(output)
-        graphicsContext?.releaseGraphicsLayer(flatOutput)
-    }
     val shadow = RetainedGlassShadow(scope)
     val path = HoverPathCache()
     val average = if (Build.VERSION.SDK_INT >= 33) MaterialAverageRenderer() else null
