@@ -328,14 +328,19 @@ internal class HoverPathCache(profile: SelectionOutlineProfile? = null) {
     fun path(regions: List<SelectionRegion>, rest: List<SelectionRegion>, gap: Float, strength: (Int, Int) -> Float): Path {
         if (regions.isEmpty()) return Path()
         val at = regions.first().bounds.topLeft
-        val local = localLensRegions(regions, at)
+        val local = localLensRegions(regions, at, previousRegions)
         val count=regions.size
         val pairCount=count*(count-1)/2
         if(nextStrengths.size!=pairCount)nextStrengths=FloatArray(pairCount)
         var changed=local!=previousRegions || gap.toBits()!=previousGap.toBits() || previousStrengths.size!=pairCount
         var index=0
         for(a in regions.indices)for(b in a+1 until count) {
-            val value=strength(a,b)
+            val observed=strength(a,b)
+            val ra=local[a].bounds;val rb=local[b].bounds
+            // A pair farther apart than the whole selection gap cannot meet: each lobe
+            // reaches at most gap/4. Its changing intent cannot change this contour.
+            val far=gap>0f && max(max(ra.left-rb.right,rb.left-ra.right),max(ra.top-rb.bottom,rb.top-ra.bottom))>gap
+            val value=if(far)0f else observed
             nextStrengths[index]=value
             if(index>=previousStrengths.size || value.toBits()!=previousStrengths[index].toBits())changed=true
             index++
@@ -391,6 +396,11 @@ internal fun connectedSelectionPath(regions: List<SelectionRegion>, gap: Float,
     rest: List<SelectionRegion> = regions, strength: (Int, Int) -> Float = { _, _ -> 1f },
     contour: AnalyticSelectionOutline = AnalyticSelectionOutline()): Path {
     if (regions.isEmpty()) return Path()
+    var duplicates=false
+    for(i in regions.indices)for(j in 0 until i) {
+        if(regions[i].bounds==regions[j].bounds && regions[i].radius(gap).toBits()==regions[j].radius(gap).toBits()) { duplicates=true;break }
+    }
+    if(!duplicates)return contour.path(regions,gap,strength)
     val members = regions.indices.groupBy { SelectionRegion(regions[it].bounds,regions[it].radius(gap)) }
     if (members.size < regions.size) {
         val unique = members.keys.toList()

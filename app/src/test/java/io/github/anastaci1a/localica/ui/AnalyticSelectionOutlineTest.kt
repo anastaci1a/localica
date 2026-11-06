@@ -6,6 +6,34 @@ import org.junit.Test
 import kotlin.math.*
 
 class AnalyticSelectionOutlineTest {
+    @Test fun coveredEdgeCullingMatchesTheCompleteArrangementAndRetainedProofsStayImmutable() {
+        val culled=AnalyticSelectionOutline();val reference=AnalyticSelectionOutline(cullCoveredEdges=false)
+        var first: List<OutlineFilletProof>?=null;var firstExpected: List<OutlineFilletProof>?=null
+        for(frame in 0..120) for(count in listOf(12,11)) {
+            val p=frame/120f
+            val regions=List(12) { i ->
+                val x=i%3*73f;val y=i/3*73f
+                val tx=x+(80f+min(i,2)*6f-x)*p;val ty=y+(70f+min(i,2)*6f-y)*p
+                SelectionRegion(Rect(tx,ty,tx+74.25f,ty+74.25f),12f)
+            }.filterIndexed { i,_ -> count==12 || i!=5 }.let { if(frame%7==0)it.reversed() else it }
+            val expected=reference.inspect(regions,16f) { _,_->1f-p }
+            val actual=culled.inspect(regions,16f) { _,_->1f-p }
+            assertEquals("frame=$frame count=$count",expected,actual)
+            if(first==null) { first=actual;firstExpected=expected.toList() }
+        }
+        assertEquals(firstExpected,first)
+    }
+    @Test fun canonicalGeometryReusesUnchangedMembersAcrossSubpixelTranslation() {
+        val regions=List(12) { i -> SelectionRegion(Rect(i*80f,0f,i*80f+72f,72f),12f) }
+        val origin=androidx.compose.ui.geometry.Offset.Zero
+        val first=localLensRegions(regions,origin)
+        assertSame(first,localLensRegions(regions,origin,first))
+        val moved=regions.map { it.copy(bounds=it.bounds.translate(androidx.compose.ui.geometry.Offset(5.125f,8.25f))) }
+        assertSame(first,localLensRegions(moved,androidx.compose.ui.geometry.Offset(5.125f,8.25f),first))
+        val changed=moved.toMutableList().apply { this[5]=this[5].copy(corner=8f) }
+        val next=localLensRegions(changed,androidx.compose.ui.geometry.Offset(5.125f,8.25f),first)
+        assertNotSame(first,next);assertNotSame(first[5],next[5]);assertSame(first[4],next[4])
+    }
     @Test fun retainedBodiesProduceTheSameContactsAsFreshGeometryWhenInputsChange() {
         val cached=AnalyticSelectionOutline()
         for(frame in 0..120) {
