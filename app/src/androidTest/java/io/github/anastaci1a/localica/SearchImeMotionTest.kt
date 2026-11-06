@@ -145,7 +145,8 @@ class SearchImeMotionTest {
             targetVisible == false && targetIme == 0 && ime > navigation && activeHideIds.isNotEmpty()
     }
 
-    // API 30+ uses platform animation callbacks, not synthetic legacy compat animation.
+    // Observe native host insets on every API. Only API 30+ installs platform
+    // animation callbacks; legacy hosts must never manufacture compat animation evidence.
     // This visible zero-size decor sibling never takes input or replaces Compose listeners.
     // A callback can change native frame synchronization: this is not timing-equivalent
     // evidence to the uninstrumented baseline, and cannot establish optical acceptance.
@@ -162,7 +163,7 @@ class SearchImeMotionTest {
             isFocusable = false
             isClickable = false
             importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
-            ViewCompat.setWindowInsetsAnimationCallback(this,
+            if (android.os.Build.VERSION.SDK_INT >= 30) ViewCompat.setWindowInsetsAnimationCallback(this,
                 object : WindowInsetsAnimationCompat.Callback(DISPATCH_MODE_CONTINUE_ON_SUBTREE) {
                     override fun onPrepare(animation: WindowInsetsAnimationCompat) {
                         if (animation.typeMask and WindowInsetsCompat.Type.ime() != 0 && requested != null &&
@@ -222,7 +223,9 @@ class SearchImeMotionTest {
         fun snapshot(): NativeReturnEvidence {
             val target = ViewCompat.getRootWindowInsets(this)
             return NativeReturnEvidence(SystemClock.uptimeMillis(), compose.mainClock.currentTime,
-                requested, progressAt, isAttachedToWindow, hasWindowFocus(), animatedIme, animatedNavigation,
+                requested, progressAt, isAttachedToWindow, hasWindowFocus(), animatedIme,
+                if (android.os.Build.VERSION.SDK_INT >= 30) animatedNavigation
+                else target?.getInsets(WindowInsetsCompat.Type.navigationBars())?.bottom ?: 0,
                 target?.isVisible(WindowInsetsCompat.Type.ime()),
                 target?.getInsets(WindowInsetsCompat.Type.ime())?.bottom,
                 progressed.filter { it in activeHides }.map { System.identityHashCode(it) })
@@ -243,7 +246,7 @@ class SearchImeMotionTest {
             super.onDetachedFromWindow()
         }
         fun dispose() {
-            ViewCompat.setWindowInsetsAnimationCallback(this, null)
+            if (android.os.Build.VERSION.SDK_INT >= 30) ViewCompat.setWindowInsetsAnimationCallback(this, null)
             reset()
             requested = null
             (parent as? android.view.ViewGroup)?.removeView(this)
@@ -552,7 +555,7 @@ class SearchImeMotionTest {
             verifyOpening(home, reduced)
             compose.awaitExpectedWindowFocus(compose.onNode(hasSetTextAction()))
             val raised = compose.runOnUiThread { samples.last().bounds }
-            if (outside && android.os.Build.VERSION.SDK_INT >= 30) compose.runOnUiThread {
+            if (outside) compose.runOnUiThread {
                 nativeReturnProbe = NativeReturnProbe().also { probe ->
                     (compose.activity.window.decorView as android.view.ViewGroup)
                         .addView(probe, 0, android.view.ViewGroup.LayoutParams(0, 0))
