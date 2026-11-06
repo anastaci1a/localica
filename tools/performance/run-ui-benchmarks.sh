@@ -50,14 +50,11 @@ for scenario in "${top_scenarios[@]}"; do
     # Trace passes are separate and never substituted into baseline measurements.
     api=$(adb -s "$serial" shell getprop ro.build.version.sdk | tr -d '\r')
     if (( api >= 31 )); then
-        config=/data/local/tmp/ui600-frametimeline.pbtxt
         trace=/data/misc/perfetto-traces/ui600-$scenario.perfetto-trace
-        adb -s "$serial" push "$(dirname "$0")/frametimeline.pbtxt" "$config" > "$out/traces/$scenario-config.txt"
-        pid=$(adb -s "$serial" shell perfetto --background --txt -c "$config" -o "$trace" | tr -d '\r')
+        pid=$(adb -s "$serial" shell perfetto --background-wait --txt -c - -o "$trace" < "$(dirname "$0")/frametimeline.pbtxt" | tr -d '\r')
         [[ $pid =~ ^[0-9]+$ ]] || { echo 'Perfetto did not return a PID' >&2; exit 1; }
         run "$scenario" 1 "$out/traces/$scenario-instrumentation.txt"
-        adb -s "$serial" shell kill -INT "$pid"
-        sleep 2
+        adb -s "$serial" shell "kill -INT $pid; while kill -0 $pid 2>/dev/null; do sleep 0.1; done"
         adb -s "$serial" pull "$trace" "$out/traces/$scenario.perfetto-trace"
         continue
     fi
