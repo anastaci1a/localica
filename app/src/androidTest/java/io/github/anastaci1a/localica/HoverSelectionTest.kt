@@ -83,7 +83,7 @@ class HoverSelectionTest {
         }
     }
 
-    private fun capture(): PixelMap = compose.onNodeWithTag("hover-scene").captureToImage().toPixelMap()
+    private fun capture(): PixelMap = compose.onNodeWithTag("hover-scene").captureNativeFrame().toPixelMap()
     private fun lum(c: Color) = .3f * c.red + .59f * c.green + .11f * c.blue
 
     private class Sample(val progress: Float, val lifted: Rect, val scale: Float, val shadow: Float, val content: Int, val stripes: Float)
@@ -136,7 +136,7 @@ class HoverSelectionTest {
                 return samples
             }
             val rising = run(true)
-            save(compose.onNodeWithTag("hover-scene").captureToImage(), "hover-selected")
+            save(compose.onNodeWithTag("hover-scene").captureNativeFrame(), "hover-selected")
             val settled = rising.last()
             val baselineContent = (0 until restPixels.width).count { lum(restPixels[it, rest.center.y.toInt()]) < .15f }
             rising.forEach { sample ->
@@ -203,7 +203,7 @@ class HoverSelectionTest {
         compose.setContent { Fixture(true, second) }
         compose.waitForIdle()
         val joined = capture()
-        save(compose.onNodeWithTag("hover-scene").captureToImage(), "hover-joined")
+        save(compose.onNodeWithTag("hover-scene").captureNativeFrame(), "hover-joined")
         val d = joined.width / 360f
         assertEquals("Both rows hover", 2, scene.lastDrawnRegions.size)
         // The 8 dp gap between the rows is inside the joined outline: no shadow seam there.
@@ -268,7 +268,7 @@ class HoverSelectionTest {
         compose.setContent { Fixture(true, true, retainSecond = retained) }
         if (android.os.Build.VERSION.SDK_INT < 33) compose.waitUntil(10000) { source.snapshot != null }
         compose.waitForIdle()
-        val beforeImage = compose.onNodeWithTag("hover-scene").captureToImage()
+        val beforeImage = compose.onNodeWithTag("hover-scene").captureNativeFrame()
         save(beforeImage, "hover-retained-source")
         val before = beforeImage.toPixelMap()
         val second = checkNotNull(scene.viewportHover["second"])
@@ -277,7 +277,7 @@ class HoverSelectionTest {
             retained = true
         }
         compose.waitForIdle()
-        val afterImage = compose.onNodeWithTag("hover-scene").captureToImage()
+        val afterImage = compose.onNodeWithTag("hover-scene").captureNativeFrame()
         save(afterImage, "hover-retained-virtualized")
         val after = afterImage.toPixelMap()
         assertEquals("The retained body still participates in the host", 2, scene.lastDrawnRegions.size)
