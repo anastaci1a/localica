@@ -46,7 +46,7 @@ internal object DiagnosticsExport {
         directory.listFiles()?.forEach { it.delete() }
         val stamp = java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss").withZone(ZoneId.systemDefault()).format(Instant.ofEpochMilli(nowMillis))
         return File(directory, "localica-diagnostics-$stamp.txt").also {
-            it.writeText(report(environment(context), ring, nowMillis))
+            it.writeText(report(environment(context), ring, nowMillis) + "\nFrame capture\n" + FrameStats.report() + "\n")
         }
     }
 
