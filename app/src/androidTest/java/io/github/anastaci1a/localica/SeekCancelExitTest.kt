@@ -29,10 +29,9 @@ class SeekCancelExitTest {
     private fun release(player: Boolean, cancel: Boolean) {
         var value by mutableFloatStateOf(.2f)
         var cancelHost: SliderCancelHost? = null
-        var renderer = "unmounted"
+        var renderer: GlassRendererRuntime? = null
         compose.setContent { LocalicaTheme {
-            val generation = currentGlassRendererGeneration()
-            SideEffect { renderer = generation.toString() }
+            renderer = LocalGlassRendererRuntime.current
             BoxWithConstraints(Modifier.fillMaxSize()) {
                 if (player) PlayerSurface(
                     PlaybackState(connected = true, title = "Exit fixture", positionMs = 20000, durationMs = 100000),
@@ -96,7 +95,7 @@ class SeekCancelExitTest {
                     save(image, "original")
                     // Failure-only reads and redraw cannot turn the original pixels into a pass.
                     val state = compose.runOnUiThread {
-                        "$description renderer=$renderer alpha=${cancelHost?.target?.motion?.alpha} " +
+                        "$description renderer=${renderer?.generation} alpha=${cancelHost?.target?.motion?.alpha} " +
                             "active=${cancelHost?.target?.active} cancelled=${cancelHost?.target?.cancelled} " +
                             "hovered=${cancelHost?.hovered} observedAfterOriginalCopy=true"
                     }
