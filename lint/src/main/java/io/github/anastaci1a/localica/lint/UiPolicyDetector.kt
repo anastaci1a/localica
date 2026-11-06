@@ -519,6 +519,14 @@ internal class UiPolicyDetector : Detector(), SourceCodeScanner {
         }
         private fun specDependency(node: UElement, target: String): Boolean {
             if (target.startsWith("$UI.spec.") || target == "$UI.spec") return true
+            val method = parents(node).filterIsInstance<UMethod>().firstOrNull()?.name
+            val glass = "io.github.anastaci1a.localica.navigation.GlassAppearance"
+            if (target == glass || target.startsWith("$glass.")) return method == "uiSpec"
+            val provider = node is UVariable && node.name == "LocalUiSpec" || parents(node).filterIsInstance<UVariable>().any { it.name == "LocalUiSpec" } || method == "getLocalUiSpec"
+            val providerImport = node is UImportStatement && context.uastFile?.classes.orEmpty().any { clazz ->
+                clazz.fields.any { it.name == "LocalUiSpec" }
+            }
+            if (target in setOf("androidx.compose.runtime.staticCompositionLocalOf", "androidx.compose.runtime.CompositionLocalKt.staticCompositionLocalOf", "androidx.compose.runtime.ProvidableCompositionLocal")) return provider || providerImport
             val settings = "io.github.anastaci1a.localica.navigation.InterfaceSettings"
             if (target == settings || target.startsWith("$settings.")) {
                 if (parents(node).filterIsInstance<UMethod>().firstOrNull()?.name == "uiSpec") return true
@@ -547,7 +555,7 @@ internal class UiPolicyDetector : Detector(), SourceCodeScanner {
                 val end = location.end?.offset ?: start
                 if (dependencyRanges.any { (symbol, first, last) -> symbol == target && start <= last && end >= first }) return
                 dependencyRanges.add(Triple(target, start, end))
-                report(UiRuleId.UiLayerDependency, node)
+                report(UiRuleId.UiLayerDependency, node, if (source == "spec") "${UiRuleId.UiLayerDependency.policy}: $target" else UiRuleId.UiLayerDependency.policy)
             }
         }
 
