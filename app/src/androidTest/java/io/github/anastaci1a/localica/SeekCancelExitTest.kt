@@ -26,6 +26,7 @@ class SeekCancelExitTest {
     @Test fun sliderNormalReleaseFliesDownWithoutMissingFrames() = release(player = false, cancel = false)
     @Test fun sliderCancelReleaseFadesInPlaceWithoutMissingFrames() = release(player = false, cancel = true)
 
+    @OptIn(ExperimentalTestApi::class)
     private fun release(player: Boolean, cancel: Boolean) {
         var value by mutableFloatStateOf(.2f)
         var cancelHost: SliderCancelHost? = null
@@ -104,6 +105,54 @@ class SeekCancelExitTest {
                     compose.runOnUiThread { androidx.compose.runtime.snapshots.Snapshot.sendApplyNotifications() }
                     save(target.captureToImage(), "redrawn")
                     android.util.Log.e("SeekCancelExitFrame", "Failure-only redraw clock=${compose.mainClock.currentTime}")
+                    val view = (target.fetchSemanticsNode().root as androidx.compose.ui.platform.ViewRootForTest).view
+                    val window = compose.runOnUiThread {
+                        var context = view.context
+                        while (context is android.content.ContextWrapper && context !is android.app.Activity) {
+                            context = context.baseContext
+                        }
+                        (context as android.app.Activity).window
+                    }
+                    fun nativeState(): String = compose.runOnUiThread {
+                        fun describe(v: android.view.View?): String {
+                            if (v == null) return "absent"
+                            val screen = IntArray(2).also(v::getLocationOnScreen)
+                            val inWindow = IntArray(2).also(v::getLocationInWindow)
+                            val visible = android.graphics.Rect().also(v::getWindowVisibleDisplayFrame)
+                            return "${v.javaClass.simpleName} size=${v.width}x${v.height} " +
+                                "screen=${screen.contentToString()} window=${inWindow.contentToString()} " +
+                                "alpha=${v.alpha} visibility=${v.visibility} background=${v.background} " +
+                                "color=${(v.background as? android.graphics.drawable.ColorDrawable)?.color} " +
+                                "visible=$visible insets=${v.rootWindowInsets}"
+                        }
+                        val decor = window.decorView
+                        "clock=${compose.mainClock.currentTime} metrics=${view.resources.displayMetrics} " +
+                            "flags=${window.attributes.flags} sysUi=${decor.systemUiVisibility} " +
+                            "navColor=${window.navigationBarColor} " +
+                            "contrast=${if (android.os.Build.VERSION.SDK_INT >= 29) window.isNavigationBarContrastEnforced else null}\n" +
+                            "compose=${describe(view)}\ndecor=${describe(decor)}\n" +
+                            "navigation=${describe(decor.findViewById(android.R.id.navigationBarBackground))}\n" +
+                            "status=${describe(decor.findViewById(android.R.id.statusBarBackground))}"
+                    }
+                    java.io.File(folder, "$stem-native.txt").writeText(nativeState())
+                    androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().uiAutomation
+                        .takeScreenshot()?.let { screenshot ->
+                            java.io.File(folder, "$stem-screen.png").outputStream().use {
+                                screenshot.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
+                            }
+                            screenshot.recycle()
+                        }
+                    // Counterfactual diagnostics only: the original contrast assertion still fails.
+                    if (android.os.Build.VERSION.SDK_INT >= 29) {
+                        val contrast = compose.runOnUiThread { window.isNavigationBarContrastEnforced }
+                        try {
+                            compose.runOnUiThread { window.isNavigationBarContrastEnforced = false }
+                            save(target.captureToImage(), "navigation-contrast-off")
+                            java.io.File(folder, "$stem-native-contrast-off.txt").writeText(nativeState())
+                        } finally {
+                            compose.runOnUiThread { window.isNavigationBarContrastEnforced = contrast }
+                        }
+                    }
                 }.onFailure { android.util.Log.e("SeekCancelExitFrame", "Failure evidence unavailable", it) }
                 assertEquals("Capture holds the requested release frame: $description", requestedClock, capturedClock)
                 assertTrue("The X remains drawn on release frame $it: $description", high - low > .02f)
