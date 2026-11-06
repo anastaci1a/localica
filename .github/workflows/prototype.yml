@@ -172,7 +172,7 @@ jobs:
         script: |
           adb shell wm size reset
           adb shell wm density reset
-          python3 .github/emulator-readiness.py
+          python3 .github/emulator-readiness.py --normalize-navigation
           bash .github/test-evidence/environment.sh >> prototype-runner-environment.txt
           bash .github/run-prototype-tests.sh
     - name: Cache the installed SDK system image
@@ -266,7 +266,7 @@ jobs:
         script: |
           adb shell wm size reset
           adb shell wm density reset
-          python3 .github/emulator-readiness.py
+          python3 .github/emulator-readiness.py --normalize-navigation
           bash .github/test-evidence/environment.sh >> prototype-runner-environment.txt
           bash .github/compatibility/run.sh
     - name: Cache the installed SDK system image
@@ -348,7 +348,7 @@ jobs:
         script: |
           adb shell wm size 720x1280
           adb shell wm density 280
-          python3 .github/emulator-readiness.py
+          python3 .github/emulator-readiness.py --normalize-navigation
           bash .github/test-evidence/environment.sh >> prototype-runner-environment.txt
           bash .github/run-prototype-tests.sh
     - name: Cache the installed SDK system image
@@ -442,7 +442,7 @@ jobs:
         script: |
           adb shell wm size 720x1280
           adb shell wm density 280
-          python3 .github/emulator-readiness.py
+          python3 .github/emulator-readiness.py --normalize-navigation
           bash .github/test-evidence/environment.sh >> prototype-runner-environment.txt
           bash .github/compatibility/run.sh
     - name: Cache the installed SDK system image
