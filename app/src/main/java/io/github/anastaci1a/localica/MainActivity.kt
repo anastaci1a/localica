@@ -73,7 +73,11 @@ class MainActivity : ComponentActivity() {
                 uri?.let { model.addFolder(it.toString()) }
             }
             androidx.compose.runtime.CompositionLocalProvider(
-                io.github.anastaci1a.localica.ui.LocalGlassRendererRuntime provides glassRenderer) {
+                io.github.anastaci1a.localica.ui.LocalGlassRendererRuntime provides glassRenderer,
+                io.github.anastaci1a.localica.ui.LocalGlassMorphWorkObserver provides
+                    (if (io.github.anastaci1a.localica.diagnostics.FrameStats.recording.value)
+                        { _, window, _ -> io.github.anastaci1a.localica.diagnostics.FrameStats.attach(window) }
+                    else null)) {
             LocalicaTheme {
                 io.github.anastaci1a.localica.ui.TagEditorHost((application as LocalicaApplication).tagEditing) {
                 LocalicaScreen(library, playback, model::play, model.playback::toggle, model.playback::seekTo,
@@ -91,6 +95,10 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onDestroy() {
+        io.github.anastaci1a.localica.diagnostics.FrameStats.stopFor(this)
+        super.onDestroy()
+    }
     override fun onStart() { super.onStart(); io.github.anastaci1a.localica.library.ArtworkColors.foreground.value = true }
     override fun onStop() { io.github.anastaci1a.localica.library.ArtworkColors.foreground.value = false; super.onStop() }
     override fun onResume() {

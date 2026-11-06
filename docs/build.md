@@ -116,6 +116,26 @@ Prototypes use the same [evidence tooling](#evidence-tooling-prerequisites), six
 
 No automatic replay or replacement full-suite run is started. Hosted transport evidence must identify the tested publisher revision. Offline contract success alone does not prove live delivery. New manual workflows require registration or an explicitly coordinated branch smoke before use.
 
+### UI frame measurements
+
+The opt-in [UI suite](../app/src/androidTest/java/io/github/anastaci1a/localica/UiPerformanceTest.kt) measures real Window frames with 2,000 seeded tracks and placeholder artwork. It covers list densities, gallery columns, carousels, subviews, Queue, pinch, selection/drag, popups, player, lyrics/theme and search.
+
+Install matching debug and test APKs on an owned disposable emulator. Run the [measurement script](../tools/performance/run-ui-benchmarks.sh) with its serial, a fresh evidence directory and the full source SHA:
+
+```sh
+tools/performance/run-ui-benchmarks.sh emulator-5554 /path/to/evidence FULL_SOURCE_SHA
+```
+
+Run API 26 and 36 separately. The script records one warmup and three repetitions, ranks scenarios by p99, and captures separate atrace passes for the three slowest scenarios. Traced passes do not replace baseline samples.
+
+The suite selects None when available. Older sources use Modern with blur disabled; API 26 resolves that request to Legacy. These provisional results retain renderer settings and cannot establish glass-free performance.
+
+Frame duration percentiles use nearest rank. Jank means duration exceeds the sampled display refresh period. Missed vsyncs are duration-based estimates. Deadline misses are reported separately on API 31+. Listener drops, overflow and incomplete native delivery remain explicit.
+
+Emulators are proxies. For pure-UI comparison, select None when available. On a physical device, open More → Settings → About and licenses. Start frame capture, repeat an action, return to stop capture, then Export diagnostics. Capture stops after two minutes or Activity destruction; a new capture replaces the previous sample.
+
+Capture is opt-in, bounded and process-local. Export includes app/device identity, renderer settings and per-Window summaries, without music titles, paths or search text. It excludes system keyboard frames. Received Window timings do not measure presentation latency.
+
 ## Compatibility and dependencies
 
 Queue schema 7 cannot be reopened by the original schema-6 APK. Before distributing it, dispatch the exact candidate through the Android workflow with `compatibility=true`. Its API 26/36 gate installs candidate → legacy-behavior bridge → candidate with the same package/signature and increasing private version codes, without clearing data.
