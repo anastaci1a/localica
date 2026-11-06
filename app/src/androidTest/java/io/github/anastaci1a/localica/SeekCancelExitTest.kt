@@ -31,6 +31,9 @@ class SeekCancelExitTest {
         var cancelHost: SliderCancelHost? = null
         var renderer: GlassRendererRuntime? = null
         compose.setContent { LocalicaTheme {
+            // LocalicaScreen owns this policy for the player; GlassMorph also
+            // disables native contrast in its separate slider-hosting window.
+            PlayerSystemBars(dark = false)
             renderer = LocalGlassRendererRuntime.current
             BoxWithConstraints(Modifier.fillMaxSize()) {
                 if (player) PlayerSurface(
@@ -41,7 +44,8 @@ class SeekCancelExitTest {
                     val host = rememberSliderCancelHost().also { cancelHost = it }
                     CompositionLocalProvider(LocalSliderCancelHost provides host) {
                         InterfaceSlider(value, { value = it }, Modifier.width(300.dp).testTag("slider"))
-                        SliderCancelLayer(host, 20.dp)
+                        SliderCancelLayer(host,
+                            WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 24.dp)
                     }
                 }
             }
@@ -107,11 +111,35 @@ class SeekCancelExitTest {
                 }.onFailure { android.util.Log.e("SeekCancelExitFrame", "Failure evidence unavailable", it) }
                 assertEquals("Capture holds the requested release frame: $description", requestedClock, capturedClock)
                 assertTrue("The X remains drawn on release frame $it: $description", high - low > .02f)
+                assertNativeClearance(target, next.bottom)
             }
             if (!cancel) assertTrue("Normal release reverses the rise", previous > at.top + 1f)
             compose.mainClock.advanceTimeBy(500)
             target.assertDoesNotExist()
         } finally { compose.mainClock.autoAdvance = true }
+    }
+
+    @OptIn(ExperimentalTestApi::class)
+    private fun assertNativeClearance(target: SemanticsNodeInteraction, bottomInRoot: Float) {
+        val view = (target.fetchSemanticsNode().root as androidx.compose.ui.platform.ViewRootForTest).view
+        compose.runOnUiThread {
+            var context = view.context
+            while (context is android.content.ContextWrapper && context !is android.app.Activity) {
+                context = context.baseContext
+            }
+            val window = (context as android.app.Activity).window
+            if (android.os.Build.VERSION.SDK_INT >= 29) {
+                assertFalse("The caller owns navigation contrast", window.isNavigationBarContrastEnforced)
+            }
+            val insets = requireNotNull(androidx.core.view.ViewCompat.getRootWindowInsets(view))
+                .getInsets(androidx.core.view.WindowInsetsCompat.Type.navigationBars())
+            val rootOrigin = IntArray(2).also(view::getLocationOnScreen)
+            val decor = window.decorView
+            val decorOrigin = IntArray(2).also(decor::getLocationOnScreen)
+            val safeBottom = decorOrigin[1] + decor.height - insets.bottom
+            assertTrue("The release X clears native navigation: bottom=${rootOrigin[1] + bottomInRoot} safeBottom=$safeBottom",
+                rootOrigin[1] + bottomInRoot <= safeBottom + 1f)
+        }
     }
 
     @Test fun exitAlphaIsMonotonicAndNewDragContinuesFromThePresentedFrame() {
