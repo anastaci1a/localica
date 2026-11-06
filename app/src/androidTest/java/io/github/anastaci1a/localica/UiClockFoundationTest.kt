@@ -7,6 +7,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.ui.Modifier
 import androidx.compose.foundation.layout.size
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Density
 import io.github.anastaci1a.localica.ui.spec.*
 import io.github.anastaci1a.localica.ui.engine.diagnostics.*
 import androidx.compose.ui.window.Popup
@@ -59,7 +60,7 @@ class UiClockFoundationTest {
             val observation=remember(owner) { EngineObservation(owner,sink) }
             DisposableEffect(observation) { onDispose { observation.close() } }
             LaunchedEffect(owner) { owner.run() }
-            CompositionLocalProvider(LocalUiClock provides owner,LocalEngineContext provides EngineContext(1f/120,1000f,MotionAccess.Standard)) {
+            CompositionLocalProvider(LocalUiClock provides owner,LocalEngineContext provides EngineContext(1f/120,1000f,MotionAccess.Standard),LocalUiSpec provides remember { ResolvedUiSpec(StockUiSpec,Density(1f)) }) {
                 val value=rememberMotionFloat("native-control",0f,1f)
                 SideEffect { motion=value; clock=owner; evidence=sink }
                 Canvas(Modifier.size(20.dp)) { value.value() }
