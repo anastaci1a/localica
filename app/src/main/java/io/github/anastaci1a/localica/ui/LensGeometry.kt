@@ -181,10 +181,24 @@ internal fun lensRay(field: LensField, span: Float, depth: Float, flattening: Fl
 
 /** Precision noise in coordinate subtraction must not rebuild a silhouette while
  * its content simply translates. The origin retains full subpixel precision. */
-internal fun localLensRegions(regions: List<SelectionRegion>, origin: Offset) = regions.map {
-    val r = it.bounds.translate(-origin)
+internal fun localLensRegions(regions: List<SelectionRegion>, origin: Offset,
+    previous: List<SelectionRegion>? = null): List<SelectionRegion> {
+    var result: MutableList<SelectionRegion>? = if(previous?.size==regions.size)null else ArrayList(regions.size)
     fun stable(value: Float) = round(value * 64f) / 64f
-    SelectionRegion(Rect(stable(r.left), stable(r.top), stable(r.right), stable(r.bottom)), it.corner)
+    for(i in regions.indices) {
+        val region=regions[i];val bounds=region.bounds
+        val l=stable(bounds.left-origin.x);val t=stable(bounds.top-origin.y)
+        val r=stable(bounds.right-origin.x);val b=stable(bounds.bottom-origin.y)
+        val old=previous?.getOrNull(i)
+        if(old!=null && old.bounds.left.toBits()==l.toBits() && old.bounds.top.toBits()==t.toBits() &&
+            old.bounds.right.toBits()==r.toBits() && old.bounds.bottom.toBits()==b.toBits() && old.corner==region.corner) {
+            result?.add(old)
+        } else {
+            if(result==null)result=ArrayList<SelectionRegion>(regions.size).also { next -> for(j in 0 until i)next.add(previous!![j]) }
+            result.add(SelectionRegion(Rect(l,t,r,b),region.corner))
+        }
+    }
+    return result ?: previous ?: emptyList()
 }
 
 /** Exact common case, not a bounding-hull approximation: one item or an aligned

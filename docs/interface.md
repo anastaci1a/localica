@@ -34,9 +34,13 @@ One uniform scale preserves artwork/outline corner centres. Growth takes at most
 
 The lift shadow follows the menu's theming: dark under dark-icon menus, a white glow under light-icon menus. Both use Glass shadow spread and share the Lift shadow strength setting.
 
-Side-adjacent selections share one hovering outline. Diagonal gallery neighbors and unselected holes stay separate. Partial groups retain accessible state without a pane/checkmark. Inset album choices and preserve readable baselines.
+Side-adjacent selections share one hovering outline. Tangent lobes and rounded concave fillets connect or part continuously with displayed separation and motion progress. Fillets are capped at 4 dp, with an 8 dp connection band.
+
+Frost and shadow use that same path, including drag launch and landing. Diagonal gallery neighbors and unselected holes stay separate. Partial groups retain accessible state without a pane/checkmark. Inset album choices and preserve readable baselines.
 
 A lifted item is drawn only from its own retained recording, which stays in the item's display list throughout; the host adds the lifted drawing and never takes ownership, so no cover or label vanishes on select or deselect.
+
+When neighbours fade independently, complete surface and shadow renderings blend continuously. Persistent selections reveal their own shadows before the departing member disappears. Equal visibilities keep one shared outline.
 
 Selection, the current queue occurrence and held drag cards share one item outline. Its corners are concentric with the artwork's, sharing their arc centres.
 
