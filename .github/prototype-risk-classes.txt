@@ -362,6 +362,7 @@ io.github.anastaci1a.localica.ItemOutlinePixelTest
 io.github.anastaci1a.localica.GlassRendererSwitchingTest
 io.github.anastaci1a.localica.NoneFullAreaTest
 io.github.anastaci1a.localica.NoneQueueMaterialTest
+io.github.anastaci1a.localica.QueueHeaderMaterialBoundaryTest
 io.github.anastaci1a.localica.PlayerArtworkLayerTest
 io.github.anastaci1a.localica.PlayerArtworkOpticsTest
 
