@@ -179,14 +179,29 @@ class QueueHeaderMaterialBoundaryTest {
         compose.waitUntil(5000) { compose.runOnUiThread {
             val page = scene
             val draw = drawn.get()
+            val parentMaterialReady = if (material.rendererGeneration.backend == GlassBackend.None) {
+                // None lenses lease the finished parent, not the unused foreground scene.
+                page?.source?.noneMaterialSource() === material && material.consumers > 0 &&
+                    (Build.VERSION.SDK_INT >= 33 || backing.fallback != null && material.snapshot != null)
+            } else Build.VERSION.SDK_INT >= 33 ||
+                backing.fallback != null && material.snapshot != null && page?.source?.snapshot != null
             root.isAttachedToWindow && root.isLaidOut && root.hasWindowFocus() && !root.isLayoutRequested &&
                 draw != null && draw.count > after && draw.requestedStrength == expected &&
                 backing.recorded && material.recorded && page?.source?.recorded == true &&
                 page.layers.size == 1 && page.layers.single().source.recorded &&
                 // Existing producer admission only; never sample a pixel or request a new readback.
-                (Build.VERSION.SDK_INT >= 33 || backing.fallback != null && material.snapshot != null && page.source.snapshot != null)
+                parentMaterialReady
         } }
         compose.runOnIdle {
+            assertEquals("Normal request resolves to the platform's actual backend",
+                if (Build.VERSION.SDK_INT >= 33) GlassBackend.Normal else GlassBackend.None,
+                material.rendererGeneration.backend)
+            if (material.rendererGeneration.backend == GlassBackend.Normal)
+                assertTrue("Normal keeps the foreground sampling lease", requireNotNull(scene).source.consumers > 0)
+            android.util.Log.i("QueueHeaderMaterialBoundary", "api=${Build.VERSION.SDK_INT} " +
+                "backend=${material.rendererGeneration.backend} parentConsumers=${material.consumers} " +
+                "foregroundConsumers=${requireNotNull(scene).source.consumers} " +
+                "parentSnapshot=${material.snapshot != null} foregroundSnapshot=${requireNotNull(scene).source.snapshot != null}")
             assertEquals("Drawer remains at its open endpoint", 1f, progress.value, 0f)
             assertFalse(progress.isRunning)
             assertEquals("No gesture/click changed drawer ownership", 0, settledCallbacks)
@@ -293,6 +308,7 @@ class QueueHeaderMaterialBoundaryTest {
     }
 
     private fun sourceFacts(source: FrostedBackdrop) = JSONObject().put("identity", id(source)).put("parentIdentity", id(source.parent))
+        .put("backend", source.rendererGeneration.backend.name).put("samplingConsumers", source.consumers)
         .put("size", JSONArray(listOf(source.size.width, source.size.height))).put("originOnScreen", point(source.origin))
         .put("registrationToScreen", source.location.registrationToScreen()?.toString() ?: "UNKNOWN")
         .put("recorded", source.recorded).put("materialOnly", source.materialOnly).put("revision", source.revision)
