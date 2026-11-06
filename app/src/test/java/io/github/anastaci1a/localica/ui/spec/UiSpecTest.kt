@@ -100,4 +100,27 @@ class UiSpecTest {
         }
         assertTrue(uiSpec(settings,UiSpecData(motion=mapOf(MotionProfile.Control to MotionProfileSpec(180,EasingSpec(0f,1f,.2f,1f))))) is SpecResult.Rejected)
     }
+    @Test fun exactEasingExtremaBoundOneHundredThousandIndependentDenseCurves() {
+        val random=Random(600002)
+        repeat(100000) {
+            val e=EasingSpec(random.nextFloat(),random.nextFloat()*6-3,random.nextFloat(),random.nextFloat()*6-3)
+            val extrema=easingExtrema(e)
+            var min=0.0; var max=1.0
+            for(i in 0..64) {
+                val t=i/64.0; val u=1-t
+                val value=3*u*u*t*e.y1+3*u*t*t*e.y2+t*t*t
+                assertTrue(value>=extrema.start-1e-12 && value<=extrema.endInclusive+1e-12)
+                min=minOf(min,value); max=maxOf(max,value)
+            }
+            val curvature=6*maxOf(abs(e.y2.toDouble()-2*e.y1),abs(1-2*e.y2.toDouble()+e.y1))
+            val bound=curvature/(8*64*64)+1e-12
+            assertTrue(min-extrema.start<=bound)
+            assertTrue(extrema.endInclusive-max<=bound)
+        }
+        val overshoot=EasingSpec(.25f,2f,.75f,2f)
+        assertTrue(easingExtrema(overshoot).endInclusive>1.625)
+        assertTrue(uiSpec(settings,UiSpecData(expansion=StockUiSpec.expansion.copy(core=overshoot))) is SpecResult.Rejected)
+        assertTrue("Unbounded scalar profiles retain legitimate plugin back-easing",uiSpec(settings,UiSpecData(motion=mapOf(MotionProfile.Control to MotionProfileSpec(180,overshoot)))) is SpecResult.Accepted)
+    }
+
 }

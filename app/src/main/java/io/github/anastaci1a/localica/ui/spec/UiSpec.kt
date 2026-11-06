@@ -36,10 +36,16 @@ internal const val StrainMotionSpan = .24f
 internal const val StrainPressureSpan = .34f
 internal const val StrainDepthSpan = .48f
 private fun slopeBound(e: EasingSpec): Float {
-    val x = doubleArrayOf(e.x1.toDouble(), 2.0*(e.x2-2*e.x1), 1.0-3*e.x2+3*e.x1); val y = doubleArrayOf(e.y1.toDouble(), 2.0*(e.y2-2*e.y1), 1.0-3*e.y2+3*e.y1)
-    fun ratio(t: Double): Double { val dx=x[0]+t*(x[1]+t*x[2]); val dy=y[0]+t*(y[1]+t*y[2]); return if(abs(dx)>1e-12) abs(dy/dx) else if(abs(dy)>1e-12) Double.POSITIVE_INFINITY else { val ddx=x[1]+2*t*x[2]; val ddy=y[1]+2*t*y[2]; if(abs(ddx)>1e-12) abs(ddy/ddx) else if(abs(ddy)>1e-12) Double.POSITIVE_INFINITY else abs(y[2]/x[2]) } }
-    val a=y[2]*x[1]-y[1]*x[2]; val b=2*(y[2]*x[0]-y[0]*x[2]); val c=y[1]*x[0]-y[0]*x[1]; val roots=if(abs(a)<1e-14) listOf(-c/b) else if(b*b-4*a*c>=0) listOf((-b-sqrt(b*b-4*a*c))/(2*a),(-b+sqrt(b*b-4*a*c))/(2*a)) else emptyList()
+    val x1=e.x1.toDouble(); val x2=e.x2.toDouble(); val y1=e.y1.toDouble(); val y2=e.y2.toDouble(); val x=doubleArrayOf(x1,2*(x2-2*x1),1-3*x2+3*x1); val y=doubleArrayOf(y1,2*(y2-2*y1),1-3*y2+3*y1)
+    fun ratio(t: Double): Double { val u=1-t; val dx=u*u*x1+2*u*t*(x2-x1)+t*t*(1-x2); val dy=u*u*y1+2*u*t*(y2-y1)+t*t*(1-y2); return if(dx!=0.0) abs(dy/dx) else if(dy!=0.0) Double.POSITIVE_INFINITY else { val ddx=x[1]+2*t*x[2]; val ddy=y[1]+2*t*y[2]; if(ddx!=0.0) abs(ddy/ddx) else if(ddy!=0.0) Double.POSITIVE_INFINITY else abs(y[2]/x[2]) } }
+    val roots=quadraticRoots(y[2]*x[1]-y[1]*x[2],2*(y[2]*x[0]-y[0]*x[2]),y[1]*x[0]-y[0]*x[1]).toList()
     return (listOf(0.0,1.0)+roots.filter { it>0 && it<1 }).maxOf(::ratio).let { if(e==EasingSpec(.242192f,.999967f,.511935f,.997652f)) 4.13f else Math.nextUp(it.toFloat()) }
+}
+internal fun quadraticRoots(a: Double,b: Double,c: Double): DoubleArray {
+    if(a==0.0) return if(b==0.0) doubleArrayOf() else doubleArrayOf(-c/b); val d=b*b-4*a*c; if(d<0) return doubleArrayOf(); val q=-.5*(b+Math.copySign(sqrt(d),b)); return if(q==0.0) doubleArrayOf(-b/(2*a)) else doubleArrayOf(q/a,c/q)
+}
+internal fun easingExtrema(e: EasingSpec): ClosedFloatingPointRange<Double> {
+    val a=e.y1.toDouble(); val b=e.y2.toDouble(); val points=listOf(0.0,1.0)+quadraticRoots(3*(1+3*a-3*b),6*(b-2*a),3*a).filter { it>0 && it<1 }; val values=points.map { t -> val u=1-t; 3*u*u*t*a+3*u*t*t*b+t*t*t }; return values.min()..values.max()
 }
 private val slow = EasingSpec(0f,0f,.2f,1f)
 private val fast = EasingSpec(.4f,0f,.2f,1f)
@@ -59,7 +65,7 @@ fun uiSpec(settings: InterfaceSettings, overrides: UiSpecData? = null): SpecResu
     fun duration(d: Int)=d in 16..2000
     for((key,m) in motion) valid(when(m) { is MotionProfileSpec -> key !in setOf(MotionProfile.Marquee,MotionProfile.Scroll) && duration(m.durationMs) && ease(m.easing); is MarqueeSpec -> key==MotionProfile.Marquee && m.pauseMs in 0..2000 && duration(m.fadeMs) && duration(m.returnMs) && m.speedDpPerSecond.isFinite() && m.speedDpPerSecond>0 && ease(m.easing); is ListMotionSpec -> key==MotionProfile.Scroll && duration(m.listMs) && duration(m.gridMs) && duration(m.fadeMs) && ease(m.easing) && ease(m.fadeEasing) },"motion.$key")
     for((key,s) in spring) valid(s.dampingRatio.isFinite() && s.dampingRatio>0 && bounded(s.stiffness,1f,10000f) && s.speedExponent in setOf(0,2) && (key==SpringProfile.Strain || springHorizon(s)<=2),"spring.$key")
-    with(expansion) { valid(ease(core) && bounded(referenceDurationMs,Float.MIN_VALUE,2000f) && bounded(floorMs,Float.MIN_VALUE,2000f) && bounded(positionFloor,Float.MIN_VALUE,1f) && velocityKnee.isFinite() && velocityKnee>0 && velocityExponent.isFinite() && velocityExponent>0 && sizeExponent.isFinite() && sizeExponent>0 && deadBand.isFinite() && deadBand>=0 && bounded(stationaryOpenAt,0f,1f) && bounded(band,0f,.1f),"expansion") }
+    with(expansion) { valid(ease(core) && easingExtrema(core).let { it.start>=-band.toDouble() && it.endInclusive<=1.0+band } && bounded(referenceDurationMs,Float.MIN_VALUE,2000f) && bounded(floorMs,Float.MIN_VALUE,2000f) && bounded(positionFloor,Float.MIN_VALUE,1f) && velocityKnee.isFinite() && velocityKnee>0 && velocityExponent.isFinite() && velocityExponent>0 && sizeExponent.isFinite() && sizeExponent>0 && deadBand.isFinite() && deadBand>=0 && bounded(stationaryOpenAt,0f,1f) && bounded(band,0f,.1f),"expansion") }
     for((key,m) in material) with(m) { valid(listOf(blur,whiteTint,shadowStrength,shadowSpread).all { bounded(it,0f,1f) } && bounded(contrast,0f,.5f) && bounded(liftShadowStrength,.5f,1.5f) && bounded(shapeDamping,2f,40f) && bounded(depth,.6f,2f),"material.$key") }
     return if(errors.isNotEmpty()) SpecResult.Rejected(errors.toList()) else SpecResult.Accepted(UiSpec(space,radius,control,clearance,motion,spring,expansion,material,if(settings.reducedMotion || o.access==MotionAccess.Reduced) MotionAccess.Reduced else o.access?:if(settings.fasterMotion) MotionAccess.Faster else MotionAccess.Standard))
 }
