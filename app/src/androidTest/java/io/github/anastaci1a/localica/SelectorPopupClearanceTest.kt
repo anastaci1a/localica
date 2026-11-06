@@ -80,7 +80,7 @@ class SelectorPopupClearanceTest {
                     popupView = LocalView.current
                     val popupDensity = LocalDensity.current
                     corner = with(popupDensity) { 24.dp.toPx() - ChoiceInnerInset.roundToPx() }
-                    val backing = rememberFrostedBackdrop(Unit, glassBlur = 0f, whiteTint = 0f)
+                    val backing = rememberFrostedBackdrop(Unit)
                     SideEffect { source = backing; popupFontScale = popupDensity.fontScale }
                     Box(Modifier.fillMaxWidth().testTag("popup-clearance-scene")) {
                         // Only the real lens can display red. The recorded red
@@ -112,7 +112,7 @@ class SelectorPopupClearanceTest {
                 }
             }
         } }
-        if (Build.VERSION.SDK_INT < 33) compose.waitUntil(10000) { source?.lensSnapshot != null }
+        if (Build.VERSION.SDK_INT < 33) compose.waitUntil(10000) { source?.snapshot != null }
         compose.waitForIdle()
         assertEquals("The real dialog content must use the requested font scale", fontScale, popupFontScale, .001f)
     }

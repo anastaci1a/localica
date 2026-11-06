@@ -10,7 +10,7 @@ import kotlinx.coroutines.ensureActive
 import kotlin.math.roundToInt
 
 /** A readback is not necessarily CPU-readable on modern Android. Normalize once
- * at the Legacy publication boundary, including completely clear/untinted glass.
+ * at the shared thumbnail publication boundary, including clear/untinted glass.
  * This is not blur: retain sharp pixels, alpha and the exact logical source extent.
  * The input may be shared with a native lease/cache and is never recycled here. */
 internal suspend fun softwareGlassSnapshot(image: ImageBitmap, size: IntSize): ImageBitmap {
@@ -33,7 +33,7 @@ internal suspend fun softwareGlassSnapshot(image: ImageBitmap, size: IntSize): I
     }
 }
 
-/** Android 8–11 fallback: shared, bounded, off-main blur with premultiplied alpha. */
+/** Artwork wash: shared, bounded, off-main blur with premultiplied alpha. */
 internal suspend fun blurGlassSnapshot(image: ImageBitmap, radius: Float): ImageBitmap {
     val scale = if (radius < 4f) 1 else 4
     val source = readGlassPixels(image, scale)

@@ -86,15 +86,3 @@ internal fun backdropContainsFootprint(width: Float, height: Float, corner: Floa
     }
 }
 
-/** Texture-only mapping and cache identity; optical vertices and rays remain consumer-local. */
-internal data class BackdropSampleMapping(
-    val sourceSize: IntSize,
-    val sourceOffset: Offset,
-    val registration: BackdropRegistration? = null
-) {
-    fun texture(point: Offset, imageSize: IntSize): Offset {
-        val source = registration?.map(point) ?: (point + sourceOffset)
-        return Offset(source.x * (imageSize.width.toFloat() / sourceSize.width.coerceAtLeast(1)),
-            source.y * (imageSize.height.toFloat() / sourceSize.height.coerceAtLeast(1)))
-    }
-}

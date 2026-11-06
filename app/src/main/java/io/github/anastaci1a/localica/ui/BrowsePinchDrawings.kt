@@ -186,9 +186,9 @@ internal fun Modifier.pinchRetainedOverlay(motion: BrowsePinchMotion, grid: Lazy
     val fadeFocus = remember(motion) { PinchFadeFocus() }
     val recordingDensity = androidx.compose.ui.platform.LocalDensity.current
     val direction = androidx.compose.ui.platform.LocalLayoutDirection.current
-    val renderer = currentGlassRendererGeneration()
-    val blur = renderer.backend == GlassBackend.Modern && android.os.Build.VERSION.SDK_INT >= 31
-    DisposableEffect(graphics) { onDispose { groups.forEach { graphics.releaseGraphicsLayer(it.output) } } }
+    val averageProgress = glassAverageProgress()
+    val blur = android.os.Build.VERSION.SDK_INT >= 33
+    DisposableEffect(graphics) { onDispose { groups.forEach { graphics.releaseGraphicsLayer(it.output); graphics.releaseGraphicsLayer(it.flatOutput) } } }
     SideEffect { motion.hoverLift = { scene?.hover?.get(it) } }
     BackdropLease(backing.takeIf { motion.visualSource != null && motion.frozen.values.any { it.content?.hover != null } })
     DisposableEffect(scene) { onDispose { scene?.retainedHover = emptyList() } }
@@ -291,12 +291,12 @@ internal fun Modifier.pinchRetainedOverlay(motion: BrowsePinchMotion, grid: Lazy
             // Standalone compositors can render retained selections without a host.
             if (scene == null) {
                 val components = hoverComponents(lifted.map { it.first.rest.bounds }, MediaSelectionGap.toPx())
-                while (groups.size < components.size) groups += HoverGroupRenderer(graphics.createGraphicsLayer(), scope)
+                while (groups.size < components.size) groups += HoverGroupRenderer(graphics.createGraphicsLayer(), graphics.createGraphicsLayer(), scope)
                 components.forEachIndexed { index, members ->
                     val parts = members.map { lifted[it].first }
                     drawHoverGroup(groups[index], parts, { a, b -> minOf(parts[a].progress, parts[b].progress) },
                         backing, location, blur, recordingDensity, direction, MediaSelectionGap.toPx(),
-                        opacity = members.maxOf { lifted[it].second }, lift = liftStyle)
+                        opacity = members.maxOf { lifted[it].second }, lift = liftStyle, averageProgress = averageProgress.value)
                 }
             }
             fun drawRetainedText(placed: RetainedPinchPlacement) {

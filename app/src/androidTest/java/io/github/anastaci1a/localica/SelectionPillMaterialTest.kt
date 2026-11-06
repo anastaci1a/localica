@@ -63,7 +63,7 @@ class SelectionPillMaterialTest {
             compose.waitForIdle()
             val tracks = (0..2).map { Track("t$it", "Song $it", fileName = "$it.mp3", relativePath = "$it.mp3") }
             compose.runOnIdle { session.select(null, tracks.map { SongRow(it.id, it) }) }
-            if (android.os.Build.VERSION.SDK_INT < 33) compose.waitUntil(10000) { backdrop.glassFallback != null }
+            if (android.os.Build.VERSION.SDK_INT < 33) compose.waitUntil(10000) { backdrop.snapshot != null }
             compose.waitForIdle()
             assertEquals("The list keeps its height (no new bottom clip edge), dark=$dark", before, listHeight)
             val pill = compose.onNodeWithTag("selection-pill", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot

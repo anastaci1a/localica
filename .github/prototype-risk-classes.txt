@@ -341,3 +341,8 @@ io.github.anastaci1a.localica.BackdropProducerContinuityTest
 io.github.anastaci1a.localica.GlassScrollHoldTest
 io.github.anastaci1a.localica.AssertionReadinessTest
 io.github.anastaci1a.localica.ShadowContinuityTest
+io.github.anastaci1a.localica.GlassRendererPreferenceTest
+io.github.anastaci1a.localica.GlassRendererSettingsTest
+io.github.anastaci1a.localica.GlassRenderModesTest
+io.github.anastaci1a.localica.GlassScrollHoldTest
+io.github.anastaci1a.localica.GlassModeFrameTimingTest

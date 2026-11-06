@@ -297,7 +297,7 @@ class QueueHeaderMaterialBoundaryTest {
         .put("registrationToScreen", source.location.registrationToScreen()?.toString() ?: "UNKNOWN")
         .put("recorded", source.recorded).put("materialOnly", source.materialOnly).put("revision", source.revision)
         .put("requestedReadback", source.readbackRequest).put("publishedReadback", source.snapshotReadbackRequest)
-        .put("snapshotIdentity", id(source.snapshot)).put("fallbackIdentity", id(source.fallback)).put("lensIdentity", id(source.lensSnapshot))
+        .put("snapshotIdentity", id(source.snapshot)).put("fallbackIdentity", id(source.fallback)).put("lensIdentity", id(source.snapshot))
         .put("producerDrawReceipt", source.snapshotDraws?.toString() ?: "UNKNOWN")
 
     private fun capture(label: String, geometry: Geometry): Bitmap {

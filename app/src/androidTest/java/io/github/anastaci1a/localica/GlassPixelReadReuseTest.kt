@@ -60,19 +60,6 @@ class GlassPixelReadReuseTest {
                             equal(old, prepared)
                         } finally { prepared?.recycle(); old.recycle() }
                     }
-                    val image = input.asImageBitmap()
-                    for (amount in listOf(-1f, 0f, .001f, .25f, .75f, 1f, 2f)) {
-                        val old = originalTintLensSnapshot(image, amount)
-                        var prepared: androidx.compose.ui.graphics.ImageBitmap? = null
-                        try {
-                            prepared = tintLensSnapshot(image, amount)
-                            if (amount <= 0f) { assertSame(image, old); assertSame(image, prepared) }
-                            else equal(old.asAndroidBitmap(), prepared.asAndroidBitmap())
-                        } finally {
-                            if (prepared != null && prepared !== image) prepared.asAndroidBitmap().recycle()
-                            if (old !== image) old.asAndroidBitmap().recycle()
-                        }
-                    }
                     assertFalse(input.isRecycled)
                     assertArrayEquals(before, pixels(input))
                     Log.i("GlassPixelReadWork", "kind=$kind size=${width}x$height scale=1 baselineCopies=${baselineCopies.size} " +

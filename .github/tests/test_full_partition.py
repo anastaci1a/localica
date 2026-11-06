@@ -93,7 +93,7 @@ class FullPartitionTest(unittest.TestCase):
         folder.mkdir(parents=True)
         methods = [('ScopedSearchOpticsTest', 'searchLensRedrawsWhenItsListBackdropArrivesLater', 33),
                    ('FloatingImeLifecycleTest', 'actualFloatingWindowPreservesEditingAndEndsOnceAcrossFocusAndReopen', 30),
-                   ('GlassRendererSwitchingTest', 'modernSwitchingDoesNotReplaceAnUnavailableRequestedHomeWithThePrimary', 33)]
+                   ('GlassReadabilityTest', 'entireGlassUsesTheBoundedCurveWithoutTintingItsForeground', 33)]
         for cls, method, minimum in methods:
             (folder/(cls+'.kt')).write_text('package io.github.anastaci1a.localica\nimport org.junit.Test\nclass '+cls+
                 ' { @Test @androidx.test.filters.SdkSuppress(minSdkVersion = '+str(minimum)+') fun '+method+'() {} }')
@@ -112,23 +112,44 @@ class FullPartitionTest(unittest.TestCase):
             with self.assertRaises(ValueError):
                 partition.plan(self.root, ['example.RiskTest'], '26', 'a'*40)
 
+    def test_multiple_optical_contracts_preserve_average_coverage(self):
+        folder = self.root/'app/src/androidTest/java/io/github/anastaci1a/localica'
+        folder.mkdir(parents=True)
+        path = folder/'GlassAppearanceTest.kt'
+        path.write_text('package io.github.anastaci1a.localica\nimport org.junit.Test\n'
+                        'class GlassAppearanceTest { '
+                        '@androidx.test.filters.SdkSuppress(minSdkVersion = 33) @Test '
+                        'fun frostedPanelsStillScatterTheParentScene() {} '
+                        '@androidx.test.filters.SdkSuppress(minSdkVersion = 33) @Test '
+                        'fun blurTintAndShadowChangeIndependentlyWhileForegroundStaysSharp() {} '
+                        '@Test fun averageStillRuns() {} }')
+        older = partition.plan(self.root, ['example.RiskTest'], '26', 'a'*40)
+        newer = partition.plan(self.root, ['example.RiskTest'], '36', 'a'*40)
+        self.assertEqual(2, len(older['sdk_omissions']))
+        self.assertEqual([], newer['sdk_omissions'])
+        self.assertIn('io.github.anastaci1a.localica.GlassAppearanceTest#averageStillRuns', older['expected'])
+        path.write_text(path.read_text().replace('@Test fun averageStillRuns',
+                        '@androidx.test.filters.SdkSuppress(minSdkVersion = 33) @Test fun averageStillRuns'))
+        with self.assertRaises(ValueError):
+            partition.plan(self.root, ['example.RiskTest'], '26', 'a'*40)
+
     def test_renderer_sdk_exception_cannot_hide_another_method_or_changed_requirement(self):
         folder = self.root/'app/src/androidTest/java/io/github/anastaci1a/localica'
         folder.mkdir(parents=True)
-        path = folder/'GlassRendererSwitchingTest.kt'
+        path = folder/'GlassReadabilityTest.kt'
         original = ('package io.github.anastaci1a.localica\nimport org.junit.Test\n'
-                    'class GlassRendererSwitchingTest { '
+                    'class GlassReadabilityTest { '
                     '@Test @androidx.test.filters.SdkSuppress(minSdkVersion = 33) '
-                    'fun modernSwitchingDoesNotReplaceAnUnavailableRequestedHomeWithThePrimary() {} '
-                    '@Test fun legacyStillRuns() {} }')
+                    'fun entireGlassUsesTheBoundedCurveWithoutTintingItsForeground() {} '
+                    '@Test fun averageStillRuns() {} }')
         path.write_text(original)
         for api in ('26', '36'):
             manifest = partition.plan(self.root, ['example.RiskTest'], api, 'a'*40)
-            self.assertIn('io.github.anastaci1a.localica.GlassRendererSwitchingTest#legacyStillRuns', manifest['expected'])
+            self.assertIn('io.github.anastaci1a.localica.GlassReadabilityTest#averageStillRuns', manifest['expected'])
         for changed in [original.replace('minSdkVersion = 33', 'minSdkVersion = 34'),
-                        original.replace('fun modernSwitchingDoesNotReplace', 'fun renamedDoesNotReplace'),
-                        original.replace('@Test fun legacyStillRuns',
-                            '@Test @androidx.test.filters.SdkSuppress(minSdkVersion = 33) fun legacyStillRuns')]:
+                        original.replace('fun entireGlassUsesTheBoundedCurve', 'fun renamedCurve'),
+                        original.replace('@Test fun averageStillRuns',
+                            '@Test @androidx.test.filters.SdkSuppress(minSdkVersion = 33) fun averageStillRuns')]:
             path.write_text(changed)
             for api in ('26', '36'):
                 with self.subTest(api=api, changed=changed), self.assertRaises(ValueError):

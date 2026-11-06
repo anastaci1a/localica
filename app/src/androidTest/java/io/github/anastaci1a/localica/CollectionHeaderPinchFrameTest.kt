@@ -137,7 +137,7 @@ class CollectionHeaderPinchFrameTest {
             // Correlate independent same-generation sampling receipts after the
             // gesture instead of requiring callback ordering within each frame.
             val sampled = compose.runOnUiThread { sampling.filter { it.generation == visibleGeneration && it.active && it.progress in .05f.. .95f } }
-            assertTrue("Observe actual filter/mesh recordings", sampled.isNotEmpty())
+            assertTrue("Observe actual backdrop sampling", sampled.isNotEmpty())
             sampled.forEach { receipt ->
                 val expected = requireNotNull(receipt.expectedRoot)
                 val root = requireNotNull(receipt.draw.rootCorners)

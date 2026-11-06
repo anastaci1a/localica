@@ -10,6 +10,13 @@ import org.json.JSONObject
 class InterfacePreferences(context: Context) {
     private val preferences = context.getSharedPreferences("interface", Context.MODE_PRIVATE)
     fun read(): InterfaceSettings {
+        val savedRenderer = preferences.getString("glass-renderer", null)
+        if (savedRenderer in listOf("Automatic", "Modern", "Legacy") || preferences.contains("glass-live-scroll")) {
+            preferences.edit().apply {
+                if (savedRenderer in listOf("Automatic", "Modern", "Legacy")) putString("glass-renderer", "Normal")
+                remove("glass-live-scroll")
+            }.apply()
+        }
         val tabs = preferences.getString("tabs", null)?.split(',')?.mapNotNull { name -> enumNameOrNull<MainTab>(name)?.takeIf { it in MainTab.available } }
             ?.distinct()?.takeIf { it.isNotEmpty() } ?: InterfaceSettings().tabs
         return InterfaceSettings(tabs, preferences.getBoolean("history", true), preferences.getBoolean("confirm-exit", false),
@@ -30,8 +37,7 @@ class InterfacePreferences(context: Context) {
                 preferences.getFloat("glass-contrast-weight", 2f), preferences.getFloat("tab-classic-opacity", .1f),
                 preferences.getFloat("glass-control-expansion", 1.75f), preferences.getFloat("tab-overlay-darkening", 0f),
                 preferences.getBoolean("tab-overlay-foreground", false),
-                preferences.enumValue<GlassRendererMode>("glass-renderer") ?: GlassRendererMode.Automatic,
-                preferences.getBoolean("glass-live-scroll", false),
+                preferences.enumValue<GlassRendererMode>("glass-renderer") ?: GlassRendererMode.Normal,
                 preferences.getFloat("glass-lift-shadow-strength", LiftShadowDefault)).normalized(),
             grayTone = preferences.getFloat("gray-tone", .4f).normalizedGrayTone(),
             lyricDelayMs = preferences.getInt("lyric-delay-ms", 0).coerceIn(-2000, 2000),
@@ -55,7 +61,7 @@ class InterfacePreferences(context: Context) {
             .putFloat("glass-control-expansion", glass.controlExpansion)
             .putFloat("tab-overlay-darkening", glass.overlayDarkening).putBoolean("tab-overlay-foreground", glass.overlayForeground)
             .putString("tab-lens-style", glass.tabStyle.name)
-            .putString("glass-renderer", glass.renderer.name).putBoolean("glass-live-scroll", glass.liveScrollGlass)
+            .putString("glass-renderer", glass.renderer.name).remove("glass-live-scroll")
             .putFloat("tab-lens-blur", glass.tabBlur).putFloat("tab-lens-tint", glass.tabWhiteTint)
             .putFloat("glass-lift-shadow-strength", glass.liftShadowStrength)
             .putFloat("glass-shape-damping", glass.shapeDamping).putFloat("glass-depth", glass.depth)
