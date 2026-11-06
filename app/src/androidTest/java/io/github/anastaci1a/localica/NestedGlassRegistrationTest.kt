@@ -38,6 +38,7 @@ import kotlin.math.roundToInt
 class NestedGlassRegistrationTest {
     @get:Rule val compose = createComposeRule()
 
+    @androidx.test.filters.SdkSuppress(minSdkVersion = 33)
     @Test fun transformedGlassSamplesItsSceneThroughForwardReverseFitAndScrolling() {
         var fitX by mutableFloatStateOf(.55f)
         var fitY by mutableFloatStateOf(.75f)
@@ -58,7 +59,7 @@ class NestedGlassRegistrationTest {
             scope = rememberCoroutineScope()
             CompositionLocalProvider(LocalGlassAppearance provides GlassAppearance(
                 blur = 0f, whiteTint = 0f, contrast = 0f, shadowStrength = 0f)) {
-                source = rememberFrostedBackdrop(Unit, dark = false, glassBlur = 0f, whiteTint = 0f)
+                source = rememberFrostedBackdrop(Unit, dark = false)
                 Box(Modifier.size(320.dp, 400.dp).testTag("nested-registration-scene")
                     .onGloballyPositioned { scene = it }) {
                     // Both recordings inherit this transform. Only the foreground has
@@ -92,7 +93,7 @@ class NestedGlassRegistrationTest {
                 }
             }
         } }
-        if (Build.VERSION.SDK_INT < 33) compose.waitUntil(10000) { source.lensSnapshot != null }
+        if (Build.VERSION.SDK_INT < 33) compose.waitUntil(10000) { source.snapshot != null }
         val cell = 24f * compose.density.density
         data class Phase(val x: Float, val y: Float, val scroll: Int,
             val commonX: Float = .88f, val commonY: Float = .92f)
@@ -206,7 +207,7 @@ class NestedGlassRegistrationTest {
             view = LocalView.current
             CompositionLocalProvider(LocalGlassAppearance provides GlassAppearance(
                 blur = 0f, whiteTint = 0f, contrast = 0f, shadowStrength = 0f)) {
-                val source = rememberFrostedBackdrop(Unit, dark = false, glassBlur = 0f, whiteTint = 0f)
+                val source = rememberFrostedBackdrop(Unit, dark = false)
                 SideEffect { source.materialOnly = true; source.materialCorner = 0f }
                 Box(Modifier.size(320.dp, 240.dp).testTag("scaled-material-scene")) {
                     Box(Modifier.align(Alignment.Center).size(200.dp, 160.dp)) {

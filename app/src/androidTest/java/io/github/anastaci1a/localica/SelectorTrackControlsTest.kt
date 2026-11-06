@@ -39,7 +39,7 @@ class SelectorTrackControlsTest {
         var source: FrostedBackdrop? = null
         compose.setContent { LocalicaTheme {
             reviewView = LocalView.current
-            val backdrop = rememberFrostedBackdrop(Unit, glassBlur = 0f, whiteTint = 0f)
+            val backdrop = rememberFrostedBackdrop(Unit)
             source = backdrop
             CompositionLocalProvider(LocalGlassAppearance provides GlassAppearance(tabStyle = style,
                 overlayForeground = true, blur = 0f, whiteTint = 0f, contrast = 0f)) {
@@ -58,7 +58,7 @@ class SelectorTrackControlsTest {
                 }
             }
         } }
-        if (android.os.Build.VERSION.SDK_INT < 33) compose.waitUntil(10000) { source?.lensSnapshot != null }
+        if (android.os.Build.VERSION.SDK_INT < 33) compose.waitUntil(10000) { source?.snapshot != null }
         checkPull("tab-track-host", "tab-track-shell", "tab-selector", "tab-option-content-0", false)
     }
 

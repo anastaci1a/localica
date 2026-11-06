@@ -17,15 +17,7 @@ internal fun SongDragScene(host: SongDragHost, modifier: Modifier = Modifier,
     content: @Composable BoxScope.() -> Unit) {
     val dragging = host.state?.drag != null
     val source = if (dragging) rememberFrostedBackdrop(host.state?.drag,
-        dark = host.source?.dark == true, retainRaster = false, settledRefresh = false, distinctPixels = true) else null
-    val renderer = currentGlassRendererGeneration()
-    LaunchedEffect(source, renderer) {
-        if (source != null && renderer.backend == GlassBackend.Legacy) {
-            // Match the browse scene's bounded refresh cadence, never a readback per frame.
-            delay(150)
-            while (isActive) { source.refresh(); delay(650) }
-        }
-    }
+        dark = host.source?.dark == true, retainRaster = false) else null
     val observer = LocalSongDragSceneObserver.current
     SideEffect { observer?.invoke(source) }
     Box(modifier) {

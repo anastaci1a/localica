@@ -130,12 +130,13 @@ The trail is an in-memory ring of the last 500 lines (about 256 KB), lost when t
 
 A healthy idle app records nothing. Debuggable builds also mirror each line to logcat.
 
+Glass always follows the scrolling content. The retired scroll-freeze preference is removed during migration.
+
 **Interface → Glass** provides live persistent controls and reset, with a draggable preview that compresses at its edges and morphs between a pill and dialog:
 
 | Control | Range / treatment |
 | --- | --- |
-| Glass renderer | Automatic (default), Modern on Android 13+, or Legacy. Changes apply across glass surfaces without restarting. Unsupported restored Modern stays saved while using Legacy, with an explanation; Cancel preserves the saved choice. Reset returns to Automatic. |
-| Live glass while scrolling | Off (default) holds Modern glass controls on the last page frame while the list scrolls, flings or is dragged by the scrollbar, then samples live again when it stops; this avoids re-blurring the moving page every frame. On keeps glass live throughout. Legacy glass is unaffected. |
+| Glass renderer | Normal (default) or None. None uses solid average colour without refraction or blur. Normal uses the same fallback below Android 13. Changes blend without restarting. Old Automatic, Modern and Legacy settings migrate to Normal. |
 | Blur / white tint | Clear through frosted; defaults use light scattering/tint. |
 | Shape damping / resting depth | Damping 2–40 (default 8); depth 0.6–2 (default 1.35). Footprint and lensing share the same response. |
 | Shadow strength / spread | Off through visible; tight through broad; default very subtle and broad. |

@@ -89,7 +89,7 @@ fun Float.normalizedGrayTone() = if (isFinite()) coerceIn(0f, 1f) else .4f
 
 enum class TabLensStyle(val label: String) { Adjustable("Adjustable glass"), Overlay("Clear overlay lens"), Classic("Classic gray pill") }
 
-enum class GlassRendererMode(val label: String) { Automatic("Automatic"), Modern("Modern"), Legacy("Legacy") }
+enum class GlassRendererMode(val label: String) { Normal("Normal"), None("None") }
 
 data class GlassAppearance(
     val blur: Float = .2f,
@@ -107,9 +107,7 @@ data class GlassAppearance(
     val controlExpansion: Float = 1.75f,
     val overlayDarkening: Float = 0f,
     val overlayForeground: Boolean = false,
-    val renderer: GlassRendererMode = GlassRendererMode.Automatic,
-    /** Modern glass re-blurs the moving page every frame; off (default) holds the last frame until scrolling stops. */
-    val liveScrollGlass: Boolean = false,
+    val renderer: GlassRendererMode = GlassRendererMode.Normal,
     /** Lift shadow strength under selected and floating items, as a multiple of [shadowStrength] (#553). */
     val liftShadowStrength: Float = LiftShadowDefault,
 ) {
@@ -121,7 +119,7 @@ data class GlassAppearance(
         if (contrastWeight.isFinite()) contrastWeight.coerceIn(1f, 2f) else 2f,
         classicOpacity.unit(.1f),
         if (controlExpansion.isFinite()) controlExpansion.coerceIn(1f, 2f) else 1.75f,
-        overlayDarkening.unit(0f).coerceAtMost(.5f), overlayForeground, renderer, liveScrollGlass,
+        overlayDarkening.unit(0f).coerceAtMost(.5f), overlayForeground, renderer,
         normalizedLiftShadowStrength(liftShadowStrength))
     private fun Float.unit(fallback: Float) = if (isFinite()) coerceIn(0f, 1f) else fallback
 }

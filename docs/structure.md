@@ -245,9 +245,9 @@ One continuous material changes its scattering/tint. No endpoint surface swap. T
 
 Morphs and controls share damped acceleration/contact/pressure response with coupled footprint/depth. Idle elastic clocks stop. [Visible motion contract](interface.md#motion-and-access).
 
-Record browsing, panel material, lists, player and lyrics separately to prevent sampling cycles. The lyrics return source composites clipped/faded lyric documents over their artwork backing, excluding the return control. Legacy captures join matching outer, mask and composite draw generations before copying. Stale generations cannot publish.
+Record browsing, panel material, lists, player and lyrics separately to prevent sampling cycles. The lyrics return source composites clipped/faded lyric documents over their artwork backing, excluding the return control. Thumbnail captures join matching outer, mask and composite draw generations before copying. Stale generations cannot publish.
 
-Sampling leases retain shared scenes as offscreen rasters. Scrolling lists keep display lists so narrow lens crops cull unseen rows without another full-viewport raster. Unreferenced scenes skip readback. Observe capture size/revision inside sampling coroutines, reuse completed samples across visibility changes.
+Sampling leases retain shared scenes as offscreen rasters. Scrolling lists keep display lists so narrow lens crops cull unseen rows without another full-viewport raster. Unreferenced scenes skip readback. On older Android, sample changed recordings into shared 32×32 thumbnails. Reuse completed samples across visibility changes.
 
 Resolve source and consumer in one live relative recording-local basis, including fit/nonuniform scale and scrolling. Common ancestors cancel and separate windows share the screen frame. Use that same mapping for crop coverage and parent-boundary clipping.
 
@@ -257,15 +257,15 @@ Inline lenses exclude themselves. Modal windows use global coordinates. The navb
 
 Hover selections read live placement and normalize translation before caching outlines/connectivity. Lazy owners provide current native item keys, since attached prefetched coordinates do not prove placement. Unselected hosts do not observe the selection placement clock.
 
-Each merged group draws one shadow and magnified backdrop surface before its uniformly scaled foreground. Modern uses a cropped GPU blur; Legacy uses the shared prepared backdrop without per-frame readback. Browser artwork/text passes share the item transform. Pinch snapshots retain hover geometry separately from content and playback frost, preserving one drawing owner for each.
+Each merged group draws one shadow and magnified backdrop surface before its uniformly scaled foreground. Normal uses a cropped GPU blur on Android 13+. None uses a solid average. Browser artwork/text passes share the item transform. Pinch snapshots retain hover geometry separately from content and playback frost, preserving one drawing owner for each.
 
 Retain immutable current-song texture at its exact display resolution instead of replaying grain primitives during scrolling. Procedural recordings use stable density and independent draw scopes, never a mutable node scope as its own density.
 
 ### Optics and performance
 
-Controls and panels use one [lens model](interface.md#materials-and-controls), executed by platform-specific adapters. Share outline geometry across clipping, refraction, illumination and shadow. Page-owned ink polarity requires no GPU readback. Both adapters use the same ordered brightness mapping. Older devices share bounded, asynchronously prepared blur/tint/tone endpoints.
+Controls and panels use one [lens model](interface.md#materials-and-controls), in Normal mode on Android 13+. Share outline geometry across clipping, refraction, illumination and shadow. Page-owned ink polarity requires no GPU readback. Normal and None use the same ordered brightness mapping. Android versions below 13 use average-colour rendering without optical preparation.
 
-Active sliders and switches render one procedural scene, unchanged outside the lens and refracted inside. Resting white thumbs release sampling leases and bypass optics. Active controls capture only the thumb neighborhood and replace pixels only within its silhouette. Track, touch mapping and expanded wall contact share geometry.
+Active sliders and switches render one procedural scene, unchanged outside the lens, with refraction or average colour inside. Resting white thumbs release sampling leases and bypass optics. Active controls capture only the thumb neighborhood and replace pixels only within its silhouette. Track, touch mapping and expanded wall contact share geometry.
 
 On Android 13+, controls entirely over explicitly recorded panel material use an 8×8 local GPU average, then the shared tint/contrast mapping and outline. Morphs retain that averaged home source while admitting the destination. Never infer eligibility from color similarity or average a foreground-containing recording.
 
@@ -274,9 +274,8 @@ Floating list controls sample the finished viewport after its fade and scrolling
 | Platform / layer | Treatment |
 | --- | --- |
 | Android 13+ optics | Padded AGSL rounded-surface refraction and tone mapping; the page supplies foreground polarity without readback. |
-| Older optics | Bounded meshes over prepared snapshots with the same curvature/tint model and sharp foreground content. Android 8–9 rasterize and retain the mesh because [hardware vertex drawing starts at API 29](https://developer.android.com/topic/performance/hardware-accel). Software texture triangles may cyclically reorder their unchanged vertices to improve the legacy affine basis; folds and genuinely singular mappings are not altered. |
 | Live scattering | Bounded downsampled layers: frosted panels on Android 12+, refracting glass on Android 13+. |
-| Prepared scattering | Shared cancellable snapshots on older adapters after scene changes/settled scrolling, never each gesture frame. |
+| Average-only rendering | Shared 8×8 GPU averages, or footprint averages from tiny shared thumbnails below Android 13. No refraction or blur. |
 | Foreground / clear glass | Full resolution; tint below icons/text. |
 | Shadows | [Shadows rules](#shadows). |
 
@@ -292,6 +291,4 @@ Geometry changes invalidate the texture; translation reuses it.
 
 Keep composed backings within their viewport and guard unrecorded/released layers before readback. Floating-glass blur is independent of Queue frost. Graphics remain replaceable and independent of core data/playback.
 
-Legacy clear-overlay navigation selectors compose stable parent imagery and unmasked ink through current shell/selector rays and per-slot inverse transforms. Evaluate selection color at the refracted coordinate. Never cache moving shell geometry or selection masks into the ink atlas. Translation reuses mesh topology, while Android 8–9 still rasterize changed scenes into a bounded selector bitmap.
-
-Modern selectors retain live padded recordings.
+Navigation selectors retain live padded recordings. The same shared material path supplies Normal optics or None averages.

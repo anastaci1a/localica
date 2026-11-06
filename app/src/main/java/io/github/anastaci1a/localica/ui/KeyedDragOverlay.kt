@@ -24,12 +24,7 @@ import androidx.compose.ui.unit.constrainHeight
 import kotlin.math.roundToInt
 import androidx.compose.ui.zIndex
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.delay
 import kotlin.math.exp
-
-/** Passive test observation of the recursive capture graph. */
-internal val LocalDragPaneObserver = staticCompositionLocalOf<((Int, FrostedBackdrop) -> Unit)?> { null }
 
 @Composable
 internal fun <T : Any, P> BoxScope.KeyedDragOverlay(state: KeyedDragState<T, P>, reducedMotion: Boolean,
@@ -118,46 +113,18 @@ internal fun <T : Any, P> BoxScope.KeyedDragOverlay(state: KeyedDragState<T, P>,
     HoverDragUnderlay({ drag.moving.mapNotNull { frames[state.keyOf(it)] } }, backing, Modifier.matchParentSize().zIndex(2f))
     val cards = remember(drag, lifted, drag.destinations) { drag.moving.withIndex().filter { (index, item) -> index < 3 ||
         (!lifted && state.keyOf(item) in drag.initialBounds) || (drag.dropping && state.keyOf(item) in drag.destinations.orEmpty()) } }
-    val paneObserver = LocalDragPaneObserver.current
     var previousPane = backing
     cards.reversed().forEach { (index, item) -> key(drag, state.keyOf(item)) {
         val paneBacking = previousPane
         // The top pane still samples its backing even though no later pane needs its recording.
         if (index == 0) BackdropLease(paneBacking)
-        // Propagate the prepared endpoint once; finishing pickup also removes lower-pane contents.
-        val paneScene = if (index > 0) rememberFrostedBackdrop(Triple(drag, lifted, paneBacking?.lensSnapshot),
+        // Capture after the pane records its changed content/backing, not when composition
+        // first sees the new backing (which can precede that draw).
+        val paneScene = if (index > 0) rememberFrostedBackdrop(drag,
             // Consumers already clip to their pane. Avoid a full-viewport offscreen raster
             // that redraws everything outside those clips whenever a card moves.
-            dark = backing?.dark == true, retainRaster = false, whiteTint = 0f, settledRefresh = false, distinctPixels = true) else null
-        SideEffect {
-            if (paneScene != null) paneObserver?.invoke(index, paneScene)
-            paneScene?.readbackBackground = {
-                paneBacking?.snapshot?.let { image ->
-                    paneBacking.location.registrationTo(paneScene.location)?.let { BackdropSnapshotBackground(image, it) }
-                }
-            }
-            paneScene?.readbackRegion = {
-                val bounds = frames.values.map { it.geometry().lifted.bounds.translate(it.position()) }
-                if (bounds.isEmpty()) null else {
-                    // Include every pane, its sampling displacement, blur and outside shadow.
-                    val room = with(density) { 96.dp.toPx() }
-                    androidx.compose.ui.unit.IntRect(
-                        kotlin.math.floor(bounds.minOf { it.left } - room).toInt().coerceIn(0, state.viewportWidth - 1),
-                        kotlin.math.floor(bounds.minOf { it.top } - room).toInt().coerceIn(0, state.viewportHeight - 1),
-                        kotlin.math.ceil(bounds.maxOf { it.right } + room).toInt().coerceIn(1, state.viewportWidth),
-                        kotlin.math.ceil(bounds.maxOf { it.bottom } + room).toInt().coerceIn(1, state.viewportHeight))
-                }
-            }
-        }
+            dark = backing?.dark == true, retainRaster = false) else null
         previousPane = paneScene
-        LaunchedEffect(drag, paneScene) {
-            if (paneScene == null) return@LaunchedEffect
-            snapshotFlow { drag.pointer to drag.dropping }.collectLatest {
-                // Legacy preparation follows a paused or completed movement, never a readback per frame.
-                delay(200)
-                paneScene.refresh()
-            }
-        }
         val itemKey = state.keyOf(item)
         val destination = drag.destinations?.get(itemKey)
         val holder = outlineHolder(item)

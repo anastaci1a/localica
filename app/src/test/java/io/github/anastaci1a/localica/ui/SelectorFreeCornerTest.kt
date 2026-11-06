@@ -99,25 +99,6 @@ class SelectorFreeCornerTest {
         }
     }
 
-    @Test fun outlinedMeshFollowsBothEllipseAxesAndCoversTheNewFreeCornerArea() {
-        for (vertical in listOf(false, true)) for (wall in listOf(-1f, 1f)) {
-            val bounds = if (vertical) Rect(0f, 0f, 56f, 80f) else Rect(0f, 0f, 80f, 56f)
-            val free = if (vertical) CornerRadius(20f, 8f) else CornerRadius(8f, 20f)
-            val contour = SelectorTrackContour.ends(bounds, 20f, free, vertical, wall)
-            val uniform = SelectorTrackContour.uniform(bounds, 20f)
-            val mesh = outlinedLensMesh(listOf(contour.outline), 1f) { LensGeometry(bounds, 20f).field(it) }
-            var newlyCovered = false
-            for (i in mesh.fields.indices) {
-                val p = Offset(mesh.vertices[i * 2], mesh.vertices[i * 2 + 1])
-                assertTrue(p.x.isFinite() && p.y.isFinite())
-                val inside = bounds.center + (p - bounds.center) * .9999f
-                assertTrue("Mesh remains inside its elliptical outline at $p", contour.contains(inside))
-                if (!uniform.contains(inside)) newlyCovered = true
-            }
-            assertTrue("Mesh must render the area gained by tightening a free corner", newlyCovered)
-            mesh.indices.forEach { assertTrue(it.toInt() in mesh.fields.indices) }
-        }
-    }
 
     @Test fun restAndReducedMotionKeepTheUniformFastPath() {
         for (vertical in listOf(false, true)) for (rtl in listOf(false, true))

@@ -600,9 +600,7 @@ private fun Modifier.recordPlayerCoverBackdrop(source: FrostedBackdrop, wash: Fr
         cutout.addRect(Rect(0f, 0f, size.width, size.height))
         cutout
     }).drawWithContent {
-        // Keep the displayed owner and the sampled composite on the same frame
-        // for the full lifetime of a retained native copy, including cancellation.
-        if (!source.readbackPending) cover.record { this@drawWithContent.drawContent() }
+        cover.record { this@drawWithContent.drawContent() }
         drawLayer(cover)
     }
 }
