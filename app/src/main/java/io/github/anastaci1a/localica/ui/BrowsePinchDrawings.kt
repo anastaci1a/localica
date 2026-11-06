@@ -188,7 +188,7 @@ internal fun Modifier.pinchRetainedOverlay(motion: BrowsePinchMotion, grid: Lazy
     val direction = androidx.compose.ui.platform.LocalLayoutDirection.current
     val averageProgress = glassAverageProgress()
     val blur = android.os.Build.VERSION.SDK_INT >= 33
-    DisposableEffect(graphics) { onDispose { groups.forEach { graphics.releaseGraphicsLayer(it.output); graphics.releaseGraphicsLayer(it.flatOutput) } } }
+    DisposableEffect(graphics) { onDispose { groups.forEach { it.release() } } }
     SideEffect { motion.hoverLift = { scene?.hover?.get(it) } }
     BackdropLease(backing.takeIf { motion.visualSource != null && motion.frozen.values.any { it.content?.hover != null } })
     DisposableEffect(scene) { onDispose { scene?.retainedHover = emptyList() } }
@@ -291,7 +291,7 @@ internal fun Modifier.pinchRetainedOverlay(motion: BrowsePinchMotion, grid: Lazy
             // Standalone compositors can render retained selections without a host.
             if (scene == null) {
                 val components = hoverComponents(lifted.map { it.first.rest.bounds }, MediaSelectionGap.toPx())
-                while (groups.size < components.size) groups += HoverGroupRenderer(graphics.createGraphicsLayer(), graphics.createGraphicsLayer(), scope)
+                while (groups.size < components.size) groups += HoverGroupRenderer(graphics, scope)
                 components.forEachIndexed { index, members ->
                     val parts = members.map { lifted[it].first }
                     drawHoverGroup(groups[index], parts, { a, b -> minOf(parts[a].progress, parts[b].progress) },
