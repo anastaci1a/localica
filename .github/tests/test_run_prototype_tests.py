@@ -766,7 +766,18 @@ class WorkflowContract(unittest.TestCase):
                 if 'run' in step:
                     subprocess.run(['bash','-n'],input=step['run'],text=True,check=True)
                 if 'uses' in step:
-                    self.assertRegex(step['uses'],r'@[0-9a-f]{40}$')
+                    if step['uses'].startswith('./.github/actions/'):
+                        action_file = (ROOT / step['uses'][2:] / 'action.yml').resolve()
+                        self.assertTrue(action_file.is_relative_to((ROOT / '.github/actions').resolve()))
+                        action = yaml.safe_load(action_file.read_text())
+                        self.assertEqual('composite', action['runs']['using'])
+                        for nested in action['runs']['steps']:
+                            if 'run' in nested:
+                                subprocess.run(['bash', '-n'], input=nested['run'], text=True, check=True)
+                            if 'uses' in nested:
+                                self.assertRegex(nested['uses'], r'@[0-9a-f]{40}$')
+                    else:
+                        self.assertRegex(step['uses'],r'@[0-9a-f]{40}$')
 
 
 
