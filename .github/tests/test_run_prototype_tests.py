@@ -807,11 +807,6 @@ class WorkflowContract(unittest.TestCase):
                 if 'run' in step:
                     subprocess.run(['bash','-n'],input=step['run'],text=True,check=True)
                 if 'uses' in step:
-<<<<<<< HEAD
-                    if step['uses'] == './.github/actions/system-image-cache':
-                        action = yaml.safe_load((ROOT/'.github/actions/system-image-cache/action.yml').read_text())
-                        for nested in action['runs']['steps']:
-=======
                     if step['uses'].startswith('./.github/actions/'):
                         action_file = (ROOT / step['uses'][2:] / 'action.yml').resolve()
                         self.assertTrue(action_file.is_relative_to((ROOT / '.github/actions').resolve()))
@@ -820,7 +815,6 @@ class WorkflowContract(unittest.TestCase):
                         for nested in action['runs']['steps']:
                             if 'run' in nested:
                                 subprocess.run(['bash', '-n'], input=nested['run'], text=True, check=True)
->>>>>>> origin/fix/emulator-sdk-cache-613
                             if 'uses' in nested:
                                 self.assertRegex(nested['uses'], r'@[0-9a-f]{40}$')
                     else:

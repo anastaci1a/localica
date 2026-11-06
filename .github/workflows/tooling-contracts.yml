@@ -60,11 +60,7 @@ jobs:
           set -euo pipefail
           mkdir tooling-contract-reports
           git rev-parse HEAD > tooling-contract-reports/source-sha.txt
-<<<<<<< HEAD
-          git ls-files -z .github/emulator-readiness.py .github/emulator-system-image.py .github/actions .github/tests .github/compatibility .github/test-evidence .github/workflows app/src/androidTest/java .github/shared-test-apks.py .github/prebuilt-device-tests.gradle .github/release-verification.py .github/run-device-tests.sh .github/prepare-device-tests.sh .github/run-prototype-tests.sh .github/prototype-risk-classes.txt .github/workflows/tooling-contracts.yml | xargs -0 sha256sum > tooling-contract-reports/source-files.sha256
-=======
-          git ls-files -z .github/actions .github/tests .github/compatibility .github/test-evidence .github/workflows app/src/androidTest/java .github/emulator-sdk.py .github/shared-test-apks.py .github/prebuilt-device-tests.gradle .github/release-verification.py .github/run-device-tests.sh .github/prepare-device-tests.sh .github/run-prototype-tests.sh .github/prototype-risk-classes.txt .github/workflows/tooling-contracts.yml | xargs -0 sha256sum > tooling-contract-reports/source-files.sha256
->>>>>>> origin/fix/emulator-sdk-cache-613
+          git ls-files -z .github/emulator-sdk.py .github/emulator-readiness.py .github/emulator-system-image.py .github/actions .github/tests .github/compatibility .github/test-evidence .github/workflows app/src/androidTest/java .github/shared-test-apks.py .github/prebuilt-device-tests.gradle .github/release-verification.py .github/run-device-tests.sh .github/prepare-device-tests.sh .github/run-prototype-tests.sh .github/prototype-risk-classes.txt .github/workflows/tooling-contracts.yml | xargs -0 sha256sum > tooling-contract-reports/source-files.sha256
           # Pin the interpreter ABI to the reviewed PyYAML wheel; refuse runner drift.
           python3.12 -c 'import platform, sys; assert sys.version_info[:2] == (3, 12) and sys.implementation.name == "cpython" and sys.platform == "linux" and platform.machine() == "x86_64"'
           python3.12 -m venv "$RUNNER_TEMP/tooling-contract-python"
