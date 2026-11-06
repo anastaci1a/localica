@@ -75,7 +75,7 @@ class SeekCancelExitTest {
                 previous = next.top
                 val requestedClock = compose.mainClock.currentTime
                 val wall = android.os.SystemClock.uptimeMillis()
-                val before = compose.runOnUiThread {
+                val before = run {
                     "renderer=$renderer alpha=${cancelHost?.target?.motion?.alpha} " +
                         "active=${cancelHost?.target?.active} hovered=${cancelHost?.hovered} " +
                         "view=${fixtureView?.width}x${fixtureView?.height} focus=${fixtureView?.hasWindowFocus()} " +
@@ -96,10 +96,21 @@ class SeekCancelExitTest {
                     "wallMs=${android.os.SystemClock.uptimeMillis() - wall} bounds=$next " +
                     "pixels=${pixels.width}x${pixels.height} low=$low high=$high $before"
                 android.util.Log.i("SeekCancelExitProbe", description)
+                if (high - low <= .02f) {
                 val directory = nativeEvidenceDirectory("seek-cancel-exit-probe",
                     androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().targetContext.cacheDir)
                 java.io.File(directory, "player-$player-cancel-$cancel-frame-$it.png").outputStream().use {
                     image.asAndroidBitmap().compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
+                }
+                runCatching {
+                    compose.runOnUiThread { androidx.compose.runtime.snapshots.Snapshot.sendApplyNotifications() }
+                    val redrawn = target.captureToImage()
+                    java.io.File(directory, "player-$player-cancel-$cancel-frame-$it-redrawn.png").outputStream().use {
+                        redrawn.asAndroidBitmap().compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
+                    }
+                    android.util.Log.e("SeekCancelExitProbe", "Failure-only redraw at clock=${compose.mainClock.currentTime} " +
+                        "alpha=${cancelHost?.target?.motion?.alpha} bounds=${target.fetchSemanticsNode().boundsInRoot}")
+                }.onFailure { android.util.Log.e("SeekCancelExitProbe", "Failure-only redraw diagnostic failed", it) }
                 }
                 assertEquals("Native capture must hold the requested release frame: $description", requestedClock, captureClock)
                 assertTrue("The X remains drawn on release frame $it: $description", high - low > .02f)
