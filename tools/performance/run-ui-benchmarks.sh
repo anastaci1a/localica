@@ -54,8 +54,32 @@ for scenario in "${top_scenarios[@]}"; do
         pid=$(adb -s "$serial" shell perfetto --background-wait --txt -c - -o "$trace" < "$(dirname "$0")/frametimeline.pbtxt" | tr -d '\r')
         [[ $pid =~ ^[0-9]+$ ]] || { echo 'Perfetto did not return a PID' >&2; exit 1; }
         run "$scenario" 1 "$out/traces/$scenario-instrumentation.txt"
-        adb -s "$serial" shell "kill -INT $pid; while kill -0 $pid 2>/dev/null; do sleep 0.1; done"
+        # The traced service owns the file: consumer PID exit does not acknowledge
+        # its final write. Register CLOSE_WRITE before stopping the consumer.
+        adb -s "$serial" shell sh -s -- "$pid" "$trace" <<'CLOSE_TRACE'
+set -eu
+pid=$1 trace=$2
+ack=/data/local/tmp/ui600-close-$pid
+: > "$ack"
+inotifyd - "$trace:w" > "$ack" &
+watcher=$!
+trap 'kill "$watcher" 2>/dev/null || :; rm -f "$ack"' EXIT
+ready=false
+for attempt in $(seq 1 100); do
+    if grep -q '^inotify ' /proc/$watcher/fdinfo/*; then ready=true; break; fi
+    sleep 0.05
+done
+$ready || { echo 'Trace close watcher not ready' >&2; exit 1; }
+kill -TERM "$pid"
+for attempt in $(seq 1 600); do
+    if test -s "$ack"; then cat "$ack"; test -s "$trace"; exit; fi
+    sleep 0.05
+done
+echo 'Trace CLOSE_WRITE not acknowledged' >&2
+exit 1
+CLOSE_TRACE
         adb -s "$serial" pull "$trace" "$out/traces/$scenario.perfetto-trace"
+        [[ -s $out/traces/$scenario.perfetto-trace ]] || { echo 'Empty trace' >&2; exit 1; }
         continue
     fi
     echo 'FrameTimeline/presented timestamps unavailable on API26; atrace app-work proxy only' > "$out/traces/$scenario-limitations.txt"
