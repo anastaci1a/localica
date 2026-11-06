@@ -391,6 +391,7 @@ io.github.anastaci1a.localica.IconPackLibraryTest
 io.github.anastaci1a.localica.PlayerArtworkHoldRealAppTest
 io.github.anastaci1a.localica.PlayerArtworkHoldTest
 io.github.anastaci1a.localica.ModalGestureCancellationTest
+io.github.anastaci1a.localica.PopupHostNavigationTest
 io.github.anastaci1a.localica.RowTextScrollTest
 io.github.anastaci1a.localica.RowMenuRevealTest
 io.github.anastaci1a.localica.ArtworkTextSkeletonLinesTest
