@@ -1,6 +1,6 @@
 # UI policy lint foundation
 
-This JVM tooling module provides thirteen ERROR rules and paired source fixtures. The application does not load it yet. Activation, the generated app baseline and integration checks belong to the next change.
+This JVM tooling module provides thirteen ERROR rules and paired source fixtures. The application loads it through `lintChecks`. Existing incidents are frozen in the generated app baseline; the immutable comparison rejects added identities and equal-count substitutions.
 
 Build and test with the repository's JDK 17 toolchain:
 
@@ -22,4 +22,4 @@ The API and test infrastructure are pinned to the lint version matching AGP. Com
 
 Escape validation fails closed without exact declarations and frozen expiry inputs. Activation supplies the `knownSteps`, `completedSteps` and `release` lint options from reviewed stage metadata. A manifest's reviewer field does not establish that a human review happened; integration owns that evidence.
 
-Before activation, rollback reverts this unused foundation commit. After activation, correct the shared enforcement configuration; never disable an individual rule to conceal a violation.
+Rollback the complete activation before adopting production callers. Never disable an individual rule to conceal a violation.

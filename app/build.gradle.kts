@@ -48,6 +48,7 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
+    lint { baseline = file("lint-baseline.xml") }
     buildFeatures { compose = true }
     // Platform-free helpers are test-only, shared by host contracts and device callers.
     sourceSets.getByName("test").java.srcDir("src/sharedTest/java")
@@ -61,6 +62,7 @@ kotlin { compilerOptions { jvmTarget.set(JvmTarget.JVM_17) } }
 ksp { arg("room.schemaLocation", "$projectDir/schemas") }
 
 dependencies {
+    lintChecks(project(":lint"))
     implementation(libs.jaudiotagger)
     implementation(libs.androidx.core)
     implementation(libs.androidx.profileinstaller)

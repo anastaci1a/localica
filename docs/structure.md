@@ -294,3 +294,9 @@ Geometry changes invalidate the texture; translation reuses it.
 Keep composed backings within their viewport and guard unrecorded/released layers before readback. Floating-glass blur is independent of Queue frost. Graphics remain replaceable and independent of core data/playback.
 
 Navigation selectors retain live padded recordings. The same shared material path supplies Normal optics or None averages.
+
+## UI migration enforcement
+
+The lint module enforces the proposed Engine, Spec, Components and Layout boundaries as callers migrate. Existing root UI incidents remain visible in the shrinking baseline. A baseline entry cannot move into a migrated package. Runtime adoption remains incomplete; lint activation does not establish motion continuity or performance.
+
+See [UI policy checks](build.md#ui-policy-checks) for activation, immutable comparisons and adapter review.
