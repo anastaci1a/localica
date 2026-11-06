@@ -58,7 +58,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   # Two independent chains cap this workflow at two occupied runners:
-  # build -> compatibility_26 -> compatibility_36; focused_26 -> focused_36.
+  # build -> compatibility_26 -> compatibility_36; focused_36 -> focused_26.
   # Explicit status conditions preserve all checks after an earlier failure.
   build:
     runs-on: ubuntu-24.04
@@ -121,6 +121,8 @@ jobs:
           prototype-runner-environment.txt
     name: Prototype build, unit tests and lint
   focused_26:
+    needs: focused_36
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-24.04
     # Repeated proofs retain all selected methods and stop on their first failure;
     # otherwise capacity for the complete selected gate, not a throughput optimization.
@@ -295,8 +297,6 @@ jobs:
         if-no-files-found: error
     name: Prototype preserved-data compatibility API 26
   focused_36:
-    needs: focused_26
-    if: ${{ !cancelled() }}
     runs-on: ubuntu-24.04
     # Repeated proofs retain all selected methods and stop on their first failure;
     # otherwise capacity for the complete selected gate, not a throughput optimization.
