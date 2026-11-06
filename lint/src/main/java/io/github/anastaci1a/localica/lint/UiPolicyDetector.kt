@@ -540,13 +540,14 @@ internal class UiPolicyDetector : Detector(), SourceCodeScanner {
         private fun edge(node: UElement, target: String) {
             val source = layer ?: return
             val destination = layer(target)
+            val rootClockProvider = pkg == UI && context.file.name == "Theme.kt" && target in setOf("$UI.engine.UiClockKt.ProvideUiClock", "$UI.engine.ProvideUiClock") && (node is UImportStatement || parents(node).filterIsInstance<UMethod>().firstOrNull()?.name == "LocalicaTheme")
             val prohibited = when (source) {
                 "spec" -> !specDependency(node, target)
                 "engine" -> destination in setOf("components", "layout", "screens")
                 "components" -> destination in setOf("layout", "screens") || target.startsWith("androidx.compose.animation.core.")
                 "layout" -> destination == "screens"
                 // A2 explicitly permits these unmigrated hosts to acquire Engine ownership in Stage2.
-                "screens" -> destination == "engine" && !(pkg == UI && context.file.name in setOf("PlayerSurface.kt", "QueueSurface.kt", "LocalicaScreen.kt"))
+                "screens" -> destination == "engine" && !rootClockProvider && !(pkg == UI && context.file.name in setOf("PlayerSurface.kt", "QueueSurface.kt", "LocalicaScreen.kt"))
                 else -> false
             }
             if (prohibited) {
