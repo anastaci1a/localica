@@ -84,7 +84,7 @@ class SeekCancelExitTest {
                 val description = "frame=$it elapsed=${requestedClock - releaseClock} " +
                     "requestedClock=$requestedClock capturedClock=$capturedClock " +
                     "bounds=$next pixels=${pixels.width}x${pixels.height} low=$low high=$high"
-                if (!player && cancel && it == 9 && high - low > .02f) runCatching {
+                if (!player && cancel && it == 9) runCatching {
                     // The primary witness has already been copied. No extra UI turn precedes it.
                     val view = (target.fetchSemanticsNode().root as androidx.compose.ui.platform.ViewRootForTest).view
                     val state = compose.runOnUiThread { nativeState(view, nativeWindow(view)) }
