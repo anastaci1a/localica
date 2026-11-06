@@ -258,12 +258,15 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
     originPreparation: GlassOriginPreparation? = null, searchDismissOnImeBack: Boolean = false,
     content: @Composable () -> Unit) {
     val popupHome = LocalGlassPopupHome.current
+    val popupFlight = remember { GlassPopupFlight() }
     val requestedVisible = visible
+    val returningInline = popupHome?.departing == true || popupFlight.handedOff && !requestedVisible
     @Suppress("NAME_SHADOWING")
     val visible = requestedVisible && popupHome?.departing != true
     // The screen layer supplies departing motion; the return keeps its original basis.
-    val returningHome = if (popupHome?.departing == true) remember(popupHome) { anchor.presentedBounds }
+    val returningHome = if (returningInline) remember(popupHome) { anchor.presentedBounds }
         else null
+    val returningFootprint = if (returningInline) remember(popupHome) { anchor.samplingFootprint() ?: anchor.lastSamplingFootprint } else null
     val childHome = rememberGlassPopupHome(!visible)
     val reduced = LocalReducedMotion.current
     val originWell = remember { GlassOriginWell() }
@@ -562,16 +565,20 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
     // Prepare the home scene while native presentation is still active. Legacy
     // readback must be ready before its window joins the outgoing screen layer.
     BackdropLease(popupHome?.backdrop)
-    val departingSource = popupHome?.takeIf { it.departing }?.backdrop
+    val departingSource = popupHome?.backdrop.takeIf { returningInline || popupFlight.wasProjected }
     val homeSampleReady = departingSource?.recorded == true &&
         (currentGlassRendererGeneration().backend != GlassBackend.Legacy || departingSource.fallback != null)
     val samplingSource = departingSource.takeIf { homeSampleReady } ?: source
     val flightLayer = rememberGraphicsLayer()
-    val popupFlight = remember(flightLayer) { GlassPopupFlight(flightLayer) }
-    DisposableEffect(popupHome, popupFlight) {
+    DisposableEffect(popupHome, popupFlight, flightLayer) {
+        popupFlight.layer = flightLayer
         popupHome?.flights?.add(popupFlight)
-        onDispose { popupHome?.flights?.remove(popupFlight) }
+        onDispose {
+            popupHome?.flights?.remove(popupFlight)
+            popupFlight.layer = null; popupFlight.prepared = false; popupFlight.handedOff = false; popupFlight.wasProjected = false
+        }
     }
+    SideEffect { if (!returningInline) popupFlight.handedOff = false }
     // The full-scene recording can span pages with different ink. Its material
     // metadata must not override an explicit trigger. Detached menus instead
     // follow current ambient ink, rather than their anchor's remembered seed.
@@ -662,13 +669,13 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                     flightLayer.record { this@drawWithContent.drawContent() }
                     androidx.compose.runtime.snapshots.Snapshot.withoutReadObservation {
                         popupFlight.revision++
-                        popupFlight.prepared = popupHome.departing && homeSampleReady && samplingSource === popupHome.backdrop
-                        if (!popupHome.departing) popupFlight.handedOff = false
+                        popupFlight.prepared = returningInline && homeSampleReady && samplingSource === popupHome.backdrop
+                        if (!returningInline) popupFlight.handedOff = false
                     }
-                    if (!popupHome.departing || !popupFlight.handedOff) drawLayer(flightLayer)
+                    if (!returningInline || !popupFlight.handedOff) drawLayer(flightLayer)
                 }
             }
-            .then(if (popupHome?.departing == true) Modifier.clearAndSetSemantics { } else Modifier)
+            .then(if (returningInline) Modifier.clearAndSetSemantics { } else Modifier)
             .then(if (continuousOrigin != null) Modifier
                 .drawWithContent { if (admittedDraw) drawContent() }
                 .then(if (!admittedDraw) Modifier.clearAndSetSemantics { } else Modifier)
@@ -870,13 +877,13 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                         if (wellStrength > 0f && !page && !detached && !anchor.contextual && placement != GlassPlacement.Search &&
                             anchor.hidden && admittedDraw && surfaceOpacity() == 1f &&
                             coordinates?.isAttached == true) {
-                            val home = anchor.presentedBounds.translate(-coordinates.backdropPosition(view))
+                            val home = (returningHome ?: anchor.presentedBounds).translate(-coordinates.backdropPosition(view))
                             val caster = glassWellCaster(size, radius.toPx(), shape.scaleX(vertical),
                                 shape.scaleY(vertical), pose?.horizontalShift ?: 0f)
                             with(originWell) { draw(home, homeRadius.toPx(), caster, wellStrength) }
                             shadowReceiver[0] = receiverField.receiver(home,homeRadius.toPx(),size,
                                 shape.scaleX(vertical),shape.scaleY(vertical),pose?.horizontalShift ?: 0f,
-                                physicalSize = anchor.presentedBounds.size)
+                                physicalSize = (returningHome ?: anchor.presentedBounds).size)
                         }
                         // The trigger's window keeps drawing its neighbors' shared shadow.
                         // At home this field must equal that union, not stack over it.
@@ -918,10 +925,13 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                             if (page) Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface))
                             else {
                                 LiquidGlassSurface(Modifier.fillMaxSize(), source = samplingSource,
-                                    homeSource = anchor.source, homeWeight = { val home = (1f - p / .5f).coerceIn(0f, 1f); home * home * (3f - 2f * home) },
+                                    // Both optical inputs must exclude the inline modal; an ancestor
+                                    // trigger source can now contain this very recording.
+                                    homeSource = if (departingSource != null && homeSampleReady) samplingSource else anchor.source, homeWeight = { val home = (1f - p / .5f).coerceIn(0f, 1f); home * home * (3f - 2f * home) },
                                     homeBounds = { if (visible && !livePreparedOrigin) origin else returningHome ?: anchor.presentedBounds },
                                     homeFootprint = if (!measuredHome) null else ({
-                                        if (visible && !livePreparedOrigin) originFootprint
+                                        if (returningInline) returningFootprint
+                                        else if (visible && !livePreparedOrigin) originFootprint
                                         else if (anchor.samplingLocation.coordinates?.isAttached == true) anchor.samplingFootprint()
                                         else anchor.lastSamplingFootprint
                                     }),

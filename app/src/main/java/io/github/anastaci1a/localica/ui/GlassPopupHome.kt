@@ -29,21 +29,25 @@ internal class GlassPopupHome(private val leaving: State<Boolean>) {
     val children = mutableStateListOf<GlassPopupHome>()
     val handedOff: Boolean get() = flights.all { it.handedOff } && children.all { it.handedOff }
     var origin = Offset.Zero
+    var currentOrigin = Offset.Zero
     var registration: BackdropRegistration? = null
+    var liveRegistration: BackdropRegistration? = null
 }
 
-internal class GlassPopupFlight(val layer: GraphicsLayer) {
+internal class GlassPopupFlight {
+    var layer by mutableStateOf<GraphicsLayer?>(null)
     var origin = Offset.Zero
+    var homeOrigin = Offset.Zero
     var revision by mutableLongStateOf(0L)
     var prepared by mutableStateOf(false)
     var handedOff by mutableStateOf(false)
+    var wasProjected by mutableStateOf(false)
 }
 
 internal val LocalGlassPopupHome = staticCompositionLocalOf<GlassPopupHome?> { null }
 
 @Composable
-internal fun rememberGlassPopupHome(departing: Boolean): GlassPopupHome {
-    val parent = LocalGlassPopupHome.current
+internal fun rememberGlassPopupHome(departing: Boolean, parent: GlassPopupHome? = LocalGlassPopupHome.current): GlassPopupHome {
     val leaving = rememberUpdatedState(departing || parent?.departing == true)
     val home = remember { GlassPopupHome(leaving) }
     DisposableEffect(home, parent) {
@@ -65,33 +69,45 @@ internal fun Modifier.glassPopupHome(home: GlassPopupHome): Modifier {
         home.mounted = true
         onDispose { home.mounted = false; home.backdrop = null }
     }
+    val recording = if (backdrop.consumers > 0) Modifier.recordFrostedBackdrop(backdrop, backing) else Modifier
     return onGloballyPositioned {
+        home.currentOrigin = it.backdropPosition(view)
         // Freeze this basis. The enclosing screen layer supplies all subsequent
         // movement, scale, clipping and alpha, including interrupted transitions.
-        if (!home.departing) {
-            home.origin = it.backdropPosition(view)
-            val screen = IntArray(2)
-            view.getLocationOnScreen(screen)
-            val offset = Offset(screen[0].toFloat(), screen[1].toFloat())
-            home.registration = BackdropRegistration.fromMapping(it.size.width.toFloat(), it.size.height.toFloat()) { point ->
-                it.localToRoot(point) + offset
-            }
+        val screen = IntArray(2)
+        view.getLocationOnScreen(screen)
+        val offset = Offset(screen[0].toFloat(), screen[1].toFloat())
+        home.liveRegistration = BackdropRegistration.fromMapping(it.size.width.toFloat(), it.size.height.toFloat()) { point ->
+            it.localToRoot(point) + offset
         }
-        backdrop.location.retainedRegistration = home.registration.takeIf { home.departing }
+        if (!home.departing && home.flights.none { it.handedOff }) {
+            home.origin = home.currentOrigin
+            home.registration = home.liveRegistration
+        }
     }.drawWithContent {
+        val retaining = home.departing || home.flights.any { it.handedOff }
+        if (!retaining) home.registration = home.liveRegistration
+        val registration = home.registration.takeIf { retaining }
+        if (backdrop.location.retainedRegistration != registration) {
+            backdrop.location.retainedRegistration = registration
+            androidx.compose.runtime.snapshots.Snapshot.withoutReadObservation { backdrop.location.transformRevision++ }
+        }
         drawContent()
-        if (home.departing) home.flights.forEach { flight ->
+        home.flights.forEach { flight ->
             flight.revision
-            if (flight.prepared && !flight.layer.isReleased) {
-                val delta = flight.origin - home.origin
-                translate(delta.x, delta.y) { drawLayer(flight.layer) }
+            val layer = flight.layer
+            if ((home.departing || flight.handedOff) && flight.prepared && layer != null && !layer.isReleased) {
+                if (!flight.handedOff) flight.homeOrigin = home.currentOrigin
+                val delta = flight.origin - flight.homeOrigin
+                translate(delta.x, delta.y) { drawLayer(layer) }
                 flight.handedOff = true
+                flight.wasProjected = true
             }
         }
     // Sampling is deliberately inside the overlay. Retained ancestor RenderNodes
     // can contain this home, so merely freezing an ancestor recording is insufficient
     // to prevent a modal from sampling itself during the inline handoff.
-    }.recordFrostedBackdrop(backdrop, backing)
+    }.then(recording)
 }
 
 @Composable
@@ -101,11 +117,17 @@ internal fun GlassPopupHome(departing: Boolean = false, content: @Composable () 
 }
 
 @Composable
-private fun GlassPopupHome(home: GlassPopupHome, content: @Composable () -> Unit) {
-    Box(Modifier.fillMaxSize().clipToBounds().glassPopupHome(home)
+internal fun GlassPopupHome(home: GlassPopupHome, content: @Composable () -> Unit) {
+    // An idle home adds no layer: native draw observers and backdrop producers
+    // keep their existing ordering until a popup actually needs containment.
+    Box(Modifier.fillMaxSize().then(if (home.flights.isNotEmpty()) Modifier.clipToBounds() else Modifier).glassPopupHome(home)
         .then(if (home.departing) Modifier.clearAndSetSemantics { } else Modifier)) {
         CompositionLocalProvider(LocalGlassPopupHome provides home, content = content)
     }
+}
+
+internal suspend fun GlassPopupHome.awaitHandoff() {
+    snapshotFlow { handedOff }.first { it }
 }
 
 private class GlassPopupPage<T : Any>(val key: Any, target: T) {
@@ -116,7 +138,7 @@ private class GlassPopupPage<T : Any>(val key: Any, target: T) {
 /** Retain the actual outgoing screen, including its popup home, until its fade ends. */
 @Composable
 internal fun <T : Any> GlassPopupNavigation(target: T, modifier: Modifier = Modifier, direction: Float = 1f,
-    departing: Boolean = false, contentKey: (T) -> Any = { it }, content: @Composable (T) -> Unit) {
+    departing: Boolean = false, onHome: ((GlassPopupHome) -> Unit)? = null, contentKey: (T) -> Any = { it }, content: @Composable (T) -> Unit) {
     val key = contentKey(target)
     val page = remember(key) { GlassPopupPage(key, target) }
     var displayed by remember { mutableStateOf(page) }
@@ -137,7 +159,9 @@ internal fun <T : Any> GlassPopupNavigation(target: T, modifier: Modifier = Modi
                 .togetherWith(fadeOut(tween(duration)) + slideOutHorizontally(tween(duration)) { (-direction * distance).toInt() })
         }) { shown ->
         val home = rememberGlassPopupHome(departing || shown !== page)
-        SideEffect { shown.home = home }
-        GlassPopupHome(home) { content(shown.target) }
+        SideEffect { shown.home = home; if (shown === page) onHome?.invoke(home) }
+        // Same-screen edits must reach controlled fields in this composition,
+        // before a subsequent input event can observe the old value.
+        GlassPopupHome(home) { content(if (shown === page) target else shown.target) }
     }
 }

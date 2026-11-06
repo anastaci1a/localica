@@ -7,6 +7,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogWindowProvider
 import androidx.compose.ui.test.*
@@ -33,7 +34,10 @@ class PopupHostNavigationTest {
     @Test fun subviewBackDuringRetractLeavesWithPage() = navigate(settings = false, expanding = false)
     @Test fun subviewBackDuringExpandThenBackLeavesWithPage() = navigate(settings = false, expanding = true)
 
-    private fun navigate(settings: Boolean, expanding: Boolean) {
+    @Test fun libraryBackDuringRetractKeepsBothOpticalSourcesOutsideThePopup() = navigate(settings = false, expanding = false, library = true)
+    @Test fun libraryBackDuringExpandKeepsBothOpticalSourcesOutsideThePopup() = navigate(settings = false, expanding = true, library = true)
+
+    private fun navigate(settings: Boolean, expanding: Boolean, library: Boolean = false) {
         var page by mutableStateOf(true)
         var open by mutableStateOf(false)
         lateinit var anchor: GlassAnchor
@@ -61,7 +65,20 @@ class PopupHostNavigationTest {
                     }
                 }
             }
-            if (settings) FolderSettings(LibraryUiState(), { page = false }, {}, {}, interfaceContent = { Body() })
+            if (library) {
+                val source = rememberFrostedBackdrop(Unit)
+                androidx.activity.compose.BackHandler(page) { page = false }
+                CompositionLocalProvider(LocalFrostedBackdrop provides source, LocalModalBackdrop provides source) {
+                    // A real Library source encloses its screen home. Sampling it
+                    // after projection would recursively sample the modal itself.
+                    Box(Modifier.fillMaxSize().recordFrostedBackdrop(source)) {
+                        GlassPopupNavigation(page) { shown ->
+                            if (shown) Body()
+                            else Box(Modifier.fillMaxSize().background(Color.Blue).testTag("popup-home-destination"))
+                        }
+                    }
+                }
+            } else if (settings) FolderSettings(LibraryUiState(), { page = false }, {}, {}, interfaceContent = { Body() })
             else if (page) GlassDialog({ page = false }, GlassPlacement.Page) { Body() }
             }
         } }
@@ -94,6 +111,7 @@ class PopupHostNavigationTest {
             compose.waitForIdle()
             assertTrue("Popup remains continuous while the host admits navigation", redFrame().pixels > 100)
             transitionStarted = if (settings) compose.onAllNodesWithText("Interface").fetchSemanticsNodes().isNotEmpty()
+                else if (library) compose.onAllNodesWithTag("popup-home-destination").fetchSemanticsNodes().isNotEmpty()
                 else parentProgress < .995f
             if (transitionStarted) break
         }
