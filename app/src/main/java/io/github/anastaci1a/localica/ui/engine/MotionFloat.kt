@@ -41,7 +41,7 @@ internal data class MotionIntent(val next: Trajectory,val stamp: FrameStamp,val 
         return prepareSegment(next,target,stamp,identity,if(access==MotionAccess.Reduced) "Reduced" else "Continuous")
     }
     internal fun prepareSegment(next: Trajectory,target: Float,stamp: FrameStamp,identity: Any?=null,policy: String="Continuous",acceptedVelocity: Float?=null): MotionIntent {
-        clock.checkMutation(); check(!disposed); require(target.isFinite() && (bounds==null || target.toDouble() in bounds)); val fd=if(segment.kind==3) rawVelocity(stamp).toFloat() else null; val accepted=acceptedVelocity?:fd
+        clock.checkMutation(); check(!disposed); require(target.isFinite() && (bounds==null || target.toDouble() in bounds)); require(stamp.nanos>=started.nanos) { "Intent predates the current trajectory" }; val fd=if(segment.kind==3) rawVelocity(stamp).toFloat() else null; val accepted=acceptedVelocity?:fd
         return MotionIntent(next,stamp,target,identity,segment,Kinematic(rawValue(stamp).toFloat(),accepted?:rawVelocity(stamp).toFloat()),accepted,fd,if(policy=="Continuous" && fd!=null) "DrivenRelease" else policy)
     }
     internal fun validate(intent: MotionIntent) { clock.checkMutation(); check(!disposed && segment===intent.previous) { "Stale atomic motion intent" } }

@@ -34,6 +34,7 @@ class BoundedTrajectoryTest {
         EngineHarness().use { h ->
             val a=MotionFloat(h.clock,0f,1f); val b=MotionFloat(h.clock,0f,1f); val stamp=h.clock.stampNow
             val plan=EasedPlan(stamp,StockUiSpec.expansion.core,.4,1.0,1.0/120)
+            val tightened=plan.copy(tauOut=.00001); assertEquals(.00001,tightened.segment(0.0,0.0,1.0).tauOut,0.0)
             val other=plan.copy()
             val x=a.prepareSegment(plan.segment(0.0,0.0,1.0),1f,stamp,plan)
             val bad=b.prepareSegment(other.segment(0.0,0.0,1.0),1f,stamp,other)

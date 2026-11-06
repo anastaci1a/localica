@@ -28,11 +28,11 @@ internal fun hermite(x: Double,v: Double,q: Double,w: Double,tau: Double,t: Doub
 internal fun hermiteExtrema(x: Double,v: Double,q: Double,w: Double,tau: Double): ClosedFloatingPointRange<Double> {
     val c=tau*v; val b=3*(q-x)-2*c-tau*w; val a=-2*(q-x)+c+tau*w; val values=listOf(x,q)+quadraticRoots(3*a,2*b,c).filter { it>0 && it<1 }.map { u -> hermite(x,v,q,w,tau,u*tau,false) }; return values.min()..values.max()
 }
-internal class Eased(internal val x: Double,internal val v: Double,internal val q: Double,private val easing: EasingSpec,override val duration: Double,sigma: Double=1.0,bounds: ClosedFloatingPointRange<Double>?=null,maxTauIn: Double=Double.POSITIVE_INFINITY,internal val plan: EasedPlan?=null): Trajectory {
-    override val kind=1; private val core=Bezier(easing); private val delta=q-x; internal val tauOut=min(duration/8,sigma*.064)
+internal class Eased(internal val x: Double,internal val v: Double,internal val q: Double,private val easing: EasingSpec,override val duration: Double,sigma: Double=1.0,bounds: ClosedFloatingPointRange<Double>?=null,maxTauIn: Double=Double.POSITIVE_INFINITY,internal val plan: EasedPlan?=null,maxTauOut: Double=Double.POSITIVE_INFINITY): Trajectory {
+    override val kind=1; private val core=Bezier(easing); private val delta=q-x; internal val tauOut=minOf(duration/8,sigma*.064,maxTauOut)
     internal val extrema: ClosedFloatingPointRange<Double>; internal val tauIn: Double; private val b: Double; private val bv: Double; private val tailX: Double; private val tailV: Double
     init {
-        require(duration.isFinite() && duration>0 && listOf(x,v,q,sigma).all { it.isFinite() } && sigma>0)
+        require(duration.isFinite() && duration>0 && tauOut.isFinite() && tauOut>0 && listOf(x,v,q,sigma).all { it.isFinite() } && sigma>0)
         var tau=minOf(sigma/120,duration/4,maxTauIn); val B=abs(delta)/duration*easing.maxSlope
         if(bounds!=null && v!=0.0) { val room=if(v>0) bounds.endInclusive-x else x-bounds.start; require(room>0) { "Unreachable outward boundary state" }; tau=min(tau,room/(.149*(abs(v)+B)+if(v*delta>0) B else 0.0)) }
         require(tau>0 && tau.isFinite()); tauIn=tau; b=x+delta*core.at(tau/duration); bv=delta*core.at(tau/duration,true)/duration; tailX=x+delta*core.at(1-tauOut/duration); tailV=delta*core.at(1-tauOut/duration,true)/duration
