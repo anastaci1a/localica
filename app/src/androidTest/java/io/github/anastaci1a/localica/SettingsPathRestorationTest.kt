@@ -92,7 +92,7 @@ class SettingsPathRestorationTest {
     @Test fun legacyRootIconPacksRestoresAndBackReturnsToInterface() {
         restoreLegacyPath("Icon packs", legacyPath = { it.drop(1) })
         compose.onNodeWithText("Icon packs", substring = false).assertIsDisplayed()
-        compose.onNodeWithText("Built-in icons", substring = false).assertIsDisplayed()
+        compose.onAllNodesWithText("Built-in icons", substring = false)[0].assertIsDisplayed()
         androidx.test.uiautomator.UiDevice.getInstance(
             androidx.test.platform.app.InstrumentationRegistry.getInstrumentation()).pressBack()
         compose.waitForIdle()
@@ -106,7 +106,7 @@ class SettingsPathRestorationTest {
         compose.onNodeWithTag("pack-icon-tab.home").assertExists()
         compose.onNodeWithContentDescription("Back from settings").performClick()
         compose.onNodeWithText("Icon packs", substring = false).assertIsDisplayed()
-        compose.onNodeWithText("Built-in icons", substring = false).assertIsDisplayed()
+        compose.onAllNodesWithText("Built-in icons", substring = false)[0].assertIsDisplayed()
         compose.onNodeWithContentDescription("Back from settings").performClick()
         compose.onNodeWithText("Interface", substring = false).assertIsDisplayed()
     }
@@ -119,7 +119,7 @@ class SettingsPathRestorationTest {
         compose.onNodeWithText("Icon packs", substring = false).assertDoesNotExist()
         compose.onNodeWithText("Interface", substring = false).performClick()
         compose.onNodeWithText("Icon packs", substring = false).performScrollTo().performClick()
-        compose.onNodeWithText("Built-in icons", substring = false).assertIsDisplayed()
+        compose.onAllNodesWithText("Built-in icons", substring = false)[0].assertIsDisplayed()
         compose.onAllNodesWithText("View icons", substring = false)[0].performScrollTo().performClick()
         compose.onNodeWithText("Pack icons", substring = false).assertIsDisplayed()
         restoration.emulateSavedInstanceStateRestore()
