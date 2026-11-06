@@ -2,6 +2,7 @@ package io.github.anastaci1a.localica
 
 import android.view.View
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -56,7 +57,13 @@ class PopupHostNavigationTest {
                 parentView = LocalView.current
                 anchor = rememberGlassAnchor()
                 Column(Modifier.fillMaxSize().background(Color.Blue).padding(24.dp)) {
-                    SettingsLink("Popup home", anchor = anchor) { open = true }
+                    if (library) {
+                        val source = LocalFrostedBackdrop.current
+                        SideEffect { anchor.source = source }
+                        Box(Modifier.glassAnchor(anchor).clickable { open = true }) {
+                            androidx.compose.material3.Text("Popup home")
+                        }
+                    } else SettingsLink("Popup home", anchor = anchor) { open = true }
                     if (open) CompositionLocalProvider(LocalGlassOrigin provides anchor, LocalMotionSpeed provides .5f) {
                         GlassDialog({ open = false }) {
                             popupView = LocalView.current

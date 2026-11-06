@@ -60,16 +60,17 @@ internal fun rememberGlassPopupHome(departing: Boolean, parent: GlassPopupHome? 
 @Composable
 internal fun Modifier.glassPopupHome(home: GlassPopupHome): Modifier {
     val view = LocalView.current
-    val backing = LocalFrostedBackdrop.current
     // Keep size/readback subscriptions in this layout scope, not in the modal's
     // committed window owner above the per-frame geometry scope.
     val backdrop = rememberFrostedBackdrop(home, dark = LocalContentColor.current.luminance() > .5f)
-    SideEffect { backdrop.parent = backing; home.backdrop = backdrop }
+    // An ambient ancestor may enclose this home; retaining it would introduce
+    // a RenderNode cycle as soon as the modal is projected here.
+    SideEffect { home.backdrop = backdrop }
     DisposableEffect(home, backdrop) {
         home.mounted = true
         onDispose { home.mounted = false; home.backdrop = null }
     }
-    val recording = if (backdrop.consumers > 0) Modifier.recordFrostedBackdrop(backdrop, backing) else Modifier
+    val recording = if (backdrop.consumers > 0) Modifier.recordFrostedBackdrop(backdrop) else Modifier
     return onGloballyPositioned {
         home.currentOrigin = it.backdropPosition(view)
         // Freeze this basis. The enclosing screen layer supplies all subsequent
