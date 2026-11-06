@@ -38,7 +38,7 @@ internal class SelectionOpacityPathCache(private val profile: SelectionOutlinePr
                 val cache=caches.getOrPut(members) { HoverPathCache(profile) }
                 val pieces=members.map { regions[it] }
                 val before=cache.rebuilds
-                val path=cache.path(pieces,members.map { rest[it] },gap) { a,b -> strength(members[a],members[b]) }
+                val path=cache.path(pieces,pieces,gap) { a,b -> strength(members[a],members[b]) }
                 rebuilds+=cache.rebuilds-before
                 SelectionOutlineGroup(members,path,cache.localPath,pieces.first().bounds.topLeft)
             })

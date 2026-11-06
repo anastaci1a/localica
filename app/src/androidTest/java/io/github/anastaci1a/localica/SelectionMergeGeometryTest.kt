@@ -11,6 +11,14 @@ import kotlin.math.*
 
 /** Geometry proofs run without the compositor, so antialiasing cannot hide a sharp join. */
 class SelectionMergeGeometryTest {
+    @Test fun distantBridgeIntentCannotRebuildAnUnchangedDisplayedContour() {
+        val regions=listOf(SelectionRegion(Rect(0f,0f,80f,80f),12f),SelectionRegion(Rect(120f,0f,200f,80f),12f))
+        val cache=io.github.anastaci1a.localica.ui.HoverPathCache()
+        val path=cache.path(regions,regions,16f) { _,_->0f };val builds=cache.rebuilds
+        for(step in 1..100)assertSame("A distant pair has no geometric dependency on bridge intent",path,
+            cache.path(regions,regions,16f) { _,_->step/100f })
+        assertEquals(builds,cache.rebuilds)
+    }
     @Test fun retainedPairStrengthsMatchFreshContoursAcrossReorderResizeAndDuplicateMembers() {
         val cache=io.github.anastaci1a.localica.ui.HoverPathCache()
         val base=List(4) { i -> SelectionRegion(Rect(i%2*81f,i/2*81f,i%2*81f+80f,i/2*81f+80f),12f) }
