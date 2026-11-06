@@ -45,7 +45,7 @@ private fun FrameStatsActions() {
     var tagIndex by remember { mutableIntStateOf(io.github.anastaci1a.localica.diagnostics.FrameStats.scenarioTags.indexOf(
         io.github.anastaci1a.localica.diagnostics.FrameStats.selectedScenarioTag)) }
     if (activity != null) {
-        if (!recording) ActionTextButton(onClick = {
+        ActionTextButton(enabled = !recording, onClick = {
             val tags = io.github.anastaci1a.localica.diagnostics.FrameStats.scenarioTags
             tagIndex = if (tagIndex == tags.lastIndex) -1 else tagIndex + 1
             io.github.anastaci1a.localica.diagnostics.FrameStats.setScenarioTag(tags.getOrNull(tagIndex).orEmpty())
