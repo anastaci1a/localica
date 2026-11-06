@@ -22,6 +22,7 @@ class FrameStatsSettingsTest {
             click(By.desc("More"))
             click(By.text("Settings"))
             click(By.textContains("About and licenses"))
+            click(By.text("Capture scenario: untagged"))
             click(By.text("Start frame capture"))
             click(By.text("Stop frame capture"))
             assertNotNull(device.wait(Until.findObject(By.text("Start frame capture")), 5000))

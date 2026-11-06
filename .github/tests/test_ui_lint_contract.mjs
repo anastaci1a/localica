@@ -43,7 +43,7 @@ test('source-bound bootstrap, substitution, relocation and deletion through real
         git('init','-q');put(file,`package io.example.ui\nfun screen() {\n${code}\n}\n`);
         const base=commit();
         put('lint/src/main/java/io/github/anastaci1a/localica/lint/LocalicaIssueRegistry.kt','registry');
-        put('app/lint-baseline.xml',baseline());put('app/ui-escapes.yaml','[]');
+        put('app/lint-baseline.xml',baseline());put('app/ui-escapes.yaml','[]');put('app/build.gradle.kts','versionName = "1.0.0"');
         const stage={schemaVersion:1,stage:0,integratedSha:base,release:'v1.0.0',knownSteps:['U13.01'],completedSteps:['U13.01'],bootstrapApproval:'fixture approval'};
         put('tools/ui-consolidation/stage.json',JSON.stringify(stage));let head=commit();
         let result=invoke(['bootstrap','--source',head,'--registry-sha256','a'.repeat(64),...common]);assert.equal(result.status,0,result.stderr);

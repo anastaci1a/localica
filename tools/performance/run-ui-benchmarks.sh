@@ -7,10 +7,17 @@ out=${2:?Output directory required}
 source_sha=${3:?Full source SHA required}
 [[ $source_sha =~ ^[a-f0-9]{40}$ ]] || { echo 'Expected a full source SHA' >&2; exit 1; }
 [[ ! -e $out ]] || { echo 'Use a fresh evidence directory' >&2; exit 1; }
+node "$(dirname "$0")/freeze-scenarios.mjs" check
 mkdir -p "$out"
+cp "$(dirname "$0")/scenarios.json" "$out/script-freeze.json"
 app=io.github.anastaci1a.localica.debug
 runner=$app.test/io.github.anastaci1a.localica.NavigationRandomOwnedSession
 remote=/sdcard/Android/data/$app/files/ui600
+for package in "$app" "$app.test"; do
+    apk_path=$(adb -s "$serial" shell pm path "$package" | head -1 | cut -d: -f2 | tr -d '\r')
+    [[ -n $apk_path ]] || { echo "Missing installed $package" >&2; exit 1; }
+    adb -s "$serial" shell sha256sum "$apk_path" > "$out/$package-apk.sha256"
+done
 adb -s "$serial" shell getprop > "$out/device-properties.txt"
 adb -s "$serial" shell dumpsys display > "$out/display.txt"
 adb -s "$serial" shell wm size > "$out/size.txt"
@@ -35,11 +42,26 @@ run() {
 adb -s "$serial" shell rm -rf "$remote"
 run '.*' 3 "$out/instrumentation.txt"
 adb -s "$serial" pull "$remote/ui-performance/." "$out/"
+node "$(dirname "$0")/none-contract.mjs" "$out" "$source_sha"
 node "$(dirname "$0")/summarize-ui.mjs" "$out"
 mkdir "$out/traces"
 mapfile -t top_scenarios < "$out/top-scenarios.txt"
 for scenario in "${top_scenarios[@]}"; do
     # Trace passes are separate and never substituted into baseline measurements.
+    api=$(adb -s "$serial" shell getprop ro.build.version.sdk | tr -d '\r')
+    if (( api >= 31 )); then
+        config=/data/local/tmp/ui600-frametimeline.pbtxt
+        trace=/data/misc/perfetto-traces/ui600-$scenario.perfetto-trace
+        adb -s "$serial" push "$(dirname "$0")/frametimeline.pbtxt" "$config" > "$out/traces/$scenario-config.txt"
+        pid=$(adb -s "$serial" shell perfetto --background --txt -c "$config" -o "$trace" | tr -d '\r')
+        [[ $pid =~ ^[0-9]+$ ]] || { echo 'Perfetto did not return a PID' >&2; exit 1; }
+        run "$scenario" 1 "$out/traces/$scenario-instrumentation.txt"
+        adb -s "$serial" shell kill -INT "$pid"
+        sleep 2
+        adb -s "$serial" pull "$trace" "$out/traces/$scenario.perfetto-trace"
+        continue
+    fi
+    echo 'FrameTimeline/presented timestamps unavailable on API26; atrace app-work proxy only' > "$out/traces/$scenario-limitations.txt"
     adb -s "$serial" shell atrace --async_start -a "$app" -b 131072 gfx view sched freq am wm > "$out/traces/$scenario-start.txt"
     if ! run "$scenario" 1 "$out/traces/$scenario-instrumentation.txt"; then
         adb -s "$serial" shell atrace -b 131072 --async_stop > "$out/traces/$scenario-failed.trace"

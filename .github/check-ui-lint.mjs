@@ -1,3 +1,4 @@
+import {strictJson} from '../tools/ui-consolidation/strict-json.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
@@ -91,9 +92,11 @@ export function run(argv) {
     const exists = (ref,p) => { try { blob(ref,p); return true; } catch { return false; } };
     const registryPath = 'lint/src/main/java/io/github/anastaci1a/localica/lint/LocalicaIssueRegistry.kt';
     const registry = digest(blob(head, registryPath));
-    const known = JSON.parse(blob(head,'tools/ui-consolidation/stage.json'));
-    requireThat(known.schemaVersion === 1 && Array.isArray(known.knownSteps), 'Stage metadata');
-    const meta = command === 'check' ? JSON.parse(fs.readFileSync(o['--completed-steps'],'utf8')) :
+    const known = strictJson(blob(head,'tools/ui-consolidation/stage.json'));
+    requireThat(Object.keys(known).sort().join()==='bootstrapApproval,completedSteps,integratedSha,knownSteps,release,schemaVersion,stage' && known.schemaVersion === 1 && Array.isArray(known.knownSteps), 'Stage metadata');
+    fullSha(known.integratedSha); git('merge-base','--is-ancestor',known.integratedSha,head);
+    requireThat(known.release === 'v'+blob(head,'app/build.gradle.kts').match(/versionName\s*=\s*"([^"]+)"/)?.[1], 'Candidate release does not match app version');
+    const meta = command === 'check' ? strictJson(fs.readFileSync(o['--completed-steps'],'utf8')) :
         {schemaVersion:1,sourceSha:head,steps:known.completedSteps,release:known.release};
     requireThat(Object.keys(meta).sort().join() === 'release,schemaVersion,sourceSha,steps' && meta.schemaVersion === 1 &&
         meta.sourceSha === head && Array.isArray(meta.steps) && new Set(meta.steps).size === meta.steps.length &&
@@ -143,11 +146,12 @@ export function run(argv) {
     } else {
         requireThat(!exists(base,'tools/ui-consolidation/ui-lint-bootstrap.json'), 'Deleted baseline cannot bootstrap');
         requireThat(!git('log','--format=%H',base,'--',o['--baseline']).trim(), 'Previously existing baseline deleted from base');
-        const receipt = JSON.parse(blob(head,'tools/ui-consolidation/ui-lint-bootstrap.json'));
-        fullSha(receipt.sourceSha);
+        const receipt = strictJson(blob(head,'tools/ui-consolidation/ui-lint-bootstrap.json'));
+        fullSha(receipt.sourceSha); git('merge-base','--is-ancestor',receipt.sourceSha,head);
         requireThat(receipt.integratedSha === known.integratedSha && receipt.approvedBy === 'lead' && receipt.approval === known.bootstrapApproval &&
             !exists(receipt.integratedSha,o['--baseline']) && receipt.baselineSha256 === digest(blob(receipt.sourceSha,o['--baseline'])), 'Invalid bootstrap receipt');
-        requireThat(base === receipt.integratedSha || git('merge-base',base,receipt.integratedSha).trim() === base, 'Bootstrap base not pinned main ancestor');
+        const common=git('merge-base',base,receipt.integratedSha).trim();
+        requireThat(common===base || common===receipt.integratedSha, 'Bootstrap base is unrelated to the integrated pin');
         before = diagnostics(receipt.sourceSha);
     }
     const result = compare(before,after,stage);
@@ -160,5 +164,14 @@ export function run(argv) {
     return report.accepted ? 0 : 1;
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
-    try { process.exitCode = run(process.argv.slice(2)); } catch (e) { console.error(e.message); process.exitCode = 2; }
+    try { process.exitCode = run(process.argv.slice(2)); } catch (e) {
+        console.error(e.message); process.exitCode = 2;
+        const argv=process.argv.slice(2), out=argv[argv.indexOf('--out')+1];
+        if (argv.includes('--out') && out && !out.startsWith('--')) {
+            const report={schemaVersion:1,command:argv[0],baseSha:null,headSha:null,registrySha256:null,
+                baselineSha256:null,manifestSha256:null,stage:null,completedSteps:[],perRule:{},
+                unmatchedIdentities:[],escapeCounts:null,validationErrors:[e.message],accepted:false};
+            fs.mkdirSync(out,{recursive:true}); fs.writeFileSync(path.join(out,'report.json'),JSON.stringify(report,null,2)+'\n');
+        }
+    }
 }

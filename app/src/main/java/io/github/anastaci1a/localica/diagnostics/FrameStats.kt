@@ -15,6 +15,18 @@ import java.util.IdentityHashMap
 /** Opt-in, main-thread lifecycle. No listener, polling, worker or frame storage before Start. */
 internal object FrameStats {
     val recording = mutableStateOf(false)
+    val scenarioTags = ("list-smallest,list-small,list-tracklist,list-compact,list-normal,list-large," +
+        "gallery-1,gallery-2,gallery-3,gallery-4,gallery-5,subview-scroll,carousel,artist-album-carousel," +
+        "queue-drawer,player-expand-collapse,popup-open-close,lyrics-open-close,lyrics-content-theme,search-typing," +
+        "pinch-sizes,multi-select-drag,interrupted-player-drag,back-during-popup-retract,queue-pull-during-player-collapse,drag-start-end-in-list").split(',')
+    private var scenarioTag = ""
+    val selectedScenarioTag get() = scenarioTag
+    private var capturedTag = ""
+    private var captureId = ""
+    fun setScenarioTag(tag: String) {
+        check(Looper.myLooper() == Looper.getMainLooper() && !recording.value)
+        require(tag.isEmpty() || tag in scenarioTags); scenarioTag = tag
+    }
     private val main = Handler(Looper.getMainLooper())
     private var worker: HandlerThread? = null
     private var handler: Handler? = null
@@ -23,6 +35,7 @@ internal object FrameStats {
     private var environment = ""
     private var glass = ""
     private var effectiveGlass = ""
+    private var requestedGlass = ""
     private var windowLimitReached = false
     private var timeLimitReached = false
     private val windows = IdentityHashMap<Window, Window.OnFrameMetricsAvailableListener>()
@@ -34,11 +47,13 @@ internal object FrameStats {
         check(Looper.myLooper() == Looper.getMainLooper())
         check(!recording.value && worker == null) { "A capture is still closing" }
         samples.clear(); windowLimitReached = false; timeLimitReached = false
+        capturedTag = scenarioTag; captureId = java.util.UUID.randomUUID().toString()
+        if (Build.VERSION.SDK_INT >= 29) android.os.Trace.beginAsyncSection("ui600:$capturedTag", 600)
         owner = activity
         environment = DiagnosticsExport.environment(activity).toString()
-        glass = io.github.anastaci1a.localica.navigation.InterfacePreferences(activity).read().glass.toString()
-        effectiveGlass = io.github.anastaci1a.localica.ui.effectiveGlassBackend(
-            io.github.anastaci1a.localica.navigation.InterfacePreferences(activity).read().glass.renderer, Build.VERSION.SDK_INT).name
+        val appearance = io.github.anastaci1a.localica.navigation.InterfacePreferences(activity).read().glass
+        glass = appearance.toString(); requestedGlass = appearance.renderer.name
+        effectiveGlass = io.github.anastaci1a.localica.ui.effectiveGlassBackend(appearance.renderer, Build.VERSION.SDK_INT).name
         started = System.nanoTime(); ended = Long.MAX_VALUE
         worker = HandlerThread("localica-frame-stats").also { it.start() }
         handler = Handler(requireNotNull(worker).looper)
@@ -69,6 +84,7 @@ internal object FrameStats {
         check(Looper.myLooper() == Looper.getMainLooper())
         if (!recording.value) return
         ended = System.nanoTime()
+        if (Build.VERSION.SDK_INT >= 29) android.os.Trace.endAsyncSection("ui600:$capturedTag", 600)
         recording.value = false
         main.removeCallbacks(timeout)
         windows.forEach { (window, listener) -> window.removeOnFrameMetricsAvailableListener(listener) }
@@ -83,8 +99,12 @@ internal object FrameStats {
 
     @Synchronized fun report(): String {
         val end = if (recording.value) System.nanoTime() else ended
-        return JSONObject().put("schema", 1).put("environment", environment).put("glass", glass)
-            .put("effectiveGlass", effectiveGlass).put("windowLimitReached", windowLimitReached)
+        return JSONObject().put("schema", 2).put("environment", environment).put("glass", glass)
+            .put("requestedGlass", requestedGlass).put("effectiveGlass", effectiveGlass).put("windowLimitReached", windowLimitReached)
+            .put("scenarioTag", capturedTag).put("captureId", captureId)
+            .put("buildSource", io.github.anastaci1a.localica.BuildConfig.SOURCE_SHA)
+            .put("startedNanos", started).put("endedNanos", if (recording.value) JSONObject.NULL else ended)
+            .put("observers", "off; opt-in FrameMetrics only")
             .put("timeLimitReached", timeLimitReached)
             .put("recording", recording.value).put("durationMs", if (started == 0L) 0 else (end - started) / 1e6)
             .put("scope", "Received app Window frames; excludes system IME. Native tail may be incomplete.")
@@ -94,6 +114,9 @@ internal object FrameStats {
     }
 
     fun json(name: String, s: FrameTiming.Summary): JSONObject = JSONObject().put("window", name)
+        .put("windowId", "$captureId:$name").put("hostEpoch", name.substringAfterLast('-').toIntOrNull() ?: JSONObject.NULL)
+        .put("frameSamples", JSONArray(s.frames.map { JSONArray(listOf(it.timestamp, it.duration, it.budget,
+            if (it.deadline > 0) it.deadline else JSONObject.NULL)) }))
         .put("frames", s.count).put("p50Ms", s.p50Ms ?: JSONObject.NULL)
         .put("p90Ms", s.p90Ms ?: JSONObject.NULL).put("p99Ms", s.p99Ms ?: JSONObject.NULL)
         .put("jankPercent", s.jankPercent ?: JSONObject.NULL).put("estimatedMissedVsyncs", s.estimatedMissedVsyncs)

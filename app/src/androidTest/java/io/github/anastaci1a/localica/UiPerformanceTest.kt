@@ -52,8 +52,9 @@ class UiPerformanceTest {
         folders = listOf(FolderSelection("fixture", "Fixture")), tracks = tracks), loading = false) }
     private val queue by lazy { ListeningQueue(id = "fixture", name = "Fixture", createdAt = 0,
         entries = tracks.mapIndexed { n, track -> QueueEntry("entry:$n", track) }) }
-    private val glassMode get() = GlassRendererMode.entries.firstOrNull { it.name == "None" }
-        ?: GlassRendererMode.entries.first { it.name == "Modern" }
+    private val glassMode = GlassRendererMode.None
+    private var effectiveMode = "unobserved"
+    private val events = mutableListOf<JSONObject>()
     private val windows = mutableSetOf<Window>() // main thread only
     private var scenario: ActivityScenario<ComponentActivity>? = null
     private var activity: ComponentActivity? = null
@@ -63,6 +64,11 @@ class UiPerformanceTest {
     @Test fun measurePureUiScenarios() {
         assumeTrue("Pass uiPerformance=true on an owned disposable test device", args.getString("uiPerformance") == "true")
         val repetitions = (args.getString("uiPerformanceRepetitions")?.toInt() ?: 3).also { require(it in 1..10) }
+        val protocolLegacy = args.getString("uiPerformanceProtocolLegacy") == "true"
+        check(!protocolLegacy || args.getString("uiPerformanceSource") == "dba7f1203be022b60060a8c602224f862630405e")
+        val warmup = args.getString("uiPerformanceWarmup") != "false"
+        val firstRep = args.getString("uiPerformanceStartRep")?.toInt() ?: 0
+        check(if (warmup) firstRep == 0 else firstRep in 1..5)
         val filter = Regex(args.getString("uiPerformanceScenario") ?: ".*")
         // Preserve developer/device preferences even when a measurement throws.
         val stores = listOf("interface", "browse-style", "library-query", "pins")
@@ -76,14 +82,21 @@ class UiPerformanceTest {
             fun measure(name: String, launch: () -> Unit, prepare: () -> Unit = {}, action: () -> Unit) {
                 if (!filter.matches(name)) return
                 measuredScenarios++
-                repeat(repetitions + 1) { rep ->
+                repeat(repetitions + if (warmup) 1 else 0) { index ->
+                    val rep = firstRep + index
                     try {
                         // Every repetition, including isolated trace passes, starts from the same styles.
                         listOf("browse-style", "library-query").forEach {
                             check(context.getSharedPreferences(it, 0).edit().clear().commit())
                         }
-                        launch(); prepare(); Thread.sleep(800)
-                        main { activity -> FrameStats.start(activity); windows.forEach { FrameStats.attach(it) } }
+                        launch(); prepare(); awaitStableScene(); events.clear()
+                        main { activity ->
+                            check(io.github.anastaci1a.localica.navigation.InterfacePreferences(context).read().glass.renderer == GlassRendererMode.None)
+                            check(effectiveMode == "None") { "Effective scene backend: $effectiveMode" }
+                            if (!protocolLegacy) FrameStats.setScenarioTag(name)
+                            FrameStats.start(activity)
+                            windows.forEach { FrameStats.attach(it) }
+                        }
                         val cookie = name.hashCode()
                         if (Build.VERSION.SDK_INT >= 29) android.os.Trace.beginAsyncSection("ui600:$name:$rep", cookie)
                         else android.os.Trace.beginSection("ui600:$name:$rep")
@@ -94,13 +107,20 @@ class UiPerformanceTest {
                         }
                         Thread.sleep(300)
                         val report = JSONObject(FrameStats.report()).put("scenario", name).put("rep", rep)
-                            .put("warmup", rep == 0).put("seed", seed).put("songs", tracks.size)
+                            .put("warmup", warmup && rep == 0).put("protocolLegacy", protocolLegacy).put("seed", seed).put("songs", tracks.size)
                             .put("api", Build.VERSION.SDK_INT).put("glassMode", glassMode.name)
-                            .put("glassFallback", glassMode.name != "None").put("artwork", "placeholders; no media I/O")
+                            .put("glassFallback", false).put("requestedGlass", "None").put("observedSceneBackend", effectiveMode)
+                            .put("scriptVersion", "stage0-v1").put("actions", org.json.JSONArray(events))
+                            .put("artwork", "placeholders; no media I/O")
                             .put("source", args.getString("uiPerformanceSource") ?: "unspecified")
+                        check(report.getString("effectiveGlass") == "None")
+                        if (!protocolLegacy) check(report.getString("source") == BuildConfig.SOURCE_SHA && report.getString("buildSource") == BuildConfig.SOURCE_SHA)
+                        check(!report.getBoolean("windowLimitReached"))
                         check(!report.getBoolean("timeLimitReached")) { "$name exceeded the capture time limit" }
                         val frames = report.getJSONArray("windows")
-                        check((0 until frames.length()).sumOf { frames.getJSONObject(it).getInt("frames") } > 0) { "$name produced no frames" }
+                        check((0 until frames.length()).all { frames.getJSONObject(it).getInt("frames") > 0 }) { "$name has an empty window" }
+                        if (name in setOf("popup-open-close", "back-during-popup-retract"))
+                            check(frames.length() >= 2) { "$name missing modal window" }
                         val directory = nativeEvidenceDirectory("ui-performance", context.getExternalFilesDir(null))
                         File(directory, "$name-$rep-api${Build.VERSION.SDK_INT}.json").writeText(report.toString(2))
                     } finally {
@@ -121,14 +141,14 @@ class UiPerformanceTest {
             }) { scroll() }
             measure("carousel", { launchApp(home = true) }) {
                 val b = bounds { it.tag() == "home-pins" }
-                repeat(4) { check(device.swipe((b.right - 30).toInt(), b.center.y.toInt(), (b.left + 30).toInt(), b.center.y.toInt(), 30)); Thread.sleep(300) }
+                repeat(4) { check(swipe((b.right - 30).toInt(), b.center.y.toInt(), (b.left + 30).toInt(), b.center.y.toInt(), 30)); Thread.sleep(300) }
             }
             measure("artist-album-carousel", {
                 val artist = LibraryViews.groups(library.snapshot, SongListView.Artists, LibraryQuery()).first()
                 launchBrowse(BrowseStyle(), BrowseRoute(MainTab.Artists, MediaRef(MediaKind.Artist, artist.id), artist.title))
             }) {
                 val b = bounds { (it.config.getOrNull(SemanticsProperties.HorizontalScrollAxisRange)?.maxValue?.invoke() ?: 0f) > 0f }
-                repeat(3) { check(device.swipe((b.right - 30).toInt(), b.center.y.toInt(), (b.left + 30).toInt(), b.center.y.toInt(), 30)); Thread.sleep(400) }
+                repeat(3) { check(swipe((b.right - 30).toInt(), b.center.y.toInt(), (b.left + 30).toInt(), b.center.y.toInt(), 30)); Thread.sleep(400) }
             }
             measure("queue-drawer", { launchApp() }, { expand() }) {
                 clickDescription("Open queue"); awaitTag("browser-list"); scroll(); clickDescription("Minimize queue")
@@ -137,7 +157,7 @@ class UiPerformanceTest {
                 repeat(3) { expand(); clickDescription("Player handle"); Thread.sleep(600) }
             }
             measure("popup-open-close", { launchApp() }) {
-                repeat(3) { clickDescription("More"); Thread.sleep(400); device.pressBack(); Thread.sleep(500) }
+                repeat(3) { clickDescription("More"); Thread.sleep(400); pressBack(); Thread.sleep(500) }
             }
             measure("lyrics-open-close", { launchApp() }, {
                 expand(); clickDescription("Show lyrics"); Thread.sleep(500); clickDescription("Hide lyrics")
@@ -161,7 +181,7 @@ class UiPerformanceTest {
                     val accepted = nodes { all -> all.lastOrNull { it.boundsInWindow.width > 0 && it.boundsInWindow.height > 0 && it.config.getOrNull(SemanticsActions.SetText)?.action != null }
                         ?.config?.getOrNull(SemanticsActions.SetText)?.action
                         ?.invoke(androidx.compose.ui.text.AnnotatedString(text)) ?: false }
-                    check(accepted) { "Search editor rejected text" }; Thread.sleep(180)
+                    check(accepted) { "Search editor rejected text" }; milestone("set-text-length:${text.length}"); Thread.sleep(180)
                 }
             }
             measure("pinch-sizes", { launchBrowse(BrowseStyle(listSize = ListSize.Smallest)) }) {
@@ -175,7 +195,71 @@ class UiPerformanceTest {
                 main { check(androidx.lifecycle.ViewModelProvider(it)[SessionSelection::class.java].entries.size == 3) }
                 val b = bounds { it.tag() == selected.first().first }
                 drag(b.center.x, b.center.y, b.center.y + 230)
-                device.pressBack()
+                pressBack()
+            }
+            measure("interrupted-player-drag", { launchApp() }) {
+                expand()
+                val b = bounds { it.tag() == "player-handle" }
+                val before = b.top
+                var outbound = before
+                pointerPath(b.center.x, b.center.y + 50, listOf(b.center.y + 270, b.center.y + 130), afterSegment = { segment ->
+                    if (segment == 0) {
+                        awaitCondition("Player did not follow outward contact") { bounds { it.tag() == "player-handle" }.top > before + 10 }
+                        outbound = bounds { it.tag() == "player-handle" }.top
+                    }
+                }) {
+                    awaitCondition("Player did not follow interrupted drag; before=$b") { bounds { it.tag() == "player-handle" }.top.let { it > before + 10 && it < outbound - 10 } }
+                    milestone("player-drag-reversed")
+                }
+                awaitStableScene()
+            }
+            measure("back-during-popup-retract", { launchApp(tabs = "Songs,Albums") }, { clickDescription("Albums") }) {
+                check(nodes { all -> all.any { it.tag() == "page-heading" && it.config.getOrNull(SemanticsProperties.Text)?.any { text -> text.text == "Albums" } == true } })
+                milestone("back-start-albums")
+                clickDescription("More"); awaitTag("glass-morph-surface")
+                lateinit var returning: Window
+                main { owner -> returning = windows.single { it !== owner.window && it.decorView.isAttachedToWindow } }
+                injectBack(); milestone("first-back-dismiss")
+                awaitCondition("Returning popup did not release input before retirement") {
+                    var released = false
+                    main { released = returning.decorView.isAttachedToWindow &&
+                        returning.attributes.flags and android.view.WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE != 0 }
+                    released
+                }
+                injectBack(); milestone("second-back-during-retained-window")
+                awaitCondition("Returning popup did not retire") {
+                    var attached = true; main { attached = returning.decorView.isAttachedToWindow }; !attached
+                }
+                awaitStableScene()
+                check(nodes { all -> all.any { it.tag() == "page-heading" &&
+                    it.config.getOrNull(SemanticsProperties.Text)?.any { text -> text.text == "Songs" } == true } }) { "Back destination did not receive input" }
+                milestone("back-destination-songs")
+            }
+            measure("queue-pull-during-player-collapse", { launchApp() }, { expand() }) {
+                val b = bounds { it.tag() == "player-handle" }
+                val origin = b.top
+                var collapsed = origin
+                // Current behaviour: Player owns the upward pull interrupting collapse.
+                // Stage 2 (U10) decides whether a Queue takeover should exist.
+                pointerPath(b.center.x, b.center.y + 50, listOf(b.center.y + 270, b.center.y + 90), afterSegment = { segment ->
+                    if (segment == 0) {
+                        awaitCondition("Collapse never moved the player; before=$b") { bounds { it.tag() == "player-handle" }.top > origin + 10 }
+                        collapsed = bounds { it.tag() == "player-handle" }.top
+                        milestone("player-collapse-contact")
+                    }
+                }) {
+                    awaitCondition("Player did not reverse upward") { bounds { it.tag() == "player-handle" }.top < collapsed - 10 }
+                    milestone("upward-pull-routed-to-player")
+                }
+                awaitStableScene()
+            }
+            measure("drag-start-end-in-list", { launchApp() }, { expand(); clickDescription("Open queue") }) {
+                val tag = nodes { all -> all.first { it.tag()?.startsWith("media-entry:") == true }.tag()!! }
+                check(nodes { all -> all.first { it.tag() == tag }.config.getOrNull(SemanticsActions.OnLongClick)?.action?.invoke() == true })
+                main { check(androidx.lifecycle.ViewModelProvider(it)[SessionSelection::class.java].entries.size == 1) }
+                val b = bounds { it.tag() == tag }
+                drag(b.center.x, b.center.y, b.center.y + 160)
+                awaitAbsent("drag-stack"); milestone("list-drag-retired")
             }
             check(measuredScenarios > 0) { "Scenario filter matched nothing: $filter" }
         } finally {
@@ -204,8 +288,8 @@ class UiPerformanceTest {
             BrowserScreen(library, PlaylistState(), route, { route = it }, {}, {}, { _, _, _ -> }, null, null, true, false)
         }
     }
-    private fun launchApp(home: Boolean = false) {
-        context.getSharedPreferences("interface", 0).edit().putString("tabs", if (home) "Home" else "Songs").commit()
+    private fun launchApp(home: Boolean = false, tabs: String? = null) {
+        context.getSharedPreferences("interface", 0).edit().putString("tabs", tabs ?: if (home) "Home" else "Songs").commit()
         BrowsePreferences(context).write(BrowseRoute(MainTab.Songs), BrowseStyle(), false)
         launch { LocalicaScreen(library, PlaybackState(connected = true, trackId = tracks[0].id,
             trackUri = "fixture", title = tracks[0].title, durationMs = 180_000), {}, {}, {}, {}, {}, {},
@@ -220,9 +304,13 @@ class UiPerformanceTest {
             windows += activity.window
             activity.setContent {
                 val runtime = remember { GlassRendererRuntime(glassMode) }
+                SideEffect { effectiveMode = runtime.generation.backend.name }
                 CompositionLocalProvider(LocalGlassRendererRuntime provides runtime,
                     LocalGlassMorphWorkObserver provides { _, window, _ ->
-                        if (window != null) { windows += window; FrameStats.attach(window) }
+                        if (window != null) {
+                            check(runtime.requested == GlassRendererMode.None && runtime.generation.backend == GlassBackend.None)
+                            windows += window; FrameStats.attach(window)
+                        }
                     }, LocalBrowseObscuredInset provides 96.dp) { LocalicaTheme(tone, content) }
             }
         }
@@ -272,12 +360,12 @@ class UiPerformanceTest {
                     node?.config?.getOrNull(SemanticsActions.OnClick)?.action
                 }
             }?.invoke() ?: false }
-            if (clicked) { Thread.sleep(650); return }
+            if (clicked) { milestone("click"); Thread.sleep(650); return }
             Thread.sleep(50)
         }
         error("Click target missing; visible semantics=" + nodes { all -> all.map { it.config.toString() }.joinToString("; ") })
     }
-    private fun clickDescription(text: String) = click { it.config.getOrNull(SemanticsProperties.ContentDescription)?.contains(text) == true }
+    private fun clickDescription(text: String) { milestone("click-description:$text"); click { it.config.getOrNull(SemanticsProperties.ContentDescription)?.contains(text) == true } }
     private fun bounds(match: (SemanticsNode) -> Boolean): Rect = nodes { all -> checkNotNull(all.lastOrNull { match(it) && it.boundsInWindow.height > 0 }).boundsInWindow }
     private fun expand() { click { it.config.getOrNull(SemanticsActions.OnClick)?.label == "Expand player" }; Thread.sleep(600) }
     private fun scroll() {
@@ -286,7 +374,8 @@ class UiPerformanceTest {
         val before = offset()
         val b = bounds { it.tag() == "browser-list" }
         repeat(3) {
-            check(device.swipe(b.center.x.toInt(), (b.top + b.height * .75).toInt(), b.center.x.toInt(), (b.top + b.height * .25).toInt(), 30))
+            events += JSONObject().put("action", "scroll-swipe").put("x", b.center.x).put("fromY", b.top + b.height * .75).put("toY", b.top + b.height * .25).put("steps", 30).put("uptimeMs", SystemClock.uptimeMillis())
+            check(swipe(b.center.x.toInt(), (b.top + b.height * .75).toInt(), b.center.x.toInt(), (b.top + b.height * .25).toInt(), 30))
             Thread.sleep(450)
         }
         check(offset() > before) { "Scroll gesture did not move content" }
@@ -294,13 +383,77 @@ class UiPerformanceTest {
     private fun drag(x: Float, y: Float, end: Float) {
         val down = SystemClock.uptimeMillis()
         fun send(action: Int, at: Float) { val e = MotionEvent.obtain(down, SystemClock.uptimeMillis(), action, x, at, 0)
-            check(instrumentation.uiAutomation.injectInputEvent(e, true)); e.recycle() }
+            e.source = android.view.InputDevice.SOURCE_TOUCHSCREEN
+            check(instrumentation.uiAutomation.injectInputEvent(e, true)); e.recycle()
+            events += JSONObject().put("pointerAction", action).put("x", x).put("y", at).put("uptimeMs", SystemClock.uptimeMillis()) }
         send(MotionEvent.ACTION_DOWN, y); Thread.sleep(650)
         repeat(60) { frame ->
             send(MotionEvent.ACTION_MOVE, y + (end - y) * frame / 59); Thread.sleep(16)
-            if (frame == 30) check(nodes { all -> all.any { it.tag() == "drag-foreground" } }) { "Drag overlay did not appear" }
+            if (frame == 30) check(nodes { all -> all.any { it.tag() == "drag-stack" } }) { "Drag overlay did not appear" }
         }
         send(MotionEvent.ACTION_UP, end)
+    }
+    private fun injectBack() {
+        val down = SystemClock.uptimeMillis()
+        for (action in listOf(android.view.KeyEvent.ACTION_DOWN, android.view.KeyEvent.ACTION_UP)) {
+            val event = android.view.KeyEvent(down, SystemClock.uptimeMillis(), action, android.view.KeyEvent.KEYCODE_BACK, 0)
+            event.source = android.view.InputDevice.SOURCE_KEYBOARD
+            check(instrumentation.uiAutomation.injectInputEvent(event, true))
+            events += JSONObject().put("keyAction", action).put("keyCode", android.view.KeyEvent.KEYCODE_BACK).put("uptimeMs", event.eventTime)
+        }
+    }
+    private fun pressBack() { injectBack(); milestone("press-back") }
+    private fun swipe(x1: Int, y1: Int, x2: Int, y2: Int, steps: Int): Boolean {
+        events += JSONObject().put("action", "swipe").put("fromX", x1).put("fromY", y1).put("toX", x2).put("toY", y2)
+            .put("steps", steps).put("uptimeMs", SystemClock.uptimeMillis())
+        return device.swipe(x1, y1, x2, y2, steps)
+    }
+    private fun milestone(name: String) { events += JSONObject().put("milestone", name).put("uptimeMs", SystemClock.uptimeMillis()) }
+    private fun awaitCondition(label: String, condition: () -> Boolean) {
+        val until = SystemClock.uptimeMillis() + 5_000
+        while (SystemClock.uptimeMillis() < until) {
+            if (condition()) return
+            Thread.sleep(25)
+        }
+        error(label)
+    }
+    private fun awaitStableScene() {
+        // Stable semantic geometry is a readiness milestone; the legacy 800ms pacing remains a floor.
+        Thread.sleep(800)
+        val until = SystemClock.uptimeMillis() + 15_000
+        var previous = ""; var stable = 0
+        while (SystemClock.uptimeMillis() < until) {
+            val geometry = nodes { all -> all.filter { it.tag() != null }.joinToString { it.tag() + it.boundsInWindow.toString() } }
+            stable = if (geometry == previous && geometry.isNotEmpty()) stable + 1 else 0
+            if (stable >= 3) { milestone("semantic-geometry-settled"); return }
+            previous = geometry; Thread.sleep(50)
+        }
+        error("Scene geometry did not settle")
+    }
+    private fun awaitAbsent(tag: String) {
+        val until = SystemClock.uptimeMillis() + 15_000
+        while (SystemClock.uptimeMillis() < until) {
+            if (nodes { all -> all.none { it.tag() == tag } }) return
+            Thread.sleep(25)
+        }
+        error("Still present: $tag")
+    }
+    private fun pointerPath(x: Float, y: Float, destinations: List<Float>, afterSegment: (Int) -> Unit = {}, verify: () -> Unit) {
+        val down = SystemClock.uptimeMillis()
+        fun send(action: Int, at: Float) {
+            val now = SystemClock.uptimeMillis()
+            val e = MotionEvent.obtain(down, now, action, x, at, 0)
+            e.source = android.view.InputDevice.SOURCE_TOUCHSCREEN
+            check(instrumentation.uiAutomation.injectInputEvent(e, true)); e.recycle()
+            events += JSONObject().put("pointerAction", action).put("x", x).put("y", at).put("uptimeMs", now)
+        }
+        send(MotionEvent.ACTION_DOWN, y)
+        var start = y
+        destinations.forEachIndexed { index, to ->
+            repeat(12) { step -> send(MotionEvent.ACTION_MOVE, start + (to - start) * (step + 1) / 12); Thread.sleep(16) }
+            afterSegment(index); start = to
+        }
+        verify(); send(MotionEvent.ACTION_UP, start); milestone("pointer-release")
     }
     private fun pinch(expand: Boolean) {
         val b = bounds { it.tag() == "browser-list" }
@@ -312,6 +465,8 @@ class UiPerformanceTest {
             val e = MotionEvent.obtain(down, SystemClock.uptimeMillis(), action, count, props, coords, 0, 0, 1f, 1f, 0, 0,
                 android.view.InputDevice.SOURCE_TOUCHSCREEN, 0)
             check(instrumentation.uiAutomation.injectInputEvent(e, true)); e.recycle()
+            events += JSONObject().put("pointerAction", action).put("pointerCount", count).put("centerX", b.center.x)
+                .put("y", b.center.y).put("spread", spread).put("uptimeMs", SystemClock.uptimeMillis())
         }
         val small = b.width * .08f; val large = b.width * .38f
         val from = if (expand) small else large; val to = if (expand) large else small
