@@ -352,7 +352,9 @@ class IncompleteScanTest {
                 .putExtra("completion", completion)
                 .putExtra("request-id", requestId)
                 .putExtra("phase", phase)
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                // A preceding no-display request can still own its finishing task.
+                // Each callback needs a fresh activity, even for consecutive revocations.
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_MULTIPLE_TASK))
             // Read access alone cannot prove that a fresh persistable grant has arrived.
             try { withTimeout(10_000) { completed.await() } }
             catch (failure: TimeoutCancellationException) {
