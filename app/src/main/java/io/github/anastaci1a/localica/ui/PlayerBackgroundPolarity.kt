@@ -239,8 +239,14 @@ private fun BackgroundSampleRole.paintReady(geometry: PlayerBackgroundGeometry, 
         BackgroundRequest(geometry, frame.roles.map { BackgroundSampleRole(it.identity, it.visual, requireNotNull(owner.backdrops[it.identity])) }) else null
     // Endpoint geometry is independent of lyrics visibility, so this preparation
     // is not cancelled and restarted on every animation frame.
-    val endpointRequests = if (request != null && lyricsEndpoints != null && reason == null && frame?.transitioning == false)
-        lyricsEndpoints.toList().map { BackgroundRequest(it, request.roles) } else null
+    // Closing lyrics remounts the actions row before its first measurement.
+    // Its destination bounds are already known; that temporary missing CURRENT
+    // footprint must not discard the prepared endpoint ink mid-transition.
+    val endpointRoles = frame?.takeIf { !it.transitioning && !it.frozenVisible && !it.liveBlur }?.roles
+        ?.takeIf { roles -> roles.all { owner.backdrops[it.identity]?.tone == requestedTone } }
+        ?.map { BackgroundSampleRole(it.identity, it.visual, requireNotNull(owner.backdrops[it.identity])) }
+    val endpointRequests = if (endpointRoles != null && lyricsEndpoints != null)
+        lyricsEndpoints.toList().map { BackgroundRequest(it, endpointRoles) } else null
     val endpointWeights = if (endpointRequests != null) frame?.roles?.map { it.weight } else null
     LaunchedEffect(endpointRequests, endpointWeights) {
         owner.presentLyricsInk(null)
