@@ -102,11 +102,20 @@ class ProducerArchiveTest(unittest.TestCase):
         self.run['head_sha'] = self.sha
         for job in self.jobs:
             job.update(started_at='2026-11-03T00:00:00Z', completed_at='2026-11-03T00:01:00Z')
+        # Model upload-artifact's paths from the real producer, rather than a
+        # separately maintained three-member fixture that can silently drift.
+        import yaml
+        workflow = yaml.safe_load((ROOT/'.github/workflows/android.yml').read_text())
+        upload = next(step for step in workflow['jobs']['device-tests-summary']['steps']
+                      if step.get('with', {}).get('name') == 'complete-verification')
+        files = {'verification.json': json.dumps(self.receipt),
+                 **{f'union-api-{api}.json': json.dumps(union) for api, union in self.unions.items()},
+                 'class-durations.csv': 'api,class,tests,total_seconds,skipped\n26,ExampleTest,1,2,0\n'}
+        self.assertEqual(set(files), set(upload['with']['path'].splitlines()))
         data = io.BytesIO()
         with zipfile.ZipFile(data,'w') as archive:
-            archive.writestr('verification.json', json.dumps(self.receipt))
-            for api, union in self.unions.items():
-                archive.writestr(f'union-api-{api}.json', json.dumps(union))
+            for path in upload['with']['path'].splitlines():
+                archive.writestr(path, files[path])
         data = data.getvalue()
         artifacts = [dict(id=number, name=name, expired=False, digest='sha256:'+hashlib.sha256(data).hexdigest(),
                           workflow_run={'id':42,'head_sha':self.sha}, created_at='2026-11-03T00:00:30Z')
