@@ -177,7 +177,11 @@ jobs:
         if: always()
         with:
           name: build-reports
-          path: app/build/reports/
+          path: |
+            app/build/reports/
+            lint/build/reports/
+            lint/build/test-results/
+            lint/build/libs/lint.jar
 
   static-checks:
     # Unit tests, lint and the release variant, off the APK critical path. The summary and
@@ -206,7 +210,10 @@ jobs:
       - name: Check immutable UI debt
         run: bash .github/run-ui-lint.sh app/build/reports/ui-lint
       - name: Unit tests, lint and release build
-        run: ./gradlew testDebugUnitTest lintDebug assembleRelease --no-daemon --max-workers=4 -Dorg.gradle.jvmargs='-Xmx6g -Dfile.encoding=UTF-8'
+        run: |
+          ./gradlew :lint:test --no-daemon --max-workers=2 -Dorg.gradle.jvmargs='-Xmx2g -Dfile.encoding=UTF-8'
+          ./gradlew testDebugUnitTest lintDebug assembleRelease --no-daemon --max-workers=4 -Dorg.gradle.jvmargs='-Xmx6g -Dfile.encoding=UTF-8'
+          sha256sum lint/build/libs/lint.jar > app/build/reports/ui-lint/registry-artifact.sha256
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:

@@ -42,7 +42,14 @@ private fun FrameStatsActions() {
         current as? android.app.Activity
     }
     val recording by io.github.anastaci1a.localica.diagnostics.FrameStats.recording
+    var tagIndex by remember { mutableIntStateOf(io.github.anastaci1a.localica.diagnostics.FrameStats.scenarioTags.indexOf(
+        io.github.anastaci1a.localica.diagnostics.FrameStats.selectedScenarioTag)) }
     if (activity != null) {
+        if (!recording) ActionTextButton(onClick = {
+            val tags = io.github.anastaci1a.localica.diagnostics.FrameStats.scenarioTags
+            tagIndex = if (tagIndex == tags.lastIndex) -1 else tagIndex + 1
+            io.github.anastaci1a.localica.diagnostics.FrameStats.setScenarioTag(tags.getOrNull(tagIndex).orEmpty())
+        }) { Text("Capture scenario: " + if (tagIndex < 0) "untagged" else io.github.anastaci1a.localica.diagnostics.FrameStats.scenarioTags[tagIndex]) }
         Text("Record up to two minutes of frame timings while you repeat an action. Stop here, then export diagnostics. No song names or search text are captured.")
         ActionTextButton(onClick = {
             if (recording) io.github.anastaci1a.localica.diagnostics.FrameStats.stop()

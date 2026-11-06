@@ -39,6 +39,7 @@ android {
             applicationIdSuffix = ".debug"
             signingConfig = signingConfigs.getByName("debug")
             isDebuggable = false
+            isProfileable = true
             isMinifyEnabled = true
             isShrinkResources = false
             matchingFallbacks += "release"
@@ -49,7 +50,11 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
     lint { baseline = file("lint-baseline.xml") }
-    buildFeatures { compose = true }
+    buildFeatures { compose = true; buildConfig = true }
+    defaultConfig {
+        val sourceSha = providers.exec { commandLine("git", "rev-parse", "HEAD") }.standardOutput.asText.get().trim()
+        buildConfigField("String", "SOURCE_SHA", "\"$sourceSha\"")
+    }
     // Platform-free helpers are test-only, shared by host contracts and device callers.
     sourceSets.getByName("test").java.srcDir("src/sharedTest/java")
     sourceSets.getByName("androidTest").java.srcDir("src/sharedTest/java")
