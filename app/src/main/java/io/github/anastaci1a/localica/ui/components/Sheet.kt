@@ -14,8 +14,7 @@ private class SheetHandle(override val expansion: ExpansionView, initial: Boolea
     var requested by mutableStateOf(initial)
     override val expanded get() = requested
     override var contact = SheetContact({ false }, {}, { error("No contact") }, {})
-    override fun expand() { requested = true }
-    override fun collapse() { requested = false }
+    override fun expand() { requested = true }; override fun collapse() { requested = false }
 }
 /** One ExpandCollapse owner; its physical frame follows the live endpoint basis (Rebase-capable, A2.3c). */
 @Composable fun rememberSheetState(key: Any, initiallyExpanded: Boolean = false, basis: ExpansionBasis): SheetState {
