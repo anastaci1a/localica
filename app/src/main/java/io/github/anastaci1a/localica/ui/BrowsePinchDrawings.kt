@@ -147,6 +147,13 @@ internal class PinchFadeFocus {
     }
 }
 
+/** Test-only witness of what the overlay paints: item key to drawn bounds and alpha. */
+internal class PinchDrawnItem(val bounds: Rect, val alpha: Float, val retained: Boolean)
+internal class PinchDrawnFrame(val progress: Float, val fingers: Float, val held: Boolean,
+    val destinationReady: Boolean, val viewport: Rect, val items: Map<Any, PinchDrawnItem>)
+@androidx.annotation.VisibleForTesting @Volatile
+internal var pinchDrawProbe: ((PinchDrawnFrame) -> Unit)? = null
+
 private data class RetainedPinchPlacement(val key: Any, val item: FrozenBrowseItem, val origin: Offset,
     val targetWidth: Float, val targetHeight: Float, val alpha: Float, val index: Int,
     val geometryProgress: Float)
@@ -212,6 +219,14 @@ internal fun Modifier.pinchRetainedOverlay(motion: BrowsePinchMotion, grid: Lazy
             visible.filter { it.key !in motion.bounds && (it.key in motion.artwork || it.key in motion.text) }
                 .associate { entry -> entry.key to (Offset(entry.offset.x + entry.size.width / 2f,
                     entry.offset.y + entry.size.height / 2f) - focus).getDistance() })
+        val probe = pinchDrawProbe?.takeIf { motion.visualSource != null }
+        val drawn = if (probe == null) null else mutableMapOf<Any, PinchDrawnItem>()
+        fun witness(key: Any, bounds: Rect, alpha: Float, retained: Boolean) {
+            val previous = drawn?.get(key)
+            drawn?.set(key, if (previous == null) PinchDrawnItem(bounds, alpha, retained)
+                else PinchDrawnItem(Rect(minOf(previous.bounds.left, bounds.left), minOf(previous.bounds.top, bounds.top),
+                    maxOf(previous.bounds.right, bounds.right), maxOf(previous.bounds.bottom, bounds.bottom)), maxOf(previous.alpha, alpha), retained))
+        }
         fun drawLive(part: BrowsePinchLayer, key: Any) {
             val viewport = motion.viewportCoordinates
             val coordinates = part.coordinates ?: return
@@ -220,6 +235,7 @@ internal fun Modifier.pinchRetainedOverlay(motion: BrowsePinchMotion, grid: Lazy
             val bounds = viewport.localBoundingBoxOf(coordinates, clipBounds = false)
             val incoming = arrivals[key]?.alpha(p, arriving = true) ?: 1f
             part.layer.alpha = (motion.itemAlpha[key] ?: 1f) * incoming
+            witness(key, bounds, part.layer.alpha, false)
             // A resized cover re-records its layer later in this frame (its own render node is
             // updated after this pass), so the layer still holds last frame's size. Scaling by it
             // painted the new drawing at old/new size, one to a few pixels off per frame (#505).
@@ -281,6 +297,9 @@ internal fun Modifier.pinchRetainedOverlay(motion: BrowsePinchMotion, grid: Lazy
             (motion.bounds.getValue(key).center - focus).getDistance()
         })
         retained.replaceAll { key, placed -> placed.copy(alpha = departures.getValue(key).alpha(p)) }
+        if (drawn != null) retained.values.forEach { placed -> witness(placed.key, Rect(placed.origin, androidx.compose.ui.geometry.Size(
+            placed.item.size.width + (placed.targetWidth - placed.item.size.width) * placed.geometryProgress,
+            placed.item.size.height + (placed.targetHeight - placed.item.size.height) * placed.geometryProgress)), placed.alpha, true) }
         fun retainedLift(placed: RetainedPinchPlacement): HoverGeometry? {
             val content = placed.item.content ?: return null
             val hover = content.hover ?: return null
@@ -405,5 +424,7 @@ internal fun Modifier.pinchRetainedOverlay(motion: BrowsePinchMotion, grid: Lazy
                 }
             }
         }
+        if (probe != null && drawn != null) probe(PinchDrawnFrame(p, motion.fingerProgress, motion.held,
+            motion.destinationReady, Rect(0f, 0f, size.width, size.height), drawn))
     }
 }
