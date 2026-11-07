@@ -62,6 +62,7 @@ io.github.anastaci1a.localica.CompactCollectionArtworkTest
 io.github.anastaci1a.localica.ContinuousPlaybackTest
 io.github.anastaci1a.localica.ControlStateMotionTest
 io.github.anastaci1a.localica.CoverImagesTest
+io.github.anastaci1a.localica.CrossViewSelectionTest
 io.github.anastaci1a.localica.CurrentSongHighlightGeometryTest
 io.github.anastaci1a.localica.DeviceCornersTest
 io.github.anastaci1a.localica.DialogChromeLayoutTest
