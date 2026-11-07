@@ -22,6 +22,7 @@ import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.anastaci1a.localica.browse.*
+import io.github.anastaci1a.localica.ui.engine.motionPixelRect
 
 /** Artwork, metadata and menu keep the same composition identities in every view. */
 @OptIn(ExperimentalSharedTransitionApi::class)
