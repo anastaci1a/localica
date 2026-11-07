@@ -393,6 +393,28 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
         controlNames.any { polarity.measured[it] == null } -> PlayerBackgroundUnavailable.Unmeasured
         else -> null
     }, GlassTone(), if (ordinaryEndpoint != null && lyricsEndpoint != null) ordinaryEndpoint to lyricsEndpoint else null)
+    // #634: keep the current song's full-player backdrop prepared while minimized. The settled ordinary
+    // geometry is retained when the full player rests; a cover of another shape, or a process that has not
+    // shown the full player yet, uses the same layout rules at their settled values.
+    val settledBackground = if (settings.artworkLayout == ArtworkLayout.FullBackground) 1f else 0f
+    if (backgroundGeometry != null && p >= .999f && backgroundReveal >= 1f && !artSwipe.active && swipeOffset == 0f &&
+        lyricVisibility == 0f && (queueProgress?.value ?: 0f) == 0f && backgroundProgress == settledBackground &&
+        aspect == artwork.palette.aspect && artCropRetention == (if (clearanceTarget > 0f) 1f else 0f))
+        SideEffect { polarity.settledEndpoint = backgroundGeometry }
+    val retainedEndpoint = polarity.settledEndpoint
+    val artistStyle = MaterialTheme.typography.bodyLarge
+    val seekLabelStyle = MaterialTheme.typography.labelSmall
+    val lineHeights = remember(titleMeasurer, artistStyle, seekLabelStyle, density.density, density.fontScale) {
+        listOf(artistStyle, seekLabelStyle).map { style ->
+            titleMeasurer.measure("Ag", style, maxLines = 1).size.height / density.density }
+    }
+    val prewarmGeometry = remember(artwork.palette.aspect, settledBackground, windowWidth, maxHeight, virtualHeight,
+        actionRows, fullTitleHeight, lineHeights, density, retainedEndpoint) {
+        settledPlayerGeometry(artwork.palette.aspect, settledBackground, windowWidth, maxHeight, virtualHeight, floatingSlot,
+            artworkBand, miniArtY, ordinarySeekY, normalTransport, contentInset, transportWidth, actionRows,
+            fullTitleHeight, lineHeights[0], lineHeights[1], density, retainedEndpoint)
+    }
+    PrewarmPlayerBackdrop(polarity, artwork, prewarmGeometry, settings.glass.contrast > 0f)
     val baseColors = MaterialTheme.colorScheme
     CompositionLocalProvider(LocalGlassPopupHome provides popupHome) {
     GlassPanelTheme(lightMix) {
