@@ -137,4 +137,8 @@ test('transfer owners change only through the recorded one-off relabel, once and
     const [m] = recordedOwnerMoves, shadow = entry(0, {codeSha256:m.codeSha256, removedBy:m.from});
     transferGrowth([shadow], [{...shadow, removedBy:m.to}]);
     assert.throws(() => transferGrowth([{...shadow, removedBy:m.to}], [shadow]), /cannot change/);
+    for (const r of recordedOwnerMoves) { const e = entry(0, {codeSha256:r.codeSha256, removedBy:r.from});
+        transferGrowth([e], [{...e, removedBy:r.to}]);
+        assert.throws(() => transferGrowth([e], [{...e, removedBy:'U10.04'}]), /cannot change/);
+        assert.throws(() => transferGrowth([{...e, codeSha256:'other'}], [{...e, codeSha256:'other', removedBy:r.to}]), /cannot change/); }
 });

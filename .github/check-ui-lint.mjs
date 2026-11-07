@@ -75,8 +75,11 @@ export const transferExceptions = {'U10.02-ledger-2026-11-07': {removedBy: 'U10.
  * entries whose real owner is another step (artwork swipe, snapshot recording, cover order, title input band) move to that
  * step once, in one commit, at most 22 entries; every other removedBy change is rejected. */
 export const transferRelabels = {'U10.03-relabel-2026-11-07': {from: 'U10.03', limit: 22}};
-/** Untagged owner moves already in the ledger history (lead decision 2026-11-07 ~8 AM, stage2 f449bf56 = stage3 b1fd8cbb). */
-export const recordedOwnerMoves = [{codeSha256: '20f5c3f87152c38dc50f6bd4be3be3085fe522574fa028dfc116923d1b338f15', from: 'U04.01a', to: 'U04.01b'}];
+/** Untagged owner moves already in the ledger history (lead decision 2026-11-07 ~8 AM, stage2 f449bf56 = stage3 b1fd8cbb), and
+ * the recorded addition to the U10.03 relabel map (lead decision 2026-11-07 11:00 AM): the PlayerSurface scroll gate shares
+ * its line with the baselined player Column, so it moves to U11.04, the step that replaces that Column. */
+export const recordedOwnerMoves = [{codeSha256: '20f5c3f87152c38dc50f6bd4be3be3085fe522574fa028dfc116923d1b338f15', from: 'U04.01a', to: 'U04.01b'},
+    {codeSha256: 'f7cb4d564f22c78a17a817c10cc0bfd565fe2d741765b679d9f9537d54882f8f', from: 'U10.03', to: 'U11.04'}];
 const transferId = e => JSON.stringify([e.rule,e.path,e.fqn,e.codeSha256]);
 /** Lead-approved ownership transfers (2026-11-07): itemized incidents a named future step removes; shrink-only along history. */
 export function transferIds(entries, known, completed) {

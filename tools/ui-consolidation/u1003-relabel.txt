@@ -26,3 +26,6 @@ RawMotionMap             PlayerSurface.kt:491  U10.03 -> U04.02a 9b6139532f5e  .
 RawMotionMap             PlayerSurface.kt:545  U10.03 -> U11.04  1c0f88107fba  val inputTop = ((statusInset + 48.dp).roundToPx() - origin).coerceIn(0, height)
 RawMotionMap             PlayerSurface.kt:546  U10.03 -> U11.04  4970cf84c028  val inputBottom = minOf(height, seekY.roundToPx() - padding - origin).coerceAtLeast(inputTop)
 RawMotionMap             PlayerSurface.kt:546  U10.03 -> U11.04  5ac821870dad  val inputBottom = minOf(height, seekY.roundToPx() - padding - origin).coerceAtLeast(inputTop)
+# Recorded addition (lead decision 2026-11-07 11:00 AM): untagged, admitted by check-ui-lint recordedOwnerMoves (pinned to this codeSha256 only).
+# U11.04 = the player Column on this line is a baselined NonPresetScreenLayout that U11.04 replaces; any text edit re-identifies it. Line number at stage2/600 da4efd64.
+RawMotionMap             PlayerSurface.kt:405  U10.03 -> U11.04  f7cb4d564f22  Column(Modifier.fillMaxSize().controlVerticalScroll(playerScroll, enabled = p > 0.99f && virtualHeight > this@PlayerSurf

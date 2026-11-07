@@ -207,8 +207,8 @@
       "path": "app/src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt",
       "fqn": "io.github.anastaci1a.localica.ui.at",
       "codeSha256": "f7cb4d564f22c78a17a817c10cc0bfd565fe2d741765b679d9f9537d54882f8f",
-      "removedBy": "U10.03",
-      "reason": "U10.03 removes: existing player phase consumer, now reading the Engine phase (U10.01 ownership move): Column(Modifier.fillMaxSize().controlVerticalScroll(playerScroll, enabled = p > 0.99f && v"
+      "removedBy": "U11.04",
+      "reason": "U11.04 removes (recorded relabel addition, lead decision 2026-11-07 11:00 AM): the scroll gate shares its line with the player Column that U11.04 replaces; was U10.03: existing player phase consumer, now reading the Engine phase (U10.01 ownership move): Column(Modifier.fillMaxSize().controlVerticalScroll(playerScroll, enabled = p > 0.99f && v"
     },
     {
       "rule": "RawMotionMap",
