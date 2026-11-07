@@ -22,10 +22,15 @@ private fun queuedEffects(context: CoroutineContext): CoroutineContext =
     if (context[ContinuationInterceptor] != null) context
     else context + StandardTestDispatcher(context[TestCoroutineScheduler])
 
+/** The running test's virtual time, for Engine owners in fixture hosts (PlayerSurfaceHarness); real-app owner tests pass it
+ * to their own UiClock. The theme clock would stamp an idle intent at its last presented frame instead. */
+internal object FixtureTime { @Volatile var nanos: (() -> Long)? = null }
+
 @OptIn(ExperimentalTestApi::class)
 internal fun localicaComposeRule(
     effectContext: CoroutineContext = EmptyCoroutineContext
 ): ComposeContentTestRule = createComposeRule(effectContext = queuedEffects(effectContext))
+    .also { rule -> FixtureTime.nanos = { rule.mainClock.currentTime * 1_000_000 } }
 
 internal inline fun <reified A : ComponentActivity> localicaAndroidComposeRule(
     effectContext: CoroutineContext = EmptyCoroutineContext
@@ -38,9 +43,10 @@ internal fun <A : ComponentActivity> localicaAndroidComposeRule(
     effectContext: CoroutineContext = EmptyCoroutineContext
 ): AndroidComposeTestRule<ActivityScenarioRule<A>, A> =
     createAndroidComposeRule(activityClass, effectContext = queuedEffects(effectContext))
+        .also { rule -> FixtureTime.nanos = { rule.mainClock.currentTime * 1_000_000 } }
 
 @OptIn(ExperimentalTestApi::class)
 internal fun localicaRunComposeUiTest(
     effectContext: CoroutineContext = EmptyCoroutineContext,
     block: ComposeUiTest.() -> Unit
-) = runComposeUiTest(effectContext = queuedEffects(effectContext), block = block)
+) = runComposeUiTest(effectContext = queuedEffects(effectContext)) { FixtureTime.nanos = { mainClock.currentTime * 1_000_000 }; block() }
