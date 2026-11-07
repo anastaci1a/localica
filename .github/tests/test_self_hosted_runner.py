@@ -121,5 +121,39 @@ class EmulatorWrapperContract(unittest.TestCase):
                     self.assertEqual(2, result.returncode, result.stderr)
 
 
+class ScriptLinesContract(unittest.TestCase):
+    """The emulator script runs line by line like the hosted action; nothing may end it early as a pass."""
+
+    def run_lines(self, script, cwd):
+        return subprocess.run(['bash', str(ROOT / '.github/local/run-script-lines.sh'), script], cwd=cwd,
+                              input='', capture_output=True, text=True, timeout=30)
+
+    def test_a_line_that_reads_stdin_cannot_swallow_the_rest(self):
+        # 2026-11-07: `adb shell` on the first line consumed the remaining lines, so the tests never ran
+        # and the self-hosted focused job passed with no results.
+        with tempfile.TemporaryDirectory() as tmp:
+            script = ('cat > consumed.txt\n'
+                      '  # comment\n'
+                      '\n'
+                      '  echo second >> ran.txt\n'
+                      'echo last >> ran.txt')
+            result = self.run_lines(script, tmp)
+            self.assertEqual(0, result.returncode, result.stderr)
+            self.assertEqual('second\nlast\n', (Path(tmp) / 'ran.txt').read_text())
+            self.assertEqual('', (Path(tmp) / 'consumed.txt').read_text())
+
+    def test_stops_at_the_first_failing_line_with_its_status(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            result = self.run_lines('echo one >> ran.txt\nexit 7\necho never >> ran.txt', tmp)
+            self.assertEqual(7, result.returncode)
+            self.assertIn('script line failed (7): exit 7', result.stdout)
+            self.assertEqual('one\n', (Path(tmp) / 'ran.txt').read_text())
+
+    def test_wrapper_runs_the_script_through_it(self):
+        wrapper = (ROOT / '.github/local/with-emulator.sh').read_text()
+        self.assertIn('bash "$here/run-script-lines.sh" "$script"', wrapper)
+        self.assertNotIn('<<< "$script"', wrapper)
+
+
 if __name__ == '__main__':
     unittest.main()

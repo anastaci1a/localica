@@ -4,14 +4,15 @@
 # Mirrors reactivecircus/android-emulator-runner (the hosted path) for the same inputs: a freshly
 # created AVD named "test" (forced), hw.cpu.ncore=2, a cold boot with the same emulator options,
 # a 600 s boot timeout on port 5554, "input keyevent 82", optional animation scales of 0, then each
-# non-empty, non-comment script line through `sh -c` with ANDROID_SERIAL and EMULATOR_PORT set,
-# stopping at the first failing line, and `emu kill` afterwards. Only the SDK location differs:
-# the runner image carries the SDK and both system images read-only.
+# non-empty, non-comment script line through `sh -c` with ANDROID_SERIAL and EMULATOR_PORT set and no
+# stdin (run-script-lines.sh), stopping at the first failing line, and `emu kill` afterwards. Only the
+# SDK location differs: the runner image carries the SDK and both system images read-only.
 #
 # Inputs (environment): EMULATOR_API, EMULATOR_TARGET, EMULATOR_PROFILE, EMULATOR_OPTIONS,
 # EMULATOR_DISABLE_ANIMATIONS (true|false) and EMULATOR_SCRIPT. The workflow contract test keeps
 # them identical to the hosted step's inputs.
 set -euo pipefail
+here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 umask 0002
 [[ ${GITHUB_ACTIONS:-} == true && ${RUNNER_ENVIRONMENT:-} == self-hosted && ${LOCALICA_JIT_RUNNER:-} == 1 && ${LOCALICA_EPHEMERAL_RUNNER:-} == localica-kvm ]] ||
   { echo 'refusing: not the locked-down self-hosted JIT runner' >&2; exit 2; }
@@ -71,10 +72,6 @@ echo '::endgroup::'
 
 export ANDROID_SERIAL=$serial EMULATOR_PORT=$port
 rc=0
-while IFS= read -r line || [[ -n $line ]]; do
-  line=${line#"${line%%[![:space:]]*}"}
-  [[ -n $line && $line != \#* ]] || continue
-  sh -c "$line" || { rc=$?; echo "::error::script line failed ($rc): $line"; break; }
-done <<< "$script"
+bash "$here/run-script-lines.sh" "$script" || rc=$?
 if (( rc )); then tail -n 150 "$log" || true; fi
 exit "$rc"
