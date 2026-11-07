@@ -1,0 +1,55 @@
+# Proof-branch only (#637): API 36 cold-boot loop with prototype's exact emulator setup.
+# Not delivery or release evidence.
+name: Proof 637 API 36 launcher-reset stress (not delivery)
+'on':
+  push:
+    branches: ['proof/637-stress']
+permissions:
+  contents: read
+jobs:
+  boots:
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        mode: [immediate, idle]
+        job: [1, 2]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    name: API 36 stress ${{ matrix.mode }} ${{ matrix.job }}
+    env:
+      PROOF_CYCLES: '80'
+      PROOF_MODE: ${{ matrix.mode }}
+    steps:
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+    - name: Record runner and toolchain identity
+      run: bash .github/test-evidence/environment.sh | tee proof-runner-environment.txt
+    - name: Enable emulator acceleration
+      run: |
+        echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+        sudo udevadm control --reload-rules
+        sudo udevadm trigger --name-match=kvm
+    - name: Make room for emulator userdata
+      run: sudo rm -rf /usr/share/dotnet
+    - name: Prepare the verified emulator SDK
+      uses: ./.github/actions/emulator-sdk-cache
+    - name: Restore the exact SDK system image revision
+      uses: ./.github/actions/system-image-cache
+      with:
+        api: 36
+    - uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
+      with:
+        api-level: 36
+        target: default
+        arch: x86_64
+        profile: pixel_2
+        emulator-options: -no-window -gpu lavapipe -no-snapshot -noaudio -no-boot-anim -memory 3072 -show-kernel
+        disable-animations: false
+        script: bash .github/proof-637-stress.sh
+    - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      if: always()
+      with:
+        name: proof-637-stress-${{ matrix.mode }}-${{ matrix.job }}
+        path: |-
+          proof/
+          proof-runner-environment.txt
