@@ -348,6 +348,11 @@ io.github.anastaci1a.localica.WorkflowPersistenceTest
 io.github.anastaci1a.localica.NoneFullAreaTest
 io.github.anastaci1a.localica.NoneQueueMaterialTest
 io.github.anastaci1a.localica.QueueHeaderMaterialBoundaryTest
+io.github.anastaci1a.localica.NonePreimageTest
+io.github.anastaci1a.localica.NoneShadowParityTest
+io.github.anastaci1a.localica.NoneShadowScreenshotTest
+io.github.anastaci1a.localica.PlayerArtworkLayerTest
+io.github.anastaci1a.localica.PlayerArtworkOpticsTest
 
 
 io.github.anastaci1a.localica.PinchRecognitionContinuityTest

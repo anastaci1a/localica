@@ -199,9 +199,8 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
     val observedShadowAppearance = if (drawObserver == null) null else LocalGlassAppearance.current
     val visible = LocalGlassVisible.current
     if (visible && renderer.backend == GlassBackend.None) {
-        val materialSource = source?.noneMaterialSource()
-        BackdropLease(materialSource)
-        BackdropLease(homeSource?.noneMaterialSource()?.takeUnless { it === materialSource })
+        BackdropLease(source)
+        BackdropLease(homeSource?.takeUnless { it === source })
     }
     val location = remember { BackdropLocation() }
     var surfaceSize by remember { mutableStateOf(androidx.compose.ui.unit.IntSize.Zero) }
@@ -243,17 +242,25 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
             else Modifier.surfaceGlassShadow(cornerRadius, anchor))
         .clip(surfaceClip)
         .backdropLocation(location).onGloballyPositioned { surfaceSize = it.size }, propagateMinConstraints = true) {
+        val density = androidx.compose.ui.platform.LocalDensity.current
+        val blur = with(density) { 22.dp.toPx() } * (appearance.blur + (1f - appearance.blur) * frost)
+        val padding = with(density) { 32.dp.toPx() }
+        // The region the lens below reads for a footprint of this size; None averages exactly it.
+        val preimageCache = remember { LensPreimageCache() }
+        val preimage: (Size) -> androidx.compose.ui.geometry.Rect = { extent ->
+            preimageCache.preimage(androidx.compose.ui.geometry.Rect(Offset.Zero, extent), liquidGlassPreimageOptics(extent,
+                cornerRadius?.let { with(density) { it.toPx() } }, appearance.depth * depthScale, refraction,
+                body().thickness * (if (pressFeedback || anchor != null) contactShape().thickness else 1f),
+                blur, padding, silhouette))
+        }
         if (visible && source != null && Build.VERSION.SDK_INT >= 33) {
-            val density = androidx.compose.ui.platform.LocalDensity.current
-            val blur = with(density) { 22.dp.toPx() } * (appearance.blur + (1f - appearance.blur) * frost)
-            val padding = with(density) { 32.dp.toPx() }
             // Crossing into panel scattering must not swap backing resolution in
             // one frame. Clear glass stays sharp; visible blur gradually permits
             // the cheaper half-resolution recording during the same morph.
             val scattering = ((blur - 1f) / 5f).coerceIn(0f, 1f)
             val resolution = 1f - .5f * scattering * scattering * (3f - 2f * scattering)
             FilteredBackdrop(Modifier.matchParentSize(), source, location, resolution, padding,
-                homeSource, homeWeight, MaterialAverageStyle(appearance.whiteTint * (1f - panel), tone), homeBounds, homeFootprint) { extent, resolution, flatWeight ->
+                homeSource, homeWeight, MaterialAverageStyle(appearance.whiteTint * (1f - panel), tone), homeBounds, homeFootprint, preimage) { extent, resolution, flatWeight ->
                 val pad = padding * resolution
                 val radius = (cornerRadius?.let { with(density) { it.toPx() } }?.times(resolution)
                     ?: ((extent.minDimension - 2 * pad) / 2)).coerceAtLeast(0f)
@@ -275,7 +282,7 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
 
         if (visible && source != null && Build.VERSION.SDK_INT < 33) {
             AverageBackdrop(Modifier.matchParentSize(), source, location,
-                MaterialAverageStyle(appearance.whiteTint * (1f - panel), tone), homeSource, homeWeight, homeBounds, homeFootprint)
+                MaterialAverageStyle(appearance.whiteTint * (1f - panel), tone), homeSource, homeWeight, homeBounds, homeFootprint, preimage)
         }
         Canvas(Modifier.matchParentSize()) {
             drawRect(tone.color(tint))
@@ -345,4 +352,15 @@ internal fun androidx.compose.ui.graphics.drawscope.DrawScope.drawGlassRim(
         drawPath(silhouette, shine, alpha = opacity, style = Stroke(2.6.dp.toPx()))
         drawPath(silhouette, shade, alpha = opacity, style = Stroke(1.4.dp.toPx()))
     }
+}
+
+/** The lens parameters [LiquidGlassSurface] draws with, for a footprint of [extent] at full
+ * resolution ([depth] excludes the contact thickness, which is applied here). Shared by the
+ * None average and by tests computing their preimage oracle. */
+internal fun liquidGlassPreimageOptics(extent: Size, cornerRadius: Float?, depth: Float, refraction: Float,
+    thickness: Float, blur: Float, padding: Float, silhouette: GlassSilhouette? = null): LensPreimageOptics {
+    val outline = silhouette?.frame(extent)
+    val radius = (cornerRadius ?: (extent.minDimension / 2)).coerceAtLeast(0f)
+    return LensPreimageOptics(outline?.geometry ?: LensGeometry(androidx.compose.ui.geometry.Rect(Offset.Zero, extent), radius),
+        depth * thickness, refraction, ((1f - thickness) / .18f).coerceIn(0f, 1f), blur, padding, outline?.let { it::opticalField })
 }

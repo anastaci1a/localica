@@ -39,6 +39,7 @@ internal fun FilteredBackdrop(modifier: Modifier, source: FrostedBackdrop, locat
     homeWeight: () -> Float = { 0f }, average: MaterialAverageStyle? = null,
     homeBounds: (() -> androidx.compose.ui.geometry.Rect)? = null,
     homeFootprint: (() -> HomeBackdropFootprint?)? = null,
+    preimage: ((Size) -> Rect)? = null,
     effect: (Size, Float, Float) -> RenderEffect?) {
     val renderer = currentGlassRendererGeneration()
     val none by animateFloatAsState(if (renderer.backend == GlassBackend.None) 1f else 0f,
@@ -47,13 +48,14 @@ internal fun FilteredBackdrop(modifier: Modifier, source: FrostedBackdrop, locat
     Box(modifier.graphicsLayer { compositingStrategy = if (blending)
         androidx.compose.ui.graphics.CompositingStrategy.Offscreen else androidx.compose.ui.graphics.CompositingStrategy.Auto }) {
         if (none < 1f) OpticalBackdrop(Modifier.matchParentSize().graphicsLayer { alpha = 1f - none }, source, location, resolution,
-            padding, homeSource, homeWeight, average, homeBounds, homeFootprint, false, effect)
+            padding, homeSource, homeWeight, average, homeBounds, homeFootprint, false, null, effect)
+        // None reads the same sources and scene composition as the lens above, over its preimage.
         if (none > 0f) OpticalBackdrop(Modifier.matchParentSize().graphicsLayer {
             alpha = none
             blendMode = if (blending) androidx.compose.ui.graphics.BlendMode.Plus else androidx.compose.ui.graphics.BlendMode.SrcOver
         },
-            source.noneMaterialSource(), location, resolution, padding, homeSource?.noneMaterialSource(), homeWeight,
-            average ?: MaterialAverageStyle(0f, GlassTone()), homeBounds, homeFootprint, true, effect)
+            source, location, resolution, padding, homeSource, homeWeight,
+            average ?: MaterialAverageStyle(0f, GlassTone()), homeBounds, homeFootprint, true, preimage, effect)
     }
 }
 
@@ -64,7 +66,7 @@ private fun OpticalBackdrop(modifier: Modifier, source: FrostedBackdrop, locatio
     homeWeight: () -> Float = { 0f }, average: MaterialAverageStyle? = null,
     homeBounds: (() -> androidx.compose.ui.geometry.Rect)? = null,
     homeFootprint: (() -> HomeBackdropFootprint?)? = null,
-    forceAverage: Boolean, effect: (Size, Float, Float) -> RenderEffect?) {
+    forceAverage: Boolean, preimage: ((Size) -> Rect)?, effect: (Size, Float, Float) -> RenderEffect?) {
     val opticalWork = LocalGlassOpticalWork.current
     val samplingObserver by rememberUpdatedState(LocalHomeBackdropSamplingObserver.current)
     val drawObserver = LocalBackdropSamplingObserver.current
@@ -136,33 +138,33 @@ private fun OpticalBackdrop(modifier: Modifier, source: FrostedBackdrop, locatio
             fun androidx.compose.ui.graphics.drawscope.DrawScope.reduce(backing: FrostedBackdrop,
                 reduction: MaterialAreaReduction, output: androidx.compose.ui.graphics.layer.GraphicsLayer,
                 renderer: MaterialAverageRenderer, home: Boolean = false) {
-                if (backing.materialOnly) {
-                    // None panels are uniform. Reuse their finished colour without
-                    // another averaging chain or another application of tint/tone.
-                    output.renderEffect = null
-                    output.record(size = IntSize(1, 1)) {
-                        scale(1f / backing.size.width, 1f / backing.size.height, Offset.Zero) { drawLayer(backing.layer) }
-                    }
-                    return
-                }
                 val registration = (if (home) homeToFootprint else sourceToLocal) ?: return
                 val footprint = if (home) homeExtent else size
-                val corners = registration.corners(Rect(0f, 0f, backing.size.width.toFloat(), backing.size.height.toFloat()))
-                val covered = Rect(corners.minOf { it.x }, corners.minOf { it.y },
-                    corners.maxOf { it.x }, corners.maxOf { it.y }).intersect(Rect(Offset.Zero, footprint))
-                if (covered.isEmpty) return
-                val extent = IntSize(ceil(covered.width).toInt(), ceil(covered.height).toInt())
+                // One rule for every element: the region the lens reads (its refraction
+                // preimage), from the same scene composition the lens samples.
+                val screenToHome = if (home) homeToScreen?.inverse() else null
+                val toLocal: (FrostedBackdrop) -> BackdropRegistration? = { scene ->
+                    if (!home) scene.location.registrationTo(location)
+                    else screenToHome?.let { toHome ->
+                        scene.location.registrationToScreen()?.followedBy(toHome)?.followedBy(registration)
+                    }
+                }
+                // Nothing outside the recorded scene exists to read: one uniform fill must not
+                // turn translucent because its preimage extends past a screen or window edge.
+                val region = (preimage?.invoke(footprint) ?: Rect(Offset.Zero, footprint))
+                    .intersect(sampledSceneBounds(backing, registration, toLocal) ?: return)
+                if (region.isEmpty || !region.width.isFinite() || !region.height.isFinite()) return
+                val extent = IntSize(ceil(region.width).toInt(), ceil(region.height).toInt())
                 val padded = materialReductionExtent(extent)
                 val result = with(reduction) { record(extent) {
-                    clipRect(right = covered.width, bottom = covered.height) {
-                        translate(-covered.left, -covered.top) {
-                            withBackdropRegistration(registration) { drawLayer(backing.layer) }
+                    clipRect(right = region.width, bottom = region.height) {
+                        translate(-region.left, -region.top) {
+                            drawSampledScene(backing, registration, toLocal)
                         }
                     }
                 } }
-                output.renderEffect = if (android.os.Build.VERSION.SDK_INT >= 33) renderer.effect(average,
-                    (if (average.opaque) covered.width * covered.height else footprint.width * footprint.height) /
-                        (padded.width.toFloat() * padded.height)) else null
+                output.renderEffect = if (android.os.Build.VERSION.SDK_INT >= 33) renderer.effect(average.forBacking(backing),
+                    region.width * region.height / (padded.width.toFloat() * padded.height)) else null
                 output.record(size = IntSize(1, 1)) { drawLayer(result) }
             }
             if (blend < 1f) reduce(source, areaSource, averageSource, areaSourceRenderer)
@@ -232,28 +234,9 @@ private fun OpticalBackdrop(modifier: Modifier, source: FrostedBackdrop, locatio
                 return
             }
             clipRect { scale(r, r, Offset.Zero) {
-                // Refraction/blur can reach beyond a nested panel's recorded box.
-                // Supply its real parent there, instead of transparent edge bands.
-                val chain = mutableListOf<FrostedBackdrop>()
-                var item: FrostedBackdrop? = backing
-                while (item != null && item !in chain && chain.size < 8) { chain += item; item = item.parent }
                 val backingToLocal = (if (isHome) homeToLocal else sourceToLocal) ?: return@scale
-                val boundary = backingToLocal.corners(Rect(0f, 0f, backing.size.width.toFloat(), backing.size.height.toFloat()))
-                val inside = Path().apply {
-                    moveTo(boundary[0].x, boundary[0].y)
-                    boundary.drop(1).forEach { lineTo(it.x, it.y) }
-                    close()
-                }
-                chain.asReversed().forEach { scene ->
-                    if (scene.recorded && !scene.layer.isReleased) {
-                        val registration = if (scene === backing) backingToLocal else scene.location.registrationTo(location)
-                        if (registration != null) translate(padding, padding) {
-                            if (scene === backing) withBackdropRegistration(registration) { drawLayer(scene.layer) }
-                            else clipPath(inside, ClipOp.Difference) {
-                                withBackdropRegistration(registration) { drawLayer(scene.layer) }
-                            }
-                        }
-                    }
+                translate(padding, padding) {
+                    drawSampledScene(backing, backingToLocal) { scene -> scene.location.registrationTo(location) }
                 }
             } }
         }
@@ -270,4 +253,50 @@ private fun OpticalBackdrop(modifier: Modifier, source: FrostedBackdrop, locatio
         }
         translate(-padding, -padding) { scale(1f / r, 1f / r, Offset.Zero) { drawLayer(layer) } }
     }
+}
+
+/** The scene a lens samples: the backing inside its recorded box and, because refraction
+ * and blur reach beyond a nested panel's box, its real parent chain outside it instead of
+ * transparent edge bands. Modern's lens and None's preimage mean draw exactly this. */
+internal fun androidx.compose.ui.graphics.drawscope.DrawScope.drawSampledScene(backing: FrostedBackdrop,
+    backingToLocal: BackdropRegistration, parentToLocal: (FrostedBackdrop) -> BackdropRegistration?) {
+    val chain = mutableListOf<FrostedBackdrop>()
+    var item: FrostedBackdrop? = backing
+    while (item != null && item !in chain && chain.size < 8) { chain += item; item = item.parent }
+    val boundary = backingToLocal.corners(Rect(0f, 0f, backing.size.width.toFloat(), backing.size.height.toFloat()))
+    val inside = Path().apply {
+        moveTo(boundary[0].x, boundary[0].y)
+        boundary.drop(1).forEach { lineTo(it.x, it.y) }
+        close()
+    }
+    chain.asReversed().forEach { scene ->
+        if (scene.recorded && !scene.layer.isReleased) {
+            val registration = if (scene === backing) backingToLocal else parentToLocal(scene)
+            if (registration != null) {
+                if (scene === backing) withBackdropRegistration(registration) { drawLayer(scene.layer) }
+                else clipPath(inside, ClipOp.Difference) {
+                    withBackdropRegistration(registration) { drawLayer(scene.layer) }
+                }
+            }
+        }
+    }
+}
+
+/** Bounds, in consumer coordinates, of everything [drawSampledScene] can draw. */
+internal fun sampledSceneBounds(backing: FrostedBackdrop, backingToLocal: BackdropRegistration,
+    parentToLocal: (FrostedBackdrop) -> BackdropRegistration?): Rect? {
+    var bounds: Rect? = null
+    val visited = mutableListOf<FrostedBackdrop>()
+    var item: FrostedBackdrop? = backing
+    while (item != null && item !in visited && visited.size < 8) {
+        visited += item
+        val registration = if (item === backing) backingToLocal else parentToLocal(item)
+        if (item.recorded && !item.layer.isReleased && registration != null) {
+            val corners = registration.corners(Rect(0f, 0f, item.size.width.toFloat(), item.size.height.toFloat()))
+            val box = Rect(corners.minOf { it.x }, corners.minOf { it.y }, corners.maxOf { it.x }, corners.maxOf { it.y })
+            bounds = bounds?.let { Rect(minOf(it.left, box.left), minOf(it.top, box.top), maxOf(it.right, box.right), maxOf(it.bottom, box.bottom)) } ?: box
+        }
+        item = item.parent
+    }
+    return bounds
 }
