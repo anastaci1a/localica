@@ -33,7 +33,7 @@ import org.junit.Test
  * open/close clock, for the foreground (text and icons) and for the controls' own ink, in both artwork layouts,
  * in both directions, reversibly mid-way, and snaps under Reduced Motion. The real PlayerSurface runs on a manual
  * clock; the sampled decision is pinned so the test chooses exactly when the theme changes. Each frame's values are
- * recorded and the sequences are checked for monotonic interpolation and the absence of a single-frame jump.
+ * recorded and checked against the cubic boundary constraints at each #608 phase, including target and reversal joins.
  */
 class PlayerLyricsThemeEaseTest {
     @get:Rule val compose = createComposeRule()
@@ -83,15 +83,18 @@ class PlayerLyricsThemeEaseTest {
     }
 
     private fun frame() { compose.mainClock.advanceTimeByFrame(); compose.waitForIdle() }
-    private fun record(count: Int) { repeat(count) {
+    private fun record(count: Int, assertLyricsPhase: Boolean = true) { repeat(count) {
         glassInk.clear()
         frame()
         val ink = requireNotNull(inkComposition)
         val expected = lerp(Color.Black, Color.White, requireNotNull(reference).expected(ink.lyricsProgress)).red
-        assertEquals("foreground follows the lyrics phase", expected, ink.contentColor.red, .015f)
-        assertEquals("shared material follows the lyrics phase", requireNotNull(reference).expected(ink.lyricsProgress), owner.lightMix, .015f)
+        if (assertLyricsPhase) {
+            assertEquals("foreground follows the lyrics phase", expected, ink.contentColor.red, .015f)
+            assertEquals("shared material follows the lyrics phase", requireNotNull(reference).expected(ink.lyricsProgress), owner.lightMix, .015f)
+        }
         recorded += Frame(ink.contentColor.red, glassInk.toMap(), expected)
     }
+        if (!assertLyricsPhase) return
         recorded.flatMap { it.glass.keys }.distinct().forEach { id ->
             val samples = recorded.filter { id in it.glass }
             val values = samples.map { it.glass.getValue(id) }
@@ -232,6 +235,7 @@ class PlayerLyricsThemeEaseTest {
         openLyrics(true); record(2)
         recorded.clear()
         pin(false); record(1)
+        assertTrue("reversal interrupts the lyrics phase", requireNotNull(inkComposition).lyricsProgress in .05f..0.95f)
         openLyrics(false)      // reversed part-way through the ease
         record(40)
         foreground().zipWithNext().forEachIndexed { i, (a, b) ->
@@ -248,6 +252,7 @@ class PlayerLyricsThemeEaseTest {
         openLyrics(true); record(2)
         recorded.clear()
         pin(false); record(1)
+        assertTrue("theme rejoin interrupts the lyrics phase", requireNotNull(inkComposition).lyricsProgress in .05f..0.95f)
         pin(true); record(40)
         assertEquals(1f, foreground().last(), .02f)
     }
@@ -268,18 +273,18 @@ class PlayerLyricsThemeEaseTest {
     @Test fun collapsingAndExpandingWithLyricsOpenNeverChangesThePolarity() {
         lyrics = true; pin(true); mount()
         compose.mainClock.autoAdvance = false
-        record(4); recorded.clear(); glassInk.clear()
-        compose.runOnIdle { expanded = false }; record(40)
-        compose.runOnIdle { expanded = true }; record(40)
+        record(4, assertLyricsPhase = false); recorded.clear(); glassInk.clear()
+        compose.runOnIdle { expanded = false }; record(40, assertLyricsPhase = false)
+        compose.runOnIdle { expanded = true }; record(40, assertLyricsPhase = false)
         glassSequences().forEachIndexed { i, s -> assertTrue("glass ink #$i constant while the player moves: ${s.min()}..${s.max()}", s.max() - s.min() < .02f) }
     }
 
     @Test fun aThemeDecidedWhileCollapsedEasesInWithTheExpansion() {
         lyrics = true; pin(true); expanded = false; mount()
         compose.mainClock.autoAdvance = false
-        record(4)
+        record(4, assertLyricsPhase = false)
         pin(false)            // decided while the mini player is showing; nothing visible changes
-        record(4); recorded.clear()
-        compose.runOnIdle { expanded = true }; record(40)
+        record(4, assertLyricsPhase = false); recorded.clear()
+        compose.runOnIdle { expanded = true }; record(40, assertLyricsPhase = false)
     }
 }
