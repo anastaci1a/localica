@@ -15,6 +15,6 @@ import androidx.compose.runtime.*
         override fun velocityAt(stamp: FrameStamp)=sampleAt(stamp).velocity
         override fun sampleAt(stamp: FrameStamp)=mapped(phase.sampleAt(stamp))
         override val target get()=this@SurfacePhase.curve.at(phase.target)
-        override val settled get()=phase.settled
+        override val settled get()=expansion.retirementReady
     }
 }

@@ -60,10 +60,10 @@ enum class Stratum { Page,Lifted,Floating,Drawer,Player,Modal,Overlay,Diagnostic
         require(owner.ownerClock===clock && owner.owns(bounds)) { "Follow the same clock and expansion-bound rectangle" }
         val old=following; require(old==null || old.expansion===owner && old.bounds===bounds) { "A surface keeps one expansion binding" }
         if(old==null) { check(ownOpacity.settled && ownTransform.channels.all { it.settled } && shadowOwnership.settled) { "Bind before starting standalone surface motion" }; following=SurfacePhase(owner,opacity,bounds); owner.lifecycle.add(::followLifetime) } else old.curve=opacity
-        followLifetime()
+        followLifetime(true)
     }
     private fun revive() { dismissed=false; if(retired) { retired=false; listOfNotNull(low,high).forEach { it.enter(this) } } }
-    private fun followLifetime() { if(disposed) return; val f=following?:return; if(f.expansion.expanded) { if(dismissed) revive() } else if(dismissed && f.expansion.phase.settled && f.opacity.target==0f) retire() }
+    private fun followLifetime(intent: Boolean=false) { if(disposed) return; val f=following?:return; if(f.expansion.expanded) { if(intent && dismissed) revive() } else if(dismissed && f.opacity.settled && f.opacity.target==0f) retire() }
     fun transfer(to: ShadowPlane,profile: MotionProfileId) {
         clock.checkMutation(); check(!disposed && !retired) { "A retired surface has no field to transfer" }; require(clock.spec.motion[MotionProfile.valueOf(profile.name)] is MotionProfileSpec) { "Transfers require a scalar profile" }; val goal=shadowOwnership.target; val towards=if(goal==1f) high else low; val away=if(goal==1f) low else high
         val queued=pending; pending=null; if(queued!=null && queued.first!==to && queued.first!==low && queued.first!==high) queued.first.leave(this)

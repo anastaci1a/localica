@@ -64,6 +64,8 @@ class SurfaceFollowTest {
         assertEquals(before.value,f.node.opacity.valueAt(h.clock.stampNow),1e-4f)
         assertEquals(before.velocity,f.node.opacity.velocityAt(h.clock.stampNow),1e-3f)
         assertEquals(listOf(f.node),f.plane.casters); assertFalse(f.node.retained)
+        f.node.dismiss(); h.advance(2.0); assertTrue("An opening rest callback cannot revoke logical dismissal",f.node.retained)
+        f.expansion.target(false); h.advance(2.0); assertFalse(f.node.retained)
         f.node.dispose(); f.expansion.dispose(); assertEquals(0,h.clock.activeCount)
     }
 

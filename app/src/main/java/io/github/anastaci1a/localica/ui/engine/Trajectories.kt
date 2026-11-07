@@ -63,3 +63,10 @@ internal fun settleEnvelope(x: Double,v: Double,w: Double,z: Double,range: Doubl
     fun time(d: Boolean): Double { val limit=range*if(d) SettleVelocityThreshold else SettleThreshold; var lo=if(z==1.0 && critical>0) max(0.0,1/w-if(d) abs(v)/(w*critical) else abs(x)/critical) else 0.0; if(bound(lo,d)<=limit) return 0.0; var hi=max(2.0,lo); while(bound(hi,d)>limit) { hi*=2; require(hi.isFinite()) }; repeat(80) { val t=(lo+hi)/2; if(bound(t,d)>limit) lo=t else hi=t }; return hi }
     return max(time(false),time(true))
 }
+
+/** A phase projection with its physical edge's rebase residual, sharing the same finite plan. */
+internal class MappedEdge(private val phase: Trajectory,private val curve: Curve,private val start: Double,private val delta: Double,private val residual: Trajectory): Trajectory {
+    override val kind=1; override val duration=residual.duration
+    override fun value(t: Double)=start+delta*curve.at(phase.value(t).toFloat())+residual.value(t)
+    override fun velocity(t: Double)=delta*curve.slope(phase.value(t).toFloat())*phase.velocity(t)+residual.velocity(t)
+}

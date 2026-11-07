@@ -19,6 +19,15 @@ private fun edges(rect: Rect)=floatArrayOf(rect.left,rect.top,rect.right,rect.bo
     override fun valueAt(stamp: FrameStamp)=Rect(left.valueAt(stamp),top.valueAt(stamp),right.valueAt(stamp),bottom.valueAt(stamp))
     internal fun claim(owner: Any) { clock.checkMutation(); require(binding==null || binding===owner) { "Rectangle already has an expansion owner" }; binding=owner }
     internal fun prepare(target: Rect,plan: EasedPlan,owner: Any,velocity: DoubleArray?=null): List<MotionIntent> { clock.checkMutation(); require(binding==null || binding===owner); val values=edges(target); require(velocity==null || velocity.size==4 && velocity.all(Double::isFinite)); return channels.mapIndexed { i,m -> val x=m.rawValue(plan.stamp); val v=velocity?.get(i)?:m.rawVelocity(plan.stamp); val next=if(clock.context!!.access==MotionAccess.Reduced) Rest(values[i].toDouble()) else plan.segment(x,v,values[i].toDouble()); m.prepareSegment(next,values[i],plan.stamp,plan,if(clock.context!!.access==MotionAccess.Reduced) "Reduced" else "Continuous",velocity?.get(i)?.toFloat()) } }
+    /** One analytic phase plus C1 edge residuals; the physical channels remain the expansion's bound rectangle. */
+    internal fun prepareMapped(basis: ExpansionBasis,curve: Curve,phase: Trajectory,target: Double,plan: EasedPlan,owner: Any): List<MotionIntent> {
+        clock.checkMutation(); require(binding==null || binding===owner)
+        return channels.mapIndexed { i,m ->
+            val start=basis.at(0.0)[i]; val delta=basis.delta(i); val p=phase.value(0.0); val v=phase.velocity(0.0)
+            val residual=plan.segment(m.rawValue(plan.stamp)-start-delta*curve.at(p.toFloat()),m.rawVelocity(plan.stamp)-delta*curve.slope(p.toFloat())*v,0.0)
+            m.prepareSegment(MappedEdge(phase,curve,start,delta,residual), (start+delta*curve.at(target.toFloat())).toFloat(),plan.stamp,plan)
+        }
+    }
     internal fun prepareDrive(target: Rect,stamp: FrameStamp,owner: Any?=null,velocity: DoubleArray?=null): List<MotionIntent> { clock.checkMutation(); require(binding==null && owner==null || binding===owner); val values=edges(target); require(velocity==null || velocity.size==4 && velocity.all(Double::isFinite)); return channels.mapIndexed { i,m -> m.prepareDrive(values[i],stamp,velocity?.get(i)) } }
     internal fun entries(intents: List<MotionIntent>)=channels.zip(intents)
     fun retarget(target: Rect,profile: MotionProfileId) { clock.checkMutation(); check(binding==null) { "Bound rectangle intents belong to ExpandCollapse" }; val values=edges(target); val identity=listOf(target,profile,clock.spec.motion[MotionProfile.valueOf(profile.name)],clock.context?.access); if(last==identity && channels.none { it.kind==3 }) return; val stamp=clock.stampNow; val intents=channels.mapIndexed { i,m -> m.prepare(values[i],profile,stamp,force=true)!! }; commitAtomic(entries(intents)); last=identity }
