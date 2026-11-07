@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {xml,manifest,compare,rules} from '../check-ui-lint.mjs';
+import {xml,manifest,compare,rules,transferIds} from '../check-ui-lint.mjs';
 const incident = {rule:rules[0],identity:'old'};
 test('new incident and equal-count substitution fail', () => {
     assert.equal(compare([incident],[incident,{...incident,identity:'new'}],0).accepted,false);
@@ -69,4 +69,14 @@ test('source-only production patches trigger policy contracts', () => {
         assert.match(section, /app\/src\/main\/\*\*/);
     }
     assert.match(workflow, /check-ui-lint/);
+});
+test('itemized transfers admit only listed identities, reject stale and expired entries', () => {
+    const entry = {rule:rules[6],path:'app/src/main/A.kt',fqn:'p.f',codeSha256:'x',removedBy:'U10.03',reason:'U10.03 removes'};
+    const [id] = transferIds([entry],['U10.03'],[]);
+    const moved = {rule:rules[6],identity:id};
+    assert.equal(compare([incident],[incident,moved],0,[id]).accepted,true);
+    assert.equal(compare([incident],[incident,moved,{...incident,identity:'new'}],0,[id]).accepted,false);
+    assert.throws(() => compare([incident],[incident],0,[id]), /Stale transfer/);
+    assert.throws(() => transferIds([entry],['U10.03'],['U10.03']), /expired/);
+    assert.throws(() => transferIds([entry,entry],['U10.03'],[]), /Duplicate/);
 });

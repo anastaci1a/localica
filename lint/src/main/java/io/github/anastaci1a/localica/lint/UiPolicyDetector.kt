@@ -23,6 +23,8 @@ private val reads = setOf("value", "velocity", "sample", "valueAt", "velocityAt"
 private val views = mutators.keys + setOf("MotionValue", "MotionRectView", "MotionColorView", "ExpansionView", "ShapeView", "SurfaceView", "ShapeFrame", "Kinematic")
 private val deferred = setOf("layout", "drawBehind", "drawWithContent", "drawWithCache", "onDrawBehind", "onDrawWithContent", "Canvas", "offset", "graphicsLayer", "placeWithLayer")
 private val immediate = setOf("run", "let", "also", "apply", "with")
+private val ownerEffects = setOf("LaunchedEffect", "SideEffect", "DisposableEffect")
+private val ownerCallbacks = setOf("onClick", "onDrag", "onDragStart", "onDragCancel", "onRelease", "onDismissRequest")
 private val surfaces = setOf("Popup", "Presence", "Drawer", "Sheet", "ModalBottomSheet", "ModalDrawerSheet")
 private val containers = setOf("Box", "Column", "Row", "Scaffold", "BoxWithConstraints")
 private val dimensions = setOf("padding", "size", "height", "width", "offset", "spacedBy", "requiredSize", "requiredWidth", "requiredHeight", "sizeIn", "widthIn", "heightIn")
@@ -403,9 +405,10 @@ internal class UiPolicyDetector : Detector(), SourceCodeScanner {
                 while (parent != null && parent != ownerMethod) {
                     if (parent is ULambdaExpression) {
                         val call = parentCall(parent) ?: return false
-                        val allowed = call.methodName in immediate || call.valueArguments.withIndex().any { (index, arg) ->
+                        // U13 amendment (lead, 2026-11-07): owner-scope effects and gesture callbacks are lexically owned.
+                        val allowed = call.methodName in immediate || call.methodName in ownerEffects && symbolName(call.resolve()).orEmpty().startsWith("androidx.compose.runtime.") || call.valueArguments.withIndex().any { (index, arg) ->
                             val parameter = (arg as? UNamedExpression)?.name ?: call.resolve()?.parameterList?.parameters?.getOrNull(index)?.name
-                            parameter in setOf("onClick", "onDrag", "onRelease", "onDismissRequest") &&
+                            parameter in ownerCallbacks &&
                                 arg.sourcePsi?.textRange?.contains(parent.sourcePsi?.textRange ?: return@any false) == true
                         }
                         if (!allowed) return false
