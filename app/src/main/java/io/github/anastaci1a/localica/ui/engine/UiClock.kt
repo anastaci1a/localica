@@ -54,7 +54,8 @@ internal val LocalEngineContext=staticCompositionLocalOf<EngineContext> { requir
     val context=LocalEngineContext.current; val clock=LocalUiClock.current; val spec=LocalUiSpec.current.spec; val domain=requireNotNull(spec.geometry) { "Publish measured ExpansionGeometryDomain through U11.00 before creating a motion owner" }; require(domain.referenceTravelPx==context.fullPlayerReferenceTravelPx && context.displayIntervalSeconds<=domain.maxDisplayIntervalSeconds) { "Engine context and admitted geometry must come from one root record" }
     if(clock.context==null) clock.configure(context,spec); SideEffect { clock.configure(context,spec) }; return clock
 }
-/** Intent time in the frame source's base (Choreographer or a test clock); before the first frame nothing is presented. */
-private class FrameBase { private var offset: Long?=null; private var latest=Long.MIN_VALUE/4
-    fun frame(nanos: Long) { offset=nanos-System.nanoTime() }
-    fun now(): Long=maxOf(latest,offset?.let { System.nanoTime()+it }?:latest).also { latest=it } }
+/** Intent time in the frame source's base: Choreographer frames use System.nanoTime; a virtual (test) frame clock stamps
+ * intents at its last frame. Before the first frame nothing is presented, so no presented frame can precede the origin. */
+private class FrameBase { private var offset: Long?=null; private var frame=Long.MIN_VALUE/4; private var latest=Long.MIN_VALUE/4
+    fun frame(nanos: Long) { frame=nanos; offset=nanos-System.nanoTime() }
+    fun now(): Long=maxOf(latest,offset?.let { if(kotlin.math.abs(it)<1_000_000_000L) System.nanoTime() else frame }?:latest).also { latest=it } }
