@@ -70,13 +70,9 @@ internal fun LyricsHeaderActions(lyricsOpen: Boolean, reveal: Float, anchor: Gla
     val source = LocalFrostedBackdrop.current
     SideEffect { anchor.source = source }
 
-    // The retained header button changes role immediately at a logical close,
-    // while its outgoing geometry and content continue to animate. Keep activation
-    // bound to that current role across the retained content/input lambdas.
-    val leftActivation by rememberUpdatedState(if (lyricsOpen) onSources else onShow)
     @Composable fun leftAction() {
         anchor.captureInk()
-        ActionIconButton({ leftActivation() }, Modifier.fillMaxSize()) {
+        ActionIconButton(if (lyricsOpen) onSources else onShow, Modifier.fillMaxSize()) {
             Icon(appIconPainter(AppIcon.ActionLyrics), if (lyricsOpen) "Lyrics sources" else "Show lyrics", Modifier.size(24.dp))
         }
     }

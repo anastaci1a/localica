@@ -4276,7 +4276,7 @@
         errorLine2="                                                                                                                          ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/LyricsHeaderActions.kt"
-            line="80"
+            line="76"
             column="123"/>
     </issue>
 
@@ -4287,7 +4287,7 @@
         errorLine2="                                                                                    ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/LyricsHeaderActions.kt"
-            line="88"
+            line="84"
             column="85"/>
     </issue>
 
@@ -4298,7 +4298,7 @@
         errorLine2="                                                                           ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/LyricsHeaderActions.kt"
-            line="92"
+            line="88"
             column="76"/>
     </issue>
 
@@ -9270,7 +9270,7 @@
         errorLine2="               ~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/LyricsHeaderActions.kt"
-            line="89"
+            line="85"
             column="16"/>
     </issue>
 
@@ -9281,7 +9281,7 @@
         errorLine2="    ~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/LyricsHeaderActions.kt"
-            line="95"
+            line="91"
             column="5"/>
     </issue>
 
@@ -9292,7 +9292,7 @@
         errorLine2="                ~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/LyricsHeaderActions.kt"
-            line="100"
+            line="96"
             column="17"/>
     </issue>
 
@@ -9303,7 +9303,7 @@
         errorLine2="                    ~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/LyricsHeaderActions.kt"
-            line="105"
+            line="101"
             column="21"/>
     </issue>
 
@@ -12658,7 +12658,7 @@
         errorLine2="                                                                      ~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/LyricsHeaderActions.kt"
-            line="102"
+            line="98"
             column="71"/>
     </issue>
 
@@ -12669,7 +12669,7 @@
         errorLine2="                        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/LyricsHeaderActions.kt"
-            line="103"
+            line="99"
             column="25"/>
     </issue>
 
@@ -12680,7 +12680,7 @@
         errorLine2="                         ~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/LyricsHeaderActions.kt"
-            line="106"
+            line="102"
             column="26"/>
     </issue>
 
@@ -12691,7 +12691,7 @@
         errorLine2="                                         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/LyricsHeaderActions.kt"
-            line="106"
+            line="102"
             column="42"/>
     </issue>
 
