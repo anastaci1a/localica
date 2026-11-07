@@ -136,7 +136,7 @@ class PinchDepartureFadeTest {
                 shown.any { it.second.alpha in .15f.. .85f }, "plan ${first.fades[key]?.let { "${it.window} arriving=${it.arriving}" }} viewport ${first.viewport} " +
                     shown.takeLast(3).joinToString { (s, item) -> "p %.3f a %.2f ${item.bounds}".format(s.p, item.alpha) } +
                     " then ${series.getOrNull(gone)?.bounds}",
-                first.fades[key]?.window?.let { it.start + it.width }))
+                first.fades[key]?.window?.let { it.start + it.width })
         }
         val timed = audited.filter { it.exit > .1f }
         timed.forEach {
