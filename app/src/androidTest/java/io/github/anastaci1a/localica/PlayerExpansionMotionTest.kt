@@ -97,7 +97,7 @@ class PlayerExpansionMotionTest {
                     }
                     compose.mainClock.advanceTimeByFrame()
                     compose.runOnIdle {
-                        assertEquals("Held endpoint is fully expanded in $artworkLayout", 1f, progress.value, .0001f)
+                        assertEquals("Held endpoint is fully expanded in $artworkLayout [diag mini=$mini start=$start root=${compose.onRoot().fetchSemanticsNode().boundsInRoot} now=${compose.onNodeWithTag("player-surface").fetchSemanticsNode().boundsInRoot} density=${compose.density.density}]", 1f, progress.value, .0001f)
                         assertFalse("No release event has changed expanded", expanded)
                     }
                     compose.waitUntil(10000) {
