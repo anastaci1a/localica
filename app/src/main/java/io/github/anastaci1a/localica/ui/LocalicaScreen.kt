@@ -160,7 +160,9 @@ fun LocalicaScreen(
     val bottomChrome = 8.dp + 72.dp * chromeVisibility
     // U11.00: one root record publishes the full player's reference travel, display interval and admitted geometry.
     val density = androidx.compose.ui.platform.LocalDensity.current
-    val window = androidx.compose.ui.platform.LocalWindowInfo.current.containerSize
+    // Endpoint bases follow the measured root layout (the window until first measure); Rebase keeps changes continuous.
+    var rootSize by remember { mutableStateOf(androidx.compose.ui.unit.IntSize.Zero) }
+    val window = rootSize.takeIf { it.height > 0 } ?: androidx.compose.ui.platform.LocalWindowInfo.current.containerSize
     val navigationInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val refreshHz = rememberPeakRefreshHz()
     val referenceTravel = playerBasis(density, window, navigationInset, StockUiSpec.clearance.getValue(Clearance.BottomChrome)).edgeTravelPx
@@ -303,6 +305,7 @@ fun LocalicaScreen(
     BoxWithConstraints(Modifier.fillMaxSize().recordFrostedBackdrop(modalBackdrop).background(MaterialTheme.colorScheme.background).bottomGlassShadowHost(bottomShadows).testTag("browse-background").windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))) {
         val inset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
         val screenScope = this
+        SideEffect { rootSize = androidx.compose.ui.unit.IntSize(constraints.maxWidth, constraints.maxHeight) }
         val queueSelectionMaxHeight = maxHeight / 3
         SongDragScene(dragHost, Modifier.fillMaxSize()) {
         CompositionLocalProvider(LocalGlassPopupHome provides browsePopupHome) {
