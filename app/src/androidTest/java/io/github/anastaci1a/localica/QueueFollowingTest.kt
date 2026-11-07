@@ -498,6 +498,17 @@ class QueueFollowingTest {
         awaitCurrent(45)
     }
 
+    /** #600 U10.02b: a follow whose rows are already measured needs no readiness frames of its own clock. */
+    @Test fun aReadyFollowStartsWithoutIndependentReadinessFrames() {
+        val fixture = fixture(initial = 5, reducedMotion = false)
+        compose.mainClock.autoAdvance = false
+        val start = position()
+        compose.runOnIdle { fixture.publish(95) }
+        val frames = (1..12).first { compose.mainClock.advanceTimeByFrame(); compose.waitForIdle(); position() != start }
+        // Base (two readiness frames, run 42370217763) moved after 7 frames; the snapshot gate after 5.
+        assertTrue("A ready follow first moved after $frames frames", frames <= 5)
+    }
+
     @Test fun aNewerOccurrenceCancelsTheInFlightDestination() {
         val fixture = fixture(initial = 5, reducedMotion = false)
         compose.mainClock.autoAdvance = false

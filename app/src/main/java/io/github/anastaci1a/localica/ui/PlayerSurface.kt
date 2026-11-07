@@ -40,6 +40,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Constraints
 import io.github.anastaci1a.localica.R
 import io.github.anastaci1a.localica.ui.components.SheetState
+import io.github.anastaci1a.localica.ui.components.ExpansionRest
+import io.github.anastaci1a.localica.ui.components.rememberExpansionRest
+import io.github.anastaci1a.localica.ui.components.PlayerReveal
 import io.github.anastaci1a.localica.navigation.*
 import io.github.anastaci1a.localica.library.Track
 import io.github.anastaci1a.localica.playback.PlaybackState
@@ -100,7 +103,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     val inkDestination = polarity.destinationLightInk
     val lightInk = if (inkDestination != null && (blendClock < 1f || inkDecision.confidence != PlayerBackgroundConfidence.Current)) inkDestination
         else inkDecision.lightInk
-    val inkTarget = if (lightInk) Color.White else Color.Black
+    val inkTarget = if (lightInk) 1f else 0f
     val paletteDuration = settings.motionDuration(550)
     // A request may precede blend admission. Keep its palette with the old frame until
     // the blend publishes the new target and its reset clock together.
@@ -108,20 +111,18 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     val aspect by animateFloatAsState(artwork.palette.aspect, tween(paletteDuration), label = "Cover proportions")
     val palette = animatedPlayerPalette(paletteTarget, blendClock).copy(aspect = aspect)
     val lyricVisibility by animateFloatAsState(if (lyricsOpen) 1f else 0f, tween(settings.motionDuration(550)), label = "Lyrics layout")
-    // A light/dark foreground change during the lyrics animation eases with its progress.
-    val inkTransition = remember { PlayerInkTransition(inkTarget) }
-    val lyricsAnimating = kotlin.math.abs(lyricVisibility - (if (lyricsOpen) 1f else 0f)) > PlayerInkTransition.SETTLED
-    val artworkEasing = !lyricsAnimating && blendClock < 1f
-    val inkStep = if (artworkEasing) inkTransition.resolve(inkTarget, blendClock, true, clock = 1)
-        else inkTransition.resolve(inkTarget, lyricVisibility, lyricsOpen)
+    // A light/dark foreground change during the lyrics animation (or artwork blend, #578) follows that shared phase (U08.02a).
+    val inkTransition = remember { io.github.anastaci1a.localica.ui.engine.PhaseBinding(inkTarget) }
+    val lyricsEnd = if (lyricsOpen) 1f else 0f
+    val inkStep = if (kotlin.math.abs(lyricVisibility - lyricsEnd) <= io.github.anastaci1a.localica.ui.engine.PhaseBinding.SETTLED &&
+        blendClock < 1f) inkTransition.resolve(inkTarget, blendClock, 1f, clock = 1) else inkTransition.resolve(inkTarget, lyricVisibility, lyricsEnd)
     val lyricsInk = polarity.lyricsInk?.takeIf { blendClock >= 1f }
-    val playerInk = if (lyricsInk != null) lerp(if (lyricsInk.ordinary) Color.White else Color.Black,
-        if (lyricsInk.lyrics) Color.White else Color.Black, lyricVisibility) else inkStep.shown
     // Every material that follows the player's ink (the glass backdrops and the panel theme below) reads the same
     // eased polarity as the foreground, and the shared state exposes it to the surfaces outside this composable.
     val lightMix = if (lyricsInk != null) (if (lyricsInk.ordinary) 1f else 0f) * (1f - lyricVisibility) +
-        (if (lyricsInk.lyrics) 1f else 0f) * lyricVisibility else inkStep.light
-    SideEffect { inkTransition.commit(inkStep.copy(shown = playerInk, light = lightMix)); polarity.presentLightMix(lightMix) }
+        (if (lyricsInk.lyrics) 1f else 0f) * lyricVisibility else inkStep.value
+    val playerInk = lerp(Color.Black, Color.White, lightMix)
+    SideEffect { inkTransition.present(inkStep.copy(value = lightMix)); polarity.presentLightMix(lightMix) }
     // Header controls already sample this scene before lyrics open. Older
     // adapters need its prepared pixels whenever that header is visible too.
     val lyricBackdrop = rememberFrostedBackdrop(listOf(artwork, settings.artworkLayout, settings.glass), p > .7f, dark = lightInk, lightMix = lightMix)
@@ -190,8 +191,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
         })
     // Finish the cover mask late, independently of the backing's color. Delaying the
     // color continuation too would reveal a dark average palette before light artwork.
-    val reveal = ((p - 0.85f) / 0.15f).coerceIn(0f, 1f)
-    val coverBlend = backgroundProgress * reveal * reveal * (3f - 2f * reveal)
+    val coverBlend = backgroundProgress * PlayerReveal.Cover.at(p)
     val extraActions = 48.dp * (actionRows - 1)
     val virtualHeight = maxHeight.coerceAtLeast(560.dp + statusInset + navigationInset + extraActions)
     val floatingSlot = minOf(windowWidth - 48.dp, (virtualHeight - statusInset - navigationInset - 440.dp - extraActions).coerceAtLeast(96.dp))
@@ -288,9 +288,9 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     val rowMotion = playerRowMotion(p, (titleY - metadataY).value, (transportY - fullTransportY).value, lyricVisibility)
     val seekY = metadataY + 64.dp + rowMotion.seekOffset.dp
     val actionsY = ordinarySeekY + 128.dp + 32.dp * lyricVisibility + rowMotion.actionsOffset.dp
-    val backgroundReveal = smoothReveal((p - .38f) / .59f)
-    val handleReveal = smoothReveal((p - .72f) / .28f)
-    val glassFrost = smoothReveal((p - .08f) / .8f)
+    val backgroundReveal = PlayerReveal.Background.at(p)
+    val handleReveal = PlayerReveal.Handle.at(p)
+    val glassFrost = PlayerReveal.Frost.at(p)
     val deviceCorners = rememberDeviceCorners()
     val surfaceFrame = playerSurfaceFrame(maxWidth, maxHeight, navigationInset, bottomChrome, p, deviceCorners)
     val lyricsViewport = playerLyricsViewport(titleY.value, (statusInset + 60.dp).value)
@@ -298,17 +298,19 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     val surfaceCorner = surfaceFrame.maximumCorner
     // This feather belongs to the cover, including its final full-background state.
     // Removing it during the handoff briefly reveals the square beneath the wash.
-    val edgeSoftness = backgroundProgress * smoothReveal(p / .18f)
-    val edgeBand = .02f + .24f * smoothReveal(p / .75f)
+    val edgeSoftness = backgroundProgress * PlayerReveal.Edge.at(p)
+    val edgeBand = .02f + .24f * PlayerReveal.EdgeBand.at(p)
     val transportWidth = minOf(contentWidth, 280.dp)
     val textWidth = miniTextWidth + (contentWidth - miniTextWidth) * p
     val textX = 58.dp + (contentInset - 58.dp) * p
     val foreground = androidx.compose.ui.graphics.lerp(miniForeground, playerInk, backgroundReveal)
     val artworkShape = RoundedCornerShape((8f + 16f * p).dp * (1f - p * backgroundProgress))
     val artPixels = with(density) { artWidth.toPx() }
-    val (artSwipe, artworkDrag) = rememberArtworkSwipe(artworkVisit, artwork, previousArtwork, nextArtwork,
-        artPixels, expanded && p >= .99f && !lyricsOpen && (queue?.expansion?.phase?.value() ?: 0f) <= 0f,
-        settings, onArtworkVisit)
+    // Artwork navigation and the title's lyrics target admit input only while the player rests open under a closed Queue.
+    val playerRest by rememberExpansionRest(sheet.expansion)
+    val queueRest by rememberExpansionRest(queue?.expansion)
+    val restingOpen = expanded && playerRest == ExpansionRest.Open && !lyricsOpen && queueRest == ExpansionRest.Closed
+    val (artSwipe, artworkDrag) = rememberArtworkSwipe(artworkVisit, artwork, previousArtwork, nextArtwork, artPixels, restingOpen, settings, onArtworkVisit)
     val swipeOffset = artSwipe.offset.value
     val swipeFraction = (kotlin.math.abs(swipeOffset) / (artPixels)).coerceIn(0f, 1f)
     val swipeFeather = if (settings.artworkLayout == ArtworkLayout.FullBackground)
@@ -384,7 +386,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
         .onGloballyPositioned { polarity.measure("viewport", it) }
         .bottomGlassShadow(surfaceCorner, opacity = { 1f - sheet.expansion.phase.value() })
         .then(drag).controlScrollParent { playerDragDirections(expanded, scrubCancel.active) }
-        .then(if ((queue?.expansion?.phase?.value() ?: 0f) > 0f) Modifier.clearAndSetSemantics {} else Modifier).testTag("player-surface")
+        .then(if (queueRest != ExpansionRest.Closed) Modifier.clearAndSetSemantics {} else Modifier).testTag("player-surface")
         // The Queue must never sample the light browsing glass. Delaying readback alone
         // is insufficient: an asynchronous capture can still see the previous recording.
         .then(if (frostedBackdrop != null) Modifier.recordFrostedBackdrop(frostedBackdrop, enabled = p >= .99f) else Modifier),
@@ -525,7 +527,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
             // band. Padding changes only the target: the title still draws at titleY.
             // Logical closing immediately re-enables opening; the existing lyricVisibility
             // animation reverses from its current value rather than waiting for zero.
-            val titleOpensLyrics = expanded && p >= .99f && !lyricsOpen && (queue?.expansion?.phase?.value() ?: 0f) <= 0f
+            val titleOpensLyrics = restingOpen
             val titlePadding = 8.dp
             // Keep the original pixel rounding without adding a translated graphics layer.
             val titleInputY = with(density) { (titleY.roundToPx() - titlePadding.roundToPx()).toDp() }
@@ -554,7 +556,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
             }
             val subtitleColor = MaterialTheme.colorScheme.onSurfaceVariant
             val artist = (if (settings.albumArtistFirst) sampled.albumArtist ?: sampled.artist else sampled.artist ?: sampled.albumArtist).orEmpty()
-            val albumVisibility = smoothReveal((p - .65f) / .35f)
+            val albumVisibility = PlayerReveal.Album.at(p)
             MarqueeTitle(buildAnnotatedString {
                 append(artist)
                 sampled.album?.let { album -> withStyle(SpanStyle(color = subtitleColor.copy(alpha = subtitleColor.alpha * albumVisibility))) {

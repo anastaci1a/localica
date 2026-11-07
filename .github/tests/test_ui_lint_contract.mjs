@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {xml,manifest,compare,rules,transferIds,transferGrowth,codeFingerprint} from '../check-ui-lint.mjs';
+import {xml,manifest,compare,rules,transferIds,transferGrowth,transferRelabels,recordedOwnerMoves,codeFingerprint} from '../check-ui-lint.mjs';
 const incident = {rule:rules[0],path:'app/src/main/A.kt',codeSha256:'c',identity:'old'};
 test('new incident and equal-count substitution fail', () => {
     assert.equal(compare([incident],[incident,{...incident,codeSha256:'d',identity:'new'}],0).accepted,false);
@@ -117,4 +117,28 @@ test('the ledger grows only through the recorded one-time exception, within its 
     transferGrowth(grown, grown.slice(1));
     assert.throws(() => transferIds([entry(3, {exception:'other'})], ['U10.03'], []), /Unrecorded/);
     assert.throws(() => transferIds([entry(3, {...tag, removedBy:'U11.01'})], ['U10.03','U11.01'], []), /Unrecorded/);
+});
+test('transfer owners change only through the recorded one-off relabel, once and within its limit', () => {
+    const entry = (n, extra = {}) => ({rule:rules[6],path:'app/src/main/A.kt',fqn:'p.f',codeSha256:'r'+n,removedBy:'U10.03',reason:'U10.03 removes',...extra});
+    const [tag, {limit}] = Object.entries(transferRelabels)[0]; const known = ['U10.03','U10.04','U06.04'];
+    const base = Array.from({length:limit + 2}, (_, i) => entry(i));
+    const move = (list, n, to = 'U10.04') => list.map((e, i) => i < n ? {...e, removedBy:to, relabel:tag} : e);
+    assert.throws(() => transferGrowth(base, base.map((e, i) => i ? e : {...e, removedBy:'U10.04'})), /cannot change/);
+    const relabeled = move(base, limit); transferGrowth(base, relabeled); transferIds(relabeled, known, []);
+    assert.throws(() => transferGrowth(base, move(base, limit + 1)), /over its limit/);
+    transferGrowth(relabeled, relabeled.slice(1));
+    assert.throws(() => transferGrowth(relabeled, move(relabeled, limit + 1)), /reused/);
+    assert.throws(() => transferGrowth(relabeled, relabeled.map((e, i) => i ? e : {...e, removedBy:'U06.04'})), /cannot change/);
+    assert.throws(() => transferGrowth(base, base.map((e, i) => i ? e : {...e, relabel:tag})), /cannot change/);
+    assert.throws(() => transferGrowth(base, [...base, entry(99, {removedBy:'U10.04', relabel:tag})]), /only shrink/);
+    assert.throws(() => transferIds([entry(1, {relabel:'other', removedBy:'U10.04'})], known, []), /Unrecorded transfer relabel/);
+    assert.throws(() => transferIds([entry(1, {relabel:tag})], known, []), /Unrecorded transfer relabel/);
+    assert.throws(() => transferIds([entry(1, {relabel:tag, removedBy:'U10.04', exception:'U10.02-ledger-2026-11-07'})], known, []), /Unrecorded/);
+    const [m] = recordedOwnerMoves, shadow = entry(0, {codeSha256:m.codeSha256, removedBy:m.from});
+    transferGrowth([shadow], [{...shadow, removedBy:m.to}]);
+    assert.throws(() => transferGrowth([{...shadow, removedBy:m.to}], [shadow]), /cannot change/);
+    for (const r of recordedOwnerMoves) { const e = entry(0, {codeSha256:r.codeSha256, removedBy:r.from});
+        transferGrowth([e], [{...e, removedBy:r.to}]);
+        assert.throws(() => transferGrowth([e], [{...e, removedBy:'U10.04'}]), /cannot change/);
+        assert.throws(() => transferGrowth([{...e, codeSha256:'other'}], [{...e, codeSha256:'other', removedBy:r.to}]), /cannot change/); }
 });

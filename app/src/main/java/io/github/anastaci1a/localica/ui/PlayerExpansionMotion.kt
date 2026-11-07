@@ -4,6 +4,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.ScaleFactor
 import androidx.compose.runtime.staticCompositionLocalOf
+import io.github.anastaci1a.localica.ui.components.PlayerReveal
 import kotlin.math.abs
 import kotlin.math.pow
 
@@ -13,7 +14,7 @@ internal data class PlayerLyricsMotion(val layout: Float, val contentAlpha: Floa
 internal fun playerLyricsMotion(expansion: Float, modeVisibility: Float): PlayerLyricsMotion {
     val p = expansion.coerceIn(0f, 1f)
     val mode = modeVisibility.coerceIn(0f, 1f)
-    return PlayerLyricsMotion(mode * p, mode * playerReveal((p - .78f) / .22f), 1f - mode * p)
+    return PlayerLyricsMotion(mode * p, mode * PlayerReveal.Lyrics.at(p), 1f - mode * p)
 }
 
 internal data class PlayerRowMotion(val seekOffset: Float, val actionsOffset: Float,
@@ -28,11 +29,8 @@ internal fun playerRowMotion(expansion: Float, titleOffset: Float, transportOffs
     return PlayerRowMotion(
         seekOffset = titleOffset + (transportOffset - titleOffset) / 3f,
         actionsOffset = titleOffset + (transportOffset - titleOffset) * (2f / 3f),
-        seekAlpha = ((p - .8f) / (1f - .8f)).coerceIn(0f, 1f),
-        actionsAlpha = ((p - .83f) / (1f - .83f)).coerceIn(0f, 1f) * (1f - lyricsModeVisibility.coerceIn(0f, 1f)))
+        seekAlpha = PlayerReveal.Seek.at(p), actionsAlpha = PlayerReveal.Actions.at(p) * (1f - lyricsModeVisibility.coerceIn(0f, 1f)))
 }
-
-private fun playerReveal(value: Float): Float = value.coerceIn(0f, 1f).let { it * it * (3f - 2f * it) }
 
 internal data class PlayerLyricsViewport(val top: Float, val height: Float)
 

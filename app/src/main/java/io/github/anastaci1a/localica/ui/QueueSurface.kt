@@ -36,6 +36,9 @@ import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.R
 import io.github.anastaci1a.localica.ui.components.SheetState
+import io.github.anastaci1a.localica.ui.components.ExpansionRest
+import io.github.anastaci1a.localica.ui.components.DrawerScrim
+import io.github.anastaci1a.localica.ui.components.rememberExpansionRest
 
 internal val CollapsedQueueHeight = 64.dp
 
@@ -121,10 +124,9 @@ internal fun BoxWithConstraintsScope.QueueSurface(sheet: SheetState,
             }
         }
     }
-    val shown by remember(sheet) { derivedStateOf { phase.value() > 0f } }
-    if (shown) Box(Modifier.fillMaxSize().graphicsLayer { alpha = phase.value().coerceIn(0f, 1f) * 0.2f }.clickable { onSettled(false) }) {
-        Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.scrim) {}
-    }
+    val rest by rememberExpansionRest(sheet.expansion)
+    val shown = rest != ExpansionRest.Closed
+    DrawerScrim(sheet.expansion, shown, MaterialTheme.colorScheme.scrim) { onSettled(false) }
     // Keep the list viewport fixed while the drawer moves. Resizing every frame
     // repeatedly measures/virtualizes rows and their glass; the window clips the reveal.
     val viewportHeight = with(density) { (maxHeight - status).roundToPx() }
@@ -163,10 +165,8 @@ internal fun BoxWithConstraintsScope.QueueSurface(sheet: SheetState,
             currentTrace?.invoke("layout top=${it.positionInRoot().y} progress=${phase.value()}")
         })
         // Header and list controls yield the swipes this drawer can still travel.
-        .controlScrollParent {
-            (if (phase.value() > 0f) ControlScrollDirection.Down else 0) or
-                (if (phase.value() < 1f) ControlScrollDirection.Up else 0)
-        }
+        .controlScrollParent { when { !phase.settled || sheet.expansion.inContact -> ControlScrollDirection.Down or ControlScrollDirection.Up
+            sheet.expansion.expanded -> ControlScrollDirection.Down; else -> ControlScrollDirection.Up } }
         .observeScrollOwnership(scrollOwnership, listPull::cancelPull)
         .nestedScroll(listPull).testTag("queue-surface"), shape = Corners.panel) {
         CompositionLocalProvider(LocalGlassPopupHome provides popupHome) {
@@ -199,7 +199,7 @@ internal fun BoxWithConstraintsScope.QueueSurface(sheet: SheetState,
         layout(constraints.maxWidth, constraints.maxHeight) {
             // Preserve the original final pixel rounding, including player translation.
             val drawerY = with(density) {
-                kotlin.math.round((top + (status - top) * phase.value().coerceIn(0f, 1f) +
+                kotlin.math.round((top + (status - top) * phase.value() +
                     80.dp * (1f - playerProgress())).toPx()).toInt()
             }
             drawer.place(0, drawerY - shelfY())

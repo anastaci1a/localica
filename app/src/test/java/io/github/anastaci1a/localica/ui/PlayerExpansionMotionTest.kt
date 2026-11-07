@@ -99,11 +99,13 @@ class PlayerExpansionMotionTest {
         }
     }
 
-    @Test fun rowOpacityIsLinearThroughoutItsVisibleWindow() {
+    @Test fun rowOpacityIsASmoothstepThroughoutItsVisibleWindow() {
+        // U10.03: the old linear clamps stepped their derivative at both joins; the C1 window keeps the same span.
         for (step in 0..20) {
             val fraction = step / 20f
-            assertEquals(fraction, rows(.8f + .2f * fraction, 0f).seekAlpha, .000001f)
-            assertEquals(fraction, rows(.83f + .17f * fraction, 0f).actionsAlpha, .000001f)
+            val eased = fraction * fraction * (3f - 2f * fraction)
+            assertEquals(eased, rows(.8f + .2f * fraction, 0f).seekAlpha, .00001f)
+            assertEquals(eased, rows(.83f + .17f * fraction, 0f).actionsAlpha, .00001f)
         }
     }
 

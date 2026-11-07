@@ -21,38 +21,6 @@
     {
       "rule": "RawMotionMap",
       "path": "app/src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt",
-      "fqn": "io.github.anastaci1a.localica.ui.pin",
-      "codeSha256": "def25ccb9b71f6b0305406c7ba23f5bcc410c424182f4e4649982e6d4163897e",
-      "removedBy": "U10.03",
-      "reason": "U10.03 removes: existing player phase consumer, now reading the Engine phase (U10.01 ownership move): val playerVisible by remember { derivedStateOf { phase.value() > 0f } }"
-    },
-    {
-      "rule": "RawMotionMap",
-      "path": "app/src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt",
-      "fqn": "io.github.anastaci1a.localica.ui.pin",
-      "codeSha256": "504571ed4db1839b7d3e088644b45c1bbab10d8d5f1d2a3a5016126b46c26557",
-      "removedBy": "U10.03",
-      "reason": "U10.03 removes: existing player phase consumer, now reading the Engine phase (U10.01 ownership move): val playerCoversBrowse by remember { derivedStateOf { phase.value() >= .5f } }"
-    },
-    {
-      "rule": "RawMotionMap",
-      "path": "app/src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt",
-      "fqn": "io.github.anastaci1a.localica.ui.pin",
-      "codeSha256": "0d079ecf9d65c4a4a4249ceaf8478b4ea9f6ca4de0425a91ee778347af9516b0",
-      "removedBy": "U10.03",
-      "reason": "U10.03 removes: existing player phase consumer, now reading the Engine phase (U10.01 ownership move): val playerFullyOpen by remember { derivedStateOf { phase.value() >= .99f } }"
-    },
-    {
-      "rule": "RawMotionMap",
-      "path": "app/src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt",
-      "fqn": "io.github.anastaci1a.localica.ui.playerAction",
-      "codeSha256": "953f7f8016628a48b13fcf1a695367a9ff9d15f233d227d0810f9a419f525450",
-      "removedBy": "U10.03",
-      "reason": "U10.03 removes: existing player phase consumer, now reading the Engine phase (U10.01 ownership move): .drawWithContent { if (!hasPlayer || phase.value() < 1f) drawContent() }"
-    },
-    {
-      "rule": "RawMotionMap",
-      "path": "app/src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt",
       "fqn": "io.github.anastaci1a.localica.ui.playerAction",
       "codeSha256": "1145c7d02d17b6f5cde13089ed10a1cb70153c48f4ecf558d5256189702de9e0",
       "removedBy": "U10.03",
@@ -63,8 +31,9 @@
       "path": "app/src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt",
       "fqn": "io.github.anastaci1a.localica.ui.BoxWithConstraintsScope.PlayerSurface",
       "codeSha256": "a4ed50deff897dfdb9723e7eefdce9d9d9c41eae34b429b48c9a59434ace9afc",
-      "removedBy": "U10.03",
-      "reason": "U10.03 removes: existing player phase consumer, now reading the Engine phase (U10.01 ownership move): val lyricBackdrop = rememberFrostedBackdrop(listOf(artwork, settings.artworkLayout, settin"
+      "removedBy": "U04.02a",
+      "reason": "U04.02a removes (one-off U10.03 relabel 2026-11-07, glass snapshot-recording gate (U04.02a retained faces and compositor recording)): existing player phase consumer, now reading the Engine phase (U10.01 ownership move): val lyricBackdrop = rememberFrostedBackdrop(listOf(artwork, settings.artworkLayout, settin",
+      "relabel": "U10.03-relabel-2026-11-07"
     },
     {
       "rule": "RawMotionMap",
@@ -73,14 +42,6 @@
       "codeSha256": "b0761800e8e4e6c7b37a452a3f6b34d4be67ddad22885ffb0f7892e13d87147e",
       "removedBy": "U10.03",
       "reason": "U10.03 removes: existing player phase consumer, now reading the Engine phase (U10.01 ownership move): val lyricsResult = if (lyricsOpen || lyricProgress > 0f) rememberLyrics(track) else null"
-    },
-    {
-      "rule": "RawMotionMap",
-      "path": "app/src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt",
-      "fqn": "io.github.anastaci1a.localica.ui.artworkAction",
-      "codeSha256": "292cadc9236caa769718b9ac9fe4395e2974b8d1d2755351627269735b129086",
-      "removedBy": "U10.03",
-      "reason": "U10.03 removes: existing player phase consumer, now reading the Engine phase (U10.01 ownership move): val reveal = ((p - 0.85f) / 0.15f).coerceIn(0f, 1f)"
     },
     {
       "rule": "RawMotionMap",
@@ -103,32 +64,36 @@
       "path": "app/src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt",
       "fqn": "io.github.anastaci1a.localica.ui.artworkAction",
       "codeSha256": "193bba0aa25c90b344946c2cd220143e41aec9f7369268ed42a921743fa6c3e0",
-      "removedBy": "U10.03",
-      "reason": "U10.03 removes: existing player phase consumer, now reading the Engine phase (U10.01 ownership move): val movingCover = p > 0f && p < 1f"
+      "removedBy": "U04.01c",
+      "reason": "U04.01c removes (one-off U10.03 relabel 2026-11-07, branch-dependent cover/metadata order (U04.01c stratum/content order; movingCover is its only input)): existing player phase consumer, now reading the Engine phase (U10.01 ownership move): val movingCover = p > 0f && p < 1f",
+      "relabel": "U10.03-relabel-2026-11-07"
     },
     {
       "rule": "RawMotionMap",
       "path": "app/src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt",
       "fqn": "io.github.anastaci1a.localica.ui.artworkAction",
       "codeSha256": "7d18dd49dd8436eebc70ba4c8f6f146866cd95bfd000a7fc0e4126072625c338",
-      "removedBy": "U10.03",
-      "reason": "U10.03 removes: existing player phase consumer, now reading the Engine phase (U10.01 ownership move): val movingCover = p > 0f && p < 1f"
+      "removedBy": "U04.01c",
+      "reason": "U04.01c removes (one-off U10.03 relabel 2026-11-07, branch-dependent cover/metadata order (U04.01c stratum/content order; movingCover is its only input)): existing player phase consumer, now reading the Engine phase (U10.01 ownership move): val movingCover = p > 0f && p < 1f",
+      "relabel": "U10.03-relabel-2026-11-07"
     },
     {
       "rule": "RawMotionMap",
       "path": "app/src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt",
       "fqn": "io.github.anastaci1a.localica.ui.artworkAction",
       "codeSha256": "9638baca284488142b0665388be46f5e2af3d5163e97c13153641377bd0d217c",
-      "removedBy": "U10.03",
-      "reason": "U10.03 removes: existing player phase consumer, now reading the Engine phase (U10.01 ownership move): val metadataLayer = if (movingCover) -.5f else 0f"
+      "removedBy": "U04.01c",
+      "reason": "U04.01c removes (one-off U10.03 relabel 2026-11-07, branch-dependent cover/metadata order (U04.01c stratum/content order; movingCover is its only input)): existing player phase consumer, now reading the Engine phase (U10.01 ownership move): val metadataLayer = if (movingCover) -.5f else 0f",
+      "relabel": "U10.03-relabel-2026-11-07"
     },
     {
       "rule": "RawMotionMap",
       "path": "app/src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt",
       "fqn": "io.github.anastaci1a.localica.ui.smoothReveal",
       "codeSha256": "f0b2ab5bbc3dd83d6bea42db875f8ddcbf3eea5c35763cc154db0816069b812c",
-      "removedBy": "U10.03",
-      "reason": "U10.03 removes: existing player phase consumer, now reading the Engine phase (U10.01 ownership move): val swipeFraction = (kotlin.math.abs(swipeOffset) / (artPixels)).coerceIn(0f, 1f)"
+      "removedBy": "U10.04",
+      "reason": "U10.04 removes (one-off U10.03 relabel 2026-11-07, artwork swipe offset/feather/neighbor geometry (U10.04 swipe continuation, Stage 4)): existing player phase consumer, now reading the Engine phase (U10.01 ownership move): val swipeFraction = (kotlin.math.abs(swipeOffset) / (artPixels)).coerceIn(0f, 1f)",
+      "relabel": "U10.03-relabel-2026-11-07"
     },
     {
       "rule": "RawMotionMap",
@@ -151,8 +116,9 @@
       "path": "app/src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt",
       "fqn": "io.github.anastaci1a.localica.ui.smoothReveal",
       "codeSha256": "167dc80e4d3bc55bce0684cb78db95e143e74938bba15bc88fc87c33b3a16aba",
-      "removedBy": "U10.03",
-      "reason": "U10.03 removes: existing player phase consumer, now reading the Engine phase (U10.01 ownership move): footprints, backgroundProgress * (1f - lyricProgress), maxOf(1f - coverBlend, swipeFeather"
+      "removedBy": "U10.04",
+      "reason": "U10.04 removes (one-off U10.03 relabel 2026-11-07, artwork swipe offset/feather/neighbor geometry (U10.04 swipe continuation, Stage 4)): existing player phase consumer, now reading the Engine phase (U10.01 ownership move): footprints, backgroundProgress * (1f - lyricProgress), maxOf(1f - coverBlend, swipeFeather",
+      "relabel": "U10.03-relabel-2026-11-07"
     },
     {
       "rule": "RawMotionMap",
@@ -167,8 +133,9 @@
       "path": "app/src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt",
       "fqn": "io.github.anastaci1a.localica.ui.lyricsEndpoint",
       "codeSha256": "d673060ccbd27dc10239728d6418c2e05ebf7cb6f879c44277235bcbafbe78e3",
-      "removedBy": "U10.03",
-      "reason": "U10.03 removes: existing player phase consumer, now reading the Engine phase (U10.01 ownership move): if (p < .999f || artSwipe.active || swipeOffset != 0f) return null"
+      "removedBy": "U10.04",
+      "reason": "U10.04 removes (one-off U10.03 relabel 2026-11-07, artwork swipe offset/feather/neighbor geometry (U10.04 swipe continuation, Stage 4)): existing player phase consumer, now reading the Engine phase (U10.01 ownership move): if (p < .999f || artSwipe.active || swipeOffset != 0f) return null",
+      "relabel": "U10.03-relabel-2026-11-07"
     },
     {
       "rule": "RawMotionMap",
@@ -215,8 +182,9 @@
       "path": "app/src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt",
       "fqn": "io.github.anastaci1a.localica.ui.at",
       "codeSha256": "9b1f4f640591320f7480d203ef69727d5cffd98cefaed6c94d1f9e32f9b33a1d",
-      "removedBy": "U10.03",
-      "reason": "U10.03 removes: existing player phase consumer, now reading the Engine phase (U10.01 ownership move): .then(if (frostedBackdrop != null) Modifier.recordFrostedBackdrop(frostedBackdrop, enabled"
+      "removedBy": "U04.02a",
+      "reason": "U04.02a removes (one-off U10.03 relabel 2026-11-07, glass snapshot-recording gate (U04.02a retained faces and compositor recording)): existing player phase consumer, now reading the Engine phase (U10.01 ownership move): .then(if (frostedBackdrop != null) Modifier.recordFrostedBackdrop(frostedBackdrop, enabled",
+      "relabel": "U10.03-relabel-2026-11-07"
     },
     {
       "rule": "RawMotionMap",
@@ -231,32 +199,35 @@
       "path": "app/src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt",
       "fqn": "io.github.anastaci1a.localica.ui.at",
       "codeSha256": "f7cb4d564f22c78a17a817c10cc0bfd565fe2d741765b679d9f9537d54882f8f",
-      "removedBy": "U10.03",
-      "reason": "U10.03 removes: existing player phase consumer, now reading the Engine phase (U10.01 ownership move): Column(Modifier.fillMaxSize().controlVerticalScroll(playerScroll, enabled = p > 0.99f && v"
+      "removedBy": "U11.04",
+      "reason": "U11.04 removes (recorded relabel addition, lead decision 2026-11-07 11:00 AM): the scroll gate shares its line with the player Column that U11.04 replaces; was U10.03: existing player phase consumer, now reading the Engine phase (U10.01 ownership move): Column(Modifier.fillMaxSize().controlVerticalScroll(playerScroll, enabled = p > 0.99f && v"
     },
     {
       "rule": "RawMotionMap",
       "path": "app/src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt",
       "fqn": "io.github.anastaci1a.localica.ui.cover",
       "codeSha256": "dee9cbe9d7090708c581719fbe04cb04f2fb6e4cc75a873101d132de9e6f34c7",
-      "removedBy": "U10.03",
-      "reason": "U10.03 removes: existing player phase consumer, now reading the Engine phase (U10.01 ownership move): alpha = lyricMotion.artworkAlpha * if (artSwipe.active) (remaining / (artPixels * .08f)).c"
+      "removedBy": "U10.04",
+      "reason": "U10.04 removes (one-off U10.03 relabel 2026-11-07, artwork swipe offset/feather/neighbor geometry (U10.04 swipe continuation, Stage 4)): existing player phase consumer, now reading the Engine phase (U10.01 ownership move): alpha = lyricMotion.artworkAlpha * if (artSwipe.active) (remaining / (artPixels * .08f)).c",
+      "relabel": "U10.03-relabel-2026-11-07"
     },
     {
       "rule": "RawMotionMap",
       "path": "app/src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt",
       "fqn": "io.github.anastaci1a.localica.ui.cover",
       "codeSha256": "d58dca48fedaba9fc759ae7c30554cc14fecd9f08f9626982a1d1db01d0bc51a",
-      "removedBy": "U10.03",
-      "reason": "U10.03 removes: existing player phase consumer, now reading the Engine phase (U10.01 ownership move): rotationY = (offset / artPixels).coerceIn(-1f, 1f) * -27f"
+      "removedBy": "U10.04",
+      "reason": "U10.04 removes (one-off U10.03 relabel 2026-11-07, artwork swipe offset/feather/neighbor geometry (U10.04 swipe continuation, Stage 4)): existing player phase consumer, now reading the Engine phase (U10.01 ownership move): rotationY = (offset / artPixels).coerceIn(-1f, 1f) * -27f",
+      "relabel": "U10.03-relabel-2026-11-07"
     },
     {
       "rule": "RawMotionMap",
       "path": "app/src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt",
       "fqn": "io.github.anastaci1a.localica.ui.cover",
       "codeSha256": "0abaebaf1d4ed274ce9713973b5189cf17730cb3884382ed6c7f7f7c394ba132",
-      "removedBy": "U10.03",
-      "reason": "U10.03 removes: existing player phase consumer, now reading the Engine phase (U10.01 ownership move): val depth = kotlin.math.abs(offset / artPixels).coerceIn(0f, 1f)"
+      "removedBy": "U10.04",
+      "reason": "U10.04 removes (one-off U10.03 relabel 2026-11-07, artwork swipe offset/feather/neighbor geometry (U10.04 swipe continuation, Stage 4)): existing player phase consumer, now reading the Engine phase (U10.01 ownership move): val depth = kotlin.math.abs(offset / artPixels).coerceIn(0f, 1f)",
+      "relabel": "U10.03-relabel-2026-11-07"
     },
     {
       "rule": "RawMotionMap",
@@ -271,24 +242,27 @@
       "path": "app/src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt",
       "fqn": "io.github.anastaci1a.localica.ui.cover",
       "codeSha256": "9ced4906a1f47ad1fe5d2485a48d54d9cd7c7879fc836c972047995cc6c2b4ac",
-      "removedBy": "U10.03",
-      "reason": "U10.03 removes: existing player phase consumer, now reading the Engine phase (U10.01 ownership move): .artworkEdgeFeather(maxOf(edgeSoftness, swipeFeather),"
+      "removedBy": "U10.04",
+      "reason": "U10.04 removes (one-off U10.03 relabel 2026-11-07, artwork swipe offset/feather/neighbor geometry (U10.04 swipe continuation, Stage 4)): existing player phase consumer, now reading the Engine phase (U10.01 ownership move): .artworkEdgeFeather(maxOf(edgeSoftness, swipeFeather),",
+      "relabel": "U10.03-relabel-2026-11-07"
     },
     {
       "rule": "RawMotionMap",
       "path": "app/src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt",
       "fqn": "io.github.anastaci1a.localica.ui.cover",
       "codeSha256": "6745207be818570c6f61e8b5d36eace23795372b525bd59d7a0bf5ddb32e4438",
-      "removedBy": "U10.03",
-      "reason": "U10.03 removes: existing player phase consumer, now reading the Engine phase (U10.01 ownership move): .recordFrostedBackdrop(if (lyricProgress > 0f) lyricBackdrop else artworkWash, enabled = p"
+      "removedBy": "U04.02a",
+      "reason": "U04.02a removes (one-off U10.03 relabel 2026-11-07, glass snapshot-recording gate (U04.02a retained faces and compositor recording)): existing player phase consumer, now reading the Engine phase (U10.01 ownership move): .recordFrostedBackdrop(if (lyricProgress > 0f) lyricBackdrop else artworkWash, enabled = p",
+      "relabel": "U10.03-relabel-2026-11-07"
     },
     {
       "rule": "RawMotionMap",
       "path": "app/src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt",
       "fqn": "io.github.anastaci1a.localica.ui.cover",
       "codeSha256": "cacae530d569621813a7facdcbd0cfdb2427ee89228fca807b1f2f511f8b6db9",
-      "removedBy": "U10.03",
-      "reason": "U10.03 removes: existing player phase consumer, now reading the Engine phase (U10.01 ownership move): .recordFrostedBackdrop(if (lyricProgress > 0f) lyricBackdrop else artworkWash, enabled = p"
+      "removedBy": "U04.02a",
+      "reason": "U04.02a removes (one-off U10.03 relabel 2026-11-07, glass snapshot-recording gate (U04.02a retained faces and compositor recording)): existing player phase consumer, now reading the Engine phase (U10.01 ownership move): .recordFrostedBackdrop(if (lyricProgress > 0f) lyricBackdrop else artworkWash, enabled = p",
+      "relabel": "U10.03-relabel-2026-11-07"
     },
     {
       "rule": "RawMotionMap",
@@ -303,16 +277,18 @@
       "path": "app/src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt",
       "fqn": "io.github.anastaci1a.localica.ui.cover",
       "codeSha256": "f117dc2ba011869eb3424dc122bc3e1473cd2e41df163524033560c70dd6bc70",
-      "removedBy": "U10.03",
-      "reason": "U10.03 removes: existing player phase consumer, now reading the Engine phase (U10.01 ownership move): with(density) { artX.toPx() } + swipeOffset, artPixels, softness = maxOf(1f - coverBlend, "
+      "removedBy": "U10.04",
+      "reason": "U10.04 removes (one-off U10.03 relabel 2026-11-07, artwork swipe offset/feather/neighbor geometry (U10.04 swipe continuation, Stage 4)): existing player phase consumer, now reading the Engine phase (U10.01 ownership move): with(density) { artX.toPx() } + swipeOffset, artPixels, softness = maxOf(1f - coverBlend, ",
+      "relabel": "U10.03-relabel-2026-11-07"
     },
     {
       "rule": "RawMotionMap",
       "path": "app/src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt",
       "fqn": "io.github.anastaci1a.localica.ui.cover",
       "codeSha256": "042d8f3096525cbab2490767d6dddd49aebbed74bd53a98f380a64f61ac94fbb",
-      "removedBy": "U10.03",
-      "reason": "U10.03 removes: existing player phase consumer, now reading the Engine phase (U10.01 ownership move): with(density) { artX.toPx() } + neighborOffset, artPixels, softness = maxOf(1f - coverBlen"
+      "removedBy": "U10.04",
+      "reason": "U10.04 removes (one-off U10.03 relabel 2026-11-07, artwork swipe offset/feather/neighbor geometry (U10.04 swipe continuation, Stage 4)): existing player phase consumer, now reading the Engine phase (U10.01 ownership move): with(density) { artX.toPx() } + neighborOffset, artPixels, softness = maxOf(1f - coverBlen",
+      "relabel": "U10.03-relabel-2026-11-07"
     },
     {
       "rule": "RawMotionMap",
@@ -335,24 +311,27 @@
       "path": "app/src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt",
       "fqn": "io.github.anastaci1a.localica.ui.cover",
       "codeSha256": "6cd3530ea4801023c11dd7b7faa0ec4da8e579417a33129a2e04bc8f0010fc01",
-      "removedBy": "U10.03",
-      "reason": "U10.03 removes: existing player phase consumer, now reading the Engine phase (U10.01 ownership move): .zIndex(if (movingCover || lyricProgress > 0f) 0f else -1f)"
+      "removedBy": "U04.01c",
+      "reason": "U04.01c removes (one-off U10.03 relabel 2026-11-07, branch-dependent cover/metadata order (U04.01c stratum/content order; movingCover is its only input)): existing player phase consumer, now reading the Engine phase (U10.01 ownership move): .zIndex(if (movingCover || lyricProgress > 0f) 0f else -1f)",
+      "relabel": "U10.03-relabel-2026-11-07"
     },
     {
       "rule": "RawMotionMap",
       "path": "app/src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt",
       "fqn": "io.github.anastaci1a.localica.ui.cover",
       "codeSha256": "342be6facfd5f2520dbaa67a7ee813518a428abd5422d5fa64686521df667fa2",
-      "removedBy": "U10.03",
-      "reason": "U10.03 removes: existing player phase consumer, now reading the Engine phase (U10.01 ownership move): .recordPlayerCoverBackdrop(lyricBackdrop, artworkWash, enabled = p > .7f && lyricProgress "
+      "removedBy": "U04.02a",
+      "reason": "U04.02a removes (one-off U10.03 relabel 2026-11-07, glass snapshot-recording gate (U04.02a retained faces and compositor recording)): existing player phase consumer, now reading the Engine phase (U10.01 ownership move): .recordPlayerCoverBackdrop(lyricBackdrop, artworkWash, enabled = p > .7f && lyricProgress ",
+      "relabel": "U10.03-relabel-2026-11-07"
     },
     {
       "rule": "RawMotionMap",
       "path": "app/src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt",
       "fqn": "io.github.anastaci1a.localica.ui.cover",
       "codeSha256": "9b6139532f5e6f422d2a586723d8fb8941016a6260817eaa915614789de8858f",
-      "removedBy": "U10.03",
-      "reason": "U10.03 removes: existing player phase consumer, now reading the Engine phase (U10.01 ownership move): .recordPlayerCoverBackdrop(lyricBackdrop, artworkWash, enabled = p > .7f && lyricProgress "
+      "removedBy": "U04.02a",
+      "reason": "U04.02a removes (one-off U10.03 relabel 2026-11-07, glass snapshot-recording gate (U04.02a retained faces and compositor recording)): existing player phase consumer, now reading the Engine phase (U10.01 ownership move): .recordPlayerCoverBackdrop(lyricBackdrop, artworkWash, enabled = p > .7f && lyricProgress ",
+      "relabel": "U10.03-relabel-2026-11-07"
     },
     {
       "rule": "RawMotionMap",
@@ -374,33 +353,28 @@
       "rule": "RawMotionMap",
       "path": "app/src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt",
       "fqn": "io.github.anastaci1a.localica.ui.cover",
-      "codeSha256": "02c2aec304fe7fe549133be605b51f6ae52f2eb51f49028240e32252c7f9c9fc",
-      "removedBy": "U10.03",
-      "reason": "U10.03 removes: existing player phase consumer, now reading the Engine phase (U10.01 ownership move): if (titleOpensLyrics) Box(Modifier.testTag(\"player-lyrics-title-target\")"
-    },
-    {
-      "rule": "RawMotionMap",
-      "path": "app/src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt",
-      "fqn": "io.github.anastaci1a.localica.ui.cover",
       "codeSha256": "1c0f88107fbafa9e295dcdebd7c621c0ceaa6f4aa38681a71313be6111984acd",
-      "removedBy": "U10.03",
-      "reason": "U10.03 removes: existing player phase consumer, now reading the Engine phase (U10.01 ownership move): val inputTop = ((statusInset + 48.dp).roundToPx() - origin).coerceIn(0, height)"
+      "removedBy": "U11.04",
+      "reason": "U11.04 removes (one-off U10.03 relabel 2026-11-07, title-to-lyrics input band bounds from player geometry (#472; U11.04 player stock geometry)): existing player phase consumer, now reading the Engine phase (U10.01 ownership move): val inputTop = ((statusInset + 48.dp).roundToPx() - origin).coerceIn(0, height)",
+      "relabel": "U10.03-relabel-2026-11-07"
     },
     {
       "rule": "RawMotionMap",
       "path": "app/src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt",
       "fqn": "io.github.anastaci1a.localica.ui.cover",
       "codeSha256": "5ac821870dadad34c3377947252a09eae22eb6e2acde6efa5a94cbe4821ba520",
-      "removedBy": "U10.03",
-      "reason": "U10.03 removes: existing player phase consumer, now reading the Engine phase (U10.01 ownership move): val inputBottom = minOf(height, seekY.roundToPx() - padding - origin).coerceAtLeast(inputT"
+      "removedBy": "U11.04",
+      "reason": "U11.04 removes (one-off U10.03 relabel 2026-11-07, title-to-lyrics input band bounds from player geometry (#472; U11.04 player stock geometry)): existing player phase consumer, now reading the Engine phase (U10.01 ownership move): val inputBottom = minOf(height, seekY.roundToPx() - padding - origin).coerceAtLeast(inputT",
+      "relabel": "U10.03-relabel-2026-11-07"
     },
     {
       "rule": "RawMotionMap",
       "path": "app/src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt",
       "fqn": "io.github.anastaci1a.localica.ui.cover",
       "codeSha256": "4970cf84c028e053511b372a0f334fad537f2cf265985a5a0182e8cc659a3032",
-      "removedBy": "U10.03",
-      "reason": "U10.03 removes: existing player phase consumer, now reading the Engine phase (U10.01 ownership move): val inputBottom = minOf(height, seekY.roundToPx() - padding - origin).coerceAtLeast(inputT"
+      "removedBy": "U11.04",
+      "reason": "U11.04 removes (one-off U10.03 relabel 2026-11-07, title-to-lyrics input band bounds from player geometry (#472; U11.04 player stock geometry)): existing player phase consumer, now reading the Engine phase (U10.01 ownership move): val inputBottom = minOf(height, seekY.roundToPx() - padding - origin).coerceAtLeast(inputT",
+      "relabel": "U10.03-relabel-2026-11-07"
     },
     {
       "rule": "RawMotionMap",
@@ -425,168 +399,6 @@
       "codeSha256": "20f5c3f87152c38dc50f6bd4be3be3085fe522574fa028dfc116923d1b338f15",
       "removedBy": "U04.01b",
       "reason": "U04.01b removes: pre-existing direct shadow call on a line rewritten by U10.01: .bottomGlassShadow(surfaceCorner, opacity = { 1f - sheet.expansion.phase.value() })"
-    },
-    {
-      "rule": "MotionReadInComposition",
-      "path": "app/src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt",
-      "fqn": "io.github.anastaci1a.localica.ui.smoothReveal",
-      "codeSha256": "98c360ae3c6cfde36c78db353930e2b2afc5c2c75e3c274789ee890c2e891e75",
-      "removedBy": "U10.03",
-      "reason": "U10.03 removes: phase consumer on a line rewritten by U10.02 (Queue drawer onto its ExpandCollapse owner; replaces a removed RawUiMotion incident): artPixels, expanded && p >= .99f && !lyricsOpen && (queue?.expansion?.phase?.value() ?: 0f) <= 0f,",
-      "exception": "U10.02-ledger-2026-11-07"
-    },
-    {
-      "rule": "NonPresetScreenLayout",
-      "path": "app/src/main/java/io/github/anastaci1a/localica/ui/QueueSurface.kt",
-      "fqn": "io.github.anastaci1a.localica.ui.onPreFling",
-      "codeSha256": "2ec5077b93229455fc0cfb37382ea2b1671270130796190973d739ed3d2fef56",
-      "removedBy": "U10.03",
-      "reason": "U10.03 removes: phase consumer on a line rewritten by U10.02 (Queue drawer onto its ExpandCollapse owner; replaces a removed RawUiMotion incident): if (shown) Box(Modifier.fillMaxSize().graphicsLayer { alpha = phase.value().coerceIn(0f, 1f) * 0.2f }.clickable { onSettled(false) }) {",
-      "exception": "U10.02-ledger-2026-11-07"
-    },
-    {
-      "rule": "RawMotionMap",
-      "path": "app/src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt",
-      "fqn": "io.github.anastaci1a.localica.ui.pin",
-      "codeSha256": "e750c9de3aad6b265a2d25f33d5d0d76fbff07646e975c605d3fc64b7294ed82",
-      "removedBy": "U10.03",
-      "reason": "U10.03 removes: phase consumer on a line rewritten by U10.02 (Queue drawer onto its ExpandCollapse owner; replaces a removed RawUiMotion incident): val queueVisible by remember { derivedStateOf { queueSheet.expansion.phase.value() > 0f } }",
-      "exception": "U10.02-ledger-2026-11-07"
-    },
-    {
-      "rule": "RawMotionMap",
-      "path": "app/src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt",
-      "fqn": "io.github.anastaci1a.localica.ui.smoothReveal",
-      "codeSha256": "a4065c603929593fcc46a656f067866f25e756344fcecca59a56bb0cf29c9aa0",
-      "removedBy": "U10.03",
-      "reason": "U10.03 removes: phase consumer on a line rewritten by U10.02 (Queue drawer onto its ExpandCollapse owner; replaces a removed RawUiMotion incident): artPixels, expanded && p >= .99f && !lyricsOpen && (queue?.expansion?.phase?.value() ?: 0f) <= 0f,",
-      "exception": "U10.02-ledger-2026-11-07"
-    },
-    {
-      "rule": "RawMotionMap",
-      "path": "app/src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt",
-      "fqn": "io.github.anastaci1a.localica.ui.smoothReveal",
-      "codeSha256": "ca587ee5acd5564fd91252cd047f7c22fcc6081631221df32ecaf710ae16129b",
-      "removedBy": "U10.03",
-      "reason": "U10.03 removes: phase consumer on a line rewritten by U10.02 (Queue drawer onto its ExpandCollapse owner; replaces a removed RawUiMotion incident): artPixels, expanded && p >= .99f && !lyricsOpen && (queue?.expansion?.phase?.value() ?: 0f) <= 0f,",
-      "exception": "U10.02-ledger-2026-11-07"
-    },
-    {
-      "rule": "RawMotionMap",
-      "path": "app/src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt",
-      "fqn": "io.github.anastaci1a.localica.ui.smoothReveal",
-      "codeSha256": "5f8d174f721d084601a1f775e6968a299b3b0c65c52691b370ebd9d9ce137c34",
-      "removedBy": "U10.03",
-      "reason": "U10.03 removes: phase consumer on a line rewritten by U10.02 (Queue drawer onto its ExpandCollapse owner; replaces a removed RawUiMotion incident): artPixels, expanded && p >= .99f && !lyricsOpen && (queue?.expansion?.phase?.value() ?: 0f) <= 0f,",
-      "exception": "U10.02-ledger-2026-11-07"
-    },
-    {
-      "rule": "RawMotionMap",
-      "path": "app/src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt",
-      "fqn": "io.github.anastaci1a.localica.ui.at",
-      "codeSha256": "6ddbda6bc79ecad14608cfeb0ad7be01ca0853609a5aa8ff07c3a38dff72da1e",
-      "removedBy": "U10.03",
-      "reason": "U10.03 removes: phase consumer on a line rewritten by U10.02 (Queue drawer onto its ExpandCollapse owner; replaces a removed RawUiMotion incident): .then(if ((queue?.expansion?.phase?.value() ?: 0f) > 0f) Modifier.clearAndSetSemantics {} else Modifier).testTag(\"player-surface\")",
-      "exception": "U10.02-ledger-2026-11-07"
-    },
-    {
-      "rule": "RawMotionMap",
-      "path": "app/src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt",
-      "fqn": "io.github.anastaci1a.localica.ui.at",
-      "codeSha256": "1eb317063eee4f39f03286f2a2430cb1196d387d5fb6372e208126414065a868",
-      "removedBy": "U10.03",
-      "reason": "U10.03 removes: phase consumer on a line rewritten by U10.02 (Queue drawer onto its ExpandCollapse owner; replaces a removed RawUiMotion incident): .then(if ((queue?.expansion?.phase?.value() ?: 0f) > 0f) Modifier.clearAndSetSemantics {} else Modifier).testTag(\"player-surface\")",
-      "exception": "U10.02-ledger-2026-11-07"
-    },
-    {
-      "rule": "RawMotionMap",
-      "path": "app/src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt",
-      "fqn": "io.github.anastaci1a.localica.ui.cover",
-      "codeSha256": "51006a7421b25f7cde440133bc68fffdec8557ddabec65dd9a9d29d07be33230",
-      "removedBy": "U10.03",
-      "reason": "U10.03 removes: phase consumer on a line rewritten by U10.02 (Queue drawer onto its ExpandCollapse owner; replaces a removed RawUiMotion incident): val titleOpensLyrics = expanded && p >= .99f && !lyricsOpen && (queue?.expansion?.phase?.value() ?: 0f) <= 0f",
-      "exception": "U10.02-ledger-2026-11-07"
-    },
-    {
-      "rule": "RawMotionMap",
-      "path": "app/src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt",
-      "fqn": "io.github.anastaci1a.localica.ui.cover",
-      "codeSha256": "ff82b803f2b17fcd701dbcc4263a828d00f3026847996f4d964d0823f17c517b",
-      "removedBy": "U10.03",
-      "reason": "U10.03 removes: phase consumer on a line rewritten by U10.02 (Queue drawer onto its ExpandCollapse owner; replaces a removed RawUiMotion incident): val titleOpensLyrics = expanded && p >= .99f && !lyricsOpen && (queue?.expansion?.phase?.value() ?: 0f) <= 0f",
-      "exception": "U10.02-ledger-2026-11-07"
-    },
-    {
-      "rule": "RawMotionMap",
-      "path": "app/src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt",
-      "fqn": "io.github.anastaci1a.localica.ui.cover",
-      "codeSha256": "8a7b714cae20453bc16fdc942b30ba08842311028bcfcaeeb86a0eaa159b3ae2",
-      "removedBy": "U10.03",
-      "reason": "U10.03 removes: phase consumer on a line rewritten by U10.02 (Queue drawer onto its ExpandCollapse owner; replaces a removed RawUiMotion incident): val titleOpensLyrics = expanded && p >= .99f && !lyricsOpen && (queue?.expansion?.phase?.value() ?: 0f) <= 0f",
-      "exception": "U10.02-ledger-2026-11-07"
-    },
-    {
-      "rule": "RawMotionMap",
-      "path": "app/src/main/java/io/github/anastaci1a/localica/ui/QueueSurface.kt",
-      "fqn": "io.github.anastaci1a.localica.ui.onPreFling",
-      "codeSha256": "08b8cce24e89e0a0fed0ceab5db7d18884d645aea2fd712a5d3d27cc2ef83f03",
-      "removedBy": "U10.03",
-      "reason": "U10.03 removes: phase consumer on a line rewritten by U10.02 (Queue drawer onto its ExpandCollapse owner; replaces a removed RawUiMotion incident): val shown by remember(sheet) { derivedStateOf { phase.value() > 0f } }",
-      "exception": "U10.02-ledger-2026-11-07"
-    },
-    {
-      "rule": "RawMotionMap",
-      "path": "app/src/main/java/io/github/anastaci1a/localica/ui/QueueSurface.kt",
-      "fqn": "io.github.anastaci1a.localica.ui.onPreFling",
-      "codeSha256": "d8a4dd52e53a16fdf155068afb047b5f8a9342811a7c233fe4272e0dfeeb51c6",
-      "removedBy": "U10.03",
-      "reason": "U10.03 removes: phase consumer on a line rewritten by U10.02 (Queue drawer onto its ExpandCollapse owner; replaces a removed RawUiMotion incident): if (shown) Box(Modifier.fillMaxSize().graphicsLayer { alpha = phase.value().coerceIn(0f, 1f) * 0.2f }.clickable { onSettled(false) }) {",
-      "exception": "U10.02-ledger-2026-11-07"
-    },
-    {
-      "rule": "RawMotionMap",
-      "path": "app/src/main/java/io/github/anastaci1a/localica/ui/QueueSurface.kt",
-      "fqn": "io.github.anastaci1a.localica.ui.shelfY",
-      "codeSha256": "5236f7d9811c50e5ed80f44752448333d689103aa1d056f4dcfa53c1a3a427e3",
-      "removedBy": "U10.03",
-      "reason": "U10.03 removes: phase consumer on a line rewritten by U10.02 (Queue drawer onto its ExpandCollapse owner; replaces a removed RawUiMotion incident): (if (phase.value() > 0f) ControlScrollDirection.Down else 0) or",
-      "exception": "U10.02-ledger-2026-11-07"
-    },
-    {
-      "rule": "RawMotionMap",
-      "path": "app/src/main/java/io/github/anastaci1a/localica/ui/QueueSurface.kt",
-      "fqn": "io.github.anastaci1a.localica.ui.shelfY",
-      "codeSha256": "f3ec749d1cea00a529102fbbf7f75982c57ecb4378707cf43c7faafad7023ed0",
-      "removedBy": "U10.03",
-      "reason": "U10.03 removes: phase consumer on a line rewritten by U10.02 (Queue drawer onto its ExpandCollapse owner; replaces a removed RawUiMotion incident): (if (phase.value() < 1f) ControlScrollDirection.Up else 0)",
-      "exception": "U10.02-ledger-2026-11-07"
-    },
-    {
-      "rule": "RawMotionMap",
-      "path": "app/src/main/java/io/github/anastaci1a/localica/ui/QueueSurface.kt",
-      "fqn": "io.github.anastaci1a.localica.ui.shelfY",
-      "codeSha256": "dfc8cbce370dd60e94f69fa69f3c9e7693c123443aaef1903d68b1d8d2a84bba",
-      "removedBy": "U10.03",
-      "reason": "U10.03 removes: phase consumer on a line rewritten by U10.02 (Queue drawer onto its ExpandCollapse owner; replaces a removed RawUiMotion incident): kotlin.math.round((top + (status - top) * phase.value().coerceIn(0f, 1f) +",
-      "exception": "U10.02-ledger-2026-11-07"
-    },
-    {
-      "rule": "RawPresentationTransform",
-      "path": "app/src/main/java/io/github/anastaci1a/localica/ui/QueueSurface.kt",
-      "fqn": "io.github.anastaci1a.localica.ui.onPreFling",
-      "codeSha256": "eb7f4a70e3e06c1fd4cec78b25663222674c6656c3dab5f9617c1bee8dc9bed3",
-      "removedBy": "U10.03",
-      "reason": "U10.03 removes: phase consumer on a line rewritten by U10.02 (Queue drawer onto its ExpandCollapse owner; replaces a removed RawUiMotion incident): if (shown) Box(Modifier.fillMaxSize().graphicsLayer { alpha = phase.value().coerceIn(0f, 1f) * 0.2f }.clickable { onSettled(false) }) {",
-      "exception": "U10.02-ledger-2026-11-07"
-    },
-    {
-      "rule": "RawPresentationTransform",
-      "path": "app/src/main/java/io/github/anastaci1a/localica/ui/QueueSurface.kt",
-      "fqn": "io.github.anastaci1a.localica.ui.onPreFling",
-      "codeSha256": "b7ed498a13168bb3d4daff74bc19e30016406b45804aa4bf1b6f1ba579cd023e",
-      "removedBy": "U10.03",
-      "reason": "U10.03 removes: phase consumer on a line rewritten by U10.02 (Queue drawer onto its ExpandCollapse owner; replaces a removed RawUiMotion incident): if (shown) Box(Modifier.fillMaxSize().graphicsLayer { alpha = phase.value().coerceIn(0f, 1f) * 0.2f }.clickable { onSettled(false) }) {",
-      "exception": "U10.02-ledger-2026-11-07"
     }
   ]
 }

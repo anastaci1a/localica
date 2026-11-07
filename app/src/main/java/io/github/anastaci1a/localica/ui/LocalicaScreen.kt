@@ -169,10 +169,13 @@ fun LocalicaScreen(
     val queueSheet = rememberSheetState("queue", queueOpen, queueBasis(density, window, navigationInset, WindowInsets.statusBars.asPaddingValues().calculateTopPadding()))
     LaunchedEffect(queueOpen) { if (!queueOpen) queuePopupHome.awaitHandoff(); if (queueOpen) queueSheet.expand() else queueSheet.collapse() }
     LaunchedEffect(expanded) { if (expanded) browsePopupHome.awaitHandoff() else playerPopupHome.awaitHandoff(); if (expanded) sheet.expand() else sheet.collapse() }
-    val playerVisible by remember { derivedStateOf { phase.value() > 0f } }
-    val playerCoversBrowse by remember { derivedStateOf { phase.value() >= .5f } }
-    val playerFullyOpen by remember { derivedStateOf { phase.value() >= .99f } }
-    val queueVisible by remember { derivedStateOf { queueSheet.expansion.phase.value() > 0f } }
+    // Browse yields semantics to an opening or open player and stops drawing only beneath a player resting open.
+    val playerRest by rememberExpansionRest(sheet.expansion)
+    val playerVisible = playerRest != ExpansionRest.Closed
+    val playerCoversBrowse = expanded && playerVisible
+    val playerFullyOpen = playerRest == ExpansionRest.Open
+    val queueRest by rememberExpansionRest(queueSheet.expansion)
+    val queueVisible = queueRest != ExpansionRest.Closed
     var queueOpeningRequest by rememberSaveable { mutableLongStateOf(0) }
     // QueueSurface removes its body at the closed endpoint. Keep intent/viewport
     // outside that conditional lifetime; a later explicit epoch owns repositioning.
@@ -310,7 +313,7 @@ fun LocalicaScreen(
         Column(Modifier.fillMaxSize()
             // The opaque full player covers this entire scene. Keep its composition,
             // scroll state and cached recording, but do not submit hidden pixels.
-            .drawWithContent { if (!hasPlayer || phase.value() < 1f) drawContent() }
+            .drawWithContent { if (!hasPlayer || !playerFullyOpen) drawContent() }
             .recordFrostedBackdrop(browseBackdrop).background(pageBackground)
             .then(if (hasPlayer && playerCoversBrowse) Modifier.clearAndSetSemantics {} else Modifier)) {
             TabPager(pager, tabs, Modifier.weight(1f), userScrollEnabled = !expanded) { page ->

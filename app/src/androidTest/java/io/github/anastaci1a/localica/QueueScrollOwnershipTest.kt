@@ -85,7 +85,8 @@ class QueueScrollOwnershipTest {
         compose.runOnIdle { assertEquals(0f, progress.value, .001f) }
         // The second finger must hit the drawer's still-visible shelf, not the
         // background exposed where the list used to be before collapse.
-        val shelf = compose.onNodeWithContentDescription("Open queue").fetchSemanticsNode().boundsInRoot.center
+        // The held contact keeps the drawer present (U10.03), so its shelf may read either label.
+        val shelf = compose.onNode(hasContentDescription("Open queue") or hasContentDescription("Close queue")).fetchSemanticsNode().boundsInRoot.center
         root.performTouchInput {
             if (secondPointer) {
                 down(1, shelf)
