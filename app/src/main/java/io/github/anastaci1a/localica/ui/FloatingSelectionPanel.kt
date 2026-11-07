@@ -11,6 +11,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.constrainHeight
+import io.github.anastaci1a.localica.ui.engine.RetainedFace
 import kotlin.math.roundToInt
 
 /** The same visible occupancy positions the panel and every control above bottom chrome. */
@@ -64,7 +65,7 @@ internal fun FloatingSelectionPanel(state: FloatingSelectionPanelState, modifier
         }
     }.graphicsLayer { alpha = state.progress }) {
         CompositionLocalProvider(LocalSurfaceShadows provides null, LocalBottomShadows provides null) {
-            RetainedGlassFace(state.visible, { 1f }, retainShadow = true, retainSize = true, content = content)
+            RetainedFace(state.visible, { 1f }, inset = glassShadowInset(), retainSize = true, content = content)
         }
     }
 }

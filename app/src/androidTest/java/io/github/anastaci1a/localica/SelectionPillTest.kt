@@ -53,7 +53,7 @@ class SelectionPillTest {
 
     private fun content(width: Dp = 380.dp, fontScale: Float = 1f, reduced: Boolean = false) {
         val tracks = (0..3).map { Track("t$it", "Song $it", fileName = "$it.mp3", relativePath = "$it.mp3") }
-        compose.setContent { LocalicaTheme {
+        compose.setContent { EngineTheme(reduced = reduced) {
             CompositionLocalProvider(LocalDensity provides Density(LocalDensity.current.density, fontScale),
                 LocalReducedMotion provides reduced) {
             backdrop = rememberFrostedBackdrop(Unit, dark = false)

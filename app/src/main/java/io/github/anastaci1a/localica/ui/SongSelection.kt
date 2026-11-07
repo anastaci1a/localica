@@ -24,6 +24,8 @@ import androidx.compose.foundation.lazy.LazyListState
 import io.github.anastaci1a.localica.library.*
 import io.github.anastaci1a.localica.playlist.*
 import io.github.anastaci1a.localica.queue.*
+import io.github.anastaci1a.localica.ui.components.*
+import io.github.anastaci1a.localica.ui.spec.*
 
 /** Passive in-host drawing witness; it neither invalidates drawing nor captures pixels. */
 internal data class PlaylistSelectionDrawSource(val scene: SelectionScene, val state: LazyListState,
@@ -31,6 +33,8 @@ internal data class PlaylistSelectionDrawSource(val scene: SelectionScene, val s
     val rows: Map<String, LayoutCoordinates>, val chosen: List<String>, val view: android.view.View,
     val hostDraws: () -> Int)
 internal val LocalPlaylistSelectionDrawObserver = staticCompositionLocalOf<((PlaylistSelectionDrawSource) -> Unit)?> { null }
+private const val SelectionCount = "count"
+private const val SelectionAction = "action"
 private class PlaylistSelectionProbe {
     var scene: SelectionScene? = null
     var viewport: LayoutCoordinates? = null
@@ -60,9 +64,9 @@ internal fun SelectionActions(rows: List<SongRow>, selected: Set<String>, onSele
     val moreAnchor = rememberGlassAnchor()
     fun act(action: SongTap) { menu = false
         queues?.act(chosen.map { it.track }, action, chosen.map { it.sourcePlaylistId }) { if (it) onSelection(emptySet()) } }
-    @Composable fun FrequentActions() {
+    @Composable fun MorphScope.FrequentActions() {
         ActionIcon(AppIcon.TabQueues, "Play next", enabled = chosen.isNotEmpty() && queues != null,
-            glass = false) { act(SongTap.PlayNext) }
+            glass = false, glyph = { Shared(SelectionAction, it) }) { act(SongTap.PlayNext) }
         ActionIcon(AppIcon.ActionPlaylistAdd, "Add to playlist", enabled = chosen.isNotEmpty(),
             glass = false) { adding = chosen.map { it.track } }
         ActionIcon(AppIcon.ActionEllipsis, "More selection actions", anchor = moreAnchor,
@@ -76,14 +80,19 @@ internal fun SelectionActions(rows: List<SongRow>, selected: Set<String>, onSele
     }
     Box(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp), contentAlignment = Alignment.Center) {
         LiquidGlassSurface(Modifier.testTag("selection-pill"), pressFeedback = false, cornerRadius = 28.dp) {
-            GlassMorphContent(expanded = !minimized, compact = {
+            // D09/B4: the count and the compact face's action glyph (Play next) are one instance each, easing into the expanded row.
+            MorphFaces(!minimized, { key ->
+                if (key == SelectionCount) MorphText("${chosen.size} selected", MaterialTheme.typography.labelLarge, MaterialTheme.typography.titleMedium) else {
+                    Icon(appIconPainter(AppIcon.TabQueues), null, Modifier.size(20.dp))
+                }
+            }, compact = {
                 Row(Modifier.heightIn(min = CompactControlSize)
                     .then(if (onExpand != null) Modifier.ownButtonDrag().clickable(role = Role.Button,
                         onClickLabel = "Expand selection", onClick = controlActivation(true, onExpand)) else Modifier)
                     .padding(horizontal = 18.dp).testTag("selection-minimized"),
                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Icon(appIconPainter(AppIcon.TabQueues), null, Modifier.size(20.dp))
-                    Text("${chosen.size} selected", style = MaterialTheme.typography.labelLarge)
+                    Shared(SelectionAction)
+                    Shared(SelectionCount)
                 }
             }) {
                 BoxWithConstraints {
@@ -92,8 +101,7 @@ internal fun SelectionActions(rows: List<SongRow>, selected: Set<String>, onSele
                         Row(Modifier.fillMaxWidth().heightIn(min = CompactControlSize).padding(horizontal = 4.dp),
                             verticalAlignment = Alignment.CenterVertically) {
                             ActionIcon(AppIcon.ActionClose, "Close selection", glass = false) { onSelection(emptySet()) }
-                            Text("${chosen.size} selected", Modifier.weight(1f).padding(horizontal = 4.dp), maxLines = 1,
-                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, style = MaterialTheme.typography.titleMedium)
+                            Shared(SelectionCount, Modifier.weight(1f).padding(horizontal = LocalUiSpec.current.spec.space.getValue(Space.Tight)))
                             if (!stacked) FrequentActions()
                             Collapse()
                         }

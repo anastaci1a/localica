@@ -1,6 +1,7 @@
 package io.github.anastaci1a.localica
 
 import androidx.activity.ComponentActivity
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.junit4.AndroidComposeTestRule
@@ -25,7 +26,13 @@ private fun queuedEffects(context: CoroutineContext): CoroutineContext =
 @OptIn(ExperimentalTestApi::class)
 internal fun localicaComposeRule(
     effectContext: CoroutineContext = EmptyCoroutineContext
-): ComposeContentTestRule = createComposeRule(effectContext = queuedEffects(effectContext))
+): ComposeContentTestRule = EngineRecordRule(createComposeRule(effectContext = queuedEffects(effectContext)))
+
+/** U04.02a: every fixture composes under the U11.00 root record, as LocalicaScreen does, so shared Components (MorphFaces, presence)
+ * can own Engine motion outside the screen. A fixture's own record (or LocalicaScreen's) still overrides it. */
+private class EngineRecordRule(private val rule: ComposeContentTestRule) : ComposeContentTestRule by rule {
+    override fun setContent(composable: @Composable () -> Unit) = rule.setContent { EngineRecord(content = composable) }
+}
 
 internal inline fun <reified A : ComponentActivity> localicaAndroidComposeRule(
     effectContext: CoroutineContext = EmptyCoroutineContext

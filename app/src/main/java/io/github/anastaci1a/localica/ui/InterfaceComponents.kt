@@ -8,6 +8,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.R
 import io.github.anastaci1a.localica.navigation.MainTab
@@ -16,6 +18,7 @@ import io.github.anastaci1a.localica.navigation.MainTab
 internal fun ActionIcon(resource: AppIcon, label: String, enabled: Boolean = true, anchor: GlassAnchor? = null,
     glass: Boolean = true, quiet: Boolean = false, iconSize: androidx.compose.ui.unit.Dp = 24.dp,
     onLongClickLabel: String? = null, onLongClick: (() -> Unit)? = null, quietInputEnabled: Boolean = true,
+    glyph: (@Composable (Modifier) -> Unit)? = null,
     onClick: () -> Unit) {
     val source = LocalFrostedBackdrop.current
     SideEffect { anchor?.quiet = quiet || !glass; if (!glass) anchor?.cornerRadius = null; anchor?.source = source; anchor?.face = { Icon(appIconPainter(resource), null, Modifier.size(iconSize)) } }
@@ -41,7 +44,9 @@ internal fun ActionIcon(resource: AppIcon, label: String, enabled: Boolean = tru
         ActionIconButton(onClick, Modifier.fillMaxSize(), enabled = enabled) { Icon(appIconPainter(resource), label, Modifier.size(iconSize)) }
     } else ActionIconButton(onClick, modifier, enabled = enabled) {
         anchor?.captureInk()
-        Icon(appIconPainter(resource), label, Modifier.size(iconSize))
+        // U04.02a: a plain button may take its glyph from a shared morph element (D09), labelled here as its own icon was.
+        if (glyph != null) glyph(Modifier.size(iconSize).semantics { contentDescription = label })
+        else Icon(appIconPainter(resource), label, Modifier.size(iconSize))
     }
 }
 internal fun MainTab.icon(): AppIcon = when (this) {

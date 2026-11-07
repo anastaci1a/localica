@@ -68,7 +68,7 @@ class ActionStripDrawingTest {
         var direction by mutableStateOf(LayoutDirection.Ltr)
         var drawnReplay: Boolean? = null
         lateinit var scroll: androidx.compose.foundation.ScrollState
-        compose.setContent { LocalicaTheme {
+        compose.setContent { EngineTheme(reduced = reduced) {
             CompositionLocalProvider(LocalLayoutDirection provides direction, LocalReducedMotion provides reduced) {
                 val state = rememberScrollState()
                 SideEffect { scroll = state }
