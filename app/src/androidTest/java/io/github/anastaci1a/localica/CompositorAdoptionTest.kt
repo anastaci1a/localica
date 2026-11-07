@@ -67,7 +67,8 @@ class CompositorAdoptionTest {
                 }
                 Box(Modifier.size(140.dp).background(Color.White).testTag("reference-field").drawWithContent {
                     drawContent()
-                    val body = RoundRect(35.dp.toPx(), 45.dp.toPx(), 95.dp.toPx(), 80.dp.toPx(), CornerRadius(radius))
+                    val left = 35.dp.roundToPx().toFloat(); val top = 45.dp.roundToPx().toFloat()
+                    val body = RoundRect(left, top, left + 60.dp.roundToPx(), top + 35.dp.roundToPx(), CornerRadius(radius))
                     with(cache) { draw(listOf(body to opacity), 1f, 1f) }
                 })
             }
