@@ -184,6 +184,13 @@ class PersistentShapeTest {
     }
     private fun corners(b: RoundRect)=floatArrayOf(b.left,b.top,b.right,b.bottom,b.topLeftCornerRadius.x,b.topLeftCornerRadius.y,b.topRightCornerRadius.x,b.topRightCornerRadius.y,b.bottomRightCornerRadius.x,b.bottomRightCornerRadius.y,b.bottomLeftCornerRadius.x,b.bottomLeftCornerRadius.y)
 
+    @Test fun framePixelRectRoundsItsOneFloatRectangle() = EngineHarness(spec=geometry).use { h ->
+        // D16: one float rectangle → four rounded edges; whole-pixel bounds map exactly with no layer correction.
+        val shape=PersistentShape(h.clock,ShapeTarget(listOf(pill(12.25f,7.5f,100.5f,40f),pill(140f,7.5f,40f,40f)),JoinPolicy.Union),"pixels")
+        assertEquals(motionPixelRect(Rect(12.25f,7.5f,180f,47.5f)),shape.outline().pixelRect())
+        assertEquals(MotionPixelRect(0,0,40,20,0f,0f,1f,1f),PersistentShape(h.clock,ShapeTarget(listOf(pill(0f,0f,40f,20f)),JoinPolicy.Union),"whole").outline().pixelRect())
+    }
+
     @Test fun consecutiveContoursMoveNoFurtherThanTheirChannels() = EngineHarness(spec=geometry).use { h ->
         val r=Random(600302); val shape=PersistentShape(h.clock,ShapeTarget(listOf(pill(0f,0f,120f,48f)),JoinPolicy.Union),"hausdorff"); shape.outline()
         repeat(300) { sequence ->

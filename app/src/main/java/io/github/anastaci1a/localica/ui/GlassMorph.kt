@@ -51,6 +51,8 @@ import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlin.math.roundToInt
 import io.github.anastaci1a.localica.ui.engine.GlassOriginWell
+import io.github.anastaci1a.localica.ui.engine.MotionPixelRect
+import io.github.anastaci1a.localica.ui.engine.motionPixelRect
 import io.github.anastaci1a.localica.ui.engine.GlassShadowExclusion
 import io.github.anastaci1a.localica.ui.engine.GlassShadowReceiver
 import io.github.anastaci1a.localica.ui.engine.GlassShadowReceiverField
@@ -1022,8 +1024,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                             else if (!detached && geometry < 0f) startHeight * (1f - geometry * 2f)
                             else mix(if (detached) foreground.height * .96f else startHeight,
                                 expandedHeight.value.takeIf { it >= 0f } ?: foreground.height.toFloat())
-                        val pixels = glassMorphPixelBounds(Rect(Offset(left, top), Size(rawWidth, rawHeight)),
-                            availableWidth, availableHeight)
+                        val pixels = glassMorphPixelBounds(Rect(Offset(left, top), Size(rawWidth, rawHeight)))
                         panelBounds[0] = pixels
                         val width = pixels.width
                         val height = pixels.height
@@ -1052,3 +1053,8 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
     } } }
 }
 
+
+/** One rectangle owns the popup's position and clip; never round position and size separately.
+ * D23: a drawable extent keeps at least one pixel; the window clips a band overshoot. */
+internal fun glassMorphPixelBounds(rect: Rect): MotionPixelRect =
+    motionPixelRect(Rect(rect.left, rect.top, rect.left + rect.width.coerceAtLeast(1f), rect.top + rect.height.coerceAtLeast(1f)))

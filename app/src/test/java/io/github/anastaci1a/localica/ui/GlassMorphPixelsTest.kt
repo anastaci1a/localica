@@ -1,6 +1,7 @@
 package io.github.anastaci1a.localica.ui
 
 import androidx.compose.ui.geometry.Rect
+import io.github.anastaci1a.localica.ui.engine.*
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -9,7 +10,7 @@ class GlassMorphPixelsTest {
         val p = glassMorphGeometryProgress(sample / 4000f, quiet)
         fun mix(a: Float, b: Float) = a + (b - a) * p
         glassMorphPixelBounds(Rect(mix(from.left, to.left), mix(from.top, to.top),
-            mix(from.right, to.right), mix(from.bottom, to.bottom)), 1440, 3120)
+            mix(from.right, to.right), mix(from.bottom, to.bottom)))
     }
 
     private fun monotone(values: List<Int>) {
@@ -47,11 +48,12 @@ class GlassMorphPixelsTest {
         assertEquals(367, middle.width)
     }
 
-    @Test fun viewportLimitsConstrainExtentsWithoutRoundingTheOriginSeparately() {
-        val pixels = glassMorphPixelBounds(Rect(12.5f, 24.5f, 1800f, 4000f), 720, 1280)
-        assertEquals(13, pixels.left); assertEquals(733, pixels.right)
-        assertEquals(25, pixels.top); assertEquals(1305, pixels.bottom)
-        val minimum = glassMorphPixelBounds(Rect(12.5f, 24.5f, 12.6f, 24.6f), 720, 1280)
+    @Test fun bandOvershootKeepsItsExtentAndTinyExtentsKeepOneDrawablePixel() {
+        // D23/D06(d): a 1.03× band overshoot past a 720 × 1280 viewport is no longer clamped (the window clips).
+        val pixels = glassMorphPixelBounds(Rect(12.5f, 24.5f, 12.5f + 720f * 1.03f, 24.5f + 1280f * 1.03f))
+        assertEquals(motionPixelRect(Rect(12.5f, 24.5f, 12.5f + 720f * 1.03f, 24.5f + 1280f * 1.03f)), pixels)
+        assertTrue(pixels.width > 720 && pixels.height > 1280)
+        val minimum = glassMorphPixelBounds(Rect(12.5f, 24.5f, 12.6f, 24.6f))
         assertEquals(1, minimum.width); assertEquals(1, minimum.height)
     }
 }
