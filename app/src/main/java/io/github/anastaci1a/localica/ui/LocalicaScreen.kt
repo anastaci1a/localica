@@ -162,23 +162,12 @@ fun LocalicaScreen(
     val density = androidx.compose.ui.platform.LocalDensity.current
     val window = androidx.compose.ui.platform.LocalWindowInfo.current.containerSize
     val navigationInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-    val view = androidx.compose.ui.platform.LocalView.current
-    var refreshHz by remember(view) { mutableFloatStateOf(peakRefreshHz(view)) }
-    DisposableEffect(view) {
-        val displays = view.context.getSystemService(android.hardware.display.DisplayManager::class.java)
-        val listener = object : android.hardware.display.DisplayManager.DisplayListener {
-            override fun onDisplayAdded(id: Int) {}
-            override fun onDisplayRemoved(id: Int) {}
-            override fun onDisplayChanged(id: Int) { refreshHz = peakRefreshHz(view) } }
-        displays.registerDisplayListener(listener, null); onDispose { displays.unregisterDisplayListener(listener) }
-    }
-    fun playerBasis(chrome: androidx.compose.ui.unit.Dp) = with(density) { listOf(0f, 1f).map { p -> playerSurfaceFrame(window.width.toDp(), window.height.toDp(), navigationInset, chrome, p, DeviceCorners())
-        .let { androidx.compose.ui.geometry.Rect(it.x.toPx(), it.y.toPx(), (it.x + it.width).toPx(), (it.y + it.height).toPx()) } } }.let { ExpansionBasis(it[0], it[1], density.density) }
-    val referenceTravel = playerBasis(StockUiSpec.clearance.getValue(Clearance.BottomChrome)).edgeTravelPx
+    val refreshHz = rememberPeakRefreshHz()
+    val referenceTravel = playerBasis(density, window, navigationInset, StockUiSpec.clearance.getValue(Clearance.BottomChrome)).edgeTravelPx
     val resolvedSpec = remember(settings.glass, settings.reducedMotion, settings.fasterMotion, referenceTravel, window, density) {
         uiSpec(settings, ExpansionGeometryDomain(referenceTravel, maxOf(1f, kotlin.math.hypot(window.width.toFloat(), window.height.toFloat())), 1f / 24), density) }
     CompositionLocalProvider(LocalEngineContext provides remember(refreshHz, referenceTravel, resolvedSpec) { EngineContext(1f / refreshHz, referenceTravel, resolvedSpec.spec.access) }, LocalUiSpec provides resolvedSpec) {
-    val sheet = rememberSheetState("player", expanded, playerBasis(bottomChrome))
+    val sheet = rememberSheetState("player", expanded, playerBasis(density, window, navigationInset, bottomChrome))
     val phase = sheet.expansion.phase
     LaunchedEffect(expanded) { if (expanded) browsePopupHome.awaitHandoff() else playerPopupHome.awaitHandoff(); if (expanded) sheet.expand() else sheet.collapse() }
     val playerVisible by remember { derivedStateOf { phase.value() > 0f } }
@@ -554,4 +543,22 @@ internal fun LibraryNotice(state: LibraryUiState) {
 
 
 
-private fun peakRefreshHz(view: android.view.View): Float = (view.display?.supportedModes?.maxOfOrNull { it.refreshRate } ?: 60f).coerceAtLeast(1f)
+/** U11.00: peak display refresh, re-published when the display changes (the engine's two-frame floor). */
+@Composable private fun rememberPeakRefreshHz(): Float {
+    val view = androidx.compose.ui.platform.LocalView.current
+    fun peak() = (view.display?.supportedModes?.maxOfOrNull { it.refreshRate } ?: 60f).coerceAtLeast(1f)
+    var refreshHz by remember(view) { mutableFloatStateOf(peak()) }
+    DisposableEffect(view) {
+        val displays = view.context.getSystemService(android.hardware.display.DisplayManager::class.java)
+        val listener = object : android.hardware.display.DisplayManager.DisplayListener {
+            override fun onDisplayAdded(id: Int) {}
+            override fun onDisplayRemoved(id: Int) {}
+            override fun onDisplayChanged(id: Int) { refreshHz = peak() } }
+        displays.registerDisplayListener(listener, null); onDispose { displays.unregisterDisplayListener(listener) }
+    }
+    return refreshHz
+}
+/** U11.00: the player's unclipped endpoint frames from the same solver PlayerSurface lays out with. */
+private fun playerBasis(density: androidx.compose.ui.unit.Density, window: androidx.compose.ui.unit.IntSize, navigationInset: androidx.compose.ui.unit.Dp,
+    chrome: androidx.compose.ui.unit.Dp) = with(density) { listOf(0f, 1f).map { p -> playerSurfaceFrame(window.width.toDp(), window.height.toDp(), navigationInset, chrome, p, DeviceCorners())
+        .let { androidx.compose.ui.geometry.Rect(it.x.toPx(), it.y.toPx(), (it.x + it.width).toPx(), (it.y + it.height).toPx()) } } }.let { ExpansionBasis(it[0], it[1], density.density) }
