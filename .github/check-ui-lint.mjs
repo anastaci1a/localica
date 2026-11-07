@@ -68,15 +68,28 @@ export function manifest(text, metadata, known) {
     }
     return entries;
 }
+/** Recorded one-time ledger growth (U14 note). Lead decision 2026-11-07 3:15 AM: U10.02 may add at most 18 rewritten
+ * phase-consumer transfers tagged U10.03, in one commit; the tag can never admit growth again. */
+export const transferExceptions = {'U10.02-ledger-2026-11-07': {removedBy: 'U10.03', limit: 18}};
+const transferId = e => JSON.stringify([e.rule,e.path,e.fqn,e.codeSha256]);
 /** Lead-approved ownership transfers (2026-11-07): itemized incidents a named future step removes; shrink-only along history. */
 export function transferIds(entries, known, completed) {
     requireThat(Array.isArray(entries), 'Transfer entries');
     const ids = entries.map(e => {
-        requireThat(Object.keys(e).sort().join() === 'codeSha256,fqn,path,reason,removedBy,rule' && rules.includes(e.rule) && e.reason &&
+        const keys = Object.keys(e).filter(k => k !== 'exception').sort().join();
+        requireThat(keys === 'codeSha256,fqn,path,reason,removedBy,rule' && rules.includes(e.rule) && e.reason &&
             known.includes(e.removedBy) && !completed.includes(e.removedBy), 'Invalid or expired transfer');
-        return JSON.stringify([e.rule,e.path,e.fqn,e.codeSha256]);
+        requireThat(!('exception' in e) || transferExceptions[e.exception]?.removedBy === e.removedBy, 'Unrecorded transfer exception');
+        return transferId(e);
     });
     requireThat(new Set(ids).size === ids.length, 'Duplicate transfer'); return ids;
+}
+/** Newer entries must be a subset of older ones, except a recorded exception's entries, admitted once up to its limit. */
+export function transferGrowth(older, newer) {
+    const prior = new Set(older.map(transferId)); const grown = newer.filter(e => !prior.has(transferId(e)));
+    requireThat(grown.every(e => e.exception), 'Transfer entries can only shrink');
+    for (const [tag, x] of Object.entries(transferExceptions)) { const added = grown.filter(e => e.exception === tag);
+        requireThat(!added.length || added.length <= x.limit && older.every(e => e.exception !== tag), 'Transfer exception reused or over its limit'); }
 }
 // Whitespace-normalized text, marker column relative to the trimmed text, and ordinal among identical source lines.
 export const codeFingerprint = (code, marker, ordinal) =>
@@ -178,11 +191,11 @@ export function run(argv) {
     if (exists(head,transfersPath)) {
         const load = ref => { if (!exists(ref,transfersPath)) return null; const t = strictJson(blob(ref,transfersPath));
             requireThat(Object.keys(t).sort().join() === 'approval,entries,schemaVersion' && t.schemaVersion === 1 && t.approval, 'Transfer manifest');
-            return transferIds(t.entries, known.knownSteps, ref === head ? meta.steps : []); };
-        transfers = load(head);
+            transferIds(t.entries, known.knownSteps, ref === head ? meta.steps : []); return t.entries; };
+        const current = load(head); transfers = transferIds(current, known.knownSteps, meta.steps);
         const history = git('log','--format=%H',head,'--',transfersPath).trim().split('\n').filter(Boolean).map(load);
-        for (let i = 0; i + 1 < history.length; i++) requireThat((history[i] ?? []).every(id => (history[i+1] ?? []).includes(id)), 'Transfer entries can only shrink');
-        if (base) { const prior = load(base); if (prior) requireThat(transfers.every(id => prior.includes(id)), 'Transfer entries can only shrink'); }
+        for (let i = 0; i + 1 < history.length; i++) transferGrowth(history[i+1] ?? [], history[i] ?? []);
+        if (base) { const prior = load(base); if (prior) transferGrowth(prior, current); }
     }
     const result = compare(before,after,stage,transfers);
     const report = {schemaVersion:1,command,baseSha:base,headSha:head,registrySha256:registry,

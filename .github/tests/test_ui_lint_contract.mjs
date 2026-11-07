@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {xml,manifest,compare,rules,transferIds,codeFingerprint} from '../check-ui-lint.mjs';
+import {xml,manifest,compare,rules,transferIds,transferGrowth,codeFingerprint} from '../check-ui-lint.mjs';
 const incident = {rule:rules[0],path:'app/src/main/A.kt',codeSha256:'c',identity:'old'};
 test('new incident and equal-count substitution fail', () => {
     assert.equal(compare([incident],[incident,{...incident,codeSha256:'d',identity:'new'}],0).accepted,false);
@@ -103,4 +103,18 @@ test('re-anchoring never absorbs an edited line, even when a function moved abov
         const result = compare(before, [at('p.helper', kept, 12), at('p.helper', code, marker, ordinal)], 0);
         assert.equal(result.accepted, false, code); assert.equal(result.added.length, 1); assert.equal(result.reanchored, 1);
     }
+});
+test('the ledger grows only through the recorded one-time exception, within its limit', () => {
+    const entry = (n, extra = {}) => ({rule:rules[6],path:'app/src/main/A.kt',fqn:'p.f',codeSha256:'x'+n,removedBy:'U10.03',reason:'U10.03 removes',...extra});
+    const tag = {exception:'U10.02-ledger-2026-11-07'};
+    const base = [entry(0), entry(1)];
+    transferGrowth(base, [entry(0)]);
+    assert.throws(() => transferGrowth(base, [...base, entry(2)]), /only shrink/);
+    const grown = [...base, ...Array.from({length:18}, (_, i) => entry(10 + i, tag))];
+    transferGrowth(base, grown); transferIds(grown, ['U10.03'], []);
+    assert.throws(() => transferGrowth(base, [...grown, entry(40, tag)]), /over its limit/);
+    assert.throws(() => transferGrowth(grown, [...grown, entry(41, tag)]), /reused/);
+    transferGrowth(grown, grown.slice(1));
+    assert.throws(() => transferIds([entry(3, {exception:'other'})], ['U10.03'], []), /Unrecorded/);
+    assert.throws(() => transferIds([entry(3, {...tag, removedBy:'U11.01'})], ['U10.03','U11.01'], []), /Unrecorded/);
 });
