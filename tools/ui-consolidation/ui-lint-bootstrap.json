@@ -1,8 +1,8 @@
 {
-  "sourceSha": "6ccfeb33f597bea63c637cab5ec2d59d174bd999",
-  "registryArtifactSha256": "d24bf39574c77de71aafeab1aaa3e1fc8a76f50de60132af5c2d3553b62e810c",
-  "baselineSha256": "033a3b5fcf2fb6598ebc6b70b62847bf6a7ddf10c4a6a81f84ea4d010e703306",
-  "integratedSha": "dba7f1203be022b60060a8c602224f862630405e",
+  "sourceSha": "7a158c0f693edf67d7fbb078cf505464a7aaee6f",
+  "registryArtifactSha256": "d5751cce8c833c7f6405884e3add4d84ea2e24530a2dd380af10960d8eac7090",
+  "baselineSha256": "ea77761c22ba03b2924b60c4640f9a4b3bb75382ddb7311e0d5bc5fb64a40450",
+  "integratedSha": "ff32ec6d674f554fd52cedf96f2bd289cdebac3b",
   "approvedBy": "lead",
-  "approval": "Operator-approved Stage 0 initial lint-generated inherited debt; lead assignment 2026-11-06T14:56:55Z; no additional escape approved."
+  "approval": "Lead approval 2026-11-07T21:16:31Z (2): control-only inherited-main lint re-pin to v0.33.8 ff32ec6d; measurement-only branch that never merges. Baseline 1803 to 1860 (+57) comes from main integration, not new player code. No escapes. The stage2/600 baseline stays 1812 and shrink-only."
 }
