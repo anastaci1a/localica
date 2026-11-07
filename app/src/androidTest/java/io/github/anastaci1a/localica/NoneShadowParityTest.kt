@@ -31,7 +31,8 @@ class NoneShadowParityTest {
     @get:Rule val compose = localicaComposeRule()
     private val appearance = GlassAppearance(shadowStrength = .6f, shadowSpread = .7f, liftShadowStrength = 1.5f)
 
-    private fun outsideBodies(a: PixelMap, b: PixelMap, bodies: List<Rect>, label: String) {
+    /** [tolerance] is in 8-bit levels: 0 demands identical pixels. */
+    private fun outsideBodies(a: PixelMap, b: PixelMap, bodies: List<Rect>, label: String, tolerance: Int = 0) {
         assertEquals(a.width, b.width); assertEquals(a.height, b.height)
         var differing = 0; var shadowed = 0; var largest = 0f
         val box = android.graphics.Rect()
@@ -40,7 +41,7 @@ class NoneShadowParityTest {
             val p = a[x, y]; val q = b[x, y]
             if (p.red < .97f) shadowed++
             val delta = maxOf(kotlin.math.abs(p.red - q.red), kotlin.math.abs(p.green - q.green), kotlin.math.abs(p.blue - q.blue))
-            if (delta > .5f / 255) { differing++; largest = maxOf(largest, delta); box.union(x, y) }
+            if (delta > (tolerance + .5f) / 255) { differing++; largest = maxOf(largest, delta); box.union(x, y) }
         }
         assertTrue("$label: the fixture must actually draw a shadow band ($shadowed px)", shadowed > 200)
         assertEquals("$label: shadow pixels differ between Normal and None (largest ${largest * 255}/255 within $box)", 0, differing)
@@ -75,7 +76,10 @@ class NoneShadowParityTest {
             }
         } finally { compose.mainClock.autoAdvance = true }
         compose.waitForIdle(); Thread.sleep(300); compose.waitForIdle()
-        outsideBodies(settledNormal, compose.onNodeWithTag("stage").captureToImage().toPixelMap(), bodies, "settled None")
+        // Between two settled captures the retained shadow raster replaces the live rings; their
+        // rounding differs by up to 2 levels whatever the renderer (identical on API 26, where both
+        // requests resolve to None). Every frame of the switch itself is compared exactly above.
+        outsideBodies(settledNormal, compose.onNodeWithTag("stage").captureToImage().toPixelMap(), bodies, "settled None", 2)
     }
 
     @Test fun liftAndGlassShadowConfigurationIsIndependentOfTheRenderer() {
