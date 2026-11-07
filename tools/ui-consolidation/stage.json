@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "stage": 3,
-  "integratedSha": "dba7f1203be022b60060a8c602224f862630405e",
+  "integratedSha": "828425032d3046d23f7b020c7a649508da4446bd",
   "release": "v0.33.5",
   "knownSteps": [
     "U01.01",
@@ -90,5 +90,5 @@
     "U13.02b",
     "U03.01a"
   ],
-  "bootstrapApproval": "Operator-approved Stage 0 initial lint-generated inherited debt; lead assignment 2026-11-06T14:56:55Z; no additional escape approved."
+  "bootstrapApproval": "Lead decision 2026-11-07 2:20 AM EST (Stage 3 re-pin, U14.01a): re-bootstrap stage3/600 at integrated v0.33.5 82842503 with incident identities identical to the Stage 2 re-pin 87210129 (1837 entries, 0 added by Stage 3); no additional escape approved."
 }
