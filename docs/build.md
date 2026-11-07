@@ -54,7 +54,7 @@ Build-report artifacts include raw JVM XML under `jvm-xml/<run>/testDebugUnitTes
 
 Select the API 26 or 36 emulator explicitly with `ANDROID_SERIAL`. Match the [emulator configuration](#ci-and-signing). Physical-device review supplements automation. Installable development APK: `app/build/outputs/apk/debug/app-debug.apk`. The production release variant is unsigned. Test-only fixtures never ship in the app.
 
-Standalone test-package components cannot rely on the target app classloader: the test APK packages identical bytes from the app’s resolved Kotlin standard library. Its coordinate and SHA256 are retained in `app/build/generated/standalone-test-runtime/binding.txt`. `NavigationStandaloneRuntimeTest` checks linkage in the separate provider process. Ordinary instrumentation alone does not cover that path.
+Standalone test-package components cannot rely on the target app classloader: the test APK packages identical bytes from the appâs resolved Kotlin standard library. Its coordinate and SHA256 are retained in `app/build/generated/standalone-test-runtime/binding.txt`. `NavigationStandaloneRuntimeTest` checks linkage in the separate provider process. Ordinary instrumentation alone does not cover that path.
 
 ### Evidence tooling prerequisites
 
@@ -114,7 +114,9 @@ Full native shards and focused prototype jobs time out after 35 minutes. A timed
 
 Search IME, search-focus and contrast coverage is mandatory on API 26/36. Build/JVM/lint/signature and both preserved-data compatibility jobs also remain required. Known issues never waive failures.
 
-The `runner` input defaults to `hosted`. `runner=self-hosted` moves only the two focused emulator jobs to the owner's locked-down, single-job runner, and only for the owner's manual dispatch on a branch (#592). It is for single focused runs: `repeat` must be 1 and `repeat_methods` empty, so repeated proofs stay hosted. Build, compatibility and evidence jobs, `android.yml`, release gates and acceptance runs stay hosted. A queued self-hosted job waits for the owner's launcher; it is never rerouted.
+The `runner` input defaults to `hosted`. `runner=self-hosted` moves only the two focused emulator jobs to the owner’s locked-down single-job runner, for the owner’s manual dispatch on a branch (#592). A queued self-hosted job waits for the owner’s launcher and is never rerouted.
+
+Self-hosted is for single focused runs: `repeat` must be 1 and `repeat_methods` empty, so repeated proofs stay hosted. Build, compatibility and evidence jobs, `android.yml`, release gates and acceptance runs always stay hosted.
 
 The prototype build job compiles debug and release Kotlin concurrently in one Kotlin daemon, which inherits the Gradle heap. It therefore uses the Android static-checks sizing (`-Xmx6g`, four workers) on the 16 GB hosted runner; the 2 GB local default ran out of memory there (#636).
 
@@ -140,15 +142,15 @@ The suite selects None when available. Older sources use Modern with blur disabl
 
 Frame duration percentiles use nearest rank. Jank means duration exceeds the sampled display refresh period. Missed vsyncs are duration-based estimates. Deadline misses are reported separately on API 31+. Listener drops, overflow and incomplete native delivery remain explicit.
 
-Emulators are proxies. For pure-UI comparison, select None when available. On a physical device, open More → Settings → About and licenses. Start frame capture, repeat an action, return to stop capture, then Export diagnostics. Capture stops after two minutes or Activity destruction; a new capture replaces the previous sample.
+Emulators are proxies. For pure-UI comparison, select None when available. On a physical device, open More â Settings â About and licenses. Start frame capture, repeat an action, return to stop capture, then Export diagnostics. Capture stops after two minutes or Activity destruction; a new capture replaces the previous sample.
 
 Capture is opt-in, bounded and process-local. Export includes app/device identity, renderer settings and per-Window summaries, without music titles, paths or search text. It excludes system keyboard frames. Received Window timings do not measure presentation latency.
 
 ## Compatibility and dependencies
 
-Queue schema 7 cannot be reopened by the original schema-6 APK. Before distributing it, dispatch the exact candidate through the Android workflow with `compatibility=true`. Its API 26/36 gate installs candidate → legacy-behavior bridge → candidate with the same package/signature and increasing private version codes, without clearing data.
+Queue schema 7 cannot be reopened by the original schema-6 APK. Before distributing it, dispatch the exact candidate through the Android workflow with `compatibility=true`. Its API 26/36 gate installs candidate â legacy-behavior bridge â candidate with the same package/signature and increasing private version codes, without clearing data.
 
-The [isolated overlay](../.github/compatibility/prepare.py) retains current schema, journal and recovery safety. Only traversal behavior changes. `ShuffleApkCompatibilityTest` checks duplicate occurrences, saved order/cursor, controller reopening and statistics across `seed`, `bridge`, then `verify`. Bridge journal/recovery checks run separately. Compatibility provenance binds the archived candidate’s reviewed instrumentation runner. APK manifest checks and every invocation require that exact runner without resident-session opt-in.
+The [isolated overlay](../.github/compatibility/prepare.py) retains current schema, journal and recovery safety. Only traversal behavior changes. `ShuffleApkCompatibilityTest` checks duplicate occurrences, saved order/cursor, controller reopening and statistics across `seed`, `bridge`, then `verify`. Bridge journal/recovery checks run separately. Compatibility provenance binds the archived candidateâs reviewed instrumentation runner. APK manifest checks and every invocation require that exact runner without resident-session opt-in.
 
 Private compatibility artifacts are never distributed: use the canonical `localica-debug` APK. Ordinary migration tests do not replace this gate. Track exact-source evidence in [#295](https://github.com/anastaci1a/localica/issues/295).
 
@@ -182,7 +184,7 @@ The native job splits each API suite into eight AndroidJUnitRunner shards (`numS
 
 `device-tests-summary` downloads every shard XML. It fails unless each API's union equals the source inventory exactly once, skipped assumptions included, and every shard passed. With `risk_classes`, each shard runs its slice of those classes first, then its slice of the remainder.
 
-API 36 uses explicit `lavapipe`, 720×1280 at 280 dpi, and normal system animations: automatic software/SwiftShader caused rendering crashes. Zero-duration system transitions stalled launcher/Back/picker flows. Compose assertions control their own clock. Keep Actions pinned by commit.
+API 36 uses explicit `lavapipe`, 720Ã1280 at 280 dpi, and normal system animations: automatic software/SwiftShader caused rendering crashes. Zero-duration system transitions stalled launcher/Back/picker flows. Compose assertions control their own clock. Keep Actions pinned by commit.
 
 Before instrumentation, the bounded emulator readiness gate checks boot completion, package-manager response, unlocked launcher focus and three stable screenshots after display resizing. It preserves observations in `emulator-readiness.json` and fails after 120 seconds. System images use exact revision cache keys; AVD userdata and snapshots are not cached.
 
@@ -208,7 +210,7 @@ Device tests and compatibility run the `debug` variant. R8 keeps all of jaudiota
 
 Use any build, including the R8 `distribution` APK. After a freeze, wait at least 2 s so the watchdog records the stuck state, then recover with the Sort/View pill or Back.
 
-Open **More → Settings → About and licenses → Export diagnostics**, tap **Export** and share the text file with the developer. Export before closing the app, because the buffer lives only for the current process. Debug builds also log to `adb logcat -d -s PinchDiagnostics:* CollectionHeaderAnchor:*`.
+Open **More â Settings â About and licenses â Export diagnostics**, tap **Export** and share the text file with the developer. Export before closing the app, because the buffer lives only for the current process. Debug builds also log to `adb logcat -d -s PinchDiagnostics:* CollectionHeaderAnchor:*`.
 
 The `distribution-smoke` job installs the exact published APK on API 26 and 36, waits for the main activity, then runs 600 seeded monkey events. It fails on crashes, ANRs, class-linkage errors or a dead process, and uploads the logcat.
 
@@ -228,7 +230,7 @@ For older producers, download `device-reports-api-*` and run `.github/test-evide
 
 ### Step 3
 
-**Wait for a complete green Android run with exactly the release commit’s Git tree before tagging a commit in main.** The producer may be a same-repository integration push or manual full run. Build, all native shards, complete inventory unions, both compatibility jobs and both distribution smoke jobs must succeed. Focused runs cannot qualify.
+**Wait for a complete green Android run with exactly the release commitâs Git tree before tagging a commit in main.** The producer may be a same-repository integration push or manual full run. Build, all native shards, complete inventory unions, both compatibility jobs and both distribution smoke jobs must succeed. Focused runs cannot qualify.
 
 Main pushes reuse retained exact-tree evidence when available; otherwise they run normal verification. Release selection verifies the original run, attempt, tree, union receipts and artifact identity. APK checksum, version and signing checks remain mandatory. Missing, expired or changed inputs require a new complete run. Unfilled release placeholders block publication.
 
