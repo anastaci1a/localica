@@ -57,7 +57,7 @@ class LiftGlowDragStartTest {
                         // The Queue: light ink, its own selection host.
                         CompositionLocalProvider(LocalContentColor provides Color.White) {
                             ConnectedSelectionHost(Modifier.fillMaxSize(), scene = selection) {
-                                LazyVerticalGrid(GridCells.Fixed(1), state = grid, contentPadding = PaddingValues(top = 40.dp)) {
+                                LazyVerticalGrid(GridCells.Fixed(1), state = grid) {
                                     items(state.rendered(songs), key = { it?.key ?: DropGapKey }) { item ->
                                         Box(Modifier.fillMaxWidth().height(72.dp)
                                             .selectionLens(selected && item?.key == songs.first().key, false, itemKey = item?.key))
@@ -75,9 +75,9 @@ class LiftGlowDragStartTest {
         val rest = capture()
         val d = rest.width / 360f
         val held = compose.runOnIdle { state.bounds().getValue(songs.first().key) }
-        // A band just below the lifted bottom edge, across the item's centre.
+        // A band just below the item's bottom edge (the neighbour leaves no vertical growth), across its centre.
         val x0 = (held.center.x - 40 * d).toInt(); val x1 = (held.center.x + 40 * d).toInt()
-        val y0 = (held.bottom + 6 * d).toInt(); val y1 = (held.bottom + 10 * d).toInt()
+        val y0 = (held.bottom + 2 * d).toInt(); val y1 = (held.bottom + 5 * d).toInt()
         fun signed(image: ImageBitmap): Float {
             val now = image.toPixelMap(); val base = rest.toPixelMap()
             var sum = 0f
