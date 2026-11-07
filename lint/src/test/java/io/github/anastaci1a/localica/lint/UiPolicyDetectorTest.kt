@@ -259,7 +259,7 @@ class UiPolicyDetectorTest : LintDetectorTest() {
 
     fun testStageThreeRootAllowanceExpiresWithItsStep() {
         fun stage(completed: String) = TestFiles.source("tools/ui-consolidation/stage.json",
-            """{"schemaVersion":1,"knownSteps":["U04.01b","U13.02b"],"completedSteps":[$completed]}""")
+            """{"schemaVersion":1,"knownSteps":["U04.01b","U10.05","U13.02b"],"completedSteps":[$completed]}""")
         fun root(file: String, vararg extra: TestFile) = lint().files(*(stubs + kotlin("src/test/$file", """
             package io.github.anastaci1a.localica.ui
             import io.github.anastaci1a.localica.ui.engine.FrameStamp
@@ -268,6 +268,8 @@ class UiPolicyDetectorTest : LintDetectorTest() {
         root("GlassShadow.kt", stage("")).expectClean()
         root("GlassShadowTwin.kt", stage("")).expectErrorCount(2)
         root("GlassSilhouette.kt", stage("")).expectErrorCount(2)
+        root("GlassSilhouetteOptics.kt", stage("")).expectClean()
+        root("GlassSilhouetteOptics.kt", stage("\"U10.05\"")).expectErrorCount(2)
         root("GlassShadow.kt", stage("\"U04.01b\"")).expectErrorCount(2)
         root("GlassShadow.kt", TestFiles.source("tools/ui-consolidation/stage.json", "{\"schemaVersion\":1,\"knownSteps\":[\"U13.02b\"],\"completedSteps\":[]}")).expectErrorCount(2)
         root("GlassShadow.kt", TestFiles.source("tools/ui-consolidation/stage.json", "not json [")).expectErrorCount(2)
