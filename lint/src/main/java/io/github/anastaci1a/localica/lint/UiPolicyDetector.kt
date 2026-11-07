@@ -603,6 +603,7 @@ private val stage3Allowance = mapOf(
     "GlassMorph.kt" to "U07.05", "GlassDialogs.kt" to "U07.05", "GlassPresence.kt" to "U07.05", "GlassPopupHome.kt" to "U07.05",
     "GlassOriginPreparation.kt" to "U07.05", "SearchMorphMotion.kt" to "U07.05",
     "FrostedMaterial.kt" to "U10.05", "LyricsHeaderActions.kt" to "U10.05", "GlassSilhouetteOptics.kt" to "U10.05", // D17: frozen split-pill optics reading ShapeFrame
+    "MotionPixels.kt" to "U11.04", "PlayerSurfaceFrame.kt" to "U11.04", "BrowseItemLayout.kt" to "U09.01b", // B2/D16: pixel-rectangle callers of the moved Engine type
     "InterfaceComponents.kt" to "U06.01", "LiquidGlass.kt" to "U06.01", "NavigationUtilityPill.kt" to "U06.01", "SlidingTabs.kt" to "U06.02",
     "ConnectedSelection.kt" to "U09.01a", "SelectionMotion.kt" to "U09.01a", "FloatingSelectionPanel.kt" to "U09.01b",
     "KeyedDragOverlay.kt" to "U09.02", "SongDragHost.kt" to "U09.02", "SongDragOverlay.kt" to "U09.02", "LibraryFilterBubbles.kt" to "U09.02",
