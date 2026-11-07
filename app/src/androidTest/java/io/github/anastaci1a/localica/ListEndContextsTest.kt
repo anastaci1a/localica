@@ -54,7 +54,7 @@ class ListEndContextsTest {
                         {}, {}, {}, { _, _, _ -> }, null, null, true, false, reducedMotion = true,
                         queueState = queueState, playingEntryId = if (queue) tracks.first().id else null,
                         popupDismiss = if (scoped) ({}) else null)
-                    Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(lowerChrome).testTag("end-lower-chrome"))
+                    if (lowerChrome > 0.dp) Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(lowerChrome).testTag("end-lower-chrome"))
                     FloatingSelectionPanel(panel, Modifier.align(Alignment.BottomCenter).padding(bottom = lowerChrome)) {
                         Box(Modifier.fillMaxWidth().height(panelHeight).testTag("end-selection"))
                     }
