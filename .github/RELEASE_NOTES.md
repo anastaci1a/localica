@@ -21,6 +21,7 @@ This is an optimized build (not debuggable, minified with R8, with a baseline pr
 - https://github.com/anastaci1a/localica/issues/631 - Use dedicated Repeat One glyphs.
 - https://github.com/anastaci1a/localica/issues/636 - Size the prototype CI build heap for concurrent Kotlin compiles.
 - https://github.com/anastaci1a/localica/issues/637 - Reset the API 36 test launcher only after an idle display to avoid emulator kernel panics.
+- https://github.com/anastaci1a/localica/issues/638 - Start tag editor theme tests with a fresh system keyboard so a stale emulator IME cannot collapse the editor.
 
 ## Known issues
 
