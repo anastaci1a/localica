@@ -21,7 +21,7 @@ import kotlinx.coroutines.launch
 
 /** Visual-fixture harness: PlayerSurface's geometry/ink tests pose the phase directly with an Animatable, exactly as before
  * U10.01. Real-app tests (LocalicaScreen) use the production ExpandCollapse owner; this adapter is never production code. */
-private class AnimatablePhase(val progress: Animatable<Float, *>) : MotionValue {
+internal class AnimatablePhase(val progress: Animatable<Float, *>) : MotionValue {
     override fun value() = progress.value
     override fun velocity() = progress.velocity
     override fun sample() = Kinematic(value(), velocity())
@@ -79,7 +79,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
         override fun collapse() {}
     } }
     ProductionPlayerSurface(state, expanded, onExpanded, settings, sheet, onToggle, onSeek, onPrevious, onNext,
-        onQueue, onLibrary, lyricsOpen, onLyrics, track, onSettings, actionRows, queueProgress, frostedBackdrop, glassBackdrop, visual,
+        onQueue, onLibrary, lyricsOpen, onLyrics, track, onSettings, actionRows, queueProgress?.let { rememberAnimatableQueueSheet(it, settings) }, frostedBackdrop, glassBackdrop, visual,
         artworkVisit, previousArtwork, nextArtwork, onArtworkVisit, bottomChrome, miniForeground, onSeekRequest, sampleState,
         backgroundPolarity, providedPopupHome, openingPopupHome, actions)
 }

@@ -1,13 +1,8 @@
 package io.github.anastaci1a.localica.ui
 
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.gestures.Orientation
-import androidx.compose.foundation.gestures.draggable
-import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -40,80 +35,56 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.R
-import io.github.anastaci1a.localica.navigation.InterfaceSettings
-import kotlinx.coroutines.CoroutineStart
-import kotlinx.coroutines.launch
+import io.github.anastaci1a.localica.ui.components.SheetState
 
 internal val CollapsedQueueHeight = 64.dp
 
 @Composable
-internal fun BoxWithConstraintsScope.QueueSurface(progress: Animatable<Float, *>, settings: InterfaceSettings,
+internal fun BoxWithConstraintsScope.QueueSurface(sheet: SheetState,
     onSettled: (Boolean) -> Unit, playerProgress: () -> Float = { 1f },
     onDragTrace: ((String) -> Unit)? = null, onOpeningContact: (() -> Unit)? = null,
     providedPopupHome: GlassPopupHome? = null,
     content: @Composable ColumnScope.() -> Unit) {
-    val scope = rememberCoroutineScope()
+    // U10.02: the drawer's phase, contacts and settles belong to its root ExpandCollapse owner.
+    val phase = sheet.expansion.phase
     val inset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val status = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     val top = maxHeight - inset - CollapsedQueueHeight
     val density = LocalDensity.current
-    val distance = with(density) { (top - status).toPx().coerceAtLeast(1f) }
-    var start by remember { mutableFloatStateOf(1f) }
     var delta by remember { mutableFloatStateOf(0f) }
-    var closing by remember { mutableStateOf(false) }
     val currentPlayerProgress by rememberUpdatedState(playerProgress)
     val interactive by remember { derivedStateOf { currentPlayerProgress() >= .99f } }
-    val departing by remember { derivedStateOf { closing || progress.targetValue < progress.value || !interactive } }
+    val departing by remember { derivedStateOf { !sheet.expanded || !interactive } }
     val popupHome = providedPopupHome ?: rememberGlassPopupHome(departing)
-    fun settle(open: Boolean) {
-        closing = !open
-        onSettled(open)
-        scope.launch {
-            if (!open) popupHome.awaitHandoff()
-            progress.animateTo(if (open) 1f else 0f, tween(settings.motionDuration(400)))
-        }
-    }
-    val currentSettle by rememberUpdatedState<(Boolean) -> Unit>(::settle)
     // Optional test diagnostics observe existing callbacks without adding a pointer node.
     // A stationary pointer observer would itself change Compose's hit-path dispatch.
     val currentTrace by rememberUpdatedState(onDragTrace)
     val currentOpeningContact by rememberUpdatedState(onOpeningContact)
-    // Contact ownership is fixed by its first directed delta, not later reversal.
-    // This input-only flag adds no geometry state or new pointer observer.
-    val directDirectionAcquired = remember { booleanArrayOf(false) }
+    val currentSettled by rememberUpdatedState(onSettled)
+    // Contact ownership is fixed by its first directed delta, not later reversal; [1] holds the owner's admission.
+    val directContact = remember { booleanArrayOf(false, false) }
     val scrollOwnership = remember { ScrollGestureOwnership() }
-    val currentDistance by rememberUpdatedState(distance)
-    val currentDensity by rememberUpdatedState(density.density)
-    // Geometry changes must not replace the connection midway through its contact.
-    // Keep that contact's pixel-to-progress scale until release; the next pull
-    // acquires the latest viewport and density.
-    val listPull = remember(progress) {
+    val listPull = remember(sheet) {
         object : NestedScrollConnection {
             var pulling by mutableStateOf(false)
             var pulled = 0f
-            var pullDistance = currentDistance
-            var pullDensity = currentDensity
             fun cancelPull() {
-                currentTrace?.invoke("nested-cancel pulling=$pulling pulled=$pulled progress=${progress.value}")
+                currentTrace?.invoke("nested-cancel pulling=$pulling pulled=$pulled progress=${phase.value()}")
                 if (!pulling) return
                 pulling = false
                 pulled = 0f
-                currentSettle(true)
+                sheet.contact.onDragCancel()
             }
             fun move(dy: Float): Offset {
-                currentTrace?.invoke("nested-move dy=$dy pulled=$pulled progress=${progress.value}")
-                // Keep raw travel and ownership through both clamped endpoints. A
-                // reversal must retrace excess travel, never leak into the child list.
+                // Keep raw travel and ownership through both endpoints. A reversal
+                // must retrace excess travel, never leak into the child list.
                 pulled += dy
-                val consumed = dy
-                scope.launch(start = CoroutineStart.UNDISPATCHED) {
-                    progress.snapTo((1f - pulled / pullDistance).coerceIn(0f, 1f))
-                    currentTrace?.invoke("nested-applied pulled=$pulled consumed=$consumed progress=${progress.value}")
-                }
-                return Offset(0f, consumed)
+                sheet.contact.onDrag(-pulled)
+                currentTrace?.invoke("nested-applied pulled=$pulled consumed=$dy progress=${phase.value()}")
+                return Offset(0f, dy)
             }
             override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
-                currentTrace?.invoke("nested-pre source=$source available=$available pulling=$pulling pulled=$pulled progress=${progress.value}")
+                currentTrace?.invoke("nested-pre source=$source available=$available pulling=$pulling pulled=$pulled progress=${phase.value()}")
                 if (source != NestedScrollSource.UserInput) return Offset.Zero
                 return if (pulling) move(available.y) else Offset(0f, scrollOwnership.consumeRetrace(available.y))
             }
@@ -123,23 +94,19 @@ internal fun BoxWithConstraintsScope.QueueSurface(progress: Animatable<Float, *>
                 // Even a partial final list delta owns the rest of this contact. A fresh
                 // downward pull already at the top still starts the documented drawer drag.
                 scrollOwnership.recordScroll(consumed.y)
-                currentTrace?.invoke("nested-post consumed=$consumed available=$available pulling=$pulling contentOwned=${scrollOwnership.contentOwned} mayHandoff=${scrollOwnership.mayHandoff} progress=${progress.value}")
+                currentTrace?.invoke("nested-post consumed=$consumed available=$available pulling=$pulling contentOwned=${scrollOwnership.contentOwned} mayHandoff=${scrollOwnership.mayHandoff} progress=${phase.value()}")
                 if (scrollOwnership.contentOwned) {
                     scrollOwnership.recordBoundary(available.y)
                     return Offset(0f, available.y)
                 }
                 if (!scrollOwnership.mayHandoff || available.y <= 0f) return Offset.Zero
-                if (!pulling) {
-                    pullDistance = currentDistance
-                    pullDensity = currentDensity
-                    pulled = (1f - progress.value) * pullDistance
-                }
+                if (!pulling && !sheet.contact.onDragStart()) return Offset.Zero
                 scrollOwnership.claimDrawer()
                 pulling = true
                 return move(available.y)
             }
             override suspend fun onPreFling(available: Velocity): Velocity {
-                currentTrace?.invoke("nested-fling available=$available pulling=$pulling mayCommit=${scrollOwnership.mayCommitPull} progress=${progress.value}")
+                currentTrace?.invoke("nested-fling available=$available pulling=$pulling mayCommit=${scrollOwnership.mayCommitPull} progress=${phase.value()}")
                 if (!pulling) return Velocity.Zero
                 // Scrollable also dispatches a zero-velocity pre-fling on cancellation,
                 // potentially before our observer receives its synthetic cancel event.
@@ -148,15 +115,14 @@ internal fun BoxWithConstraintsScope.QueueSurface(progress: Animatable<Float, *>
                     return Velocity(0f, available.y)
                 }
                 pulling = false
-                currentSettle(settleOpen(-pulled / pullDensity, -available.y / pullDensity,
-                    progress.value, opening = false))
                 pulled = 0f
+                currentSettled(sheet.contact.onRelease(-available.y).expanded)
                 return Velocity(0f, available.y)
             }
         }
     }
-    val shown by remember(progress) { derivedStateOf { progress.value > 0f } }
-    if (shown) Box(Modifier.fillMaxSize().graphicsLayer { alpha = progress.value * 0.2f }.clickable { settle(false) }) {
+    val shown by remember(sheet) { derivedStateOf { phase.value() > 0f } }
+    if (shown) Box(Modifier.fillMaxSize().graphicsLayer { alpha = phase.value().coerceIn(0f, 1f) * 0.2f }.clickable { onSettled(false) }) {
         Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.scrim) {}
     }
     // Keep the list viewport fixed while the drawer moves. Resizing every frame
@@ -172,33 +138,34 @@ internal fun BoxWithConstraintsScope.QueueSurface(progress: Animatable<Float, *>
     FrostedSurface(Modifier.width(maxWidth).height(maxHeight - status)
         .graphicsLayer { alpha = ((playerProgress() - .4f) / .6f).coerceIn(0f, 1f) }
         .then(if (!interactive) Modifier.clearAndSetSemantics {} else Modifier)
-        .draggable(rememberDraggableState { dy ->
-            currentTrace?.invoke("direct-delta dy=$dy start=$start delta=$delta progress=${progress.value}")
+        // Touch-down on a moving drawer catches it (#608 contact); a stationary drawer keeps its taps.
+        .playerVerticalDrag(onCatch = { !phase.settled && sheet.contact.onDragStart().also { directContact[1] = it
+                directContact[0] = true; delta = 0f } },
+            onDelta = { dy ->
+            currentTrace?.invoke("direct-delta dy=$dy delta=$delta progress=${phase.value()}")
             delta += dy
-            if (!directDirectionAcquired[0] && dy != 0f) {
-                directDirectionAcquired[0] = true
-                if (dy < 0f && (start - delta / distance).coerceIn(0f, 1f) > progress.value)
-                    currentOpeningContact?.invoke()
+            if (!directContact[0] && dy != 0f) {
+                directContact[0] = true
+                if (dy < 0f && !sheet.expanded) currentOpeningContact?.invoke()
             }
-            scope.launch(start = CoroutineStart.UNDISPATCHED) {
-                progress.snapTo((start - delta / distance).coerceIn(0f, 1f))
-                currentTrace?.invoke("direct-applied delta=$delta progress=${progress.value}")
-            }
-        }, Orientation.Vertical, onDragStarted = { position ->
-            currentTrace?.invoke("direct-start position=$position progress=${progress.value}")
-            progress.stop(); start = progress.value; delta = 0f
-            directDirectionAcquired[0] = false
-        }, onDragStopped = { velocity ->
-            currentTrace?.invoke("direct-stop velocity=$velocity delta=$delta progress=${progress.value}")
-            settle(settleOpen(-delta / density.density, -velocity / density.density, progress.value, start < .5f))
-        })
+            if (directContact[1]) sheet.contact.onDrag(-delta)
+            currentTrace?.invoke("direct-applied delta=$delta progress=${phase.value()}")
+        }, onStart = {
+            currentTrace?.invoke("direct-start progress=${phase.value()}")
+            delta = 0f
+            directContact[0] = false
+            directContact[1] = sheet.contact.onDragStart()
+        }, onStop = { velocity ->
+            currentTrace?.invoke("direct-stop velocity=$velocity delta=$delta progress=${phase.value()}")
+            if (directContact[1]) { directContact[1] = false; currentSettled(sheet.contact.onRelease(-velocity).expanded) }
+        }, onCancel = { if (directContact[1]) { directContact[1] = false; sheet.contact.onDragCancel() } })
         .then(if (onDragTrace == null) Modifier else Modifier.onGloballyPositioned {
-            currentTrace?.invoke("layout top=${it.positionInRoot().y} progress=${progress.value} distance=$distance")
+            currentTrace?.invoke("layout top=${it.positionInRoot().y} progress=${phase.value()}")
         })
         // Header and list controls yield the swipes this drawer can still travel.
         .controlScrollParent {
-            (if (progress.value > 0f) ControlScrollDirection.Down else 0) or
-                (if (progress.value < 1f) ControlScrollDirection.Up else 0)
+            (if (phase.value() > 0f) ControlScrollDirection.Down else 0) or
+                (if (phase.value() < 1f) ControlScrollDirection.Up else 0)
         }
         .observeScrollOwnership(scrollOwnership, listPull::cancelPull)
         .nestedScroll(listPull).testTag("queue-surface"), shape = Corners.panel) {
@@ -206,9 +173,9 @@ internal fun BoxWithConstraintsScope.QueueSurface(progress: Animatable<Float, *>
         Box(Modifier.fillMaxSize().glassPopupHome(popupHome)) {
         Column(Modifier.fillMaxSize().clipToBounds().padding(bottom = inset)) {
             Box(Modifier.fillMaxWidth().height(CollapsedQueueHeight).clickable(onClickLabel = if (!shown) "Open queue" else "Close queue") {
-                val open = progress.value < .5f
+                val open = !sheet.expanded
                 if (open) currentOpeningContact?.invoke()
-                settle(open)
+                onSettled(open); if (open) sheet.expand()
             }
                 .semantics { contentDescription = if (!shown) "Open queue" else "Close queue" }) {
                 Box(Modifier.align(Alignment.TopCenter).padding(top = 8.dp).size(36.dp, 4.dp)
@@ -232,7 +199,7 @@ internal fun BoxWithConstraintsScope.QueueSurface(progress: Animatable<Float, *>
         layout(constraints.maxWidth, constraints.maxHeight) {
             // Preserve the original final pixel rounding, including player translation.
             val drawerY = with(density) {
-                kotlin.math.round((top + (status - top) * progress.value +
+                kotlin.math.round((top + (status - top) * phase.value().coerceIn(0f, 1f) +
                     80.dp * (1f - playerProgress())).toPx()).toInt()
             }
             drawer.place(0, drawerY - shelfY())
