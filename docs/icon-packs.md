@@ -74,7 +74,7 @@ Limits keep import and drawing bounded: 256 KB per SVG, 256 paths, 1,024 element
 | `menu.play_next` | Play next |
 | `menu.queue_add` | Add to queue |
 | `menu.info` | Information |
-| `menu.download` | Download (reserved) |
+| `menu.download` | Download and downloading state (tray with a down arrow) |
 | `menu.share` | Share (reserved) |
 | `menu.station` | Station (reserved) |
 | `menu.favorite` | Favorite (reserved) |
@@ -107,6 +107,16 @@ Limits keep import and drawing bounded: 256 KB per SVG, 256 paths, 1,024 element
 | `action.info` | Information (player and dialogs) |
 | `action.trash` | Delete (other places) |
 | `action.playlist_add` | Add to playlist (player) |
+| `settings.interface` | Settings: Interface |
+| `settings.appearance` | Settings: Appearance |
+| `settings.icon_packs` | Settings: Icon packs |
+| `settings.glass` | Settings: Glass |
+| `settings.navigation` | Settings: Navigation |
+| `settings.player` | Settings: Player |
+| `settings.motion` | Settings: Motion |
+| `settings.library_filters` | Settings: Library filters |
+| `settings.metadata_failures` | Settings: Metadata read failures |
+| `settings.tag_jobs` | Settings: Tag jobs and recovery |
 
 The `transport.*` ids are the rest-state glyphs; Play and Pause also provide the end states of the play/pause animation. Ids and their built-in files are tracked in `ui/AppIcons.kt`; every id must appear in this table.
 

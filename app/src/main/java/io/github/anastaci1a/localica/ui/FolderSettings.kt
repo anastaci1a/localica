@@ -18,25 +18,29 @@ import io.github.anastaci1a.localica.scanner.ScanPreferences
 private data class SettingsDestination(val title: String, val parent: String?, val icon: AppIcon, val summary: String)
 private data class SettingsPageRoute(val title: String, val folderUri: String?, val iconPackId: String?)
 private val settingsDestinations = listOf(
-    SettingsDestination("Interface", null, AppIcon.ActionSettings, "Navigation, player, icons, glass, and motion"),
-    SettingsDestination("Appearance", "Interface", AppIcon.TabLibrary, "Typography and interface gray"),
-    SettingsDestination("Icon packs", "Interface", AppIcon.TabLibrary, "Import, switch, and view icons"),
-    SettingsDestination("Glass", "Interface", AppIcon.ActionSettings, "Blur, white tint, and floating shadows"),
-    SettingsDestination("Navigation", "Interface", AppIcon.TabHome, "Main tabs, Back history, and exit confirmation"),
-    SettingsDestination("Player", "Interface", AppIcon.TabAlbums, "Artwork, gestures, and player actions"),
-    SettingsDestination("Motion", "Interface", AppIcon.TransportNext, "Animation speed and reduced motion"),
+    SettingsDestination("Interface", null, AppIcon.SettingsInterface, "Navigation, player, icons, glass, and motion"),
+    SettingsDestination("Appearance", "Interface", AppIcon.SettingsAppearance, "Typography and interface gray"),
+    SettingsDestination("Icon packs", "Interface", AppIcon.SettingsIconPacks, "Import, switch, and view icons"),
+    SettingsDestination("Glass", "Interface", AppIcon.SettingsGlass, "Blur, white tint, and floating shadows"),
+    SettingsDestination("Navigation", "Interface", AppIcon.SettingsNavigation, "Main tabs, Back history, and exit confirmation"),
+    SettingsDestination("Player", "Interface", AppIcon.SettingsPlayer, "Artwork, gestures, and player actions"),
+    SettingsDestination("Motion", "Interface", AppIcon.SettingsMotion, "Animation speed and reduced motion"),
     SettingsDestination("Playback and queues", null, AppIcon.TransportPlay, "Preloading, queue switching, and retention"),
     SettingsDestination("Song tap behavior", "Playback and queues", AppIcon.TabSongs, "Default action and per-list overrides"),
     SettingsDestination("Library and tags", null, AppIcon.TabLibrary, "Folders, scanner configuration, tag jobs and recovery"),
-    SettingsDestination("Library filters", "Library and tags", AppIcon.TabLibrary, "Visible filters, their order, and unfiltered collections"),
+    SettingsDestination("Library filters", "Library and tags", AppIcon.SettingsLibraryFilters, "Visible filters, their order, and unfiltered collections"),
     SettingsDestination("Folders to scan", "Library and tags", AppIcon.TabFolders, "Choose music folders and excluded subfolders"),
     SettingsDestination("Scanner", "Library and tags", AppIcon.ActionSearch, "Quick Scan, full scan, startup scans, subfolders and short files"),
-    SettingsDestination("Metadata read failures", "Scanner", AppIcon.ActionInfo, "Files with incomplete metadata"),
-    SettingsDestination("Tag jobs and recovery", "Library and tags", AppIcon.TabSongs, "Background jobs, outcomes and interrupted tag edits"),
+    SettingsDestination("Metadata read failures", "Scanner", AppIcon.SettingsMetadataFailures, "Files with incomplete metadata"),
+    SettingsDestination("Tag jobs and recovery", "Library and tags", AppIcon.SettingsTagJobs, "Background jobs, outcomes and interrupted tag edits"),
     SettingsDestination("About and licenses", null, AppIcon.ActionInfo, "Version, source code, help, diagnostics export, and open-source licenses"),
 )
 /** Destination title to row icon; the #655 audit keeps every settings row icon distinct. */
 internal val settingsDestinationIcons: Map<String, AppIcon> get() = settingsDestinations.associate { it.title to it.icon }
+private fun destinationIcon(title: String): AppIcon = settingsDestinations.first { it.title == title }.icon
+/** Pages that link to child destinations (or list folders) show row icons, so every row there keeps the icon slot. */
+private fun reservesIconSlot(page: String?): Boolean =
+    page == null || page == "Folders to scan" || settingsDestinations.any { it.parent == page }
 
 private fun settingsTitle(title: String): String = when (title) {
     "Interface and gestures" -> "Interface"
@@ -94,7 +98,8 @@ fun FolderSettings(state: LibraryUiState, onDismiss: () -> Unit, onChooseFolder:
             modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp))
         key(pageKey) { holder.SaveableStateProvider(pageKey) {
             if (page == "Metadata read failures") MetadataReadFailures(state, Modifier.weight(1f))
-            else Column(Modifier.fillMaxWidth().weight(1f).controlVerticalScroll(rememberScrollState()).padding(24.dp),
+            else CompositionLocalProvider(LocalSettingsRowMetrics provides
+                LocalSettingsRowMetrics.current.copy(iconSlot = reservesIconSlot(page))) { Column(Modifier.fillMaxWidth().weight(1f).controlVerticalScroll(rememberScrollState()).padding(24.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (page == null) {
                     val shown = settingsDestinations.filter {
@@ -114,7 +119,7 @@ fun FolderSettings(state: LibraryUiState, onDismiss: () -> Unit, onChooseFolder:
                     "Pack icons" -> IconPackViewer(shown.iconPackId)
                     "Playback and queues" -> {
                         playbackContent(page)
-                        SettingsLink("Song tap behavior", "Default action and per-list overrides", AppIcon.TabSongs) { path = path + "Song tap behavior" }
+                        SettingsLink("Song tap behavior", "Default action and per-list overrides", destinationIcon("Song tap behavior")) { path = path + "Song tap behavior" }
                     }
                     "Song tap behavior" -> playbackContent(page)
                     "About and licenses" -> aboutContent()
@@ -141,7 +146,7 @@ fun FolderSettings(state: LibraryUiState, onDismiss: () -> Unit, onChooseFolder:
                     }
                     "Scanner" -> ScannerConfiguration(preferences, state, onFullScan, onQuickScan) { path = path + "Metadata read failures" }
                 }
-            }
+            } }
         } }
     }
     removing?.let { folder -> CompositionLocalProvider(LocalGlassOrigin provides removeOrigin) { GlassAlertDialog(onDismissRequest = { removing = null }, title = { Text("Remove ${folderLabels[folder.uri] ?: folder.name}?") },
@@ -159,7 +164,8 @@ private fun ScannerConfiguration(preferences: ScanPreferences, state: LibraryUiS
     var durationOpen by remember { mutableStateOf(false) }
     val durationOrigin = rememberGlassAnchor()
     ScannerActions(state, onFullScan, onQuickScan)
-    SettingsLink("Metadata read failures", "${state.snapshot.metadataFailures.map { it.trackId }.distinct().size} songs", onClick = failures)
+    SettingsLink("Metadata read failures", "${state.snapshot.metadataFailures.map { it.trackId }.distinct().size} songs",
+        destinationIcon("Metadata read failures"), onClick = failures)
     SettingsHeading("Music library")
     BooleanPreference("Include subfolders", options.includeSubfolders) { options = options.copy(includeSubfolders = it); preferences.write(options) }
     Text("Off scans only each chosen folder; on includes nested folders. Both scans skip excluded paths. Set exclusions in Library and tags → Folders to scan → choose a folder → Excluded subfolders.", style = MaterialTheme.typography.bodySmall)
