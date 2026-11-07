@@ -37,6 +37,7 @@ class PlayerLyricsMaterialEaseTest {
     private var reference: LyricsPhaseReference? = null
     private var pendingTarget: Float? = null
     private var initialMix = 0f
+    @Volatile private var outsideSourceIdentity = 0
     @Volatile private var tone = Float.NaN
     @Volatile private var coating = Float.NaN
     @Volatile private var panelInk = Float.NaN
@@ -52,11 +53,11 @@ class PlayerLyricsMaterialEaseTest {
         compose.setContent { LocalicaTheme {
             CompositionLocalProvider(LocalDensity provides Density(1f),
                 LocalPlayerInkCompositionObserver provides { inkComposition = it }, LocalGlassSurfaceDrawObserver provides {
-                if (it.panel > 0f && it.width < 100f) { tone = it.toneLightMix; coating = it.coatingLightMix } }) {
+                if (it.source?.identity == outsideSourceIdentity && !it.inkOverridden) { tone = it.toneLightMix; coating = it.coatingLightMix } }) {
                 BoxWithConstraints(Modifier.fillMaxSize()) {
                     val mix = owner.lightMix
                     val backdrop = rememberFrostedBackdrop(Unit, enabled = false, dark = mix >= .5f, lightMix = mix, retainRaster = false)
-                    SideEffect { backdropMix = backdrop.lightMix }
+                    SideEffect { outsideSourceIdentity = System.identityHashCode(backdrop); backdropMix = backdrop.lightMix }
                     GlassPanelTheme(mix) { val ink = LocalContentColor.current; SideEffect { panelInk = ink.red } }
                     // A surface outside the player that samples the shared backdrop, as the browse chrome and Queue do.
                     LiquidGlassSurface(Modifier.size(48.dp), source = backdrop, panelProgress = 1f, cornerRadius = 12.dp) { Text("x") }

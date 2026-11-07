@@ -45,9 +45,10 @@ class PlayerLyricsThemeEaseTest {
     @Volatile private var inkComposition: PlayerInkComposition? = null
     private var sampleHeld by mutableStateOf(false)
     /** Latest drawn ink of every glass surface, by surface identity. */
-    private val glassInk = ConcurrentHashMap<Int, Float>()
+    private val glassInk = ConcurrentHashMap<Int, GlassInk>()
 
-    private class Frame(val foreground: Float, val glass: Map<Int, Float>, val expected: Float, val previous: Float)
+    private class GlassInk(val red: Float, val overridden: Boolean)
+    private class Frame(val foreground: Float, val glass: Map<Int, GlassInk>, val mix: Float, val previousMix: Float)
     private var reference: LyricsPhaseReference? = null
     private var pendingInk: Float? = null
     private var pendingEnd = 0f
@@ -68,7 +69,7 @@ class PlayerLyricsThemeEaseTest {
             CompositionLocalProvider(LocalDensity provides Density(1f),
                 LocalPlayerBackgroundPreparationBarrier provides preparationBarrier,
                 LocalPlayerInkCompositionObserver provides { inkComposition = it },
-                LocalGlassSurfaceDrawObserver provides { glassInk[it.surfaceIdentity] = Color(it.inkArgb).red }) {
+                LocalGlassSurfaceDrawObserver provides { glassInk[it.surfaceIdentity] = GlassInk(Color(it.inkArgb).red, it.inkOverridden) }) {
                 BoxWithConstraints(Modifier.fillMaxSize()) {
                     BoxWithConstraints(Modifier.width(300.dp).height(minOf(560.dp, maxHeight))) {
                         PlayerSurface(PlaybackState(connected = true, title = "Region", artist = "Artwork", durationMs = 120000),
@@ -86,7 +87,7 @@ class PlayerLyricsThemeEaseTest {
 
     private fun frame() { compose.mainClock.advanceTimeByFrame(); compose.waitForIdle() }
     private fun record(count: Int, assertLyricsPhase: Boolean = true) { repeat(count) {
-        val previous = requireNotNull(inkComposition).contentColor.red
+        val previous = owner.lightMix
         glassInk.clear()
         frame()
         if (assertLyricsPhase) compose.onNodeWithContentDescription("Play").captureNativeFrame()
@@ -95,22 +96,26 @@ class PlayerLyricsThemeEaseTest {
             requireNotNull(reference).join(target, ink.lyricsProgress, pendingEnd)
             pendingInk = null
         }
-        val expected = lerp(Color.Black, Color.White, requireNotNull(reference).expected(ink.lyricsProgress)).red
+        val mix = requireNotNull(reference).expected(ink.lyricsProgress)
+        val expected = lerp(Color.Black, Color.White, mix).red
         if (assertLyricsPhase) {
             assertEquals("foreground follows the lyrics phase", expected, ink.contentColor.red, .015f)
             assertEquals("shared material follows the lyrics phase", requireNotNull(reference).expected(ink.lyricsProgress), owner.lightMix, .015f)
         }
-        recorded += Frame(ink.contentColor.red, glassInk.toMap(), expected, previous)
+        recorded += Frame(ink.contentColor.red, glassInk.toMap(), mix, previous)
     }
         if (!assertLyricsPhase) return
         recorded.flatMap { it.glass.keys }.distinct().forEach { id ->
             val samples = recorded.filter { id in it.glass }
-            val values = samples.map { it.glass.getValue(id) }
+            val values = samples.map { it.glass.getValue(id).red }
             // Constant surfaces need not consume the player polarity; every changing surface must.
             if (values.max() - values.min() > .05f) samples.forEach {
-                val actual = it.glass.getValue(id)
-                assertTrue("drawn glass ink #$id follows this or the preceding admitted phase: $actual vs "+
-                    it.previous + " -> " + it.expected, minOf(abs(actual - it.expected), abs(actual - it.previous)) <= .02f)
+                val ink = it.glass.getValue(id)
+                val dark = if (ink.overridden) Color.Black else Color(0xFF202124)
+                val current = lerp(dark, Color.White, it.mix).red
+                val previous = lerp(dark, Color.White, it.previousMix).red
+                assertTrue("drawn glass ink #$id follows its endpoint colors at this or the preceding phase: "+
+                    ink.red + " vs $previous -> $current", minOf(abs(ink.red - current), abs(ink.red - previous)) <= .02f)
             }
         }
     }
@@ -127,7 +132,7 @@ class PlayerLyricsThemeEaseTest {
     private fun foreground() = recorded.map { it.foreground }
     /** Each glass surface's drawn ink over the frames it was present in. */
     private fun glassSequences(): List<List<Float>> = recorded.flatMap { it.glass.keys }.distinct()
-        .map { id -> recorded.mapNotNull { it.glass[id] } }
+        .map { id -> recorded.mapNotNull { it.glass[id]?.red } }
 
     private fun assertEveryChannelEased(towardLight: Boolean?) {
         val values = foreground()
