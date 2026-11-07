@@ -39,7 +39,8 @@ internal val LocalEngineContext=staticCompositionLocalOf<EngineContext> { requir
         try { while(true) {
             if(active.isEmpty()) { wake.receive(); continue }
             source.awaitFrame { nanos -> checkMutation(); check(nanos>last.nanos) { "Frame source must advance monotonically" }; last=FrameStamp(nanos,last.sequence+1); state.value=last
-            val iterator=active.iterator(); while(iterator.hasNext()) { val motion=iterator.next(); if(motion.endsAt(last)) { iterator.remove(); motion.finish(last) } }
+            // Finishing a motion may retire a surface or admit a queued transfer, changing other active owners.
+            active.toList().forEach { motion -> if(motion in active && motion.endsAt(last)) { active.remove(motion); motion.finish(last) } }
             if(observers.isNotEmpty()) observe { val frame=active.toList(); observers.forEach { it.onFrame(last,frame) } } }
         } } finally { active.clear() }
     }
