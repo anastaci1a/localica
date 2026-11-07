@@ -422,3 +422,4 @@ io.github.anastaci1a.localica.UiClockFoundationTest
 io.github.anastaci1a.localica.UiExpansionFoundationTest
 io.github.anastaci1a.localica.SelectionMergeGeometryTest
 io.github.anastaci1a.localica.SelectionMergeSequenceTest
+io.github.anastaci1a.localica.PlayerReleaseContinuityTest
