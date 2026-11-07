@@ -93,7 +93,8 @@ class PlayerGestureTest {
             .assert(SemanticsMatcher.keyNotDefined(androidx.compose.ui.semantics.SemanticsActions.OnClick))
         val mini = art.fetchSemanticsNode().boundsInRoot
         compose.mainClock.autoAdvance = false
-        compose.onRoot().performTouchInput { down(mini.center); repeat(24) { moveBy(Offset(0f, -10f), delayMillis = 40) } }
+        // #608: a slow, then still, release settles by the halfway rule, so the slow drag passes halfway (60% of travel).
+        compose.onRoot().performTouchInput { down(mini.center); repeat(24) { moveBy(Offset(0f, -mini.top * .6f / 24), delayMillis = 40) } }
         compose.mainClock.advanceTimeBy(32)
         val middle = art.fetchSemanticsNode().boundsInRoot
         assertTrue("Artwork must follow a slow drag: $mini -> $middle", middle.top < mini.top && middle.width > mini.width)
