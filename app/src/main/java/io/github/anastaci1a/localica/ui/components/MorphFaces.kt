@@ -38,8 +38,8 @@ import io.github.anastaci1a.localica.ui.engine.*
     @Composable fun Shared(key: Any, modifier: Modifier = Modifier) = host.Slot(key, face, modifier)
 }
 internal class MorphHost(val slots: MorphSlots) {
-    var expanded = false
-    var shared: @Composable SharedScope.(Any) -> Unit = {}
+    var expanded by mutableStateOf(false)
+    var shared: @Composable SharedScope.(Any) -> Unit by mutableStateOf({})
     private val live = object : SharedScope { override val progress = slots.progress }
     private val ends = listOf(0f, 1f).map { end -> object : SharedScope { override val progress = { end } } }
     private val instances = mutableMapOf<Any, @Composable (@Composable SharedScope.(Any) -> Unit) -> Unit>()

@@ -71,6 +71,7 @@ class MorphFacesTest {
         compose.runOnIdle { expanded = false }; compose.waitForIdle()
         val (closed, closedArea) = mark()
         assertTrue("The mark travels between slots: $open -> $closed", open - closed > 40f)
+        assertEquals("Compact endpoint records the 20 dp mark, not stale expanded ink", 20f * 20f / (32f * 32f), closedArea.toFloat() / openArea, .03f)
         compose.mainClock.autoAdvance = false
         try {
             compose.runOnIdle { expanded = true }
