@@ -116,7 +116,7 @@ Search IME, search-focus and contrast coverage is mandatory on API 26/36. Build/
 
 The `runner` input defaults to `hosted`. `runner=self-hosted` moves only the two focused emulator jobs to the owner’s locked-down single-job runner, for the owner’s manual dispatch on a branch (#592). A queued self-hosted job waits for the owner’s launcher and is never rerouted.
 
-Self-hosted is for single focused runs: `repeat` must be 1 and `repeat_methods` empty, so repeated proofs stay hosted. Build, compatibility and evidence jobs, `android.yml`, release gates and acceptance runs always stay hosted.
+Self-hosted runs focused jobs with `repeat` up to 5 (with or without `repeat_methods`); longer repeat proofs stay hosted. Build, compatibility and evidence jobs, `android.yml`, release gates and acceptance runs always stay hosted.
 
 The prototype build job compiles debug and release Kotlin concurrently in one Kotlin daemon, which inherits the Gradle heap. It therefore uses the Android static-checks sizing (`-Xmx6g`, four workers) on the 16 GB hosted runner; the 2 GB local default ran out of memory there (#636).
 
