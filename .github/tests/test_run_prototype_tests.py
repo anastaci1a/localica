@@ -182,6 +182,17 @@ p=pathlib.Path(sys.argv[sys.argv.index('--state-dir')+1]);p.mkdir();(p/'complete
         self.run_case(1)
 
     def test_empty(self): self.run_case(2,AFFECTED_CLASSES='')
+    def test_locked_down_self_hosted_jit_runner_is_admitted(self):
+        self.run_case(RUNNER_ENVIRONMENT='self-hosted', LOCALICA_JIT_RUNNER='1', LOCALICA_EPHEMERAL_RUNNER='localica-kvm')
+        self.assertEqual('setup\nrestore\n',(self.root/'lifecycle').read_text())
+    def test_other_self_hosted_or_local_environments_are_refused(self):
+        for env in ({'RUNNER_ENVIRONMENT':'self-hosted'}, {'RUNNER_ENVIRONMENT':'self-hosted','LOCALICA_JIT_RUNNER':'1'},
+                    {'RUNNER_ENVIRONMENT':'self-hosted','LOCALICA_EPHEMERAL_RUNNER':'localica-kvm'},
+                    {'RUNNER_ENVIRONMENT':'','LOCALICA_JIT_RUNNER':'1','LOCALICA_EPHEMERAL_RUNNER':'localica-kvm'},
+                    {'GITHUB_ACTIONS':'false','RUNNER_ENVIRONMENT':'self-hosted','LOCALICA_JIT_RUNNER':'1','LOCALICA_EPHEMERAL_RUNNER':'localica-kvm'}):
+            with self.subTest(env=env):
+                self.run_case(2, **env)
+                self.assertFalse((self.root/'lifecycle').exists())
     def test_mandatory_alone_is_not_affected_coverage(self): self.run_case(2,AFFECTED_CLASSES=REQUIRED)
     def test_injection(self):
         self.run_case(2,AFFECTED_CLASSES=AFFECTED+';touch PWNED')
@@ -789,7 +800,7 @@ class WorkflowContract(unittest.TestCase):
         import yaml
         workflow=yaml.safe_load((ROOT/'.github/workflows/prototype.yml').read_text())
         self.assertEqual({'workflow_dispatch','workflow_call'},set(workflow['on']))
-        self.assertEqual({'affected_classes','coverage_reason','known_issues','repeat','repeat_methods'},set(workflow['on']['workflow_call']['inputs']))
+        self.assertEqual({'affected_classes','coverage_reason','known_issues','repeat','repeat_methods','runner'},set(workflow['on']['workflow_call']['inputs']))
         self.assertEqual({'ANDROID_DEBUG_KEYSTORE'},set(workflow['on']['workflow_call']['secrets']))
         self.assertEqual({'contents':'read'},workflow['permissions'])
         jobs=workflow['jobs']
