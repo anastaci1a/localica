@@ -2,9 +2,9 @@ package io.github.anastaci1a.localica
 
 import androidx.compose.ui.graphics.Paint
 import io.github.anastaci1a.localica.navigation.InterfaceSettings
-import io.github.anastaci1a.localica.ui.GlassShadowGeometry
+import io.github.anastaci1a.localica.ui.engine.GlassShadowGeometry
 import io.github.anastaci1a.localica.ui.engine.*
-import io.github.anastaci1a.localica.ui.glassShadows
+import io.github.anastaci1a.localica.ui.engine.glassShadows
 import io.github.anastaci1a.localica.ui.spec.*
 import org.junit.Assert.assertTrue
 import org.junit.Test

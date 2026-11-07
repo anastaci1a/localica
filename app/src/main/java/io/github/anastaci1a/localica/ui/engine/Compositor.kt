@@ -2,7 +2,8 @@ package io.github.anastaci1a.localica.ui.engine
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.*
-import androidx.compose.ui.layout.layout
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.layout.*
 import androidx.compose.ui.platform.LocalView
 import io.github.anastaci1a.localica.ui.spec.*
 enum class Stratum { Page,Lifted,Floating,Drawer,Player,Modal,Overlay,Diagnostics }; enum class ShadowRole { None,Glass,Lift,Glow }
@@ -20,7 +21,11 @@ enum class Stratum { Page,Lifted,Floating,Drawer,Player,Modal,Overlay,Diagnostic
     internal fun leave(node: SurfaceNode) { clock.checkMutation(); if(registered[node.key]===node) registered.remove(node.key) }
     /** I3/D27: exactly one plane draws a caster's field, at strength × opacity; the others contribute 0. Never a partition: an alpha split (A(1−w), Aw) dips by A²w(1−w), and a strength split, exact before quantization, misses the drawn field by .011 at 16 rings (PlaneOracleTest). */
     internal fun contributionAt(node: SurfaceNode,stamp: FrameStamp)=if(node.owns(this)) node.opacity.valueAt(stamp) else 0f
-    internal fun acknowledge() { clock.checkMutation(); generation++; casters.forEach { it.advance() } }
+    internal fun acknowledge() { clock.checkMutation(); receipt(); admit() }
+    /** The host's draw-pass receipt writes plain fields only (no snapshot state in draw); true when a queued transfer waits for [admit] on the next frame. */
+    internal fun receipt(): Boolean { generation++; return registered.values.any { it.waiting } }
+    internal fun admit() { clock.checkMutation(); casters.forEach { it.advance() } }
+    internal var layout: LayoutCoordinates?=null; internal var view: android.view.View?=null; internal var revision by mutableIntStateOf(0)
 }
 /** U04.01a foundation (no production caller before U04.01b/U11.00, D03). The field has one [owner] plane: the destination from the moment its transfer starts, the source again only once a reversal settles there (D27). w is the continuous exclusion weight of [high] against 1−w of [low] (D27/D29): at most {low, high, pending}; A→B→A reverses w, a third plane waits for w to settle and for its draw receipt (D28). */
 @Stable class SurfaceNode internal constructor(private val clock: UiClock,override val key: Any,override val shape: ShapeView,initial: SurfaceTarget,home: ShadowPlane): SurfaceView {
@@ -32,7 +37,7 @@ enum class Stratum { Page,Lifted,Floating,Drawer,Player,Modal,Overlay,Diagnostic
     init { shadowOwnership.onRest={ settle() }; opacity.onRest={ if(dismissed && opacity.target==0f) retire() } }
     private fun bounds(): Rect { var b=Rect.Zero; clock.observe { b=shape.outlineAt(clock.stamp).bounds }; return b } // Observing read: never marks the shape presented.
     private fun planes()=listOfNotNull(low,high,pending?.first).distinct()
-    internal fun owns(plane: ShadowPlane)=!retired && plane===owner
+    internal fun owns(plane: ShadowPlane)=!retired && plane===owner; internal val waiting get()=pending!=null
     internal fun shareAt(plane: ShadowPlane,stamp: FrameStamp): Float { if(retired) return 0f; val w=shadowOwnership.valueAt(stamp); return (if(plane===high) w else 0f)+(if(plane===low) 1-w else 0f) }
     /** Equal target, profile, spec and access are idempotent; opacity and the presented rectangle join at one stamp. */
     fun request(target: SurfaceTarget,profile: MotionProfileId) {
@@ -58,3 +63,15 @@ enum class Stratum { Page,Lifted,Floating,Drawer,Player,Modal,Overlay,Diagnostic
 @Composable fun rememberSurfaceNode(key: Any,shape: ShapeView,initial: SurfaceTarget): SurfaceNode { val clock=ownerClock(); val plane=requireNotNull(LocalShadowPlane.current) { "A surface registers on its host's ShadowPlane" }; val node=remember(clock,plane,key) { SurfaceNode(clock,key,shape,initial,plane) }; require(node.shape===shape) { "A surface keeps one persistent shape" }; DisposableEffect(node) { onDispose { node.dispose() } }; return node }
 /** D31: one placement node; z-order is the stratum, then stable registration order within the host. */
 fun Modifier.surface(node: SurfaceView): Modifier { require(node is SurfaceNode) { "Surfaces come from rememberSurfaceNode" }; return layout { m,c -> val p=m.measure(c); layout(p.width,p.height) { p.place(0,0,zIndex=node.order) } } }
+/** D25/D28: the host draws its owned casters' field after its content, then publishes the draw receipt; queued transfers start on the next frame. */
+@Composable internal fun ShadowPlaneHost(plane: ShadowPlane,strength: Float,spread: Float,modifier: Modifier,content: @Composable androidx.compose.foundation.layout.BoxScope.()->Unit) { val cache=rememberGlassShadow(); val view=LocalView.current; SideEffect { plane.view=view }
+    androidx.compose.foundation.layout.Box(modifier.onPlaced { plane.layout=it }.drawWithContent { drawContent(); plane.revision; with(cache) { draw(plane.casters.flatMap { n -> if(n.owns(plane) && n.opacity.value()>0f) n.shape.outline().bodies.map { it to n.opacity.value() } else emptyList() },strength,spread) }; if(plane.receipt()) view.postOnAnimation { plane.admit() } },content=content) }
+/** D26 live-compat caster (expires U06.01/U09.01a): an Engine-owned implicit node whose shape follows its layout in [plane]'s host; [body] maps that rectangle to the drawn body, or null. */
+internal class LayoutShape(override val key: Any,private val plane: ShadowPlane): ShapeView { var coordinates: LayoutCoordinates?=null; var body: (Rect)->RoundRect? = { null }
+    /** The laid-out body in host space, read in draw; not a motion read. */
+    fun laidOut(): RoundRect? { val host=plane.layout?.takeIf { it.isAttached }; val own=coordinates?.takeIf { it.isAttached }; return if(host==null || own==null) null else body(host.localBoundingBoxOf(own,clipBounds=false)) }
+    override fun outline(): ShapeFrame { val b=laidOut(); return ShapeFrame(listOfNotNull(b),b?.boundingRect?:Rect.Zero,b?.topLeftCornerRadius?.x?:0f,GlassStrain.None) }
+    override fun outlineAt(stamp: FrameStamp)=outline() }
+@Composable internal fun Modifier.glassCaster(plane: ShadowPlane,key: Any,body: (Rect)->RoundRect?): Modifier { val clock=ownerClock(); val shape=remember(plane,key) { LayoutShape(key,plane) }; SideEffect { shape.body=body }
+    val node=remember(clock,plane,key) { SurfaceNode(clock,key,shape,SurfaceTarget(Stratum.Floating,1f,ShadowRole.Glass),plane) }; DisposableEffect(node) { onDispose { node.dispose() } }
+    return onGloballyPositioned { shape.coordinates=it; androidx.compose.runtime.snapshots.Snapshot.withoutReadObservation { plane.revision++ } } }

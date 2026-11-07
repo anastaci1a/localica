@@ -130,10 +130,10 @@ class ActivationHapticsTest {
         var selected by mutableStateOf(setOf("A"))
         var holds = 0
         compose.setContent { LocalicaTheme { CompositionLocalProvider(LocalControlHaptics provides sink) {
-            Box(Modifier.width(300.dp)) {
+            Box(Modifier.width(300.dp)) { EngineRecord {
                 OrderedGlassBubbles(listOf("A", "B"), selected, { it }, false, enabled = enabled,
                     role = Role.Tab, onSelect = { selected = setOf(it); clicks++ }, onLongClick = { holds++ })
-            }
+            } }
         } } }
         compose.onNodeWithTag("B").performTouchInput { click() }
         compose.onNodeWithTag("A").performClick()

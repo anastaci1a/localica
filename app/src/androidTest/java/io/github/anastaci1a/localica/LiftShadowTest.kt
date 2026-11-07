@@ -30,6 +30,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.anastaci1a.localica.navigation.*
 import io.github.anastaci1a.localica.ui.*
+import io.github.anastaci1a.localica.ui.engine.*
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test

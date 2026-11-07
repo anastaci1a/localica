@@ -203,6 +203,8 @@ internal class HoverSurfaceRenderer(private val graphics: GraphicsContext,scope:
     val average = if (Build.VERSION.SDK_INT >= 33) MaterialAverageRenderer() else null
     private val lifetime=kotlinx.coroutines.Job(scope.coroutineContext[kotlinx.coroutines.Job])
     val shadow=RetainedGlassShadow(kotlinx.coroutines.CoroutineScope(scope.coroutineContext+lifetime))
+    /** Root adapter for callers outside the D04 allowance (HoverDrag): the same retained renderer call. */
+    fun androidx.compose.ui.graphics.drawscope.DrawScope.drawShadow(bodies: List<Pair<androidx.compose.ui.geometry.RoundRect,Float>>,strength: Float,spread: Float,color: androidx.compose.ui.graphics.Color)=with(shadow) { draw(bodies,strength,spread,color=color) }
     fun release() { lifetime.cancel();graphics.releaseGraphicsLayer(output);graphics.releaseGraphicsLayer(flatOutput) }
 }
 

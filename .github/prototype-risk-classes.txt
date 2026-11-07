@@ -431,3 +431,4 @@ io.github.anastaci1a.localica.SelectionMergeGeometryTest
 io.github.anastaci1a.localica.SelectionMergeSequenceTest
 io.github.anastaci1a.localica.PlayerReleaseContinuityTest
 io.github.anastaci1a.localica.QueueOwnerContinuityTest
+io.github.anastaci1a.localica.CompositorAdoptionTest
