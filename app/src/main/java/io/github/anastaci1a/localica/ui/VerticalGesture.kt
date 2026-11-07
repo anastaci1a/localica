@@ -14,5 +14,3 @@ internal fun settleOpen(travel: Float, velocity: Float, progress: Float, opening
 }
 
 internal enum class VerticalOwner { Undecided, Player, Queue }
-
-internal val PlayerSettleEasing = androidx.compose.animation.core.CubicBezierEasing(.22f, .0f, .12f, 1f)

@@ -72,6 +72,9 @@ fun uiSpec(settings: InterfaceSettings, overrides: UiSpecData? = null, geometry:
     for((key,m) in material) with(m) { valid(listOf(blur,whiteTint,shadowStrength,shadowSpread).all { bounded(it,0f,1f) } && bounded(contrast,0f,.5f) && bounded(liftShadowStrength,.5f,1.5f) && bounded(shapeDamping,2f,40f) && bounded(depth,.6f,2f),"material.$key") }
     return if(errors.isNotEmpty()) SpecResult.Rejected(errors.toList()) else SpecResult.Accepted(UiSpec(space,radius,control,clearance,motion,spring,expansion,material,if(settings.reducedMotion || o.access==MotionAccess.Reduced) MotionAccess.Reduced else o.access?:if(settings.fasterMotion) MotionAccess.Faster else MotionAccess.Standard,geometry))
 }
+/** U11.00 root ingress: a rejected payload falls back to the stock catalog with the same access and measured geometry. */
+fun uiSpec(settings: InterfaceSettings, geometry: ExpansionGeometryDomain, density: Density): ResolvedUiSpec = ResolvedUiSpec(((uiSpec(settings, null, geometry) as? SpecResult.Accepted)
+    ?: uiSpec(InterfaceSettings(reducedMotion = settings.reducedMotion, fasterMotion = settings.fasterMotion), null, geometry) as SpecResult.Accepted).spec, density)
 internal fun springHorizon(s: SpringProfileSpec, x0: Double = 1.05, v0: Double = vMax.toDouble(), range: Double = 1.0, speed: Double = 4.0/3): Double {
     val w=sqrt(s.stiffness.toDouble())*if(s.speedExponent==2) speed else 1.0; val z=s.dampingRatio.toDouble(); val x=x0/range; val v=v0/range; val critical=abs(v+w*x)
     fun envelopes(t: Double): Pair<Double,Double> = when { z<1 -> { val c=hypot(x,(v+z*w*x)/(w*sqrt(1-z*z))); c*exp(-z*w*t) to c*w*exp(-z*w*t) }; z==1.0 -> { (abs(x)+critical*t)*exp(-w*t) to (abs(v)+w*critical*t)*exp(-w*t) }; else -> { val ls=w/(z+sqrt(z*z-1)); val lf=w*(z+sqrt(z*z-1)); val a=(v+lf*x)/(lf-ls); val b=-(v+ls*x)/(lf-ls); (abs(a)+abs(b))*exp(-ls*t) to (abs(a)*ls+abs(b)*lf)*exp(-ls*t) } }

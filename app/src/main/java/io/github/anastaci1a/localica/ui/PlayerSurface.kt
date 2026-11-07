@@ -40,6 +40,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Constraints
 import io.github.anastaci1a.localica.R
+import io.github.anastaci1a.localica.ui.components.SheetState
 import io.github.anastaci1a.localica.navigation.*
 import io.github.anastaci1a.localica.library.Track
 import io.github.anastaci1a.localica.playback.PlaybackState
@@ -60,7 +61,7 @@ internal val LocalPlayerWorkObserver = staticCompositionLocalOf<((String, Float?
 /** The surface, gesture owner, artwork, metadata and transport retain identity at every progress value. */
 @Composable
 internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expanded: Boolean, onExpanded: (Boolean) -> Unit,
-    settings: InterfaceSettings, progress: Animatable<Float, *>, onToggle: () -> Unit, onSeek: (Long) -> Unit,
+    settings: InterfaceSettings, sheet: SheetState, onToggle: () -> Unit, onSeek: (Long) -> Unit,
     onPrevious: () -> Unit, onNext: () -> Unit, onQueue: () -> Unit, onLibrary: () -> Unit,
     lyricsOpen: Boolean = false, onLyrics: (Boolean) -> Unit = {},
     track: Track? = null, onSettings: (InterfaceSettings) -> Unit = {},
@@ -84,7 +85,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     val statusInset = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     val miniTop = maxHeight - navigationInset - (CompactControlSize + bottomChrome)
     val distance = with(density) { miniTop.toPx().coerceAtLeast(1f) }
-    val p = progress.value
+    val p = sheet.expansion.phase.value()
     // A paused skip can buffer without requesting playback. Only show Pause
     // while playing or buffering with an explicit play-when-ready intent.
     val showPause = sampled.isPlaying || (sampled.isBuffering && sampled.playWhenReady)
@@ -138,7 +139,6 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     val backgroundProgress by animateFloatAsState(if (settings.artworkLayout == ArtworkLayout.FullBackground) 1f else 0f,
         tween(settings.motionDuration(400)), label = "Artwork layout")
     var startExpanded by remember { mutableStateOf(expanded) }
-    var startProgress by remember { mutableFloatStateOf(progress.value) }
     var startQueueProgress by remember { mutableFloatStateOf(0f) }
     var movement by remember { mutableFloatStateOf(0f) }
     var dragging by remember { mutableStateOf(false) }
@@ -163,53 +163,34 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
         ArtworkAction.Change -> track?.let { editArtwork?.invoke(it) }
         ArtworkAction.None -> Unit
     } }
-    LaunchedEffect(expanded, settings.reducedMotion, settings.fasterMotion) {
-        if (!dragging) {
-            if (expanded) openingPopupHome?.awaitHandoff() else popupHome.awaitHandoff()
-            progress.animateTo(if (expanded) 1f else 0f, tween(settings.motionDuration(400), easing = PlayerSettleEasing))
-        }
-    }
-    fun settle(target: Boolean) {
-        onExpanded(target)
-        scope.launch {
-            if (target) openingPopupHome?.awaitHandoff() else popupHome.awaitHandoff()
-            progress.animateTo(if (target) 1f else 0f, tween(settings.motionDuration(400), easing = PlayerSettleEasing))
-        }
-    }
+    var touching by remember { mutableStateOf(false) }
     val dragState = rememberDraggableState { delta ->
-        if (owner == VerticalOwner.Undecided) owner = if (startExpanded && (delta < 0f || startQueueProgress > 0f)) VerticalOwner.Queue else VerticalOwner.Player
-        movement += delta
-        scope.launch(start = CoroutineStart.UNDISPATCHED) {
-            if (owner == VerticalOwner.Queue) {
-                progress.snapTo(1f)
-                queueProgress?.snapTo((startQueueProgress - movement / distance).coerceIn(0f, 1f))
-            } else progress.snapTo((startProgress - movement / distance).coerceIn(0f, 1f))
+        if (owner == VerticalOwner.Undecided) {
+            owner = if (startExpanded && (delta < 0f || startQueueProgress > 0f)) VerticalOwner.Queue else VerticalOwner.Player
+            touching = owner == VerticalOwner.Player && sheet.contact.onDragStart()
         }
+        movement += delta
+        // The finger drives the player's phase through its owner; Queue keeps its own drive until U10.02.
+        if (touching) sheet.contact.onDrag(-movement)
+        else if (owner == VerticalOwner.Queue) scope.launch(start = CoroutineStart.UNDISPATCHED) {
+            queueProgress?.snapTo((startQueueProgress - movement / distance).coerceIn(0f, 1f)) }
     }
     val drag = Modifier.playerVerticalDrag(canStart = { !scrubCancel.active }, onDelta = { dragState.dispatchRawDelta(it) },
-        onStart = { startExpanded = expanded; startProgress = progress.value; startQueueProgress = queueProgress?.value ?: 0f; movement = 0f
-            owner = VerticalOwner.Undecided; dragging = true; progress.stop(); queueProgress?.stop() },
+        onStart = { startExpanded = expanded; startQueueProgress = queueProgress?.value ?: 0f; movement = 0f
+            owner = VerticalOwner.Undecided; dragging = true; queueProgress?.stop() },
         onStop = { velocity ->
             dragging = false
-            val travelDp = -movement / density.density
-            val velocityDp = -velocity / density.density
             if (owner == VerticalOwner.Queue) {
-                settle(true)
-                val open = settleOpen(travelDp, velocityDp, queueProgress?.value ?: 0f, startQueueProgress < .5f)
+                onExpanded(true)
+                val open = settleOpen(-movement / density.density, -velocity / density.density, queueProgress?.value ?: 0f, startQueueProgress < .5f)
                 if (open) onQueue()
                 else scope.launch { queueProgress?.animateTo(0f, tween(settings.motionDuration(400))) }
-            } else settle(settleOpen(travelDp, velocityDp, progress.value, !startExpanded,
-                velocityThreshold = if (startExpanded) VerticalReleaseVelocity else 240f,
-                distanceThreshold = if (startExpanded) VerticalReleaseDistance else CompactControlSize.value * .42f))
+            } else if (touching) { touching = false; onExpanded(sheet.contact.onRelease(-velocity).expanded) }
         }, onCancel = {
             dragging = false
-            // Cancellation restores the previous logical surface, not a zero-velocity
-            // distance-based release that could still open the player or Queue.
-            kotlinx.coroutines.coroutineScope {
-                launch { progress.animateTo(if (startExpanded) 1f else 0f,
-                    tween(settings.motionDuration(400), easing = PlayerSettleEasing)) }
-                launch { queueProgress?.animateTo(startQueueProgress, tween(settings.motionDuration(400))) }
-            }
+            // Cancellation restores the previous logical surface from the current kinematics.
+            if (touching) { touching = false; sheet.contact.onDragCancel() }
+            queueProgress?.animateTo(startQueueProgress, tween(settings.motionDuration(400)))
         })
     // Finish the cover mask late, independently of the backing's color. Delaying the
     // color continuation too would reveal a dark average palette before light artwork.
@@ -405,7 +386,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
         surfaceContainerHighest = androidx.compose.ui.graphics.lerp(baseColors.surfaceContainerHighest, palette.top, p))) {
     Surface(Modifier.motionBounds(surfaceFrame.x, surfaceFrame.y, surfaceFrame.width, surfaceFrame.height)
         .onGloballyPositioned { polarity.measure("viewport", it) }
-        .bottomGlassShadow(surfaceCorner, opacity = { 1f - progress.value })
+        .bottomGlassShadow(surfaceCorner, opacity = { 1f - sheet.expansion.phase.value() })
         .then(drag).controlScrollParent { playerDragDirections(expanded, scrubCancel.active) }
         .then(if ((queueProgress?.value ?: 0f) > 0f) Modifier.clearAndSetSemantics {} else Modifier).testTag("player-surface")
         // The Queue must never sample the light browsing glass. Delaying readback alone
@@ -426,7 +407,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
         Column(Modifier.fillMaxSize().controlVerticalScroll(playerScroll, enabled = p > 0.99f && virtualHeight > this@PlayerSurface.maxHeight)) {
         Box(Modifier.fillMaxWidth().height(virtualHeight).clipToBounds().testTag("player-background-space")
             .onGloballyPositioned { polarity.measure("background", it) }
-            .then(if (!expanded) Modifier.clickable(onClickLabel = "Expand player") { settle(true) } else Modifier)) {
+            .then(if (!expanded) Modifier.clickable(onClickLabel = "Expand player") { onExpanded(true) } else Modifier)) {
         @Composable fun cover(frame: PlayerVisual, offset: Float, neighbor: Boolean = false) {
             Box(Modifier.motionBounds(artX, artY, artWidth, artHeight)
                 .then(if (!neighbor) Modifier.onGloballyPositioned { polarity.measure("cover", it) } else Modifier).graphicsLayer {
@@ -524,14 +505,14 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
             }
             if (handleReveal > 0f) Box(Modifier.offset(y = statusInset).fillMaxWidth().height(48.dp).graphicsLayer { alpha = handleReveal }) {
                 Box(Modifier.align(Alignment.TopCenter).size(96.dp, 48.dp)
-                    .clickable(interactionSource = null, indication = null, onClickLabel = "Collapse player") { settle(false) }
+                    .clickable(interactionSource = null, indication = null, onClickLabel = "Collapse player") { onExpanded(false) }
                     .semantics { contentDescription = "Player handle" }) {
                     Box(Modifier.align(Alignment.TopCenter).padding(top = 10.dp).size(72.dp, 4.dp).testTag("player-handle")
                         .background(playerHandleColor(foreground), RoundedCornerShape(2.dp)))
                 }
                 CompositionLocalProvider(LocalFrostedBackdrop provides lyricBackdrop) {
                     Box(Modifier.align(Alignment.TopStart).padding(start = 16.dp)) {
-                        ActionIcon(AppIcon.ActionDown, "Collapse player") { settle(false) }
+                        ActionIcon(AppIcon.ActionDown, "Collapse player") { onExpanded(false) }
                     }
                     Box(Modifier.align(Alignment.TopEnd).padding(end = 16.dp)) {
                         LyricsHeaderActions(lyricsOpen, lyricProgress, sourcesAnchor, sourcesPreparation,
@@ -543,7 +524,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
             }
             val titleScale = 13f / MaterialTheme.typography.headlineSmall.fontSize.value
             val subtitleScale = 11f / MaterialTheme.typography.bodyLarge.fontSize.value
-            val textMotionPaused = playerMarqueePaused(p, expanded, dragging, progress.isRunning)
+            val textMotionPaused = playerMarqueePaused(p, expanded, dragging, !sheet.expansion.phase.settled)
             // Measure the presented title, including its scale, before sizing its input
             // band. Padding changes only the target: the title still draws at titleY.
             // Logical closing immediately re-enables opening; the existing lyricVisibility
