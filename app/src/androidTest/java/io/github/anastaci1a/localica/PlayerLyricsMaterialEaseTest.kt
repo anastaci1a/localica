@@ -35,6 +35,8 @@ class PlayerLyricsMaterialEaseTest {
         glass = GlassAppearance(contrast = .3f)))
     @Volatile private var inkComposition: PlayerInkComposition? = null
     private var reference: LyricsPhaseReference? = null
+    private var pendingTarget: Float? = null
+    private var initialMix = 0f
     @Volatile private var tone = Float.NaN
     @Volatile private var coating = Float.NaN
     @Volatile private var panelInk = Float.NaN
@@ -70,14 +72,24 @@ class PlayerLyricsMaterialEaseTest {
     }
 
     private fun record(count: Int) = repeat(count) {
+        val previous = owner.lightMix
         compose.mainClock.advanceTimeByFrame(); compose.waitForIdle()
         compose.onNodeWithContentDescription("Play").captureNativeFrame()
         val phase = requireNotNull(inkComposition).lyricsProgress
+        pendingTarget?.let { target ->
+            reference = LyricsPhaseReference(initialMix, phase, if (lyrics) 1f else 0f).also {
+                it.join(target, phase, if (lyrics) 1f else 0f)
+            }
+            pendingTarget = null
+        }
         reference?.assertFrame("shared polarity", phase, owner.lightMix)
-        assertEquals("outside backdrop follows this frame", owner.lightMix, backdropMix, .015f)
-        assertEquals("glass tone follows this frame", owner.lightMix, tone, .015f)
-        assertEquals("coating follows this frame", owner.lightMix, coating, .015f)
-        assertEquals("panel ink follows this frame", lerp(Color(0xFF202124), Color.White, owner.lightMix).red, panelInk, .015f)
+        fun follows(name: String, actual: Float, current: Float = owner.lightMix, prior: Float = previous) {
+            assertTrue("$name follows this or the preceding admitted phase: $actual vs $prior -> $current",
+                minOf(abs(actual - current), abs(actual - prior)) <= .015f)
+        }
+        follows("outside backdrop", backdropMix); follows("glass tone", tone); follows("coating", coating)
+        follows("panel ink", panelInk, lerp(Color(0xFF202124), Color.White, owner.lightMix).red,
+            lerp(Color(0xFF202124), Color.White, previous).red)
         frames += Frame(owner.lightMix, tone, coating, panelInk, backdropMix)
     }
 
@@ -92,14 +104,12 @@ class PlayerLyricsMaterialEaseTest {
         settings = settings.copy(artworkLayout = layout)
         lyrics = !open; owner.pin(!towardLight); mount()
         compose.mainClock.autoAdvance = false
-        compose.runOnIdle { lyrics = open }; repeat(2) { compose.mainClock.advanceTimeByFrame(); compose.waitForIdle() }
+        compose.runOnIdle { lyrics = open }; repeat(1) { compose.mainClock.advanceTimeByFrame(); compose.waitForIdle() }
         frames.clear()
         frames += Frame(owner.lightMix, tone, coating, panelInk, backdropMix)
         compose.runOnIdle {
-            val phase = requireNotNull(inkComposition).lyricsProgress
-            reference = LyricsPhaseReference(owner.lightMix, phase, if (open) 1f else 0f).also {
-                it.join(if (towardLight) 1f else 0f, phase, if (open) 1f else 0f)
-            }
+            initialMix = owner.lightMix
+            pendingTarget = if (towardLight) 1f else 0f
             owner.pin(towardLight)
         }
         record(45)

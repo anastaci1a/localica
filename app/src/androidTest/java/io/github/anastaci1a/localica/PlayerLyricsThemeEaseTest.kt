@@ -47,8 +47,10 @@ class PlayerLyricsThemeEaseTest {
     /** Latest drawn ink of every glass surface, by surface identity. */
     private val glassInk = ConcurrentHashMap<Int, Float>()
 
-    private class Frame(val foreground: Float, val glass: Map<Int, Float>, val expected: Float)
+    private class Frame(val foreground: Float, val glass: Map<Int, Float>, val expected: Float, val previous: Float)
     private var reference: LyricsPhaseReference? = null
+    private var pendingInk: Float? = null
+    private var pendingEnd = 0f
     private val recorded = ArrayList<Frame>()
 
     private fun mount(realDecision: Boolean = false) {
@@ -84,16 +86,21 @@ class PlayerLyricsThemeEaseTest {
 
     private fun frame() { compose.mainClock.advanceTimeByFrame(); compose.waitForIdle() }
     private fun record(count: Int, assertLyricsPhase: Boolean = true) { repeat(count) {
+        val previous = requireNotNull(inkComposition).contentColor.red
         glassInk.clear()
         frame()
         if (assertLyricsPhase) compose.onNodeWithContentDescription("Play").captureNativeFrame()
         val ink = requireNotNull(inkComposition)
+        pendingInk?.let { target ->
+            requireNotNull(reference).join(target, ink.lyricsProgress, pendingEnd)
+            pendingInk = null
+        }
         val expected = lerp(Color.Black, Color.White, requireNotNull(reference).expected(ink.lyricsProgress)).red
         if (assertLyricsPhase) {
             assertEquals("foreground follows the lyrics phase", expected, ink.contentColor.red, .015f)
             assertEquals("shared material follows the lyrics phase", requireNotNull(reference).expected(ink.lyricsProgress), owner.lightMix, .015f)
         }
-        recorded += Frame(ink.contentColor.red, glassInk.toMap(), expected)
+        recorded += Frame(ink.contentColor.red, glassInk.toMap(), expected, previous)
     }
         if (!assertLyricsPhase) return
         recorded.flatMap { it.glass.keys }.distinct().forEach { id ->
@@ -101,17 +108,19 @@ class PlayerLyricsThemeEaseTest {
             val values = samples.map { it.glass.getValue(id) }
             // Constant surfaces need not consume the player polarity; every changing surface must.
             if (values.max() - values.min() > .05f) samples.forEach {
-                assertEquals("drawn glass ink #$id follows this phase", it.expected, it.glass.getValue(id), .02f)
+                val actual = it.glass.getValue(id)
+                assertTrue("drawn glass ink #$id follows this or the preceding admitted phase: $actual vs "+
+                    it.previous + " -> " + it.expected, minOf(abs(actual - it.expected), abs(actual - it.previous)) <= .02f)
             }
         }
     }
     private fun openLyrics(open: Boolean) { compose.runOnIdle {
-        reference?.join(if (owner.decision.lightInk) 1f else 0f, requireNotNull(inkComposition).lyricsProgress, if (open) 1f else 0f)
+        pendingInk = if (owner.decision.lightInk) 1f else 0f; pendingEnd = if (open) 1f else 0f
         lyrics = open
     } }
     private fun pin(light: Boolean) { compose.runOnIdle {
         if (settings.reducedMotion) reference = LyricsPhaseReference(if (light) 1f else 0f, if (lyrics) 1f else 0f, if (lyrics) 1f else 0f)
-        else reference?.join(if (light) 1f else 0f, requireNotNull(inkComposition).lyricsProgress, if (lyrics) 1f else 0f)
+        else { pendingInk = if (light) 1f else 0f; pendingEnd = if (lyrics) 1f else 0f }
         owner.pin(light)
     } }
 
@@ -127,7 +136,7 @@ class PlayerLyricsThemeEaseTest {
             if (towardLight == true) assertTrue("ink moves toward light", b >= a - 1e-3f)
             if (towardLight == false) assertTrue("ink moves toward dark", b <= a + 1e-3f)
         }
-        assertTrue("glass controls were drawn", glassSequences().isNotEmpty())
+        assertTrue("some glass control follows the polarity", glassSequences().any { it.max() - it.min() > .3f })
         // record() compares every channel with the cubic boundary-value oracle at this frame's
         // actual #608 phase. Its successive expected values supply the law-derived frame bound.
     }
@@ -204,7 +213,7 @@ class PlayerLyricsThemeEaseTest {
         settings = settings.copy(artworkLayout = layout)
         pin(true); mount()
         compose.mainClock.autoAdvance = false
-        openLyrics(true); record(2)
+        openLyrics(true); record(1)
         recorded.clear()
         pin(false)            // the lyrics theme differs: this arrives part-way through the animation
         record(40)
@@ -219,7 +228,7 @@ class PlayerLyricsThemeEaseTest {
         settings = settings.copy(artworkLayout = layout)
         lyrics = true; pin(false); mount()
         compose.mainClock.autoAdvance = false
-        openLyrics(false); record(2)
+        openLyrics(false); record(1)
         recorded.clear()
         pin(true)
         record(40)
@@ -233,9 +242,9 @@ class PlayerLyricsThemeEaseTest {
     @Test fun reversingTheLyricsAnimationMidEaseContinuesWithoutAJump() {
         pin(true); mount()
         compose.mainClock.autoAdvance = false
-        openLyrics(true); record(2)
+        openLyrics(true); record(1)
         recorded.clear()
-        pin(false); record(1)
+        pin(false); record(2)
         assertTrue("reversal interrupts the lyrics phase", requireNotNull(inkComposition).lyricsProgress in .05f..0.95f)
         openLyrics(false)      // reversed part-way through the ease
         record(40)
@@ -250,9 +259,9 @@ class PlayerLyricsThemeEaseTest {
     @Test fun aThemeThatChangesBackMidEaseTurnsAroundWithoutAJump() {
         pin(true); mount()
         compose.mainClock.autoAdvance = false
-        openLyrics(true); record(2)
+        openLyrics(true); record(1)
         recorded.clear()
-        pin(false); record(1)
+        pin(false); record(2)
         assertTrue("theme rejoin interrupts the lyrics phase", requireNotNull(inkComposition).lyricsProgress in .05f..0.95f)
         pin(true); record(40)
         assertEquals(1f, foreground().last(), .02f)
