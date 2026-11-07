@@ -1,0 +1,113 @@
+{
+  "schemaVersion": 1,
+  "approval": "Lead decision 2026-11-07 ~12:55 PM (5), #600 Stage 2 close-out (design/STAGE2-CLOSEOUT.md §3): A2 nominal and unit caps are unchanged; the cap gap is a carried deficit of 340 tracked as seven named rows. A row closes only with its step's U14 receipt (actual gross deletion, symbol gone); a short row becomes that unit's overrun.",
+  "carried": 340,
+  "effectiveGates": {
+    "stage2": 490,
+    "stage3": -60,
+    "stage4": -700
+  },
+  "repayment": {
+    "byStage3Close": 200,
+    "byStage4Close": 140
+  },
+  "rows": [
+    {
+      "id": "R1",
+      "credit": "GlassElastic, GlassSpringParameters, GlassMomentum integrator (strain)",
+      "grossA2Stage2": 165,
+      "expectedNet": -125,
+      "step": "U01.05b",
+      "stage": 3,
+      "authority": "D32"
+    },
+    {
+      "id": "R2",
+      "credit": "retained-face policy, U10 share (GlassMorphContent, GlassPresence, FloatingSelectionPanel minus U04's 60)",
+      "grossA2Stage2": 93,
+      "expectedNet": -80,
+      "step": "U04.02a",
+      "stage": 3,
+      "authority": "D33",
+      "note": "measured on the receipt, not assumed"
+    },
+    {
+      "id": "R3",
+      "credit": "SelectorCrossMotion",
+      "grossA2Stage2": 55,
+      "expectedNet": -45,
+      "step": "U01.05b",
+      "stage": 3,
+      "authority": "12:55 PM (1)"
+    },
+    {
+      "id": "R4",
+      "credit": "ListMotion numerical",
+      "grossA2Stage2": 154,
+      "expectedNet": -120,
+      "step": "U01.05c",
+      "stage": 4,
+      "authority": "10:10 AM (3), 12:55 PM (6)"
+    },
+    {
+      "id": "R5",
+      "credit": "ControlStateMotion",
+      "grossA2Stage2": 41,
+      "expectedNet": -35,
+      "step": "U01.05c/U05.02c",
+      "stage": 4,
+      "authority": "12:55 PM (1), (2)"
+    },
+    {
+      "id": "R6",
+      "credit": "MarqueeMotion clock",
+      "grossA2Stage2": 52,
+      "expectedNet": -35,
+      "step": "U01.05c",
+      "stage": 4,
+      "authority": "12:55 PM (6)"
+    },
+    {
+      "id": "R7",
+      "credit": "motionDuration and the LocalicaScreen tweens (chromeVisibility, miniInk)",
+      "grossA2Stage2": 9,
+      "expectedNet": -9,
+      "step": "U10.05/U11.01",
+      "stage": 4,
+      "authority": "12:55 PM (3), (4)"
+    }
+  ],
+  "writtenOff": [
+    "PlayerBackdrop/PlayerBackgroundPolarity independent clocks >= 40",
+    "QueuePlaybackFollow local timing >= 30",
+    "InterfaceMotion token lines 32"
+  ],
+  "unitOverruns": [
+    {
+      "unit": "U10",
+      "amount": 69,
+      "reason": "Stage 2 Components + PhaseBinding +109 against the U10.00 allowance of +40; U10.04/U10.05 make it up or a later raise names an equal deletion"
+    }
+  ],
+  "receipt": {
+    "measuredAt": "5df1c4fd",
+    "path": "app/src/main",
+    "method": "git diff --numstat, added minus deleted; Stage 1+2 against the integrated v0.33.8 tip so main-side lines are excluded",
+    "stage0plus1": {
+      "range": "dba7f120..763b5ede",
+      "added": 483,
+      "deleted": 6,
+      "net": 477,
+      "cap": 550
+    },
+    "stage1plus2": {
+      "range": "d95bcb8c..5df1c4fd",
+      "added": 905,
+      "deleted": 361,
+      "net": 544,
+      "effectiveGate": 490,
+      "overrun": 54
+    },
+    "note": "Stage 2 rows still open here: U01.05a/U05.02a (floating family, blocked on fixture hosting) was projected at -7. U10.03 landed at about +39 against a projected -15: owner factories must stay in engine/components (ColorReferenceTest), so the root reaches its Engine owners through components/Presence.kt (+24), and the crop target is computed at the settled layout instead of from the moving clearance."
+  }
+}
