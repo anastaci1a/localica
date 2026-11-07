@@ -304,7 +304,7 @@ fun LocalicaScreen(
         LocalBrowseObscuredInset provides (browseBottomChrome + selectionPanel.clearance)) {
     ShadowPlaneViewport(bottomShadows, settings.glass.shadowStrength, settings.glass.shadowSpread,
         Modifier.fillMaxSize().recordFrostedBackdrop(modalBackdrop).background(MaterialTheme.colorScheme.background),
-        Modifier.testTag("browse-background").windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))) {
+        Modifier.testTag("browse-background"), WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal)) {
         val inset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
         val screenScope = this
         SideEffect { rootSize = androidx.compose.ui.unit.IntSize(constraints.maxWidth, constraints.maxHeight) }

@@ -1,6 +1,8 @@
 package io.github.anastaci1a.localica.ui.engine
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.ui.geometry.*
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.layout.*
@@ -74,10 +76,10 @@ fun Modifier.surface(node: SurfaceView): Modifier { require(node is SurfaceNode)
 @Composable internal fun ShadowPlaneHost(plane: ShadowPlane,strength: Float,spread: Float,modifier: Modifier,content: @Composable androidx.compose.foundation.layout.BoxScope.()->Unit) {
     CompositionLocalProvider(LocalShadowPlane provides plane) { androidx.compose.foundation.layout.Box(modifier.shadowPlaneHost(plane,strength,spread),content=content) } }
 /** Page host: the original constraints layout, with the field before the caller's existing inset/clip suffix. */
-@Composable internal fun ShadowPlaneViewport(plane: ShadowPlane,strength: Float,spread: Float,modifier: Modifier,contentModifier: Modifier=Modifier,
+@Composable internal fun ShadowPlaneViewport(plane: ShadowPlane,strength: Float,spread: Float,modifier: Modifier,contentModifier: Modifier,insets: WindowInsets,
     content: @Composable androidx.compose.foundation.layout.BoxWithConstraintsScope.()->Unit) {
     CompositionLocalProvider(LocalShadowPlane provides plane) {
-        androidx.compose.foundation.layout.BoxWithConstraints(modifier.shadowPlaneHost(plane,strength,spread).then(contentModifier),content=content)
+        androidx.compose.foundation.layout.BoxWithConstraints(modifier.shadowPlaneHost(plane,strength,spread).then(contentModifier).windowInsetsPadding(insets),content=content)
     }
 }
 /** The stock rounded panel keeps one host layout; its field precedes the original content clip and inherits outer alpha. */
