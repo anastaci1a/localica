@@ -29,8 +29,7 @@ internal class AnimatablePhase(val progress: Animatable<Float, *>) : MotionValue
     override fun velocityAt(stamp: FrameStamp) = velocity()
     override fun sampleAt(stamp: FrameStamp) = sample()
     override val target get() = progress.targetValue
-    // Like the Engine, a pose rests only at an endpoint; a posed partial phase is mid-motion (U10.03 ExpansionRest).
-    override val settled get() = !progress.isRunning && (progress.value == 0f || progress.value == 1f)
+    override val settled get() = !progress.isRunning
 }
 
 @Composable
