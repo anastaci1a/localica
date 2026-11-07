@@ -269,6 +269,69 @@ class SourceMethodsContract(unittest.TestCase):
                                                  "--output", str(invalid)]), 2)
         self.assertFalse(invalid.exists())
 
+    # #464: API-gated expectations.
+    def gated_fixture(self):
+        self.source("Gated.kt", '''
+            package sample
+            import org.junit.Test
+            import org.junit.Assume.assumeTrue
+            class Mixed {
+                @Test fun plain() {}
+                @androidx.test.filters.SdkSuppress(minSdkVersion = 33)
+                @Test fun before() {}
+                @Test @androidx.test.filters.SdkSuppress(minSdkVersion = 30) fun after() {}
+                @Test fun byAssume() {
+                    assumeTrue("needs shaders", android.os.Build.VERSION.SDK_INT >= 33)
+                    val nested = { assumeTrue(android.os.Build.VERSION.SDK_INT >= 99) }
+                }
+                @Test fun lowGate() {}
+            }
+            @androidx.test.filters.SdkSuppress(minSdkVersion = 33)
+            class Whole {
+                @Test fun one() {}
+                @Test fun two() {}
+            }
+        ''')
+
+    def test_gates_are_recorded_and_api_selects_the_exact_expectation(self):
+        self.gated_fixture()
+        full = self.inventory("sample.Mixed", "sample.Whole")
+        self.assertEqual(7, len(full["runtime_methods"]))
+        self.assertEqual({"min_sdk": 33, "assume_min_sdk": 0}, full["gates"]["sample.Mixed#before"])
+        self.assertEqual({"min_sdk": 30, "assume_min_sdk": 0}, full["gates"]["sample.Mixed#after"])
+        self.assertEqual({"min_sdk": 0, "assume_min_sdk": 33}, full["gates"]["sample.Mixed#byAssume"])
+        self.assertEqual(33, full["gates"]["sample.Whole#one"]["min_sdk"])
+        old = source_methods.inventory(self.root, ["sample.Mixed", "sample.Whole"], 26)
+        self.assertEqual(["sample.Mixed#byAssume", "sample.Mixed#lowGate", "sample.Mixed#plain"],
+                         [m for m in old["runtime_methods"] if "after" not in m and "before" not in m][:3])
+        self.assertEqual(["sample.Mixed#after", "sample.Mixed#before", "sample.Whole#one", "sample.Whole#two"],
+                         old["gated_absent_methods"])
+        self.assertEqual(["sample.Whole"], old["gated_absent_classes"])
+        mid = source_methods.inventory(self.root, ["sample.Mixed", "sample.Whole"], 30)
+        self.assertEqual(["sample.Mixed#after", "sample.Mixed#byAssume", "sample.Mixed#lowGate", "sample.Mixed#plain"],
+                         mid["runtime_methods"])
+        new = source_methods.inventory(self.root, ["sample.Mixed", "sample.Whole"], 33)
+        self.assertEqual(full["runtime_methods"], new["runtime_methods"])
+        self.assertEqual([], new["gated_absent_methods"])
+        self.assertEqual(full["runtime_methods"], old["all_runtime_methods"])
+
+    def test_unsupported_sdk_suppress_arguments_fail_closed(self):
+        for args in ("maxSdkVersion = 30", "minSdkVersion = Build.VERSION_CODES.TIRAMISU", "codeName = \"U\"", ""):
+            with self.subTest(args=args):
+                self.source("Odd.kt", "package sample\nimport org.junit.Test\nclass Odd { @Test "
+                            "@androidx.test.filters.SdkSuppress(" + args + ") fun x() {} }")
+                with self.assertRaisesRegex(source_methods.InventoryError, "SdkSuppress"):
+                    self.inventory("sample.Odd")
+
+    def test_cli_api_flag_writes_the_api_expectation(self):
+        self.gated_fixture()
+        output = self.root / "api26.json"
+        self.assertEqual(0, source_methods.main(["--root", str(self.root), "--classes", "sample.Whole,sample.Mixed",
+                                                 "--api", "26", "--output", str(output)]))
+        data = json.loads(output.read_text())
+        self.assertEqual(26, data["api"])
+        self.assertNotIn("sample.Whole#one", data["runtime_methods"])
+
     def test_real_repository_selected_classes_match_direct_methods_and_secondary_class(self):
         # Reads the real selected source snippets instead of relying only on parser-shaped fixtures.
         selectors = ["io.github.anastaci1a.localica.ListSearchTest",
