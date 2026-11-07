@@ -171,7 +171,9 @@ Under Reduced Motion the lyrics clock has no duration, so the polarity snaps wit
 
 Artwork changes drive surface palette tints from the same reveal fraction as the backdrop, ink and Queue materials. Rapid skips continue from the presented palette; Reduce motion snaps every channel.
 
-With brightness trim enabled, a backdrop waits for its grade and matching prepared pixels before its first drawing. Outgoing artwork retains its prepared grade when the blend creates a new role. The owned neutral placeholder gradient already meets white-ink contrast and draws immediately with zero grading shift.
+With brightness trim enabled, the current song's full-player backdrop is prepared while the player is minimized: on every song change, off the main thread, its grade at the settled full-player layout and its graded pixels. The previous song's set stays until the new one is complete. Expanding therefore draws the final backdrop from its first frame. Outgoing artwork retains its prepared grade when the blend creates a new role. The owned neutral placeholder gradient already meets white-ink contrast and draws immediately with zero grading shift.
+
+A drawn backdrop stays until its replacement's pixels are prepared; it never blanks. If an expansion or a restored open player starts before preparation finishes, the backdrop presents the same artwork ungraded and eases into its grade, never the empty window behind the player.
 
 Blur, texture and the artwork continuation remain unchanged.
 

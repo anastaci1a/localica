@@ -273,7 +273,9 @@ class QueueSongTransitionTest {
         assertTrue("backdrop snapped, never eased: $shots", shots.all { abs(it - shots.first()) < .05f || abs(it - shots.last()) < .05f })
     }
 
-    @Test fun firstOpenNeverPresentsAnUngradedBackdropWhilePreparationIsPending() {
+    /** #634 supersedes the empty first frames: a first open whose grade is still pending presents the same
+     * artwork ungraded, never the empty window behind the player, then holds or eases into the grade. */
+    @Test fun firstOpenPresentsTheArtworkNotAnEmptyWindowWhilePreparationIsPending() {
         val ready = CompletableDeferred<Unit>()
         preparationBarrier = { ready.await() }
         compose.mainClock.autoAdvance = false
@@ -282,7 +284,7 @@ class QueueSongTransitionTest {
             repeat(4) {
                 compose.mainClock.advanceTimeByFrame()
                 assertTrue("No grade may bypass the preparation barrier", owner.roleGrades.isEmpty())
-                assertTrue("First frame $it must hold the raw white backdrop", gutter(green = true) < .2f)
+                assertTrue("First frame $it must present the white artwork backdrop, not the empty window", gutter(green = true) > .75f)
             }
             ready.complete(Unit)
             for (i in 0 until 60) {

@@ -63,7 +63,15 @@ private object ToneImages {
         override fun sizeOf(key: Key, value: ImageBitmap) = value.width * value.height * 4
     }
     val mutex = Mutex()
-    fun peek(image: ImageBitmap, tone: GlassTone): ImageBitmap? = images.get(Key(image.asAndroidBitmap(), tone))
+    /** Sets an owner keeps outside the LRU (#634): the current song's full-player backdrop must survive
+     * unrelated tone work while the player is minimized. An owner replaces its whole set at once. */
+    private val retained = HashMap<Any, Map<Key, ImageBitmap>>()
+    private fun lookup(key: Key): ImageBitmap? =
+        images.get(key) ?: synchronized(retained) { retained.values.firstNotNullOfOrNull { it[key] } }
+    fun peek(image: ImageBitmap, tone: GlassTone): ImageBitmap? = lookup(Key(image.asAndroidBitmap(), tone))
+    fun retain(owner: Any, set: Map<Key, ImageBitmap>) = synchronized(retained) {
+        if (set.isEmpty()) retained.remove(owner) else retained[owner] = set
+    }
     /** Pixels already prepared for this image under another tone: close to the wanted result,
      * unlike the raw image, which is visibly brighter than any positive tone's output. An entry
      * of the same polarity is preferred; the opposite polarity is only a last resort. */
@@ -74,7 +82,7 @@ private object ToneImages {
     }
     suspend fun get(image: ImageBitmap, tone: GlassTone): ImageBitmap = mutex.withLock {
         val key = Key(image.asAndroidBitmap(), tone)
-        images.get(key)?.let { return@withLock it }
+        lookup(key)?.let { return@withLock it }
         val source = readGlassPixels(image, 1)
         val pixels = source.pixels
         if (tone.shift != 0f) {
@@ -89,6 +97,21 @@ private object ToneImages {
         }
         Bitmap.createBitmap(pixels, source.width, source.height, Bitmap.Config.ARGB_8888)
             .asImageBitmap().also { images.put(key, it) }
+    }
+}
+
+/** One prepared tone image, opaque outside this file: the shared cache key and its pixels. */
+internal class PreparedToneImage private constructor(internal val key: Any, val image: ImageBitmap) {
+    internal companion object {
+        /** Prepares [bitmap] under [tone] in the shared cache before any consumer mounts (#634), off Main.
+         * Null for an identity tone, which draws the source itself. */
+        suspend fun prepare(bitmap: Bitmap, tone: GlassTone): PreparedToneImage? = if (tone.identity) null
+            else withContext(Dispatchers.Default) {
+                PreparedToneImage(ToneImages.Key(bitmap, tone), ToneImages.get(bitmap.asImageBitmap(), tone))
+            }
+        /** [owner] keeps exactly [images] findable by every tone consumer, replacing its previous set. */
+        fun retain(owner: Any, images: List<PreparedToneImage>) =
+            ToneImages.retain(owner, images.associate { it.key as ToneImages.Key to it.image })
     }
 }
 

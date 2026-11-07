@@ -197,6 +197,7 @@ io.github.anastaci1a.localica.PlayerBackdropTest
 io.github.anastaci1a.localica.PlayerBackgroundImageMappingTest
 io.github.anastaci1a.localica.PlayerBackgroundPolarityTest
 io.github.anastaci1a.localica.PlayerContrastTest
+io.github.anastaci1a.localica.PlayerExpandReadinessTest
 io.github.anastaci1a.localica.PlayerExpansionMotionTest
 io.github.anastaci1a.localica.PlayerFeedbackTest
 io.github.anastaci1a.localica.PlayerGestureTest
