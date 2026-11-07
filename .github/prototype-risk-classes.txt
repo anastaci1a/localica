@@ -98,6 +98,7 @@ io.github.anastaci1a.localica.GlassMenuContentTest
 io.github.anastaci1a.localica.GlassMenuForegroundTest
 io.github.anastaci1a.localica.GlassMenuViewportTouchTest
 io.github.anastaci1a.localica.GlassMorphTest
+io.github.anastaci1a.localica.GlassMorphZeroConstraintsTest
 io.github.anastaci1a.localica.GlassOpticsTest
 io.github.anastaci1a.localica.GlassOriginPreparationTest
 io.github.anastaci1a.localica.GlassPresenceTest
