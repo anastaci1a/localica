@@ -11,6 +11,7 @@ This is an optimized build (not debuggable, minified with R8, with a baseline pr
 - Extend Glass brightness weighting to 1–8 without inverting brightness; saved settings keep their look.
 - Let focused prototype test runs account for API-gated tests and optionally run on the owner's self-hosted runner.
 - Refresh the measured test shard costs and tidy the prototype test inventory.
+- Wait for the backdrop snapshot before sampling the Android 8–12 transparent-lens test, removing a readiness race.
 
 ## Resolved issues
 
