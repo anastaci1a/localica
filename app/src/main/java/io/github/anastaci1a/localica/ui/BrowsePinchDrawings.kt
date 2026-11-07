@@ -86,7 +86,7 @@ private fun Modifier.retainPinchPass(key: Any, motion: BrowsePinchMotion, upper:
     }
     // Keep the live coordinates reference; the overlay maps it when drawing. A
     // placement callback avoids a global-position dispatch for every scrolled frame.
-    return onPlaced { recording.coordinates = it }.drawWithContent {
+    return placedCoordinates { recording.coordinates = it }.drawWithContent {
         if (!motion.recordingFrozen || layer.size.width == 0 || layer.size.height == 0)
             layer.record { this@drawWithContent.drawContent() }
         // Standalone row/geometry previews have no viewport compositor.
