@@ -31,7 +31,6 @@ import org.junit.Assert.*
 import org.junit.Assume.assumeTrue
 import org.junit.Rule
 import org.junit.Test
-import kotlin.math.abs
 
 /**
  * #640 §2 prototype (prototype.yml only, no production caller): the scene is captured once through
@@ -75,12 +74,13 @@ class FocusBackdropPrototypeTest {
 
     private class Sample(val sharp: Float, val white: Float, val black: Float)
 
-    /** Luminance contrast between a white stripe centre and the black stripe next to it. */
+    /** Stripe contrast over two periods around x0: max − min red, so the stripe phase and the capture origin do not matter. */
     private fun sample(x0: Int, y: Int): Sample {
         val image = compose.onNodeWithTag("scene").captureToImage().toPixelMap()
-        val white = ((x0 / 16) * 16 + 4).coerceIn(0, image.width - 9)
-        val a = image[white, y]; val b = image[white + 8, y]
-        return Sample(abs(a.red - b.red), a.red, b.red)
+        val start = (x0 - 16).coerceIn(0, image.width - 33)
+        var max = 0f; var min = 1f
+        for (x in start until start + 32) { val red = image[x, y.coerceIn(0, image.height - 1)].red; if (red > max) max = red; if (red < min) min = red }
+        return Sample(max - min, max, min)
     }
 
     @Test fun captureOnceThenBlurOutsideTheItemOnly() {
@@ -91,7 +91,7 @@ class FocusBackdropPrototypeTest {
         val density = compose.density.density
         val size = Size(h.source.size.width.toFloat(), h.source.size.height.toFloat())
         val item = itemRect(size, density)
-        val farX = (size.width - 24f).toInt(); val farY = (size.height - 24f).toInt()
+        val farX = (size.width - 40f).toInt(); val farY = (item.bottom + (size.height - item.bottom) * .55f).toInt() // far below the item, clear of the system bars
         assertFalse(h.backdrop.ready)
         compose.runOnIdle { h.captureRequest.value = 1 }
         compose.waitUntil(10_000) { h.captured != null }
@@ -118,7 +118,7 @@ class FocusBackdropPrototypeTest {
         val density = compose.density.density
         val size = Size(h.source.size.width.toFloat(), h.source.size.height.toFloat())
         val item = itemRect(size, density)
-        val farX = (size.width - 24f).toInt(); val farY = (size.height - 24f).toInt()
+        val farX = (size.width - 40f).toInt(); val farY = (item.bottom + (size.height - item.bottom) * .55f).toInt() // far below the item, clear of the system bars
         assertTrue("no capture needed", h.backdrop.ready)
         compose.runOnIdle { h.captureRequest.value = 1 }
         compose.waitUntil(10_000) { h.captured != null }
