@@ -85,6 +85,8 @@ for i,selector in enumerate(os.environ['CASES'].split(',') if os.environ.get('CA
         skip=E.SubElement(skipped,'skipped')
         if os.environ.get('SKIP_XML_REASON'):skip.set('message',os.environ['SKIP_XML_REASON'])
         suite.set('tests','2')
+        if os.environ.get('SKIP_ONLY')==cls:
+            suite.remove(case);suite.set('tests','1')
         if os.environ.get('SKIP_LOG','yes')=='yes':
             folder=root/'emulator-5554 - fixture';folder.mkdir(exist_ok=True)
             marker=method+'('+cls+')'
@@ -468,6 +470,15 @@ p=pathlib.Path(sys.argv[sys.argv.index('--state-dir')+1]);p.mkdir();(p/'complete
         evidence=json.loads((self.root/'prototype-evidence/reconciled-tests.json').read_text())
         self.assertEqual('skipped', evidence['methods'][env['SKIP_CLASS']+'#gatedByAssume'])
         self.assertEqual(1, len(evidence['qualified_skips']))
+
+    def test_class_whose_only_method_is_a_source_gated_skip_may_run_nothing_else(self):
+        cls=self.gated_source('OnlyAssumeTest', '@org.junit.Test fun gatedByAssume() { '
+            'org.junit.Assume.assumeTrue(android.os.Build.VERSION.SDK_INT >= 33)\n val x = 1 }')
+        self.run_case(TEST_API='26', AFFECTED_CLASSES=cls, SKIP_CLASS=cls, SKIP_METHOD='gatedByAssume',
+                      SKIP_REASON='got: <false>, expected: is <true>', SKIP_ONLY=cls)
+        evidence=json.loads((self.root/'prototype-evidence/reconciled-tests.json').read_text())
+        self.assertEqual({'passed':0,'failed':0,'errors':0,'skipped':1}, evidence['counts'][cls])
+
 
     def test_assume_gated_skip_at_or_above_its_api_is_rejected(self):
         self.run_case(1, TEST_API='36', SKIP_REASON='got: <false>, expected: is <true>', **self.assume_gated())

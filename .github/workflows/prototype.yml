@@ -585,8 +585,15 @@ jobs:
                     # #464: a class whose every method is SdkSuppress-gated above this API legitimately runs nothing.
                     gated_classes = set(source_inventory.get('gated_absent_classes', []))
                     assert not gated_classes & required
+                    # ...or one that only skips methods whose own assumeTrue(SDK_INT >= N) is above this API.
+                    gates = source_inventory.get('gates', {})
+                    def only_source_gated_skips(cls):
+                        skipped = [m for m, o in data['methods'].items() if m.rsplit('#', 1)[0] == cls and o == 'skipped']
+                        return bool(skipped) and len(skipped) == data['counts'][cls]['skipped'] and all(
+                            gates.get(m, {}).get('assume_min_sdk', 0) > api for m in skipped)
                     assert all(value['failed'] == 0 and value['errors'] == 0 and
-                               (value['passed'] > 0 or (cls in gated_classes and not any(value.values())))
+                               (value['passed'] > 0 or (cls in gated_classes and not any(value.values()))
+                                or only_source_gated_skips(cls))
                                for cls, value in data['counts'].items())
                     data['independent_test_apk_hashes'] = (focused / 'test-input-apks.sha256').read_text()
                     repetitions = manifest['requested_iterations']
