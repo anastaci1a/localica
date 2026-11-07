@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "stage": 0,
-  "integratedSha": "dba7f1203be022b60060a8c602224f862630405e",
-  "release": "v0.33.3",
+  "integratedSha": "ff32ec6d674f554fd52cedf96f2bd289cdebac3b",
+  "release": "v0.33.8",
   "knownSteps": [
     "U01.01",
     "U01.02",
@@ -81,5 +81,5 @@
     "U14.01a",
     "U13.02"
   ],
-  "bootstrapApproval": "Operator-approved Stage 0 initial lint-generated inherited debt; lead assignment 2026-11-06T14:56:55Z; no additional escape approved."
+  "bootstrapApproval": "Lead approval 2026-11-07T21:16:31Z (2): control-only inherited-main lint re-pin to v0.33.8 ff32ec6d; measurement-only branch that never merges. Baseline 1803 to 1860 (+57) comes from main integration, not new player code. No escapes. The stage2/600 baseline stays 1812 and shrink-only."
 }
