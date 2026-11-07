@@ -126,6 +126,14 @@ class FrostedSurfaceTest {
         val queue = io.github.anastaci1a.localica.queue.QueueEdits.create(tracks, 0, "Color studies ◀ Localica")
         lateinit var hostView: android.view.View
         try {
+            // The Queue material samples the player scene. Start from the prepared cover and wash:
+            // a cold cover that lands during the held drag (frozen clock) replaces the scene this
+            // test measures with the player's own empty-to-cover transition (#645, owned by #634).
+            val visual = kotlinx.coroutines.runBlocking {
+                kotlinx.coroutines.withTimeout(15_000) { PlayerVisualCache.read(context, track.uri) }
+            }
+            assertNotNull("The embedded fixture cover must decode", visual.artwork)
+            assertNotNull("The fixture must include its prepared wash", visual.palette.wash)
             compose.setContent { hostView = androidx.compose.ui.platform.LocalView.current
                 LocalicaTheme { LocalicaScreen(
                 LibraryUiState(io.github.anastaci1a.localica.library.LibrarySnapshot(tracks = tracks), loading = false),
