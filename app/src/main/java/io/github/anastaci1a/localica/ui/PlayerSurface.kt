@@ -40,6 +40,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Constraints
 import io.github.anastaci1a.localica.R
 import io.github.anastaci1a.localica.ui.components.SheetState
+import io.github.anastaci1a.localica.ui.components.ExpansionRest
+import io.github.anastaci1a.localica.ui.components.rememberExpansionRest
 import io.github.anastaci1a.localica.navigation.*
 import io.github.anastaci1a.localica.library.Track
 import io.github.anastaci1a.localica.playback.PlaybackState
@@ -304,9 +306,11 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     val foreground = androidx.compose.ui.graphics.lerp(miniForeground, playerInk, backgroundReveal)
     val artworkShape = RoundedCornerShape((8f + 16f * p).dp * (1f - p * backgroundProgress))
     val artPixels = with(density) { artWidth.toPx() }
-    val (artSwipe, artworkDrag) = rememberArtworkSwipe(artworkVisit, artwork, previousArtwork, nextArtwork,
-        artPixels, expanded && p >= .99f && !lyricsOpen && (queue?.expansion?.phase?.value() ?: 0f) <= 0f,
-        settings, onArtworkVisit)
+    // Artwork navigation and the title's lyrics target admit input only while the player rests open under a closed Queue.
+    val playerRest by rememberExpansionRest(sheet.expansion)
+    val queueRest by rememberExpansionRest(queue?.expansion)
+    val restingOpen = expanded && playerRest == ExpansionRest.Open && !lyricsOpen && queueRest == ExpansionRest.Closed
+    val (artSwipe, artworkDrag) = rememberArtworkSwipe(artworkVisit, artwork, previousArtwork, nextArtwork, artPixels, restingOpen, settings, onArtworkVisit)
     val swipeOffset = artSwipe.offset.value
     val swipeFraction = (kotlin.math.abs(swipeOffset) / (artPixels)).coerceIn(0f, 1f)
     val swipeFeather = if (settings.artworkLayout == ArtworkLayout.FullBackground)
@@ -382,7 +386,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
         .onGloballyPositioned { polarity.measure("viewport", it) }
         .bottomGlassShadow(surfaceCorner, opacity = { 1f - sheet.expansion.phase.value() })
         .then(drag).controlScrollParent { playerDragDirections(expanded, scrubCancel.active) }
-        .then(if ((queue?.expansion?.phase?.value() ?: 0f) > 0f) Modifier.clearAndSetSemantics {} else Modifier).testTag("player-surface")
+        .then(if (queueRest != ExpansionRest.Closed) Modifier.clearAndSetSemantics {} else Modifier).testTag("player-surface")
         // The Queue must never sample the light browsing glass. Delaying readback alone
         // is insufficient: an asynchronous capture can still see the previous recording.
         .then(if (frostedBackdrop != null) Modifier.recordFrostedBackdrop(frostedBackdrop, enabled = p >= .99f) else Modifier),
@@ -523,7 +527,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
             // band. Padding changes only the target: the title still draws at titleY.
             // Logical closing immediately re-enables opening; the existing lyricVisibility
             // animation reverses from its current value rather than waiting for zero.
-            val titleOpensLyrics = expanded && p >= .99f && !lyricsOpen && (queue?.expansion?.phase?.value() ?: 0f) <= 0f
+            val titleOpensLyrics = restingOpen
             val titlePadding = 8.dp
             // Keep the original pixel rounding without adding a translated graphics layer.
             val titleInputY = with(density) { (titleY.roundToPx() - titlePadding.roundToPx()).toDp() }
