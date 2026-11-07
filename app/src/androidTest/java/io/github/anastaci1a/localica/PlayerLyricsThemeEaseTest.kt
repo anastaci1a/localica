@@ -287,5 +287,8 @@ class PlayerLyricsThemeEaseTest {
         pin(false)            // decided while the mini player is showing; nothing visible changes
         record(4, assertLyricsPhase = false); recorded.clear()
         compose.runOnIdle { expanded = true }; record(40, assertLyricsPhase = false)
+        foreground().zipWithNext().forEachIndexed { i, (a, b) ->
+            assertTrue("expansion foreground jump at $i: $a -> $b", abs(b - a) <= .4f)
+        }
     }
 }
