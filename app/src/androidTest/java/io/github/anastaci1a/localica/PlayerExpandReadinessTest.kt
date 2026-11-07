@@ -207,6 +207,19 @@ class PlayerExpandReadinessTest {
         compose.runOnIdle { assertEquals("Still minimized", 0f, progress.value) }
     }
 
+    /** The reference: the same, already graded song expanded a second time, with nothing pending. */
+    @Test fun warmExpansionOfAnAlreadyShownSongDrawsArtworkAndBackdropOnEveryFrame() {
+        mount(first)
+        compose.runOnIdle { expanded = true }
+        compose.waitUntil(10_000) { progress.value >= 1f && polarity.decision.confidence == PlayerBackgroundConfidence.Current }
+        compose.runOnIdle { expanded = false }
+        compose.waitUntil(10_000) { progress.value <= 0f }
+        compose.waitForIdle()
+        try {
+            assertNeverEmpty("warm expansion", expandAndRecord())
+        } finally { compose.mainClock.autoAdvance = true }
+    }
+
     @Test fun expandingRightAfterAMinimizedSongChangeDrawsArtworkAndBackdropOnEveryFrame() {
         mount(first)
         // A session that has already shown the full player once.
