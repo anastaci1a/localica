@@ -9,6 +9,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
@@ -145,7 +146,24 @@ internal data class PlayerBackgroundGeometry(val size: Size, val cover: Rect, va
         }
         if (measured !== next) measured = next
     }
+    /**
+     * #634: the last settled ordinary full-player geometry, retained across minimization. It is what the
+     * full player grades a song with once settled, so a song prepared against it while minimized gets the
+     * same grade. Plain metadata: never observed by UI.
+     */
+    internal var settledEndpoint: PlayerBackgroundGeometry? = null
+    /** Publishes a grade prepared before its backdrop mounted; a measured grade for the same visual wins. */
+    internal fun prewarmed(visual: PlayerVisual, grade: BackdropRoleGrade, images: List<PreparedToneImage>) {
+        // Keep the previous song's set until this one is complete, then replace it in one step.
+        PreparedToneImage.retain(this, images)
+        if (visualGrades[visual] == null) visualGrades[visual] = grade
+        if (visualGrades.size > 8) visualGrades.keys.filter { it != visual && frame?.roles?.none { role -> role.visual == it } != false }
+            .take(visualGrades.size - 8).forEach { visualGrades.remove(it) }
+    }
+    /** True once [visual]'s full-player backdrop can draw graded on its first frame (#634). */
+    internal fun prepared(visual: PlayerVisual): Boolean = grade(null, visual) != null
     fun detach() {
+        PreparedToneImage.retain(this, emptyList())
         preparedLyricsInk = null
         coordinates.clear(); measured = emptyMap(); frame = null; backdrops.clear(); roleGrades = emptyMap(); visualGrades.clear(); destinationLightInk = null; artworkClock = 1f
         unavailable(PlayerBackgroundUnavailable.Unmeasured)
@@ -175,6 +193,39 @@ internal data class PlayerBackgroundGeometry(val size: Size, val cover: Rect, va
 
 /** Optional suspension seam for deterministic first-frame preparation tests. */
 internal val LocalPlayerBackgroundPreparationBarrier = staticCompositionLocalOf<(suspend () -> Unit)?> { null }
+
+/** The role key of a song prepared before any blend role exists for it. */
+private object PrewarmRole
+
+/**
+ * #634: while the player shows [visual], even minimized, prepare its full-player backdrop: the grade at the
+ * settled full-player [geometry] and the graded wash pixels, off Main, before any expansion asks for them.
+ * The backdrop then draws graded on its first expanding frame instead of waiting for a measurement that
+ * only a settled full player can finish. Uses the same sampler and grade as the settled measurement.
+ */
+@Composable internal fun PrewarmPlayerBackdrop(owner: PlayerBackgroundPolarityState, visual: PlayerVisual,
+    geometry: PlayerBackgroundGeometry?, grading: Boolean) {
+    val barrier = LocalPlayerBackgroundPreparationBarrier.current
+    // A known grade, measured or prewarmed, needs no new geometry; only its pixels are re-checked.
+    val known = owner.grade(null, visual)
+    LaunchedEffect(owner, visual, if (known == null) geometry else null, known, grading, barrier) {
+        // Missing art keeps its own neutral grade; Off draws untoned and needs nothing prepared.
+        if (!grading || visual.artwork == null || visual.loading) return@LaunchedEffect
+        val grade = known ?: run {
+            val endpoint = geometry ?: return@LaunchedEffect
+            barrier?.invoke()
+            val role = BackgroundSampleRole(PrewarmRole, visual, PlayerBackdropDescriptor(visual.palette,
+                visual.palette.wash, visual.palette.softWash, playerGrain, GlassTone()))
+            val sample = withContext(Dispatchers.Default) { prepareBackground(BackgroundRequest(endpoint, listOf(role))) }
+                ?: return@LaunchedEffect
+            gradeRoles(sample)[PrewarmRole] ?: return@LaunchedEffect
+        }
+        val tone = GlassTone(shift = grade.shift)
+        val images = listOfNotNull(visual.palette.wash, visual.palette.softWash).mapNotNull { PreparedToneImage.prepare(it, tone) }
+        currentCoroutineContext().ensureActive()
+        owner.prewarmed(visual, grade, images)
+    }
+}
 
 private data class BackgroundPaintInputs(val palette: PlayerPalette, val wash: Bitmap?, val softWash: Bitmap?,
     val grain: Bitmap, val tone: GlassTone)
@@ -560,3 +611,46 @@ private fun gradeRoles(prepared: PreparedBackground): Map<Any, BackdropRoleGrade
         val shift = BackdropGrade.lightnessShift(m.red.coerceIn(0.0, 1.0), m.green.coerceIn(0.0, 1.0), m.blue.coerceIn(0.0, 1.0), light)
         role.identity to BackdropRoleGrade(light, if (shift.isFinite()) shift else 0f)
     }.toMap()
+
+/**
+ * #634: the ordinary full player at rest (lyrics closed, no swipe, scrolled to the top) for a cover of [aspect],
+ * from the same layout rules [PlayerSurface] applies at full expansion. A retained measurement of that rest state
+ * supplies the exact control footprints, and is used whole when its cover already has this shape.
+ */
+internal fun settledPlayerGeometry(aspect: Float, background: Float, windowWidth: androidx.compose.ui.unit.Dp,
+    windowHeight: androidx.compose.ui.unit.Dp, virtualHeight: androidx.compose.ui.unit.Dp, floatingSlot: androidx.compose.ui.unit.Dp,
+    band: PlayerArtworkBand, miniArtY: androidx.compose.ui.unit.Dp, metadataY: androidx.compose.ui.unit.Dp,
+    transportY: androidx.compose.ui.unit.Dp, contentInset: androidx.compose.ui.unit.Dp, transportWidth: androidx.compose.ui.unit.Dp,
+    actionRows: Int, titleHeight: Float, artistHeight: Float, seekLabelHeight: Float,
+    density: androidx.compose.ui.unit.Density, retained: PlayerBackgroundGeometry?): PlayerBackgroundGeometry? = with(density) {
+    if (!aspect.isFinite() || aspect <= 0f) return null
+    fun dp(value: Float) = androidx.compose.ui.unit.Dp(value)
+    val slotWidth = minOf(floatingSlot, floatingSlot * aspect)
+    val slotHeight = minOf(floatingSlot, floatingSlot / aspect)
+    val fit = minOf(1f, band.fittingHeight() / slotHeight.value)
+    val floatingWidth = slotWidth * fit
+    val floatingHeight = slotHeight * fit
+    val width = floatingWidth + (windowWidth - floatingWidth) * background
+    val height = floatingHeight + (windowWidth / aspect - floatingHeight) * background
+    val left = (windowWidth - width) / 2
+    val top = dp(band.artworkTop(height.value))
+    val cover = Rect(left.toPx(), top.toPx(), left.toPx() + width.toPx(), top.toPx() + height.toPx())
+    val size = Size(windowWidth.toPx(), virtualHeight.toPx())
+    if (retained != null && retained.size == size && retained.fullArtBlend == background &&
+        kotlin.math.abs(retained.cover.width / retained.cover.height - aspect) < .01f) return retained
+    val contentWidth = windowWidth - contentInset * 2
+    fun rect(x: androidx.compose.ui.unit.Dp, y: androidx.compose.ui.unit.Dp, w: androidx.compose.ui.unit.Dp, h: androidx.compose.ui.unit.Dp) =
+        Rect(x.toPx(), y.toPx(), (x + w).toPx(), (y + h).toPx())
+    val footprints = retained?.takeIf { it.size == size }?.footprints ?: playerBackgroundFootprints(Rect(Offset.Zero, size),
+        Rect(0f, 0f, windowWidth.toPx(), windowHeight.toPx()), listOfNotNull(
+            rect(contentInset, metadataY, contentWidth, dp(titleHeight)),
+            rect(contentInset, metadataY + 34.dp, contentWidth, dp(artistHeight)),
+            rect(contentInset, metadataY + 64.dp, contentWidth, 40.dp + dp(seekLabelHeight)),
+            if (actionRows > 0) rect(contentInset, metadataY + 128.dp, contentWidth, 48.dp * actionRows) else null,
+            rect((windowWidth - transportWidth) / 2, transportY, transportWidth, 64.dp)))
+    if (footprints.isEmpty()) return null
+    val clearance = if (minOf(width, height) < MiniArtworkSize) 0f else
+        playerArtworkClearance(top.value, height.value, metadataY.value, miniArtY.value, MiniArtworkSize.value)
+    PlayerBackgroundGeometry(size, cover, cover, footprints, background, 1f - background, background, .26f, background, 1f,
+        (24.dp * (1f - background)).toPx(), playerArtworkContentScale(MiniArtworkSize.toPx(), if (clearance > 0f) 1f else 0f, false))
+}

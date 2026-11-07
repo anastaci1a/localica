@@ -74,7 +74,10 @@ export const transferExceptions = {'U10.02-ledger-2026-11-07': {removedBy: 'U10.
 /** Recorded one-off relabel (U14 note, tools/ui-consolidation/u1003-relabel.txt). Lead decision 2026-11-07 10:10 AM: U10.03
  * entries whose real owner is another step (artwork swipe, snapshot recording, cover order, title input band) move to that
  * step once, in one commit, at most 22 entries; every other removedBy change is rejected. */
-export const transferRelabels = {'U10.03-relabel-2026-11-07': {from: 'U10.03', limit: 22}};
+export const transferRelabels = {'U10.03-relabel-2026-11-07': {from: 'U10.03', limit: 22},
+    /** Lead decision 2026-11-07 12:10 PM (2): U10.03 completes on the tween and curve work; its remaining 22 transfers (the player
+     * phase read and phase-derived lifetime gates) move once to the step that samples them (U11.04/U11.01 geometry, U10.05 Components). */
+    'U10.03-relabel-2-2026-11-07': {from: 'U10.03', limit: 22}};
 /** Untagged owner moves already in the ledger history (lead decision 2026-11-07 ~8 AM, stage2 f449bf56 = stage3 b1fd8cbb), and
  * the recorded addition to the U10.03 relabel map (lead decision 2026-11-07 11:00 AM): the PlayerSurface scroll gate shares
  * its line with the baselined player Column, so it moves to U11.04, the step that replaces that Column. */

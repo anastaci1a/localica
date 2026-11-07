@@ -153,7 +153,9 @@ Glass always follows the scrolling content. The retired scroll-freeze preference
 
 #### Adaptive contrast
 
-Page-wide ink polarity; background brightness trim 0–50% (default 25%) and weighting from even to highlight/shadow-focused. White icons darken highlights; dark icons lift shadows in the general glass treatment. Player wash retains its palette-directed trim independently of the ink.
+Page-wide ink polarity; background brightness trim 0–50% (default 25%) and weighting 1–8 (default 2) from even to highlight/shadow-focused, with 1–2 on the first third of the slider.
+
+The applied trim is limited to 1/weighting (only weightings above 2 are affected), so brightness order never inverts. White icons darken highlights; dark icons lift shadows in the general glass treatment. Player wash retains its palette-directed trim independently of the ink.
 
 Foreground and media selections remain unfiltered; Player/Queue ink follows the measured background behind controls rather than the cover’s middle band. The player’s blurred artwork extension uses the same trim/weight, without a separate bottom-darkening gradient.
 
@@ -171,7 +173,11 @@ Under Reduced Motion the lyrics clock has no duration, so the polarity snaps wit
 
 Artwork changes drive surface palette tints from the same reveal fraction as the backdrop, ink and Queue materials. Rapid skips continue from the presented palette; Reduce motion snaps every channel.
 
-With brightness trim enabled, a backdrop waits for its grade and matching prepared pixels before its first drawing. Outgoing artwork retains its prepared grade when the blend creates a new role. The owned neutral placeholder gradient already meets white-ink contrast and draws immediately with zero grading shift.
+With brightness trim enabled, the current song's full-player backdrop is prepared while the player is minimized: on every song change, off the main thread, its grade at the settled full-player layout and its graded pixels. The previous song's set stays until the new one is complete. Expanding therefore draws the final backdrop from its first frame.
+
+Outgoing artwork retains its prepared grade when the blend creates a new role. The owned neutral placeholder gradient already meets white-ink contrast and draws immediately with zero grading shift.
+
+A drawn backdrop stays until its replacement's pixels are prepared; it never blanks. If an expansion or a restored open player starts before preparation finishes, the backdrop presents the same artwork ungraded and eases into its grade, never the empty window behind the player.
 
 Blur, texture and the artwork continuation remain unchanged.
 
@@ -586,7 +592,9 @@ Default artwork tap toggles lyrics. Hold opens View artwork / Change artwork / C
 
 Change artwork opens image selection directly, then the shared artwork-only review/write flow for the current song in the [shared single-song editor](product.md#metadata-and-artwork-editing).
 
-Follow real playback/seeks/queue changes with active-line emphasis, fluid movement and fading viewport edges, inspired by [Better Lyrics](https://github.com/better-lyrics/better-lyrics). Manual scrolling suspends following. a Liquid Glass directional bubble returns to the current line. Touch exploration starts with following off. Plain lyrics scroll normally. Keep source selection without loading text/progress or tap ripples.
+Follow real playback/seeks/queue changes with active-line emphasis, fluid movement and fading viewport edges, inspired by [Better Lyrics](https://github.com/better-lyrics/better-lyrics). Manual scrolling suspends following. A Liquid Glass directional bubble returns to the current line. Touch exploration starts with following off. Plain lyrics scroll normally. Keep source selection without loading text/progress or tap ripples.
+
+Presented lyrics receive taps and swipes throughout the artwork cross-fade, including reversal. Disabled artwork gestures leave no hit-test node over the lyrics. Artwork input resumes when the lyric document is no longer presented. Keep cover drawing order independent of input ownership.
 
 Show the shared quiet empty state only after the current lookup finds no usable lyrics without reporting a read error. Never during loading, failed reads or a real lyric document's arrival. Available lyrics remain visible when another source fails.
 

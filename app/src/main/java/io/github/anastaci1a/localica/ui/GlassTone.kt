@@ -10,7 +10,14 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import io.github.anastaci1a.localica.navigation.GlassContrastWeightMax
+import io.github.anastaci1a.localica.navigation.GlassContrastWeightMin
 import kotlin.math.pow
+
+/** The trim actually applied at weight [p] (#633). Both laws have slope 1 − t·p·y^(p−1) ≥ 1 − t·p, so ordering
+ * needs t·p ≤ 1; above that the trim becomes 1/p. With t ≤ .5 and p ≤ 2 the float product never exceeds 1, so
+ * every setting available before #633 keeps its exact trim. glassTrim in [GlassColorShader] is the same expression. */
+internal fun effectiveGlassTrim(t: Float, p: Float): Float = if (t * p > 1f) 1f / p else t
 
 /** Ordered compression: no brightness inversion, including at maximum trim/weight.
  * [lightInk] is the polarity being approached and [arrival] how far the tone has travelled to it from the opposite
@@ -26,8 +33,8 @@ internal data class GlassTone(val trim: Float = 0f, val weight: Float = 2f, val 
     /** The tone pinned at one polarity; only these tones have prepared pixels. */
     fun endpoint(light: Boolean) = if (lightInk == light && arrival == 1f) this else copy(lightInk = light, arrival = 1f)
     private fun endpointChannel(x: Float, light: Boolean): Float {
-        val t = trim.coerceIn(0f, .5f)
-        val p = weight.coerceIn(1f, 2f)
+        val p = weight.coerceIn(GlassContrastWeightMin, GlassContrastWeightMax)
+        val t = effectiveGlassTrim(trim.coerceIn(0f, .5f), p)
         return if (light) x - t * x.pow(p) else x + t * (1f - x).pow(p)
     }
     fun channel(value: Float): Float {
@@ -63,7 +70,15 @@ private object ToneImages {
         override fun sizeOf(key: Key, value: ImageBitmap) = value.width * value.height * 4
     }
     val mutex = Mutex()
-    fun peek(image: ImageBitmap, tone: GlassTone): ImageBitmap? = images.get(Key(image.asAndroidBitmap(), tone))
+    /** Sets an owner keeps outside the LRU (#634): the current song's full-player backdrop must survive
+     * unrelated tone work while the player is minimized. An owner replaces its whole set at once. */
+    private val retained = HashMap<Any, Map<Key, ImageBitmap>>()
+    private fun lookup(key: Key): ImageBitmap? =
+        images.get(key) ?: synchronized(retained) { retained.values.firstNotNullOfOrNull { it[key] } }
+    fun peek(image: ImageBitmap, tone: GlassTone): ImageBitmap? = lookup(Key(image.asAndroidBitmap(), tone))
+    fun retain(owner: Any, set: Map<Key, ImageBitmap>) = synchronized(retained) {
+        if (set.isEmpty()) retained.remove(owner) else retained[owner] = set
+    }
     /** Pixels already prepared for this image under another tone: close to the wanted result,
      * unlike the raw image, which is visibly brighter than any positive tone's output. An entry
      * of the same polarity is preferred; the opposite polarity is only a last resort. */
@@ -74,7 +89,7 @@ private object ToneImages {
     }
     suspend fun get(image: ImageBitmap, tone: GlassTone): ImageBitmap = mutex.withLock {
         val key = Key(image.asAndroidBitmap(), tone)
-        images.get(key)?.let { return@withLock it }
+        lookup(key)?.let { return@withLock it }
         val source = readGlassPixels(image, 1)
         val pixels = source.pixels
         if (tone.shift != 0f) {
@@ -89,6 +104,21 @@ private object ToneImages {
         }
         Bitmap.createBitmap(pixels, source.width, source.height, Bitmap.Config.ARGB_8888)
             .asImageBitmap().also { images.put(key, it) }
+    }
+}
+
+/** One prepared tone image, opaque outside this file: the shared cache key and its pixels. */
+internal class PreparedToneImage private constructor(internal val key: Any, val image: ImageBitmap) {
+    internal companion object {
+        /** Prepares [bitmap] under [tone] in the shared cache before any consumer mounts (#634), off Main.
+         * Null for an identity tone, which draws the source itself. */
+        suspend fun prepare(bitmap: Bitmap, tone: GlassTone): PreparedToneImage? = if (tone.identity) null
+            else withContext(Dispatchers.Default) {
+                PreparedToneImage(ToneImages.Key(bitmap, tone), ToneImages.get(bitmap.asImageBitmap(), tone))
+            }
+        /** [owner] keeps exactly [images] findable by every tone consumer, replacing its previous set. */
+        fun retain(owner: Any, images: List<PreparedToneImage>) =
+            ToneImages.retain(owner, images.associate { it.key as ToneImages.Key to it.image })
     }
 }
 
@@ -187,6 +217,8 @@ private class ToneSnapshotCompletion {
 
 /** Shared post-optics mapping, also used by the material-only average. */
 internal const val GlassColorShader = """
+    // effectiveGlassTrim (#633): weights above 1/trim limit the trim to 1/weight, so brightness never inverts.
+    float glassTrim(float3 tone) { return tone.x * tone.y > 1.0 ? 1.0 / tone.y : tone.x; }
     float3 glassColor(float3 color, float whiteTint, float3 tone) {
         float luma = clamp(dot(color, float3(0.2126, 0.7152, 0.0722)), 0.0, 1.0);
         float lifted = 1.0 - (1.0 - luma) * (1.0 - whiteTint) / max(1.0 - whiteTint * luma, 0.0001);
@@ -195,10 +227,11 @@ internal const val GlassColorShader = """
         color = clamp(color, 0.0, 1.0);
         if (tone.x > 0.0) {
             // tone.z is the light-ink mix: 0 and 1 are the two exact polarities, between them their blend.
+            float trim = glassTrim(tone);
             float3 darkEnd = 1.0 - color;
             float3 darkWeighted = tone.y == 2.0 ? darkEnd * darkEnd : tone.y == 1.0 ? darkEnd : pow(darkEnd, float3(tone.y));
             float3 lightWeighted = tone.y == 2.0 ? color * color : tone.y == 1.0 ? color : pow(color, float3(tone.y));
-            color += mix(darkWeighted * tone.x, -lightWeighted * tone.x, clamp(tone.z, 0.0, 1.0));
+            color += mix(darkWeighted * trim, -lightWeighted * trim, clamp(tone.z, 0.0, 1.0));
         }
         return color;
     }

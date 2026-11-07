@@ -133,6 +133,9 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     // immediately, including the fully expanded endpoint before onExpanded changes.
     val lyricMotion = playerLyricsMotion(p, lyricVisibility)
     val lyricProgress = lyricMotion.layout
+    // Match the panel's placement, including the outgoing half of a cross-fade.
+    // Drawing order must not let the invisible cover shield presented lyrics.
+    val lyricsInteractive = lyricMotion.contentAlpha > 0f
     val backgroundProgress by animateFloatAsState(if (settings.artworkLayout == ArtworkLayout.FullBackground) 1f else 0f,
         tween(settings.motionDuration(400)), label = "Artwork layout")
     var startExpanded by remember { mutableStateOf(expanded) }
@@ -309,8 +312,8 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     // Artwork navigation and the title's lyrics target admit input only while the player rests open under a closed Queue.
     val playerRest by rememberExpansionRest(sheet.expansion)
     val queueRest by rememberExpansionRest(queue?.expansion)
-    val restingOpen = expanded && playerRest == ExpansionRest.Open && !lyricsOpen && queueRest == ExpansionRest.Closed
-    val (artSwipe, artworkDrag) = rememberArtworkSwipe(artworkVisit, artwork, previousArtwork, nextArtwork, artPixels, restingOpen, settings, onArtworkVisit)
+    val restingOpen = expanded && playerRest == ExpansionRest.Open && queueRest == ExpansionRest.Closed
+    val (artSwipe, artworkDrag) = rememberArtworkSwipe(artworkVisit, artwork, previousArtwork, nextArtwork, artPixels, restingOpen && !lyricsInteractive, settings, onArtworkVisit)
     val swipeOffset = artSwipe.offset.value
     val swipeFraction = (kotlin.math.abs(swipeOffset) / (artPixels)).coerceIn(0f, 1f)
     val swipeFeather = if (settings.artworkLayout == ArtworkLayout.FullBackground)
@@ -372,6 +375,28 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
         controlNames.any { polarity.measured[it] == null } -> PlayerBackgroundUnavailable.Unmeasured
         else -> null
     }, GlassTone(), if (ordinaryEndpoint != null && lyricsEndpoint != null) ordinaryEndpoint to lyricsEndpoint else null)
+    // #634: keep the current song's full-player backdrop prepared while minimized. The settled ordinary
+    // geometry is retained when the full player rests; a cover of another shape, or a process that has not
+    // shown the full player yet, uses the same layout rules at their settled values.
+    val settledBackground = if (settings.artworkLayout == ArtworkLayout.FullBackground) 1f else 0f
+    if (backgroundGeometry != null && playerRest == ExpansionRest.Open && backgroundReveal >= 1f && !artSwipe.active && swipeOffset == 0f &&
+        lyricVisibility == 0f && queueRest == ExpansionRest.Closed && backgroundProgress == settledBackground &&
+        aspect == artwork.palette.aspect && artCropRetention == (if (clearanceTarget > 0f) 1f else 0f))
+        SideEffect { polarity.settledEndpoint = backgroundGeometry }
+    val retainedEndpoint = polarity.settledEndpoint
+    val artistStyle = MaterialTheme.typography.bodyLarge
+    val seekLabelStyle = MaterialTheme.typography.labelSmall
+    val lineHeights = remember(titleMeasurer, artistStyle, seekLabelStyle, density.density, density.fontScale) {
+        listOf(artistStyle, seekLabelStyle).map { style ->
+            titleMeasurer.measure("Ag", style, maxLines = 1).size.height / density.density }
+    }
+    val prewarmGeometry = remember(artwork.palette.aspect, settledBackground, windowWidth, maxHeight, virtualHeight,
+        actionRows, fullTitleHeight, lineHeights, density, retainedEndpoint) {
+        settledPlayerGeometry(artwork.palette.aspect, settledBackground, windowWidth, maxHeight, virtualHeight, floatingSlot,
+            artworkBand, miniArtY, ordinarySeekY, normalTransport, contentInset, transportWidth, actionRows,
+            fullTitleHeight, lineHeights[0], lineHeights[1], density, retainedEndpoint)
+    }
+    PrewarmPlayerBackdrop(polarity, artwork, prewarmGeometry, settings.glass.contrast > 0f)
     val baseColors = MaterialTheme.colorScheme
     CompositionLocalProvider(LocalGlassPopupHome provides popupHome) {
     GlassPanelTheme(lightMix) {
@@ -454,7 +479,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
                 }
             }
             Box(Modifier.motionBounds(artX, artY, artWidth, artHeight).testTag("artwork-gesture")
-                .then(artworkDrag).then(if (expanded && !lyricsOpen) Modifier.combinedClickable(interactionSource = null, indication = null,
+                .then(artworkDrag).then(if (expanded && !lyricsInteractive) Modifier.combinedClickable(interactionSource = null, indication = null,
                     onClickLabel = settings.artworkTap.label,
                     onClick = { artworkAction(settings.artworkTap, editArtwork) },
                     onLongClickLabel = settings.artworkHold.label,
@@ -527,7 +552,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
             // band. Padding changes only the target: the title still draws at titleY.
             // Logical closing immediately re-enables opening; the existing lyricVisibility
             // animation reverses from its current value rather than waiting for zero.
-            val titleOpensLyrics = restingOpen
+            val titleOpensLyrics = restingOpen && !lyricsOpen
             val titlePadding = 8.dp
             // Keep the original pixel rounding without adding a translated graphics layer.
             val titleInputY = with(density) { (titleY.roundToPx() - titlePadding.roundToPx()).toDp() }

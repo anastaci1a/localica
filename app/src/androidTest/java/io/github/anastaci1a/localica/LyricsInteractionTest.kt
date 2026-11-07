@@ -20,6 +20,93 @@ import org.junit.Test
 
 class LyricsInteractionTest {
     @get:Rule val compose = createComposeRule()
+
+    // Exercise the complete player hit-test stack: standalone LyricsLines and semantic
+    // click/scroll actions bypass the invisible artwork node that caused #632.
+    private fun withNativeLyrics(lyrics: MutableState<Boolean> = mutableStateOf(true), reducedMotion: Boolean = true,
+        block: (MutableState<PlaybackState>, MutableList<Long>, () -> Int) -> Unit) {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val file = java.io.File.createTempFile("lyrics-input-", ".mp3", instrumentation.targetContext.cacheDir)
+        copyTestAsset(instrumentation.context.assets, "tone.mp3", file)
+        io.github.anastaci1a.localica.library.ContainerTags.configure()
+        org.jaudiotagger.audio.AudioFileIO.read(file).apply {
+            tag = org.jaudiotagger.tag.id3.ID3v24Tag().apply {
+                setField(org.jaudiotagger.tag.FieldKey.LYRICS,
+                    (0..59).joinToString("\n") { "[00:${it.toString().padStart(2, '0')}.00]Input line $it" })
+            }
+            commit()
+        }
+        val track = Track(android.net.Uri.fromFile(file).toString(), "Input probe", fileName = file.name, relativePath = file.name)
+        val state = mutableStateOf(PlaybackState(connected = true, trackId = track.id, trackUri = track.uri,
+            title = track.title, positionMs = 15000, durationMs = 60000))
+        val sought = mutableListOf<Long>()
+        var escaped = 0
+        try {
+            compose.setContent { LocalicaTheme { androidx.compose.foundation.layout.BoxWithConstraints {
+                PlayerSurface(state.value, true, { escaped++ },
+                    InterfaceSettings(reducedMotion = reducedMotion, artworkLayout = ArtworkLayout.FullBackground),
+                    remember { androidx.compose.animation.core.Animatable(1f) }, {}, { sought += it }, {}, {},
+                    { escaped++ }, {}, lyricsOpen = lyrics.value, onLyrics = { escaped++ }, track = track,
+                    // A real player has queue navigation available even while artwork gestures are disabled.
+                    onArtworkVisit = { _, result -> result(true) })
+            } } }
+            compose.waitUntil(10000) { compose.onAllNodesWithText("Input line 15").fetchSemanticsNodes().isNotEmpty() }
+            compose.waitForIdle()
+            block(state, sought) { escaped }
+        } finally { file.delete() }
+    }
+
+    private fun nativeLyricsOffset() = compose.onNodeWithTag("lyric-lines").fetchSemanticsNode()
+        .config[androidx.compose.ui.semantics.SemanticsProperties.VerticalScrollAxisRange].value()
+
+    @Test fun fullPlayerLyricsAcceptNativeScrollWithoutOpeningQueue() = withNativeLyrics { _, _, escaped ->
+        val before = nativeLyricsOffset()
+        compose.onNodeWithTag("lyric-lines").performTouchInput { swipeUp() }
+        assertTrue("A native swipe must move the real lyric list", nativeLyricsOffset() > before + 1f)
+        assertEquals("Lyrics consume the gesture before parent navigation", 0, escaped())
+    }
+
+    @Test fun fullPlayerLyricsAcceptNativeTapToSeek() = withNativeLyrics { _, sought, escaped ->
+        compose.onNodeWithText("Input line 16").assertIsDisplayed().performTouchInput { click() }
+        compose.runOnIdle { assertEquals(listOf(16000L), sought); assertEquals(0, escaped()) }
+    }
+
+    @Test fun fullPlayerLyricsDetachAndResumeFollowThroughNativeInput() = withNativeLyrics { state, _, escaped ->
+        compose.onNodeWithTag("lyric-lines").performTouchInput { swipeUp() }
+        compose.onNodeWithContentDescription("Return to current line").assertIsDisplayed()
+        val detached = nativeLyricsOffset()
+        compose.runOnIdle { state.value = state.value.copy(positionMs = 45000) }
+        assertEquals("Playback must not steal a manually detached viewport", detached, nativeLyricsOffset(), .01f)
+        compose.onNodeWithContentDescription("Return to current line").performTouchInput { click() }
+        compose.onNodeWithText("Input line 45").assertIsDisplayed().assertIsSelected()
+        compose.onNodeWithContentDescription("Return to current line").assertDoesNotExist()
+        compose.runOnIdle { state.value = state.value.copy(positionMs = 48000) }
+        compose.onNodeWithText("Input line 48").assertIsDisplayed().assertIsSelected()
+        assertEquals(0, escaped())
+    }
+
+    @Test fun nativeInputStaysWithPresentedLyricsAcrossCrossFadeAndReversal() {
+        val lyrics = mutableStateOf(true)
+        withNativeLyrics(lyrics, reducedMotion = false) { _, sought, escaped ->
+            compose.mainClock.autoAdvance = false
+            try {
+                compose.runOnIdle { lyrics.value = false }
+                compose.mainClock.advanceTimeBy(180)
+                // The outgoing document is still presented, although its target is artwork.
+                compose.onNodeWithText("Input line 16").assertIsDisplayed().performTouchInput { click() }
+                compose.runOnIdle { assertEquals(listOf(16000L), sought); assertEquals(0, escaped()) }
+                compose.runOnIdle { lyrics.value = true }
+                compose.mainClock.advanceTimeBy(90)
+                compose.onNodeWithText("Input line 16").performTouchInput { click() }
+                compose.runOnIdle { assertEquals(listOf(16000L, 16000L), sought); assertEquals(0, escaped()) }
+                compose.runOnIdle { lyrics.value = false }
+                compose.mainClock.advanceTimeBy(650)
+                // Once the document is gone the very next touch belongs to artwork exactly once.
+                compose.onNodeWithTag("artwork-gesture", true).performTouchInput { click() }
+                compose.runOnIdle { assertEquals(1, escaped()); assertEquals(2, sought.size) }
+            } finally { compose.mainClock.autoAdvance = true }
+        }
+    }
     @Test fun missingLyricsCanBeOpenedAndOtherArtworkActionsStillPersist() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         context.getSharedPreferences("interface", 0).edit().clear().commit()

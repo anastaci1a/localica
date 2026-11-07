@@ -4,6 +4,8 @@ import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.clipRect
@@ -67,6 +69,24 @@ internal data class TransportShapes(
     },
 )
 internal val LocalTransportShapes = staticCompositionLocalOf { TransportShapes() }
+
+/** Arbitrary imported contours share transport timing and interruption state.
+ * Play/pause endpoints fade in fixed bounds; skip glyphs travel through a clipped cycle.
+ */
+internal fun DrawScope.drawTransportPainters(glyph: TransportGlyph, pause: Float, travel: Float,
+    color: Color, painter: Painter, pausePainter: Painter) {
+    fun draw(p: Painter, alpha: Float = 1f) {
+        if (alpha > 0f) with(p) { draw(size, alpha = alpha, colorFilter = ColorFilter.tint(color)) }
+    }
+    if (glyph == TransportGlyph.PlayPause) {
+        draw(painter, 1f - pause)
+        draw(pausePainter, pause)
+    } else clipRect {
+        val phase = travel - floor(travel)
+        val direction = if (glyph == TransportGlyph.Previous) -1f else 1f
+        for (copy in -1..1) translate(left = (copy + phase) * size.width * direction) { draw(painter) }
+    }
+}
 
 internal fun DrawScope.drawTransportGlyph(glyph: TransportGlyph, pause: Float, travel: Float,
     color: Color, shapes: TransportShapes) {
