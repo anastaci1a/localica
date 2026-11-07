@@ -950,39 +950,6 @@
     <issue
         id="IndependentUiClock"
         message="Use the shared UiClock"
-        errorLine1="    LaunchedEffect(queueOpen) {"
-        errorLine2="    ~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt"
-            line="151"
-            column="5"/>
-    </issue>
-
-    <issue
-        id="IndependentUiClock"
-        message="Use the shared UiClock"
-        errorLine1="        navigationScope.launch { queuePopupHome.awaitHandoff(); queueProgress.animateTo(0f, androidx.compose.animation.core.tween(settings.motionDuration(400))) }"
-        errorLine2="                        ~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt"
-            line="196"
-            column="25"/>
-    </issue>
-
-    <issue
-        id="IndependentUiClock"
-        message="Use the shared UiClock"
-        errorLine1="    androidx.activity.compose.BackHandler(queueOpen || queueVisible) { queueOpen = false; navigationScope.launch { queuePopupHome.awaitHandoff(); queueProgress.animateTo(0f, androidx.compose.animation.core.tween(settings.motionDuration(400))) } }"
-        errorLine2="                                                                                                          ~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt"
-            line="456"
-            column="107"/>
-    </issue>
-
-    <issue
-        id="IndependentUiClock"
-        message="Use the shared UiClock"
         errorLine1="                val now = withFrameMillis { time ->"
         errorLine2="                          ~~~~~~~~~~~~~~~">
         <location
@@ -1066,72 +1033,6 @@
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerActionCustomizer.kt"
             line="121"
             column="25"/>
-    </issue>
-
-    <issue
-        id="IndependentUiClock"
-        message="Use the shared UiClock"
-        errorLine1="    LaunchedEffect(expanded, settings.reducedMotion, settings.fasterMotion) {"
-        errorLine2="    ~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="166"
-            column="5"/>
-    </issue>
-
-    <issue
-        id="IndependentUiClock"
-        message="Use the shared UiClock"
-        errorLine1="        scope.launch {"
-        errorLine2="              ~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="174"
-            column="15"/>
-    </issue>
-
-    <issue
-        id="IndependentUiClock"
-        message="Use the shared UiClock"
-        errorLine1="                else scope.launch { queueProgress?.animateTo(0f, tween(settings.motionDuration(400))) }"
-        errorLine2="                           ~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="200"
-            column="28"/>
-    </issue>
-
-    <issue
-        id="IndependentUiClock"
-        message="Use the shared UiClock"
-        errorLine1="                launch { progress.animateTo(if (startExpanded) 1f else 0f,"
-        errorLine2="                ~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="209"
-            column="17"/>
-    </issue>
-
-    <issue
-        id="IndependentUiClock"
-        message="Use the shared UiClock"
-        errorLine1="                launch { queueProgress?.animateTo(startQueueProgress, tween(settings.motionDuration(400))) }"
-        errorLine2="                ~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="211"
-            column="17"/>
-    </issue>
-
-    <issue
-        id="IndependentUiClock"
-        message="Use the shared UiClock"
-        errorLine1="        scope.launch {"
-        errorLine2="              ~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/QueueSurface.kt"
-            line="71"
-            column="15"/>
     </issue>
 
     <issue
@@ -4177,7 +4078,7 @@
         errorLine2="                       ~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt"
-            line="265"
+            line="155"
             column="24"/>
     </issue>
 
@@ -4188,7 +4089,7 @@
         errorLine2="                              ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt"
-            line="265"
+            line="155"
             column="31"/>
     </issue>
 
@@ -4199,7 +4100,7 @@
         errorLine2="                                                           ~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt"
-            line="271"
+            line="284"
             column="60"/>
     </issue>
 
@@ -4210,7 +4111,7 @@
         errorLine2="                                                                                             ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt"
-            line="319"
+            line="333"
             column="94"/>
     </issue>
 
@@ -4221,7 +4122,7 @@
         errorLine2="                                                                                                                         ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt"
-            line="319"
+            line="333"
             column="122"/>
     </issue>
 
@@ -4232,7 +4133,7 @@
         errorLine2="                                                                 ~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt"
-            line="320"
+            line="334"
             column="66"/>
     </issue>
 
@@ -4243,7 +4144,7 @@
         errorLine2="                                                                        ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt"
-            line="367"
+            line="381"
             column="73"/>
     </issue>
 
@@ -4254,18 +4155,18 @@
         errorLine2="                                      ~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt"
-            line="368"
+            line="382"
             column="39"/>
     </issue>
 
     <issue
         id="LiteralUiSpacing"
         message="Use validated Spec tokens"
-        errorLine1="            .offset { androidx.compose.ui.unit.IntOffset(0, kotlin.math.round((80.dp + inset).toPx() * maxOf(progress.value, 1f - chromeVisibility)).toInt()) }"
+        errorLine1="            .offset { androidx.compose.ui.unit.IntOffset(0, kotlin.math.round((80.dp + inset).toPx() * maxOf(phase.value(), 1f - chromeVisibility)).toInt()) }"
         errorLine2="                                                                               ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt"
-            line="369"
+            line="383"
             column="80"/>
     </issue>
 
@@ -4276,7 +4177,7 @@
         errorLine2="                                                         ~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt"
-            line="372"
+            line="386"
             column="58"/>
     </issue>
 
@@ -4287,7 +4188,7 @@
         errorLine2="                               ~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt"
-            line="393"
+            line="407"
             column="32"/>
     </issue>
 
@@ -4298,7 +4199,7 @@
         errorLine2="                                  ~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt"
-            line="407"
+            line="421"
             column="35"/>
     </issue>
 
@@ -4309,7 +4210,7 @@
         errorLine2="                                                                                            ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt"
-            line="501"
+            line="515"
             column="93"/>
     </issue>
 
@@ -5046,7 +4947,7 @@
         errorLine2="                                                                                                               ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="70"
+            line="69"
             column="112"/>
     </issue>
 
@@ -5057,7 +4958,7 @@
         errorLine2="                       ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="218"
+            line="195"
             column="24"/>
     </issue>
 
@@ -5068,7 +4969,7 @@
         errorLine2="                                                ~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="219"
+            line="196"
             column="49"/>
     </issue>
 
@@ -5079,7 +4980,7 @@
         errorLine2="                                           ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="220"
+            line="197"
             column="44"/>
     </issue>
 
@@ -5090,7 +4991,7 @@
         errorLine2="                                                                                                   ~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="220"
+            line="197"
             column="100"/>
     </issue>
 
@@ -5101,7 +5002,7 @@
         errorLine2="                                                                                                                                        ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="220"
+            line="197"
             column="137"/>
     </issue>
 
@@ -5112,7 +5013,7 @@
         errorLine2="                                     ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="221"
+            line="198"
             column="38"/>
     </issue>
 
@@ -5123,7 +5024,7 @@
         errorLine2="                                                            ~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="221"
+            line="198"
             column="61"/>
     </issue>
 
@@ -5134,7 +5035,7 @@
         errorLine2="                                                       ~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="222"
+            line="199"
             column="56"/>
     </issue>
 
@@ -5145,7 +5046,7 @@
         errorLine2="                                                            ~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="223"
+            line="200"
             column="61"/>
     </issue>
 
@@ -5156,7 +5057,7 @@
         errorLine2="                                                                   ~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="225"
+            line="202"
             column="68"/>
     </issue>
 
@@ -5167,7 +5068,7 @@
         errorLine2="               ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="236"
+            line="213"
             column="16"/>
     </issue>
 
@@ -5178,7 +5079,7 @@
         errorLine2="                                                      ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="236"
+            line="213"
             column="55"/>
     </issue>
 
@@ -5189,7 +5090,7 @@
         errorLine2="                                                      ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="244"
+            line="221"
             column="55"/>
     </issue>
 
@@ -5200,7 +5101,7 @@
         errorLine2="                       ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="247"
+            line="224"
             column="24"/>
     </issue>
 
@@ -5211,7 +5112,7 @@
         errorLine2="                                       ~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="249"
+            line="226"
             column="40"/>
     </issue>
 
@@ -5222,7 +5123,7 @@
         errorLine2="                                                             ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="249"
+            line="226"
             column="62"/>
     </issue>
 
@@ -5233,7 +5134,7 @@
         errorLine2="                                          ~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="300"
+            line="277"
             column="43"/>
     </issue>
 
@@ -5244,7 +5145,7 @@
         errorLine2="                                          ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="301"
+            line="278"
             column="43"/>
     </issue>
 
@@ -5255,7 +5156,7 @@
         errorLine2="                                                  ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="301"
+            line="278"
             column="51"/>
     </issue>
 
@@ -5266,7 +5167,7 @@
         errorLine2="                                                           ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="303"
+            line="280"
             column="60"/>
     </issue>
 
@@ -5277,7 +5178,7 @@
         errorLine2="                 ~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="306"
+            line="283"
             column="18"/>
     </issue>
 
@@ -5288,7 +5189,7 @@
         errorLine2="                                     ~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="306"
+            line="283"
             column="38"/>
     </issue>
 
@@ -5299,7 +5200,7 @@
         errorLine2="                    ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="307"
+            line="284"
             column="21"/>
     </issue>
 
@@ -5310,7 +5211,7 @@
         errorLine2="                                         ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="307"
+            line="284"
             column="42"/>
     </issue>
 
@@ -5321,7 +5222,7 @@
         errorLine2="                                                 ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="307"
+            line="284"
             column="50"/>
     </issue>
 
@@ -5332,7 +5233,7 @@
         errorLine2="                                           ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="308"
+            line="285"
             column="44"/>
     </issue>
 
@@ -5343,7 +5244,7 @@
         errorLine2="                                                                                                      ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="309"
+            line="286"
             column="103"/>
     </issue>
 
@@ -5354,7 +5255,7 @@
         errorLine2="                            ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="312"
+            line="289"
             column="29"/>
     </issue>
 
@@ -5365,7 +5266,7 @@
         errorLine2="                                   ~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="313"
+            line="290"
             column="36"/>
     </issue>
 
@@ -5376,7 +5277,7 @@
         errorLine2="                                            ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="313"
+            line="290"
             column="45"/>
     </issue>
 
@@ -5387,7 +5288,7 @@
         errorLine2="                                                                           ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="319"
+            line="296"
             column="76"/>
     </issue>
 
@@ -5398,7 +5299,7 @@
         errorLine2="                                             ~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="326"
+            line="303"
             column="46"/>
     </issue>
 
@@ -5409,7 +5310,7 @@
         errorLine2="                ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="328"
+            line="305"
             column="17"/>
     </issue>
 
@@ -5420,7 +5321,7 @@
         errorLine2="                                        ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="328"
+            line="305"
             column="41"/>
     </issue>
 
@@ -5431,7 +5332,7 @@
         errorLine2="                              ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="368"
+            line="345"
             column="31"/>
     </issue>
 
@@ -5442,7 +5343,7 @@
         errorLine2="                                     ~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="369"
+            line="346"
             column="38"/>
     </issue>
 
@@ -5453,7 +5354,7 @@
         errorLine2="                                              ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="369"
+            line="346"
             column="47"/>
     </issue>
 
@@ -5464,7 +5365,7 @@
         errorLine2="                                           ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="376"
+            line="353"
             column="44"/>
     </issue>
 
@@ -5475,7 +5376,7 @@
         errorLine2="                                                                                                         ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="378"
+            line="355"
             column="106"/>
     </issue>
 
@@ -5486,7 +5387,7 @@
         errorLine2="                                                                ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="504"
+            line="481"
             column="65"/>
     </issue>
 
@@ -5497,7 +5398,7 @@
         errorLine2="                                                                                     ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="504"
+            line="481"
             column="86"/>
     </issue>
 
@@ -5508,7 +5409,7 @@
         errorLine2="                                                                                            ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="505"
+            line="482"
             column="93"/>
     </issue>
 
@@ -5519,7 +5420,7 @@
         errorLine2="                                                                                              ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="525"
+            line="502"
             column="95"/>
     </issue>
 
@@ -5530,7 +5431,7 @@
         errorLine2="                                                             ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="526"
+            line="503"
             column="62"/>
     </issue>
 
@@ -5541,7 +5442,7 @@
         errorLine2="                                                                    ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="526"
+            line="503"
             column="69"/>
     </issue>
 
@@ -5552,7 +5453,7 @@
         errorLine2="                                                                          ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="529"
+            line="506"
             column="75"/>
     </issue>
 
@@ -5563,7 +5464,7 @@
         errorLine2="                                                                                      ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="529"
+            line="506"
             column="87"/>
     </issue>
 
@@ -5574,7 +5475,7 @@
         errorLine2="                                                                                             ~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="529"
+            line="506"
             column="94"/>
     </issue>
 
@@ -5585,7 +5486,7 @@
         errorLine2="                                                                                      ~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="530"
+            line="507"
             column="87"/>
     </issue>
 
@@ -5596,7 +5497,7 @@
         errorLine2="                                                                           ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="533"
+            line="510"
             column="76"/>
     </issue>
 
@@ -5607,7 +5508,7 @@
         errorLine2="                                                                       ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="536"
+            line="513"
             column="72"/>
     </issue>
 
@@ -5618,7 +5519,7 @@
         errorLine2="                               ~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="552"
+            line="529"
             column="32"/>
     </issue>
 
@@ -5629,7 +5530,7 @@
         errorLine2="                                               ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="570"
+            line="547"
             column="48"/>
     </issue>
 
@@ -5640,7 +5541,7 @@
         errorLine2="                                            ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="597"
+            line="574"
             column="45"/>
     </issue>
 
@@ -5651,7 +5552,7 @@
         errorLine2="                                                    ~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="599"
+            line="576"
             column="53"/>
     </issue>
 
@@ -5662,7 +5563,7 @@
         errorLine2="                                                                                                                               ~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="601"
+            line="578"
             column="128"/>
     </issue>
 
@@ -5673,7 +5574,7 @@
         errorLine2="                                  ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="603"
+            line="580"
             column="35"/>
     </issue>
 
@@ -5684,7 +5585,7 @@
         errorLine2="                                          ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="603"
+            line="580"
             column="43"/>
     </issue>
 
@@ -5695,7 +5596,7 @@
         errorLine2="                                                  ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="603"
+            line="580"
             column="51"/>
     </issue>
 
@@ -5706,7 +5607,7 @@
         errorLine2="                                  ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="606"
+            line="583"
             column="35"/>
     </issue>
 
@@ -5717,7 +5618,7 @@
         errorLine2="                                          ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="606"
+            line="583"
             column="43"/>
     </issue>
 
@@ -5728,7 +5629,7 @@
         errorLine2="                                                                    ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="606"
+            line="583"
             column="69"/>
     </issue>
 
@@ -5739,7 +5640,7 @@
         errorLine2="                                                                            ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="606"
+            line="583"
             column="77"/>
     </issue>
 
@@ -5750,7 +5651,7 @@
         errorLine2="                                  ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="609"
+            line="586"
             column="35"/>
     </issue>
 
@@ -5761,7 +5662,7 @@
         errorLine2="                                          ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="609"
+            line="586"
             column="43"/>
     </issue>
 
@@ -5772,7 +5673,7 @@
         errorLine2="                                                  ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="609"
+            line="586"
             column="51"/>
     </issue>
 
@@ -5783,7 +5684,7 @@
         errorLine2="                                                     ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="622"
+            line="599"
             column="54"/>
     </issue>
 
@@ -6355,7 +6256,7 @@
         errorLine2="                                    ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/QueueSurface.kt"
-            line="47"
+            line="40"
             column="37"/>
     </issue>
 
@@ -6366,7 +6267,7 @@
         errorLine2="                                 ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/QueueSurface.kt"
-            line="166"
+            line="132"
             column="34"/>
     </issue>
 
@@ -6377,7 +6278,7 @@
         errorLine2="                                                                      ~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/QueueSurface.kt"
-            line="214"
+            line="181"
             column="71"/>
     </issue>
 
@@ -6388,7 +6289,7 @@
         errorLine2="                                                                                 ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/QueueSurface.kt"
-            line="214"
+            line="181"
             column="82"/>
     </issue>
 
@@ -6399,7 +6300,7 @@
         errorLine2="                                                                                        ~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/QueueSurface.kt"
-            line="214"
+            line="181"
             column="89"/>
     </issue>
 
@@ -6410,7 +6311,7 @@
         errorLine2="                                                                                                           ~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/QueueSurface.kt"
-            line="215"
+            line="182"
             column="108"/>
     </issue>
 
@@ -6421,7 +6322,7 @@
         errorLine2="                                                                ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/QueueSurface.kt"
-            line="216"
+            line="183"
             column="65"/>
     </issue>
 
@@ -6432,7 +6333,7 @@
         errorLine2="                                                                                     ~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/QueueSurface.kt"
-            line="216"
+            line="183"
             column="86"/>
     </issue>
 
@@ -6443,7 +6344,7 @@
         errorLine2="                    ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/QueueSurface.kt"
-            line="236"
+            line="203"
             column="21"/>
     </issue>
 
@@ -7361,6 +7262,28 @@
     </issue>
 
     <issue
+        id="MotionReadInComposition"
+        message="Sample presentation only in layout or draw"
+        errorLine1="    val p = sheet.expansion.phase.value()"
+        errorLine2="                                  ~~~~~">
+        <location
+            file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
+            line="84"
+            column="35"/>
+    </issue>
+
+    <issue
+        id="MotionReadInComposition"
+        message="Sample presentation only in layout or draw"
+        errorLine1="        artPixels, expanded &amp;&amp; p >= .99f &amp;&amp; !lyricsOpen &amp;&amp; (queue?.expansion?.phase?.value() ?: 0f) &lt;= 0f,"
+        errorLine2="                                                                                     ~~~~~">
+        <location
+            file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
+            line="310"
+            column="86"/>
+    </issue>
+
+    <issue
         id="NonPresetScreenLayout"
         message="Use stock screen layout slots"
         errorLine1="        Box(Modifier.fillMaxSize().graphicsLayer {"
@@ -8161,6 +8084,182 @@
             file="src/main/java/io/github/anastaci1a/localica/ui/ConnectedSelection.kt"
             line="118"
             column="9"/>
+    </issue>
+
+    <issue
+        id="RawShadowOrZOrder"
+        message="Use SurfaceTarget and ShadowRole"
+        errorLine1="    canvas.saveLayer(bounds,Paint())"
+        errorLine2="           ~~~~~~~~~">
+        <location
+            file="src/main/java/io/github/anastaci1a/localica/ui/ConnectedSelection.kt"
+            line="245"
+            column="12"/>
+    </issue>
+
+    <issue
+        id="RawShadowOrZOrder"
+        message="Use SurfaceTarget and ShadowRole"
+        errorLine1="        canvas.saveLayer(bounds,Paint().apply { alpha=layer.weight;blendMode=BlendMode.Plus })"
+        errorLine2="               ~~~~~~~~~">
+        <location
+            file="src/main/java/io/github/anastaci1a/localica/ui/ConnectedSelection.kt"
+            line="247"
+            column="16"/>
+    </issue>
+
+    <issue
+        id="RawShadowOrZOrder"
+        message="Use SurfaceTarget and ShadowRole"
+        errorLine1="        if (blending) drawContext.canvas.saveLayer(path.getBounds(), Paint())"
+        errorLine2="                                         ~~~~~~~~~">
+        <location
+            file="src/main/java/io/github/anastaci1a/localica/ui/ConnectedSelection.kt"
+            line="277"
+            column="42"/>
+    </issue>
+
+    <issue
+        id="RawShadowOrZOrder"
+        message="Use SurfaceTarget and ShadowRole"
+        errorLine1="            drawContext.canvas.saveLayer(path.getBounds(), Paint().apply { alpha = progress * (1f - averageProgress) })"
+        errorLine2="                               ~~~~~~~~~">
+        <location
+            file="src/main/java/io/github/anastaci1a/localica/ui/ConnectedSelection.kt"
+            line="293"
+            column="32"/>
+    </issue>
+
+    <issue
+        id="RawUiMotion"
+        message="Use Engine trajectories"
+        errorLine1="    val visibility = androidx.compose.animation.core.animateFloatAsState(if (isSelected &amp;&amp; !partial) 1f else 0f,"
+        errorLine2="                                                     ~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/io/github/anastaci1a/localica/ui/ConnectedSelection.kt"
+            line="440"
+            column="54"/>
+    </issue>
+
+    <issue
+        id="ReplacePersistentShape"
+        message="Retarget a stable PersistentShape"
+        errorLine1="        if (regions.isEmpty()) return Path()"
+        errorLine2="                                      ~~~~">
+        <location
+            file="src/main/java/io/github/anastaci1a/localica/ui/ConnectedSelection.kt"
+            line="330"
+            column="39"/>
+    </issue>
+
+    <issue
+        id="ReplacePersistentShape"
+        message="Retarget a stable PersistentShape"
+        errorLine1="            presented = Path().apply { addPath(localPath, at) }"
+        errorLine2="                        ~~~~">
+        <location
+            file="src/main/java/io/github/anastaci1a/localica/ui/ConnectedSelection.kt"
+            line="356"
+            column="25"/>
+    </issue>
+
+    <issue
+        id="UnownedSurfaceLifetime"
+        message="Retain the SurfaceNode host until dismissal completes"
+        errorLine1="                        scale(lift.scale, lift.scale, pivot) { drawLayer(layer) }"
+        errorLine2="                                                               ~~~~~~~~~">
+        <location
+            file="src/main/java/io/github/anastaci1a/localica/ui/ConnectedSelection.kt"
+            line="191"
+            column="64"/>
+    </issue>
+
+    <issue
+        id="UnownedSurfaceLifetime"
+        message="Retain the SurfaceNode host until dismissal completes"
+        errorLine1="                    translate(-crop.left, -crop.top) { magnified { drawLayer(source.layer) } }"
+        errorLine2="                                                                   ~~~~~~~~~">
+        <location
+            file="src/main/java/io/github/anastaci1a/localica/ui/ConnectedSelection.kt"
+            line="285"
+            column="68"/>
+    </issue>
+
+    <issue
+        id="UnownedSurfaceLifetime"
+        message="Retain the SurfaceNode host until dismissal completes"
+        errorLine1="                translate(crop.left, crop.top) { drawLayer(output.also { it.alpha = progress * (1f - averageProgress) }) }"
+        errorLine2="                                                 ~~~~~~~~~">
+        <location
+            file="src/main/java/io/github/anastaci1a/localica/ui/ConnectedSelection.kt"
+            line="287"
+            column="50"/>
+    </issue>
+
+    <issue
+        id="UnownedSurfaceLifetime"
+        message="Retain the SurfaceNode host until dismissal completes"
+        errorLine1="            magnified { drawLayer(source.layer) }"
+        errorLine2="                        ~~~~~~~~~">
+        <location
+            file="src/main/java/io/github/anastaci1a/localica/ui/ConnectedSelection.kt"
+            line="294"
+            column="25"/>
+    </issue>
+
+    <issue
+        id="UnownedSurfaceLifetime"
+        message="Retain the SurfaceNode host until dismissal completes"
+        errorLine1="                    translate(-crop.left, -crop.top) { magnified { drawLayer(source.layer) } }"
+        errorLine2="                                                                   ~~~~~~~~~">
+        <location
+            file="src/main/java/io/github/anastaci1a/localica/ui/ConnectedSelection.kt"
+            line="303"
+            column="68"/>
+    </issue>
+
+    <issue
+        id="UnownedSurfaceLifetime"
+        message="Retain the SurfaceNode host until dismissal completes"
+        errorLine1="                scale(crop.width / 8f, crop.height / 8f, Offset.Zero) { drawLayer(output) }"
+        errorLine2="                                                                        ~~~~~~~~~">
+        <location
+            file="src/main/java/io/github/anastaci1a/localica/ui/ConnectedSelection.kt"
+            line="309"
+            column="73"/>
+    </issue>
+
+    <issue
+        id="UnownedSurfaceLifetime"
+        message="Retain the SurfaceNode host until dismissal completes"
+        errorLine1="    val layer = androidx.compose.ui.graphics.rememberGraphicsLayer()"
+        errorLine2="                                             ~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/io/github/anastaci1a/localica/ui/ConnectedSelection.kt"
+            line="438"
+            column="46"/>
+    </issue>
+
+    <issue
+        id="UnownedSurfaceLifetime"
+        message="Retain the SurfaceNode host until dismissal completes"
+        errorLine1="            drawLayer(layer)"
+        errorLine2="            ~~~~~~~~~">
+        <location
+            file="src/main/java/io/github/anastaci1a/localica/ui/ConnectedSelection.kt"
+            line="479"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnownedSurfaceLifetime"
+        message="Retain the SurfaceNode host until dismissal completes"
+        errorLine1="        clipRect(-1f, -1f, 0f, 0f) { drawLayer(layer) }"
+        errorLine2="                                     ~~~~~~~~~">
+        <location
+            file="src/main/java/io/github/anastaci1a/localica/ui/ConnectedSelection.kt"
+            line="484"
+            column="38"/>
     </issue>
 
     <issue
@@ -9006,7 +9105,7 @@
         errorLine2="    ~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt"
-            line="289"
+            line="302"
             column="5"/>
     </issue>
 
@@ -9017,7 +9116,7 @@
         errorLine2="                                                                                                                                                                                                      ~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt"
-            line="289"
+            line="302"
             column="199"/>
     </issue>
 
@@ -9028,7 +9127,7 @@
         errorLine2="        ~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt"
-            line="295"
+            line="309"
             column="9"/>
     </issue>
 
@@ -9039,7 +9138,7 @@
         errorLine2="        ~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt"
-            line="296"
+            line="310"
             column="9"/>
     </issue>
 
@@ -9050,7 +9149,7 @@
         errorLine2="            ~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt"
-            line="316"
+            line="330"
             column="13"/>
     </issue>
 
@@ -9061,7 +9160,7 @@
         errorLine2="                                           ~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt"
-            line="318"
+            line="332"
             column="44"/>
     </issue>
 
@@ -9072,7 +9171,7 @@
         errorLine2="                                       ~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt"
-            line="319"
+            line="333"
             column="40"/>
     </issue>
 
@@ -9083,7 +9182,7 @@
         errorLine2="                ~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt"
-            line="330"
+            line="344"
             column="17"/>
     </issue>
 
@@ -9094,7 +9193,7 @@
         errorLine2="        ~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt"
-            line="367"
+            line="381"
             column="9"/>
     </issue>
 
@@ -9105,7 +9204,7 @@
         errorLine2="            ~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt"
-            line="373"
+            line="387"
             column="13"/>
     </issue>
 
@@ -9116,7 +9215,7 @@
         errorLine2="            ~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt"
-            line="409"
+            line="423"
             column="13"/>
     </issue>
 
@@ -9127,7 +9226,7 @@
         errorLine2="            ~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt"
-            line="441"
+            line="455"
             column="13"/>
     </issue>
 
@@ -9138,7 +9237,7 @@
         errorLine2="            ~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt"
-            line="448"
+            line="462"
             column="13"/>
     </issue>
 
@@ -9149,7 +9248,7 @@
         errorLine2="        ~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt"
-            line="501"
+            line="515"
             column="9"/>
     </issue>
 
@@ -9666,7 +9765,7 @@
         errorLine2="        ~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="415"
+            line="392"
             column="9"/>
     </issue>
 
@@ -9677,7 +9776,7 @@
         errorLine2="        ~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="426"
+            line="403"
             column="9"/>
     </issue>
 
@@ -9688,7 +9787,7 @@
         errorLine2="        ~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="427"
+            line="404"
             column="9"/>
     </issue>
 
@@ -9699,7 +9798,7 @@
         errorLine2="            ~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="431"
+            line="408"
             column="13"/>
     </issue>
 
@@ -9710,7 +9809,7 @@
         errorLine2="                                           ~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="466"
+            line="443"
             column="44"/>
     </issue>
 
@@ -9721,7 +9820,7 @@
         errorLine2="            ~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="477"
+            line="454"
             column="13"/>
     </issue>
 
@@ -9732,7 +9831,7 @@
         errorLine2="                                   ~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="525"
+            line="502"
             column="36"/>
     </issue>
 
@@ -9743,7 +9842,7 @@
         errorLine2="                ~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="526"
+            line="503"
             column="17"/>
     </issue>
 
@@ -9754,7 +9853,7 @@
         errorLine2="                    ~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="529"
+            line="506"
             column="21"/>
     </issue>
 
@@ -9765,7 +9864,7 @@
         errorLine2="                    ~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="533"
+            line="510"
             column="21"/>
     </issue>
 
@@ -9776,7 +9875,7 @@
         errorLine2="                    ~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="536"
+            line="513"
             column="21"/>
     </issue>
 
@@ -9787,7 +9886,7 @@
         errorLine2="                                      ~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="559"
+            line="536"
             column="39"/>
     </issue>
 
@@ -9798,7 +9897,7 @@
         errorLine2="                                          ~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="590"
+            line="567"
             column="43"/>
     </issue>
 
@@ -9809,7 +9908,7 @@
         errorLine2="                                             ~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="596"
+            line="573"
             column="46"/>
     </issue>
 
@@ -9820,7 +9919,7 @@
         errorLine2="            ~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="599"
+            line="576"
             column="13"/>
     </issue>
 
@@ -9831,7 +9930,7 @@
         errorLine2="                 ~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="627"
+            line="604"
             column="18"/>
     </issue>
 
@@ -10190,11 +10289,11 @@
     <issue
         id="NonPresetScreenLayout"
         message="Use stock screen layout slots"
-        errorLine1="    if (shown) Box(Modifier.fillMaxSize().graphicsLayer { alpha = progress.value * 0.2f }.clickable { settle(false) }) {"
+        errorLine1="    if (shown) Box(Modifier.fillMaxSize().graphicsLayer { alpha = phase.value().coerceIn(0f, 1f) * 0.2f }.clickable { onSettled(false) }) {"
         errorLine2="               ~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/QueueSurface.kt"
-            line="159"
+            line="125"
             column="16"/>
     </issue>
 
@@ -10205,7 +10304,7 @@
         errorLine2="        ~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/QueueSurface.kt"
-            line="206"
+            line="173"
             column="9"/>
     </issue>
 
@@ -10216,7 +10315,7 @@
         errorLine2="        ~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/QueueSurface.kt"
-            line="207"
+            line="174"
             column="9"/>
     </issue>
 
@@ -10227,7 +10326,7 @@
         errorLine2="            ~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/QueueSurface.kt"
-            line="208"
+            line="175"
             column="13"/>
     </issue>
 
@@ -10238,7 +10337,7 @@
         errorLine2="                ~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/QueueSurface.kt"
-            line="214"
+            line="181"
             column="17"/>
     </issue>
 
@@ -10249,7 +10348,7 @@
         errorLine2="                ~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/QueueSurface.kt"
-            line="216"
+            line="183"
             column="17"/>
     </issue>
 
@@ -10988,6 +11087,710 @@
             file="src/main/java/io/github/anastaci1a/localica/ui/TransportButton.kt"
             line="39"
             column="5"/>
+    </issue>
+
+    <issue
+        id="RawMotionMap"
+        message="Use Curve maps and owner-only mutation"
+        errorLine1="    val playerVisible by remember { derivedStateOf { phase.value() > 0f } }"
+        errorLine2="                                                     ~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt"
+            line="172"
+            column="54"/>
+    </issue>
+
+    <issue
+        id="RawMotionMap"
+        message="Use Curve maps and owner-only mutation"
+        errorLine1="    val playerCoversBrowse by remember { derivedStateOf { phase.value() >= .5f } }"
+        errorLine2="                                                          ~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt"
+            line="173"
+            column="59"/>
+    </issue>
+
+    <issue
+        id="RawMotionMap"
+        message="Use Curve maps and owner-only mutation"
+        errorLine1="    val playerFullyOpen by remember { derivedStateOf { phase.value() >= .99f } }"
+        errorLine2="                                                       ~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt"
+            line="174"
+            column="56"/>
+    </issue>
+
+    <issue
+        id="RawMotionMap"
+        message="Use Curve maps and owner-only mutation"
+        errorLine1="    val queueVisible by remember { derivedStateOf { queueSheet.expansion.phase.value() > 0f } }"
+        errorLine2="                                                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt"
+            line="175"
+            column="53"/>
+    </issue>
+
+    <issue
+        id="RawMotionMap"
+        message="Use Curve maps and owner-only mutation"
+        errorLine1="            .drawWithContent { if (!hasPlayer || phase.value() &lt; 1f) drawContent() }"
+        errorLine2="                                                 ~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt"
+            line="313"
+            column="50"/>
+    </issue>
+
+    <issue
+        id="RawMotionMap"
+        message="Use Curve maps and owner-only mutation"
+        errorLine1="            .offset { androidx.compose.ui.unit.IntOffset(0, kotlin.math.round((80.dp + inset).toPx() * maxOf(phase.value(), 1f - chromeVisibility)).toInt()) }"
+        errorLine2="                                                                                                       ~~~~~">
+        <location
+            file="src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt"
+            line="383"
+            column="104"/>
+    </issue>
+
+    <issue
+        id="RawMotionMap"
+        message="Use Curve maps and owner-only mutation"
+        errorLine1="    val lyricBackdrop = rememberFrostedBackdrop(listOf(artwork, settings.artworkLayout, settings.glass), p > .7f, dark = lightInk, lightMix = lightMix)"
+        errorLine2="                                                                                                         ~~~~~~~">
+        <location
+            file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
+            line="127"
+            column="106"/>
+    </issue>
+
+    <issue
+        id="RawMotionMap"
+        message="Use Curve maps and owner-only mutation"
+        errorLine1="    val lyricsResult = if (lyricsOpen || lyricProgress > 0f) rememberLyrics(track) else null"
+        errorLine2="                                         ~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
+            line="149"
+            column="42"/>
+    </issue>
+
+    <issue
+        id="RawMotionMap"
+        message="Use Curve maps and owner-only mutation"
+        errorLine1="    val reveal = ((p - 0.85f) / 0.15f).coerceIn(0f, 1f)"
+        errorLine2="                                       ~~~~~~~~">
+        <location
+            file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
+            line="193"
+            column="40"/>
+    </issue>
+
+    <issue
+        id="RawMotionMap"
+        message="Use Curve maps and owner-only mutation"
+        errorLine1="    val artContentScale = remember(miniArtworkPixels, artCropRetention, p == 0f) {"
+        errorLine2="                                                                        ~~~~~~~">
+        <location
+            file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
+            line="267"
+            column="73"/>
+    </issue>
+
+    <issue
+        id="RawMotionMap"
+        message="Use Curve maps and owner-only mutation"
+        errorLine1="        playerArtworkContentScale(miniArtworkPixels, artCropRetention, p == 0f)"
+        errorLine2="                                                                       ~~~~~~~">
+        <location
+            file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
+            line="268"
+            column="72"/>
+    </issue>
+
+    <issue
+        id="RawMotionMap"
+        message="Use Curve maps and owner-only mutation"
+        errorLine1="    val movingCover = p > 0f &amp;&amp; p &lt; 1f"
+        errorLine2="                      ~~~~~~">
+        <location
+            file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
+            line="275"
+            column="23"/>
+    </issue>
+
+    <issue
+        id="RawMotionMap"
+        message="Use Curve maps and owner-only mutation"
+        errorLine1="    val movingCover = p > 0f &amp;&amp; p &lt; 1f"
+        errorLine2="                                ~~~~~~">
+        <location
+            file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
+            line="275"
+            column="33"/>
+    </issue>
+
+    <issue
+        id="RawMotionMap"
+        message="Use Curve maps and owner-only mutation"
+        errorLine1="    val metadataLayer = if (movingCover) -.5f else 0f"
+        errorLine2="                            ~~~~~~~~~~~">
+        <location
+            file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
+            line="276"
+            column="29"/>
+    </issue>
+
+    <issue
+        id="RawMotionMap"
+        message="Use Curve maps and owner-only mutation"
+        errorLine1="        artPixels, expanded &amp;&amp; p >= .99f &amp;&amp; !lyricsOpen &amp;&amp; (queue?.expansion?.phase?.value() ?: 0f) &lt;= 0f,"
+        errorLine2="                               ~~~~~~~~~">
+        <location
+            file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
+            line="310"
+            column="32"/>
+    </issue>
+
+    <issue
+        id="RawMotionMap"
+        message="Use Curve maps and owner-only mutation"
+        errorLine1="        artPixels, expanded &amp;&amp; p >= .99f &amp;&amp; !lyricsOpen &amp;&amp; (queue?.expansion?.phase?.value() ?: 0f) &lt;= 0f,"
+        errorLine2="                                                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
+            line="310"
+            column="60"/>
+    </issue>
+
+    <issue
+        id="RawMotionMap"
+        message="Use Curve maps and owner-only mutation"
+        errorLine1="        artPixels, expanded &amp;&amp; p >= .99f &amp;&amp; !lyricsOpen &amp;&amp; (queue?.expansion?.phase?.value() ?: 0f) &lt;= 0f,"
+        errorLine2="                                                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
+            line="310"
+            column="61"/>
+    </issue>
+
+    <issue
+        id="RawMotionMap"
+        message="Use Curve maps and owner-only mutation"
+        errorLine1="    val swipeFraction = (kotlin.math.abs(swipeOffset) / (artPixels)).coerceIn(0f, 1f)"
+        errorLine2="                                                                     ~~~~~~~~">
+        <location
+            file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
+            line="313"
+            column="70"/>
+    </issue>
+
+    <issue
+        id="RawMotionMap"
+        message="Use Curve maps and owner-only mutation"
+        errorLine1="        if (rowMotion.seekAlpha > 0f) add(&quot;seek&quot;)"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
+            line="325"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="RawMotionMap"
+        message="Use Curve maps and owner-only mutation"
+        errorLine1="        if (rowMotion.actionsAlpha > 0f) add(&quot;actions&quot;)"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
+            line="326"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="RawMotionMap"
+        message="Use Curve maps and owner-only mutation"
+        errorLine1="            footprints, backgroundProgress * (1f - lyricProgress), maxOf(1f - coverBlend, swipeFeather / .9f),"
+        errorLine2="                                                                   ~~~~~">
+        <location
+            file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
+            line="334"
+            column="68"/>
+    </issue>
+
+    <issue
+        id="RawMotionMap"
+        message="Use Curve maps and owner-only mutation"
+        errorLine1="        val geometry = backgroundGeometry ?: return null"
+        errorLine2="                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
+            line="341"
+            column="24"/>
+    </issue>
+
+    <issue
+        id="RawMotionMap"
+        message="Use Curve maps and owner-only mutation"
+        errorLine1="        if (p &lt; .999f || artSwipe.active || swipeOffset != 0f) return null"
+        errorLine2="            ~~~~~~~~~">
+        <location
+            file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
+            line="342"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="RawMotionMap"
+        message="Use Curve maps and owner-only mutation"
+        errorLine1="        if (controls.size &lt; 4) return null"
+        errorLine2="            ~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
+            line="357"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="RawMotionMap"
+        message="Use Curve maps and owner-only mutation"
+        errorLine1="        p &lt; .999f || backgroundReveal &lt; 1f -> PlayerBackgroundUnavailable.PartialPlayer"
+        errorLine2="        ~~~~~~~~~">
+        <location
+            file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
+            line="368"
+            column="9"/>
+    </issue>
+
+    <issue
+        id="RawMotionMap"
+        message="Use Curve maps and owner-only mutation"
+        errorLine1="        p &lt; .999f || backgroundReveal &lt; 1f -> PlayerBackgroundUnavailable.PartialPlayer"
+        errorLine2="                     ~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
+            line="368"
+            column="22"/>
+    </issue>
+
+    <issue
+        id="RawMotionMap"
+        message="Use Curve maps and owner-only mutation"
+        errorLine1="    }, GlassTone(), if (ordinaryEndpoint != null &amp;&amp; lyricsEndpoint != null) ordinaryEndpoint to lyricsEndpoint else null)"
+        errorLine2="                        ~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
+            line="372"
+            column="25"/>
+    </issue>
+
+    <issue
+        id="RawMotionMap"
+        message="Use Curve maps and owner-only mutation"
+        errorLine1="    }, GlassTone(), if (ordinaryEndpoint != null &amp;&amp; lyricsEndpoint != null) ordinaryEndpoint to lyricsEndpoint else null)"
+        errorLine2="                                                    ~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
+            line="372"
+            column="53"/>
+    </issue>
+
+    <issue
+        id="RawMotionMap"
+        message="Use Curve maps and owner-only mutation"
+        errorLine1="        .then(if ((queue?.expansion?.phase?.value() ?: 0f) > 0f) Modifier.clearAndSetSemantics {} else Modifier).testTag(&quot;player-surface&quot;)"
+        errorLine2="                  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
+            line="387"
+            column="19"/>
+    </issue>
+
+    <issue
+        id="RawMotionMap"
+        message="Use Curve maps and owner-only mutation"
+        errorLine1="        .then(if ((queue?.expansion?.phase?.value() ?: 0f) > 0f) Modifier.clearAndSetSemantics {} else Modifier).testTag(&quot;player-surface&quot;)"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
+            line="387"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="RawMotionMap"
+        message="Use Curve maps and owner-only mutation"
+        errorLine1="        .then(if (frostedBackdrop != null) Modifier.recordFrostedBackdrop(frostedBackdrop, enabled = p >= .99f) else Modifier),"
+        errorLine2="                                                                                                     ~~~~~~~~~">
+        <location
+            file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
+            line="390"
+            column="102"/>
+    </issue>
+
+    <issue
+        id="RawMotionMap"
+        message="Use Curve maps and owner-only mutation"
+        errorLine1="        if (backgroundReveal &lt; 1f) LiquidGlassSurface(Modifier.fillMaxSize(), source = glassBackdrop,"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
+            line="400"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="RawMotionMap"
+        message="Use Curve maps and owner-only mutation"
+        errorLine1="        Column(Modifier.fillMaxSize().controlVerticalScroll(playerScroll, enabled = p > 0.99f &amp;&amp; virtualHeight > this@PlayerSurface.maxHeight)) {"
+        errorLine2="                                                                                    ~~~~~~~~~">
+        <location
+            file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
+            line="403"
+            column="85"/>
+    </issue>
+
+    <issue
+        id="RawMotionMap"
+        message="Use Curve maps and owner-only mutation"
+        errorLine1="                alpha = lyricMotion.artworkAlpha * if (artSwipe.active) (remaining / (artPixels * .08f)).coerceIn(0f, 1f) else 1f"
+        errorLine2="                                                                                                         ~~~~~~~~">
+        <location
+            file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
+            line="411"
+            column="106"/>
+    </issue>
+
+    <issue
+        id="RawMotionMap"
+        message="Use Curve maps and owner-only mutation"
+        errorLine1="                rotationY = (offset / artPixels).coerceIn(-1f, 1f) * -27f"
+        errorLine2="                                                 ~~~~~~~~">
+        <location
+            file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
+            line="413"
+            column="50"/>
+    </issue>
+
+    <issue
+        id="RawMotionMap"
+        message="Use Curve maps and owner-only mutation"
+        errorLine1="                val depth = kotlin.math.abs(offset / artPixels).coerceIn(0f, 1f)"
+        errorLine2="                                                                ~~~~~~~~">
+        <location
+            file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
+            line="415"
+            column="65"/>
+    </issue>
+
+    <issue
+        id="RawMotionMap"
+        message="Use Curve maps and owner-only mutation"
+        errorLine1="            if (edgeSoftness > 0f &amp;&amp; frame.softArtwork != null) androidx.compose.foundation.Image(frame.softArtwork, null,"
+        errorLine2="                ~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
+            line="419"
+            column="17"/>
+    </issue>
+
+    <issue
+        id="RawMotionMap"
+        message="Use Curve maps and owner-only mutation"
+        errorLine1="                .artworkEdgeFeather(maxOf(edgeSoftness, swipeFeather),"
+        errorLine2="                                    ~~~~~">
+        <location
+            file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
+            line="423"
+            column="37"/>
+    </issue>
+
+    <issue
+        id="RawMotionMap"
+        message="Use Curve maps and owner-only mutation"
+        errorLine1="                .recordFrostedBackdrop(if (lyricProgress > 0f) lyricBackdrop else artworkWash, enabled = p > .7f),"
+        errorLine2="                                           ~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
+            line="430"
+            column="44"/>
+    </issue>
+
+    <issue
+        id="RawMotionMap"
+        message="Use Curve maps and owner-only mutation"
+        errorLine1="                .recordFrostedBackdrop(if (lyricProgress > 0f) lyricBackdrop else artworkWash, enabled = p > .7f),"
+        errorLine2="                                                                                                         ~~~~~~~">
+        <location
+            file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
+            line="430"
+            column="106"/>
+    </issue>
+
+    <issue
+        id="RawMotionMap"
+        message="Use Curve maps and owner-only mutation"
+        errorLine1="                if (backgroundReveal > 0f) Box(Modifier.fillMaxSize().graphicsLayer { alpha = backgroundReveal }) {"
+        errorLine2="                    ~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
+            line="443"
+            column="21"/>
+    </issue>
+
+    <issue
+        id="RawMotionMap"
+        message="Use Curve maps and owner-only mutation"
+        errorLine1="                        with(density) { artX.toPx() } + swipeOffset, artPixels, softness = maxOf(1f - coverBlend, swipeFeather / .9f), tone = roleTone, ready = gradeReady,"
+        errorLine2="                                                                                           ~~~~~">
+        <location
+            file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
+            line="446"
+            column="92"/>
+    </issue>
+
+    <issue
+        id="RawMotionMap"
+        message="Use Curve maps and owner-only mutation"
+        errorLine1="                        with(density) { artX.toPx() } + neighborOffset, artPixels, softness = maxOf(1f - coverBlend, swipeFeather / .9f), tone = roleTone, ready = gradeReady)"
+        errorLine2="                                                                                              ~~~~~">
+        <location
+            file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
+            line="451"
+            column="95"/>
+    </issue>
+
+    <issue
+        id="RawMotionMap"
+        message="Use Curve maps and owner-only mutation"
+        errorLine1="            if (lyricProgress > 0f) CompositionLocalProvider(LocalFrostedBackdrop provides lyricBackdrop) { LyricsPanel(track, sampled.positionMs, settings.reducedMotion, onSeek,"
+        errorLine2="                ~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
+            line="467"
+            column="17"/>
+    </issue>
+
+    <issue
+        id="RawMotionMap"
+        message="Use Curve maps and owner-only mutation"
+        errorLine1="                            if (lyricMotion.contentAlpha > 0f) child.place(0, 0)"
+        errorLine2="                                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
+            line="476"
+            column="33"/>
+    </issue>
+
+    <issue
+        id="RawMotionMap"
+        message="Use Curve maps and owner-only mutation"
+        errorLine1="                .zIndex(if (movingCover || lyricProgress > 0f) 0f else -1f)"
+        errorLine2="                                           ~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
+            line="492"
+            column="44"/>
+    </issue>
+
+    <issue
+        id="RawMotionMap"
+        message="Use Curve maps and owner-only mutation"
+        errorLine1="                .recordPlayerCoverBackdrop(lyricBackdrop, artworkWash, enabled = p > .7f &amp;&amp; lyricProgress &lt;= 0f),"
+        errorLine2="                                                                                 ~~~~~~~">
+        <location
+            file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
+            line="493"
+            column="82"/>
+    </issue>
+
+    <issue
+        id="RawMotionMap"
+        message="Use Curve maps and owner-only mutation"
+        errorLine1="                .recordPlayerCoverBackdrop(lyricBackdrop, artworkWash, enabled = p > .7f &amp;&amp; lyricProgress &lt;= 0f),"
+        errorLine2="                                                                                            ~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
+            line="493"
+            column="93"/>
+    </issue>
+
+    <issue
+        id="RawMotionMap"
+        message="Use Curve maps and owner-only mutation"
+        errorLine1="            if (handleReveal > 0f) Box(Modifier.offset(y = statusInset).fillMaxWidth().height(48.dp).graphicsLayer { alpha = handleReveal }) {"
+        errorLine2="                ~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
+            line="502"
+            column="17"/>
+    </issue>
+
+    <issue
+        id="RawMotionMap"
+        message="Use Curve maps and owner-only mutation"
+        errorLine1="                            onSources = { if (lyricsResult?.sources?.isNotEmpty() == true) sourcesVisible = true },"
+        errorLine2="                                              ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
+            line="516"
+            column="47"/>
+    </issue>
+
+    <issue
+        id="RawMotionMap"
+        message="Use Curve maps and owner-only mutation"
+        errorLine1="            val titleOpensLyrics = expanded &amp;&amp; p >= .99f &amp;&amp; !lyricsOpen &amp;&amp; (queue?.expansion?.phase?.value() ?: 0f) &lt;= 0f"
+        errorLine2="                                               ~~~~~~~~~">
+        <location
+            file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
+            line="528"
+            column="48"/>
+    </issue>
+
+    <issue
+        id="RawMotionMap"
+        message="Use Curve maps and owner-only mutation"
+        errorLine1="            val titleOpensLyrics = expanded &amp;&amp; p >= .99f &amp;&amp; !lyricsOpen &amp;&amp; (queue?.expansion?.phase?.value() ?: 0f) &lt;= 0f"
+        errorLine2="                                                                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
+            line="528"
+            column="76"/>
+    </issue>
+
+    <issue
+        id="RawMotionMap"
+        message="Use Curve maps and owner-only mutation"
+        errorLine1="            val titleOpensLyrics = expanded &amp;&amp; p >= .99f &amp;&amp; !lyricsOpen &amp;&amp; (queue?.expansion?.phase?.value() ?: 0f) &lt;= 0f"
+        errorLine2="                                                                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
+            line="528"
+            column="77"/>
+    </issue>
+
+    <issue
+        id="RawMotionMap"
+        message="Use Curve maps and owner-only mutation"
+        errorLine1="                if (titleOpensLyrics) Box(Modifier.testTag(&quot;player-lyrics-title-target&quot;)"
+        errorLine2="                    ~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
+            line="536"
+            column="21"/>
+    </issue>
+
+    <issue
+        id="RawMotionMap"
+        message="Use Curve maps and owner-only mutation"
+        errorLine1="                val inputTop = ((statusInset + 48.dp).roundToPx() - origin).coerceIn(0, height)"
+        errorLine2="                                                                            ~~~~~~~~">
+        <location
+            file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
+            line="547"
+            column="77"/>
+    </issue>
+
+    <issue
+        id="RawMotionMap"
+        message="Use Curve maps and owner-only mutation"
+        errorLine1="                val inputBottom = minOf(height, seekY.roundToPx() - padding - origin).coerceAtLeast(inputTop)"
+        errorLine2="                                  ~~~~~">
+        <location
+            file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
+            line="548"
+            column="35"/>
+    </issue>
+
+    <issue
+        id="RawMotionMap"
+        message="Use Curve maps and owner-only mutation"
+        errorLine1="                val inputBottom = minOf(height, seekY.roundToPx() - padding - origin).coerceAtLeast(inputTop)"
+        errorLine2="                                                                                      ~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
+            line="548"
+            column="87"/>
+    </issue>
+
+    <issue
+        id="RawMotionMap"
+        message="Use Curve maps and owner-only mutation"
+        errorLine1="            if (rowMotion.seekAlpha > 0f) Column(Modifier.offset(x = contentInset, y = seekY).width(contentWidth)"
+        errorLine2="                ~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
+            line="567"
+            column="17"/>
+    </issue>
+
+    <issue
+        id="RawMotionMap"
+        message="Use Curve maps and owner-only mutation"
+        errorLine1="            if (rowMotion.actionsAlpha > 0f) Box(Modifier.offset(x = contentInset, y = actionsY)"
+        errorLine2="                ~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
+            line="573"
+            column="17"/>
+    </issue>
+
+    <issue
+        id="RawMotionMap"
+        message="Use Curve maps and owner-only mutation"
+        errorLine1="    val shown by remember(sheet) { derivedStateOf { phase.value() > 0f } }"
+        errorLine2="                                                    ~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/io/github/anastaci1a/localica/ui/QueueSurface.kt"
+            line="124"
+            column="53"/>
+    </issue>
+
+    <issue
+        id="RawMotionMap"
+        message="Use Curve maps and owner-only mutation"
+        errorLine1="    if (shown) Box(Modifier.fillMaxSize().graphicsLayer { alpha = phase.value().coerceIn(0f, 1f) * 0.2f }.clickable { onSettled(false) }) {"
+        errorLine2="                                                                                ~~~~~~~~">
+        <location
+            file="src/main/java/io/github/anastaci1a/localica/ui/QueueSurface.kt"
+            line="125"
+            column="81"/>
+    </issue>
+
+    <issue
+        id="RawMotionMap"
+        message="Use Curve maps and owner-only mutation"
+        errorLine1="            (if (phase.value() > 0f) ControlScrollDirection.Down else 0) or"
+        errorLine2="                 ~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/io/github/anastaci1a/localica/ui/QueueSurface.kt"
+            line="167"
+            column="18"/>
+    </issue>
+
+    <issue
+        id="RawMotionMap"
+        message="Use Curve maps and owner-only mutation"
+        errorLine1="                (if (phase.value() &lt; 1f) ControlScrollDirection.Up else 0)"
+        errorLine2="                     ~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/io/github/anastaci1a/localica/ui/QueueSurface.kt"
+            line="168"
+            column="22"/>
+    </issue>
+
+    <issue
+        id="RawMotionMap"
+        message="Use Curve maps and owner-only mutation"
+        errorLine1="                kotlin.math.round((top + (status - top) * phase.value().coerceIn(0f, 1f) +"
+        errorLine2="                                                                        ~~~~~~~~">
+        <location
+            file="src/main/java/io/github/anastaci1a/localica/ui/QueueSurface.kt"
+            line="202"
+            column="73"/>
     </issue>
 
     <issue
@@ -12020,7 +12823,7 @@
         errorLine2="             ~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt"
-            line="370"
+            line="384"
             column="14"/>
     </issue>
 
@@ -12031,7 +12834,7 @@
         errorLine2="                             ~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt"
-            line="370"
+            line="384"
             column="30"/>
     </issue>
 
@@ -12218,7 +13021,7 @@
         errorLine2="                                                                                                                    ~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="432"
+            line="409"
             column="117"/>
     </issue>
 
@@ -12229,7 +13032,7 @@
         errorLine2="                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="434"
+            line="411"
             column="17"/>
     </issue>
 
@@ -12240,7 +13043,7 @@
         errorLine2="                ~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="435"
+            line="412"
             column="17"/>
     </issue>
 
@@ -12251,7 +13054,7 @@
         errorLine2="                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="436"
+            line="413"
             column="17"/>
     </issue>
 
@@ -12262,7 +13065,7 @@
         errorLine2="                ~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="439"
+            line="416"
             column="17"/>
     </issue>
 
@@ -12273,7 +13076,7 @@
         errorLine2="                ~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="440"
+            line="417"
             column="17"/>
     </issue>
 
@@ -12284,7 +13087,7 @@
         errorLine2="                                       ~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="443"
+            line="420"
             column="40"/>
     </issue>
 
@@ -12295,7 +13098,7 @@
         errorLine2="                                                       ~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="443"
+            line="420"
             column="56"/>
     </issue>
 
@@ -12306,7 +13109,7 @@
         errorLine2="                                                                      ~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="466"
+            line="443"
             column="71"/>
     </issue>
 
@@ -12317,7 +13120,7 @@
         errorLine2="                                                                                      ~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="466"
+            line="443"
             column="87"/>
     </issue>
 
@@ -12328,7 +13131,7 @@
         errorLine2="                                               ~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="472"
+            line="449"
             column="48"/>
     </issue>
 
@@ -12339,7 +13142,7 @@
         errorLine2="                                                               ~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="472"
+            line="449"
             column="64"/>
     </issue>
 
@@ -12350,7 +13153,7 @@
         errorLine2="                     ~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="493"
+            line="470"
             column="22"/>
     </issue>
 
@@ -12361,7 +13164,7 @@
         errorLine2="                                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="493"
+            line="470"
             column="38"/>
     </issue>
 
@@ -12372,7 +13175,7 @@
         errorLine2="                                                                                                     ~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="525"
+            line="502"
             column="102"/>
     </issue>
 
@@ -12383,7 +13186,7 @@
         errorLine2="                                                                                                                     ~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="525"
+            line="502"
             column="118"/>
     </issue>
 
@@ -12394,7 +13197,7 @@
         errorLine2="                                                                                                  ~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="591"
+            line="568"
             column="99"/>
     </issue>
 
@@ -12405,7 +13208,7 @@
         errorLine2="                                                                                                                  ~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="591"
+            line="568"
             column="115"/>
     </issue>
 
@@ -12416,7 +13219,7 @@
         errorLine2="                                                                                                                                                       ~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="597"
+            line="574"
             column="152"/>
     </issue>
 
@@ -12427,7 +13230,7 @@
         errorLine2="                                                                                                                                                                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="597"
+            line="574"
             column="168"/>
     </issue>
 
@@ -12467,22 +13270,22 @@
     <issue
         id="RawPresentationTransform"
         message="Bind presentation through Modifier.surface"
-        errorLine1="    if (shown) Box(Modifier.fillMaxSize().graphicsLayer { alpha = progress.value * 0.2f }.clickable { settle(false) }) {"
+        errorLine1="    if (shown) Box(Modifier.fillMaxSize().graphicsLayer { alpha = phase.value().coerceIn(0f, 1f) * 0.2f }.clickable { onSettled(false) }) {"
         errorLine2="                                          ~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/QueueSurface.kt"
-            line="159"
+            line="125"
             column="43"/>
     </issue>
 
     <issue
         id="RawPresentationTransform"
         message="Bind presentation through Modifier.surface"
-        errorLine1="    if (shown) Box(Modifier.fillMaxSize().graphicsLayer { alpha = progress.value * 0.2f }.clickable { settle(false) }) {"
-        errorLine2="                                                          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        errorLine1="    if (shown) Box(Modifier.fillMaxSize().graphicsLayer { alpha = phase.value().coerceIn(0f, 1f) * 0.2f }.clickable { onSettled(false) }) {"
+        errorLine2="                                                          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/QueueSurface.kt"
-            line="159"
+            line="125"
             column="59"/>
     </issue>
 
@@ -12493,7 +13296,7 @@
         errorLine2="         ~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/QueueSurface.kt"
-            line="173"
+            line="139"
             column="10"/>
     </issue>
 
@@ -12504,7 +13307,7 @@
         errorLine2="                         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/QueueSurface.kt"
-            line="173"
+            line="139"
             column="26"/>
     </issue>
 
@@ -12715,50 +13518,6 @@
             file="src/main/java/io/github/anastaci1a/localica/ui/CollectionHeaderActionPresentation.kt"
             line="86"
             column="44"/>
-    </issue>
-
-    <issue
-        id="RawShadowOrZOrder"
-        message="Use SurfaceTarget and ShadowRole"
-        errorLine1="    canvas.saveLayer(bounds,Paint())"
-        errorLine2="           ~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/ConnectedSelection.kt"
-            line="245"
-            column="12"/>
-    </issue>
-
-    <issue
-        id="RawShadowOrZOrder"
-        message="Use SurfaceTarget and ShadowRole"
-        errorLine1="        canvas.saveLayer(bounds,Paint().apply { alpha=layer.weight;blendMode=BlendMode.Plus })"
-        errorLine2="               ~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/ConnectedSelection.kt"
-            line="247"
-            column="16"/>
-    </issue>
-
-    <issue
-        id="RawShadowOrZOrder"
-        message="Use SurfaceTarget and ShadowRole"
-        errorLine1="        if (blending) drawContext.canvas.saveLayer(path.getBounds(), Paint())"
-        errorLine2="                                         ~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/ConnectedSelection.kt"
-            line="277"
-            column="42"/>
-    </issue>
-
-    <issue
-        id="RawShadowOrZOrder"
-        message="Use SurfaceTarget and ShadowRole"
-        errorLine1="            drawContext.canvas.saveLayer(path.getBounds(), Paint().apply { alpha = progress * (1f - averageProgress) })"
-        errorLine2="                               ~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/ConnectedSelection.kt"
-            line="293"
-            column="32"/>
     </issue>
 
     <issue
@@ -12977,7 +13736,7 @@
         errorLine2="                             ~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt"
-            line="283"
+            line="296"
             column="30"/>
     </issue>
 
@@ -12988,7 +13747,7 @@
         errorLine2="                                                                                                                                    ~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt"
-            line="289"
+            line="302"
             column="133"/>
     </issue>
 
@@ -12999,7 +13758,7 @@
         errorLine2="                                                    ~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt"
-            line="319"
+            line="333"
             column="53"/>
     </issue>
 
@@ -13050,11 +13809,11 @@
     <issue
         id="RawShadowOrZOrder"
         message="Use SurfaceTarget and ShadowRole"
-        errorLine1="        .bottomGlassShadow(surfaceCorner, opacity = { 1f - progress.value })"
+        errorLine1="        .bottomGlassShadow(surfaceCorner, opacity = { 1f - sheet.expansion.phase.value() })"
         errorLine2="         ~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="408"
+            line="385"
             column="10"/>
     </issue>
 
@@ -13065,7 +13824,7 @@
         errorLine2="                                                                            ~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="452"
+            line="429"
             column="77"/>
     </issue>
 
@@ -13076,7 +13835,7 @@
         errorLine2="                                                      ~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="492"
+            line="469"
             column="55"/>
     </issue>
 
@@ -13087,7 +13846,7 @@
         errorLine2="                 ~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="515"
+            line="492"
             column="18"/>
     </issue>
 
@@ -13098,7 +13857,7 @@
         errorLine2="                                                                                   ~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="555"
+            line="532"
             column="84"/>
     </issue>
 
@@ -13109,7 +13868,7 @@
         errorLine2="                                                                   ~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="587"
+            line="564"
             column="68"/>
     </issue>
 
@@ -14717,17 +15476,6 @@
             file="src/main/java/io/github/anastaci1a/localica/ui/BrowserScreen.kt"
             line="1149"
             column="89"/>
-    </issue>
-
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="    val visibility = androidx.compose.animation.core.animateFloatAsState(if (isSelected &amp;&amp; !partial) 1f else 0f,"
-        errorLine2="                                                     ~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/ConnectedSelection.kt"
-            line="440"
-            column="54"/>
     </issue>
 
     <issue
@@ -16761,151 +17509,8 @@
         errorLine2="                                                                                                   ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt"
-            line="91"
+            line="94"
             column="100"/>
-    </issue>
-
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="    val queueProgress = remember { androidx.compose.animation.core.Animatable(if (queueOpen) 1f else 0f) }"
-        errorLine2="                                                                   ~~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt"
-            line="141"
-            column="68"/>
-    </issue>
-
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="    val progress = remember { androidx.compose.animation.core.Animatable(if (expanded) 1f else 0f) }"
-        errorLine2="                                                              ~~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt"
-            line="142"
-            column="63"/>
-    </issue>
-
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="        queueProgress.animateTo(if (queueOpen) 1f else 0f, androidx.compose.animation.core.tween(settings.motionDuration(400)))"
-        errorLine2="                      ~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt"
-            line="153"
-            column="23"/>
-    </issue>
-
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="        queueProgress.animateTo(if (queueOpen) 1f else 0f, androidx.compose.animation.core.tween(settings.motionDuration(400)))"
-        errorLine2="                                                                                           ~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt"
-            line="153"
-            column="92"/>
-    </issue>
-
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="    val playerVisible by remember { derivedStateOf { progress.value > 0f } }"
-        errorLine2="                                                              ~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt"
-            line="155"
-            column="63"/>
-    </issue>
-
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="    val playerCoversBrowse by remember { derivedStateOf { progress.value >= .5f } }"
-        errorLine2="                                                                   ~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt"
-            line="156"
-            column="68"/>
-    </issue>
-
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="    val playerFullyOpen by remember { derivedStateOf { progress.value >= .99f } }"
-        errorLine2="                                                                ~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt"
-            line="157"
-            column="65"/>
-    </issue>
-
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="    val queueVisible by remember { derivedStateOf { queueProgress.value > 0f } }"
-        errorLine2="                                                                  ~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt"
-            line="158"
-            column="67"/>
-    </issue>
-
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="        navigationScope.launch { queuePopupHome.awaitHandoff(); queueProgress.animateTo(0f, androidx.compose.animation.core.tween(settings.motionDuration(400))) }"
-        errorLine2="                                                                              ~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt"
-            line="196"
-            column="79"/>
-    </issue>
-
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="        navigationScope.launch { queuePopupHome.awaitHandoff(); queueProgress.animateTo(0f, androidx.compose.animation.core.tween(settings.motionDuration(400))) }"
-        errorLine2="                                                                                                                            ~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt"
-            line="196"
-            column="125"/>
-    </issue>
-
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="    LaunchedEffect(hasPlayer) { if (!hasPlayer) { expanded = false; queueOpen = false; progress.snapTo(0f) } }"
-        errorLine2="                                                                                                ~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt"
-            line="234"
-            column="97"/>
-    </issue>
-
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="    val miniInk by androidx.compose.animation.animateColorAsState(browseInk,"
-        errorLine2="                                              ~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt"
-            line="259"
-            column="47"/>
-    </issue>
-
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="        androidx.compose.animation.core.tween(settings.motionDuration(220)), label = &quot;Mini-player foreground&quot;)"
-        errorLine2="                                        ~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt"
-            line="260"
-            column="41"/>
     </issue>
 
     <issue
@@ -16915,7 +17520,7 @@
         errorLine2="                                                            ~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt"
-            line="262"
+            line="153"
             column="61"/>
     </issue>
 
@@ -16926,19 +17531,30 @@
         errorLine2="                                        ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt"
-            line="263"
+            line="154"
             column="41"/>
     </issue>
 
     <issue
         id="RawUiMotion"
         message="Use Engine trajectories"
-        errorLine1="            .drawWithContent { if (!hasPlayer || progress.value &lt; 1f) drawContent() }"
-        errorLine2="                                                          ~~~~~">
+        errorLine1="    val miniInk by androidx.compose.animation.animateColorAsState(browseInk,"
+        errorLine2="                                              ~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt"
-            line="299"
-            column="59"/>
+            line="276"
+            column="47"/>
+    </issue>
+
+    <issue
+        id="RawUiMotion"
+        message="Use Engine trajectories"
+        errorLine1="        androidx.compose.animation.core.tween(settings.motionDuration(220)), label = &quot;Mini-player foreground&quot;)"
+        errorLine2="                                        ~~~~~">
+        <location
+            file="src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt"
+            line="277"
+            column="41"/>
     </issue>
 
     <issue
@@ -16948,7 +17564,7 @@
         errorLine2="                                               ~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt"
-            line="322"
+            line="336"
             column="48"/>
     </issue>
 
@@ -16959,30 +17575,8 @@
         errorLine2="                                                                                                        ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt"
-            line="323"
+            line="337"
             column="105"/>
-    </issue>
-
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="            .offset { androidx.compose.ui.unit.IntOffset(0, kotlin.math.round((80.dp + inset).toPx() * maxOf(progress.value, 1f - chromeVisibility)).toInt()) }"
-        errorLine2="                                                                                                                      ~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt"
-            line="369"
-            column="119"/>
-    </issue>
-
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="                SlidingTabs(settings.tabs, settings.tabs[pager.targetPage.coerceIn(settings.tabs.indices)], { pager.currentPage + pager.currentPageOffsetFraction }, source = browseBackdrop, pageDragging = pager.interactionSource.collectIsDraggedAsState().value, activity = tabActivity, shadowOpacity = { chromeVisibility * (1f - progress.value) }, onReselect = { tab ->"
-        errorLine2="                                                                                                                                                                                                                                                                                                                                                  ~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt"
-            line="374"
-            column="339"/>
     </issue>
 
     <issue
@@ -16992,63 +17586,8 @@
         errorLine2="                                                                                                                  ~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt"
-            line="385"
+            line="399"
             column="115"/>
-    </issue>
-
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="                shadowOpacity = { chromeVisibility * (1f - progress.value) },"
-        errorLine2="                                                                    ~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt"
-            line="394"
-            column="69"/>
-    </issue>
-
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="        screenScope.PlayerClippedOverlay({ progress.value }, bottomChrome) {"
-        errorLine2="                                                    ~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt"
-            line="438"
-            column="53"/>
-    </issue>
-
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="        screenScope.QueueSurface(queueProgress, settings, { queueOpen = it }, playerProgress = { progress.value },"
-        errorLine2="                                                                                                          ~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt"
-            line="439"
-            column="107"/>
-    </issue>
-
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="    androidx.activity.compose.BackHandler(queueOpen || queueVisible) { queueOpen = false; navigationScope.launch { queuePopupHome.awaitHandoff(); queueProgress.animateTo(0f, androidx.compose.animation.core.tween(settings.motionDuration(400))) } }"
-        errorLine2="                                                                                                                                                                ~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt"
-            line="456"
-            column="161"/>
-    </issue>
-
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="    androidx.activity.compose.BackHandler(queueOpen || queueVisible) { queueOpen = false; navigationScope.launch { queuePopupHome.awaitHandoff(); queueProgress.animateTo(0f, androidx.compose.animation.core.tween(settings.motionDuration(400))) } }"
-        errorLine2="                                                                                                                                                                                                              ~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt"
-            line="456"
-            column="207"/>
     </issue>
 
     <issue
@@ -17516,44 +18055,11 @@
     <issue
         id="RawUiMotion"
         message="Use Engine trajectories"
-        errorLine1="    settings: InterfaceSettings, progress: Animatable&lt;Float, *>, onToggle: () -> Unit, onSeek: (Long) -> Unit,"
-        errorLine2="                                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="63"
-            column="34"/>
-    </issue>
-
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="    actionRows: Int = 1, queueProgress: Animatable&lt;Float, *>? = null, frostedBackdrop: FrostedBackdrop? = null,"
-        errorLine2="                         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="67"
-            column="26"/>
-    </issue>
-
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="    val p = progress.value"
-        errorLine2="                     ~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="87"
-            column="22"/>
-    </issue>
-
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
         errorLine1="    val aspect by animateFloatAsState(artwork.palette.aspect, tween(paletteDuration), label = &quot;Cover proportions&quot;)"
         errorLine2="                  ~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="111"
+            line="108"
             column="19"/>
     </issue>
 
@@ -17564,7 +18070,7 @@
         errorLine2="                                                              ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="111"
+            line="108"
             column="63"/>
     </issue>
 
@@ -17575,7 +18081,7 @@
         errorLine2="                           ~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="113"
+            line="110"
             column="28"/>
     </issue>
 
@@ -17586,7 +18092,7 @@
         errorLine2="                                                                           ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="113"
+            line="110"
             column="76"/>
     </issue>
 
@@ -17597,7 +18103,7 @@
         errorLine2="                              ~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="138"
+            line="135"
             column="31"/>
     </issue>
 
@@ -17608,228 +18114,8 @@
         errorLine2="        ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="139"
+            line="136"
             column="9"/>
-    </issue>
-
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="    var startProgress by remember { mutableFloatStateOf(progress.value) }"
-        errorLine2="                                                                 ~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="141"
-            column="66"/>
-    </issue>
-
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="            progress.animateTo(if (expanded) 1f else 0f, tween(settings.motionDuration(400), easing = PlayerSettleEasing))"
-        errorLine2="                     ~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="169"
-            column="22"/>
-    </issue>
-
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="            progress.animateTo(if (expanded) 1f else 0f, tween(settings.motionDuration(400), easing = PlayerSettleEasing))"
-        errorLine2="                                                         ~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="169"
-            column="58"/>
-    </issue>
-
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="            progress.animateTo(if (target) 1f else 0f, tween(settings.motionDuration(400), easing = PlayerSettleEasing))"
-        errorLine2="                     ~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="176"
-            column="22"/>
-    </issue>
-
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="            progress.animateTo(if (target) 1f else 0f, tween(settings.motionDuration(400), easing = PlayerSettleEasing))"
-        errorLine2="                                                       ~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="176"
-            column="56"/>
-    </issue>
-
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="                progress.snapTo(1f)"
-        errorLine2="                         ~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="184"
-            column="26"/>
-    </issue>
-
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="                queueProgress?.snapTo((startQueueProgress - movement / distance).coerceIn(0f, 1f))"
-        errorLine2="                               ~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="185"
-            column="32"/>
-    </issue>
-
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="            } else progress.snapTo((startProgress - movement / distance).coerceIn(0f, 1f))"
-        errorLine2="                            ~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="186"
-            column="29"/>
-    </issue>
-
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="        onStart = { startExpanded = expanded; startProgress = progress.value; startQueueProgress = queueProgress?.value ?: 0f; movement = 0f"
-        errorLine2="                                                                       ~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="190"
-            column="72"/>
-    </issue>
-
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="        onStart = { startExpanded = expanded; startProgress = progress.value; startQueueProgress = queueProgress?.value ?: 0f; movement = 0f"
-        errorLine2="                                                                                                                  ~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="190"
-            column="115"/>
-    </issue>
-
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="            owner = VerticalOwner.Undecided; dragging = true; progress.stop(); queueProgress?.stop() },"
-        errorLine2="                                                                       ~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="191"
-            column="72"/>
-    </issue>
-
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="            owner = VerticalOwner.Undecided; dragging = true; progress.stop(); queueProgress?.stop() },"
-        errorLine2="                                                                                              ~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="191"
-            column="95"/>
-    </issue>
-
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="                val open = settleOpen(travelDp, velocityDp, queueProgress?.value ?: 0f, startQueueProgress &lt; .5f)"
-        errorLine2="                                                                           ~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="198"
-            column="76"/>
-    </issue>
-
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="                else scope.launch { queueProgress?.animateTo(0f, tween(settings.motionDuration(400))) }"
-        errorLine2="                                                   ~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="200"
-            column="52"/>
-    </issue>
-
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="                else scope.launch { queueProgress?.animateTo(0f, tween(settings.motionDuration(400))) }"
-        errorLine2="                                                                 ~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="200"
-            column="66"/>
-    </issue>
-
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="            } else settle(settleOpen(travelDp, velocityDp, progress.value, !startExpanded,"
-        errorLine2="                                                                    ~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="201"
-            column="69"/>
-    </issue>
-
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="                launch { progress.animateTo(if (startExpanded) 1f else 0f,"
-        errorLine2="                                  ~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="209"
-            column="35"/>
-    </issue>
-
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="                    tween(settings.motionDuration(400), easing = PlayerSettleEasing)) }"
-        errorLine2="                    ~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="210"
-            column="21"/>
-    </issue>
-
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="                launch { queueProgress?.animateTo(startQueueProgress, tween(settings.motionDuration(400))) }"
-        errorLine2="                                        ~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="211"
-            column="41"/>
-    </issue>
-
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="                launch { queueProgress?.animateTo(startQueueProgress, tween(settings.motionDuration(400))) }"
-        errorLine2="                                                                      ~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="211"
-            column="71"/>
     </issue>
 
     <issue
@@ -17839,7 +18125,7 @@
         errorLine2="                            ~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="287"
+            line="264"
             column="29"/>
     </issue>
 
@@ -17850,19 +18136,8 @@
         errorLine2="        ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="288"
+            line="265"
             column="9"/>
-    </issue>
-
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="        artPixels, expanded &amp;&amp; p >= .99f &amp;&amp; !lyricsOpen &amp;&amp; (queueProgress?.value ?: 0f) == 0f,"
-        errorLine2="                                                                           ~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="333"
-            column="76"/>
     </issue>
 
     <issue
@@ -17872,52 +18147,8 @@
         errorLine2="                                      ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="335"
+            line="312"
             column="39"/>
-    </issue>
-
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="        .bottomGlassShadow(surfaceCorner, opacity = { 1f - progress.value })"
-        errorLine2="                                                                    ~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="408"
-            column="69"/>
-    </issue>
-
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="        .then(if ((queueProgress?.value ?: 0f) > 0f) Modifier.clearAndSetSemantics {} else Modifier).testTag(&quot;player-surface&quot;)"
-        errorLine2="                                  ~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="410"
-            column="35"/>
-    </issue>
-
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="            val textMotionPaused = playerMarqueePaused(p, expanded, dragging, progress.isRunning)"
-        errorLine2="                                                                                       ~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="546"
-            column="88"/>
-    </issue>
-
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="            val titleOpensLyrics = expanded &amp;&amp; p >= .99f &amp;&amp; !lyricsOpen &amp;&amp; (queueProgress?.value ?: 0f) == 0f"
-        errorLine2="                                                                                           ~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="551"
-            column="92"/>
     </issue>
 
     <issue
@@ -17940,336 +18171,6 @@
             file="src/main/java/io/github/anastaci1a/localica/ui/QueueSelectorList.kt"
             line="119"
             column="124"/>
-    </issue>
-
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="internal fun BoxWithConstraintsScope.QueueSurface(progress: Animatable&lt;Float, *>, settings: InterfaceSettings,"
-        errorLine2="                                                  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/QueueSurface.kt"
-            line="50"
-            column="51"/>
-    </issue>
-
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="    val departing by remember { derivedStateOf { closing || progress.targetValue &lt; progress.value || !interactive } }"
-        errorLine2="                                                                     ~~~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/QueueSurface.kt"
-            line="66"
-            column="70"/>
-    </issue>
-
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="    val departing by remember { derivedStateOf { closing || progress.targetValue &lt; progress.value || !interactive } }"
-        errorLine2="                                                                                            ~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/QueueSurface.kt"
-            line="66"
-            column="93"/>
-    </issue>
-
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="            progress.animateTo(if (open) 1f else 0f, tween(settings.motionDuration(400)))"
-        errorLine2="                     ~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/QueueSurface.kt"
-            line="73"
-            column="22"/>
-    </issue>
-
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="            progress.animateTo(if (open) 1f else 0f, tween(settings.motionDuration(400)))"
-        errorLine2="                                                     ~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/QueueSurface.kt"
-            line="73"
-            column="54"/>
-    </issue>
-
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="                currentTrace?.invoke(&quot;nested-cancel pulling=$pulling pulled=$pulled progress=${progress.value}&quot;)"
-        errorLine2="                                                                                                        ~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/QueueSurface.kt"
-            line="97"
-            column="105"/>
-    </issue>
-
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="                currentTrace?.invoke(&quot;nested-move dy=$dy pulled=$pulled progress=${progress.value}&quot;)"
-        errorLine2="                                                                                            ~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/QueueSurface.kt"
-            line="104"
-            column="93"/>
-    </issue>
-
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="                    progress.snapTo((1f - pulled / pullDistance).coerceIn(0f, 1f))"
-        errorLine2="                             ~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/QueueSurface.kt"
-            line="110"
-            column="30"/>
-    </issue>
-
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="                    currentTrace?.invoke(&quot;nested-applied pulled=$pulled consumed=$consumed progress=${progress.value}&quot;)"
-        errorLine2="                                                                                                               ~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/QueueSurface.kt"
-            line="111"
-            column="112"/>
-    </issue>
-
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="                currentTrace?.invoke(&quot;nested-pre source=$source available=$available pulling=$pulling pulled=$pulled progress=${progress.value}&quot;)"
-        errorLine2="                                                                                                                                         ~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/QueueSurface.kt"
-            line="116"
-            column="138"/>
-    </issue>
-
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="                currentTrace?.invoke(&quot;nested-post consumed=$consumed available=$available pulling=$pulling contentOwned=${scrollOwnership.contentOwned} mayHandoff=${scrollOwnership.mayHandoff} progress=${progress.value}&quot;)"
-        errorLine2="                                                                                                                                                                                                                     ~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/QueueSurface.kt"
-            line="126"
-            column="214"/>
-    </issue>
-
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="                    pulled = (1f - progress.value) * pullDistance"
-        errorLine2="                                            ~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/QueueSurface.kt"
-            line="135"
-            column="45"/>
-    </issue>
-
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="                currentTrace?.invoke(&quot;nested-fling available=$available pulling=$pulling mayCommit=${scrollOwnership.mayCommitPull} progress=${progress.value}&quot;)"
-        errorLine2="                                                                                                                                                        ~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/QueueSurface.kt"
-            line="142"
-            column="153"/>
-    </issue>
-
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="                    progress.value, opening = false))"
-        errorLine2="                             ~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/QueueSurface.kt"
-            line="152"
-            column="30"/>
-    </issue>
-
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="    val shown by remember(progress) { derivedStateOf { progress.value > 0f } }"
-        errorLine2="                                                                ~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/QueueSurface.kt"
-            line="158"
-            column="65"/>
-    </issue>
-
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="    if (shown) Box(Modifier.fillMaxSize().graphicsLayer { alpha = progress.value * 0.2f }.clickable { settle(false) }) {"
-        errorLine2="                                                                           ~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/QueueSurface.kt"
-            line="159"
-            column="76"/>
-    </issue>
-
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="            currentTrace?.invoke(&quot;direct-delta dy=$dy start=$start delta=$delta progress=${progress.value}&quot;)"
-        errorLine2="                                                                                                    ~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/QueueSurface.kt"
-            line="176"
-            column="101"/>
-    </issue>
-
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="                if (dy &lt; 0f &amp;&amp; (start - delta / distance).coerceIn(0f, 1f) > progress.value)"
-        errorLine2="                                                                                      ~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/QueueSurface.kt"
-            line="180"
-            column="87"/>
-    </issue>
-
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="                progress.snapTo((start - delta / distance).coerceIn(0f, 1f))"
-        errorLine2="                         ~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/QueueSurface.kt"
-            line="184"
-            column="26"/>
-    </issue>
-
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="                currentTrace?.invoke(&quot;direct-applied delta=$delta progress=${progress.value}&quot;)"
-        errorLine2="                                                                                      ~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/QueueSurface.kt"
-            line="185"
-            column="87"/>
-    </issue>
-
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="            currentTrace?.invoke(&quot;direct-start position=$position progress=${progress.value}&quot;)"
-        errorLine2="                                                                                      ~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/QueueSurface.kt"
-            line="188"
-            column="87"/>
-    </issue>
-
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="            progress.stop(); start = progress.value; delta = 0f"
-        errorLine2="                     ~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/QueueSurface.kt"
-            line="189"
-            column="22"/>
-    </issue>
-
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="            progress.stop(); start = progress.value; delta = 0f"
-        errorLine2="                                              ~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/QueueSurface.kt"
-            line="189"
-            column="47"/>
-    </issue>
-
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="            currentTrace?.invoke(&quot;direct-stop velocity=$velocity delta=$delta progress=${progress.value}&quot;)"
-        errorLine2="                                                                                                  ~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/QueueSurface.kt"
-            line="192"
-            column="99"/>
-    </issue>
-
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="            settle(settleOpen(-delta / density.density, -velocity / density.density, progress.value, start &lt; .5f))"
-        errorLine2="                                                                                              ~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/QueueSurface.kt"
-            line="193"
-            column="95"/>
-    </issue>
-
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="            currentTrace?.invoke(&quot;layout top=${it.positionInRoot().y} progress=${progress.value} distance=$distance&quot;)"
-        errorLine2="                                                                                          ~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/QueueSurface.kt"
-            line="196"
-            column="91"/>
-    </issue>
-
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="            (if (progress.value > 0f) ControlScrollDirection.Down else 0) or"
-        errorLine2="                          ~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/QueueSurface.kt"
-            line="200"
-            column="27"/>
-    </issue>
-
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="                (if (progress.value &lt; 1f) ControlScrollDirection.Up else 0)"
-        errorLine2="                              ~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/QueueSurface.kt"
-            line="201"
-            column="31"/>
-    </issue>
-
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="                val open = progress.value &lt; .5f"
-        errorLine2="                                    ~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/QueueSurface.kt"
-            line="209"
-            column="37"/>
-    </issue>
-
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="                kotlin.math.round((top + (status - top) * progress.value +"
-        errorLine2="                                                                   ~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/QueueSurface.kt"
-            line="235"
-            column="68"/>
     </issue>
 
     <issue
@@ -19142,39 +19043,6 @@
     </issue>
 
     <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="internal val PlayerSettleEasing = androidx.compose.animation.core.CubicBezierEasing(.22f, .0f, .12f, 1f)"
-        errorLine2="                                                                  ~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/VerticalGesture.kt"
-            line="18"
-            column="67"/>
-    </issue>
-
-    <issue
-        id="ReplacePersistentShape"
-        message="Retarget a stable PersistentShape"
-        errorLine1="        if (regions.isEmpty()) return Path()"
-        errorLine2="                                      ~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/ConnectedSelection.kt"
-            line="330"
-            column="39"/>
-    </issue>
-
-    <issue
-        id="ReplacePersistentShape"
-        message="Retarget a stable PersistentShape"
-        errorLine1="            presented = Path().apply { addPath(localPath, at) }"
-        errorLine2="                        ~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/ConnectedSelection.kt"
-            line="356"
-            column="25"/>
-    </issue>
-
-    <issue
         id="ReplacePersistentShape"
         message="Retarget a stable PersistentShape"
         errorLine1="        silhouette?.let { outline -> androidx.compose.foundation.shape.GenericShape { extent, _ ->"
@@ -19469,105 +19337,6 @@
             file="src/main/java/io/github/anastaci1a/localica/ui/CollectionPinchHeader.kt"
             line="347"
             column="54"/>
-    </issue>
-
-    <issue
-        id="UnownedSurfaceLifetime"
-        message="Retain the SurfaceNode host until dismissal completes"
-        errorLine1="                        scale(lift.scale, lift.scale, pivot) { drawLayer(layer) }"
-        errorLine2="                                                               ~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/ConnectedSelection.kt"
-            line="191"
-            column="64"/>
-    </issue>
-
-    <issue
-        id="UnownedSurfaceLifetime"
-        message="Retain the SurfaceNode host until dismissal completes"
-        errorLine1="                    translate(-crop.left, -crop.top) { magnified { drawLayer(source.layer) } }"
-        errorLine2="                                                                   ~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/ConnectedSelection.kt"
-            line="285"
-            column="68"/>
-    </issue>
-
-    <issue
-        id="UnownedSurfaceLifetime"
-        message="Retain the SurfaceNode host until dismissal completes"
-        errorLine1="                translate(crop.left, crop.top) { drawLayer(output.also { it.alpha = progress * (1f - averageProgress) }) }"
-        errorLine2="                                                 ~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/ConnectedSelection.kt"
-            line="287"
-            column="50"/>
-    </issue>
-
-    <issue
-        id="UnownedSurfaceLifetime"
-        message="Retain the SurfaceNode host until dismissal completes"
-        errorLine1="            magnified { drawLayer(source.layer) }"
-        errorLine2="                        ~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/ConnectedSelection.kt"
-            line="294"
-            column="25"/>
-    </issue>
-
-    <issue
-        id="UnownedSurfaceLifetime"
-        message="Retain the SurfaceNode host until dismissal completes"
-        errorLine1="                    translate(-crop.left, -crop.top) { magnified { drawLayer(source.layer) } }"
-        errorLine2="                                                                   ~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/ConnectedSelection.kt"
-            line="303"
-            column="68"/>
-    </issue>
-
-    <issue
-        id="UnownedSurfaceLifetime"
-        message="Retain the SurfaceNode host until dismissal completes"
-        errorLine1="                scale(crop.width / 8f, crop.height / 8f, Offset.Zero) { drawLayer(output) }"
-        errorLine2="                                                                        ~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/ConnectedSelection.kt"
-            line="309"
-            column="73"/>
-    </issue>
-
-    <issue
-        id="UnownedSurfaceLifetime"
-        message="Retain the SurfaceNode host until dismissal completes"
-        errorLine1="    val layer = androidx.compose.ui.graphics.rememberGraphicsLayer()"
-        errorLine2="                                             ~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/ConnectedSelection.kt"
-            line="438"
-            column="46"/>
-    </issue>
-
-    <issue
-        id="UnownedSurfaceLifetime"
-        message="Retain the SurfaceNode host until dismissal completes"
-        errorLine1="            drawLayer(layer)"
-        errorLine2="            ~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/ConnectedSelection.kt"
-            line="479"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="UnownedSurfaceLifetime"
-        message="Retain the SurfaceNode host until dismissal completes"
-        errorLine1="        clipRect(-1f, -1f, 0f, 0f) { drawLayer(layer) }"
-        errorLine2="                                     ~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/ConnectedSelection.kt"
-            line="484"
-            column="38"/>
     </issue>
 
     <issue
@@ -20061,7 +19830,7 @@
         errorLine2="                ~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="639"
+            line="616"
             column="17"/>
     </issue>
 
@@ -20072,7 +19841,7 @@
         errorLine2="                     ~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="643"
+            line="620"
             column="22"/>
     </issue>
 
@@ -20083,7 +19852,7 @@
         errorLine2="        ~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt"
-            line="650"
+            line="627"
             column="9"/>
     </issue>
 
@@ -20141,5 +19910,6 @@
             line="61"
             column="5"/>
     </issue>
+
 
 </issues>

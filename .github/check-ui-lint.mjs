@@ -68,15 +68,48 @@ export function manifest(text, metadata, known) {
     }
     return entries;
 }
-export function compare(before, after, stage) {
+/** Recorded one-time ledger growth (U14 note). Lead decision 2026-11-07 3:15 AM: U10.02 may add at most 18 rewritten
+ * phase-consumer transfers tagged U10.03, in one commit; the tag can never admit growth again. */
+export const transferExceptions = {'U10.02-ledger-2026-11-07': {removedBy: 'U10.03', limit: 18}};
+const transferId = e => JSON.stringify([e.rule,e.path,e.fqn,e.codeSha256]);
+/** Lead-approved ownership transfers (2026-11-07): itemized incidents a named future step removes; shrink-only along history. */
+export function transferIds(entries, known, completed) {
+    requireThat(Array.isArray(entries), 'Transfer entries');
+    const ids = entries.map(e => {
+        const keys = Object.keys(e).filter(k => k !== 'exception').sort().join();
+        requireThat(keys === 'codeSha256,fqn,path,reason,removedBy,rule' && rules.includes(e.rule) && e.reason &&
+            known.includes(e.removedBy) && !completed.includes(e.removedBy), 'Invalid or expired transfer');
+        requireThat(!('exception' in e) || transferExceptions[e.exception]?.removedBy === e.removedBy, 'Unrecorded transfer exception');
+        return transferId(e);
+    });
+    requireThat(new Set(ids).size === ids.length, 'Duplicate transfer'); return ids;
+}
+/** Newer entries must be a subset of older ones, except a recorded exception's entries, admitted once up to its limit. */
+export function transferGrowth(older, newer) {
+    const prior = new Set(older.map(transferId)); const grown = newer.filter(e => !prior.has(transferId(e)));
+    requireThat(grown.every(e => e.exception), 'Transfer entries can only shrink');
+    for (const [tag, x] of Object.entries(transferExceptions)) { const added = grown.filter(e => e.exception === tag);
+        requireThat(!added.length || added.length <= x.limit && older.every(e => e.exception !== tag), 'Transfer exception reused or over its limit'); }
+}
+// Whitespace-normalized text, marker column relative to the trimmed text, and ordinal among identical source lines.
+export const codeFingerprint = (code, marker, ordinal) =>
+    digest(JSON.stringify([code.trim().replace(/\s+/g,' '), marker - (code.length-code.trimStart().length), ordinal]));
+export function compare(before, after, stage, transfers = []) {
     const counts = Object.fromEntries(rules.map(r => [r, {before:0, after:0, removed:0, added:0}]));
     for (const d of before) counts[d.rule].before++;
     for (const d of after) counts[d.rule].after++;
     const old = new Set(before.map(d => d.identity)), now = new Set(after.map(d => d.identity));
-    const added = after.filter(d => !old.has(d.identity)), removed = before.filter(d => !now.has(d.identity));
+    const moved = new Set(transfers); requireThat(transfers.every(t => now.has(t)), 'Stale transfer entry');
+    let added = after.filter(d => !old.has(d.identity) && !moved.has(d.identity));
+    // The enclosing-symbol heuristic drifts when a local function is added, deleted or moved above an unchanged line:
+    // the same rule, file and code fingerprint (text, marker and ordinal) is the same incident, re-anchored.
+    const key = d => JSON.stringify([d.rule,d.path,d.codeSha256]), gone = new Map(), reanchored = [];
+    for (const d of before.filter(d => !now.has(d.identity))) gone.set(key(d), [...(gone.get(key(d)) ?? []), d]);
+    added = added.filter(d => { const same = gone.get(key(d)); if (!same?.length) return true; same.pop(); reanchored.push(d); return false; });
+    const removed = [...gone.values()].flat();
     for (const d of added) counts[d.rule].added++;
     for (const d of removed) counts[d.rule].removed++;
-    return {counts, added, removed, accepted: added.length === 0 && (stage < 6 || after.length === 0)};
+    return {counts, added, removed, reanchored: reanchored.length, transferred: transfers.length, accepted: added.length === 0 && (stage < 6 || after.length === 0)};
 }
 export function run(argv) {
     const command = argv.shift(); requireThat(['check','bootstrap'].includes(command), 'Unknown command');
@@ -130,7 +163,7 @@ export function run(argv) {
         const symbol = lines.slice(0,at+1).join('\n').match(/\b(?:fun|class|object)\s+(?:<[^>]*>\s*)?([\w.]+)/g)?.at(-1)?.replace(/^.*\s/,'') || path.basename(file,'.kt');
         const marker = (+loc.column > 0 ? +loc.column - 1 : issue.errorLine2?.search(/[~^]/));
         const ordinal = candidates.indexOf(at);
-        const codeSha256 = digest(JSON.stringify([code.trim().replace(/\s+/g,' '), marker - (code.length-code.trimStart().length), ordinal]));
+        const codeSha256 = codeFingerprint(code, marker, ordinal);
         const identity = JSON.stringify([issue.id,file,pkg+'.'+symbol,codeSha256]);
         return {rule:issue.id,path:file,fqn:pkg+'.'+symbol,codeSha256,originalLine:+loc.line,identity};
     });
@@ -154,10 +187,20 @@ export function run(argv) {
         requireThat(common===base || common===receipt.integratedSha, 'Bootstrap base is unrelated to the integrated pin');
         before = diagnostics(receipt.sourceSha);
     }
-    const result = compare(before,after,stage);
+    const transfersPath = 'tools/ui-consolidation/transfers.json'; let transfers = [];
+    if (exists(head,transfersPath)) {
+        const load = ref => { if (!exists(ref,transfersPath)) return null; const t = strictJson(blob(ref,transfersPath));
+            requireThat(Object.keys(t).sort().join() === 'approval,entries,schemaVersion' && t.schemaVersion === 1 && t.approval, 'Transfer manifest');
+            transferIds(t.entries, known.knownSteps, ref === head ? meta.steps : []); return t.entries; };
+        const current = load(head); transfers = transferIds(current, known.knownSteps, meta.steps);
+        const history = git('log','--format=%H',head,'--',transfersPath).trim().split('\n').filter(Boolean).map(load);
+        for (let i = 0; i + 1 < history.length; i++) transferGrowth(history[i+1] ?? [], history[i] ?? []);
+        if (base) { const prior = load(base); if (prior) transferGrowth(prior, current); }
+    }
+    const result = compare(before,after,stage,transfers);
     const report = {schemaVersion:1,command,baseSha:base,headSha:head,registrySha256:registry,
         baselineSha256:digest(blob(head,o['--baseline'])),manifestSha256:digest(manifestText),stage,completedSteps:meta.steps,
-        perRule:result.counts,unmatchedIdentities:result.added,escapeCounts:{before:base && exists(base,o['--escapes']) ? manifest(blob(base,o['--escapes']),meta,known.knownSteps).length : 0,after:escapes.length},
+        perRule:result.counts,unmatchedIdentities:result.added,transferredIdentities:result.transferred,reanchoredIdentities:result.reanchored,escapeCounts:{before:base && exists(base,o['--escapes']) ? manifest(blob(base,o['--escapes']),meta,known.knownSteps).length : 0,after:escapes.length},
         validationErrors:[],accepted:(command === 'bootstrap' || result.accepted) && escapes.length <= 5};
     fs.mkdirSync(o['--out'],{recursive:true}); fs.writeFileSync(path.join(o['--out'],'report.json'),JSON.stringify(report,null,2)+'\n');
     if (bootstrap) fs.writeFileSync(path.join(o['--out'],'bootstrap.json'),JSON.stringify(bootstrap,null,2)+'\n');

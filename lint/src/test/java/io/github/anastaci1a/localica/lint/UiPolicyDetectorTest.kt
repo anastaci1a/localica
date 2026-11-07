@@ -163,6 +163,25 @@ class UiPolicyDetectorTest : LintDetectorTest() {
             @Composable fun owner() { val handle = rememberMotionFloat(); Button(onClick = { handle.release() }) }
             fun Button(onClick: () -> Unit) {}
         """, 0)
+        // U13 amendment: effects and gesture callbacks lexically inside the owner composable are owner scope.
+        check(UiRuleId.RawMotionMap, """
+            import androidx.compose.runtime.*
+            import io.github.anastaci1a.localica.ui.engine.*
+            class Intents(val onDragStart: () -> Unit, val onDrag: () -> Unit, val onDragCancel: () -> Unit)
+            @Composable fun owner(): Intents { val handle = rememberMotionFloat()
+                SideEffect { handle.release() }; LaunchedEffect(1) { handle.release() }; DisposableEffect(1) { handle.release() }
+                return Intents(onDragStart = { handle.drive() }, onDrag = { handle.drive() }, onDragCancel = { handle.release() }) }
+        """, 0)
+        // Negative: the same calls from another composable, a passed-in handle, a non-owner effect or an unlisted callback.
+        check(UiRuleId.RawMotionMap, """
+            import androidx.compose.runtime.*
+            import io.github.anastaci1a.localica.ui.engine.*
+            class Intents(val onDragStart: () -> Unit, val onMove: () -> Unit)
+            fun LaunchedEffect(key: Any?, block: () -> Unit) {}
+            @Composable fun borrowed(handle: MotionFloat) { SideEffect { handle.release() } }
+            @Composable fun other() { val handle = rememberMotionFloat(); LaunchedEffect(1) { handle.release() }; Intents(onDragStart = {}, onMove = { handle.drive() }) }
+            @Composable fun stored() { val handle = rememberMotionFloat(); val later = remember { { handle.release() } }; SideEffect { later() } }
+        """, 4, "screens")
     }
 
     fun testMotionAliasHelperChannelAndLogicalTargets() {
@@ -270,6 +289,9 @@ class UiPolicyDetectorTest : LintDetectorTest() {
                 @Target(AnnotationTarget.FUNCTION, AnnotationTarget.TYPE) annotation class Composable
                 fun <T> remember(vararg keys: Any?, factory: () -> T): T = factory()
                 suspend fun withFrameNanos(block: (Long) -> Unit) {}
+                @Composable fun SideEffect(effect: () -> Unit) {}
+                @Composable fun LaunchedEffect(key1: Any?, block: suspend () -> Unit) {}
+                @Composable fun DisposableEffect(key1: Any?, effect: () -> Unit) {}
                 suspend fun withFrameMillis(block: (Long) -> Unit) {}
             """).indented(),
             kotlin("""

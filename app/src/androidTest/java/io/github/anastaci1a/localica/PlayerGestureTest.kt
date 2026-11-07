@@ -93,7 +93,8 @@ class PlayerGestureTest {
             .assert(SemanticsMatcher.keyNotDefined(androidx.compose.ui.semantics.SemanticsActions.OnClick))
         val mini = art.fetchSemanticsNode().boundsInRoot
         compose.mainClock.autoAdvance = false
-        compose.onRoot().performTouchInput { down(mini.center); repeat(24) { moveBy(Offset(0f, -10f), delayMillis = 40) } }
+        // #608: a slow, then still, release settles by the halfway rule, so the slow drag passes halfway (60% of travel).
+        compose.onRoot().performTouchInput { down(mini.center); repeat(24) { moveBy(Offset(0f, -mini.top * .6f / 24), delayMillis = 40) } }
         compose.mainClock.advanceTimeBy(32)
         val middle = art.fetchSemanticsNode().boundsInRoot
         assertTrue("Artwork must follow a slow drag: $mini -> $middle", middle.top < mini.top && middle.width > mini.width)
@@ -116,7 +117,8 @@ class PlayerGestureTest {
         val full = art.fetchSemanticsNode().boundsInRoot
         assertTrue(full.top < middle.top && full.width > middle.width)
         compose.onNodeWithTag("player-surface").performTouchInput {
-            swipe(Offset(8f, centerY), Offset(8f, centerY - 240f), durationMillis = 1200)
+            // #608: a slow upward drag opens Queue by passing halfway, not by a fixed 240 px distance rule.
+            swipe(Offset(8f, height * .85f), Offset(8f, height * .15f), durationMillis = 1200)
         }
         compose.onNodeWithContentDescription("Queue actions").assertIsDisplayed()
         // List scrolling retains its contact through the top and direction reversals.
@@ -142,10 +144,10 @@ class PlayerGestureTest {
             swipe(Offset(centerX, height * .35f), Offset(centerX, height * .75f), durationMillis = 1000)
         }
         compose.onNodeWithContentDescription("Close queue").assertDoesNotExist()
-        // Hold a collapsing gesture; browsing must already be light before releasing.
+        // Hold a collapsing gesture past halfway (#608: a still release settles by position); browsing must already be light.
         compose.mainClock.autoAdvance = false
         compose.onNodeWithTag("player-surface").performTouchInput {
-            down(Offset(8f, centerY)); repeat(20) { moveBy(Offset(0f, height * .01f), delayMillis = 30) }
+            down(Offset(8f, centerY)); repeat(20) { moveBy(Offset(0f, height * .03f), delayMillis = 30) }
         }
         compose.mainClock.advanceTimeBy(32)
         val rootBounds = compose.onRoot().fetchSemanticsNode().boundsInRoot
