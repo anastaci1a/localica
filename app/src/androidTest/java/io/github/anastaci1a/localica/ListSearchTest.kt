@@ -345,9 +345,8 @@ class ListSearchTest {
             setup.forEach { android.util.Log.i("ListSearchSlotSetup", it) }
             if (original == "null") shell("settings delete secure $key") else shell("settings put secure $key $original")
             assertEquals("Restore native keyboard policy", original, shell("settings get secure $key"))
-            // The running keyboard may observe the restored policy seconds later, inside the next
-            // test, and hide mid-edit (#593). A fresh keyboard process reads it at its first bind.
-            restartSystemIme()
+            // The running keyboard can observe the restore seconds later, inside the next test (#593).
+            compose.awaitSystemImeHardKeyboardPolicy(::shell, (original.toIntOrNull() ?: 0) != 0)
             scales.forEach { (name, value) ->
                 if (value == "null") shell("settings delete global $name") else shell("settings put global $name $value")
                 assertEquals("Restore native animation scale $name", value, shell("settings get global $name"))

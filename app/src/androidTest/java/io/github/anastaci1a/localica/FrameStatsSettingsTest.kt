@@ -17,8 +17,12 @@ class FrameStatsSettingsTest {
     @Test fun aboutOffersExplicitStartAndStopWithoutSharingAnything() {
         val device = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
         fun click(selector: BySelector) {
-            val target = device.wait(Until.findObject(selector), 15_000)
-            assertNotNull("Missing operator control: $selector", target)
+            assertNotNull("Missing operator control: $selector", device.wait(Until.findObject(selector), 15_000))
+            // A settings page slides in while the previous one is still composed. On a loaded emulator a
+            // tap during that motion was lost (#620); accessibility quiescence marks its end.
+            device.waitForIdle(15_000)
+            val target = device.findObject(selector)
+            assertNotNull("Operator control left after settling: $selector", target)
             target.click()
         }
         ActivityScenario.launch(MainActivity::class.java).use {
