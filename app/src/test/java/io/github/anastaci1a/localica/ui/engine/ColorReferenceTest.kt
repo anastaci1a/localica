@@ -52,8 +52,10 @@ class ColorReferenceTest {
     @Test fun stageOneHasNoProductionOwnerFactoryCallers() {
         val root=File("src/main/java")
         assertTrue(root.isDirectory)
-        val names=Regex("\\b(rememberMotionFloat|rememberNormalizedMotionFloat|rememberMotionRect|rememberMotionColor|rememberExpandCollapse|rememberPersistentShape|rememberSurfaceNode)\\s*\\(")
-        val callers=root.walkTopDown().filter { it.extension=="kt" && "/ui/engine/" !in it.invariantSeparatorsPath }.filter { names.containsMatchIn(it.readText()) }.toList()
+        val names=Regex("\\b(rememberMotionFloat|rememberNormalizedMotionFloat|rememberMotionRect|rememberMotionColor|rememberExpandCollapse|rememberPersistentShape|rememberSurfaceNode|rememberPopupMotion|rememberPopupState)\\s*\\(")
+        // The components factory declaration (U07.00: rememberPopupState → rememberPopupMotion) is not a caller.
+        val declaration=Regex("^@Composable fun rememberPopupState\\(")
+        val callers=root.walkTopDown().filter { it.extension=="kt" && "/ui/engine/" !in it.invariantSeparatorsPath }.filter { f -> f.readLines().any { names.containsMatchIn(it) && !declaration.containsMatchIn(it) } }.toList()
         assertEquals(emptyList<File>(),callers)
     }
     @Test fun transparentAlphaNarrowRectAndMirroredPhysicalEdgesStayFinite() {
