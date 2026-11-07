@@ -172,6 +172,7 @@ io.github.anastaci1a.localica.NavigationTest
 io.github.anastaci1a.localica.OrderCommitPersistenceTest
 io.github.anastaci1a.localica.OrderedJourneyDatabaseTest
 io.github.anastaci1a.localica.PinchArtworkContinuityTest
+io.github.anastaci1a.localica.PinchDepartureFadeTest
 io.github.anastaci1a.localica.PinchDiagnosticsRecorderTest
 io.github.anastaci1a.localica.PinchFadeTest
 io.github.anastaci1a.localica.PinchItemPlacementLifecycleTest
@@ -181,6 +182,7 @@ io.github.anastaci1a.localica.PinchReadbackLifetimeTest
 io.github.anastaci1a.localica.PinchReleaseHandoffTest
 io.github.anastaci1a.localica.PinchRetainedHighlightTest
 io.github.anastaci1a.localica.PinchRetargetTest
+io.github.anastaci1a.localica.PinchSlowFrameTest
 io.github.anastaci1a.localica.PlayNextJourneyTest
 io.github.anastaci1a.localica.PlaybackDataSourceTest
 io.github.anastaci1a.localica.PlaybackIntentTest
