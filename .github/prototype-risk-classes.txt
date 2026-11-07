@@ -129,6 +129,7 @@ io.github.anastaci1a.localica.LibraryFilterTest
 io.github.anastaci1a.localica.LibraryPlaybackReadTest
 io.github.anastaci1a.localica.LibraryPreferencesTest
 io.github.anastaci1a.localica.LibraryScrollResetTest
+io.github.anastaci1a.localica.LiftGlowDragStartTest
 io.github.anastaci1a.localica.LiftShadowContinuityTest
 io.github.anastaci1a.localica.LiftShadowTest
 io.github.anastaci1a.localica.LiquidGlassTest
