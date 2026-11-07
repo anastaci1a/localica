@@ -102,7 +102,7 @@ data class GlassAppearance(
     val tabWhiteTint: Float = .16f,
     val shapeDamping: Float = 8f,
     val depth: Float = 1.35f,
-    val contrastWeight: Float = 2f,
+    val contrastWeight: Float = GlassContrastWeightDefault,
     val classicOpacity: Float = .1f,
     val controlExpansion: Float = 1.75f,
     val overlayDarkening: Float = 0f,
@@ -116,7 +116,7 @@ data class GlassAppearance(
         tabBlur.unit(.3f), tabWhiteTint.unit(.16f),
         if (shapeDamping.isFinite()) shapeDamping.coerceIn(2f, 40f) else 8f,
         if (depth.isFinite()) depth.coerceIn(.6f, 2f) else 1.35f,
-        if (contrastWeight.isFinite()) contrastWeight.coerceIn(1f, 2f) else 2f,
+        if (contrastWeight.isFinite()) contrastWeight.coerceIn(GlassContrastWeightMin, GlassContrastWeightMax) else GlassContrastWeightDefault,
         classicOpacity.unit(.1f),
         if (controlExpansion.isFinite()) controlExpansion.coerceIn(1f, 2f) else 1.75f,
         overlayDarkening.unit(0f).coerceAtMost(.5f), overlayForeground, renderer,
@@ -131,6 +131,12 @@ enum class ArtworkAction(val label: String) {
 enum class ArtworkLayout(val label: String) { FullBackground("Full-background artwork"), Floating("Floating artwork with matte background") }
 
 enum class ArtworkTransition(val label: String) { BlurThrough("Blur through"), Carousel("Carousel") }
+
+/** Adaptive-contrast brightness weighting (#633): 1 is even; the default 2 was the maximum before #633. Weights
+ * above 1/trim limit the effective trim (see effectiveGlassTrim), so every weight keeps brightness ordered. */
+const val GlassContrastWeightMin = 1f
+const val GlassContrastWeightDefault = 2f
+const val GlassContrastWeightMax = 8f
 
 /** The lift shadow is a 50-150% multiple of Glass shadow strength in plain 5% steps; default 100%. */
 const val LiftShadowDefault = 1f
