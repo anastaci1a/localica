@@ -13,6 +13,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import kotlinx.coroutines.launch
+import io.github.anastaci1a.localica.icons.IconPacks
 
 internal enum class TransportGlyph { Previous, PlayPause, Next }
 
@@ -22,6 +23,16 @@ internal fun TransportButton(glyph: TransportGlyph, playing: Boolean, label: Str
     val reduced = rememberEffectiveReducedMotion(reducedMotion || LocalReducedMotion.current)
     val speed = LocalMotionSpeed.current
     val shapes = LocalTransportShapes.current
+    val images by IconPacks.images.collectAsState()
+    val icon = when (glyph) {
+        TransportGlyph.Previous -> AppIcon.TransportPrevious
+        TransportGlyph.Next -> AppIcon.TransportNext
+        TransportGlyph.PlayPause -> AppIcon.TransportPlay
+    }
+    fun replaced(id: AppIcon) = id.id in images.vectors || id.id in images.masks
+    val custom = replaced(icon) || (glyph == TransportGlyph.PlayPause && replaced(AppIcon.TransportPause))
+    val painter = appIconPainter(icon)
+    val pausePainter = if (glyph == TransportGlyph.PlayPause) appIconPainter(AppIcon.TransportPause) else painter
     val pause by animateFloatAsState(if (playing) 1f else 0f,
         tween(if (reduced) 0 else 260, easing = FastOutSlowInEasing), label = "Play pause morph")
     val opacity by animateControlStateFloat(if (enabled) 1f else .38f, enabled, "Transport availability", reduced)
@@ -55,8 +66,11 @@ internal fun TransportButton(glyph: TransportGlyph, playing: Boolean, label: Str
             }
         }), contentAlignment = Alignment.Center) {
         Canvas(Modifier.size(iconSize)) {
-            drawTransportGlyph(glyph, if (reduced) { if (playing) 1f else 0f } else pause,
-                if (reduced) 0f else travel.value, tint.copy(alpha = tint.alpha * opacity), shapes)
+            val progress = if (reduced) { if (playing) 1f else 0f } else pause
+            val cycle = if (reduced) 0f else travel.value
+            val color = tint.copy(alpha = tint.alpha * opacity)
+            if (custom) drawTransportPainters(glyph, progress, cycle, color, painter, pausePainter)
+            else drawTransportGlyph(glyph, progress, cycle, color, shapes)
         }
     }
 }

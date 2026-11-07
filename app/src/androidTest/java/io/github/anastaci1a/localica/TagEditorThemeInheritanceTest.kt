@@ -29,12 +29,18 @@ import kotlinx.coroutines.Dispatchers
 import org.junit.After
 import org.junit.Assert.*
 import org.junit.Before
+import org.junit.ClassRule
 import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TestRule
 import java.util.concurrent.atomic.AtomicReference
 
 /** Real host and launch controls; no tag write is submitted by these presentation tests. */
 class TagEditorThemeInheritanceTest {
+    companion object {
+        // Real text entry shows the shared system keyboard; start from a fresh IME process (#638).
+        @JvmField @ClassRule val systemIme: TestRule = FreshSystemIme()
+    }
     @get:Rule val compose = createComposeRule()
     private val controller get() = (InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as LocalicaApplication).tagEditing
     private val track = Track("theme-inheritance:missing", "Presentation song", artist = "Presentation artist",

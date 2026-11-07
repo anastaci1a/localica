@@ -148,7 +148,7 @@ class ControlStateMotionTest {
         assertEquals(full, ink("apply-ink"), full * .01)
     }
 
-    @Test fun playerModeAndBadgeFadesKeepOneLiveLabelAndFixedTargets() {
+    @Test fun playerModesAndRepeatGlyphFadesKeepOneLiveLabelAndFixedTargets() {
         var shuffle by mutableStateOf(false)
         var repeat by mutableStateOf(QueueRepeat.All)
         val slots = PlayerActionSettings(slots = mapOf(
@@ -164,7 +164,7 @@ class ControlStateMotionTest {
         val shuffleTag = "player-slot-0:0"
         val repeatTag = "player-slot-0:1"
         val off = ink(shuffleTag)
-        val badgeAbsent = ink(repeatTag)
+        val glyphAbsent = ink(repeatTag)
         val bounds = compose.onNodeWithTag(repeatTag).fetchSemanticsNode().boundsInRoot
         compose.mainClock.autoAdvance = false
         compose.runOnIdle { shuffle = true; repeat = QueueRepeat.One }
@@ -172,12 +172,14 @@ class ControlStateMotionTest {
         compose.onNodeWithTag(shuffleTag).assertIsSelected()
         compose.onAllNodesWithContentDescription("Repeat One").assertCountEquals(1)
         val entering = ink(shuffleTag)
-        val badgeEntering = ink(repeatTag)
+        val glyphEntering = ink(repeatTag)
         compose.mainClock.advanceTimeBy(400)
         val on = ink(shuffleTag)
-        val badgePresent = ink(repeatTag)
+        val glyphPresent = ink(repeatTag)
         assertTrue(entering > off && entering < on)
-        assertTrue(badgeEntering > badgeAbsent && badgeEntering < badgePresent)
+        // Complete glyphs crossfade; overlapping strokes need not gain ink monotonically.
+        assertNotEquals(glyphAbsent, glyphEntering, glyphPresent * .001)
+        assertNotEquals(glyphPresent, glyphEntering, glyphPresent * .001)
         compose.runOnIdle { shuffle = false; repeat = QueueRepeat.All }
         compose.mainClock.advanceTimeBy(144)
         compose.onNodeWithTag(shuffleTag).assertIsNotSelected()
@@ -186,11 +188,12 @@ class ControlStateMotionTest {
         assertEquals(bounds, compose.onNodeWithTag(repeatTag).fetchSemanticsNode().boundsInRoot)
         assertTrue("Mode activation is faster than deactivation",
             (entering - off) / (on - off) > (on - ink(shuffleTag)) / (on - off))
-        val badgeLeaving = ink(repeatTag)
-        assertTrue("Outgoing badge remains drawn during fade", badgeLeaving > badgeAbsent && badgeLeaving < badgePresent)
+        val glyphLeaving = ink(repeatTag)
+        assertNotEquals("The outgoing glyph has not snapped away", glyphAbsent, glyphLeaving, glyphPresent * .001)
+        assertNotEquals("The outgoing glyph advances during its fade", glyphPresent, glyphLeaving, glyphPresent * .001)
         compose.mainClock.advanceTimeBy(400)
         assertEquals(off, ink(shuffleTag), on * .01)
-        assertEquals(badgeAbsent, ink(repeatTag), badgePresent * .01)
+        assertEquals(glyphAbsent, ink(repeatTag), glyphPresent * .01)
     }
 
     @Test fun sharedDisabledControlsRejectTouchBeforeTheirVisualFadeSettles() {

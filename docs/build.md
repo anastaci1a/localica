@@ -32,6 +32,8 @@ Final build and native commands, run only after candidate freeze:
 
 Use the [shared Compose test factories](../app/src/androidTest/java/io/github/anastaci1a/localica/TestComposeRules.kt) for instrumentation. They select `StandardTestDispatcher` by default and preserve explicit fixture contexts. Compose 1.10 drains due work on Main while idling, including with a paused frame clock. Keep clock advances and input assertions explicit; do not add a separate idle-drain backport.
 
+The system keyboard is device state that survives app resets between shard classes. Classes that show it through real text entry start with [`FreshSystemIme`](../app/src/androidTest/java/io/github/anastaci1a/localica/SystemImeIsolation.kt), which restarts the selected system IME process. After a long API 36 shard, LatinIME on the hardware-keyboard emulator can report its whole window as the IME inset while drawing nothing (#638).
+
 The R8 rules preserve Compose 1.10's `AndroidLayoutApi34` helper as an optimization boundary, while allowing shrinking and renaming. This keeps its guarded text-range adapter out of paragraph classes loaded on API 26. Recheck the rule when upgrading Compose or R8; the distribution smoke linkage gate remains unchanged.
 
 Mandatory native regressions retain presented-pixel, lifecycle, first/reopened-frame, interruption and disposal assertions. Repeated utility-popup optical recording is opt-in with `utilityPopupOpticalDiagnostics=true`. The three mandatory scene methods still run by default. Successful SwitchTap frame exports require `switchTapOpticsReview=true`. Pixel checks and bounded failure evidence remain enabled.
@@ -112,6 +114,8 @@ Full native shards and focused prototype jobs time out after 35 minutes. A timed
 
 Search IME, search-focus and contrast coverage is mandatory on API 26/36. Build/JVM/lint/signature and both preserved-data compatibility jobs also remain required. Known issues never waive failures.
 
+The prototype build job compiles debug and release Kotlin concurrently in one Kotlin daemon, which inherits the Gradle heap. It therefore uses the Android static-checks sizing (`-Xmx6g`, four workers) on the 16 GB hosted runner; the 2 GB local default ran out of memory there (#636).
+
 The decision manifest records the exact SHA, APK identity, selected coverage and that complete native suites were not run. Prototype results do not certify a release.
 
 Prototypes use the same [evidence tooling](#evidence-tooling-prerequisites), six-packet limit and outcome rules described above: final XML owns test results, monitoring degradation blocks a green result, and test failure retains its exit status.
@@ -181,6 +185,8 @@ API 36 uses explicit `lavapipe`, 720×1280 at 280 dpi, and normal system animati
 Before instrumentation, the bounded emulator readiness gate checks boot completion, package-manager response, unlocked launcher focus and three stable screenshots after display resizing. It preserves observations in `emulator-readiness.json` and fails after 120 seconds. System images use exact revision cache keys; AVD userdata and snapshots are not cached.
 
 CI passes `--normalize-navigation` to recreate API 36's Launcher3 after display overrides. This clears providers cached at the previous density and residual cold-start launcher state. Admission also requires the native three-button navigation inset to equal `48 dp` at the effective density. The reset refuses physical devices, other launchers and gesture navigation. API 26 retains its existing setup.
+
+The reset waits for three identical frames first. Force-stopping Launcher3 during its first post-boot frames panicked the guest `goldfish_sync` driver (#637).
 
 API 26 disables the optional GLDMA transfer path with `-feature -GLDMA`. This targets the `goldfish_pipe_dma_clear_lock` guest-kernel panic observed during repeated display captures (#607). Renderer, memory, capture coverage and assertions remain unchanged. Repeated native verification determines whether this mitigation is sufficient.
 
