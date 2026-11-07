@@ -1026,7 +1026,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                     onPreview = { style = it }, onCommit = { style = it; preferences.write(route, it, preferences.overridden(route)) },
                     onAnchor = { zoomAnchor = it })
                 .testTag("browser-list"), contentPadding = PaddingValues(start = cellGeometry.gridInset.dp, end = cellGeometry.gridInset.dp,
-                    bottom = if (popupDismiss != null) 16.dp else obscuredInset +
+                    bottom = obscuredInset +
                         maxOf(with(density) { returnControlHeight.toDp() } + floatingControlClearance,
                             with(density) { actionControlHeight.toDp() }) + 16.dp)) {
                 item(key = "browser-notice", contentType = "notice", span = { GridItemSpan(maxLineSpan) }) {
