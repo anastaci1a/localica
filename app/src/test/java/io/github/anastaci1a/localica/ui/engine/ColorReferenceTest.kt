@@ -49,11 +49,11 @@ class ColorReferenceTest {
             rect.dispose(); color.dispose()
         }
     }
-    @Test fun stageOneHasNoProductionOwnerFactoryCallers() {
+    @Test fun ownerFactoryCallersStayInEngineAndComponents() {
         val root=File("src/main/java")
         assertTrue(root.isDirectory)
         val names=Regex("\\b(rememberMotionFloat|rememberNormalizedMotionFloat|rememberMotionRect|rememberMotionColor|rememberExpandCollapse)\\s*\\(")
-        val callers=root.walkTopDown().filter { it.extension=="kt" && "/ui/engine/" !in it.invariantSeparatorsPath }.filter { names.containsMatchIn(it.readText()) }.toList()
+        val callers=root.walkTopDown().filter { it.extension=="kt" && listOf("/ui/engine/","/ui/components/").none { p -> p in it.invariantSeparatorsPath } }.filter { names.containsMatchIn(it.readText()) }.toList()
         assertEquals(emptyList<File>(),callers)
     }
     @Test fun transparentAlphaNarrowRectAndMirroredPhysicalEdgesStayFinite() {
