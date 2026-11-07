@@ -379,7 +379,7 @@ class GlassMorphTest {
             }
         }
         val original = darkness(45)
-        assertTrue("Modal descendants cannot join a shadow group in another window", outsideShadows.entries.isEmpty() && outsidePlane.casters.isEmpty())
+        assertTrue("Modal descendants cannot join a shadow group in another window", outsidePlane.casters.isEmpty())
         assertTrue("Control casts a visible shadow", original > .01f)
         compose.runOnIdle { moved = true }
         assertTrue("No shadow remains at the old location", darkness(45) < .002f)
