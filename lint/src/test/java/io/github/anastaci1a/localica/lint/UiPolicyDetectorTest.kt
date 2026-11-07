@@ -259,7 +259,7 @@ class UiPolicyDetectorTest : LintDetectorTest() {
 
     fun testStageThreeRootAllowanceExpiresWithItsStep() {
         fun stage(completed: String) = TestFiles.source("tools/ui-consolidation/stage.json",
-            """{"schemaVersion":1,"knownSteps":["U04.01b","U10.05","U13.02b"],"completedSteps":[$completed]}""")
+            """{"schemaVersion":1,"knownSteps":["U04.01b","U09.01b","U10.05","U11.04","U13.02b"],"completedSteps":[$completed]}""")
         fun root(file: String, vararg extra: TestFile) = lint().files(*(stubs + kotlin("src/test/$file", """
             package io.github.anastaci1a.localica.ui
             import io.github.anastaci1a.localica.ui.engine.FrameStamp
@@ -270,6 +270,11 @@ class UiPolicyDetectorTest : LintDetectorTest() {
         root("GlassSilhouette.kt", stage("")).expectErrorCount(2)
         root("GlassSilhouetteOptics.kt", stage("")).expectClean()
         root("GlassSilhouetteOptics.kt", stage("\"U10.05\"")).expectErrorCount(2)
+        // B2 (9:45 AM): the pixel-rectangle callers read the moved Engine type until their U09/U11 adoption.
+        for ((file, step) in listOf("MotionPixels.kt" to "U11.04", "PlayerSurfaceFrame.kt" to "U11.04", "BrowseItemLayout.kt" to "U09.01b")) {
+            root(file, stage("")).expectClean()
+            root(file, stage("\"$step\"")).expectErrorCount(2)
+        }
         root("GlassShadow.kt", stage("\"U04.01b\"")).expectErrorCount(2)
         root("GlassShadow.kt", TestFiles.source("tools/ui-consolidation/stage.json", "{\"schemaVersion\":1,\"knownSteps\":[\"U13.02b\"],\"completedSteps\":[]}")).expectErrorCount(2)
         root("GlassShadow.kt", TestFiles.source("tools/ui-consolidation/stage.json", "not json [")).expectErrorCount(2)
