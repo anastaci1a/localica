@@ -52,12 +52,12 @@ class LiftShadowContinuityTest {
         val reference = ShadowFrameProbe(Rect(130*d, 160*d, 170*d, 164*d))
         reference.observeLuminance(1f)
         val scene = compose.onNodeWithTag("lift-shadow-scene")
-        probe.sample(scene.captureToImage())
+        probe.sample(scene.captureNativeFrame())
         for (target in listOf(true, false)) {
             compose.runOnIdle { selected = target }
             repeat(60) {
                 compose.mainClock.advanceTimeByFrame()
-                val image = scene.captureToImage()
+                val image = scene.captureNativeFrame()
                 val actual = probe.sample(image)
                 val expectedImage = ImageBitmap(image.width, image.height)
                 compose.runOnIdle {

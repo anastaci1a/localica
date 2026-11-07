@@ -52,7 +52,7 @@ internal fun playerHandleColor(ink: Color): Color =
 /** Provider composition evidence, not a draw/presentation acknowledgement. The sampling
  * frame and decision are captured with the composition that selected the supplied ink. */
 internal data class PlayerInkComposition(val decision: PlayerBackgroundDecision,
-    val frame: ArtworkBackgroundFrame?, val contentColor: Color)
+    val frame: ArtworkBackgroundFrame?, val contentColor: Color, val lyricsProgress: Float = 0f)
 internal val LocalPlayerInkCompositionObserver = staticCompositionLocalOf<((PlayerInkComposition) -> Unit)?> { null }
 
 internal val LocalPlayerWorkObserver = staticCompositionLocalOf<((String, Float?) -> Unit)?> { null }
@@ -70,10 +70,13 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     onArtworkVisit: ((String, (Boolean) -> Unit) -> Unit)? = null, bottomChrome: androidx.compose.ui.unit.Dp = 80.dp, miniForeground: Color = Color.Black,
     onSeekRequest: ((Long, String?) -> Long)? = null,
     sampleState: (() -> PlaybackState)? = null,
-    backgroundPolarity: PlayerBackgroundPolarityState? = null, actions: @Composable () -> Unit = {}) {
+    backgroundPolarity: PlayerBackgroundPolarityState? = null,
+    providedPopupHome: GlassPopupHome? = null, openingPopupHome: GlassPopupHome? = null,
+    actions: @Composable () -> Unit = {}) {
     val sampled = sampleState?.invoke() ?: state
     val windowWidth = maxWidth
     val scope = rememberCoroutineScope()
+    val popupHome = providedPopupHome ?: rememberGlassPopupHome(!expanded)
     val playerScroll = rememberScrollState()
     LaunchedEffect(expanded) { if (!expanded) playerScroll.scrollTo(0) }
     val density = LocalDensity.current
@@ -114,11 +117,14 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     val artworkEasing = !lyricsAnimating && blendClock < 1f
     val inkStep = if (artworkEasing) inkTransition.resolve(inkTarget, blendClock, true, clock = 1)
         else inkTransition.resolve(inkTarget, lyricVisibility, lyricsOpen)
-    val playerInk = inkStep.shown
+    val lyricsInk = polarity.lyricsInk?.takeIf { blendClock >= 1f }
+    val playerInk = if (lyricsInk != null) lerp(if (lyricsInk.ordinary) Color.White else Color.Black,
+        if (lyricsInk.lyrics) Color.White else Color.Black, lyricVisibility) else inkStep.shown
     // Every material that follows the player's ink (the glass backdrops and the panel theme below) reads the same
     // eased polarity as the foreground, and the shared state exposes it to the surfaces outside this composable.
-    val lightMix = inkStep.light
-    SideEffect { inkTransition.commit(inkStep); polarity.presentLightMix(lightMix) }
+    val lightMix = if (lyricsInk != null) (if (lyricsInk.ordinary) 1f else 0f) * (1f - lyricVisibility) +
+        (if (lyricsInk.lyrics) 1f else 0f) * lyricVisibility else inkStep.light
+    SideEffect { inkTransition.commit(inkStep.copy(shown = playerInk, light = lightMix)); polarity.presentLightMix(lightMix) }
     // Header controls already sample this scene before lyrics open. Older
     // adapters need its prepared pixels whenever that header is visible too.
     val lyricBackdrop = rememberFrostedBackdrop(listOf(artwork, settings.artworkLayout, settings.glass), p > .7f, dark = lightInk, lightMix = lightMix)
@@ -158,11 +164,17 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
         ArtworkAction.None -> Unit
     } }
     LaunchedEffect(expanded, settings.reducedMotion, settings.fasterMotion) {
-        if (!dragging) progress.animateTo(if (expanded) 1f else 0f, tween(settings.motionDuration(400), easing = PlayerSettleEasing))
+        if (!dragging) {
+            if (expanded) openingPopupHome?.awaitHandoff() else popupHome.awaitHandoff()
+            progress.animateTo(if (expanded) 1f else 0f, tween(settings.motionDuration(400), easing = PlayerSettleEasing))
+        }
     }
     fun settle(target: Boolean) {
         onExpanded(target)
-        scope.launch { progress.animateTo(if (target) 1f else 0f, tween(settings.motionDuration(400), easing = PlayerSettleEasing)) }
+        scope.launch {
+            if (target) openingPopupHome?.awaitHandoff() else popupHome.awaitHandoff()
+            progress.animateTo(if (target) 1f else 0f, tween(settings.motionDuration(400), easing = PlayerSettleEasing))
+        }
     }
     val dragState = rememberDraggableState { delta ->
         if (owner == VerticalOwner.Undecided) owner = if (startExpanded && (delta < 0f || startQueueProgress > 0f)) VerticalOwner.Queue else VerticalOwner.Player
@@ -346,13 +358,43 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
             edgeSoftness, edgeBand, coverBlend, lyricMotion.artworkAlpha,
             with(density) { ((8f + 16f * p).dp * (1f - p * backgroundProgress)).toPx() },
             artContentScale) else null
+    // Project measured sizes onto the two existing layout endpoints. Never
+    // subtract the moving measured position: it can be one layout pass old.
+    fun lyricsEndpoint(mode: Float): PlayerBackgroundGeometry? {
+        val geometry = backgroundGeometry ?: return null
+        if (p < .999f || artSwipe.active || swipeOffset != 0f) return null
+        val metadata = ordinarySeekY + (lyricMetadataY - ordinarySeekY) * mode
+        val transport = normalTransport + (lyricTransport - normalTransport) * mode
+        val seek = metadata + 64.dp
+        val action = ordinarySeekY + 128.dp + 32.dp * mode
+        fun at(name: String, x: androidx.compose.ui.unit.Dp, y: androidx.compose.ui.unit.Dp): Rect? =
+            polarity.measured[name]?.let { measured -> with(density) {
+                val left = x.roundToPx().toFloat(); val top = y.roundToPx().toFloat()
+                Rect(left, top, left + measured.width, top + measured.height)
+            } }
+        val controls = listOfNotNull(at("title", textX, metadata),
+            at("artist", textX, metadata + 34.dp), at("seek", contentInset, seek),
+            at("transport", (windowWidth - transportWidth) / 2, transport)) + if (mode == 0f) listOf(with(density) {
+                Rect(contentInset.toPx(), action.toPx(), (contentInset + contentWidth).toPx(), (action + 48.dp * actionRows).toPx())
+            }) else emptyList()
+        if (controls.size < 4) return null
+        val coverY = fullArtY + (lyricFullArtY - fullArtY) * mode
+        val cover = with(density) { Rect(artX.toPx(), coverY.toPx(), artX.toPx() + artPixels, coverY.toPx() + artHeight.toPx()) }
+        return geometry.copy(cover = cover, washCover = cover,
+            footprints = playerBackgroundFootprints(measuredBackground, measuredViewport, controls),
+            fullArtBlend = backgroundProgress * (1f - mode), artworkAlpha = 1f - mode,
+            contentScale = ContentScale.Fit)
+    }
+    val ordinaryEndpoint = lyricsEndpoint(0f)
+    val lyricsEndpoint = lyricsEndpoint(1f)
     ObservePlayerBackgroundPolarity(polarity, backgroundGeometry, when {
         p < .999f || backgroundReveal < 1f -> PlayerBackgroundUnavailable.PartialPlayer
         artSwipe.active || swipeOffset != 0f -> PlayerBackgroundUnavailable.MovingCover
         controlNames.any { polarity.measured[it] == null } -> PlayerBackgroundUnavailable.Unmeasured
         else -> null
-    }, GlassTone())
+    }, GlassTone(), if (ordinaryEndpoint != null && lyricsEndpoint != null) ordinaryEndpoint to lyricsEndpoint else null)
     val baseColors = MaterialTheme.colorScheme
+    CompositionLocalProvider(LocalGlassPopupHome provides popupHome) {
     GlassPanelTheme(lightMix) {
     val playerColors = MaterialTheme.colorScheme
     MaterialTheme(colorScheme = playerColors.copy(onSurface = foreground,
@@ -370,17 +412,18 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
         // is insufficient: an asynchronous capture can still see the previous recording.
         .then(if (frostedBackdrop != null) Modifier.recordFrostedBackdrop(frostedBackdrop, enabled = p >= .99f) else Modifier),
         shape = surfaceFrame.shape, color = Color.Transparent, contentColor = foreground) {
+        Box(Modifier.fillMaxSize().glassPopupHome(popupHome)) {
         if (workObserver != null) SideEffect { workObserver("surface-content", null) }
         if (inkObserver != null) {
             // Read inside Surface's actual provider, including when the actions row is absent.
-            val observed = PlayerInkComposition(inkDecision, inkFrame, LocalContentColor.current)
+            val observed = PlayerInkComposition(inkDecision, inkFrame, LocalContentColor.current, lyricVisibility)
             SideEffect { inkObserver(observed) }
         }
         val editArtwork = presentedArtworkEdit()
         if (backgroundReveal < 1f) LiquidGlassSurface(Modifier.fillMaxSize(), source = glassBackdrop,
             cornerRadius = surfaceCorner, frostProgress = glassFrost, pressFeedback = false, shadow = false,
             depthScale = RaisedGlassDepthScale + (1f - RaisedGlassDepthScale) * p)
-        Column(Modifier.fillMaxSize().controlVerticalScroll(playerScroll, enabled = p > 0.99f && virtualHeight > maxHeight)) {
+        Column(Modifier.fillMaxSize().controlVerticalScroll(playerScroll, enabled = p > 0.99f && virtualHeight > this@PlayerSurface.maxHeight)) {
         Box(Modifier.fillMaxWidth().height(virtualHeight).clipToBounds().testTag("player-background-space")
             .onGloballyPositioned { polarity.measure("background", it) }
             .then(if (!expanded) Modifier.clickable(onClickLabel = "Expand player") { settle(true) } else Modifier)) {
@@ -416,7 +459,8 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
                 // Off disables grading.
                 val grade = polarity.grade(backgroundRole, frame)
                 val gradeReady = settings.glass.contrast <= 0f || grade != null
-                val roleTone = GlassTone(shift = if (settings.glass.contrast > 0f) grade?.shift ?: 0f else 0f)
+                val roleTone = GlassTone(shift = if (settings.glass.contrast > 0f)
+                    lyricsInk?.shift(backgroundRole, lyricVisibility) ?: grade?.shift ?: 0f else 0f)
                 val destination = artSwipe.destination
                 val neighborOffset = swipeOffset - (if (swipeOffset < 0f) -1f else 1f) * artPixels
                 if (backgroundReveal > 0f) Box(Modifier.fillMaxSize().graphicsLayer { alpha = backgroundReveal }) {
@@ -568,6 +612,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
         }
     }
     }
+    }
     // The complete player composite (artwork, wash, controls, text) as recorded by the Surface above.
     // This target must stay outside that Surface's content: inside it, the Surface records the X into
     // the very layer the X's lens draws, a RenderNode cycle that overflows the API 33+ RenderThread (#583).
@@ -582,6 +627,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
         text = { Column { ArtworkAction.entries.forEach { value -> ActionTextButton(onClick = {
             onSettings(settings.copy(artworkTap = value)); configureTap = false
         }) { Text(value.label) } } } }, confirmButton = { ActionTextButton(onClick = { configureTap = false }) { Text("Close") } })
+}
 }
 }
 

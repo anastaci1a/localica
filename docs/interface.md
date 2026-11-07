@@ -34,9 +34,13 @@ One uniform scale preserves artwork/outline corner centres. Growth takes at most
 
 The lift shadow follows the menu's theming: dark under dark-icon menus, a white glow under light-icon menus. Both use Glass shadow spread and share the Lift shadow strength setting.
 
-Side-adjacent selections share one hovering outline. Diagonal gallery neighbors and unselected holes stay separate. Partial groups retain accessible state without a pane/checkmark. Inset album choices and preserve readable baselines.
+Side-adjacent selections share one hovering outline. Tangent lobes and rounded concave fillets connect or part continuously with displayed separation and motion progress. Fillets are capped at 4 dp, with an 8 dp connection band.
+
+Frost and shadow use that same path, including drag launch and landing. Diagonal gallery neighbors and unselected holes stay separate. Partial groups retain accessible state without a pane/checkmark. Inset album choices and preserve readable baselines.
 
 A lifted item is drawn only from its own retained recording, which stays in the item's display list throughout; the host adds the lifted drawing and never takes ownership, so no cover or label vanishes on select or deselect.
+
+When neighbours fade independently, complete surface and shadow renderings blend continuously. Persistent selections reveal their own shadows before the departing member disappears. Equal visibilities keep one shared outline.
 
 Selection, the current queue occurrence and held drag cards share one item outline. Its corners are concentric with the artwork's, sharing their arc centres.
 
@@ -53,6 +57,8 @@ Sort/settings choices share a moving clear lens with tap/drag control. Settings 
 Search/More follows the deeper profile because its surface opens a menu. Separate the actions in every two-button glass pill with a subtle vertical divider. Use rounded Apple Music-style icons, one shared original record glyph for albums, and attributed open-source transport artwork. Omit unavailable actions.
 
 Action-menu width fits measured labels, icons and padding within the screen. Returning flyouts gradually restore the shared trigger foreground with its original ink/tint. Keep system pickers/permissions native and artwork/timed-lyric taps ripple-free.
+
+Popups belong to their opening screen. Back during expansion or return preserves the retract inside the outgoing screen’s movement, fade and clip. The destination never inherits an independently floating popup.
 
 Corner tokens: small art 8 dp, cards 16, inputs/menus 20, large art 24, panels 28. Compact shelves/chips use pills. Transport uses circles. Icons start at 24 dp with a unified icon/label/surface target of at least 48 dp. Clip feedback to that shape.
 
@@ -155,7 +161,7 @@ Adaptive contrast also applies to player color continuations, Queue frost and ne
 
 A choice is current only after matching tone preparation completes. Unmeasured, frozen, native-blurred, moving-cover and partial-player backgrounds retain the last verified decision (white ink before any verification), explicitly without claiming current coverage. Tone preparation, sampling, composition and native presentation are asynchronous, so this does not guarantee atomic ink and background presentation.
 
-A light/dark polarity change that arrives while lyrics open or close eases with that animation's progress instead of switching in one frame, and reverses with it.
+The player prepares the normal and lyrics ink endpoints from their destination layouts. Foreground, materials and backdrop grading interpolate between those endpoints using the lyrics layout progress, including during reversal. A delayed measurement of the moving background does not change the theme at the end.
 
 One fraction drives the foreground (text and icons) and the materials: glass control ink and tone, panel frost and coating, the backdrops that follow the player's ink and the panel theme.
 
