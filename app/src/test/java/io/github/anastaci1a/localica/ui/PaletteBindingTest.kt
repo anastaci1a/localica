@@ -28,4 +28,13 @@ class PaletteBindingTest {
         assertEquals(before.value, retargeted.value, 1e-6f); assertEquals(before.slope, retargeted.slope, 1e-5f)
         assertEquals("the end of the phase lands with zero slope", 0f, ink.resolve(0f, .9995f, 1f).slope, 0f)
     }
+
+    /** A change at the phase origin (eased owner, zero velocity there) rides the shared phase, so the song blend's ink
+     * stays on the artwork crossfade's own clock (QueueSongTransitionTest, #578) instead of re-easing an eased phase. */
+    @Test fun aChangeAtThePhaseOriginRidesThePhaseLinearly() {
+        val ink = PhaseBinding(1f)
+        listOf(0f, .045f, .165f, .333f, .524f, .712f, .871f, .974f).forEach { c ->
+            assertEquals(1f - c, ink.resolve(0f, c, 1f, clock = 1).also(ink::present).value, 1e-5f)
+        }
+    }
 }
