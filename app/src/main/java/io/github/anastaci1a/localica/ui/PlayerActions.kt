@@ -38,12 +38,21 @@ internal fun PlayerActionGlyph(action: PlayerAction, description: String?,
             maxLines = 1, textAlign = androidx.compose.ui.text.style.TextAlign.Center,
             modifier = Modifier.semantics { if (description != null) contentDescription = description })
         else {
-            Icon(appIconPainter(action.icon), description, Modifier.size(24.dp))
+            if (action == PlayerAction.Repeat) {
+                val one = repeat == QueueRepeat.One
+                val oneAlpha by animateControlStateFloat(if (one) 1f else 0f, one, "Repeat one glyph")
+                Box(Modifier.size(24.dp).semantics { if (description != null) contentDescription = description }) {
+                    Icon(appIconPainter(AppIcon.ActionRepeat), null,
+                        Modifier.size(24.dp).graphicsLayer { alpha = 1f - oneAlpha }.testTag("repeat-all-glyph"))
+                    Icon(appIconPainter(AppIcon.ActionRepeatOne), null,
+                        Modifier.size(24.dp).graphicsLayer { alpha = oneAlpha }.testTag("repeat-one-glyph"))
+                }
+            } else Icon(appIconPainter(action.icon), description, Modifier.size(24.dp))
             if (action == PlayerAction.BackTen || action == PlayerAction.ForwardTen) Text("10", fontSize = 8.sp,
                 modifier = Modifier.clearAndSetSemantics {}, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
             if (action == PlayerAction.Repeat) {
                 val badge = when {
-                    repeat == QueueRepeat.One -> "1"
+                    repeat == QueueRepeat.One -> null
                     advancedRepeat?.songEnd == SongEnd.Stop -> "■"
                     advancedRepeat?.songEnd == SongEnd.NextPaused -> "Ⅱ"
                     advancedRepeat?.queueEnd == QueueEnd.NextQueue -> "Q"
@@ -52,7 +61,7 @@ internal fun PlayerActionGlyph(action: PlayerAction, description: String?,
                 // The icon owns the single live description. Decorative variants keep
                 // fixed bounds and fade independently, even when reversed mid-transition.
                 Box(Modifier.size(24.dp).clearAndSetSemantics {}, contentAlignment = Alignment.Center) {
-                    listOf("1", "■", "Ⅱ", "Q").forEach { variant ->
+                    listOf("■", "Ⅱ", "Q").forEach { variant ->
                         val opacity by animateControlStateFloat(if (badge == variant) 1f else 0f, badge == variant, "Repeat badge $variant")
                         if (opacity > 0f) Text(variant, fontSize = 10.sp,
                             fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
