@@ -190,7 +190,7 @@ internal class UiPolicyDetector : Detector(), SourceCodeScanner {
             }
             val owner = method.containingClass?.qualifiedName.orEmpty()
             edge(node, "$owner.$name")
-            if (layer != null && layer != "engine" && owner.startsWith("$UI.engine.") && ((method.isConstructor && method.containingClass?.name in setOf("UiClock", "FrameStamp", "ExpandCollapse", "MotionFloat", "MotionRect", "MotionColor", "MotionProfileId", "SpringProfileId", "Eased", "Damped", "Rest", "Driven", "EasedPlan", "MotionIntent")) || (name == "copy" && method.containingClass?.name in setOf("MotionProfileId", "SpringProfileId")) || name in setOf("prepare", "prepareSegment", "prepareDrive", "commit", "commitDrive", "commitAtomic", "emit", "emitDrive", "claim", "rawValue", "rawVelocity", "finish", "reduce", "configure", "register", "unregister", "dispose", "ownerClock", "updateSpec", "expansionPlan", "expansionDuration", "observe", "allocateId"))) report(UiRuleId.RawUiMotion, node)
+            if (layer != null && layer != "engine" && owner.startsWith("$UI.engine.") && ((method.isConstructor && method.containingClass?.name in setOf("UiClock", "FrameStamp", "ExpandCollapse", "MotionFloat", "MotionRect", "MotionColor", "MotionProfileId", "SpringProfileId", "Eased", "Damped", "Rest", "Driven", "EasedPlan", "MotionIntent", "PersistentShape", "SurfaceNode", "ShadowPlane", "HostKey")) || (name == "copy" && method.containingClass?.name in setOf("MotionProfileId", "SpringProfileId")) || name in setOf("prepare", "prepareSegment", "prepareDrive", "commit", "commitDrive", "commitAtomic", "emit", "emitDrive", "claim", "rawValue", "rawVelocity", "finish", "reduce", "configure", "register", "unregister", "dispose", "ownerClock", "updateSpec", "expansionPlan", "boundedPlan", "expansionDuration", "observe", "allocateId"))) report(UiRuleId.RawUiMotion, node)
             val compose = owner.startsWith("androidx.compose.")
             if (policy) {
                 if (owner.startsWith("androidx.compose.animation.") ||
@@ -549,7 +549,7 @@ internal class UiPolicyDetector : Detector(), SourceCodeScanner {
                 "components" -> destination in setOf("layout", "screens") || target.startsWith("androidx.compose.animation.core.")
                 "layout" -> destination == "screens"
                 // A2 explicitly permits these unmigrated hosts to acquire Engine ownership in Stage2.
-                "screens" -> destination == "engine" && !rootClockProvider && !(pkg == UI && context.file.name in setOf("PlayerSurface.kt", "QueueSurface.kt", "LocalicaScreen.kt"))
+                "screens" -> destination == "engine" && !rootClockProvider && !(pkg == UI && (context.file.name in setOf("PlayerSurface.kt", "QueueSurface.kt", "LocalicaScreen.kt") || stageAllowance(context.file.name)))
                 else -> false
             }
             if (prohibited) {
@@ -563,6 +563,17 @@ internal class UiPolicyDetector : Detector(), SourceCodeScanner {
         }
 
         override fun visitAnnotation(node: UAnnotation) = auditAnnotation(node)
+
+        /** U13.02b (D04): a named Stage 3 root adopter imports Engine only until its expiry step completes; fails closed without stage.json. */
+        private val stageSteps by lazy {
+            sequenceOf(context.project.dir, context.project.dir.parentFile).filterNotNull()
+                .map { it.resolve("tools/ui-consolidation/stage.json") }.firstOrNull { it.isFile }?.let { StageFile.steps(it.readText()) }
+        }
+        private fun stageAllowance(file: String): Boolean {
+            val expiry = stage3Allowance[file] ?: return false
+            val (known, completed) = stageSteps ?: return false
+            return expiry in known && expiry !in completed
+        }
 
         private fun escapeAllowed(node: UElement, id: String): Boolean {
             if (id == "all" || layer != "engine" || !pkg.startsWith("$UI.engine.") ||
@@ -582,6 +593,17 @@ internal class UiPolicyDetector : Detector(), SourceCodeScanner {
         }
     }
 }
+
+/** D04 Stage 3 root adopters and the step that moves or retires each one. Files that move to Engine get no entry. */
+private val stage3Allowance = mapOf(
+    "GlassShadow.kt" to "U04.01b", "GlassMorphContent.kt" to "U04.02a",
+    "GlassMorph.kt" to "U07.05", "GlassDialogs.kt" to "U07.05", "GlassPresence.kt" to "U07.05", "GlassPopupHome.kt" to "U07.05",
+    "GlassOriginPreparation.kt" to "U07.05", "SearchMorphMotion.kt" to "U07.05",
+    "FrostedMaterial.kt" to "U10.05", "LyricsHeaderActions.kt" to "U10.05",
+    "InterfaceComponents.kt" to "U06.01", "LiquidGlass.kt" to "U06.01", "NavigationUtilityPill.kt" to "U06.01", "SlidingTabs.kt" to "U06.02",
+    "ConnectedSelection.kt" to "U09.01a", "SelectionMotion.kt" to "U09.01a", "FloatingSelectionPanel.kt" to "U09.01b",
+    "KeyedDragOverlay.kt" to "U09.02", "SongDragHost.kt" to "U09.02", "SongDragOverlay.kt" to "U09.02", "LibraryFilterBubbles.kt" to "U09.02",
+)
 
 private fun layer(name: String): String? = when {
     name == "io.github.anastaci1a.localica.MainActivity" || name.startsWith("io.github.anastaci1a.localica.MainActivity.") -> "screens"

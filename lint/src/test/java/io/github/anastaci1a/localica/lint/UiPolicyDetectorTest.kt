@@ -1,6 +1,8 @@
 package io.github.anastaci1a.localica.lint
 
 import com.android.tools.lint.checks.infrastructure.LintDetectorTest
+import com.android.tools.lint.checks.infrastructure.TestFile
+import com.android.tools.lint.checks.infrastructure.TestFiles
 import com.android.tools.lint.checks.infrastructure.TestFiles.kotlin
 import com.android.tools.lint.checks.infrastructure.TestMode
 import com.android.tools.lint.detector.api.Detector
@@ -236,6 +238,31 @@ class UiPolicyDetectorTest : LintDetectorTest() {
         check(UiRuleId.UnreviewedUiEscape, "@Suppress(\"UNUSED_PARAMETER\") fun fine() = 1", 0)
     }
 
+    fun testStageThreeRootAllowanceExpiresWithItsStep() {
+        fun stage(completed: String) = TestFiles.source("tools/ui-consolidation/stage.json",
+            """{"schemaVersion":1,"knownSteps":["U04.01b","U13.02b"],"completedSteps":[$completed]}""")
+        fun root(file: String, vararg extra: TestFile) = lint().files(*(stubs + kotlin("src/test/$file", """
+            package io.github.anastaci1a.localica.ui
+            import io.github.anastaci1a.localica.ui.engine.FrameStamp
+            fun f(stamp: FrameStamp) = stamp
+        """).indented() + extra).toTypedArray()).issues(UiRuleId.UiLayerDependency.issue).allowMissingSdk().testModes(TestMode.DEFAULT).run()
+        root("GlassShadow.kt", stage("")).expectClean()
+        root("GlassShadowTwin.kt", stage("")).expectErrorCount(2)
+        root("GlassSilhouette.kt", stage("")).expectErrorCount(2)
+        root("GlassShadow.kt", stage("\"U04.01b\"")).expectErrorCount(2)
+        root("GlassShadow.kt", TestFiles.source("tools/ui-consolidation/stage.json", "{\"schemaVersion\":1,\"knownSteps\":[\"U13.02b\"],\"completedSteps\":[]}")).expectErrorCount(2)
+        root("GlassShadow.kt", TestFiles.source("tools/ui-consolidation/stage.json", "not json [")).expectErrorCount(2)
+        root("GlassShadow.kt").expectErrorCount(2)
+    }
+
+    fun testStageThreeOwnersAreNotConstructedOutsideEngine() {
+        for (type in listOf("PersistentShape", "SurfaceNode", "ShadowPlane", "HostKey")) {
+            check(UiRuleId.RawUiMotion, "fun bad() = io.github.anastaci1a.localica.ui.engine.$type()", 1)
+            check(UiRuleId.RawUiMotion, "fun fine() = io.github.anastaci1a.localica.ui.engine.$type()", 0, "engine")
+        }
+        check(UiRuleId.RawUiMotion, "fun bad() = io.github.anastaci1a.localica.ui.engine.boundedPlan()", 1)
+    }
+
     companion object {
         internal val stubs = listOf(
             kotlin("""
@@ -332,6 +359,9 @@ class UiPolicyDetectorTest : LintDetectorTest() {
                 class PersistentShape { fun retarget() {}; fun drive() {} }
                 class SurfaceNode { fun request() {}; fun transfer() {}; fun dismiss() {} }
                 class SurfaceTarget
+                class ShadowPlane
+                class HostKey
+                fun boundedPlan() = 0
                 fun rememberMotionFloat() = MotionFloat()
                 fun rememberMotionRect() = MotionRect()
                 fun rememberMotionColor() = MotionColor()
