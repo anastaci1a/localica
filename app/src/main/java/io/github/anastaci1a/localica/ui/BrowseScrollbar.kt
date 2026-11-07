@@ -9,7 +9,6 @@ import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.LazyListState
@@ -160,18 +159,30 @@ private fun ListScrollbar(state: Any, contentKey: Any, scrollable: () -> Boolean
                 }
             }
             .pointerInput(model) {
-                try {
-                    detectVerticalDragGestures(onDragStart = {
-                            // Grabbing the thumb keeps its offset under the finger; elsewhere the thumb comes to the finger.
-                            val top = position()
-                            grab = if (it.y in top..(top + thumb())) it.y - (top + thumb() / 2) else 0f
-                            dragging = true; seek(it.y)
-                        },
-                        onDragEnd = ::endDrag, onDragCancel = ::endDrag) { change, delta ->
-                        change.consume(); seek(dragY + delta)
+                // The strip shares input with the list beneath, so the drag is claimed on the Initial pass:
+                // the list's own Main-pass scroll then sees a consumed stream, while taps stay unconsumed for row actions.
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                    var travel = 0f
+                    try {
+                        while (true) {
+                            val change = awaitPointerEvent(PointerEventPass.Initial).changes.firstOrNull { it.id == down.id } ?: break
+                            if (!change.pressed) break
+                            val dy = change.position.y - change.previousPosition.y
+                            if (!dragging) {
+                                if (change.isConsumed) break
+                                travel += dy
+                                if (kotlin.math.abs(travel) < viewConfiguration.touchSlop) continue
+                                // Grabbing the thumb keeps its offset under the finger; elsewhere the thumb comes to the finger.
+                                val top = position()
+                                grab = if (down.position.y in top..(top + thumb())) down.position.y - (top + thumb() / 2) else 0f
+                                dragging = true; seek(down.position.y + travel)
+                            } else seek(dragY + dy)
+                            change.consume()
+                        }
+                    } finally {
+                        endDrag()
                     }
-                } finally {
-                    endDrag()
                 }
             }) {
             Box(Modifier.align(Alignment.TopEnd).offset(x = (-4).dp)
