@@ -66,7 +66,13 @@ internal fun GlassControlScene(modifier: Modifier, horizontalPadding: Dp = 20.dp
                 val delta = backing.origin - location.position() - origin
                 if (modern && backing.recorded && !backing.layer.isReleased) {
                     translate(delta.x, delta.y) { drawLayer(backing.layer) }
-                } else backing.snapshot?.let { image -> translate(delta.x, delta.y) { drawImage(image, dstSize = backing.size) } }
+                } else backing.snapshot?.let { image -> translate(delta.x, delta.y) {
+                    // The shared reduction retains transparent power-of-two padding.
+                    // Keep its source-pixel basis; fitting it to size compresses the ink.
+                    clipRect(right = backing.size.width.toFloat(), bottom = backing.size.height.toFloat()) {
+                        drawImage(image, dstSize = backing.snapshotExtent)
+                    }
+                } }
             }
             // scene() uses the original control's geometry, not the small capture's size.
             inset(-origin.x, -origin.y, size.width - controlSize.width + origin.x,

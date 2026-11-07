@@ -48,17 +48,17 @@ class TransportAnimationFrameTest {
                 }
             }
         }
-        val first = compose.onNodeWithTag("Next").captureToImage()
+        val first = compose.onNodeWithTag("Next").captureNativeFrame()
         for (p in listOf(0f, .1f, .25f, .5f, .75f, .9f, .9999f, 1f)) {
             compose.runOnIdle { phase = p }
-            val next = compose.onNodeWithTag("Next").captureToImage().toPixelMap()
-            val previous = compose.onNodeWithTag("Previous").captureToImage().toPixelMap()
+            val next = compose.onNodeWithTag("Next").captureNativeFrame().toPixelMap()
+            val previous = compose.onNodeWithTag("Previous").captureNativeFrame().toPixelMap()
             for (y in 0 until next.height) for (x in 0 until next.width)
                 assertEquals("Mirrored at $p $x,$y", next[x,y].red, previous[next.width - 1 - x,y].red, .025f)
         }
-        same(first, compose.onNodeWithTag("Next").captureToImage())
+        same(first, compose.onNodeWithTag("Next").captureNativeFrame())
         compose.runOnIdle { phase = .99999f }
-        same(first, compose.onNodeWithTag("Next").captureToImage(), .015f)
+        same(first, compose.onNodeWithTag("Next").captureNativeFrame(), .015f)
     }
 
     @Test fun repeatPressesKeepThePresentedFrameAndReducedMotionSnapsMidFlight() {
@@ -71,26 +71,26 @@ class TransportAnimationFrameTest {
         }
         compose.mainClock.autoAdvance = false
         val node = compose.onNodeWithTag("skip")
-        val rest = node.captureToImage()
+        val rest = node.captureNativeFrame()
         node.performClick()
         compose.mainClock.advanceTimeBy(112)
         repeat(3) {
-            val before = node.captureToImage()
+            val before = node.captureNativeFrame()
             // Touch injection advances event time even with a paused frame clock.
             // Invoke the same activation at one instant to test the actual handoff.
             val instant = compose.mainClock.currentTime
             node.performSemanticsAction(SemanticsActions.OnClick) { it() }
             assertEquals("Activation must not advance the frame under comparison", instant, compose.mainClock.currentTime)
-            same(before, node.captureToImage())
+            same(before, node.captureNativeFrame())
             compose.mainClock.advanceTimeBy(48)
         }
         assertEquals(4, calls)
         compose.runOnIdle { reduced = true }
         compose.mainClock.advanceTimeByFrame()
-        same(rest, node.captureToImage())
+        same(rest, node.captureNativeFrame())
         node.performClick()
         compose.mainClock.advanceTimeBy(64)
-        same(rest, node.captureToImage())
+        same(rest, node.captureNativeFrame())
         assertEquals(5, calls)
     }
 
@@ -105,18 +105,18 @@ class TransportAnimationFrameTest {
         }
         compose.mainClock.autoAdvance = false
         val node = compose.onNodeWithTag("skip")
-        val rest = node.captureToImage()
+        val rest = node.captureNativeFrame()
         node.performClick()
         compose.mainClock.advanceTimeBy(304)
         assertFalse("Normal cycle is still settling at 304 ms",
-            rest.asAndroidBitmap().sameAs(node.captureToImage().asAndroidBitmap()))
+            rest.asAndroidBitmap().sameAs(node.captureNativeFrame().asAndroidBitmap()))
         compose.mainClock.advanceTimeBy(160)
-        same(rest, node.captureToImage())
+        same(rest, node.captureNativeFrame())
         compose.runOnIdle { speed = 2f }
         compose.mainClock.advanceTimeByFrame()
         node.performClick()
         compose.mainClock.advanceTimeBy(304)
-        same(rest, node.captureToImage())
+        same(rest, node.captureNativeFrame())
     }
 
     @Test fun configurablePlayPauseEndpointsKeepTheMorphAndSinglePlayContour() {
@@ -140,15 +140,15 @@ class TransportAnimationFrameTest {
                 }
             }
         }
-        same(compose.onNodeWithTag("expected").captureToImage(), compose.onNodeWithTag("actual").captureToImage())
+        same(compose.onNodeWithTag("expected").captureNativeFrame(), compose.onNodeWithTag("actual").captureNativeFrame())
         compose.mainClock.autoAdvance = false
-        val play = compose.onNodeWithTag("actual").captureToImage()
+        val play = compose.onNodeWithTag("actual").captureNativeFrame()
         compose.runOnIdle { playing = true }
         compose.mainClock.advanceTimeBy(112)
-        val intermediate = compose.onNodeWithTag("actual").captureToImage()
+        val intermediate = compose.onNodeWithTag("actual").captureNativeFrame()
         assertFalse("Existing morph still interpolates", play.asAndroidBitmap().sameAs(intermediate.asAndroidBitmap()))
         compose.mainClock.advanceTimeBy(400)
-        same(compose.onNodeWithTag("expected").captureToImage(), compose.onNodeWithTag("actual").captureToImage())
+        same(compose.onNodeWithTag("expected").captureNativeFrame(), compose.onNodeWithTag("actual").captureNativeFrame())
     }
 
     @Test fun exportMiniAndFullPlayerFrameSequenceAtNormalAndFasterSpeeds() {
@@ -173,7 +173,7 @@ class TransportAnimationFrameTest {
             ?: requireNotNull(InstrumentationRegistry.getInstrumentation().targetContext.getExternalFilesDir(null)))
             .let { File(it, "transport-571") }.apply { mkdirs() }
         fun save(name: String) {
-            val shot = compose.onNodeWithTag("strip").captureToImage()
+            val shot = compose.onNodeWithTag("strip").captureNativeFrame()
             File(root, "$name-api${android.os.Build.VERSION.SDK_INT}.png").outputStream().use {
                 shot.asAndroidBitmap().compress(Bitmap.CompressFormat.PNG, 100, it)
             }

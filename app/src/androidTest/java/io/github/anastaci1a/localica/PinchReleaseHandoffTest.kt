@@ -217,7 +217,8 @@ class PinchReleaseHandoffTest {
                     "stage=$stage visible=$visibleCenter measured=$center extent=$highlightExtent contour=$contour")
                 return center
             }
-            assertEquals("Initial rendered landmark", expectedFinalCenter, presentedCenter(), 4f)
+            val initialCenter = presentedCenter()
+            assertEquals("Initial rendered landmark", expectedFinalCenter, initialCenter, 4f)
             compose.mainClock.autoAdvance = false
             pointersDown = true
             list.performTouchInput {
@@ -258,8 +259,7 @@ class PinchReleaseHandoffTest {
             pointersDown = false
             // The endpoint is the ORIGINAL pinch midpoint, never a possibly wrong
             // final sample. No frame may jump outside the held-to-endpoint path.
-            val low = minOf(before, expectedFinalCenter) - 4f
-            val high = maxOf(before, expectedFinalCenter) + 4f
+            val releaseRange = pinchReleaseAnchorRange(before, initialCenter, expectedFinalCenter)
             val samples = mutableListOf<Float>()
             val extents = mutableListOf<Int>()
             val artworkFrames = mutableListOf(heldArtwork)
@@ -276,7 +276,7 @@ class PinchReleaseHandoffTest {
                     "outward=$outward cancelled=$cancelled frame=$frame t=${compose.mainClock.currentTime} center=$center expected=$expectedFinalCenter")
             }
             assertTrue("Every presented release frame must preserve the anchor: expected=$expectedFinalCenter held=$before samples=$samples extents=$extents",
-                anchorPreserved(samples, extents, low..high))
+                anchorPreserved(samples, extents, releaseRange))
             assertEquals("Final rendered anchor must return to the original midpoint",
                 expectedFinalCenter, samples.last(), 4f)
             assertEquals("Final layout anchor must return to the original midpoint",
@@ -360,6 +360,30 @@ class PinchReleaseHandoffTest {
         val full = extents.sorted()[extents.size / 2]
         val occluded = extents.map { it < full * .7f }
         return occluded.count { it } <= 2 && !occluded.last() && samples.indices.all { occluded[it] || samples[it] in range }
+    }
+
+
+    @Test fun unplaceableHeldContourRetainsFiniteReleaseBoundsAndAllNegativeControls() {
+        val range = pinchReleaseAnchorRange(Float.NaN, 400f, 400f)
+        val samples = MutableList(12) { 400f }
+        val extents = MutableList(12) { 280 }
+        for (index in listOf(3, 4)) { samples[index] = Float.NaN; extents[index] = 0 }
+        assertTrue("An occluded held contour cannot poison otherwise observed anchors",
+            anchorPreserved(samples, extents, range))
+        for (shift in listOf(-4.5f, 4.5f)) {
+            val moved = samples.toMutableList().also { it[8] += shift }
+            assertFalse("A whole visible contour moving beyond four pixels must fail",
+                anchorPreserved(moved, extents, range))
+        }
+        val third = extents.toMutableList().also { it[5] = 0 }
+        assertFalse("Three unplaceable release frames still fail", anchorPreserved(samples, third, range))
+        val final = extents.toMutableList().also { it[11] = 0 }
+        assertFalse("An unplaceable final frame still fails", anchorPreserved(samples, final, range))
+        val observed = pinchReleaseAnchorRange(420f, 400f, 400f)
+        assertTrue(420f in observed && 400f in observed)
+        assertFalse(424.5f in observed || 395.5f in observed)
+        assertThrows(IllegalArgumentException::class.java) { pinchReleaseAnchorRange(Float.NaN, Float.NaN, 400f) }
+        assertThrows(IllegalArgumentException::class.java) { pinchReleaseAnchorRange(400f, 400f, Float.NaN) }
     }
 
     /** Negative control: the occlusion allowance never excuses a slab that moved whole. */

@@ -41,7 +41,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 internal data class GlassBackdropCapture(val renderer: GlassRendererGeneration,
-    val snapshot: ImageBitmap, val fallback: ImageBitmap)
+    val snapshot: ImageBitmap, val fallback: ImageBitmap, val extent: IntSize = IntSize(snapshot.width, snapshot.height))
 
 /** A recorded scene, independent of every surface that samples it. Never record a surface
  * into its own source: the player and its lyric background use separate sources. */
@@ -52,7 +52,7 @@ internal class FrostedBackdrop(val layer: GraphicsLayer, dark: Boolean,
     private val defaultRenderer = defaultGlassRendererGeneration()
     val rendererGeneration get() = renderer?.generation ?: defaultRenderer
     private val captureLock = Mutex()
-    var parent: FrostedBackdrop? = null
+    var parent by mutableStateOf<FrostedBackdrop?>(null)
     var materialOnly by mutableStateOf(false)
     var materialCorner by mutableFloatStateOf(0f)
     var consumers by mutableIntStateOf(0)
@@ -70,6 +70,7 @@ internal class FrostedBackdrop(val layer: GraphicsLayer, dark: Boolean,
     val capture get() = completed?.takeIf { it.renderer == rendererGeneration }
     val fallback get() = capture?.fallback
     val snapshot get() = capture?.snapshot
+    val snapshotExtent get() = capture?.extent ?: size
     var revision by mutableIntStateOf(0)
     // Draw invalidation only, deliberately absent from the capture key below.
     // Each already-scheduled readback asks retained drawings to publish its frame.
@@ -101,15 +102,15 @@ internal class FrostedBackdrop(val layer: GraphicsLayer, dark: Boolean,
     }
 
     fun publish(renderer: GlassRendererGeneration, snapshot: ImageBitmap, fallback: ImageBitmap,
-        request: Int, draws: BackdropReadbackDraws?): Boolean {
+        request: Int, draws: BackdropReadbackDraws?, extent: IntSize = size): Boolean {
         if (rendererGeneration != renderer) return false
         snapshotReadbackRequest = request; snapshotDraws = draws
         // Reading an average can redraw its producer through a parent recording.
         // Equal thumbnail pixels must not publish new observable state forever.
         val previous = completed?.takeIf { it.renderer == renderer }?.snapshot
         if (previous != null && previous.width == snapshot.width && previous.height == snapshot.height &&
-            previous.asAndroidBitmap().sameAs(snapshot.asAndroidBitmap())) return true
-        completed = GlassBackdropCapture(renderer, snapshot, fallback)
+            capture?.extent == extent && previous.asAndroidBitmap().sameAs(snapshot.asAndroidBitmap())) return true
+        completed = GlassBackdropCapture(renderer, snapshot, fallback, extent)
         return true
     }
 
@@ -120,6 +121,8 @@ internal val LocalBackdropRefresh = staticCompositionLocalOf<() -> Unit> { {} }
 
 /** Resolve both sides of sampling in the same draw frame, including scroll placement. */
 @Stable internal class BackdropLocation {
+    /** A projected modal samples its home in the pre-departure screen basis. */
+    var retainedRegistration: BackdropRegistration? = null
     var coordinates: LayoutCoordinates? = null
     var windowOffset by mutableStateOf(Offset.Zero)
     var placement by mutableIntStateOf(0)
@@ -134,6 +137,7 @@ internal val LocalBackdropRefresh = staticCompositionLocalOf<() -> Unit> { {} }
 
     fun position(): Offset {
         placement
+        retainedRegistration?.let { return it.map(Offset.Zero) }
         val previous = fallback
         return coordinates?.takeIf { it.isAttached }?.let { it.positionInRoot() + windowOffset } ?: previous
     }
@@ -144,7 +148,8 @@ internal val LocalBackdropRefresh = staticCompositionLocalOf<() -> Unit> { {} }
         transformRevision; consumer.transformRevision
         val source = coordinates?.takeIf { it.isAttached } ?: return null
         val target = consumer.coordinates?.takeIf { it.isAttached } ?: return null
-        if (source.findRootCoordinates() === target.findRootCoordinates()) {
+        if (retainedRegistration == null && consumer.retainedRegistration == null &&
+            source.findRootCoordinates() === target.findRootCoordinates()) {
             return BackdropRegistration.fromMapping(source.size.width.toFloat(), source.size.height.toFloat()) {
                 target.localPositionOf(source, it)
             }
@@ -158,6 +163,7 @@ internal val LocalBackdropRefresh = staticCompositionLocalOf<() -> Unit> { {} }
     fun registrationToScreen(): BackdropRegistration? {
         placement
         transformRevision
+        retainedRegistration?.let { return it }
         val attached = coordinates?.takeIf { it.isAttached } ?: return null
         val offset = windowOffset
         return BackdropRegistration.fromMapping(attached.size.width.toFloat(), attached.size.height.toFloat()) {
@@ -213,6 +219,7 @@ internal fun rememberFrostedBackdrop(key: Any?, enabled: Boolean = true, dark: B
     // Older Android has no runtime shader. Read a tiny shared scene thumbnail;
     // consumers average their own footprint without blur or mesh preparation.
     val thumbnail = if (Build.VERSION.SDK_INT < 33) rememberGraphicsLayer() else null
+    val areaReduction = if (Build.VERSION.SDK_INT < 33) rememberMaterialAreaReduction() else null
     LaunchedEffect(source, key, enabled, sampled, graphicsContext) {
         if (thumbnail != null && enabled && sampled) {
             source.recordedFrames.trySend(Unit)
@@ -234,12 +241,17 @@ internal fun rememberFrostedBackdrop(key: Any?, enabled: Boolean = true, dark: B
                 val image = source.captureCurrent(graphicsContext, currentDensity, currentDirection, ::valid,
                     captureLayer = thumbnail, record = {
                         thumbnail.record(currentDensity, currentDirection, IntSize(32, 32)) {
-                            scale(32f / extent.width, 32f / extent.height, Offset.Zero) { drawLayer(source.layer) }
+                            val reduced = with(requireNotNull(areaReduction)) { record(extent, minimum = 32) {
+                                clipRect(right = extent.width.toFloat(), bottom = extent.height.toFloat()) { drawLayer(source.layer) }
+                            } }
+                            drawLayer(reduced)
                         }
                     }) ?: continue
                 val pixels = withContext(Dispatchers.Default) { softwareGlassSnapshot(image, IntSize(32, 32)) }
                 currentCoroutineContext().ensureActive()
-                if (valid()) source.publish(generation, pixels, pixels, request, draws)
+                val padded = materialReductionExtent(extent)
+                if (valid()) source.publish(generation, pixels, pixels, request, draws,
+                    IntSize(padded.width.coerceAtLeast(32), padded.height.coerceAtLeast(32)))
                 completedRecording = source.recordings
                 completedRevision = source.revision
                 } finally { ticket?.close() }
@@ -321,7 +333,7 @@ internal fun FrostedSurface(modifier: Modifier = Modifier, shape: Shape = Corner
     source: FrostedBackdrop? = LocalFrostedBackdrop.current, compact: Boolean = false,
     tint: Color = Color.Transparent, shadow: Boolean = true, content: @Composable BoxScope.() -> Unit) {
     val renderer = currentGlassRendererGeneration()
-    if (renderer.backend == GlassBackend.None) BackdropLease(source)
+    if (renderer.backend == GlassBackend.None) BackdropLease(source?.noneMaterialSource())
     val location = remember { BackdropLocation() }
     val lightMix = source?.lightMix ?: 0f
     val dark = lightMix >= .5f
@@ -344,14 +356,15 @@ internal fun FrostedSurface(modifier: Modifier = Modifier, shape: Shape = Corner
             if (Build.VERSION.SDK_INT >= 33) {
                 val blur = with(LocalDensity.current) { 22.dp.toPx() }
                 FilteredBackdrop(Modifier.matchParentSize(), source, location, .5f, blur * 1.5f,
-                    average = MaterialAverageStyle(0f, tone)) { _, resolution, _ ->
+                    average = MaterialAverageStyle(0f, tone, opaque = true)) { _, resolution, _ ->
                     toneRenderer.value?.effect(tone, blur * resolution)
                 }
-            } else AverageBackdrop(Modifier.matchParentSize(), source, location, MaterialAverageStyle(0f, tone))
+            } else AverageBackdrop(Modifier.matchParentSize(), source, location, MaterialAverageStyle(0f, tone, opaque = true))
         }
         Canvas(Modifier.matchParentSize()) {
             if (source == null) drawRect(fallbackColor)
-            drawFrostCoating(lightMix, tone.color(tint), 1f, compact)
+            if (renderer.backend == GlassBackend.None) drawRect(tone.color(tint))
+            else drawFrostCoating(lightMix, tone.color(tint), 1f, compact)
         }
         }
         CompositionLocalProvider(LocalContentColor provides foreground, LocalFrostedBackdrop provides material) { content() }

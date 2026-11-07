@@ -1,0 +1,29 @@
+name: Verified emulator SDK archive cache
+description: Restore a revision-keyed emulator archive, verify its checksum, and retry one corrupt download.
+outputs:
+  revision:
+    description: Stable Android Emulator revision selected from the official repository
+    value: ${{ steps.package.outputs.revision }}
+  archive-sha1:
+    description: Official archive checksum, verified before installation
+    value: ${{ steps.package.outputs.sha1 }}
+runs:
+  using: composite
+  steps:
+    - name: Resolve the stable emulator archive identity
+      id: package
+      shell: bash
+      run: python3 .github/emulator-sdk.py resolve
+    - uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+      id: cached
+      with:
+        path: ${{ steps.package.outputs.path }}
+        key: ${{ steps.package.outputs.key }}
+    - name: Verify and install the emulator SDK archive
+      shell: bash
+      run: python3 .github/emulator-sdk.py prepare
+    - uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+      if: steps.cached.outputs.cache-hit != 'true'
+      with:
+        path: ${{ steps.package.outputs.path }}
+        key: ${{ steps.package.outputs.key }}

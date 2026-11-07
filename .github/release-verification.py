@@ -114,7 +114,7 @@ def select():
             data = gh(f'repos/{repository}/actions/artifacts/{summary["id"]}/zip', binary=True)
             require('sha256:'+hashlib.sha256(data).hexdigest() == summary['digest'], 'Summary archive digest mismatch')
             with zipfile.ZipFile(io.BytesIO(data)) as archive:
-                names = ['verification.json','union-api-26.json','union-api-36.json']
+                names = ['verification.json','union-api-26.json','union-api-36.json','class-durations.csv']
                 require(sorted(archive.namelist()) == sorted(names), 'Unexpected summary archive members')
                 require(sum(item.file_size for item in archive.infolist()) < 1024*1024, 'Oversized summary')
                 receipt = json.loads(archive.read('verification.json'))

@@ -39,12 +39,24 @@ class FakeDevice:
         self.states = states
         self.index = -1
         self.calls = []
+        self.launcher_resets = 0
 
     def call(self, *args, binary=False):
         self.calls.append(args)
         if args == ('shell', 'getprop', 'sys.boot_completed'):
             self.index += 1
         state = self.states[min(self.index, len(self.states) - 1)]
+        if args == ('shell', 'getprop', 'ro.build.version.sdk'):
+            return state.get('sdk', '36')
+        if args == ('shell', 'getprop', 'ro.kernel.qemu'):
+            return state.get('qemu', '1')
+        if args == ('get-serialno',):
+            return state.get('serial', 'emulator-5554')
+        if args == ('shell', 'settings', 'get', 'secure', 'navigation_mode'):
+            return state.get('navigation_mode', '0')
+        if args == ('shell', 'am', 'force-stop', 'com.android.launcher3'):
+            self.launcher_resets += 1
+            return ''
         if args == ('shell', 'getprop', 'sys.boot_completed'):
             return state.get('boot', '1')
         if args == ('shell', 'getprop', 'init.svc.bootanim'):
@@ -52,11 +64,18 @@ class FakeDevice:
         if args == ('shell', 'pm', 'path', 'android'):
             return state.get('pm', 'package:/system/framework/framework-res.apk')
         if args[:4] == ('shell', 'cmd', 'package', 'resolve-activity'):
-            return 'priority=0\ncom.android.launcher3/.Launcher'
+            return 'priority=0\n' + state.get('home', 'com.android.launcher3/.Launcher')
+        if args == ('shell', 'dumpsys', 'window', 'displays'):
+            if state.get('missing_navigation'):
+                return ''
+            bottom = state.get('navigation_bottom', 84) if self.launcher_resets else 126
+            return native_display(bottom=bottom)
         if args == ('shell', 'dumpsys', 'window'):
             if state.get('error'):
                 raise subprocess.TimeoutExpired('adb', 10)
             focus = state.get('focus', 'com.android.launcher3/.Launcher')
+            if self.launcher_resets:
+                focus = state.get('focus_after_reset', focus)
             locked = str(state.get('locked', False)).lower()
             screen = 'SCREEN_STATE_OFF' if state.get('asleep') else 'SCREEN_STATE_ON'
             return (f'WINDOW MANAGER DISPLAY CONTENTS\nmCurrentFocus=Window{{abc u0 {focus}}}\n'
@@ -67,10 +86,17 @@ class FakeDevice:
         return ''
 
 
+def native_display(bottom=84, density=280, display=0):
+    return (f'Display: mDisplayId={display} (organized)\n'
+            f' init=1080x1920 420dpi base=720x1280 {density}dpi cur=720x1280\n'
+            f' InsetsSource id=123 type=navigationBars frame=[0,{1280 - bottom}][720,1280] visible=true\n')
+
+
 class ReadinessTests(unittest.TestCase):
-    def run_gate(self, states, timeout=4):
+    def run_gate(self, states, timeout=4, normalize_navigation=False):
         clock, device = Clock(), FakeDevice(states)
-        result = ready.wait_ready(device, timeout, clock.now, clock.sleep)
+        result = ready.wait_ready(device, timeout, clock.now, clock.sleep,
+                                  normalize_navigation=normalize_navigation)
         return result, device, clock
 
     def test_boot_package_focus_unlock_and_three_stable_frames(self):
@@ -144,6 +170,60 @@ class ReadinessTests(unittest.TestCase):
         with mock.patch.object(ready.time, 'monotonic', return_value=101):
             with self.assertRaises(TimeoutError):
                 ready.Device(100).call('shell', 'getprop', 'sys.boot_completed')
+
+    def test_explicit_reset_replaces_stale_geometry_and_cold_launcher_anr_once(self):
+        result, device, _ = self.run_gate([{
+            'focus': 'Application Not Responding: com.android.launcher3',
+            'focus_after_reset': 'com.android.launcher3/.Launcher'}], normalize_navigation=True)
+        self.assertTrue(result['ready'])
+        self.assertEqual(1, device.launcher_resets)
+        before = result['navigation_normalization']
+        self.assertEqual([(0, 1154, 720, 1280)], before['before_navigation']['frames'])
+        self.assertIn('Not Responding', before['before_focus'][0])
+        self.assertEqual([1, 2, 3], [s['stable_samples'] for s in result['samples']])
+        self.assertEqual(84, result['samples'][-1]['navigation']['expected_bottom_inset'])
+        stop = device.calls.index(('shell', 'am', 'force-stop', 'com.android.launcher3'))
+        launch = next(i for i, args in enumerate(device.calls) if args[:3] == ('shell', 'am', 'start'))
+        self.assertLess(stop, launch)
+
+    def test_navigation_change_resets_stable_frames_and_cannot_be_waived(self):
+        result, device, _ = self.run_gate([
+            {'navigation_bottom': n} for n in (126, 84, 126, 84, 84, 84)], normalize_navigation=True)
+        self.assertTrue(result['ready'])
+        self.assertEqual([0, 1, 0, 1, 2, 3], [s['stable_samples'] for s in result['samples']])
+        self.assertEqual(1, device.launcher_resets)
+        for state in ({'navigation_bottom': 126}, {'missing_navigation': True},
+                      {'focus': 'Application Error: another.package'}):
+            with self.subTest(state=state):
+                result, device, clock = self.run_gate([state], timeout=2, normalize_navigation=True)
+                self.assertFalse(result['ready'])
+                self.assertEqual(1, device.launcher_resets)
+                self.assertEqual(2, clock.time)
+
+    def test_navigation_reset_refuses_physical_foreign_home_and_gesture_devices(self):
+        for state in ({'qemu': '0'}, {'serial': 'physical-device'},
+                      {'home': 'another.package/.Home'}, {'navigation_mode': '2'}):
+            with self.subTest(state=state):
+                result, device, _ = self.run_gate([state], normalize_navigation=True)
+                self.assertFalse(result['ready'])
+                self.assertEqual('failed', result['navigation_normalization']['status'])
+                self.assertEqual(0, device.launcher_resets)
+
+    def test_api26_does_not_reset_launcher_or_require_api36_inset_dump(self):
+        result, device, _ = self.run_gate([{'sdk': '26'}], normalize_navigation=True)
+        self.assertTrue(result['ready'])
+        self.assertEqual('not-applicable', result['navigation_normalization']['status'])
+        self.assertEqual(0, device.launcher_resets)
+
+    def test_native_geometry_uses_effective_density_and_only_current_display_zero(self):
+        for density, bottom in ((280, 84), (420, 126), (295, 89)):
+            with self.subTest(density=density):
+                self.assertTrue(ready.navigation_geometry(native_display(bottom, density))['ready'])
+        self.assertFalse(ready.navigation_geometry(native_display(126))['ready'])
+        self.assertFalse(ready.navigation_geometry('no current native providers')['ready'])
+        full_dump = (native_display(126) + '\nWINDOW MANAGER DISPLAY CONTENTS\n' +
+                     native_display() + '\n' + native_display(126, display=1))
+        self.assertEqual([(0, 1196, 720, 1280)], ready.navigation_geometry(full_dump)['frames'])
 
 
 class CacheTests(unittest.TestCase):
@@ -222,6 +302,7 @@ class WorkflowTests(unittest.TestCase):
                     script = step['with']['script']
                     self.assertNotIn('sleep 60', script)
                     self.assertLess(script.index('wm density'), script.index('emulator-readiness.py'))
+                    self.assertIn('emulator-readiness.py --normalize-navigation', script)
                     self.assertEqual('./.github/actions/system-image-cache', steps[index - 1]['uses'])
                     self.assertEqual(step['with']['api-level'], steps[index - 1]['with']['api'])
                     self.assertEqual('save', steps[index + 1]['with']['mode'])

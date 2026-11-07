@@ -57,11 +57,11 @@ class ShadowContinuityTest {
             compose.runOnIdle { background = Color(level, level, level); moving = false }
             compose.mainClock.advanceTimeByFrame()
             probe.beginSegment()
-            probe.sample(scene.captureToImage())
+            probe.sample(scene.captureNativeFrame())
             repeat(4) { index ->
                 compose.runOnIdle { moving = index % 2 == 0 }
                 compose.mainClock.advanceTimeByFrame()
-                probe.sample(scene.captureToImage())
+                probe.sample(scene.captureNativeFrame())
             }
         }
         probe.assertContinuous(.008f, "retained/direct handoff without perceptible geometry motion")
@@ -89,9 +89,9 @@ class ShadowContinuityTest {
         }
         compose.waitUntil(5000) { shadow.rasterizations > 0 }
         val scene = compose.onNodeWithTag("union-shadow")
-        val retained = scene.captureToImage().toPixelMap()
+        val retained = scene.captureNativeFrame().toPixelMap()
         compose.runOnIdle { moving = true }
-        val live = scene.captureToImage().toPixelMap()
+        val live = scene.captureNativeFrame().toPixelMap()
         var maximum = 0f
         for (y in 0 until live.height) for (x in 0 until live.width)
             maximum = maxOf(maximum, kotlin.math.abs(live[x, y].red - retained[x, y].red))
@@ -120,14 +120,14 @@ class ShadowContinuityTest {
         val region = Rect(body.center.x-8*d, body.bottom+4*d, body.center.x+8*d, body.bottom+8*d)
         val probe = ShadowFrameProbe(region)
         val reference = ShadowFrameProbe(region)
-        val resting = scene.captureToImage()
+        val resting = scene.captureNativeFrame()
         probe.sample(resting)
         reference.sample(resting)
         for (pressed in listOf(true, false)) {
             button.performTouchInput { if (pressed) down(center) else up() }
             repeat(48) {
                 compose.mainClock.advanceTimeByFrame()
-                val image = scene.captureToImage()
+                val image = scene.captureNativeFrame()
                 val expected = ImageBitmap(image.width, image.height)
                 compose.runOnIdle {
                     val shape = anchor.contact.body.value
@@ -182,14 +182,14 @@ class ShadowContinuityTest {
         val body = subject.fetchSemanticsNode().boundsInRoot.translate(-origin)
         val d = compose.density.density
         val probe = ShadowFrameProbe(Rect(body.center.x-12*d, body.bottom+4*d, body.center.x+12*d, body.bottom+8*d))
-        val resting = probe.sample(scene.captureToImage())
+        val resting = probe.sample(scene.captureNativeFrame())
         val expectedFrames = mutableListOf(resting)
         var maximumResidual = 0f
         for (available in listOf(false, true)) {
             compose.runOnIdle { enabled = available }
             repeat(32) {
                 compose.mainClock.advanceTimeByFrame()
-                val image = scene.captureToImage()
+                val image = scene.captureNativeFrame()
                 val actual = probe.sample(image)
                 val expected = 1f - (1f - resting) * compose.runOnIdle { expectedOpacity.value }
                 expectedFrames += expected
@@ -225,7 +225,7 @@ class ShadowContinuityTest {
         val body = compose.onNodeWithTag("cancel-seek").fetchSemanticsNode().boundsInRoot.translate(-root.topLeft)
         val d = compose.density.density
         val probe = ShadowFrameProbe(Rect(body.center.x - 8*d, body.bottom + 2*d, body.center.x + 8*d, body.bottom + 6*d))
-        val image = scene.captureToImage()
+        val image = scene.captureNativeFrame()
         val luminance = probe.sample(image)
         assertTrue("The seek X must cast onto content outside its placement layer: $luminance", luminance < .97f)
         ShadowFrameProbe.assertSpreadEdge(image,

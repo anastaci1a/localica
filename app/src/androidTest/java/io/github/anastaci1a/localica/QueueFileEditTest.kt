@@ -246,20 +246,29 @@ class QueueFileEditTest {
         } finally { caller.cancel(); gate.release.complete(Unit) }
     }
 
-    @Test fun failedQueueRestoreNeverStartsWriterAndAcquisitionRemainsBounded() = fixture(failedRestore = true) {
-        val scheduler = TestCoroutineScheduler()
-        val caller = CoroutineScope(SupervisorJob() + StandardTestDispatcher(scheduler))
-        var edited = false
-        try {
-            val request = caller.async { queues.withFileEdit("one") { edited = true } }
-            scheduler.runCurrent()
-            // The existing unavailable-queue gate skips both acquisition and release commands.
-            scheduler.advanceTimeBy(30000)
-            scheduler.runCurrent()
-            assertTrue(request.isCancelled)
-            assertFalse(edited)
-            assertNotNull(queues.state.value.problem)
-        } finally { caller.cancel() }
+    @Test fun failedQueueRestoreNeverStartsWriterAndAcquisitionRemainsBounded() {
+        val unavailableActor = TestCoroutineScheduler()
+        fixture(failedRestore = true, actorScheduler = unavailableActor) {
+            val scheduler = TestCoroutineScheduler()
+            val caller = CoroutineScope(SupervisorJob() + StandardTestDispatcher(scheduler))
+            var edited = false
+            try {
+                val request = caller.async { queues.withFileEdit("one") { edited = true } }
+                scheduler.runCurrent()
+                // Park the unavailable actor's replies: both 15-second caller deadlines
+                // must finish without a Main-thread rejection racing the last clock drain.
+                scheduler.advanceTimeBy(30000)
+                scheduler.runCurrent()
+                assertTrue(request.isCancelled)
+                assertFalse(edited)
+                assertEquals(30000L, scheduler.currentTime)
+                // Late processing of either queued command must not revive the writer.
+                withContext(Dispatchers.Main) { unavailableActor.runCurrent() }
+                scheduler.runCurrent()
+                assertFalse(edited)
+                assertNotNull(queues.state.value.problem)
+            } finally { caller.cancel() }
+        }
     }
 
     @Test fun readerAdmittedDuringCaptureIsDrainedAndLaterAdmissionIsRejected() = fixture {
@@ -351,7 +360,8 @@ class QueueFileEditTest {
         }
     }
 
-    private fun fixture(failedRestore: Boolean = false, test: suspend Fixture.() -> Unit) = runBlocking {
+    private fun fixture(failedRestore: Boolean = false, actorScheduler: TestCoroutineScheduler? = null,
+        test: suspend Fixture.() -> Unit) = runBlocking {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
         val id = java.util.UUID.randomUUID().toString()
@@ -361,7 +371,8 @@ class QueueFileEditTest {
         val preferences = QueuePreferences(object : ContextWrapper(context) {
             override fun getSharedPreferences(name: String, mode: Int) = context.getSharedPreferences(prefsName, mode)
         })
-        val actor = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+        val actor = CoroutineScope(SupervisorJob() +
+            (actorScheduler?.let { StandardTestDispatcher(it) } ?: Dispatchers.Main.immediate))
         val tracks = listOf("one", "two", "one").map { Track(Uri.fromFile(file).toString(), it,
             fileName = file.name, relativePath = file.name, id = it) }
         val queue = ListeningQueue(id = "active", name = "Original", entries = tracks.map { QueueEntry(track = it) }, positionMs = 2000)
@@ -371,6 +382,9 @@ class QueueFileEditTest {
         val queues = QueueController(dao, preferences, (context.applicationContext as LocalicaApplication).library, actor, readers)
         val fixture = Fixture(this, actor, queues, dao, player, queue, readers)
         try {
+            // Controlled actor work still executes on Main, preserving the fixture's
+            // native-thread ownership while the caller advances a separate clock.
+            if (actorScheduler != null) withContext(Dispatchers.Main) { actorScheduler.runCurrent() }
             if (failedRestore) fixture.awaitMain { !queues.state.value.loading } else {
                 queues.attach(player)
                 fixture.awaitMain { player.mediaItemCount == 3 }
@@ -380,6 +394,7 @@ class QueueFileEditTest {
             withTimeout(10000) { fixture.test() }
         } finally {
             actor.cancel()
+            if (actorScheduler != null) withContext(Dispatchers.Main) { actorScheduler.runCurrent() }
             withContext(Dispatchers.Main) { player.release() }
             context.deleteSharedPreferences(prefsName)
             file.delete()

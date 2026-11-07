@@ -228,8 +228,7 @@ class ModalGestureTakeoverTest {
         compose.runOnUiThread { popup = false }
         await { !rootOwner.blocked }
         pump(1000)
-        touch.down(0, area.center + Offset(0f, 140f))
-        touch.move(0, area.center, 12); touch.move(0, area.center + Offset(0f, -140f), 12); touch.up(0)
+        touch.fling(area.center + Offset(0f, 140f), area.center, area.center + Offset(0f, -140f))
         await { grid.isScrollInProgress }
         compose.runOnUiThread { popup = true }
         await { rootOwner.blocked && !grid.isScrollInProgress }
@@ -282,8 +281,14 @@ class ModalGestureTakeoverTest {
         touch.down(1, trigger); touch.up(1)
         await { rootOwner.blocked && drag.drag?.dropping != false }
         touch.move(0, start + Offset(0f, 250f)); touch.up(0)
-        await { drag.drag == null }
-        compose.runOnUiThread { assertEquals(0, moves) }
+        // The paused clock owns the 350 ms landing and 220 ms handoff. A cold
+        // renderer can exhaust a wall-clock poll before advancing even 350 ms.
+        // Require cleanup by a fixed animation deadline, independent of draw cost.
+        pump(700)
+        compose.runOnUiThread {
+            assertNull("Cancelled drag must finish landing and handoff within 700 ms", drag.drag)
+            assertEquals(0, moves)
+        }
     }
 
     @Test fun realBrowsePinchTakeoverRestoresSourcePreferenceAndViewportAnchor() {
@@ -361,6 +366,7 @@ class ModalGestureTakeoverTest {
         compose.onAllNodesWithTag(tag).fetchSemanticsNodes().isNotEmpty()
     }
     private fun await(phase: String = "modal transition", condition: () -> Boolean) {
+        val startedClock = compose.mainClock.currentTime
         try {
             compose.waitUntil(5000) {
                 compose.mainClock.advanceTimeByFrame()
@@ -372,7 +378,10 @@ class ModalGestureTakeoverTest {
                     "style=$style source=${motion.source} target=${motion.target} generation=${motion.transaction} " +
                     "held=${motion.held} capturing=${motion.capturing} captureProblem=${motion.captureProblem} " +
                     "progress=${motion.progress.value} finger=${motion.fingerProgress} committed=${motion.committed} " +
-                    "commits=$commits disposed=${motion.disposed}"
+                    "commits=$commits disposed=${motion.disposed} " +
+                    "clockDelta=${compose.mainClock.currentTime - startedClock} " +
+                    "drag=${if (::drag.isInitialized) drag.drag?.let { "dropping=${it.dropping} landing=${it.landing.value} handoff=${it.handoff.value}" } else null} " +
+                    "scroll=${if (::grid.isInitialized) grid.isScrollInProgress else null}"
             }
             throw AssertionError("$phase: $state", failure)
         }
@@ -394,6 +403,13 @@ class ModalGestureTakeoverTest {
             points.remove(id)
         }
         fun cancel() { if (points.isNotEmpty()) { send(MotionEvent.ACTION_CANCEL); points.clear() } }
+        fun fling(start: Offset, middle: Offset, end: Offset) = compose.runOnUiThread {
+            // Keep the velocity witness in one native dispatch turn. Separate
+            // instrumentation round trips can exceed VelocityTracker's history
+            // horizon under rendering load, turning this fling into a slow drag.
+            down(0, start)
+            move(0, middle, 12); move(0, end, 12); up(0)
+        }
         private fun send(action: Int, delay: Long = 16) {
             eventTime = maxOf(eventTime + delay, android.os.SystemClock.uptimeMillis(), downTime)
             val properties = points.keys.map { id -> MotionEvent.PointerProperties().apply { this.id = id; toolType = MotionEvent.TOOL_TYPE_FINGER } }.toTypedArray()

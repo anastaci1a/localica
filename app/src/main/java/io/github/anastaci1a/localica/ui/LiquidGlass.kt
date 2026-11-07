@@ -198,7 +198,11 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
     val observedShadowGroup = if (drawObserver == null) null else LocalSurfaceShadows.current
     val observedShadowAppearance = if (drawObserver == null) null else LocalGlassAppearance.current
     val visible = LocalGlassVisible.current
-    if (visible && renderer.backend == GlassBackend.None) { BackdropLease(source); BackdropLease(homeSource?.takeUnless { it === source }) }
+    if (visible && renderer.backend == GlassBackend.None) {
+        val materialSource = source?.noneMaterialSource()
+        BackdropLease(materialSource)
+        BackdropLease(homeSource?.noneMaterialSource()?.takeUnless { it === materialSource })
+    }
     val location = remember { BackdropLocation() }
     var surfaceSize by remember { mutableStateOf(androidx.compose.ui.unit.IntSize.Zero) }
     val view = LocalView.current
@@ -275,7 +279,7 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
         }
         Canvas(Modifier.matchParentSize()) {
             drawRect(tone.color(tint))
-            if (panel > 0f) drawFrostCoating(coatingLightMix, Color.Transparent, panel)
+            if (panel > 0f && renderer.backend != GlassBackend.None) drawFrostCoating(coatingLightMix, Color.Transparent, panel)
             val outline = silhouette?.frame(size)
             val splitRim = outline?.description?.rimSplit ?: 0f
             val bounds = androidx.compose.ui.geometry.Rect(Offset.Zero, size)

@@ -32,6 +32,47 @@ def focused_home(windows, package):
                 re.search(r'\b' + re.escape(package) + r'/', focus[-1]))
 
 
+def navigation_geometry(displays):
+    """Read current display-zero providers, never a historical last-ANR snapshot."""
+    if 'WINDOW MANAGER DISPLAY CONTENTS' in displays:
+        displays = displays.rpartition('WINDOW MANAGER DISPLAY CONTENTS')[2]
+    display = re.search(r'Display: mDisplayId=0\b(.*?)(?=\n\s*Display: mDisplayId=|\Z)',
+                        displays, re.S)
+    profile = re.search(r'\bbase=(\d+)x(\d+) (\d+)dpi cur=(\d+)x(\d+)',
+                        display[1]) if display else None
+    if profile is None:
+        return {'ready': False, 'error': 'Missing effective display-zero profile'}
+    _, _, density, width, height = map(int, profile.groups())
+    expected = int(48 * density / 160 + .5)
+    frames = sorted(set(tuple(map(int, values)) for values in re.findall(
+        r'\bInsetsSource\b[^\n]*\btype=navigationBars frame=\[(\d+),(\d+)\]'
+        r'\[(\d+),(\d+)\] visible=true', display[1])))
+    return {'ready': frames == [(0, height - expected, width, height)],
+            'density_dpi': density, 'width': width, 'height': height,
+            'expected_bottom_inset': expected, 'frames': frames}
+
+
+def normalize_launcher(device, home):
+    """One explicit reset of the disposable API36 image's Launcher3 after resizing."""
+    api = int(device.call('shell', 'getprop', 'ro.build.version.sdk'))
+    if api != 36:
+        return {'status': 'not-applicable', 'api': api}
+    serial = device.call('get-serialno')
+    if (not re.fullmatch(r'emulator-\d+', serial) or
+            device.call('shell', 'getprop', 'ro.kernel.qemu') != '1' or
+            home.split('/')[0] != 'com.android.launcher3' or
+            device.call('shell', 'settings', 'get', 'secure', 'navigation_mode') != '0'):
+        raise ValueError('Navigation normalization requires an API36 emulator with Launcher3 and three-button navigation')
+    windows = device.call('shell', 'dumpsys', 'window')
+    before = navigation_geometry(device.call('shell', 'dumpsys', 'window', 'displays'))
+    # A wm density override can leave rotation-specific providers at the old density.
+    # Recreate the owner instead of hiding its scrim or changing any test assertion.
+    device.call('shell', 'am', 'force-stop', 'com.android.launcher3')
+    return {'status': 'reset', 'api': api, 'serial': serial, 'home': home,
+            'before_navigation': before,
+            'before_focus': re.findall(r'^\s*mCurrentFocus=(.*)$', windows, re.M)}
+
+
 class Device:
     def __init__(self, deadline):
         self.deadline = deadline
@@ -45,12 +86,23 @@ class Device:
         return result.stdout if binary else result.stdout.decode('utf-8', errors='replace').strip()
 
 
-def wait_ready(device, deadline, clock=time.monotonic, sleep=time.sleep):
+def wait_ready(device, deadline, clock=time.monotonic, sleep=time.sleep,
+               normalize_navigation=False):
     home = None
     previous = None
     stable = 0
     samples = []
     last_windows = ''
+    normalization = None
+
+    def report(is_ready):
+        result = {'ready': is_ready, 'samples': samples}
+        if not is_ready:
+            result['last_window_dump'] = last_windows
+        if normalize_navigation:
+            result['navigation_normalization'] = normalization
+        return result
+
     while clock() < deadline:
         sample = {'elapsed_remaining': round(deadline - clock(), 2)}
         try:
@@ -68,6 +120,14 @@ def wait_ready(device, deadline, clock=time.monotonic, sleep=time.sleep):
                                                            '-c', 'android.intent.category.HOME'))
                     if candidate is None:
                         raise ValueError('No resolved HOME activity')
+                    if normalize_navigation and normalization is None:
+                        try:
+                            normalization = normalize_launcher(device, candidate)
+                        except (OSError, ValueError, TimeoutError, subprocess.SubprocessError) as error:
+                            normalization = {'status': 'failed', 'error': str(error)}
+                            sample['error'] = str(error)
+                            samples.append(sample)
+                            return report(False)
                     device.call('shell', 'input', 'keyevent', 'KEYCODE_WAKEUP')
                     device.call('shell', 'wm', 'dismiss-keyguard')
                     # Wait for the launcher draw after wm size/density changes.
@@ -84,7 +144,12 @@ def wait_ready(device, deadline, clock=time.monotonic, sleep=time.sleep):
                 sample['current_focus_entries'] = re.findall(r'^\s*mCurrentFocus=(.*)$', windows, re.M)
                 sample['unlocked'] = unlocked(windows)
                 sample['focused_home'] = focused_home(windows, home.split('/')[0])
-                if sample['unlocked'] and sample['focused_home']:
+                navigation_ready = True
+                if normalization is not None and normalization.get('api') == 36:
+                    sample['navigation'] = navigation_geometry(
+                        device.call('shell', 'dumpsys', 'window', 'displays'))
+                    navigation_ready = sample['navigation']['ready']
+                if sample['unlocked'] and sample['focused_home'] and navigation_ready:
                     frame = device.call('exec-out', 'screencap', '-p', binary=True)
                     if not frame.startswith(b'\x89PNG\r\n\x1a\n'):
                         raise ValueError('No rendered PNG screenshot')
@@ -96,7 +161,7 @@ def wait_ready(device, deadline, clock=time.monotonic, sleep=time.sleep):
             samples.append(sample)
             # Three independently captured frames, with all readiness signals still true.
             if stable >= 3:
-                return {'ready': True, 'samples': samples}
+                return report(True)
         except (OSError, ValueError, TimeoutError, subprocess.SubprocessError) as error:
             previous, stable = None, 0
             sample['error'] = str(error)
@@ -104,16 +169,19 @@ def wait_ready(device, deadline, clock=time.monotonic, sleep=time.sleep):
         remaining = deadline - clock()
         if remaining > 0:
             sleep(min(.5, remaining))
-    return {'ready': False, 'samples': samples, 'last_window_dump': last_windows}
+    return report(False)
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--timeout', type=int, default=120, choices=range(1, 181), metavar='1..180')
     parser.add_argument('--output', type=Path, default=Path('emulator-readiness.json'))
+    parser.add_argument('--normalize-navigation', action='store_true',
+                        help='Recreate disposable API36 Launcher3 after display overrides and require a native 48dp navigation inset')
     args = parser.parse_args()
     start = time.monotonic()
-    result = wait_ready(Device(start + args.timeout), start + args.timeout)
+    result = wait_ready(Device(start + args.timeout), start + args.timeout,
+                        normalize_navigation=args.normalize_navigation)
     result['elapsed_seconds'] = round(time.monotonic() - start, 3)
     args.output.write_text(json.dumps(result, indent=2) + '\n')
     print(json.dumps(result), flush=True)
