@@ -134,6 +134,12 @@ test('transfer owners change only through the recorded one-off relabel, once and
     assert.throws(() => transferIds([entry(1, {relabel:'other', removedBy:'U10.04'})], known, []), /Unrecorded transfer relabel/);
     assert.throws(() => transferIds([entry(1, {relabel:tag})], known, []), /Unrecorded transfer relabel/);
     assert.throws(() => transferIds([entry(1, {relabel:tag, removedBy:'U10.04', exception:'U10.02-ledger-2026-11-07'})], known, []), /Unrecorded/);
+    const [, [second, {limit:secondLimit}]] = Object.entries(transferRelabels), rest = relabeled.slice(limit);
+    const moveAgain = (n, t = second) => relabeled.map((e, i) => i >= limit && i < limit + n ? {...e, removedBy:'U06.04', relabel:t} : e);
+    assert.ok(rest.length <= secondLimit); transferGrowth(relabeled, moveAgain(rest.length)); transferIds(moveAgain(rest.length), known, []);
+    assert.throws(() => transferGrowth(relabeled, moveAgain(rest.length, tag)), /reused/);
+    assert.throws(() => transferGrowth(moveAgain(1), moveAgain(2)), /reused/);
+    assert.throws(() => transferGrowth(moveAgain(1), moveAgain(1).map((e, i) => i ? e : {...e, removedBy:'U06.04', relabel:second})), /cannot change/);
     const [m] = recordedOwnerMoves, shadow = entry(0, {codeSha256:m.codeSha256, removedBy:m.from});
     transferGrowth([shadow], [{...shadow, removedBy:m.to}]);
     assert.throws(() => transferGrowth([{...shadow, removedBy:m.to}], [shadow]), /cannot change/);
