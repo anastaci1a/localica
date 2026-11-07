@@ -42,13 +42,12 @@ internal class HoverCardFrame(
     return renderer
 }
 
-/** A dragged card reuses the hover outline and frost. The shared underlay owns the outside
- * shadow; a small additional shadow separates panes once they join the stack. */
+/** A dragged card reuses the hover outline and frost, and its source's [liftStyle] (#553). The shared
+ * underlay owns the outside shadow; a small additional shadow separates panes once they join the stack. */
 @Composable
-internal fun HoverDragCard(modifier: Modifier, frame: HoverCardFrame, backing: FrostedBackdrop?,
+internal fun HoverDragCard(modifier: Modifier, frame: HoverCardFrame, backing: FrostedBackdrop?, liftStyle: LiftShadow,
     stackShadow: () -> Float = { 0f }, contentAlpha: () -> Float = frame.alpha,
     content: @Composable BoxScope.() -> Unit) {
-    val liftStyle = rememberLiftShadow()
     val averageProgress = glassAverageProgress()
     val group = rememberHoverGroupRenderer()
     val location = remember { BackdropLocation() }
@@ -80,8 +79,8 @@ internal fun HoverDragCard(modifier: Modifier, frame: HoverCardFrame, backing: F
  * items adjacent at their destinations bridge again as they land.
  */
 @Composable
-internal fun HoverDragUnderlay(frames: () -> List<HoverCardFrame>, backing: FrostedBackdrop?, modifier: Modifier) {
-    val liftStyle = rememberLiftShadow()
+internal fun HoverDragUnderlay(frames: () -> List<HoverCardFrame>, backing: FrostedBackdrop?, liftStyle: LiftShadow,
+    modifier: Modifier) {
     val averageProgress = glassAverageProgress()
     val shadow = rememberHoverGroupRenderer()
     val location = remember { BackdropLocation() }
