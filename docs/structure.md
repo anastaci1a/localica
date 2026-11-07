@@ -271,17 +271,17 @@ Active sliders and switches render one procedural scene, unchanged outside the l
 
 In Normal mode on Android 13+, controls entirely over explicitly recorded panel material use an 8×8 local GPU average, then the shared tint/contrast mapping and outline. Morphs retain that averaged home source while admitting the destination. Never infer eligibility from color similarity or average a foreground-containing recording.
 
-None averages exactly the region Normal's lens would read for each glass control, pill, switch thumb and panel: its refraction preimage. One shared function, `lensRefractionPreimage`, maps each face point through the lens displacement of Normal's shader. It then adds the blur kernel's reach, ceil(3σ) with σ = 0.57735·radius + 0.5, and stops at the recorded padding.
+None uniformly averages the backdrop over each material's own full bounds: controls, pills, switch thumbs and panels. Refraction and blur do not change that region.
 
 The mean is coverage-weighted over the scene the lens samples: the element's own source, with its parent chain beyond that source's box. Floating controls therefore follow the text and artwork passing behind them. No element chooses a different source or region.
 
 What None samples inside a finished panel material (frosted panels, the Queue drawer, popup bodies) already carries that panel's tint and tone, so None does not apply them again there.
 
-The region stops where the recorded scene ends, so a preimage reaching past a screen or window edge never makes a fill translucent. Opaque panels also ignore transparent pixels inside their source. Odd edges retain their coverage through progressive reduction.
+The region stops where the recorded scene ends, so material bounds reaching past a screen or window edge never make a fill translucent. Opaque panels also ignore transparent pixels inside their source. Odd edges retain their coverage through progressive reduction.
 
 None replaces only the optical fill. Floating, panel, lift and selection shadows use the same appearance settings and drawing path in both renderers, so a renderer switch never changes a shadow.
 
-Below Android 13, preimage boundaries inside thumbnail cells retain those cells' mean colours. Excluding raster quantization, mean error is bounded by boundary-cell area fraction multiplied by their maximum channel contrast. Shared readback remains 32×32 pixels; no full-resolution CPU capture is required.
+Below Android 13, material boundaries inside thumbnail cells retain those cells' mean colours. Excluding raster quantization, mean error is bounded by boundary-cell area fraction multiplied by their maximum channel contrast. Shared readback remains 32×32 pixels; no full-resolution CPU capture is required.
 
 Only the nearest parent supplies the region beyond a source's box below Android 13. Until that parent has a snapshot, None averages the available part.
 

@@ -38,7 +38,6 @@ internal fun GlassControlScene(modifier: Modifier, horizontalPadding: Dp = 20.dp
     val averageRenderer = remember { if (Build.VERSION.SDK_INT >= 33) MaterialAverageRenderer(true) else null }
     val averageLayer = if (optical && modern) rememberGraphicsLayer() else null
     val areaReduction = if (optical && modern) rememberMaterialAreaReduction() else null
-    val preimageCache = remember { LensPreimageCache() }
     val rim = remember { GlassRimCache() }
     val layer = if (optical && modern) rememberGraphicsLayer() else null
     val averageBitmap = if (optical && !modern) remember { arrayOfNulls<ImageBitmap>(1) } else null
@@ -92,10 +91,8 @@ internal fun GlassControlScene(modifier: Modifier, horizontalPadding: Dp = 20.dp
             clipPath(silhouette) { translate(origin.x, origin.y) { drawLayer(layer) } }
         }
         if (none > 0f) {
-            // The same refraction preimage rule as every other glass element: the region
-            // this control's lens reads, coverage-weighted.
-            val region = preimageCache.preimage(shape.bounds,
-                LensPreimageOptics(shape, 1.35f * thickness, 1f, flattening, 0f, pad))
+            // None uniformly averages the material's own full bounds.
+            val region = shape.bounds
             val sceneOffset = origin - region.topLeft
             val extentOfRegion = IntSize(ceil(region.width).toInt().coerceAtLeast(1), ceil(region.height).toInt().coerceAtLeast(1))
             if (averageLayer != null && averageRenderer != null && areaReduction != null && Build.VERSION.SDK_INT >= 33) {

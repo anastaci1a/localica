@@ -23,8 +23,7 @@ import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
 
-/** #624: None averages exactly the refraction preimage that Modern's lens would read
- * (from the shared [lensRefractionPreimage]), over the actual scene behind the element. */
+/** #624: None averages the full material bounds over the actual scene behind it. */
 class NonePreimageTest {
     @get:Rule val compose = localicaComposeRule()
     private val appearance = GlassAppearance(whiteTint = 0f, contrast = 0f, shadowStrength = 0f)
@@ -44,8 +43,7 @@ class NonePreimageTest {
         return Color((r + background.red * rest) / total, (g + background.green * rest) / total, (b + background.blue * rest) / total)
     }
 
-    private fun preimage(size: Size, corner: Float? = null): Rect = lensRefractionPreimage(Rect(Offset.Zero, size),
-        liquidGlassPreimageOptics(size, corner, appearance.depth, 1f, 1f, 22f * appearance.blur, 32f))
+    private fun bounds(size: Size): Rect = Rect(Offset.Zero, size)
 
     private fun DrawScopeScene(scene: Scene): androidx.compose.ui.graphics.drawscope.DrawScope.() -> Unit = {
         drawRect(scene.background)
@@ -86,7 +84,7 @@ class NonePreimageTest {
     private fun assertMean(label: String, expected: Color, actual: Color, region: Rect) {
         for ((channel, e, a) in listOf(Triple("red", expected.red, actual.red), Triple("green", expected.green, actual.green),
                 Triple("blue", expected.blue, actual.blue))) {
-            if (Build.VERSION.SDK_INT >= 33) assertEquals("$label $channel over preimage $region", e, a, .015f)
+            if (Build.VERSION.SDK_INT >= 33) assertEquals("$label $channel over bounds $region", e, a, .015f)
             else assertLegacyAreaBound(a, e, region, 512, 512)
         }
     }
@@ -106,7 +104,7 @@ class NonePreimageTest {
             }
         } }
         compose.waitUntil(15_000) { source.recorded && (Build.VERSION.SDK_INT >= 33 || source.snapshot != null) }
-        val region = preimage(buttonSize, corner).translate(buttonAt)
+        val region = bounds(buttonSize).translate(buttonAt)
         val fills = mutableListOf<Color>()
         for (variant in listOf<Scene.() -> Scene>({ this }) + variants) {
             compose.runOnIdle { current = scene().variant() }
@@ -119,19 +117,19 @@ class NonePreimageTest {
             fills.zipWithNext().all { (a, b) -> kotlin.math.abs(a.red - b.red) + kotlin.math.abs(a.blue - b.blue) > .04f })
     }
 
-    @Test fun floatingButtonFollowsTextBehindItOverItsPreimage() {
+    @Test fun floatingButtonFollowsTextBehindItOverItsFullBounds() {
         val text = Rect(0f, 152f, sourceSize, 168f)
         floating({ Scene(Color.White, emptyList()) }, Offset(110f, 110f), Size(100f, 100f), null, "button over text",
             listOf({ copy(rects = listOf(text to Color.Black)) }, { copy(rects = listOf(text.translate(0f, -52f) to Color.Black)) }))
     }
 
-    @Test fun floatingButtonOverAlbumArtAveragesTheArtItRefracts() {
+    @Test fun floatingButtonOverAlbumArtAveragesItsFullArtBounds() {
         val red = Rect(60f, 60f, 160f, 260f); val blue = Rect(160f, 60f, 260f, 260f)
         floating({ Scene(Color.White, listOf(red to Color.Red, blue to Color.Blue)) }, Offset(96f, 110f), Size(100f, 100f), null,
             "button over art", listOf({ copy(rects = listOf(red.translate(40f, 0f) to Color.Red, blue.translate(40f, 0f) to Color.Blue)) }))
     }
 
-    @Test fun pillOverAListAveragesTheRowsItRefracts() {
+    @Test fun pillOverAListAveragesItsFullRowBounds() {
         val rows = (0 until 20).map { Rect(0f, it * 16f, sourceSize, it * 16f + 8f) to Color.Black }
         floating({ Scene(Color.White, rows) }, Offset(40f, 128f), Size(240f, 64f), 32f, "pill over list",
             listOf({ copy(rects = rects.map { (r, c) -> Rect(r.left, r.top, r.right, r.top + 12f) to c }) }))
@@ -165,7 +163,7 @@ class NonePreimageTest {
             }
         } }
         compose.waitUntil(15_000) { list.recorded && (Build.VERSION.SDK_INT >= 33 || list.snapshot != null) }
-        val region = preimage(Size(100f, 100f)).translate(button)
+        val region = bounds(Size(100f, 100f)).translate(button)
         val fills = mutableListOf<Color>()
         for (y in listOf(-100f, 152f, 100f)) {
             compose.runOnIdle { textY = y }
@@ -177,13 +175,13 @@ class NonePreimageTest {
             val actual = eventually { centre("glass").also { assertMean("control over list at $y", expected, it, region); assertRefreshed(fills, it) } }
             fills += actual
             // A control over the bare material shows exactly that material.
-            assertMean("control over material", panel, centre("material-control"), preimage(Size(48f, 48f)).translate(Offset(20f, 250f)))
+            assertMean("control over material", panel, centre("material-control"), bounds(Size(48f, 48f)).translate(Offset(20f, 250f)))
         }
         assertTrue("Text passing behind the control must change its fill: $fills",
             fills.zipWithNext().all { (a, b) -> kotlin.math.abs(a.red - b.red) > .02f })
     }
 
-    /** Controls inside a popup sample the popup's finished material over their preimage. */
+    /** Controls inside a popup sample the popup's finished material over their full bounds. */
     @Test fun controlInsidePopupShowsThePopupMaterial() {
         compose.setContent { Fixture {
             val page = rememberFrostedBackdrop(Unit, dark = false)
@@ -192,7 +190,7 @@ class NonePreimageTest {
                     drawRect(Color.White); drawRect(Color.Black, Offset.Zero, Size(size.width / 2, size.height))
                 }
                 CompositionLocalProvider(LocalFrostedBackdrop provides page) {
-                    GlassAlertDialog(onDismissRequest = {}, title = { androidx.compose.material3.Text("Preimage popup") }, text = {
+                    GlassAlertDialog(onDismissRequest = {}, title = { androidx.compose.material3.Text("Bounds popup") }, text = {
                         Row(Modifier.fillMaxWidth().testTag("popup-row"), verticalAlignment = Alignment.CenterVertically) {
                             Spacer(Modifier.size(48.dp).testTag("popup-gap"))
                             Spacer(Modifier.width(24.dp))
@@ -202,7 +200,7 @@ class NonePreimageTest {
                 }
             }
         } }
-        compose.onNodeWithText("Preimage popup").assertExists()
+        compose.onNodeWithText("Bounds popup").assertExists()
         compose.waitForIdle()
         compose.waitUntil(15_000) {
             // Dialog windows cannot be captured per node below API 28: read the screen instead.
