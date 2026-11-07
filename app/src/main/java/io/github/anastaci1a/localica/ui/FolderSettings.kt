@@ -35,6 +35,9 @@ private val settingsDestinations = listOf(
     SettingsDestination("Tag jobs and recovery", "Library and tags", AppIcon.TabSongs, "Background jobs, outcomes and interrupted tag edits"),
     SettingsDestination("About and licenses", null, AppIcon.ActionInfo, "Version, source code, help, diagnostics export, and open-source licenses"),
 )
+/** Destination title to row icon; the #655 audit keeps every settings row icon distinct. */
+internal val settingsDestinationIcons: Map<String, AppIcon> get() = settingsDestinations.associate { it.title to it.icon }
+
 private fun settingsTitle(title: String): String = when (title) {
     "Interface and gestures" -> "Interface"
     "Scanner configuration" -> "Scanner"
