@@ -75,8 +75,9 @@ class MainActivity : ComponentActivity() {
             androidx.compose.runtime.CompositionLocalProvider(
                 io.github.anastaci1a.localica.ui.LocalGlassRendererRuntime provides glassRenderer,
                 io.github.anastaci1a.localica.ui.LocalGlassMorphWorkObserver provides
-                    androidx.compose.runtime.remember { { _: String, window: android.view.Window?, _: Float? ->
-                        io.github.anastaci1a.localica.diagnostics.FrameStats.observe(window) } }) {
+                    (if (io.github.anastaci1a.localica.diagnostics.FrameStats.recording.value)
+                        { _, window, _ -> io.github.anastaci1a.localica.diagnostics.FrameStats.attach(window) }
+                    else null)) {
             LocalicaTheme {
                 io.github.anastaci1a.localica.ui.TagEditorHost((application as LocalicaApplication).tagEditing) {
                 LocalicaScreen(library, playback, model::play, model.playback::toggle, model.playback::seekTo,
