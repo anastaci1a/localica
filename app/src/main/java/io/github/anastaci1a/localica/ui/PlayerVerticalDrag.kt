@@ -32,7 +32,8 @@ internal fun Modifier.playerVerticalDrag(onDelta: (Float) -> Unit, onStart: susp
             try { do {
                 val event = awaitPointerEvent(PointerEventPass.Main)
                 val change = event.changes.firstOrNull { it.id == down.id } ?: break
-                if (!change.pressed) { released = !change.isConsumed; break }
+                // The release sample lets a still hold report zero velocity (no move events arrive while still).
+                if (!change.pressed) { velocity.addPosition(change.uptimeMillis, total + change.positionChange()); released = !change.isConsumed; break }
                 if (!owned && (change.isConsumed || event.changes.count { it.pressed } > 1)) break
                 val movement = change.positionChange()
                 total += movement
