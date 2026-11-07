@@ -34,7 +34,7 @@ class InterfacePreferences(context: Context) {
                 preferences.enumValue<TabLensStyle>("tab-lens-style") ?: TabLensStyle.Adjustable,
                 preferences.getFloat("tab-lens-blur", .3f), preferences.getFloat("tab-lens-tint", .16f),
                 preferences.getFloat("glass-shape-damping", 8f), preferences.getFloat("glass-depth", 1.35f),
-                preferences.getFloat("glass-contrast-weight", 2f), preferences.getFloat("tab-classic-opacity", .1f),
+                preferences.getFloat("glass-contrast-weight", GlassContrastWeightDefault), preferences.getFloat("tab-classic-opacity", .1f),
                 preferences.getFloat("glass-control-expansion", 1.75f), preferences.getFloat("tab-overlay-darkening", 0f),
                 preferences.getBoolean("tab-overlay-foreground", false),
                 preferences.enumValue<GlassRendererMode>("glass-renderer") ?: GlassRendererMode.Normal,
