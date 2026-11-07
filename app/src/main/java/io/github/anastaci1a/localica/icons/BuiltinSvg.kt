@@ -1,12 +1,14 @@
 package io.github.anastaci1a.localica.icons
 
 import android.content.Context
+import android.annotation.SuppressLint
 import android.graphics.Color
 import androidx.core.content.ContextCompat
 import io.github.anastaci1a.localica.ui.AppIcon
 import org.xmlpull.v1.XmlPullParser
 
 /** Exports the app's original path geometry, without rendering a bitmap. */
+@SuppressLint("ResourceType") // Registry drawables are compiled vector XML, not res/xml entries.
 internal fun builtinSvg(context: Context, icon: AppIcon): ByteArray {
     val ns = "http://schemas.android.com/apk/res/android"
     val out = StringBuilder()
