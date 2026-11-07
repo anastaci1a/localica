@@ -2,12 +2,19 @@
 
 This is deliberately a small supported syntax parser, not a Kotlin/Java compiler or a
 runtime discovery oracle. Only direct @org.junit.Test (or imported Test/alias) methods
-of selected top-level concrete classes count. Inherited/generated/parameterized tests,
-SDK filters and runner rewrites are not inferred. Reconciliation must reject every
-missing/extra/duplicate runtime ID; never treat an SDK omission as an automatic pass.
+of selected top-level concrete classes count. Inherited/generated/parameterized tests
+and runner rewrites are not inferred. Reconciliation must reject every
+missing/extra/duplicate runtime ID.
+API gating (#464): a literal @SdkSuppress(minSdkVersion = N) on a class or method, and a
+direct Assume.assumeTrue([message,] Build.VERSION.SDK_INT >= N) statement in a method
+body, are recorded per method in "gates" (min_sdk, assume_min_sdk). With --api,
+runtime_methods is the exact expectation for that API: a method with min_sdk above the
+API is expected ABSENT (listed in gated_absent_methods; gated_absent_classes when no
+method of a class remains) and every other method is still required. Any other
+SdkSuppress argument form fails closed.
 Kotlin backtick names retain their source spelling; runtime_methods strips delimiters.
 
-CLI: source_methods.py --root REPO --classes FQCN,FQCN --output FRESH_JSON
+CLI: source_methods.py --root REPO --classes FQCN,FQCN [--api N] --output FRESH_JSON
 No Git, network, runtime tests or app files are modified. Output uses exclusive create.
 """
 import argparse
@@ -258,6 +265,45 @@ def annotation(source, i):
     return name, end
 
 
+def sdk_suppress_min(source, at):
+    """minSdkVersion of an @SdkSuppress at token `at`; None for any other annotation."""
+    tokens = source.tokens
+    name, after = dotted(tokens, at + 1)
+    if name.rsplit(".", 1)[-1] != "SdkSuppress":
+        return None
+    if after >= len(tokens) or tokens[after].text != "(":
+        fail(source.path, tokens[at].line, "SdkSuppress requires a literal minSdkVersion")
+    inner = "".join(t.text for t in tokens[after + 1:source.pairs[after]])
+    match = re.fullmatch(r"minSdkVersion=([0-9]+)", inner)
+    if not match:
+        fail(source.path, tokens[at].line, "Unsupported SdkSuppress arguments")
+    return int(match.group(1))
+
+
+def gate_in(source, first, last):
+    """Highest literal SdkSuppress minimum among annotations starting in tokens[first:last]."""
+    found = [sdk_suppress_min(source, i) for i in range(first, last)
+             if source.tokens[i].text == "@" and source.depths[i] == source.depths[first]]
+    return max([v for v in found if v is not None], default=0)
+
+
+def assume_min_sdk(source, body_open):
+    """Highest N of a direct `assumeTrue([message,] Build.VERSION.SDK_INT >= N)` statement."""
+    tokens, pairs, depths = source.tokens, source.pairs, source.depths
+    if tokens[body_open].text != "{":
+        return 0
+    direct = depths[body_open] + ("{",)
+    found = [0]
+    for i in range(body_open + 1, pairs[body_open]):
+        if tokens[i].text != "assumeTrue" or depths[i] != direct or tokens[i + 1].text != "(":
+            continue
+        inner = "".join(t.text for t in tokens[i + 2:pairs[i + 1]])
+        match = re.fullmatch(r"(?:<literal>,)?(?:[A-Za-z_.]*\.)?SDK_INT>=([0-9]+)", inner)
+        if match:
+            found.append(int(match.group(1)))
+    return max(found)
+
+
 def class_prefix(source, start):
     """Walk only this declaration's contiguous annotations and class modifiers.
 
@@ -310,6 +356,7 @@ def selected_methods(source, entry):
     if any(t.text in ("Parameterized", "TestFactory", "TestTemplate") for t in prefix):
         fail(source.path, tokens[start].line, "Dynamic/parameterized selected class unsupported")
     direct_depth = depths[body] + ("{",)
+    class_gate = gate_in(source, start - len(prefix), start)
     names, declarations = [], []
     for i in range(body + 1, pairs[body]):
         if tokens[i].text != "@" or depths[i] != direct_depth:
@@ -324,6 +371,8 @@ def selected_methods(source, entry):
         # Kotlin/Java permit modifiers before the annotation as well as after it.
         modifier_names = {"public", "internal", "final", "open", "override", "private",
                           "protected", "static", "abstract", "suspend", "external", "inline"}
+        before_tokens, _ = class_prefix(source, i)
+        method_gate = max(class_gate, gate_in(source, i - len(before_tokens), i))
         modifiers = []
         before = i - 1
         while before > body and tokens[before].text in modifier_names:
@@ -333,6 +382,7 @@ def selected_methods(source, entry):
         while cursor < len(tokens):
             value = tokens[cursor].text
             if value == "@":
+                method_gate = max(method_gate, sdk_suppress_min(source, cursor) or 0)
                 extra, cursor = annotation(source, cursor)
                 if extra in source.tests:
                     fail(source.path, tokens[i].line, "Duplicate Test annotation")
@@ -368,7 +418,8 @@ def selected_methods(source, entry):
         if method in names:
             fail(source.path, tokens[i].line, "Duplicate method identity " + cls + "#" + method)
         names.append(method)
-        declarations.append({"id": cls + "#" + method, "line": tokens[i].line})
+        declarations.append({"id": cls + "#" + method, "line": tokens[i].line, "min_sdk": method_gate,
+                             "assume_min_sdk": assume_min_sdk(source, end)})
     if not names:
         fail(source.path, tokens[start].line, "Selected class has no supported direct Test methods")
     runtime = [cls + "#" + name[1:-1] if name.startswith("`") else cls + "#" + name for name in names]
@@ -377,7 +428,7 @@ def selected_methods(source, entry):
     return declarations, runtime
 
 
-def inventory(root, selectors):
+def inventory(root, selectors, api=None):
     root = Path(root).resolve()
     selected = list(selectors)
     if not selected or any(not FQCN.fullmatch(c) for c in selected) or len(set(selected)) != len(selected):
@@ -395,7 +446,7 @@ def inventory(root, selectors):
         for entry in source.classes:
             if entry[0] in candidates:
                 candidates[entry[0]].append((source, entry))
-    classes, methods, runtime = [], [], []
+    classes, methods, runtime, gates = [], [], [], {}
     for cls in selected:
         matches = candidates[cls]
         if len(matches) != 1:
@@ -405,13 +456,22 @@ def inventory(root, selectors):
         values = [item["id"] for item in declarations]
         methods.extend(values)
         runtime.extend(runtime_ids)
+        for item, runtime_id in zip(declarations, runtime_ids):
+            gates[runtime_id] = {"min_sdk": item["min_sdk"], "assume_min_sdk": item["assume_min_sdk"]}
         classes.append({"class": cls, "source": source.path.relative_to(root).as_posix(),
                         "sha256": hashlib.sha256(source.data).hexdigest(), "methods": values,
                         "declarations": declarations})
     if len(methods) != len(set(methods)) or len(runtime) != len(set(runtime)):
         raise InventoryError("Duplicate selected method identities")
+    expected, api_fields = sorted(runtime), {}
+    if api is not None:
+        absent = sorted(r for r in runtime if gates[r]["min_sdk"] > api)
+        expected = sorted(set(runtime) - set(absent))
+        api_fields = {"api": api, "all_runtime_methods": sorted(runtime), "gated_absent_methods": absent,
+                      "gated_absent_classes": sorted(c for c in selected
+                                                     if not any(r.startswith(c + "#") for r in expected))}
     return {"schema_version": 1, "selectors": selected, "methods": sorted(methods),
-            "runtime_methods": sorted(runtime), "classes": classes,
+            "runtime_methods": expected, "gates": gates, **api_fields, "classes": classes,
             "method_count": len(methods), "runtime_discovery_proven": False,
             "limits": "Static direct JUnit4 declarations only. Runtime missing/extra/duplicate IDs must fail closed; inherited/generated/parameterized/SDK-filter discovery is not inferred."}
 
@@ -421,10 +481,11 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", default=".")
     parser.add_argument("--classes", required=True)
+    parser.add_argument("--api", type=int, help="expect only the methods that can run on this API level")
     parser.add_argument("--output", required=True)
     args = parser.parse_args(argv)
     try:
-        result = inventory(args.root, args.classes.split(","))
+        result = inventory(args.root, args.classes.split(","), args.api)
         # Compute/validate everything before creating any output; never overwrite receipts.
         with Path(args.output).open("x", encoding="utf-8") as stream:
             stream.write(json.dumps(result, indent=2) + "\n")

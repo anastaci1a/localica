@@ -16,3 +16,7 @@ local.properties
 
 # Documentation tooling and local output
 tools/docs/node_modules/
+
+# Python bytecode
+__pycache__/
+*.pyc
