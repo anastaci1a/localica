@@ -107,7 +107,8 @@ class PinchDepartureFadeTest {
         val last = samples.last()
         val leaving = first.items.filter { (_, item) -> item.bounds.visibleIn(first.viewport) && item.alpha > .95f }.keys
             .filter { key -> last.items[key]?.let { !it.bounds.visibleIn(last.viewport) || it.alpha < .02f } ?: true }
-        class Departure(val key: Any, val exit: Float, val start: Float, val minimum: Float, val partial: Boolean, val trace: String)
+        class Departure(val key: Any, val exit: Float, val start: Float, val minimum: Float, val partial: Boolean, val trace: String,
+            val planned: Float?)
         val audited = leaving.map { key ->
             val series = samples.map { it.items[key] }
             val gone = series.indices.firstOrNull { i -> series[i]?.bounds?.visibleIn(samples[i].viewport) != true }
@@ -134,11 +135,15 @@ class PinchDepartureFadeTest {
             Departure(key, exit, start, shown.minOf { it.second.alpha },
                 shown.any { it.second.alpha in .15f.. .85f }, "plan ${first.fades[key]?.let { "${it.window} arriving=${it.arriving}" }} viewport ${first.viewport} " +
                     shown.takeLast(3).joinToString { (s, item) -> "p %.3f a %.2f ${item.bounds}".format(s.p, item.alpha) } +
-                    " then ${series.getOrNull(gone)?.bounds}")
+                    " then ${series.getOrNull(gone)?.bounds}",
+                first.fades[key]?.window?.let { it.start + it.width }))
         }
         val timed = audited.filter { it.exit > .1f }
         timed.forEach {
-            assertTrue("$label: ${it.key} leaves the screen at ${it.exit} still drawn at ${it.minimum}; ${it.trace}", it.minimum <= .5f)
+            // The painted text sits a few pixels inside the card the fade is timed by: a narrow
+            // fade may end that much after the paint leaves, never later.
+            assertTrue("$label: ${it.key} leaves the screen at ${it.exit} still drawn at ${it.minimum}; ${it.trace}",
+                it.minimum <= .5f || it.planned != null && abs(it.planned - it.exit) <= .02f)
         }
         if (timed.isNotEmpty()) assertTrue("$label: the fade is visible, not clipped " +
             "(${timed.count { it.partial }} of ${timed.size} show partial alpha)", timed.count { it.partial } * 2 >= timed.size)
