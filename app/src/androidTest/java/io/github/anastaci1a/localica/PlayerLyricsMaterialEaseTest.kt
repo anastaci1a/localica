@@ -74,6 +74,7 @@ class PlayerLyricsMaterialEaseTest {
 
     private fun record(count: Int) = repeat(count) {
         val previous = owner.lightMix
+        val previousBackdrop = backdropMix
         compose.mainClock.advanceTimeByFrame(); compose.waitForIdle()
         compose.onNodeWithContentDescription("Play").captureNativeFrame()
         val phase = requireNotNull(inkComposition).lyricsProgress
@@ -88,7 +89,11 @@ class PlayerLyricsMaterialEaseTest {
             assertTrue("$name follows this or the preceding admitted phase: $actual vs $prior -> $current",
                 minOf(abs(actual - current), abs(actual - prior)) <= .015f)
         }
-        follows("outside backdrop", backdropMix); follows("glass tone", tone); follows("coating", coating)
+        follows("outside backdrop", backdropMix)
+        // Owner -> backdrop and backdrop -> material publish through separate composition
+        // bridges. Each bridge follows adjacent phase samples of its own source.
+        follows("glass tone", tone, backdropMix, previousBackdrop)
+        follows("coating", coating, backdropMix, previousBackdrop)
         follows("panel ink", panelInk, lerp(Color(0xFF202124), Color.White, owner.lightMix).red,
             lerp(Color(0xFF202124), Color.White, previous).red)
         frames += Frame(owner.lightMix, tone, coating, panelInk, backdropMix)
