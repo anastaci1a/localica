@@ -229,3 +229,58 @@ internal fun simpleLensGeometry(regions: List<SelectionRegion>, gap: Float): Len
     if (row.zipWithNext().any { (a, b) -> b.bounds.left - a.bounds.right !in 0f..gap }) return null
     return LensGeometry(Rect(left.left, left.top, row.last().bounds.right, left.bottom), rowRadius)
 }
+
+/** Reach in pixels of a platform blur of [radius] px, verified from source:
+ * - RenderEffect.createBlurEffect passes Blur::convertRadiusToSigma(radius) to SkImageFilters::Blur
+ *   (AOSP frameworks/base libs/hwui/jni/RenderEffect.cpp, createBlurEffect, lines 43-45);
+ * - convertRadiusToSigma(r) = r > 0 ? 0.57735·r + 0.5 : 0 (libs/hwui/utils/Blur.cpp, lines 27-30);
+ * - Skia's kernel radius is ceil(3·sigma), and 0 when sigma <= 0.03
+ *   (skia src/core/SkBlurEngine.h, SigmaToRadius / IsEffectivelyIdentity, lines 65-72). */
+internal fun glassBlurReach(radius: Float): Float {
+    val sigma = if (radius > 0f) .57735f * radius + .5f else 0f
+    return if (sigma <= .03f) 0f else kotlin.math.ceil(3f * sigma)
+}
+
+/** The optical parameters a Modern lens draw uses. [field] is the same distance field
+ * the shader evaluates (analytic, circles or silhouette); null means [geometry]'s own. */
+internal data class LensPreimageOptics(val geometry: LensGeometry?, val depth: Float, val power: Float,
+    val flattening: Float, val blur: Float, val padding: Float, val field: ((Offset) -> LensField)? = null)
+
+/** Refraction preimage: the region of the backdrop that the Modern lens reads for a
+ * footprint, in the footprint's coordinates. Every face point p looks up
+ * p + [lensRay].offset × power (the shader's displacement, mirrored exactly); the
+ * blur kernel then reaches [glassBlurReach] further, and nothing beyond the recorded
+ * padding exists. A null geometry is a flat, blur-only panel. The None renderer
+ * averages exactly this region; tests use it as their oracle. */
+internal fun lensRefractionPreimage(footprint: Rect, optics: LensPreimageOptics, samples: Int = 48): Rect {
+    if (footprint.isEmpty) return footprint
+    val geometry = optics.geometry
+    val looked = if (geometry == null || geometry.span <= 0f) footprint else {
+        var left = Float.POSITIVE_INFINITY; var top = Float.POSITIVE_INFINITY
+        var right = Float.NEGATIVE_INFINITY; var bottom = Float.NEGATIVE_INFINITY
+        val n = samples.coerceAtLeast(2)
+        for (j in 0..n) for (i in 0..n) {
+            val p = Offset(geometry.bounds.left + geometry.bounds.width * i / n,
+                geometry.bounds.top + geometry.bounds.height * j / n)
+            val field = optics.field?.invoke(p) ?: geometry.field(p)
+            // The shader returns the unrefracted scene outside the outline, where the surface clip hides it.
+            if (field.distance < 0f) continue
+            val q = p + lensRay(field, geometry.span, optics.depth, optics.flattening).offset * optics.power
+            if (!q.x.isFinite() || !q.y.isFinite()) continue
+            left = min(left, q.x); top = min(top, q.y); right = max(right, q.x); bottom = max(bottom, q.y)
+        }
+        if (left > right || top > bottom) footprint else Rect(left, top, right, bottom)
+    }
+    return looked.inflate(glassBlurReach(optics.blur)).intersect(footprint.inflate(optics.padding.coerceAtLeast(0f)))
+}
+
+/** Retains the last preimage; geometry is relative to the footprint, so translation is free. */
+internal class LensPreimageCache {
+    private var key: Pair<Rect, LensPreimageOptics>? = null
+    private var value = Rect.Zero
+    fun preimage(footprint: Rect, optics: LensPreimageOptics): Rect {
+        val next = footprint to optics
+        if (next != key) { key = next; value = lensRefractionPreimage(footprint, optics) }
+        return value
+    }
+}

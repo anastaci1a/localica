@@ -109,16 +109,19 @@ internal fun MaterialAverageStyle.color(mean: Color): Color {
 @Composable
 internal fun AverageBackdrop(modifier: Modifier, source: FrostedBackdrop, location: BackdropLocation,
     style: MaterialAverageStyle, home: FrostedBackdrop? = null, homeWeight: () -> Float = { 0f },
-    homeBounds: (() -> Rect)? = null, homeFootprint: (() -> HomeBackdropFootprint?)? = null) {
+    homeBounds: (() -> Rect)? = null, homeFootprint: (() -> HomeBackdropFootprint?)? = null,
+    preimage: ((Size) -> Rect)? = null) {
     val drawObserver = LocalBackdropSamplingObserver.current
-    val backing = source.noneMaterialSource()
-    val homeBacking = home?.noneMaterialSource()
+    // The scene the lens would sample (and its parent outside its box), never a substitute.
+    val backing = source
+    val homeBacking = home
     BackdropLease(backing)
     BackdropLease(homeBacking?.takeUnless { it === backing })
     Canvas(modifier) {
         val bounds = Rect(Offset.Zero, size)
         val localToSource = location.registrationTo(backing.location) ?: return@Canvas
-        val primary = backing.averageColor(localToSource, bounds) ?: return@Canvas
+        val primary = backing.preimageMean(localToSource, preimage?.invoke(size) ?: bounds) {
+            location.registrationTo(it.location) } ?: return@Canvas
         val weight = homeWeight().coerceIn(0f, 1f)
         val homeColor = if (homeBacking != null && weight > 0f) {
             val footprint = homeFootprint?.invoke()
@@ -131,13 +134,126 @@ internal fun AverageBackdrop(modifier: Modifier, source: FrostedBackdrop, locati
                     logicalBounds.left, logicalBounds.top)?.followedBy(sourceToScreen?.inverse() ?: return@Canvas)
                 else -> location.registrationTo(homeBacking.location)
             } ?: return@Canvas
-            homeBacking.averageColor(mapping, Rect(Offset.Zero, footprint?.size ?: logicalBounds?.size ?: size))
-                ?: return@Canvas
+            val extent = footprint?.size ?: logicalBounds?.size ?: size
+            homeBacking.preimageMean(mapping, preimage?.invoke(extent) ?: Rect(Offset.Zero, extent)) { parent ->
+                homeBacking.location.registrationTo(parent.location)?.let(mapping::followedBy) } ?: return@Canvas
         } else primary
-        fun resolved(mean: Color, material: FrostedBackdrop?) =
-            (if (material?.materialOnly == true) MaterialAverageStyle(0f, GlassTone(), style.opaque) else style).color(mean)
+        fun resolved(mean: Color, material: FrostedBackdrop) = style.forBacking(material).color(mean)
         val color = lerp(resolved(primary, backing), resolved(homeColor, homeBacking ?: backing), weight)
         drawObserver?.let { observeBackdropSampling(it, location, localToSource, bounds) }
         drawRect(color)
     }
+}
+
+/** Premultiplied coverage sums in consumer-area units. */
+private class PreimageSums { var red = 0f; var green = 0f; var blue = 0f; var alpha = 0f }
+
+private fun polygonArea(polygon: List<Offset>): Float = kotlin.math.abs(polygon.indices.sumOf { index ->
+    val a = polygon[index]; val b = polygon[(index + 1) % polygon.size]
+    (a.x * b.y - b.x * a.y).toDouble()
+}.toFloat()) * .5f
+
+/** Sutherland–Hodgman against a convex clip polygon of either winding. */
+internal fun clipConvexPolygon(subject: List<Offset>, clip: List<Offset>): List<Offset> {
+    if (subject.isEmpty() || clip.size < 3) return emptyList()
+    val orientation = clip.indices.sumOf { i ->
+        val a = clip[i]; val b = clip[(i + 1) % clip.size]; (a.x * b.y - b.x * a.y).toDouble()
+    }.let { if (it >= 0.0) 1f else -1f }
+    var output = subject
+    for (i in clip.indices) {
+        if (output.isEmpty()) break
+        val a = clip[i]; val b = clip[(i + 1) % clip.size]
+        fun side(p: Offset) = orientation * ((b.x - a.x) * (p.y - a.y) - (b.y - a.y) * (p.x - a.x))
+        val input = output
+        output = mutableListOf()
+        var previous = input.last()
+        for (point in input) {
+            val inside = side(point) >= 0f
+            val previousInside = side(previous) >= 0f
+            if (inside != previousInside) {
+                val sp = side(previous); val sc = side(point)
+                output += previous + (point - previous) * (sp / (sp - sc))
+            }
+            if (inside) output += point
+            previous = point
+        }
+    }
+    return output
+}
+
+/** Add this snapshot's coverage over [local] (this recording's pixels), minus [excluded]. */
+private fun FrostedBackdrop.accumulate(local: List<Offset>, excluded: List<Offset>?, consumerAreaPerPixel: Float,
+    sums: PreimageSums): Boolean {
+    val image = snapshot?.asAndroidBitmap() ?: return false
+    if (size.width <= 0 || size.height <= 0) return false
+    val sx = image.width / snapshotExtent.width.toFloat()
+    val sy = image.height / snapshotExtent.height.toFloat()
+    val corners = local.map { Offset(it.x * sx, it.y * sy) }
+    val cut = excluded?.let { box -> clipConvexPolygon(corners, box.map { Offset(it.x * sx, it.y * sy) }) }
+        ?.takeIf { it.size >= 3 }
+    val unit = consumerAreaPerPixel / (sx * sy)
+    val left = corners.minOf { it.x }; val right = corners.maxOf { it.x }
+    val top = corners.minOf { it.y }; val bottom = corners.maxOf { it.y }
+    val axisAligned = corners.size == 4 && (corners[0].y == corners[1].y && corners[1].x == corners[2].x ||
+        corners[0].x == corners[1].x && corners[1].y == corners[2].y)
+    for (y in floor(top).toInt().coerceAtLeast(0) until ceil(bottom).toInt().coerceAtMost(image.height)) {
+        for (x in floor(left).toInt().coerceAtLeast(0) until ceil(right).toInt().coerceAtMost(image.width)) {
+            var weight = if (axisAligned) (minOf(right, x + 1f) - maxOf(left, x.toFloat())).coerceAtLeast(0f) *
+                (minOf(bottom, y + 1f) - maxOf(top, y.toFloat())).coerceAtLeast(0f) else footprintPixelArea(corners, x, y)
+            if (cut != null) weight -= footprintPixelArea(cut, x, y)
+            if (weight <= 0f) continue
+            val pixel = image.getPixel(x, y)
+            val a = (pixel ushr 24) / 255f * weight * unit
+            sums.red += (pixel ushr 16 and 255) / 255f * a
+            sums.green += (pixel ushr 8 and 255) / 255f * a
+            sums.blue += (pixel and 255) / 255f * a
+            sums.alpha += a
+        }
+    }
+    return true
+}
+
+/** Coverage-weighted mean over [region] (consumer-local, normally the refraction preimage)
+ * of the scene the lens samples: this recording inside its box, its nearest parent outside
+ * it. API 26 integrates the shared 32×32 snapshots: boundary cells contribute their cell
+ * mean by overlap area, and a second ancestor beyond the parent is not consulted. When the
+ * parent has no snapshot yet, the mean covers the available part of the region only. */
+internal fun FrostedBackdrop.preimageMean(toLocal: BackdropRegistration, region: Rect,
+    toParent: (FrostedBackdrop) -> BackdropRegistration?): Color? {
+    if (region.isEmpty) return null
+    val determinant = kotlin.math.abs(toLocal.xx * toLocal.yy - toLocal.xy * toLocal.yx)
+    if (!(determinant > 0f)) return null
+    val sums = PreimageSums()
+    val local = toLocal.corners(region)
+    if (!accumulate(local, null, 1f / determinant, sums)) return null
+    val total = region.width * region.height
+    var available = total
+    val box = Rect(0f, 0f, size.width.toFloat(), size.height.toFloat())
+    val boxCorners = listOf(box.topLeft, box.topRight, box.bottomRight, box.bottomLeft)
+    val insideArea = polygonArea(clipConvexPolygon(local, boxCorners)) / determinant
+    val parent = parent
+    if (insideArea < total * .999f && parent != null && parent !== this) {
+        val parentMapping = toParent(parent)
+        val parentDeterminant = parentMapping?.let { kotlin.math.abs(it.xx * it.yy - it.xy * it.yx) } ?: 0f
+        val boxInParent = parentMapping?.let { mapping ->
+            toLocal.inverse()?.followedBy(mapping)?.let { m -> boxCorners.map(m::map) } }
+        if (parentMapping == null || !(parentDeterminant > 0f) || boxInParent == null ||
+            !parent.accumulate(parentMapping.corners(region), boxInParent, 1f / parentDeterminant, sums)) available = insideArea
+    }
+    return if (sums.alpha <= 0f || available <= 0f) Color.Transparent
+        else Color(sums.red / sums.alpha, sums.green / sums.alpha, sums.blue / sums.alpha, (sums.alpha / available).coerceIn(0f, 1f))
+}
+
+/** Premultiplied mean of a rasterized region; alpha is its coverage of [area] pixels. */
+internal fun averageGlassPixels(pixels: IntArray, area: Float): Color {
+    var red = 0f; var green = 0f; var blue = 0f; var alpha = 0f
+    for (pixel in pixels) {
+        val a = (pixel ushr 24) / 255f
+        red += (pixel ushr 16 and 255) / 255f * a
+        green += (pixel ushr 8 and 255) / 255f * a
+        blue += (pixel and 255) / 255f * a
+        alpha += a
+    }
+    return if (alpha == 0f || area <= 0f) Color.Transparent
+        else Color(red / alpha, green / alpha, blue / alpha, (alpha / area).coerceIn(0f, 1f))
 }
