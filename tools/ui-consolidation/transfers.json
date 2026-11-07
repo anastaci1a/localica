@@ -421,6 +421,33 @@
       "codeSha256": "20f5c3f87152c38dc50f6bd4be3be3085fe522574fa028dfc116923d1b338f15",
       "removedBy": "U04.01b",
       "reason": "U04.01b removes: pre-existing direct shadow call on a line rewritten by U10.01: .bottomGlassShadow(surfaceCorner, opacity = { 1f - sheet.expansion.phase.value() })"
+    },
+    {
+      "rule": "MotionReadInComposition",
+      "path": "app/src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt",
+      "fqn": "io.github.anastaci1a.localica.ui.BoxWithConstraintsScope.PlayerSurface",
+      "codeSha256": "1c187f7cb9a6316df1d1494f88067af226e4bfcac565348a3cb282d3ba08e8b0",
+      "removedBy": "U11.04",
+      "reason": "U11.04 removes (U10.03 tween exception, lead decision 2026-11-07 12:10 PM (1)): entry 1, lyrics phase (expand/collapse presence on the #608 law); includes the state route polarity.presentLightMix(lightMix) -> LocalicaScreen playerLightMix/playerLightInk; the value moves into layout/draw sampling",
+      "exception": "U10.03-tween-2026-11-07"
+    },
+    {
+      "rule": "MotionReadInComposition",
+      "path": "app/src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt",
+      "fqn": "io.github.anastaci1a.localica.ui.BoxWithConstraintsScope.PlayerSurface",
+      "codeSha256": "2605469a2dadf0a9f3c386b529f99e08dff03b9a6da9ab50de3b8c2c3f5d7685",
+      "removedBy": "U11.04",
+      "reason": "U11.04 removes (U10.03 tween exception, lead decision 2026-11-07 12:10 PM (1)): entry 2, artwork layout (ArtworkLayout profile value); the value moves into layout/draw sampling",
+      "exception": "U10.03-tween-2026-11-07"
+    },
+    {
+      "rule": "MotionReadInComposition",
+      "path": "app/src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt",
+      "fqn": "io.github.anastaci1a.localica.ui.artworkAction",
+      "codeSha256": "a4122390e3e3815f9900ea05dc71f264ac86da741c5f166d344b5b243be96623",
+      "removedBy": "U11.04",
+      "reason": "U11.04 removes (U10.03 tween exception, lead decision 2026-11-07 12:10 PM (1)): entry 3, crop retention (CropRetention profile value); the value moves into layout/draw sampling",
+      "exception": "U10.03-tween-2026-11-07"
     }
   ]
 }

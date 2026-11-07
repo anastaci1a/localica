@@ -58,9 +58,7 @@ internal data class ArtworkBackgroundRole(val identity: Any, val visual: PlayerV
 internal data class BackdropRoleGrade(val lightInk: Boolean, val shift: Float)
 /** Prepared destinations, with no animation state or clock of their own. */
 internal data class PlayerLyricsInk(val ordinary: Boolean, val lyrics: Boolean,
-    val shifts: Map<Any, Pair<Float, Float>>) {
-    fun shift(identity: Any?, progress: Float): Float? = shifts[identity]?.let { (from, to) -> from + (to - from) * progress }
-}
+    val shifts: Map<Any, Pair<Float, Float>>)
 internal val LocalArtworkBackgroundRole = staticCompositionLocalOf<Any?> { null }
 internal data class ArtworkBackgroundFrame(val roles: List<ArtworkBackgroundRole>,
     val frozenVisible: Boolean, val liveBlur: Boolean, val transitioning: Boolean,

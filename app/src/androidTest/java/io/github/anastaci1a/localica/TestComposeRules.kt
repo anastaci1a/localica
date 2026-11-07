@@ -1,7 +1,8 @@
 package io.github.anastaci1a.localica
 
 import androidx.activity.ComponentActivity
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
+import io.github.anastaci1a.localica.ui.engine.*
 import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.junit4.AndroidComposeTestRule
@@ -23,16 +24,31 @@ private fun queuedEffects(context: CoroutineContext): CoroutineContext =
     if (context[ContinuationInterceptor] != null) context
     else context + StandardTestDispatcher(context[TestCoroutineScheduler])
 
+/** The running test's virtual time, for Engine owners in fixture hosts (PlayerSurfaceHarness); real-app owner tests pass it
+ * to their own UiClock. The theme clock would stamp an idle intent at its last presented frame instead. */
+internal object FixtureTime {
+    @Volatile var nanos: (() -> Long)? = null
+    /** Stage2's harness clock, shared with the fixture root so every owner stamps idle intents in the same virtual time. */
+    @Composable fun WithClock(content: @Composable () -> Unit) {
+        val clock = remember { nanos?.let { now -> UiClock(object : FrameSource {
+            override suspend fun awaitFrame() = withFrameNanos { it }
+            override suspend fun <R> awaitFrame(onFrame: (Long) -> R) = withFrameNanos(onFrame)
+        }, now) } }
+        if (clock == null) { content(); return }
+        LaunchedEffect(clock) { clock.run() }
+        CompositionLocalProvider(LocalClockOwner provides clock, LocalUiClock provides clock, content = content)
+    }
+}
+
 @OptIn(ExperimentalTestApi::class)
 internal fun localicaComposeRule(
     effectContext: CoroutineContext = EmptyCoroutineContext
-): ComposeContentTestRule = EngineRecordRule(createComposeRule(effectContext = queuedEffects(effectContext)))
+): ComposeContentTestRule = EngineRecordRule(createComposeRule(effectContext = queuedEffects(effectContext))
+    .also { rule -> FixtureTime.nanos = { rule.mainClock.currentTime * 1_000_000 } })
 
-/** U04.02a: every fixture composes under the U11.00 root record, as LocalicaScreen does, so shared Components (MorphFaces, presence)
- * can own Engine motion outside the screen. A fixture's own record (or LocalicaScreen's) still overrides it. Its clock stamps intents in
- * virtual time ([VirtualUiClock]); a fixture's own clock owner still overrides it. */
+/** Fixtures outside LocalicaScreen receive its root record and Stage2's shared virtual-time clock. */
 private class EngineRecordRule(private val rule: ComposeContentTestRule) : ComposeContentTestRule by rule {
-    override fun setContent(composable: @Composable () -> Unit) = rule.setContent { VirtualUiClock(rule.mainClock) { EngineRecord(content = composable) } }
+    override fun setContent(composable: @Composable () -> Unit) = rule.setContent { FixtureTime.WithClock { EngineRecord(content = composable) } }
 }
 
 internal inline fun <reified A : ComponentActivity> localicaAndroidComposeRule(
@@ -46,9 +62,10 @@ internal fun <A : ComponentActivity> localicaAndroidComposeRule(
     effectContext: CoroutineContext = EmptyCoroutineContext
 ): AndroidComposeTestRule<ActivityScenarioRule<A>, A> =
     createAndroidComposeRule(activityClass, effectContext = queuedEffects(effectContext))
+        .also { rule -> FixtureTime.nanos = { rule.mainClock.currentTime * 1_000_000 } }
 
 @OptIn(ExperimentalTestApi::class)
 internal fun localicaRunComposeUiTest(
     effectContext: CoroutineContext = EmptyCoroutineContext,
     block: ComposeUiTest.() -> Unit
-) = runComposeUiTest(effectContext = queuedEffects(effectContext), block = block)
+) = runComposeUiTest(effectContext = queuedEffects(effectContext)) { FixtureTime.nanos = { mainClock.currentTime * 1_000_000 }; block() }

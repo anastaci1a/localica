@@ -43,6 +43,10 @@ import io.github.anastaci1a.localica.ui.components.SheetState
 import io.github.anastaci1a.localica.ui.components.ExpansionRest
 import io.github.anastaci1a.localica.ui.components.rememberExpansionRest
 import io.github.anastaci1a.localica.ui.components.PlayerReveal
+import io.github.anastaci1a.localica.ui.components.rememberPresence
+import io.github.anastaci1a.localica.ui.components.rememberProfileValue
+import io.github.anastaci1a.localica.ui.engine.ExpansionBasis
+import io.github.anastaci1a.localica.ui.spec.MotionProfile
 import io.github.anastaci1a.localica.navigation.*
 import io.github.anastaci1a.localica.library.Track
 import io.github.anastaci1a.localica.playback.PlaybackState
@@ -110,12 +114,15 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     val paletteTarget = polarity.frame?.roles?.firstOrNull { it.incoming && !it.soft }?.visual?.palette ?: artwork.palette
     val aspect by animateFloatAsState(artwork.palette.aspect, tween(paletteDuration), label = "Cover proportions")
     val palette = animatedPlayerPalette(paletteTarget, blendClock).copy(aspect = aspect)
-    val lyricVisibility by animateFloatAsState(if (lyricsOpen) 1f else 0f, tween(settings.motionDuration(550)), label = "Lyrics layout")
+    // U10.03: the lyrics layout is one expand/collapse owner on the #608 law over the title's travel (basis bound below).
+    val lyricsPresence = rememberPresence("player-lyrics", lyricsOpen)
+    val lyricVisibility = lyricsPresence.view.phase.value()
+    val lyricsRest by rememberExpansionRest(lyricsPresence.view)
+    val lyricsSettled = lyricsRest == if (lyricsOpen) ExpansionRest.Open else ExpansionRest.Closed
     // A light/dark foreground change during the lyrics animation (or artwork blend, #578) follows that shared phase (U08.02a).
     val inkTransition = remember { io.github.anastaci1a.localica.ui.engine.PhaseBinding(inkTarget) }
     val lyricsEnd = if (lyricsOpen) 1f else 0f
-    val inkStep = if (kotlin.math.abs(lyricVisibility - lyricsEnd) <= io.github.anastaci1a.localica.ui.engine.PhaseBinding.SETTLED &&
-        blendClock < 1f) inkTransition.resolve(inkTarget, blendClock, 1f, clock = 1) else inkTransition.resolve(inkTarget, lyricVisibility, lyricsEnd)
+    val inkStep = if (lyricsSettled && blendClock < 1f) inkTransition.resolve(inkTarget, blendClock, 1f, clock = 1) else inkTransition.resolve(inkTarget, lyricVisibility, lyricsEnd)
     val lyricsInk = polarity.lyricsInk?.takeIf { blendClock >= 1f }
     // Every material that follows the player's ink (the glass backdrops and the panel theme below) reads the same
     // eased polarity as the foreground, and the shared state exposes it to the surfaces outside this composable.
@@ -136,8 +143,9 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     // Match the panel's placement, including the outgoing half of a cross-fade.
     // Drawing order must not let the invisible cover shield presented lyrics.
     val lyricsInteractive = lyricMotion.contentAlpha > 0f
-    val backgroundProgress by animateFloatAsState(if (settings.artworkLayout == ArtworkLayout.FullBackground) 1f else 0f,
-        tween(settings.motionDuration(400)), label = "Artwork layout")
+    val settledBackground = if (settings.artworkLayout == ArtworkLayout.FullBackground) 1f else 0f
+    val backgroundView = rememberProfileValue("player-background", settledBackground, MotionProfile.ArtworkLayout)
+    val backgroundProgress = backgroundView.value()
     var startExpanded by remember { mutableStateOf(expanded) }
     var startQueueOpen by remember { mutableStateOf(false) }
     var movement by remember { mutableFloatStateOf(0f) }
@@ -234,6 +242,9 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
         titleMeasurer.measure(sampled.title, marqueeTextStyle(titleStyle), maxLines = 1, softWrap = false)
             .size.height / density.density
     }
+    val lyricsBasis = with(density) { ExpansionBasis(androidx.compose.ui.geometry.Rect(0f, ordinarySeekY.toPx(), windowWidth.toPx(), ordinarySeekY.toPx() + fullTitleHeight.dp.toPx()),
+        androidx.compose.ui.geometry.Rect(0f, lyricMetadataY.toPx(), windowWidth.toPx(), lyricMetadataY.toPx() + fullTitleHeight.dp.toPx()), density.density) }
+    SideEffect { lyricsPresence.basis = lyricsBasis }
     val artTrajectory = remember(windowWidth, fullArt, fullArtY, lyricFullArtY, miniArtY, ordinarySeekY,
         lyricMetadataY, lyricVisibility, fullTitleHeight, miniTitleScale) {
         List(257) { index ->
@@ -260,12 +271,17 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
             artTrajectory, fullArt.value, fullArtHeight.value)) }
     }
     // Crop compatibility remains independent of immediate frame growth.
-    val clearanceTarget = if (minOf(fullArt, fullArtHeight) < MiniArtworkSize) 0f else
-        playerArtworkClearance((fullArtY + (lyricFullArtY - fullArtY) * lyricVisibility).value,
-            fullArtHeight.value, (ordinarySeekY + (lyricMetadataY - ordinarySeekY) * lyricVisibility).value,
-            miniArtY.value, MiniArtworkSize.value, ((lyricMetadataY - ordinarySeekY) * lyricVisibility).value)
-    val artCropRetention by animateFloatAsState(if (clearanceTarget > 0f) 1f else 0f,
-        tween(settings.motionDuration(300)), label = "Artwork crop retention")
+    // Crop retention targets the settled layout (artwork layout and lyrics intents); its Engine owner eases between targets.
+    val cropTarget = run {
+        val width = floatingWidth + (windowWidth - floatingWidth) * settledBackground
+        val height = floatingHeight + (windowWidth / palette.aspect - floatingHeight) * settledBackground
+        val top = artworkBand.artworkTop(height.value).dp; val lyricTop = playerArtworkBand((statusInset + PlayerTopControlsHeight).value, lyricMetadataY.value).artworkTop(height.value).dp
+        if (minOf(width, height) >= MiniArtworkSize && playerArtworkClearance((top + (lyricTop - top) * lyricsEnd).value, height.value,
+            (ordinarySeekY + (lyricMetadataY - ordinarySeekY) * lyricsEnd).value, miniArtY.value, MiniArtworkSize.value,
+            ((lyricMetadataY - ordinarySeekY) * lyricsEnd).value) > 0f) 1f else 0f
+    }
+    val cropView = rememberProfileValue("player-crop", cropTarget, MotionProfile.CropRetention)
+    val artCropRetention = cropView.value()
     val miniArtworkPixels = with(density) { MiniArtworkSize.toPx() }
     val artContentScale = remember(miniArtworkPixels, artCropRetention, p == 0f) {
         playerArtworkContentScale(miniArtworkPixels, artCropRetention, p == 0f)
@@ -378,10 +394,9 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     // #634: keep the current song's full-player backdrop prepared while minimized. The settled ordinary
     // geometry is retained when the full player rests; a cover of another shape, or a process that has not
     // shown the full player yet, uses the same layout rules at their settled values.
-    val settledBackground = if (settings.artworkLayout == ArtworkLayout.FullBackground) 1f else 0f
     if (backgroundGeometry != null && playerRest == ExpansionRest.Open && backgroundReveal >= 1f && !artSwipe.active && swipeOffset == 0f &&
-        lyricVisibility == 0f && queueRest == ExpansionRest.Closed && backgroundProgress == settledBackground &&
-        aspect == artwork.palette.aspect && artCropRetention == (if (clearanceTarget > 0f) 1f else 0f))
+        lyricsSettled && !lyricsOpen && queueRest == ExpansionRest.Closed && backgroundView.settled && backgroundView.target == settledBackground &&
+        aspect == artwork.palette.aspect && cropView.settled && cropView.target == cropTarget)
         SideEffect { polarity.settledEndpoint = backgroundGeometry }
     val retainedEndpoint = polarity.settledEndpoint
     val artistStyle = MaterialTheme.typography.bodyLarge
@@ -463,8 +478,9 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
                 // Off disables grading.
                 val grade = polarity.grade(backgroundRole, frame)
                 val gradeReady = settings.glass.contrast <= 0f || grade != null
-                val roleTone = GlassTone(shift = if (settings.glass.contrast > 0f)
-                    lyricsInk?.shift(backgroundRole, lyricVisibility) ?: grade?.shift ?: 0f else 0f)
+                val lyricsShift = lyricsInk?.shifts?.get(backgroundRole)
+                val roleTone = GlassTone(shift = if (settings.glass.contrast <= 0f) 0f else if (lyricsShift != null)
+                    lyricsShift.first + (lyricsShift.second - lyricsShift.first) * lyricVisibility else grade?.shift ?: 0f)
                 val destination = artSwipe.destination
                 val neighborOffset = swipeOffset - (if (swipeOffset < 0f) -1f else 1f) * artPixels
                 if (backgroundReveal > 0f) Box(Modifier.fillMaxSize().graphicsLayer { alpha = backgroundReveal }) {

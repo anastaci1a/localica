@@ -81,9 +81,17 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
         override fun expand() {}
         override fun collapse() {}
     } }
-    // U03.01c: the lyrics split pill owns an Engine shape; production composes it under LocalicaScreen's U11.00 record.
-    EngineRecord { ProductionPlayerSurface(state, expanded, onExpanded, settings, sheet, onToggle, onSeek, onPrevious, onNext,
+    // PlayerSurface's own Engine owners (lyrics, artwork layout, crop; U10.03) need the root record LocalicaScreen publishes (U11.00).
+    val window = with(LocalDensity.current) { kotlin.math.hypot(maxWidth.toPx(), maxHeight.toPx()) }
+    val spec = io.github.anastaci1a.localica.ui.spec.uiSpec(settings,
+        io.github.anastaci1a.localica.ui.spec.ExpansionGeometryDomain(currentTravel, maxOf(1f, window), 1f / 24), LocalDensity.current)
+    FixtureTime.WithClock {
+    CompositionLocalProvider(
+        LocalEngineContext provides EngineContext(1f / 60, currentTravel, spec.spec.access),
+        io.github.anastaci1a.localica.ui.spec.LocalUiSpec provides spec) {
+    ProductionPlayerSurface(state, expanded, onExpanded, settings, sheet, onToggle, onSeek, onPrevious, onNext,
         onQueue, onLibrary, lyricsOpen, onLyrics, track, onSettings, actionRows, queueProgress?.let { rememberAnimatableQueueSheet(it, settings) }, frostedBackdrop, glassBackdrop, visual,
         artworkVisit, previousArtwork, nextArtwork, onArtworkVisit, bottomChrome, miniForeground, onSeekRequest, sampleState,
         backgroundPolarity, providedPopupHome, openingPopupHome, actions) }
+    }
 }
