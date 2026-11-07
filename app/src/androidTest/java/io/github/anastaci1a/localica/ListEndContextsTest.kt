@@ -27,10 +27,11 @@ class ListEndContextsTest {
     @Test fun songListEndClearsReturnArrow() = verify()
     @Test fun galleryEndClearsReturnArrow() = verify(gallery = true)
     @Test fun searchResultsEndClearsReturnArrow() = verify(search = true)
+    @Test fun scopedSearchResultsEndClearsReturnArrow() = verify(search = true, scoped = true)
     @Test fun queueEndClearsDirectionalReturnArrow() = verify(queue = true)
     @Test fun selectionEndClearsPanelAsItsMeasuredHeightChanges() = verify(selection = true)
 
-    private fun verify(gallery: Boolean = false, search: Boolean = false, queue: Boolean = false, selection: Boolean = false) {
+    private fun verify(gallery: Boolean = false, search: Boolean = false, scoped: Boolean = false, queue: Boolean = false, selection: Boolean = false) {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         context.getSharedPreferences("browse-style", 0).edit().clear().commit()
         context.getSharedPreferences("library-query", 0).edit().clear().commit()
@@ -43,16 +44,18 @@ class ListEndContextsTest {
             entries = tracks.map { QueueEntry(it.id, it) }, currentEntryId = tracks.first().id)), "end-queue"), loading = false)
         val session = SessionSelection()
         if (selection) session.select(null, listOf(SongRow(tracks.first().id, tracks.first())))
+        val lowerChrome = if (scoped) 0.dp else 100.dp
         var panelHeight by mutableStateOf(100.dp)
         compose.setContent { LocalicaTheme {
             val panel = rememberFloatingSelectionPanel(selection, true)
-            CompositionLocalProvider(LocalBrowseObscuredInset provides (100.dp + panel.clearance), LocalSessionSelection provides session) {
+            CompositionLocalProvider(LocalBrowseObscuredInset provides (lowerChrome + panel.clearance), LocalSessionSelection provides session) {
                 Box(Modifier.fillMaxSize()) {
                     BrowserScreen(LibraryUiState(LibrarySnapshot(tracks = tracks), loading = false), PlaylistState(loading = false), route,
                         {}, {}, {}, { _, _, _ -> }, null, null, true, false, reducedMotion = true,
-                        queueState = queueState, playingEntryId = if (queue) tracks.first().id else null)
-                    Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(100.dp).testTag("end-lower-chrome"))
-                    FloatingSelectionPanel(panel, Modifier.align(Alignment.BottomCenter).padding(bottom = 100.dp)) {
+                        queueState = queueState, playingEntryId = if (queue) tracks.first().id else null,
+                        popupDismiss = if (scoped) ({}) else null)
+                    Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(lowerChrome).testTag("end-lower-chrome"))
+                    FloatingSelectionPanel(panel, Modifier.align(Alignment.BottomCenter).padding(bottom = lowerChrome)) {
                         Box(Modifier.fillMaxWidth().height(panelHeight).testTag("end-selection"))
                     }
                 }
