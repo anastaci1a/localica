@@ -2,6 +2,8 @@ package io.github.anastaci1a.localica.ui.engine
 import androidx.compose.runtime.*
 import androidx.compose.ui.geometry.*
 import androidx.compose.ui.graphics.*
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.layout
 import io.github.anastaci1a.localica.ui.spec.*
 import kotlin.math.*
 /** [keys] (D14) name bodies for correspondence; null corresponds by order and geometry. */ @Immutable data class ShapeTarget(val bodies: List<RoundRect>,val join: JoinPolicy=JoinPolicy.ConcaveFillet,val strain: GlassStrain=GlassStrain.None,val keys: List<Any>?=null)
@@ -46,6 +48,10 @@ private class Slot(val id: Long,val channels: List<MotionFloat>,var key: Any?,va
     /** D18: C0 contact geometry; a finger cannot create or kill bodies, so the count and keys must match the current target. */ fun drive(target: ShapeTarget,stamp: FrameStamp) {
         clock.checkMutation(); val (next,charts)=admit(target); joined(next); require(charts.size==this.target.bodies.size && next.keys==this.target.keys && stamp.nanos>=lastStamp.nanos) { "A drive keeps the current bodies and moves forward in time" }; purge()
         val goals=listOf(floatArrayOf(next.strain.strain,next.strain.depth))+charts; commitAtomic((listOf(strain)+slots.filter { it.live }.map { it.channels }).zip(goals).flatMap { (ms,g) -> ms.mapIndexed { i,m -> m to m.prepareDrive(g[i],stamp) } },true); this.target=next; last=null; lastIntentWasRetarget=false; changed(stamp) }
+    /** B1: a phase-bound intent: the first target initializes (fixing the body count), later ones drive; [rest] releases every driven channel where it is, so a phase at rest runs no frames. */ internal fun follow(target: ShapeTarget,rest: Boolean) { if(this.target.bodies.isEmpty()) retarget(target,motionProfileId(MotionProfile.Control)) else drive(target,clock.stampNow); val held=flat.filter { it.kind==3 }; if(rest && held.isNotEmpty()) { val stamp=clock.stampNow; held.forEach { it.release(it.rawValue(stamp).toFloat(),motionProfileId(MotionProfile.Control),0f) }; changed(stamp) } }
     /** D14 side channel: replaces the join data and republishes the frame (no channel motion). */ internal fun joinPolicyData(data: JoinData) { clock.checkMutation(); require(data.gap.isFinite() && data.gap>0f) { "JoinData needs a finite positive gap" }; join=data.copy(rest=data.rest.toList()); changed(lastStamp) }
     internal fun dispose() { flat.forEach { it.dispose() } } }
 @Composable fun rememberPersistentShape(key: Any): PersistentShape { val clock=ownerClock(); val shape=remember(clock,key) { PersistentShape(clock,ShapeTarget(emptyList()),key) }; DisposableEffect(shape) { onDispose { shape.dispose() } }; return shape }
+/** D17/B1 live-compat (expires U10.05): an Engine-owned shape that follows a caller's phase at C0 (D18 drives, no trajectory of its own). [target] maps the laid-out size to bodies whose count never changes and is driven in the layout pass, before the content draws; [rest] settles it. */
+@Composable internal fun rememberPhaseShape(key: Any,target: (Size)->ShapeTarget,rest: ()->Boolean): Pair<ShapeView,Modifier> { val clock=ownerClock(); val shape=remember(clock,key) { PersistentShape(clock,ShapeTarget(emptyList()),key) }; DisposableEffect(shape) { onDispose { shape.dispose() } }; val latest by rememberUpdatedState(target to rest)
+    return shape to remember(shape) { Modifier.layout { m,c -> val p=m.measure(c); shape.follow(latest.first(Size(p.width.toFloat(),p.height.toFloat())),latest.second()); layout(p.width,p.height) { p.place(0,0) } } } }

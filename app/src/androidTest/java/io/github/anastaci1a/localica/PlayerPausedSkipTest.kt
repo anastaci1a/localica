@@ -23,7 +23,7 @@ class PlayerPausedSkipTest {
     private var toggles = 0
 
     private fun mount(expanded: Boolean) {
-        compose.setContent { LocalicaTheme {
+        compose.setContent { EngineTheme {
             BoxWithConstraints(Modifier.fillMaxSize()) {
                 PlayerSurface(state, expanded, {}, InterfaceSettings(),
                     remember { Animatable(if (expanded) 1f else 0f) },

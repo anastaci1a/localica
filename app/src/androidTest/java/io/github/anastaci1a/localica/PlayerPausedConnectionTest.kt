@@ -93,7 +93,7 @@ class PlayerPausedConnectionTest {
                 // Keep traversal modes and unrelated queue data; bypass tap policy explicitly.
                 queues.settings(savedSettings!!.copy(maximum = null, previousBehavior = PreviousBehavior.PreviousSong))
             }
-            compose.setContent { LocalicaTheme {
+            compose.setContent { EngineTheme {
                 if (mounted) {
                     val state by playback.state.collectAsState()
                     LaunchedEffect(playback) {

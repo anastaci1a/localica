@@ -42,7 +42,7 @@ class LyricsHeaderActionsTest {
         lateinit var anchor: GlassAnchor
         lateinit var preparation: GlassOriginPreparation
         lateinit var backing: FrostedBackdrop
-        compose.setContent { ClearGlassTheme {
+        compose.setContent { EngineTheme(clear = true) {
             anchor = rememberGlassAnchor()
             preparation = rememberGlassOriginPreparation()
             backing = rememberFrostedBackdrop(Unit)
@@ -118,7 +118,7 @@ class LyricsHeaderActionsTest {
         var sources by mutableStateOf(false)
         lateinit var preparation: GlassOriginPreparation
         lateinit var anchor: GlassAnchor
-        compose.setContent { LocalicaTheme {
+        compose.setContent { EngineTheme {
             preparation = rememberGlassOriginPreparation()
             anchor = rememberGlassAnchor()
             Box(Modifier.fillMaxSize().padding(32.dp)) {

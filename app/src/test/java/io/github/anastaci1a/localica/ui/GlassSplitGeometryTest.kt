@@ -7,6 +7,8 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class GlassSplitGeometryTest {
+    private fun optics(size: Size, p: Float) = splitPillOptics(splitPillBodies(size, p).filter { it.width > 0f }, size, p)
+
     @Test fun roundedPixelSizesNormalizeTheSplitCornersWithoutAnEmptyEdge() {
         for (width in listOf(119f, 120f, 121f, 315f)) for (height in listOf(60f, 61f, 158f)) {
             val bounds = Rect(0f, 0f, width, height)
@@ -68,7 +70,8 @@ class GlassSplitGeometryTest {
 
     @Test fun joinedOutlineAndSeparatedCirclesShareOuterEdges() {
         val diameter = 60f
-        val joined = splitPillBodies(Size(diameter * 2, diameter), 0f).single()
+        val (joined, neck) = splitPillBodies(Size(diameter * 2, diameter), 0f)
+        assertEquals("B1: the second body rests as a zero-width neck", Rect(60f, 0f, 60f, 60f), Rect(neck.left, neck.top, neck.right, neck.bottom))
         assertEquals(0f, joined.left, 0f)
         assertEquals(120f, joined.right, 0f)
         val separated = splitPillBodies(Size(130f, diameter), 1f)
@@ -93,10 +96,10 @@ class GlassSplitGeometryTest {
     }
 
     @Test fun endpointsUseTheOrdinaryAnalyticPillAndCircleFields() {
-        val joined = splitPillGeometry(Size(120f, 60f), 0f)
+        val joined = optics(Size(120f, 60f), 0f)
         assertEquals(0f, joined.fieldWeight, 0f)
         assertNull(joined.circles)
-        val split = splitPillGeometry(Size(130f, 60f), 1f)
+        val split = optics(Size(130f, 60f), 1f)
         assertEquals(0f, split.fieldWeight, 0f)
         assertEquals(Offset(30f, 30f) to Offset(100f, 30f), split.circles)
         val circle = LensGeometry(Rect(0f, 0f, 60f, 60f), 30f)
@@ -110,11 +113,11 @@ class GlassSplitGeometryTest {
     }
 
     @Test fun theIntermediateBoundaryHidesTheAnalyticEndpointHandoff() {
-        assertEquals(1f, splitPillGeometry(Size(120f, 60f), .25f).fieldWeight, 0f)
+        assertEquals(1f, optics(Size(120f, 60f), .25f).fieldWeight, 0f)
         for (p in listOf(.24999f, .25001f)) {
-            assertTrue(splitPillGeometry(Size(120f, 60f), p).fieldWeight > .9999f)
+            assertTrue(optics(Size(120f, 60f), p).fieldWeight > .9999f)
         }
-        assertEquals(0f, splitPillGeometry(Size(120f, 60f), .5f).fieldWeight, 0f)
+        assertEquals(0f, optics(Size(120f, 60f), .5f).fieldWeight, 0f)
     }
 
     @Test fun theConnectedOpticalNeckHasNoNormalSeamAndMatchesItsHeightGradient() {
