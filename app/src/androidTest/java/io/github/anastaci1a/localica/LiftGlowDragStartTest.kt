@@ -11,6 +11,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.toPixelMap
+import androidx.compose.ui.layout.LookaheadScope
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
@@ -39,10 +40,11 @@ class LiftGlowDragStartTest {
 
     @Test fun lightInkGlowContinuesThroughDragStartWithoutAShadowFrame() {
         lateinit var state: SongDragState
+        lateinit var selection: SelectionScene
         compose.setContent { LocalicaTheme {
             val grid = rememberLazyGridState()
             val scope = rememberCoroutineScope()
-            val selection = remember { SelectionScene() }
+            selection = remember { SelectionScene() }
             state = remember { SongDragState(grid, scope).also { it.items = songs; it.ink = Color.White } }
             // As BrowserScreen does: cards start from the selection host's drawn lift.
             SideEffect { state.hoverLift = { key -> selection.hover[key] } }
@@ -57,10 +59,23 @@ class LiftGlowDragStartTest {
                         // The Queue: light ink, its own selection host.
                         CompositionLocalProvider(LocalContentColor provides Color.White) {
                             ConnectedSelectionHost(Modifier.fillMaxSize(), scene = selection) {
-                                LazyVerticalGrid(GridCells.Fixed(1), state = grid) {
-                                    items(state.rendered(songs), key = { it?.key ?: DropGapKey }) { item ->
-                                        Box(Modifier.fillMaxWidth().height(72.dp)
-                                            .selectionLens(selected && item?.key == songs.first().key, false, itemKey = item?.key))
+                                // As BrowserScreen does: each row's selection follows its BrowseItemLayout outline,
+                                // the same outline its drag card draws.
+                                LookaheadScope {
+                                    LazyVerticalGrid(GridCells.Fixed(1), state = grid) {
+                                        items(state.rendered(songs), key = { it?.key ?: DropGapKey }) { item ->
+                                            // The drop gap keeps the held row's height, so neighbours stay put.
+                                            if (item == null) Box(Modifier.fillMaxWidth().height(with(androidx.compose.ui.platform.LocalDensity.current) {
+                                                (state.drag?.cardSize?.height ?: 0f).toDp() }))
+                                            else {
+                                                val outline = remember(item.key) { MediaItemOutlineHolder() }
+                                                Box(Modifier.fillMaxWidth().selectionLens(selected && item.key == songs.first().key, false,
+                                                    itemKey = item.key, outline = { _, _ -> outline.value })) {
+                                                    BrowseItemLayout(item, state.style, state.cellGeometry, this@LookaheadScope, true,
+                                                        menu = { }, itemIndex = songs.indexOf(item), outline = outline)
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -75,18 +90,19 @@ class LiftGlowDragStartTest {
         val rest = capture()
         val d = rest.width / 360f
         val held = compose.runOnIdle { state.bounds().getValue(songs.first().key) }
-        // A band just below the item's bottom edge (the neighbour leaves no vertical growth), across its centre.
+        compose.runOnIdle { selected = true }
+        compose.mainClock.advanceTimeBy(1000)
+        compose.waitForIdle()
+        // A band just below the drawn lifted edge (item-local hover geometry), across the centre. Cards start from this lift.
+        val edge = held.top + compose.runOnIdle { checkNotNull(selection.hover[songs.first().key]).lifted.bounds.bottom }
         val x0 = (held.center.x - 40 * d).toInt(); val x1 = (held.center.x + 40 * d).toInt()
-        val y0 = (held.bottom + 2 * d).toInt(); val y1 = (held.bottom + 5 * d).toInt()
+        val y0 = (edge + 2 * d).toInt(); val y1 = (edge + 5 * d).toInt()
         fun signed(image: ImageBitmap): Float {
             val now = image.toPixelMap(); val base = rest.toPixelMap()
             var sum = 0f
             for (y in y0 until y1) for (x in x0 until x1) sum += lum(now[x, y]) - lum(base[x, y])
             return sum / ((x1 - x0) * (y1 - y0))
         }
-        compose.runOnIdle { selected = true }
-        compose.mainClock.advanceTimeBy(1000)
-        compose.waitForIdle()
         val lifted = signed(capture().also { save(it, "lifted") })
         assertTrue("Light ink selects with a white glow below the item: $lifted", lifted > .006f)
         val pickup = mutableListOf(lifted)
