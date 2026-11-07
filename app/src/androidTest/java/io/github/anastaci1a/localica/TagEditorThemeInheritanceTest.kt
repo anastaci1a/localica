@@ -88,8 +88,51 @@ class TagEditorThemeInheritanceTest {
         return color
     }
 
+    /** #638 diagnostic only: record the real failing state, then rethrow the original assertion. */
+    private fun diag638(label: String) {
+        val tag = "Diag638"
+        fun log(text: String) = text.lines().forEach { android.util.Log.e(tag, "$label | $it") }
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        fun shell(command: String) = android.os.ParcelFileDescriptor.AutoCloseInputStream(
+            instrumentation.uiAutomation.executeShellCommand(command)).bufferedReader().use { it.readText() }
+        runCatching { shell("screencap -p /data/local/tmp/diag638-${label.filter(Char::isLetterOrDigit)}.png") }
+        runCatching {
+            compose.onAllNodes(isRoot()).fetchSemanticsNodes(atLeastOneRootRequired = false).forEachIndexed { index, root ->
+                instrumentation.runOnMainSync {
+                    val view = (root.root as ViewRootForTest).view
+                    val rect = android.graphics.Rect()
+                    val global = view.getGlobalVisibleRect(rect)
+                    val insets = view.rootWindowInsets
+                    val ime = android.view.WindowInsets.Type.ime()
+                    val params = view.rootView.layoutParams as? android.view.WindowManager.LayoutParams
+                    log("root[$index] ${view.rootView.javaClass.simpleName} shown=${view.isShown} vis=${view.visibility} " +
+                        "windowVis=${view.windowVisibility} attached=${view.isAttachedToWindow} focus=${view.hasWindowFocus()} " +
+                        "size=${view.width}x${view.height} global=$global $rect imeVisible=${insets?.isVisible(ime)} " +
+                        "ime=${insets?.getInsets(ime)} sys=${insets?.getInsets(android.view.WindowInsets.Type.systemBars())} " +
+                        "softInput=${params?.softInputMode} flags=${params?.flags?.let(Integer::toHexString)} title=${params?.title} " +
+                        "rootBounds=${root.boundsInWindow}")
+                }
+            }
+        }.onFailure { log("roots failed $it") }
+        runCatching {
+            compose.onAllNodes(hasText("Edit 1 song")).fetchSemanticsNodes(atLeastOneRootRequired = false).forEach { node ->
+                log("title id=${node.id} placed=${node.layoutInfo.isPlaced} attached=${node.layoutInfo.isAttached} " +
+                    "boundsInWindow=${node.boundsInWindow} boundsInRoot=${node.boundsInRoot} size=${node.size} " +
+                    "positionOnScreen=${node.positionOnScreen}")
+            }
+        }.onFailure { log("title failed $it") }
+        runCatching { log(compose.onAllNodes(isRoot()).printToString(Int.MAX_VALUE)) }.onFailure { log("tree failed $it") }
+        runCatching { compose.runOnIdle { log("controller=${controller.state.value}") } }
+        runCatching { log(shell("dumpsys window windows").lines().filter { line ->
+            listOf("Window #", "mFrame", "mHasSurface", "isVisible", "mViewVisibility", "mAttrs", "imeInputTarget", "mCurrentFocus", "mInputMethod").any { it in line }
+        }.joinToString("\n")) }
+        runCatching { log(shell("dumpsys input_method").lines().filter { line ->
+            listOf("mInputShown", "mCurFocusedWindow", "mServedView", "mImeWindowVis", "mShowRequested").any { it in line }
+        }.joinToString("\n")) }
+    }
+
     private fun assertPopup(title: String, lightInk: Boolean, expectedAppearance: GlassAppearance = appearance(lightInk)) {
-        val node = compose.onNodeWithText(title).assertIsDisplayed()
+        val node = try { compose.onNodeWithText(title).assertIsDisplayed() } catch (failure: AssertionError) { diag638(title); throw failure }
         assertEquals("Actual popup title keeps launch ink", lightInk, textColor(node, title).luminance() > .5f)
         compose.runOnIdle {
             val current = declarations.last()
