@@ -30,7 +30,7 @@ internal fun BoxScope.SongDragOverlay(state: SongDragState, reducedMotion: Boole
         }
     }
     KeyedDragOverlay(state, reducedMotion, countDescription = { "Dragging $it songs" },
-        cancelBottomMargin = cancelBottomMargin) { item, presentation ->
+        cancelBottomMargin = cancelBottomMargin, liftInk = { it.ink }) { item, presentation ->
         androidx.compose.ui.layout.LookaheadScope {
             Box(Modifier.fillMaxWidth()) {
                 MaterialTheme(colorScheme = presentation.colors ?: MaterialTheme.colorScheme) {
