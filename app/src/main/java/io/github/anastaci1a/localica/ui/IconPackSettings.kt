@@ -121,7 +121,7 @@ internal fun IconPackViewer(id: String?) {
     pack?.let { Text("Imported ${DateFormat.getDateTimeInstance().format(Date(it.importedAt))}", style = MaterialTheme.typography.bodySmall) }
     Text("Pack icon · Built-in icon", style = MaterialTheme.typography.bodySmall)
     AppIcon.entries.groupBy { it.id.substringBefore('.') }.forEach { (area, icons) ->
-        SettingsHeading(when (area) { "tab" -> "Tabs"; "transport" -> "Transport"; "menu" -> "Song menu"; else -> "Actions" })
+        SettingsHeading(when (area) { "tab" -> "Tabs"; "transport" -> "Transport"; "menu" -> "Song menu"; "settings" -> "Settings"; else -> "Actions" })
         icons.forEach { icon ->
             val mask = pack?.masks?.get(icon.id)
             val vector = pack?.vectors?.get(icon.id)

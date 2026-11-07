@@ -14,7 +14,7 @@ The song-menu icon set is the reference for future icons: 24 dp vectors, 1.8 str
 | Play next | `ic_menu_play_next` |
 | Add to current queue, Add to a queue, Add to queue (selection) | `ic_menu_queue_add` |
 | Information | `ic_menu_info` |
-| Download (unused) | `ic_download` |
+| Download, downloading state and Save artwork: a tray with a down arrow, never a plain arrow | `ic_download` |
 | Share (unused) | `ic_share` |
 | Station (unused) | `ic_station` |
 | Favorite (unused) | `ic_star` |
@@ -129,6 +129,8 @@ Long titles pause, scroll and fade at their edges. Reduced motion uses ellipsis.
 Browsing/settings stay light, with a pink selected-tab accent, shared neutral gray for secondary text/inactive icons, and red for errors/destructive actions. Use Inter with compact tracking and bold mini-player titles. Do not bundle Apple's system font. **Interface → Appearance** persistently adjusts gray, with reset to the darker default. Broader themes remain [planned](roadmap.md).
 
 Settings categories are Interface, Playback and queues, Library and tags, About/licenses, with icons, summaries and chevrons. Search appears only at the root. Both Back controls reverse the page entrance direction.
+
+Every settings row (links, switches, sliders, choices and headings) uses the shared row in `ui/PreferenceFrames.kt`. The leading icon sits in a fixed 40 dp slot and is centred vertically on the row, as is the trailing chevron or control, at any line count, font scale or density. All rows on a page start their text at the same x: flat rows take the glass links' 16 dp inner inset, and pages whose rows carry icons keep the empty slot on rows without one. No two settings rows share an icon, and each says what its row is; the dedicated glyphs have `settings.*` [icon pack ids](icon-packs.md#icon-ids).
 
 **Settings → About and licenses → Export diagnostics** opens a glass dialog, then the Android share sheet with one text file: app version, device model, Android version, export time and the diagnostics trail. Nothing leaves the device unless the user picks a share target; there is no network path.
 
