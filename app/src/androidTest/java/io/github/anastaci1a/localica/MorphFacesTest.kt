@@ -52,8 +52,6 @@ class MorphFacesTest {
         try {
             repeat(3) { round ->
                 compose.runOnIdle { expanded = !expanded }; repeat(3 + round) { compose.mainClock.advanceTimeByFrame() }
-                android.util.Log.i("MorphDiagnostics", "merged\n" + compose.onRoot().printToString())
-                android.util.Log.i("MorphDiagnostics", "unmerged\n" + compose.onRoot(useUnmergedTree = true).printToString())
                 compose.onAllNodesWithText("3 selected").assertCountEquals(1)
             }
             compose.mainClock.advanceTimeBy(2000)
