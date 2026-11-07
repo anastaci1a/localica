@@ -48,7 +48,7 @@ Supported elements and attributes:
 
 Other elements, attributes and transforms are rejected with a per-icon reason. Scripts, CSS, text, external references, entities, document types, raster images, gradients, clipping and processing instructions are unsupported. A malformed SVG can fall back to a valid raster entry for the same id.
 
-Limits keep import and drawing bounded: 256 KB per SVG, 256 paths, 1,024 elements, nesting depth 16, and 16,384 total path tokens. Coordinates are finite and bounded; viewBox dimensions must be at least 0.01. Combined transforms are bounded before rendering.
+Limits keep import and drawing bounded: 256 KB per SVG, 256 paths, 1,024 elements, nesting depth 16, and 16,384 total path tokens. Coordinates are finite and bounded; viewBox dimensions must be at least 0.01. Combined transforms are bounded before rendering, with at most 32 nested transform operations.
 
 ## Icon ids
 

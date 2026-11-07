@@ -37,6 +37,8 @@ class SvgIconTest {
         bad.forEach { value -> assertTrue(value.take(80), runCatching { SvgIconParser.parse(value.toByteArray()) }.isFailure) }
         assertTrue(runCatching { SvgIconParser.parse(ByteArray(SvgIconParser.MAX_BYTES + 1)) }.isFailure)
         assertTrue(runCatching { SvgIconParser.parse(byteArrayOf(0xc3.toByte(), 0x28)) }.isFailure)
+        val group = "<g transform='${"scale(1) ".repeat(16)}'>"
+        assertTrue(runCatching { SvgIconParser.parse(svg(group.repeat(3) + path + "</g>".repeat(3))) }.isFailure)
     }
     @Test(timeout = 10000) fun boundedMutationCorpusNeverEscapesWithAnError() {
         val random = Random(630)
