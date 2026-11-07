@@ -47,14 +47,6 @@
       "rule": "RawMotionMap",
       "path": "app/src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt",
       "fqn": "io.github.anastaci1a.localica.ui.artworkAction",
-      "codeSha256": "292cadc9236caa769718b9ac9fe4395e2974b8d1d2755351627269735b129086",
-      "removedBy": "U10.03",
-      "reason": "U10.03 removes: existing player phase consumer, now reading the Engine phase (U10.01 ownership move): val reveal = ((p - 0.85f) / 0.15f).coerceIn(0f, 1f)"
-    },
-    {
-      "rule": "RawMotionMap",
-      "path": "app/src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt",
-      "fqn": "io.github.anastaci1a.localica.ui.artworkAction",
       "codeSha256": "7f5b31755f972d3a6104e1935ac2d937520e37a670275f5ff6c75e3b55f1f248",
       "removedBy": "U10.03",
       "reason": "U10.03 removes: existing player phase consumer, now reading the Engine phase (U10.01 ownership move): val artContentScale = remember(miniArtworkPixels, artCropRetention, p == 0f) {"

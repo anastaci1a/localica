@@ -42,6 +42,7 @@ import io.github.anastaci1a.localica.R
 import io.github.anastaci1a.localica.ui.components.SheetState
 import io.github.anastaci1a.localica.ui.components.ExpansionRest
 import io.github.anastaci1a.localica.ui.components.rememberExpansionRest
+import io.github.anastaci1a.localica.ui.components.PlayerReveal
 import io.github.anastaci1a.localica.navigation.*
 import io.github.anastaci1a.localica.library.Track
 import io.github.anastaci1a.localica.playback.PlaybackState
@@ -190,8 +191,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
         })
     // Finish the cover mask late, independently of the backing's color. Delaying the
     // color continuation too would reveal a dark average palette before light artwork.
-    val reveal = ((p - 0.85f) / 0.15f).coerceIn(0f, 1f)
-    val coverBlend = backgroundProgress * reveal * reveal * (3f - 2f * reveal)
+    val coverBlend = backgroundProgress * PlayerReveal.Cover.at(p)
     val extraActions = 48.dp * (actionRows - 1)
     val virtualHeight = maxHeight.coerceAtLeast(560.dp + statusInset + navigationInset + extraActions)
     val floatingSlot = minOf(windowWidth - 48.dp, (virtualHeight - statusInset - navigationInset - 440.dp - extraActions).coerceAtLeast(96.dp))
@@ -288,9 +288,9 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     val rowMotion = playerRowMotion(p, (titleY - metadataY).value, (transportY - fullTransportY).value, lyricVisibility)
     val seekY = metadataY + 64.dp + rowMotion.seekOffset.dp
     val actionsY = ordinarySeekY + 128.dp + 32.dp * lyricVisibility + rowMotion.actionsOffset.dp
-    val backgroundReveal = smoothReveal((p - .38f) / .59f)
-    val handleReveal = smoothReveal((p - .72f) / .28f)
-    val glassFrost = smoothReveal((p - .08f) / .8f)
+    val backgroundReveal = PlayerReveal.Background.at(p)
+    val handleReveal = PlayerReveal.Handle.at(p)
+    val glassFrost = PlayerReveal.Frost.at(p)
     val deviceCorners = rememberDeviceCorners()
     val surfaceFrame = playerSurfaceFrame(maxWidth, maxHeight, navigationInset, bottomChrome, p, deviceCorners)
     val lyricsViewport = playerLyricsViewport(titleY.value, (statusInset + 60.dp).value)
@@ -298,8 +298,8 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     val surfaceCorner = surfaceFrame.maximumCorner
     // This feather belongs to the cover, including its final full-background state.
     // Removing it during the handoff briefly reveals the square beneath the wash.
-    val edgeSoftness = backgroundProgress * smoothReveal(p / .18f)
-    val edgeBand = .02f + .24f * smoothReveal(p / .75f)
+    val edgeSoftness = backgroundProgress * PlayerReveal.Edge.at(p)
+    val edgeBand = .02f + .24f * PlayerReveal.EdgeBand.at(p)
     val transportWidth = minOf(contentWidth, 280.dp)
     val textWidth = miniTextWidth + (contentWidth - miniTextWidth) * p
     val textX = 58.dp + (contentInset - 58.dp) * p
@@ -556,7 +556,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
             }
             val subtitleColor = MaterialTheme.colorScheme.onSurfaceVariant
             val artist = (if (settings.albumArtistFirst) sampled.albumArtist ?: sampled.artist else sampled.artist ?: sampled.albumArtist).orEmpty()
-            val albumVisibility = smoothReveal((p - .65f) / .35f)
+            val albumVisibility = PlayerReveal.Album.at(p)
             MarqueeTitle(buildAnnotatedString {
                 append(artist)
                 sampled.album?.let { album -> withStyle(SpanStyle(color = subtitleColor.copy(alpha = subtitleColor.alpha * albumVisibility))) {
