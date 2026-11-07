@@ -96,7 +96,7 @@ Fresh `native-live-evidence` is always uploaded, including on failure. Existing 
 
 ### Measured native shards
 
-The eight native shards per API assign whole classes by measured duration, longest first. The [duration profile](../.github/test-evidence/class-durations.csv) records v0.33.1's complete run 42085439724 (#598). Previous profiles used v0.33.0 run 41980502454 (#598), v0.32.0 run 41939345197 (#591), and earlier measurements (#550).
+The eight native shards per API assign whole classes by measured duration, longest first. The [duration profile](../.github/test-evidence/class-durations.csv) records v0.33.6's complete run 42361455770. Previous profiles used v0.33.1 run 42085439724 (#598), v0.33.0 run 41980502454 (#598), v0.32.0 run 41939345197 (#591), and earlier measurements (#550).
 
 Each complete run generates a profile in `complete-verification` for the next [release preparation](#release-preparation). The refresh helper also accepts multiple run directories and takes each class's median duration. Refresh after adding slow classes: an unmeasured six-minute class unbalanced a v0.32.0 shard. The budget is build 10 minutes, slowest shard 22 minutes, whole run 40 minutes.
 
