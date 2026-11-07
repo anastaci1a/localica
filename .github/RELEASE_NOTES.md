@@ -1,6 +1,6 @@
-<!-- Release: v0.33.7 -->
+<!-- Release: v0.33.8 -->
 
-# Release v0.33.7
+# Release v0.33.8
 
 Android APK for Android 8 or newer. Keeps the existing `.debug` application ID and project development signing key for in-place updates. Separate production signing is not configured.
 
@@ -8,16 +8,17 @@ This is an optimized build (not debuggable, minified with R8, with a baseline pr
 
 ## Changes
 
-- Extend Glass brightness weighting to 1–8 without inverting brightness; saved settings keep their look.
-- Let focused prototype test runs account for API-gated tests and optionally run on the owner's self-hosted runner.
-- Refresh the measured test shard costs and tidy the prototype test inventory.
-- Wait for the backdrop snapshot before sampling the Android 8–12 transparent-lens test, removing a readiness race.
+- Keep the current song's full-player backdrop prepared while the player is minimized, so expanding no longer flashes white before the artwork appears.
+- Make None glass average the whole area its lens samples (also used by Glass on Android 8–12), and keep shadows the same in every renderer.
+- Keep the white lift glow on light-ink rows, such as the Queue, when a drag starts instead of switching to a dark shadow.
+- Refresh the measured test shard costs.
 
 ## Resolved issues
 
-- https://github.com/anastaci1a/localica/issues/633 - Raise the Glass brightness weighting maximum to 8 while keeping brightness monotone.
-- https://github.com/anastaci1a/localica/issues/464 - Derive the prototype expected-method inventory from API gating.
-- https://github.com/anastaci1a/localica/issues/592 - Add an opt-in, owner-only self-hosted runner for single focused prototype runs.
+- https://github.com/anastaci1a/localica/issues/634 - Keep the current song's full-player assets prepared while minimized so expanding never flashes white.
+- https://github.com/anastaci1a/localica/issues/644 - Fix the PlayerBackdropTest cover-colour readiness race (same cause as #634).
+- https://github.com/anastaci1a/localica/issues/624 - Average the None material over the full area the lens samples.
+- https://github.com/anastaci1a/localica/issues/553 - Keep the theme-aware lift glow from selection through drag start.
 
 ## Known issues
 
@@ -26,7 +27,7 @@ This is an optimized build (not debuggable, minified with R8, with a baseline pr
 
 ## Install
 
-1. Download `localica-v0.33.7-debug.apk` from **Assets** below (Android 8+).
+1. Download `localica-v0.33.8-debug.apk` from **Assets** below (Android 8+).
 2. Open the APK and allow installation from your browser or file manager if prompted. It updates the existing development app.
 3. First use: open **More → Scan music**, choose **Folders to scan**, then **Scan now**.
 
