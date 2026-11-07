@@ -74,8 +74,8 @@ class PinchDepartureFadeTest {
             assertTrue("The pinch reached its destination while held: ${held.lastOrNull()?.progress}",
                 held.size > 40 && held.last().progress > .97f)
             val label = "${start.presentation}/${start.listSize}/${start.itemsPerRow} ${if (outward) "out" else "in"}"
-            val departures = audit(held.map { Sample(it.progress, it.viewport, it.items) }, "$label departures")
-            val arrivals = audit(held.reversed().map { Sample(1f - it.progress, it.viewport, it.items) }, "$label arrivals")
+            val departures = audit(held.map { Sample(it.progress, it.viewport, it.items, it.fades) }, "$label departures")
+            val arrivals = audit(held.reversed().map { Sample(1f - it.progress, it.viewport, it.items, it.fades) }, "$label arrivals")
             assertTrue("$label has departures or arrivals to fade ($departures/$arrivals)", departures + arrivals >= 2)
         } finally {
             pinchDrawProbe = null
@@ -84,7 +84,8 @@ class PinchDepartureFadeTest {
         }
     }
 
-    private class Sample(val p: Float, val viewport: Rect, val items: Map<Any, PinchDrawnItem>)
+    private class Sample(val p: Float, val viewport: Rect, val items: Map<Any, PinchDrawnItem>,
+        val fades: Map<Any, PinchFade> = emptyMap())
 
     /** Fraction of the way from [a] to [b] at which the interpolated rectangle stops intersecting [viewport]. */
     private fun crossing(a: Rect, b: Rect, viewport: Rect): Float {
@@ -106,7 +107,7 @@ class PinchDepartureFadeTest {
         val last = samples.last()
         val leaving = first.items.filter { (_, item) -> item.bounds.visibleIn(first.viewport) && item.alpha > .95f }.keys
             .filter { key -> last.items[key]?.let { !it.bounds.visibleIn(last.viewport) || it.alpha < .02f } ?: true }
-        class Departure(val key: Any, val exit: Float, val start: Float, val minimum: Float, val partial: Boolean)
+        class Departure(val key: Any, val exit: Float, val start: Float, val minimum: Float, val partial: Boolean, val trace: String)
         val audited = leaving.map { key ->
             val series = samples.map { it.items[key] }
             val gone = series.indices.firstOrNull { i -> series[i]?.bounds?.visibleIn(samples[i].viewport) != true }
@@ -131,11 +132,13 @@ class PinchDepartureFadeTest {
             }
             val start = shown.firstOrNull { it.second.alpha < .995f }?.first?.p ?: exit
             Departure(key, exit, start, shown.minOf { it.second.alpha },
-                shown.any { it.second.alpha in .15f.. .85f })
+                shown.any { it.second.alpha in .15f.. .85f }, "plan ${first.fades[key]?.let { "${it.window} arriving=${it.arriving}" }} viewport ${first.viewport} " +
+                    shown.takeLast(3).joinToString { (s, item) -> "p %.3f a %.2f ${item.bounds}".format(s.p, item.alpha) } +
+                    " then ${series.getOrNull(gone)?.bounds}")
         }
         val timed = audited.filter { it.exit > .1f }
         timed.forEach {
-            assertTrue("$label: ${it.key} leaves the screen at ${it.exit} still drawn at ${it.minimum}", it.minimum <= .5f)
+            assertTrue("$label: ${it.key} leaves the screen at ${it.exit} still drawn at ${it.minimum}; ${it.trace}", it.minimum <= .5f)
         }
         if (timed.isNotEmpty()) assertTrue("$label: the fade is visible, not clipped " +
             "(${timed.count { it.partial }} of ${timed.size} show partial alpha)", timed.count { it.partial } * 2 >= timed.size)
