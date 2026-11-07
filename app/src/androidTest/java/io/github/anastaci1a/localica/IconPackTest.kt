@@ -66,13 +66,14 @@ class IconPackTest {
         val report = IconPacks.import(context, ByteArrayInputStream(out.toByteArray()))
         assertEquals(AppIcon.ids, report.applied.toSet())
         assertTrue(report.unknown.isEmpty() && report.rejected.isEmpty())
-        val first = IconPacks.masks.value.mapValues { (_, b) -> IntArray(b.width * b.height).also { b.getPixels(it, 0, b.width, 0, 0, b.width, b.height) }.toList() }
+        val first = IconPacks.images.value.vectors
+        assertEquals(AppIcon.ids, first.keys)
         val again = ByteArrayOutputStream()
         IconPacks.exportTemplate(context, again)
         IconPacks.reset(context)
         IconPacks.import(context, ByteArrayInputStream(again.toByteArray()))
-        val second = IconPacks.masks.value.mapValues { (_, b) -> IntArray(b.width * b.height).also { b.getPixels(it, 0, b.width, 0, 0, b.width, b.height) }.toList() }
+        val second = IconPacks.images.value.vectors
         assertEquals(first, second)
-        assertTrue(first.values.all { px -> px.any { (it ushr 24) > 0 } })
+        assertTrue(first.values.all { it.root.size > 0 })
     }
 }

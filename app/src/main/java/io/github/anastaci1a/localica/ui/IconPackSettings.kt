@@ -99,11 +99,11 @@ private fun IconPackRow(pack: StoredIconPack?, selected: Boolean, enabled: Boole
     val info = pack?.report?.info
     SettingsLink(info?.name ?: "Built-in icons", listOfNotNull(
         if (selected) "Active" else null, info?.version?.let { "Version $it" }, info?.author,
-        if (pack == null) "${AppIcon.entries.size} icons" else "${pack.masks.size} of ${AppIcon.entries.size} icons replaced"
+        if (pack == null) "${AppIcon.entries.size} icons" else "${pack.iconIds.size} of ${AppIcon.entries.size} icons replaced"
     ).joinToString(" · "), enabled = enabled, onClick = onSelect)
     Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        val icons = if (pack == null) AppIcon.entries.take(4) else pack.masks.keys.take(4).mapNotNull(AppIcon::byId)
-        icons.forEach { icon -> Icon(packIconPainter(icon, pack?.masks?.get(icon.id)), null, Modifier.size(24.dp)) }
+        val icons = if (pack == null) AppIcon.entries.take(4) else pack.iconIds.take(4).mapNotNull(AppIcon::byId)
+        icons.forEach { icon -> Icon(packIconPainter(icon, pack?.masks?.get(icon.id), pack?.vectors?.get(icon.id)), null, Modifier.size(24.dp)) }
     }
     Row {
         ActionTextButton(onView, enabled = enabled) { Text("View icons") }
@@ -124,13 +124,14 @@ internal fun IconPackViewer(id: String?) {
         SettingsHeading(when (area) { "tab" -> "Tabs"; "transport" -> "Transport"; "menu" -> "Song menu"; else -> "Actions" })
         icons.forEach { icon ->
             val mask = pack?.masks?.get(icon.id)
+            val vector = pack?.vectors?.get(icon.id)
             Row(Modifier.fillMaxWidth().padding(vertical = 8.dp).testTag("pack-icon-${icon.id}"),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Icon(packIconPainter(icon, mask), "Pack: ${icon.id}", Modifier.size(24.dp))
+                Icon(packIconPainter(icon, mask, vector), "Pack: ${icon.id}", Modifier.size(24.dp))
                 Icon(packIconPainter(icon, null), "Built-in: ${icon.id}", Modifier.size(24.dp))
                 Column(Modifier.weight(1f)) {
                     Text(icon.id)
-                    Text(if (mask != null) "Reassigned" else if (pack == null) "Built-in" else "Built-in (fallback)", style = MaterialTheme.typography.bodySmall)
+                    Text(if (vector != null) "Reassigned · Vector" else if (mask != null) "Reassigned" else if (pack == null) "Built-in" else "Built-in (fallback)", style = MaterialTheme.typography.bodySmall)
                 }
             }
         }
