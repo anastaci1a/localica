@@ -78,6 +78,9 @@ export function transferIds(entries, known, completed) {
     });
     requireThat(new Set(ids).size === ids.length, 'Duplicate transfer'); return ids;
 }
+// Whitespace-normalized text, marker column relative to the trimmed text, and ordinal among identical source lines.
+export const codeFingerprint = (code, marker, ordinal) =>
+    digest(JSON.stringify([code.trim().replace(/\s+/g,' '), marker - (code.length-code.trimStart().length), ordinal]));
 export function compare(before, after, stage, transfers = []) {
     const counts = Object.fromEntries(rules.map(r => [r, {before:0, after:0, removed:0, added:0}]));
     for (const d of before) counts[d.rule].before++;
@@ -147,7 +150,7 @@ export function run(argv) {
         const symbol = lines.slice(0,at+1).join('\n').match(/\b(?:fun|class|object)\s+(?:<[^>]*>\s*)?([\w.]+)/g)?.at(-1)?.replace(/^.*\s/,'') || path.basename(file,'.kt');
         const marker = (+loc.column > 0 ? +loc.column - 1 : issue.errorLine2?.search(/[~^]/));
         const ordinal = candidates.indexOf(at);
-        const codeSha256 = digest(JSON.stringify([code.trim().replace(/\s+/g,' '), marker - (code.length-code.trimStart().length), ordinal]));
+        const codeSha256 = codeFingerprint(code, marker, ordinal);
         const identity = JSON.stringify([issue.id,file,pkg+'.'+symbol,codeSha256]);
         return {rule:issue.id,path:file,fqn:pkg+'.'+symbol,codeSha256,originalLine:+loc.line,identity};
     });
