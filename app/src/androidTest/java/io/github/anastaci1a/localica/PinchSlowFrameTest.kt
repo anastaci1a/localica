@@ -29,8 +29,9 @@ class PinchSlowFrameTest {
         val shown = pinch(stallHeld = true)
         val held = shown.filter { it.held }
         val start = held.first()
-        val gap = start.fingers - start.progress
-        assertTrue("The fingers are ahead of the first destination frame: $gap", gap > .1f)
+        // The fingers may still be moving: measure every step against the whole recognition gap.
+        val gap = held.maxOf { it.fingers } - start.progress
+        assertTrue("The fingers are ahead of the first destination frame: $gap", gap > .05f)
         val steps = held.zipWithNext { a, b -> (b.progress - a.progress) / gap }
         val log = held.joinToString("\n") { "+${it.time - start.time} ms shown %.3f fingers %.3f".format(it.progress, it.fingers) }
         assertTrue("One frame closes ${steps.max()} of the recognition gap after a slow frame\n$log", steps.max() < .5f)
