@@ -56,6 +56,6 @@ internal val LocalEngineContext=staticCompositionLocalOf<EngineContext> { requir
 }
 /** Intent time in the frame source's base: Choreographer frames use System.nanoTime; a virtual (test) frame clock stamps
  * intents at its last frame. Before the first frame nothing is presented, so no presented frame can precede the origin. */
-private class FrameBase { private var offset: Long?=null; private var frame=Long.MIN_VALUE/4; private var latest=Long.MIN_VALUE/4
-    fun frame(nanos: Long) { frame=nanos; offset=nanos-System.nanoTime() }
-    fun now(): Long=maxOf(latest,offset?.let { if(kotlin.math.abs(it)<1_000_000_000L) System.nanoTime() else frame }?:latest).also { latest=it } }
+internal class FrameBase(private val system: ()->Long=System::nanoTime) { private var offset: Long?=null; private var frame=Long.MIN_VALUE/4; private var latest=Long.MIN_VALUE/4
+    fun frame(nanos: Long) { frame=nanos; offset=nanos-system() }
+    fun now(): Long=maxOf(latest,offset?.let { if(kotlin.math.abs(it)<1_000_000_000L) system() else frame }?:latest).also { latest=it } }
