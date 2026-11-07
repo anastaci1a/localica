@@ -313,6 +313,7 @@ class UiPolicyDetectorTest : LintDetectorTest() {
                     val target: Float get() = 1f
                 }
                 open class MotionFloat : MotionValue {
+                    var onRest: (() -> Unit)? = null
                     fun retarget() {}; fun retargetSpring() {}; fun drive() {}; fun release() {}; fun initialize() {}
                 }
                 class MotionRect : MotionValue {
@@ -323,6 +324,7 @@ class UiPolicyDetectorTest : LintDetectorTest() {
                 }
                 interface ExpansionView { val phase: MotionValue; val expanded: Boolean; val inContact: Boolean }
                 class ExpandCollapse {
+                    fun updateSpec(value: Any) {}
                     fun target() {}; fun contactBegin() {}; fun contactMove() {}; fun contactRelease() {}
                     fun contactCancel() {}; fun setBasis() {}; fun bind() {}
                 }

@@ -262,4 +262,12 @@ class ProvenanceContractTest {
         task(UiRuleId.RawUiMotion,"package io.github.anastaci1a.localica.ui.engine\n$source").run().expectClean()
     }
 
+    @Test fun expansionConstructionAndLifecycleHooksStayEngineOwned() {
+        val pkg="io.github.anastaci1a.localica.ui"
+        task(UiRuleId.RawUiMotion,"package $pkg.components\nfun bad(v: $pkg.engine.MotionFloat) { v.onRest = {} }").run().expectErrorCount(1)
+        task(UiRuleId.RawUiMotion,"package $pkg.engine\nfun good(v: MotionFloat) { v.onRest = {} }").run().expectClean()
+        task(UiRuleId.RawUiMotion,"package $pkg.components\nfun bad(v: $pkg.engine.ExpandCollapse) { v.updateSpec(1) }").run().expectErrorCount(1)
+        task(UiRuleId.RawUiMotion,"package $pkg\nfun bad() = $pkg.engine.ExpandCollapse()").run().expectErrorCount(1)
+    }
+
 }
