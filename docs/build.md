@@ -112,6 +112,8 @@ Full native shards and focused prototype jobs time out after 35 minutes. A timed
 
 Search IME, search-focus and contrast coverage is mandatory on API 26/36. Build/JVM/lint/signature and both preserved-data compatibility jobs also remain required. Known issues never waive failures.
 
+The prototype build job compiles debug and release Kotlin concurrently in one Kotlin daemon, which inherits the Gradle heap. It therefore uses the Android static-checks sizing (`-Xmx6g`, four workers) on the 16 GB hosted runner; the 2 GB local default ran out of memory there (#636).
+
 The decision manifest records the exact SHA, APK identity, selected coverage and that complete native suites were not run. Prototype results do not certify a release.
 
 Prototypes use the same [evidence tooling](#evidence-tooling-prerequisites), six-packet limit and outcome rules described above: final XML owns test results, monitoring degradation blocks a green result, and test failure retains its exit status.
