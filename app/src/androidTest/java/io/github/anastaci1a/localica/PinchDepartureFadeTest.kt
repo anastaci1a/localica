@@ -148,8 +148,16 @@ class PinchDepartureFadeTest {
         if (timed.isNotEmpty()) assertTrue("$label: the fade is visible, not clipped " +
             "(${timed.count { it.partial }} of ${timed.size} show partial alpha)", timed.count { it.partial } * 2 >= timed.size)
         for (a in timed) for (b in timed) {
-            if (abs(a.exit - b.exit) <= .004f) assertEquals("$label: ${a.key} and ${b.key} leave together (${a.exit}, ${b.exit}) " +
-                "and must fade together", a.start, b.start, .03f)
+            if (abs(a.exit - b.exit) <= .004f) {
+                // Painted text sits a few pixels inside the card the plan times, differently at the
+                // top and bottom: the plan may see two exits a tie apart. Then it must time them
+                // as near neighbours; otherwise it must fade them as one.
+                val split = a.planned != null && b.planned != null && a.planned != b.planned
+                if (split) assertEquals("$label: ${a.key} and ${b.key} leave together but are planned apart",
+                    a.planned!!, b.planned!!, .03f)
+                else assertEquals("$label: ${a.key} and ${b.key} leave together (${a.exit}, ${b.exit}) " +
+                    "and must fade together", a.start, b.start, .03f)
+            }
             if (a.exit + .05f < b.exit) assertTrue("$label: ${a.key} leaves at ${a.exit} before ${b.key} at ${b.exit} " +
                 "but starts fading later (${a.start} > ${b.start})", a.start <= b.start + .03f)
         }
