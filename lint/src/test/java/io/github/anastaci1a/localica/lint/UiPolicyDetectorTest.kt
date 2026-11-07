@@ -200,6 +200,39 @@ class UiPolicyDetectorTest : LintDetectorTest() {
         """, 0)
     }
 
+    fun testSubcomposeMeasurementDoesNotInheritItsRenderedContentsMotionReads() {
+        val layout = """
+            package androidx.compose.ui.layout
+            class Placeable(val height: Int)
+            class Measurable { fun measure() = Placeable(20) }
+            fun subcompose(slotId: Any, content: () -> Unit): List<Measurable> { content(); return listOf(Measurable()) }
+        """
+        val renderer = """
+            package io.github.anastaci1a.localica.ui.engine
+            fun render(view: MotionValue) { view.value() }
+        """
+        check(UiRuleId.RawMotionMap, """
+            import androidx.compose.ui.layout.*
+            import io.github.anastaci1a.localica.ui.engine.*
+            fun fit(view: MotionValue): Boolean {
+                val natural = subcompose("body") { render(view) }.single().measure()
+                return natural.height <= 200
+            }
+        """, 0, "components", layout, renderer)
+        // The SDK boundary does not conceal a motion-dependent slot identity.
+        check(UiRuleId.RawMotionMap, """
+            import androidx.compose.ui.layout.*
+            import io.github.anastaci1a.localica.ui.engine.*
+            fun bad(view: MotionValue) = subcompose(view.value()) { render(view) }.single().measure().height > 0
+        """, 1, "components", layout, renderer)
+        // A user helper with the same name is still followed.
+        check(UiRuleId.RawMotionMap, """
+            import io.github.anastaci1a.localica.ui.engine.*
+            fun subcompose(content: () -> Float) = content()
+            fun bad(view: MotionValue) = subcompose { view.value() } > .5f
+        """, 1)
+    }
+
     fun testImmediateAndDeferredMotionReads() {
         val imports = "import androidx.compose.runtime.*\nimport io.github.anastaci1a.localica.ui.engine.*\n"
         for (read in listOf("value()", "velocity()", "sample()", "valueAt(FrameStamp())", "velocityAt(FrameStamp())", "sampleAt(FrameStamp())")) {

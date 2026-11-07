@@ -361,6 +361,14 @@ internal class UiPolicyDetector : Detector(), SourceCodeScanner {
         private fun derived(node: UElement?, seen: MutableSet<PsiElement> = mutableSetOf()): Boolean {
             if (node == null) return false
             if (node is UCallExpression) {
+                // Measured geometry does not inherit reads used only to render subcomposed children.
+                // Keep motion-derived slot arguments and receivers visible; only the SDK content callback is excluded.
+                val measurement = node.resolve()
+                if (node.methodName == "subcompose" && measurement?.containingClass?.qualifiedName.orEmpty().startsWith("androidx.compose.ui.layout.")) {
+                    return derived(node.receiver, seen) || measurement!!.parameterList.parameters.indices
+                        .filter { measurement.parameterList.parameters[it].name != "content" }
+                        .mapNotNull { node.getArgumentForParameter(it) }.any { derived(it, seen) }
+                }
                 if (isRead(node)) return true
                 if (derived(node.receiver, seen)) return true
                 val method = node.resolve()
