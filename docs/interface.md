@@ -265,11 +265,15 @@ In all lists, including queues and album details, pinch outward through Smallest
 
 Change one adjacent view per gesture, requiring all fingers to lift before another step. A 4% span change picks the direction. The first presented frame keeps the source, then geometry catches up to the full finger distance over 100 ms.
 
+A slow frame advances that ease and the release settle by at most one 60 Hz frame, so neither finishes in a single step.
+
 Shared pinch geometry carries the captured selection lift into both live and retained items. Reversing restores items virtualized out by the destination. All text draws below a separate artwork pass. Within each pass earlier items draw on top.
 
 Pinches during settlement retain the shown progress. Reversals reuse the frozen endpoints. Further adjacent steps preserve their input until the preceding handoff permits a fresh capture, including gestures already released. Modal interruption discards pending steps.
 
-Departing items retain their bounded movement and resizing. Whole-item fades span the eased geometry transition, with evenly spaced starts and equal widths overlapping by half. Items farthest from the pinch focus fade first; arrivals mirror departures. A single item fades over the full transition. Reversals retrace every alpha.
+Departing items keep moving and resizing along their whole path. Every item that leaves the viewport during the transition fades, including live items sliding past an edge; artwork, text, frost and selection fade together.
+
+Fades follow exit order: items leaving at the same moment (within 2% of the transition) share one fade, fade starts are evenly spaced, and each fade ends exactly as its item leaves. Items already at the edge fade until they leave. Arrivals mirror departures along the reversed path. Reversals retrace every alpha.
 
 View controls fade over 120 ms. Live items retain ordinary geometry progression.
 
