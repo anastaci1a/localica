@@ -143,10 +143,10 @@ class PlayerGestureTest {
             swipe(Offset(centerX, height * .35f), Offset(centerX, height * .75f), durationMillis = 1000)
         }
         compose.onNodeWithContentDescription("Close queue").assertDoesNotExist()
-        // Hold a collapsing gesture; browsing must already be light before releasing.
+        // Hold a collapsing gesture past halfway (#608: a still release settles by position); browsing must already be light.
         compose.mainClock.autoAdvance = false
         compose.onNodeWithTag("player-surface").performTouchInput {
-            down(Offset(8f, centerY)); repeat(20) { moveBy(Offset(0f, height * .01f), delayMillis = 30) }
+            down(Offset(8f, centerY)); repeat(20) { moveBy(Offset(0f, height * .03f), delayMillis = 30) }
         }
         compose.mainClock.advanceTimeBy(32)
         val rootBounds = compose.onRoot().fetchSemanticsNode().boundsInRoot

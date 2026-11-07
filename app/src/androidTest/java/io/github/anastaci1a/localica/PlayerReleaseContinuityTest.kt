@@ -110,10 +110,10 @@ class PlayerReleaseContinuityTest {
         val scene = Scene(); start(scene)
         val travel = top(); val frames = mutableListOf<PhaseFrame>()
         onNodeWithTag("player-surface").performClick(); frames(60, travel, frames)
-        onNodeWithContentDescription("Show lyrics", useUnmergedTree = true).performSemanticsAction(SemanticsActions.OnClick); frames(40, travel, frames)
+        onNodeWithContentDescription("Show lyrics").performSemanticsAction(SemanticsActions.OnClick); frames(40, travel, frames)
         frames.clear(); val t0 = mainClock.currentTime * 1_000_000
-        onNodeWithContentDescription("Collapse player", useUnmergedTree = true).performSemanticsAction(SemanticsActions.OnClick); frames(5, travel, frames)
-        onAllNodesWithContentDescription("Hide lyrics", useUnmergedTree = true).onFirst().performSemanticsAction(SemanticsActions.OnClick)
+        onNodeWithContentDescription("Collapse player").performSemanticsAction(SemanticsActions.OnClick); frames(5, travel, frames)
+        onAllNodesWithContentDescription("Hide lyrics").onFirst().performSemanticsAction(SemanticsActions.OnClick)
         frames(40, travel, frames)
         verifyReleaseLaw("lyrics during collapse", frames, scene.recorder.joins, fallbackJoin(t0, 1.0, 0.0, false))
         assertEquals("collapse completes through the lyrics toggle", 0.0, frames.last().p, 1e-3)
