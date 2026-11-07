@@ -57,6 +57,7 @@ import io.github.anastaci1a.localica.queue.*
 import io.github.anastaci1a.localica.home.PinEdits
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
@@ -827,27 +828,25 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
             request.owner === latestFollowOwner && modalOwner?.blocked != true &&
             request.modalGeneration == modalOwner?.generation
         try {
-            snapshotFlow { !latestBrowse.pending && latestBrowse.current != null }.first { it }
-            while (owns()) {
-                // Row publication and lazy measurement are separate. Check the
-                // measured keys too, including same-size reorder/replacement.
-                withFrameNanos { }; withFrameNanos { }
-                if (!owns()) return@LaunchedEffect
-                val published = latestBrowse.current ?: continue
-                if (latestBrowse.pending) continue
-                val target = request.targetIndex(published.result.items) ?: return@LaunchedEffect
+            // Row publication and lazy measurement are separate snapshot publications. Observe both,
+            // including same-size reorder/replacement, without a frame clock of its own (#600 U10.02b).
+            val target = snapshotFlow {
+                val published = latestBrowse.current
                 val layout = gridState.layoutInfo
-                if (published.route != currentRoute || layout.totalItemsCount != published.result.items.size + 1 ||
-                    layout.visibleItemsInfo.any { item -> item.index > 0 &&
-                        published.result.items.getOrNull(item.index - 1)?.key != item.key }) continue
-                if (!playbackFollow.beginMotion(request)) return@LaunchedEffect
-                scrollOwnership.during {
-                    artworkTransit.during(!latestReducedMotion &&
-                        kotlin.math.abs(target - gridState.firstVisibleItemIndex) > layout.visibleItemsInfo.size * 2) {
-                        gridState.easeToTarget(ListScrollTarget.below(target, latestTopInset), latestReducedMotion)
-                    }
+                when {
+                    !owns() -> -1
+                    latestBrowse.pending || published == null -> null
+                    else -> (request.targetIndex(published.result.items) ?: -1).takeIf { it < 0 || published.route == currentRoute &&
+                        layout.totalItemsCount == published.result.items.size + 1 && layout.visibleItemsInfo.none { item ->
+                            item.index > 0 && published.result.items.getOrNull(item.index - 1)?.key != item.key } }
                 }
-                break
+            }.filterNotNull().first()
+            if (target < 0 || !playbackFollow.beginMotion(request)) return@LaunchedEffect
+            scrollOwnership.during {
+                artworkTransit.during(!latestReducedMotion &&
+                    kotlin.math.abs(target - gridState.firstVisibleItemIndex) > gridState.layoutInfo.visibleItemsInfo.size * 2) {
+                    gridState.easeToTarget(ListScrollTarget.below(target, latestTopInset), latestReducedMotion)
+                }
             }
         } finally { playbackFollow.finish(request) }
     }
