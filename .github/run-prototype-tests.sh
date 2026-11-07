@@ -121,6 +121,7 @@ selection_sdk33_callsites = {
     'SelectionLensTest#translatingAnIrregularSelectionKeepsItsMapButChangingItsHoleRebuildsIt': 315,
 }
 qualified_skips = []
+assume_gated_skips = {}
 def qualify_skip(name, method, skipped, xml_file):
     identity = name+'#'+method
     api = str(observed['api'])
@@ -168,6 +169,8 @@ def qualify_skip(name, method, skipped, xml_file):
     detail = (skipped.text or '').strip()
     if message not in ('', expected) or detail not in ('', expected, 'org.junit.AssumptionViolatedException: '+expected):
         raise ValueError('Contradictory XML assumption reason: '+identity)
+    if assume_gated:
+        assume_gated_skips[name] = assume_gated_skips.get(name, 0) + 1
     qualified_skips.append({'id': identity, 'api': api, 'reason': reasons[0], 'evidence': str(logs[0]),
         'evidence_sha256': hashlib.sha256(logs[0].read_bytes()).hexdigest(), 'xml': str(xml_file),
         'qualification': ('Source assumeTrue(SDK_INT >= '+str(assume_gate)+') above API'+api+'; skip is not a pass'
@@ -199,6 +202,9 @@ assert all(counts[c]['skipped'] == 0 for c in required), 'Required regression me
 result = {'qualified_skips': qualified_skips, 'methods': methods, 'source_inventory_sha256': hashlib.sha256(source_bytes).hexdigest(), 'required_selectors': sorted(required), 'schema_version': 1, 'sha': observed['sha'], 'api': observed['api'], 'selectors': sorted(selected), 'counts': counts, 'xml_files': [str(p) for p in files], 'release_certified': False}
 (root/'reconciled-tests.json').write_text(json.dumps(result, indent=2)+'\n')
 assert not (gated_classes & required), 'Required regression classes cannot be API-gated'
-assert all(v['failed'] == 0 and v['errors'] == 0 and (v['passed'] > 0 or (c in gated_classes and not any(v.values())))
+# A class may run nothing when it is wholly SdkSuppress-gated above this API, or only skip methods whose own
+# source assumeTrue(SDK_INT >= N) is above this API; every other class needs a passing method.
+assert all(v['failed'] == 0 and v['errors'] == 0 and (v['passed'] > 0 or (c in gated_classes and not any(v.values()))
+           or (v['skipped'] > 0 and v['skipped'] == assume_gated_skips.get(c, 0)))
            for c, v in counts.items()), 'Required class failed or had no passing tests'
 PYXML
