@@ -130,7 +130,9 @@ class IconPackVectorTest {
                     val folder = File(context.getExternalFilesDir(null), "icon-pack-metrics").also { check(it.isDirectory || it.mkdirs()) }
                     for ((column, label) in listOf(0 to "builtin", 2 to "current")) {
                         File(folder, "${icon.id}-$label.png").outputStream().use {
-                            render(values[column], 768, Color.Black).compress(Bitmap.CompressFormat.PNG, 100, it)
+                            val bitmap = render(values[column], 384, Color.Black)
+                            bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)
+                            bitmap.recycle()
                         }
                     }
                 }
