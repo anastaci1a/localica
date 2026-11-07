@@ -70,7 +70,12 @@ export function manifest(text, metadata, known) {
 }
 /** Recorded one-time ledger growth (U14 note). Lead decision 2026-11-07 3:15 AM: U10.02 may add at most 18 rewritten
  * phase-consumer transfers tagged U10.03, in one commit; the tag can never admit growth again. */
-export const transferExceptions = {'U10.02-ledger-2026-11-07': {removedBy: 'U10.03', limit: 18}};
+export const transferExceptions = {'U10.02-ledger-2026-11-07': {removedBy: 'U10.03', limit: 18},
+    /** Lead decision 2026-11-07 12:10 PM (1): U10.03 retires the lyrics, artwork-layout and crop tweens onto Engine owners whose
+     * values still feed composition geometry, once, at most 3 MotionReadInComposition entries, expiring at U11.04 (layout/draw
+     * sampling). Recorded route: the lyrics value also reaches LocalicaScreen through state, polarity.presentLightMix(lightMix)
+     * -> playerLightMix/playerLightInk; that route is part of entry 1 and expires with it. */
+    'U10.03-tween-2026-11-07': {removedBy: 'U11.04', limit: 3}};
 /** Recorded one-off relabel (U14 note, tools/ui-consolidation/u1003-relabel.txt). Lead decision 2026-11-07 10:10 AM: U10.03
  * entries whose real owner is another step (artwork swipe, snapshot recording, cover order, title input band) move to that
  * step once, in one commit, at most 22 entries; every other removedBy change is rejected. */

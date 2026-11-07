@@ -118,6 +118,15 @@ test('the ledger grows only through the recorded one-time exception, within its 
     assert.throws(() => transferIds([entry(3, {exception:'other'})], ['U10.03'], []), /Unrecorded/);
     assert.throws(() => transferIds([entry(3, {...tag, removedBy:'U11.01'})], ['U10.03','U11.01'], []), /Unrecorded/);
 });
+test('the U10.03 tween exception admits at most 3 entries owned by U11.04, once', () => {
+    const tag = 'U10.03-tween-2026-11-07', e = (n, extra = {}) => ({rule:rules[0],path:'app/src/main/A.kt',fqn:'p.f',codeSha256:'t'+n,removedBy:'U11.04',reason:'U11.04 removes',exception:tag,...extra});
+    const base = [{...e(0), exception:undefined}].map(({exception, ...x}) => x), grown = [...base, e(1), e(2), e(3)];
+    transferGrowth(base, grown); transferIds(grown, ['U11.04'], []);
+    assert.throws(() => transferGrowth(base, [...grown, e(4)]), /over its limit/);
+    assert.throws(() => transferGrowth(grown, [...grown, e(5)]), /reused/);
+    assert.throws(() => transferIds([e(1, {removedBy:'U10.05'})], ['U10.05','U11.04'], []), /Unrecorded/);
+    assert.throws(() => transferIds(grown, ['U11.04'], ['U11.04']), /expired/);
+});
 test('transfer owners change only through the recorded one-off relabel, once and within its limit', () => {
     const entry = (n, extra = {}) => ({rule:rules[6],path:'app/src/main/A.kt',fqn:'p.f',codeSha256:'r'+n,removedBy:'U10.03',reason:'U10.03 removes',...extra});
     const [tag, {limit}] = Object.entries(transferRelabels)[0]; const known = ['U10.03','U10.04','U06.04'];
