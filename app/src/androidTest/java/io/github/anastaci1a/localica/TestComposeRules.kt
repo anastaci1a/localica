@@ -29,9 +29,10 @@ internal fun localicaComposeRule(
 ): ComposeContentTestRule = EngineRecordRule(createComposeRule(effectContext = queuedEffects(effectContext)))
 
 /** U04.02a: every fixture composes under the U11.00 root record, as LocalicaScreen does, so shared Components (MorphFaces, presence)
- * can own Engine motion outside the screen. A fixture's own record (or LocalicaScreen's) still overrides it. */
+ * can own Engine motion outside the screen. A fixture's own record (or LocalicaScreen's) still overrides it. Its clock stamps intents in
+ * virtual time ([VirtualUiClock]); a fixture's own clock owner still overrides it. */
 private class EngineRecordRule(private val rule: ComposeContentTestRule) : ComposeContentTestRule by rule {
-    override fun setContent(composable: @Composable () -> Unit) = rule.setContent { EngineRecord(content = composable) }
+    override fun setContent(composable: @Composable () -> Unit) = rule.setContent { VirtualUiClock(rule.mainClock) { EngineRecord(content = composable) } }
 }
 
 internal inline fun <reified A : ComponentActivity> localicaAndroidComposeRule(
