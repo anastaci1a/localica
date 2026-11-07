@@ -168,7 +168,8 @@ internal data class PinchFade(val window: PinchFadeWindow, val arriving: Boolean
     fun alpha(progress: Float) = window.alpha(progress, arriving)
 }
 
-internal class PinchFadePlan(val transaction: Long, val layout: LazyGridLayoutInfo, val fades: Map<Any, PinchFade>)
+internal class PinchFadePlan(val transaction: Long, val layout: LazyGridLayoutInfo,
+    val box: androidx.compose.ui.unit.IntSize?, val fades: Map<Any, PinchFade>)
 
 /** A virtualized source item's destination cell, extrapolated from the first live row. */
 internal fun BrowsePinchMotion.retainedTargetCell(index: Int, rowTop: Float, rowIndex: Int, pitch: Float): Rect {
@@ -186,9 +187,12 @@ internal fun BrowsePinchMotion.retainedTargetCell(index: Int, rowTop: Float, row
 internal fun BrowsePinchMotion.pinchFades(grid: LazyGridState, indices: Map<String, Int>): Map<Any, PinchFade> {
     if (visualSource == null || target == null) return emptyMap()
     val layout = grid.layoutInfo
-    fadePlan?.let { if (it.transaction == transaction && it.layout === layout) return it.fades }
+    fadePlan?.let { if (it.transaction == transaction && it.layout === layout && it.box == viewportCoordinates?.takeIf { c -> c.isAttached }?.size) return it.fades }
     val visible = layout.visibleItemsInfo.filter { it.key != "browser-notice" }
-    val viewport = Rect(0f, layout.viewportStartOffset.toFloat(), viewportWidth, layout.viewportEndOffset.toFloat())
+    // The overlay paints every item in these coordinates and clips to its own bounds.
+    val box = viewportCoordinates?.takeIf { it.isAttached }?.size
+    val viewport = if (box != null) Rect(0f, 0f, box.width.toFloat(), box.height.toFloat())
+        else Rect(0f, layout.viewportStartOffset.toFloat(), viewportWidth, layout.viewportEndOffset.toFloat())
     val inset = (BrowseCellGeometry(targetColumns).gridInset * pixelDensity).roundToInt()
     val departures = mutableMapOf<Any, Float>()
     val arrivals = mutableMapOf<Any, Float>()
@@ -223,7 +227,7 @@ internal fun BrowsePinchMotion.pinchFades(grid: LazyGridState, indices: Map<Stri
     }
     val fades = pinchExitSchedule(departures).mapValues { PinchFade(it.value, false) } +
         pinchExitSchedule(arrivals).mapValues { PinchFade(it.value, true) }
-    fadePlan = PinchFadePlan(transaction, layout, fades)
+    fadePlan = PinchFadePlan(transaction, layout, box, fades)
     return fades
 }
 
