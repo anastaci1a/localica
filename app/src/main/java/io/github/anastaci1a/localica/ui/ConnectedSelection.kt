@@ -23,6 +23,7 @@ import androidx.compose.ui.semantics.*
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import io.github.anastaci1a.localica.ui.engine.*
 import kotlin.math.*
 
 /** [corner] comes from the item's shared outline (#532); null keeps the generic contour. */
@@ -335,12 +336,7 @@ internal class HoverPathCache(profile: SelectionOutlineProfile? = null) {
         var changed=local!=previousRegions || gap.toBits()!=previousGap.toBits() || previousStrengths.size!=pairCount
         var index=0
         for(a in regions.indices)for(b in a+1 until count) {
-            val observed=strength(a,b)
-            val ra=local[a].bounds;val rb=local[b].bounds
-            // A pair farther apart than the whole selection gap cannot meet: each lobe
-            // reaches at most gap/4. Its changing intent cannot change this contour.
-            val far=gap>0f && max(max(ra.left-rb.right,rb.left-ra.right),max(ra.top-rb.bottom,rb.top-ra.bottom))>gap
-            val value=if(far)0f else observed
+            val value=filletStrength(local[a].bounds,local[b].bounds,gap,strength(a,b))
             nextStrengths[index]=value
             if(index>=previousStrengths.size || value.toBits()!=previousStrengths[index].toBits())changed=true
             index++
@@ -360,6 +356,33 @@ internal class HoverPathCache(profile: SelectionOutlineProfile? = null) {
             presented = Path().apply { addPath(localPath, at) }
         }
         return presented
+    }
+}
+
+/** The renderer and benchmark share this cache, including all mixed-opacity path builds. */
+internal class SelectionOpacityPathCache(private val profile: SelectionOutlineProfile?=null) {
+    private val caches=mutableMapOf<List<Int>,HoverPathCache>()
+    var rebuilds=0;private set
+    fun clear() { caches.clear() }
+    fun paths(regions: List<SelectionRegion>,rest: List<SelectionRegion>,gap: Float,
+        visibility: List<Float>,splitRestComponents: Boolean=false,strength: (Int,Int)->Float): List<SelectionOutlineLayer> {
+        require(regions.size==rest.size && regions.size==visibility.size)
+        val active=mutableSetOf<List<Int>>()
+        val result=selectionOpacitySlices(visibility).map { slice ->
+            val components=if(splitRestComponents)hoverComponents(slice.members.map { rest[it].bounds },gap)
+                .map { component -> component.map { slice.members[it] } } else listOf(slice.members)
+            SelectionOutlineLayer(slice.weight,components.map { members ->
+                active+=members
+                val cache=caches.getOrPut(members) { HoverPathCache(profile) }
+                val pieces=members.map { regions[it] }
+                val before=cache.rebuilds
+                val path=cache.path(pieces,pieces,gap) { a,b -> strength(members[a],members[b]) }
+                rebuilds+=cache.rebuilds-before
+                SelectionOutlineGroup(members,path,cache.localPath,pieces.first().bounds.topLeft)
+            })
+        }
+        caches.keys.retainAll(active)
+        return result
     }
 }
 
@@ -394,23 +417,8 @@ internal fun selectionComponents(regions: List<SelectionRegion>, gap: Float): Li
  * [rest] remains an adapter parameter; it never authorizes a tether across a displayed gap. */
 internal fun connectedSelectionPath(regions: List<SelectionRegion>, gap: Float,
     rest: List<SelectionRegion> = regions, strength: (Int, Int) -> Float = { _, _ -> 1f },
-    contour: AnalyticSelectionOutline = AnalyticSelectionOutline()): Path {
-    if (regions.isEmpty()) return Path()
-    var duplicates=false
-    for(i in regions.indices)for(j in 0 until i) {
-        if(regions[i].bounds==regions[j].bounds && regions[i].radius(gap).toBits()==regions[j].radius(gap).toBits()) { duplicates=true;break }
-    }
-    if(!duplicates)return contour.path(regions,gap,strength)
-    val members = regions.indices.groupBy { SelectionRegion(regions[it].bounds,regions[it].radius(gap)) }
-    if (members.size < regions.size) {
-        val unique = members.keys.toList()
-        val indices = members.values.toList()
-        return connectedSelectionPath(unique,gap,strength = { a,b ->
-            indices[a].maxOf { i -> indices[b].maxOf { j -> strength(min(i,j),max(i,j)) } }
-        },contour = contour)
-    }
-    return contour.path(regions,gap,strength)
-}
+    contour: AnalyticSelectionOutline = AnalyticSelectionOutline()): Path =
+    concaveFilletPath(regions.map { it.contour(gap) },gap,strength,contour)
 
 /**
  * Registers an item with the surrounding host and lifts it while selected (#533). While its

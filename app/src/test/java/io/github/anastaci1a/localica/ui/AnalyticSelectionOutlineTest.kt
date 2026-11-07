@@ -1,6 +1,7 @@
 package io.github.anastaci1a.localica.ui
 
 import androidx.compose.ui.geometry.Rect
+import io.github.anastaci1a.localica.ui.engine.*
 import org.junit.Assert.*
 import org.junit.Test
 import kotlin.math.*
@@ -123,3 +124,6 @@ class AnalyticSelectionOutlineTest {
     }
 }
 
+
+/** U03.01b moved the solver to Engine on uniform RoundRects; the integrated corpus keeps its SelectionRegion inputs through the same contour adapter. */
+internal fun AnalyticSelectionOutline.inspect(regions: List<SelectionRegion>,gap: Float,strength: (Int,Int)->Float)=inspect(regions.map { it.contour(gap) },gap,strength)

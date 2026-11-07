@@ -1,5 +1,6 @@
 package io.github.anastaci1a.localica.ui
 
+import io.github.anastaci1a.localica.ui.engine.*
 import org.junit.Assert.*
 import org.junit.Test
 import kotlin.math.abs

@@ -166,7 +166,7 @@ class PersistentShapeTest {
         val body=pill(0f,0f,100f,40f)
         assertThrows(IllegalArgumentException::class.java) { PersistentShape(h.clock,ShapeTarget(listOf(body)),"fillet") }
         val shape=PersistentShape(h.clock,ShapeTarget(listOf(body),JoinPolicy.Union),"chart"); val before=shape.outline()
-        assertThrows("ConcaveFillet waits for U03.01b",IllegalArgumentException::class.java) { shape.retarget(ShapeTarget(listOf(body),JoinPolicy.ConcaveFillet),profile) }
+        assertThrows("ConcaveFillet needs JoinData first",IllegalArgumentException::class.java) { shape.retarget(ShapeTarget(listOf(body),JoinPolicy.ConcaveFillet),profile) }
         // Sums fit Skia's scale, but one radius exceeds half its side: outside the fraction chart, rejected rather than clamped.
         val lopsided=RoundRect(0f,0f,100f,40f,CornerRadius(70f,10f),CornerRadius(10f,10f),CornerRadius.Zero,CornerRadius.Zero)
         assertThrows(IllegalArgumentException::class.java) { shape.retarget(ShapeTarget(listOf(lopsided),JoinPolicy.Union),profile) }
