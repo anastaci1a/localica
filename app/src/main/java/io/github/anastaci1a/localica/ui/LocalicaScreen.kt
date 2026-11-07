@@ -141,7 +141,6 @@ fun LocalicaScreen(
     var lyricsOpen by rememberSaveable { mutableStateOf(false) }
     var exitPrompt by remember { mutableStateOf(false) }
     var consumedRequest by rememberSaveable { mutableLongStateOf(queues.playerRequest) }
-    val queueProgress = remember { androidx.compose.animation.core.Animatable(if (queueOpen) 1f else 0f) }
     val browsePopupHome = rememberGlassPopupHome(expanded || settingsOpen)
     var settingsPresented by remember { mutableStateOf(false) }
     LaunchedEffect(settingsOpen) {
@@ -150,10 +149,6 @@ fun LocalicaScreen(
     }
     val playerPopupHome = rememberGlassPopupHome(!expanded)
     val queuePopupHome = rememberGlassPopupHome(!queueOpen || !expanded, playerPopupHome)
-    LaunchedEffect(queueOpen) {
-        if (!queueOpen) queuePopupHome.awaitHandoff()
-        queueProgress.animateTo(if (queueOpen) 1f else 0f, androidx.compose.animation.core.tween(settings.motionDuration(400)))
-    }
     val insideCollection = navigation.route.collection?.kind in setOf(MediaKind.Album, MediaKind.Artist, MediaKind.AlbumArtist, MediaKind.Playlist, MediaKind.Folder)
     val chromeVisibility by androidx.compose.animation.core.animateFloatAsState(if (insideCollection) 0f else 1f,
         androidx.compose.animation.core.tween(settings.motionDuration(300)), label = "Detail navigation")
@@ -171,11 +166,13 @@ fun LocalicaScreen(
     CompositionLocalProvider(LocalEngineContext provides remember(refreshHz, referenceTravel, resolvedSpec) { EngineContext(1f / refreshHz, referenceTravel, resolvedSpec.spec.access) }, LocalUiSpec provides resolvedSpec) {
     val sheet = rememberSheetState("player", expanded, playerBasis(density, window, navigationInset, bottomChrome))
     val phase = sheet.expansion.phase
+    val queueSheet = rememberSheetState("queue", queueOpen, queueBasis(density, window, navigationInset, WindowInsets.statusBars.asPaddingValues().calculateTopPadding()))
+    LaunchedEffect(queueOpen) { if (!queueOpen) queuePopupHome.awaitHandoff(); if (queueOpen) queueSheet.expand() else queueSheet.collapse() }
     LaunchedEffect(expanded) { if (expanded) browsePopupHome.awaitHandoff() else playerPopupHome.awaitHandoff(); if (expanded) sheet.expand() else sheet.collapse() }
     val playerVisible by remember { derivedStateOf { phase.value() > 0f } }
     val playerCoversBrowse by remember { derivedStateOf { phase.value() >= .5f } }
     val playerFullyOpen by remember { derivedStateOf { phase.value() >= .99f } }
-    val queueVisible by remember { derivedStateOf { queueProgress.value > 0f } }
+    val queueVisible by remember { derivedStateOf { queueSheet.expansion.phase.value() > 0f } }
     var queueOpeningRequest by rememberSaveable { mutableLongStateOf(0) }
     // QueueSurface removes its body at the closed endpoint. Keep intent/viewport
     // outside that conditional lifetime; a later explicit epoch owns repositioning.
@@ -213,7 +210,7 @@ fun LocalicaScreen(
             ?: io.github.anastaci1a.localica.library.ArtworkCache.peek(item.coverUris), item)
         navigation = navigation.open(route)
         queueOpen = false; expanded = false; songInfo = false
-        navigationScope.launch { queuePopupHome.awaitHandoff(); queueProgress.animateTo(0f, androidx.compose.animation.core.tween(settings.motionDuration(400))) }
+        navigationScope.launch { queuePopupHome.awaitHandoff(); queueSheet.collapse() }
     }
     val livePlayerOccurrence by rememberUpdatedState(queues.library.activeId to queues.library.active?.currentEntryId)
     val playerCollectionLookup = rememberCollectionLookup(library.snapshot, playlist.playlists, browseSorts, onOpen = ::openCollection)
@@ -432,7 +429,7 @@ fun LocalicaScreen(
         Sheet(sheet) { if (hasPlayer) screenScope.PlayerSurface(player, expanded, { expanded = it }, settings, sheet,
             onToggle, onSeek, onPrevious, onNext, ::openQueue, { expanded = false },
             lyricsOpen, { lyricsOpen = it }, playerTracks.lyrics,
-            { settings = it; preferences.write(it) }, actionRows = if (playerActions.twoRows) 2 else 1, queueProgress = queueProgress, frostedBackdrop = playerBackdrop, glassBackdrop = browseBackdrop, visual = playerVisual,
+            { settings = it; preferences.write(it) }, actionRows = if (playerActions.twoRows) 2 else 1, queue = queueSheet, frostedBackdrop = playerBackdrop, glassBackdrop = browseBackdrop, visual = playerVisual,
             onSeekRequest = onSeekRequest, sampleState = playerSample, backgroundPolarity = playerBackgroundPolarity, artworkVisit = journey?.current?.token, previousArtwork = previousArtwork, nextArtwork = nextArtwork,
             providedPopupHome = playerPopupHome, openingPopupHome = browsePopupHome,
             bottomChrome = bottomChrome, miniForeground = miniInk, onArtworkVisit = queueController?.let { controller -> { token, complete -> controller.swipeTo(token, complete) } }) {
@@ -453,7 +450,7 @@ fun LocalicaScreen(
         if (hasPlayer && playerVisible) CompositionLocalProvider(LocalFrostedBackdrop provides playerBackdrop) {
         GlassPanelTheme(playerLightMix) {
         screenScope.PlayerClippedOverlay({ phase.value() }, bottomChrome) {
-        screenScope.QueueSurface(queueProgress, settings, { queueOpen = it }, playerProgress = { phase.value() },
+        screenScope.QueueSurface(queueSheet, { queueOpen = it }, playerProgress = { phase.value() },
             onOpeningContact = { queueOpeningRequest++ }, providedPopupHome = queuePopupHome) {
             Box(Modifier.weight(1f)) { CompositionLocalProvider(LocalBrowseObscuredInset provides queueSelectionPanel.clearance) {
             queueDrawerState.SaveableStateProvider("player-queue") { QueueScreen(queues, queueController, library,
@@ -470,7 +467,7 @@ fun LocalicaScreen(
         }
     }
     androidx.activity.compose.BackHandler(expanded) { if (lyricsOpen) lyricsOpen = false else expanded = false }
-    androidx.activity.compose.BackHandler(queueOpen || queueVisible) { queueOpen = false; navigationScope.launch { queuePopupHome.awaitHandoff(); queueProgress.animateTo(0f, androidx.compose.animation.core.tween(settings.motionDuration(400))) } }
+    androidx.activity.compose.BackHandler(queueOpen || queueVisible) { queueOpen = false; navigationScope.launch { queuePopupHome.awaitHandoff(); queueSheet.collapse() } }
     androidx.activity.compose.BackHandler(session.active && (!expanded || queueOpen || queueVisible)) { session.clear() }
     GlassPanelTheme(if (playerVisible) playerLightMix else if (browseInk == androidx.compose.ui.graphics.Color.White) 1f else 0f) {
     if (settingsPresented) FolderSettings(library,
@@ -565,3 +562,7 @@ internal fun LibraryNotice(state: LibraryUiState) {
 private fun playerBasis(density: androidx.compose.ui.unit.Density, window: androidx.compose.ui.unit.IntSize, navigationInset: androidx.compose.ui.unit.Dp,
     chrome: androidx.compose.ui.unit.Dp) = with(density) { listOf(0f, 1f).map { p -> playerSurfaceFrame(window.width.toDp(), window.height.toDp(), navigationInset, chrome, p, DeviceCorners())
         .let { androidx.compose.ui.geometry.Rect(it.x.toPx(), it.y.toPx(), (it.x + it.width).toPx(), (it.y + it.height).toPx()) } } }.let { ExpansionBasis(it[0], it[1], density.density) }
+/** U10.02: the Queue drawer's lip top travels from its collapsed shelf to the status inset (operator, 2026-11-06). */
+private fun queueBasis(density: androidx.compose.ui.unit.Density, window: androidx.compose.ui.unit.IntSize, navigationInset: androidx.compose.ui.unit.Dp,
+    status: androidx.compose.ui.unit.Dp) = with(density) { val open = status.toPx(); val closed = window.height - (navigationInset + CollapsedQueueHeight).toPx()
+    ExpansionBasis(androidx.compose.ui.geometry.Rect(0f, closed, window.width.toFloat(), closed + window.height - open), androidx.compose.ui.geometry.Rect(0f, open, window.width.toFloat(), window.height.toFloat()), density.density) }

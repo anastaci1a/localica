@@ -28,7 +28,8 @@ internal fun Modifier.playerVerticalDrag(onDelta: (Float) -> Unit, onStart: susp
             // release settles by position from rest; movement past slop drags from the caught state.
             val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
             if (!allowed()) return@awaitEachGesture
-            val caught = catch()
+            // An enclosing surface that already caught this touch owns it.
+            val caught = !down.isConsumed && catch()
             if (caught) down.consume() else awaitPointerEvent(PointerEventPass.Main)
             val pass = if (caught) PointerEventPass.Initial else PointerEventPass.Main
             var total = Offset.Zero
