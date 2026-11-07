@@ -21,38 +21,6 @@
     {
       "rule": "RawMotionMap",
       "path": "app/src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt",
-      "fqn": "io.github.anastaci1a.localica.ui.pin",
-      "codeSha256": "def25ccb9b71f6b0305406c7ba23f5bcc410c424182f4e4649982e6d4163897e",
-      "removedBy": "U10.03",
-      "reason": "U10.03 removes: existing player phase consumer, now reading the Engine phase (U10.01 ownership move): val playerVisible by remember { derivedStateOf { phase.value() > 0f } }"
-    },
-    {
-      "rule": "RawMotionMap",
-      "path": "app/src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt",
-      "fqn": "io.github.anastaci1a.localica.ui.pin",
-      "codeSha256": "504571ed4db1839b7d3e088644b45c1bbab10d8d5f1d2a3a5016126b46c26557",
-      "removedBy": "U10.03",
-      "reason": "U10.03 removes: existing player phase consumer, now reading the Engine phase (U10.01 ownership move): val playerCoversBrowse by remember { derivedStateOf { phase.value() >= .5f } }"
-    },
-    {
-      "rule": "RawMotionMap",
-      "path": "app/src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt",
-      "fqn": "io.github.anastaci1a.localica.ui.pin",
-      "codeSha256": "0d079ecf9d65c4a4a4249ceaf8478b4ea9f6ca4de0425a91ee778347af9516b0",
-      "removedBy": "U10.03",
-      "reason": "U10.03 removes: existing player phase consumer, now reading the Engine phase (U10.01 ownership move): val playerFullyOpen by remember { derivedStateOf { phase.value() >= .99f } }"
-    },
-    {
-      "rule": "RawMotionMap",
-      "path": "app/src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt",
-      "fqn": "io.github.anastaci1a.localica.ui.playerAction",
-      "codeSha256": "953f7f8016628a48b13fcf1a695367a9ff9d15f233d227d0810f9a419f525450",
-      "removedBy": "U10.03",
-      "reason": "U10.03 removes: existing player phase consumer, now reading the Engine phase (U10.01 ownership move): .drawWithContent { if (!hasPlayer || phase.value() < 1f) drawContent() }"
-    },
-    {
-      "rule": "RawMotionMap",
-      "path": "app/src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt",
       "fqn": "io.github.anastaci1a.localica.ui.playerAction",
       "codeSha256": "1145c7d02d17b6f5cde13089ed10a1cb70153c48f4ecf558d5256189702de9e0",
       "removedBy": "U10.03",
