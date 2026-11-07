@@ -320,6 +320,24 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
         mutableQueue?.entries?.map { it.id } ?: mutablePlaylist?.entries?.map { it.id }
     }
     val mutablePositions = remember(physicalOrder) { physicalOrder.orEmpty().withIndex().associate { it.value to it.index + 1 } }
+    val pinchMotion = remember(route.key) { BrowsePinchMotion() }
+    /** A saved geometry change (View popup) takes the pinch transaction, not a reflow (#627).
+     * Its geometry commits like a pinch; the saved style (sort, information and so on) is
+     * written once the transaction ends, so a rollback, failure or disposal still saves it. */
+    fun changeViewInPlace(value: BrowseStyle, persist: () -> Unit = {}): Boolean {
+        if (route.search) return false
+        val view = displayedStyle.copy(presentation = value.presentation, itemsPerRow = value.itemsPerRow, listSize = value.listSize)
+        val finished = pinchMotion.viewChange?.invoke(view) { style = it } ?: return false
+        orderScroll.cancel()
+        scrollScope.launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) {
+            try { finished.await() } finally {
+                persist()
+                style = value
+            }
+        }
+        dismissSorting()
+        return true
+    }
     fun commitStyle(value: BrowseStyle) {
         orderScroll.cancel()
         style = value
@@ -350,9 +368,19 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
             mutableQueue?.entries?.map { SongRow(it.id, it.track) } ?: mutablePlaylist?.entries
         }
         BrowseSortDialog(route, style, preferences.overridden(route), ::dismissSorting, { value, override ->
-        preferences.write(route, value, override)
-        commitStyle(value)
-    }, { preferences.reset(route); commitStyle(preferences.read(route)) }, initialView,
+        if (!changeViewInPlace(value) { preferences.write(route, value, override) }) {
+            preferences.write(route, value, override)
+            commitStyle(value)
+        }
+    }, {
+        val shown = style
+        preferences.reset(route)
+        val value = preferences.read(route)
+        // The observer reloads synchronously; restore the shown view before any frame so the
+        // defaults' geometry still enters the pinch transaction from the presented source.
+        style = shown
+        if (!changeViewInPlace(value)) commitStyle(value)
+    }, initialView,
         onRandomize = when {
             mutableQueue != null && queues != null -> ({ done -> orderAction(false, { done(it != null) }) { queues.randomizeOrder(mutableQueue.id, it) } })
             mutablePlaylist != null && playlistController != null -> ({ done -> orderAction(false, { done(it != null) }) { playlistController.randomizeOrder(mutablePlaylist.id, it) } })
@@ -423,7 +451,6 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
         val child = measurable.measure(constraints.copy(minHeight = height, maxHeight = height))
         layout(child.width, height) { child.placeRelative(0, 0) }
     }
-    val pinchMotion = remember(route.key) { BrowsePinchMotion() }
     val pinchHeader = if (artDetail) remember(pinchMotion, gridState) { CollectionPinchHeader(pinchMotion, gridState) } else null
     val headerFrameObserver = LocalCollectionHeaderFrameObserver.current
     SideEffect { pinchMotion.header = pinchHeader; pinchHeader?.observer = headerFrameObserver }

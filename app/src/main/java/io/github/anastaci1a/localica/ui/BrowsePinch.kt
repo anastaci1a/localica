@@ -31,9 +31,11 @@ private data class PinchCaptureDrawing(val key: Any, val pass: Int, val layer: G
 private object PinchHeaderCaptureKey
 private object PinchHeaderStaticCaptureKey
 
-/** Input ownership outlives a release when its adjacent view is waiting for an earlier handoff. */
+/** Input ownership outlives a release when its adjacent view is waiting for an earlier handoff.
+ * A [view] request (the View popup, #627) names its destination and arrives already released. */
 internal class BrowsePinchGesture(val zoomIn: Boolean, val midpoint: Offset,
-    var source: BrowseStyle, var destination: BrowseStyle, val epoch: Long) {
+    var source: BrowseStyle, var destination: BrowseStyle, val epoch: Long,
+    val view: BrowseStyle? = null, val commit: ((BrowseStyle) -> Unit)? = null) {
     val finished = kotlinx.coroutines.CompletableDeferred<Unit>()
     var pending = false
     var released = false
@@ -161,6 +163,9 @@ internal class BrowsePinchMotion {
     var sourceColumns = 1
     val retained = mutableMapOf<Any, androidx.compose.ui.graphics.layer.GraphicsLayer>()
     var hoverLift: (Any) -> HoverGeometry? = { null }
+    /** Enters an explicit view change into this same transaction as an already released pinch.
+     * Returns its completion, or null when no transaction could start (#627). */
+    var viewChange: ((BrowseStyle, (BrowseStyle) -> Unit) -> kotlinx.coroutines.Deferred<Unit>?)? = null
     val currentHighlights = mutableMapOf<Any, androidx.compose.ui.graphics.Color>()
     val itemContent = mutableMapOf<Any, BrowsePinchContent>()
     // Global drawing bypasses the row layer, so entry/reorder alpha must invalidate it too.
@@ -439,7 +444,7 @@ internal fun Modifier.browsePinch(enabled: Boolean, motion: BrowsePinchMotion, s
                     // A cancelled retarget still owes the preceding genuine release its endpoint.
                     if (request.cancelled && !request.retargeted) onPreview(destination) else {
                         motion.committed = true
-                        onCommit(destination)
+                        (request.commit ?: onCommit)(destination)
                     }
                     motion.focusKey?.let {
                         val sourceTop = motion.bounds[it]?.top
@@ -462,7 +467,7 @@ internal fun Modifier.browsePinch(enabled: Boolean, motion: BrowsePinchMotion, s
     fun startStep(style: BrowseStyle, request: BrowsePinchGesture): Boolean {
         val zoomIn = request.zoomIn
         val midpoint = request.midpoint
-        val next = style.zoomStep(zoomIn, with(density) { width.toDp().value },
+        val next = request.view ?: style.zoomStep(zoomIn, with(density) { width.toDp().value },
             albumSongs = route.supportsTracklist())
         return if (next != style && !motion.disposed && motion.source == null && !motion.readbackPending) {
             val visible = gridState.layoutInfo.visibleItemsInfo.filter { it.key != "browser-notice" }
@@ -632,6 +637,25 @@ internal fun Modifier.browsePinch(enabled: Boolean, motion: BrowsePinchMotion, s
             return a.presentation == b.presentation && a.listSize == b.listSize
         val widthDp = with(density) { width.toDp().value }
         return galleryColumns(a.presentation, widthDp, a.itemsPerRow) == galleryColumns(b.presentation, widthDp, b.itemsPerRow)
+    }
+    val admitted by rememberUpdatedState(enabled)
+    SideEffect {
+        motion.viewChange = change@{ view, commit ->
+            val source = currentStyle
+            if (!admitted || motion.disposed || motion.takeover || motion.gesture != null || motion.source != null ||
+                motion.readbackPending || sameView(source, view)) return@change null
+            // No fingers: anchor the topmost fully visible item, as a pinch at its top edge would.
+            val visible = gridState.layoutInfo.visibleItemsInfo.filter { it.key != "browser-notice" }
+            val anchor = visible.firstOrNull { it.offset.y >= 0 } ?: visible.firstOrNull() ?: return@change null
+            val columns = galleryColumns(source.presentation, with(density) { width.toDp().value }, source.itemsPerRow)
+            val inset = (BrowseCellGeometry(columns).gridInset * density.density).roundToInt()
+            val midpoint = Offset(anchor.offset.x + inset + anchor.size.width / 2f, anchor.offset.y + 1f)
+            val request = BrowsePinchGesture(false, midpoint, source, view, motion.gestureEpoch, view, commit)
+            request.released = true; request.travel = 1f
+            motion.gesture = request
+            if (startStep(source, request)) request.finished
+            else { motion.gesture = null; request.finished.complete(Unit); null }
+        }
     }
     return pinchToChangeView(enabled && !motion.takeover && motion.gesture?.cancelled != true &&
         (motion.source == null && !motion.readbackPending ||
