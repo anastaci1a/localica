@@ -142,20 +142,24 @@ private fun OpticalBackdrop(modifier: Modifier, source: FrostedBackdrop, locatio
                 val footprint = if (home) homeExtent else size
                 // One rule for every element: the region the lens reads (its refraction
                 // preimage), from the same scene composition the lens samples.
-                val region = preimage?.invoke(footprint) ?: Rect(Offset.Zero, footprint)
-                if (region.isEmpty || !region.width.isFinite() || !region.height.isFinite()) return
                 val screenToHome = if (home) homeToScreen?.inverse() else null
+                val toLocal: (FrostedBackdrop) -> BackdropRegistration? = { scene ->
+                    if (!home) scene.location.registrationTo(location)
+                    else screenToHome?.let { toHome ->
+                        scene.location.registrationToScreen()?.followedBy(toHome)?.followedBy(registration)
+                    }
+                }
+                // Nothing outside the recorded scene exists to read: one uniform fill must not
+                // turn translucent because its preimage extends past a screen or window edge.
+                val region = (preimage?.invoke(footprint) ?: Rect(Offset.Zero, footprint))
+                    .intersect(sampledSceneBounds(backing, registration, toLocal) ?: return)
+                if (region.isEmpty || !region.width.isFinite() || !region.height.isFinite()) return
                 val extent = IntSize(ceil(region.width).toInt(), ceil(region.height).toInt())
                 val padded = materialReductionExtent(extent)
                 val result = with(reduction) { record(extent) {
                     clipRect(right = region.width, bottom = region.height) {
                         translate(-region.left, -region.top) {
-                            drawSampledScene(backing, registration) { scene ->
-                                if (!home) scene.location.registrationTo(location)
-                                else screenToHome?.let { toHome ->
-                                    scene.location.registrationToScreen()?.followedBy(toHome)?.followedBy(registration)
-                                }
-                            }
+                            drawSampledScene(backing, registration, toLocal)
                         }
                     }
                 } }
@@ -276,4 +280,23 @@ internal fun androidx.compose.ui.graphics.drawscope.DrawScope.drawSampledScene(b
             }
         }
     }
+}
+
+/** Bounds, in consumer coordinates, of everything [drawSampledScene] can draw. */
+internal fun sampledSceneBounds(backing: FrostedBackdrop, backingToLocal: BackdropRegistration,
+    parentToLocal: (FrostedBackdrop) -> BackdropRegistration?): Rect? {
+    var bounds: Rect? = null
+    val visited = mutableListOf<FrostedBackdrop>()
+    var item: FrostedBackdrop? = backing
+    while (item != null && item !in visited && visited.size < 8) {
+        visited += item
+        val registration = if (item === backing) backingToLocal else parentToLocal(item)
+        if (item.recorded && !item.layer.isReleased && registration != null) {
+            val corners = registration.corners(Rect(0f, 0f, item.size.width.toFloat(), item.size.height.toFloat()))
+            val box = Rect(corners.minOf { it.x }, corners.minOf { it.y }, corners.maxOf { it.x }, corners.maxOf { it.y })
+            bounds = bounds?.let { Rect(minOf(it.left, box.left), minOf(it.top, box.top), maxOf(it.right, box.right), maxOf(it.bottom, box.bottom)) } ?: box
+        }
+        item = item.parent
+    }
+    return bounds
 }

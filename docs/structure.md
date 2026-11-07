@@ -275,7 +275,9 @@ None averages exactly the region Normal's lens would read for each glass control
 
 The mean is coverage-weighted over the scene the lens samples: the element's own source, with its parent chain beyond that source's box. Floating controls therefore follow the text and artwork passing behind them. No element chooses a different source or region.
 
-What None samples inside a finished panel material (frosted panels, the Queue drawer, popup bodies) already carries that panel's tint and tone, so None does not apply them again there. Opaque panels divide by covered area; transparent pixels outside a source do not dilute their opacity. Odd edges retain their coverage through progressive reduction.
+What None samples inside a finished panel material (frosted panels, the Queue drawer, popup bodies) already carries that panel's tint and tone, so None does not apply them again there.
+
+The region stops where the recorded scene ends, so a preimage reaching past a screen or window edge never makes a fill translucent. Opaque panels also ignore transparent pixels inside their source. Odd edges retain their coverage through progressive reduction.
 
 None replaces only the optical fill. Floating, panel, lift and selection shadows use the same appearance settings and drawing path in both renderers, so a renderer switch never changes a shadow.
 

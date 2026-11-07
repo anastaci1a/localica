@@ -116,7 +116,7 @@ class NonePreimageTest {
     @Test fun floatingButtonFollowsTextBehindItOverItsPreimage() {
         val text = Rect(0f, 152f, sourceSize, 168f)
         floating({ Scene(Color.White, emptyList()) }, Offset(110f, 110f), Size(100f, 100f), null, "button over text",
-            listOf({ copy(rects = listOf(text to Color.Black)) }, { copy(rects = listOf(text.translate(0f, 24f) to Color.Black)) }))
+            listOf({ copy(rects = listOf(text to Color.Black)) }, { copy(rects = listOf(text.translate(0f, -52f) to Color.Black)) }))
     }
 
     @Test fun floatingButtonOverAlbumArtAveragesTheArtItRefracts() {
@@ -128,7 +128,7 @@ class NonePreimageTest {
     @Test fun pillOverAListAveragesTheRowsItRefracts() {
         val rows = (0 until 20).map { Rect(0f, it * 16f, sourceSize, it * 16f + 8f) to Color.Black }
         floating({ Scene(Color.White, rows) }, Offset(40f, 128f), Size(240f, 64f), 32f, "pill over list",
-            listOf({ copy(rects = rects.map { (r, c) -> r.translate(0f, 5f) to c }) }))
+            listOf({ copy(rects = rects.map { (r, c) -> Rect(r.left, r.top, r.right, r.top + 12f) to c }) }))
     }
 
     /** Controls inside a finished panel (the Queue drawer's structure: a list recorded over
@@ -161,7 +161,7 @@ class NonePreimageTest {
         compose.waitUntil(15_000) { list.recorded && (Build.VERSION.SDK_INT >= 33 || list.snapshot != null) }
         val region = preimage(Size(100f, 100f)).translate(button)
         val fills = mutableListOf<Color>()
-        for (y in listOf(-100f, 152f, 176f)) {
+        for (y in listOf(-100f, 152f, 100f)) {
             compose.runOnIdle { textY = y }
             compose.waitForIdle()
             val panel = compose.onNodeWithTag("panel").captureToImage().toPixelMap()[300, 20]

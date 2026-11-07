@@ -216,8 +216,8 @@ private fun FrostedBackdrop.accumulate(local: List<Offset>, excluded: List<Offse
 /** Coverage-weighted mean over [region] (consumer-local, normally the refraction preimage)
  * of the scene the lens samples: this recording inside its box, its nearest parent outside
  * it. API 26 integrates the shared 32×32 snapshots: boundary cells contribute their cell
- * mean by overlap area, and a second ancestor beyond the parent is not consulted. When the
- * parent has no snapshot yet, the mean covers the available part of the region only. */
+ * mean by overlap area, and a second ancestor beyond the parent is not consulted. Area
+ * outside every available recording (or a parent without a snapshot yet) does not count. */
 internal fun FrostedBackdrop.preimageMean(toLocal: BackdropRegistration, region: Rect,
     toParent: (FrostedBackdrop) -> BackdropRegistration?): Color? {
     if (region.isEmpty) return null
@@ -227,18 +227,25 @@ internal fun FrostedBackdrop.preimageMean(toLocal: BackdropRegistration, region:
     val local = toLocal.corners(region)
     if (!accumulate(local, null, 1f / determinant, sums)) return null
     val total = region.width * region.height
-    var available = total
     val box = Rect(0f, 0f, size.width.toFloat(), size.height.toFloat())
     val boxCorners = listOf(box.topLeft, box.topRight, box.bottomRight, box.bottomLeft)
     val insideArea = polygonArea(clipConvexPolygon(local, boxCorners)) / determinant
+    // Nothing outside the recorded scene exists to read; only recorded area counts.
+    var available = insideArea
     val parent = parent
     if (insideArea < total * .999f && parent != null && parent !== this) {
         val parentMapping = toParent(parent)
         val parentDeterminant = parentMapping?.let { kotlin.math.abs(it.xx * it.yy - it.xy * it.yx) } ?: 0f
         val boxInParent = parentMapping?.let { mapping ->
             toLocal.inverse()?.followedBy(mapping)?.let { m -> boxCorners.map(m::map) } }
-        if (parentMapping == null || !(parentDeterminant > 0f) || boxInParent == null ||
-            !parent.accumulate(parentMapping.corners(region), boxInParent, 1f / parentDeterminant, sums)) available = insideArea
+        if (parentMapping != null && parentDeterminant > 0f && boxInParent != null &&
+            parent.accumulate(parentMapping.corners(region), boxInParent, 1f / parentDeterminant, sums)) {
+            val parentBox = listOf(Offset.Zero, Offset(parent.size.width.toFloat(), 0f),
+                Offset(parent.size.width.toFloat(), parent.size.height.toFloat()), Offset(0f, parent.size.height.toFloat()))
+            val inParent = clipConvexPolygon(parentMapping.corners(region), parentBox)
+            val overlap = if (inParent.size >= 3) polygonArea(clipConvexPolygon(inParent, boxInParent)) else 0f
+            available = (insideArea + (polygonArea(inParent) - overlap) / parentDeterminant).coerceAtMost(total)
+        }
     }
     return if (sums.alpha <= 0f || available <= 0f) Color.Transparent
         else Color(sums.red / sums.alpha, sums.green / sums.alpha, sums.blue / sums.alpha, (sums.alpha / available).coerceIn(0f, 1f))
