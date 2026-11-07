@@ -418,7 +418,6 @@ io.github.anastaci1a.localica.BackdropProducerContinuityTest
 io.github.anastaci1a.localica.GlassScrollHoldTest
 io.github.anastaci1a.localica.PresentationMarkerTest
 io.github.anastaci1a.localica.FrameStatsTest
-io.github.anastaci1a.localica.FrameStatsSettingsTest
 
 io.github.anastaci1a.localica.SelectionMergeGeometryTest
 io.github.anastaci1a.localica.SelectionMergeSequenceTest
