@@ -8,6 +8,22 @@ import org.junit.Test
 
 class SessionSelectionTest {
     private val track = Track("song", "Song", fileName = "song.mp3", relativePath = "song.mp3")
+    @Test fun sameSongIsSelectedAcrossEveryViewAndTappingAnyOccurrenceDeselectsIt() {
+        val state = SessionSelection()
+        val album = MediaRef(MediaKind.Album, "album")
+        state.select(album, listOf(SongRow("album-row", track)))
+        for (kind in MediaKind.entries) {
+            val source = MediaRef(kind, "other-view")
+            val row = SongRow(kind.name + "-row", track.copy(title = "Refreshed metadata"))
+            val item = BrowserItem(MediaRef(MediaKind.Song, track.id), track.title, null, listOf(row), row)
+            assertEquals("Selected in " + kind, 1, state.selectedCount(item, source))
+            state.select(source, listOf(row, row))
+            assertEquals("Unique action input in " + kind, 1, state.entries.size)
+            state.toggle(source, row)
+            assertTrue("Deselected everywhere from " + kind, state.entries.isEmpty())
+            state.select(album, listOf(SongRow("album-row", track)))
+        }
+    }
     @Test fun heldPointerDefersOnlyNewPanelAndReleasePreservesMembership() {
         val state = SessionSelection()
         val token = state.beginPresentationHold()
