@@ -421,3 +421,8 @@ io.github.anastaci1a.localica.FrameStatsTest
 
 io.github.anastaci1a.localica.SelectionMergeGeometryTest
 io.github.anastaci1a.localica.SelectionMergeSequenceTest
+io.github.anastaci1a.localica.ImeClosingObservationTest
+io.github.anastaci1a.localica.MotionFollowupTest
+io.github.anastaci1a.localica.NavigationRandomCorpusDocumentsProviderTest
+io.github.anastaci1a.localica.NavigationRandomCorpusFilesTest
+io.github.anastaci1a.localica.NavigationRecoveryTest
