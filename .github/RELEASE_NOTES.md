@@ -10,6 +10,7 @@ This is an optimized build (not debuggable, minified with R8, with a baseline pr
 
 - None materials average their complete covered area, and nested Queue controls inherit one coherent parent material.
 - Held switch lenses keep their sampled backings aligned on older Android versions.
+- Lyrics opening, closing and reversal ease foreground and material colours together with the layout.
 - Queue edit failure tests verify that unavailable player replies remain bounded by the acquisition timeout.
 - Emulator readiness recreates resized launchers and requires native navigation clearance before testing.
 
@@ -20,6 +21,7 @@ This is an optimized build (not debuggable, minified with R8, with a baseline pr
 - https://github.com/anastaci1a/localica/issues/618 - Make failed queue-restore timeout proofs deterministic.
 - https://github.com/anastaci1a/localica/issues/623 - Admit native system bars after emulator resizes.
 - https://github.com/anastaci1a/localica/issues/628 - Preserve padded thumbnail coordinates in older Android switch lenses.
+- https://github.com/anastaci1a/localica/issues/564 - Derive lyrics theme easing from the complete layout phase.
 
 ## Known issues
 
