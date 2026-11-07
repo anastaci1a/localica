@@ -96,8 +96,9 @@ class PlayerExpansionMotionTest {
                         repeat(40) { index -> moveTo(Offset(start.x, start.y * (1f - (index + 1) / 40f)), delayMillis = 32) }
                     }
                     compose.mainClock.advanceTimeByFrame()
+                    val diag = "mini=$mini start=$start root=${compose.onRoot().fetchSemanticsNode().boundsInRoot} now=${compose.onNodeWithTag("player-surface").fetchSemanticsNode().boundsInRoot} density=${compose.density.density}"
                     compose.runOnIdle {
-                        assertEquals("Held endpoint is fully expanded in $artworkLayout [diag mini=$mini start=$start root=${compose.onRoot().fetchSemanticsNode().boundsInRoot} now=${compose.onNodeWithTag("player-surface").fetchSemanticsNode().boundsInRoot} density=${compose.density.density}]", 1f, progress.value, .0001f)
+                        assertEquals("Held endpoint is fully expanded in $artworkLayout [diag $diag]", 1f, progress.value, .0001f)
                         assertFalse("No release event has changed expanded", expanded)
                     }
                     compose.waitUntil(10000) {
