@@ -133,6 +133,7 @@ io.github.anastaci1a.localica.LibraryFilterTest
 io.github.anastaci1a.localica.LibraryPlaybackReadTest
 io.github.anastaci1a.localica.LibraryPreferencesTest
 io.github.anastaci1a.localica.LibraryScrollResetTest
+io.github.anastaci1a.localica.LiftGlowDragStartTest
 io.github.anastaci1a.localica.LiftShadowContinuityTest
 io.github.anastaci1a.localica.LiftShadowTest
 io.github.anastaci1a.localica.LiquidGlassTest
@@ -265,6 +266,7 @@ io.github.anastaci1a.localica.QueueSaveOriginTest
 io.github.anastaci1a.localica.QueueScrollOwnershipTest
 io.github.anastaci1a.localica.QueueSelectionPlacementTest
 io.github.anastaci1a.localica.QueueSelectorDragTest
+io.github.anastaci1a.localica.QueueShadowContinuityTest
 io.github.anastaci1a.localica.QueueSongTransitionTest
 io.github.anastaci1a.localica.QueueSqlCountBenchmarkTest
 io.github.anastaci1a.localica.QueuedSettingsTest
