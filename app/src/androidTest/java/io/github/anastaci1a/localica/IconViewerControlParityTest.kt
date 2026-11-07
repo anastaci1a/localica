@@ -2,6 +2,8 @@ package io.github.anastaci1a.localica
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -34,7 +36,8 @@ class IconViewerControlParityTest {
 
     private fun compare(packId: String?) {
         compose.setContent { LocalicaTheme { CompositionLocalProvider(LocalContentColor provides Color.Black) {
-            Column(Modifier.background(Color.White).verticalScroll(rememberScrollState())) {
+            // Edge-to-edge (API 35+) draws system-bar scrims over the window; keep both captures clear of them.
+            Column(Modifier.fillMaxSize().background(Color.White).safeDrawingPadding().verticalScroll(rememberScrollState())) {
                 IconPackViewer(packId)
                 // Controls (GlassActionButtonFace, player action slots) host the icon exactly like this.
                 AppIcon.entries.forEach { Icon(appIconPainter(it), null, Modifier.size(24.dp).testTag("control-${it.id}")) }
@@ -46,8 +49,14 @@ class IconViewerControlParityTest {
             assertEquals("${icon.id} size", viewer.width to viewer.height, control.width to control.height)
             val a = pixels(viewer); val b = pixels(control)
             assertTrue("${icon.id} has visible ink", a.any { it != android.graphics.Color.WHITE })
-            val differing = a.indices.count { a[it] != b[it] }
-            assertEquals("${icon.id} (pack=$packId): viewer and control pixels differ", 0, differing)
+            val differing = a.indices.filter { a[it] != b[it] }
+            val corners = listOf(0, viewer.width - 1, a.size - viewer.width, a.size - 1)
+            fun hex(values: IntArray) = corners.joinToString { Integer.toHexString(values[it]) }
+            assertEquals("${icon.id} (pack=$packId): viewer and control pixels differ " +
+                "(ink ${differing.count { a[it] != android.graphics.Color.WHITE || b[it] != android.graphics.Color.WHITE }}; " +
+                "viewer corners ${hex(a)}; control corners ${hex(b)}; bounds " +
+                "${compose.onNodeWithContentDescription("Pack: ${icon.id}").fetchSemanticsNode().boundsInRoot} vs " +
+                "${compose.onNodeWithTag("control-${icon.id}").fetchSemanticsNode().boundsInRoot})", 0, differing.size)
         }
     }
 
