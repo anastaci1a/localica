@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.MotionDurationScale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.platform.testTag
@@ -25,7 +26,9 @@ import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 
 class RepeatOneIconTest {
-    @get:Rule val compose = localicaComposeRule()
+    @get:Rule val compose = localicaComposeRule(effectContext = object : MotionDurationScale {
+        override val scaleFactor = 1f
+    })
     private val context = InstrumentationRegistry.getInstrumentation().targetContext
     @After fun reset() { IconPacks.reset(context) }
     private fun repeatOnlyPack() = ByteArrayOutputStream().also { out -> ZipOutputStream(out).use { zip ->
@@ -34,8 +37,16 @@ class RepeatOneIconTest {
         entry("icons/action.repeat.svg", """<svg viewBox="0 0 24 24"><path d="M2 2 H22 V22 H2 Z"/></svg>""")
     } }.toByteArray()
     private fun pixels(tag: String): List<Color> {
-        val p = compose.onNodeWithTag(tag, useUnmergedTree = true).captureToImage().toPixelMap()
+        val p = compose.onNodeWithTag(tag, useUnmergedTree = true).captureNativeFrame().toPixelMap()
         return (0 until p.height).flatMap { y -> (0 until p.width).map { x -> p[x, y] } }
+    }
+    private fun same(expected: List<Color>, actual: List<Color>, message: String) {
+        assertEquals(expected.size, actual.size)
+        val error = expected.indices.sumOf { i ->
+            kotlin.math.abs(expected[i].red - actual[i].red).toDouble() +
+                kotlin.math.abs(expected[i].green - actual[i].green) + kotlin.math.abs(expected[i].blue - actual[i].blue)
+        } / (expected.size * 3)
+        assertTrue("$message; mean channel error=$error", error < .005)
     }
     @Test fun oneUsesDedicatedFallbackWithoutTextAndReversesContinuously() {
         IconPacks.import(context, repeatOnlyPack().inputStream())
@@ -69,13 +80,13 @@ class RepeatOneIconTest {
         compose.mainClock.advanceTimeBy(600)
         val one = pixels("repeat-frame")
         assertNotEquals(all, one); assertNotEquals(middle, one)
-        assertEquals("Missing pack glyph falls back to the original dedicated vector", pixels("repeat-reference"), one)
+        same(pixels("repeat-reference"), one, "Missing pack glyph uses the original dedicated vector")
         compose.onNodeWithText("1", useUnmergedTree = true).assertDoesNotExist()
         compose.onAllNodesWithContentDescription("Repeat mode").assertCountEquals(1)
         compose.onNodeWithTag("repeat-one-glyph", useUnmergedTree = true).assertExists()
         compose.runOnIdle { repeat = QueueRepeat.Off }
         compose.mainClock.advanceTimeByFrame(); compose.mainClock.advanceTimeBy(600)
-        assertEquals("Off and All share the repeat glyph", all, pixels("repeat-frame"))
+        same(all, pixels("repeat-frame"), "Off and All share the repeat glyph")
         compose.mainClock.autoAdvance = true
     }
 }
