@@ -62,9 +62,9 @@ class ShadowFieldOracleSensitivityTest {
         val white = shadowCapture { drawRect(Color.White) }; val reference = field(white = true)
         // Symmetric pixels under the body share one shadow value; move them by ±8/255 so the region mean is unchanged.
         val mutated = edit(reference) { b ->
-            val a = b.getPixel(80, 98); val c = b.getPixel(120, 98); assertEquals(a, c)
-            val gray = android.graphics.Color.red(a); assertTrue("probe pixels need shadow", gray in 20..235)
-            b.setPixel(80, 98, android.graphics.Color.rgb(gray + 8, gray + 8, gray + 8)); b.setPixel(120, 98, android.graphics.Color.rgb(gray - 8, gray - 8, gray - 8))
+            val y = (89..107).first { android.graphics.Color.red(b.getPixel(80, it)) in 20..235 }
+            val a = b.getPixel(80, y); val c = b.getPixel(120, y); assertEquals(a, c); val gray = android.graphics.Color.red(a)
+            b.setPixel(80, y, android.graphics.Color.rgb(gray + 8, gray + 8, gray + 8)); b.setPixel(120, y, android.graphics.Color.rgb(gray - 8, gray - 8, gray - 8))
         }
         assertEquals(meanLuminance(reference), meanLuminance(mutated), 1e-6f)
         rejects(mutated, reference, white)
