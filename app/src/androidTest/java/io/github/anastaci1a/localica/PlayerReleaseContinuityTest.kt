@@ -21,41 +21,7 @@ import kotlin.math.*
  * frames are compared with an independent implementation of the #608 equations, not with the Engine's own plan. */
 @OptIn(ExperimentalTestApi::class)
 class PlayerReleaseContinuityTest {
-    private class Join(val nanos: Long, val before: Kinematic, val after: Kinematic, val target: Float, val policy: String, val release: Float?)
-    private class Recorder : MotionEvents {
-        val joins = mutableListOf<Join>()
-        private fun player(m: MotionFloat) = m.key == ("player" to "phase")
-        override fun created(motion: MotionFloat) {}
-        override fun joined(motion: MotionFloat, join: MotionJoin) { if (player(motion)) joins += Join(join.stamp.nanos, join.before, join.after, motion.target, join.policy, join.releaseVelocity) }
-        override fun retired(motion: MotionFloat, stamp: FrameStamp) {}
-    }
-    /** Independent #608 oracle: fitted core, position/velocity duration law, C1 startup and terminal Hermite bridges. */
-    private object Law {
-        const val T = .426086832
-        private fun bezier(u: Double): Pair<Double, Double> {
-            val (x1, y1, x2, y2) = listOf(.242192, .999967, .511935, .997652)
-            fun c(s: Double, a: Double, b: Double) = 3 * (1 - s) * (1 - s) * s * a + 3 * (1 - s) * s * s * b + s * s * s
-            fun d(s: Double, a: Double, b: Double) = 3 * (1 - s) * (1 - s) * a + 6 * (1 - s) * s * (b - a) + 3 * s * s * (1 - b)
-            var s = u; repeat(30) { s = (s - (c(s, x1, x2) - u) / max(d(s, x1, x2), 1e-9)).coerceIn(0.0, 1.0) }
-            return c(s, y1, y2) to d(s, y1, y2) / max(d(s, x1, x2), 1e-9)
-        }
-        private fun hermite(t: Double, tau: Double, a: Double, va: Double, b: Double, vb: Double): Double {
-            val u = t / tau; return (2 * u * u * u - 3 * u * u + 1) * a + (u * u * u - 2 * u * u + u) * tau * va + (-2 * u * u * u + 3 * u * u) * b + (u * u * u - u * u) * tau * vb
-        }
-        fun duration(p: Double, v: Double, q: Double) = max(T * (.500401615 + .499598385 * abs(q - p)) / max(1.0, abs(v) / 1.41952128).pow(.73607278), 2 / 120.0)
-        fun at(p: Double, v: Double, q: Double, t: Double): Double {
-            val d = duration(p, v, q); if (t >= d) return q
-            fun core(s: Double) = bezier(s / d).let { (e, slope) -> p + (q - p) * e to (q - p) * slope / d }
-            val tin = min(1 / 120.0, d / 4); val tout = min(d / 8, .064)
-            return when {
-                t < tin -> core(tin).let { (b, vb) -> hermite(t, tin, p, v, b, vb) }
-                t > d - tout -> core(d - tout).let { (a, va) -> hermite(t - (d - tout), tout, a, va, q, 0.0) }
-                else -> core(t).first
-            }
-        }
-    }
-    private class Frame(val nanos: Long, val p: Double)
-    private class Scene { var clock: UiClock? = null; val recorder = Recorder() }
+    private class Scene { var clock: UiClock? = null; val recorder = JoinRecorder("player") }
 
     private fun ComposeUiTest.start(scene: Scene) {
         InstrumentationRegistry.getInstrumentation().targetContext.getSharedPreferences("interface", 0).edit().clear().commit()
@@ -73,47 +39,29 @@ class PlayerReleaseContinuityTest {
         waitForIdle(); mainClock.autoAdvance = false
     }
     private fun ComposeUiTest.top() = onNodeWithTag("player-surface").fetchSemanticsNode().boundsInRoot.top.toDouble()
-    private fun ComposeUiTest.frames(count: Int, travel: Double, into: MutableList<Frame>) =
-        repeat(count) { mainClock.advanceTimeByFrame(); into += Frame(mainClock.currentTime * 1_000_000, 1 - top() / travel) }
+    private fun ComposeUiTest.frames(count: Int, travel: Double, into: MutableList<PhaseFrame>) =
+        repeat(count) { mainClock.advanceTimeByFrame(); into += PhaseFrame(mainClock.currentTime * 1_000_000, 1 - top() / travel) }
     private fun ComposeUiTest.drag(from: Offset, step: Float, count: Int, hold: Int = 0) {
         onRoot().performTouchInput { down(from) }
         repeat(count) { onRoot().performTouchInput { moveBy(Offset(0f, -step), delayMillis = 16) } }
         repeat(hold) { onRoot().performTouchInput { moveBy(Offset.Zero, delayMillis = 16) } }
         onRoot().performTouchInput { up() }
     }
-    /** Every presented frame after an automatic join matches the oracle from that join; joins keep value and velocity. */
-    private fun verify(label: String, frames: List<Frame>, joins: List<Join>, fallback: Join) {
-        val automatic = joins.filter { it.policy != "DrivenInput" && it.policy != "Initial" }.ifEmpty { listOf(fallback) }
-        for (j in joins.filter { it.policy == "Continuous" || it.policy == "DrivenRelease" }) {
-            assertEquals("$label join value", j.before.value.toDouble(), j.after.value.toDouble(), 1e-4)
-            if (j.policy == "Continuous") assertEquals("$label join velocity", j.before.velocity.toDouble(), j.after.velocity.toDouble(), 1e-3)
-            else assertEquals("$label release hand-off is the accepted tracker velocity", j.release!!.toDouble(), j.after.velocity.toDouble(), 1e-4)
-        }
-        var worst = 0.0
-        for (f in frames) {
-            val j = automatic.lastOrNull { it.nanos <= f.nanos } ?: continue
-            if (joins.any { it.policy == "DrivenInput" && it.nanos > j.nanos && it.nanos <= f.nanos }) continue
-            val expected = Law.at(j.after.value.toDouble(), j.after.velocity.toDouble(), j.target.toDouble(), (f.nanos - j.nanos) / 1e9)
-            worst = max(worst, abs(expected - f.p))
-        }
-        assertTrue("$label: presented phase deviates from the #608 law by $worst", worst <= .008)
-    }
-    private fun join(nanos: Long, p: Double, v: Double, q: Boolean) = Join(nanos, Kinematic(p.toFloat(), v.toFloat()), Kinematic(p.toFloat(), v.toFloat()), if (q) 1f else 0f, "Fallback", null)
 
     @Test fun tapBackAndReverseFollowTheLawWithC1Joins() = localicaRunComposeUiTest {
         val scene = Scene(); start(scene)
-        val travel = top(); val frames = mutableListOf<Frame>()
+        val travel = top(); val frames = mutableListOf<PhaseFrame>()
         val t0 = mainClock.currentTime * 1_000_000
         onNodeWithTag("player-surface").performClick(); frames(6, travel, frames)
         InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(KeyEvent.KEYCODE_BACK); frames(4, travel, frames)
         onNodeWithTag("player-surface").performClick(); frames(40, travel, frames)
-        verify("tap/Back/tap", frames, scene.recorder.joins, join(t0, 0.0, 0.0, true))
+        verifyReleaseLaw("tap/Back/tap", frames, scene.recorder.joins, fallbackJoin(t0, 0.0, 0.0, true))
         assertEquals("tap/Back/tap settles expanded", 1.0, frames.last().p, 1e-3)
     }
 
     private fun releaseCase(label: String, step: Float, count: Int, expanded: Boolean, hold: Int = 0, expectOpen: Boolean) = localicaRunComposeUiTest {
         val scene = Scene(); start(scene)
-        val travel = top(); val frames = mutableListOf<Frame>()
+        val travel = top(); val frames = mutableListOf<PhaseFrame>()
         if (expanded) { onNodeWithTag("player-surface").performClick(); frames(60, travel, frames); frames.clear() }
         val from = if (expanded) Offset(onRoot().fetchSemanticsNode().boundsInRoot.width / 2, travel.toFloat() * .3f)
             else onNodeWithTag("player-artwork", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot.center
@@ -121,7 +69,7 @@ class PlayerReleaseContinuityTest {
         val release = mainClock.currentTime * 1_000_000; val p0 = 1 - top() / travel
         frames(45, travel, frames)
         val v = if (hold > 0) 0.0 else step / .016 / travel
-        verify(label, frames, scene.recorder.joins, join(release, p0, v, expectOpen))
+        verifyReleaseLaw(label, frames, scene.recorder.joins, fallbackJoin(release, p0, v, expectOpen))
         assertEquals("$label settles at the release decision", if (expectOpen) 1.0 else 0.0, frames.last().p, 1e-3)
     }
     @Test fun slowOpeningReleaseBelowDeadBandUsesHalfway() = releaseCase("slow", 3f, 30, false, expectOpen = false)
@@ -132,18 +80,18 @@ class PlayerReleaseContinuityTest {
     @Test fun stationaryJustBelowHalfCloses() = localicaRunComposeUiTest { halfway(this, .47, false) }
     private fun halfway(test: ComposeUiTest, fraction: Double, open: Boolean) = with(test) {
         val scene = Scene(); start(scene)
-        val travel = top(); val frames = mutableListOf<Frame>()
+        val travel = top(); val frames = mutableListOf<PhaseFrame>()
         val from = onNodeWithTag("player-artwork", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot.center
         drag(from, (travel * fraction / 24).toFloat(), 24, hold = 8)
         val release = mainClock.currentTime * 1_000_000; val p0 = 1 - top() / travel
         frames(45, travel, frames)
-        verify("halfway $fraction", frames, scene.recorder.joins, join(release, p0, 0.0, open))
+        verifyReleaseLaw("halfway $fraction", frames, scene.recorder.joins, fallbackJoin(release, p0, 0.0, open))
         assertEquals("near-50% stationary release at $p0", if (open) 1.0 else 0.0, frames.last().p, 1e-3)
     }
 
     @Test fun catchingAMovingPlayerAndReversingKeepsTheSurfaceUnderTheFinger() = localicaRunComposeUiTest {
         val scene = Scene(); start(scene)
-        val travel = top(); val frames = mutableListOf<Frame>()
+        val travel = top(); val frames = mutableListOf<PhaseFrame>()
         onNodeWithTag("player-surface").performClick(); frames(8, travel, frames)
         val caught = top()
         onRoot().performTouchInput { down(Offset(width / 2f, caught.toFloat() + 40f)) }
@@ -153,20 +101,20 @@ class PlayerReleaseContinuityTest {
         repeat(10) { onRoot().performTouchInput { moveBy(Offset(0f, 24f), delayMillis = 16) } }
         onRoot().performTouchInput { up() }
         frames(45, travel, frames)
-        verify("catch/reverse", frames, scene.recorder.joins, join(0, 0.0, 0.0, true))
+        verifyReleaseLaw("catch/reverse", frames, scene.recorder.joins, fallbackJoin(0, 0.0, 0.0, true))
         assertEquals("reversed release follows its downward velocity", 0.0, frames.last().p, 1e-3)
     }
 
     @Test fun lyricsToggleDuringCollapseKeepsOnePlayerTimeline() = localicaRunComposeUiTest {
         val scene = Scene(); start(scene)
-        val travel = top(); val frames = mutableListOf<Frame>()
+        val travel = top(); val frames = mutableListOf<PhaseFrame>()
         onNodeWithTag("player-surface").performClick(); frames(60, travel, frames)
         onNodeWithContentDescription("Show lyrics", useUnmergedTree = true).performSemanticsAction(SemanticsActions.OnClick); frames(40, travel, frames)
         frames.clear(); val t0 = mainClock.currentTime * 1_000_000
         onNodeWithContentDescription("Collapse player", useUnmergedTree = true).performSemanticsAction(SemanticsActions.OnClick); frames(5, travel, frames)
         onAllNodesWithContentDescription("Hide lyrics", useUnmergedTree = true).onFirst().performSemanticsAction(SemanticsActions.OnClick)
         frames(40, travel, frames)
-        verify("lyrics during collapse", frames, scene.recorder.joins, join(t0, 1.0, 0.0, false))
+        verifyReleaseLaw("lyrics during collapse", frames, scene.recorder.joins, fallbackJoin(t0, 1.0, 0.0, false))
         assertEquals("collapse completes through the lyrics toggle", 0.0, frames.last().p, 1e-3)
     }
 }
