@@ -26,12 +26,12 @@ class SplitPillShapeTest {
     @Test fun regrabAtTheNeckKeepsOneShapeIdentityAndTheLegacyFrames() = EngineHarness(spec=spec).use { h ->
         for(reveal in listOf(1f,0f)) {
             var p=0f; val shape=PersistentShape(h.clock,ShapeTarget(emptyList()),"split $reveal"); val pill=SplitPill(shape,Modifier) { p }
-            fun follow(q: Float) { p=q; h.now+=8_000_000; shape.follow(ShapeTarget(splitPillBodies(size(q,reveal),q),JoinPolicy.Union),q==0f || q==1f) }
+            fun follow(q: Float) { p=q; h.now+=8_000_000; shape.follow(ShapeTarget(splitPillBodies(size(q,reveal),q),JoinPolicy.Union)) }
             follow(0f); val ids=shape.slotIds(); assertEquals("Both bodies exist from rest",2,ids.size)
             // Out, a regrab at the neck, back out and home: D17's phases plus the reversal; the fast tap starts below one height per half.
             for(q in listOf(.1f,.25f,.4f,.5f,.75f,1f,.6f,.5f,.45f,.3f,.1f,.0001f,0f,.4f,1f)) {
                 follow(q); assertEquals("One identity through split and rejoin (p=$q)",ids,shape.slotIds())
-                assertEquals("Only a moving phase runs frames (p=$q)",q==0f || q==1f,h.clock.activeCount==0)
+                assertEquals("The followed phase owns all motion: the shape keeps no frame loop awake (p=$q)",0,h.clock.activeCount)
                 for(scale in listOf(1f,.5f)) {
                     val s=size(q,reveal)*scale; val actual=splitPillOptics(pill.bodies(s),s,q); val expected=legacyOptics(s,q)
                     assertEquals(expected.bodies.size,actual.bodies.size); expected.bodies.zip(actual.bodies).forEach { (a,b) -> assertArrayEquals("p=$q reveal=$reveal scale=$scale",corners(a),corners(b),1e-3f) }
