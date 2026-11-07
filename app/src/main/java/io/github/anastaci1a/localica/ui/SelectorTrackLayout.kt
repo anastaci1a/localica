@@ -29,11 +29,15 @@ import kotlin.math.floor
 }
 
 /** One contact owner for choices and navigation. Preview is non-consuming; movement
- * uses shared parent arbitration, and a stationary hold is an additional pickup path. */
+ * uses shared parent arbitration, and a stationary hold is an additional pickup path.
+ * An [immediate] origin with no movable ancestor is picked up on finger-down instead:
+ * travel inside slop stays withheld, and a short release within slop reports [onTap]. */
 @Composable internal fun Modifier.selectorTrackDrag(horizontal: Boolean, eligible: (Offset) -> Boolean,
     contact: (Boolean) -> Unit, onPreview: (Offset) -> Unit, onStart: () -> Unit,
     onDelta: (Float) -> Unit, option: () -> Int, onEnd: (owned: Boolean, cancelled: Boolean) -> Unit,
-    gestureKey: Any? = Unit): Modifier {
+    gestureKey: Any? = Unit, immediate: (Offset) -> Boolean = { false }, onTap: () -> Unit = {}): Modifier {
+    val pickup by rememberUpdatedState(immediate)
+    val tap by rememberUpdatedState(onTap)
     val accepts by rememberUpdatedState(eligible)
     val touch by rememberUpdatedState(contact)
     val preview by rememberUpdatedState(onPreview)
@@ -54,6 +58,10 @@ import kotlin.math.floor
             var pointer = down.id
             var elapsed = 0L
             var holdEligible = true
+            // No scroll can claim this contact, so pickup needs no slop or hold threshold.
+            var withheld = pickup(down.position) && parent.directions() == ControlScrollDirection.None
+            var tapping = withheld
+            var tapped = false
             val feedback = ControlDragHaptics(haptics)
             val intent = ControlGestureIntent(viewConfiguration.touchSlop, parent.directions())
             fun engage(over: Float) {
@@ -62,6 +70,7 @@ import kotlin.math.floor
                 feedback.engage(currentOption())
             }
             try {
+                if (withheld) { intent.hold(); engage(0f) }
                 while (true) {
                     val event = if (!started && holdEligible) withTimeoutOrNull(
                         (ControlHoldLockMillis - elapsed).coerceAtLeast(1L)) {
@@ -85,13 +94,26 @@ import kotlin.math.floor
                         if (started && replacement != null) {
                             // Preserve the same owned gesture and baseline across fingers.
                             point.consume(); pointer = replacement.id
+                            withheld = false; tapping = false
                             continue
                         }
                         if (started) point.consume()
                         released = true
+                        tapped = tapping && point.uptimeMillis - down.uptimeMillis < ControlHoldLockMillis
                         break
                     }
-                    if (started) {
+                    if (withheld) {
+                        // Match slop pickup: the lens follows only beyond slop, without a jump.
+                        val movement = point.position - down.position
+                        if (movement.getDistance() > viewConfiguration.touchSlop) tapping = false
+                        val travel = if (horizontal) movement.x else movement.y
+                        if (kotlin.math.abs(travel) > viewConfiguration.touchSlop) {
+                            withheld = false
+                            delta(kotlin.math.sign(travel) * (kotlin.math.abs(travel) - viewConfiguration.touchSlop))
+                            feedback.move(currentOption())
+                        }
+                        point.consume()
+                    } else if (started) {
                         val movement = point.positionChange()
                         delta(if (horizontal) movement.x else movement.y)
                         feedback.move(currentOption()); point.consume()
@@ -122,9 +144,11 @@ import kotlin.math.floor
                     }
                 }
             } finally {
-                feedback.finish(released)
+                // A tap already pulsed on finger-down; only a held or moved pickup drops.
+                feedback.finish(released && !tapped)
                 end(started, !released)
                 touch(false)
+                if (tapped) tap()
             }
         }
     }
