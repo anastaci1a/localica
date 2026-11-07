@@ -76,6 +76,11 @@ class NonePreimageTest {
         try { return Color(screen.getPixel((centre.x + origin[0]).toInt(), (centre.y + origin[1]).toInt())) } finally { screen.recycle() }
     }
 
+    private fun assertRefreshed(previous: List<Color>, actual: Color) {
+        val last = previous.lastOrNull() ?: return
+        assertTrue("Fill has not refreshed from $last", kotlin.math.abs(last.red - actual.red) + kotlin.math.abs(last.blue - actual.blue) > .04f)
+    }
+
     private fun centre(tag: String): Color = compose.onNodeWithTag(tag).captureToImage().toPixelMap().let { it[it.width / 2, it.height / 2] }
 
     private fun assertMean(label: String, expected: Color, actual: Color, region: Rect) {
@@ -106,7 +111,8 @@ class NonePreimageTest {
         for (variant in listOf<Scene.() -> Scene>({ this }) + variants) {
             compose.runOnIdle { current = scene().variant() }
             val expected = current.mean(region)
-            val actual = eventually { centre("glass").also { assertMean(label, expected, it, region) } }
+            // API 26 publishes snapshots asynchronously: wait for the new scene, not just the area bound.
+            val actual = eventually { centre("glass").also { assertMean(label, expected, it, region); assertRefreshed(fills, it) } }
             fills += actual
         }
         if (variants.isNotEmpty()) assertTrue("$label: moving content behind the control must change its fill: $fills",
@@ -168,7 +174,7 @@ class NonePreimageTest {
             val scene = Scene(panel, listOf(Rect(0f, y, sourceSize, y + 16f) to Color.Black))
             val expected = scene.mean(region)
             // Inside a finished panel the material already carries tint and tone: no second mapping.
-            val actual = eventually { centre("glass").also { assertMean("control over list at $y", expected, it, region) } }
+            val actual = eventually { centre("glass").also { assertMean("control over list at $y", expected, it, region); assertRefreshed(fills, it) } }
             fills += actual
             // A control over the bare material shows exactly that material.
             assertMean("control over material", panel, centre("material-control"), preimage(Size(48f, 48f)).translate(Offset(20f, 250f)))
