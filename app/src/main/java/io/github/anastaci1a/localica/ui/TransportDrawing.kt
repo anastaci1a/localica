@@ -28,9 +28,10 @@ internal fun skipRetargetEasing(velocity: Float, distance: Float, duration: Int)
 internal data class SkipElement(val x: Float, val alpha: Float)
 internal fun skipElements(travel: Float): List<SkipElement> {
     val phase = travel - floor(travel)
-    return listOf(SkipElement(.08f + (phase - 1f) * .4f, phase),
+    // Literal rest positions: .08f + .4f rounds to .48000002f, which shifts the settled icon by an ulp.
+    return listOf(SkipElement(-.32f + phase * .4f, phase),
         SkipElement(.08f + phase * .4f, 1f),
-        SkipElement(.08f + (phase + 1f) * .4f, 1f - phase))
+        SkipElement(.48f + phase * .4f, 1f - phase))
 }
 
 /** The rest wedges span [SkipRestInset, 1 - SkipRestInset] of the canvas. */
