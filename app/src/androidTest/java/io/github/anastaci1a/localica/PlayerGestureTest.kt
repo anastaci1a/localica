@@ -117,7 +117,8 @@ class PlayerGestureTest {
         val full = art.fetchSemanticsNode().boundsInRoot
         assertTrue(full.top < middle.top && full.width > middle.width)
         compose.onNodeWithTag("player-surface").performTouchInput {
-            swipe(Offset(8f, centerY), Offset(8f, centerY - 240f), durationMillis = 1200)
+            // #608: a slow upward drag opens Queue by passing halfway, not by a fixed 240 px distance rule.
+            swipe(Offset(8f, height * .85f), Offset(8f, height * .15f), durationMillis = 1200)
         }
         compose.onNodeWithContentDescription("Queue actions").assertIsDisplayed()
         // List scrolling retains its contact through the top and direction reversals.

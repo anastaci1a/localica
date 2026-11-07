@@ -28,9 +28,12 @@ internal object Law {
     private fun hermite(t: Double, tau: Double, a: Double, va: Double, b: Double, vb: Double): Double {
         val u = t / tau; return (2 * u * u * u - 3 * u * u + 1) * a + (u * u * u - 2 * u * u + u) * tau * va + (-2 * u * u * u + 3 * u * u) * b + (u * u * u - u * u) * tau * vb
     }
-    fun duration(p: Double, v: Double, q: Double) = max(T * (.500401615 + .499598385 * abs(q - p)) / max(1.0, abs(v) / 1.41952128).pow(.73607278), 2 / 120.0)
-    fun at(p: Double, v: Double, q: Double, t: Double): Double {
-        val d = duration(p, v, q); if (t >= d) return q
+    /** #608 object time: the reference duration scaled by (edge travel / reference travel)^.5, floored at 140 ms. */
+    fun objectTime(travel: Double, reference: Double) = max(.14, T * (travel / reference).pow(.5))
+    fun duration(p: Double, v: Double, q: Double, objectTime: Double = T) =
+        max(objectTime * (.500401615 + .499598385 * abs(q - p)) / max(1.0, abs(v * objectTime / T) / 1.41952128).pow(.73607278), 2 / 120.0)
+    fun at(p: Double, v: Double, q: Double, t: Double, objectTime: Double = T): Double {
+        val d = duration(p, v, q, objectTime); if (t >= d) return q
         fun core(s: Double) = bezier(s / d).let { (e, slope) -> p + (q - p) * e to (q - p) * slope / d }
         val tin = min(1 / 120.0, d / 4); val tout = min(d / 8, .064)
         return when {
@@ -41,7 +44,7 @@ internal object Law {
     }
 }
 /** Every presented frame after an automatic join matches the oracle from that join; joins keep value and velocity. */
-internal fun verifyReleaseLaw(label: String, frames: List<PhaseFrame>, joins: List<Join>, fallback: Join) {
+internal fun verifyReleaseLaw(label: String, frames: List<PhaseFrame>, joins: List<Join>, fallback: Join, objectTime: Double = Law.T) {
     val automatic = joins.filter { it.policy != "DrivenInput" && it.policy != "Initial" }.ifEmpty { listOf(fallback) }
     for (j in joins.filter { it.policy == "Continuous" || it.policy == "DrivenRelease" }) {
         assertEquals("$label join value", j.before.value.toDouble(), j.after.value.toDouble(), 1e-4)
@@ -53,10 +56,10 @@ internal fun verifyReleaseLaw(label: String, frames: List<PhaseFrame>, joins: Li
         val j = automatic.lastOrNull { it.nanos <= f.nanos } ?: continue
         if (joins.any { it.policy == "DrivenInput" && it.nanos > j.nanos && it.nanos <= f.nanos }) continue
         val t = (f.nanos - j.nanos) / 1e9
-        val expected = Law.at(j.after.value.toDouble(), j.after.velocity.toDouble(), j.target.toDouble(), t)
+        val expected = Law.at(j.after.value.toDouble(), j.after.velocity.toDouble(), j.target.toDouble(), t, objectTime)
         if (abs(expected - f.p) > worst) { worst = abs(expected - f.p)
             detail = "at t=%.4fs from %s join (p=%.4f v=%.4f q=%.1f, T=%.4f): expected %.4f, presented %.4f".format(t, j.policy,
-                j.after.value, j.after.velocity, j.target, Law.duration(j.after.value.toDouble(), j.after.velocity.toDouble(), j.target.toDouble()), expected, f.p) }
+                j.after.value, j.after.velocity, j.target, Law.duration(j.after.value.toDouble(), j.after.velocity.toDouble(), j.target.toDouble(), objectTime), expected, f.p) }
     }
     val trace = frames.joinToString(" ") { "%d:%.3f".format((it.nanos - frames.first().nanos) / 1_000_000, it.p) }
     val summary = joins.joinToString(" ") { "%s@%d(%.3f,%.3f->%.1f)".format(it.policy, (it.nanos - frames.first().nanos) / 1_000_000, it.after.value, it.after.velocity, it.target) }

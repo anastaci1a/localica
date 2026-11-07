@@ -18,7 +18,9 @@ import org.junit.Test
  * lip drag, list pull and the expanded player's upward drag, with C1 joins, and a contact catches the moving drawer. */
 @OptIn(ExperimentalTestApi::class)
 class QueueOwnerContinuityTest {
-    private class Scene { var clock: UiClock? = null; val recorder = JoinRecorder("queue"); var closed = 0.0; var travel = 1.0 }
+    private class Scene { var clock: UiClock? = null; val recorder = JoinRecorder("queue"); var closed = 0.0; var travel = 1.0
+        /** The drawer's own #608 object time: its edge travel against the full-player reference travel. */
+        fun objectTime() = Law.objectTime(travel, clock!!.context!!.fullPlayerReferenceTravelPx.toDouble()) }
 
     private fun ComposeUiTest.start(scene: Scene) {
         InstrumentationRegistry.getInstrumentation().targetContext.getSharedPreferences("interface", 0).edit().clear().commit()
@@ -64,7 +66,7 @@ class QueueOwnerContinuityTest {
         drag(from, step, count)
         val release = now(); val p0 = phase(scene)
         frames(scene, 45, frames)
-        verifyReleaseLaw(label, frames, scene.recorder.joins, fallbackJoin(release, p0, step / .016 / scene.travel, expectOpen))
+        verifyReleaseLaw(label, frames, scene.recorder.joins, fallbackJoin(release, p0, step / .016 / scene.travel, expectOpen), scene.objectTime())
         assertEquals("$label settles at the release decision", if (expectOpen) 1.0 else 0.0, frames.last().p, 1e-3)
     }
     private fun ComposeUiTest.center() = onRoot().fetchSemanticsNode().boundsInRoot.width / 2
@@ -74,7 +76,7 @@ class QueueOwnerContinuityTest {
         val t0 = now()
         click("Open queue"); frames(scene, 6, frames)
         back(); frames(scene, 45, frames)
-        verifyReleaseLaw("tap/Back", frames, scene.recorder.joins, fallbackJoin(t0, 0.0, 0.0, true))
+        verifyReleaseLaw("tap/Back", frames, scene.recorder.joins, fallbackJoin(t0, 0.0, 0.0, true), scene.objectTime())
         assertEquals("Back closes the drawer", 0.0, frames.last().p, 1e-3)
     }
     @Test fun lipDragReleaseOpens() = localicaRunComposeUiTest {
@@ -101,7 +103,7 @@ class QueueOwnerContinuityTest {
         repeat(10) { onRoot().performTouchInput { moveBy(Offset(0f, 24f), delayMillis = 16) } }
         onRoot().performTouchInput { up() }
         frames(scene, 45, frames)
-        verifyReleaseLaw("catch/reverse", frames, scene.recorder.joins, fallbackJoin(0, 0.0, 0.0, true))
+        verifyReleaseLaw("catch/reverse", frames, scene.recorder.joins, fallbackJoin(0, 0.0, 0.0, true), scene.objectTime())
         assertEquals("reversed release follows its downward velocity", 0.0, frames.last().p, 1e-3)
     }
 }

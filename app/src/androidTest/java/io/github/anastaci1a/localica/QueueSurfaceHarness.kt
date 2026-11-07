@@ -38,10 +38,11 @@ internal fun BoxWithConstraintsScope.rememberAnimatableQueueSheet(progress: Anim
     return remember(progress) { object : SheetState {
         var start = 0f; var touching = false
         fun settle(open: Boolean) { scope.launch { progress.animateTo(if (open) 1f else 0f, tween(current.third.motionDuration(400))) } }
-        override val expanded get() = progress.targetValue >= .5f
+        // Settles target exactly 0 or 1; a posed partial phase (e.g. .55) is a drawer not requested open.
+        override val expanded get() = progress.targetValue >= 1f
         override val expansion = object : ExpansionView {
             override val phase: MotionValue = AnimatablePhase(progress)
-            override val expanded get() = progress.targetValue >= .5f
+            override val expanded get() = progress.targetValue >= 1f
             override val inContact get() = touching
             override val canContact = true
         }
