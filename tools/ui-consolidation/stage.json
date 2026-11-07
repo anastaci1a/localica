@@ -91,7 +91,8 @@
     "U03.01a",
     "U03.01b",
     "U04.01a",
-    "U12.01c"
+    "U12.01c",
+    "U07.00"
   ],
   "bootstrapApproval": "Lead decision 2026-11-07 2:20 AM EST (Stage 3 re-pin, U14.01a): re-bootstrap stage3/600 at integrated v0.33.5 82842503 with incident identities identical to the Stage 2 re-pin 87210129 (1837 entries, 0 added by Stage 3); no additional escape approved."
 }
