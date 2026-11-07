@@ -38,6 +38,8 @@ Rules:
 
 Use UTF-8 XML with an `svg` root and a numeric `viewBox`, usually `0 0 24 24`. Optional numeric `width` and `height` accept pixels. Paths become the same Compose vector trees used by built-in icons; import never rasterizes them.
 
+The viewBox fits the square icon canvas uniformly and stays centered. Non-square viewBoxes keep their proportions and receive padding on the shorter axis.
+
 Supported elements and attributes:
 
 - `path`: `d`, using SVG moveto, line, horizontal/vertical line, cubic/quadratic curve, smooth curve, elliptical arc and close commands.
