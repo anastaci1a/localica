@@ -12,7 +12,8 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.util.IdentityHashMap
 
-/** Opt-in, main-thread lifecycle. No listener, polling, worker or frame storage before Start. */
+/** Opt-in, main-thread lifecycle. Before Start it only weakly remembers open modal windows:
+ * no listener, polling, worker or frame storage. */
 internal object FrameStats {
     val recording = mutableStateOf(false)
     private val main = Handler(Looper.getMainLooper())
@@ -26,6 +27,9 @@ internal object FrameStats {
     private var windowLimitReached = false
     private var timeLimitReached = false
     private val windows = IdentityHashMap<Window, Window.OnFrameMetricsAvailableListener>()
+    // Modal windows the app has shown, weakly held: Start must also measure one that is already open
+    // (the Settings popup itself) without recomposing the app to rediscover it (#620).
+    private val modalWindows = java.util.WeakHashMap<Window, Unit>()
     private val samples = mutableListOf<Pair<String, FrameTiming>>()
     private val timeout = Runnable { timeLimitReached = true; stop() }
     private var owner: Activity? = null
@@ -44,7 +48,17 @@ internal object FrameStats {
         handler = Handler(requireNotNull(worker).looper)
         recording.value = true
         attach(activity.window, "activity")
+        modalWindows.keys.toList().filter { it.peekDecorView()?.isAttachedToWindow == true }.forEach { attach(it) }
         main.postDelayed(timeout, 120_000)
+    }
+
+    /** Registers a modal window on every composition of its content; attaches it while recording.
+     * The app provides this once, so Start and Stop never change composition state above the button. */
+    @Synchronized fun observe(window: Window?) {
+        check(Looper.myLooper() == Looper.getMainLooper())
+        if (window == null) return
+        modalWindows[window] = Unit
+        attach(window)
     }
 
     /** Also observes the app's separate modal windows through the existing committed-scope observer. */
