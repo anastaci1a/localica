@@ -71,23 +71,36 @@ export function manifest(text, metadata, known) {
 /** Recorded one-time ledger growth (U14 note). Lead decision 2026-11-07 3:15 AM: U10.02 may add at most 18 rewritten
  * phase-consumer transfers tagged U10.03, in one commit; the tag can never admit growth again. */
 export const transferExceptions = {'U10.02-ledger-2026-11-07': {removedBy: 'U10.03', limit: 18}};
+/** Recorded one-off relabel (U14 note, tools/ui-consolidation/u1003-relabel.txt). Lead decision 2026-11-07 10:10 AM: U10.03
+ * entries whose real owner is another step (artwork swipe, snapshot recording, cover order, title input band) move to that
+ * step once, in one commit, at most 22 entries; every other removedBy change is rejected. */
+export const transferRelabels = {'U10.03-relabel-2026-11-07': {from: 'U10.03', limit: 22}};
+/** Untagged owner moves already in the ledger history (lead decision 2026-11-07 ~8 AM, stage2 f449bf56 = stage3 b1fd8cbb). */
+export const recordedOwnerMoves = [{codeSha256: '20f5c3f87152c38dc50f6bd4be3be3085fe522574fa028dfc116923d1b338f15', from: 'U04.01a', to: 'U04.01b'}];
 const transferId = e => JSON.stringify([e.rule,e.path,e.fqn,e.codeSha256]);
 /** Lead-approved ownership transfers (2026-11-07): itemized incidents a named future step removes; shrink-only along history. */
 export function transferIds(entries, known, completed) {
     requireThat(Array.isArray(entries), 'Transfer entries');
     const ids = entries.map(e => {
-        const keys = Object.keys(e).filter(k => k !== 'exception').sort().join();
+        const keys = Object.keys(e).filter(k => k !== 'exception' && k !== 'relabel').sort().join();
         requireThat(keys === 'codeSha256,fqn,path,reason,removedBy,rule' && rules.includes(e.rule) && e.reason &&
             known.includes(e.removedBy) && !completed.includes(e.removedBy), 'Invalid or expired transfer');
         requireThat(!('exception' in e) || transferExceptions[e.exception]?.removedBy === e.removedBy, 'Unrecorded transfer exception');
+        requireThat(!('relabel' in e) || !('exception' in e) && transferRelabels[e.relabel] && transferRelabels[e.relabel].from !== e.removedBy, 'Unrecorded transfer relabel');
         return transferId(e);
     });
     requireThat(new Set(ids).size === ids.length, 'Duplicate transfer'); return ids;
 }
-/** Newer entries must be a subset of older ones, except a recorded exception's entries, admitted once up to its limit. */
+/** Newer entries must be a subset of older ones with unchanged owners, except a recorded exception's entries or relabel, each admitted once up to its limit. */
 export function transferGrowth(older, newer) {
     const prior = new Set(older.map(transferId)); const grown = newer.filter(e => !prior.has(transferId(e)));
-    requireThat(grown.every(e => e.exception), 'Transfer entries can only shrink');
+    requireThat(grown.every(e => e.exception && !e.relabel), 'Transfer entries can only shrink');
+    const was = new Map(older.map(e => [transferId(e), e])), before = e => was.get(transferId(e));
+    const moved = newer.filter(e => before(e) && (before(e).removedBy !== e.removedBy || before(e).relabel !== e.relabel));
+    const recorded = e => !e.relabel && !before(e).relabel && recordedOwnerMoves.some(m => m.codeSha256 === e.codeSha256 && m.from === before(e).removedBy && m.to === e.removedBy);
+    requireThat(moved.every(e => recorded(e) || e.relabel && !before(e).relabel && e.removedBy !== before(e).removedBy && transferRelabels[e.relabel]?.from === before(e).removedBy), 'Transfer owners cannot change');
+    for (const [tag, x] of Object.entries(transferRelabels)) { const changed = moved.filter(e => e.relabel === tag && !recorded(e));
+        requireThat(!changed.length || changed.length <= x.limit && older.every(e => e.relabel !== tag), 'Transfer relabel reused or over its limit'); }
     for (const [tag, x] of Object.entries(transferExceptions)) { const added = grown.filter(e => e.exception === tag);
         requireThat(!added.length || added.length <= x.limit && older.every(e => e.exception !== tag), 'Transfer exception reused or over its limit'); }
 }
@@ -193,8 +206,9 @@ export function run(argv) {
             requireThat(Object.keys(t).sort().join() === 'approval,entries,schemaVersion' && t.schemaVersion === 1 && t.approval, 'Transfer manifest');
             transferIds(t.entries, known.knownSteps, ref === head ? meta.steps : []); return t.entries; };
         const current = load(head); transfers = transferIds(current, known.knownSteps, meta.steps);
-        const history = git('log','--format=%H',head,'--',transfersPath).trim().split('\n').filter(Boolean).map(load);
-        for (let i = 0; i + 1 < history.length; i++) transferGrowth(history[i+1] ?? [], history[i] ?? []);
+        // Each ledger version is checked against its real parents, never against an unrelated branch's version.
+        for (const [commit, ...parents] of git('log','--format=%H %P',head,'--',transfersPath).trim().split('\n').filter(Boolean).map(l => l.split(' ')))
+            for (const parent of parents) { const prior = load(parent), now = load(commit); if (prior && now) transferGrowth(prior, now); }
         if (base) { const prior = load(base); if (prior) transferGrowth(prior, current); }
     }
     const result = compare(before,after,stage,transfers);
