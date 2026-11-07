@@ -88,8 +88,8 @@ internal fun LyricsHeaderActions(lyricsOpen: Boolean, reveal: Float, anchor: Gla
             Icon(appIconPainter(AppIcon.ActionEyeOff), null, Modifier.size(24.dp), tint = foreground)
         }
     }
-    Box(Modifier.width(width).height(CompactControlSize).then(pill.follow).preparedOrigin(preparation, progress)
-        .testTag("player-lyrics-pill").silhouetteGlassShadow(shadow)) {
+    Box(Modifier.width(width).height(CompactControlSize).preparedOrigin(preparation, progress)
+        .then(pill.follow).testTag("player-lyrics-pill").silhouetteGlassShadow(shadow)) {
         if (!separated) {
             LiquidGlassSurface(Modifier.fillMaxSize(), silhouette = pill.silhouette, shadow = false,
                 sharedContact = contacts.joined, depthScale = RaisedGlassDepthScale) {
