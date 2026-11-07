@@ -118,6 +118,8 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     val screenWork = LocalBrowseCellWorkObserver.current
     if (screenWork != null) SideEffect { screenWork("screen", route.key) }
     val obscuredInset = LocalBrowseObscuredInset.current
+    var returnControlHeight by remember { mutableIntStateOf(0) }
+    var actionControlHeight by remember { mutableIntStateOf(0) }
     val density = androidx.compose.ui.platform.LocalDensity.current
     val context = androidx.compose.ui.platform.LocalContext.current
     val sorts = rememberBrowseSortSnapshot()
@@ -1051,7 +1053,9 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                     onPreview = { style = it }, onCommit = { style = it; preferences.write(route, it, preferences.overridden(route)) },
                     onAnchor = { zoomAnchor = it })
                 .testTag("browser-list"), contentPadding = PaddingValues(start = cellGeometry.gridInset.dp, end = cellGeometry.gridInset.dp,
-                    bottom = if (popupDismiss != null) 16.dp else maxOf(80.dp, obscuredInset + 16.dp))) {
+                    bottom = if (popupDismiss != null) 16.dp else maxOf(80.dp, obscuredInset +
+                        maxOf(with(density) { returnControlHeight.toDp() } + floatingControlClearance,
+                            with(density) { actionControlHeight.toDp() }) + 16.dp))) {
                 item(key = "browser-notice", contentType = "notice", span = { GridItemSpan(maxLineSpan) }) {
                     // Grid gutters belong to tiles; full-span headers keep their viewport alignment.
                     Column(Modifier.requiredWidth(with(density) { viewportWidth.toDp() }).testTag("browse-full-span")
@@ -1287,7 +1291,8 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                     label = if (playbackReturn) "Current song" else "Return to top",
                     visible = showReturn, reducedMotion = reducedMotion,
                     returning = returning,
-                    modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = obscuredInset + floatingControlClearance)) {
+                    modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = obscuredInset + floatingControlClearance)
+                        .onSizeChanged { if (it.height > 0) returnControlHeight = it.height }) {
                     if (!playbackReturn) returnToList(if (artDetail) ListReturnAction.ScrollSongs else ListReturnAction.ScrollTop)
                     else {
                         orderScroll.cancel()
@@ -1305,7 +1310,8 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                     bottom = obscuredInset), onUserScroll = ::userScroll)
             if (route.collection?.kind in setOf(MediaKind.Playlist, MediaKind.Album, MediaKind.Artist, MediaKind.AlbumArtist) && !route.search) {
                 val playlist = playlists.playlists.firstOrNull { it.id == route.collection?.id }
-                if (playlist != null || artDetail) Box(Modifier.align(Alignment.BottomEnd).padding(end = 12.dp, bottom = obscuredInset)) {
+                if (playlist != null || artDetail) Box(Modifier.align(Alignment.BottomEnd).padding(end = 12.dp, bottom = obscuredInset)
+                    .onSizeChanged { actionControlHeight = it.height }) {
                     val anchor = rememberGlassAnchor()
                     var open by remember { mutableStateOf(false) }
                     ActionIcon(AppIcon.ActionEllipsis, if (playlist != null) "Playlist actions" else if (artistDetail) "Artist actions" else "Album actions", anchor = anchor) { open = true }
@@ -1316,7 +1322,8 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                 }
             }
             if (route.tab in setOf(MainTab.Library, MainTab.Playlists) && route.collection == null && !route.search)
-                PlaylistCreationButton(library.snapshot, playlists, playlistController, Modifier.align(Alignment.BottomEnd).padding(end = 12.dp, bottom = obscuredInset).testTag("playlist-add-module"))
+                PlaylistCreationButton(library.snapshot, playlists, playlistController, Modifier.align(Alignment.BottomEnd).padding(end = 12.dp, bottom = obscuredInset).testTag("playlist-add-module")
+                    .onSizeChanged { actionControlHeight = it.height })
             }
         }
         }
