@@ -126,14 +126,18 @@ class LiquidGlassTest {
     @Test fun darkBubbleTransmitsAndRefreshesSceneWithoutBlurringForeground() = verifyLens(true)
 
     @Test fun transparentListPixelsLeaveTheDrawerVisibleThroughTheLens() {
+        lateinit var source: FrostedBackdrop
         compose.setContent { ClearGlassTheme { Box(Modifier.fillMaxSize().background(Color.Red)) {
-            val source = rememberFrostedBackdrop(Unit)
+            source = rememberFrostedBackdrop(Unit)
             Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(source)) {
                 // A transparent list over a drawer must not replace that drawer with raw artwork.
                 drawRect(Color.Blue, Offset(size.width / 2, 0f), Size(size.width / 2, size.height))
             }
             LiquidGlassSurface(Modifier.align(Alignment.Center).size(300.dp, 96.dp).testTag("transparent-lens"), source)
         } } }
+        // Below API 33 the average draws only once the asynchronous backdrop snapshot exists; until then the
+        // lens shows the raw parent, which is not what this contract measures.
+        if (Build.VERSION.SDK_INT < 33) compose.waitUntil(10000) { source.snapshot != null }
         val pixels = compose.onNodeWithTag("transparent-lens").captureToImage().toPixelMap()
         val edge = pixels[(pixels.width * .02f).toInt(), pixels.height / 2]
         val interior = pixels[pixels.width / 4, pixels.height / 2]
