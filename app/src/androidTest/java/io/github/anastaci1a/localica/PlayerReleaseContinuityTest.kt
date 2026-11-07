@@ -55,7 +55,9 @@ class PlayerReleaseContinuityTest {
         val t0 = mainClock.currentTime * 1_000_000
         onNodeWithTag("player-surface").performClick(); frames(6, travel, frames)
         InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(KeyEvent.KEYCODE_BACK); frames(4, travel, frames)
-        onNodeWithTag("player-surface").performClick(); frames(40, travel, frames)
+        // A touch on the moving sheet only catches it (#608 contact); the reversal is the surface's click intent.
+        onNode(SemanticsMatcher("Expand player") { it.config.getOrElseNullable(SemanticsActions.OnClick) { null }?.label == "Expand player" })
+            .performSemanticsAction(SemanticsActions.OnClick); frames(40, travel, frames)
         verifyReleaseLaw("tap/Back/tap", frames, scene.recorder.joins, fallbackJoin(t0, 0.0, 0.0, true))
         assertEquals("tap/Back/tap settles expanded", 1.0, frames.last().p, 1e-3)
     }
@@ -106,14 +108,31 @@ class PlayerReleaseContinuityTest {
         assertEquals("reversed release follows its downward velocity", 0.0, frames.last().p, 1e-3)
     }
 
+    @Test fun aStillTapOnAMovingPlayerCatchesItAndSettlesByPosition() = localicaRunComposeUiTest {
+        val scene = Scene(); start(scene)
+        val travel = top(); val frames = mutableListOf<PhaseFrame>()
+        onNodeWithTag("player-surface").performClick(); frames(8, travel, frames)
+        val caught = top()
+        onRoot().performTouchInput { down(Offset(width / 2f, caught.toFloat() + 40f)) }
+        repeat(3) { mainClock.advanceTimeByFrame(); assertEquals("a held touch keeps the sheet caught", caught, top(), 3.0) }
+        onRoot().performTouchInput { up() }
+        val release = mainClock.currentTime * 1_000_000; val p0 = 1 - top() / travel
+        frames.clear(); frames(45, travel, frames)
+        verifyReleaseLaw("still tap on a moving sheet", frames, scene.recorder.joins, fallbackJoin(release, p0, 0.0, p0 >= .5))
+        assertEquals("the release settles by position, not as a tap toggle", if (p0 >= .5) 1.0 else 0.0, frames.last().p, 1e-3)
+    }
+
     @Test fun lyricsToggleDuringCollapseKeepsOnePlayerTimeline() = localicaRunComposeUiTest {
         val scene = Scene(); start(scene)
         val travel = top(); val frames = mutableListOf<PhaseFrame>()
         onNodeWithTag("player-surface").performClick(); frames(60, travel, frames)
         onNodeWithContentDescription("Show lyrics").performSemanticsAction(SemanticsActions.OnClick); frames(40, travel, frames)
         frames.clear(); val t0 = mainClock.currentTime * 1_000_000
-        onNodeWithContentDescription("Collapse player").performSemanticsAction(SemanticsActions.OnClick); frames(5, travel, frames)
-        onAllNodesWithContentDescription("Hide lyrics").onFirst().performSemanticsAction(SemanticsActions.OnClick)
+        onNodeWithContentDescription("Collapse player").performSemanticsAction(SemanticsActions.OnClick)
+        // The header (and its Hide lyrics action) exists only while the handle is revealed (p > .72): toggle mid-flight.
+        do frames(1, travel, frames) while (frames.last().p > .85 && frames.size < 30)
+        assertTrue("collapse is in flight with the header present at p=${frames.last().p}", frames.last().p > .72 && frames.last().p < 1.0)
+        onNodeWithContentDescription("Hide lyrics").performSemanticsAction(SemanticsActions.OnClick)
         frames(40, travel, frames)
         verifyReleaseLaw("lyrics during collapse", frames, scene.recorder.joins, fallbackJoin(t0, 1.0, 0.0, false))
         assertEquals("collapse completes through the lyrics toggle", 0.0, frames.last().p, 1e-3)
