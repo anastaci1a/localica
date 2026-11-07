@@ -8,7 +8,8 @@ import io.github.anastaci1a.localica.ui.spec.*
 import kotlinx.coroutines.channels.Channel
 
 @Immutable class FrameStamp internal constructor(val nanos: Long,val sequence: Long) { fun secondsSince(other: FrameStamp)=(nanos-other.nanos)/1e9f }
-interface FrameSource { suspend fun awaitFrame(): Long }
+/** [onFrame] runs inside the frame callback, so state it writes is read by that same frame's composition, layout and draw. */
+interface FrameSource { suspend fun awaitFrame(): Long; suspend fun <R> awaitFrame(onFrame: (Long)->R): R=onFrame(awaitFrame()) }
 internal interface ActiveMotion { val id: Long; val presented: Boolean; val settled: Boolean; fun endsAt(stamp: FrameStamp): Boolean; fun finish(stamp: FrameStamp); fun reduce(stamp: FrameStamp) }
 internal fun interface FrameObserver { fun onFrame(stamp: FrameStamp,active: List<ActiveMotion>) }
 internal data class EngineContext(val displayIntervalSeconds: Float,val fullPlayerReferenceTravelPx: Float,val access: MotionAccess) { init { require(displayIntervalSeconds.isFinite() && displayIntervalSeconds>0 && (2*displayIntervalSeconds).isFinite() && 2e9*displayIntervalSeconds<=Long.MAX_VALUE.toDouble() && fullPlayerReferenceTravelPx.isFinite() && fullPlayerReferenceTravelPx>0) } }
@@ -37,16 +38,17 @@ internal val LocalEngineContext=staticCompositionLocalOf<EngineContext> { requir
         checkMutation()
         try { while(true) {
             if(active.isEmpty()) { wake.receive(); continue }
-            val nanos=source.awaitFrame(); checkMutation(); check(nanos>last.nanos) { "Frame source must advance monotonically" }; last=FrameStamp(nanos,last.sequence+1); state.value=last
+            source.awaitFrame { nanos -> checkMutation(); check(nanos>last.nanos) { "Frame source must advance monotonically" }; last=FrameStamp(nanos,last.sequence+1); state.value=last
             val iterator=active.iterator(); while(iterator.hasNext()) { val motion=iterator.next(); if(motion.endsAt(last)) { iterator.remove(); motion.finish(last) } }
-            if(observers.isNotEmpty()) observe { val frame=active.toList(); observers.forEach { it.onFrame(last,frame) } }
+            if(observers.isNotEmpty()) observe { val frame=active.toList(); observers.forEach { it.onFrame(last,frame) } } }
         } } finally { active.clear() }
     }
 }
 @Composable internal fun ProvideUiClock(content: @Composable ()->Unit) {
     val inherited=LocalClockOwner.current
     val base=remember { FrameBase() }
-    val clock=inherited?:remember { UiClock(object: FrameSource { override suspend fun awaitFrame()=withFrameNanos { base.frame(it); it } },base::now) }
+    val clock=inherited?:remember { UiClock(object: FrameSource { override suspend fun awaitFrame()=awaitFrame { it }
+        override suspend fun <R> awaitFrame(onFrame: (Long)->R)=withFrameNanos { base.frame(it); onFrame(it) } },base::now) }
     if(inherited==null) LaunchedEffect(clock) { withFrameNanos { base.frame(it) }; clock.run() }
     CompositionLocalProvider(LocalClockOwner provides clock,LocalUiClock provides clock,content=content)
 }
