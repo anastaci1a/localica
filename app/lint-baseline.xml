@@ -8159,7 +8159,7 @@
         errorLine2="        ~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/ConnectedSelection.kt"
-            line="117"
+            line="118"
             column="9"/>
     </issue>
 
@@ -12724,7 +12724,7 @@
         errorLine2="           ~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/ConnectedSelection.kt"
-            line="244"
+            line="245"
             column="12"/>
     </issue>
 
@@ -12735,7 +12735,7 @@
         errorLine2="               ~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/ConnectedSelection.kt"
-            line="246"
+            line="247"
             column="16"/>
     </issue>
 
@@ -12746,7 +12746,7 @@
         errorLine2="                                         ~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/ConnectedSelection.kt"
-            line="276"
+            line="277"
             column="42"/>
     </issue>
 
@@ -12757,7 +12757,7 @@
         errorLine2="                               ~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/ConnectedSelection.kt"
-            line="292"
+            line="293"
             column="32"/>
     </issue>
 
@@ -14726,7 +14726,7 @@
         errorLine2="                                                     ~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/ConnectedSelection.kt"
-            line="432"
+            line="440"
             column="54"/>
     </issue>
 
@@ -19159,7 +19159,7 @@
         errorLine2="                                      ~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/ConnectedSelection.kt"
-            line="329"
+            line="330"
             column="39"/>
     </issue>
 
@@ -19170,19 +19170,8 @@
         errorLine2="                        ~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/ConnectedSelection.kt"
-            line="360"
+            line="356"
             column="25"/>
-    </issue>
-
-    <issue
-        id="ReplacePersistentShape"
-        message="Retarget a stable PersistentShape"
-        errorLine1="    if (regions.isEmpty()) return Path()"
-        errorLine2="                                  ~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/ConnectedSelection.kt"
-            line="398"
-            column="35"/>
     </issue>
 
     <issue
@@ -19489,7 +19478,7 @@
         errorLine2="                                                               ~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/ConnectedSelection.kt"
-            line="190"
+            line="191"
             column="64"/>
     </issue>
 
@@ -19500,7 +19489,7 @@
         errorLine2="                                                                   ~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/ConnectedSelection.kt"
-            line="284"
+            line="285"
             column="68"/>
     </issue>
 
@@ -19511,7 +19500,7 @@
         errorLine2="                                                 ~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/ConnectedSelection.kt"
-            line="286"
+            line="287"
             column="50"/>
     </issue>
 
@@ -19522,7 +19511,7 @@
         errorLine2="                        ~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/ConnectedSelection.kt"
-            line="293"
+            line="294"
             column="25"/>
     </issue>
 
@@ -19533,7 +19522,7 @@
         errorLine2="                                                                   ~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/ConnectedSelection.kt"
-            line="302"
+            line="303"
             column="68"/>
     </issue>
 
@@ -19544,7 +19533,7 @@
         errorLine2="                                                                        ~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/ConnectedSelection.kt"
-            line="308"
+            line="309"
             column="73"/>
     </issue>
 
@@ -19555,7 +19544,7 @@
         errorLine2="                                             ~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/ConnectedSelection.kt"
-            line="430"
+            line="438"
             column="46"/>
     </issue>
 
@@ -19566,7 +19555,7 @@
         errorLine2="            ~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/ConnectedSelection.kt"
-            line="471"
+            line="479"
             column="13"/>
     </issue>
 
@@ -19577,7 +19566,7 @@
         errorLine2="                                     ~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/ConnectedSelection.kt"
-            line="476"
+            line="484"
             column="38"/>
     </issue>
 
