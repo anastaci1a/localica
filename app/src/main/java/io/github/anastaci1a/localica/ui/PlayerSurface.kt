@@ -176,6 +176,8 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
             queueProgress?.snapTo((startQueueProgress - movement / distance).coerceIn(0f, 1f)) }
     }
     val drag = Modifier.playerVerticalDrag(canStart = { !scrubCancel.active }, onDelta = { dragState.dispatchRawDelta(it) },
+        onCatch = { !sheet.expansion.phase.settled && sheet.contact.onDragStart() && run { startExpanded = expanded
+            movement = 0f; owner = VerticalOwner.Player; touching = true; dragging = true; true } },
         onStart = { startExpanded = expanded; startQueueProgress = queueProgress?.value ?: 0f; movement = 0f
             owner = VerticalOwner.Undecided; dragging = true; queueProgress?.stop() },
         onStop = { velocity ->
