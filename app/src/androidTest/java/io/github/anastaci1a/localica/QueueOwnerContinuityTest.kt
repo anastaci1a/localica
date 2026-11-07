@@ -25,7 +25,8 @@ class QueueOwnerContinuityTest {
         val tracks = (1..3).map { Track("queue-$it", "Evening $it", fileName = "song$it.mp3", relativePath = "song$it.mp3") }
         val queue = QueueEdits.create(tracks, 0, "Evening queue")
         setContent {
-            val clock = remember { UiClock(object : FrameSource { override suspend fun awaitFrame() = withFrameNanos { it } }, { mainClock.currentTime * 1_000_000 }) }
+            val clock = remember { UiClock(object : FrameSource { override suspend fun awaitFrame() = withFrameNanos { it }
+                override suspend fun <R> awaitFrame(onFrame: (Long) -> R) = withFrameNanos(onFrame) }, { mainClock.currentTime * 1_000_000 }) }
             SideEffect { if (scene.clock == null) { clock.events = scene.recorder; scene.clock = clock } }
             LaunchedEffect(clock) { clock.run() }
             CompositionLocalProvider(LocalClockOwner provides clock, LocalUiClock provides clock) { LocalicaTheme { LocalicaScreen(

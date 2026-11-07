@@ -52,4 +52,14 @@ class FrameBaseTest {
         base.frame(16_000_000L) // switch to a virtual base (e.g. a test clock takes over)
         assertEquals(real,base.now())
     }
+    @Test fun aFrameIsPresentedInsideItsFrameCallback() {
+        // Compose recomposes right after the frame callbacks; a stamp written after awaitFrame returns lags one frame.
+        val channel=Channel<Long>(Channel.UNLIMITED); var clock: UiClock? = null; var seen=Long.MIN_VALUE
+        clock=UiClock(object: FrameSource { override suspend fun awaitFrame()=channel.receive()
+            override suspend fun <R> awaitFrame(onFrame: (Long)->R): R { val nanos=channel.receive(); return onFrame(nanos).also { seen=clock!!.stamp.nanos } } },{ 0L },{})
+        clock.configure(EngineContext(1f/120,1000f,MotionAccess.Standard),StockUiSpec)
+        val scope=CoroutineScope(Dispatchers.Unconfined+SupervisorJob()); scope.launch { clock.run() }
+        clock.register(motion); channel.trySend(16_000_000L)
+        assertEquals(16_000_000L,seen); scope.cancel()
+    }
 }
