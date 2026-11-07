@@ -27,7 +27,7 @@ internal data class MaterialAverageStyle(val whiteTint: Float, val tone: GlassTo
 /** True when this scene is, or lies inside, a finished panel material (a frosted panel or
  * popup body). That material already carries its panel's tint and tone, so None does not
  * apply them a second time to what it samples there. Which pixels are sampled is decided
- * only by the refraction preimage ([lensRefractionPreimage]), never by this provenance. */
+ * by the material's full bounds, never by this provenance. */
 internal fun FrostedBackdrop.withinFinishedMaterial(): Boolean {
     var current: FrostedBackdrop? = this
     val visited = mutableSetOf<FrostedBackdrop>()

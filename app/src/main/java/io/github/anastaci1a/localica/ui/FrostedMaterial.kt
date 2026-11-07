@@ -354,18 +354,12 @@ internal fun FrostedSurface(modifier: Modifier = Modifier, shape: Shape = Corner
         Box(Modifier.matchParentSize().recordFrostedBackdrop(material)) {
         if (source != null) {
             val blur = with(LocalDensity.current) { 22.dp.toPx() }
-            // A flat panel has no lens: its preimage is the footprint plus the blur's reach.
-            val preimage: (androidx.compose.ui.geometry.Size) -> androidx.compose.ui.geometry.Rect = { extent ->
-                lensRefractionPreimage(androidx.compose.ui.geometry.Rect(Offset.Zero, extent),
-                    LensPreimageOptics(null, 0f, 0f, 0f, blur, blur * 1.5f))
-            }
             if (Build.VERSION.SDK_INT >= 33) {
                 FilteredBackdrop(Modifier.matchParentSize(), source, location, .5f, blur * 1.5f,
-                    average = MaterialAverageStyle(0f, tone, opaque = true), preimage = preimage) { _, resolution, _ ->
+                    average = MaterialAverageStyle(0f, tone, opaque = true)) { _, resolution, _ ->
                     toneRenderer.value?.effect(tone, blur * resolution)
                 }
-            } else AverageBackdrop(Modifier.matchParentSize(), source, location, MaterialAverageStyle(0f, tone, opaque = true),
-                preimage = preimage)
+            } else AverageBackdrop(Modifier.matchParentSize(), source, location, MaterialAverageStyle(0f, tone, opaque = true))
         }
         Canvas(Modifier.matchParentSize()) {
             if (source == null) drawRect(fallbackColor)
