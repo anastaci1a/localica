@@ -15,6 +15,7 @@ import io.github.anastaci1a.localica.ui.*
 import io.github.anastaci1a.localica.ui.engine.*
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import org.junit.Assert.assertSame
 import org.junit.Rule
 import org.junit.Test
 import kotlin.math.abs
@@ -23,6 +24,29 @@ import kotlin.math.abs
  * and reordering the casters' zIndex leaves the plane's single field unchanged (the plane draws the union after its content). */
 class CompositorAdoptionTest {
     @get:Rule val compose = createComposeRule()
+
+    @Test fun descendantOwnersUseTheHostRegistryAndUnregisterOnRemoval() {
+        var shown by mutableStateOf(true)
+        var host: ShadowPlane? = null
+        var child: SurfaceNode? = null
+        compose.setContent { EngineTheme {
+            GlassShadowScope(Modifier.size(100.dp)) {
+                val plane = requireNotNull(LocalSurfaceShadows.current)
+                SideEffect { host = plane }
+                if (shown) {
+                    val shape = rememberPersistentShape("descendant-shape")
+                    val node = rememberSurfaceNode("descendant", shape, SurfaceTarget(Stratum.Floating, 1f, ShadowRole.None))
+                    SideEffect { child = node }
+                }
+            }
+        } }
+        compose.runOnIdle {
+            assertSame("A descendant must use its enclosing host's registry", child, requireNotNull(host).casters.single())
+            shown = false
+        }
+        compose.waitForIdle()
+        compose.runOnIdle { assertTrue("Removed descendants leave the same registry", requireNotNull(host).casters.isEmpty()) }
+    }
 
     @Test fun zReorderKeepsOneField() {
         var front by mutableStateOf(0)
