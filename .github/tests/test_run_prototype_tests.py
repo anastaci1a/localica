@@ -717,6 +717,8 @@ class WorkflowContract(unittest.TestCase):
         android=yaml.safe_load((ROOT/'.github/workflows/android.yml').read_text())['jobs']['static-checks']
         build=next(s for s in prototype['steps'] if s.get('name')=='Build and check')['run']
         checks=next(s for s in android['steps'] if s.get('name')=='Unit tests, lint and release build')['run']
+        # The step may run other Gradle invocations first (#600's :lint:test); compare the one that compiles the app.
+        checks=next(line for line in checks.splitlines() if 'testDebugUnitTest' in line.split())
         for task in ('testDebugUnitTest','lintDebug','assembleDebug','assembleRelease'):
             self.assertIn(task,build.split())
         heap=lambda run: re.search(r"(-Dorg\.gradle\.jvmargs='[^']*')",run).group(1)
