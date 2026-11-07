@@ -69,7 +69,7 @@ internal fun SettingsLink(title: String, summary: String? = null, icon: AppIcon?
 @Composable
 internal fun SettingsHeading(title: String) {
     Text(title, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary,
-        modifier = Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 4.dp))
+        modifier = Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 4.dp).settingsRowPart(SettingsRowPart.Heading))
 }
 
 @Composable

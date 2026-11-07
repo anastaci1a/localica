@@ -8,6 +8,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.SemanticsPropertyKey
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Dp
@@ -17,17 +19,23 @@ import io.github.anastaci1a.localica.R
 /** Opt-in compact rows keep the shared switch and the full 48dp input target. */
 internal val LocalCompactPreferenceFrames = androidx.compose.runtime.compositionLocalOf { false }
 
+/** Geometry-test handles for the shared settings row parts (unmerged semantics tree). */
+internal enum class SettingsRowPart { Row, Icon, Text, Trailing, Heading }
+internal val SettingsRowPartKey = SemanticsPropertyKey<SettingsRowPart>("SettingsRowPart")
+internal fun Modifier.settingsRowPart(part: SettingsRowPart) =
+    semantics { this[SettingsRowPartKey] = part }
+
 /** Stateless field faces shared by live controls and popup envelope measurement. */
 @Composable
 internal fun SettingsLinkFace(title: String, summary: String?, icon: AppIcon?, modifier: Modifier = Modifier,
     headlineStyle: TextStyle = MaterialTheme.typography.bodyLarge,
     summaryStyle: TextStyle = MaterialTheme.typography.bodyMedium,
     colors: ListItemColors = ListItemDefaults.colors(containerColor = Color.Transparent)) {
-    ListItem(headlineContent = { Text(title, style = headlineStyle) },
+    ListItem(headlineContent = { Text(title, Modifier.settingsRowPart(SettingsRowPart.Text), style = headlineStyle) },
         supportingContent = summary?.let { { Text(it, style = summaryStyle) } },
-        leadingContent = icon?.let { { Icon(appIconPainter(it), null, Modifier.size(24.dp)) } },
-        trailingContent = { Icon(appIconPainter(AppIcon.ActionBack), null, Modifier.size(20.dp).rotate(180f)) },
-        colors = colors, modifier = modifier.heightIn(min = 64.dp))
+        leadingContent = icon?.let { { Icon(appIconPainter(it), null, Modifier.size(24.dp).settingsRowPart(SettingsRowPart.Icon)) } },
+        trailingContent = { Icon(appIconPainter(AppIcon.ActionBack), null, Modifier.size(20.dp).rotate(180f).settingsRowPart(SettingsRowPart.Trailing)) },
+        colors = colors, modifier = modifier.heightIn(min = 64.dp).settingsRowPart(SettingsRowPart.Row))
 }
 
 internal val ChoiceOuterVerticalInset = 4.dp
@@ -42,7 +50,7 @@ internal val InterfaceSwitchHeight = 48.dp
 internal fun SliderPreferenceFrame(label: String, low: String?, high: String?, description: String?,
     track: @Composable () -> Unit) {
     Column(Modifier.fillMaxWidth().padding(top = 12.dp)) {
-        Text(label, style = MaterialTheme.typography.titleMedium)
+        Text(label, Modifier.settingsRowPart(SettingsRowPart.Text), style = MaterialTheme.typography.titleMedium)
         track()
         if (low != null && high != null) SliderEndpoints(low, high)
         if (description != null) Text(description, style = MaterialTheme.typography.bodySmall)
@@ -53,9 +61,9 @@ internal fun SliderPreferenceFrame(label: String, low: String?, high: String?, d
 internal fun BooleanPreferenceFrame(label: String, modifier: Modifier = Modifier, control: @Composable () -> Unit) {
     val compact = LocalCompactPreferenceFrames.current
     Row(modifier.fillMaxWidth().heightIn(min = if (compact) 48.dp else 56.dp)
-        .padding(vertical = if (compact) 0.dp else 4.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text(label, Modifier.weight(1f).padding(end = 12.dp))
-        control()
+        .padding(vertical = if (compact) 0.dp else 4.dp).settingsRowPart(SettingsRowPart.Row), verticalAlignment = Alignment.CenterVertically) {
+        Text(label, Modifier.weight(1f).padding(end = 12.dp).settingsRowPart(SettingsRowPart.Text))
+        Box(Modifier.settingsRowPart(SettingsRowPart.Trailing)) { control() }
     }
 }
 
@@ -81,7 +89,7 @@ internal fun ChoicePreferenceFrame(title: String, labels: List<String>, popup: B
     val required = choiceRequiredCellWidth(labels)
     BoxWithConstraints(Modifier.fillMaxWidth()) {
         if (choiceFitsInline(labels.size, required.value, maxWidth.value, popup)) Column {
-            Text(title, style = MaterialTheme.typography.titleMedium)
+            Text(title, Modifier.settingsRowPart(SettingsRowPart.Text), style = MaterialTheme.typography.titleMedium)
             choices()
         } else link()
     }
