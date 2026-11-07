@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "stage": 0,
+  "stage": 3,
   "integratedSha": "dba7f1203be022b60060a8c602224f862630405e",
   "release": "v0.33.5",
   "knownSteps": [
@@ -65,6 +65,7 @@
     "U12.03",
     "U13.01",
     "U13.02",
+    "U13.02b",
     "U13.03a",
     "U13.03b",
     "U14.01a",
@@ -79,7 +80,15 @@
     "U13.01",
     "U12.01a",
     "U14.01a",
-    "U13.02"
+    "U13.02",
+    "U05.01",
+    "U01.01",
+    "U01.02",
+    "U01.03",
+    "U01.04",
+    "U02.01",
+    "U13.02b",
+    "U03.01a"
   ],
   "bootstrapApproval": "Operator-approved Stage 0 initial lint-generated inherited debt; lead assignment 2026-11-06T14:56:55Z; no additional escape approved."
 }
