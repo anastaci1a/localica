@@ -71,7 +71,9 @@ class NoneShadowScreenshotTest {
             File(output, "$name-$suffix.png").outputStream().use { image.compress(Bitmap.CompressFormat.PNG, 100, it) }
     }
 
-    private fun capture(name: String, runtime: GlassRendererRuntime): Pair<Bitmap, Bitmap> {
+    private fun capture(name: String, runtime: GlassRendererRuntime, source: FrostedBackdrop): Pair<Bitmap, Bitmap> {
+        // API 26-32 average materials draw nothing until the first scene readback lands; never compare that frame.
+        if (Build.VERSION.SDK_INT < 33) compose.waitUntil(10000) { source.snapshot != null }
         compose.runOnIdle { runtime.request(GlassRendererMode.Normal) }
         val normal = screenshot()
         compose.runOnIdle { runtime.request(GlassRendererMode.None) }
@@ -83,8 +85,9 @@ class NoneShadowScreenshotTest {
     @Test fun floatingPillSelectedRowAndPopup() {
         val runtime = GlassRendererRuntime(GlassRendererMode.Normal)
         var popup by mutableStateOf(false)
+        lateinit var source: FrostedBackdrop
         compose.setContent { CompositionLocalProvider(LocalGlassRendererRuntime provides runtime) { LocalicaTheme {
-            val source = rememberFrostedBackdrop(Unit, dark = false)
+            source = rememberFrostedBackdrop(Unit, dark = false)
             Box(Modifier.fillMaxSize()) {
                 Page(source)
                 CompositionLocalProvider(LocalFrostedBackdrop provides source) {
@@ -105,9 +108,9 @@ class NoneShadowScreenshotTest {
                 }
             }
         } } }
-        val (normal, none) = capture("pill-row", runtime)
+        val (normal, none) = capture("pill-row", runtime, source)
         // Selected-row lift: identical outside the lifted body in both renderers.
-        val row = compose.onNodeWithTag("selected-row").fetchSemanticsNode().boundsInWindow
+        val row = compose.onNodeWithTag("selected-row").fetchSemanticsNode().boundsInRoot // root-relative: boundsInWindow already includes the root offset
         val inWindow = IntArray(2).also { (compose.onRoot().fetchSemanticsNode().root as androidx.compose.ui.platform.ViewRootForTest).view.getLocationOnScreen(it) }
         // The lifted body is magnified beyond the row's layout bounds; exclude a generous margin.
         val margin = 48f
@@ -124,7 +127,7 @@ class NoneShadowScreenshotTest {
                 if (delta > 2) { differing++; largest = maxOf(largest, delta); box.union(x, y) }
             }
         compose.runOnIdle { popup = true }
-        capture("popup", runtime)
+        capture("popup", runtime, source)
         assertEquals("Selected-row lift shadow differs outside the lifted body $body (largest $largest/255 within $box)", 0, differing)
     }
 
@@ -133,9 +136,10 @@ class NoneShadowScreenshotTest {
         val queue = QueueEdits.create(tracks, 0, "Queue")
         val state = QueueUiState(QueueLibrary(listOf(queue), queue.id), loading = false)
         val library = LibraryUiState(LibrarySnapshot(tracks = tracks), loading = false)
+        lateinit var source: FrostedBackdrop
         val runtime = GlassRendererRuntime(GlassRendererMode.Normal)
         compose.setContent { CompositionLocalProvider(LocalGlassRendererRuntime provides runtime) { LocalicaTheme {
-            val source = rememberFrostedBackdrop(Unit, dark = false)
+            source = rememberFrostedBackdrop(Unit, dark = false)
             CompositionLocalProvider(LocalFrostedBackdrop provides source, LocalSessionSelection provides remember { SessionSelection() }) {
                 BoxWithConstraints(Modifier.fillMaxSize()) {
                     Page(source)
@@ -145,6 +149,6 @@ class NoneShadowScreenshotTest {
                 }
             }
         } } }
-        capture("queue-edge", runtime)
+        capture("queue-edge", runtime, source)
     }
 }
