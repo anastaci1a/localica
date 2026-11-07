@@ -31,6 +31,24 @@ class CompositorRegistryTest {
         assertFalse("Without a queued transfer nothing is posted",a.receipt())
         node.dispose()
     }
+    @Test fun registryAndOwnershipChangesInvalidateAStationaryHost() = EngineHarness(spec=geometry).use { h ->
+        val a=plane(h); val b=plane(h)
+        val observer=androidx.compose.runtime.snapshots.SnapshotStateObserver { it() }; var changed=false
+        observer.start(); observer.observeReads("registration",{ _: String -> changed=true }) { assertTrue(a.casters.isEmpty()) }
+        val node=SurfaceNode(h.clock,"stationary",shape(h),shown,a)
+        androidx.compose.runtime.snapshots.Snapshot.sendApplyNotifications(); assertTrue("Registration redraws the host",changed)
+        observer.clear(); changed=false
+        observer.observeReads("ownership",{ _: String -> changed=true }) { assertTrue(node.owns(a)) }
+        node.transfer(b,profile); b.acknowledge()
+        androidx.compose.runtime.snapshots.Snapshot.sendApplyNotifications(); assertTrue("Transfer redraws a stationary source",changed)
+        assertFalse(node.owns(a)); assertTrue(node.owns(b))
+        observer.clear(); changed=false
+        observer.observeReads("removal",{ _: String -> changed=true }) { assertEquals(listOf(node),b.casters) }
+        node.dispose(); androidx.compose.runtime.snapshots.Snapshot.sendApplyNotifications()
+        assertTrue("Removal redraws the old field",changed); assertTrue(b.casters.isEmpty())
+        observer.stop(); observer.clear()
+    }
+
     @Test fun oneKeyOneNodeOnePlaneBinding() = EngineHarness(spec=geometry).use { h ->
         val a=plane(h); val b=plane(h); val s=shape(h)
         val node=SurfaceNode(h.clock,"pill",s,shown,a)

@@ -22,9 +22,9 @@ enum class Stratum { Page,Lifted,Floating,Drawer,Player,Modal,Overlay,Diagnostic
 /** D25/D28: one plane per host. A key registers once per plane; [acknowledge] is the host's draw receipt, which admits transfers waiting for this plane. */
 @Stable class ShadowPlane internal constructor(private val clock: UiClock,val host: HostKey) {
     private val registered=linkedMapOf<Any,SurfaceNode>(); private var registrations=0; internal var generation=0L; private set
-    internal val casters: List<SurfaceNode> get()=registered.values.toList()
-    internal fun enter(node: SurfaceNode): Int { clock.checkMutation(); require(registered[node.key].let { it==null || it===node }) { "One SurfaceNode per key per host" }; registered[node.key]=node; return ++registrations }
-    internal fun leave(node: SurfaceNode) { clock.checkMutation(); if(registered[node.key]===node) registered.remove(node.key) }
+    internal val casters: List<SurfaceNode> get() { revision; return registered.values.toList() }
+    internal fun enter(node: SurfaceNode): Int { clock.checkMutation(); require(registered[node.key].let { it==null || it===node }) { "One SurfaceNode per key per host" }; if(registered[node.key]===node) return registrations; registered[node.key]=node; androidx.compose.runtime.snapshots.Snapshot.withoutReadObservation { revision++ }; return ++registrations }
+    internal fun leave(node: SurfaceNode) { clock.checkMutation(); if(registered[node.key]===node) { registered.remove(node.key); androidx.compose.runtime.snapshots.Snapshot.withoutReadObservation { revision++ } } }
     /** I3/D27: exactly one plane draws a caster's field, at strength × opacity; the others contribute 0. Never a partition: an alpha split (A(1−w), Aw) dips by A²w(1−w), and a strength split, exact before quantization, misses the drawn field by .011 at 16 rings (PlaneOracleTest). */
     internal fun contributionAt(node: SurfaceNode,stamp: FrameStamp)=if(node.owns(this)) node.opacity.valueAt(stamp) else 0f
     internal fun acknowledge() { clock.checkMutation(); receipt(); admit() }
@@ -35,7 +35,7 @@ enum class Stratum { Page,Lifted,Floating,Drawer,Player,Modal,Overlay,Diagnostic
 }
 /** U04.01a foundation (no production caller before U04.01b/U11.00, D03). The field has one [owner] plane: the destination from the moment its transfer starts, the source again only once a reversal settles there (D27). w is the continuous exclusion weight of [high] against 1−w of [low] (D27/D29): at most {low, high, pending}; A→B→A reverses w, a third plane waits for w to settle and for its draw receipt (D28). */
 @Stable class SurfaceNode internal constructor(private val clock: UiClock,override val key: Any,override val shape: ShapeView,initial: SurfaceTarget,home: ShadowPlane): SurfaceView {
-    private val px=requireNotNull(clock.spec.geometry) { "Publish measured ExpansionGeometryDomain through U11.00 before creating a surface" }.maxViewportDiagonalPx; private var low: ShadowPlane?=home; private var owner: ShadowPlane=home; private var high: ShadowPlane?=null; private var pending: Triple<ShadowPlane,Long,MotionProfileId>?=null; private var last: Any?=null; private var dismissed by mutableStateOf(false); private var retired by mutableStateOf(false); private var disposed=false
+    private val px=requireNotNull(clock.spec.geometry) { "Publish measured ExpansionGeometryDomain through U11.00 before creating a surface" }.maxViewportDiagonalPx; private var low: ShadowPlane?=home; private var owner by mutableStateOf(home); private var high: ShadowPlane?=null; private var pending: Triple<ShadowPlane,Long,MotionProfileId>?=null; private var last: Any?=null; private var dismissed by mutableStateOf(false); private var retired by mutableStateOf(false); private var disposed=false
     override var stratum by mutableStateOf(initial.stratum); private set; internal var role=initial.shadow; private set
     private val ownOpacity=MotionFloat(clock,initial.opacity,1f,0.0..1.0,key to "opacity"); private var following by mutableStateOf<SurfacePhase?>(null)
     override val opacity: MotionValue get()=following?.opacity?:ownOpacity
