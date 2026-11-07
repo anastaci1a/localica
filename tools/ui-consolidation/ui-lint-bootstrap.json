@@ -1,0 +1,8 @@
+{
+  "sourceSha": "6ccfeb33f597bea63c637cab5ec2d59d174bd999",
+  "registryArtifactSha256": "d24bf39574c77de71aafeab1aaa3e1fc8a76f50de60132af5c2d3553b62e810c",
+  "baselineSha256": "033a3b5fcf2fb6598ebc6b70b62847bf6a7ddf10c4a6a81f84ea4d010e703306",
+  "integratedSha": "dba7f1203be022b60060a8c602224f862630405e",
+  "approvedBy": "lead",
+  "approval": "Operator-approved Stage 0 initial lint-generated inherited debt; lead assignment 2026-11-06T14:56:55Z; no additional escape approved."
+}

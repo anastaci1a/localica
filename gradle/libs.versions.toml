@@ -1,5 +1,6 @@
 [versions]
 agp = "8.13.2"
+lint = "31.13.2"
 kotlin = "2.1.21"
 ksp = "2.1.21-2.0.1"
 compose = "2026.03.01"
@@ -11,6 +12,9 @@ media3 = "1.10.1"
 coroutines = "1.10.2"
 
 [libraries]
+snakeyaml = { module = "org.yaml:snakeyaml", version = "2.2" }
+lint-api = { module = "com.android.tools.lint:lint-api", version.ref = "lint" }
+lint-tests = { module = "com.android.tools.lint:lint-tests", version.ref = "lint" }
 jaudiotagger = { module = "net.jthink:jaudiotagger", version = "3.0.1" }
 androidx-profileinstaller = { module = "androidx.profileinstaller:profileinstaller", version = "1.4.1" }
 androidx-core = { module = "androidx.core:core-ktx", version = "1.16.0" }
@@ -37,6 +41,8 @@ compose-test = { module = "androidx.compose.ui:ui-test-junit4" }
 compose-test-manifest = { module = "androidx.compose.ui:ui-test-manifest" }
 
 [plugins]
+android-lint = { id = "com.android.lint", version.ref = "agp" }
+kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
 android-application = { id = "com.android.application", version.ref = "agp" }
 kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }

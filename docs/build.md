@@ -262,3 +262,17 @@ Open `build/docs-site/docs/index.html` to review the site locally. No Android SD
 The [documentation workflow](../.github/workflows/documentation.yml) runs these checks for pull requests and pushes to main, and uploads the built site as a workflow artifact. Nothing is published.
 
 [Writing rules](../DOCUMENTATION.md) define the maintained inventory and historical exclusions. Automated checks cover prose limits, local links and fragments, headings, image descriptions and rendered navigation. Review contract meaning and remote evidence separately.
+
+## UI policy checks
+
+The app consumes thirteen ERROR rules from `:lint`. Run `./gradlew :lint:test :app:lintDebug` and `bash .github/run-ui-lint.sh app/build/reports/ui-lint`. The second command fetches main once and records its immutable SHA.
+
+The generated `app/lint-baseline.xml` records inherited debt. Initial bootstrap requires the frozen Stage 0 approval and source receipt. Subsequent changes may only remove incident identities; equal-count replacements fail. Never regenerate the baseline to accept new debt.
+
+`app/ui-escapes.yaml` starts empty. An exact adapter exception needs a tracking issue, owner, concrete expiry and recorded lead review. Frozen stage metadata supplies completed steps and release identity. Tests, runtime dependencies and source-only changes trigger the tooling contracts.
+
+Frame export schema 2 retains schema 1 keys and adds an allow-listed scenario tag, frozen build source, capture ID, clock bounds and per-Window identities. Each raw frame sample contains app VSYNC timestamp, work duration, refresh budget and nullable deadline in nanoseconds. Native presentation and tail acknowledgment remain unavailable from FrameMetrics.
+
+The optimized distribution variant is profileable for explicit Perfetto capture. Export occurs after Stop through the existing diagnostics share sheet. No frame listener or trace capture starts before the user chooses Start.
+
+Builds record the checkout’s full Git SHA. For a source archive without Git metadata, pass `-PlocalicaSourceSha=FULL_SOURCE_SHA` from its verified provenance. The compatibility builder supplies the immutable archived candidate SHA.

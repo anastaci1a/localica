@@ -5,7 +5,21 @@ name: Evidence tooling contracts
     paths:
       - '.github/workflows/**'
       - '.github/actions/**'
+      - 'app/src/main/**'
+      - 'app/src/sharedTest/**'
+      - 'app/src/test/**'
       - 'app/src/androidTest/java/**'
+      - 'lint/**'
+      - 'tools/ui-consolidation/**'
+      - 'tools/performance/**'
+      - 'app/lint-baseline.xml'
+      - 'app/ui-escapes.yaml'
+      - 'app/build.gradle.kts'
+      - 'settings.gradle.kts'
+      - 'build.gradle.kts'
+      - 'gradle/**'
+      - '.github/check-ui-lint.mjs'
+      - '.github/run-ui-lint.sh'
       - '.github/tests/**'
       - '.github/compatibility/**'
       - '.github/test-evidence/**'
@@ -23,7 +37,21 @@ name: Evidence tooling contracts
     paths:
       - '.github/workflows/**'
       - '.github/actions/**'
+      - 'app/src/main/**'
+      - 'app/src/sharedTest/**'
+      - 'app/src/test/**'
       - 'app/src/androidTest/java/**'
+      - 'lint/**'
+      - 'tools/ui-consolidation/**'
+      - 'tools/performance/**'
+      - 'app/lint-baseline.xml'
+      - 'app/ui-escapes.yaml'
+      - 'app/build.gradle.kts'
+      - 'settings.gradle.kts'
+      - 'build.gradle.kts'
+      - 'gradle/**'
+      - '.github/check-ui-lint.mjs'
+      - '.github/run-ui-lint.sh'
       - '.github/tests/**'
       - '.github/compatibility/**'
       - '.github/test-evidence/**'
@@ -51,16 +79,20 @@ jobs:
       PYTHONUNBUFFERED: '1'
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '24'
+      - name: Check immutable UI debt
+        run: bash .github/run-ui-lint.sh tooling-ui-lint-reports
       - name: Bind source and prepare runner Python
         shell: bash
         run: |
           set -euo pipefail
           mkdir tooling-contract-reports
           git rev-parse HEAD > tooling-contract-reports/source-sha.txt
-          git ls-files -z .github/emulator-sdk.py .github/emulator-readiness.py .github/emulator-system-image.py .github/actions .github/tests .github/compatibility .github/test-evidence .github/workflows app/src/androidTest/java .github/shared-test-apks.py .github/prebuilt-device-tests.gradle .github/release-verification.py .github/run-device-tests.sh .github/prepare-device-tests.sh .github/run-prototype-tests.sh .github/prototype-risk-classes.txt .github/workflows/tooling-contracts.yml | xargs -0 sha256sum > tooling-contract-reports/source-files.sha256
+          git ls-files -z app/src/main app/src/sharedTest app/src/test lint tools/ui-consolidation tools/performance app/lint-baseline.xml app/ui-escapes.yaml app/build.gradle.kts settings.gradle.kts build.gradle.kts gradle .github/check-ui-lint.mjs .github/run-ui-lint.sh .github/emulator-sdk.py .github/emulator-readiness.py .github/emulator-system-image.py .github/actions .github/tests .github/compatibility .github/test-evidence .github/workflows app/src/androidTest/java .github/shared-test-apks.py .github/prebuilt-device-tests.gradle .github/release-verification.py .github/run-device-tests.sh .github/prepare-device-tests.sh .github/run-prototype-tests.sh .github/prototype-risk-classes.txt .github/workflows/tooling-contracts.yml | xargs -0 sha256sum > tooling-contract-reports/source-files.sha256
           # Pin the interpreter ABI to the reviewed PyYAML wheel; refuse runner drift.
           python3.12 -c 'import platform, sys; assert sys.version_info[:2] == (3, 12) and sys.implementation.name == "cpython" and sys.platform == "linux" and platform.machine() == "x86_64"'
           python3.12 -m venv "$RUNNER_TEMP/tooling-contract-python"
@@ -99,6 +131,7 @@ jobs:
                   raise RuntimeError('Missing required contract file: ' + name)
           commands = [[sys.executable, '-m', 'unittest', 'discover', '-v', '-s', '.github/tests', '-p', name] for name in names]
           commands.append(['node', '--test', '--test-reporter=tap', '.github/tests/test_publish_test_evidence.mjs'])
+          commands.append(['node', '--test', '.github/tests/test_ui_lint_contract.mjs', 'tools/ui-consolidation/pin.test.mjs', 'tools/ui-consolidation/adopt-baseline.test.mjs', 'tools/performance/none-contract.test.mjs', 'tools/performance/summarize-ui.test.mjs'])
           results = []
           for index, argv in enumerate(commands):
               log = root / ('contract-%02d.log' % index)
@@ -122,5 +155,7 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: evidence-tooling-contracts-${{ github.run_id }}-${{ github.run_attempt }}
-          path: tooling-contract-reports/
+          path: |
+            tooling-contract-reports/
+            tooling-ui-lint-reports/
           if-no-files-found: error
