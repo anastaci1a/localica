@@ -79,7 +79,8 @@
     "U13.01",
     "U12.01a",
     "U14.01a",
-    "U13.02"
+    "U13.02",
+    "U01.03"
   ],
   "bootstrapApproval": "Lead decision 2026-11-07 (Stage 2 re-pin, U14.01a): re-bootstrap at integrated v0.33.5 82842503 recording 43 main-side incidents, 51 re-anchored and 9 retired entries; no additional escape approved."
 }
