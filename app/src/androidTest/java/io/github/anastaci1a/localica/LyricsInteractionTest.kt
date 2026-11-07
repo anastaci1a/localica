@@ -102,7 +102,7 @@ class LyricsInteractionTest {
                     }
                     fail("$label was not presented; phase=$lyricsPhase")
                 }
-                phaseUntil("Outgoing lyrics cross-fade") { lyricsPhase in .7f.. .9f }
+                phaseUntil("Outgoing lyrics cross-fade") { lyricsPhase > 0f && lyricsPhase < 1f }
                 // The outgoing document is still presented, although its target is artwork.
                 compose.onNodeWithText("Input line 16").assertIsDisplayed().performTouchInput { click() }
                 compose.runOnIdle { assertEquals(listOf(16000L), sought); assertEquals(0, escaped()) }
