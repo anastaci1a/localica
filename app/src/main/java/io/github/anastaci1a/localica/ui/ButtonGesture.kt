@@ -5,6 +5,7 @@ import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.composed
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
@@ -18,12 +19,15 @@ internal fun Modifier.ownButtonDrag(enabled: Boolean = true, pass: PointerEventP
         awaitEachGesture {
             val down = awaitFirstDown(requireUnconsumed = false, pass = pass)
             val intent = ControlGestureIntent(viewConfiguration.touchSlop, parent.directions())
+            var movement = Offset.Zero
             do {
                 val event = awaitPointerEvent(pass)
                 val point = event.changes.firstOrNull { it.id == down.id } ?: break
                 if (point.isConsumed) break
                 if (event.changes.count { it.pressed } > 1) intent.cancel()
-                val movement = point.position - down.position
+                // Both event positions use the current local coordinates. Summing
+                // their delta excludes layout travel under a stationary finger.
+                movement += point.position - point.previousPosition
                 when (intent.move(movement.x, movement.y, point.uptimeMillis - down.uptimeMillis)) {
                     ControlGestureOwner.Control -> point.consume()
                     ControlGestureOwner.Scroll, ControlGestureOwner.Cancelled -> {
