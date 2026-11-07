@@ -85,8 +85,10 @@ def main():
     gate = None
     if requested_methods:
         inventory_file = archive / 'requested-methods.json'
+        # The same API-gated inventory every iteration's runner records (#657).
         subprocess.run(['python3', '.github/test-evidence/source_methods.py', '--classes',
-                        ','.join(sorted(os.environ['AFFECTED_CLASSES'].split(','))), '--output', str(inventory_file)], check=True)
+                        ','.join(sorted(os.environ['AFFECTED_CLASSES'].split(','))), '--api', os.environ['TEST_API'],
+                        '--output', str(inventory_file)], check=True)
         complete = json.loads(inventory_file.read_text())
         # Preserve source identities while restricting runtime expectations to requested methods.
         subprocess.run(['python3', '.github/prototype-methods.py', str(inventory_file), requested_methods], check=True)
