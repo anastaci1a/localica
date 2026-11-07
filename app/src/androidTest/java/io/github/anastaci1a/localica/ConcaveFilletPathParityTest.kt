@@ -5,7 +5,7 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.geometry.boundingRect
 import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.PathOperation
+import androidx.compose.ui.graphics.asAndroidPath
 import io.github.anastaci1a.localica.navigation.InterfaceSettings
 import io.github.anastaci1a.localica.ui.HoverPathCache
 import io.github.anastaci1a.localica.ui.SelectionRegion
@@ -14,6 +14,7 @@ import io.github.anastaci1a.localica.ui.spec.*
 import org.junit.Assert.*
 import org.junit.Test
 import kotlin.math.min
+import android.graphics.Region
 
 /** U03.01b (D15) native proof: a ConcaveFillet frame path equals HoverPathCache.path for the same bodies, gap and strengths. */
 class ConcaveFilletPathParityTest {
@@ -23,6 +24,8 @@ class ConcaveFilletPathParityTest {
     private fun corpus(frame: Int,count: Int): List<RoundRect> { val p=frame/120f
         return List(12) { i -> val x=i%3*73f; val y=i/3*73f; val tx=x+(80f+min(i,2)*6f-x)*p; val ty=y+(70f+min(i,2)*6f-y)*p
             RoundRect(tx,ty,tx+74.25f,ty+74.25f,CornerRadius(12f)) }.filterIndexed { i,_ -> count==12 || i!=5 }.let { if(frame%7==0) it.reversed() else it } }
+    /** Skia path ops on API 26 fail on the corpus's near-coincident body edges (Path.combine threw at frame 0); a Region at 1/16 px is exact and robust on every level. */
+    private fun region(path: Path)=Region().apply { setPath(android.graphics.Path(path.asAndroidPath()).apply { transform(android.graphics.Matrix().apply { setScale(16f,16f) }) },Region(-16000,-16000,16000,16000)) }
     private fun near(e: Rect,a: Rect)=listOf(e.left-a.left,e.top-a.top,e.right-a.right,e.bottom-a.bottom).all { kotlin.math.abs(it)<=1e-4f }
 
     @Test fun frameContourMatchesHoverPathCacheAcrossTheIntegratedCorpus() {
@@ -34,9 +37,9 @@ class ConcaveFilletPathParityTest {
             val legacy=HoverPathCache().path(regions,regions,gap,data.strength)
             val label="frame=$frame count=$count gap=$gap"
             assertTrue(label,near(legacy.getBounds(),engine.getBounds()))
-            assertTrue("$label: contours differ",Path.combine(PathOperation.Xor,legacy,engine).isEmpty)
+            assertFalse("$label: contours differ",region(legacy).op(region(engine),Region.Op.XOR))
             // The concave contour is not the plain union: at strength 1 the bridges add coverage beyond the bodies.
-            if(p<.5f && gap==16f) assertFalse(label,Path.combine(PathOperation.Difference,engine,shown.bodies.fold(Path()) { c,b -> Path.combine(PathOperation.Union,c,Path().apply { addRoundRect(b) }) }).isEmpty)
+            if(p<.5f && gap==16f) assertTrue(label,region(engine).op(shown.bodies.fold(Region()) { u,b -> u.apply { op(region(Path().apply { addRoundRect(b) }),Region.Op.UNION) } },Region.Op.DIFFERENCE))
             shape.dispose()
         }
     }
