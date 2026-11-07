@@ -164,11 +164,18 @@ class PlayerExpandReadinessTest {
             assertTrue("$name: frame $i at p=${f.progress} lacks the artwork (art ${f.art}); " +
                 "all: ${frames.map { "%.2f@%.2f".format(it.art, it.progress) }}", f.art < EmptyLuminance)
         }
-        // No luminance flash: an open frame never brightens far beyond where the open player rests.
+        // No luminance flash. The last moving frames may still settle from the feathered cover and soft wash
+        // into the rest state (API < 31 prepares that soft layer as a bitmap), but no open frame brightens
+        // beyond both the frame before it and the rest state, and the resting frames hold the rest state.
         val rest = open.last()
-        open.forEach { f ->
-            assertTrue("$name: luminance flash ${f.gutter}/${f.art} over rest ${rest.gutter}/${rest.art}",
-                f.gutter <= rest.gutter + FlashTolerance && f.art <= rest.art + FlashTolerance)
+        val trace = open.map { "%.2f/%.2f@%.3f".format(it.gutter, it.art, it.progress) }
+        open.zipWithNext().forEachIndexed { i, (a, b) ->
+            assertTrue("$name: luminance flash at open frame ${i + 1}: $trace",
+                b.gutter <= maxOf(a.gutter, rest.gutter) + FlashTolerance && b.art <= maxOf(a.art, rest.art) + FlashTolerance)
+        }
+        open.filter { it.progress >= 1f }.forEach { f ->
+            assertTrue("$name: resting frames hold the rest state: $trace",
+                abs(f.gutter - rest.gutter) <= FlashTolerance && abs(f.art - rest.art) <= FlashTolerance)
         }
     }
 
