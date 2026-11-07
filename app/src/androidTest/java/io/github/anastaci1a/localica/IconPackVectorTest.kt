@@ -96,6 +96,7 @@ class IconPackVectorTest {
         assertTrue(report.unknown.isEmpty()); assertTrue(report.rejected.isEmpty())
         val current = IconPacks.images.value
         val external = arguments.getString("icon_pack_path") != null
+        val icons = if (external) AppIcon.entries.filter { it.id in report.applied } else AppIcon.entries
         if (!external) assertEquals(AppIcon.ids, current.vectors.keys)
         val previousPath = arguments.getString("previous_icon_pack_path")
         val previous = previousPath?.let {
@@ -103,7 +104,7 @@ class IconPackVectorTest {
         } ?: current
         val painters = linkedMapOf<AppIcon, List<Painter>>()
         compose.setContent { LocalicaTheme {
-            AppIcon.entries.forEach { icon ->
+            icons.forEach { icon ->
                 val builtin = packIconPainter(icon, null)
                 val old = packIconPainter(icon, previous.masks[icon.id], previous.vectors[icon.id])
                 val new = packIconPainter(icon, current.masks[icon.id], current.vectors[icon.id])
@@ -112,14 +113,27 @@ class IconPackVectorTest {
         } }
         compose.waitForIdle()
         compose.runOnIdle {
-            val sheet = Bitmap.createBitmap(700, 60 + AppIcon.entries.size * 68, Bitmap.Config.ARGB_8888)
+            val sheet = Bitmap.createBitmap(700, 60 + icons.size * 68, Bitmap.Config.ARGB_8888)
             val canvas = android.graphics.Canvas(sheet); canvas.drawColor(0xfff4f4f4.toInt())
             val text = android.graphics.Paint().apply { color = android.graphics.Color.BLACK; textSize = 13f; isAntiAlias = true }
-            canvas.drawText("Icon id                 Built-in              Previous                 Current", 12f, 24f, text)
-            AppIcon.entries.forEachIndexed { index, icon ->
+            val previousLabel = arguments.getString("previous_label") ?: "Previous"
+            val currentLabel = arguments.getString("current_label") ?: "Current"
+            canvas.drawText("Icon id", 12f, 24f, text)
+            canvas.drawText("Built-in", 220f, 24f, text)
+            canvas.drawText(previousLabel, 370f, 24f, text)
+            canvas.drawText(currentLabel, 520f, 24f, text)
+            icons.forEachIndexed { index, icon ->
                 val y = 48 + index * 68
                 canvas.drawText(icon.id, 12f, y + 24f, text)
                 val values = painters.getValue(icon)
+                if (arguments.getString("measure_icons") == "true") {
+                    val folder = File(context.getExternalFilesDir(null), "icon-pack-metrics").also { check(it.isDirectory || it.mkdirs()) }
+                    for ((column, label) in listOf(0 to "builtin", 2 to "current")) {
+                        File(folder, "${icon.id}-$label.png").outputStream().use {
+                            render(values[column], 768, Color.Black).compress(Bitmap.CompressFormat.PNG, 100, it)
+                        }
+                    }
+                }
                 for ((column, painter) in values.withIndex()) for (px in listOf(24, 48)) {
                     val bitmap = render(painter, px, Color(0xff222222))
                     assertTrue("${icon.id} has visible ink", (0 until px).any { row -> (0 until px).any { x -> android.graphics.Color.alpha(bitmap.getPixel(x, row)) > 0 } })

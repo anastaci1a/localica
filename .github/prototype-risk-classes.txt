@@ -1,6 +1,9 @@
 
 # Exact top-level instrumentation classes available at the candidate baseline.
 # Selection remains explicit; this inventory does not claim affected coverage.
+io.github.anastaci1a.localica.IconPackVectorTest
+io.github.anastaci1a.localica.IconPackTransportTest
+io.github.anastaci1a.localica.RepeatOneIconTest
 io.github.anastaci1a.localica.AacEditListExtractionTest
 io.github.anastaci1a.localica.ActionStripDrawingTest
 io.github.anastaci1a.localica.ActivationHapticsTest
