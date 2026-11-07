@@ -1,5 +1,6 @@
 package io.github.anastaci1a.localica.ui
 
+import androidx.compose.foundation.lazy.grid.LazyGridLayoutInfo
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -114,37 +115,122 @@ internal fun browsePinchPartRect(x: Int, y: Int, width: Int, height: Int,
     pinchElementRect(Rect(x.toFloat(), y.toFloat(), (x + width).toFloat(), (y + height).toFloat()),
         Rect(targetX.toFloat(), targetY.toFloat(), (targetX + targetWidth).toFloat(), (targetY + targetHeight).toFloat()), progress)
 
-/** Rank zero is farthest from the focus. Half-overlapping windows cover the whole
- * eased geometry progress; the singleton uses the complete transition. */
+/** A fade from fully drawn at [start] to invisible at [start] + [width] of the transition. */
 internal data class PinchFadeWindow(val start: Float, val width: Float) {
     fun alpha(progress: Float, arriving: Boolean = false): Float {
         val p = if (arriving) 1f - progress else progress
-        val local = ((p.coerceIn(0f, 1f) - start) / width).coerceIn(0f, 1f)
+        val local = ((p.coerceIn(0f, 1f) - start) / width.coerceAtLeast(.0001f)).coerceIn(0f, 1f)
         return 1f - local * local * (3f - 2f * local)
     }
 }
 
-internal fun pinchFadeWindow(rank: Int, count: Int): PinchFadeWindow {
-    require(count > 0 && rank in 0 until count)
-    return if (count == 1) PinchFadeWindow(0f, 1f)
-        else PinchFadeWindow(rank.toFloat() / (count + 1f), 2f / (count + 1f))
+/** Exits closer than this share one fade (top and bottom rows leaving together). */
+internal const val PinchExitTie = .02f
+/** Items leaving sooner than this are already at the edge and fade until they leave. */
+internal const val PinchExitLeadIn = .05f
+
+/** The first progress at which the [source]→[target] interpolation stops intersecting
+ * [viewport]: null while it stays visible to the end, zero when it starts outside. */
+internal fun pinchExitProgress(source: Rect, target: Rect, viewport: Rect): Float? {
+    if (!(source.left < viewport.right && source.right > viewport.left &&
+            source.top < viewport.bottom && source.bottom > viewport.top)) return 0f
+    var exit = Float.POSITIVE_INFINITY
+    // Each overlap condition is a + b·p > 0, positive at p = 0; it fails at -a/b when b < 0.
+    fun limit(a: Float, b: Float) { if (b < 0f) exit = minOf(exit, -a / b) }
+    limit(viewport.right - source.left, source.left - target.left)
+    limit(source.right - viewport.left, target.right - source.right)
+    limit(viewport.bottom - source.top, source.top - target.top)
+    limit(source.bottom - viewport.top, target.bottom - source.bottom)
+    return exit.takeIf { it <= 1f }
 }
 
-/** Endpoint distances keep order independent of interpolated positions and direction.
- * Input order breaks equal-distance ties consistently for both drawing passes. */
-internal fun <T> pinchFadeSchedule(distances: Map<T, Float>): Map<T, PinchFadeWindow> =
-    distances.entries.sortedByDescending { it.value }.mapIndexed { rank, entry ->
-        entry.key to pinchFadeWindow(rank, distances.size)
-    }.toMap()
-
-/** Drawing-only focus snapshot: re-grabbing a preview must not reorder its fades. */
-internal class PinchFadeFocus {
-    private var generation = -1L
-    private var point = Offset.Zero
-    fun resolve(transaction: Long, midpoint: Offset): Offset {
-        if (generation != transaction) { generation = transaction; point = midpoint }
-        return point
+/** Departures fade in the order they leave the viewport (#559). Exits within [PinchExitTie]
+ * share a window. Fade starts are evenly spaced and every fade ends as its item leaves,
+ * so nothing is still opaque when it goes off screen. Arrivals use the reversed path. */
+internal fun <T> pinchExitSchedule(exits: Map<T, Float>): Map<T, PinchFadeWindow> {
+    val groups = mutableListOf<MutableList<Pair<T, Float>>>()
+    exits.entries.map { it.key to it.value.coerceIn(.0001f, 1f) }.sortedBy { it.second }.forEach { exit ->
+        val group = groups.lastOrNull()
+        if (group != null && exit.second - group.first().second <= PinchExitTie) group += exit else groups += mutableListOf(exit)
     }
+    val (edge, ranked) = groups.partition { it.first().second < PinchExitLeadIn }
+    val step = ranked.withIndex().minOfOrNull { (rank, group) -> group.first().second / (rank + 1) } ?: 0f
+    return buildMap {
+        edge.forEach { group -> group.forEach { put(it.first, PinchFadeWindow(0f, group.first().second)) } }
+        ranked.forEachIndexed { rank, group ->
+            val start = rank * step
+            group.forEach { put(it.first, PinchFadeWindow(start, group.first().second - start)) }
+        }
+    }
+}
+
+internal data class PinchFade(val window: PinchFadeWindow, val arriving: Boolean) {
+    fun alpha(progress: Float) = window.alpha(progress, arriving)
+}
+
+internal class PinchFadePlan(val transaction: Long, val layout: LazyGridLayoutInfo, val fades: Map<Any, PinchFade>)
+
+/** A virtualized source item's destination cell, extrapolated from the first live row. */
+internal fun BrowsePinchMotion.retainedTargetCell(index: Int, rowTop: Float, rowIndex: Int, pitch: Float): Rect {
+    val geometry = BrowseCellGeometry(targetColumns)
+    val column = index % targetColumns
+    val width = geometry.cellWidth(viewportWidth.toInt(), pixelDensity, column).toFloat()
+    val leading = geometry.cellLeft(viewportWidth.toInt(), pixelDensity, column).toFloat()
+    val x = if (rightToLeft) viewportWidth - leading - width else leading
+    val y = rowTop + (index / targetColumns - rowIndex / targetColumns) * pitch
+    return Rect(x, y, x + width, y + pitch)
+}
+
+/** Every departing and arriving item's fade for this transaction and destination layout.
+ * Live rows (their body, frost and selection) and the overlay's parts read the same plan. */
+internal fun BrowsePinchMotion.pinchFades(grid: LazyGridState, indices: Map<String, Int>): Map<Any, PinchFade> {
+    if (visualSource == null || target == null) return emptyMap()
+    val layout = grid.layoutInfo
+    fadePlan?.let { if (it.transaction == transaction && it.layout === layout) return it.fades }
+    val visible = layout.visibleItemsInfo.filter { it.key != "browser-notice" }
+    val viewport = Rect(0f, layout.viewportStartOffset.toFloat(), viewportWidth, layout.viewportEndOffset.toFloat())
+    val inset = (BrowseCellGeometry(targetColumns).gridInset * pixelDensity).roundToInt()
+    val departures = mutableMapOf<Any, Float>()
+    val arrivals = mutableMapOf<Any, Float>()
+    val live = HashSet<Any>()
+    visible.forEach { entry ->
+        live += entry.key
+        val index = indices.retainedPinchItemIndex(entry.key).takeIf { it >= 0 } ?: (entry.index - 1).coerceAtLeast(0)
+        val source = sourceBounds(entry.key, index)
+        val target = Rect((entry.offset.x + inset).toFloat(), entry.offset.y.toFloat(),
+            (entry.offset.x + inset + entry.size.width).toFloat(), (entry.offset.y + entry.size.height).toFloat())
+        val exit = pinchExitProgress(source, target, viewport)
+        val entry0 = pinchExitProgress(target, source, viewport)
+        when {
+            entry.key in bounds -> when {
+                exit != null && exit > 0f -> departures[entry.key] = exit
+                exit == 0f && entry0 != 0f -> arrivals[entry.key] = entry0 ?: 1f
+            }
+            entry0 != 0f -> arrivals[entry.key] = entry0 ?: 1f
+        }
+    }
+    val row = visible.firstOrNull()
+    if (row != null) {
+        val rowIndex = indices.retainedPinchItemIndex(row.key)
+        val pitch = max(row.size.height.toFloat(), 1f)
+        bounds.forEach { (key, old) ->
+            if (key in live) return@forEach
+            val index = indices.retainedPinchItemIndex(key)
+            if (index < 0) return@forEach
+            departures[key] = pinchExitProgress(old, retainedTargetCell(index, row.offset.y.toFloat(), rowIndex, pitch), viewport)
+                ?.takeIf { it > 0f } ?: 1f
+        }
+    }
+    val fades = pinchExitSchedule(departures).mapValues { PinchFade(it.value, false) } +
+        pinchExitSchedule(arrivals).mapValues { PinchFade(it.value, true) }
+    fadePlan = PinchFadePlan(transaction, layout, fades)
+    return fades
+}
+
+/** One item's departure or arrival opacity at the current progress; 1 at rest. */
+internal fun BrowsePinchMotion.pinchFadeAlpha(key: Any, grid: LazyGridState, indices: Map<String, Int>): Float {
+    if (visualSource == null) return 1f
+    return pinchFades(grid, indices)[key]?.alpha(progress.value.coerceIn(0f, 1f)) ?: 1f
 }
 
 /** Test-only witness of what the overlay paints: item key to drawn bounds and alpha. */
@@ -190,7 +276,6 @@ internal fun Modifier.pinchRetainedOverlay(motion: BrowsePinchMotion, grid: Lazy
     val scope = rememberCoroutineScope()
     val groups = remember { mutableListOf<HoverGroupRenderer>() }
     val liftStyle = rememberLiftShadow()
-    val fadeFocus = remember(motion) { PinchFadeFocus() }
     val recordingDensity = androidx.compose.ui.platform.LocalDensity.current
     val direction = androidx.compose.ui.platform.LocalLayoutDirection.current
     val averageProgress = glassAverageProgress()
@@ -212,13 +297,7 @@ internal fun Modifier.pinchRetainedOverlay(motion: BrowsePinchMotion, grid: Lazy
         val visible = grid.layoutInfo.visibleItemsInfo
         val p = motion.progress.value.coerceIn(0f, 1f)
         val liveKeys = if (motion.visualSource == null) emptySet() else visible.map { it.key }.toSet()
-        val focus = if (motion.source == null) Offset.Zero else fadeFocus.resolve(motion.transaction,
-            motion.gesture?.midpoint ?: Offset(motion.bounds[motion.focusKey]?.center?.x ?: motion.viewportWidth / 2f,
-                motion.focusTop.toFloat()))
-        val arrivals = if (motion.visualSource == null) emptyMap() else pinchFadeSchedule(
-            visible.filter { it.key !in motion.bounds && (it.key in motion.artwork || it.key in motion.text) }
-                .associate { entry -> entry.key to (Offset(entry.offset.x + entry.size.width / 2f,
-                    entry.offset.y + entry.size.height / 2f) - focus).getDistance() })
+        val fades = motion.pinchFades(grid, indices)
         val probe = pinchDrawProbe?.takeIf { motion.visualSource != null }
         val drawn = if (probe == null) null else mutableMapOf<Any, PinchDrawnItem>()
         fun witness(key: Any, bounds: Rect, alpha: Float, retained: Boolean) {
@@ -233,8 +312,7 @@ internal fun Modifier.pinchRetainedOverlay(motion: BrowsePinchMotion, grid: Lazy
             if (viewport?.isAttached != true || !coordinates.isAttached || part.layer.isReleased ||
                 part.layer.size.width <= 0 || part.layer.size.height <= 0) return
             val bounds = viewport.localBoundingBoxOf(coordinates, clipBounds = false)
-            val incoming = arrivals[key]?.alpha(p, arriving = true) ?: 1f
-            part.layer.alpha = (motion.itemAlpha[key] ?: 1f) * incoming
+            part.layer.alpha = (motion.itemAlpha[key] ?: 1f) * (fades[key]?.alpha(p) ?: 1f)
             witness(key, bounds, part.layer.alpha, false)
             // A resized cover re-records its layer later in this frame (its own render node is
             // updated after this pass), so the layer still holds last frame's size. Scaling by it
@@ -276,30 +354,21 @@ internal fun Modifier.pinchRetainedOverlay(motion: BrowsePinchMotion, grid: Lazy
                 val image = motion.frozen[key] ?: return@forEach
                 val index = indices.retainedPinchItemIndex(key)
                 if (index < 0) return@forEach
-                val column = index % motion.targetColumns
-                val width = geometry.cellWidth(motion.viewportWidth.toInt(), motion.pixelDensity, column).toFloat()
-                val leading = geometry.cellLeft(motion.viewportWidth.toInt(), motion.pixelDensity, column).toFloat()
-                val x = if (motion.rightToLeft) motion.viewportWidth - leading - width else leading
-                val y = row.offset.y + (index / motion.targetColumns - rowIndex / motion.targetColumns) * pitch
+                val cell = motion.retainedTargetCell(index, row.offset.y.toFloat(), rowIndex, pitch)
                 val sourceOrigin = Offset(old.left + sourceInset, old.top + sourceVerticalInset)
-                val targetOrigin = Offset(x + targetInset, y + targetVerticalInset)
-                val fadeWindow = browsePinchFadeWindow((targetOrigin - sourceOrigin).getDistance(), motion.viewportWidth)
-                val exitProgress = browsePinchGeometryProgress(true, p, fadeWindow)
-                // Position and every part's dimensions stop on the same spatial frame.
-                val origin = sourceOrigin + (targetOrigin - sourceOrigin) * exitProgress
-                retained[key] = RetainedPinchPlacement(key, image, origin, (width - 2 * targetInset).coerceAtLeast(0f),
+                val targetOrigin = Offset(cell.left + targetInset, cell.top + targetVerticalInset)
+                // Departures keep moving along their whole path; the fade, keyed to when
+                // the path leaves the viewport, hides them (#559).
+                val origin = sourceOrigin + (targetOrigin - sourceOrigin) * p
+                val placed = RetainedPinchPlacement(key, image, origin, (cell.width - 2 * targetInset).coerceAtLeast(0f),
                     image.content?.target?.height?.toFloat() ?: (pitch - 2 * targetVerticalInset).coerceAtLeast(0f),
-                    1f, index, exitProgress)
+                    fades[key]?.alpha(p) ?: 1f, index, p)
+                retained[key] = placed
+                if (drawn != null) witness(key, Rect(origin, androidx.compose.ui.geometry.Size(
+                    image.size.width + (placed.targetWidth - image.size.width) * p,
+                    image.size.height + (placed.targetHeight - image.size.height) * p)), placed.alpha, true)
             }
         }
-        // Reuse the validated placements: scheduling must not add catalog lookups.
-        val departures = pinchFadeSchedule(retained.keys.associateWith { key ->
-            (motion.bounds.getValue(key).center - focus).getDistance()
-        })
-        retained.replaceAll { key, placed -> placed.copy(alpha = departures.getValue(key).alpha(p)) }
-        if (drawn != null) retained.values.forEach { placed -> witness(placed.key, Rect(placed.origin, androidx.compose.ui.geometry.Size(
-            placed.item.size.width + (placed.targetWidth - placed.item.size.width) * placed.geometryProgress,
-            placed.item.size.height + (placed.targetHeight - placed.item.size.height) * placed.geometryProgress)), placed.alpha, true) }
         fun retainedLift(placed: RetainedPinchPlacement): HoverGeometry? {
             val content = placed.item.content ?: return null
             val hover = content.hover ?: return null

@@ -1098,6 +1098,8 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                                 pinchMotion.itemAlpha[item.key]
                             }
                             if (previous != alpha) pinchMotion.itemAlpha[item.key] = alpha
+                            // The row body, frost and selection share the overlay's departure/arrival fade (#559).
+                            alpha *= pinchMotion.pinchFadeAlpha(item.key, gridState, pinchIndices)
                         }) {
                         // Placement callbacks need not repeat for a re-keyed owner; register the
                         // last placed coordinates whenever this row's key or drag owner changes.
@@ -1171,7 +1173,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                                 pinchMotion.highlightSize(item.key, itemIndex, size)
                             }
                             .selectionLens(selectedCount > 0, partiallySelected, itemKey = item.key, anchor = menuAnchor, outline = { _, _ -> itemOutline.value },
-                                handle = hover, alpha = { pinchMotion.itemAlpha[item.key] ?: 1f }) { size ->
+                                handle = hover, alpha = { (pinchMotion.itemAlpha[item.key] ?: 1f) * pinchMotion.pinchFadeAlpha(item.key, gridState, pinchIndices) }) { size ->
                                 pinchMotion.highlightSize(item.key, itemIndex, size)
                             }
                             .currentSongHighlight(current, MaterialTheme.colorScheme.primary, { _, _ -> itemOutline.value },

@@ -38,7 +38,7 @@ class PinchFadeTest {
     @Test fun smallAndNormalCoversRetraceTheirPixelsAtFractionalDensity() = partMirror(false, 1.75f)
     @Test fun tracklistAndGalleryCoversRetraceTheirPixels() = partMirror(true, 1f)
     @Test fun tracklistAndGalleryCoversRetraceTheirPixelsAtFractionalDensity() = partMirror(true, 1.75f)
-    @Test fun liveArrivalsMirrorRetainedDeparturesAndFartherItemsFadeFirst() = journeyMirror(1f)
+    @Test fun liveArrivalsMirrorRetainedDeparturesAndEarlierExitsFadeFirst() = journeyMirror(1f)
     @Test fun journeyFadesMirrorAtFractionalDensity() = journeyMirror(1.75f)
     @Test fun journeyFadesIncludeDifferentVerticalInsets() = journeyMirror(1f, true)
     @Test fun journeyFadesIncludeFractionalVerticalInsets() = journeyMirror(1.75f, true)
@@ -121,7 +121,7 @@ class PinchFadeTest {
         val art = (30 * scale).roundToInt()
         val list = BrowseStyle(listSize = if (smallest) ListSize.Smallest else ListSize.Normal)
         val gallery = BrowseStyle(presentation = Presentation.Standard, itemsPerRow = 2)
-        // The nearer item travels farther: focus distance, not travel distance, orders fades.
+        // "near" travels farther and leaves the viewport first: exit order, not focus distance, orders fades (#559).
         val indices = mapOf("anchor" to 0, "near" to 3, "far" to 1)
         compose.setContent { CompositionLocalProvider(LocalDensity provides Density(scale)) { LocalicaTheme {
             empty = rememberTextMeasurer().measure(AnnotatedString(""))
@@ -152,8 +152,8 @@ class PinchFadeTest {
             motion.sourceColumns = if (arriving) 1 else 2
             motion.targetColumns = if (arriving) 2 else 1
             motion.pixelDensity = scale; motion.viewportWidth = viewport.toFloat()
-            // Keep synthetic incoming endpoints on screen: this fixture measures alpha, not clipping.
-            motion.anchorIndex = 0; motion.anchorTop = 0f; motion.rowHeight = scale
+            // Arrivals start from the departures' rows, so both directions share their exits.
+            motion.anchorIndex = 0; motion.anchorTop = 0f; motion.rowHeight = pitch.toFloat()
             motion.focusKey = "focus"; motion.focusTop = pitch / 2
             motion.bounds = if (arriving) emptyMap() else mapOf("near" to Rect(0f, 0f, pitch.toFloat(), pitch.toFloat()),
                 "far" to Rect(pitch.toFloat(), 0f, viewport.toFloat(), pitch.toFloat()))
@@ -197,12 +197,11 @@ class PinchFadeTest {
             }
             assertEquals(1f, departures.first().first, .02f)
             assertEquals(1f, departures.first().second, .02f)
-            assertTrue("The farther departure disappears while the nearer cover still paints",
-                departures.any { (near, far) -> near > .05f && far < .01f })
-            assertTrue("Fades must still paint late in the eased transition", departures[15].first > .05f)
-            assertTrue("Neighboring equal-width fades overlap", departures.any { (near, far) ->
-                near in .05f.. .95f && far in .05f.. .95f
-            })
+            assertTrue("The earlier exit disappears while the later cover still paints",
+                departures.any { (near, far) -> far > .05f && near < .01f })
+            assertTrue("Fades must still paint late in the eased transition", departures[15].second > .05f)
+            assertTrue("Both fades are partial at some frame", departures.any { it.first in .05f.. .95f } &&
+                departures.any { it.second in .05f.. .95f })
             assertEquals(0f, departures.last().first, .01f)
             assertEquals(0f, departures.last().second, .01f)
         } finally { compose.mainClock.autoAdvance = true }
