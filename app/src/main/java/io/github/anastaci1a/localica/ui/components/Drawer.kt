@@ -10,7 +10,9 @@ import io.github.anastaci1a.localica.ui.engine.*
 
 /** Where an expansion rests (U10.03). Retained hosts gate lifetime, input and semantics on it, never on a raw phase threshold. */
 enum class ExpansionRest { Closed, Moving, Open }
-private fun ExpansionView.rest() = if (inContact || !phase.settled) ExpansionRest.Moving else if (expanded) ExpansionRest.Open else ExpansionRest.Closed
+/** Only an endpoint rests; a phase held between endpoints (a test pose) is Moving. */
+private fun ExpansionView.rest() = if (inContact || !phase.settled) ExpansionRest.Moving
+    else if (phase.target == 1f && expanded) ExpansionRest.Open else if (phase.target == 0f && !expanded) ExpansionRest.Closed else ExpansionRest.Moving
 /** Follows each applied phase epoch (an Engine settle publishes one), so no composition reads the phase. */
 @Composable fun rememberExpansionRest(view: ExpansionView?): State<ExpansionRest> = produceState(view?.rest() ?: ExpansionRest.Closed, view) {
     if (view != null) snapshotFlow { view.phase.value(); view.rest() }.collect { value = it }
