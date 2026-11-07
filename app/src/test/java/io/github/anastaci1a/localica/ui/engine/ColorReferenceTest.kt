@@ -52,7 +52,7 @@ class ColorReferenceTest {
     @Test fun stageOneHasNoProductionOwnerFactoryCallers() {
         val root=File("src/main/java")
         assertTrue(root.isDirectory)
-        val names=Regex("\\b(rememberMotionFloat|rememberNormalizedMotionFloat|rememberMotionRect|rememberMotionColor|rememberExpandCollapse|rememberPersistentShape)\\s*\\(")
+        val names=Regex("\\b(rememberMotionFloat|rememberNormalizedMotionFloat|rememberMotionRect|rememberMotionColor|rememberExpandCollapse|rememberPersistentShape|rememberSurfaceNode)\\s*\\(")
         val callers=root.walkTopDown().filter { it.extension=="kt" && "/ui/engine/" !in it.invariantSeparatorsPath }.filter { names.containsMatchIn(it.readText()) }.toList()
         assertEquals(emptyList<File>(),callers)
     }
