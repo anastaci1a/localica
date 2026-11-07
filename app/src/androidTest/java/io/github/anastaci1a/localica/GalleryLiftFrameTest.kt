@@ -48,12 +48,12 @@ class GalleryLiftFrameTest {
             }
         } }
         compose.waitForIdle()
-        val restShot = compose.onNodeWithTag("gallery-lift").captureToImage()
+        val restShot = compose.onNodeWithTag("gallery-lift").captureNativeFrame()
         compose.runOnIdle { selected = true }
         compose.waitUntil(5000) { scene.lastDrawnRegions.isNotEmpty() }
         compose.mainClock.advanceTimeBy(1000)
         compose.waitForIdle()
-        val liftedShot = compose.onNodeWithTag("gallery-lift").captureToImage()
+        val liftedShot = compose.onNodeWithTag("gallery-lift").captureNativeFrame()
         val root = (InstrumentationRegistry.getArguments().getString("additionalTestOutputDir")?.takeIf { it.isNotBlank() }?.let(::File)
             ?: requireNotNull(InstrumentationRegistry.getInstrumentation().targetContext.getExternalFilesDir(null))).let { File(it, "gallery-lift") }.apply { mkdirs() }
         for ((name, image) in listOf("rest" to restShot, "lifted" to liftedShot))

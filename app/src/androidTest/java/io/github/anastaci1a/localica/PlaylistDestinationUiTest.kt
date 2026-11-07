@@ -2,7 +2,7 @@ package io.github.anastaci1a.localica
 
 import androidx.compose.runtime.*
 import androidx.compose.ui.test.*
-import io.github.anastaci1a.localica.localicaComposeRule as createComposeRule
+import io.github.anastaci1a.localica.localicaAndroidComposeRule as createComposeRule
 import androidx.compose.ui.unit.dp
 import androidx.room.Room
 import androidx.room.withTransaction
@@ -17,10 +17,33 @@ import org.junit.Rule
 import org.junit.Test
 
 class PlaylistDestinationUiTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = createComposeRule<androidx.activity.ComponentActivity>()
+    private var contentMounted by mutableStateOf(true)
+
+    @org.junit.After fun retireEditorBeforeActivityDisposal() {
+        // These fixtures deliberately finish with an active draft. Dispose its
+        // input while the Activity still owns a live native window (#622).
+        val input = compose.activity.getSystemService(android.view.inputmethod.InputMethodManager::class.java)
+        compose.runOnIdle { contentMounted = false }
+        compose.waitForIdle()
+        compose.runOnUiThread {
+            val view = compose.activity.window.decorView
+            input.hideSoftInputFromWindow(view.windowToken, 0)
+            input.restartInput(view)
+        }
+        compose.waitUntil(5000) {
+            val retired = compose.runOnUiThread {
+                !input.isAcceptingText && androidx.core.view.ViewCompat.getRootWindowInsets(compose.activity.window.decorView)
+                    ?.isVisible(androidx.core.view.WindowInsetsCompat.Type.ime()) != true
+            }
+            retired && nativeImeWindowVisible(android.os.ParcelFileDescriptor.AutoCloseInputStream(
+                InstrumentationRegistry.getInstrumentation().uiAutomation.executeShellCommand("dumpsys -t 2 input_method")
+            ).bufferedReader().use { it.readText() }) == false
+        }
+    }
 
     @Test fun playlistNameOmitsSearchIconAndItsSlotWhileKeepingClearAndFocus() {
-        compose.setContent { LocalicaTheme {
+        compose.setContent { if (contentMounted) LocalicaTheme {
             AddToPlaylistDialog(emptyList(), PlaylistState(loading = false), null, {}, {})
         } }
         val input = compose.onNodeWithContentDescription("New playlist name input")
@@ -43,7 +66,7 @@ class PlaylistDestinationUiTest {
     }
 
     @Test fun actualSearchKeepsItsLeadingIconByDefault() {
-        compose.setContent { LocalicaTheme {
+        compose.setContent { if (contentMounted) LocalicaTheme {
             GlassSearchField("", {}, "Search songs")
         } }
         compose.onNodeWithContentDescription("Search songs input").assertIsDisplayed().assertIsEnabled()
@@ -52,7 +75,7 @@ class PlaylistDestinationUiTest {
 
     @Test fun backFromNameEndsEditingBeforeDismissingPicker() {
         var closed by mutableStateOf(false)
-        compose.setContent { LocalicaTheme {
+        compose.setContent { if (contentMounted) LocalicaTheme {
             if (!closed) AddToPlaylistDialog(emptyList(), PlaylistState(loading = false), null, { closed = true }, {})
         } }
         compose.onNodeWithText("New playlist name").performClick().performTextInput("Draft")
@@ -78,7 +101,7 @@ class PlaylistDestinationUiTest {
                 controller.create("Existing") { created.complete(it) }
                 assertTrue(withTimeout(5000) { created.await() })
             }
-            compose.setContent { LocalicaTheme {
+            compose.setContent { if (contentMounted) LocalicaTheme {
                 val state by controller.state.collectAsState()
                 AddToPlaylistDialog(listOf(song), state, controller, {}, { finished = true })
             } }

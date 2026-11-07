@@ -38,6 +38,10 @@ Mandatory native regressions retain presented-pixel, lifecycle, first/reopened-f
 
 `ScrollPerformanceTest` only measures scrolling. It is skipped by assumption unless `scrollPerformance=true`, set by the Android workflow dispatch input `scroll_performance`. Default runs report its three methods as skipped.
 
+Selection outline benchmarks report geometry and path construction, including mixed-opacity subset paths and unchanged-input caching. API 26 CI requires a median at most 1 ms and a 95th percentile at most 2 ms. API 36 reports timing and its renderer without enforcing that budget.
+
+For local diagnostics under host contention, pass instrumentation argument `selectionOutlineTimingGate=false`. Measurements and cache-correctness assertions still run. CI leaves this argument unset, so the API 26 timing gate remains enabled.
+
 `StartupDiagnosticsSeedTest` also skips by assumption without `startupDiagnostics=disposable-emulator`. Its one method prepares the diagnostic fixture; it is not performance acceptance.
 
 The [startup diagnostic controller source](../tools/startup-diagnostics/run.py) runs in the test package, outside the measured process. Explicit disposable-emulator admission permits fixture seeding and paired process-cold/warm activity launches. It records p50/p95/p99 frame times, accessibility input milestones and optional system traces. Synthetic embedded covers exercise decoding; physical-device acceptance remains open.
@@ -176,9 +180,13 @@ API 36 uses explicit `lavapipe`, 720×1280 at 280 dpi, and normal system animati
 
 Before instrumentation, the bounded emulator readiness gate checks boot completion, package-manager response, unlocked launcher focus and three stable screenshots after display resizing. It preserves observations in `emulator-readiness.json` and fails after 120 seconds. System images use exact revision cache keys; AVD userdata and snapshots are not cached.
 
+CI passes `--normalize-navigation` to recreate API 36's Launcher3 after display overrides. This clears providers cached at the previous density and residual cold-start launcher state. Admission also requires the native three-button navigation inset to equal `48 dp` at the effective density. The reset refuses physical devices, other launchers and gesture navigation. API 26 retains its existing setup.
+
 API 26 disables the optional GLDMA transfer path with `-feature -GLDMA`. This targets the `goldfish_pipe_dma_clear_lock` guest-kernel panic observed during repeated display captures (#607). Renderer, memory, capture coverage and assertions remain unchanged. Repeated native verification determines whether this mitigation is sufficient.
 
 Full and focused native jobs stream guest kernel messages into workflow logs and retain the emulator crash database on failure when present. An absent host crash report does not rule out a guest reboot. Preserve the original test logs and host diagnostics when investigating device loss.
+
+Hosted emulator jobs cache the SDK archive by revision and checksum. Cached and downloaded archives must match the [official SDK repository](https://dl.google.com/android/repository/repository2-1.xml)'s size, SHA-1 and package revision before installation. A failed or corrupt download is retried once. Two failures stop setup before device tests.
 
 On disposable GitHub-hosted API 26 emulators, the native runner temporarily disables preinstalled Google Search before instrumentation. Its unrelated JobScheduler crash can obstruct Localica. Cleanup restores its prior enabled state after verifying device and package ownership. Google Search data is preserved. Physical devices are untouched. Localica crashes and all assertions remain fatal.
 

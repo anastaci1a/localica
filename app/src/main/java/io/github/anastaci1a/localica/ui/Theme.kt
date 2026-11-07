@@ -117,6 +117,6 @@ fun LocalicaTheme(grayTone: Float = .4f, content: @Composable () -> Unit) {
             LocalGlassRendererRuntime provides renderer,
             androidx.compose.material3.LocalContentColor provides MaterialTheme.colorScheme.onSurface,
             androidx.compose.material3.LocalRippleConfiguration provides null,
-        ) { ProvideUiClock { ModalGestureRoot { TextEditingFocusHost { GlassDialogHost(content) } } } }
+        ) { ProvideUiClock { ModalGestureRoot { TextEditingFocusHost { GlassDialogHost { GlassPopupHome(content = content) } } } } }
     }
 }

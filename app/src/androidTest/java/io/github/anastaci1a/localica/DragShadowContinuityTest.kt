@@ -54,7 +54,7 @@ class DragShadowContinuityTest {
         val probe = ShadowFrameProbe(Rect(target.center.x-8*d, target.bottom+3*d, target.center.x+8*d, target.bottom+7*d))
         for (dx in listOf(-12f, -8f, -4f, 0f, 4f, 8f, 12f, 0f)) {
             compose.runOnIdle { state.move(target.center + Offset(dx*d, 0f)) }
-            val image = scene.captureToImage()
+            val image = scene.captureNativeFrame()
             val luminance = probe.sample(image)
             assertTrue("X shadow must fall on the opaque dragged card at dx=$dx: $luminance", luminance < .97f)
             ShadowFrameProbe.assertSpreadEdge(image,
