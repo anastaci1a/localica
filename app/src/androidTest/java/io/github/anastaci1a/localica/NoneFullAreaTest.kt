@@ -33,12 +33,15 @@ class NoneFullAreaTest {
             LocalGlassAppearance provides GlassAppearance(whiteTint = 0f, contrast = 0f, shadowStrength = 0f)
         ) { LocalicaTheme {
             source = rememberFrostedBackdrop(Unit, dark = false)
-            Box(Modifier.size(257.dp, 129.dp)) {
+            // The source extends past the surface by more than its blur reach, so the whole
+            // refraction preimage lies over recorded pixels.
+            Box(Modifier.size(297.dp, 169.dp)) {
                 Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(source)) {
                     drawRect(Color.Black)
-                    for (x in 0 until 257) if (x % 32 < whiteWidth) drawRect(Color.White, Offset(x.toFloat(), 0f), Size(1f, size.height))
+                    for (x in -20 until 277) if (Math.floorMod(x, 32) < whiteWidth)
+                        drawRect(Color.White, Offset(x + 20f, 0f), Size(1f, size.height))
                 }
-                LiquidGlassSurface(Modifier.fillMaxSize().testTag("mean"), source,
+                LiquidGlassSurface(Modifier.offset(20.dp, 20.dp).size(257.dp, 129.dp).testTag("mean"), source,
                     cornerRadius = 0.dp, pressFeedback = false, shadow = false)
             }
         } } }
@@ -47,9 +50,9 @@ class NoneFullAreaTest {
         // The averaged region is the shared refraction preimage (#624), not a re-derived footprint.
         val region = lensRefractionPreimage(Rect(0f, 0f, 257f, 129f), liquidGlassPreimageOptics(Size(257f, 129f), 0f,
             GlassAppearance().depth, 1f, 1f, 22f * GlassAppearance().blur, 32f))
-        assertEquals("Preimage $region stays inside the source", region, Rect(0f, 0f, 257f, 129f).intersect(region))
+        assertEquals("Preimage $region stays inside the source", region, Rect(-20f, -20f, 277f, 149f).intersect(region))
         // Independent oracle: the covered fraction of every one-pixel white column, all rows alike.
-        fun mean(width: Int) = (0 until 257).filter { it % 32 < width }.sumOf { x ->
+        fun mean(width: Int) = (-20 until 277).filter { Math.floorMod(it, 32) < width }.sumOf { x ->
             (minOf(region.right, x + 1f) - maxOf(region.left, x.toFloat())).coerceAtLeast(0f).toDouble() }.toFloat() / region.width
         val expected = mean(8)
         for (x in listOf(image.width / 4, image.width / 2, image.width * 3 / 4)) {
@@ -58,7 +61,7 @@ class NoneFullAreaTest {
             assertEquals(expected, actual.green, .02f)
             assertEquals(expected, actual.blue, .02f)
             if (Build.VERSION.SDK_INT < 33) assertLegacyAreaBound(actual.red, expected,
-                region, 512, 256)
+                region.translate(20f, 20f), 512, 256)
         }
         // Keep the same surface mounted while its backdrop changes. A retained
         // reduction must refresh its input rather than freeze the first mean.

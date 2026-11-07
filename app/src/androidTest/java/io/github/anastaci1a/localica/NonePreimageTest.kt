@@ -68,6 +68,14 @@ class NonePreimageTest {
         }
     }
 
+    private fun onScreen(tag: String): Color {
+        val node = compose.onNodeWithTag(tag).fetchSemanticsNode()
+        val origin = IntArray(2).also { (node.root as androidx.compose.ui.platform.ViewRootForTest).view.getLocationOnScreen(it) }
+        val centre = node.boundsInRoot.center
+        val screen = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot()
+        try { return Color(screen.getPixel((centre.x + origin[0]).toInt(), (centre.y + origin[1]).toInt())) } finally { screen.recycle() }
+    }
+
     private fun centre(tag: String): Color = compose.onNodeWithTag(tag).captureToImage().toPixelMap().let { it[it.width / 2, it.height / 2] }
 
     private fun assertMean(label: String, expected: Color, actual: Color, region: Rect) {
@@ -108,7 +116,7 @@ class NonePreimageTest {
     @Test fun floatingButtonFollowsTextBehindItOverItsPreimage() {
         val text = Rect(0f, 152f, sourceSize, 168f)
         floating({ Scene(Color.White, emptyList()) }, Offset(110f, 110f), Size(100f, 100f), null, "button over text",
-            listOf({ copy(rects = listOf(text to Color.Black)) }, { copy(rects = listOf(text.translate(0f, 24f) to Color.Black)) }))
+            listOf({ copy(rects = listOf(text to Color.Black)) }, { copy(rects = listOf(text.translate(0f, -52f) to Color.Black)) }))
     }
 
     @Test fun floatingButtonOverAlbumArtAveragesTheArtItRefracts() {
@@ -120,7 +128,7 @@ class NonePreimageTest {
     @Test fun pillOverAListAveragesTheRowsItRefracts() {
         val rows = (0 until 20).map { Rect(0f, it * 16f, sourceSize, it * 16f + 8f) to Color.Black }
         floating({ Scene(Color.White, rows) }, Offset(40f, 128f), Size(240f, 64f), 32f, "pill over list",
-            listOf({ copy(rects = rects.map { (r, c) -> r.translate(0f, 5f) to c }) }))
+            listOf({ copy(rects = rects.map { (r, c) -> Rect(r.left, r.top, r.right, r.top + 12f) to c }) }))
     }
 
     /** Controls inside a finished panel (the Queue drawer's structure: a list recorded over
@@ -153,7 +161,7 @@ class NonePreimageTest {
         compose.waitUntil(15_000) { list.recorded && (Build.VERSION.SDK_INT >= 33 || list.snapshot != null) }
         val region = preimage(Size(100f, 100f)).translate(button)
         val fills = mutableListOf<Color>()
-        for (y in listOf(-100f, 152f, 176f)) {
+        for (y in listOf(-100f, 152f, 100f)) {
             compose.runOnIdle { textY = y }
             compose.waitForIdle()
             val panel = compose.onNodeWithTag("panel").captureToImage().toPixelMap()[300, 20]
@@ -191,8 +199,9 @@ class NonePreimageTest {
         compose.onNodeWithText("Preimage popup").assertExists()
         compose.waitForIdle()
         compose.waitUntil(15_000) {
-            val panel = compose.onNodeWithTag("popup-gap").captureToImage().toPixelMap().let { it[it.width / 2, it.height / 2] }
-            val control = centre("popup-control")
+            // Dialog windows cannot be captured per node below API 28: read the screen instead.
+            val panel = onScreen("popup-gap")
+            val control = onScreen("popup-control")
             listOf(panel.red - control.red, panel.green - control.green, panel.blue - control.blue).all { kotlin.math.abs(it) < .03f }
         }
     }
