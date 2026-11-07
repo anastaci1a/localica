@@ -52,3 +52,15 @@ internal object EscapeManifest {
         return false
     }
 }
+
+/** `tools/ui-consolidation/stage.json` step lists (known, completed), or null unless strictly well-formed. */
+internal object StageFile {
+    fun steps(text: String): Pair<Set<String>, Set<String>>? {
+        val options = LoaderOptions().apply { isAllowDuplicateKeys = false; maxAliasesForCollections = 0; codePointLimit = 100_000 }
+        val map = (try { Yaml(SafeConstructor(options)).load<Any>(text) } catch (_: RuntimeException) { null }) as? Map<*, *> ?: return null
+        fun list(key: String) = (map[key] as? List<*>)?.map { it as? String ?: return null }?.takeIf { it.toSet().size == it.size }?.toSet()
+        val known = list("knownSteps") ?: return null
+        val completed = list("completedSteps") ?: return null
+        return (known to completed).takeIf { map["schemaVersion"] == 1 && known.isNotEmpty() && known.containsAll(completed) }
+    }
+}
