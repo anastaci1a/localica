@@ -169,7 +169,7 @@ internal object SvgIconParser {
 
     private class Frame(val tag: String, val style: SvgStyle, val transforms: List<SvgTransform> = emptyList(),
         val children: MutableList<SvgNode>? = mutableListOf(),
-        val matrix: List<Double> = listOf(1.0, 0.0, 0.0, 1.0, 0.0, 0.0))
+        val matrix: List<Double> = listOf(1.0, 0.0, 0.0, 1.0, 0.0, 0.0), val transformDepth: Int = 0)
     private class Handler : DefaultHandler() {
         var result: SvgIcon? = null
         private var box: List<Float> = emptyList()
@@ -209,7 +209,9 @@ internal object SvgIconParser {
                 "g" -> {
                     require(stack.isNotEmpty()) { "SVG root is required" }
                     val transforms = a["transform"]?.let(::transforms).orEmpty()
-                    stack += Frame(local, s, transforms, matrix = combined(stack.last().matrix, transforms))
+                    val depth = stack.last().transformDepth + transforms.size
+                    require(depth <= 32) { "SVG transform nesting limit exceeded" }
+                    stack += Frame(local, s, transforms, matrix = combined(stack.last().matrix, transforms), transformDepth = depth)
                 }
                 "path" -> {
                     require(stack.isNotEmpty() && ++paths <= MAX_PATHS) { "SVG path limit exceeded" }
