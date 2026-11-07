@@ -1,15 +1,16 @@
 {
   "schemaVersion": 1,
-  "approval": "Lead decision 2026-11-07 ~12:55 PM (5), #600 Stage 2 close-out (design/STAGE2-CLOSEOUT.md §3): A2 nominal and unit caps are unchanged; the cap gap is a carried deficit of 340 tracked as seven named rows. A row closes only with its step's U14 receipt (actual gross deletion, symbol gone); a short row becomes that unit's overrun.",
-  "carried": 340,
+  "approval": "Lead decisions 2026-11-07 12:55 PM (5) and 2:10 PM (3), #600 Stage 2: accept +544 carried; add R8 (+54) for U10.03. Stage 3 gate tightens to -114. Nominal and unit caps remain unchanged. Close rows only with measured U14 receipts.",
+  "carried": 394,
   "effectiveGates": {
-    "stage2": 490,
-    "stage3": -60,
+    "stage2": 544,
+    "stage3": -114,
     "stage4": -700
   },
   "repayment": {
-    "byStage3Close": 200,
-    "byStage4Close": 140
+    "byStage3Close": 308,
+    "byStage4Close": 86,
+    "note": "394 carried minus 308 recovered leaves 86; Stage 3 nominal -200 plus 86 equals the approved -114 gate."
   },
   "rows": [
     {
@@ -75,6 +76,16 @@
       "step": "U10.05/U11.01",
       "stage": 4,
       "authority": "12:55 PM (3), (4)"
+    },
+    {
+      "id": "R8",
+      "credit": "U10.03 components layer and settled-layout crop",
+      "grossA2Stage2": 0,
+      "expectedNet": -54,
+      "step": "U10.03",
+      "stage": 3,
+      "authority": "Lead decision 2026-11-07 2:10 PM (3)",
+      "note": "Accepted Stage 2 overrun; recover against the tightened Stage 3 gate, with a measured U14 receipt."
     }
   ],
   "writtenOff": [
@@ -90,7 +101,7 @@
     }
   ],
   "receipt": {
-    "measuredAt": "5df1c4fd",
+    "measuredAt": "f803b7b7",
     "path": "app/src/main",
     "method": "git diff --numstat, added minus deleted; Stage 1+2 against the integrated v0.33.8 tip so main-side lines are excluded",
     "stage0plus1": {
@@ -101,13 +112,17 @@
       "cap": 550
     },
     "stage1plus2": {
-      "range": "d95bcb8c..5df1c4fd",
+      "range": "ff32ec6d..f803b7b7",
       "added": 905,
       "deleted": 361,
       "net": 544,
-      "effectiveGate": 490,
-      "overrun": 54
+      "effectiveGate": 544,
+      "overrun": 0
     },
-    "note": "Stage 2 rows still open here: U01.05a/U05.02a (floating family, blocked on fixture hosting) was projected at -7. U10.03 landed at about +39 against a projected -15: owner factories must stay in engine/components (ColorReferenceTest), so the root reaches its Engine owners through components/Presence.kt (+24), and the crop target is computed at the settled layout instead of from the moving clearance."
-  }
+    "note": "Measured +905/-361 = +544 against v0.33.8 ff32ec6d. The floating family U01.05a/U05.02a moves to Stage 4 with U05.02c (lead 2:10 PM (2)); no provisional Engine root or fixture changes. U10.03 owners require components/Presence.kt; crop targets the settled layout. R8 carries the +54 beyond the previous +490 gate."
+  },
+  "validationNotes": [
+    "Lead decision 2026-11-07 2:10 PM (1): ink and material assertions follow every lyrics phase sample and C1 rejoin; frame bounds derive from the #608 curve plus the cubic phase binding. The retired 412 ms duration and four-intermediate-frame requirement are removed.",
+    "Stage 2 FixtureTime and the PlayerSurface harness clock are the single test-clock implementation (lead 2:10 PM (5))."
+  ]
 }

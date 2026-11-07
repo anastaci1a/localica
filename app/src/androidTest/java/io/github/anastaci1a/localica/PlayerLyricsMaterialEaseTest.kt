@@ -7,6 +7,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.*
 import io.github.anastaci1a.localica.localicaComposeRule as createComposeRule
@@ -31,6 +33,8 @@ class PlayerLyricsMaterialEaseTest {
     private var lyrics by mutableStateOf(false)
     private var settings by mutableStateOf(InterfaceSettings(artworkLayout = ArtworkLayout.FullBackground,
         glass = GlassAppearance(contrast = .3f)))
+    @Volatile private var inkComposition: PlayerInkComposition? = null
+    private var reference: LyricsPhaseReference? = null
     @Volatile private var tone = Float.NaN
     @Volatile private var coating = Float.NaN
     @Volatile private var panelInk = Float.NaN
@@ -44,7 +48,8 @@ class PlayerLyricsMaterialEaseTest {
             .apply { eraseColor(android.graphics.Color.GRAY) }
         val visual = PlayerVisual(bitmap.asImageBitmap(), kotlinx.coroutines.runBlocking { playerPalette(bitmap) }, contentKey = "gray")
         compose.setContent { LocalicaTheme {
-            CompositionLocalProvider(LocalDensity provides Density(1f), LocalGlassSurfaceDrawObserver provides {
+            CompositionLocalProvider(LocalDensity provides Density(1f),
+                LocalPlayerInkCompositionObserver provides { inkComposition = it }, LocalGlassSurfaceDrawObserver provides {
                 if (it.panel > 0f && it.width < 100f) { tone = it.toneLightMix; coating = it.coatingLightMix } }) {
                 BoxWithConstraints(Modifier.fillMaxSize()) {
                     val mix = owner.lightMix
@@ -66,25 +71,36 @@ class PlayerLyricsMaterialEaseTest {
 
     private fun record(count: Int) = repeat(count) {
         compose.mainClock.advanceTimeByFrame(); compose.waitForIdle()
+        val phase = requireNotNull(inkComposition).lyricsProgress
+        reference?.assertFrame("shared polarity", phase, owner.lightMix)
+        assertEquals("outside backdrop follows this frame", owner.lightMix, backdropMix, .015f)
+        assertEquals("glass tone follows this frame", owner.lightMix, tone, .015f)
+        assertEquals("coating follows this frame", owner.lightMix, coating, .015f)
+        assertEquals("panel ink follows this frame", lerp(Color(0xFF202124), Color.White, owner.lightMix).red, panelInk, .015f)
         frames += Frame(owner.lightMix, tone, coating, panelInk, backdropMix)
     }
 
     private fun check(name: String, values: List<Float>, towardLight: Boolean) {
         assertTrue("$name never changed: $values", abs(values.last() - values.first()) > .9f)
         values.zipWithNext().forEachIndexed { i, (a, b) ->
-            assertTrue("$name single-frame jump at $i: $a -> $b", abs(b - a) <= .3f)
             assertTrue("$name not monotonic at $i: $a -> $b", if (towardLight) b >= a - 1e-3f else b <= a + 1e-3f)
         }
-        assertTrue("$name eased through intermediates", values.count { it > .05f && it < .95f } >= 4)
     }
 
     private fun run(layout: ArtworkLayout, open: Boolean, towardLight: Boolean) {
         settings = settings.copy(artworkLayout = layout)
         lyrics = !open; owner.pin(!towardLight); mount()
         compose.mainClock.autoAdvance = false
-        compose.runOnIdle { lyrics = open }; repeat(6) { compose.mainClock.advanceTimeByFrame(); compose.waitForIdle() }
+        compose.runOnIdle { lyrics = open }; repeat(2) { compose.mainClock.advanceTimeByFrame(); compose.waitForIdle() }
         frames.clear()
-        compose.runOnIdle { owner.pin(towardLight) }
+        frames += Frame(owner.lightMix, tone, coating, panelInk, backdropMix)
+        compose.runOnIdle {
+            val phase = requireNotNull(inkComposition).lyricsProgress
+            reference = LyricsPhaseReference(owner.lightMix, phase, if (open) 1f else 0f).also {
+                it.join(if (towardLight) 1f else 0f, phase, if (open) 1f else 0f)
+            }
+            owner.pin(towardLight)
+        }
         record(45)
         check("shared polarity", frames.map { it.shared }, towardLight)
         check("outside backdrop", frames.map { it.backdrop }, towardLight)
@@ -93,7 +109,7 @@ class PlayerLyricsMaterialEaseTest {
         // The panel theme ink runs from dark ink (red .1255) to white; normalise to the 0..1 fraction.
         check("panel theme ink", frames.map { ((it.panel - .1255f) / .8745f).coerceIn(0f, 1f) }, towardLight)
         // The player's own foreground and every material read the one eased fraction: they never disagree by more than a frame.
-        frames.zipWithNext().forEach { (a, b) -> assertTrue(abs(b.backdrop - a.shared) <= .3f) }
+        // record() compares every material with the same frame, including the faster first #608 step.
     }
 
     @Test fun openingToTheLyricsThemeEasesTheMaterialsFullBackground() = run(ArtworkLayout.FullBackground, open = true, towardLight = false)
