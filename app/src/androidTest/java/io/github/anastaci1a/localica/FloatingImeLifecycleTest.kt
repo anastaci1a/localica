@@ -253,6 +253,9 @@ class FloatingImeLifecycleTest {
                 records += "method-binding-restoration-verified"
             }
             cleanup { File(output(), "restored-input-method.txt").writeText(restoredMethodDump) }
+            // Switching the default IME to the synthetic service and back leaves the system keyboard
+            // (LatinIME) reporting its whole window as the IME inset (#638). A fresh process fixes it.
+            cleanup { restartSystemKeyboard(original.getValue("default_input_method")) }
             if (cleanupError != null) {
                 cleanup { File(output(), "restoration-windows.txt").writeText(shell("dumpsys -t 2 window")) }
                 cleanup {
