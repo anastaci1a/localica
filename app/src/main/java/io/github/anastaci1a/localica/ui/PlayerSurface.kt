@@ -100,7 +100,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     val inkDestination = polarity.destinationLightInk
     val lightInk = if (inkDestination != null && (blendClock < 1f || inkDecision.confidence != PlayerBackgroundConfidence.Current)) inkDestination
         else inkDecision.lightInk
-    val inkTarget = if (lightInk) Color.White else Color.Black
+    val inkTarget = if (lightInk) 1f else 0f
     val paletteDuration = settings.motionDuration(550)
     // A request may precede blend admission. Keep its palette with the old frame until
     // the blend publishes the new target and its reset clock together.
@@ -108,20 +108,18 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     val aspect by animateFloatAsState(artwork.palette.aspect, tween(paletteDuration), label = "Cover proportions")
     val palette = animatedPlayerPalette(paletteTarget, blendClock).copy(aspect = aspect)
     val lyricVisibility by animateFloatAsState(if (lyricsOpen) 1f else 0f, tween(settings.motionDuration(550)), label = "Lyrics layout")
-    // A light/dark foreground change during the lyrics animation eases with its progress.
-    val inkTransition = remember { PlayerInkTransition(inkTarget) }
-    val lyricsAnimating = kotlin.math.abs(lyricVisibility - (if (lyricsOpen) 1f else 0f)) > PlayerInkTransition.SETTLED
-    val artworkEasing = !lyricsAnimating && blendClock < 1f
-    val inkStep = if (artworkEasing) inkTransition.resolve(inkTarget, blendClock, true, clock = 1)
-        else inkTransition.resolve(inkTarget, lyricVisibility, lyricsOpen)
+    // A light/dark foreground change during the lyrics animation (or artwork blend, #578) follows that shared phase (U08.02a).
+    val inkTransition = remember { io.github.anastaci1a.localica.ui.engine.PhaseBinding(inkTarget) }
+    val lyricsEnd = if (lyricsOpen) 1f else 0f
+    val inkStep = if (kotlin.math.abs(lyricVisibility - lyricsEnd) <= io.github.anastaci1a.localica.ui.engine.PhaseBinding.SETTLED &&
+        blendClock < 1f) inkTransition.resolve(inkTarget, blendClock, 1f, clock = 1) else inkTransition.resolve(inkTarget, lyricVisibility, lyricsEnd)
     val lyricsInk = polarity.lyricsInk?.takeIf { blendClock >= 1f }
-    val playerInk = if (lyricsInk != null) lerp(if (lyricsInk.ordinary) Color.White else Color.Black,
-        if (lyricsInk.lyrics) Color.White else Color.Black, lyricVisibility) else inkStep.shown
     // Every material that follows the player's ink (the glass backdrops and the panel theme below) reads the same
     // eased polarity as the foreground, and the shared state exposes it to the surfaces outside this composable.
     val lightMix = if (lyricsInk != null) (if (lyricsInk.ordinary) 1f else 0f) * (1f - lyricVisibility) +
-        (if (lyricsInk.lyrics) 1f else 0f) * lyricVisibility else inkStep.light
-    SideEffect { inkTransition.commit(inkStep.copy(shown = playerInk, light = lightMix)); polarity.presentLightMix(lightMix) }
+        (if (lyricsInk.lyrics) 1f else 0f) * lyricVisibility else inkStep.value
+    val playerInk = lerp(Color.Black, Color.White, lightMix)
+    SideEffect { inkTransition.present(inkStep.copy(value = lightMix)); polarity.presentLightMix(lightMix) }
     // Header controls already sample this scene before lyrics open. Older
     // adapters need its prepared pixels whenever that header is visible too.
     val lyricBackdrop = rememberFrostedBackdrop(listOf(artwork, settings.artworkLayout, settings.glass), p > .7f, dark = lightInk, lightMix = lightMix)

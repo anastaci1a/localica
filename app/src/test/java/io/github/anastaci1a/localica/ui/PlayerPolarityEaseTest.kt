@@ -2,6 +2,7 @@ package io.github.anastaci1a.localica.ui
 
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
+import io.github.anastaci1a.localica.ui.engine.PhaseBinding
 import org.junit.Assert.*
 import org.junit.Test
 import kotlin.math.abs
@@ -20,10 +21,10 @@ class PlayerPolarityEaseTest {
 
     /** Runs the transition one frame at a time. [progressAt] is the lyrics clock, [inkAt] the sampled decision. */
     private fun run(initial: Color, open: (Int) -> Boolean, progressAt: (Int) -> Float, inkAt: (Int) -> Color, count: Int = frames + 1): List<Frame> {
-        val ink = PlayerInkTransition(initial)
+        val ink = PhaseBinding(initial.luminance().let { if (it > .5f) 1f else 0f })
         return (0 until count).map { i ->
-            val step = ink.resolve(inkAt(i), progressAt(i), open(i)).also(ink::commit)
-            Frame(progressAt(i), step.shown, step.light)
+            val step = ink.resolve(if (inkAt(i) == white) 1f else 0f, progressAt(i), if (open(i)) 1f else 0f).also(ink::present)
+            Frame(progressAt(i), androidx.compose.ui.graphics.lerp(black, white, step.value), step.value)
         }
     }
 
@@ -53,7 +54,7 @@ class PlayerPolarityEaseTest {
                 assertTrue(b.light <= a.light + 1e-6f); assertTrue(b.ink.luminance() <= a.ink.luminance() + 1e-4f)
             }
             if (flip <= 30) assertTrue("eases through intermediate values for flip=$flip", sequence.count { it.light in .05f..0.95f } >= (frames - flip) / 2)
-            assertNoJump(sequence, 1.2f / (frames - flip).coerceAtLeast(1))
+            assertNoJump(sequence, 1.6f / (frames - flip).coerceAtLeast(1)) // C1 ease: peak 1.5x the mean
             assertForegroundFollowsMaterial(sequence)
         }
     }
@@ -67,7 +68,7 @@ class PlayerPolarityEaseTest {
             sequence.zipWithNext().forEach { (a, b) ->
                 assertTrue(b.light >= a.light - 1e-6f); assertTrue(b.ink.luminance() >= a.ink.luminance() - 1e-4f)
             }
-            assertNoJump(sequence, 1.2f / (frames - flip).coerceAtLeast(1))
+            assertNoJump(sequence, 1.6f / (frames - flip).coerceAtLeast(1)) // C1 ease: peak 1.5x the mean
             assertForegroundFollowsMaterial(sequence)
         }
     }
