@@ -126,14 +126,6 @@
       "rule": "RawMotionMap",
       "path": "app/src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt",
       "fqn": "io.github.anastaci1a.localica.ui.smoothReveal",
-      "codeSha256": "97173f560c8aaaf83654756ba8001a4ce06805c00078c9d3d02217015850cae7",
-      "removedBy": "U10.03",
-      "reason": "U10.03 removes: existing player phase consumer, now reading the Engine phase (U10.01 ownership move): artPixels, expanded && p >= .99f && !lyricsOpen && (queueProgress?.value ?: 0f) == 0f,"
-    },
-    {
-      "rule": "RawMotionMap",
-      "path": "app/src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt",
-      "fqn": "io.github.anastaci1a.localica.ui.smoothReveal",
       "codeSha256": "f0b2ab5bbc3dd83d6bea42db875f8ddcbf3eea5c35763cc154db0816069b812c",
       "removedBy": "U10.03",
       "reason": "U10.03 removes: existing player phase consumer, now reading the Engine phase (U10.01 ownership move): val swipeFraction = (kotlin.math.abs(swipeOffset) / (artPixels)).coerceIn(0f, 1f)"
@@ -382,14 +374,6 @@
       "rule": "RawMotionMap",
       "path": "app/src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt",
       "fqn": "io.github.anastaci1a.localica.ui.cover",
-      "codeSha256": "80534fac0c0bd3d3db71ae49ef7bc0d789f41fcc30badc2aafe7416f797a5c8a",
-      "removedBy": "U10.03",
-      "reason": "U10.03 removes: existing player phase consumer, now reading the Engine phase (U10.01 ownership move): val titleOpensLyrics = expanded && p >= .99f && !lyricsOpen && (queueProgress?.value ?: 0f"
-    },
-    {
-      "rule": "RawMotionMap",
-      "path": "app/src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt",
-      "fqn": "io.github.anastaci1a.localica.ui.cover",
       "codeSha256": "02c2aec304fe7fe549133be605b51f6ae52f2eb51f49028240e32252c7f9c9fc",
       "removedBy": "U10.03",
       "reason": "U10.03 removes: existing player phase consumer, now reading the Engine phase (U10.01 ownership move): if (titleOpensLyrics) Box(Modifier.testTag(\"player-lyrics-title-target\")"
@@ -443,52 +427,148 @@
       "reason": "U04.01a removes: pre-existing direct shadow call on a line rewritten by U10.01: .bottomGlassShadow(surfaceCorner, opacity = { 1f - sheet.expansion.phase.value() })"
     },
     {
-      "rule": "RawUiMotion",
+      "rule": "MotionReadInComposition",
       "path": "app/src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt",
-      "fqn": "io.github.anastaci1a.localica.ui.artworkAction",
-      "codeSha256": "1cb6304e1bbde8ecf1294c3a742788fac93f66461bafdbaa497a293b66635875",
-      "removedBy": "U10.02",
-      "reason": "U10.02 removes: pre-existing Queue Animatable incident on a line rewritten by U10.01: queueProgress?.snapTo((startQueueProgress - movement / distance).coerceIn(0f, 1f)) }"
+      "fqn": "io.github.anastaci1a.localica.ui.smoothReveal",
+      "codeSha256": "98c360ae3c6cfde36c78db353930e2b2afc5c2c75e3c274789ee890c2e891e75",
+      "removedBy": "U10.03",
+      "reason": "U10.03 removes: phase consumer on a line rewritten by U10.02 (Queue drawer onto its ExpandCollapse owner; replaces a removed RawUiMotion incident): artPixels, expanded && p >= .99f && !lyricsOpen && (queue?.expansion?.phase?.value() ?: 0f) <= 0f,"
     },
     {
-      "rule": "RawUiMotion",
-      "path": "app/src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt",
-      "fqn": "io.github.anastaci1a.localica.ui.artworkAction",
-      "codeSha256": "40e8df1937532655814114533a619e68432a7a1e3a9ae4eb750d7155114eaa12",
-      "removedBy": "U10.02",
-      "reason": "U10.02 removes: pre-existing Queue Animatable incident on a line rewritten by U10.01: onStart = { startExpanded = expanded; startQueueProgress = queueProgress?.value ?: 0f; mov"
+      "rule": "NonPresetScreenLayout",
+      "path": "app/src/main/java/io/github/anastaci1a/localica/ui/QueueSurface.kt",
+      "fqn": "io.github.anastaci1a.localica.ui.onPreFling",
+      "codeSha256": "2ec5077b93229455fc0cfb37382ea2b1671270130796190973d739ed3d2fef56",
+      "removedBy": "U10.03",
+      "reason": "U10.03 removes: phase consumer on a line rewritten by U10.02 (Queue drawer onto its ExpandCollapse owner; replaces a removed RawUiMotion incident): if (shown) Box(Modifier.fillMaxSize().graphicsLayer { alpha = phase.value().coerceIn(0f, 1f) * 0.2f }.clickable { onSettled(false) }) {"
     },
     {
-      "rule": "RawUiMotion",
-      "path": "app/src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt",
-      "fqn": "io.github.anastaci1a.localica.ui.artworkAction",
-      "codeSha256": "8bbfe2d8e03fcd879938ab3d8ed2446b442c8f189f81283b9b19c5d58cf4e69f",
-      "removedBy": "U10.02",
-      "reason": "U10.02 removes: pre-existing Queue Animatable incident on a line rewritten by U10.01: owner = VerticalOwner.Undecided; dragging = true; queueProgress?.stop() },"
+      "rule": "RawMotionMap",
+      "path": "app/src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt",
+      "fqn": "io.github.anastaci1a.localica.ui.pin",
+      "codeSha256": "e750c9de3aad6b265a2d25f33d5d0d76fbff07646e975c605d3fc64b7294ed82",
+      "removedBy": "U10.03",
+      "reason": "U10.03 removes: phase consumer on a line rewritten by U10.02 (Queue drawer onto its ExpandCollapse owner; replaces a removed RawUiMotion incident): val queueVisible by remember { derivedStateOf { queueSheet.expansion.phase.value() > 0f } }"
     },
     {
-      "rule": "RawUiMotion",
+      "rule": "RawMotionMap",
       "path": "app/src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt",
-      "fqn": "io.github.anastaci1a.localica.ui.artworkAction",
-      "codeSha256": "3cf74a36c13f843e69d50b663c21429091a715a3aa4f7ded734c5b4672430eaa",
-      "removedBy": "U10.02",
-      "reason": "U10.02 removes: pre-existing Queue Animatable incident on a line rewritten by U10.01: val open = settleOpen(-movement / density.density, -velocity / density.density, queueProgr"
+      "fqn": "io.github.anastaci1a.localica.ui.smoothReveal",
+      "codeSha256": "a4065c603929593fcc46a656f067866f25e756344fcecca59a56bb0cf29c9aa0",
+      "removedBy": "U10.03",
+      "reason": "U10.03 removes: phase consumer on a line rewritten by U10.02 (Queue drawer onto its ExpandCollapse owner; replaces a removed RawUiMotion incident): artPixels, expanded && p >= .99f && !lyricsOpen && (queue?.expansion?.phase?.value() ?: 0f) <= 0f,"
     },
     {
-      "rule": "RawUiMotion",
+      "rule": "RawMotionMap",
       "path": "app/src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt",
-      "fqn": "io.github.anastaci1a.localica.ui.artworkAction",
-      "codeSha256": "0a0577057da3abb7c6d16a31bdf5105d39f8c26ee79bf61bd0d2e4dbf7f5feb8",
-      "removedBy": "U10.02",
-      "reason": "U10.02 removes: pre-existing Queue Animatable incident on a line rewritten by U10.01: queueProgress?.animateTo(startQueueProgress, tween(settings.motionDuration(400)))"
+      "fqn": "io.github.anastaci1a.localica.ui.smoothReveal",
+      "codeSha256": "ca587ee5acd5564fd91252cd047f7c22fcc6081631221df32ecaf710ae16129b",
+      "removedBy": "U10.03",
+      "reason": "U10.03 removes: phase consumer on a line rewritten by U10.02 (Queue drawer onto its ExpandCollapse owner; replaces a removed RawUiMotion incident): artPixels, expanded && p >= .99f && !lyricsOpen && (queue?.expansion?.phase?.value() ?: 0f) <= 0f,"
     },
     {
-      "rule": "RawUiMotion",
+      "rule": "RawMotionMap",
       "path": "app/src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt",
-      "fqn": "io.github.anastaci1a.localica.ui.artworkAction",
-      "codeSha256": "85a4cbd96799b51b62b0032ba3cf953f292382909132d808354455d732e7cb9e",
-      "removedBy": "U10.02",
-      "reason": "U10.02 removes: pre-existing Queue Animatable incident on a line rewritten by U10.01: queueProgress?.animateTo(startQueueProgress, tween(settings.motionDuration(400)))"
+      "fqn": "io.github.anastaci1a.localica.ui.smoothReveal",
+      "codeSha256": "5f8d174f721d084601a1f775e6968a299b3b0c65c52691b370ebd9d9ce137c34",
+      "removedBy": "U10.03",
+      "reason": "U10.03 removes: phase consumer on a line rewritten by U10.02 (Queue drawer onto its ExpandCollapse owner; replaces a removed RawUiMotion incident): artPixels, expanded && p >= .99f && !lyricsOpen && (queue?.expansion?.phase?.value() ?: 0f) <= 0f,"
+    },
+    {
+      "rule": "RawMotionMap",
+      "path": "app/src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt",
+      "fqn": "io.github.anastaci1a.localica.ui.at",
+      "codeSha256": "6ddbda6bc79ecad14608cfeb0ad7be01ca0853609a5aa8ff07c3a38dff72da1e",
+      "removedBy": "U10.03",
+      "reason": "U10.03 removes: phase consumer on a line rewritten by U10.02 (Queue drawer onto its ExpandCollapse owner; replaces a removed RawUiMotion incident): .then(if ((queue?.expansion?.phase?.value() ?: 0f) > 0f) Modifier.clearAndSetSemantics {} else Modifier).testTag(\"player-surface\")"
+    },
+    {
+      "rule": "RawMotionMap",
+      "path": "app/src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt",
+      "fqn": "io.github.anastaci1a.localica.ui.at",
+      "codeSha256": "1eb317063eee4f39f03286f2a2430cb1196d387d5fb6372e208126414065a868",
+      "removedBy": "U10.03",
+      "reason": "U10.03 removes: phase consumer on a line rewritten by U10.02 (Queue drawer onto its ExpandCollapse owner; replaces a removed RawUiMotion incident): .then(if ((queue?.expansion?.phase?.value() ?: 0f) > 0f) Modifier.clearAndSetSemantics {} else Modifier).testTag(\"player-surface\")"
+    },
+    {
+      "rule": "RawMotionMap",
+      "path": "app/src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt",
+      "fqn": "io.github.anastaci1a.localica.ui.cover",
+      "codeSha256": "51006a7421b25f7cde440133bc68fffdec8557ddabec65dd9a9d29d07be33230",
+      "removedBy": "U10.03",
+      "reason": "U10.03 removes: phase consumer on a line rewritten by U10.02 (Queue drawer onto its ExpandCollapse owner; replaces a removed RawUiMotion incident): val titleOpensLyrics = expanded && p >= .99f && !lyricsOpen && (queue?.expansion?.phase?.value() ?: 0f) <= 0f"
+    },
+    {
+      "rule": "RawMotionMap",
+      "path": "app/src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt",
+      "fqn": "io.github.anastaci1a.localica.ui.cover",
+      "codeSha256": "ff82b803f2b17fcd701dbcc4263a828d00f3026847996f4d964d0823f17c517b",
+      "removedBy": "U10.03",
+      "reason": "U10.03 removes: phase consumer on a line rewritten by U10.02 (Queue drawer onto its ExpandCollapse owner; replaces a removed RawUiMotion incident): val titleOpensLyrics = expanded && p >= .99f && !lyricsOpen && (queue?.expansion?.phase?.value() ?: 0f) <= 0f"
+    },
+    {
+      "rule": "RawMotionMap",
+      "path": "app/src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt",
+      "fqn": "io.github.anastaci1a.localica.ui.cover",
+      "codeSha256": "8a7b714cae20453bc16fdc942b30ba08842311028bcfcaeeb86a0eaa159b3ae2",
+      "removedBy": "U10.03",
+      "reason": "U10.03 removes: phase consumer on a line rewritten by U10.02 (Queue drawer onto its ExpandCollapse owner; replaces a removed RawUiMotion incident): val titleOpensLyrics = expanded && p >= .99f && !lyricsOpen && (queue?.expansion?.phase?.value() ?: 0f) <= 0f"
+    },
+    {
+      "rule": "RawMotionMap",
+      "path": "app/src/main/java/io/github/anastaci1a/localica/ui/QueueSurface.kt",
+      "fqn": "io.github.anastaci1a.localica.ui.onPreFling",
+      "codeSha256": "08b8cce24e89e0a0fed0ceab5db7d18884d645aea2fd712a5d3d27cc2ef83f03",
+      "removedBy": "U10.03",
+      "reason": "U10.03 removes: phase consumer on a line rewritten by U10.02 (Queue drawer onto its ExpandCollapse owner; replaces a removed RawUiMotion incident): val shown by remember(sheet) { derivedStateOf { phase.value() > 0f } }"
+    },
+    {
+      "rule": "RawMotionMap",
+      "path": "app/src/main/java/io/github/anastaci1a/localica/ui/QueueSurface.kt",
+      "fqn": "io.github.anastaci1a.localica.ui.onPreFling",
+      "codeSha256": "d8a4dd52e53a16fdf155068afb047b5f8a9342811a7c233fe4272e0dfeeb51c6",
+      "removedBy": "U10.03",
+      "reason": "U10.03 removes: phase consumer on a line rewritten by U10.02 (Queue drawer onto its ExpandCollapse owner; replaces a removed RawUiMotion incident): if (shown) Box(Modifier.fillMaxSize().graphicsLayer { alpha = phase.value().coerceIn(0f, 1f) * 0.2f }.clickable { onSettled(false) }) {"
+    },
+    {
+      "rule": "RawMotionMap",
+      "path": "app/src/main/java/io/github/anastaci1a/localica/ui/QueueSurface.kt",
+      "fqn": "io.github.anastaci1a.localica.ui.shelfY",
+      "codeSha256": "5236f7d9811c50e5ed80f44752448333d689103aa1d056f4dcfa53c1a3a427e3",
+      "removedBy": "U10.03",
+      "reason": "U10.03 removes: phase consumer on a line rewritten by U10.02 (Queue drawer onto its ExpandCollapse owner; replaces a removed RawUiMotion incident): (if (phase.value() > 0f) ControlScrollDirection.Down else 0) or"
+    },
+    {
+      "rule": "RawMotionMap",
+      "path": "app/src/main/java/io/github/anastaci1a/localica/ui/QueueSurface.kt",
+      "fqn": "io.github.anastaci1a.localica.ui.shelfY",
+      "codeSha256": "f3ec749d1cea00a529102fbbf7f75982c57ecb4378707cf43c7faafad7023ed0",
+      "removedBy": "U10.03",
+      "reason": "U10.03 removes: phase consumer on a line rewritten by U10.02 (Queue drawer onto its ExpandCollapse owner; replaces a removed RawUiMotion incident): (if (phase.value() < 1f) ControlScrollDirection.Up else 0)"
+    },
+    {
+      "rule": "RawMotionMap",
+      "path": "app/src/main/java/io/github/anastaci1a/localica/ui/QueueSurface.kt",
+      "fqn": "io.github.anastaci1a.localica.ui.shelfY",
+      "codeSha256": "dfc8cbce370dd60e94f69fa69f3c9e7693c123443aaef1903d68b1d8d2a84bba",
+      "removedBy": "U10.03",
+      "reason": "U10.03 removes: phase consumer on a line rewritten by U10.02 (Queue drawer onto its ExpandCollapse owner; replaces a removed RawUiMotion incident): kotlin.math.round((top + (status - top) * phase.value().coerceIn(0f, 1f) +"
+    },
+    {
+      "rule": "RawPresentationTransform",
+      "path": "app/src/main/java/io/github/anastaci1a/localica/ui/QueueSurface.kt",
+      "fqn": "io.github.anastaci1a.localica.ui.onPreFling",
+      "codeSha256": "eb7f4a70e3e06c1fd4cec78b25663222674c6656c3dab5f9617c1bee8dc9bed3",
+      "removedBy": "U10.03",
+      "reason": "U10.03 removes: phase consumer on a line rewritten by U10.02 (Queue drawer onto its ExpandCollapse owner; replaces a removed RawUiMotion incident): if (shown) Box(Modifier.fillMaxSize().graphicsLayer { alpha = phase.value().coerceIn(0f, 1f) * 0.2f }.clickable { onSettled(false) }) {"
+    },
+    {
+      "rule": "RawPresentationTransform",
+      "path": "app/src/main/java/io/github/anastaci1a/localica/ui/QueueSurface.kt",
+      "fqn": "io.github.anastaci1a.localica.ui.onPreFling",
+      "codeSha256": "b7ed498a13168bb3d4daff74bc19e30016406b45804aa4bf1b6f1ba579cd023e",
+      "removedBy": "U10.03",
+      "reason": "U10.03 removes: phase consumer on a line rewritten by U10.02 (Queue drawer onto its ExpandCollapse owner; replaces a removed RawUiMotion incident): if (shown) Box(Modifier.fillMaxSize().graphicsLayer { alpha = phase.value().coerceIn(0f, 1f) * 0.2f }.clickable { onSettled(false) }) {"
     }
   ]
 }

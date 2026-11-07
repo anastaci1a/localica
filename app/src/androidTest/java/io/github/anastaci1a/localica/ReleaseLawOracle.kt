@@ -48,13 +48,18 @@ internal fun verifyReleaseLaw(label: String, frames: List<PhaseFrame>, joins: Li
         if (j.policy == "Continuous") assertEquals("$label join velocity", j.before.velocity.toDouble(), j.after.velocity.toDouble(), 1e-3)
         else assertEquals("$label release hand-off is the accepted tracker velocity", j.release!!.toDouble(), j.after.velocity.toDouble(), 1e-4)
     }
-    var worst = 0.0
+    var worst = 0.0; var detail = ""
     for (f in frames) {
         val j = automatic.lastOrNull { it.nanos <= f.nanos } ?: continue
         if (joins.any { it.policy == "DrivenInput" && it.nanos > j.nanos && it.nanos <= f.nanos }) continue
-        val expected = Law.at(j.after.value.toDouble(), j.after.velocity.toDouble(), j.target.toDouble(), (f.nanos - j.nanos) / 1e9)
-        worst = max(worst, abs(expected - f.p))
+        val t = (f.nanos - j.nanos) / 1e9
+        val expected = Law.at(j.after.value.toDouble(), j.after.velocity.toDouble(), j.target.toDouble(), t)
+        if (abs(expected - f.p) > worst) { worst = abs(expected - f.p)
+            detail = "at t=%.4fs from %s join (p=%.4f v=%.4f q=%.1f, T=%.4f): expected %.4f, presented %.4f".format(t, j.policy,
+                j.after.value, j.after.velocity, j.target, Law.duration(j.after.value.toDouble(), j.after.velocity.toDouble(), j.target.toDouble()), expected, f.p) }
     }
-    assertTrue("$label: presented phase deviates from the #608 law by $worst", worst <= .008)
+    val trace = frames.joinToString(" ") { "%d:%.3f".format((it.nanos - frames.first().nanos) / 1_000_000, it.p) }
+    val summary = joins.joinToString(" ") { "%s@%d(%.3f,%.3f->%.1f)".format(it.policy, (it.nanos - frames.first().nanos) / 1_000_000, it.after.value, it.after.velocity, it.target) }
+    assertTrue("$label: presented phase deviates from the #608 law by $worst $detail; joins[$summary]; frames[$trace]", worst <= .008)
 }
 internal fun fallbackJoin(nanos: Long, p: Double, v: Double, q: Boolean) = Join(nanos, Kinematic(p.toFloat(), v.toFloat()), Kinematic(p.toFloat(), v.toFloat()), if (q) 1f else 0f, "Fallback", null)
