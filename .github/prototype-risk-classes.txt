@@ -424,3 +424,5 @@ io.github.anastaci1a.localica.UiShapeFoundationTest
 io.github.anastaci1a.localica.SelectionMergeGeometryTest
 io.github.anastaci1a.localica.SelectionMergeSequenceTest
 io.github.anastaci1a.localica.ConcaveFilletPathParityTest
+io.github.anastaci1a.localica.ShadowFieldOracleSensitivityTest
+io.github.anastaci1a.localica.ShadowPlaneFieldTest
