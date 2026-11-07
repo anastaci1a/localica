@@ -172,7 +172,8 @@ fun LocalicaScreen(
     val playerVisible by remember { derivedStateOf { phase.value() > 0f } }
     val playerCoversBrowse by remember { derivedStateOf { phase.value() >= .5f } }
     val playerFullyOpen by remember { derivedStateOf { phase.value() >= .99f } }
-    val queueVisible by remember { derivedStateOf { queueSheet.expansion.phase.value() > 0f } }
+    val queueRest by rememberExpansionRest(queueSheet.expansion)
+    val queueVisible = queueRest != ExpansionRest.Closed
     var queueOpeningRequest by rememberSaveable { mutableLongStateOf(0) }
     // QueueSurface removes its body at the closed endpoint. Keep intent/viewport
     // outside that conditional lifetime; a later explicit epoch owns repositioning.
