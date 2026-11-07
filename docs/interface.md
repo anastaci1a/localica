@@ -153,7 +153,9 @@ Glass always follows the scrolling content. The retired scroll-freeze preference
 
 #### Adaptive contrast
 
-Page-wide ink polarity; background brightness trim 0–50% (default 25%) and weighting 1–8 (default 2) from even to highlight/shadow-focused, with the slider giving 1–2 a third of its travel. The applied trim is limited to 1/weighting (only weightings above 2 are affected), so brightness order never inverts. White icons darken highlights; dark icons lift shadows in the general glass treatment. Player wash retains its palette-directed trim independently of the ink.
+Page-wide ink polarity; background brightness trim 0–50% (default 25%) and weighting 1–8 (default 2) from even to highlight/shadow-focused, with 1–2 on the first third of the slider.
+
+The applied trim is limited to 1/weighting (only weightings above 2 are affected), so brightness order never inverts. White icons darken highlights; dark icons lift shadows in the general glass treatment. Player wash retains its palette-directed trim independently of the ink.
 
 Foreground and media selections remain unfiltered; Player/Queue ink follows the measured background behind controls rather than the cover’s middle band. The player’s blurred artwork extension uses the same trim/weight, without a separate bottom-darkening gradient.
 
