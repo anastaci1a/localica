@@ -45,11 +45,16 @@ internal val LocalEngineContext=staticCompositionLocalOf<EngineContext> { requir
 }
 @Composable internal fun ProvideUiClock(content: @Composable ()->Unit) {
     val inherited=LocalClockOwner.current
-    val clock=inherited?:remember { UiClock(object: FrameSource { override suspend fun awaitFrame()=withFrameNanos { it } }) }
-    if(inherited==null) LaunchedEffect(clock) { clock.run() }
+    val base=remember { FrameBase() }
+    val clock=inherited?:remember { UiClock(object: FrameSource { override suspend fun awaitFrame()=withFrameNanos { base.frame(it); it } },base::now) }
+    if(inherited==null) LaunchedEffect(clock) { withFrameNanos { base.frame(it) }; clock.run() }
     CompositionLocalProvider(LocalClockOwner provides clock,LocalUiClock provides clock,content=content)
 }
 @Composable internal fun ownerClock(): UiClock {
     val context=LocalEngineContext.current; val clock=LocalUiClock.current; val spec=LocalUiSpec.current.spec; val domain=requireNotNull(spec.geometry) { "Publish measured ExpansionGeometryDomain through U11.00 before creating a motion owner" }; require(domain.referenceTravelPx==context.fullPlayerReferenceTravelPx && context.displayIntervalSeconds<=domain.maxDisplayIntervalSeconds) { "Engine context and admitted geometry must come from one root record" }
     if(clock.context==null) clock.configure(context,spec); SideEffect { clock.configure(context,spec) }; return clock
 }
+/** Intent time in the frame source's base (Choreographer or a test clock); before the first frame nothing is presented. */
+private class FrameBase { private var offset: Long?=null; private var latest=Long.MIN_VALUE/4
+    fun frame(nanos: Long) { offset=nanos-System.nanoTime() }
+    fun now(): Long=maxOf(latest,offset?.let { System.nanoTime()+it }?:latest).also { latest=it } }
