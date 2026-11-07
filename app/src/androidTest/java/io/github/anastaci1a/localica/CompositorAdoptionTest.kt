@@ -4,6 +4,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.RoundRect
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.platform.testTag
@@ -46,6 +50,39 @@ class CompositorAdoptionTest {
         }
         compose.waitForIdle()
         compose.runOnIdle { assertTrue("Removed descendants leave the same registry", requireNotNull(host).casters.isEmpty()) }
+    }
+
+    @Test fun layoutCasterOpacityMatchesTheExistingRendererAtEveryWeight() {
+        var opacity by mutableFloatStateOf(.2f)
+        compose.setContent { EngineTheme {
+            val radius = with(LocalDensity.current) { 12.dp.toPx() }
+            val cache = rememberGlassShadow()
+            Row {
+                Box(Modifier.size(140.dp).background(Color.White).testTag("plane-field")) {
+                    val plane = rememberShadowPlane()
+                    ShadowPlaneHost(plane, 1f, 1f, Modifier.fillMaxSize()) {
+                        Box(Modifier.offset(35.dp, 45.dp).size(60.dp, 35.dp)
+                            .glassCaster(plane, "fading-caster", { opacity }) { RoundRect(it, CornerRadius(radius)) })
+                    }
+                }
+                Box(Modifier.size(140.dp).background(Color.White).testTag("reference-field").drawWithContent {
+                    drawContent()
+                    val body = RoundRect(35.dp.toPx(), 45.dp.toPx(), 95.dp.toPx(), 80.dp.toPx(), CornerRadius(radius))
+                    with(cache) { draw(listOf(body to opacity), 1f, 1f) }
+                })
+            }
+        } }
+        for (weight in listOf(.2f, .5f, 1f, .5f, 0f)) {
+            compose.runOnIdle { opacity = weight }
+            val actual = compose.onNodeWithTag("plane-field").captureToImage().toPixelMap()
+            val expected = compose.onNodeWithTag("reference-field").captureToImage().toPixelMap()
+            var worst = 0f
+            for (y in 0 until actual.height) for (x in 0 until actual.width) {
+                val a = actual[x, y]; val b = expected[x, y]
+                worst = maxOf(worst, abs(a.red - b.red), abs(a.green - b.green), abs(a.blue - b.blue), abs(a.alpha - b.alpha))
+            }
+            assertTrue("Plane field preserves opacity $weight, worst RGBA error $worst", worst <= .008f)
+        }
     }
 
     @Test fun zReorderKeepsOneField() {
