@@ -93,16 +93,17 @@ class FullPartitionTest(unittest.TestCase):
         folder.mkdir(parents=True)
         methods = [('ScopedSearchOpticsTest', 'searchLensRedrawsWhenItsListBackdropArrivesLater', 33),
                    ('FloatingImeLifecycleTest', 'actualFloatingWindowPreservesEditingAndEndsOnceAcrossFocusAndReopen', 30),
-                   ('GlassReadabilityTest', 'entireGlassUsesTheBoundedCurveWithoutTintingItsForeground', 33)]
+                   ('GlassReadabilityTest', 'entireGlassUsesTheBoundedCurveWithoutTintingItsForeground', 33),
+                   ('GlassToneShaderParityTest', 'shaderMatchesKotlinAtSamplePoints', 33)]
         for cls, method, minimum in methods:
             (folder/(cls+'.kt')).write_text('package io.github.anastaci1a.localica\nimport org.junit.Test\nclass '+cls+
                 ' { @Test @androidx.test.filters.SdkSuppress(minSdkVersion = '+str(minimum)+') fun '+method+'() {} }')
         legacy = partition.plan(self.root, ['example.RiskTest'], '26', 'a'*40)
         modern = partition.plan(self.root, ['example.RiskTest'], '36', 'a'*40)
-        self.assertEqual(3, len(legacy['sdk_omissions']))
+        self.assertEqual(4, len(legacy['sdk_omissions']))
         self.assertEqual(4, len(legacy['expected']))
         self.assertEqual([], modern['sdk_omissions'])
-        self.assertEqual(7, len(modern['expected']))
+        self.assertEqual(8, len(modern['expected']))
         self.assertEqual({row['id'] for row in legacy['sdk_omissions']}, set(modern['expected'])-set(legacy['expected']))
         path = folder/'FloatingImeLifecycleTest.kt'
         original = path.read_text()
