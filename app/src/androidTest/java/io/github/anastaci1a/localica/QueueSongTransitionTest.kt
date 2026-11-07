@@ -239,7 +239,7 @@ class QueueSongTransitionTest {
         mount(black); compose.mainClock.autoAdvance = false
         compose.runOnIdle { visual = white }
         record(70)
-        assertOneClock("dark to light artwork", toLight = false)
+        org.junit.Assert.fail("DIAG " + frames.mapIndexed { i, f -> "%d:m%.3f/b%.3f/s%.3f/c%.3f/t%.3f".format(java.util.Locale.ROOT, i, f.mix, f.backdrop, f.shot, f.clock, f.tint) }.joinToString(" "))
     }
 
     @Test fun rapidSkipsRetargetWithoutJumps() {
