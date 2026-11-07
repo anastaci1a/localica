@@ -1,5 +1,7 @@
 package io.github.anastaci1a.localica
 
+import io.github.anastaci1a.localica.ui.engine.*
+
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
@@ -337,13 +339,12 @@ class GlassMorphTest {
         var moved by mutableStateOf(false)
         var visible by mutableStateOf(true)
         lateinit var popupView: android.view.View
-        val outsideShadows = GlassShadowGroup()
         lateinit var outsidePlane: io.github.anastaci1a.localica.ui.engine.ShadowPlane
         compose.setContent { LocalicaTheme { EngineRecord {
             outsidePlane = io.github.anastaci1a.localica.ui.engine.rememberShadowPlane()
             CompositionLocalProvider(LocalGlassAppearance provides
                 io.github.anastaci1a.localica.navigation.GlassAppearance(shadowStrength = 1f),
-                LocalSurfaceShadows provides outsidePlane, LocalBottomShadows provides outsideShadows) {
+                LocalSurfaceShadows provides outsidePlane, LocalPageShadows provides outsidePlane) {
                 GlassMorphPopup(true, rememberGlassAnchor(), {}, fitContent = false) {
                     popupView = androidx.compose.ui.platform.LocalView.current
                     Box(Modifier.fillMaxWidth().height(180.dp).background(Color.White).testTag("moving-shadow-scene")) {

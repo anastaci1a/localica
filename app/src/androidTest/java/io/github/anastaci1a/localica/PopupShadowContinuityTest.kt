@@ -1,5 +1,7 @@
 package io.github.anastaci1a.localica
 
+import io.github.anastaci1a.localica.ui.engine.*
+
 import android.graphics.Bitmap
 import android.graphics.Canvas as AndroidCanvas
 import android.graphics.Color as AndroidColor
@@ -294,10 +296,10 @@ class PopupShadowContinuityTest {
                 shadowStrength = strength, shadowSpread = .6f, shapeDamping = 2f), LocalReducedMotion provides false) {
                 val source = rememberFrostedBackdrop(Unit, dark = false)
                 val modal = rememberFrostedBackdrop(Unit, dark = false)
-                val group = remember { GlassShadowGroup() }
+                val group = rememberShadowPlane()
                 CompositionLocalProvider(LocalFrostedBackdrop provides source, LocalModalBackdrop provides modal,
-                    LocalBottomShadows provides group) {
-                    Box(Modifier.fillMaxSize().recordFrostedBackdrop(modal).bottomGlassShadowHost(group)) {
+                    LocalPageShadows provides group) {
+                    Box(Modifier.fillMaxSize().recordFrostedBackdrop(modal).pageShadowHost(group)) {
                         Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(source)) { drawRect(androidx.compose.ui.graphics.Color.White) }
                         if (nested) {
                             GlassMorphPopup(true, rememberGlassAnchor(), {}, GlassPlacement.Center, fitContent = false) {
@@ -317,7 +319,7 @@ class PopupShadowContinuityTest {
                                 LiquidGlassSurface(Modifier.weight(1f).fillMaxHeight().onGloballyPositioned {
                                     neighboringBody = Rect(it.backdropPosition(page), androidx.compose.ui.geometry.Size(
                                         it.size.width.toFloat(), it.size.height.toFloat()))
-                                }.bottomGlassShadow(),
+                                }.pageGlassCaster(),
                                     source = source, shadow = false) {}
                                 NavigationUtilityPill(anchor, source, Modifier.width(104.dp).fillMaxHeight(),
                                     onSearch = {}, onMore = { open = true })

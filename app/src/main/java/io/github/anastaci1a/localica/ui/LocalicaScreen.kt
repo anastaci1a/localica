@@ -293,16 +293,18 @@ fun LocalicaScreen(
     SideEffect { dialogs?.backdrop = modalBackdrop }
     LaunchedEffect(pager.settledPage) { browseBackdrop.refresh() }
     PlayerSystemBars(hasPlayer && playerFullyOpen && playerLightInk || !playerFullyOpen && insideCollection && browseInk == androidx.compose.ui.graphics.Color.White)
-    val bottomShadows = remember { GlassShadowGroup() }
+    val bottomShadows = rememberShadowPlane()
     SideEffect { LongScroll.style = settings.longScroll }
     LocalicaTheme(grayTone = settings.grayTone) {
-    CompositionLocalProvider(LocalBottomShadows provides bottomShadows, LocalGlassAppearance provides settings.glass, LocalArtworkTransition provides settings.artworkTransition, LocalReducedMotion provides rememberEffectiveReducedMotion(settings.reducedMotion), LocalSessionSelection provides session, LocalSongDragHost provides dragHost,
+    CompositionLocalProvider(LocalPageShadows provides bottomShadows, LocalGlassAppearance provides settings.glass, LocalArtworkTransition provides settings.artworkTransition, LocalReducedMotion provides rememberEffectiveReducedMotion(settings.reducedMotion), LocalSessionSelection provides session, LocalSongDragHost provides dragHost,
         LocalBrowsePresentationCache provides presentationCache, LocalBrowseSortSnapshot provides browseSorts,
         LocalMotionSpeed provides if (settings.fasterMotion) 2f else 4f / 3f,
         LocalModalBackdrop provides modalBackdrop,
         LocalBackdropRefresh provides browseBackdrop::refresh,
         LocalBrowseObscuredInset provides (browseBottomChrome + selectionPanel.clearance)) {
-    BoxWithConstraints(Modifier.fillMaxSize().recordFrostedBackdrop(modalBackdrop).background(MaterialTheme.colorScheme.background).bottomGlassShadowHost(bottomShadows).testTag("browse-background").windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))) {
+    ShadowPlaneViewport(bottomShadows, settings.glass.shadowStrength, settings.glass.shadowSpread,
+        Modifier.fillMaxSize().recordFrostedBackdrop(modalBackdrop).background(MaterialTheme.colorScheme.background),
+        Modifier.testTag("browse-background").windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))) {
         val inset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
         val screenScope = this
         SideEffect { rootSize = androidx.compose.ui.unit.IntSize(constraints.maxWidth, constraints.maxHeight) }

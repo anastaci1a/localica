@@ -19,7 +19,7 @@ internal fun GlassPresence(visible: Boolean, modifier: Modifier = Modifier, cont
     val inset = glassShadowInset()
     // The retained layer owns the whole material, including its shadow. Hoisting
     // that shadow outside this lifetime would leave a dark silhouette on exit.
-    CompositionLocalProvider(LocalSurfaceShadows provides null, LocalBottomShadows provides null) {
+    CompositionLocalProvider(LocalSurfaceShadows provides null, LocalPageShadows provides null) {
         RetainedFace(visible, face.view.phase::value, modifier, inset, scale = PresenceScale,
             onMeasured = { face.measured(centeredFrame(it, PresenceScale), centeredFrame(it)) }, content = content)
     }

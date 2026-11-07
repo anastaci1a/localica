@@ -7,9 +7,6 @@ import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.*
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.*
-import androidx.compose.ui.layout.LayoutCoordinates
-import androidx.compose.ui.layout.onPlaced
-import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.Density
@@ -47,16 +44,6 @@ internal fun Modifier.shadowViewportOutset(inset: Dp, horizontal: Boolean = fals
     layout((child.width - side * 2).coerceAtLeast(0), (child.height - pad * 2).coerceAtLeast(0)) { child.place(-side, -pad) }
 }
 
-internal class GlassShadowEntry {
-    var coordinates: LayoutCoordinates? = null
-    var radius: Dp? = null
-    var opacity: () -> Float = { 1f }
-    var anchor: GlassAnchor? = null
-    var view: android.view.View? = null
-
-    fun body(rect: Rect, density: Density): RoundRect? = glassCasterBody(rect, density, radius, anchor, opacity())
-}
-
 /** The drawn, shape-deformed body in [rect]'s space, or null when it casts nothing. */
 internal fun glassCasterBody(rect: Rect, density: Density, radius: Dp?, anchor: GlassAnchor?, opacity: Float = 1f): RoundRect? {
     if (opacity <= .001f || anchor?.shadowInModal == true) return null
@@ -71,25 +58,13 @@ internal fun glassCasterBody(rect: Rect, density: Density, radius: Dp?, anchor: 
     return RoundRect(Rect(rect.center - half, rect.center + half), CornerRadius(corner * sx, corner * sy))
 }
 
-/** Screen-space neighbor bodies of [anchor]'s shared shadow group, excluding the trigger. */
+/** Screen-space neighbor bodies on the trigger's plane, excluding the trigger. */
 internal fun glassShadowNeighbors(anchor: GlassAnchor, density: Density): List<RoundRect> {
-    anchor.shadowPlane?.let { plane ->
-        val origin = plane.layout?.takeIf { it.isAttached }?.backdropPosition(plane.view ?: return emptyList()) ?: return emptyList()
-        return plane.casters.filter { it.key !== anchor }.mapNotNull { (it.shape as? LayoutShape)?.laidOut()?.translate(origin) }
-    }
-    val group = anchor.shadowGroup ?: return emptyList()
-    return group.entries.values.mapNotNull { entry ->
-        if (entry.anchor === anchor) return@mapNotNull null
-        val item = entry.coordinates?.takeIf { it.isAttached } ?: return@mapNotNull null
-        val view = entry.view ?: return@mapNotNull null
-        entry.body(Rect(item.backdropPosition(view), Size(item.size.width.toFloat(), item.size.height.toFloat())), density)
-    }
+    val plane = anchor.shadowPlane ?: return emptyList()
+    val origin = plane.layout?.takeIf { it.isAttached }?.backdropPosition(plane.view ?: return emptyList()) ?: return emptyList()
+    return plane.casters.filter { it.key !== anchor }.mapNotNull { (it.shape as? LayoutShape)?.laidOut()?.translate(origin) }
 }
-@Stable internal class GlassShadowGroup {
-    val entries = mutableStateMapOf<Any, GlassShadowEntry>()
-    var revision by mutableIntStateOf(0)
-}
-internal val LocalBottomShadows = staticCompositionLocalOf<GlassShadowGroup?> { null }
+internal val LocalPageShadows = staticCompositionLocalOf<ShadowPlane?> { null }
 internal val LocalSurfaceShadows = staticCompositionLocalOf<ShadowPlane?> { null }
 
 /** Only group siblings sharing a transform, opacity and visibility lifetime.
@@ -102,14 +77,13 @@ internal val LocalSurfaceShadows = staticCompositionLocalOf<ShadowPlane?> { null
     }
 }
 
-@Composable internal fun Modifier.surfaceGlassShadow(radius: Dp?, anchor: GlassAnchor?): Modifier {
-    val group = LocalSurfaceShadows.current
+@Composable internal fun Modifier.surfaceGlassShadow(radius: Dp?, anchor: GlassAnchor?, group: ShadowPlane? = LocalSurfaceShadows.current, opacity: () -> Float = { 1f }): Modifier {
     val appearance = LocalGlassAppearance.current
     val density = androidx.compose.ui.platform.LocalDensity.current
     val key = anchor ?: remember { Any() }
     if (group != null) DisposableEffect(group, anchor) { anchor?.shadowPlane = group; onDispose { if (anchor?.shadowPlane === group) anchor.shadowPlane = null } }
     return if (group == null) clearGlassShadow(appearance.shadowStrength, appearance.shadowSpread, radius) { anchor?.shadowInModal != true }
-        else glassCaster(group, key) { glassCasterBody(it, density, radius, anchor) }
+        else glassCaster(group, key, opacity) { glassCasterBody(it, density, radius, anchor, opacity()) }
 }
 
 /** Keep visibility compositing outside the surface clip without a tight ViewLayer.
@@ -159,39 +133,15 @@ internal val LocalSurfaceShadows = staticCompositionLocalOf<ShadowPlane?> { null
     }
 }
 
-@Composable internal fun Modifier.bottomGlassShadow(radius: Dp? = null, opacity: () -> Float = { 1f }, group: GlassShadowGroup? = LocalBottomShadows.current,
+/** D26: the page's existing controls register one Engine caster on their enclosing plane. */
+@Composable internal fun Modifier.pageGlassCaster(radius: Dp? = null, opacity: () -> Float = { 1f }, group: ShadowPlane? = LocalPageShadows.current,
     anchorOverride: GlassAnchor? = null): Modifier {
-    val appearance = LocalGlassAppearance.current
-    if (group == null) return clearGlassShadow(appearance.shadowStrength, appearance.shadowSpread, radius)
-    val entry = remember { GlassShadowEntry() }
     val anchor = anchorOverride ?: glassSurfaceAnchor()
-    val latest by rememberUpdatedState(opacity)
-    val view = androidx.compose.ui.platform.LocalView.current
-    SideEffect {
-        entry.radius = radius; entry.anchor = anchor; entry.opacity = { latest() }; entry.view = view
-        group.entries[entry] = entry
-        // A popup owning this trigger's shadow must not stack over its neighbors.
-        anchor?.shadowGroup = group
-    }
-    DisposableEffect(group, anchor) { onDispose {
-        group.entries.remove(entry)
-        if (anchor?.shadowGroup === group) anchor.shadowGroup = null
-    } }
-    return onGloballyPositioned { entry.coordinates = it; androidx.compose.runtime.snapshots.Snapshot.withoutReadObservation { group.revision++ } }
+    return surfaceGlassShadow(radius, if (group == null) null else anchor, group, opacity)
 }
 
-@Composable internal fun Modifier.bottomGlassShadowHost(group: GlassShadowGroup): Modifier {
-    var coordinates: LayoutCoordinates? by remember { mutableStateOf(null) }
+/** Compatibility host for existing synthetic scenes; production uses the Engine viewport host. */
+@Composable internal fun Modifier.pageShadowHost(plane: ShadowPlane): Modifier {
     val appearance = LocalGlassAppearance.current
-    val cache = rememberGlassShadow()
-    return onPlaced { coordinates = it }.drawWithContent {
-        drawContent()
-        group.revision
-        val host = coordinates ?: return@drawWithContent
-        val bodies = group.entries.values.mapNotNull { entry ->
-            val item = entry.coordinates?.takeIf { it.isAttached } ?: return@mapNotNull null
-            entry.body(host.localBoundingBoxOf(item, clipBounds = false), this)?.let { it to entry.opacity() }
-        }
-        with(cache) { draw(bodies, appearance.shadowStrength, appearance.shadowSpread) }
-    }
+    return shadowPlaneHost(plane, appearance.shadowStrength, appearance.shadowSpread)
 }

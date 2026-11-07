@@ -424,7 +424,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
         surfaceContainerHighest = androidx.compose.ui.graphics.lerp(baseColors.surfaceContainerHighest, palette.top, p))) {
     Surface(Modifier.motionBounds(surfaceFrame.x, surfaceFrame.y, surfaceFrame.width, surfaceFrame.height)
         .onGloballyPositioned { polarity.measure("viewport", it) }
-        .bottomGlassShadow(surfaceCorner, opacity = { 1f - sheet.expansion.phase.value() })
+        .pageGlassCaster(surfaceCorner, opacity = { 1f - sheet.expansion.phase.value() })
         .then(drag).controlScrollParent { playerDragDirections(expanded, scrubCancel.active) }
         .then(if (queueRest != ExpansionRest.Closed) Modifier.clearAndSetSemantics {} else Modifier).testTag("player-surface")
         // The Queue must never sample the light browsing glass. Delaying readback alone

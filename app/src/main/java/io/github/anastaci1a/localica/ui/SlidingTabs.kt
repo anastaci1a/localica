@@ -145,7 +145,7 @@ internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, pagePosition: () 
         val recording = selectorTrackRecordingBounds(viewport, baseHeight, limits.crossClearance)
         Box(Modifier.selectorTrackPlacement(recording).recordFrostedBackdrop(composite), contentAlignment = AbsoluteAlignment.TopLeft) {
             LiquidGlassSurface(Modifier.selectorTrackPlacement(track.translate(-recording.topLeft))
-                .testTag("tab-track-shell").bottomGlassShadow(opacity = shadowOpacity), source,
+                .testTag("tab-track-shell").pageGlassCaster(opacity = shadowOpacity), source,
                 pressFeedback = false, shadow = false, cornerRadius = with(density) { radius.toDp() },
                 body = { shell.value }, inkOverride = Color.Black, depthScale = BottomPillDepthScale)
         }

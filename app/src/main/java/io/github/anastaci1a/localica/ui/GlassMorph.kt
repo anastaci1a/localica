@@ -101,7 +101,6 @@ internal class GlassAnchor {
     var modalPresent by mutableStateOf(false)
     var shadowInModal by mutableStateOf(false)
     // The shared shadow group its trigger casts into, if any.
-    var shadowGroup: GlassShadowGroup? = null
     var shadowPlane: io.github.anastaci1a.localica.ui.engine.ShadowPlane? = null
     var source: FrostedBackdrop? = null
     var face by mutableStateOf<(@Composable () -> Unit)?>(null)
@@ -968,7 +967,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                                 LocalModalBackdrop provides completePanel,
                                 LocalChildPanels provides childPanels,
                                 LocalPopupScrollEdges provides !page,
-                                LocalSurfaceShadows provides null, LocalBottomShadows provides null,
+                                LocalSurfaceShadows provides null, LocalPageShadows provides null,
                                 LocalGlassOrigin provides null,
                                 LocalGlassPopupHome provides childHome,
                                 LocalSearchOpeningReady provides reportSearchOpening.takeIf { placement == GlassPlacement.Search },

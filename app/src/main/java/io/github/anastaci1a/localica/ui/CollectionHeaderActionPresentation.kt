@@ -83,7 +83,7 @@ internal fun CollectionHeaderActionPresentation(owner: CollectionPinchHeader, so
         upstreamObserver?.invoke(observation)
     } else upstreamObserver
     CompositionLocalProvider(LocalFrostedBackdrop provides source,
-        LocalSurfaceShadows provides null, LocalBottomShadows provides null,
+        LocalSurfaceShadows provides null, LocalPageShadows provides null,
         LocalBackdropSamplingObserver provides drawObserver) {
         Layout(content = {
             Box(Modifier.onPlaced { placement.coordinates = it }.drawWithContent {

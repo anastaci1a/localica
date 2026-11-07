@@ -319,13 +319,13 @@ class GlassShadowTest {
     @Test fun bottomUnionDoesNotKeepAGhostOfAModalTrigger() {
         lateinit var anchor: GlassAnchor
         compose.setContent { LocalicaTheme {
-            val group = remember { GlassShadowGroup() }
+            val group = rememberShadowPlane()
             anchor = rememberGlassAnchor()
-            CompositionLocalProvider(LocalBottomShadows provides group, LocalGlassAppearance provides
+            CompositionLocalProvider(LocalPageShadows provides group, LocalGlassAppearance provides
                 io.github.anastaci1a.localica.navigation.GlassAppearance(shadowStrength = 1f)) {
                 Box(Modifier.size(240.dp, 160.dp).background(Color.White)
-                    .bottomGlassShadowHost(group).testTag("shadow-union"), contentAlignment = Alignment.Center) {
-                    Box(Modifier.size(104.dp, 52.dp).glassAnchor(anchor).bottomGlassShadow())
+                    .pageShadowHost(group).testTag("shadow-union"), contentAlignment = Alignment.Center) {
+                    Box(Modifier.size(104.dp, 52.dp).glassAnchor(anchor).pageGlassCaster())
                 }
             }
         } }

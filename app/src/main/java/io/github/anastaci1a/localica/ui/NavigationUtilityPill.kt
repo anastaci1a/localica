@@ -30,7 +30,7 @@ internal fun NavigationUtilityPill(anchor: GlassAnchor, source: FrostedBackdrop,
         }
     }
     LiquidGlassSurface(modifier.glassAnchor(anchor).testTag("utility-pill")
-        .bottomGlassShadow(opacity = shadowOpacity), source = source, shadow = false,
+        .pageGlassCaster(opacity = shadowOpacity), source = source, shadow = false,
         depthScale = RaisedGlassDepthScale) {
         anchor.captureInk()
         Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {

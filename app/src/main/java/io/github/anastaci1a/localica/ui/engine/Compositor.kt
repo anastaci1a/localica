@@ -65,10 +65,17 @@ enum class Stratum { Page,Lifted,Floating,Drawer,Player,Modal,Overlay,Diagnostic
 fun Modifier.surface(node: SurfaceView): Modifier { require(node is SurfaceNode) { "Surfaces come from rememberSurfaceNode" }; return layout { m,c -> val p=m.measure(c); layout(p.width,p.height) { p.place(0,0,zIndex=node.order) } } }
 /** D25/D28: the host draws its owned casters' field after its content, then publishes the draw receipt; queued transfers start on the next frame. */
 @Composable internal fun Modifier.shadowPlaneHost(plane: ShadowPlane,strength: Float,spread: Float): Modifier { val cache=rememberGlassShadow(); val view=LocalView.current; SideEffect { plane.view=view }
-    return onPlaced { plane.layout=it }.drawWithContent { drawContent(); plane.revision; with(cache) { draw(plane.casters.flatMap { n -> val opacity=n.opacity.value()*((n.shape as? LayoutShape)?.opacity?.invoke()?:1f); if(n.owns(plane) && opacity>0f) n.shape.outline().bodies.map { it to opacity } else emptyList() },strength,spread) }; if(plane.receipt()) view.postOnAnimation { plane.admit() } } }
+    return onPlaced { plane.layout=it }.drawWithContent { drawContent(); plane.revision; with(cache) { draw(plane.casters.flatMap { n -> if(!n.owns(plane)) emptyList() else { val opacity=n.opacity.value()*((n.shape as? LayoutShape)?.opacity?.invoke()?:1f); if(opacity>0f) n.shape.outline().bodies.map { it to opacity } else emptyList() } },strength,spread) }; if(plane.receipt()) view.postOnAnimation { plane.admit() } } }
 /** The existing host layout provides its registry to descendant surface owners; the modifier also fits a page's existing layout. */
 @Composable internal fun ShadowPlaneHost(plane: ShadowPlane,strength: Float,spread: Float,modifier: Modifier,content: @Composable androidx.compose.foundation.layout.BoxScope.()->Unit) {
     CompositionLocalProvider(LocalShadowPlane provides plane) { androidx.compose.foundation.layout.Box(modifier.shadowPlaneHost(plane,strength,spread),content=content) } }
+/** Page host: the original constraints layout, with the field before the caller's existing inset/clip suffix. */
+@Composable internal fun ShadowPlaneViewport(plane: ShadowPlane,strength: Float,spread: Float,modifier: Modifier,contentModifier: Modifier=Modifier,
+    content: @Composable androidx.compose.foundation.layout.BoxWithConstraintsScope.()->Unit) {
+    CompositionLocalProvider(LocalShadowPlane provides plane) {
+        androidx.compose.foundation.layout.BoxWithConstraints(modifier.shadowPlaneHost(plane,strength,spread).then(contentModifier),content=content)
+    }
+}
 /** D26 live-compat caster (expires U06.01/U09.01a): an Engine-owned implicit node whose shape follows its layout in [plane]'s host; [body] maps that rectangle to the drawn body, or null. */
 internal class LayoutShape(override val key: Any,private val plane: ShadowPlane): ShapeView { var coordinates: LayoutCoordinates?=null; var body: (Rect)->RoundRect? = { null }; var opacity by mutableStateOf<()->Float>({ 1f })
     /** The laid-out body in host space, read in draw; not a motion read. */

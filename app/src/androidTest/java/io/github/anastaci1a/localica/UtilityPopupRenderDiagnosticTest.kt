@@ -1,5 +1,7 @@
 package io.github.anastaci1a.localica
 
+import io.github.anastaci1a.localica.ui.engine.*
+
 import android.graphics.Bitmap
 import android.graphics.Canvas as AndroidCanvas
 import android.graphics.Color as AndroidColor
@@ -60,7 +62,7 @@ class UtilityPopupRenderDiagnosticTest {
     private var strength by mutableFloatStateOf(GlassAppearance().shadowStrength)
     private var pageStage by mutableIntStateOf(1)
     private lateinit var anchor: GlassAnchor
-    private lateinit var group: GlassShadowGroup
+    private lateinit var group: ShadowPlane
     private lateinit var pageView: View
     private lateinit var browseSource: FrostedBackdrop
     private lateinit var modalSource: FrostedBackdrop
@@ -123,7 +125,7 @@ class UtilityPopupRenderDiagnosticTest {
             .put("frames", records).put("closingTrace", trace).put("observedEndpointQuiescence", endpointObservations)
         compose.setContent { Fixture(scene) }
         compose.waitForIdle()
-        entryKeys = group.entries.keys.toSet()
+        entryKeys = group.casters.map { it.key }.toSet()
         assertEquals("Mini-player, tab shelf and utility have exactly three persistent entries", 3, entryKeys.size)
         compose.mainClock.autoAdvance = false
         var primaryFailure: Throwable? = null
@@ -171,7 +173,7 @@ class UtilityPopupRenderDiagnosticTest {
             assertTrue("The first reopened frame immediately hides the restored trigger", anchor.hidden)
             assertTrue("The retained modal immediately reclaims shadow ownership", anchor.shadowInModal)
             assertEquals("Reopening leaves only the mini-player and tabs in the bottom group", 2,
-                group.entries.values.count { it.anchor?.shadowInModal != true })
+                group.casters.count { (it.key as? GlassAnchor)?.shadowInModal != true })
             advanceFrame()
             capture("reopen-second-frame", save = false)
             assertSame("The second reopened frame retains the original dialog", firstWindow, popupWindow)
@@ -179,7 +181,7 @@ class UtilityPopupRenderDiagnosticTest {
             assertTrue("The trigger stays hidden on the second reopened frame", anchor.hidden)
             assertTrue("The modal keeps shadow ownership on the second reopened frame", anchor.shadowInModal)
             assertEquals("No duplicate bottom-group body appears on the second reopened frame", 2,
-                group.entries.values.count { it.anchor?.shadowInModal != true })
+                group.casters.count { (it.key as? GlassAnchor)?.shadowInModal != true })
             settleEndpoint(beforeOpenRequest)
 
             compose.runOnIdle { open = false }
@@ -191,7 +193,7 @@ class UtilityPopupRenderDiagnosticTest {
             assertFalse("The acknowledged trigger owns its visible surface", anchor.hidden)
             assertFalse("The acknowledged trigger owns its shadow", anchor.shadowInModal)
             assertEquals("Normal handoff restores all three bottom-group bodies", 3,
-                group.entries.values.count { it.anchor?.shadowInModal != true })
+                group.casters.count { (it.key as? GlassAnchor)?.shadowInModal != true })
             val after = anchor.contact.body.value
             trace.put(stateJson().put("observation", "first-trigger-owned-frame"))
             assertTrue("Actual pill keeps its depth through handoff", abs(after.depth - before.depth) < .03f)
@@ -258,17 +260,17 @@ class UtilityPopupRenderDiagnosticTest {
                 val modal = rememberFrostedBackdrop(scene, dark = scene.dark)
                 browseSource = browse
                 modalSource = modal
-                group = remember { GlassShadowGroup() }
+                group = rememberShadowPlane()
                 anchor = rememberGlassAnchor()
                 pageView = LocalView.current
                 CompositionLocalProvider(LocalFrostedBackdrop provides browse, LocalModalBackdrop provides modal,
-                    LocalBottomShadows provides group) {
+                    LocalPageShadows provides group) {
                     Box(Modifier.fillMaxSize().onGloballyPositioned {
                         sceneBounds = Rect(it.backdropPosition(pageView), Size(it.size.width.toFloat(), it.size.height.toFloat()))
                     }) {
                         // Same separation as LocalicaScreen: browse excludes floating
                         // controls, modal records the complete underlying scene/group.
-                        Box(Modifier.fillMaxSize().recordFrostedBackdrop(modal).bottomGlassShadowHost(group)) {
+                        Box(Modifier.fillMaxSize().recordFrostedBackdrop(modal).pageShadowHost(group)) {
                             Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(browse)) {
                                 drawRect(when (scene) {
                                     Scene.Light -> androidx.compose.ui.graphics.Color(0xFFF4F4F6)
@@ -286,13 +288,13 @@ class UtilityPopupRenderDiagnosticTest {
                                 .padding(horizontal = 12.dp).padding(bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 LiquidGlassSurface(Modifier.fillMaxWidth().height(CompactControlSize)
                                     .onGloballyPositioned { miniBounds = Rect(it.backdropPosition(pageView), Size(it.size.width.toFloat(), it.size.height.toFloat())) }
-                                    .bottomGlassShadow(), source = browse, shadow = false, depthScale = RaisedGlassDepthScale) {
+                                    .pageGlassCaster(), source = browse, shadow = false, depthScale = RaisedGlassDepthScale) {
                                     Text("Synthetic mini-player", Modifier.align(Alignment.Center))
                                 }
                                 Row(Modifier.fillMaxWidth().height(NavigationPillHeight), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                     LiquidGlassSurface(Modifier.weight(1f).fillMaxHeight()
                                         .onGloballyPositioned { tabBounds = Rect(it.backdropPosition(pageView), Size(it.size.width.toFloat(), it.size.height.toFloat())) }
-                                        .bottomGlassShadow(), source = browse, shadow = false, depthScale = BottomPillDepthScale) {
+                                        .pageGlassCaster(), source = browse, shadow = false, depthScale = BottomPillDepthScale) {
                                         Text("Home     Library", Modifier.align(Alignment.Center))
                                     }
                                     NavigationUtilityPill(anchor, browse, Modifier.width(104.dp).fillMaxHeight(),
@@ -330,7 +332,7 @@ class UtilityPopupRenderDiagnosticTest {
     @Composable private fun InstallDialogMarker() {
         val view = LocalView.current
         val window = (view.parent as DialogWindowProvider).window
-        val cleared = LocalBottomShadows.current == null && LocalSurfaceShadows.current == null
+        val cleared = LocalPageShadows.current == null && LocalSurfaceShadows.current == null
         SideEffect { popupView = view; popupWindow = window; modalGroupsCleared = cleared }
         DisposableEffect(window) {
             val marker = WindowMarker()
@@ -470,9 +472,9 @@ class UtilityPopupRenderDiagnosticTest {
     private data class Frame(val utility: Geometry, val popup: Geometry?, val shape: GlassShape, val expansion: Float)
 
     private fun capture(name: String, save: Boolean): Frame {
-        assertEquals("Repeated reopen cannot accumulate group entries", entryKeys, group.entries.keys.toSet())
-        assertTrue("All persistent bottom entries remain attached", group.entries.values.all { it.coordinates?.isAttached == true })
-        assertEquals("Exactly one persistent entry belongs to the utility anchor", 1, group.entries.values.count { it.anchor === anchor })
+        assertEquals("Repeated reopen cannot accumulate group entries", entryKeys, group.casters.map { it.key }.toSet())
+        assertTrue("All persistent bottom entries remain attached", group.casters.all { (it.shape as? LayoutShape)?.coordinates?.isAttached == true })
+        assertEquals("Exactly one persistent entry belongs to the utility anchor", 1, group.casters.count { it.key === anchor })
         if (anchor.modalPresent) assertTrue("Popup descendants cannot join another window's group", modalGroupsCleared)
         val shape = anchor.contact.body.value
         val sx = shape.scaleX(anchor.contact.vertical)
@@ -550,7 +552,7 @@ class UtilityPopupRenderDiagnosticTest {
                 frameJson.put("shadowRegions", regions)
                 if (save) frameJson.put("image", saveScene(image, name))
                 Log.i("UtilityPopupProbe", "${report.getString("scene")} $name p=$p shape=$shape " +
-                    "hidden=${anchor.hidden} modal=${anchor.modalPresent} group=${group.entries.size} regions=$regions")
+                    "hidden=${anchor.hidden} modal=${anchor.modalPresent} group=${group.casters.size} regions=$regions")
             } else {
                 // Transfer this existing screenshot for bounded failure-only evidence.
                 lastPresentedFrame?.recycle()
@@ -595,7 +597,7 @@ class UtilityPopupRenderDiagnosticTest {
             .put("vertical", anchor.contact.vertical).put("settled", anchor.contact.state.momentum.settled)
             .put("hidden", anchor.hidden).put("modalPresent", anchor.modalPresent).put("restoredDrawn", anchor.restoredDrawn)
             .put("shadowInModal", anchor.shadowInModal).put("appShadowStrength", strength)
-            .put("groupEntries", group.entries.size).put("activeGroupBodies", group.entries.values.count { it.anchor?.shadowInModal != true })
+            .put("groupEntries", group.casters.size).put("activeGroupBodies", group.casters.count { (it.key as? GlassAnchor)?.shadowInModal != true })
             .put("browseRecorded", browseSource.recorded).put("modalRecorded", modalSource.recorded)
             .put("browseRevision", browseSource.revision).put("modalRevision", modalSource.revision)
             .put("browseRasterReady", browseSource.snapshot != null).put("modalRasterReady", modalSource.snapshot != null)
