@@ -122,7 +122,7 @@
     "note": "Measured +905/-361 = +544 against v0.33.8 ff32ec6d. The floating family U01.05a/U05.02a moves to Stage 4 with U05.02c (lead 2:10 PM (2)); no provisional Engine root or fixture changes. U10.03 owners require components/Presence.kt; crop targets the settled layout. R8 carries the +54 beyond the previous +490 gate."
   },
   "validationNotes": [
-    "Lead decision 2026-11-07 2:10 PM (1): ink and material assertions follow every lyrics phase sample and C1 rejoin; frame bounds derive from the #608 curve plus the cubic phase binding. The retired 412 ms duration and four-intermediate-frame requirement are removed.",
+    "Lead decision 2026-11-07 2:10 PM (1): ink/material assertions follow every admitted lyrics phase and C1 cubic rejoin. The retired 412 ms duration and four-intermediate-frame expectation are removed. The existing one-frame composition/draw latency is bounded by the exact adjacent phase-derived values, replacing fixed 0.3/0.4 jumps. Native draw is flushed before observation; target joins use the first rendered phase, not intent time.",
     "Stage 2 FixtureTime and the PlayerSurface harness clock are the single test-clock implementation (lead 2:10 PM (5))."
   ]
 }
