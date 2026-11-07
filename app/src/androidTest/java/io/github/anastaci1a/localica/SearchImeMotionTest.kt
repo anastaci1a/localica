@@ -83,6 +83,9 @@ class SearchImeMotionTest {
                                 assertEquals("Restore native policy after Activity disposal", original,
                                     nativeShell("settings get $setting"))
                                 events += "${SystemClock.uptimeMillis()} after-activities $setting=$original"
+                                // The running keyboard can observe the restore seconds later, inside the next class (#593).
+                                if (setting == "secure show_ime_with_hard_keyboard")
+                                    awaitSystemImeHardKeyboardPolicy(::nativeShell, (original.toIntOrNull() ?: 0) != 0)
                             } catch (caught: Throwable) {
                                 if (failure == null) failure = caught else failure.addSuppressed(caught)
                             }

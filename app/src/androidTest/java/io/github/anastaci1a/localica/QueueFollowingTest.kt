@@ -759,6 +759,8 @@ class QueueFollowingTest {
             if (original == "null") shell("settings delete secure $key")
             else if (original != "1") shell("settings put secure $key $original")
             assertEquals("Restore native keyboard policy", original, shell("settings get secure $key"))
+            // The running keyboard can observe the restore seconds later, inside the next test (#593).
+            awaitSystemImeHardKeyboardPolicy(::shell, (original.toIntOrNull() ?: 0) != 0)
         }
     }
 

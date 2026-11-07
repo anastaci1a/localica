@@ -102,6 +102,8 @@ class PopupImeBackTest {
                         if (originalKeyboard == "null") shell("settings delete secure $keyboardKey")
                         else shell("settings put secure $keyboardKey $originalKeyboard")
                         assertEquals(originalKeyboard, shell("settings get secure $keyboardKey"))
+                        // The running keyboard can observe the restore seconds later, inside the next test (#593).
+                        awaitSystemImeHardKeyboardPolicy(::shell, (originalKeyboard.toIntOrNull() ?: 0) != 0)
                     }
                 }
                 failure?.let { throw it }

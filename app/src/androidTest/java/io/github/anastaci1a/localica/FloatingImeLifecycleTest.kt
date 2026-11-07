@@ -213,6 +213,11 @@ class FloatingImeLifecycleTest {
                 shell(if (value == "null") "settings delete secure $key" else "settings put secure $key " + argument(value))
                 assertEquals("Restore secure setting $key", value, shell("settings get secure $key"))
             }
+            // The restored keyboard can observe the policy seconds later, inside the next test (#593).
+            cleanup {
+                val policy = original.getValue("show_ime_with_hard_keyboard")
+                awaitSystemImeHardKeyboardPolicy(::shell, (policy.toIntOrNull() ?: 0) != 0)
+            }
             cleanup {
                 val restored = keys.associateWith { shell("settings get secure $it") }
                 assertEquals("All captured IME settings agree after the complete restoration", original, restored)
