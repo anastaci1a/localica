@@ -1,8 +1,8 @@
 {
-  "sourceSha": "6ccfeb33f597bea63c637cab5ec2d59d174bd999",
-  "registryArtifactSha256": "d24bf39574c77de71aafeab1aaa3e1fc8a76f50de60132af5c2d3553b62e810c",
-  "baselineSha256": "033a3b5fcf2fb6598ebc6b70b62847bf6a7ddf10c4a6a81f84ea4d010e703306",
-  "integratedSha": "dba7f1203be022b60060a8c602224f862630405e",
+  "sourceSha": "872101297d120718cc330fb451f19b9cf72af32e",
+  "registryArtifactSha256": "97639d0eed41e3ef933fc327c27088f1bad6fea80dc7ca552f518a314ff2d506",
+  "baselineSha256": "dd0bcca131ece5d28685d26406336b5092fc929caa843a1668a95adac9264ad8",
+  "integratedSha": "828425032d3046d23f7b020c7a649508da4446bd",
   "approvedBy": "lead",
-  "approval": "Operator-approved Stage 0 initial lint-generated inherited debt; lead assignment 2026-11-06T14:56:55Z; no additional escape approved."
+  "approval": "Lead decision 2026-11-07 (Stage 2 re-pin, U14.01a): re-bootstrap at integrated v0.33.5 82842503 recording 43 main-side incidents, 51 re-anchored and 9 retired entries; no additional escape approved."
 }
