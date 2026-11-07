@@ -121,7 +121,7 @@ private fun ListScrollbar(state: Any, contentKey: Any, scrollable: () -> Boolean
     val speed = LocalMotionSpeed.current
     val grip by animateFloatAsState(if (dragging || pressed) ScrollbarGrip.HeldScale else 1f,
         tween(ScrollbarGrip.durationMillis(speed, reduced), easing = CubicBezierEasing(0f, 0f, .2f, 1f)), label = "Scrollbar grip")
-    BoxWithConstraints(modifier.fillMaxHeight().width(76.dp).padding(top = 8.dp, bottom = 80.dp)) {
+    BoxWithConstraints(modifier.fillMaxHeight().width(76.dp).then(ScrollbarTapSharing).padding(top = 8.dp, bottom = 80.dp)) {
         val track = with(density) { maxHeight.toPx().coerceAtLeast(1f) }
         val minThumb = with(density) { ScrollbarGrip.MinHeightDp.dp.toPx() }
         var dragFraction by remember { mutableFloatStateOf(0f) }
