@@ -114,6 +114,8 @@ Full native shards and focused prototype jobs time out after 35 minutes. A timed
 
 Search IME, search-focus and contrast coverage is mandatory on API 26/36. Build/JVM/lint/signature and both preserved-data compatibility jobs also remain required. Known issues never waive failures.
 
+The `runner` input defaults to `hosted`. `runner=self-hosted` moves only the two focused emulator jobs to the owner's locked-down, single-job runner, and only for the owner's manual dispatch on a branch (#592). It is for single focused runs: `repeat` must be 1 and `repeat_methods` empty, so repeated proofs stay hosted. Build, compatibility and evidence jobs, `android.yml`, release gates and acceptance runs stay hosted. A queued self-hosted job waits for the owner's launcher; it is never rerouted.
+
 The prototype build job compiles debug and release Kotlin concurrently in one Kotlin daemon, which inherits the Gradle heap. It therefore uses the Android static-checks sizing (`-Xmx6g`, four workers) on the 16 GB hosted runner; the 2 GB local default ran out of memory there (#636).
 
 The decision manifest records the exact SHA, APK identity, selected coverage and that complete native suites were not run. Prototype results do not certify a release.
