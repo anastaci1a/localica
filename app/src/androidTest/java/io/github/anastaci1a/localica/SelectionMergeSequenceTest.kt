@@ -11,6 +11,7 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.asAndroidPath
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.anastaci1a.localica.ui.*
+import io.github.anastaci1a.localica.ui.engine.SelectionOutlineProfile
 import io.github.anastaci1a.localica.browse.BrowseStyle
 import io.github.anastaci1a.localica.browse.BrowseCellGeometry
 import io.github.anastaci1a.localica.browse.ListSize

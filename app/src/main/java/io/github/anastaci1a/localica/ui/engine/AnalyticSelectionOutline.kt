@@ -1,8 +1,9 @@
-package io.github.anastaci1a.localica.ui
+package io.github.anastaci1a.localica.ui.engine
 
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.boundingRect
 import androidx.compose.ui.graphics.Path
 import kotlin.math.*
 
@@ -646,16 +647,16 @@ internal class AnalyticSelectionOutline(private val profile: SelectionOutlinePro
         }
         return best
     }
-    internal fun inspect(regions: List<SelectionRegion>,gap: Float,strength: (Int,Int)->Float): List<OutlineFilletProof> {
+    internal fun inspect(regions: List<RoundRect>,gap: Float,strength: (Int,Int)->Float): List<OutlineFilletProof> {
         return prepare(regions,gap,strength).map { it.proof }
     }
-    private fun prepare(regions: List<SelectionRegion>,gap: Float,strength: (Int,Int)->Float): List<OutlineFillet> {
+    private fun prepare(regions: List<RoundRect>,gap: Float,strength: (Int,Int)->Float): List<OutlineFillet> {
         val started=if(profile!=null)System.nanoTime() else 0L
         unit=gap.toDouble()/16;epsilon=unit*1e-5
         val bodies=regions.mapIndexed { i,r ->
-            val radius=r.radius(gap).toDouble()
-            cachedBodies.getOrNull(i)?.takeIf { it.box==r.bounds && it.corner==radius }
-                ?: OutlineBody(i,i,r.bounds,radius)
+            val radius=r.topLeftCornerRadius.x.toDouble()
+            cachedBodies.getOrNull(i)?.takeIf { it.box==r.boundingRect && it.corner==radius }
+                ?: OutlineBody(i,i,r.boundingRect,radius)
         }
         cachedBodies=bodies
         components=addLobes(bodies,strength);lobeCount=components.size-bodies.size
@@ -686,7 +687,7 @@ internal class AnalyticSelectionOutline(private val profile: SelectionOutlinePro
         }
         return patches
     }
-    fun path(regions: List<SelectionRegion>,gap: Float,strength: (Int,Int)->Float): Path {
+    fun path(regions: List<RoundRect>,gap: Float,strength: (Int,Int)->Float): Path {
         val patches=prepare(regions,gap,strength)
         val rounded=if(profile!=null)System.nanoTime() else 0L
         val path=Path().apply {
@@ -708,3 +709,22 @@ internal class SelectionOutlineProfile {
     var roundingNanos=0L
 }
 
+
+/** The #556 contour of uniform-corner [bodies]; exact duplicates merge first, keeping each merged pair's strongest bridge. */
+internal fun concaveFilletPath(bodies: List<RoundRect>, gap: Float, strength: (Int, Int) -> Float = { _, _ -> 1f },
+    contour: AnalyticSelectionOutline = AnalyticSelectionOutline()): Path {
+    if (bodies.isEmpty()) return Path()
+    var duplicates=false
+    for(i in bodies.indices)for(j in 0 until i) {
+        if(bodies[i]==bodies[j]) { duplicates=true;break }
+    }
+    if(!duplicates)return contour.path(bodies,gap,strength)
+    val members = bodies.indices.groupBy { bodies[it] }
+    val unique = members.keys.toList()
+    val indices = members.values.toList()
+    return contour.path(unique,gap) { a,b -> indices[a].maxOf { i -> indices[b].maxOf { j -> strength(min(i,j),max(i,j)) } } }
+}
+
+/** A pair farther apart than the whole selection gap cannot meet (each lobe reaches at most gap/4), so its strength cannot change the contour. */
+internal fun filletStrength(a: Rect, b: Rect, gap: Float, observed: Float) =
+    if(gap>0f && max(max(a.left-b.right,b.left-a.right),max(a.top-b.bottom,b.top-a.bottom))>gap) 0f else observed

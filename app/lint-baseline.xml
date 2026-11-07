@@ -4,61 +4,6 @@
     <issue
         id="IndependentUiClock"
         message="Use the shared UiClock"
-        errorLine1="        val started=if(profile!=null)System.nanoTime() else 0L"
-        errorLine2="                                            ~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/AnalyticSelectionOutline.kt"
-            line="653"
-            column="45"/>
-    </issue>
-
-    <issue
-        id="IndependentUiClock"
-        message="Use the shared UiClock"
-        errorLine1="        val arranged=if(profile!=null)System.nanoTime() else 0L"
-        errorLine2="                                             ~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/AnalyticSelectionOutline.kt"
-            line="664"
-            column="46"/>
-    </issue>
-
-    <issue
-        id="IndependentUiClock"
-        message="Use the shared UiClock"
-        errorLine1="        val rounded=if(profile!=null)System.nanoTime() else 0L"
-        errorLine2="                                            ~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/AnalyticSelectionOutline.kt"
-            line="680"
-            column="45"/>
-    </issue>
-
-    <issue
-        id="IndependentUiClock"
-        message="Use the shared UiClock"
-        errorLine1="        val rounded=if(profile!=null)System.nanoTime() else 0L"
-        errorLine2="                                            ~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/AnalyticSelectionOutline.kt"
-            line="691"
-            column="45"/>
-    </issue>
-
-    <issue
-        id="IndependentUiClock"
-        message="Use the shared UiClock"
-        errorLine1="        profile?.let { it.pathNanos+=System.nanoTime()-rounded }"
-        errorLine2="                                            ~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/AnalyticSelectionOutline.kt"
-            line="696"
-            column="45"/>
-    </issue>
-
-    <issue
-        id="IndependentUiClock"
-        message="Use the shared UiClock"
         errorLine1="                val start = withFrameNanos { it }"
         errorLine2="                            ~~~~~~~~~~~~~~">
         <location
