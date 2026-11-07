@@ -20,6 +20,7 @@ import org.junit.Test
 
 class LyricsInteractionTest {
     @get:Rule val compose = createComposeRule()
+    @Volatile private var lyricsPhase = 1f
 
     // Exercise the complete player hit-test stack: standalone LyricsLines and semantic
     // click/scroll actions bypass the invisible artwork node that caused #632.
@@ -42,14 +43,16 @@ class LyricsInteractionTest {
         val sought = mutableListOf<Long>()
         var escaped = 0
         try {
-            compose.setContent { LocalicaTheme { androidx.compose.foundation.layout.BoxWithConstraints {
+            compose.setContent { LocalicaTheme { CompositionLocalProvider(
+                LocalPlayerInkCompositionObserver provides { lyricsPhase = it.lyricsProgress }) {
+                androidx.compose.foundation.layout.BoxWithConstraints {
                 PlayerSurface(state.value, true, { escaped++ },
                     InterfaceSettings(reducedMotion = reducedMotion, artworkLayout = ArtworkLayout.FullBackground),
                     remember { androidx.compose.animation.core.Animatable(1f) }, {}, { sought += it }, {}, {},
                     { escaped++ }, {}, lyricsOpen = lyrics.value, onLyrics = { escaped++ }, track = track,
                     // A real player has queue navigation available even while artwork gestures are disabled.
                     onArtworkVisit = { _, result -> result(true) })
-            } } }
+            } } } }
             compose.waitUntil(10000) { compose.onAllNodesWithText("Input line 15").fetchSemanticsNodes().isNotEmpty() }
             compose.waitForIdle()
             block(state, sought) { escaped }
@@ -91,16 +94,27 @@ class LyricsInteractionTest {
             compose.mainClock.autoAdvance = false
             try {
                 compose.runOnIdle { lyrics.value = false }
-                compose.mainClock.advanceTimeBy(180)
+                fun phaseUntil(label: String, reached: () -> Boolean) {
+                    repeat(60) {
+                        if (reached()) return
+                        compose.mainClock.advanceTimeByFrame()
+                        compose.waitForIdle()
+                    }
+                    fail("$label was not presented; phase=$lyricsPhase")
+                }
+                phaseUntil("Outgoing lyrics cross-fade") { lyricsPhase in .7f.. .9f }
                 // The outgoing document is still presented, although its target is artwork.
                 compose.onNodeWithText("Input line 16").assertIsDisplayed().performTouchInput { click() }
                 compose.runOnIdle { assertEquals(listOf(16000L), sought); assertEquals(0, escaped()) }
                 compose.runOnIdle { lyrics.value = true }
-                compose.mainClock.advanceTimeBy(90)
+                val reversal = lyricsPhase
+                phaseUntil("Reversed lyrics advance from the presented phase") { lyricsPhase > reversal + .01f && lyricsPhase < 1f }
+                compose.onNodeWithText("Input line 16").assertIsDisplayed()
                 compose.onNodeWithText("Input line 16").performTouchInput { click() }
                 compose.runOnIdle { assertEquals(listOf(16000L, 16000L), sought); assertEquals(0, escaped()) }
                 compose.runOnIdle { lyrics.value = false }
-                compose.mainClock.advanceTimeBy(650)
+                phaseUntil("Closed lyrics owner") { lyricsPhase == 0f }
+                compose.waitForIdle()
                 // Once the document is gone the very next touch belongs to artwork exactly once.
                 compose.onNodeWithTag("artwork-gesture", true).performTouchInput { click() }
                 compose.runOnIdle { assertEquals(1, escaped()); assertEquals(2, sought.size) }
