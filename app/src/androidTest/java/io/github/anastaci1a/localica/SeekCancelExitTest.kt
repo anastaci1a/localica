@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
@@ -27,17 +28,24 @@ class SeekCancelExitTest {
 
     private fun release(player: Boolean, cancel: Boolean) {
         var value by mutableFloatStateOf(.2f)
+        var cancelHost: SliderCancelHost? = null
+        var renderer: GlassRendererRuntime? = null
         compose.setContent { LocalicaTheme {
+            // LocalicaScreen owns this policy for the player; GlassMorph also
+            // disables native contrast in its separate slider-hosting window.
+            PlayerSystemBars(dark = false)
+            renderer = LocalGlassRendererRuntime.current
             BoxWithConstraints(Modifier.fillMaxSize()) {
                 if (player) PlayerSurface(
                     PlaybackState(connected = true, title = "Exit fixture", positionMs = 20000, durationMs = 100000),
                     true, {}, InterfaceSettings(), remember { Animatable(1f) },
                     {}, {}, {}, {}, {}, {}, visual = PlayerVisual())
                 else {
-                    val host = rememberSliderCancelHost()
+                    val host = rememberSliderCancelHost().also { cancelHost = it }
                     CompositionLocalProvider(LocalSliderCancelHost provides host) {
                         InterfaceSlider(value, { value = it }, Modifier.width(300.dp).testTag("slider"))
-                        SliderCancelLayer(host, 20.dp)
+                        SliderCancelLayer(host,
+                            WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 24.dp)
                     }
                 }
             }
@@ -55,6 +63,7 @@ class SeekCancelExitTest {
                 compose.mainClock.advanceTimeBy(300)
             }
             slider.performTouchInput { up() }
+            val releaseClock = compose.mainClock.currentTime
             var previous = at.top
             // Every presented frame of the early exit must retain the original placement.
             repeat(12) {
@@ -64,7 +73,10 @@ class SeekCancelExitTest {
                 if (cancel) assertEquals("Cancel fades at the release position", at.top, next.top, 1f)
                 else assertTrue("Normal exit moves only down: $previous -> ${next.top}", next.top >= previous - 1f)
                 previous = next.top
-                val pixels = target.captureToImage().toPixelMap()
+                val requestedClock = compose.mainClock.currentTime
+                val image = target.captureToImage()
+                val capturedClock = compose.mainClock.currentTime
+                val pixels = image.toPixelMap()
                 var low = 1f
                 var high = 0f
                 for (y in 0 until pixels.height) for (x in 0 until pixels.width) {
@@ -72,12 +84,62 @@ class SeekCancelExitTest {
                     val brightness = (c.red + c.green + c.blue) / 3f
                     low = minOf(low, brightness); high = maxOf(high, brightness)
                 }
-                assertTrue("The X remains drawn on release frame $it", high - low > .02f)
+                val description = "frame=$it elapsed=${requestedClock - releaseClock} " +
+                    "requestedClock=$requestedClock capturedClock=$capturedClock " +
+                    "bounds=$next pixels=${pixels.width}x${pixels.height} low=$low high=$high"
+                if (high - low <= .02f || requestedClock != capturedClock) runCatching {
+                    val folder = nativeEvidenceDirectory("seek-cancel-exit-failure",
+                        androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().targetContext.cacheDir)
+                    val stem = "player-$player-cancel-$cancel-frame-$it"
+                    fun save(bitmap: androidx.compose.ui.graphics.ImageBitmap, suffix: String) {
+                        java.io.File(folder, "$stem-$suffix.png").outputStream().use {
+                            bitmap.asAndroidBitmap().compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
+                        }
+                    }
+                    save(image, "original")
+                    // Failure-only reads and redraw cannot turn the original pixels into a pass.
+                    val state = compose.runOnUiThread {
+                        "$description renderer=${renderer?.generation} alpha=${cancelHost?.target?.motion?.alpha} " +
+                            "active=${cancelHost?.target?.active} cancelled=${cancelHost?.target?.cancelled} " +
+                            "hovered=${cancelHost?.hovered} observedAfterOriginalCopy=true"
+                    }
+                    android.util.Log.e("SeekCancelExitFrame", state)
+                    java.io.File(folder, "$stem.txt").writeText(state)
+                    compose.runOnUiThread { androidx.compose.runtime.snapshots.Snapshot.sendApplyNotifications() }
+                    save(target.captureToImage(), "redrawn")
+                    android.util.Log.e("SeekCancelExitFrame", "Failure-only redraw clock=${compose.mainClock.currentTime}")
+                }.onFailure { android.util.Log.e("SeekCancelExitFrame", "Failure evidence unavailable", it) }
+                assertEquals("Capture holds the requested release frame: $description", requestedClock, capturedClock)
+                assertTrue("The X remains drawn on release frame $it: $description", high - low > .02f)
+                assertNativeClearance(target, next.bottom)
             }
             if (!cancel) assertTrue("Normal release reverses the rise", previous > at.top + 1f)
             compose.mainClock.advanceTimeBy(500)
             target.assertDoesNotExist()
         } finally { compose.mainClock.autoAdvance = true }
+    }
+
+    @OptIn(ExperimentalTestApi::class)
+    private fun assertNativeClearance(target: SemanticsNodeInteraction, bottomInRoot: Float) {
+        val view = (target.fetchSemanticsNode().root as androidx.compose.ui.platform.ViewRootForTest).view
+        compose.runOnUiThread {
+            var context = view.context
+            while (context is android.content.ContextWrapper && context !is android.app.Activity) {
+                context = context.baseContext
+            }
+            val window = (context as android.app.Activity).window
+            if (android.os.Build.VERSION.SDK_INT >= 29) {
+                assertFalse("The caller owns navigation contrast", window.isNavigationBarContrastEnforced)
+            }
+            val insets = requireNotNull(androidx.core.view.ViewCompat.getRootWindowInsets(view))
+                .getInsets(androidx.core.view.WindowInsetsCompat.Type.navigationBars())
+            val rootOrigin = IntArray(2).also(view::getLocationOnScreen)
+            val decor = window.decorView
+            val decorOrigin = IntArray(2).also(decor::getLocationOnScreen)
+            val safeBottom = decorOrigin[1] + decor.height - insets.bottom
+            assertTrue("The release X clears native navigation: bottom=${rootOrigin[1] + bottomInRoot} safeBottom=$safeBottom",
+                rootOrigin[1] + bottomInRoot <= safeBottom + 1f)
+        }
     }
 
     @Test fun exitAlphaIsMonotonicAndNewDragContinuesFromThePresentedFrame() {

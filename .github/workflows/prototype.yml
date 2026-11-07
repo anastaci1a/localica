@@ -156,6 +156,8 @@ jobs:
         df -h "$HOME"
     - name: Compile instrumentation APKs before starting emulator
       run: ./gradlew assembleDebug assembleDebugAndroidTest --no-daemon --max-workers=2
+    - name: Prepare the verified emulator SDK
+      uses: ./.github/actions/emulator-sdk-cache
     - name: Restore the exact SDK system image revision
       id: emulator-image-cache
       uses: ./.github/actions/system-image-cache
@@ -172,7 +174,7 @@ jobs:
         script: |
           adb shell wm size reset
           adb shell wm density reset
-          python3 .github/emulator-readiness.py
+          python3 .github/emulator-readiness.py --normalize-navigation
           bash .github/test-evidence/environment.sh >> prototype-runner-environment.txt
           bash .github/run-prototype-tests.sh
     - name: Cache the installed SDK system image
@@ -250,6 +252,8 @@ jobs:
         sudo rm -rf /usr/share/dotnet
     - name: Build and inspect private compatibility APKs sequentially
       run: bash .github/compatibility/build.sh
+    - name: Prepare the verified emulator SDK
+      uses: ./.github/actions/emulator-sdk-cache
     - name: Restore the exact SDK system image revision
       id: emulator-image-cache
       uses: ./.github/actions/system-image-cache
@@ -266,7 +270,7 @@ jobs:
         script: |
           adb shell wm size reset
           adb shell wm density reset
-          python3 .github/emulator-readiness.py
+          python3 .github/emulator-readiness.py --normalize-navigation
           bash .github/test-evidence/environment.sh >> prototype-runner-environment.txt
           bash .github/compatibility/run.sh
     - name: Cache the installed SDK system image
@@ -332,6 +336,8 @@ jobs:
         df -h "$HOME"
     - name: Compile instrumentation APKs before starting emulator
       run: ./gradlew assembleDebug assembleDebugAndroidTest --no-daemon --max-workers=2
+    - name: Prepare the verified emulator SDK
+      uses: ./.github/actions/emulator-sdk-cache
     - name: Restore the exact SDK system image revision
       id: emulator-image-cache
       uses: ./.github/actions/system-image-cache
@@ -348,7 +354,7 @@ jobs:
         script: |
           adb shell wm size 720x1280
           adb shell wm density 280
-          python3 .github/emulator-readiness.py
+          python3 .github/emulator-readiness.py --normalize-navigation
           bash .github/test-evidence/environment.sh >> prototype-runner-environment.txt
           bash .github/run-prototype-tests.sh
     - name: Cache the installed SDK system image
@@ -426,6 +432,8 @@ jobs:
         sudo rm -rf /usr/share/dotnet
     - name: Build and inspect private compatibility APKs sequentially
       run: bash .github/compatibility/build.sh
+    - name: Prepare the verified emulator SDK
+      uses: ./.github/actions/emulator-sdk-cache
     - name: Restore the exact SDK system image revision
       id: emulator-image-cache
       uses: ./.github/actions/system-image-cache
@@ -442,7 +450,7 @@ jobs:
         script: |
           adb shell wm size 720x1280
           adb shell wm density 280
-          python3 .github/emulator-readiness.py
+          python3 .github/emulator-readiness.py --normalize-navigation
           bash .github/test-evidence/environment.sh >> prototype-runner-environment.txt
           bash .github/compatibility/run.sh
     - name: Cache the installed SDK system image

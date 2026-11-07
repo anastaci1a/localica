@@ -267,12 +267,43 @@ internal fun DrawScope.glassShadows(bodies: List<Pair<RoundRect, Float>>, streng
     // from the cached texture's destination clip, exposing a handoff fringe.
     if (excludeInterior) clipPath(cache.body, ClipOp.Difference) { field() } else field()
 }
+/** Paths and round rectangles share the same optical field and live/raster handoff. */
+private fun DrawScope.glassPathShadow(path: Path, strength: Float, spread: Float, color: Color,
+    excludeInterior: Boolean, rasterizing: Boolean = false) {
+    val reach = (4f + spread * 28f).dp.toPx()
+    val shift = 2.dp.toPx()
+    val count = glassShadowRingCount(reach)
+    val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+        style = android.graphics.Paint.Style.FILL_AND_STROKE
+        strokeJoin = android.graphics.Paint.Join.ROUND
+        if (rasterizing) xfermode = android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.SRC)
+    }
+    fun DrawScope.rings() = translate(0f, shift) {
+        repeat(count) { index ->
+            val alpha = if (rasterizing) glassShadowRingCoverage(index + 1, count, strength) / 255f
+                else glassShadowRingAlpha(index, count, strength)
+            if (alpha > 0f) {
+                paint.color = color.copy(alpha = alpha).toArgb()
+                paint.strokeWidth = glassShadowRingExpansion(index, reach) * 2f
+                drawContext.canvas.nativeCanvas.drawPath(path.asAndroidPath(), paint)
+            }
+        }
+    }
+    fun DrawScope.field() {
+        val canvas = drawContext.canvas
+        if (!rasterizing) canvas.saveLayer(path.getBounds().inflate(reach + shift + 1f), Paint())
+        try { rings() } finally { if (!rasterizing) canvas.restore() }
+    }
+    // Match primitive shadows: resolve the destination cutout before the temporary field.
+    if (excludeInterior) clipPath(path, ClipOp.Difference) { field() } else field()
+}
+
 /** Retain the complete, padded shadow texture. Scrolling an unchanged surface only
  * translates this texture; it does not replay overlapping path fills. */
 internal class RetainedGlassShadow(private val scope: CoroutineScope) {
     private val geometry = GlassShadowGeometry()
     private data class Key(val bodies: List<Pair<RoundRect, Float>>, val strength: Float,
-        val spread: Float, val density: Float, val color: Color)
+        val spread: Float, val density: Float, val color: Color, val path: Path? = null)
     private data class Raster(val key: Key, val image: ImageBitmap, val inset: Offset)
     private var requested: Key? = null
     private var preparation: Job? = null
@@ -294,13 +325,31 @@ internal class RetainedGlassShadow(private val scope: CoroutineScope) {
             r.right - origin.x, r.bottom - origin.y, r.topLeftCornerRadius, r.topRightCornerRadius,
             r.bottomRightCornerRadius, r.bottomLeftCornerRadius) to alpha }
         val key = Key(normalized, strength, spread, density, color)
+        drawNormalized(key,origin,exclusion)
+    }
+    /** The field's normalized path is immutable until its input changes. Translation is free. */
+    fun DrawScope.draw(path: Path, origin: Offset, strength: Float, spread: Float, color: Color = Color.Black) {
+        if (strength <= 0f || path.isEmpty) return
+        drawNormalized(Key(emptyList(),strength,spread,density,color,path),origin,null)
+    }
+    private fun DrawScope.drawNormalized(key: Key,origin: Offset,exclusion: GlassShadowExclusion?) {
+        val normalized = key.bodies
+        val strength = key.strength; val spread = key.spread; val color = key.color
+        val outline = key.path
+        val bounds = outline?.getBounds() ?: Rect(0f,0f,normalized.maxOf { it.first.right },normalized.maxOf { it.first.bottom })
+        fun DrawScope.paintShadow(excludeInterior: Boolean, rasterizing: Boolean = false) {
+            if (outline == null) {
+                if (rasterizing) glassShadows(normalized,strength,spread,GlassShadowGeometry(),excludeInterior = false,color = color,rasterizing = true)
+                else glassShadows(normalized,strength,spread,geometry,exclusion = exclusion,exclusionTranslation = -origin,color = color)
+            } else glassPathShadow(outline,strength,spread,color,excludeInterior,rasterizing)
+        }
         if (key != requested) {
             requested = key
             preparation?.cancel()
             val padding = (4f + spread * 28f).dp.toPx() + 2.dp.toPx() + 2f
-            val inset = Offset(floor(-padding), floor(-padding))
-            val extent = IntSize(ceil(normalized.maxOf { it.first.right } + padding - inset.x).toInt(),
-                ceil(normalized.maxOf { it.first.bottom } + padding - inset.y).toInt())
+            val inset = Offset(floor(bounds.left-padding), floor(bounds.top-padding))
+            val extent = IntSize(ceil(bounds.right + padding - inset.x).toInt(),
+                ceil(bounds.bottom + padding - inset.y).toInt())
             // A retained RenderNode is a display list, not a guaranteed cached
             // raster: traces still showed every shadow ring drawn during scrolling.
             // Prepare settled geometry off Main. While the outline is morphing,
@@ -315,7 +364,7 @@ internal class RetainedGlassShadow(private val scope: CoroutineScope) {
                     ImageBitmap(extent.width, extent.height).also { next ->
                         CanvasDrawScope().draw(metrics, direction, Canvas(next),
                             Size(extent.width.toFloat(), extent.height.toFloat())) {
-                            translate(-inset.x, -inset.y) { glassShadows(normalized, strength, spread, GlassShadowGeometry(), excludeInterior = false, color = color, rasterizing = true) }
+                            translate(-inset.x, -inset.y) { paintShadow(excludeInterior = false, rasterizing = true) }
                         }
                     }
                 }
@@ -326,17 +375,16 @@ internal class RetainedGlassShadow(private val scope: CoroutineScope) {
         // A neighbor exclusion exists only while the popup is near its shared home.
         val prepared = raster?.takeIf { it.key == key && exclusion == null }
         if (prepared != null) translate(origin.x, origin.y) {
-            geometry.update(normalized.map { it.first }, (4f + spread * 28f).dp.toPx(), 2.dp.toPx())
+            if (outline == null) geometry.update(normalized.map { it.first }, (4f + spread * 28f).dp.toPx(), 2.dp.toPx())
             // Keep the cutout in the destination renderer. Baking a software clip
             // would change edge coverage when a fractional-position shadow moves.
-            clipPath(geometry.body, ClipOp.Difference) {
+            clipPath(outline ?: geometry.body, ClipOp.Difference) {
                 translate(prepared.inset.x, prepared.inset.y) {
                     drawImage(prepared.image, dstSize = IntSize(prepared.image.width, prepared.image.height), filterQuality = FilterQuality.Low)
                 }
             }
         } else translate(origin.x, origin.y) {
-            glassShadows(normalized, strength, spread, geometry,
-                exclusion = exclusion, exclusionTranslation = -origin, color = color)
+            paintShadow(excludeInterior = true)
         }
     }
 }

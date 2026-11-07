@@ -249,7 +249,7 @@ Morphs and controls share damped acceleration/contact/pressure response with cou
 
 Record browsing, panel material, lists, player and lyrics separately to prevent sampling cycles. The lyrics return source composites clipped/faded lyric documents over their artwork backing, excluding the return control. Thumbnail captures join matching outer, mask and composite draw generations before copying. Stale generations cannot publish.
 
-Sampling leases retain shared scenes as offscreen rasters. Scrolling lists keep display lists so narrow lens crops cull unseen rows without another full-viewport raster. Unreferenced scenes skip readback. On older Android, sample changed recordings into shared 32×32 thumbnails. Reuse completed samples across visibility changes.
+Sampling leases retain shared scenes as offscreen rasters. Scrolling lists keep display lists so narrow lens crops cull unseen rows without another full-viewport raster. Unreferenced scenes skip readback. On older Android, progressively halve changed recordings into shared 32×32 thumbnails. Reuse completed samples across visibility changes.
 
 Resolve source and consumer in one live relative recording-local basis, including fit/nonuniform scale and scrolling. Common ancestors cancel and separate windows share the screen frame. Use that same mapping for crop coverage and parent-boundary clipping.
 
@@ -269,7 +269,11 @@ Controls and panels use one [lens model](interface.md#materials-and-controls), i
 
 Active sliders and switches render one procedural scene, unchanged outside the lens, with refraction or average colour inside. Resting white thumbs release sampling leases and bypass optics. Active controls capture only the thumb neighborhood and replace pixels only within its silhouette. Track, touch mapping and expanded wall contact share geometry.
 
-On Android 13+, controls entirely over explicitly recorded panel material use an 8×8 local GPU average, then the shared tint/contrast mapping and outline. Morphs retain that averaged home source while admitting the destination. Never infer eligibility from color similarity or average a foreground-containing recording.
+In Normal mode on Android 13+, controls entirely over explicitly recorded panel material use an 8×8 local GPU average, then the shared tint/contrast mapping and outline. Morphs retain that averaged home source while admitting the destination. Never infer eligibility from color similarity or average a foreground-containing recording.
+
+None panels resolve one opaque mean weighted by source coverage. Transparent pixels outside the source do not dilute panel opacity. Descendant controls reuse the finished parent material without repeating tint, tone or averaging. Odd edges retain their coverage through progressive reduction.
+
+Below Android 13, footprint boundaries inside thumbnail cells retain those cells' mean colours. Excluding raster quantization, mean error is bounded by boundary-cell area fraction multiplied by their maximum channel contrast. Shared readback remains 32×32 pixels; no full-resolution CPU capture is required.
 
 Floating list controls sample the finished viewport after its fade and scrolling transforms, with the parent backing beneath transparent pixels. Keep those controls outside their own source recording.
 
@@ -277,7 +281,7 @@ Floating list controls sample the finished viewport after its fade and scrolling
 | --- | --- |
 | Android 13+ optics | Padded AGSL rounded-surface refraction and tone mapping; the page supplies foreground polarity without readback. |
 | Live scattering | Bounded downsampled layers: frosted panels on Android 12+, refracting glass on Android 13+. |
-| Average-only rendering | Shared 8×8 GPU averages, or footprint averages from tiny shared thumbnails below Android 13. No refraction or blur. |
+| Average-only rendering | Progressive GPU box reduction over the covered footprint. Below Android 13, integrate shared 32×32 cells by overlap area. No refraction or blur. |
 | Foreground / clear glass | Full resolution; tint below icons/text. |
 | Shadows | [Shadows rules](#shadows). |
 

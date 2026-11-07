@@ -38,3 +38,11 @@ internal fun galleryHighlightCenter(pixels: PixelMap, contour: Rect, covers: Lis
         else -> Float.NaN
     }
 }
+
+/** Hidden optical edges cannot establish a new held center. Preserve the last
+ * observed optical anchor until a placeable frame arrives; keep the four-pixel bound. */
+internal fun pinchReleaseAnchorRange(held: Float, lastVisible: Float, final: Float): ClosedFloatingPointRange<Float> {
+    require(lastVisible.isFinite() && final.isFinite()) { "Release bounds require observed finite anchors" }
+    val start = if (held.isFinite()) held else lastVisible
+    return (minOf(start, final) - 4f)..(maxOf(start, final) + 4f)
+}

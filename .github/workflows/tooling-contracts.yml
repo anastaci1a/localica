@@ -23,6 +23,7 @@ name: Evidence tooling contracts
       - '.github/tests/**'
       - '.github/compatibility/**'
       - '.github/test-evidence/**'
+      - '.github/emulator-sdk.py'
       - '.github/shared-test-apks.py'
       - '.github/prebuilt-device-tests.gradle'
       - '.github/release-verification.py'
@@ -54,6 +55,7 @@ name: Evidence tooling contracts
       - '.github/tests/**'
       - '.github/compatibility/**'
       - '.github/test-evidence/**'
+      - '.github/emulator-sdk.py'
       - '.github/shared-test-apks.py'
       - '.github/prebuilt-device-tests.gradle'
       - '.github/release-verification.py'
@@ -90,7 +92,7 @@ jobs:
           set -euo pipefail
           mkdir tooling-contract-reports
           git rev-parse HEAD > tooling-contract-reports/source-sha.txt
-          git ls-files -z app/src/main app/src/sharedTest app/src/test lint tools/ui-consolidation tools/performance app/lint-baseline.xml app/ui-escapes.yaml app/build.gradle.kts settings.gradle.kts build.gradle.kts gradle .github/check-ui-lint.mjs .github/run-ui-lint.sh .github/emulator-readiness.py .github/emulator-system-image.py .github/actions .github/tests .github/compatibility .github/test-evidence .github/workflows app/src/androidTest/java .github/shared-test-apks.py .github/prebuilt-device-tests.gradle .github/release-verification.py .github/run-device-tests.sh .github/prepare-device-tests.sh .github/run-prototype-tests.sh .github/prototype-risk-classes.txt .github/workflows/tooling-contracts.yml | xargs -0 sha256sum > tooling-contract-reports/source-files.sha256
+          git ls-files -z app/src/main app/src/sharedTest app/src/test lint tools/ui-consolidation tools/performance app/lint-baseline.xml app/ui-escapes.yaml app/build.gradle.kts settings.gradle.kts build.gradle.kts gradle .github/check-ui-lint.mjs .github/run-ui-lint.sh .github/emulator-sdk.py .github/emulator-readiness.py .github/emulator-system-image.py .github/actions .github/tests .github/compatibility .github/test-evidence .github/workflows app/src/androidTest/java .github/shared-test-apks.py .github/prebuilt-device-tests.gradle .github/release-verification.py .github/run-device-tests.sh .github/prepare-device-tests.sh .github/run-prototype-tests.sh .github/prototype-risk-classes.txt .github/workflows/tooling-contracts.yml | xargs -0 sha256sum > tooling-contract-reports/source-files.sha256
           # Pin the interpreter ABI to the reviewed PyYAML wheel; refuse runner drift.
           python3.12 -c 'import platform, sys; assert sys.version_info[:2] == (3, 12) and sys.implementation.name == "cpython" and sys.platform == "linux" and platform.machine() == "x86_64"'
           python3.12 -m venv "$RUNNER_TEMP/tooling-contract-python"
@@ -119,7 +121,7 @@ jobs:
           import hashlib, json, pathlib, subprocess, sys, time
           root = pathlib.Path('tooling-contract-reports')
           names = [
-              'test_source_methods.py', 'test_full_partition.py',
+              'test_source_methods.py', 'test_full_partition.py', 'test_emulator_sdk.py',
               'test_prepare_device_tests.py', 'test_full_live_evidence.py',
               'test_run_prototype_tests.py', 'test_observe_test_evidence.py',
               'test_failure_context.py', 'test_shared_test_apks.py', 'test_release_verification.py', 'test_refresh_durations.py', 'test_emulator_setup.py',
