@@ -24,7 +24,12 @@ import org.junit.Test
 class ScrollTopRetainedRowsTest {
     @get:Rule val compose = createComposeRule()
 
+    /** The fly-through's last two landings in the operator's video: the rows just past the top
+     * screen (items 35 to 44) at the top, then one step to the top. The lookahead keeps the rows
+     * after its new last visible item composed, and those were just placed on screen. */
     @Test fun snapToTopDoesNotDrawRetainedRowsAtTheirOldPositions() = land { list, _ ->
+        list.performScrollToIndex(35)
+        compose.waitForIdle()
         list.performScrollToIndex(0)
     }
 
