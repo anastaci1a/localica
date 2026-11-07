@@ -47,8 +47,11 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     actions: @Composable () -> Unit = {}) {
     val scope = rememberCoroutineScope()
     val easing = remember { CubicBezierEasing(.22f, 0f, .12f, 1f) }
-    val travel = with(LocalDensity.current) { (maxHeight - WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() -
+    // Read through updated state: the remembered SheetState outlives the first composition, whose insets can still be
+    // empty on edge-to-edge APIs (a stale travel left API 36 held drags at 0.9625).
+    val currentTravel = with(LocalDensity.current) { (maxHeight - WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() -
         (CompactControlSize + bottomChrome)).toPx().coerceAtLeast(1f) }
+    val travel by rememberUpdatedState(currentTravel)
     val density = LocalDensity.current.density
     var dragging by remember { mutableStateOf(false) }
     LaunchedEffect(expanded, settings.reducedMotion, settings.fasterMotion) {
