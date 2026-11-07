@@ -49,13 +49,12 @@ class ColorReferenceTest {
             rect.dispose(); color.dispose()
         }
     }
-    @Test fun stageOneHasNoProductionOwnerFactoryCallers() {
+    @Test fun ownerFactoryCallersStayInEngineAndComponents() {
         val root=File("src/main/java")
         assertTrue(root.isDirectory)
+        // Stage 2 (U10.00) scopes owner factories to Engine and Components; the Stage 3 factories (D03) join the same witness.
         val names=Regex("\\b(rememberMotionFloat|rememberNormalizedMotionFloat|rememberMotionRect|rememberMotionColor|rememberExpandCollapse|rememberPersistentShape|rememberSurfaceNode|rememberPopupMotion|rememberPopupState)\\s*\\(")
-        // The components factory declaration (U07.00: rememberPopupState → rememberPopupMotion) is not a caller.
-        val declaration=Regex("^@Composable fun rememberPopupState\\(")
-        val callers=root.walkTopDown().filter { it.extension=="kt" && "/ui/engine/" !in it.invariantSeparatorsPath }.filter { f -> f.readLines().any { names.containsMatchIn(it) && !declaration.containsMatchIn(it) } }.toList()
+        val callers=root.walkTopDown().filter { it.extension=="kt" && listOf("/ui/engine/","/ui/components/").none { p -> p in it.invariantSeparatorsPath } }.filter { names.containsMatchIn(it.readText()) }.toList()
         assertEquals(emptyList<File>(),callers)
     }
     @Test fun transparentAlphaNarrowRectAndMirroredPhysicalEdgesStayFinite() {

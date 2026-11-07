@@ -15,7 +15,6 @@ import io.github.anastaci1a.localica.localicaComposeRule as createComposeRule
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.navigation.InterfaceSettings
 import io.github.anastaci1a.localica.ui.LocalicaTheme
-import io.github.anastaci1a.localica.ui.QueueSurface
 import io.github.anastaci1a.localica.ui.pinchToChangeView
 import org.junit.Assert.*
 import org.junit.Rule
