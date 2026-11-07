@@ -68,3 +68,8 @@ internal fun boundedPlan(stamp: FrameStamp,core: EasingSpec,T: Double,sigma: Dou
     internal fun dispose() { clock.checkMutation(); if(disposed) return; try { check(pendingBasis==null || bound!=null) { "Unbound pending Rebase at owner disposal" } } finally { disposed=true; motion.onRest=null; motion.dispose(); bound?.dispose() } }
 }
 @Composable fun rememberExpandCollapse(key: Any,initiallyExpanded: Boolean): ExpandCollapse { val clock=ownerClock(); val spec=LocalUiSpec.current.spec.expansion; val owner=remember(clock,key) { ExpandCollapse(clock,spec,initiallyExpanded,key) }; SideEffect { owner.updateSpec(spec) }; DisposableEffect(owner) { onDispose { owner.dispose() } }; return owner }
+/** U07.00 (D41–D43): a popup's one expansion, driven only by its components PopupState. The basis (presented home → envelope) comes with the presenter's measurement; an earlier intent waits for it. */
+@Stable internal class PopupMotion(private val clock: UiClock,spec: ExpansionSpec,key: Any) { internal val expansion=ExpandCollapse(clock,spec,false,key to "popup"); private var placed=false; private var shown=false
+    internal fun show(visible: Boolean) { clock.checkMutation(); if(placed) expansion.target(visible); shown=visible }
+    internal fun place(basis: ExpansionBasis) { expansion.setBasis(basis); placed=true; expansion.target(shown) } }
+@Composable internal fun rememberPopupMotion(key: Any): PopupMotion { val clock=ownerClock(); val spec=LocalUiSpec.current.spec.expansion; val owner=remember(clock,key) { PopupMotion(clock,spec,key) }; SideEffect { owner.expansion.updateSpec(spec) }; DisposableEffect(owner) { onDispose { owner.expansion.dispose() } }; return owner }
