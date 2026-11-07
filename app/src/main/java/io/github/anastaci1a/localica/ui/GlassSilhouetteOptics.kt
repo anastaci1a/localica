@@ -25,7 +25,7 @@ internal class SplitPill(val shape: ShapeView, val follow: Modifier, private val
 
 @Composable internal fun rememberSplitPill(progress: () -> Float): SplitPill {
     val latest by rememberUpdatedState(progress)
-    val (shape, follow) = rememberPhaseShape("split pill", { ShapeTarget(splitPillBodies(it, latest()), JoinPolicy.Union) }) { latest().let { it == 0f || it == 1f } }
+    val (shape, follow) = rememberPhaseShape("split pill") { ShapeTarget(splitPillBodies(it, latest()), JoinPolicy.Union) }
     return remember(shape, follow) { SplitPill(shape, follow) { latest() } }
 }
 
