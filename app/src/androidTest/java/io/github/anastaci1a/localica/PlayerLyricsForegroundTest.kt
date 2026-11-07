@@ -32,7 +32,7 @@ class PlayerLyricsForegroundTest {
         // The lyrics screen wants dark ink; the animation has just begun.
         assertMix(white, black, 0f, ink.update(black, 0f, true))
         assertMix(white, black, .5f, ink.update(black, .5f, true))
-        assertMix(white, black, smooth(.75f), ink.update(black, .75f, true))
+        assertMix(white, black, .75f, ink.update(black, .75f, true)) // a change at the origin rides the eased phase
         assertMix(white, black, 1f, ink.update(black, 1f, true))
     }
 
