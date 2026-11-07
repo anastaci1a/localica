@@ -20,6 +20,11 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.node.ModifierNodeElement
+import androidx.compose.ui.node.PointerInputModifierNode
+import androidx.compose.ui.platform.InspectorInfo
+import androidx.compose.ui.input.pointer.PointerEvent
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
@@ -138,7 +143,7 @@ private fun ListScrollbar(state: Any, contentKey: Any, scrollable: () -> Boolean
             val gap = dragFraction - fraction()
             scope.launch { release.snapTo(gap); release.animateTo(0f, tween(180)) }
         }
-        Box(Modifier.align(Alignment.CenterEnd).width(ScrollbarGrip.HitWidthDp.dp).fillMaxHeight().testTag("browse-scrollbar")
+        Box(Modifier.align(Alignment.CenterEnd).width(ScrollbarGrip.HitWidthDp.dp).fillMaxHeight().then(ScrollbarTapSharing).testTag("browse-scrollbar")
             .semantics {
                 contentDescription = "Scroll list"
                 progressBarRangeInfo = ProgressBarRangeInfo(fraction(), 0f..1f)
@@ -190,4 +195,17 @@ private fun ListScrollbar(state: Any, contentKey: Any, scrollable: () -> Boolean
             }
         }
     }
+}
+
+/** The edge strip takes drags, while unconsumed taps still reach a row's trailing action. */
+private object ScrollbarTapSharing : ModifierNodeElement<ScrollbarTapSharingNode>() {
+    override fun create() = ScrollbarTapSharingNode()
+    override fun update(node: ScrollbarTapSharingNode) = Unit
+    override fun InspectorInfo.inspectableProperties() { name = "scrollbarTapSharing" }
+}
+
+private class ScrollbarTapSharingNode : Modifier.Node(), PointerInputModifierNode {
+    override fun sharePointerInputWithSiblings() = true
+    override fun onPointerEvent(pointerEvent: PointerEvent, pass: PointerEventPass, bounds: IntSize) = Unit
+    override fun onCancelPointerInput() = Unit
 }
