@@ -39,6 +39,8 @@ class CrossViewSelectionTest {
             compose.onNodeWithContentDescription("Collapse selection").performClick()
 
             fun tab(name: String) { compose.onNodeWithContentDescription(name).performClick() }
+            // Collection subviews hide the tab bar from semantics, so leave them first.
+            fun back() { compose.onNodeWithContentDescription("Back").performClick(); compose.waitForIdle() }
             fun song(key: String): SemanticsNodeInteraction {
                 compose.onNodeWithTag("browser-list").performScrollToKey(key)
                 return compose.onNodeWithTag("media-$key").assertIsDisplayed()
@@ -47,6 +49,7 @@ class CrossViewSelectionTest {
             compose.onNodeWithText("Shared artist").performClick()
             song(tracks[0].id).assertIsSelected()
             song(tracks[1].id).assertIsSelected()
+            back()
             tab("Songs")
             song(tracks[0].id).assertIsSelected().performClick().assertIsNotSelected()
             compose.onNodeWithTag("selection-minimized").assert(hasText("1 selected", substring = true))
@@ -58,7 +61,9 @@ class CrossViewSelectionTest {
             song(playlist.entries[1].id).performClick().assertIsNotSelected()
             song(playlist.entries[0].id).assertIsNotSelected()
             compose.onNodeWithTag("selection-minimized").assert(hasText("1 selected", substring = true))
+            back()
             tab("Artists")
+            compose.onNodeWithText("Shared artist").performClick()
             song(tracks[0].id).assertIsNotSelected()
             song(tracks[1].id).assertIsSelected()
         } finally {
