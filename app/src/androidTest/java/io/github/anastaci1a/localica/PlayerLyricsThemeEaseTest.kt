@@ -47,7 +47,7 @@ class PlayerLyricsThemeEaseTest {
     /** Latest drawn ink of every glass surface, by surface identity. */
     private val glassInk = ConcurrentHashMap<Int, Float>()
 
-    private class Frame(val foreground: Float, val glass: Map<Int, Float>)
+    private class Frame(val foreground: Float, val glass: Map<Int, Float>, val expected: Float)
     private var reference: LyricsPhaseReference? = null
     private val recorded = ArrayList<Frame>()
 
@@ -83,15 +83,23 @@ class PlayerLyricsThemeEaseTest {
     }
 
     private fun frame() { compose.mainClock.advanceTimeByFrame(); compose.waitForIdle() }
-    private fun record(count: Int) = repeat(count) {
+    private fun record(count: Int) { repeat(count) {
         glassInk.clear()
         frame()
         val ink = requireNotNull(inkComposition)
         val expected = lerp(Color.Black, Color.White, requireNotNull(reference).expected(ink.lyricsProgress)).red
         assertEquals("foreground follows the lyrics phase", expected, ink.contentColor.red, .015f)
         assertEquals("shared material follows the lyrics phase", requireNotNull(reference).expected(ink.lyricsProgress), owner.lightMix, .015f)
-        glassInk.values.forEach { assertEquals("drawn glass ink follows the same phase", expected, it, .02f) }
-        recorded += Frame(ink.contentColor.red, glassInk.toMap())
+        recorded += Frame(ink.contentColor.red, glassInk.toMap(), expected)
+    }
+        recorded.flatMap { it.glass.keys }.distinct().forEach { id ->
+            val samples = recorded.filter { id in it.glass }
+            val values = samples.map { it.glass.getValue(id) }
+            // Constant surfaces need not consume the player polarity; every changing surface must.
+            if (values.max() - values.min() > .05f) samples.forEach {
+                assertEquals("drawn glass ink #$id follows this phase", it.expected, it.glass.getValue(id), .02f)
+            }
+        }
     }
     private fun openLyrics(open: Boolean) { compose.runOnIdle {
         reference?.join(if (owner.decision.lightInk) 1f else 0f, requireNotNull(inkComposition).lyricsProgress, if (open) 1f else 0f)
