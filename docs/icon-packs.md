@@ -29,7 +29,7 @@ Rules:
 - Icons are tintable masks: only transparency matters. Draw in any single color on a transparent background.
 - The app tints them with its theme colors, so packs follow light and dark appearance, the accent and the page ink.
 - Unknown ids are ignored and listed in the import report.
-- Images that are not square, too small or large, or not decodable are rejected individually and listed; the rest of the pack still applies.
+- Raster images that are not square, too small or large, or not decodable are rejected individually and listed; the rest of the pack still applies.
 - A pack without a valid `pack.json`, or with no usable icon, is refused and the current icons stay.
 - Notification small icons are system-rendered and cannot be replaced.
 - Fit the glyph inside the image with a small margin; the built-in icons use about 10 percent.
