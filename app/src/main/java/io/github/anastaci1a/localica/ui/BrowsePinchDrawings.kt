@@ -194,15 +194,25 @@ internal fun BrowsePinchMotion.pinchFades(grid: LazyGridState, indices: Map<Stri
     val viewport = if (box != null) Rect(0f, 0f, box.width.toFloat(), box.height.toFloat())
         else Rect(0f, layout.viewportStartOffset.toFloat(), viewportWidth, layout.viewportEndOffset.toFloat())
     val inset = (BrowseCellGeometry(targetColumns).gridInset * pixelDensity).roundToInt()
+    // Exits use the painted card, not the cell with its gaps: a row whose padding alone
+    // remains on screen has left (#559).
+    fun card(columns: Int, style: BrowseStyle): (Rect) -> Rect {
+        val geometry = BrowseCellGeometry(columns)
+        val x = geometry.cardInset * pixelDensity
+        val y = geometry.cardVerticalInset(style) * pixelDensity
+        return { cell -> Rect(cell.left + x, cell.top + y, cell.right - x, cell.bottom - y) }
+    }
+    val sourceCard = card(sourceColumns, requireNotNull(visualSource))
+    val targetCard = card(targetColumns, requireNotNull(target))
     val departures = mutableMapOf<Any, Float>()
     val arrivals = mutableMapOf<Any, Float>()
     val live = HashSet<Any>()
     visible.forEach { entry ->
         live += entry.key
         val index = indices.retainedPinchItemIndex(entry.key).takeIf { it >= 0 } ?: (entry.index - 1).coerceAtLeast(0)
-        val source = sourceBounds(entry.key, index)
-        val target = Rect((entry.offset.x + inset).toFloat(), entry.offset.y.toFloat(),
-            (entry.offset.x + inset + entry.size.width).toFloat(), (entry.offset.y + entry.size.height).toFloat())
+        val source = sourceCard(sourceBounds(entry.key, index))
+        val target = targetCard(Rect((entry.offset.x + inset).toFloat(), entry.offset.y.toFloat(),
+            (entry.offset.x + inset + entry.size.width).toFloat(), (entry.offset.y + entry.size.height).toFloat()))
         val exit = pinchExitProgress(source, target, viewport)
         val entry0 = pinchExitProgress(target, source, viewport)
         when {
@@ -221,7 +231,7 @@ internal fun BrowsePinchMotion.pinchFades(grid: LazyGridState, indices: Map<Stri
             if (key in live) return@forEach
             val index = indices.retainedPinchItemIndex(key)
             if (index < 0) return@forEach
-            departures[key] = pinchExitProgress(old, retainedTargetCell(index, row.offset.y.toFloat(), rowIndex, pitch), viewport)
+            departures[key] = pinchExitProgress(sourceCard(old), targetCard(retainedTargetCell(index, row.offset.y.toFloat(), rowIndex, pitch)), viewport)
                 ?.takeIf { it > 0f } ?: 1f
         }
     }
@@ -240,7 +250,8 @@ internal fun BrowsePinchMotion.pinchFadeAlpha(key: Any, grid: LazyGridState, ind
 /** Test-only witness of what the overlay paints: item key to drawn bounds and alpha. */
 internal class PinchDrawnItem(val bounds: Rect, val alpha: Float, val retained: Boolean)
 internal class PinchDrawnFrame(val progress: Float, val fingers: Float, val held: Boolean,
-    val destinationReady: Boolean, val viewport: Rect, val items: Map<Any, PinchDrawnItem>)
+    val destinationReady: Boolean, val viewport: Rect, val items: Map<Any, PinchDrawnItem>,
+    val fades: Map<Any, PinchFade> = emptyMap())
 @androidx.annotation.VisibleForTesting @Volatile
 internal var pinchDrawProbe: ((PinchDrawnFrame) -> Unit)? = null
 
@@ -498,6 +509,6 @@ internal fun Modifier.pinchRetainedOverlay(motion: BrowsePinchMotion, grid: Lazy
             }
         }
         if (probe != null && drawn != null) probe(PinchDrawnFrame(p, motion.fingerProgress, motion.held,
-            motion.destinationReady, Rect(0f, 0f, size.width, size.height), drawn))
+            motion.destinationReady, Rect(0f, 0f, size.width, size.height), drawn, fades))
     }
 }
