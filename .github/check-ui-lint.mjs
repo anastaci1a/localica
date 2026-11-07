@@ -68,15 +68,26 @@ export function manifest(text, metadata, known) {
     }
     return entries;
 }
-export function compare(before, after, stage) {
+/** Lead-approved ownership transfers (2026-11-07): itemized incidents a named future step removes; shrink-only along history. */
+export function transferIds(entries, known, completed) {
+    requireThat(Array.isArray(entries), 'Transfer entries');
+    const ids = entries.map(e => {
+        requireThat(Object.keys(e).sort().join() === 'codeSha256,fqn,path,reason,removedBy,rule' && rules.includes(e.rule) && e.reason &&
+            known.includes(e.removedBy) && !completed.includes(e.removedBy), 'Invalid or expired transfer');
+        return JSON.stringify([e.rule,e.path,e.fqn,e.codeSha256]);
+    });
+    requireThat(new Set(ids).size === ids.length, 'Duplicate transfer'); return ids;
+}
+export function compare(before, after, stage, transfers = []) {
     const counts = Object.fromEntries(rules.map(r => [r, {before:0, after:0, removed:0, added:0}]));
     for (const d of before) counts[d.rule].before++;
     for (const d of after) counts[d.rule].after++;
     const old = new Set(before.map(d => d.identity)), now = new Set(after.map(d => d.identity));
-    const added = after.filter(d => !old.has(d.identity)), removed = before.filter(d => !now.has(d.identity));
+    const moved = new Set(transfers); requireThat(transfers.every(t => now.has(t)), 'Stale transfer entry');
+    const added = after.filter(d => !old.has(d.identity) && !moved.has(d.identity)), removed = before.filter(d => !now.has(d.identity));
     for (const d of added) counts[d.rule].added++;
     for (const d of removed) counts[d.rule].removed++;
-    return {counts, added, removed, accepted: added.length === 0 && (stage < 6 || after.length === 0)};
+    return {counts, added, removed, transferred: transfers.length, accepted: added.length === 0 && (stage < 6 || after.length === 0)};
 }
 export function run(argv) {
     const command = argv.shift(); requireThat(['check','bootstrap'].includes(command), 'Unknown command');
@@ -154,10 +165,20 @@ export function run(argv) {
         requireThat(common===base || common===receipt.integratedSha, 'Bootstrap base is unrelated to the integrated pin');
         before = diagnostics(receipt.sourceSha);
     }
-    const result = compare(before,after,stage);
+    const transfersPath = 'tools/ui-consolidation/transfers.json'; let transfers = [];
+    if (exists(head,transfersPath)) {
+        const load = ref => { if (!exists(ref,transfersPath)) return null; const t = strictJson(blob(ref,transfersPath));
+            requireThat(Object.keys(t).sort().join() === 'approval,entries,schemaVersion' && t.schemaVersion === 1 && t.approval, 'Transfer manifest');
+            return transferIds(t.entries, known.knownSteps, ref === head ? meta.steps : []); };
+        transfers = load(head);
+        const history = git('log','--format=%H',head,'--',transfersPath).trim().split('\n').filter(Boolean).map(load);
+        for (let i = 0; i + 1 < history.length; i++) requireThat((history[i] ?? []).every(id => (history[i+1] ?? []).includes(id)), 'Transfer entries can only shrink');
+        if (base) { const prior = load(base); if (prior) requireThat(transfers.every(id => prior.includes(id)), 'Transfer entries can only shrink'); }
+    }
+    const result = compare(before,after,stage,transfers);
     const report = {schemaVersion:1,command,baseSha:base,headSha:head,registrySha256:registry,
         baselineSha256:digest(blob(head,o['--baseline'])),manifestSha256:digest(manifestText),stage,completedSteps:meta.steps,
-        perRule:result.counts,unmatchedIdentities:result.added,escapeCounts:{before:base && exists(base,o['--escapes']) ? manifest(blob(base,o['--escapes']),meta,known.knownSteps).length : 0,after:escapes.length},
+        perRule:result.counts,unmatchedIdentities:result.added,transferredIdentities:result.transferred,escapeCounts:{before:base && exists(base,o['--escapes']) ? manifest(blob(base,o['--escapes']),meta,known.knownSteps).length : 0,after:escapes.length},
         validationErrors:[],accepted:(command === 'bootstrap' || result.accepted) && escapes.length <= 5};
     fs.mkdirSync(o['--out'],{recursive:true}); fs.writeFileSync(path.join(o['--out'],'report.json'),JSON.stringify(report,null,2)+'\n');
     if (bootstrap) fs.writeFileSync(path.join(o['--out'],'bootstrap.json'),JSON.stringify(bootstrap,null,2)+'\n');
