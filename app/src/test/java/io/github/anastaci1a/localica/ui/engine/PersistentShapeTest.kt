@@ -20,7 +20,8 @@ class PersistentShapeTest {
     private fun pill(l: Float,t: Float,w: Float,h: Float)=RoundRect(l,t,l+w,t+h,CornerRadius(h/2))
     private fun channels(f: ShapeFrame)=f.bodies.flatMap { b -> listOf(b.left,b.top,b.right,b.bottom,b.topLeftCornerRadius.x,b.topLeftCornerRadius.y,b.topRightCornerRadius.x,b.topRightCornerRadius.y,b.bottomRightCornerRadius.x,b.bottomRightCornerRadius.y,b.bottomLeftCornerRadius.x,b.bottomLeftCornerRadius.y) }
     private fun area(b: RoundRect)=b.width*b.height
-    private fun randomBody(r: Random): RoundRect { val l=r.nextFloat()*400-200; val t=r.nextFloat()*400-200; val w=r.nextFloat()*200; val h=r.nextFloat()*200; return RoundRect(l,t,l+w,t+h,CornerRadius(r.nextFloat()*w/2,r.nextFloat()*h/2),CornerRadius(r.nextFloat()*w/2,r.nextFloat()*h/2),CornerRadius(r.nextFloat()*w/2,r.nextFloat()*h/2),CornerRadius(r.nextFloat()*w/2,r.nextFloat()*h/2)) }
+    // B1: radii up to .75 of their side, so lopsided sides (one radius beyond half) and sums past the side (Skia-scaled at admission) are both exercised.
+    private fun randomBody(r: Random): RoundRect { val l=r.nextFloat()*400-200; val t=r.nextFloat()*400-200; val w=r.nextFloat()*200; val h=r.nextFloat()*200; val c={ CornerRadius(r.nextFloat()*w*.75f,r.nextFloat()*h*.75f) }; return RoundRect(l,t,l+w,t+h,c(),c(),c(),c()) }
 
     @Test fun targetChangeKeepsIdentityAndOldFrameImmutable() = EngineHarness(spec=geometry).use { h ->
         val a=ShapeTarget(listOf(pill(0f,0f,200f,64f)),JoinPolicy.Union); val b=ShapeTarget(listOf(pill(0f,0f,96f,64f),pill(104f,0f,96f,64f)),JoinPolicy.Union,GlassStrain(.1f,-.05f))
@@ -167,13 +168,21 @@ class PersistentShapeTest {
         assertThrows(IllegalArgumentException::class.java) { PersistentShape(h.clock,ShapeTarget(listOf(body)),"fillet") }
         val shape=PersistentShape(h.clock,ShapeTarget(listOf(body),JoinPolicy.Union),"chart"); val before=shape.outline()
         assertThrows("ConcaveFillet needs JoinData first",IllegalArgumentException::class.java) { shape.retarget(ShapeTarget(listOf(body),JoinPolicy.ConcaveFillet),profile) }
-        // Sums fit Skia's scale, but one radius exceeds half its side: outside the fraction chart, rejected rather than clamped.
-        val lopsided=RoundRect(0f,0f,100f,40f,CornerRadius(70f,10f),CornerRadius(10f,10f),CornerRadius.Zero,CornerRadius.Zero)
-        assertThrows(IllegalArgumentException::class.java) { shape.retarget(ShapeTarget(listOf(lopsided),JoinPolicy.Union),profile) }
         assertThrows(IllegalArgumentException::class.java) { shape.retarget(ShapeTarget(listOf(body),JoinPolicy.Union,GlassStrain(Float.NaN,0f)),profile) }
         assertSame(before,shape.outline()); assertEquals(0,h.clock.activeCount)
         assertTrue(PersistentShape(h.clock,ShapeTarget(emptyList()),"empty fillet").outline().bodies.isEmpty())
     }
+
+    @Test fun pillHalfNarrowerThanItsHeightIsAdmittedExactly() = EngineHarness(spec=geometry).use { h ->
+        // B1 (9:45 AM): each side stores the sum and split of its two radii, so a split-pill half (outer h/2, inner h·p, half-width h/2 + h·p < h) and a lopsided side are inside the chart.
+        val (height,p)=40f to .2f; val half=height/2+height*p; val outer=CornerRadius(height/2); val inner=CornerRadius(height*p)
+        val bodies=listOf(RoundRect(0f,0f,half,height,outer,inner,inner,outer),RoundRect(half,0f,2*half,height,inner,outer,outer,inner),RoundRect(0f,0f,100f,40f,CornerRadius(70f,10f),CornerRadius(10f,10f),CornerRadius.Zero,CornerRadius.Zero))
+        val shape=PersistentShape(h.clock,ShapeTarget(bodies,JoinPolicy.Union),"split half"); val frame=shape.outline()
+        assertEquals(3,frame.bodies.size); frame.bodies.zip(bodies).forEach { (a,b) -> assertArrayEquals(corners(b),corners(a),1e-4f) }
+        // Sums beyond a side take Skia's uniform scale once at admission (what addRoundRect draws); a uniform pill splits evenly.
+        assertArrayEquals(bodyChart(RoundRect(0f,0f,100f,40f,CornerRadius(20f))),bodyChart(RoundRect(0f,0f,100f,40f,CornerRadius(60f))),0f); assertEquals(.5f,bodyChart(pill(0f,0f,100f,40f))[5],0f)
+    }
+    private fun corners(b: RoundRect)=floatArrayOf(b.left,b.top,b.right,b.bottom,b.topLeftCornerRadius.x,b.topLeftCornerRadius.y,b.topRightCornerRadius.x,b.topRightCornerRadius.y,b.bottomRightCornerRadius.x,b.bottomRightCornerRadius.y,b.bottomLeftCornerRadius.x,b.bottomLeftCornerRadius.y)
 
     @Test fun consecutiveContoursMoveNoFurtherThanTheirChannels() = EngineHarness(spec=geometry).use { h ->
         val r=Random(600302); val shape=PersistentShape(h.clock,ShapeTarget(listOf(pill(0f,0f,120f,48f)),JoinPolicy.Union),"hausdorff"); shape.outline()
