@@ -126,7 +126,6 @@ io.github.anastaci1a.localica.ItemOutlinePixelTest
 io.github.anastaci1a.localica.KeyedDragTest
 io.github.anastaci1a.localica.LargeQueueTransportTest
 io.github.anastaci1a.localica.LegacyReadbackGrallocBoundsTest
-io.github.anastaci1a.localica.LensMeshSamplingTest
 io.github.anastaci1a.localica.LibraryDatabaseTest
 io.github.anastaci1a.localica.LibraryFilterMotionTest
 io.github.anastaci1a.localica.LibraryFilterPresentationTest
@@ -304,7 +303,6 @@ io.github.anastaci1a.localica.SelectorPickupTest
 io.github.anastaci1a.localica.SelectorPopupClearanceTest
 io.github.anastaci1a.localica.SelectorReboundRecordingTest
 io.github.anastaci1a.localica.SelectorRegistrationTest
-io.github.anastaci1a.localica.SelectorSceneRasterTest
 io.github.anastaci1a.localica.SelectorStackingTest
 io.github.anastaci1a.localica.SelectorTrackControlsTest
 io.github.anastaci1a.localica.SettingsLinkMorphTest
@@ -319,7 +317,6 @@ io.github.anastaci1a.localica.SliderModelTest
 io.github.anastaci1a.localica.SliderSwitchHapticsTest
 io.github.anastaci1a.localica.SlidingTabsTest
 io.github.anastaci1a.localica.SmallestTitleGapTest
-io.github.anastaci1a.localica.SoftwareControlCaptureTest
 io.github.anastaci1a.localica.SongDragViewportTest
 io.github.anastaci1a.localica.SongInformationTest
 io.github.anastaci1a.localica.SongMenuIconsTest
@@ -346,78 +343,20 @@ io.github.anastaci1a.localica.TransportAnimationFrameTest
 io.github.anastaci1a.localica.TransportScrollTest
 io.github.anastaci1a.localica.UtilityPopupRenderDiagnosticTest
 io.github.anastaci1a.localica.WorkflowPersistenceTest
-io.github.anastaci1a.localica.LyricsArtworkEntryTest
-io.github.anastaci1a.localica.PlayerArtworkSpacingTest
-io.github.anastaci1a.localica.PlayerLyricsForegroundTest
-io.github.anastaci1a.localica.PlayerLyricsMaterialEaseTest
-io.github.anastaci1a.localica.PlayerLyricsThemeEaseTest
-io.github.anastaci1a.localica.SoftwareControlCaptureTest
-io.github.anastaci1a.localica.DirectComposeDispatcherTest
-io.github.anastaci1a.localica.TestComposeDispatcherTest
-io.github.anastaci1a.localica.ArtworkBlendLoadingTest
-io.github.anastaci1a.localica.ArtworkLoadingFallbackTest
-io.github.anastaci1a.localica.ArtworkTextRevealTest
-io.github.anastaci1a.localica.ArtworkTintPlaceholderTest
-io.github.anastaci1a.localica.LyricsPausedSeekTest
-io.github.anastaci1a.localica.SearchDismissalLifecycleTest
-io.github.anastaci1a.localica.SettingsPathRestorationTest
-io.github.anastaci1a.localica.NativeWindowCopyOwnershipTest
-io.github.anastaci1a.localica.PinchLibraryRefreshTest
-io.github.anastaci1a.localica.ItemOutlinePixelTest
-io.github.anastaci1a.localica.GlassRendererSwitchingTest
 io.github.anastaci1a.localica.NoneFullAreaTest
 io.github.anastaci1a.localica.NoneQueueMaterialTest
 io.github.anastaci1a.localica.QueueHeaderMaterialBoundaryTest
-io.github.anastaci1a.localica.PlayerArtworkLayerTest
-io.github.anastaci1a.localica.PlayerArtworkOpticsTest
 
-io.github.anastaci1a.localica.DragStackMaterialTest
-io.github.anastaci1a.localica.DragStackPlaybackFadeTest
-io.github.anastaci1a.localica.DragStackFrameTimeTest
-io.github.anastaci1a.localica.LiftShadowTest
-io.github.anastaci1a.localica.SelectionPillMaterialTest
-io.github.anastaci1a.localica.PopupHomeShapeTest
-io.github.anastaci1a.localica.SeekCancelGlassTest
-io.github.anastaci1a.localica.PlaybackShutdownTest
-io.github.anastaci1a.localica.SelectionBackTest
 
 io.github.anastaci1a.localica.PinchRecognitionContinuityTest
-io.github.anastaci1a.localica.GalleryLiftFrameTest
-io.github.anastaci1a.localica.SelectorFreeCornerPixelTest
-io.github.anastaci1a.localica.SongMenuIconsTest
-io.github.anastaci1a.localica.IconPackTest
-io.github.anastaci1a.localica.IconPackResolverTest
-io.github.anastaci1a.localica.TransportScrollTest
-io.github.anastaci1a.localica.TransportAnimationFrameTest
-io.github.anastaci1a.localica.PlayerSeekCancelCrashTest
-io.github.anastaci1a.localica.ArtworkSaveTest
-io.github.anastaci1a.localica.ScrollbarContinuityTest
-io.github.anastaci1a.localica.ScrollbarScreenshotTest
 
-io.github.anastaci1a.localica.IconPackLibraryRegressionTest
-io.github.anastaci1a.localica.IconPackLibraryTest
-io.github.anastaci1a.localica.PlayerArtworkHoldRealAppTest
-io.github.anastaci1a.localica.PlayerArtworkHoldTest
-io.github.anastaci1a.localica.ModalGestureCancellationTest
 io.github.anastaci1a.localica.PopupHostNavigationTest
-io.github.anastaci1a.localica.RowTextScrollTest
-io.github.anastaci1a.localica.RowMenuRevealTest
-io.github.anastaci1a.localica.ArtworkTextSkeletonLinesTest
-io.github.anastaci1a.localica.ArtworkScrollLoadingTest
 
-io.github.anastaci1a.localica.SeekCancelExitTest
-io.github.anastaci1a.localica.BackdropProducerContinuityTest
-io.github.anastaci1a.localica.GlassScrollHoldTest
-io.github.anastaci1a.localica.AssertionReadinessTest
-io.github.anastaci1a.localica.ShadowContinuityTest
 io.github.anastaci1a.localica.GlassRendererPreferenceTest
 io.github.anastaci1a.localica.GlassRendererSettingsTest
 io.github.anastaci1a.localica.GlassRenderModesTest
-io.github.anastaci1a.localica.GlassScrollHoldTest
 io.github.anastaci1a.localica.GlassModeFrameTimingTest
 
-io.github.anastaci1a.localica.BackdropProducerContinuityTest
-io.github.anastaci1a.localica.GlassScrollHoldTest
 io.github.anastaci1a.localica.PresentationMarkerTest
 io.github.anastaci1a.localica.FrameStatsTest
 

@@ -1131,4 +1131,22 @@ while true; do sleep .05; done
         self.assertEqual(['failed', 'not-run', 'not-run'], [i['status'] for i in summary['iterations']])
 
 
+class RiskInventoryContract(unittest.TestCase):
+    """The reviewed prototype inventory names only existing top-level test classes, once each."""
+
+    def test_every_listed_class_exists_once(self):
+        lines = (ROOT/'.github/prototype-risk-classes.txt').read_text().splitlines()
+        names = [line for line in lines if line.startswith('io.')]
+        self.assertEqual(sorted(set(names)), sorted(names), 'Duplicate inventory lines')
+        source = ROOT/'app/src/androidTest/java/io/github/anastaci1a/localica'
+        prefix = 'io.github.anastaci1a.localica.'
+        missing = []
+        for name in names:
+            self.assertTrue(name.startswith(prefix) and '.' not in name[len(prefix):], name)
+            simple = name[len(prefix):]
+            path = source/(simple+'.kt')
+            if not path.is_file() or ('class '+simple) not in path.read_text():
+                missing.append(name)
+        self.assertEqual([], missing, 'Inventory names classes without a test source')
+
 if __name__=='__main__':unittest.main()
