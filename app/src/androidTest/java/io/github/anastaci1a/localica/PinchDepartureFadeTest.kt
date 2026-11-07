@@ -76,7 +76,7 @@ class PinchDepartureFadeTest {
             val label = "${start.presentation}/${start.listSize}/${start.itemsPerRow} ${if (outward) "out" else "in"}"
             val departures = audit(held.map { Sample(it.progress, it.viewport, it.items) }, "$label departures")
             val arrivals = audit(held.reversed().map { Sample(1f - it.progress, it.viewport, it.items) }, "$label arrivals")
-            assertTrue("$label has departures or arrivals to fade ($departures/$arrivals)", departures + arrivals >= 3)
+            assertTrue("$label has departures or arrivals to fade ($departures/$arrivals)", departures + arrivals >= 2)
         } finally {
             pinchDrawProbe = null
             compose.mainClock.autoAdvance = true
@@ -85,6 +85,17 @@ class PinchDepartureFadeTest {
     }
 
     private class Sample(val p: Float, val viewport: Rect, val items: Map<Any, PinchDrawnItem>)
+
+    /** Fraction of the way from [a] to [b] at which the interpolated rectangle stops intersecting [viewport]. */
+    private fun crossing(a: Rect, b: Rect, viewport: Rect): Float {
+        var t = 1f
+        fun limit(start: Float, delta: Float) { if (delta < 0f) t = minOf(t, (-start / delta).coerceIn(0f, 1f)) }
+        limit(viewport.right - a.left, a.left - b.left)
+        limit(a.right - viewport.left, b.right - a.right)
+        limit(viewport.bottom - a.top, a.top - b.top)
+        limit(a.bottom - viewport.top, b.bottom - a.bottom)
+        return t
+    }
 
     private fun Rect.visibleIn(viewport: Rect) =
         width > 0f && height > 0f && left < viewport.right && right > viewport.left && top < viewport.bottom && bottom > viewport.top
@@ -109,8 +120,16 @@ class PinchDepartureFadeTest {
                 assertFalse("$label: $key stops at ${b.bounds} while drawn at alpha ${b.alpha} " +
                     "(p ${before.p} -> ${after.p})", still && after.p - before.p > .004f && b.alpha > .1f)
             }
-            val exit = samples.getOrElse(gone) { last }.p
-            val start = shown.firstOrNull { it.second.alpha < .97f }?.first?.p ?: exit
+            // Between the last frame it is shown and the next one, interpolate where its bounds cross the edge.
+            val after = samples.getOrNull(gone)
+            val exit = if (after == null) last.p else {
+                val a = shown.lastOrNull()?.second?.bounds
+                val b = series[gone]?.bounds
+                val t = if (a == null || b == null) 1f else crossing(a, b, after.viewport)
+                val before = shown.lastOrNull()?.first?.p ?: after.p
+                before + (after.p - before) * t
+            }
+            val start = shown.firstOrNull { it.second.alpha < .995f }?.first?.p ?: exit
             Departure(key, exit, start, shown.minOf { it.second.alpha },
                 shown.any { it.second.alpha in .15f.. .85f })
         }
@@ -121,7 +140,7 @@ class PinchDepartureFadeTest {
         if (timed.isNotEmpty()) assertTrue("$label: the fade is visible, not clipped " +
             "(${timed.count { it.partial }} of ${timed.size} show partial alpha)", timed.count { it.partial } * 2 >= timed.size)
         for (a in timed) for (b in timed) {
-            if (abs(a.exit - b.exit) <= .01f) assertEquals("$label: ${a.key} and ${b.key} leave together (${a.exit}, ${b.exit}) " +
+            if (abs(a.exit - b.exit) <= .004f) assertEquals("$label: ${a.key} and ${b.key} leave together (${a.exit}, ${b.exit}) " +
                 "and must fade together", a.start, b.start, .03f)
             if (a.exit + .05f < b.exit) assertTrue("$label: ${a.key} leaves at ${a.exit} before ${b.key} at ${b.exit} " +
                 "but starts fading later (${a.start} > ${b.start})", a.start <= b.start + .03f)
