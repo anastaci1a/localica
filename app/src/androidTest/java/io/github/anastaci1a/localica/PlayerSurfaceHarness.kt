@@ -81,8 +81,9 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
         override fun expand() {}
         override fun collapse() {}
     } }
-    ProductionPlayerSurface(state, expanded, onExpanded, settings, sheet, onToggle, onSeek, onPrevious, onNext,
+    // U03.01c: the lyrics split pill owns an Engine shape; production composes it under LocalicaScreen's U11.00 record.
+    EngineRecord { ProductionPlayerSurface(state, expanded, onExpanded, settings, sheet, onToggle, onSeek, onPrevious, onNext,
         onQueue, onLibrary, lyricsOpen, onLyrics, track, onSettings, actionRows, queueProgress?.let { rememberAnimatableQueueSheet(it, settings) }, frostedBackdrop, glassBackdrop, visual,
         artworkVisit, previousArtwork, nextArtwork, onArtworkVisit, bottomChrome, miniForeground, onSeekRequest, sampleState,
-        backgroundPolarity, providedPopupHome, openingPopupHome, actions)
+        backgroundPolarity, providedPopupHome, openingPopupHome, actions) }
 }

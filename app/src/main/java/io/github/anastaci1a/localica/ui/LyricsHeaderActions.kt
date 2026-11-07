@@ -43,10 +43,10 @@ internal fun LyricsHeaderActions(lyricsOpen: Boolean, reveal: Float, anchor: Gla
     // substituting a full-width pill at the beginning of preparation.
     val expanded = maxOf(reveal, (progress * 2f).coerceIn(0f, 1f))
     val width = CompactControlSize * (1f + expanded + gap / 6f)
-    val silhouette = rememberSplitPillSilhouette(progress = { preparation.progress })
+    val pill = rememberSplitPill { preparation.progress }
     val shadow = rememberGlassSilhouette { size ->
         val p = preparation.progress
-        val bodies = splitPillBodies(size, p)
+        val bodies = pill.bodies(size)
         if (p < .5f) bodies.map { it.deformed(contacts.joined.body.value, Offset(size.width / 2f, size.height / 2f)) }
         else {
             val separation = ((p - .5f) * 2f).coerceIn(0f, 1f)
@@ -88,10 +88,10 @@ internal fun LyricsHeaderActions(lyricsOpen: Boolean, reveal: Float, anchor: Gla
             Icon(appIconPainter(AppIcon.ActionEyeOff), null, Modifier.size(24.dp), tint = foreground)
         }
     }
-    Box(Modifier.width(width).height(CompactControlSize).preparedOrigin(preparation, progress)
+    Box(Modifier.width(width).height(CompactControlSize).then(pill.follow).preparedOrigin(preparation, progress)
         .testTag("player-lyrics-pill").silhouetteGlassShadow(shadow)) {
         if (!separated) {
-            LiquidGlassSurface(Modifier.fillMaxSize(), silhouette = silhouette, shadow = false,
+            LiquidGlassSurface(Modifier.fillMaxSize(), silhouette = pill.silhouette, shadow = false,
                 sharedContact = contacts.joined, depthScale = RaisedGlassDepthScale) {
                 Box(Modifier.align(Alignment.CenterStart).size(CompactControlSize).glassAnchor(anchor)) { leftAction() }
                 if (expanded > 0f) {

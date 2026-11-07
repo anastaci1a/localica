@@ -432,3 +432,5 @@ io.github.anastaci1a.localica.SelectionMergeSequenceTest
 io.github.anastaci1a.localica.PlayerReleaseContinuityTest
 io.github.anastaci1a.localica.QueueOwnerContinuityTest
 io.github.anastaci1a.localica.CompositorAdoptionTest
+io.github.anastaci1a.localica.MotionFollowupTest
+io.github.anastaci1a.localica.GlassMorphSubpixelTest
