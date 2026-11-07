@@ -346,3 +346,13 @@ internal fun androidx.compose.ui.graphics.drawscope.DrawScope.drawGlassRim(
         drawPath(silhouette, shade, alpha = opacity, style = Stroke(1.4.dp.toPx()))
     }
 }
+/** The lens parameters [LiquidGlassSurface] draws with, for a footprint of [extent] at full
+ * resolution ([depth] excludes the contact thickness, which is applied here). Shared by the
+ * None average and by tests computing their preimage oracle. */
+internal fun liquidGlassPreimageOptics(extent: Size, cornerRadius: Float?, depth: Float, refraction: Float,
+    thickness: Float, blur: Float, padding: Float, silhouette: GlassSilhouette? = null): LensPreimageOptics {
+    val outline = silhouette?.frame(extent)
+    val radius = (cornerRadius ?: (extent.minDimension / 2)).coerceAtLeast(0f)
+    return LensPreimageOptics(outline?.geometry ?: LensGeometry(androidx.compose.ui.geometry.Rect(Offset.Zero, extent), radius),
+        depth * thickness, refraction, ((1f - thickness) / .18f).coerceIn(0f, 1f), blur, padding, outline?.let { it::opticalField })
+}

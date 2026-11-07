@@ -44,21 +44,27 @@ class NoneFullAreaTest {
         } } }
         compose.waitUntil(15_000) { source.recorded && (Build.VERSION.SDK_INT >= 33 || source.snapshot != null) }
         val image = compose.onNodeWithTag("mean").captureToImage().toPixelMap()
-        // Independent oracle: eight white pixels per complete period, plus the odd white edge.
-        val expected = 65f / 257f
+        // The averaged region is the shared refraction preimage (#624), not a re-derived footprint.
+        val region = lensRefractionPreimage(Rect(0f, 0f, 257f, 129f), liquidGlassPreimageOptics(Size(257f, 129f), 0f,
+            GlassAppearance().depth, 1f, 1f, 22f * GlassAppearance().blur, 32f))
+        assertEquals("Preimage $region stays inside the source", region, Rect(0f, 0f, 257f, 129f).intersect(region))
+        // Independent oracle: the covered fraction of every one-pixel white column, all rows alike.
+        fun mean(width: Int) = (0 until 257).filter { it % 32 < width }.sumOf { x ->
+            (minOf(region.right, x + 1f) - maxOf(region.left, x.toFloat())).coerceAtLeast(0f).toDouble() }.toFloat() / region.width
+        val expected = mean(8)
         for (x in listOf(image.width / 4, image.width / 2, image.width * 3 / 4)) {
             val actual = image[x, image.height / 2]
             assertEquals("Full 257x129 area mean at x=$x", expected, actual.red, .02f)
             assertEquals(expected, actual.green, .02f)
             assertEquals(expected, actual.blue, .02f)
             if (Build.VERSION.SDK_INT < 33) assertLegacyAreaBound(actual.red, expected,
-                Rect(0f, 0f, 257f, 129f), 512, 256)
+                region, 512, 256)
         }
         // Keep the same surface mounted while its backdrop changes. A retained
         // reduction must refresh its input rather than freeze the first mean.
         for (width in listOf(16, 24, 8)) {
             compose.runOnIdle { whiteWidth = width }
-            val nextExpected = (8 * width + 1) / 257f
+            val nextExpected = mean(width)
             compose.waitUntil(15_000) {
                 val pixels = compose.onNodeWithTag("mean").captureToImage().toPixelMap()
                 listOf(pixels.width / 4, pixels.width / 2, pixels.width * 3 / 4).all { x ->
