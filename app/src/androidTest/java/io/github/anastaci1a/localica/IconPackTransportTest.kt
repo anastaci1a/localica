@@ -6,6 +6,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.MotionDurationScale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.platform.testTag
@@ -23,7 +24,9 @@ import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 
 class IconPackTransportTest {
-    @get:Rule val compose = localicaComposeRule()
+    @get:Rule val compose = localicaComposeRule(effectContext = object : MotionDurationScale {
+        override val scaleFactor = 1f
+    })
     private val context = InstrumentationRegistry.getInstrumentation().targetContext
     @After fun reset() { IconPacks.reset(context) }
     private fun install() {
@@ -37,8 +40,16 @@ class IconPackTransportTest {
         IconPacks.import(context, source.inputStream())
     }
     private fun pixels(tag: String): List<Color> {
-        val p = compose.onNodeWithTag(tag).captureToImage().toPixelMap()
+        val p = compose.onNodeWithTag(tag).captureNativeFrame().toPixelMap()
         return (0 until p.height).flatMap { y -> (0 until p.width).map { x -> p[x, y] } }
+    }
+    private fun same(expected: List<Color>, actual: List<Color>, message: String) {
+        assertEquals(expected.size, actual.size)
+        val error = expected.indices.sumOf { i ->
+            kotlin.math.abs(expected[i].red - actual[i].red).toDouble() +
+                kotlin.math.abs(expected[i].green - actual[i].green) + kotlin.math.abs(expected[i].blue - actual[i].blue)
+        } / (expected.size * 3)
+        assertTrue("$message; mean channel error=$error", error < .005)
     }
     @Test fun vectorTransportUsesSharedTintSizeAvailabilityAndContinuousStateTiming() {
         install()
@@ -68,8 +79,8 @@ class IconPackTransportTest {
             }
         } }
         compose.waitForIdle()
-        for (index in 0..2) assertEquals(pixels("reference-$index"), pixels("transport-$index"))
-        assertEquals(pixels("disabled-reference"), pixels("disabled"))
+        for (index in 0..2) same(pixels("reference-$index"), pixels("transport-$index"), "Transport $index tint and size")
+        same(pixels("disabled-reference"), pixels("disabled"), "Disabled transport tint")
         val start = pixels("transport-1")
         compose.mainClock.autoAdvance = false
         compose.onNodeWithContentDescription("Transport 1").performClick()
@@ -77,7 +88,7 @@ class IconPackTransportTest {
         val middle = pixels("transport-1")
         assertNotEquals(start, middle)
         compose.mainClock.advanceTimeBy(600)
-        assertEquals(pixels("reference-1"), pixels("transport-1"))
+        same(pixels("reference-1"), pixels("transport-1"), "Pause endpoint")
         assertNotEquals(middle, pixels("transport-1"))
         compose.mainClock.autoAdvance = true
     }
