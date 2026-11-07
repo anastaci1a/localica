@@ -55,7 +55,7 @@ internal fun BrowseScrollbar(state: LazyGridState, items: List<BrowserItem>, sor
 
 @Composable
 internal fun BrowseScrollbar(state: LazyListState, modifier: Modifier = Modifier, onUserScroll: () -> Unit = {}) {
-    ListScrollbar(state, { state.canScrollForward || state.canScrollBackward }, { state.scrollbarFrame() },
+    ListScrollbar(state, state, { state.canScrollForward || state.canScrollBackward }, { state.scrollbarFrame() },
         { state.firstVisibleItemIndex to state.firstVisibleItemScrollOffset },
         { index, offset -> state.scrollToItem(index, offset) }, modifier, onUserScroll) { null }
 }
