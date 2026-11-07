@@ -401,7 +401,7 @@ Holding a mutable playlist/queue song selects immediately. Its new action panel 
 
 Other items use Select song / Select all songs in their shared menu. The bulk action panel appears and disappears above the mini-player with the shared glass morph, independently of immediate item selection, retaining tabs. Normal collection taps navigate. Song taps toggle membership while selection is active. Use the [shared selection treatment](#materials-and-controls).
 
-Retain source occurrence identities and selection order across routes, tabs, queries, sorting, rotation and backgrounding. Select-all appends in collection order. Reselect appends last. Preserve distinct occurrences for playlists/queues and deduplicate files for editing. Fresh sessions start empty.
+Key selection by song identity across routes, tabs, queries, sorting, rotation and backgrounding. Count each song once and pass unique songs to actions. Select-all appends in collection order; reselect appends last. Retain the first source’s occurrence identities for playlist/queue removal and reordering. Fresh sessions start empty.
 
 The panel is one compact glass pill: close, count, Play next, Add to playlist, More and a divided collapse. It uses the standard Liquid Glass pill material in Library tabs, subviews and the Queue, with material, icons and its More menu following the page's light or dark ink.
 

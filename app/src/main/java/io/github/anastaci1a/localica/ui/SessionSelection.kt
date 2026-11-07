@@ -13,7 +13,8 @@ internal data class SongSelectionTarget(val source: MediaRef?, val rows: List<So
 internal fun BrowserItem.selectionTarget(containingSource: MediaRef? = null) =
     if (row == null) SongSelectionTarget(ref, songs) else SongSelectionTarget(containingSource, listOf(row))
 
-internal data class SelectedSong(val id: String = UUID.randomUUID().toString(), val source: MediaRef?, val row: SongRow)
+internal data class SelectedSong(val id: String = UUID.randomUUID().toString(), val source: MediaRef?, val row: SongRow,
+    val sourceRowIds: Set<String> = setOf(row.id))
 
 /** Activity session only: configuration changes retain it; fresh sessions never restore it from disk. */
 internal class SessionSelection : ViewModel() {
@@ -32,28 +33,38 @@ internal class SessionSelection : ViewModel() {
         if (token != null && presentationHold === token) presentationHold = null
     }
     val entries = mutableStateListOf<SelectedSong>()
-    private val occurrences by derivedStateOf { entries.mapTo(hashSetOf()) { it.source to it.row.id } }
     val trackIds by derivedStateOf { entries.mapTo(hashSetOf()) { it.row.track.id } }
     var visible: List<SongRow> = emptyList()
     var source: MediaRef? = null
-    fun contains(source: MediaRef?, id: String) = source to id in occurrences
+    fun contains(row: SongRow) = row.track.id in trackIds
+    @Suppress("UNUSED_PARAMETER") // Source provenance affects edits, never membership.
     fun selectedCount(item: BrowserItem, containingSource: MediaRef? = null): Int =
-        item.row?.let { if (contains(containingSource, it.id)) 1 else 0 }
+        item.row?.let { if (contains(it)) 1 else 0 }
             ?: item.songs.count { it.track.id in trackIds }
     fun select(source: MediaRef?, rows: List<SongRow>) {
         if (!active) collapsed = false
         active = true
-        val known = occurrences.toMutableSet()
-        entries.addAll(rows.mapNotNull { row ->
-            if (known.add(source to row.id)) SelectedSong(source = source, row = row) else null
-        })
+        // Keep one action input per song, with the first source's occurrence IDs
+        // available for mutable-list removal and reordering.
+        val scope = if (this.source == source) visible else emptyList()
+        val occurrences = (rows + scope).groupBy { it.track.id }
+        val indices = entries.withIndex().associate { it.value.row.track.id to it.index }
+        for (row in rows.distinctBy { it.track.id }) {
+            val ids = occurrences.getValue(row.track.id).mapTo(linkedSetOf()) { it.id }
+            val index = indices[row.track.id]
+            if (index == null) entries.add(SelectedSong(source = source, row = row, sourceRowIds = ids))
+            else if (entries[index].source == source) {
+                val previous = entries[index]
+                entries[index] = previous.copy(sourceRowIds = previous.sourceRowIds + ids)
+            }
+        }
     }
     fun toggle(source: MediaRef?, row: SongRow) {
-        if (contains(source, row.id)) entries.removeAll { it.source == source && it.row.id == row.id }
+        if (contains(row)) entries.removeAll { it.row.track.id == row.track.id }
         else select(source, listOf(row))
     }
     fun range() {
-        val indices = visible.indices.filter { contains(source, visible[it].id) }
+        val indices = visible.indices.filter { contains(visible[it]) }
         if (indices.isNotEmpty()) select(source, visible.subList(indices.first(), indices.last() + 1))
     }
     fun clear() { entries.clear(); active = false; collapsed = false }
@@ -77,9 +88,9 @@ internal fun SessionSelectionPanel(session: SessionSelection, queues: io.github.
     val source = entries.map { it.source }.distinct().singleOrNull()
     val remove: (((Boolean) -> Unit) -> Unit)? = when {
         source?.kind == io.github.anastaci1a.localica.navigation.MediaKind.Playlist -> ({ complete ->
-            playlists?.removeEntries(source.id, session.entries.map { it.row.id }.toSet(), complete) })
+            playlists?.removeEntries(source.id, session.entries.flatMap { it.sourceRowIds }.toSet(), complete) })
         source?.kind == io.github.anastaci1a.localica.navigation.MediaKind.Queue && queues != null -> ({ complete ->
-            queues.removeEntries(session.entries.map { it.row.id }.toSet(), source.id, complete) })
+            queues.removeEntries(session.entries.flatMap { it.sourceRowIds }.toSet(), source.id, complete) })
         else -> null
     }
     // Collapsed and dragging share the minimized pill (#534); dragging cannot expand it.

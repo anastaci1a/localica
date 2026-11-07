@@ -41,7 +41,8 @@ internal fun Modifier.songDrag(state: SongDragState, enabled: Boolean, source: M
             }
         }, onHold = { item -> selection.select(source, listOf(requireNotNull(item.row))) },
         keysFor = {
-            selection.entries.takeIf { entries -> entries.all { it.source == source && state.items.any { item -> item.key == it.row.id } } }
-                ?.map { it.row.id }?.toSet()
+            selection.entries.takeIf { entries -> entries.all { entry ->
+                entry.source == source && entry.sourceRowIds.all { id -> state.items.any { it.key == id } }
+            } }?.flatMap { it.sourceRowIds }?.toSet()
         }, onCommitted = selection::clear, commit = commit)
 }
