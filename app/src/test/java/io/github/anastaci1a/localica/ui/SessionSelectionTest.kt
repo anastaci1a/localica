@@ -74,47 +74,61 @@ class SessionSelectionTest {
         assertEquals(SongSelectionTarget(source, listOf(row)), item.selectionTarget(source))
         assertEquals(SongSelectionTarget(null, listOf(row)), item.selectionTarget())
     }
-    @Test fun standaloneSongMembershipDoesNotBorrowPlaylistOccurrenceButCollectionsSummarizeTracks() {
+    @Test fun standaloneSongsAndCollectionsShareMembershipWithoutChangingSourceProvenance() {
         val source = MediaRef(MediaKind.Playlist, "playlist")
         val row = SongRow(track.id, track)
         val song = BrowserItem(MediaRef(MediaKind.Song, track.id), track.title, null, listOf(row), row)
         val collection = BrowserItem(source, "Playlist", null, listOf(row))
         val state = SessionSelection()
         state.select(source, listOf(row))
-        assertEquals(0, state.selectedCount(song))
+        assertEquals(1, state.selectedCount(song))
         assertEquals(1, state.selectedCount(song, source))
         assertEquals(1, state.selectedCount(collection))
+        state.select(null, listOf(row))
+        assertEquals(source, state.entries.single().source)
         state.toggle(null, row)
-        assertEquals(1, state.selectedCount(song))
-        assertEquals(2, state.entries.size)
+        assertEquals(0, state.selectedCount(song))
+        assertTrue(state.entries.isEmpty())
     }
-    @Test fun selectingAPlaylistInItsCatalogRetainsItsOccurrencesInsideThePlaylist() {
+    @Test fun selectingAPlaylistRetainsAllSourceOccurrencesWithOneActionInputPerSong() {
         val source = MediaRef(MediaKind.Playlist, "playlist")
         val rows = listOf(SongRow("entry1", track, source.id), SongRow("entry2", track, source.id))
         val target = BrowserItem(source, "Playlist", null, rows).selectionTarget()
         val state = SessionSelection()
         state.select(target.source, target.rows)
-        assertTrue(rows.all { state.contains(source, it.id) })
+        assertTrue(rows.all { state.contains(it) })
         state.select(source, rows)
-        assertEquals(2, state.entries.size)
-        state.toggle(source, rows.first())
-        assertEquals(listOf("entry2"), state.entries.map { it.row.id })
-        assertEquals(source, state.entries.map { it.source }.distinct().single())
+        assertEquals(1, state.entries.size)
+        assertEquals(setOf("entry1", "entry2"), state.entries.single().sourceRowIds)
+        assertEquals(source, state.entries.single().source)
+        state.toggle(source, rows.last())
+        assertTrue(state.entries.isEmpty())
     }
-    @Test fun sourceOccurrencesKeepAppendOrderAndDuplicatesAcrossCollections() {
+    @Test fun visibleDuplicateOccurrencesAreRetainedWhenSelectingOneRow() {
+        val state = SessionSelection()
+        val source = MediaRef(MediaKind.Queue, "queue")
+        val rows = listOf(SongRow("entry1", track), SongRow("entry2", track))
+        state.source = source
+        state.visible = rows
+        state.select(source, rows.take(1))
+        assertEquals(setOf("entry1", "entry2"), state.entries.single().sourceRowIds)
+        assertEquals(1, state.entries.size)
+    }
+    @Test fun sourceProvenanceAndAppendOrderSurviveDeduplicationAcrossCollections() {
         val state = SessionSelection()
         val first = MediaRef(MediaKind.Playlist, "one")
         val second = MediaRef(MediaKind.Playlist, "two")
-        val rows = listOf(SongRow("entry1", track), SongRow("entry2", track))
+        val rows = listOf(SongRow("entry1", track), SongRow("entry2", track.copy(id = "other")))
         state.select(first, rows + rows)
-        state.select(second, rows)
+        state.select(second, rows.map { it.copy(id = "other-" + it.id) })
         state.select(first, rows)
-        assertEquals(4, state.entries.size)
-        assertEquals(4, state.entries.map { it.id }.distinct().size)
-        state.toggle(first, rows.first())
-        state.toggle(first, rows.first())
-        assertEquals(listOf("entry2", "entry1", "entry2", "entry1"), state.entries.map { it.row.id })
-        assertEquals(first, state.entries.last().source)
+        assertEquals(2, state.entries.size)
+        assertEquals(2, state.entries.map { it.id }.distinct().size)
+        assertTrue(state.entries.all { it.source == first })
+        state.toggle(second, rows.first())
+        state.toggle(second, rows.first())
+        assertEquals(listOf("entry2", "entry1"), state.entries.map { it.row.id })
+        assertEquals(second, state.entries.last().source)
     }
     @Test fun emptySelectionStaysActiveUntilExplicitCloseAndNewSessionStartsEmpty() {
         val state = SessionSelection()
@@ -136,12 +150,12 @@ class SessionSelectionTest {
         state.select(null, listOf(SongRow("three", track)))
         assertFalse(state.collapsed)
     }
-    @Test fun rangeAppendsMissingOccurrencesWithoutReorderingExistingSelection() {
+    @Test fun rangeFindsAnchorsFromOtherViewsAndAppendsUniqueSongsInVisibleOrder() {
         val state = SessionSelection()
-        val rows = (0..4).map { SongRow("$it", track) }
+        val rows = (0..4).map { SongRow("$it", track.copy(id = "$it")) }
         state.visible = rows
-        state.select(null, listOf(rows[3], rows[1]))
+        state.select(MediaRef(MediaKind.Album, "album"), listOf(rows[3], rows[1]).map { it.copy(id = "album-" + it.id) })
         state.range()
-        assertEquals(listOf("3", "1", "2"), state.entries.map { it.row.id })
+        assertEquals(listOf("album-3", "album-1", "2"), state.entries.map { it.row.id })
     }
 }

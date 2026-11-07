@@ -22,7 +22,7 @@ class CollectionSelectionTest {
         browseStore.edit().clear().commit()
         InterfacePreferences(context).write(InterfaceSettings(tabs = listOf(MainTab.Playlists), reducedMotion = true))
         val track = Track("selection:song", "Repeated song", fileName = "song.mp3", relativePath = "song.mp3")
-        val playlist = PlaylistEdits.append(ManualPlaylist(name = "Selection mix"), listOf(track, track))
+        val playlist = PlaylistEdits.append(ManualPlaylist(name = "Selection mix"), listOf(track, track.copy(uri = "selection:other", id = "selection:other", title = "Other song")))
         try {
             compose.setContent { LocalicaTheme {
                 LocalicaScreen(LibraryUiState(LibrarySnapshot(tracks = listOf(track)), loading = false),
