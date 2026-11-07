@@ -599,7 +599,7 @@ internal class UiPolicyDetector : Detector(), SourceCodeScanner {
 
 /** D04 Stage 3 root adopters and the step that moves or retires each one. Files that move to Engine get no entry. */
 private val stage3Allowance = mapOf(
-    "GlassShadow.kt" to "U04.01b", "GlassMorphContent.kt" to "U04.02a",
+    "GlassShadow.kt" to "U06.01", "GlassMorphContent.kt" to "U04.02a",
     "GlassMorph.kt" to "U07.05", "GlassDialogs.kt" to "U07.05", "GlassPresence.kt" to "U07.05", "GlassPopupHome.kt" to "U07.05",
     "GlassOriginPreparation.kt" to "U07.05", "SearchMorphMotion.kt" to "U07.05",
     "FrostedMaterial.kt" to "U10.05", "LyricsHeaderActions.kt" to "U10.05", "GlassSilhouetteOptics.kt" to "U10.05", // D17: frozen split-pill optics reading ShapeFrame
