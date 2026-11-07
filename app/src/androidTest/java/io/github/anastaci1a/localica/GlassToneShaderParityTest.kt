@@ -4,7 +4,6 @@ import android.graphics.Bitmap
 import android.graphics.Paint
 import android.graphics.Picture
 import android.graphics.RuntimeShader
-import androidx.test.filters.SdkSuppress
 import io.github.anastaci1a.localica.ui.GlassColorShader
 import io.github.anastaci1a.localica.ui.GlassTone
 import org.junit.Assert.*
@@ -12,8 +11,7 @@ import org.junit.Test
 import kotlin.math.abs
 
 /** #633: the production AGSL tone ([GlassColorShader]) matches the Kotlin [GlassTone] on the GPU, including the
- * trim limit above weight 2, and its rendered rows never reverse brightness. */
-@SdkSuppress(minSdkVersion = 33)
+ * trim limit above weight 2, and its rendered rows never reverse brightness. Runtime shaders need API 33. */
 class GlassToneShaderParityTest {
     private val source = """
         uniform float3 tone;
@@ -24,6 +22,7 @@ class GlassToneShaderParityTest {
         }
     """
 
+    @androidx.test.filters.SdkSuppress(minSdkVersion = 33)
     @Test fun shaderMatchesKotlinAtSamplePoints() {
         val tones = listOf(
             GlassTone(.25f, 2f, false), GlassTone(.25f, 2f, true), GlassTone(.5f, 2f, true), GlassTone(.5f, 1f, false),
