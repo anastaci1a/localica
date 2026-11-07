@@ -68,6 +68,14 @@ class NonePreimageTest {
         }
     }
 
+    private fun onScreen(tag: String): Color {
+        val node = compose.onNodeWithTag(tag).fetchSemanticsNode()
+        val origin = IntArray(2).also { (node.root as androidx.compose.ui.platform.ViewRootForTest).view.getLocationOnScreen(it) }
+        val centre = node.boundsInRoot.center
+        val screen = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot()
+        try { return Color(screen.getPixel((centre.x + origin[0]).toInt(), (centre.y + origin[1]).toInt())) } finally { screen.recycle() }
+    }
+
     private fun centre(tag: String): Color = compose.onNodeWithTag(tag).captureToImage().toPixelMap().let { it[it.width / 2, it.height / 2] }
 
     private fun assertMean(label: String, expected: Color, actual: Color, region: Rect) {
@@ -191,8 +199,9 @@ class NonePreimageTest {
         compose.onNodeWithText("Preimage popup").assertExists()
         compose.waitForIdle()
         compose.waitUntil(15_000) {
-            val panel = compose.onNodeWithTag("popup-gap").captureToImage().toPixelMap().let { it[it.width / 2, it.height / 2] }
-            val control = centre("popup-control")
+            // Dialog windows cannot be captured per node below API 28: read the screen instead.
+            val panel = onScreen("popup-gap")
+            val control = onScreen("popup-control")
             listOf(panel.red - control.red, panel.green - control.green, panel.blue - control.blue).all { kotlin.math.abs(it) < .03f }
         }
     }

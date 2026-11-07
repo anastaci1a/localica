@@ -33,16 +33,17 @@ class NoneShadowParityTest {
 
     private fun outsideBodies(a: PixelMap, b: PixelMap, bodies: List<Rect>, label: String) {
         assertEquals(a.width, b.width); assertEquals(a.height, b.height)
-        var differing = 0; var shadowed = 0
+        var differing = 0; var shadowed = 0; var largest = 0f
+        val box = android.graphics.Rect()
         for (y in 0 until a.height) for (x in 0 until a.width) {
             if (bodies.any { it.inflate(1f).contains(Offset(x + .5f, y + .5f)) }) continue
             val p = a[x, y]; val q = b[x, y]
             if (p.red < .97f) shadowed++
-            if (kotlin.math.abs(p.red - q.red) > .5f / 255 || kotlin.math.abs(p.green - q.green) > .5f / 255 ||
-                kotlin.math.abs(p.blue - q.blue) > .5f / 255) differing++
+            val delta = maxOf(kotlin.math.abs(p.red - q.red), kotlin.math.abs(p.green - q.green), kotlin.math.abs(p.blue - q.blue))
+            if (delta > .5f / 255) { differing++; largest = maxOf(largest, delta); box.union(x, y) }
         }
         assertTrue("$label: the fixture must actually draw a shadow band ($shadowed px)", shadowed > 200)
-        assertEquals("$label: shadow pixels differ between Normal and None", 0, differing)
+        assertEquals("$label: shadow pixels differ between Normal and None (largest ${largest * 255}/255 within $box)", 0, differing)
     }
 
     @Test fun floatingPillAndPanelShadowsMatchAcrossAContinuousSwitch() {
@@ -60,9 +61,12 @@ class NoneShadowParityTest {
         } } }
         val bodies = listOf(Rect(60f, 50f, 260f, 114f), Rect(60f, 180f, 260f, 300f))
         compose.waitForIdle(); Thread.sleep(300); compose.waitForIdle()
-        val normal = compose.onNodeWithTag("stage").captureToImage().toPixelMap()
+        val settledNormal = compose.onNodeWithTag("stage").captureToImage().toPixelMap()
         compose.mainClock.autoAdvance = false
         try {
+            // The frame-by-frame reference is taken under the same paused clock as the switch frames.
+            compose.mainClock.advanceTimeByFrame()
+            val normal = compose.onNodeWithTag("stage").captureToImage().toPixelMap()
             compose.runOnIdle { runtime.request(GlassRendererMode.None) }
             // Every frame of the blend: no shadow blip while the fill crossfades.
             repeat(24) { frame ->
@@ -71,15 +75,17 @@ class NoneShadowParityTest {
             }
         } finally { compose.mainClock.autoAdvance = true }
         compose.waitForIdle(); Thread.sleep(300); compose.waitForIdle()
-        outsideBodies(normal, compose.onNodeWithTag("stage").captureToImage().toPixelMap(), bodies, "settled None")
+        outsideBodies(settledNormal, compose.onNodeWithTag("stage").captureToImage().toPixelMap(), bodies, "settled None")
     }
 
     @Test fun liftAndGlassShadowConfigurationIsIndependentOfTheRenderer() {
         val seen = mutableMapOf<GlassRendererMode, LiftShadow>()
+        val runtime = GlassRendererRuntime(GlassRendererMode.Normal)
+        var lift: LiftShadow? = null
+        compose.setContent { CompositionLocalProvider(LocalGlassRendererRuntime provides runtime,
+            LocalGlassAppearance provides appearance) { LocalicaTheme { lift = rememberLiftShadow() } } }
         for (mode in listOf(GlassRendererMode.Normal, GlassRendererMode.None)) {
-            var lift: LiftShadow? = null
-            compose.setContent { CompositionLocalProvider(LocalGlassRendererRuntime provides remember { GlassRendererRuntime(mode) },
-                LocalGlassAppearance provides appearance) { LocalicaTheme { lift = rememberLiftShadow() } } }
+            compose.runOnIdle { runtime.request(mode) }
             compose.waitForIdle()
             seen[mode] = requireNotNull(lift)
         }
