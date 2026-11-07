@@ -360,7 +360,7 @@
         errorLine2="                                      ~~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/FrostedMaterial.kt"
-            line="235"
+            line="236"
             column="39"/>
     </issue>
 
@@ -371,7 +371,7 @@
         errorLine2="                                                          ~~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/FrostedMaterial.kt"
-            line="235"
+            line="236"
             column="59"/>
     </issue>
 
@@ -2461,31 +2461,11 @@
         errorLine2="                                                                                                                   ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/FrostedMaterial.kt"
-            line="349"
+            line="350"
             column="116"/>
     </issue>
 
-    <issue
-        id="LiteralUiSpacing"
-        message="Use validated Spec tokens"
-        errorLine1="    Box(modifier.then(if (shadow) Modifier.shadow(if (compact) 3.dp else 8.dp, shape, clip = false) else Modifier).clip(shape)"
-        errorLine2="                                                               ~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/FrostedMaterial.kt"
-            line="350"
-            column="64"/>
-    </issue>
 
-    <issue
-        id="LiteralUiSpacing"
-        message="Use validated Spec tokens"
-        errorLine1="    Box(modifier.then(if (shadow) Modifier.shadow(if (compact) 3.dp else 8.dp, shape, clip = false) else Modifier).clip(shape)"
-        errorLine2="                                                                         ~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/FrostedMaterial.kt"
-            line="350"
-            column="74"/>
-    </issue>
 
     <issue
         id="LiteralUiSpacing"
@@ -2494,7 +2474,7 @@
         errorLine2="                ~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/FrostedMaterial.kt"
-            line="352"
+            line="353"
             column="17"/>
     </issue>
 
@@ -2505,7 +2485,7 @@
         errorLine2="                                                        ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/FrostedMaterial.kt"
-            line="357"
+            line="358"
             column="57"/>
     </issue>
 
@@ -8383,16 +8363,6 @@
             column="13"/>
     </issue>
 
-    <issue
-        id="NonPresetScreenLayout"
-        message="Use stock screen layout slots"
-        errorLine1="    Box(modifier.then(if (shadow) Modifier.shadow(if (compact) 3.dp else 8.dp, shape, clip = false) else Modifier).clip(shape)"
-        errorLine2="    ~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/FrostedMaterial.kt"
-            line="350"
-            column="5"/>
-    </issue>
 
     <issue
         id="NonPresetScreenLayout"
@@ -8401,7 +8371,7 @@
         errorLine2="        ~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/FrostedMaterial.kt"
-            line="354"
+            line="355"
             column="9"/>
     </issue>
 
@@ -19139,7 +19109,7 @@
         errorLine2="                ~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/FrostedMaterial.kt"
-            line="205"
+            line="206"
             column="17"/>
     </issue>
 
@@ -19150,7 +19120,7 @@
         errorLine2="                                                    ~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/FrostedMaterial.kt"
-            line="221"
+            line="222"
             column="53"/>
     </issue>
 
@@ -19161,7 +19131,7 @@
         errorLine2="                                                                                                             ~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/FrostedMaterial.kt"
-            line="245"
+            line="246"
             column="110"/>
     </issue>
 
@@ -19172,7 +19142,7 @@
         errorLine2="                            ~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/FrostedMaterial.kt"
-            line="247"
+            line="248"
             column="29"/>
     </issue>
 
@@ -19183,7 +19153,7 @@
         errorLine2="                                                                                ~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/FrostedMaterial.kt"
-            line="306"
+            line="307"
             column="81"/>
     </issue>
 
@@ -19194,7 +19164,7 @@
         errorLine2="                                ~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/FrostedMaterial.kt"
-            line="324"
+            line="325"
             column="33"/>
     </issue>
 
@@ -19205,7 +19175,7 @@
         errorLine2="                                                       ~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/FrostedMaterial.kt"
-            line="325"
+            line="326"
             column="56"/>
     </issue>
 

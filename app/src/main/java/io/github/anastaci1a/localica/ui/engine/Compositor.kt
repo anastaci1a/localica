@@ -5,6 +5,10 @@ import androidx.compose.ui.geometry.*
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.layout.*
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.graphics.Outline
 import io.github.anastaci1a.localica.ui.spec.*
 enum class Stratum { Page,Lifted,Floating,Drawer,Player,Modal,Overlay,Diagnostics }; enum class ShadowRole { None,Glass,Lift,Glow }
 @Immutable data class SurfaceTransform(val translation: Offset=Offset.Zero,val scale: Float=1f,val pivot: Offset=Offset.Zero) { init { require(translation.isFinite && pivot.isFinite && scale.isFinite() && scale>0) { "A surface transform needs finite offsets and a positive scale" } }
@@ -74,6 +78,22 @@ fun Modifier.surface(node: SurfaceView): Modifier { require(node is SurfaceNode)
     content: @Composable androidx.compose.foundation.layout.BoxWithConstraintsScope.()->Unit) {
     CompositionLocalProvider(LocalShadowPlane provides plane) {
         androidx.compose.foundation.layout.BoxWithConstraints(modifier.shadowPlaneHost(plane,strength,spread).then(contentModifier),content=content)
+    }
+}
+/** The stock rounded panel keeps one host layout; its field precedes the original content clip and inherits outer alpha. */
+@Composable internal fun ShadowPlanePanel(modifier: Modifier,shape: RoundedCornerShape,shadow: Boolean,strength: Float,spread: Float,
+    contentModifier: Modifier=Modifier,content: @Composable androidx.compose.foundation.layout.BoxScope.()->Unit) {
+    val plane=if(shadow) rememberShadowPlane() else null
+    val density=LocalDensity.current; val direction=LocalLayoutDirection.current; val key=remember { Any() }
+    val field=if(plane==null) Modifier else Modifier.shadowPlaneHost(plane,strength,spread).glassCaster(plane,key) { rect ->
+        when(val outline=shape.createOutline(rect.size,direction,density)) {
+            is Outline.Rounded -> outline.roundRect.translate(rect.topLeft)
+            is Outline.Rectangle -> RoundRect(rect,CornerRadius.Zero)
+            is Outline.Generic -> error("A rounded stock panel has a rectangular or rounded outline")
+        }
+    }
+    CompositionLocalProvider(LocalShadowPlane provides (plane?:LocalShadowPlane.current)) {
+        androidx.compose.foundation.layout.Box(modifier.then(field).then(contentModifier),content=content)
     }
 }
 /** D26 live-compat caster (expires U06.01/U09.01a): an Engine-owned implicit node whose shape follows its layout in [plane]'s host; [body] maps that rectangle to the drawn body, or null. */
