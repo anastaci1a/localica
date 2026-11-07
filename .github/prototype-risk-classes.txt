@@ -32,6 +32,7 @@ io.github.anastaci1a.localica.ArtworkWashDetailTest
 io.github.anastaci1a.localica.ArtworkWashTest
 io.github.anastaci1a.localica.AssertionReadinessTest
 io.github.anastaci1a.localica.BackdropProducerContinuityTest
+io.github.anastaci1a.localica.BrightnessWeightingTest
 io.github.anastaci1a.localica.BrowseArtworkTest
 io.github.anastaci1a.localica.BrowseInteractionTest
 io.github.anastaci1a.localica.BrowseLoadingRevealTest
@@ -104,6 +105,7 @@ io.github.anastaci1a.localica.GlassReturnCheckTest
 io.github.anastaci1a.localica.GlassScrollHoldTest
 io.github.anastaci1a.localica.GlassShadowTest
 io.github.anastaci1a.localica.GlassSilhouetteTest
+io.github.anastaci1a.localica.GlassToneShaderParityTest
 io.github.anastaci1a.localica.GlobalPlaybackModesTest
 io.github.anastaci1a.localica.HomeSelectionTest
 io.github.anastaci1a.localica.HoverSelectionTest

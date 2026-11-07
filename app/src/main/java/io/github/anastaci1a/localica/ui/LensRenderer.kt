@@ -190,14 +190,14 @@ internal class LensRenderer {
             float grazing = 1.0 - normal.z;
             grazing = grazing * grazing * grazing;
             float reflection = (0.018 * (1.0 - normal.z) + 0.26 * grazing) * illumination * power;
-            float white = mix(1.0, 1.0 - tone.x, tone.z);
-            float black = mix(tone.x, 0.0, tone.z);
+            float white = mix(1.0, 1.0 - glassTrim(tone), tone.z);
+            float black = mix(glassTrim(tone), 0.0, tone.z);
             color = mix(color, float3(white), reflection * max(facing, 0.0));
             color = mix(color, float3(black), reflection * max(-facing, 0.0) * 0.3);
             // Environmental light still reflects when this recording is translucent
             // (for example an unpainted row over its parent's background).
             float reflected = reflection * max(facing, 0.0) * (1.0 - alpha);
-            float reflectedTone = mix(1.0, 1.0 - tone.x, tone.z);
+            float reflectedTone = mix(1.0, 1.0 - glassTrim(tone), tone.z);
             return half4(half3(color * alpha + reflected * reflectedTone), half(alpha + reflected));
         }
     """.trimIndent())
