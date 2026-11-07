@@ -10,6 +10,7 @@ internal class Rest(private val x: Double): Trajectory { override val kind=0; ov
 internal class Driven(private val x: Double,private val v: Double): Trajectory { override val kind=3; override val duration=Double.POSITIVE_INFINITY; override fun value(t: Double)=x; override fun velocity(t: Double)=v }
 internal class Bezier(private val e: EasingSpec) {
     init { require(e.maxSlope.isFinite() && e.x1 in 0f..1f && e.x2 in 0f..1f) }
+    fun maxSlope(from: Double,to: Double): Double { val x=doubleArrayOf(e.x1.toDouble(),2.0*(e.x2-2.0*e.x1),1-3.0*e.x2+3.0*e.x1); val y=doubleArrayOf(e.y1.toDouble(),2.0*(e.y2-2.0*e.y1),1-3.0*e.y2+3.0*e.y1); val roots=quadraticRoots(y[2]*x[1]-y[1]*x[2],2*(y[2]*x[0]-y[0]*x[2]),y[1]*x[0]-y[0]*x[1]); return (listOf(abs(at(from,true)),abs(at(to,true)))+roots.filter { it>0 && it<1 }.map { t -> val a=1-t; 3*a*a*t*e.x1+3*a*t*t*e.x2+t*t*t }.filter { it in from..to }.map { abs(at(it,true)) }).max() }
     fun at(u: Double,derivative: Boolean=false): Double {
         val x1=e.x1.toDouble(); val x2=e.x2.toDouble(); val y1=e.y1.toDouble(); val y2=e.y2.toDouble()
         if(u<=0) return if(!derivative) 0.0 else if(x1!=0.0) y1/x1 else if(x2!=0.0) y2/x2 else 1.0
@@ -28,6 +29,7 @@ internal fun hermite(x: Double,v: Double,q: Double,w: Double,tau: Double,t: Doub
 internal fun hermiteExtrema(x: Double,v: Double,q: Double,w: Double,tau: Double): ClosedFloatingPointRange<Double> {
     val c=tau*v; val b=3*(q-x)-2*c-tau*w; val a=-2*(q-x)+c+tau*w; val values=listOf(x,q)+quadraticRoots(3*a,2*b,c).filter { it>0 && it<1 }.map { u -> hermite(x,v,q,w,tau,u*tau,false) }; return values.min()..values.max()
 }
+internal fun hermiteVelocityPeak(x: Double,v: Double,q: Double,w: Double,tau: Double): Double { val c=tau*v; val b=3*(q-x)-2*c-tau*w; val a=-2*(q-x)+c+tau*w; val u=if(a==0.0) -1.0 else -b/(3*a); return maxOf(abs(v),abs(w),if(u>0 && u<1) abs(hermite(x,v,q,w,tau,u*tau,true)) else 0.0) }
 internal class Eased(internal val x: Double,internal val v: Double,internal val q: Double,private val easing: EasingSpec,override val duration: Double,sigma: Double=1.0,bounds: ClosedFloatingPointRange<Double>?=null,maxTauIn: Double=Double.POSITIVE_INFINITY,internal val plan: EasedPlan?=null,maxTauOut: Double=Double.POSITIVE_INFINITY): Trajectory {
     override val kind=1; private val core=Bezier(easing); private val delta=q-x; internal val tauOut=minOf(duration/8,sigma*.064,maxTauOut)
     internal val extrema: ClosedFloatingPointRange<Double>; internal val tauIn: Double; private val b: Double; private val bv: Double; private val tailX: Double; private val tailV: Double
@@ -37,7 +39,7 @@ internal class Eased(internal val x: Double,internal val v: Double,internal val 
         if(bounds!=null && v!=0.0) { val room=if(v>0) bounds.endInclusive-x else x-bounds.start; require(room>0) { "Unreachable outward boundary state" }; tau=min(tau,room/(.149*(abs(v)+B)+if(v*delta>0) B else 0.0)) }
         require(tau>0 && tau.isFinite()); tauIn=tau; b=x+delta*core.at(tau/duration); bv=delta*core.at(tau/duration,true)/duration; tailX=x+delta*core.at(1-tauOut/duration); tailV=delta*core.at(1-tauOut/duration,true)/duration
         val extrema=easingExtrema(easing); val a=x+delta*extrema.start; val z=x+delta*extrema.endInclusive; val start=hermiteExtrema(x,v,b,bv,tauIn); val end=hermiteExtrema(tailX,tailV,q,0.0,tauOut); val lo=minOf(a,z,start.start,end.start); val hi=maxOf(a,z,start.endInclusive,end.endInclusive)
-        this.extrema=lo..hi; require(bounds==null || lo>=bounds.start && hi<=bounds.endInclusive) { "Easing or Hermite bridge leaves channel bounds" }; require(lo.toFloat().isFinite() && hi.toFloat().isFinite() && (abs(v)+2.5*B).toFloat().isFinite()) { "Trajectory exceeds Float kinematic capacity" }
+        this.extrema=lo..hi; require(bounds==null || lo>=bounds.start && hi<=bounds.endInclusive) { "Easing or Hermite bridge leaves channel bounds" }; require(lo.toFloat().isFinite() && hi.toFloat().isFinite() && maxOf(abs(delta)/duration*core.maxSlope(tauIn/duration,1-tauOut/duration),hermiteVelocityPeak(x,v,b,bv,tauIn),hermiteVelocityPeak(tailX,tailV,q,0.0,tauOut)).toFloat().isFinite()) { "Trajectory exceeds Float kinematic capacity" }
     }
     private fun sample(t: Double,d: Boolean): Double = when { t<=0 -> if(d) v else x; t>=duration -> if(d) 0.0 else q; t<tauIn -> hermite(x,v,b,bv,tauIn,t,d); t>=duration-tauOut -> hermite(tailX,tailV,q,0.0,tauOut,t-duration+tauOut,d); else -> if(d) delta*core.at(t/duration,true)/duration else x+delta*core.at(t/duration) }
     override fun value(t: Double)=sample(t,false)

@@ -10,13 +10,14 @@ internal fun motionProfileId(profile: MotionProfile)=MotionProfileId(profile.nam
 internal fun springProfileId(profile: SpringProfile)=SpringProfileId(profile.name)
 @Stable interface MotionValue { fun value(): Float; fun velocity(): Float; fun sample(): Kinematic; fun valueAt(stamp: FrameStamp): Float; fun velocityAt(stamp: FrameStamp): Float; fun sampleAt(stamp: FrameStamp): Kinematic; val target: Float; val settled: Boolean }
 internal data class MotionJoin(val epoch: Int,val stamp: FrameStamp,val before: Kinematic,val after: Kinematic,val beforeKind: Int,val afterKind: Int,val policy: String,val releaseVelocity: Float?=null,val finiteDifferenceVelocity: Float?=null,val envelopeSeconds: Double?=null,val finishSeconds: Double?=null)
-internal interface MotionEvents { fun created(motion: MotionFloat); fun joined(motion: MotionFloat,join: MotionJoin); fun driven(motion: MotionFloat,stamp: FrameStamp,sample: Kinematic) {}; fun retired(motion: MotionFloat,stamp: FrameStamp) }
+internal interface MotionEvents { fun created(motion: MotionFloat); fun joined(motion: MotionFloat,join: MotionJoin); fun driven(motion: MotionFloat,stamp: FrameStamp,sample: Kinematic) {}; fun retired(motion: MotionFloat,stamp: FrameStamp); fun releaseBridge(motion: MotionFloat,tau: Double,approvedTau: Double,displayInterval: Double) {} }
 internal data class MotionIntent(val next: Trajectory,val stamp: FrameStamp,val destination: Float,val descriptor: Any?,val previous: Trajectory,val before: Kinematic,val releaseVelocity: Float?=null,val finiteDifferenceVelocity: Float?=null,val policy: String="Continuous")
 @Stable class MotionFloat internal constructor(internal val clock: UiClock,initial: Float,internal val range: Float,internal val bounds: ClosedFloatingPointRange<Double>?=null,internal val key: Any=Any()): MotionValue,ActiveMotion {
     private data class Past(val trajectory: Trajectory,val started: FrameStamp,val previous: Past?)
     private val destination=mutableFloatStateOf(initial); private val epochState=mutableIntStateOf(0); private var segment: Trajectory=Rest(initial.toDouble()); private var started=clock.stampNow; private var descriptor: Any?=null; private var drivenStamp: FrameStamp?=null; private var disposed=false; private var past: Past?=null
     override val id: Long
     override var presented=false; private set
+    internal var onRest: (()->Unit)?=null
     internal val epoch: IntState get()=epochState
     internal val kind: Int get()=segment.kind
     override val target: Float get()=destination.floatValue
@@ -48,7 +49,7 @@ internal data class MotionIntent(val next: Trajectory,val stamp: FrameStamp,val 
     internal fun commit(intent: MotionIntent,notify: Boolean=true) {
         clock.checkMutation(); check(!disposed); check(segment===intent.previous) { "Stale atomic motion intent" }; past=if(intent.policy in setOf("Reduced","Initial","DrivenInput")) null else Past(segment,started,past); segment=intent.next; started=intent.stamp; descriptor=intent.descriptor; destination.floatValue=intent.destination; epochState.intValue++; if(segment.kind!=3) drivenStamp=null; if(segment.kind==0) clock.unregister(this) else clock.register(this); if(notify) emit(intent)
     }
-    internal fun emit(intent: MotionIntent) { clock.events?.let { sink -> clock.observe { sink.joined(this,MotionJoin(epochState.intValue,intent.stamp,intent.before,Kinematic(intent.next.value(0.0).toFloat(),intent.next.velocity(0.0).toFloat()),intent.previous.kind,intent.next.kind,intent.policy,intent.releaseVelocity,intent.finiteDifferenceVelocity,(intent.next as? Damped)?.envelopeSeconds,intent.next.duration)) } } }
+    internal fun emit(intent: MotionIntent) { clock.events?.let { sink -> clock.observe { sink.joined(this,MotionJoin(epochState.intValue,intent.stamp,intent.before,Kinematic(intent.next.value(0.0).toFloat(),intent.next.velocity(0.0).toFloat()),intent.previous.kind,intent.next.kind,intent.policy,intent.releaseVelocity,intent.finiteDifferenceVelocity,(intent.next as? Damped)?.envelopeSeconds,intent.next.duration)) } }; if(intent.next.kind==0) onRest?.invoke() }
     fun retarget(target: Float,profile: MotionProfileId) { prepare(target,profile)?.let { commit(it) } }
     fun retargetSpring(target: Float,spring: SpringProfileId) {
         clock.checkMutation(); check(!disposed); require(target.isFinite()); val spec=clock.spec.spring.getValue(SpringProfile.valueOf(spring.name)); val context=context(); val sigma=if(context.access==MotionAccess.Faster) 2.0/3 else 1.0; val speed=(if(spec.speedExponent==2) 4.0/3 else 1.0)/sigma; val identity=listOf(spring,spec,sigma); val stamp=clock.stampNow; val x=rawValue(stamp); val v=rawVelocity(stamp)

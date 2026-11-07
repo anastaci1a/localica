@@ -60,7 +60,7 @@ class UiClockFoundationTest {
             val observation=remember(owner) { EngineObservation(owner,sink) }
             DisposableEffect(observation) { onDispose { observation.close() } }
             LaunchedEffect(owner) { owner.run() }
-            CompositionLocalProvider(LocalUiClock provides owner,LocalEngineContext provides EngineContext(1f/120,1000f,MotionAccess.Standard),LocalUiSpec provides remember { ResolvedUiSpec(StockUiSpec,Density(1f)) }) {
+            CompositionLocalProvider(LocalUiClock provides owner,LocalEngineContext provides EngineContext(1f/120,1000f,MotionAccess.Standard),LocalUiSpec provides remember { ResolvedUiSpec((uiSpec(io.github.anastaci1a.localica.navigation.InterfaceSettings(),geometry=ExpansionGeometryDomain(1000f,3000f,1f/60)) as SpecResult.Accepted).spec,Density(1f)) }) {
                 val value=rememberMotionFloat("native-control",0f,1f)
                 SideEffect { motion=value; clock=owner; evidence=sink }
                 Canvas(Modifier.size(20.dp)) { value.value() }

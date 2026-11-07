@@ -11,7 +11,7 @@ import kotlinx.coroutines.channels.Channel
 interface FrameSource { suspend fun awaitFrame(): Long }
 internal interface ActiveMotion { val id: Long; val presented: Boolean; val settled: Boolean; fun endsAt(stamp: FrameStamp): Boolean; fun finish(stamp: FrameStamp); fun reduce(stamp: FrameStamp) }
 internal fun interface FrameObserver { fun onFrame(stamp: FrameStamp,active: List<ActiveMotion>) }
-internal data class EngineContext(val displayIntervalSeconds: Float,val fullPlayerReferenceTravelPx: Float,val access: MotionAccess) { init { require(displayIntervalSeconds.isFinite() && displayIntervalSeconds>0 && fullPlayerReferenceTravelPx.isFinite() && fullPlayerReferenceTravelPx>0) } }
+internal data class EngineContext(val displayIntervalSeconds: Float,val fullPlayerReferenceTravelPx: Float,val access: MotionAccess) { init { require(displayIntervalSeconds.isFinite() && displayIntervalSeconds>0 && (2*displayIntervalSeconds).isFinite() && 2e9*displayIntervalSeconds<=Long.MAX_VALUE.toDouble() && fullPlayerReferenceTravelPx.isFinite() && fullPlayerReferenceTravelPx>0) } }
 internal val LocalUiClock=staticCompositionLocalOf<UiClock> { error("UiClock is provided by LocalicaTheme") }
 internal val LocalClockOwner=staticCompositionLocalOf<UiClock?> { null }
 internal val LocalEngineContext=staticCompositionLocalOf<EngineContext> { requireNotNull<EngineContext>(null) { "Publish real EngineContext through U11.00 before creating a motion owner" } }
@@ -50,6 +50,6 @@ internal val LocalEngineContext=staticCompositionLocalOf<EngineContext> { requir
     CompositionLocalProvider(LocalClockOwner provides clock,LocalUiClock provides clock,content=content)
 }
 @Composable internal fun ownerClock(): UiClock {
-    val context=LocalEngineContext.current; val clock=LocalUiClock.current; val spec=LocalUiSpec.current.spec
+    val context=LocalEngineContext.current; val clock=LocalUiClock.current; val spec=LocalUiSpec.current.spec; val domain=requireNotNull(spec.geometry) { "Publish measured ExpansionGeometryDomain through U11.00 before creating a motion owner" }; require(domain.referenceTravelPx==context.fullPlayerReferenceTravelPx && context.displayIntervalSeconds<=domain.maxDisplayIntervalSeconds) { "Engine context and admitted geometry must come from one root record" }
     if(clock.context==null) clock.configure(context,spec); SideEffect { clock.configure(context,spec) }; return clock
 }

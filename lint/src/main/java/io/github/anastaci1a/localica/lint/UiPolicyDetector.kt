@@ -163,6 +163,7 @@ internal class UiPolicyDetector : Detector(), SourceCodeScanner {
             if (symbol is PsiPackage) return
             val name = symbolName(symbol) ?: return
             edge(node, name)
+            if (layer != "engine" && name.startsWith("$UI.engine.") && name.substringAfterLast('.') in setOf("onRest", "getOnRest", "setOnRest", "events", "getEvents", "setEvents", "observers", "getObservers")) report(UiRuleId.RawUiMotion, node)
             if (policy && (name.contains(".animation.core.") || name.endsWith(".AnimationSpec"))) {
                 report(UiRuleId.RawUiMotion, node)
             }
@@ -189,9 +190,9 @@ internal class UiPolicyDetector : Detector(), SourceCodeScanner {
             }
             val owner = method.containingClass?.qualifiedName.orEmpty()
             edge(node, "$owner.$name")
+            if (layer != null && layer != "engine" && owner.startsWith("$UI.engine.") && ((method.isConstructor && method.containingClass?.name in setOf("UiClock", "FrameStamp", "ExpandCollapse", "MotionFloat", "MotionRect", "MotionColor", "MotionProfileId", "SpringProfileId", "Eased", "Damped", "Rest", "Driven", "EasedPlan", "MotionIntent")) || (name == "copy" && method.containingClass?.name in setOf("MotionProfileId", "SpringProfileId")) || name in setOf("prepare", "prepareSegment", "prepareDrive", "commit", "commitDrive", "commitAtomic", "emit", "emitDrive", "claim", "rawValue", "rawVelocity", "finish", "reduce", "configure", "register", "unregister", "dispose", "ownerClock", "updateSpec", "expansionPlan", "expansionDuration", "observe", "allocateId"))) report(UiRuleId.RawUiMotion, node)
             val compose = owner.startsWith("androidx.compose.")
             if (policy) {
-                if (owner.startsWith("$UI.engine.") && ((method.isConstructor && method.containingClass?.name in setOf("UiClock", "MotionFloat", "MotionRect", "MotionColor", "MotionProfileId", "SpringProfileId", "Eased", "Damped", "Rest", "Driven", "EasedPlan", "MotionIntent")) || (name == "copy" && method.containingClass?.name in setOf("MotionProfileId", "SpringProfileId")) || name in setOf("prepare", "prepareSegment", "prepareDrive", "commit", "commitDrive", "commitAtomic", "emit", "emitDrive", "claim", "rawValue", "rawVelocity", "finish", "reduce", "configure", "register", "unregister", "dispose", "ownerClock"))) report(UiRuleId.RawUiMotion, node)
                 if (owner.startsWith("androidx.compose.animation.") ||
                     (name in setOf("animateScrollToItem", "animateScrollBy", "scrollBy") && foundation(owner) && !scrollAllowed(node))) {
                     report(UiRuleId.RawUiMotion, node)

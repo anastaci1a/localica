@@ -9,6 +9,9 @@ import io.github.anastaci1a.localica.ui.engine.diagnostics.fixture.ActiveMotion 
 /** U12.01b actual-engine hook. Installed by correctness fixtures only, never app timing runs. */
 internal class EngineObservation(private val clock: UiClock,sink: ViolationSink): MotionEvents,AutoCloseable {
     val continuity=ContinuityObserver(sink)
+    var subFrameReleases=0; private set
+    var bandLimitedReleases=0; private set
+    override fun releaseBridge(motion: MotionFloat,tau: Double,approvedTau: Double,displayInterval: Double) { if(tau<displayInterval) subFrameReleases++; if(tau<approvedTau) bandLimitedReleases++ }
     private val keys=linkedMapOf<Any,String>()
     private val previous=clock.events
     private val frames=FrameObserver { stamp,active -> continuity.onFrame(EvidenceStamp(stamp.nanos,stamp.sequence),active.map { EvidenceActive(it.id,it.presented) }) }
