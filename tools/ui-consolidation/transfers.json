@@ -415,14 +415,6 @@
       "relabel": "U10.03-relabel-2-2026-11-07"
     },
     {
-      "rule": "RawShadowOrZOrder",
-      "path": "app/src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt",
-      "fqn": "io.github.anastaci1a.localica.ui.at",
-      "codeSha256": "20f5c3f87152c38dc50f6bd4be3be3085fe522574fa028dfc116923d1b338f15",
-      "removedBy": "U04.01b",
-      "reason": "U04.01b removes: pre-existing direct shadow call on a line rewritten by U10.01: .bottomGlassShadow(surfaceCorner, opacity = { 1f - sheet.expansion.phase.value() })"
-    },
-    {
       "rule": "MotionReadInComposition",
       "path": "app/src/main/java/io/github/anastaci1a/localica/ui/PlayerSurface.kt",
       "fqn": "io.github.anastaci1a.localica.ui.BoxWithConstraintsScope.PlayerSurface",
