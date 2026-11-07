@@ -182,6 +182,8 @@ Before instrumentation, the bounded emulator readiness gate checks boot completi
 
 CI passes `--normalize-navigation` to recreate API 36's Launcher3 after display overrides. This clears providers cached at the previous density and residual cold-start launcher state. Admission also requires the native three-button navigation inset to equal `48 dp` at the effective density. The reset refuses physical devices, other launchers and gesture navigation. API 26 retains its existing setup.
 
+The reset waits for three identical frames first. Force-stopping Launcher3 during its first post-boot frames panicked the guest `goldfish_sync` driver (#637).
+
 API 26 disables the optional GLDMA transfer path with `-feature -GLDMA`. This targets the `goldfish_pipe_dma_clear_lock` guest-kernel panic observed during repeated display captures (#607). Renderer, memory, capture coverage and assertions remain unchanged. Repeated native verification determines whether this mitigation is sufficient.
 
 Full and focused native jobs stream guest kernel messages into workflow logs and retain the emulator crash database on failure when present. An absent host crash report does not rule out a guest reboot. Preserve the original test logs and host diagnostics when investigating device loss.
