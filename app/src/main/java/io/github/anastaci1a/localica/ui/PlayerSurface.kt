@@ -132,6 +132,9 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     // immediately, including the fully expanded endpoint before onExpanded changes.
     val lyricMotion = playerLyricsMotion(p, lyricVisibility)
     val lyricProgress = lyricMotion.layout
+    // Match the panel's placement, including the outgoing half of a cross-fade.
+    // Drawing order must not let the invisible cover shield presented lyrics.
+    val lyricsInteractive = lyricMotion.contentAlpha > 0f
     val backgroundProgress by animateFloatAsState(if (settings.artworkLayout == ArtworkLayout.FullBackground) 1f else 0f,
         tween(settings.motionDuration(400)), label = "Artwork layout")
     var startExpanded by remember { mutableStateOf(expanded) }
@@ -327,7 +330,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     val artworkShape = RoundedCornerShape((8f + 16f * p).dp * (1f - p * backgroundProgress))
     val artPixels = with(density) { artWidth.toPx() }
     val (artSwipe, artworkDrag) = rememberArtworkSwipe(artworkVisit, artwork, previousArtwork, nextArtwork,
-        artPixels, expanded && p >= .99f && !lyricsOpen && (queueProgress?.value ?: 0f) == 0f,
+        artPixels, expanded && p >= .99f && !lyricsInteractive && (queueProgress?.value ?: 0f) == 0f,
         settings, onArtworkVisit)
     val swipeOffset = artSwipe.offset.value
     val swipeFraction = (kotlin.math.abs(swipeOffset) / (artPixels)).coerceIn(0f, 1f)
@@ -442,7 +445,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
                 }
             }
             Box(Modifier.motionBounds(artX, artY, artWidth, artHeight).testTag("artwork-gesture")
-                .then(artworkDrag).then(if (expanded && !lyricsOpen) Modifier.combinedClickable(interactionSource = null, indication = null,
+                .then(artworkDrag).then(if (expanded && !lyricsInteractive) Modifier.combinedClickable(interactionSource = null, indication = null,
                     onClickLabel = settings.artworkTap.label,
                     onClick = { artworkAction(settings.artworkTap, editArtwork) },
                     onLongClickLabel = settings.artworkHold.label,
