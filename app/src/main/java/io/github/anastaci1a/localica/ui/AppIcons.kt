@@ -12,6 +12,8 @@ import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.painter.Painter
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.IntSize
 import io.github.anastaci1a.localica.R
@@ -63,6 +65,7 @@ internal enum class AppIcon(val id: String, @DrawableRes val builtin: Int) {
     ActionSettings("action.settings", R.drawable.ic_settings),
     ActionShuffle("action.shuffle", R.drawable.ic_shuffle),
     ActionRepeat("action.repeat", R.drawable.ic_repeat),
+    ActionRepeatOne("action.repeat_one", R.drawable.ic_repeat_one),
     ActionSeekBack("action.seek_back", R.drawable.ic_seek_back),
     ActionSeekForward("action.seek_forward", R.drawable.ic_seek_forward),
     ActionLyrics("action.lyrics", R.drawable.ic_lyrics),
@@ -78,13 +81,14 @@ internal enum class AppIcon(val id: String, @DrawableRes val builtin: Int) {
 /** The one resolver: the active pack's mask for this icon, otherwise the built-in vector. */
 @Composable
 internal fun appIconPainter(icon: AppIcon): Painter {
-    val masks by IconPacks.masks.collectAsState()
-    return packIconPainter(icon, masks[icon.id])
+    val images by IconPacks.images.collectAsState()
+    return packIconPainter(icon, images.masks[icon.id], images.vectors[icon.id])
 }
 
 /** Explicit pack preview; never resolves through the currently selected pack. */
 @Composable
-internal fun packIconPainter(icon: AppIcon, mask: Bitmap?): Painter {
+internal fun packIconPainter(icon: AppIcon, mask: Bitmap?, vector: ImageVector? = null): Painter {
+    if (vector != null) return rememberVectorPainter(vector)
     val builtin = painterResource(icon.builtin)
     return if (mask == null) builtin else remember(mask) { MaskPainter(mask) }
 }
