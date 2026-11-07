@@ -211,6 +211,7 @@ io.github.anastaci1a.localica.PlayerPausedSkipTest
 io.github.anastaci1a.localica.PlayerRefinementTest
 io.github.anastaci1a.localica.PlayerSeekCancelCrashTest
 io.github.anastaci1a.localica.PlayerSeekHapticsTest
+io.github.anastaci1a.localica.PlayerSkipBackgroundTest
 io.github.anastaci1a.localica.PlayerTrackProjectionTest
 io.github.anastaci1a.localica.PlayerTransitionTest
 io.github.anastaci1a.localica.PlaylistArtworkRestorationTest
