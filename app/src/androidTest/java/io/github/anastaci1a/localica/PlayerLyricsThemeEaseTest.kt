@@ -86,6 +86,7 @@ class PlayerLyricsThemeEaseTest {
     private fun record(count: Int, assertLyricsPhase: Boolean = true) { repeat(count) {
         glassInk.clear()
         frame()
+        if (assertLyricsPhase) compose.onNodeWithContentDescription("Play").captureNativeFrame()
         val ink = requireNotNull(inkComposition)
         val expected = lerp(Color.Black, Color.White, requireNotNull(reference).expected(ink.lyricsProgress)).red
         if (assertLyricsPhase) {

@@ -71,6 +71,7 @@ class PlayerLyricsMaterialEaseTest {
 
     private fun record(count: Int) = repeat(count) {
         compose.mainClock.advanceTimeByFrame(); compose.waitForIdle()
+        compose.onNodeWithContentDescription("Play").captureNativeFrame()
         val phase = requireNotNull(inkComposition).lyricsProgress
         reference?.assertFrame("shared polarity", phase, owner.lightMix)
         assertEquals("outside backdrop follows this frame", owner.lightMix, backdropMix, .015f)
@@ -108,7 +109,7 @@ class PlayerLyricsMaterialEaseTest {
         check("panel coating", frames.map { it.coating }, towardLight)
         // The panel theme ink runs from dark ink (red .1255) to white; normalise to the 0..1 fraction.
         check("panel theme ink", frames.map { ((it.panel - .1255f) / .8745f).coerceIn(0f, 1f) }, towardLight)
-        // The player's own foreground and every material read the one eased fraction: they never disagree by more than a frame.
+        // The player foreground and every material read the same presented fraction.
         // record() compares every material with the same frame, including the faster first #608 step.
     }
 
