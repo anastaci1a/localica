@@ -82,7 +82,9 @@ jobs:
     - name: Record runner and toolchain identity
       run: bash .github/test-evidence/environment.sh | tee prototype-runner-environment.txt
     - name: Build and check
-      run: ./gradlew testDebugUnitTest lintDebug assembleDebug assembleRelease --no-daemon --max-workers=2
+      # The Kotlin daemon inherits this heap; debug and release compile concurrently in it (#636).
+      # Same sizing as the Android workflow static-checks job on the same 16 GB hosted runner.
+      run: ./gradlew testDebugUnitTest lintDebug assembleDebug assembleRelease --no-daemon --max-workers=4 -Dorg.gradle.jvmargs='-Xmx6g -Dfile.encoding=UTF-8'
     - name: Verify development signing certificate
       run: |
         expected=$(keytool -exportcert -alias androiddebugkey -keystore "$LOCALICA_DEBUG_KEYSTORE" -storepass android | sha256sum | cut -d ' ' -f 1)
