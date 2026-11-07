@@ -25,17 +25,45 @@ internal val SettingsRowPartKey = SemanticsPropertyKey<SettingsRowPart>("Setting
 internal fun Modifier.settingsRowPart(part: SettingsRowPart) =
     semantics { this[SettingsRowPartKey] = part }
 
-/** Stateless field faces shared by live controls and popup envelope measurement. */
+internal val SettingsRowInset = 16.dp
+internal val SettingsIconSize = 24.dp
+/** The leading icon slot: the icon plus its gap to the text. */
+internal val SettingsIconSlotWidth = 40.dp
+
+/**
+ * One settings-row standard (#655): links, switches, sliders, choices and headings start their text at [textStart].
+ * Settings pages provide [inset] so flat rows line up with the text inside glass links, and [iconSlot] on pages
+ * whose rows carry icons, so rows without one keep the empty slot. Popups keep the default (no inset, no slot).
+ */
+@androidx.compose.runtime.Immutable
+internal data class SettingsRowMetrics(val inset: Dp = 0.dp, val iconSlot: Boolean = false) {
+    val textStart: Dp get() = inset + if (iconSlot) SettingsIconSlotWidth else 0.dp
+}
+internal val LocalSettingsRowMetrics = androidx.compose.runtime.compositionLocalOf { SettingsRowMetrics() }
+
+/**
+ * Stateless field faces shared by live controls and popup envelope measurement.
+ * The icon sits in a fixed-width slot and the icon and chevron stay centred on the row at any line count or font scale.
+ */
 @Composable
 internal fun SettingsLinkFace(title: String, summary: String?, icon: AppIcon?, modifier: Modifier = Modifier,
     headlineStyle: TextStyle = MaterialTheme.typography.bodyLarge,
     summaryStyle: TextStyle = MaterialTheme.typography.bodyMedium,
-    colors: ListItemColors = ListItemDefaults.colors(containerColor = Color.Transparent)) {
-    ListItem(headlineContent = { Text(title, Modifier.settingsRowPart(SettingsRowPart.Text), style = headlineStyle) },
-        supportingContent = summary?.let { { Text(it, style = summaryStyle) } },
-        leadingContent = icon?.let { { Icon(appIconPainter(it), null, Modifier.size(24.dp).settingsRowPart(SettingsRowPart.Icon)) } },
-        trailingContent = { Icon(appIconPainter(AppIcon.ActionBack), null, Modifier.size(20.dp).rotate(180f).settingsRowPart(SettingsRowPart.Trailing)) },
-        colors = colors, modifier = modifier.heightIn(min = 64.dp).settingsRowPart(SettingsRowPart.Row))
+    colors: ListItemColors = ListItemDefaults.colors(containerColor = Color.Transparent),
+    metrics: SettingsRowMetrics = LocalSettingsRowMetrics.current) {
+    Row(modifier.heightIn(min = 64.dp).settingsRowPart(SettingsRowPart.Row)
+        .padding(horizontal = SettingsRowInset, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        if (icon != null || metrics.iconSlot) Box(Modifier.width(SettingsIconSlotWidth), contentAlignment = Alignment.CenterStart) {
+            icon?.let { Icon(appIconPainter(it), null, Modifier.size(SettingsIconSize).settingsRowPart(SettingsRowPart.Icon),
+                tint = colors.leadingIconColor) }
+        }
+        Column(Modifier.weight(1f)) {
+            Text(title, Modifier.settingsRowPart(SettingsRowPart.Text), style = headlineStyle, color = colors.headlineColor)
+            summary?.let { Text(it, style = summaryStyle, color = colors.supportingTextColor) }
+        }
+        Icon(appIconPainter(AppIcon.ActionBack), null, Modifier.padding(start = 16.dp).size(20.dp).rotate(180f)
+            .settingsRowPart(SettingsRowPart.Trailing), tint = colors.trailingIconColor)
+    }
 }
 
 internal val ChoiceOuterVerticalInset = 4.dp
@@ -50,19 +78,22 @@ internal val InterfaceSwitchHeight = 48.dp
 internal fun SliderPreferenceFrame(label: String, low: String?, high: String?, description: String?,
     track: @Composable () -> Unit) {
     Column(Modifier.fillMaxWidth().padding(top = 12.dp)) {
-        Text(label, Modifier.settingsRowPart(SettingsRowPart.Text), style = MaterialTheme.typography.titleMedium)
+        val textStart = LocalSettingsRowMetrics.current.textStart
+        Text(label, Modifier.padding(start = textStart).settingsRowPart(SettingsRowPart.Text), style = MaterialTheme.typography.titleMedium)
         track()
         if (low != null && high != null) SliderEndpoints(low, high)
-        if (description != null) Text(description, style = MaterialTheme.typography.bodySmall)
+        if (description != null) Text(description, Modifier.padding(start = textStart), style = MaterialTheme.typography.bodySmall)
     }
 }
 
 @Composable
 internal fun BooleanPreferenceFrame(label: String, modifier: Modifier = Modifier, control: @Composable () -> Unit) {
     val compact = LocalCompactPreferenceFrames.current
+    val metrics = LocalSettingsRowMetrics.current
     Row(modifier.fillMaxWidth().heightIn(min = if (compact) 48.dp else 56.dp)
-        .padding(vertical = if (compact) 0.dp else 4.dp).settingsRowPart(SettingsRowPart.Row), verticalAlignment = Alignment.CenterVertically) {
-        Text(label, Modifier.weight(1f).padding(end = 12.dp).settingsRowPart(SettingsRowPart.Text))
+        .padding(vertical = if (compact) 0.dp else 4.dp).settingsRowPart(SettingsRowPart.Row).padding(horizontal = metrics.inset),
+        verticalAlignment = Alignment.CenterVertically) {
+        Text(label, Modifier.weight(1f).padding(start = metrics.textStart - metrics.inset, end = 12.dp).settingsRowPart(SettingsRowPart.Text))
         Box(Modifier.settingsRowPart(SettingsRowPart.Trailing)) { control() }
     }
 }
@@ -89,7 +120,8 @@ internal fun ChoicePreferenceFrame(title: String, labels: List<String>, popup: B
     val required = choiceRequiredCellWidth(labels)
     BoxWithConstraints(Modifier.fillMaxWidth()) {
         if (choiceFitsInline(labels.size, required.value, maxWidth.value, popup)) Column {
-            Text(title, Modifier.settingsRowPart(SettingsRowPart.Text), style = MaterialTheme.typography.titleMedium)
+            Text(title, Modifier.padding(start = LocalSettingsRowMetrics.current.textStart).settingsRowPart(SettingsRowPart.Text),
+                style = MaterialTheme.typography.titleMedium)
             choices()
         } else link()
     }
