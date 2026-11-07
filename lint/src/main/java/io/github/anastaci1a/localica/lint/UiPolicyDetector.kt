@@ -365,8 +365,11 @@ internal class UiPolicyDetector : Detector(), SourceCodeScanner {
                 // Keep motion-derived slot arguments and receivers visible; only the SDK content callback is excluded.
                 val measurement = node.resolve()
                 if (node.methodName == "subcompose" && measurement?.containingClass?.qualifiedName.orEmpty().startsWith("androidx.compose.ui.layout.")) {
-                    return derived(node.receiver, seen) || measurement!!.parameterList.parameters.indices
-                        .filter { measurement.parameterList.parameters[it].name != "content" }
+                    val parameters = measurement!!.parameterList.parameters
+                    val content = parameters.indexOfFirst { it.name == "content" }.takeIf { it >= 0 }
+                        ?: parameters.lastIndex // Binary SDK parameters can be p0/p1; subcompose puts content last.
+                    return derived(node.receiver, seen) || parameters.indices
+                        .filter { it != content }
                         .mapNotNull { node.getArgumentForParameter(it) }.any { derived(it, seen) }
                 }
                 if (isRead(node)) return true

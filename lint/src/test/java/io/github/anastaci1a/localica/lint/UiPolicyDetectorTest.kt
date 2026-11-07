@@ -205,7 +205,7 @@ class UiPolicyDetectorTest : LintDetectorTest() {
             package androidx.compose.ui.layout
             class Placeable(val height: Int)
             class Measurable { fun measure() = Placeable(20) }
-            fun subcompose(slotId: Any, content: () -> Unit): List<Measurable> { content(); return listOf(Measurable()) }
+            fun subcompose(p0: Any, p1: () -> Unit): List<Measurable> { p1(); return listOf(Measurable()) }
         """
         val renderer = """
             package io.github.anastaci1a.localica.ui.engine
