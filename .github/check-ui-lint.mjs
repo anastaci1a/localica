@@ -84,10 +84,16 @@ export function compare(before, after, stage, transfers = []) {
     for (const d of after) counts[d.rule].after++;
     const old = new Set(before.map(d => d.identity)), now = new Set(after.map(d => d.identity));
     const moved = new Set(transfers); requireThat(transfers.every(t => now.has(t)), 'Stale transfer entry');
-    const added = after.filter(d => !old.has(d.identity) && !moved.has(d.identity)), removed = before.filter(d => !now.has(d.identity));
+    let added = after.filter(d => !old.has(d.identity) && !moved.has(d.identity));
+    // The enclosing-symbol heuristic drifts when a local function is added, deleted or moved above an unchanged line:
+    // the same rule, file and code fingerprint (text, marker and ordinal) is the same incident, re-anchored.
+    const key = d => JSON.stringify([d.rule,d.path,d.codeSha256]), gone = new Map(), reanchored = [];
+    for (const d of before.filter(d => !now.has(d.identity))) gone.set(key(d), [...(gone.get(key(d)) ?? []), d]);
+    added = added.filter(d => { const same = gone.get(key(d)); if (!same?.length) return true; same.pop(); reanchored.push(d); return false; });
+    const removed = [...gone.values()].flat();
     for (const d of added) counts[d.rule].added++;
     for (const d of removed) counts[d.rule].removed++;
-    return {counts, added, removed, transferred: transfers.length, accepted: added.length === 0 && (stage < 6 || after.length === 0)};
+    return {counts, added, removed, reanchored: reanchored.length, transferred: transfers.length, accepted: added.length === 0 && (stage < 6 || after.length === 0)};
 }
 export function run(argv) {
     const command = argv.shift(); requireThat(['check','bootstrap'].includes(command), 'Unknown command');
@@ -178,7 +184,7 @@ export function run(argv) {
     const result = compare(before,after,stage,transfers);
     const report = {schemaVersion:1,command,baseSha:base,headSha:head,registrySha256:registry,
         baselineSha256:digest(blob(head,o['--baseline'])),manifestSha256:digest(manifestText),stage,completedSteps:meta.steps,
-        perRule:result.counts,unmatchedIdentities:result.added,transferredIdentities:result.transferred,escapeCounts:{before:base && exists(base,o['--escapes']) ? manifest(blob(base,o['--escapes']),meta,known.knownSteps).length : 0,after:escapes.length},
+        perRule:result.counts,unmatchedIdentities:result.added,transferredIdentities:result.transferred,reanchoredIdentities:result.reanchored,escapeCounts:{before:base && exists(base,o['--escapes']) ? manifest(blob(base,o['--escapes']),meta,known.knownSteps).length : 0,after:escapes.length},
         validationErrors:[],accepted:(command === 'bootstrap' || result.accepted) && escapes.length <= 5};
     fs.mkdirSync(o['--out'],{recursive:true}); fs.writeFileSync(path.join(o['--out'],'report.json'),JSON.stringify(report,null,2)+'\n');
     if (bootstrap) fs.writeFileSync(path.join(o['--out'],'bootstrap.json'),JSON.stringify(bootstrap,null,2)+'\n');
