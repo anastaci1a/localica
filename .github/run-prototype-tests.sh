@@ -42,7 +42,7 @@ selector=$(printf '%s\n' "${!seen[@]}" | LC_ALL=C sort | paste -sd, -)
 [[ ! -e prototype-evidence ]] || { echo 'Refusing stale prototype evidence' >&2; exit 2; }
 mkdir prototype-evidence
 printf '%s\n' "$selector" > prototype-evidence/selectors.txt
-python3 .github/test-evidence/source_methods.py --classes "$selector" --output prototype-evidence/expected-methods.json
+python3 .github/test-evidence/source_methods.py --classes "$selector" --api "$TEST_API" --output prototype-evidence/expected-methods.json
 instrument_selector=$selector
 required_selector=$(printf '%s\n' "$required" "$focus_regression" "$contrast_regression" | sed '/^$/d' | paste -sd, -)
 if [[ "$method_iteration" == true ]]; then
@@ -95,7 +95,12 @@ methods = {}
 source_bytes = (root/'expected-methods.json').read_bytes()
 source_inventory = json.loads(source_bytes)
 assert set(source_inventory['selectors']) == selected
+# #464: runtime_methods already excludes methods gated above this API (SdkSuppress); a gated
+# method must be absent below its API and present at or above it, like any other method.
 expected_methods = set(source_inventory['runtime_methods'])
+assert source_inventory.get('api') == int(observed['api']), 'Inventory API differs from the observed API'
+gates = source_inventory['gates']
+gated_classes = set(source_inventory['gated_absent_classes'])
 required = set(filter(None, sys.argv[2].split(',')))
 # AGP's observed XML serializes assumptions as <skipped />. Its EXISTING per-method
 # logcat carries the reason. Never infer that reason from a count or source predicate.
@@ -128,6 +133,10 @@ def qualify_skip(name, method, skipped, xml_file):
         expected = 'got: <false>, expected: is <true>'
     if identity == package+'PlayerArtworkOpticsTest#headerGlassKeepsTheCoverAcrossExpansionAndCollapse' and api == '26':
         expected = 'SDK <33 has cached Legacy glass rather than live Modern sampling'
+    assume_gate = gates.get(identity, {}).get('assume_min_sdk', 0)
+    assume_gated = expected is None and api.isdigit() and int(api) < assume_gate
+    if assume_gated:
+        expected = ''  # replaced by the single observed reason below
     if expected is None or api not in ('26', '36'):
         raise ValueError('Unqualified skipped identity/API: '+identity+' API'+api)
     logs = sorted(pathlib.Path('app/build/outputs/androidTest-results').rglob('logcat-'+name+'-'+method+'.txt'))
@@ -138,6 +147,8 @@ def qualify_skip(name, method, skipped, xml_file):
     if text.count('TestRunner: started: '+marker) != 1 or text.count('TestRunner: assumption failed: '+marker) != 1:
         raise ValueError('Assumption log lacks unique matching method boundaries: '+identity)
     reasons = re.findall(r'TestRunner: org\.junit\.AssumptionViolatedException: ([^\r\n]*)', text)
+    if assume_gated and len(reasons) == 1:
+        expected = reasons[0]
     if reasons != [expected]:
         raise ValueError('Missing, ambiguous or wrong observed skip reason: '+identity)
     if sdk33_line is not None:
@@ -159,7 +170,8 @@ def qualify_skip(name, method, skipped, xml_file):
         raise ValueError('Contradictory XML assumption reason: '+identity)
     qualified_skips.append({'id': identity, 'api': api, 'reason': reasons[0], 'evidence': str(logs[0]),
         'evidence_sha256': hashlib.sha256(logs[0].read_bytes()).hexdigest(), 'xml': str(xml_file),
-        'qualification': ('Observed API26 SDK>=33 guard; shader path not exercised and API36 must execute'
+        'qualification': ('Source assumeTrue(SDK_INT >= '+str(assume_gate)+') above API'+api+'; skip is not a pass'
+                          if assume_gated else 'Observed API26 SDK>=33 guard; shader path not exercised and API36 must execute'
                           if sdk33_line is not None else 'Observed assumption only; not a passed profile or optical proof')})
 for file in files:
     tree = ET.parse(file)
@@ -186,5 +198,7 @@ assert set(methods) == expected_methods, 'Missing or extra source-declared metho
 assert all(counts[c]['skipped'] == 0 for c in required), 'Required regression methods cannot skip'
 result = {'qualified_skips': qualified_skips, 'methods': methods, 'source_inventory_sha256': hashlib.sha256(source_bytes).hexdigest(), 'required_selectors': sorted(required), 'schema_version': 1, 'sha': observed['sha'], 'api': observed['api'], 'selectors': sorted(selected), 'counts': counts, 'xml_files': [str(p) for p in files], 'release_certified': False}
 (root/'reconciled-tests.json').write_text(json.dumps(result, indent=2)+'\n')
-assert all(v['passed'] > 0 and v['failed'] == 0 and v['errors'] == 0 for v in counts.values()), 'Required class failed or had no passing tests'
+assert not (gated_classes & required), 'Required regression classes cannot be API-gated'
+assert all(v['failed'] == 0 and v['errors'] == 0 and (v['passed'] > 0 or (c in gated_classes and not any(v.values())))
+           for c, v in counts.items()), 'Required class failed or had no passing tests'
 PYXML

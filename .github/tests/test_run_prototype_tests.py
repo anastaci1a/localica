@@ -71,7 +71,7 @@ if mode=='exit7': sys.exit(7)
 if mode=='silent': sys.exit(0)
 if mode=='observed': print(classes[0]+' > regression[emulator-5554 - 16] FAILED',flush=True)
 root=pathlib.Path('app/build/outputs/androidTest-results/connected/debug');root.mkdir(parents=True,exist_ok=True)
-for i,selector in enumerate(classes):
+for i,selector in enumerate(os.environ['CASES'].split(',') if os.environ.get('CASES') else classes):
     cls, _, method = selector.partition('#')
     method = method or 'regression'
     if mode=='missing-class' and i==1: continue
@@ -401,6 +401,81 @@ p=pathlib.Path(sys.argv[sys.argv.index('--state-dir')+1]);p.mkdir();(p/'complete
         self.run_case(**self.skip_source(cls,method),TEST_API='26',SKIP_REASON='got: <false>, expected: is <true>')
         evidence=json.loads((self.root/'prototype-evidence/reconciled-tests.json').read_text())
         self.assertEqual('got: <false>, expected: is <true>',evidence['qualified_skips'][0]['reason'])
+
+    # #464: the expected inventory follows the same SdkSuppress/assumeTrue API gates as the runner.
+    PKG='io.github.anastaci1a.localica.'
+    GATE='@androidx.test.filters.SdkSuppress(minSdkVersion = 33)'
+
+    def gated_source(self, name, body, prefix=''):
+        cls=self.PKG+name
+        with (self.root/'.github/prototype-risk-classes.txt').open('a') as stream:
+            stream.write(cls+'\n')
+        (self.root/('app/src/androidTest/java/'+cls.replace('.','/')+'.kt')).write_text(
+            'package io.github.anastaci1a.localica\n'+prefix+'class '+name+' { '+body+' }\n')
+        return cls
+
+    def cases(self, *extra):
+        return ','.join([c+'#regression' for c in (REQUIRED,FOCUS,CONTRAST)]+list(extra))
+
+    def mixed(self):
+        cls=self.gated_source('GatedMixedTest', '@org.junit.Test fun plain() {} '+self.GATE+' @org.junit.Test fun gated() {} '
+            '@org.junit.Test '+self.GATE+' fun gatedAfter() {}')
+        return cls
+
+    def rerun(self, *args, **env):
+        for stale in ('prototype-evidence', 'app/build/outputs/androidTest-results', 'lifecycle'):
+            target = self.root/stale
+            if target.is_dir(): shutil.rmtree(target)
+            elif target.exists(): target.unlink()
+        return self.run_case(*args, **env)
+
+    def test_api26_expects_sdk_gated_methods_absent_and_passes(self):
+        cls=self.mixed()
+        self.run_case(AFFECTED_CLASSES=cls, TEST_API='26', CASES=self.cases(cls+'#plain'))
+        evidence=json.loads((self.root/'prototype-evidence/reconciled-tests.json').read_text())
+        self.assertEqual({'passed':1,'failed':0,'errors':0,'skipped':0}, evidence['counts'][cls])
+        inventory=json.loads((self.root/'prototype-evidence/expected-methods.json').read_text())
+        self.assertEqual([cls+'#gated',cls+'#gatedAfter'], inventory['gated_absent_methods'])
+
+    def test_api36_still_requires_sdk_gated_methods(self):
+        cls=self.mixed()
+        self.run_case(AFFECTED_CLASSES=cls, TEST_API='36', CASES=self.cases(cls+'#plain',cls+'#gated',cls+'#gatedAfter'))
+        self.rerun(1, AFFECTED_CLASSES=cls, TEST_API='36', CASES=self.cases(cls+'#plain',cls+'#gated'))
+
+    def test_api26_rejects_a_gated_method_that_ran_anyway(self):
+        cls=self.mixed()
+        self.run_case(1, AFFECTED_CLASSES=cls, TEST_API='26', CASES=self.cases(cls+'#plain',cls+'#gated'))
+
+    def test_api26_rejects_a_missing_ungated_method(self):
+        cls=self.mixed()
+        self.run_case(1, AFFECTED_CLASSES=cls, TEST_API='26', CASES=self.cases())
+
+    def test_class_level_gate_expects_the_whole_class_absent_below_its_api(self):
+        cls=self.gated_source('GatedWholeTest', '@org.junit.Test fun one() {} @org.junit.Test fun two() {}', self.GATE+'\n')
+        self.run_case(AFFECTED_CLASSES=cls, TEST_API='26', CASES=self.cases())
+        self.rerun(AFFECTED_CLASSES=cls, TEST_API='36', CASES=self.cases(cls+'#one',cls+'#two'))
+        self.rerun(1, AFFECTED_CLASSES=cls, TEST_API='36', CASES=self.cases())
+        self.rerun(1, AFFECTED_CLASSES=cls, TEST_API='26', CASES=self.cases(cls+'#one'))
+
+    def assume_gated(self, name='AssumeGatedTest'):
+        cls=self.gated_source(name, '@org.junit.Test fun regression() {} @org.junit.Test fun gatedByAssume() { '
+            'org.junit.Assume.assumeTrue(android.os.Build.VERSION.SDK_INT >= 33)\n val x = 1 }')
+        return dict(AFFECTED_CLASSES=cls, SKIP_CLASS=cls, SKIP_METHOD='gatedByAssume')
+
+    def test_assume_gated_skip_below_its_api_is_qualified_without_an_allow_list_entry(self):
+        env=self.assume_gated()
+        self.run_case(TEST_API='26', SKIP_REASON='got: <false>, expected: is <true>', **env)
+        evidence=json.loads((self.root/'prototype-evidence/reconciled-tests.json').read_text())
+        self.assertEqual('skipped', evidence['methods'][env['SKIP_CLASS']+'#gatedByAssume'])
+        self.assertEqual(1, len(evidence['qualified_skips']))
+
+    def test_assume_gated_skip_at_or_above_its_api_is_rejected(self):
+        self.run_case(1, TEST_API='36', SKIP_REASON='got: <false>, expected: is <true>', **self.assume_gated())
+
+    def test_ungated_skip_is_still_rejected(self):
+        cls=self.gated_source('PlainSkipTest', '@org.junit.Test fun regression() {} @org.junit.Test fun skipsAnyway() {}')
+        self.run_case(1, TEST_API='26', AFFECTED_CLASSES=cls, SKIP_CLASS=cls, SKIP_METHOD='skipsAnyway',
+                      SKIP_REASON='got: <false>, expected: is <true>')
 
     def selection_sdk_skip(self, method, line, **overrides):
         cls='io.github.anastaci1a.localica.SelectionLensTest'
