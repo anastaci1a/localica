@@ -31,6 +31,7 @@ class SplitPillShapeTest {
             // Out, a regrab at the neck, back out and home: D17's phases plus the reversal; the fast tap starts below one height per half.
             for(q in listOf(.1f,.25f,.4f,.5f,.75f,1f,.6f,.5f,.45f,.3f,.1f,.0001f,0f,.4f,1f)) {
                 follow(q); assertEquals("One identity through split and rejoin (p=$q)",ids,shape.slotIds())
+                val published=shape.outline(); follow(q); assertSame("Re-following the same phase publishes nothing (no layout feedback loop)",published,shape.outline())
                 assertEquals("The followed phase owns all motion: the shape keeps no frame loop awake (p=$q)",0,h.clock.activeCount)
                 for(scale in listOf(1f,.5f)) {
                     val s=size(q,reveal)*scale; val actual=splitPillOptics(pill.bodies(s),s,q); val expected=legacyOptics(s,q)
