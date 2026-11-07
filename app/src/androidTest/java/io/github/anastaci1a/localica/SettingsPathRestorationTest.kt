@@ -126,7 +126,7 @@ class SettingsPathRestorationTest {
         compose.onNodeWithTag("pack-icon-tab.home").assertExists()
         repeat(3) { compose.onNodeWithContentDescription("Back from settings").performClick() }
         compose.onNodeWithText("Search settings").performTextInput("Icon packs")
-        compose.onNodeWithText("Icon packs", substring = false).performClick()
+        compose.onNode(hasText("Icon packs", substring = false) and !hasSetTextAction()).performClick()
         compose.onNodeWithContentDescription("Back from settings").performClick()
         compose.onNodeWithText("Interface", substring = false).assertIsDisplayed()
     }
