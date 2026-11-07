@@ -26,6 +26,14 @@ name: Prototype (not release certified)
         required: false
         default: ''
         type: string
+      runner:
+        description: Where the focused emulator jobs run; self-hosted is the owner's locked-down JIT runner (#592)
+        required: false
+        default: hosted
+        type: choice
+        options:
+        - hosted
+        - self-hosted
   workflow_call:
     inputs:
       repeat:
@@ -47,6 +55,10 @@ name: Prototype (not release certified)
       known_issues:
         required: false
         default: ''
+        type: string
+      runner:
+        required: false
+        default: hosted
         type: string
     secrets:
       ANDROID_DEBUG_KEYSTORE:
@@ -123,7 +135,11 @@ jobs:
           prototype-runner-environment.txt
     name: Prototype build, unit tests and lint
   focused_26:
-    runs-on: ubuntu-24.04
+    # runner=self-hosted (#592): the owner's locked-down single-job JIT runner, labelled with this
+    # run id. Only an owner workflow_dispatch of this workflow may use it; anything else is skipped,
+    # never rerouted to a hosted runner. The runner's job-started hook repeats every check.
+    if: ${{ inputs.runner != 'self-hosted' || (github.event_name == 'workflow_dispatch' && github.repository == 'anastaci1a/localica' && github.actor == 'anastaci1a' && github.triggering_actor == 'anastaci1a' && startsWith(github.workflow_ref, 'anastaci1a/localica/.github/workflows/prototype.yml@refs/heads/')) }}
+    runs-on: ${{ inputs.runner == 'self-hosted' && fromJSON(format('["self-hosted","Linux","X64","localica-jit","ljit-{0}"]', github.run_id)) || 'ubuntu-24.04' }}
     # Repeated proofs retain all selected methods and stop on their first failure;
     # otherwise capacity for the complete selected gate, not a throughput optimization.
     timeout-minutes: ${{ inputs.repeat_methods != '' && 60 || inputs.repeat > 1 && 360 || 35 }}
@@ -139,6 +155,8 @@ jobs:
         distribution: temurin
         java-version: '17'
     - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a
+      # The self-hosted image carries a read-only dependency cache (GRADLE_RO_DEP_CACHE).
+      if: inputs.runner != 'self-hosted'
     - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
       with:
         node-version: '24'
@@ -147,25 +165,45 @@ jobs:
     - name: Record runner and toolchain identity
       run: bash .github/test-evidence/environment.sh | tee prototype-runner-environment.txt
     - name: Enable emulator acceleration
+      if: inputs.runner != 'self-hosted'
       run: |
         echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
         sudo udevadm control --reload-rules
         sudo udevadm trigger --name-match=kvm
     - name: Make room for emulator userdata
+      if: inputs.runner != 'self-hosted'
       run: |
         # This Android job does not use the runner's preinstalled .NET SDKs.
         sudo rm -rf /usr/share/dotnet
         df -h "$HOME"
     - name: Compile instrumentation APKs before starting emulator
       run: ./gradlew assembleDebug assembleDebugAndroidTest --no-daemon --max-workers=2
+    - name: Run on a disposable emulator (self-hosted JIT runner)
+      if: ${{ inputs.runner == 'self-hosted' }}
+      env:
+        EMULATOR_API: '26'
+        EMULATOR_TARGET: google_apis
+        EMULATOR_PROFILE: pixel_2
+        EMULATOR_OPTIONS: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -memory 3072 -show-kernel -feature -GLDMA
+        EMULATOR_DISABLE_ANIMATIONS: 'true'
+        EMULATOR_SCRIPT: |
+          adb shell wm size reset
+          adb shell wm density reset
+          python3 .github/emulator-readiness.py --normalize-navigation
+          bash .github/test-evidence/environment.sh >> prototype-runner-environment.txt
+          bash .github/run-prototype-tests.sh
+      run: bash .github/local/with-emulator.sh
     - name: Prepare the verified emulator SDK
+      if: inputs.runner != 'self-hosted'
       uses: ./.github/actions/emulator-sdk-cache
     - name: Restore the exact SDK system image revision
       id: emulator-image-cache
+      if: inputs.runner != 'self-hosted'
       uses: ./.github/actions/system-image-cache
       with:
         api: 26
     - uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
+      if: inputs.runner != 'self-hosted'
       with:
         api-level: 26
         target: google_apis
@@ -180,7 +218,7 @@ jobs:
           bash .github/test-evidence/environment.sh >> prototype-runner-environment.txt
           bash .github/run-prototype-tests.sh
     - name: Cache the installed SDK system image
-      if: always() && steps.emulator-image-cache.outputs.cache-hit != 'true'
+      if: always() && steps.emulator-image-cache.outputs.cache-hit != 'true' && inputs.runner != 'self-hosted'
       uses: ./.github/actions/system-image-cache
       with:
         api: 26
@@ -200,7 +238,7 @@ jobs:
         path: /tmp/android-runner/emu-crash-*/
         if-no-files-found: warn
     - name: Capture host diagnostics on emulator failure
-      if: failure()
+      if: failure() && inputs.runner != 'self-hosted'
       run: |
         free -h
         df -h
@@ -302,8 +340,9 @@ jobs:
     name: Prototype preserved-data compatibility API 26
   focused_36:
     needs: focused_26
-    if: ${{ !cancelled() }}
-    runs-on: ubuntu-24.04
+    # runner=self-hosted (#592): see focused_26; the same guard, never rerouted.
+    if: ${{ !cancelled() && (inputs.runner != 'self-hosted' || (github.event_name == 'workflow_dispatch' && github.repository == 'anastaci1a/localica' && github.actor == 'anastaci1a' && github.triggering_actor == 'anastaci1a' && startsWith(github.workflow_ref, 'anastaci1a/localica/.github/workflows/prototype.yml@refs/heads/'))) }}
+    runs-on: ${{ inputs.runner == 'self-hosted' && fromJSON(format('["self-hosted","Linux","X64","localica-jit","ljit-{0}"]', github.run_id)) || 'ubuntu-24.04' }}
     # Repeated proofs retain all selected methods and stop on their first failure;
     # otherwise capacity for the complete selected gate, not a throughput optimization.
     timeout-minutes: ${{ inputs.repeat_methods != '' && 60 || inputs.repeat > 1 && 360 || 35 }}
@@ -319,6 +358,8 @@ jobs:
         distribution: temurin
         java-version: '17'
     - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a
+      # The self-hosted image carries a read-only dependency cache (GRADLE_RO_DEP_CACHE).
+      if: inputs.runner != 'self-hosted'
     - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
       with:
         node-version: '24'
@@ -327,25 +368,45 @@ jobs:
     - name: Record runner and toolchain identity
       run: bash .github/test-evidence/environment.sh | tee prototype-runner-environment.txt
     - name: Enable emulator acceleration
+      if: inputs.runner != 'self-hosted'
       run: |
         echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
         sudo udevadm control --reload-rules
         sudo udevadm trigger --name-match=kvm
     - name: Make room for emulator userdata
+      if: inputs.runner != 'self-hosted'
       run: |
         # This Android job does not use the runner's preinstalled .NET SDKs.
         sudo rm -rf /usr/share/dotnet
         df -h "$HOME"
     - name: Compile instrumentation APKs before starting emulator
       run: ./gradlew assembleDebug assembleDebugAndroidTest --no-daemon --max-workers=2
+    - name: Run on a disposable emulator (self-hosted JIT runner)
+      if: ${{ inputs.runner == 'self-hosted' }}
+      env:
+        EMULATOR_API: '36'
+        EMULATOR_TARGET: default
+        EMULATOR_PROFILE: pixel_2
+        EMULATOR_OPTIONS: -no-window -gpu lavapipe -no-snapshot -noaudio -no-boot-anim -memory 3072 -show-kernel
+        EMULATOR_DISABLE_ANIMATIONS: 'false'
+        EMULATOR_SCRIPT: |
+          adb shell wm size 720x1280
+          adb shell wm density 280
+          python3 .github/emulator-readiness.py --normalize-navigation
+          bash .github/test-evidence/environment.sh >> prototype-runner-environment.txt
+          bash .github/run-prototype-tests.sh
+      run: bash .github/local/with-emulator.sh
     - name: Prepare the verified emulator SDK
+      if: inputs.runner != 'self-hosted'
       uses: ./.github/actions/emulator-sdk-cache
     - name: Restore the exact SDK system image revision
       id: emulator-image-cache
+      if: inputs.runner != 'self-hosted'
       uses: ./.github/actions/system-image-cache
       with:
         api: 36
     - uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
+      if: inputs.runner != 'self-hosted'
       with:
         api-level: 36
         target: default
@@ -360,7 +421,7 @@ jobs:
           bash .github/test-evidence/environment.sh >> prototype-runner-environment.txt
           bash .github/run-prototype-tests.sh
     - name: Cache the installed SDK system image
-      if: always() && steps.emulator-image-cache.outputs.cache-hit != 'true'
+      if: always() && steps.emulator-image-cache.outputs.cache-hit != 'true' && inputs.runner != 'self-hosted'
       uses: ./.github/actions/system-image-cache
       with:
         api: 36
@@ -380,7 +441,7 @@ jobs:
         path: /tmp/android-runner/emu-crash-*/
         if-no-files-found: warn
     - name: Capture host diagnostics on emulator failure
-      if: failure()
+      if: failure() && inputs.runner != 'self-hosted'
       run: |
         free -h
         df -h

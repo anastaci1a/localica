@@ -291,7 +291,8 @@ class WorkflowTests(unittest.TestCase):
                    'focused_36': 'focused_26'}
         for job, parent in parents.items():
             self.assertEqual(parent, jobs[job]['needs'])
-            self.assertEqual('${{ !cancelled() }}', jobs[job]['if'])
+            # focused_36 adds the self-hosted owner guard (#592) after the same status condition.
+            self.assertTrue(jobs[job]['if'] == '${{ !cancelled() }}' or jobs[job]['if'].startswith('${{ !cancelled() && ('), jobs[job]['if'])
         names = set(jobs) - {'evidence'}
         self.assertEqual({'build', 'focused_26', 'focused_36', 'compatibility_26', 'compatibility_36'}, names)
 
