@@ -88,6 +88,9 @@ def expected_for(root, api):
         'GlassOpticsTest': [
             ('changingDepthBendsARecordedGridAndKeepsTheOutsideUntouched', 33),
         ],
+        'GlassToneShaderParityTest': [
+            ('shaderMatchesKotlinAtSamplePoints', 33),
+        ],
         'GlassReadabilityTest': [
             ('entireGlassUsesTheBoundedCurveWithoutTintingItsForeground', 33),
         ],

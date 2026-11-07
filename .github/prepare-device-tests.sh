@@ -63,8 +63,10 @@ localica_guard_exit() {
   exit "$result"
 }
 localica_guard_prepare() {
-  # No mutation on local/shared devices; this is the hosted native runner only.
-  [[ -v GITHUB_ACTIONS && "$GITHUB_ACTIONS" == true && -v RUNNER_ENVIRONMENT && "$RUNNER_ENVIRONMENT" == github-hosted ]] || return 0
+  # No mutation on local/shared devices: only the hosted native runner or the disposable
+  # emulator of the locked-down single-job self-hosted JIT runner image (#592).
+  [[ -v GITHUB_ACTIONS && "$GITHUB_ACTIONS" == true && -v RUNNER_ENVIRONMENT ]] || return 0
+  [[ "$RUNNER_ENVIRONMENT" == github-hosted || ( "$RUNNER_ENVIRONMENT" == self-hosted && "${LOCALICA_JIT_RUNNER:-}" == 1 && "${LOCALICA_EPHEMERAL_RUNNER:-}" == localica-kvm ) ]] || return 0
   LOCALICA_GUARD_SERIAL=emulator-5554
   if [[ -v ANDROID_SERIAL && -n "$ANDROID_SERIAL" ]]; then LOCALICA_GUARD_SERIAL=$ANDROID_SERIAL; fi
   [[ "$LOCALICA_GUARD_SERIAL" =~ ^emulator-[0-9]+$ ]] || return 2
@@ -117,7 +119,8 @@ focused_error_dialog() {
 }
 guard_error_dialogs() {
   local lane=$1 setting ns key value found
-  [[ ${GITHUB_ACTIONS:-} == true && ${RUNNER_ENVIRONMENT:-} == github-hosted ]] || return 0
+  [[ ${GITHUB_ACTIONS:-} == true ]] || return 0
+  [[ ${RUNNER_ENVIRONMENT:-} == github-hosted || ( ${RUNNER_ENVIRONMENT:-} == self-hosted && ${LOCALICA_JIT_RUNNER:-} == 1 && ${LOCALICA_EPHEMERAL_RUNNER:-} == localica-kvm ) ]] || return 0
   [[ $(dialog_adb shell getprop ro.kernel.qemu 2>/dev/null | tr -d '\r') == 1 ]] || return 0
   if [[ -z "$dialogs_ready" ]]; then
     dialogs_ready=yes
