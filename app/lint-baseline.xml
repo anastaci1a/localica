@@ -1075,7 +1075,7 @@
         errorLine2="    ~~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerBackdrop.kt"
-            line="138"
+            line="121"
             column="5"/>
     </issue>
 
@@ -13692,7 +13692,7 @@
         errorLine2="                       ~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerBackdrop.kt"
-            line="153"
+            line="136"
             column="24"/>
     </issue>
 
@@ -17905,7 +17905,7 @@
         errorLine2="                                     ~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerBackdrop.kt"
-            line="137"
+            line="120"
             column="38"/>
     </issue>
 
@@ -17916,7 +17916,7 @@
         errorLine2="                 ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerBackdrop.kt"
-            line="139"
+            line="122"
             column="18"/>
     </issue>
 
@@ -17927,7 +17927,7 @@
         errorLine2="                 ~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerBackdrop.kt"
-            line="140"
+            line="123"
             column="18"/>
     </issue>
 
@@ -17938,7 +17938,7 @@
         errorLine2="                               ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerBackdrop.kt"
-            line="140"
+            line="123"
             column="32"/>
     </issue>
 
@@ -17949,7 +17949,7 @@
         errorLine2="                                                   ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/PlayerBackdrop.kt"
-            line="148"
+            line="131"
             column="52"/>
     </issue>
 
