@@ -28,8 +28,13 @@ import kotlin.math.exp
 
 @Composable
 internal fun <T : Any, P> BoxScope.KeyedDragOverlay(state: KeyedDragState<T, P>, reducedMotion: Boolean,
-    countDescription: (Int) -> String, cancelBottomMargin: Dp = 20.dp, content: @Composable BoxScope.(T, P) -> Unit) {
+    countDescription: (Int) -> String, cancelBottomMargin: Dp = 20.dp,
+    liftInk: (P) -> androidx.compose.ui.graphics.Color = { androidx.compose.ui.graphics.Color.Unspecified },
+    content: @Composable BoxScope.(T, P) -> Unit) {
     val drag = state.drag ?: return
+    // The overlay may be hosted outside its source's theming (#553). The lift glow or shadow follows
+    // the ink captured with the presentation, so drag start continues the selection's lift.
+    val liftStyle = rememberLiftShadow(liftInk(drag.presentation))
     val density = LocalDensity.current
     val haptics = rememberControlHaptics()
     val cancelMotion = key(drag) { rememberFloatingControlMotion(!drag.dropping, reducedMotion) }
@@ -110,7 +115,7 @@ internal fun <T : Any, P> BoxScope.KeyedDragOverlay(state: KeyedDragState<T, P>,
         return (initial + (1f - initial) * flightProgress()) *
             (if (drag.committed) 1f - drag.handoff.value.coerceIn(0f, 1f) else 1f)
     }
-    HoverDragUnderlay({ drag.moving.mapNotNull { frames[state.keyOf(it)] } }, backing, Modifier.matchParentSize().zIndex(2f))
+    HoverDragUnderlay({ drag.moving.mapNotNull { frames[state.keyOf(it)] } }, backing, liftStyle, Modifier.matchParentSize().zIndex(2f))
     val cards = remember(drag, lifted, drag.destinations) { drag.moving.withIndex().filter { (index, item) -> index < 3 ||
         (!lifted && state.keyOf(item) in drag.initialBounds) || (drag.dropping && state.keyOf(item) in drag.destinations.orEmpty()) } }
     var previousPane = backing
@@ -191,7 +196,7 @@ internal fun <T : Any, P> BoxScope.KeyedDragOverlay(state: KeyedDragState<T, P>,
                     layout(width, height) { child.place(0, 0) }
                 }
                 .testTag(if (index == 0) "drag-stack" else "drag-card-$itemKey"),
-                frame, paneBacking, stackShadow = { flightProgress() * (1f - if (drag.dropping) drag.landing.value else 0f) },
+                frame, paneBacking, liftStyle, stackShadow = { flightProgress() * (1f - if (drag.dropping) drag.landing.value else 0f) },
                 // Complementary source-over fades expose the backdrop at mid-handoff.
                 // Keep the outgoing foreground opaque above the warming destination row.
                 contentAlpha = { if (drag.dropping && destination != null) alpha else frame.alpha() }) {

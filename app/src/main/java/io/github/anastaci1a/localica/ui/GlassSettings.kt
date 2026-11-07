@@ -13,6 +13,8 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.navigation.GlassAppearance
+import io.github.anastaci1a.localica.navigation.GlassContrastWeightMax
+import io.github.anastaci1a.localica.navigation.GlassContrastWeightMin
 import io.github.anastaci1a.localica.navigation.GlassRendererMode
 import io.github.anastaci1a.localica.navigation.LiftShadowMax
 import io.github.anastaci1a.localica.navigation.LiftShadowMin
@@ -30,6 +32,17 @@ internal val LocalGlassAppearance = compositionLocalOf { GlassAppearance() }
  * render at the same strength; a given track position now maps to a lower strength between the endpoints.
  */
 internal const val GlassShadowStrengthCurve = 2.2f
+
+/**
+ * Brightness weighting slider (#633): 1–8 with the low end given more travel. The curve puts the default 2 exactly a
+ * third of the way along the track (7·(1/3)^curve = 1), and 60 intervals keep the 20 steps that 1–2 had before #633.
+ */
+internal val GlassContrastWeightCurve = (kotlin.math.ln(7.0) / kotlin.math.ln(3.0)).toFloat()
+internal const val GlassContrastWeightSteps = 59
+
+/** Slider weights are stored to three decimals, so the default's step stores exactly 2 (the shader's x² path). */
+internal fun contrastWeightFromSlider(value: Float): Float =
+    (Math.round(value * 1000f) / 1000f).coerceIn(GlassContrastWeightMin, GlassContrastWeightMax)
 
 /** #502's curve, kept as the baseline for the #540 granularity test. */
 internal const val GlassShadowStrengthCurve502 = 1.8f
@@ -73,9 +86,13 @@ internal fun GlassSettingsControls(value: GlassAppearance, onChange: (GlassAppea
     SettingsHeading("Adaptive contrast")
     Text("Compress background brightness away from the page’s icon color.", style = MaterialTheme.typography.bodySmall)
     GlassSlider("Brightness trim", value.contrast, "Off", "50%", maximum = .5f) { onChange(value.copy(contrast = it)) }
-    SliderPreference("Brightness weighting", value.contrastWeight, { onChange(value.copy(contrastWeight = it)) },
-        Modifier.semantics { contentDescription = "Brightness weighting" }, valueRange = 1f..2f, steps = 19,
-        low = "Even", high = "Highlights / shadows")
+    SliderPreference("Brightness weighting · ${"%.2f".format(java.util.Locale.ROOT, value.contrastWeight)}", value.contrastWeight,
+        { onChange(value.copy(contrastWeight = contrastWeightFromSlider(it))) },
+        Modifier.semantics { contentDescription = "Brightness weighting" },
+        valueRange = GlassContrastWeightMin..GlassContrastWeightMax, steps = GlassContrastWeightSteps,
+        low = "Even", high = "Highlights / shadows", curve = GlassContrastWeightCurve,
+        description = "Higher weighting focuses the trim on the brightest highlights or deepest shadows. " +
+            "At high weighting the trim eases off where needed, so brighter areas never end up darker than dimmer ones.")
     SettingsHeading("Shape and motion")
     Text("Hold the preview to flatten it; release to let it rebound.", style = MaterialTheme.typography.bodySmall)
     SliderPreference("Shape damping · ${value.shapeDamping.roundToInt()}", value.shapeDamping, { onChange(value.copy(shapeDamping = it)) },

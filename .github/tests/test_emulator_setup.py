@@ -180,17 +180,37 @@ class ReadinessTests(unittest.TestCase):
         before = result['navigation_normalization']
         self.assertEqual([(0, 1154, 720, 1280)], before['before_navigation']['frames'])
         self.assertIn('Not Responding', before['before_focus'][0])
-        self.assertEqual([1, 2, 3], [s['stable_samples'] for s in result['samples']])
+        self.assertEqual([0, 0, 1, 2, 3], [s['stable_samples'] for s in result['samples']])
+        self.assertEqual([1, 2, 3], [s['pre_reset_stable_samples'] for s in result['samples'][:3]])
         self.assertEqual(84, result['samples'][-1]['navigation']['expected_bottom_inset'])
         stop = device.calls.index(('shell', 'am', 'force-stop', 'com.android.launcher3'))
         launch = next(i for i, args in enumerate(device.calls) if args[:3] == ('shell', 'am', 'start'))
         self.assertLess(stop, launch)
 
+    def test_launcher_reset_waits_for_an_idle_display(self):
+        # #637: a force-stop during the first post-boot frames panicked goldfish_sync.
+        png = b'\x89PNG\r\n\x1a\n'
+        result, device, _ = self.run_gate(
+            [{'frame': png + b'one'}, {'frame': png + b'two'}, {}, {}, {}, {}, {}],
+            normalize_navigation=True)
+        self.assertTrue(result['ready'])
+        self.assertEqual(1, device.launcher_resets)
+        self.assertEqual([1, 1, 1, 2, 3], [s['pre_reset_stable_samples'] for s in result['samples'][:5]])
+        stop = device.calls.index(('shell', 'am', 'force-stop', 'com.android.launcher3'))
+        captures = [i for i, args in enumerate(device.calls) if args[:2] == ('exec-out', 'screencap')]
+        self.assertEqual(5, sum(i < stop for i in captures))
+        result, device, clock = self.run_gate(
+            [{'frame': png + bytes([n])} for n in range(8)], timeout=2, normalize_navigation=True)
+        self.assertFalse(result['ready'])
+        self.assertEqual(0, device.launcher_resets)
+        self.assertIsNone(result['navigation_normalization'])
+        self.assertEqual(2, clock.time)
+
     def test_navigation_change_resets_stable_frames_and_cannot_be_waived(self):
         result, device, _ = self.run_gate([
-            {'navigation_bottom': n} for n in (126, 84, 126, 84, 84, 84)], normalize_navigation=True)
+            {'navigation_bottom': n} for n in (126, 126, 126, 84, 126, 84, 84, 84)], normalize_navigation=True)
         self.assertTrue(result['ready'])
-        self.assertEqual([0, 1, 0, 1, 2, 3], [s['stable_samples'] for s in result['samples']])
+        self.assertEqual([0, 0, 0, 1, 0, 1, 2, 3], [s['stable_samples'] for s in result['samples']])
         self.assertEqual(1, device.launcher_resets)
         for state in ({'navigation_bottom': 126}, {'missing_navigation': True},
                       {'focus': 'Application Error: another.package'}):
@@ -271,7 +291,8 @@ class WorkflowTests(unittest.TestCase):
                    'focused_36': 'focused_26'}
         for job, parent in parents.items():
             self.assertEqual(parent, jobs[job]['needs'])
-            self.assertEqual('${{ !cancelled() }}', jobs[job]['if'])
+            # focused_36 adds the self-hosted owner guard (#592) after the same status condition.
+            self.assertTrue(jobs[job]['if'] == '${{ !cancelled() }}' or jobs[job]['if'].startswith('${{ !cancelled() && ('), jobs[job]['if'])
         names = set(jobs) - {'evidence'}
         self.assertEqual({'build', 'focused_26', 'focused_36', 'compatibility_26', 'compatibility_36'}, names)
 

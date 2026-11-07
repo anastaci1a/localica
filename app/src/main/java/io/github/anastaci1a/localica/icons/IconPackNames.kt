@@ -15,7 +15,7 @@ internal object IconPackNames {
         val file = entry.removePrefix("icons/")
         if ('/' in file || file.contains("..")) return null
         val extension = file.substringAfterLast('.', "").lowercase()
-        if (extension != "png" && extension != "webp") return null
+        if (extension !in setOf("svg", "png", "webp")) return null
         return file.substringBeforeLast('.').takeIf { it.isNotEmpty() }
     }
 
