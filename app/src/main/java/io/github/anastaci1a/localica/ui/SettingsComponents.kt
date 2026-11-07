@@ -40,7 +40,10 @@ internal fun <T : Any> SettingsNavigationPage(target: T, title: (T) -> String, o
                     Text(title(shown), Modifier.weight(1f), style = MaterialTheme.typography.titleLarge)
                     ActionIcon(AppIcon.ActionClose, "Close settings", onClick = onClose)
                 }
-                Column(Modifier.weight(1f)) { content(shown) }
+                // #655: flat rows on settings pages line up with the text inside glass links.
+                CompositionLocalProvider(LocalSettingsRowMetrics provides SettingsRowMetrics(inset = SettingsRowInset)) {
+                    Column(Modifier.weight(1f)) { content(shown) }
+                }
             }
         }
         }
@@ -55,8 +58,10 @@ internal fun SettingsLink(title: String, summary: String? = null, icon: AppIcon?
     val colors = ListItemDefaults.colors(containerColor = androidx.compose.ui.graphics.Color.Transparent)
     val headlineStyle = MaterialTheme.typography.bodyLarge
     val summaryStyle = MaterialTheme.typography.bodyMedium
+    // Captured here so the retained modal face keeps this page's icon slot.
+    val metrics = LocalSettingsRowMetrics.current
     @Composable fun Foreground(modifier: Modifier = Modifier) {
-        SettingsLinkFace(title, summary, icon, modifier, headlineStyle, summaryStyle, colors)
+        SettingsLinkFace(title, summary, icon, modifier, headlineStyle, summaryStyle, colors, metrics)
     }
     SideEffect { if (anchor != null) anchor.face = { Foreground() } }
     val opacity by animateControlStateFloat(if (enabled) 1f else .45f, enabled, "Settings link availability")
@@ -69,7 +74,8 @@ internal fun SettingsLink(title: String, summary: String? = null, icon: AppIcon?
 @Composable
 internal fun SettingsHeading(title: String) {
     Text(title, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary,
-        modifier = Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 4.dp).settingsRowPart(SettingsRowPart.Heading))
+        modifier = Modifier.fillMaxWidth().padding(start = LocalSettingsRowMetrics.current.textStart, top = 16.dp, bottom = 4.dp)
+            .settingsRowPart(SettingsRowPart.Heading))
 }
 
 @Composable
