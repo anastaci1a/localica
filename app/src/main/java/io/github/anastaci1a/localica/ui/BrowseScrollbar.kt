@@ -201,6 +201,8 @@ private fun ListScrollbar(state: Any, contentKey: Any, scrollable: () -> Boolean
 private object ScrollbarTapSharing : ModifierNodeElement<ScrollbarTapSharingNode>() {
     override fun create() = ScrollbarTapSharingNode()
     override fun update(node: ScrollbarTapSharingNode) = Unit
+    override fun equals(other: Any?) = this === other
+    override fun hashCode() = javaClass.hashCode()
     override fun InspectorInfo.inspectableProperties() { name = "scrollbarTapSharing" }
 }
 
