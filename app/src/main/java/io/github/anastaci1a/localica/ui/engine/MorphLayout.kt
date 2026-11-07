@@ -112,6 +112,7 @@ private fun ease(a: IntSize, b: IntSize, p: Float) = IntSize((a.width + (b.width
             val from = frames[0] ?: frames[1] ?: continue; val to = frames[1] ?: from
             val ink = slot.ink.takeIf { it[0] != it[1] && it.all { c -> c.isSpecified } }?.let { lerp(it[0], it[1], p) }
             layer.colorFilter = ink?.let { ColorFilter.tint(it) }
+            android.util.Log.i("MorphDiagnostics", "key=$slot p=$p sizes=${slot.sizes.toList()} drawn=${slot.drawn} layer=${layer.size} from=$from to=$to")
             val frame = sharedFrame(from, to, p); translate(frame.left, frame.top) { drawLayer(layer) }
         }
     }

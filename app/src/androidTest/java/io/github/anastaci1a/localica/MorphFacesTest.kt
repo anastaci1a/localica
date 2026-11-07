@@ -52,6 +52,8 @@ class MorphFacesTest {
         try {
             repeat(3) { round ->
                 compose.runOnIdle { expanded = !expanded }; repeat(3 + round) { compose.mainClock.advanceTimeByFrame() }
+                android.util.Log.i("MorphDiagnostics", "merged\n" + compose.onRoot().printToString())
+                android.util.Log.i("MorphDiagnostics", "unmerged\n" + compose.onRoot(useUnmergedTree = true).printToString())
                 compose.onAllNodesWithText("3 selected").assertCountEquals(1)
             }
             compose.mainClock.advanceTimeBy(2000)
@@ -76,7 +78,7 @@ class MorphFacesTest {
             repeat(40) { compose.mainClock.advanceTimeByFrame(); frames += mark() }
             val xs = frames.map { it.first }; val span = open - closed
             xs.zipWithNext().forEach { (a, b) ->
-                assertTrue("Monotone travel: $xs", b >= a - .75f)
+                assertTrue("Monotone travel: $xs; closedArea=$closedArea openArea=$openArea", b >= a - .75f)
                 assertTrue("No frame jump: $xs", b - a <= span * .4f)
             }
             assertTrue("Intermediate frames: $xs", xs.count { it > closed + span * .1f && it < open - span * .1f } >= 3)
