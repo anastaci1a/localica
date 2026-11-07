@@ -1026,9 +1026,9 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                     onPreview = { style = it }, onCommit = { style = it; preferences.write(route, it, preferences.overridden(route)) },
                     onAnchor = { zoomAnchor = it })
                 .testTag("browser-list"), contentPadding = PaddingValues(start = cellGeometry.gridInset.dp, end = cellGeometry.gridInset.dp,
-                    bottom = if (popupDismiss != null) 16.dp else maxOf(80.dp, obscuredInset +
+                    bottom = if (popupDismiss != null) 16.dp else obscuredInset +
                         maxOf(with(density) { returnControlHeight.toDp() } + floatingControlClearance,
-                            with(density) { actionControlHeight.toDp() }) + 16.dp))) {
+                            with(density) { actionControlHeight.toDp() }) + 16.dp)) {
                 item(key = "browser-notice", contentType = "notice", span = { GridItemSpan(maxLineSpan) }) {
                     // Grid gutters belong to tiles; full-span headers keep their viewport alignment.
                     Column(Modifier.requiredWidth(with(density) { viewportWidth.toDp() }).testTag("browse-full-span")
