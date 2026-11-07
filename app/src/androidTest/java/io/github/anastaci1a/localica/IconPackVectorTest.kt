@@ -90,15 +90,19 @@ class IconPackVectorTest {
     @Test fun groupTransformsAndViewBoxOriginsRenderLikeFlattenedGeometry() {
         val grouped = SvgIconParser.parse("""<svg viewBox="-2 -3 24 24"><g transform="translate(4 5) scale(.5) rotate(90)" fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke-opacity=".5"><path d="M0 0 L8 0 L8 4"/></g></svg>""".toByteArray()).toImageVector()
         val flattened = SvgIconParser.parse("""<svg viewBox="0 0 24 24"><path fill="none" stroke="black" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" stroke-opacity=".5" d="M6 8 L6 12 L4 12"/></svg>""".toByteArray()).toImageVector()
+        val wide = SvgIconParser.parse("""<svg viewBox="0 0 24 12"><path d="M2 2 H22 V10 H2 Z"/></svg>""".toByteArray()).toImageVector()
+        val centered = SvgIconParser.parse("""<svg viewBox="0 0 24 24"><path d="M2 8 H22 V16 H2 Z"/></svg>""".toByteArray()).toImageVector()
         val painters = mutableListOf<Painter>()
         compose.setContent {
             val a = packIconPainter(AppIcon.MenuPin, null, grouped)
             val b = packIconPainter(AppIcon.MenuPin, null, flattened)
-            SideEffect { painters.clear(); painters.addAll(listOf(a, b)) }
+            val c = packIconPainter(AppIcon.MenuPin, null, wide)
+            val d = packIconPainter(AppIcon.MenuPin, null, centered)
+            SideEffect { painters.clear(); painters.addAll(listOf(a, b, c, d)) }
         }
         compose.waitForIdle()
-        compose.runOnIdle { for (px in listOf(24, 48)) {
-            val a = render(painters[0], px, Color.Red); val b = render(painters[1], px, Color.Red)
+        compose.runOnIdle { for (pair in painters.chunked(2)) for (px in listOf(24, 48)) {
+            val a = render(pair[0], px, Color.Red); val b = render(pair[1], px, Color.Red)
             val delta = (0 until px).sumOf { y -> (0 until px).sumOf { x ->
                 kotlin.math.abs(android.graphics.Color.alpha(a.getPixel(x, y)) - android.graphics.Color.alpha(b.getPixel(x, y)))
             } }
