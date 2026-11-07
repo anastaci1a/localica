@@ -20,6 +20,17 @@ class CompositorRegistryTest {
     private val shown=SurfaceTarget(Stratum.Floating,1f,ShadowRole.Glass)
     private fun shares(node: SurfaceNode,planes: List<ShadowPlane>,stamp: FrameStamp)=planes.map { node.shareAt(it,stamp) }
 
+    /** Lead condition (4:50 AM): the host's draw-pass receipt writes no Compose snapshot state; the queued transfer starts at [ShadowPlane.admit] on the next frame. */
+    @Test fun drawReceiptWritesNoSnapshotStateAndAdmitsOnTheNextFrame() = EngineHarness(spec=geometry).use { h ->
+        val a=plane(h); val b=plane(h); val node=SurfaceNode(h.clock,"pill",shape(h),shown,a)
+        node.transfer(b,profile); assertTrue(node.waiting); assertEquals(0f,node.shadowOwnership.target)
+        val draw=androidx.compose.runtime.snapshots.Snapshot.takeMutableSnapshot()
+        val waiting=try { draw.enter { b.receipt() }.also { assertFalse("A draw receipt must not write snapshot state",draw.hasPendingChanges()) } } finally { draw.dispose() }
+        assertTrue(waiting); assertTrue(node.waiting); assertEquals(0f,node.shadowOwnership.target); assertEquals(1f,a.contributionAt(node,h.clock.stamp))
+        b.admit(); assertFalse(node.waiting); assertEquals(1f,node.shadowOwnership.target); assertEquals(1f,b.contributionAt(node,h.clock.stamp)); assertEquals(0f,a.contributionAt(node,h.clock.stamp))
+        assertFalse("Without a queued transfer nothing is posted",a.receipt())
+        node.dispose()
+    }
     @Test fun oneKeyOneNodeOnePlaneBinding() = EngineHarness(spec=geometry).use { h ->
         val a=plane(h); val b=plane(h); val s=shape(h)
         val node=SurfaceNode(h.clock,"pill",s,shown,a)

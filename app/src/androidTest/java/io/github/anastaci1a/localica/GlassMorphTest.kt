@@ -338,10 +338,12 @@ class GlassMorphTest {
         var visible by mutableStateOf(true)
         lateinit var popupView: android.view.View
         val outsideShadows = GlassShadowGroup()
-        compose.setContent { LocalicaTheme {
+        lateinit var outsidePlane: io.github.anastaci1a.localica.ui.engine.ShadowPlane
+        compose.setContent { LocalicaTheme { EngineRecord {
+            outsidePlane = io.github.anastaci1a.localica.ui.engine.rememberShadowPlane()
             CompositionLocalProvider(LocalGlassAppearance provides
                 io.github.anastaci1a.localica.navigation.GlassAppearance(shadowStrength = 1f),
-                LocalSurfaceShadows provides outsideShadows, LocalBottomShadows provides outsideShadows) {
+                LocalSurfaceShadows provides outsidePlane, LocalBottomShadows provides outsideShadows) {
                 GlassMorphPopup(true, rememberGlassAnchor(), {}, fitContent = false) {
                     popupView = androidx.compose.ui.platform.LocalView.current
                     Box(Modifier.fillMaxWidth().height(180.dp).background(Color.White).testTag("moving-shadow-scene")) {
@@ -356,7 +358,7 @@ class GlassMorphTest {
                     }
                 }
             }
-        } }
+        } } }
         fun darkness(left: Int): Float {
             val node = compose.onNodeWithTag("moving-shadow-scene")
             val stage = if (!visible) 2 else if (moved) 1 else 0
@@ -376,7 +378,7 @@ class GlassMorphTest {
             }
         }
         val original = darkness(45)
-        assertTrue("Modal descendants cannot join a shadow group in another window", outsideShadows.entries.isEmpty())
+        assertTrue("Modal descendants cannot join a shadow group in another window", outsideShadows.entries.isEmpty() && outsidePlane.casters.isEmpty())
         assertTrue("Control casts a visible shadow", original > .01f)
         compose.runOnIdle { moved = true }
         assertTrue("No shadow remains at the old location", darkness(45) < .002f)

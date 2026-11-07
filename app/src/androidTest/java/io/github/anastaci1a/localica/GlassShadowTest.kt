@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.LayoutDirection
 import io.github.anastaci1a.localica.ui.*
+import io.github.anastaci1a.localica.ui.engine.*
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -267,11 +268,11 @@ class GlassShadowTest {
         compose.setContent { LocalicaTheme {
             CompositionLocalProvider(LocalGlassAppearance provides
                 io.github.anastaci1a.localica.navigation.GlassAppearance(shadowStrength = 1f)) {
-                GlassShadowScope(Modifier.size(240.dp, 180.dp).background(Color.White).testTag("page-shadow")) {
+                EngineRecord { GlassShadowScope(Modifier.size(240.dp, 180.dp).background(Color.White).testTag("page-shadow")) {
                     Box(Modifier.padding(top = 40.dp).fillMaxWidth().height(48.dp).clipToBounds(), contentAlignment = Alignment.Center) {
                         LiquidGlassSurface(Modifier.size(100.dp, 48.dp)) {}
                     }
-                }
+                } }
             }
         } }
         val pixels = compose.onNodeWithTag("page-shadow").captureToImage().toPixelMap()

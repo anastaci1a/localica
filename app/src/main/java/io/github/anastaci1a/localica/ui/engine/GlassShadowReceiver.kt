@@ -1,4 +1,4 @@
-package io.github.anastaci1a.localica.ui
+package io.github.anastaci1a.localica.ui.engine
 
 import android.graphics.Bitmap
 import androidx.compose.ui.geometry.*

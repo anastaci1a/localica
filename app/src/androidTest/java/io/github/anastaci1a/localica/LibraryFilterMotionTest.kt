@@ -23,9 +23,9 @@ class LibraryFilterMotionTest {
     @Test fun selectionLeadsAndDeselectingRestoresConfiguredOrderThroughInterruptions() {
         val filters = listOf(LibraryFilter.Artists, LibraryFilter.Songs, LibraryFilter.Albums)
         var selected by mutableStateOf<MediaKind?>(null)
-        compose.setContent { LocalicaTheme {
+        compose.setContent { LocalicaTheme { EngineRecord {
             LibraryFilterBubbles(filters, selected, false, { selected = it }, {})
-        } }
+        } } }
         fun left(name: String) = compose.onNodeWithTag("filter-$name").fetchSemanticsNode().boundsInRoot.left
         val original = listOf(left("Artists"), left("Songs"), left("Albums"))
         compose.onNodeWithText("All").assertDoesNotExist()
@@ -55,7 +55,7 @@ class LibraryFilterMotionTest {
             CompositionLocalProvider(LocalDensity provides Density(density.density, 1.8f)) {
                 Column {
                     Box(Modifier.fillMaxWidth().testTag("filters-slot")) {
-                        LibraryFilterBubbles(listOf(LibraryFilter.Albums), null, true, {}, {})
+                        EngineRecord { LibraryFilterBubbles(listOf(LibraryFilter.Albums), null, true, {}, {}) }
                     }
                     Box(Modifier.fillMaxWidth().testTag("search-slot")) {
                         ListSearchPill("Search Albums", {}, Modifier.padding(horizontal = 12.dp, vertical = ListPillVerticalInset))

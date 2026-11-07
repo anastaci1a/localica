@@ -3,7 +3,7 @@ package io.github.anastaci1a.localica.ui.engine
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.RoundRect
 import io.github.anastaci1a.localica.navigation.InterfaceSettings
-import io.github.anastaci1a.localica.ui.glassShadowRingAlpha
+import io.github.anastaci1a.localica.ui.engine.glassShadowRingAlpha
 import io.github.anastaci1a.localica.ui.spec.*
 import org.junit.Assert.*
 import org.junit.Test

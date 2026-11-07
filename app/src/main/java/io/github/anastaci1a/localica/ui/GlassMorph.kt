@@ -50,6 +50,11 @@ import kotlinx.coroutines.job
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlin.math.roundToInt
+import io.github.anastaci1a.localica.ui.engine.GlassOriginWell
+import io.github.anastaci1a.localica.ui.engine.GlassShadowExclusion
+import io.github.anastaci1a.localica.ui.engine.GlassShadowReceiver
+import io.github.anastaci1a.localica.ui.engine.GlassShadowReceiverField
+import io.github.anastaci1a.localica.ui.engine.glassWellCaster
 
 /** The trigger stays in layout while its one visible surface moves into a modal window. */
 internal data class GlassOriginPresentation(val shape: GlassShape, val vertical: Boolean,
@@ -95,6 +100,7 @@ internal class GlassAnchor {
     var shadowInModal by mutableStateOf(false)
     // The shared shadow group its trigger casts into, if any.
     var shadowGroup: GlassShadowGroup? = null
+    var shadowPlane: io.github.anastaci1a.localica.ui.engine.ShadowPlane? = null
     var source: FrostedBackdrop? = null
     var face by mutableStateOf<(@Composable () -> Unit)?>(null)
     var depthScale = RaisedGlassDepthScale

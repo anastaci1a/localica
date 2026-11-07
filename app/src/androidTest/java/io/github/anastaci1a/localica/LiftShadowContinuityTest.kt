@@ -21,6 +21,7 @@ import androidx.compose.ui.test.*
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.navigation.GlassAppearance
 import io.github.anastaci1a.localica.ui.*
+import io.github.anastaci1a.localica.ui.engine.*
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test

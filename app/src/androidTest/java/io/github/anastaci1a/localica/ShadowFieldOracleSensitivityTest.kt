@@ -14,8 +14,8 @@ import androidx.compose.ui.graphics.drawscope.CanvasDrawScope
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
-import io.github.anastaci1a.localica.ui.GlassShadowGeometry
-import io.github.anastaci1a.localica.ui.glassShadows
+import io.github.anastaci1a.localica.ui.engine.GlassShadowGeometry
+import io.github.anastaci1a.localica.ui.engine.glassShadows
 import org.junit.Assert.*
 import org.junit.Test
 

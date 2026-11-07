@@ -59,8 +59,8 @@ internal fun HoverDragCard(modifier: Modifier, frame: HoverCardFrame, backing: F
         // into the list, while its cover and text stay opaque until the row is ready.
         Box(Modifier.matchParentSize().graphicsLayer { alpha = frame.alpha().coerceIn(0f, 1f) }.drawWithContent {
             val geometry = frame.geometry()
-            with(group.surface(listOf(0)).shadow) {
-                draw(listOf(geometry.lifted.contour to 1f), .22f * liftStyle.strength * stackShadow(),
+            with(group.surface(listOf(0))) {
+                drawShadow(listOf(geometry.lifted.contour to 1f), .22f * liftStyle.strength * stackShadow(),
                     liftStyle.spread, color = liftStyle.color)
             }
             drawHoverGroup(group, listOf(geometry), { _, _ -> 1f }, backing, location, Build.VERSION.SDK_INT >= 33,
