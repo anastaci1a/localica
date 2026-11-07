@@ -222,5 +222,7 @@ internal fun rememberArtworkSwipe(visit: String?, visual: PlayerVisual, previous
             }
         }
     }
-    return swipe to modifier
+    // An idle pointerInput node still wins hit testing over lower drawing layers.
+    // Remove it entirely when disabled so the visible lyrics receive real input.
+    return swipe to if (gestureEnabled && navigate != null) modifier else Modifier
 }
