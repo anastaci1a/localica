@@ -1,10 +1,10 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {xml,manifest,compare,rules,transferIds} from '../check-ui-lint.mjs';
-const incident = {rule:rules[0],identity:'old'};
+const incident = {rule:rules[0],path:'app/src/main/A.kt',codeSha256:'c',identity:'old'};
 test('new incident and equal-count substitution fail', () => {
-    assert.equal(compare([incident],[incident,{...incident,identity:'new'}],0).accepted,false);
-    assert.equal(compare([incident],[{...incident,identity:'new'}],0).accepted,false);
+    assert.equal(compare([incident],[incident,{...incident,codeSha256:'d',identity:'new'}],0).accepted,false);
+    assert.equal(compare([incident],[{...incident,codeSha256:'d',identity:'new'}],0).accepted,false);
 });
 test('unchanged identity with line relocation passes; closure rejects debt', () => {
     assert.equal(compare([incident],[{...incident,originalLine:150}],0).accepted,true);
@@ -79,4 +79,10 @@ test('itemized transfers admit only listed identities, reject stale and expired 
     assert.throws(() => compare([incident],[incident],0,[id]), /Stale transfer/);
     assert.throws(() => transferIds([entry],['U10.03'],['U10.03']), /expired/);
     assert.throws(() => transferIds([entry,entry],['U10.03'],[]), /Duplicate/);
+});
+test('an unchanged line whose enclosing-symbol anchor drifted is re-anchored, not added', () => {
+    const drifted = {...incident,fqn:'p.other',identity:'drifted'};
+    assert.equal(compare([incident],[drifted],0).accepted,true);
+    assert.equal(compare([incident],[drifted,{...drifted,identity:'second'}],0).accepted,false);
+    assert.equal(compare([incident],[{...drifted,rule:rules[1]}],0).accepted,false);
 });
