@@ -19,11 +19,13 @@ class ModalGestureCancellationTest {
 
     private class Contact {
         val events = mutableListOf<Int>()
+        var duringDispatch: ((Int) -> Unit)? = null
         val owner = ModalGestureScope(ModalGestureCoordinator(), null, CoroutineScope(Dispatchers.Main))
         private val original = Proxy.newProxyInstance(Window.Callback::class.java.classLoader,
             arrayOf(Window.Callback::class.java)) { _, method, args ->
             if (method.name == "dispatchTouchEvent") {
                 events += (args!![0] as MotionEvent).actionMasked
+                duringDispatch?.invoke(events.last())
                 true
             } else null
         } as Window.Callback
@@ -32,6 +34,36 @@ class ModalGestureCancellationTest {
         fun send(action: Int): Boolean {
             val event = MotionEvent.obtain(downTime, SystemClock.uptimeMillis(), action, 40f, 40f, 0)
             return try { callback.dispatchTouchEvent(event) } finally { event.recycle() }
+        }
+    }
+
+    @Test fun reentrantModalActivationDefersCancelUntilOriginalNativeDispatchReturns() {
+        instrumentation.runOnMainSync {
+            val contact = Contact()
+            contact.owner.registerCancellation(contact.callback::cancelContact)
+            var insideOriginalDispatch = false
+            var activated = false
+            contact.duringDispatch = { action ->
+                if (action == MotionEvent.ACTION_DOWN && !activated) {
+                    activated = true
+                    insideOriginalDispatch = true
+                    contact.owner.block(true)
+                    contact.owner.block(false)
+                    assertEquals("Opening and dismissing a modal must not re-enter native dispatch",
+                        listOf(MotionEvent.ACTION_DOWN), contact.events)
+                    insideOriginalDispatch = false
+                } else if (action == MotionEvent.ACTION_CANCEL) {
+                    assertFalse(insideOriginalDispatch)
+                }
+            }
+            contact.send(MotionEvent.ACTION_DOWN)
+            assertEquals(listOf(MotionEvent.ACTION_DOWN, MotionEvent.ACTION_CANCEL), contact.events)
+            assertTrue(contact.send(MotionEvent.ACTION_UP))
+            assertEquals("The cancelled release stays quarantined", 2, contact.events.size)
+            contact.send(MotionEvent.ACTION_DOWN)
+            contact.send(MotionEvent.ACTION_UP)
+            assertEquals("A new contact remains usable", listOf(0, 3, 0, 1), contact.events)
+            contact.callback.dispose()
         }
     }
 

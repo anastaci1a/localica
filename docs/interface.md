@@ -586,7 +586,9 @@ Default artwork tap toggles lyrics. Hold opens View artwork / Change artwork / C
 
 Change artwork opens image selection directly, then the shared artwork-only review/write flow for the current song in the [shared single-song editor](product.md#metadata-and-artwork-editing).
 
-Follow real playback/seeks/queue changes with active-line emphasis, fluid movement and fading viewport edges, inspired by [Better Lyrics](https://github.com/better-lyrics/better-lyrics). Manual scrolling suspends following. a Liquid Glass directional bubble returns to the current line. Touch exploration starts with following off. Plain lyrics scroll normally. Keep source selection without loading text/progress or tap ripples.
+Follow real playback/seeks/queue changes with active-line emphasis, fluid movement and fading viewport edges, inspired by [Better Lyrics](https://github.com/better-lyrics/better-lyrics). Manual scrolling suspends following. A Liquid Glass directional bubble returns to the current line. Touch exploration starts with following off. Plain lyrics scroll normally. Keep source selection without loading text/progress or tap ripples.
+
+Presented lyrics receive taps and swipes throughout the artwork cross-fade, including reversal. Disabled artwork gestures leave no hit-test node over the lyrics. Artwork input resumes when the lyric document is no longer presented. Keep cover drawing order independent of input ownership.
 
 Show the shared quiet empty state only after the current lookup finds no usable lyrics without reporting a read error. Never during loading, failed reads or a real lyric document's arrival. Available lyrics remain visible when another source fails.
 
