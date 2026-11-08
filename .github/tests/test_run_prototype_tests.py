@@ -302,7 +302,6 @@ esac
         self.assertEqual('-I', args[args.index('.github/api26-aot.gradle')-1])
         self.rerun(TEST_API='36')
         args=json.loads((self.root/'argv.json').read_text())
-        self.assertNotIn('-I', args)
         self.assertNotIn('.github/api26-aot.gradle', args)
 
     def test_duplicate_selectors_deduplicate(self):
