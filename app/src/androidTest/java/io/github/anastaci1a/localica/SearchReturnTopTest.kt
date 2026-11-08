@@ -24,12 +24,16 @@ import org.junit.Test
 /** Actual scoped popup, native IME and measured return geometry. */
 class SearchReturnTopTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
+    @get:Rule val name = org.junit.rules.TestName()
     private val instrumentation get() = InstrumentationRegistry.getInstrumentation()
     private val songs = (0..79).map { Track("return-search:$it", "Song ${it.toString().padStart(3, '0')}",
         album = "Return album", artist = "Return artist", fileName = "$it.mp3", relativePath = "$it.mp3") }
     private val route = BrowseRoute(MainTab.Songs, key = "return-search-690")
     private val originalStyles = linkedMapOf<BrowseRoute, Pair<BrowseStyle, Boolean>>()
     @After fun restorePreferences() {
+        val directory = nativeEvidenceDirectory("search-return-top", instrumentation.targetContext.getExternalFilesDir(null))
+        java.io.File(directory, "last-frame-${name.methodName}-api${android.os.Build.VERSION.SDK_INT}.txt")
+            .writeText("${scrollProbe.frame}\n")
         val prefs = BrowsePreferences(instrumentation.targetContext)
         originalStyles.forEach { (route, saved) -> prefs.write(route, saved.first, saved.second) }
     }

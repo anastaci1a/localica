@@ -335,6 +335,7 @@ class ListReturnControlsTest {
         }
         compose.waitUntil(5000) { position() == 0f }
         compose.onNodeWithContentDescription("Return to top").assertDoesNotExist()
+        compose.onNodeWithTag("floating-return-control", true).assertDoesNotExist()
     }
 
     @Test fun ordinaryTopReturnPreservesTheExactFilterAndQuery() {
