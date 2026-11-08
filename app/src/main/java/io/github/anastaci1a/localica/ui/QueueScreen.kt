@@ -207,11 +207,15 @@ internal fun QueueDialogs(state: QueueUiState, controller: QueueController?) {
 
 @Composable
 internal fun QueueSettingsControls(settings: QueueSettings, section: String = "Playback and queues", onChange: ((QueueSettings) -> QueueSettings) -> Unit) {
+    val navigate = LocalSettingsNavigate.current
     var limitOpen by remember { mutableStateOf(false) }
     var thresholdOpen by remember { mutableStateOf(false) }
-    if (section == "Song tap behavior") {
+    if (section == "Song tap behavior" || section == "Per-list overrides") {
+        if (section == "Song tap behavior") {
         SettingsHeading("Default song action")
         ChoicePreference("Song tap", settings.songTap, SongTap.entries, { it.label() }) { action -> onChange { it.copy(songTap = action) } }
+        SettingsLink("Per-list overrides", "Choose a song action for each list") { navigate("Per-list overrides") }
+        } else {
         SettingsHeading("List overrides")
         SongListView.entries.forEach { view ->
             ChoicePreference(view.label, settings.tapOverrides[view], listOf(null) + SongTap.entries,
@@ -219,7 +223,8 @@ internal fun QueueSettingsControls(settings: QueueSettings, section: String = "P
                 onChange { it.copy(tapOverrides = if (action == null) it.tapOverrides - view else it.tapOverrides + (view to action)) }
             }
         }
-        ActionTextButton(onClick = { onChange { it.copy(tapOverrides = emptyMap()) } }) { Text("Reset all tap overrides") }
+        SettingsEntry("Reset all tap overrides") { ActionTextButton(onClick = { onChange { it.copy(tapOverrides = emptyMap()) } }) { Text("Reset all tap overrides") } }
+        }
     } else {
         SettingsHeading("Playback")
         BooleanPreference("Preload next track", settings.preloadNext) { enabled -> onChange { it.copy(preloadNext = enabled) } }
@@ -259,10 +264,10 @@ internal fun QueueSettingsControls(settings: QueueSettings, section: String = "P
 }
 internal fun SongTap.label() = when (this) { SongTap.NewQueue -> "New queue from displayed list"
     SongTap.PlayNow -> "Insert after current and play"; SongTap.PlayNext -> "Add next"; SongTap.Append -> "Append to current" }
-private fun PreviousBehavior.label() = when (this) {
+internal fun PreviousBehavior.label() = when (this) {
     PreviousBehavior.RestartAfterThreshold -> "Restart after threshold"
     PreviousBehavior.PreviousSong -> "Always previous song"
     PreviousBehavior.RestartSong -> "Always restart song"
 }
-private fun QueueSwitch.label() = when (this) { QueueSwitch.Browse -> "Browse without changing playback"; QueueSwitch.Paused -> "Restore paused"
+internal fun QueueSwitch.label() = when (this) { QueueSwitch.Browse -> "Browse without changing playback"; QueueSwitch.Paused -> "Restore paused"
     QueueSwitch.Resume -> "Resume immediately"; QueueSwitch.KeepPlaybackState -> "Keep playing or paused" }
