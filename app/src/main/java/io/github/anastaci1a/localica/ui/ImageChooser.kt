@@ -88,7 +88,9 @@ internal fun ImageChooser(workflow: ArtworkWorkflow, onDismiss: () -> Unit, onCh
                 "nativeImeVisible=${nativeInsets?.isVisible(androidx.core.view.WindowInsetsCompat.Type.ime())} " +
                 "view=${popupView.width}x${popupView.height}")
         }
-        Column(Modifier.traceMeasure("body"), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        val bodyScroll = androidx.compose.foundation.rememberScrollState()
+        Column(Modifier.traceMeasure("body").scrollEdgeFade(bodyScroll).controlVerticalScroll(bodyScroll),
+            verticalArrangement = Arrangement.spacedBy(12.dp)) {
             if (hasPermission && recent.isEmpty()) Text("No recent photos", style = MaterialTheme.typography.bodySmall)
             if (unavailableRecent) Text("Some recent images are unavailable. Choose them again using gallery or files.", style = MaterialTheme.typography.bodySmall)
             val recentScroll = androidx.compose.foundation.lazy.rememberLazyListState()
