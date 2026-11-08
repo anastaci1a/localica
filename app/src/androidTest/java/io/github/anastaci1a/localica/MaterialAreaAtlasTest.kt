@@ -51,6 +51,7 @@ class MaterialAreaAtlasTest {
         var parents = 0
         var epoch: Atlas? = null
         var heldEpoch: Atlas? = null
+        var disposedEpoch: Atlas? = null
         var heldInputB: GraphicsLayer? = null
         var heldRequestB: Request? = null
         var heldDownstreamRecordsB = 0
@@ -117,6 +118,7 @@ class MaterialAreaAtlasTest {
                         // End the held output lease before releasing its producer graph.
                         heldB.record(size = IntSize(1, 1)) {}
                         extractedB.record(size = IntSize(1, 1)) {}
+                        state.disposedEpoch = state.heldEpoch
                         state.heldEpoch?.release()
                         state.heldEpoch = null
                         b.release()
@@ -263,6 +265,7 @@ class MaterialAreaAtlasTest {
                         // ARITHMETIC ORDER: old/control/candidate L0, then each half stage,
                         // finally extraction. Its graph is separate from the live test.
                         if (live) {
+                            assertEquals("zero downstream atlas rerecords within an epoch", 1, frame.atlas.records)
                             val oldA = copy(frame.a.last(), "live-old-a")
                             val oldAControl = copy(frame.a.last(), "live-old-a-control")
                             val atlasA = copy(frame.extractedA, "live-atlas-a")
@@ -338,7 +341,11 @@ class MaterialAreaAtlasTest {
                             assertFalse("A held member must update, not freeze its pre-release raster",
                                 requireNotNull(heldBefore).contentEquals(held.bytes))
                             heldBefore = held.bytes.copyOf()
-                        } else assertTrue("Last held lease releases the old input", requireNotNull(state.heldInputB).isReleased)
+                        } else {
+                            assertTrue("Last held lease releases the old input", requireNotNull(state.heldInputB).isReleased)
+                            assertTrue("Last held lease disposes every retired atlas node",
+                                requireNotNull(state.disposedEpoch).levels.all { it.layer.isReleased })
+                        }
                         assertEquals("Parent counters remain unchanged", 1, frame.parents)
                         receipts += "${input.label} PASS stages=${frame.a.size} oldDownstreamTargets=${(frame.a.size - 1) * 2} atlasTargets=${frame.atlas.levels.size} activeB=${input.memberB} BcropRecords=${frame.bInputRecords} BdownstreamRecords=${frame.bDownstreamRecords}"
                     } catch (error: Throwable) { failure = error }
