@@ -684,7 +684,13 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
             .drawBehind { drawRect(Color.Black.copy(alpha = .16f * progress.value.coerceIn(0f, 1f))) }
             .pointerInput(visible, admittedDraw) { detectTapGestures { if (visible && admittedDraw) dismissNow() } }) {
             CompositionLocalProvider(LocalSliderCancelHost provides sliderCancel) {
-            BoxWithConstraints(Modifier.fillMaxSize().then(if (placement == GlassPlacement.Page) Modifier else Modifier.safeDrawingPadding().imePadding())
+            val measureImeViewport = placement == GlassPlacement.Sheet || placement == GlassPlacement.Center
+            val editorIme = WindowInsets.ime
+            BoxWithConstraints(Modifier.fillMaxSize().then(when {
+                placement == GlassPlacement.Page -> Modifier
+                measureImeViewport -> Modifier.windowInsetsPadding(WindowInsets.systemBars.union(WindowInsets.displayCutout))
+                else -> Modifier.safeDrawingPadding().imePadding()
+            })
                 .offset { androidx.compose.ui.unit.IntOffset(0, -sliderCancel.shift.value.roundToInt()) }) {
                 // Geometry still observes every sample in its own layout-content scope.
                 // Window/input ownership above does not subscribe to the animation clock.
@@ -692,11 +698,22 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                 val geometry = glassMorphGeometryProgress(p, anchor.quiet)
                 if (workObserver != null) SideEffect { workObserver("geometry", window, p) }
                 val density = LocalDensity.current
+                val editorImeSource = WindowInsets.imeAnimationSource
+                val editorImeTarget = WindowInsets.imeAnimationTarget
+                val consumedInsets = remember { arrayOf(WindowInsets(0, 0, 0, 0)) }
                 var windowOrigin by remember { mutableStateOf(Offset.Zero) }
                 var targetHeight by remember { mutableIntStateOf(0) }
                 val expandedHeight = remember { Animatable(-1f) }
-                LaunchedEffect(targetHeight, reduced, speed) {
-                    if (targetHeight > 0) {
+                val imeHeightBasis = remember { GlassImeHeightBasis() }
+                var normalizedHeightTarget by remember { mutableFloatStateOf(Float.NaN) }
+                var normalizedHeightReady by remember { mutableStateOf(false) }
+                LaunchedEffect(if (measureImeViewport) normalizedHeightTarget else targetHeight, reduced, speed) {
+                    if (measureImeViewport && normalizedHeightTarget.isFinite()) {
+                        if (!normalizedHeightReady || reduced) {
+                            expandedHeight.snapTo(normalizedHeightTarget)
+                            normalizedHeightReady = true
+                        } else expandedHeight.animateTo(normalizedHeightTarget, glassMorphSpring(speed))
+                    } else if (!measureImeViewport && targetHeight > 0) {
                         if (expandedHeight.value < 0f || reduced) expandedHeight.snapTo(targetHeight.toFloat())
                         else expandedHeight.animateTo(targetHeight.toFloat(), glassMorphSpring(speed))
                     }
@@ -714,9 +731,9 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                 var previousViewport by remember { mutableStateOf(viewportIdentity) }
                 // Keep the keyboard-open viewport after IME dismissal. A nested
                 // action menu freezes its parent's position until it has returned.
-                val imeHeight = WindowInsets.ime.getBottom(density)
-                val imeSource = WindowInsets.imeAnimationSource.getBottom(density)
-                val imeTarget = WindowInsets.imeAnimationTarget.getBottom(density)
+                val imeHeight = if (measureImeViewport) 0 else WindowInsets.ime.getBottom(density)
+                val imeSource = if (measureImeViewport) 0 else WindowInsets.imeAnimationSource.getBottom(density)
+                val imeTarget = if (measureImeViewport) 0 else WindowInsets.imeAnimationTarget.getBottom(density)
                 val safeBottom = WindowInsets.systemBars.union(WindowInsets.displayCutout).getBottom(density)
                 val windowFocused = androidx.compose.ui.platform.LocalWindowInfo.current.isWindowFocused
                 val nativeIme = ViewCompat.getRootWindowInsets(view)
@@ -845,7 +862,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                     // Measure and placement share one edge-rounded rectangle. Keep the
                     // shadow's layer-free placement on legacy Android.
                     val panelBounds = remember { arrayOfNulls<MotionPixelRect>(1) }
-                    Layout(modifier = Modifier.glassShadowOffset {
+                    Layout(modifier = Modifier.onConsumedWindowInsetsChanged { consumedInsets[0] = it }.glassShadowOffset {
                         val pixels = panelBounds[0]
                         androidx.compose.ui.unit.IntOffset(pixels?.left ?: 0, pixels?.top ?: 0)
                     }.onGloballyPositioned {
@@ -953,6 +970,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                             }
                         }
                         Box(Modifier.graphicsLayer { alpha = if (page) 1f else ((p - .18f) / .65f).coerceIn(0f, 1f) }
+                            .then(if (measureImeViewport) Modifier.consumeWindowInsets(editorIme.only(WindowInsetsSides.Bottom)) else Modifier)
                             .then(if (!visible || p < .85f) Modifier.clearAndSetSemantics { }.pointerInput(Unit) {
                                 awaitPointerEventScope { while (true) awaitPointerEvent(PointerEventPass.Initial).changes.forEach { it.consume() } }
                             } else Modifier)) {
@@ -975,7 +993,14 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                                 ?: if (dark) Color.White else Color(0xFF202124))) { anchor.face?.invoke() }
                         }
                     }) { children, panelConstraints ->
-                        if (!hasViewport) {
+                        val currentIme = editorIme.getBottom(this)
+                        val incomingBottom = consumedInsets[0].getBottom(this)
+                        val remainingIme = (currentIme - incomingBottom).coerceAtLeast(0)
+                        val viewportHeight = if (measureImeViewport)
+                            (panelConstraints.maxHeight - remainingIme).coerceAtLeast(0) else availableHeight
+                        val contentMaxHeight = if (measureImeViewport)
+                            (viewportHeight - margin * 2).roundToInt().coerceAtLeast(1) else maxHeight
+                        if (!hasViewport || viewportHeight == 0) {
                             // Do not measure/place the foreground at an invented 1px
                             // size or overwrite its remembered target. An empty
                             // measure retains all three composed children, including
@@ -984,10 +1009,15 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                             return@Layout layout(panelConstraints.minWidth, panelConstraints.minHeight) { }
                         }
                         val contentWidth = if (fitContent)
-                            children[1].maxIntrinsicWidth(maxHeight).coerceIn(1, widthLimit) else widthLimit
+                            children[1].maxIntrinsicWidth(contentMaxHeight).coerceIn(1, widthLimit) else widthLimit
                         measuredWidth = contentWidth
                         val foreground = children[1].measure(Constraints(minWidth = contentWidth, maxWidth = contentWidth,
-                            minHeight = if (page) maxHeight else 0, maxHeight = maxHeight))
+                            minHeight = if (page) contentMaxHeight else 0, maxHeight = contentMaxHeight))
+                        val alreadyOpen = visible && !progress.isRunning && progress.value == 1f
+                        val nativeViewportChanging = measureImeViewport && alreadyOpen &&
+                            (currentIme != editorImeTarget.getBottom(this) || editorImeSource.getBottom(this) != editorImeTarget.getBottom(this) ||
+                                imeHeightBasis.lastIme != currentIme)
+                        if (measureImeViewport) normalizedHeightTarget = imeHeightBasis.target(currentIme, foreground.height, alreadyOpen)
                         targetHeight = foreground.height
                         val rightAligned = start.center.x > availableWidth / 2f
                         val x = if (placement == GlassPlacement.Menu)
@@ -995,15 +1025,15 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                             else (availableWidth - targetWidth) / 2f
                         val y = when (placement) {
                             GlassPlacement.Search -> if (imeHeight > 0)
-                                (availableHeight - targetHeight - margin).coerceAtLeast(margin)
-                                else ((availableHeight - targetHeight) / 2f).coerceAtLeast(margin)
-                            GlassPlacement.Center -> (availableHeight - targetHeight) / 2f
-                            GlassPlacement.Sheet -> (availableHeight - targetHeight - margin).coerceAtLeast(margin)
+                                (viewportHeight - targetHeight - margin).coerceAtLeast(margin)
+                                else ((viewportHeight - targetHeight) / 2f).coerceAtLeast(margin)
+                            GlassPlacement.Center -> (viewportHeight - targetHeight) / 2f
+                            GlassPlacement.Sheet -> (viewportHeight - targetHeight - margin).coerceAtLeast(margin)
                             GlassPlacement.Page -> 0f
                             GlassPlacement.Menu -> (if (anchor.contextual) minOf(start.top,
-                                (anchor.bottomLimit.takeIf { it.isFinite() }?.minus(windowOrigin.y) ?: (availableHeight - anchor.bottomClearance)) - targetHeight)
-                                else if (start.center.y > availableHeight / 2f) start.bottom - targetHeight else start.top)
-                                .coerceIn(margin, (availableHeight - targetHeight).toFloat().coerceAtLeast(margin))
+                                (anchor.bottomLimit.takeIf { it.isFinite() }?.minus(windowOrigin.y) ?: (viewportHeight - anchor.bottomClearance)) - targetHeight)
+                                else if (start.center.y > viewportHeight / 2f) start.bottom - targetHeight else start.top)
+                                .coerceIn(margin, (viewportHeight - targetHeight).toFloat().coerceAtLeast(margin))
                         }
                         val left = if (flightRect != null) flightRect.left
                             else if (page) with(density) { 28.dp.toPx() * (1f - p) }
@@ -1015,9 +1045,10 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                         val rawHeight = if (flightRect != null) flightRect.height else if (page) foreground.height.toFloat()
                             else if (!detached && geometry < 0f) startHeight * (1f - geometry * 2f)
                             else mix(if (detached) foreground.height * .96f else startHeight,
-                                expandedHeight.value.takeIf { it >= 0f } ?: foreground.height.toFloat())
+                                if (measureImeViewport && normalizedHeightReady) expandedHeight.value + imeHeightBasis.correction
+                                else expandedHeight.value.takeIf { it >= 0f } ?: foreground.height.toFloat())
                         val pixels = glassMorphPixelBounds(Rect(Offset(left, top), Size(rawWidth, rawHeight)),
-                            availableWidth, availableHeight)
+                            availableWidth, viewportHeight)
                         panelBounds[0] = pixels
                         val width = pixels.width
                         val height = pixels.height
@@ -1028,7 +1059,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                             foreground.placeWithLayer((width - foreground.width) / 2, if (placement == GlassPlacement.Search) 0 else (height - foreground.height) / 2) {
                                 // Reveal the whole fixed-layout menu, not a moving crop of its
                                 // middle rows. A uniform scale keeps glyph proportions intact.
-                                val fit = if (page || placement == GlassPlacement.Search) 1f else minOf(width.toFloat() / foreground.width.coerceAtLeast(1),
+                                val fit = if (page || placement == GlassPlacement.Search || nativeViewportChanging) 1f else minOf(width.toFloat() / foreground.width.coerceAtLeast(1),
                                     height.toFloat() / foreground.height.coerceAtLeast(1)).coerceAtMost(1f)
                                 scaleX = fit; scaleY = fit
                             }
@@ -1046,3 +1077,20 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
     } } }
 }
 
+
+/** Measure-owned coordinate correction; popup intent and unrelated height easing retain their owner. */
+private class GlassImeHeightBasis {
+    var lastIme = -1
+        private set
+    private var lastHeight = 0
+    private var wasOpen = false
+    var correction = 0f
+        private set
+    fun target(ime: Int, height: Int, open: Boolean): Float {
+        if (open && wasOpen && lastIme >= 0 && ime != lastIme) correction += height - lastHeight
+        lastIme = ime
+        lastHeight = height
+        wasOpen = open
+        return height - correction
+    }
+}
