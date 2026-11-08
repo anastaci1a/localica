@@ -5,7 +5,6 @@ import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.By
 import androidx.test.uiautomator.BySelector
 import androidx.test.uiautomator.UiDevice
-import androidx.test.uiautomator.Until
 import org.junit.Assert.assertNotNull
 import org.junit.Test
 
@@ -13,10 +12,11 @@ import org.junit.Test
 class FrameStatsSettingsTest {
     @Test fun aboutOffersExplicitStartAndStopWithoutSharingAnything() {
         val device = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
+        // The label changes in place; a cached lookup saw it 1.5-15 s late on API 36 (#620).
         fun click(selector: BySelector) {
-            val target = device.wait(Until.findObject(selector), 15_000)
+            val target = device.findFresh(selector, 15_000)
             assertNotNull("Missing operator control: $selector", target)
-            target.click()
+            target!!.click()
         }
         ActivityScenario.launch(MainActivity::class.java).use {
             click(By.desc("More"))
@@ -24,7 +24,7 @@ class FrameStatsSettingsTest {
             click(By.textContains("About and licenses"))
             click(By.text("Start frame capture"))
             click(By.text("Stop frame capture"))
-            assertNotNull(device.wait(Until.findObject(By.text("Start frame capture")), 5000))
+            assertNotNull(device.findFresh(By.text("Start frame capture"), 5000))
         }
     }
 }
