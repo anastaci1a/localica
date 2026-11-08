@@ -207,7 +207,7 @@ Emulator archives and system images are saved only from `main`. A branch-scoped 
 
 Hosted compile jobs restore shared Gradle dependency entries instead of downloading: `localica-static-checks` (unit tests, lint, debug and release builds) and `localica-test-apks` (app and instrumentation APKs, also the compatibility builds). Only runs on `main` save them: the [dependency cache workflow](../.github/workflows/dependency-cache.yml) writes both on dispatch or when dependency files change; the Android workflow refreshes them each train.
 
-Each compile job records `dependency-downloads=N` in its runner identity file and annotates the run when `N > 0`. Dependency downloads retry transient failures (HTTP 5xx, resets, timeouts) five times from a 2 s back-off; failed tests are never retried automatically.
+Each compile job records `dependency-downloads=N` in its runner identity file and annotates the run when `N > 0`. Gradle itself never retries a failed download, so compile steps run through `gradle-transient-retry.sh`: at most three attempts, only after an HTTP 5xx, timeout or reset on a download. Failing tests, compilation errors and lint findings are never retried.
 
 On disposable GitHub-hosted API 26 emulators, the native runner temporarily disables preinstalled Google Search before instrumentation. Its unrelated JobScheduler crash can obstruct Localica. Cleanup restores its prior enabled state after verifying device and package ownership. Google Search data is preserved. Physical devices are untouched. Localica crashes and all assertions remain fatal.
 

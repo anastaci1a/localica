@@ -11,9 +11,10 @@ state=${RUNNER_TEMP:-${TMPDIR:-/tmp}}/dependency-cache-audit
 identity=${DEPENDENCY_CACHE_AUDIT_IDENTITY:-prototype-runner-environment.txt}
 
 modules() {
-  # Paths relative to the caches directory: modules-2/files-2.1/<group>/<name>/<version>/<hash>/<file>
+  # Paths relative to the caches directory: modules-2/files-2.1/<group>/<name>/<version>/<hash>/<file>.
+  # Only the module directories are walked; a Gradle JVM may still be removing other cache entries.
   if [[ -d "$home/caches" ]]; then
-    find "$home/caches" -path '*/modules-*/files-*/*' -type f -printf '%P\n' | LC_ALL=C sort
+    (cd "$home/caches" && { find modules-* -path '*/files-*/*' -type f -print 2>/dev/null || true; }) | LC_ALL=C sort
   fi
 }
 
