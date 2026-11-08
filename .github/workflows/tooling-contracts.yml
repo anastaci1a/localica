@@ -92,7 +92,7 @@ jobs:
               'test_source_methods.py', 'test_full_partition.py', 'test_emulator_sdk.py',
               'test_prepare_device_tests.py', 'test_full_live_evidence.py',
               'test_run_prototype_tests.py', 'test_observe_test_evidence.py',
-              'test_failure_context.py', 'test_shared_test_apks.py', 'test_release_verification.py', 'test_refresh_durations.py', 'test_emulator_setup.py', 'test_self_hosted_runner.py',
+              'test_upload_artifact_retry.py', 'test_failure_context.py', 'test_shared_test_apks.py', 'test_release_verification.py', 'test_refresh_durations.py', 'test_emulator_setup.py', 'test_self_hosted_runner.py',
           ]
           for name in names:
               if not pathlib.Path('.github/tests', name).is_file():
@@ -119,7 +119,7 @@ jobs:
           PY
       - name: Preserve host contract logs and source identity
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: ./.github/actions/upload-artifact-retry
         with:
           name: evidence-tooling-contracts-${{ github.run_id }}-${{ github.run_attempt }}
           path: tooling-contract-reports/
