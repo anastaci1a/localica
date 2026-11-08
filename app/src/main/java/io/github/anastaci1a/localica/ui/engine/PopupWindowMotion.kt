@@ -17,8 +17,7 @@ import io.github.anastaci1a.localica.ui.spec.ExpansionSpec
     val foreground=Curve.window(.18f,.83f)
     val homeWeight=Curve.constant(1f)+Curve.window(0f,.5f).scaled(-1f)
     val face=Curve.linear(1f,1f-1f/.55f)
-    val preparationCurve = Curve.window(0f, .25f).scaled(.68359375f) +
-        Curve.window(.25f, .75f).scaled(.31640625f)
+    val preparationCurve = Curve.window(0f, .4f)
     private val ranges = requireNotNull(clock.spec.geometry).maxViewportDiagonalPx.let { EdgeRanges(it, it, it, it) }
     private var rectangle by mutableStateOf<MotionRect?>(null)
     val bounds: MotionRectView? get() = rectangle
