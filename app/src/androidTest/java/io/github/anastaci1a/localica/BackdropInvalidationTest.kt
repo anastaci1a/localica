@@ -48,7 +48,8 @@ class BackdropInvalidationTest {
         compose.runOnUiThread { assertEquals("Dependency observation must settle without redraw feedback", settled, dependent.recordings) }
     }
 
-    @Test fun queuedFinalRecordingSurvivesASuspendedThumbnailCaptureAndThenSettles() {
+    @Test @androidx.test.filters.SdkSuppress(maxSdkVersion = 32)
+    fun queuedFinalRecordingSurvivesASuspendedThumbnailCaptureAndThenSettles() {
         assumeTrue("CPU thumbnail worker is the pre-33 adapter", Build.VERSION.SDK_INT < 33)
         lateinit var source: FrostedBackdrop
         lateinit var graphics: GraphicsContext
