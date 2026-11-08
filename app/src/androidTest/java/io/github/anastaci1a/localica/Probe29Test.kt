@@ -142,14 +142,28 @@ class Probe29Test {
         return IntArray(b.width * b.height).also { b.getPixels(it, 0, b.width, 0, 0, b.width, b.height) }
     }
 
-    private fun loop(route: BrowseRoute) {
+    /** Blocks the main thread for stalls[n] ms in the nth frame after the call, so the next
+     * vsyncs are missed and the following frame time jumps, like a slow device's fly-through. */
+    private fun stall(stalls: List<Long>) {
+        if (stalls.isEmpty()) return
+        val choreographer = android.view.Choreographer.getInstance()
+        var n = 0
+        choreographer.postFrameCallback(object : android.view.Choreographer.FrameCallback {
+            override fun doFrame(frameTimeNanos: Long) {
+                SystemClock.sleep(stalls[n])
+                if (++n < stalls.size) choreographer.postFrameCallback(this)
+            }
+        })
+    }
+
+    private fun loop(route: BrowseRoute, stalls: List<Long> = emptyList()) {
         val host = host(route)
         val problems = mutableListOf<String>()
         repeat(10) { i ->
             scrollDeep(albums - 1 - i * 3)
             Thread.sleep(1500)
             android.util.Log.i("P635", "iteration $i tap")
-            main { host.topRequest++ }
+            main { host.topRequest++; stall(stalls) }
             Thread.sleep(2500)
             main { io.github.anastaci1a.localica.ui.P635Debug.dump = true }; Thread.sleep(300)
             val landed = shot("it$i-landed")
@@ -165,4 +179,11 @@ class Probe29Test {
 
     @Test fun albumsTopRequest() = loop(BrowseRoute(MainTab.Albums))
     @Test fun mixedTopRequest() = loop(BrowseRoute(MainTab.Library))
+    /** Every flight frame takes about 50 ms (a 20 fps flight). */
+    @Test fun albumsSteadyStall() = loop(BrowseRoute(MainTab.Albums), List(16) { 50L })
+    /** Irregular frames: mostly on time, with 60 to 180 ms stalls through the flight and landing. */
+    @Test fun albumsIrregularStall() = loop(BrowseRoute(MainTab.Albums),
+        listOf(0L, 0, 90, 0, 40, 0, 0, 150, 0, 60, 0, 0, 180, 0, 0, 70, 0, 120, 0, 0, 100, 0, 0, 0))
+    /** One long stall each time a frame lands near the end of the flight. */
+    @Test fun albumsLateStall() = loop(BrowseRoute(MainTab.Albums), List(14) { 0L } + listOf(250L, 0, 0, 200L))
 }
