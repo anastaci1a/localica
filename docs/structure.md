@@ -12,7 +12,7 @@ Paths below are under `app/src/main/java/io/github/anastaci1a/localica/`.
 | `scanner`, `editing`, `lyrics` | Background scans, recoverable writes/image selection, local lyric discovery/parsing. |
 | `queue`, `playlist` | Durable occurrence-based collections and serialized commands/imports. |
 | `playback`, `statistics` | Media3 service/controller, elapsed listening, durable qualified events and provider-independent ranking counts. |
-| `artist` | Artist hub data projections, release classification and enrichment interfaces. |
+| `artist`, `lastfm` | Artist projections, release classification, read-only statistics sync and separate external snapshots. |
 | `navigation`, `home` | Restorable typed routes/preferences; typed pins and manual order. |
 | `ui` | Compose views, lifecycle-aware state, gestures and reusable materials. |
 
@@ -78,7 +78,9 @@ The artist data source prepares release groups, five ranked songs, current-year 
 
 Ranking windows use the caller's time zone and inclusive event boundaries. The caller refreshes the window when time advances. Duration-weighted totals use selected counts and distinct songs, treating missing duration as zero and saturating overflow. Albums and artists expose the same measure for future sort integration.
 
-A provider interface keeps local and external counts separate. Typed settings select external counts with per-song local fallback; unsupported windows also fall back locally. This is a data API: artist hub UI, sort controls, persistent provider settings and Last.fm sync remain separate work. Appears On and Similar Artists currently return empty through an enrichment interface.
+A provider interface keeps local and external counts separate. Typed settings select external counts with per-song local fallback; unsupported windows also fall back locally. Artist hub UI and additional sort controls remain separate work. The Last.fm provider stores its snapshot, account selection and mappings in a dedicated atomic file.
+
+Appears On and Similar Artists currently return empty through an enrichment interface.
 
 ### Settings/selection
 

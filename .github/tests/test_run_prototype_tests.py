@@ -928,7 +928,8 @@ class WorkflowContract(unittest.TestCase):
         workflow=yaml.safe_load((ROOT/'.github/workflows/prototype.yml').read_text())
         self.assertEqual({'workflow_dispatch','workflow_call'},set(workflow['on']))
         self.assertEqual({'affected_classes','coverage_reason','known_issues','repeat','repeat_methods','runner'},set(workflow['on']['workflow_call']['inputs']))
-        self.assertEqual({'ANDROID_DEBUG_KEYSTORE'},set(workflow['on']['workflow_call']['secrets']))
+        self.assertEqual({'ANDROID_DEBUG_KEYSTORE','LASTFM_API_KEY'},set(workflow['on']['workflow_call']['secrets']))
+        self.assertFalse(workflow['on']['workflow_call']['secrets']['LASTFM_API_KEY']['required'])
         self.assertEqual({'contents':'read'},workflow['permissions'])
         jobs=workflow['jobs']
         self.assertEqual({'build','focused_26','focused_36','compatibility_26','compatibility_36'},set(jobs['evidence']['needs']))
