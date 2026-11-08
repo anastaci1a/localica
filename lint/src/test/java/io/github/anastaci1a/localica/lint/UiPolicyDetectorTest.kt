@@ -266,6 +266,57 @@ class UiPolicyDetectorTest : LintDetectorTest() {
         check(UiRuleId.MotionReadInComposition, imports + "@Composable fun Bad(shape: ShapeView) { shape.outlineAt(FrameStamp()) }", 1)
     }
 
+    fun testSharedCompositionHelperGraphRetainsTheLeafRead() {
+        val helpers = (1..10).joinToString("\n") { depth ->
+            "fun helper$depth(view: MotionValue) { helper${depth - 1}(view); helper${depth - 1}(view) }"
+        }
+        check(UiRuleId.MotionReadInComposition, """
+            import androidx.compose.runtime.Composable
+            import io.github.anastaci1a.localica.ui.engine.MotionValue
+            fun helper0(view: MotionValue) { view.value() }
+            $helpers
+            @Composable fun Bad(view: MotionValue) { helper10(view) }
+        """, 1)
+    }
+
+    fun testSharedAndCyclicSurfaceHelpersKeepTheirLifetimePolicy() {
+        val helpers = (1..10).joinToString("\n") { depth ->
+            "fun helper$depth() { helper${depth - 1}(); helper${depth - 1}() }"
+        }
+        check(UiRuleId.UnownedSurfaceLifetime, """
+            fun Popup(content: () -> Unit) {}
+            fun helper0() { Popup {} }
+            $helpers
+            fun first() { second(); Popup {} }
+            fun second() { first() }
+            fun Bad(ready: Boolean) {
+                if (ready) helper10()
+                if (ready) first()
+                if (ready) second()
+            }
+        """, 3)
+    }
+
+    fun testCyclicMotionDependenciesDoNotCachePartialNegativeAnswers() {
+        check(UiRuleId.RawMotionMap, """
+            import io.github.anastaci1a.localica.ui.engine.MotionValue
+            fun first(view: MotionValue): Float = second(view) + view.value()
+            fun second(view: MotionValue): Float = first(view)
+            fun bad(view: MotionValue) {
+                val one = first(view) > .5f
+                val two = second(view) > .5f
+            }
+        """, 2)
+        check(UiRuleId.RawMotionMap, """
+            fun first(): Float = second()
+            fun second(): Float = first()
+            fun good() {
+                val one = first() > .5f
+                val two = second() > .5f
+            }
+        """, 0)
+    }
+
     fun testSpacingAliasesAndValidatedSpecData() {
         val body = """
             import androidx.compose.ui.unit.*

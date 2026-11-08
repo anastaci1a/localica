@@ -49,6 +49,10 @@ internal class UiPolicyDetector : Detector(), SourceCodeScanner {
         }) "screens" else null
         private val policy = layer in setOf("components", "layout", "screens")
         private val emitted = mutableSetOf<Pair<UiRuleId, Int>>()
+        // A false answer is reusable only after a whole root search completes.
+        // Cycle-pruned recursive branches are not independently negative.
+        private val derivedSymbols = mutableMapOf<PsiElement, Boolean>()
+        private val surfaceMethods = mutableMapOf<PsiElement, Boolean>()
         private val dependencyRanges = mutableListOf<Triple<String, Int, Int>>()
         private val assignments by lazy {
             val result = mutableMapOf<PsiElement, MutableList<UExpression>>()
@@ -358,7 +362,22 @@ internal class UiPolicyDetector : Detector(), SourceCodeScanner {
         private fun isRead(node: UCallExpression): Boolean = node.methodName in reads &&
             (motionType(node.receiverType) || node.resolve()?.containingClass?.let { motionClass(it) } == true)
 
-        private fun derived(node: UElement?, seen: MutableSet<PsiElement> = mutableSetOf()): Boolean {
+        private fun derived(node: UElement?): Boolean {
+            val seen = mutableSetOf<PsiElement>()
+            val result = derivedNode(node, seen)
+            if (!result) seen.forEach { derivedSymbols.putIfAbsent(it, false) }
+            return result
+        }
+
+        private inline fun derivedSymbol(symbol: PsiElement, seen: MutableSet<PsiElement>, query: () -> Boolean): Boolean {
+            derivedSymbols[symbol]?.let { return it }
+            if (!seen.add(symbol)) return false
+            val result = query()
+            if (result) derivedSymbols[symbol] = true
+            return result
+        }
+
+        private fun derivedNode(node: UElement?, seen: MutableSet<PsiElement>): Boolean {
             if (node == null) return false
             // A handle's identity is structural. Only sampling it yields presentation:
             // do not inherit reads performed inside its factory/constructor. Samples
@@ -372,28 +391,31 @@ internal class UiPolicyDetector : Detector(), SourceCodeScanner {
                     val parameters = measurement!!.parameterList.parameters
                     val content = parameters.indexOfFirst { it.name == "content" }.takeIf { it >= 0 }
                         ?: parameters.lastIndex // Binary SDK parameters can be p0/p1; subcompose puts content last.
-                    return derived(node.receiver, seen) || parameters.indices
+                    return derivedNode(node.receiver, seen) || parameters.indices
                         .filter { it != content }
-                        .mapNotNull { node.getArgumentForParameter(it) }.any { derived(it, seen) }
+                        .mapNotNull { node.getArgumentForParameter(it) }.any { derivedNode(it, seen) }
                 }
                 if (isRead(node)) return true
-                if (derived(node.receiver, seen)) return true
+                if (derivedNode(node.receiver, seen)) return true
                 val method = node.resolve()
-                if (method != null && seen.add(method) && derived(method.toUElementOfType<UMethod>()?.uastBody, seen)) return true
+                if (method != null && derivedSymbol(method, seen) {
+                        derivedNode(method.toUElementOfType<UMethod>()?.uastBody, seen)
+                    }) return true
             }
             if (node is UReferenceExpression) {
                 val symbol = node.resolve()
-                if (symbol != null && seen.add(symbol)) {
-                    if (symbol is PsiVariable && (derived(symbol.toUElementOfType<UVariable>()?.uastInitializer, seen) ||
-                        assignments[symbol.navigationElement].orEmpty().any { derived(it, seen) })) return true
-                    if (symbol is PsiMethod && derived(symbol.toUElementOfType<UMethod>()?.uastBody, seen)) return true
-                }
+                if (symbol != null && derivedSymbol(symbol, seen) {
+                        symbol is PsiVariable && (derivedNode(symbol.toUElementOfType<UVariable>()?.uastInitializer, seen) ||
+                            assignments[symbol.navigationElement].orEmpty().any { derivedNode(it, seen) }) ||
+                            symbol is PsiMethod && derivedNode(symbol.toUElementOfType<UMethod>()?.uastBody, seen)
+                    }) return true
             }
             var result = false
             node.accept(object : AbstractUastVisitor() {
                 override fun visitElement(child: UElement): Boolean {
+                    if (result) return true
                     if (child === node) return false
-                    if (derived(child, seen)) result = true
+                    if (derivedNode(child, seen)) result = true
                     return true
                 }
             })
@@ -508,17 +530,27 @@ internal class UiPolicyDetector : Detector(), SourceCodeScanner {
             return result || (node as? UCallExpression)?.let { call -> transforms.any { suppliedArgument(call, it) != null } } == true
         }
 
-        private fun hostsSurface(call: UCallExpression, seen: MutableSet<PsiElement> = mutableSetOf()): Boolean {
+        private fun hostsSurface(call: UCallExpression): Boolean {
+            val seen = mutableSetOf<PsiElement>()
+            val result = hostsSurfaceNode(call, seen)
+            if (!result) seen.forEach { surfaceMethods.putIfAbsent(it, false) }
+            return result
+        }
+
+        private fun hostsSurfaceNode(call: UCallExpression, seen: MutableSet<PsiElement>): Boolean {
             if (call.methodName in surfaces) return true
             val method = call.resolve() ?: return false
+            surfaceMethods[method]?.let { return it }
             if (!seen.add(method)) return false
             var found = false
             method.toUElementOfType<UMethod>()?.uastBody?.accept(object : AbstractUastVisitor() {
                 override fun visitCallExpression(node: UCallExpression): Boolean {
-                    if (hostsSurface(node, seen)) found = true
+                    if (found) return true
+                    if (hostsSurfaceNode(node, seen)) found = true
                     return false
                 }
             })
+            if (found) surfaceMethods[method] = true
             return found
         }
 
