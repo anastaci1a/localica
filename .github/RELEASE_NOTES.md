@@ -1,6 +1,6 @@
-<!-- Release: v0.33.9 -->
+<!-- Release: v0.33.10 -->
 
-# Release v0.33.9
+# Release v0.33.10
 
 Android APK for Android 8 or newer. Keeps the existing `.debug` application ID and project development signing key for in-place updates. Separate production signing is not configured.
 
@@ -8,15 +8,19 @@ This is an optimized build (not debuggable, minified with R8, with a baseline pr
 
 ## Changes
 
-- With the None glass renderer, every glass surface (switch and slider thumbs, bars, buttons and frosted panels) is filled with the average of the content behind its whole area, and controls inside panels sample the panel's finished material.
-- Restart the system keyboard after the floating keyboard test so later tests start clean (follow-up to #638).
-- Allow up to five repeats per prototype run on the self-hosted test runner (follow-up to #592).
-- Accept green repeated-method prototype runs in the delivery decision.
+- Changing the view from the View popup, such as gallery items per row, now transitions like a pinch instead of jumping items into place.
+- A song selected in one view stays selected in every other view, so multi-select no longer counts it twice.
+- The circular seek and revert icons point their arrowheads in the right direction in the icon pack viewer and controls.
+- Fix two test flakes: Queue material readiness and the search keyboard wait.
+- Rebalance the measured test shard costs.
 
 ## Resolved issues
 
-- https://github.com/anastaci1a/localica/issues/624 - Fill None glass surfaces with the average of their full area.
-- https://github.com/anastaci1a/localica/issues/657 - Record the same method inventory for repeated-method prototype runs as each iteration does.
+- https://github.com/anastaci1a/localica/issues/627 - Transition View popup view changes like a pinch.
+- https://github.com/anastaci1a/localica/issues/651 - Recognise a selected song across views in multi-select.
+- https://github.com/anastaci1a/localica/issues/659 - Point the circular-arrow icon arrowheads the right way.
+- https://github.com/anastaci1a/localica/issues/645 - Fix the FrostedSurfaceTest Queue material readiness flake.
+- https://github.com/anastaci1a/localica/issues/593 - Fix the ListSearchTest search keyboard timing flake.
 
 ## Known issues
 
@@ -25,7 +29,7 @@ This is an optimized build (not debuggable, minified with R8, with a baseline pr
 
 ## Install
 
-1. Download `localica-v0.33.9-debug.apk` from **Assets** below (Android 8+).
+1. Download `localica-v0.33.10-debug.apk` from **Assets** below (Android 8+).
 2. Open the APK and allow installation from your browser or file manager if prompted. It updates the existing development app.
 3. First use: open **More → Scan music**, choose **Folders to scan**, then **Scan now**.
 
