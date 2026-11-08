@@ -7,10 +7,10 @@ gradle.beforeProject { project ->
     project.plugins.withId('com.android.application') {
         def components = project.extensions.getByName('androidComponents')
         components.onVariants(components.selector().withBuildType('debug'), { variant ->
-            variant.androidTest.experimentalProperties.put('android.experimental.force-aot-compilation', true)
+            variant.experimentalProperties.put('android.experimental.force-aot-compilation', true)
         } as org.gradle.api.Action)
-        project.tasks.matching { it.name == 'connectedDebugAndroidTest' }.configureEach { task ->
-            task.doFirst {
+        gradle.taskGraph.whenReady { graph ->
+            graph.allTasks.findAll { it.path == ':app:connectedDebugAndroidTest' }.each { task ->
                 if (!task.testRunnerFactory.forceCompilation.get()) {
                     throw new GradleException('API 26 CI requires full post-install AOT for both packages')
                 }
