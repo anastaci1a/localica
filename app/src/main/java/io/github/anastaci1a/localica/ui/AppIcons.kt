@@ -71,7 +71,17 @@ internal enum class AppIcon(val id: String, @DrawableRes val builtin: Int) {
     ActionLyrics("action.lyrics", R.drawable.ic_lyrics),
     ActionInfo("action.info", R.drawable.ic_info),
     ActionTrash("action.trash", R.drawable.ic_trash),
-    ActionPlaylistAdd("action.playlist_add", R.drawable.ic_playlist_add);
+    ActionPlaylistAdd("action.playlist_add", R.drawable.ic_playlist_add),
+    SettingsInterface("settings.interface", R.drawable.ic_settings_interface),
+    SettingsAppearance("settings.appearance", R.drawable.ic_settings_appearance),
+    SettingsIconPacks("settings.icon_packs", R.drawable.ic_settings_icon_packs),
+    SettingsGlass("settings.glass", R.drawable.ic_settings_glass),
+    SettingsNavigation("settings.navigation", R.drawable.ic_settings_navigation),
+    SettingsPlayer("settings.player", R.drawable.ic_settings_player),
+    SettingsMotion("settings.motion", R.drawable.ic_settings_motion),
+    SettingsLibraryFilters("settings.library_filters", R.drawable.ic_settings_library_filters),
+    SettingsMetadataFailures("settings.metadata_failures", R.drawable.ic_settings_metadata_failures),
+    SettingsTagJobs("settings.tag_jobs", R.drawable.ic_settings_tag_jobs);
     companion object {
         val ids: Set<String> = entries.mapTo(linkedSetOf()) { it.id }
         fun byId(id: String): AppIcon? = entries.firstOrNull { it.id == id }

@@ -1,0 +1,21 @@
+// CI-only: AGP compiles both APKs after installation, before instrumentation.
+// FULL_COMPILATION runs cmd package compile -m speed -f for each package.
+if (System.getenv('GITHUB_ACTIONS') != 'true' || System.getenv('TEST_API') != '26') {
+    throw new GradleException('API 26 AOT setup requires the API 26 CI lane')
+}
+gradle.beforeProject { project ->
+    project.plugins.withId('com.android.application') {
+        def components = project.extensions.getByName('androidComponents')
+        components.onVariants(components.selector().withBuildType('debug'), { variant ->
+            variant.experimentalProperties.put('android.experimental.force-aot-compilation', true)
+        } as org.gradle.api.Action)
+        gradle.taskGraph.whenReady { graph ->
+            graph.allTasks.findAll { it.path == ':app:connectedDebugAndroidTest' }.each { task ->
+                if (!task.testRunnerFactory.forceCompilation.get()) {
+                    throw new GradleException('API 26 CI requires full post-install AOT for both packages')
+                }
+                logger.lifecycle('API 26 CI: full post-install AOT enabled for app and test packages')
+            }
+        }
+    }
+}

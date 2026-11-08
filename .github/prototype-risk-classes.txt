@@ -410,3 +410,5 @@ io.github.anastaci1a.localica.PlayerLyricsOwnerContinuityTest
 
 io.github.anastaci1a.localica.SheetCollapseCompositionTest
 io.github.anastaci1a.localica.ArtworkVelocityTest
+io.github.anastaci1a.localica.SettingsRowAlignmentTest
+io.github.anastaci1a.localica.SettingsSearchTest

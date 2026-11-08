@@ -14,7 +14,7 @@ The song-menu icon set is the reference for future icons: 24 dp vectors, 1.8 str
 | Play next | `ic_menu_play_next` |
 | Add to current queue, Add to a queue, Add to queue (selection) | `ic_menu_queue_add` |
 | Information | `ic_menu_info` |
-| Download (unused) | `ic_download` |
+| Download, downloading state and Save artwork: a tray with a down arrow, never a plain arrow | `ic_download` |
 | Share (unused) | `ic_share` |
 | Station (unused) | `ic_station` |
 | Favorite (unused) | `ic_star` |
@@ -128,7 +128,15 @@ Long titles pause, scroll and fade at their edges. Reduced motion uses ellipsis.
 
 Browsing/settings stay light, with a pink selected-tab accent, shared neutral gray for secondary text/inactive icons, and red for errors/destructive actions. Use Inter with compact tracking and bold mini-player titles. Do not bundle Apple's system font. **Interface → Appearance** persistently adjusts gray, with reset to the darker default. Broader themes remain [planned](roadmap.md).
 
-Settings categories are Interface, Playback and queues, Library and tags, About/licenses, with icons, summaries and chevrons. Search appears only at the root. Both Back controls reverse the page entrance direction.
+Settings categories stay in this order: Interface, Playback and queues, Library and tags, About/licenses. Player stays inside Interface. Category rows have icons, summaries and chevrons. Both Back controls reverse the page entrance direction.
+
+Every settings page has global search. Results cover controls, choice values and synonyms without typo correction. Selecting a result scrolls to its row and briefly highlights it. Hidden options lead to the control that reveals them. Reduce motion uses an immediate scroll and a static highlight.
+
+Every settings row (links, switches, sliders, choices and headings) uses the shared row in `ui/PreferenceFrames.kt`. The leading icon sits in a fixed 40 dp slot and is centred vertically on the row, as is the trailing chevron or control, at any line count, font scale or density.
+
+All rows on a page start their text at the same x: flat rows take the glass links' 16 dp inner inset, and pages whose rows carry icons keep the empty slot on rows without one.
+
+No two settings rows share an icon, and each says what its row is; the dedicated glyphs have `settings.*` [icon pack ids](icon-packs.md#icon-ids).
 
 **Settings → About and licenses → Export diagnostics** opens a glass dialog, then the Android share sheet with one text file: app version, device model, Android version, export time and the diagnostics trail. Nothing leaves the device unless the user picks a share target; there is no network path.
 
@@ -138,7 +146,9 @@ A healthy idle app records nothing. Debuggable builds also mirror each line to l
 
 Glass always follows the scrolling content. The retired scroll-freeze preference is removed during migration.
 
-**Interface → Glass** provides live persistent controls and reset, with a draggable preview that compresses at its edges and morphs between a pill and dialog:
+**Interface → Glass** keeps Renderer on its root. Glass appearance, Glass advanced and Navigation selector are internal submenus. With Renderer set to None, glass options and submenus remain visible and disabled. Saved values are preserved.
+
+Glass appearance includes a draggable preview that compresses at its edges and morphs between a pill and dialog. The submenus retain these persistent controls:
 
 | Control | Range / treatment |
 | --- | --- |
@@ -273,7 +283,7 @@ In all lists, including queues and album details, pinch outward through Smallest
 
 Change one adjacent view per gesture, requiring all fingers to lift before another step. A 4% span change picks the direction. The first presented frame keeps the source, then geometry catches up to the full finger distance over 100 ms.
 
-A slow frame advances that ease and the release settle by at most one 60 Hz frame, so neither finishes in a single step.
+A slow first frame advances that ease and the release settle by at most one 60 Hz frame, so neither finishes in a single step. Later frames advance at most a quarter of the ease, so a sustained slow frame rate still shows each ease over at least four frames instead of stretching it indefinitely.
 
 Shared pinch geometry carries the captured selection lift into both live and retained items. Reversing restores items virtualized out by the destination. All text draws below a separate artwork pass. Within each pass earlier items draw on top.
 

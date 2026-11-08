@@ -8,6 +8,8 @@ import androidx.compose.ui.Modifier
 import io.github.anastaci1a.localica.library.FolderSelection
 import io.github.anastaci1a.localica.library.LibrarySnapshot
 import androidx.compose.ui.test.*
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.text.AnnotatedString
 import io.github.anastaci1a.localica.localicaComposeRule as createComposeRule
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.anastaci1a.localica.browse.*
@@ -72,7 +74,7 @@ class SettingsOptionsTest {
         } }
         repeat(2) {
             assertAnchoredPopup(host, "Exclude short files") {
-                compose.onNode(hasSetTextAction()).performTextReplacement("17")
+                compose.onNode(hasSetTextAction() and !hasContentDescription("Search settings input")).performTextReplacement("17")
             }
             compose.runOnIdle {
                 assertEquals("Cancelling an edited duration preserves scanner rules", originalOptions, preferences.read(""))
@@ -98,18 +100,18 @@ class SettingsOptionsTest {
             assertAnchoredPopup(host, "Excluded subfolders") {
                 compose.onNodeWithText("Both scans skip these paths when Include subfolders is on.", substring = true).assertIsDisplayed()
                 compose.onNodeWithText("Run Full scan to remove indexed songs from excluded paths.", substring = true).assertIsDisplayed()
-                compose.onNode(hasSetTextAction()).performTextReplacement("Synthetic/Cancelled")
+                compose.onNode(hasSetTextAction() and !hasContentDescription("Search settings input")).performTextReplacement("Synthetic/Cancelled")
             }
             assertAnchoredPopup(host, "Remove folder")
             compose.runOnIdle { assertEquals("Cancellation preserves the folder scan configuration", originalOptions, preferences.read(root)) }
         }
     }
 
-    @Test fun settingsSearchIsRootOnlyAndScannerLinksReachSharedFolderPage() {
+    @Test fun settingsSearchIsAvailableOnEveryPageAndScannerLinksReachSharedFolderPage() {
         compose.setContent { LocalicaTheme { FolderSettings(LibraryUiState(loading = false), {}, {}, {}) } }
         compose.onNode(hasSetTextAction()).performTextInput("scanner")
         compose.onNodeWithText("Scanner").performClick()
-        compose.onNodeWithText("Search settings").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Search settings input").assertExists().assert(SemanticsMatcher.expectValue(SemanticsProperties.EditableText, AnnotatedString("")))
         compose.onNodeWithText("Folders to scan").assertDoesNotExist()
         compose.onNodeWithText("Metadata read failures").performScrollTo().performClick()
         compose.onNodeWithText("No metadata read failures.").assertIsDisplayed()
@@ -121,7 +123,7 @@ class SettingsOptionsTest {
         compose.onNodeWithText("Choose folder").assertIsDisplayed()
         compose.onNodeWithContentDescription("Back from settings").performClick()
         compose.onNodeWithContentDescription("Back from settings").performClick()
-        compose.onNode(hasSetTextAction()).assertTextContains("scanner")
+        compose.onNodeWithContentDescription("Search settings input").assert(SemanticsMatcher.expectValue(SemanticsProperties.EditableText, AnnotatedString("")))
     }
     @Test fun quickScanIsSearchableAndKeepsTheExistingOptInPreference() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
