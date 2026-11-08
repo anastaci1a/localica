@@ -89,8 +89,11 @@ internal class ArtistPhotoProviders(private val http: PhotoTransport) {
     private suspend fun deezer(entry: JSONObject, id: String, name: String): RemoteArtist {
         val releases = json("https://api.deezer.com/artist/$id/top?limit=25").optJSONArray("data")?.objects(25)
             ?.mapNotNull { it.optJSONObject("album")?.text("title") }?.distinct().orEmpty()
-        val image = sequenceOf(entry.text("picture_xl"), entry.text("picture_big")).filterNotNull()
-            .firstOrNull { safePhotoUrl(it) && URI(it).host in setOf("cdn-images.dzcdn.net", "cdn-images.deezer.com", "e-cdns-images.dzcdn.net") }
+        val image = if (entry.has("md5_image") && entry.text("md5_image") == null) null else
+            sequenceOf(entry.text("picture_xl"), entry.text("picture_big")).filterNotNull().firstOrNull {
+                safePhotoUrl(it) && !URI(it).path.orEmpty().contains("/artist//") &&
+                    URI(it).host in setOf("cdn-images.dzcdn.net", "cdn-images.deezer.com", "e-cdns-images.dzcdn.net")
+            }
         return RemoteArtist(ArtistPhotoChoice(ArtistPhotoProvider.DEEZER, id), name, releases, image)
     }
     private suspend fun musicbrainz(id: String, name: String): RemoteArtist {
