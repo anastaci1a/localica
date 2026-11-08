@@ -24,7 +24,8 @@ class LastFmGroupListTest {
         val remote = LastFmTrack("Remote Artist", "Remote Song", 123)
         val matches = LastFmMatches(emptyMap(), listOf(LastFmReview(remote, listOf(song), "Review evidence")),
             editions = listOf(LastFmReview(remote, listOf(song), "Edition evidence")),
-            resolutions = listOf(LastFmResolution(remote, listOf(song), LastFmMatchTier.PROBABLE, "Weak evidence", 75)), unmatched = listOf(remote))
+            resolutions = listOf(LastFmResolution(remote, listOf(song), LastFmMatchTier.PROBABLE, "Weak evidence", 75),
+                LastFmResolution(remote, listOf(song), LastFmMatchTier.CLEAR, "Exact recording", 100)), unmatched = listOf(remote))
         var group by mutableStateOf(LastFmGroup.MATCHED)
         val choices = mutableListOf<Pair<String, String>>()
         var undone: String? = null
@@ -45,10 +46,14 @@ class LastFmGroupListTest {
                 assertEquals(remote.key, undone)
             }
             compose.onNodeWithText("Remote Artist — Remote Song").performScrollTo().performClick()
-            if (item != LastFmGroup.ABSENT) compose.onNodeWithText("None of these").performScrollTo().performClick()
+            compose.onNodeWithTag("lastfm-match-field").performScrollTo().performClick()
+            compose.onNodeWithText("Choose another song…").performScrollTo().performClick()
+            compose.onNodeWithText("Select").performClick()
             compose.onNode(hasSetTextAction() and hasAnyAncestor(hasTestTag("lastfm-library-search")), useUnmergedTree = true).performTextReplacement("Outside")
+            compose.onNodeWithTag("lastfm-match-field").performScrollTo().performClick()
             compose.onNodeWithText("Outside · Artist · Other").performScrollTo().performClick()
-            compose.onNodeWithText("Use selection").performClick()
+            compose.onNodeWithText("Select").performClick()
+            compose.onNodeWithContentDescription("Use selection").performClick()
             compose.waitUntil(5000) { choices.size == item.ordinal + 1 }
             compose.onNodeWithText("Choose a match").assertDoesNotExist()
         }
