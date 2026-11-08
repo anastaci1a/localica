@@ -87,32 +87,30 @@ run_gate() {
 # #675: the emulator's adb transport can drop in the second after a complete, all-pass
 # instrumentation run, while UTP pulls outputs and uninstalls the APKs. Gradle then fails
 # on a teardown-only plugin error although every test passed. Only that exact signature,
-# with the SAME guest answering again, earns one more run of this gate; the first attempt's
-# evidence is retained. Any failed, missing or uncounted test keeps the original failure.
+# with the SAME guest answering again and the interrupted uninstall completed, lets the
+# reconciliation below judge the first attempt's complete XML. Never a second run: it
+# would give every test another chance. Any failed, missing or uncounted test, a rebooted
+# guest, a device that stays offline or a package that cannot be removed keeps the failure.
+# Exact-method iterations are excluded: the delivery decision requires their clean exit.
 offline=prototype-evidence/teardown-offline
-prepare_teardown_offline_retry() {
-  local path
-  mkdir "$offline/first-attempt" || return 1
-  mv prototype-evidence/live "$offline/first-attempt/live" || return 1
-  for path in app/build/outputs/androidTest-results app/build/outputs/connected_android_test_additional_output app/build/reports/androidTests; do
-    [[ ! -e "$path" ]] || mv "$path" "$offline/first-attempt/$(basename "$path")" || return 1
-  done
-  # The teardown that the drop interrupted: remove both packages so the retry installs fresh.
-  python3 .github/test-evidence/teardown_offline.py uninstall --serial "$serial" --output "$offline/uninstall.json" || return 1
-  if declare -F guard_error_dialogs >/dev/null; then guard_error_dialogs retry; fi
+monitoring_completed() {
+  python3 - prototype-evidence/live/supervision.json <<'PYSUP'
+import json, sys
+receipt = json.loads(open(sys.argv[1]).read())
+raise SystemExit(0 if receipt['monitoring_complete'] is True and receipt['supervisor_error'] is None else 1)
+PYSUP
 }
 set +e
 run_gate
 result=$?
-if [[ "$result" != 0 ]] \
+if [[ "$result" != 0 && "$method_iteration" == false ]] \
   && python3 .github/test-evidence/teardown_offline.py classify --live prototype-evidence/live --results app/build/outputs/androidTest-results --expected prototype-evidence/expected-methods.json --output "$offline/classification.json" \
   && python3 .github/test-evidence/teardown_offline.py recover --serial "$serial" --api "$TEST_API" --boot-id "$boot_id" --timeout "${PROTOTYPE_OFFLINE_RECOVERY_SECONDS:-180}" --output "$offline" \
-  && prepare_teardown_offline_retry; then
-  echo "::warning title=#675 adb offline after a complete pass::API $TEST_API emulator went offline during UTP teardown after a complete, failure-free run (exit $result); the same guest reconnected, so this gate runs once more. First attempt retained under $offline/first-attempt."
-  printf 'first_attempt_exit=%s\n' "$result" > "$offline/retry.txt"
-  run_gate
-  result=$?
-  printf 'retry_exit=%s\n' "$result" >> "$offline/retry.txt"
+  && python3 .github/test-evidence/teardown_offline.py uninstall --serial "$serial" --output "$offline/uninstall.json" \
+  && monitoring_completed; then
+  echo "::warning title=#675 adb offline after a complete pass::API $TEST_API emulator went offline during UTP teardown after a complete, failure-free run (Gradle exit $result); the same guest reconnected and the interrupted uninstall completed, so the first attempt's final XML is reconciled as usual. Evidence under $offline."
+  printf 'first_attempt_exit=%s\n' "$result" > "$offline/recovered.txt"
+  result=0
 fi
 set -e
 [[ "$result" == 0 ]] || exit "$result"
@@ -122,8 +120,18 @@ if not __debug__:
     raise SystemExit("Optimized Python cannot disable prototype reconciliation")
 root = pathlib.Path('prototype-evidence')
 observed = json.loads((root/'live/observed/manifest.json').read_text())
-assert observed['status'] == 'completed' and observed['child_returncode'] == 0
-assert observed['observer_exit_status'] == 0 and observed['observed_failure_lines'] == 0
+if (root/'teardown-offline/recovered.txt').is_file():
+    # #675: Gradle failed only on the teardown plugin error after a complete run; the same
+    # guest answered again and the uninstall completed. The final XML below still decides.
+    assert json.loads((root/'teardown-offline/classification.json').read_text())['accepted'] is True
+    assert json.loads((root/'teardown-offline/recovery.json').read_text())['recovered'] is True
+    assert observed['status'] == 'failed' and observed['child_returncode'] not in (None, 0)
+    assert observed['observer_exit_status'] == observed['child_returncode'], 'Observer degraded beyond the Gradle exit'
+    assert observed['cancel_signal'] is None and observed['observer_error'] is None
+else:
+    assert observed['status'] == 'completed' and observed['child_returncode'] == 0
+    assert observed['observer_exit_status'] == 0
+assert observed['observed_failure_lines'] == 0
 assert not (root/'live/observed/events.jsonl').read_text().strip(), 'Observed failure contradicts a successful exit'
 selected = set(sys.argv[1].split(','))
 counts = {c: {'passed': 0, 'failed': 0, 'errors': 0, 'skipped': 0} for c in selected}
