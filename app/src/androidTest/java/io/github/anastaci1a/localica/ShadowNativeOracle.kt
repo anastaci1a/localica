@@ -68,6 +68,52 @@ internal fun collectRetainedSamplingDiagnostics(rule: ComposeContentTestRule) {
     } } finally { rule.mainClock.autoAdvance = true }
 }
 
+internal fun collectNativeDestinationCutoutDiagnostics(rule: ComposeContentTestRule) {
+    var shift by mutableStateOf(0f)
+    lateinit var bodies: List<Pair<RoundRect, Float>>
+    lateinit var clock: UiClock
+    rule.setContent {
+        val currentClock = LocalUiClock.current
+        SideEffect { clock = currentClock }
+        Box(Modifier.size(240.dp).background(Color.White).testTag("diagnostic-cutout").drawBehind {
+            bodies = listOf(60f, 110f).map { top -> RoundRect(60.dp.toPx() + .25f + shift,
+                top.dp.toPx() + .75f + shift, 160.dp.toPx() + .25f + shift,
+                (top + 40).dp.toPx() + .75f + shift, CornerRadius(20.dp.toPx())) to 1f }
+            diagnosticCutoutMask(bodies)
+        })
+    }
+    rule.waitForIdle(); rule.mainClock.autoAdvance = false
+    try { ShadowNativeCapture(rule, rule.onNodeWithTag("diagnostic-cutout")) { clock.stampNow.sequence }.use { native ->
+        for (delta in listOf(0f, .5f)) {
+            rule.runOnIdle { shift = delta }; rule.mainClock.advanceTimeByFrame(); rule.waitForIdle()
+            val actual = native.capture { scene -> ShadowDrawState(clock.stampNow.sequence, 0,
+                shadowScreenBodies(bodies, scene.topLeft)) }
+            val state = actual.nativeWindows.single().state
+            val expected = ImageBitmap(actual.image.width, actual.image.height)
+            val extent = Size(expected.width.toFloat(), expected.height.toFloat())
+            val blank = ImageBitmap(expected.width, expected.height)
+            CanvasDrawScope().draw(rule.density, LayoutDirection.Ltr, Canvas(blank), extent) { drawRect(Color.White) }
+            CanvasDrawScope().draw(rule.density, LayoutDirection.Ltr, Canvas(expected), extent) {
+                drawRect(Color.White); diagnosticCutoutMask(state.bodies)
+            }
+            val scene = checkNotNull(actual.sceneBounds)
+            val roi = Rect(scene.left, scene.top + 10f, scene.right, scene.bottom)
+            check(state.bodies.all { (r, _) -> val edge = Rect(r.left, r.top, r.right, r.bottom).inflate(2f)
+                roi.contains(edge.topLeft) && roi.contains(edge.bottomRight) })
+            val reference = actual.copy(image = expected, offscreen = true)
+            val result = ShadowFieldProbe(listOf(roi), 1f / 255f).compare(actual, reference,
+                actual.copy(image = blank, offscreen = true))
+            shadowOracleEvidence("diagnostic-native-cutout-$delta", actual, reference, result)
+        }
+    } } finally { rule.mainClock.autoAdvance = true }
+}
+
+private fun androidx.compose.ui.graphics.drawscope.DrawScope.diagnosticCutoutMask(bodies: List<Pair<RoundRect, Float>>) {
+    val origin = androidx.compose.ui.geometry.Offset(bodies.minOf { it.first.left }, bodies.minOf { it.first.top })
+    val geometry = GlassShadowGeometry().apply { update(shadowScreenBodies(bodies, -origin).map { it.first }, 0f, 0f, false) }
+    translate(origin.x, origin.y) { clipPath(geometry.body, ClipOp.Difference) { drawRect(Color.Black, -origin, size) } }
+}
+
 private fun recordRetainedSamplingVariants(rule: ComposeContentTestRule, actual: PresentedCapture, label: String) {
     checkNativeShadowMarker(actual)
     val state = actual.nativeWindows.single().state
