@@ -2519,7 +2519,7 @@
         errorLine2="                                                               ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="621"
+            line="623"
             column="64"/>
     </issue>
 
@@ -2530,7 +2530,7 @@
         errorLine2="                                                                                                            ~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="652"
+            line="654"
             column="109"/>
     </issue>
 
@@ -2541,7 +2541,7 @@
         errorLine2="                                                                                                                                                                          ~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="652"
+            line="654"
             column="171"/>
     </issue>
 
@@ -2585,7 +2585,7 @@
         errorLine2="                                         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="774"
+            line="776"
             column="42"/>
     </issue>
 
@@ -2607,7 +2607,7 @@
         errorLine2="                                                                                                                     ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="922"
+            line="924"
             column="118"/>
     </issue>
 
@@ -8416,7 +8416,7 @@
         errorLine2="        ~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="588"
+            line="590"
             column="9"/>
     </issue>
 
@@ -8427,7 +8427,7 @@
         errorLine2="            ~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="611"
+            line="613"
             column="13"/>
     </issue>
 
@@ -8438,7 +8438,7 @@
         errorLine2="                ~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="708"
+            line="710"
             column="17"/>
     </issue>
 
@@ -8449,7 +8449,7 @@
         errorLine2="                        ~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="796"
+            line="798"
             column="25"/>
     </issue>
 
@@ -8460,7 +8460,7 @@
         errorLine2="                                      ~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="799"
+            line="801"
             column="39"/>
     </issue>
 
@@ -12114,7 +12114,7 @@
         errorLine2="                                     ~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="796"
+            line="798"
             column="38"/>
     </issue>
 
@@ -12180,7 +12180,7 @@
         errorLine2="                                       ~~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="907"
+            line="909"
             column="40"/>
     </issue>
 
@@ -15344,7 +15344,7 @@
         errorLine2="                                                                                    ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="612"
+            line="614"
             column="85"/>
     </issue>
 
@@ -18457,7 +18457,7 @@
         errorLine2="                      ~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="485"
+            line="487"
             column="23"/>
     </issue>
 
@@ -18468,7 +18468,7 @@
         errorLine2="                                                                    ~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="600"
+            line="602"
             column="69"/>
     </issue>
 

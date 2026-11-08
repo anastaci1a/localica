@@ -325,6 +325,8 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
         onDispose { gestures.deactivate() }
     }
     val searchMotion = remember { SearchMorphMotion() }
+    // Diagnostic intent origin precedes this composition's next placement callback.
+    val searchOpeningFrom = remember(visible) { searchMotion.rendered.takeIf { it.width > 0f } }
     SideEffect { searchMotion.observer = searchObserver }
     var searchTransitioning by remember { mutableStateOf(false) }
     var searchReturning by remember { mutableStateOf(false) }
@@ -399,7 +401,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                 searchFocusRequest = null
                 searchShapeStarted = false
                 searchOpeningPositioned = false
-                searchFlight = SearchMorphFlight(searchMotion.rendered.takeIf { it.width > 0f } ?: origin,
+                searchFlight = SearchMorphFlight(searchOpeningFrom ?: origin,
                     progress.value, opening = true)
             } else beginSearchReturn()
         }
