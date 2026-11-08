@@ -101,4 +101,44 @@ class LastFmWorkerTest {
             assertEquals(before, calls)
         } finally { scope.cancel(); dispose(file) }
     }
+    /** The ordinary suite executes both phases. The host proof runs seed → force-stop → resume in separate app processes. */
+    @Test fun durableAttemptCanBeResumedAfterAppProcessDeath() = runBlocking {
+        val phase = InstrumentationRegistry.getArguments().getString("lastfmDeathPhase")
+        require(phase == null || phase == "seed" || phase == "resume")
+        val file = File(context.cacheDir, if (phase == null) "lastfm-death-${UUID.randomUUID()}.json" else "lastfm-death-probe.json")
+        val receipt = File(file.path + ".receipt")
+        val firstScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        val resumedScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        try {
+            if (phase != "resume") {
+                FileLastFmStore(file).write(old)
+                val first = controller(file, firstScope, Consent(), LastFmApi { _, page -> if (page == 1)
+                    LastFmPage(1, 2, listOf(LastFmTrack("New", "Partial", 99))) else awaitCancellation() }, 100_000)
+                val id = UUID.randomUUID()
+                firstScope.launch { worker(first, id, CopyOnWriteArrayList(), CopyOnWriteArrayList()).doWork() }
+                withTimeout(5000) { first.state.first { it.progress?.page == 1 } }
+                assertEquals(old.snapshot, FileLastFmStore(file).read().snapshot)
+                receipt.writeText(org.json.JSONObject().put("id", id.toString()).put("pid", android.os.Process.myPid()).toString())
+                if (phase == "seed") {
+                    android.util.Log.i("LastFmProcessDeath", "seed pid=${android.os.Process.myPid()} attempt=$id; previous snapshot intact")
+                    return@runBlocking
+                }
+                firstScope.cancel()
+            }
+            val seed = org.json.JSONObject(receipt.readText())
+            if (phase == "resume") assertNotEquals("The host must kill the seeded process before resume", seed.getInt("pid"), android.os.Process.myPid())
+            val saved = FileLastFmStore(file).read()
+            assertEquals(old.snapshot, saved.snapshot); assertEquals(seed.getString("id"), saved.activeAttempt)
+            val resumed = controller(file, resumedScope, Consent(), LastFmApi { _, page ->
+                LastFmPage(page, 1, listOf(LastFmTrack("New", "Complete", 200))) }, 100_001)
+            assertEquals(ListenableWorker.Result.success(), worker(resumed, UUID.fromString(seed.getString("id")),
+                CopyOnWriteArrayList(), CopyOnWriteArrayList()).doWork())
+            assertEquals("Complete", FileLastFmStore(file).read().snapshot!!.tracks.single().title)
+            assertNull(FileLastFmStore(file).read().activeAttempt)
+            android.util.Log.i("LastFmProcessDeath", "resumed seedPid=${seed.getInt("pid")} pid=${android.os.Process.myPid()}; atomic completion verified")
+        } finally {
+            // Explicit seed leaves the blocked worker and its durable files for the host to kill, without graceful cancellation.
+            if (phase != "seed") { firstScope.cancel(); resumedScope.cancel(); dispose(file); receipt.delete() }
+        }
+    }
 }

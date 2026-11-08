@@ -80,6 +80,8 @@ Ranking windows use the caller's time zone and inclusive event boundaries. The c
 
 A provider interface keeps local and external counts separate. Typed settings select external counts with per-song local fallback; unsupported windows also fall back locally. Artist hub UI and additional sort controls remain separate work. The Last.fm provider stores its snapshot, account selection and mappings in a dedicated atomic file.
 
+The background worker and in-process path share a controller. A persisted work-request ID lets the same interrupted attempt restart paging within the 60-second throttle. Ephemeral progress and WorkManager status never become a snapshot. Cancellation preserves the last completed same-account snapshot.
+
 Appears On and Similar Artists currently return empty through an enrichment interface.
 
 ### Settings/selection

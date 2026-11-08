@@ -115,7 +115,7 @@ Timed lyrics interpolate Media3's latency-aware position between samples, freezi
 
 ## Online features and artist photos
 
-Online features is one app-level consent switch in Settings → Last.fm. It defaults off. Consent covers artist photos and manual Last.fm sync. Turning it off prevents new network requests; cached photos and saved counts remain available offline.
+Online features is one app-level consent switch in Settings → Last.fm. It defaults off. Consent covers artist photos and manual Last.fm sync. Turning it off cancels Last.fm work and prevents new network requests; cached photos and saved counts remain available offline.
 
 Artist photo lookup sends artist and release names to Deezer, then MusicBrainz, Wikidata and Wikimedia Commons when needed. It never uses Last.fm images. Automatic matching requires a normalized artist name and a release title shared with the local library. Missing matches retain the caller's latest album artwork.
 
@@ -127,7 +127,11 @@ Photos refresh after 30 days. Failed attempts wait 24 hours before retrying. A 6
 
 Settings → Last.fm accepts a username and explicitly starts a read-only sync. No password, account login or OAuth is used. Last.fm requests use its HTTPS API. Requests fetch listening statistics; they never upload local history or audio. Sync is manual, with no automatic launch request.
 
+Keep syncing in the background defaults on. A manually requested sync uses one persistent WorkManager request with a foreground progress notification. The notification opens Last.fm settings and offers Cancel. Disabling the option uses in-process sync for future requests. No periodic or launch sync is scheduled.
+
 A complete paginated snapshot replaces the previous snapshot only after every page succeeds. Requests are paced, transient failures retry with backoff, and complete sync attempts are limited to once a minute. Failed same-account syncs preserve the last complete offline snapshot. Changing username clears the previous account's snapshot and turns external counts off.
+
+Progress shows validated pages, percentage and songs fetched. Account summaries derive track entries, scrobbles, distinct songs and artist credits from the completed snapshot. Albums are counted only when supplied. No additional account API requests are made.
 
 Local qualified events and Last.fm counts remain separate. Use Last.fm counts is off by default. When enabled, positive Last.fm totals feed per-song play-based sorting and all-time rankings; songs without positive remote totals use local counts. Recent time ranges continue using local events. Turning the setting off restores local counts without a sync.
 

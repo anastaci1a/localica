@@ -54,6 +54,11 @@ class LastFmReviewTest {
             compose.waitForIdle()
             org.junit.Assert.assertTrue(androidx.test.uiautomator.UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
                 .takeScreenshot(File(directory, "review-decision-selected.png")))
+            compose.onNodeWithText("Images and Words · Learning to Live").performTouchInput { down(center) }
+            compose.waitForIdle()
+            org.junit.Assert.assertTrue(androidx.test.uiautomator.UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
+                .takeScreenshot(File(directory, "review-decision-pressed.png")))
+            compose.onNodeWithText("Images and Words · Learning to Live").performTouchInput { up() }
             compose.onNodeWithText("Skip").performClick()
             compose.onNodeWithText("86 plays · Skipped for now").assertExists()
             compose.onNodeWithText("Dream Theater — Learning to Live").performClick()

@@ -203,7 +203,11 @@ The [appearance settings](#appearance-and-settings) own thumb finish and expansi
 
 ### Last.fm settings
 
-The Last.fm settings page uses shared text fields, buttons and switches. It shows username, explicit Sync now, last successful sync, source selection, errors and unresolved matches. Candidate buttons resolve ambiguous recordings; Disconnect clears the external snapshot. See the [statistics contract](product.md#optional-lastfm-statistics) for privacy, fallback and retention rules.
+The Last.fm page uses shared text fields, buttons and switches. It shows sync progress, account statistics, source selection and errors. See the [statistics contract](product.md#optional-lastfm-statistics) for privacy, background work, fallback and retention rules.
+
+Review matches starts with a glass summary and compact rows. Needs review shows up to 20 items per page, ordered by plays. Auto-matched editions and Not in your library start collapsed.
+
+Tap a review row to open a shared glass popup. Selectable glass rows show album and track title with a selected indicator. Use selection confirms the choice. None of these excludes the entry; Skip defers it for the current visit.
 
 ## Navigation and Back
 

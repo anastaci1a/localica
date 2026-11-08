@@ -44,7 +44,7 @@ internal fun LastFmSummary(state: LastFmState, matches: LastFmMatches, summaryTa
 
 @Composable
 internal fun LastFmReviewList(matches: LastFmMatches, onMap: (String, String) -> Unit) {
-    var shown by rememberSaveable { mutableIntStateOf(20) }
+    var page by rememberSaveable { mutableIntStateOf(0) }
     var editionsOpen by rememberSaveable { mutableStateOf(false) }
     var editionsShown by rememberSaveable { mutableIntStateOf(20) }
     var absentOpen by rememberSaveable { mutableStateOf(false) }
@@ -52,7 +52,8 @@ internal fun LastFmReviewList(matches: LastFmMatches, onMap: (String, String) ->
     SettingsHeading("Needs review (${matches.review.size})")
     if (matches.review.isEmpty()) Text("All available matches are resolved.", style = MaterialTheme.typography.bodyMedium)
     val ordered = matches.review.filter { it.remote.key !in skipped } + matches.review.filter { it.remote.key in skipped }
-    ordered.take(shown).forEach { review -> key(review.remote.key) {
+    val currentPage = page.coerceAtMost((ordered.size - 1).coerceAtLeast(0) / 20)
+    ordered.drop(currentPage * 20).take(20).forEach { review -> key(review.remote.key) {
         var open by remember { mutableStateOf(false) }
         val anchor = rememberGlassAnchor()
         SettingsLink("${review.remote.artist} — ${review.remote.title}",
@@ -64,7 +65,8 @@ internal fun LastFmReviewList(matches: LastFmMatches, onMap: (String, String) ->
             }, onChoose = { onMap(review.remote.key, it); open = false })
         }
     } }
-    if (matches.review.size > shown) SettingsLink("Show more matches", "Next 20, ordered by plays") { shown += 20 }
+    if (currentPage > 0) SettingsLink("Previous matches", "Previous 20") { page = currentPage - 1 }
+    if (ordered.size > (currentPage + 1) * 20) SettingsLink("Show more matches", "Next 20, ordered by plays") { page = currentPage + 1 }
     SettingsLink("Auto-matched editions (${matches.editions.size})", if (editionsOpen) "Hide editions" else "Show editions",
         AppIcon.TabAlbums) { editionsOpen = !editionsOpen }
     if (editionsOpen) {
