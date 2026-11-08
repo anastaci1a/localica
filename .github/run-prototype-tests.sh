@@ -142,8 +142,8 @@ methods = {}
 source_bytes = (root/'expected-methods.json').read_bytes()
 source_inventory = json.loads(source_bytes)
 assert set(source_inventory['selectors']) == selected
-# #464: runtime_methods already excludes methods gated above this API (SdkSuppress); a gated
-# method must be absent below its API and present at or above it, like any other method.
+# runtime_methods excludes methods outside their SdkSuppress interval. They must be
+# absent outside it and execute inside it; runtime assumption skips still need evidence.
 expected_methods = set(source_inventory['runtime_methods'])
 assert source_inventory.get('api') == int(observed['api']), 'Inventory API differs from the observed API'
 gates = source_inventory['gates']
@@ -265,10 +265,10 @@ for file in files:
                 assert int(suite.attrib[attr]) == sum(c.find(tag) is not None for c in cases), 'Inconsistent XML '+attr
 assert set(methods) == expected_methods, 'Missing or extra source-declared methods'
 assert all(counts[c]['skipped'] == 0 for c in required), 'Required regression methods cannot skip'
-result = {'qualified_skips': qualified_skips, 'methods': methods, 'source_inventory_sha256': hashlib.sha256(source_bytes).hexdigest(), 'required_selectors': sorted(required), 'schema_version': 1, 'sha': observed['sha'], 'api': observed['api'], 'selectors': sorted(selected), 'counts': counts, 'xml_files': [str(p) for p in files], 'release_certified': False}
+result = {'qualified_absences': source_inventory['gated_absent_reasons'], 'qualified_skips': qualified_skips, 'methods': methods, 'source_inventory_sha256': hashlib.sha256(source_bytes).hexdigest(), 'required_selectors': sorted(required), 'schema_version': 1, 'sha': observed['sha'], 'api': observed['api'], 'selectors': sorted(selected), 'counts': counts, 'xml_files': [str(p) for p in files], 'release_certified': False}
 (root/'reconciled-tests.json').write_text(json.dumps(result, indent=2)+'\n')
 assert not (gated_classes & required), 'Required regression classes cannot be API-gated'
-# A class may run nothing when it is wholly SdkSuppress-gated above this API, or only skip methods whose own
+# A class may run nothing when it is wholly SdkSuppress-gated outside this API, or only skip methods whose own
 # source assumeTrue(SDK_INT >= N) is above this API; every other class needs a passing method.
 assert all(v['failed'] == 0 and v['errors'] == 0 and (v['passed'] > 0 or (c in gated_classes and not any(v.values()))
            or (v['skipped'] > 0 and v['skipped'] == assume_gated_skips.get(c, 0)))

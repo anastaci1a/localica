@@ -640,6 +640,26 @@ p=pathlib.Path(sys.argv[sys.argv.index('--state-dir')+1]);p.mkdir();(p/'complete
         self.rerun(1, AFFECTED_CLASSES=cls, TEST_API='36', CASES=self.cases())
         self.rerun(1, AFFECTED_CLASSES=cls, TEST_API='26', CASES=self.cases(cls+'#one'))
 
+    def test_max_sdk_absence_is_qualified_on_36_and_execution_required_on_26(self):
+        cls=self.gated_source('LegacyCaptureTest', '@org.junit.Test fun plain() {} '
+            '@org.junit.Test @androidx.test.filters.SdkSuppress(maxSdkVersion = 32) fun legacy() {}')
+        self.run_case(AFFECTED_CLASSES=cls, TEST_API='36', CASES=self.cases(cls+'#plain'))
+        evidence=json.loads((self.root/'prototype-evidence/reconciled-tests.json').read_text())
+        self.assertEqual({cls+'#legacy': 'SdkSuppress(maxSdkVersion=32) excludes API 36'},
+                         evidence['qualified_absences'])
+        self.rerun(AFFECTED_CLASSES=cls, TEST_API='26', CASES=self.cases(cls+'#plain',cls+'#legacy'))
+        self.rerun(1, AFFECTED_CLASSES=cls, TEST_API='26', CASES=self.cases(cls+'#plain'))
+        self.rerun(1, AFFECTED_CLASSES=cls, TEST_API='36', CASES=self.cases(cls+'#plain',cls+'#legacy'))
+        self.rerun(1, AFFECTED_CLASSES=cls, TEST_API='26', SKIP_CLASS=cls, SKIP_METHOD='legacy')
+        self.rerun(1, AFFECTED_CLASSES=cls, TEST_API='36', SKIP_CLASS=cls, SKIP_METHOD='legacy')
+
+    def test_max_sdk_class_gate_requires_absence_only_above_bound(self):
+        cls=self.gated_source('LegacyWholeTest', '@org.junit.Test fun one() {}',
+                              '@androidx.test.filters.SdkSuppress(maxSdkVersion = 32)')
+        self.run_case(AFFECTED_CLASSES=cls, TEST_API='36', CASES=self.cases())
+        self.rerun(AFFECTED_CLASSES=cls, TEST_API='26', CASES=self.cases(cls+'#one'))
+        self.rerun(1, AFFECTED_CLASSES=cls, TEST_API='26', CASES=self.cases())
+
     def assume_gated(self, name='AssumeGatedTest'):
         cls=self.gated_source(name, '@org.junit.Test fun regression() {} @org.junit.Test fun gatedByAssume() { '
             'org.junit.Assume.assumeTrue(android.os.Build.VERSION.SDK_INT >= 33)\n val x = 1 }')

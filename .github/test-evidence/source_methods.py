@@ -5,13 +5,12 @@ runtime discovery oracle. Only direct @org.junit.Test (or imported Test/alias) m
 of selected top-level concrete classes count. Inherited/generated/parameterized tests
 and runner rewrites are not inferred. Reconciliation must reject every
 missing/extra/duplicate runtime ID.
-API gating (#464): a literal @SdkSuppress(minSdkVersion = N) on a class or method, and a
-direct Assume.assumeTrue([message,] Build.VERSION.SDK_INT >= N) statement in a method
-body, are recorded per method in "gates" (min_sdk, assume_min_sdk). With --api,
-runtime_methods is the exact expectation for that API: a method with min_sdk above the
-API is expected ABSENT (listed in gated_absent_methods; gated_absent_classes when no
-method of a class remains) and every other method is still required. Any other
-SdkSuppress argument form fails closed.
+Literal SdkSuppress minSdkVersion/maxSdkVersion bounds on classes and methods are
+intersected. With --api, methods outside the inclusive interval are expected ABSENT,
+with qualified source reasons in gated_absent_reasons. Every method inside it is
+required. Unknown, duplicate, nonliteral or contradictory bounds fail closed.
+Direct assumeTrue([message,] Build.VERSION.SDK_INT >= N) statements are separately
+recorded as assume_min_sdk; runtime assumption skips still need observed evidence.
 Kotlin backtick names retain their source spelling; runtime_methods strips delimiters.
 
 CLI: source_methods.py --root REPO --classes FQCN,FQCN [--api N] --output FRESH_JSON
@@ -265,26 +264,37 @@ def annotation(source, i):
     return name, end
 
 
-def sdk_suppress_min(source, at):
-    """minSdkVersion of an @SdkSuppress at token `at`; None for any other annotation."""
+def sdk_suppress_bounds(source, at):
     tokens = source.tokens
     name, after = dotted(tokens, at + 1)
     if name.rsplit(".", 1)[-1] != "SdkSuppress":
-        return None
+        return (0, None)
     if after >= len(tokens) or tokens[after].text != "(":
-        fail(source.path, tokens[at].line, "SdkSuppress requires a literal minSdkVersion")
+        fail(source.path, tokens[at].line, "SdkSuppress requires literal SDK bounds")
     inner = "".join(t.text for t in tokens[after + 1:source.pairs[after]])
-    match = re.fullmatch(r"minSdkVersion=([0-9]+)", inner)
-    if not match:
-        fail(source.path, tokens[at].line, "Unsupported SdkSuppress arguments")
-    return int(match.group(1))
+    bounds = {}
+    for argument in inner.split(","):
+        match = re.fullmatch(r"(minSdkVersion|maxSdkVersion)=([0-9]+)", argument)
+        if not match or match.group(1) in bounds:
+            fail(source.path, tokens[at].line, "Unsupported SdkSuppress arguments")
+        bounds[match.group(1)] = int(match.group(2))
+    return intersect_gates(source, at, (bounds.get("minSdkVersion", 0), bounds.get("maxSdkVersion")))
+
+
+def intersect_gates(source, at, *gates):
+    minimum = max(gate[0] for gate in gates)
+    maxima = [gate[1] for gate in gates if gate[1] is not None]
+    maximum = min(maxima) if maxima else None
+    if maximum is not None and minimum > maximum:
+        fail(source.path, source.tokens[at].line, "Contradictory SdkSuppress bounds")
+    return minimum, maximum
 
 
 def gate_in(source, first, last):
-    """Highest literal SdkSuppress minimum among annotations starting in tokens[first:last]."""
-    found = [sdk_suppress_min(source, i) for i in range(first, last)
+    """Intersect literal SDK bounds on the class or method annotations."""
+    found = [sdk_suppress_bounds(source, i) for i in range(first, last)
              if source.tokens[i].text == "@" and source.depths[i] == source.depths[first]]
-    return max([v for v in found if v is not None], default=0)
+    return intersect_gates(source, first, (0, None), *found)
 
 
 def assume_min_sdk(source, body_open):
@@ -372,7 +382,7 @@ def selected_methods(source, entry):
         modifier_names = {"public", "internal", "final", "open", "override", "private",
                           "protected", "static", "abstract", "suspend", "external", "inline"}
         before_tokens, _ = class_prefix(source, i)
-        method_gate = max(class_gate, gate_in(source, i - len(before_tokens), i))
+        method_gate = intersect_gates(source, i, class_gate, gate_in(source, i - len(before_tokens), i))
         modifiers = []
         before = i - 1
         while before > body and tokens[before].text in modifier_names:
@@ -382,7 +392,7 @@ def selected_methods(source, entry):
         while cursor < len(tokens):
             value = tokens[cursor].text
             if value == "@":
-                method_gate = max(method_gate, sdk_suppress_min(source, cursor) or 0)
+                method_gate = intersect_gates(source, cursor, method_gate, sdk_suppress_bounds(source, cursor))
                 extra, cursor = annotation(source, cursor)
                 if extra in source.tests:
                     fail(source.path, tokens[i].line, "Duplicate Test annotation")
@@ -418,7 +428,7 @@ def selected_methods(source, entry):
         if method in names:
             fail(source.path, tokens[i].line, "Duplicate method identity " + cls + "#" + method)
         names.append(method)
-        declarations.append({"id": cls + "#" + method, "line": tokens[i].line, "min_sdk": method_gate,
+        declarations.append({"id": cls + "#" + method, "line": tokens[i].line, "min_sdk": method_gate[0], "max_sdk": method_gate[1],
                              "assume_min_sdk": assume_min_sdk(source, end)})
     if not names:
         fail(source.path, tokens[start].line, "Selected class has no supported direct Test methods")
@@ -457,7 +467,7 @@ def inventory(root, selectors, api=None):
         methods.extend(values)
         runtime.extend(runtime_ids)
         for item, runtime_id in zip(declarations, runtime_ids):
-            gates[runtime_id] = {"min_sdk": item["min_sdk"], "assume_min_sdk": item["assume_min_sdk"]}
+            gates[runtime_id] = {"min_sdk": item["min_sdk"], "max_sdk": item["max_sdk"], "assume_min_sdk": item["assume_min_sdk"]}
         classes.append({"class": cls, "source": source.path.relative_to(root).as_posix(),
                         "sha256": hashlib.sha256(source.data).hexdigest(), "methods": values,
                         "declarations": declarations})
@@ -465,9 +475,14 @@ def inventory(root, selectors, api=None):
         raise InventoryError("Duplicate selected method identities")
     expected, api_fields = sorted(runtime), {}
     if api is not None:
-        absent = sorted(r for r in runtime if gates[r]["min_sdk"] > api)
+        absent = sorted(r for r in runtime if gates[r]["min_sdk"] > api or
+                        (gates[r]["max_sdk"] is not None and gates[r]["max_sdk"] < api))
+        reasons = {r: ("SdkSuppress(minSdkVersion=" + str(gates[r]["min_sdk"]) + ") excludes API " + str(api)
+                       if gates[r]["min_sdk"] > api else
+                       "SdkSuppress(maxSdkVersion=" + str(gates[r]["max_sdk"]) + ") excludes API " + str(api))
+                   for r in absent}
         expected = sorted(set(runtime) - set(absent))
-        api_fields = {"api": api, "all_runtime_methods": sorted(runtime), "gated_absent_methods": absent,
+        api_fields = {"api": api, "all_runtime_methods": sorted(runtime), "gated_absent_methods": absent, "gated_absent_reasons": reasons,
                       "gated_absent_classes": sorted(c for c in selected
                                                      if not any(r.startswith(c + "#") for r in expected))}
     return {"schema_version": 1, "selectors": selected, "methods": sorted(methods),
