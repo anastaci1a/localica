@@ -46,10 +46,21 @@ class DragHandoffArtworkTest {
         }
     }
 
-    private fun near(c: androidx.compose.ui.graphics.Color, argb: Int) =
-        kotlin.math.abs(c.red - (argb shr 16 and 0xFF) / 255f) < .16f &&
-            kotlin.math.abs(c.green - (argb shr 8 and 0xFF) / 255f) < .16f &&
-            kotlin.math.abs(c.blue - (argb and 0xFF) / 255f) < .16f
+    // For sRGB bytes, abs(channel / 255f - target / 255f) < .16f is exactly abs(channel - target) <= 40.
+    // These six colour cubes are disjoint. Native fills build one exact label lookup, zero outside every cube.
+    private val coverLabels by lazy {
+        ByteArray(1 shl 24).also { labels ->
+            colours.forEachIndexed { i, colour ->
+                val r = colour shr 16 and 0xFF; val g = colour shr 8 and 0xFF; val b = colour and 0xFF
+                for (red in (r - 40).coerceAtLeast(0)..(r + 40).coerceAtMost(255))
+                    for (green in (g - 40).coerceAtLeast(0)..(g + 40).coerceAtMost(255)) {
+                        val row = (red shl 16) or (green shl 8)
+                        java.util.Arrays.fill(labels, row + (b - 40).coerceAtLeast(0),
+                            row + (b + 40).coerceAtMost(255) + 1, (i + 1).toByte())
+                    }
+            }
+        }
+    }
 
     private data class Frame(val covers: IntArray, val titles: IntArray, val lightInk: BooleanArray, val image: ImageBitmap)
 
@@ -74,11 +85,13 @@ class DragHandoffArtworkTest {
         val image = root.captureToImage()
         val map = image.toPixelMap()
         captureNs += System.nanoTime() - t; t = System.nanoTime()
-        val result = IntArray(indices.size)
+        val labels = coverLabels
+        val pixels = map.buffer
+        val hits = IntArray(colours.size + 1)
         for (y in 0 until map.height step 2) for (x in 0 until map.width step 2) {
-            val c = map[x, y]
-            indices.forEachIndexed { i, colour -> if (near(c, colours[colour])) result[i]++ }
+            hits[labels[pixels[map.bufferOffset + y * map.stride + x] and 0xFFFFFF].toInt()]++
         }
+        val result = IntArray(indices.size) { hits[indices[it] + 1] }
         coverLoopNs += System.nanoTime() - t; t = System.nanoTime()
         // Playlist detail inherits white ink over its coloured artwork backdrop; queue
         // rows can use dark ink. Infer the baseline polarity from the title's surrounding
