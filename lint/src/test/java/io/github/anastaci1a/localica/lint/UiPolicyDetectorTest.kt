@@ -182,6 +182,29 @@ class UiPolicyDetectorTest : LintDetectorTest() {
         """, 4, "screens")
     }
 
+    fun testOwnerEffectIntentDoesNotIntroduceAClock() {
+        val imports = "import androidx.compose.runtime.*\nimport io.github.anastaci1a.localica.ui.engine.*"
+        check(UiRuleId.IndependentUiClock, """
+            $imports
+            @Composable fun owner() { val handle = rememberExpandCollapse()
+                LaunchedEffect(1) { handle.target() } }
+        """, 0)
+        check(UiRuleId.IndependentUiClock, """
+            $imports
+            @Composable fun borrowed(handle: ExpandCollapse) { LaunchedEffect(1) { handle.target() } }
+        """, 1)
+        check(UiRuleId.IndependentUiClock, """
+            $imports
+            @Composable fun owner() { val handle = rememberExpandCollapse()
+                LaunchedEffect(1) { withFrameNanos {}; handle.target() } }
+        """, 1)
+        check(UiRuleId.IndependentUiClock, """
+            $imports
+            @Composable fun escaped() { val handle = rememberExpandCollapse()
+                LaunchedEffect(1) { val later = { handle.target() }; later() } }
+        """, 1)
+    }
+
     fun testMotionAliasHelperChannelAndLogicalTargets() {
         check(UiRuleId.RawMotionMap, """
             import io.github.anastaci1a.localica.ui.engine.*
