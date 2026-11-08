@@ -156,4 +156,5 @@ class ShadowFieldOracleSensitivityTest {
 
     @Test fun realShadowCallersHaveCompleteNativeFieldsInNormal() = verifyNativeShadowCallers(compose, GlassRendererMode.Normal)
     @Test fun realShadowCallersHaveCompleteNativeFieldsInNone() = verifyNativeShadowCallers(compose, GlassRendererMode.None)
+    @Test fun diagnosticRetainedSamplingReferencesAcrossFractionalTranslations() = collectRetainedSamplingDiagnostics(compose)
 }
