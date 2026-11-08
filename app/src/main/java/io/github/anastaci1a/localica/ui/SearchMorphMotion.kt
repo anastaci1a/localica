@@ -69,31 +69,17 @@ internal data class SearchMorphFlight(val from: Rect, val startingProgress: Floa
     }
 }
 
-/** Vacancy follows the existing placement state; this owner has no clock or animation. */
+/** Live compatibility boundary: screens read vacancy without depending on Engine. */
 internal class SearchSlotMotion {
-    private var generation = 0L
-    private var retained by mutableFloatStateOf(0f)
-    private var reader by mutableStateOf<(() -> Float)?>(null)
-    val fraction: Float get() = (reader?.invoke() ?: retained).coerceIn(0f, 1f)
-
-    fun begin(): Long {
-        val current = fraction
-        generation++
-        reader = null
-        retained = current
-        return generation
-    }
-    fun bind(token: Long, value: () -> Float) {
-        if (token == generation) reader = value
-    }
-    /** Native-window replacement retires old writers without inventing another clock. */
-    fun renew(): Long = ++generation
-    fun settle(token: Long, value: Float) {
-        if (token != generation) return
-        reader = null
-        retained = value.coerceIn(0f, 1f)
-    }
+    private val value=io.github.anastaci1a.localica.ui.engine.SearchSlotMotion()
+    val fraction get()=value.fraction
+    fun begin()=value.begin()
+    fun renew()=value.renew()
+    fun settle(token: Long,fraction: Float)=value.settle(token,fraction)
+    fun bind(token: Long,edge: io.github.anastaci1a.localica.ui.engine.MotionValue)=value.bind(token,edge)
+    fun bindBottom(token: Long,edge: io.github.anastaci1a.localica.ui.engine.MotionValue,destination: Float,target: Float)=value.bindBottom(token,edge,destination,target)
 }
+internal typealias SearchSlotTravel = io.github.anastaci1a.localica.ui.engine.SearchSlotTravel
 
 /** One grid traversal owns its anchor request and spacer measurement together. */
 internal data class SearchSlotMeasure(val fraction: Float, val anchorOffset: Int?)
@@ -128,15 +114,6 @@ internal class SearchSlotLayout {
     /** Speculative measurement/placement never relabels the actual row witness. */
     fun place(isLookingAhead: Boolean, measure: SearchSlotMeasure) {
         if (!isLookingAhead) placedFraction = measure.fraction
-    }
-}
-
-/** Rebase on retargeting before changing the destination; no jump or guessed duration. */
-internal data class SearchSlotTravel(val fromFraction: Float, val fromBottom: Float, val toBottom: Float) {
-    fun fraction(bottom: Float): Float {
-        val distance = toBottom - fromBottom
-        val traveled = if (kotlin.math.abs(distance) <= .0001f) 1f else ((bottom - fromBottom) / distance).coerceIn(0f, 1f)
-        return (fromFraction + (1f - fromFraction) * traveled).coerceIn(0f, 1f)
     }
 }
 

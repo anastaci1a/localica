@@ -134,7 +134,7 @@ class ListSearchTest {
                 io.github.anastaci1a.localica.queue.QueueLibrary(listOf(value), value.id), loading = false, browsedId = value.id)
         } else io.github.anastaci1a.localica.queue.QueueUiState()
         try {
-            compose.setContent { LocalicaTheme {
+            compose.setContent { EngineTheme(reduced = reduced) {
                 val density = LocalDensity.current
                 val slotHeight = listPillSlotHeight()
                 val snapshot = remember { LibrarySnapshot(folders = listOf(FolderSelection("slot-root", "Music")), tracks = tracks) }

@@ -12,6 +12,11 @@ import io.github.anastaci1a.localica.ui.spec.ExpansionSpec
     val expansion = ExpandCollapse(clock, spec, false, key)
     val geometryCurve = if (prepared) Curve.window(.25f, 1f) else if (quiet) Curve.window(.14f, 1f) else Curve.linear(0f, 1f)
     val popupCurve = if (prepared) geometryCurve else Curve.linear(0f, 1f)
+    val quietStrength=Curve.window(0f,.14f)
+    val quietContent=Curve.window(0f,.25f)
+    val foreground=Curve.window(.18f,.83f)
+    val homeWeight=Curve.constant(1f)+Curve.window(0f,.5f).scaled(-1f)
+    val face=Curve.linear(1f,1f-1f/.55f)
     val preparationCurve = Curve.window(0f, .4f)
     private val ranges = requireNotNull(clock.spec.geometry).maxViewportDiagonalPx.let { EdgeRanges(it, it, it, it) }
     private var rectangle by mutableStateOf<MotionRect?>(null)

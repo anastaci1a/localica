@@ -89,16 +89,15 @@ private fun FrostedBackdrop?.surfaceDrawSource(location: BackdropLocation, exten
         registration?.inverse()?.corners(androidx.compose.ui.geometry.Rect(Offset.Zero, extent))?.surfaceDrawScalars())
 }
 
-/** Legacy contact readers borrow the popup phase; they never own its trajectory. */
+/** D26 compatibility: root controls keep a read-only view without importing Engine. */
 @Stable internal class GlassExpansion {
-    private var owner by mutableStateOf<io.github.anastaci1a.localica.ui.engine.ExpandCollapse?>(null)
-    private var curve = io.github.anastaci1a.localica.ui.engine.Curve.linear(0f, 1f)
-    val value: Float get() = owner?.let { curve.at(it.phase.value()) } ?: 0f
-    val velocity: Float get() = owner?.let { curve.slope(it.phase.value()) * it.phase.velocity() } ?: 0f
-    val targetValue: Float get() = owner?.let { curve.at(if (it.expanded) 1f else 0f) } ?: 0f
-    val isRunning: Boolean get() = owner?.retirementReady == false
-    fun bind(value: io.github.anastaci1a.localica.ui.engine.ExpandCollapse, mapping: io.github.anastaci1a.localica.ui.engine.Curve) { owner = value; curve = mapping }
-    fun unbind(value: io.github.anastaci1a.localica.ui.engine.ExpandCollapse) { if (owner === value) { owner = null } }
+    private val phase=io.github.anastaci1a.localica.ui.engine.GlassExpansion()
+    val value get()=phase.value
+    val velocity get()=phase.velocity
+    val targetValue get()=phase.targetValue
+    val isRunning get()=phase.isRunning
+    fun bind(owner: io.github.anastaci1a.localica.ui.engine.ExpandCollapse,curve: io.github.anastaci1a.localica.ui.engine.Curve)=phase.bind(owner,curve)
+    fun unbind(owner: io.github.anastaci1a.localica.ui.engine.ExpandCollapse)=phase.unbind(owner)
 }
 
 @Stable internal class GlassContact {
@@ -291,7 +290,7 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
                     blur * resolution,
                     appearance.depth * depthScale * thickness,
                     power = refraction, whiteTint = appearance.whiteTint * (1f - panel), illumination = 1f - flatWeight,
-                    flattening = ((1f - thickness) / .18f).coerceIn(0f, 1f), tone = tone,
+                    flattening = io.github.anastaci1a.localica.ui.engine.glassBodyFlattening(thickness), tone = tone,
                     map = outline?.field, origin = Offset(pad, pad), fieldWeight = outline?.description?.fieldWeight ?: 1f,
                     circles = outline?.description?.circles?.let { (a, b) -> a + Offset(pad, pad) to b + Offset(pad, pad) },
                     splitInner = outline?.description?.splitInner)

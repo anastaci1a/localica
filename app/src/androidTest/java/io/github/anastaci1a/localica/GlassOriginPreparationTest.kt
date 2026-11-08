@@ -27,7 +27,7 @@ class GlassOriginPreparationTest {
     private var preAdmissionFocusLosses = 0
 
     private fun fixture(reduced: Boolean = false) {
-        compose.setContent { LocalicaTheme {
+        compose.setContent { EngineTheme(reduced = reduced) {
             CompositionLocalProvider(LocalReducedMotion provides reduced) {
                 preparation = rememberGlassOriginPreparation()
                 anchor = rememberGlassAnchor()
@@ -232,7 +232,7 @@ class GlassOriginPreparationTest {
                     }
                     if (anchor.modalPresent && !anchor.hidden && anchor.restoredDrawn &&
                         anchor.contact.expansion.value == 0f) restored = true
-                    if (preparation.progress < LyricsSourcePhase.preparation(LyricsSourcePhase.Handoff)) {
+                    if (preparation.progress < .68359375f /* independent smoothstep(.25 / .4) handoff reference */) {
                         assertTrue("Restored draw must precede neck rejoin", restored)
                     }
                 }
