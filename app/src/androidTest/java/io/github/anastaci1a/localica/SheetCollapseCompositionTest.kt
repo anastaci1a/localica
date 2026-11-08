@@ -135,7 +135,7 @@ class SheetCollapseCompositionTest {
         }
         mainClock.autoAdvance = false
         mainClock.advanceTimeBy(64)
-        runOnIdle { assertEquals(1f, scene.presentedPhase); assertEquals(1f, scene.controlPhase) }
+        runOnIdle { assertEquals(1f, scene.presentedPhase, 0f); assertEquals(1f, scene.controlPhase, 0f) }
         onNodeWithTag("collapse-intent").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick)
         val fixed = mutableListOf<Float>()
         val control = mutableListOf<Float>()
