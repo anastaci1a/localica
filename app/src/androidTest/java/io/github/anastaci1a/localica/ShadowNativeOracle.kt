@@ -5,7 +5,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.RoundRect
@@ -13,128 +12,19 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Canvas
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.ClipOp
-import androidx.compose.ui.graphics.FilterQuality
-import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.drawscope.CanvasDrawScope
 import androidx.compose.ui.graphics.drawscope.scale
-import androidx.compose.ui.graphics.drawscope.clipPath
-import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.ComposeContentTestRule
 import androidx.compose.ui.unit.LayoutDirection
-import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.navigation.GlassAppearance
 import io.github.anastaci1a.localica.navigation.GlassRendererMode
 import io.github.anastaci1a.localica.ui.*
 import io.github.anastaci1a.localica.ui.engine.*
 import org.junit.Assert.assertSame
-
-/** Diagnostic-only sampling experiment. Delete this section/test independently of the authoritative check. */
-internal fun collectRetainedSamplingDiagnostics(rule: ComposeContentTestRule) {
-    var live by mutableStateOf(false)
-    var shift by mutableStateOf(0f)
-    lateinit var shadow: RetainedGlassShadow
-    lateinit var clock: UiClock
-    lateinit var bodies: List<Pair<RoundRect, Float>>
-    rule.setContent {
-        val currentClock = LocalUiClock.current
-        SideEffect { clock = currentClock }
-        val scope = rememberCoroutineScope()
-        shadow = remember { RetainedGlassShadow(scope) }
-        Box(Modifier.size(240.dp).background(Color.White).testTag("diagnostic-retained")
-            .then(Modifier.drawBehind {
-                bodies = listOf(60f, 110f).map { top -> RoundRect(60.dp.toPx() + .25f + shift,
-                    top.dp.toPx() + .75f + shift, 160.dp.toPx() + .25f + shift,
-                    (top + 40).dp.toPx() + .75f + shift, CornerRadius(20.dp.toPx())) to 1f }
-                with(shadow) { draw(bodies, 1f, 1f, exclusion = if (live) GlassShadowExclusion(emptyList(),
-                    androidx.compose.ui.geometry.Offset.Zero, size, 1f, 1f, 0f, 1f) else null) }
-            }))
-    }
-    rule.waitUntil(5000) { shadow.rasterizations > 0 }
-    rule.mainClock.autoAdvance = false
-    try { ShadowNativeCapture(rule, rule.onNodeWithTag("diagnostic-retained")) { clock.stampNow.sequence }.use { native ->
-        for (delta in listOf(0f, .5f)) for (moving in listOf(false, true)) {
-            rule.runOnIdle { shift = delta; live = moving }
-            rule.mainClock.advanceTimeByFrame(); rule.waitForIdle()
-            val actual = native.capture { scene -> ShadowDrawState(clock.stampNow.sequence, 0,
-                shadowScreenBodies(bodies, scene.topLeft), exclusion = if (moving) ShadowExclusionState(emptyList(),
-                    scene.topLeft, scene.size, 1f, 1f, 0f, 1f) else null) }
-            recordRetainedSamplingVariants(rule, actual, "diagnostic-retained-$delta-$moving")
-        }
-    } } finally { rule.mainClock.autoAdvance = true }
-}
-
-private fun recordRetainedSamplingVariants(rule: ComposeContentTestRule, actual: PresentedCapture, label: String) {
-    checkNativeShadowMarker(actual)
-    val state = actual.nativeWindows.single().state
-    check(state.receiver == null && state.exclusion?.bodies.isNullOrEmpty() && state.scaleX == 1f && state.scaleY == 1f)
-    val density = rule.density.density
-    val origin = androidx.compose.ui.geometry.Offset(state.bodies.minOf { it.first.left }, state.bodies.minOf { it.first.top })
-    val local = shadowScreenBodies(state.bodies, -origin)
-    val padding = (4f + state.spread * 28f + 2f) * density + 2f
-    val inset = androidx.compose.ui.geometry.Offset(kotlin.math.floor(-padding), kotlin.math.floor(-padding))
-    val field = ImageBitmap(kotlin.math.ceil(local.maxOf { it.first.right } + padding - inset.x).toInt(),
-        kotlin.math.ceil(local.maxOf { it.first.bottom } + padding - inset.y).toInt())
-    CanvasDrawScope().draw(rule.density, LayoutDirection.Ltr, Canvas(field), Size(field.width.toFloat(), field.height.toFloat())) {
-        translate(-inset.x, -inset.y) { glassShadows(local, state.strength, state.spread, GlassShadowGeometry(),
-            excludeInterior = false, rasterizing = true) }
-    }
-    val scene = checkNotNull(actual.sceneBounds)
-    val roi = Rect(scene.left, scene.top + 10f, scene.right, scene.bottom)
-    // This unchanged authoritative ROI must enclose every possible tail, for both translation phases.
-    check(state.bodies.all { (body, _) ->
-        val tail = Rect(body.left, body.top, body.right, body.bottom).inflate(padding)
-        roi.contains(tail.topLeft) && roi.contains(tail.bottomRight)
-    }) { "Diagnostic ROI must not omit any shadow-field pixels" }
-    val extent = Size(actual.image.width.toFloat(), actual.image.height.toFloat())
-    val blank = ImageBitmap(actual.image.width, actual.image.height)
-    CanvasDrawScope().draw(rule.density, LayoutDirection.Ltr, Canvas(blank), extent) { drawRect(state.background) }
-    val probe = ShadowFieldProbe(listOf(roi), 1f / 255f)
-    val summaries = org.json.JSONArray()
-    for (variant in listOf("authoritative", "A-normalized", "B-incremental")) {
-        val expected = ImageBitmap(actual.image.width, actual.image.height)
-        CanvasDrawScope().draw(rule.density, LayoutDirection.Ltr, Canvas(expected), extent) {
-            drawRect(state.background)
-            if (variant == "A-normalized") translate(origin.x, origin.y) {
-                val geometry = GlassShadowGeometry().apply { update(local.map { it.first }, (4f + state.spread * 28f) * density, 2f * density) }
-                clipPath(geometry.body, ClipOp.Difference) { translate(inset.x, inset.y) {
-                    drawImage(field, dstSize = IntSize(field.width, field.height), filterQuality = FilterQuality.Low)
-                } }
-            } else {
-                drawContext.canvas.saveLayer(Rect(0f, 0f, size.width, size.height), Paint())
-                glassShadows(state.bodies, state.strength, state.spread, GlassShadowGeometry(), receiver = state.receiver,
-                    exclusion = state.exclusion?.renderer(), rasterizing = variant == "authoritative")
-                drawContext.canvas.restore()
-            }
-        }
-        val reference = actual.copy(image = expected, offscreen = true)
-        val result = probe.compare(actual, reference, actual.copy(image = blank, offscreen = true))
-        shadowOracleEvidence("$label-$variant", actual, reference, result)
-        fun pixel(image: ImageBitmap): Any = if (result.worstX < 0) org.json.JSONObject.NULL else {
-            val argb = image.asAndroidBitmap().getPixel(result.worstX, result.worstY)
-            org.json.JSONArray(listOf(16, 8, 0, 24).map { argb ushr it and 255 })
-        }
-        summaries.put(org.json.JSONObject().put("variant", variant).put("max", result.maximumRgbaError)
-            .put("mean", result.meanRgbaError).put("missingCoverage", result.missingCoveragePixels)
-            .put("worstX", result.worstX).put("worstY", result.worstY)
-            .put("actualRgba", pixel(actual.image)).put("referenceRgba", pixel(expected)))
-    }
-    val context = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().targetContext
-    val directory = nativeEvidenceDirectory("shadow-field-oracle", context.getExternalFilesDir("shadow-field-oracle"))
-    java.io.File(directory, "$label-sampling.json").writeText(org.json.JSONObject().put("diagnosticOnly", true)
-        .put("actualPath", if (state.exclusion == null) "retained-rest" else "exclusion-selected-live")
-        .put("opticalAcceptance", false).put("originX", origin.x.toDouble()).put("originY", origin.y.toDouble())
-        .put("originXBits", origin.x.toRawBits()).put("originYBits", origin.y.toRawBits())
-        .put("insetX", inset.x.toDouble()).put("insetY", inset.y.toDouble()).put("density", density.toDouble())
-        .put("densityBits", density.toRawBits()).put("padding", padding.toDouble()).put("roi", roi.toString())
-        .put("bodies", org.json.JSONArray(state.bodies.map { (r, a) -> org.json.JSONArray(listOf(r.left, r.top,
-            r.right, r.bottom, r.topLeftCornerRadius.x, r.topLeftCornerRadius.y, a).map { it.toDouble() }) }))
-        .put("results", summaries).toString(2))
-}
 
 internal fun shadowScreenBodies(bodies: List<Pair<RoundRect, Float>>, offset: androidx.compose.ui.geometry.Offset) = bodies.map { (r, alpha) ->
     RoundRect(r.left + offset.x, r.top + offset.y, r.right + offset.x, r.bottom + offset.y,

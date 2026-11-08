@@ -196,7 +196,8 @@ class ShadowFieldOracleSensitivityTest {
         assertThrows(IllegalStateException::class.java) { shadowMarkerColor(0x40000, true) }
     }
 
+    @Test fun nativeDestinationCutoutMatchesTheBareControlAtBothFractionalOrigins() = verifyNativeDestinationCutoutReference(compose)
+
     @Test fun realShadowCallersHaveCompleteNativeFieldsInNormal() = verifyNativeShadowCallers(compose, GlassRendererMode.Normal)
     @Test fun realShadowCallersHaveCompleteNativeFieldsInNone() = verifyNativeShadowCallers(compose, GlassRendererMode.None)
-    @Test fun diagnosticRetainedSamplingReferencesAcrossFractionalTranslations() = collectRetainedSamplingDiagnostics(compose)
 }
