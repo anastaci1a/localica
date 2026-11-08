@@ -158,7 +158,8 @@ class PrepareDeviceTestsTest(unittest.TestCase):
 
     def test_full_suite_still_runs_without_any_selector(self):
         self.assert_exit(0,script='run-device-tests.sh');self.assertEqual(1,self.state['gradle'])
-        self.assertIn(['gradlew','connectedDebugAndroidTest','--no-daemon','--max-workers=2'],self.commands())
+        self.assertIn(['gradlew','connectedDebugAndroidTest','--no-daemon','--max-workers=2',
+                       '-I','.github/api26-aot.gradle'],self.commands())
         self.assertEqual(0,self.state['enabled']);self.assertEqual('',self.state['token'])
 
     def test_gradle_failure_is_preserved_after_restore(self):
