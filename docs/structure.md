@@ -12,7 +12,7 @@ Paths below are under `app/src/main/java/io/github/anastaci1a/localica/`.
 | `scanner`, `editing`, `lyrics` | Background scans, recoverable writes/image selection, local lyric discovery/parsing. |
 | `queue`, `playlist` | Durable occurrence-based collections and serialized commands/imports. |
 | `playback`, `statistics` | Media3 service/controller, elapsed listening, durable qualified events and provider-independent ranking counts. |
-| `artist`, `lastfm` | Artist projections, release classification, read-only statistics sync and separate external snapshots. |
+| `artist`, `artistphoto`, `lastfm`, `network` | Artist projections, photo providers/cache, read-only statistics sync and shared online consent. |
 | `navigation`, `home` | Restorable typed routes/preferences; typed pins and manual order. |
 | `ui` | Compose views, lifecycle-aware state, gestures and reusable materials. |
 
@@ -85,6 +85,10 @@ Appears On and Similar Artists currently return empty through an enrichment inte
 ### Settings/selection
 
 Typed preference boundaries retain explicit inheritance. Shared enum decoding preserves unknown-value fallbacks. Pure ordering/move helpers are shared across collection types. Selection retains source occurrence IDs and clears only after command completion. Pins retain typed identity/manual order independently of tabs.
+
+Artist photo requests run off Main and use fixed HTTPS hosts, disabled redirects, bounded responses and shared request pacing. Provider errors become fixed failures without URLs or transport messages. Metadata responses are limited to 512 KiB and pictures to 4 MiB. Searches inspect five artists and 25 releases per candidate; incomplete coverage falls back conservatively.
+
+Photo entries and consent use atomic file replacement. Match choices live separately from evictable images. A persisted attempt time throttles failed requests across process death. The default-off consent stays closed until its asynchronous load completes. Commons credits are bounded plain text; licence and source links remain structured metadata.
 
 ## Legacy MP3 transitions
 

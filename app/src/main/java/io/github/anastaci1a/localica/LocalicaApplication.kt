@@ -32,6 +32,7 @@ class LocalicaApplication : Application() {
             // here so those Main reads find them in memory. Values and write paths are unchanged.
             for (name in STARTUP_PREFERENCES) runCatching { getSharedPreferences(name, MODE_PRIVATE).contains("") }
         }
+        startup.launch { onlineMetadataConsent.load() }
         startup.launch { io.github.anastaci1a.localica.icons.IconPacks.load(this@LocalicaApplication) }
         startup.launch { startArtworkColors(this) }
         startup.launch {
@@ -63,6 +64,13 @@ class LocalicaApplication : Application() {
         io.github.anastaci1a.localica.statistics.StatisticsRepository(statisticsDatabase.statistics(),
             identities = io.github.anastaci1a.localica.statistics.ListeningIdentityStore(
                 getSharedPreferences("listening-identity", MODE_PRIVATE)))
+    }
+    val onlineMetadataConsent by lazy {
+        io.github.anastaci1a.localica.network.OnlineMetadataConsent(java.io.File(filesDir, "online-metadata-consent"))
+    }
+    val artistPhotos by lazy {
+        io.github.anastaci1a.localica.artistphoto.ArtistPhotos(onlineMetadataConsent,
+            java.io.File(cacheDir, "artist-photos"), java.io.File(filesDir, "artist-photo-matches"))
     }
     val lastfm by lazy {
         io.github.anastaci1a.localica.lastfm.LastFmController(
