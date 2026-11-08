@@ -1,7 +1,5 @@
 package io.github.anastaci1a.localica.ui
 
-import androidx.compose.animation.core.AnimationVector4D
-import androidx.compose.animation.core.TwoWayConverter
 import androidx.compose.animation.core.spring
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.getValue
@@ -12,16 +10,6 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.geometry.lerp
-
-internal val SearchRectConverter = TwoWayConverter<Rect, AnimationVector4D>(
-    { AnimationVector4D(it.left, it.top, it.right, it.bottom) },
-    { Rect(it.v1, it.v2, it.v3, it.v4) },
-)
-
-internal fun searchPlacementSpring(speed: Float) = glassMorphSpring(speed).let {
-    spring(dampingRatio = it.dampingRatio, stiffness = it.stiffness,
-        visibilityThreshold = Rect(.5f, .5f, .5f, .5f))
-}
 
 internal fun searchBottomSpring(speed: Float) = glassMorphSpring(speed).let {
     spring(dampingRatio = it.dampingRatio, stiffness = it.stiffness, visibilityThreshold = .5f)

@@ -17020,126 +17020,27 @@
             column="124"/>
     </issue>
 
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="internal val SearchRectConverter = TwoWayConverter&lt;Rect, AnimationVector4D>("
-        errorLine2="                                   ~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/SearchMorphMotion.kt"
-            line="16"
-            column="36"/>
-    </issue>
 
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="    { AnimationVector4D(it.left, it.top, it.right, it.bottom) },"
-        errorLine2="      ~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/SearchMorphMotion.kt"
-            line="17"
-            column="7"/>
-    </issue>
 
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="    { Rect(it.v1, it.v2, it.v3, it.v4) },"
-        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/SearchMorphMotion.kt"
-            line="18"
-            column="5"/>
-    </issue>
 
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="    { Rect(it.v1, it.v2, it.v3, it.v4) },"
-        errorLine2="              ~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/SearchMorphMotion.kt"
-            line="18"
-            column="15"/>
-    </issue>
 
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="    { Rect(it.v1, it.v2, it.v3, it.v4) },"
-        errorLine2="                     ~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/SearchMorphMotion.kt"
-            line="18"
-            column="22"/>
-    </issue>
 
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="    { Rect(it.v1, it.v2, it.v3, it.v4) },"
-        errorLine2="                            ~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/SearchMorphMotion.kt"
-            line="18"
-            column="29"/>
-    </issue>
 
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="    { Rect(it.v1, it.v2, it.v3, it.v4) },"
-        errorLine2="                                   ~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/SearchMorphMotion.kt"
-            line="18"
-            column="36"/>
-    </issue>
 
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="internal fun searchPlacementSpring(speed: Float) = glassMorphSpring(speed).let {"
-        errorLine2="                                                                               ^">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/SearchMorphMotion.kt"
-            line="21"
-            column="80"/>
-    </issue>
 
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="    spring(dampingRatio = it.dampingRatio, stiffness = it.stiffness,"
-        errorLine2="    ~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/SearchMorphMotion.kt"
-            line="22"
-            column="5"/>
-    </issue>
 
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="    spring(dampingRatio = it.dampingRatio, stiffness = it.stiffness,"
-        errorLine2="                             ~~~~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/SearchMorphMotion.kt"
-            line="22"
-            column="30"/>
-    </issue>
 
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="    spring(dampingRatio = it.dampingRatio, stiffness = it.stiffness,"
-        errorLine2="                                                          ~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/SearchMorphMotion.kt"
-            line="22"
-            column="59"/>
-    </issue>
+
+
+
+
+
+
+
+
+
+
+
 
     <issue
         id="RawUiMotion"
@@ -17148,7 +17049,7 @@
         errorLine2="                                                                            ^">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/SearchMorphMotion.kt"
-            line="26"
+            line="14"
             column="77"/>
     </issue>
 
@@ -17159,7 +17060,7 @@
         errorLine2="    ~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/SearchMorphMotion.kt"
-            line="27"
+            line="15"
             column="5"/>
     </issue>
 
@@ -17170,7 +17071,7 @@
         errorLine2="                             ~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/SearchMorphMotion.kt"
-            line="27"
+            line="15"
             column="30"/>
     </issue>
 
@@ -17181,7 +17082,7 @@
         errorLine2="                                                          ~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/SearchMorphMotion.kt"
-            line="27"
+            line="15"
             column="59"/>
     </issue>
 
