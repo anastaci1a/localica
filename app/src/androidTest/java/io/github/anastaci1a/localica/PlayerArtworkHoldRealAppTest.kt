@@ -142,18 +142,19 @@ class PlayerArtworkHoldRealAppTest {
                     still == androidx.lifecycle.Lifecycle.State.STARTED)
                 when {
                     expectText != null -> {
-                        val found = device.wait(Until.findObject(By.text(expectText)), 8000)
+                        val found = device.findFresh(By.text(expectText), 8000)
                         if (found == null) evidence("after-hold-${settings.artworkHold}")
                         assertNotNull("'$expectText' did not appear after the hold", found)
                     }
                     expectDescription != null -> {
-                        val found = device.wait(Until.findObject(By.desc(expectDescription)), 8000)
+                        val found = device.findFresh(By.desc(expectDescription), 8000)
                         if (found == null) evidence("after-hold-${settings.artworkHold}")
                         assertNotNull("'$expectDescription' did not appear after the hold", found)
                     }
                     else -> {
                         SystemClock.sleep(1500)
-                        assertNull(device.findObject(By.text("Configure tap action")))
+                        // A cached lookup could miss a newly shown sheet and pass falsely (#620).
+                        assertNull(device.findFresh(By.text("Configure tap action"), 0))
                     }
                 }
                 assertNull("The system crash dialog appeared", device.findObject(By.textContains("keeps stopping")))
