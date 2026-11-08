@@ -74,6 +74,7 @@ dependencies {
     implementation(libs.compose.ui)
     implementation(libs.compose.material)
     debugImplementation(libs.compose.tooling)
+    implementation(libs.work.runtime)
     implementation(libs.room.runtime)
     implementation(libs.room.ktx)
     ksp(libs.room.compiler)
@@ -90,6 +91,7 @@ dependencies {
     androidTestImplementation(libs.androidx.test.junit)
     androidTestImplementation(libs.androidx.test.uiautomator)
     androidTestImplementation(libs.coroutines.test)
+    androidTestImplementation(libs.work.testing)
     debugImplementation(libs.compose.test.manifest)
 }
 

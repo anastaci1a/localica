@@ -11,9 +11,10 @@ data class LastFmTrack(val artist: String, val title: String, val plays: Long, v
 }
 data class LastFmSnapshot(val username: String, val syncedAt: Long, val tracks: List<LastFmTrack>)
 data class SavedLastFm(val username: String = "", val useCounts: Boolean = false,
-    val snapshot: LastFmSnapshot? = null, val mappings: Map<String, String> = emptyMap(), val attemptedAt: Long? = null)
+    val snapshot: LastFmSnapshot? = null, val mappings: Map<String, String> = emptyMap(), val attemptedAt: Long? = null,
+    val keepSyncingInBackground: Boolean = true, val activeAttempt: String? = null)
 data class LastFmState(val saved: SavedLastFm = SavedLastFm(), val loading: Boolean = true,
-    val syncing: Boolean = false, val problem: String? = null)
+    val syncing: Boolean = false, val problem: String? = null, val progress: LastFmProgress? = null)
 data class LastFmReview(val remote: LastFmTrack, val candidates: List<Track>)
 data class LastFmMatches(val counts: Map<String, Long>, val review: List<LastFmReview>,
     val notInLibrary: Int = 0, val editions: List<LastFmReview> = emptyList(), val matched: Int = 0, val dismissed: Int = 0)

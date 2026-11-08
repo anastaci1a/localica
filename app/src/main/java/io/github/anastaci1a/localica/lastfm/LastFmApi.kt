@@ -99,7 +99,7 @@ object LastFmResponses {
 
 /** A failed/cancelled page never publishes a partial snapshot. Every request is paced, including retries. */
 class LastFmSync(private val api: LastFmApi, private val pause: suspend (Long) -> Unit = { delay(it) }) {
-    suspend fun fetch(username: String, mayRequest: () -> Boolean = { true }): List<LastFmTrack> {
+    suspend fun fetch(username: String, onProgress: suspend (LastFmProgress) -> Unit = {}, mayRequest: () -> Boolean = { true }): List<LastFmTrack> {
         val collected = linkedMapOf<String, LastFmTrack>(); var page = 1; var total = 1; var requests = 0
         while (page <= total) {
             var result: LastFmPage? = null
@@ -118,6 +118,7 @@ class LastFmSync(private val api: LastFmApi, private val pause: suspend (Long) -
                 if (previous == null || previous.plays < track.plays) collected[track.key] = track
             }
             if (collected.size > 1_000_000 || total > 10_000) throw LastFmFailure("This Last.fm library is too large to sync.")
+            onProgress(LastFmProgress(page, total, collected.size))
             page++
         }
         return collected.values.toList()

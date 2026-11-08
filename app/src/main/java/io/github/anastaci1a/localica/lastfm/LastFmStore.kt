@@ -29,6 +29,7 @@ class FileLastFmStore(file: File) : LastFmStore {
 object LastFmSnapshotCodec {
     fun encode(value: SavedLastFm): String = JSONObject().apply {
         put("username", value.username); put("useCounts", value.useCounts); put("attemptedAt", value.attemptedAt)
+        put("keepSyncingInBackground", value.keepSyncingInBackground); put("activeAttempt", value.activeAttempt)
         put("mappings", JSONObject(value.mappings))
         value.snapshot?.let { snapshot -> put("snapshot", JSONObject().apply {
             put("username", snapshot.username); put("syncedAt", snapshot.syncedAt)
@@ -55,6 +56,7 @@ object LastFmSnapshotCodec {
         val mappings = optJSONObject("mappings") ?: JSONObject()
         SavedLastFm(username, optBoolean("useCounts", false), snapshot,
             mappings.keys().asSequence().associateWith { mappings.getString(it) },
-            if (isNull("attemptedAt")) null else getLong("attemptedAt"))
+            if (isNull("attemptedAt")) null else getLong("attemptedAt"),
+            optBoolean("keepSyncingInBackground", true), if (isNull("activeAttempt")) null else getString("activeAttempt"))
     }
 }

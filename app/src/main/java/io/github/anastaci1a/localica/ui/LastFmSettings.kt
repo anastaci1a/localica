@@ -19,7 +19,7 @@ internal fun LastFmSettings(controller: LastFmController) {
     val matches by controller.matches.collectAsState()
     val saved = state.saved
     var username by rememberSaveable(saved.username) { mutableStateOf(saved.username) }
-    var shown by rememberSaveable { mutableIntStateOf(20) }
+    var reviewOpen by rememberSaveable { mutableStateOf(false) }
     SettingsHeading("Last.fm statistics")
     Text("Read-only sync sends your username to Last.fm to fetch play counts. It never uploads listening history or audio.",
         style = MaterialTheme.typography.bodyMedium)
@@ -31,6 +31,12 @@ internal fun LastFmSettings(controller: LastFmController) {
     Text("Changing username clears the previous Last.fm snapshot. Sync is manual and limited to once a minute.", style = MaterialTheme.typography.bodySmall)
     ActionButton(onClick = { controller.sync(username) }, enabled = controller.enabled && onlineAllowed && username.isNotBlank() && !state.loading && !state.syncing,
         modifier = Modifier.testTag("lastfm-sync")) { Text(if (state.syncing) "Syncing…" else "Sync now") }
+    if (state.syncing) {
+        Text(state.progress?.label ?: "Connecting to Last.fm…", Modifier.testTag("lastfm-sync-progress"))
+        GlassActionButton(AppIcon.ActionClose, "Cancel sync", onClick = controller::cancelSync)
+    }
+    BooleanPreference("Keep syncing in the background", saved.keepSyncingInBackground, controller::keepSyncingInBackground)
+    Text("Started syncs can finish after you leave the app. Syncs are never scheduled automatically.", style = MaterialTheme.typography.bodySmall)
     val lastSync = saved.snapshot?.let { DateFormat.getDateTimeInstance().format(Date(it.syncedAt)) }
     Text(if (lastSync == null) "Last sync: never" else "Last sync: $lastSync · ${saved.snapshot?.username}", Modifier.testTag("lastfm-last-sync"))
     state.problem?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.testTag("lastfm-problem")) }
@@ -40,19 +46,15 @@ internal fun LastFmSettings(controller: LastFmController) {
         style = MaterialTheme.typography.bodyMedium)
     if (saved.username.isNotBlank() || saved.snapshot != null) ActionTextButton(onClick = controller::disconnect,
         modifier = Modifier.testTag("lastfm-disconnect")) { Text("Disconnect and delete Last.fm snapshot") }
-    SettingsHeading("Review matches")
-    Text("${matches.counts.size} matched · ${matches.review.size} to review", Modifier.testTag("lastfm-review-summary"))
-    matches.review.take(shown).forEach { review ->
-        Column(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text("${review.remote.artist} — ${review.remote.title}", style = MaterialTheme.typography.titleSmall)
-            Text("${review.remote.plays} plays · " + if (review.candidates.isEmpty()) "Not found in the local library" else "Several local matches")
-            review.candidates.take(10).forEach { candidate ->
-                ActionTextButton(onClick = { controller.map(review.remote.key, candidate.id) }) {
-                    Text("Use ${candidate.album ?: "Unknown album"} · ${candidate.fileName}")
-                }
-            }
+    LastFmSummary(state, matches)
+    SettingsLink("Review matches", "${matches.review.size} need review · ${matches.editions.size} auto-matched editions") { reviewOpen = true }
+    if (saved.mappings.isNotEmpty()) ActionTextButton(onClick = controller::resetMappings) { Text("Reset Last.fm match choices") }
+    if (reviewOpen) SettingsPage("Review matches", onBack = { reviewOpen = false }) {
+        val scroll = androidx.compose.foundation.rememberScrollState()
+        Column(Modifier.fillMaxSize().scrollEdgeFade(scroll).controlVerticalScroll(scroll).padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            LastFmSummary(state, matches)
+            LastFmReviewList(matches, controller::map)
         }
     }
-    if (matches.review.size > shown) ActionTextButton(onClick = { shown += 20 }) { Text("Show more matches") }
-    if (saved.mappings.isNotEmpty()) ActionTextButton(onClick = controller::resetMappings) { Text("Reset Last.fm match choices") }
 }
