@@ -152,17 +152,12 @@ private fun OpticalBackdrop(modifier: Modifier, source: FrostedBackdrop, locatio
                 val region = Rect(Offset.Zero, footprint)
                     .intersect(sampledSceneBounds(backing, registration, toLocal) ?: return)
                 if (region.isEmpty || !region.width.isFinite() || !region.height.isFinite()) return
-                val extent = IntSize(ceil(region.width).toInt(), ceil(region.height).toInt())
-                val padded = materialReductionExtent(extent)
-                val result = with(reduction) { record(extent) {
-                    clipRect(right = region.width, bottom = region.height) {
-                        translate(-region.left, -region.top) {
-                            drawSampledScene(backing, registration, toLocal)
-                        }
+                val result = with(reduction) { recordFullBounds(region.size) {
+                    translate(-region.left, -region.top) {
+                        drawSampledScene(backing, registration, toLocal)
                     }
                 } }
-                output.renderEffect = if (android.os.Build.VERSION.SDK_INT >= 33) renderer.effect(average.forBacking(backing),
-                    region.width * region.height / (padded.width.toFloat() * padded.height)) else null
+                output.renderEffect = if (android.os.Build.VERSION.SDK_INT >= 33) renderer.effect(average.forBacking(backing)) else null
                 output.record(size = IntSize(1, 1)) { drawLayer(result) }
             }
             if (blend < 1f) reduce(source, areaSource, averageSource, areaSourceRenderer)

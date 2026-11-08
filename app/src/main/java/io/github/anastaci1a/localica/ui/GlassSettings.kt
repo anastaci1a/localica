@@ -55,9 +55,30 @@ internal fun shadowStrengthReadout(strength: Float): Int =
     (sliderPosition(strength, 0f..1f, GlassShadowStrengthCurve) * 20f).roundToInt() * 5
 
 @Composable
-internal fun GlassSettingsControls(value: GlassAppearance, onChange: (GlassAppearance) -> Unit) {
+internal fun GlassSettingsControls(value: GlassAppearance, section: String = "Glass", onChange: (GlassAppearance) -> Unit) {
+    val navigate = LocalSettingsNavigate.current
+    if (section == "Glass") {
+        GlassRendererPreference(value.renderer) { onChange(value.copy(renderer = it)) }
+        val enabled = value.renderer != GlassRendererMode.None
+        listOf("Glass appearance" to "Blur, tint, and floating shadows",
+            "Glass advanced" to "Contrast, shape, depth, and expansion",
+            "Navigation selector" to "Tab style, tint, and refraction").forEach { (page, summary) ->
+            SettingsLink(page, summary, enabled = enabled) { navigate(page) }
+        }
+        return
+    }
+    CompositionLocalProvider(LocalSettingsEnabled provides (value.renderer != GlassRendererMode.None)) {
+        when (section) {
+            "Glass appearance" -> GlassAppearanceSettings(value, onChange)
+            "Glass advanced" -> GlassAdvancedSettings(value, onChange)
+            "Navigation selector" -> GlassSelectorSettings(value, onChange)
+        }
+    }
+}
+
+@Composable
+private fun GlassAppearanceSettings(value: GlassAppearance, onChange: (GlassAppearance) -> Unit) {
     Text("Tune floating glass and the navigation selector.")
-    GlassRendererPreference(value.renderer) { onChange(value.copy(renderer = it)) }
     var previewLightInk by remember { mutableStateOf(false) }
     CompositionLocalProvider(LocalGlassAppearance provides value) {
         Box(Modifier.fillMaxWidth().height(180.dp), contentAlignment = Alignment.Center) {
@@ -71,10 +92,10 @@ internal fun GlassSettingsControls(value: GlassAppearance, onChange: (GlassAppea
                     drawRect(palette[(x / 2 + y) % palette.size], Offset(x * cell, y * cell), Size(cell, cell))
                 }
             }
-            GlassPreview(source)
+            if (LocalSettingsEnabled.current) GlassPreview(source) else Text("Glass preview disabled")
         }
     }
-    GlassChoices(listOf("Dark icons", "White icons"), if (previewLightInk) 1 else 0, horizontal = true) { previewLightInk = it == 1 }
+    if (LocalSettingsEnabled.current) GlassChoices(listOf("Dark icons", "White icons"), if (previewLightInk) 1 else 0, horizontal = true) { previewLightInk = it == 1 }
     GlassSlider("Blur", value.blur, "Clear", "Frosted") { onChange(value.copy(blur = it)) }
     GlassSlider("White tint", value.whiteTint, "None", "White") { onChange(value.copy(whiteTint = it)) }
     GlassSlider("Shadow strength", value.shadowStrength, "Off", "Strong", curve = GlassShadowStrengthCurve, readout = ::shadowStrengthReadout) { onChange(value.copy(shadowStrength = it)) }
@@ -83,6 +104,10 @@ internal fun GlassSettingsControls(value: GlassAppearance, onChange: (GlassAppea
         { onChange(value.copy(liftShadowStrength = normalizedLiftShadowStrength(it))) }, Modifier.semantics { contentDescription = "Lift shadow strength" },
         valueRange = LiftShadowMin..LiftShadowMax, steps = LiftShadowSteps, low = "50%", high = "150%",
         description = "Selected and floating items lift with Glass shadow spread, or a white glow on white-icon menus, at this share of Glass shadow strength.")
+}
+
+@Composable
+private fun GlassAdvancedSettings(value: GlassAppearance, onChange: (GlassAppearance) -> Unit) {
     SettingsHeading("Adaptive contrast")
     Text("Compress background brightness away from the page’s icon color.", style = MaterialTheme.typography.bodySmall)
     GlassSlider("Brightness trim", value.contrast, "Off", "50%", maximum = .5f) { onChange(value.copy(contrast = it)) }
@@ -100,6 +125,16 @@ internal fun GlassSettingsControls(value: GlassAppearance, onChange: (GlassAppea
         description = "Lower is squishier; higher settles sooner.")
     SliderPreference("Resting depth · ${"%.2f".format(java.util.Locale.ROOT, value.depth)}", value.depth, { onChange(value.copy(depth = it)) },
         Modifier.semantics { contentDescription = "Resting depth" }, valueRange = .6f..2f)
+    SettingsHeading("Sliders and switches")
+    Text("White at rest; clear glass while held.", style = MaterialTheme.typography.bodySmall)
+    SliderPreference("Control expansion · ${"%.2f".format(java.util.Locale.ROOT, value.controlExpansion)}×", value.controlExpansion,
+        { onChange(value.copy(controlExpansion = it)) }, Modifier.semantics { contentDescription = "Control expansion" },
+        valueRange = 1f..2f, steps = 19, low = "1×", high = "2×")
+    SettingsEntry("Reset glass appearance") { ActionTextButton(enabled = LocalSettingsEnabled.current, onClick = { onChange(GlassAppearance()) }) { Text("Reset glass appearance") } }
+}
+
+@Composable
+private fun GlassSelectorSettings(value: GlassAppearance, onChange: (GlassAppearance) -> Unit) {
     SettingsHeading("Navigation selector")
     ChoicePreference("Selector style", value.tabStyle, io.github.anastaci1a.localica.navigation.TabLensStyle.entries, { it.label }) {
         onChange(value.copy(tabStyle = it))
@@ -115,12 +150,6 @@ internal fun GlassSettingsControls(value: GlassAppearance, onChange: (GlassAppea
         }
         BooleanPreference("Refract icons and labels", value.overlayForeground) { onChange(value.copy(overlayForeground = it)) }
     }
-    SettingsHeading("Sliders and switches")
-    Text("White at rest; clear glass while held.", style = MaterialTheme.typography.bodySmall)
-    SliderPreference("Control expansion · ${"%.2f".format(java.util.Locale.ROOT, value.controlExpansion)}×", value.controlExpansion,
-        { onChange(value.copy(controlExpansion = it)) }, Modifier.semantics { contentDescription = "Control expansion" },
-        valueRange = 1f..2f, steps = 19, low = "1×", high = "2×")
-    ActionTextButton(onClick = { onChange(GlassAppearance()) }) { Text("Reset glass appearance") }
 }
 
 @Composable
