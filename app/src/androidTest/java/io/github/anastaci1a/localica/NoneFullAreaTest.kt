@@ -1,6 +1,10 @@
 package io.github.anastaci1a.localica
 
 import android.os.Build
+import android.graphics.Bitmap
+import java.io.File
+import androidx.test.platform.app.InstrumentationRegistry
+import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
@@ -28,17 +32,25 @@ class NoneFullAreaTest {
 
     @Test fun mixedSettingsRowsHaveTheSameNoneMaterialAtLargeFontScale() = settingsRows(1.5f)
 
-    private fun settingsRows(fontScale: Float) {
+    @Test fun normalSettingsRowsPixelReference() = settingsRows(1f, GlassRendererMode.Normal)
+
+    @Test fun normalSettingsRowsPixelReferenceAtLargeFontScale() = settingsRows(1.5f, GlassRendererMode.Normal)
+
+    private fun settingsRows(fontScale: Float, mode: GlassRendererMode = GlassRendererMode.None) {
         lateinit var source: FrostedBackdrop
         compose.setContent { CompositionLocalProvider(
             LocalDensity provides Density(1f, fontScale),
-            LocalGlassRendererRuntime provides remember { GlassRendererRuntime(GlassRendererMode.None) },
+            LocalGlassRendererRuntime provides remember { GlassRendererRuntime(mode) },
             LocalGlassAppearance provides GlassAppearance(whiteTint = 0f, contrast = 0f)
         ) { LocalicaTheme {
             source = rememberFrostedBackdrop(Unit, dark = false)
             Box(Modifier.size(320.dp, 480.dp)) {
                 Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(source)) {
                     drawRect(Color(0xFFF8F8FA))
+                    if (mode == GlassRendererMode.Normal) {
+                        for (x in 0 until 32) drawRect(if (x % 2 == 0) Color.Red else Color.Blue,
+                            Offset(x * 10f, 0f), Size(10f, size.height))
+                    }
                 }
                 CompositionLocalProvider(LocalFrostedBackdrop provides source) {
                     Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -51,9 +63,20 @@ class NoneFullAreaTest {
         } } }
         compose.waitUntil(15_000) { source.recorded && (Build.VERSION.SDK_INT >= 33 || source.snapshot != null) }
         fun row(title: String) = compose.onNode(hasText(title) and hasClickAction())
-        val images = listOf("Appearance", "Navigation", "Glass").map { row(it).captureToImage().toPixelMap() }
+        val titles = listOf("Appearance", "Navigation", "Glass")
+        val captured = titles.map { row(it).captureToImage() }
+        val root = InstrumentationRegistry.getArguments().getString("additionalTestOutputDir")?.let(::File)
+            ?: InstrumentationRegistry.getInstrumentation().targetContext.getExternalFilesDir(null)!!
+        val output = File(root, "settings-material-api" + Build.VERSION.SDK_INT).also { it.mkdirs() }
+        captured.forEachIndexed { index, image ->
+            File(output, "$mode-$fontScale-" + titles[index] + ".png").outputStream().use {
+                image.asAndroidBitmap().compress(Bitmap.CompressFormat.PNG, 100, it)
+            }
+        }
+        val images = captured.map { it.toPixelMap() }
         assertTrue("The wrapping subtitle must exercise a taller row at fontScale=$fontScale",
             images[1].height > images[0].height)
+        if (mode == GlassRendererMode.Normal) return
         val colors = images.map { it[8, it.height / 2] }
         val reference = colors.first()
         colors.forEachIndexed { index, color ->
