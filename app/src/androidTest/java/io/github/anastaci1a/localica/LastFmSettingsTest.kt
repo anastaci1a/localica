@@ -46,13 +46,18 @@ class LastFmSettingsTest {
             compose.onNode(hasSetTextAction() and hasAnyAncestor(hasTestTag("lastfm-username")), useUnmergedTree = true).performTextInput("fixture-user")
             compose.onNodeWithTag("lastfm-sync").performScrollTo().performClick()
             compose.waitUntil(5000) { controller.matches.value.counts["song"] == 42L }
-            compose.onNodeWithTag("lastfm-review-summary").performScrollTo().assertTextEquals("1 matched · 1 to review")
+            compose.onNodeWithTag("lastfm-review-summary").performScrollTo().assertTextEquals("1 matched · 1 need review · 1 not in library")
             compose.onNode(isToggleable() and hasText("Use Last.fm counts")).performScrollTo().performClick()
             compose.waitUntil(5000) { controller.state.value.saved.useCounts }
             assertEquals(42L, runBlocking { controller.applyTo(flowOf(local)).first().tracks["song"] })
-            compose.onNodeWithText("Use A · a.mp3").performScrollTo().performClick()
+            compose.onNodeWithText("Review matches").performScrollTo().performClick()
+            compose.onNodeWithText("A · Ambiguous").assertDoesNotExist()
+            compose.onNodeWithText("Artist — Ambiguous").performScrollTo().performClick()
+            compose.onNodeWithText("A · Ambiguous").performScrollTo().assertIsNotSelected().performClick().assertIsSelected()
+            compose.onNodeWithText("Use selection").performClick()
             compose.waitUntil(5000) { controller.matches.value.review.isEmpty() }
             assertEquals("a", runBlocking { store.read().mappings.values.single() })
+            compose.onNodeWithContentDescription("Back from Last.fm review").performClick()
             compose.onNode(isToggleable() and hasText("Use Last.fm counts")).performScrollTo().performClick()
             compose.waitUntil(5000) { !controller.state.value.saved.useCounts }
             assertEquals(local, runBlocking { controller.applyTo(flowOf(local)).first() })

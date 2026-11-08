@@ -25,6 +25,19 @@ class LastFmController(private val store: LastFmStore, private val syncer: LastF
     private var syncJob: Job? = null
     private var workerJob: Job? = null
     init {
+        if (background != null) scope.launch {
+            ready.await()
+            var observedWork = false
+            background.updates.collect { work -> writes.withLock {
+                if (work.active) {
+                    observedWork = true
+                    mutable.value = state.value.copy(syncing = true, progress = work.progress ?: state.value.progress ?: LastFmProgress())
+                } else if (observedWork && workerJob?.isActive != true) {
+                    mutable.value = state.value.copy(syncing = false, progress = null,
+                        problem = work.problem ?: state.value.problem)
+                }
+            } }
+        }
         scope.launch { networkConsent.allowed.collect { if (!it) {
             syncJob?.cancel(); workerJob?.cancel(); background?.cancelIfConsentDenied()
         } } }
@@ -151,7 +164,10 @@ class LastFmController(private val store: LastFmStore, private val syncer: LastF
 }
 
 /** Scheduling stays Android-owned; pure matching/controller tests never initialize WorkManager. */
+data class LastFmBackgroundState(val active: Boolean, val progress: LastFmProgress? = null, val problem: String? = null)
+
 interface LastFmBackground {
+    val updates: Flow<LastFmBackgroundState> get() = emptyFlow()
     suspend fun enqueue(username: String)
     fun cancel()
     fun cancelIfConsentDenied() = cancel()

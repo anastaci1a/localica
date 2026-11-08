@@ -49,11 +49,11 @@ internal fun LastFmSettings(controller: LastFmController) {
     LastFmSummary(state, matches)
     SettingsLink("Review matches", "${matches.review.size} need review · ${matches.editions.size} auto-matched editions") { reviewOpen = true }
     if (saved.mappings.isNotEmpty()) ActionTextButton(onClick = controller::resetMappings) { Text("Reset Last.fm match choices") }
-    if (reviewOpen) SettingsPage("Review matches", onBack = { reviewOpen = false }) {
+    if (reviewOpen) SettingsPage("Review matches", onBack = { reviewOpen = false }, backLabel = "Back from Last.fm review") {
         val scroll = androidx.compose.foundation.rememberScrollState()
         Column(Modifier.fillMaxSize().scrollEdgeFade(scroll).controlVerticalScroll(scroll).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            LastFmSummary(state, matches)
+            LastFmSummary(state, matches, "lastfm-review-page-summary")
             LastFmReviewList(matches, controller::map)
         }
     }

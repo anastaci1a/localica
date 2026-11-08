@@ -1,7 +1,5 @@
 package io.github.anastaci1a.localica
 
-import android.graphics.Bitmap
-import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.test.*
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.anastaci1a.localica.lastfm.*
@@ -43,12 +41,26 @@ class LastFmReviewTest {
                     lastFmContent = { LastFmSettings(controller) })
             } }
             compose.waitUntil(5000) { !controller.state.value.loading && controller.matches.value.review.isNotEmpty() }
-            compose.onNodeWithTag("lastfm-review-summary").performScrollTo()
+            compose.onNodeWithText("Review matches").performScrollTo().performClick()
+            compose.onNodeWithTag("lastfm-review-page-summary").performScrollTo()
             compose.waitForIdle()
             val directory = nativeEvidenceDirectory("lastfm-review", context.getExternalFilesDir(null))
-            File(directory, "review-list.png").outputStream().use {
-                compose.onRoot().captureToImage().asAndroidBitmap().compress(Bitmap.CompressFormat.PNG, 100, it)
-            }
+            org.junit.Assert.assertTrue(androidx.test.uiautomator.UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
+                .takeScreenshot(File(directory, "review-list.png")))
+            compose.onNodeWithText("Dream Theater — Learning to Live").performScrollTo().performClick()
+            compose.onNodeWithText("Use selection").assertIsNotEnabled()
+            compose.onNodeWithText("Images and Words · Learning to Live").performScrollTo().assertIsNotSelected().performClick().assertIsSelected()
+            compose.onNodeWithText("None of these").assertIsNotSelected()
+            compose.waitForIdle()
+            org.junit.Assert.assertTrue(androidx.test.uiautomator.UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
+                .takeScreenshot(File(directory, "review-decision-selected.png")))
+            compose.onNodeWithText("Skip").performClick()
+            compose.onNodeWithText("86 plays · Skipped for now").assertExists()
+            compose.onNodeWithText("Dream Theater — Learning to Live").performClick()
+            compose.onNodeWithText("None of these").performScrollTo().performClick().assertIsSelected()
+            compose.onNodeWithText("Use selection").performClick()
+            compose.waitUntil(5000) { controller.matches.value.review.isEmpty() }
+            compose.onNodeWithText("All available matches are resolved.").assertExists()
         } finally { scope.cancel() }
     }
 }

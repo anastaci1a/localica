@@ -13,9 +13,16 @@ import io.github.anastaci1a.localica.LocalicaApplication
 import io.github.anastaci1a.localica.MainActivity
 import io.github.anastaci1a.localica.R
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.map
 
 /** Only explicit manual requests are enqueued. KEEP prevents concurrent scans of the same account. */
 class LastFmWork(private val app: LocalicaApplication) : LastFmBackground {
+    override val updates get() = WorkManager.getInstance(app).getWorkInfosForUniqueWorkFlow(NAME).map { work ->
+        val active = work.firstOrNull { !it.state.isFinished }
+        if (active == null) LastFmBackgroundState(false, problem = work.firstOrNull()?.outputData?.getString("problem"))
+        else LastFmBackgroundState(true, LastFmProgress(active.progress.getInt("page", 0),
+            active.progress.getInt("totalPages", 0), active.progress.getInt("songs", 0)))
+    }
     override suspend fun enqueue(username: String) {
         WorkManager.getInstance(app).enqueueUniqueWork(NAME, ExistingWorkPolicy.KEEP,
             OneTimeWorkRequestBuilder<LastFmWorker>()
@@ -46,21 +53,30 @@ private suspend fun <T> com.google.common.util.concurrent.ListenableFuture<T>.aw
         continuation.invokeOnCancellation { cancel(true) }
     }
 
-class LastFmWorker(context: Context, parameters: WorkerParameters) : CoroutineWorker(context, parameters) {
+internal fun interface LastFmWorkRuntime {
+    suspend fun controller(): LastFmController
+}
+
+class LastFmWorker internal constructor(context: Context, parameters: WorkerParameters,
+    private val runtime: LastFmWorkRuntime) : CoroutineWorker(context, parameters) {
+    constructor(context: Context, parameters: WorkerParameters) : this(context, parameters, LastFmWorkRuntime {
+        val app = context.applicationContext as LocalicaApplication
+        app.onlineMetadataConsent.load()
+        app.lastfm
+    })
     override suspend fun getForegroundInfo(): ForegroundInfo = foreground(LastFmProgress())
     override suspend fun doWork(): Result {
-        val app = applicationContext as LocalicaApplication
-        app.onlineMetadataConsent.load()
-        if (!app.onlineMetadataConsent.allowed.value || BuildConfigKeyMissing(app)) return Result.failure()
+        val controller = runtime.controller()
+        if (!controller.networkConsent.allowed.value || !controller.enabled) return Result.failure()
         val username = inputData.getString(LastFmWork.USERNAME) ?: return Result.failure()
         return try {
             setForeground(getForegroundInfo())
-            if (app.lastfm.syncInBackground(username, id.toString()) { progress ->
+            if (controller.syncInBackground(username, id.toString()) { progress ->
                 setProgress(workDataOf("page" to progress.page, "totalPages" to progress.totalPages, "songs" to progress.songs))
                 setForeground(foreground(progress))
             }) Result.success() else Result.failure()
         } catch (cancelled: CancellationException) { throw cancelled }
-        catch (_: Exception) { Result.failure() }
+        catch (_: Exception) { Result.failure(workDataOf("problem" to "Background sync could not finish. Your previous snapshot is kept.")) }
     }
     private fun foreground(progress: LastFmProgress): ForegroundInfo {
         val manager = applicationContext.getSystemService(NotificationManager::class.java)
@@ -76,5 +92,4 @@ class LastFmWorker(context: Context, parameters: WorkerParameters) : CoroutineWo
         return if (Build.VERSION.SDK_INT >= 29) ForegroundInfo(684, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
             else ForegroundInfo(684, notification)
     }
-    private fun BuildConfigKeyMissing(app: LocalicaApplication) = !app.lastfm.enabled
 }

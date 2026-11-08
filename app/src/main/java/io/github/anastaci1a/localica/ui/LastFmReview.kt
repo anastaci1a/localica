@@ -18,14 +18,14 @@ import java.text.DateFormat
 import java.util.Date
 
 @Composable
-internal fun LastFmSummary(state: LastFmState, matches: LastFmMatches) {
+internal fun LastFmSummary(state: LastFmState, matches: LastFmMatches, summaryTag: String = "lastfm-review-summary") {
     val snapshot = state.saved.snapshot
     val stats = remember(snapshot) { snapshot?.accountStats() }
     LiquidGlassSurface(Modifier.fillMaxWidth(), cornerRadius = 20.dp, pressFeedback = false) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("Listening statistics", style = MaterialTheme.typography.titleMedium)
             Text("${matches.matched} matched · ${matches.review.size} need review · ${matches.notInLibrary} not in library",
-                Modifier.testTag("lastfm-review-summary"), style = MaterialTheme.typography.bodyLarge)
+                Modifier.testTag(summaryTag), style = MaterialTheme.typography.bodyLarge)
             Text("${matches.editions.size} auto-matched editions" + if (matches.dismissed > 0) " · ${matches.dismissed} excluded by you" else "",
                 style = MaterialTheme.typography.bodyMedium)
             if (stats != null && snapshot != null) {
