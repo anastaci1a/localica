@@ -168,7 +168,7 @@ class LastFmWorkerTest {
             assertEquals(1, pages.last().getInt("artists", -1))
             assertEquals(1, pages.last().getInt("albums", -1))
             assertEquals(100, pages.last().getInt("percent", -1))
-            assertTrue(notifications.last().notification.extras.getCharSequence("android.text")!!.contains("1 songs · 1 artists · 1 known albums"))
+            assertTrue(notifications.last().notification.extras.getCharSequence("android.text")!!.contains("1 song · 1 artist · 1 album"))
             assertNotNull(notifications.last().notification.contentIntent)
         } finally { scope.cancel(); dispose(file) }
     }

@@ -8,11 +8,11 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.platform.LocalContext
+import android.text.format.DateUtils
 import io.github.anastaci1a.localica.lastfm.*
 import io.github.anastaci1a.localica.ui.layout.*
 import io.github.anastaci1a.localica.ui.spec.Space
-import java.text.DateFormat
-import java.util.Date
 
 @Composable
 internal fun LastFmSettings(controller: LastFmController) {
@@ -30,7 +30,9 @@ internal fun LastFmSettings(controller: LastFmController) {
     val stats = remember(saved.snapshot) { saved.snapshot?.accountStats() }
     val progress = state.progress ?: LastFmProgress(songs = stats?.songs ?: 0, artists = stats?.artists ?: 0,
         albums = stats?.albums ?: 0, reportedPercent = if (saved.snapshot == null) 0 else 100)
-    val lastSync = saved.snapshot?.let { DateFormat.getDateTimeInstance().format(Date(it.syncedAt)) }
+    val context = LocalContext.current
+    val lastSync = saved.snapshot?.let { DateUtils.getRelativeDateTimeString(context, it.syncedAt,
+        DateUtils.DAY_IN_MILLIS, DateUtils.WEEK_IN_MILLIS, DateUtils.FORMAT_SHOW_TIME or DateUtils.FORMAT_ABBREV_RELATIVE) }
     val focus = LocalSettingsSearchFocus.current
     val highlight = focus?.highlighted
     LaunchedEffect(highlight) { if (highlight == "Data") tab = 2 }
@@ -39,19 +41,19 @@ internal fun LastFmSettings(controller: LastFmController) {
             LiquidGlassSurface(Modifier.fillMaxWidth().testTag("lastfm-dashboard-card"), cornerRadius = settingsReviewRadius(), pressFeedback = false) {
                 SettingsStack {
                     LastFmDashboardHeader(progress, state.syncing) {
-                        Text("${progress.songs} songs · ${progress.artists} artists · ${progress.albums} known albums",
+                        Text(progress.countSummary(context.resources),
                             Modifier.testTag(if (state.syncing) "lastfm-progress" else "lastfm-archive-summary"), style = MaterialTheme.typography.bodySmall)
                         Text(if (lastSync == null) "Last sync: never" else "Last sync: $lastSync",
                             Modifier.testTag("lastfm-dashboard-last-sync"), style = MaterialTheme.typography.bodySmall)
                     }
-                    GlassActionRow {
+                    SettingsStack(inset = Space.Comfortable) { GlassActionRow {
                         if (state.syncing) GlassActionButton(AppIcon.ActionClose, "Stop sync", onClick = controller::cancelSync)
                         else {
                             GlassActionButton(AppIcon.MenuDownload, "Sync now", enabled = canSync, modifier = Modifier.testTag("lastfm-dashboard-sync")) { controller.sync(username) }
                             GlassActionButton(AppIcon.MenuDownload, "Full rescan", enabled = canSync && saved.snapshot != null,
                                 modifier = Modifier.testTag("lastfm-dashboard-full-rescan")) { controller.sync(username, fullRescan = true) }
                         }
-                    }
+                    } }
                 }
             }
             LiquidGlassSurface(Modifier.fillMaxWidth().testTag("lastfm-stats-card"), cornerRadius = settingsReviewRadius(), pressFeedback = false) {
