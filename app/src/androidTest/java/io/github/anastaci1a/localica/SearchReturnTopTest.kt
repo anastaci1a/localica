@@ -60,9 +60,10 @@ class SearchReturnTopTest {
             CompositionLocalProvider(LocalSearchMorphObserver provides { sample = it },
                 LocalLayoutDirection provides if (rtl) LayoutDirection.Rtl else LayoutDirection.Ltr,
                 LocalBrowseScrollFrameProbe provides scrollProbe) {
-                BrowserScreen(LibraryUiState(LibrarySnapshot(
+                // Every host mounts a route under key(route.key): a route change is a fresh grid.
+                key(currentRoute.key) { BrowserScreen(LibraryUiState(LibrarySnapshot(
                     folders = if (foldersEmpty) emptyList() else listOf(FolderSelection("return-search-root", "Music")), tracks = songs), loading = false, problem = libraryProblem),
-                    PlaylistState(loading = false), currentRoute, {}, {}, {}, { _, _, _ -> }, null, null, true, false, queueState = queueState)
+                    PlaylistState(loading = false), currentRoute, {}, {}, {}, { _, _, _ -> }, null, null, true, false, queueState = queueState) }
             }
         } }
         val first = queueState.library.queues.firstOrNull { it.id == currentRoute.collection?.id }?.entries?.firstOrNull()?.id ?: "return-search:0"
