@@ -10,6 +10,7 @@ This is an optimized build (not debuggable, minified with R8, with a baseline pr
 
 - Optional, read-only Last.fm statistics: enter a Last.fm username in **Settings → Last.fm** to sync play counts matched to your library. Localica never scrobbles or posts anything.
 - Reworked Settings: clearer menu order, a deep search that opens the matching page and eases to the option, and a distinct icon on every row, aligned the same in one-line and multi-line rows.
+- A song selected in one view stays selected in every other view, while repeated entries in a playlist or queue stay separately selectable.
 - Downloading items uses the download icon instead of a plain arrow.
 - Imported icon packs now animate the play ↔ pause morph.
 - Skip forward and back animate with soft opacity tapers instead of hard clip edges.
@@ -22,6 +23,7 @@ This is an optimized build (not debuggable, minified with R8, with a baseline pr
 ## Resolved issues
 
 - https://github.com/anastaci1a/localica/issues/20 - Add opt-in, read-only Last.fm statistics sync.
+- https://github.com/anastaci1a/localica/issues/651 - Recognise a selected song across views while keeping repeated entries distinct.
 - https://github.com/anastaci1a/localica/issues/641 - Rework settings order and add deep settings search.
 - https://github.com/anastaci1a/localica/issues/655 - Align settings row icons and chevrons in one-line and multi-line rows.
 - https://github.com/anastaci1a/localica/issues/649 - Use the download icon for downloading items.
