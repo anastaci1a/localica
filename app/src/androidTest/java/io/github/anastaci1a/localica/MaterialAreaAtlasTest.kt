@@ -46,10 +46,12 @@ class MaterialAreaAtlasTest {
     @get:Rule val compose = localicaComposeRule()
     private data class Request(val label: String, val width: Float, val height: Float,
         val phase: Int = 0, val x: Float = 3.25f, val y: Float = 5.75f,
-        val memberB: Boolean = true, val retainB: Boolean = false)
+        val memberB: Boolean = true, val retainB: Boolean = false, val dropHeld: Boolean = false)
     private class State {
         var parents = 0
         var epoch: Atlas? = null
+        var heldEpoch: Atlas? = null
+        var heldInputB: GraphicsLayer? = null
         var frame: Frame? = null
     }
     private data class Frame(val a: List<GraphicsLayer>, val b: List<GraphicsLayer>,
@@ -66,7 +68,8 @@ class MaterialAreaAtlasTest {
             Request("vertical-one-axis", 1f, 17f, phase = 5),
             Request("one-texel-fallback", 1f, 1f, phase = 6),
             Request("held-member", 17f, 13f, phase = 7, retainB = true),
-            Request("released-member-live-child", 17f, 13f, phase = 8, memberB = false)
+            Request("released-member-live-child", 17f, 13f, phase = 8, memberB = false),
+            Request("last-held-lease-released", 17f, 13f, phase = 9, memberB = false, dropHeld = true)
         )
         val request = mutableStateOf(requests.first())
         val state = State()
@@ -90,10 +93,18 @@ class MaterialAreaAtlasTest {
                 val extractedB = rememberGraphicsLayer().apply { clip = true; compositingStrategy = CompositingStrategy.Offscreen }
                 val heldB = rememberGraphicsLayer().apply { clip = true; compositingStrategy = CompositingStrategy.Offscreen }
                 DisposableEffect(graphics) {
-                    onDispose { state.epoch?.release(); a.release(); b.release() }
+                    onDispose { state.epoch?.release(); state.heldEpoch?.release(); a.release(); b.release() }
                 }
                 Canvas(Modifier.size(300.dp, 200.dp)) {
                     val input = request.value
+                    if (input.dropHeld && state.heldEpoch != null) {
+                        // End the held output lease before releasing its producer graph.
+                        heldB.record(size = IntSize(1, 1)) {}
+                        extractedB.record(size = IntSize(1, 1)) {}
+                        state.heldEpoch?.release()
+                        state.heldEpoch = null
+                        b.release()
+                    }
                     fun DrawScope.paint(isB: Boolean) {
                         val even = input.phase % 2 == 0
                         drawRect(if (isB) if (even) Color(0x8040E010) else Color(0xC0E020F0)
@@ -122,14 +133,14 @@ class MaterialAreaAtlasTest {
                     val oldB = if (input.memberB) with(b) {
                         record(extent) { crop(parentB, Offset(input.x + 7.5f, input.y + 3.25f)) }
                     } else {
-                        // Keep the old reference chain live without CPU recording its released input.
-                        b.releaseInput()
+                        // Consumer removal does not end the retained output's producer lease.
+                        // Keep the input and retired epoch live until dropHeld, without rerecording B.
                         b.stages
                     }
                     val previous = state.epoch
                     val epoch = if (previous == null || previous.input != padded || previous.memberB != input.memberB) {
                         Atlas(graphics, padded, input.memberB).also {
-                            previous?.release()
+                            previous?.takeUnless { it === state.heldEpoch }?.release()
                             state.epoch = it
                         }
                     } else previous
@@ -142,7 +153,11 @@ class MaterialAreaAtlasTest {
                     }
                     extract(extractedA, false)
                     if (input.memberB) extract(extractedB, true)
-                    if (input.retainB) heldB.record(size = IntSize(1, 1)) { drawLayer(extractedB) }
+                    if (input.retainB) {
+                        heldB.record(size = IntSize(1, 1)) { drawLayer(extractedB) }
+                        state.heldEpoch = epoch
+                        state.heldInputB = oldB.first()
+                    }
                     // Every stage has a presented provider before raw readback, including
                     // the original chain, which the atlas itself does not consume.
                     var y = 0f
@@ -212,12 +227,13 @@ class MaterialAreaAtlasTest {
                             val finalB = copy(frame.extractedB, "extracted-b")
                             assertRaw("${input.label} extracted B", copy(frame.b.last(), "final-old-b"), finalB, 0, receipts)
                             if (input.retainB) heldBefore = finalB.bytes.copyOf()
-                        } else {
+                        } else if (!input.dropHeld) {
+                            assertFalse("A held output owns a live producer lease", requireNotNull(state.heldInputB).isReleased)
                             val held = copy(frame.heldB, "released-held-b")
                             assertRaw("${input.label} released B live child", copy(frame.b.last(), "released-old-b"), held, 0, receipts)
                             assertFalse("A held member must update, not freeze its pre-release raster",
                                 requireNotNull(heldBefore).contentEquals(held.bytes))
-                        }
+                        } else assertTrue("Last held lease releases the old input", requireNotNull(state.heldInputB).isReleased)
                         assertEquals("Parent counters remain unchanged", 1, frame.parents)
                         receipts += "${input.label} PASS stages=${frame.a.size} oldDownstreamTargets=${(frame.a.size - 1) * 2} atlasTargets=${frame.atlas.levels.size} activeB=${input.memberB}"
                     } catch (error: Throwable) { failure = error }
@@ -276,8 +292,7 @@ class MaterialAreaAtlasTest {
             stages = owned.take(index)
             return stages
         }
-        fun releaseInput() { owned.firstOrNull()?.takeUnless { it.isReleased }?.let(graphics::releaseGraphicsLayer) }
-        fun release() { owned.filterNot { it.isReleased }.forEach(graphics::releaseGraphicsLayer); owned.clear() }
+        fun release() { owned.filterNot { it.isReleased }.forEach(graphics::releaseGraphicsLayer); owned.clear(); stages = emptyList() }
     }
     private class Atlas(private val graphics: GraphicsContext, val input: IntSize, val memberB: Boolean) {
         data class Tile(val layer: GraphicsLayer, val size: IntSize)
@@ -310,6 +325,6 @@ class MaterialAreaAtlasTest {
                 previous = output; before = next
             }
         }
-        fun release() { levels.forEach { graphics.releaseGraphicsLayer(it.layer) } }
+        fun release() { levels.filterNot { it.layer.isReleased }.forEach { graphics.releaseGraphicsLayer(it.layer) } }
     }
 }
