@@ -39,8 +39,11 @@ internal fun ImageChooser(workflow: ArtworkWorkflow, onDismiss: () -> Unit, onCh
     val images = remember { CoverImages(context) }
     val decodeObserver = LocalImagePreviewDecodeObserver.current
     val traceId = remember { java.util.UUID.randomUUID().toString().take(8) }
+    val traceEnabled = remember(context) {
+        context.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0
+    }
     fun trace(message: String) {
-        if (io.github.anastaci1a.localica.BuildConfig.DEBUG)
+        if (traceEnabled)
             android.util.Log.d("Chooser660", "id=$traceId target=${workflow.target} $message")
     }
     DisposableEffect(workflow) {
