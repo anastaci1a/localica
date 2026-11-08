@@ -199,8 +199,8 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
     val observedShadowAppearance = if (drawObserver == null) null else LocalGlassAppearance.current
     val visible = LocalGlassVisible.current
     if (visible && renderer.backend == GlassBackend.None) {
-        BackdropLease(source)
-        BackdropLease(homeSource?.takeUnless { it === source })
+        BackdropLease(source, diagnosticNone = true)
+        BackdropLease(homeSource?.takeUnless { it === source }, diagnosticNone = true)
     }
     val location = remember { BackdropLocation() }
     var surfaceSize by remember { mutableStateOf(androidx.compose.ui.unit.IntSize.Zero) }
