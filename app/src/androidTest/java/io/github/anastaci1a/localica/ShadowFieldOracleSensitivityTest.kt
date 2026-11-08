@@ -154,6 +154,48 @@ class ShadowFieldOracleSensitivityTest {
         }
     }
 
+    @Test fun popupScrimsNeedExactHigherReceiptsAndRejectOneQuantumOrExtraDimming() {
+        fun marker(bitmap: Bitmap, left: Int, blue: Int, sentinel: Int) {
+            for (y in 1..8) for (x in 0..7) bitmap.setPixel(left + x, y,
+                if (x < 4) android.graphics.Color.BLACK or blue else android.graphics.Color.rgb(sentinel, 0, sentinel))
+        }
+        val state = ShadowDrawState(1, 1, listOf(probeBody to 1f))
+        val lower = ShadowWindowReceipt("native-window-1", NativeShadowGeneration(12,
+            androidx.compose.ui.unit.IntOffset(2, 2), 1000), state, PopupShadowReceipt(null, listOf("native-window-2")))
+        val higher = ShadowWindowReceipt("native-window-2", NativeShadowGeneration(19,
+            androidx.compose.ui.unit.IntOffset(12, 2), 2000), state, PopupShadowReceipt(PopupShadowScrim(1f, 41), emptyList()))
+        // Independent fixed pixels: spaced code12 is blue48; one black alpha41 gives blue40, sentinel214.
+        val original = edit(nativeField(12)) {
+            marker(it, 1, 40, 214); marker(it, 11, 76, 255)
+        }.copy(windowIds = listOf(lower.windowId, higher.windowId), nativeWindows = listOf(lower, higher))
+        probe.assertWithin(probe.compare(original, original), 2f / 255f, "recorded popup composition")
+        shadowOracleEvidence("popup-composition-valid", original, original)
+        val wrongQuantum = original.copy(nativeWindows = listOf(lower,
+            higher.copy(popup = PopupShadowReceipt(PopupShadowScrim(1f, 42), emptyList()))))
+        val missing = original.copy(nativeWindows = listOf(lower))
+        val unknown = original.copy(nativeWindows = listOf(lower, higher.copy(popup = null)))
+        val extraDim = edit(original) { marker(it, 1, 40, 213) }
+        for ((label, actual) in listOf("alpha-off-one-quantum" to wrongQuantum, "missing-receipt" to missing,
+            "unknown-higher-composition" to unknown, "extra-unrecorded-dim" to extraDim)) {
+            assertThrows(IllegalStateException::class.java) { probe.compare(actual, actual) }
+            shadowOracleEvidence("popup-composition-$label", actual, original)
+        }
+        val noScrim = edit(original) { marker(it, 1, 48, 255) }.copy(nativeWindows = listOf(lower,
+            higher.copy(popup = PopupShadowReceipt(null, emptyList()))))
+        probe.assertWithin(probe.compare(noScrim, noScrim), 2f / 255f, "explicit known no-scrim receipt")
+        shadowOracleEvidence("popup-composition-known-no-scrim", noScrim, noScrim)
+        val top = higher.copy(windowId = "native-window-3", generation = NativeShadowGeneration(23,
+            androidx.compose.ui.unit.IntOffset(22, 2), 3000))
+        val nested = edit(original) {
+            marker(it, 1, 34, 180); marker(it, 11, 64, 214); marker(it, 21, 92, 255)
+        }.copy(windowIds = listOf(lower.windowId, higher.windowId, top.windowId), nativeWindows = listOf(
+            lower.copy(popup = PopupShadowReceipt(null, listOf(higher.windowId, top.windowId))),
+            higher.copy(popup = PopupShadowReceipt(PopupShadowScrim(1f, 41), listOf(top.windowId))), top))
+        probe.assertWithin(probe.compare(nested, nested), 2f / 255f, "different per-window nested operations")
+        shadowOracleEvidence("popup-composition-nested-valid", nested, nested)
+        assertThrows(IllegalStateException::class.java) { shadowMarkerColor(0x40000, true) }
+    }
+
     @Test fun realShadowCallersHaveCompleteNativeFieldsInNormal() = verifyNativeShadowCallers(compose, GlassRendererMode.Normal)
     @Test fun realShadowCallersHaveCompleteNativeFieldsInNone() = verifyNativeShadowCallers(compose, GlassRendererMode.None)
     @Test fun diagnosticRetainedSamplingReferencesAcrossFractionalTranslations() = collectRetainedSamplingDiagnostics(compose)
