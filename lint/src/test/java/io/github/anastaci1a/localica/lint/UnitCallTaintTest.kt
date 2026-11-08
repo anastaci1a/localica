@@ -7,7 +7,7 @@ import com.android.tools.lint.detector.api.Detector
 import com.android.tools.lint.detector.api.Issue
 
 /**
- * PROPOSED regressions for the MINIMAL derived() correction (agent-19 review, 2026-11-08): a resolved Unit/void call,
+ * Regressions for the reviewed derived() Unit-call guard (agent-19, 2026-11-08): a resolved Unit/void call,
  * or a reference to a void method, never taints the caller's value; non-void bodies keep the existing full traversal.
  * Cases A-C are the RepeatOptionsDialog shape (five findings at 812195e1); D-H are the intended positives agent-19 named.
  */

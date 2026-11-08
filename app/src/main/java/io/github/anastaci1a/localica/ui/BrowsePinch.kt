@@ -68,6 +68,7 @@ internal class BrowsePinchMotion {
     fun beginGeometry() {
         tracking?.cancel(); tracking = null
         caughtUp = false
+        progress.retire()
         progress = BrowsePinchProgress(0f)
     }
     var held by mutableStateOf(false)
@@ -220,6 +221,7 @@ internal class BrowsePinchMotion {
         disposed = true
         cancelGestures()
         capture?.cancel(); tracking?.cancel(); settling?.cancel()
+        progress.retire()
         clearTransaction()
     }
     /** The departure and arrival fades of [transaction]'s current destination layout (#559). */

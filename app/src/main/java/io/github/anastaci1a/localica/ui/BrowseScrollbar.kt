@@ -1,6 +1,5 @@
 package io.github.anastaci1a.localica.ui
 
-import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -24,7 +23,8 @@ import androidx.compose.ui.node.PointerInputModifierNode
 import androidx.compose.ui.platform.InspectorInfo
 import androidx.compose.ui.input.pointer.PointerEvent
 import androidx.compose.ui.unit.IntSize
-import androidx.compose.ui.graphics.graphicsLayer
+import io.github.anastaci1a.localica.ui.engine.rememberScrollbarMotion
+import io.github.anastaci1a.localica.ui.engine.scrollbarLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
@@ -104,16 +104,14 @@ private fun ListScrollbar(state: Any, contentKey: Any, scrollable: () -> Boolean
     fun fraction() = model.observe(frame())
     val density = LocalDensity.current
     // After a drag the list settles at an item or step target; the thumb eases from the finger to the true position.
-    val release = remember { Animatable(0f) }
+    val scrollbar = rememberScrollbarMotion()
     var pressed by remember { mutableStateOf(false) }
     var activity by remember { mutableIntStateOf(0) }
-    val opacity = remember { Animatable(1f) }
     val latestMovement by rememberUpdatedState(movement)
     LaunchedEffect(state) {
         snapshotFlow { latestMovement() to activity }.collectLatest {
-            opacity.snapTo(1f)
-            // Delayed animation uses the frame clock. A held, motionless contact also becomes idle.
-            opacity.animateTo(0f, tween(durationMillis = 220, delayMillis = 1200))
+            scrollbar.wake()
+            // The delayed fade runs on the root frame clock. A held, motionless contact also becomes idle.
         }
     }
     val reduced = LocalReducedMotion.current
@@ -127,7 +125,7 @@ private fun ListScrollbar(state: Any, contentKey: Any, scrollable: () -> Boolean
         var dragY by remember { mutableFloatStateOf(0f) }
         var grab by remember { mutableFloatStateOf(0f) }
         fun thumb(): Float { fraction(); return model.thumbSize(track, minThumb, track * ScrollbarGrip.MaxTrackShare) * grip }
-        fun displayed() = if (dragging) dragFraction else (fraction() + release.value).coerceIn(0f, 1f)
+        fun displayed() = scrollbar.displayed(fraction(), dragging, dragFraction)
         fun position() = ScrollbarGrip.top(displayed(), track, thumb())
         fun seek(y: Float) {
             activity++
@@ -140,7 +138,7 @@ private fun ListScrollbar(state: Any, contentKey: Any, scrollable: () -> Boolean
             if (!dragging) return
             dragging = false
             val gap = dragFraction - fraction()
-            scope.launch { release.snapTo(gap); release.animateTo(0f, tween(180)) }
+            scrollbar.release(gap)
         }
         Box(Modifier.align(Alignment.CenterEnd).width(ScrollbarGrip.HitWidthDp.dp).fillMaxHeight().then(ScrollbarTapSharing).testTag("browse-scrollbar")
             .semantics {
@@ -186,7 +184,7 @@ private fun ListScrollbar(state: Any, contentKey: Any, scrollable: () -> Boolean
                 }
             }) {
             Box(Modifier.align(Alignment.TopEnd).offset(x = (-4).dp)
-                .graphicsLayer { alpha = opacity.value; translationY = position(); scaleX = grip; scaleY = grip; transformOrigin = TransformOrigin(1f, 0f) }
+                .scrollbarLayer({ scrollbar.opacity() }, { position() }, { grip }, TransformOrigin(1f, 0f))
                 .width(ScrollbarGrip.RestWidthDp.dp)
                 // The resting length follows the model; it is read while measuring, so it never recomposes.
                 .layout { measurable, constraints ->
@@ -199,7 +197,7 @@ private fun ListScrollbar(state: Any, contentKey: Any, scrollable: () -> Boolean
         }
         val preview = previewFor(target)
         if (dragging && preview != null) Surface(Modifier.align(Alignment.TopStart)
-            .graphicsLayer { alpha = opacity.value; translationY = position() }.testTag("scroll-preview"),
+            .scrollbarLayer({ scrollbar.opacity() }, { position() }).testTag("scroll-preview"),
             shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.primaryContainer) {
             Box(Modifier.defaultMinSize(48.dp, 48.dp).padding(8.dp), contentAlignment = Alignment.Center) {
                 Text(preview, style = MaterialTheme.typography.titleMedium)

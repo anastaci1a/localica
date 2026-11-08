@@ -24,9 +24,13 @@ internal data class MotionIntent(val next: Trajectory,val stamp: FrameStamp,val 
     override val settled: Boolean get()=segment.kind==0
     init { clock.checkMutation(); require(initial.isFinite() && range.isFinite() && range>0 && (bounds==null || initial.toDouble() in bounds)); id=clock.allocateId(); clock.events?.let { sink -> clock.observe { sink.created(this); sink.joined(this,MotionJoin(0,started,Kinematic(initial,0f),Kinematic(initial,0f),0,0,"Initial")) } } }
     override val followsRoot get()=owner.followsRoot
+    internal val playback: FramePlayback? get()=segment as? FramePlayback
+    override val frameTransaction: Any? get()=playback?.transaction
+    override fun prepareFrame() { playback?.prepareFrame() }
+    override fun sampleFrame(stamp: FrameStamp) { playback?.let { p -> p.sampleFrame(stamp) { !disposed && segment===p }; if(p.finished) destination.floatValue=p.endpoint } }
     override val admitsReduced get()=settled || owner.admitsReduced(segment,clock.spec)
     private fun elapsed(stamp: FrameStamp)=(stamp.nanos-started.nanos)/1e9
-    private fun raw(stamp: FrameStamp,derivative: Boolean): Double { var selected=segment; var start=started; var old=past; while(stamp.nanos<start.nanos && old!=null) { selected=old.trajectory; start=old.started; old=old.previous }; val t=(stamp.nanos-start.nanos)/1e9; return if(derivative) selected.velocity(t) else selected.value(t) }
+    private fun raw(stamp: FrameStamp,derivative: Boolean): Double { var selected=segment; var start=started; var old=past; while(stamp.nanos<start.nanos && old!=null) { selected=old.trajectory; start=old.started; old=old.previous }; val t=(stamp.nanos-start.nanos)/1e9; return if(selected is FramePlayback) (if(derivative) selected.velocityAt(stamp.nanos) else selected.valueAt(stamp.nanos)) else if(derivative) selected.velocity(t) else selected.value(t) }
     internal fun rawValue(stamp: FrameStamp)=raw(stamp,false)
     internal fun rawVelocity(stamp: FrameStamp)=raw(stamp,true)
     private fun presentedRead() { if(!presented && !clock.isObserving) presented=true }
@@ -73,8 +77,8 @@ internal data class MotionIntent(val next: Trajectory,val stamp: FrameStamp,val 
         clock.checkMutation(); check(segment.kind==3 || context().access==MotionAccess.Reduced && segment.kind==0 && acceptedDrive); require(releaseVelocity.isFinite()); val stamp=clock.stampNow; val data=clock.spec.motion[MotionProfile.valueOf(profile.name)] as? MotionProfileSpec?:throw IllegalArgumentException("Scalar release profile required"); val context=context(); val sigma=if(context.access==MotionAccess.Faster) 2.0/3 else 1.0; val next=if(context.access==MotionAccess.Reduced || rawValue(stamp)==target.toDouble() && releaseVelocity==0f) Rest(target.toDouble()) else Eased(rawValue(stamp),releaseVelocity.toDouble(),target.toDouble(),data.easing,data.durationMs*sigma/1000,sigma,bounds); val intent=prepareSegment(next,target,stamp,listOf(profile,data,sigma),if(context.access==MotionAccess.Reduced) "Reduced" else "DrivenRelease",releaseVelocity); drivenStamp=null; acceptedDrive=false; commit(intent)
     }
     internal fun initialize(value: Float) { clock.checkMutation(); require(value.isFinite()); check(!presented || context().access==MotionAccess.Reduced); commit(prepareSegment(Rest(value.toDouble()),value,clock.stampNow,policy=if(context().access==MotionAccess.Reduced) "Reduced" else "Initial")) }
-    override fun endsAt(stamp: FrameStamp): Boolean { if(stamp.nanos>=started.nanos) past=null; return segment.kind in 1..2 && elapsed(stamp)>=segment.duration }
-    override fun finish(stamp: FrameStamp) { val intent=prepareSegment(Rest(target.toDouble()),target,stamp,descriptor,policy=segment.completionPolicy); segment=intent.next; started=stamp; past=null; epochState.intValue++; emit(intent) }
+    override fun endsAt(stamp: FrameStamp): Boolean { if(stamp.nanos>=started.nanos && past?.trajectory !is FramePlayback) past=null; return playback?.finished ?: (segment.kind in 1..2 && elapsed(stamp)>=segment.duration) }
+    override fun finish(stamp: FrameStamp) { val intent=prepareSegment(Rest(target.toDouble()),target,stamp,descriptor,policy=segment.completionPolicy); past=if(segment is FramePlayback) Past(segment,started,past) else null; segment=intent.next; started=stamp; epochState.intValue++; emit(intent) }
     override fun reduce(stamp: FrameStamp) { val intent=prepareSegment(Rest(target.toDouble()),target,stamp,policy="Reduced"); val driving=acceptedDrive; commit(intent,false); acceptedDrive=driving; emit(intent) }
     internal fun dispose() { clock.checkMutation(); if(disposed) return; clock.unregister(this); clock.events?.let { sink -> clock.observe { sink.retired(this,clock.stampNow) } }; disposed=true }
 }

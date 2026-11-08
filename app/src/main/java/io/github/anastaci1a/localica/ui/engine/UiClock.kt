@@ -26,10 +26,11 @@ internal val LocalEngineContext=staticCompositionLocalOf<EngineContext> { requir
     internal var context: EngineContext?=null; private set
     internal var spec: UiSpec=StockUiSpec; private set
     internal var events: MotionEvents?=null
+    internal var intentNow: (() -> Long)?=null
     internal val observers=mutableListOf<FrameObserver>()
     init { checkOwner() }
     val stamp: FrameStamp get()=state.value
-    val stampNow: FrameStamp get() { checkOwner(); return FrameStamp(maxOf(nowNanos(),last.nanos),last.sequence) }
+    val stampNow: FrameStamp get() { checkOwner(); return FrameStamp(maxOf((intentNow ?: nowNanos)(),last.nanos),last.sequence) }
     val activeCount: Int get()=active.size
     internal val presentedStamp: FrameStamp get()=last
     internal val isObserving: Boolean get()=observing
@@ -63,6 +64,7 @@ internal val LocalEngineContext=staticCompositionLocalOf<EngineContext> { requir
     val base=remember { FrameBase() }
     val clock=inherited?:remember { UiClock(object: FrameSource { override suspend fun awaitFrame()=awaitFrame { it }
         override suspend fun <R> awaitFrame(onFrame: (Long)->R)=withFrameNanos { base.frame(it); onFrame(it) } },base::now) }
+    bindScrollClock(clock)
     if(inherited==null) LaunchedEffect(clock) { withFrameNanos { base.frame(it) }; clock.run() }
     CompositionLocalProvider(LocalClockOwner provides clock,LocalUiClock provides clock,content=content)
 }

@@ -17,10 +17,12 @@ internal class EngineHarness(access: MotionAccess=MotionAccess.Standard) : AutoC
     var awaits=0
     private val frames=Channel<Long>(Channel.UNLIMITED)
     val clock=UiClock(object: FrameSource { override suspend fun awaitFrame(): Long { awaits++; return frames.receive() } },{ now },{})
-    private val scope=CoroutineScope(Dispatchers.Unconfined+SupervisorJob())
+    /** A root-loop failure must fail the test instead of silently clearing the active set. */
+    val failures=mutableListOf<Throwable>()
+    private val scope=CoroutineScope(Dispatchers.Unconfined+SupervisorJob()+CoroutineExceptionHandler { _,e -> failures+=e })
     init { clock.configure(EngineContext(1f/120,1000f,access),StockUiSpec); scope.launch { clock.run() } }
     fun advance(seconds: Double) { now+=(seconds*1e9).roundToLong(); frames.trySend(now) }
-    override fun close() { scope.cancel() }
+    override fun close() { scope.cancel(); failures.firstOrNull()?.let { throw AssertionError("Root clock failed: $it",it) } }
 }
 
 class EngineFoundationTest {

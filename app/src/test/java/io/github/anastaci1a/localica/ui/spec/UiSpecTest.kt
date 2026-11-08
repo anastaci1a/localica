@@ -25,6 +25,8 @@ class UiSpecTest {
         assertEquals(ListMotionSpec(350,500,120,EasingSpec(.4f,0f,.2f,1f),EasingSpec(0f,0f,1f,1f)),stock.motion[MotionProfile.Scroll])
         assertEquals(SettingsHighlightSpec(150,450,600,1200,.18f,EasingSpec(.4f,0f,.2f,1f)),stock.motion[MotionProfile.SettingsHighlight])
         assertEquals(SettingsScrollSpec(262,175,EasingSpec(.4f,0f,.2f,1f)),stock.motion[MotionProfile.SettingsScroll])
+        assertEquals(MotionProfileSpec(100,EasingSpec(.4f,0f,.2f,1f)),stock.motion[MotionProfile.PinchCatchUp]); assertEquals(MotionProfileSpec(180,EasingSpec(.4f,0f,.2f,1f)),stock.motion[MotionProfile.ScrollbarRelease])
+        assertEquals(DelayedFadeSpec(1200,220,EasingSpec(.4f,0f,.2f,1f)),stock.motion[MotionProfile.ScrollbarIdleFade])
         assertEquals(4.13f,stock.expansion.core.maxSlope,0f)
         assertEquals(.0003f,SettleThreshold,0f); assertEquals(.003f,SettleVelocityThreshold,0f)
         assertEquals(426.086832f,stock.expansion.referenceDurationMs,0f)
