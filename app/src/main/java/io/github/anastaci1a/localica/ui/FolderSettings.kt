@@ -32,7 +32,9 @@ private val settingsDestinations = listOf(
     SettingsDestination("Navigation", "Interface", AppIcon.SettingsNavigation, "Main tabs, Back history, and exit confirmation"),
     SettingsDestination("Player", "Interface", AppIcon.SettingsPlayer, "Artwork, gestures, and player actions"),
     SettingsDestination("Motion", "Interface", AppIcon.SettingsMotion, "Animation speed and reduced motion"),
-    SettingsDestination("Last.fm", null, AppIcon.MenuStation, "Read-only listening statistics"),
+    SettingsDestination("Online features", null, AppIcon.MenuStation, "Privacy, Last.fm, and artist photos"),
+    SettingsDestination("Last.fm", "Online features", AppIcon.MenuStation, "Read-only listening statistics"),
+    SettingsDestination("Artist photos", "Online features", AppIcon.TabArtists, "Sources, cache, and photo matching"),
     SettingsDestination("Playback and queues", null, AppIcon.TransportPlay, "Preloading, queue switching, and retention"),
     SettingsDestination("Song tap behavior", "Playback and queues", AppIcon.TabSongs, "Default action and per-list overrides"),
     SettingsDestination("Library and tags", null, AppIcon.TabLibrary, "Folders, scanner configuration, tag jobs and recovery"),
@@ -63,6 +65,7 @@ private val settingsPathSaver = Saver<List<String>, List<String>>(
 private fun migrateSettingsPath(path: List<String>): List<String> {
     val titles = path.map(::settingsTitle)
     return when (titles.firstOrNull()) {
+        "Last.fm" -> listOf("Online features") + titles
         "Icon packs" -> listOf("Interface") + titles
         "Pack icons" -> listOf("Interface", "Icon packs") + titles
         else -> titles
@@ -81,7 +84,9 @@ internal fun settingsPath(title: String?): List<String> {
 fun FolderSettings(state: LibraryUiState, onDismiss: () -> Unit, onChooseFolder: () -> Unit,
     onRemove: (String) -> Unit, extraContent: @Composable () -> Unit = {},
     interfaceContent: @Composable (String) -> Unit = {}, playbackContent: @Composable (String) -> Unit = {},
-    aboutContent: @Composable () -> Unit = {}, initialCategory: String? = null, onFullScan: () -> Unit = {}, onQuickScan: () -> Unit = {}, libraryFiltersContent: @Composable () -> Unit = {}, searchValues: Map<String, String> = emptyMap(), lastFmContent: @Composable () -> Unit = {}) {
+    aboutContent: @Composable () -> Unit = {}, initialCategory: String? = null, onFullScan: () -> Unit = {}, onQuickScan: () -> Unit = {}, libraryFiltersContent: @Composable () -> Unit = {}, searchValues: Map<String, String> = emptyMap(), lastFmContent: @Composable () -> Unit = {},
+    onlineFeaturesContent: @Composable () -> Unit = {}, artistPhotosContent: @Composable () -> Unit = {},
+    lastFmSettingsRequest: Int = 0) {
     var path by rememberSaveable(stateSaver = settingsPathSaver) { mutableStateOf(settingsPath(initialCategory)) }
     var iconPackId by rememberSaveable { mutableStateOf<String?>(null) }
     var pending by remember { mutableStateOf<SettingSpec?>(null) }
@@ -94,6 +99,9 @@ fun FolderSettings(state: LibraryUiState, onDismiss: () -> Unit, onChooseFolder:
     val removeOrigin = rememberGlassAnchor()
     val folderLabels = remember(state.snapshot.folders) { scanFolderLabels(state.snapshot.folders) }
     val page = path.lastOrNull()
+    LaunchedEffect(lastFmSettingsRequest) {
+        if (lastFmSettingsRequest > 0) { path = settingsPath("Last.fm"); search = ""; pending = null }
+    }
     val holder = rememberSaveableStateHolder()
     val context = LocalContext.current
     val preferences = remember(context) { ScanPreferences(context) }
@@ -176,7 +184,14 @@ fun FolderSettings(state: LibraryUiState, onDismiss: () -> Unit, onChooseFolder:
                     "Song tap behavior", "Per-list overrides" -> playbackContent(page)
                     "About and licenses" -> aboutContent()
                     "Library filters" -> libraryFiltersContent()
+                    "Online features" -> {
+                        onlineFeaturesContent()
+                        settingsDestinations.filter { it.parent == page }.forEach { child ->
+                            SettingsLink(child.title, child.summary, child.icon) { path = path + child.title }
+                        }
+                    }
                     "Last.fm" -> lastFmContent()
+                    "Artist photos" -> artistPhotosContent()
                     "Tag jobs and recovery" -> { Text("Interrupted edits keep a recovery copy until you resolve them."); extraContent() }
                     "Folders to scan" -> {
                         Text("Your files stay where they are. Start scanning from More → Scan music.", style = MaterialTheme.typography.bodyMedium)
