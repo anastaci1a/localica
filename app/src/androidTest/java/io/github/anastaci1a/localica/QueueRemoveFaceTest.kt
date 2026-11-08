@@ -207,6 +207,7 @@ class QueueRemoveFaceTest {
                 val p = compose.runOnUiThread { anchor.contact.expansion.value }
                 val hidden = compose.runOnUiThread { anchor.hidden }
                 val present = compose.runOnUiThread { anchor.modalPresent }
+                val retired = compose.runOnUiThread { entry !in host.entries }
                 val node = surface()
                 val panel = if (present && node != null) screenBounds(node) else home
                 val native = node?.let { compose.runOnUiThread { window(view(it)) } }
@@ -218,7 +219,7 @@ class QueueRemoveFaceTest {
                         val file = File(output, "return-${frame.toString().padStart(3, '0')}.png").also { files += it }
                         save(image, file)
                         val record = JSONObject().put("frame", frame).put("clockMillis", compose.mainClock.currentTime - start)
-                            .put("progress", p).put("hidden", hidden).put("modalPresent", present)
+                            .put("progress", p).put("hidden", hidden).put("modalPresent", present).put("entryRetired", retired)
                             .put("windowIdentity", native?.let(System::identityHashCode)).put("file", file.name)
                         if (p <= .16f) {
                             val result = match(image, icon, label, panel.center)
@@ -231,7 +232,7 @@ class QueueRemoveFaceTest {
                     } finally { image.recycle() }
                 }
                 frame++
-                if (!hidden && !present) { returned = true; break }
+                if (!hidden && !present && retired) { returned = true; break }
             }
             assertTrue("The same source returns within the existing five-second bound", returned)
             assertTrue("Observe actual retained-face pixels before the native handoff", retainedSamples >= 2)
