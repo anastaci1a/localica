@@ -435,6 +435,8 @@ The mini-player appears whenever an active queue has a current song, including p
 
 The settled Play triangle uses a single filled contour. It morphs into Pause using configurable endpoint shapes. Skips scroll overlapping rounded triangles one step, crossfading departing and arriving elements symmetrically. Repeated presses preserve presented position and velocity. The 380 ms normal cycle has a longer settle; Faster shortens it and Reduce motion snaps.
 
+Imported play and pause icons share that morph when play is one shape and pause is two separate shapes: the play shape splits vertically at the centre of its ink and each half morphs into its bar with the same timing, easing and Reduce motion behaviour. Other pack art cross-fades, and the log names the reason.
+
 Secondary metadata defaults to Album Artist with Artist fallback. Artist-first is configurable. The body is one rounded tap target. Transport remains independent.
 
 Tap/swipe up expands one shared outline containing glass, artwork, text and transport. The expanded player follows device-reported corner radii. Absent or unavailable physical geometry stays square. Queue keeps the shared rounded panel contour for its material, content clip and border throughout opening, closing and reversal, independently of physical window clipping.
