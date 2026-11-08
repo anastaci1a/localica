@@ -8,6 +8,7 @@ import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -54,7 +55,10 @@ internal fun ImageChooser(workflow: ArtworkWorkflow, onDismiss: () -> Unit, onCh
     val files = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument(), ::chosen)
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { revision++ }
     if (workflow.stage == ArtworkStage.Chooser) GlassAlertDialog(onDismissRequest = onDismiss, title = { Text("Choose artwork") }, text = {
-        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        // Recent images arrive after the first layout; scroll within the dialog's body limit so
+        // they can never squeeze the gallery and files actions to zero height (#660).
+        val bodyScroll = rememberScrollState()
+        Column(Modifier.scrollEdgeFade(bodyScroll).controlVerticalScroll(bodyScroll), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             if (hasPermission && recent.isEmpty()) Text("No recent photos", style = MaterialTheme.typography.bodySmall)
             if (unavailableRecent) Text("Some recent images are unavailable. Choose them again using gallery or files.", style = MaterialTheme.typography.bodySmall)
             val recentScroll = androidx.compose.foundation.lazy.rememberLazyListState()
