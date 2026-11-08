@@ -1,6 +1,11 @@
 package io.github.anastaci1a.localica
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.layout.LookaheadScope
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -27,6 +32,7 @@ class BrowseNoticeMeasurementTest {
         var densityScale by mutableFloatStateOf(1f)
         var fontScale by mutableFloatStateOf(1f)
         var intent by mutableIntStateOf(0)
+        var bounded by mutableStateOf(false)
         lateinit var identity: Any
         lateinit var density: Density
         var pixels = 0
@@ -38,9 +44,12 @@ class BrowseNoticeMeasurementTest {
             val currentWidth = width
             SideEffect { identity = content; density = actual; pixels = with(actual) { currentWidth.roundToPx() }; currentIntent.hashCode() }
             CompositionLocalProvider(LocalDensity provides actual, LocalLayoutDirection provides direction) {
-                if (mounted) Box(Modifier.width(currentWidth).measureBrowseNotice(measurement, content)) {
-                    if (notice) Text("A measured notice")
-                }
+                // The grid measures items in a LookaheadScope with an unbounded main axis.
+                LookaheadScope { Column(if (bounded) Modifier.height(0.dp) else Modifier.verticalScroll(rememberScrollState())) {
+                    if (mounted) Box(Modifier.width(currentWidth).measureBrowseNotice(measurement, content)) {
+                        if (notice) Text("A measured notice")
+                    }
+                } }
             }
         } }
         fun height() = measurement.height(identity, pixels, density, direction)
@@ -59,6 +68,8 @@ class BrowseNoticeMeasurementTest {
             mounted = false
         }
         compose.runOnIdle { assertNull("A detached node cannot certify the next mount", height()); mounted = true }
-        compose.runOnIdle { assertEquals("The reattached node must actually measure again", 0, height()) }
+        compose.runOnIdle { assertEquals("The reattached node must actually measure again", 0, height()); bounded = true }
+        compose.runOnIdle { assertNull("A bounded main axis is not notice geometry", height()); bounded = false }
+        compose.runOnIdle { assertEquals(0, height()) }
     }
 }
