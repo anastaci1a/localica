@@ -18,7 +18,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.browse.*
@@ -148,8 +147,8 @@ internal fun PinnedHome(library: LibraryUiState, playlists: PlaylistState, pins:
             visible = selectionVisible && !playerOpen && currentOrder && songs.isNotEmpty() && !session.active && scroll.canScrollBackward && !returnToList.pending,
             reducedMotion = reducedMotion,
             returning = returnToList.pending,
-            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = obscuredInset)
-                .onSizeChanged { if (it.height > 0) returnControlHeight = it.height }) {
+            onHeightMeasured = { returnControlHeight = it },
+            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = obscuredInset)) {
             returnToList(ListReturnAction.ScrollTop)
         }
     }
