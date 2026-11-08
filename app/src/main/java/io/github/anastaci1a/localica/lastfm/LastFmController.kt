@@ -137,6 +137,7 @@ class LastFmController(private val store: LastFmStore, private val syncer: LastF
         return result.await()
     }
     fun undoJudgment(remoteKey: String) = map(remoteKey, LastFmMatcher.REVIEW)
+    fun resetMapping(remoteKey: String) = edit { it.copy(mappings = it.mappings - remoteKey) }
     fun resetMappings() = edit { it.copy(mappings = emptyMap()) }
     fun keepSyncingInBackground(value: Boolean) = edit { it.copy(keepSyncingInBackground = value) }
     fun cancelSync() { syncJob?.cancel(); workerJob?.cancel(); background?.cancel() }

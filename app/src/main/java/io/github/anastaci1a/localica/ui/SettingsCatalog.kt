@@ -47,6 +47,7 @@ internal object SettingsCatalog {
         SettingSpec("Last sync", "Last.fm", "status update"),
         SettingSpec("Last.fm", "Last.fm", "on off archive"),
         SettingSpec("Data", "Last.fm", "account archive"),
+        SettingSpec("Sync notifications", "Last.fm", "enable background progress notification", revealedBy = "Data"),
         SettingSpec("Keep syncing in the background", "Last.fm", "notification WorkManager", revealedBy = "Data"),
         SettingSpec("Full rescan", "Last.fm", "complete account refresh", revealedBy = "Data"),
         SettingSpec("Disconnect Last.fm", "Last.fm", "forget account keep archive", revealedBy = "Data"),

@@ -416,3 +416,4 @@ io.github.anastaci1a.localica.LastFmDashboardTest
 io.github.anastaci1a.localica.LastFmWorkerTest
 io.github.anastaci1a.localica.LastFmMatchingBarTest
 io.github.anastaci1a.localica.LastFmGroupListTest
+io.github.anastaci1a.localica.LastFmSharedControlsTest

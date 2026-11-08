@@ -215,9 +215,11 @@ The [appearance settings](#appearance-and-settings) own thumb finish and expansi
 
 Settings → Online features → Last.fm starts with a sync ring, percent and live song, artist and album counts. Its archive card shows scrobbles, songs, artists, albums and matched share. Overview, Matches and Data use shared glass tabs.
 
-Matching shows an exact-proportion colour strip with tappable labelled legend rows. Matched, Judgment calls, Needs review, Auto-matched editions and Not in your library are searchable. Every row opens the shared glass chooser and can match any library song. Judgment rows show the reason and Undo.
+Matching shows an exact-proportion colour strip with tappable labelled legend rows. Matched, Judgment calls, Needs review, Auto-matched editions and Not in your library are searchable. Every row opens the shared decision popup and can match any library song. Judgment rows show the reason and Undo.
 
-The chooser stages a candidate until Use selection saves it. None of these opens an entire-library search. Skip preserves the current match. Failed saves keep the popup open for retry.
+The popup stages one match field, initially Choose…. Its field opens the existing single-select dialog. Choose another song… opens library-wide search. Not in my library records an absent copy; that list can undo or replace the choice.
+
+A check-only button saves the field with the accessible label Use selection. Skip preserves the current match. Failed saves keep the popup open for retry.
 
 Data offers background continuation, enabled by default, quick refresh and Full rescan. Sync notifications show percent and live counts with Stop. Disconnect retains the archive; Delete synced Last.fm data requires confirmation. See the [statistics contract](product.md#optional-lastfm-statistics) for privacy, fallback and retention.
 

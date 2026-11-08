@@ -13,6 +13,8 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.R
+import io.github.anastaci1a.localica.ui.layout.settingsLinkMarker
+import androidx.compose.ui.graphics.Color
 
 @Composable
 internal fun SettingsPage(title: String, onBack: () -> Unit, onClose: () -> Unit = onBack,
@@ -53,6 +55,12 @@ internal fun <T : Any> SettingsNavigationPage(target: T, title: (T) -> String, o
 @Composable
 internal fun SettingsLink(title: String, summary: String? = null, icon: AppIcon? = null, enabled: Boolean = true, anchor: GlassAnchor? = null,
     modifier: Modifier = Modifier, onClick: () -> Unit) {
+    SettingsLink(markerColor = null, title = title, summary = summary, icon = icon, enabled = enabled, anchor = anchor, modifier = modifier, onClick = onClick)
+}
+
+@Composable
+internal fun SettingsLink(markerColor: Color?, title: String, summary: String? = null, icon: AppIcon? = null, enabled: Boolean = true, anchor: GlassAnchor? = null,
+    modifier: Modifier = Modifier, onClick: () -> Unit) {
     anchor?.captureInk()
     // Retained modal foreground keeps the source composition’s ink and typography.
     val colors = ListItemDefaults.colors(containerColor = androidx.compose.ui.graphics.Color.Transparent)
@@ -61,7 +69,7 @@ internal fun SettingsLink(title: String, summary: String? = null, icon: AppIcon?
     // Captured here so the retained modal face keeps this page's icon slot.
     val metrics = LocalSettingsRowMetrics.current
     @Composable fun Foreground(modifier: Modifier = Modifier) {
-        SettingsLinkFace(title, summary, icon, modifier, headlineStyle, summaryStyle, colors, metrics)
+        SettingsLinkFace(title, summary, icon, modifier.settingsLinkMarker(markerColor), headlineStyle, summaryStyle, colors, metrics)
     }
     SideEffect { if (anchor != null) anchor.face = { Foreground() } }
     val opacity by animateControlStateFloat(if (enabled) 1f else .45f, enabled, "Settings link availability")

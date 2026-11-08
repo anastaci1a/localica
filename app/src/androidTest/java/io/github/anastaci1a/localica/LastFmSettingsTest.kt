@@ -53,8 +53,10 @@ class LastFmSettingsTest {
             assertEquals(42L, runBlocking { controller.applyTo(flowOf(local)).first().tracks["song"] })
             compose.onNodeWithText("Matches", useUnmergedTree = true).performScrollTo().performClick()
             compose.onNodeWithText("Artist — Ambiguous").performScrollTo().performClick()
-            compose.onNodeWithText("Ambiguous · Artist · A", useUnmergedTree = true).performScrollTo().performClick()
-            compose.onNodeWithText("Use selection").performClick()
+            compose.onNodeWithTag("lastfm-match-field").performClick()
+            compose.onNodeWithText("Ambiguous · Artist · A").performScrollTo().performClick()
+            compose.onNodeWithText("Select").performClick()
+            compose.onNodeWithContentDescription("Use selection").performClick()
             compose.waitUntil(5000) { controller.matches.value.review.isEmpty() }
             assertEquals("a", runBlocking { store.read().mappings.values.single() })
             compose.onNodeWithText("Data").performScrollTo().performClick()
