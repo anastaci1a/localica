@@ -264,10 +264,10 @@ internal fun QueueSettingsControls(settings: QueueSettings, section: String = "P
 }
 internal fun SongTap.label() = when (this) { SongTap.NewQueue -> "New queue from displayed list"
     SongTap.PlayNow -> "Insert after current and play"; SongTap.PlayNext -> "Add next"; SongTap.Append -> "Append to current" }
-private fun PreviousBehavior.label() = when (this) {
+internal fun PreviousBehavior.label() = when (this) {
     PreviousBehavior.RestartAfterThreshold -> "Restart after threshold"
     PreviousBehavior.PreviousSong -> "Always previous song"
     PreviousBehavior.RestartSong -> "Always restart song"
 }
-private fun QueueSwitch.label() = when (this) { QueueSwitch.Browse -> "Browse without changing playback"; QueueSwitch.Paused -> "Restore paused"
+internal fun QueueSwitch.label() = when (this) { QueueSwitch.Browse -> "Browse without changing playback"; QueueSwitch.Paused -> "Restore paused"
     QueueSwitch.Resume -> "Resume immediately"; QueueSwitch.KeepPlaybackState -> "Keep playing or paused" }

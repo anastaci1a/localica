@@ -17,8 +17,11 @@ import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.SemanticsPropertyKey
 import androidx.compose.ui.semantics.stateDescription
 import kotlinx.coroutines.delay
+
+internal val SettingsHighlightAlpha = SemanticsPropertyKey<Float>("SettingsHighlightAlpha")
 
 internal class SettingsSearchFocus(val page: String, val scroll: ScrollState) {
     val anchors = mutableStateMapOf<String, Float>()
@@ -53,6 +56,7 @@ internal fun SettingsEntry(label: String, content: @Composable () -> Unit) {
     Box(Modifier.fillMaxWidth().testTag("setting:${spec.id}")
         .onGloballyPositioned { focus.anchors[spec.id] = it.positionInWindow().y + focus.scroll.value }
         .focusRequester(requester).focusable()
+        .semantics { this[SettingsHighlightAlpha] = alpha.value }
         .background(MaterialTheme.colorScheme.primary.copy(alpha = alpha.value))) {
         CompositionLocalProvider(LocalSettingEntry provides true) { content() }
         if (highlighted) Box(Modifier.matchParentSize().testTag("setting-highlight:${spec.id}"))
@@ -60,14 +64,14 @@ internal fun SettingsEntry(label: String, content: @Composable () -> Unit) {
 }
 
 @Composable
-internal fun SettingsSearchResults(query: String, onSelect: (SettingsCatalog.Result) -> Unit) {
+internal fun SettingsSearchResults(query: String, values: Map<String, String>, onSelect: (SettingsCatalog.Result) -> Unit) {
     val results = remember(query) { SettingsCatalog.search(query) }
     if (results.isEmpty()) {
         Text("No settings match \"$query\"")
         Text("Try a different word, like blur, queue or tabs", style = MaterialTheme.typography.bodyMedium)
     }
     results.forEach { result ->
-        SettingsLink(result.title, SettingsCatalog.breadcrumb(result.page) +
+        SettingsLink(result.title, SettingsCatalog.breadcrumb(result.page) + (values[result.setting?.id]?.let { " · $it" } ?: "") +
             (result.setting?.revealedBy?.let { " · If hidden, open $it" } ?: ""),
             modifier = Modifier.testTag("search-result:${result.title}").semantics {
                 stateDescription = SettingsCatalog.breadcrumb(result.page)

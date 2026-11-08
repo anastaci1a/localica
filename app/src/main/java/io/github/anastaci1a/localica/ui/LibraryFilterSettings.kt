@@ -37,15 +37,13 @@ internal fun LibraryFilterSettings(value: LibraryFilters, onChange: (LibraryFilt
         ChoiceDialog("Add library filter", LibraryFilter.entries.filterNot { it in value.visible }, LibraryFilter.entries.first { it !in value.visible },
         { it.label }, { adding = false }) { onChange(value.copy(visible = value.visible + it)) }
     }
-    SettingsHeading("Unfiltered Library collections")
+    SettingsEntry("Unfiltered Library collections") { SettingsHeading("Unfiltered Library collections") }
     Text("Choose which collections appear when no filter is selected. This is independent of the visible filter buttons.", style = MaterialTheme.typography.bodyMedium)
-    SettingsEntry("Unfiltered Library collections") { Column {
     MediaKind.entries.filterNot { it == MediaKind.Song || it == MediaKind.Queue }.forEach { kind ->
-        BooleanPreference(kind.label, kind in value.allCollections) { included ->
+        SettingsEntry("Unfiltered ${kind.label}") { BooleanPreference(kind.label, kind in value.allCollections) { included ->
             onChange(value.copy(allCollections = if (included) value.allCollections + kind else value.allCollections - kind))
-        }
+        } }
     }
-    } }
     SettingsEntry("Reset library filters") { ActionTextButton(onClick = { onChange(LibraryFilters()) }) { Text("Reset library filters") } }
 }
 

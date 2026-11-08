@@ -80,7 +80,7 @@ internal fun settingsPath(title: String?): List<String> {
 fun FolderSettings(state: LibraryUiState, onDismiss: () -> Unit, onChooseFolder: () -> Unit,
     onRemove: (String) -> Unit, extraContent: @Composable () -> Unit = {},
     interfaceContent: @Composable (String) -> Unit = {}, playbackContent: @Composable (String) -> Unit = {},
-    aboutContent: @Composable () -> Unit = {}, initialCategory: String? = null, onFullScan: () -> Unit = {}, onQuickScan: () -> Unit = {}, libraryFiltersContent: @Composable () -> Unit = {}) {
+    aboutContent: @Composable () -> Unit = {}, initialCategory: String? = null, onFullScan: () -> Unit = {}, onQuickScan: () -> Unit = {}, libraryFiltersContent: @Composable () -> Unit = {}, searchValues: Map<String, String> = emptyMap()) {
     var path by rememberSaveable(stateSaver = settingsPathSaver) { mutableStateOf(settingsPath(initialCategory)) }
     var iconPackId by rememberSaveable { mutableStateOf<String?>(null) }
     var pending by remember { mutableStateOf<SettingSpec?>(null) }
@@ -136,7 +136,13 @@ fun FolderSettings(state: LibraryUiState, onDismiss: () -> Unit, onChooseFolder:
                 .controlVerticalScroll(scroll).padding(24.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (search.isNotBlank()) {
-                    SettingsSearchResults(search) { result ->
+                    val scanOptions = preferences.read("")
+                    val values = searchValues + mapOf(
+                        "Include subfolders" to if (scanOptions.includeSubfolders) "On" else "Off",
+                        "Exclude short files" to if (scanOptions.minimumDurationSeconds == 0) "Off" else "${scanOptions.minimumDurationSeconds} seconds",
+                        "Quick Scan on launch" to if (preferences.scanOnLaunch) "On" else "Off",
+                        "Full scan on launch" to if (preferences.fullScanOnLaunch) "On" else "Off")
+                    SettingsSearchResults(search, values) { result ->
                         var target = result.setting
                         var destination = result.page
                         if (glass.renderer == GlassRendererMode.None &&
