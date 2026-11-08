@@ -89,7 +89,8 @@ class SelfHostedPrototypeContract(unittest.TestCase):
         # A skipped (refused) self-hosted job is "not-run", never a pass.
         self.assertIn('focused_26', self.jobs['evidence']['needs'])
         self.assertIn('focused_36', self.jobs['evidence']['needs'])
-        self.assertIn("'skipped': 'not-run'", self.jobs['evidence']['steps'][1]['run'])
+        self.assertIn("'skipped': 'not-run'", next(step['run'] for step in self.jobs['evidence']['steps']
+                           if step.get('name') == 'Record passed, failed and not-run checks'))
 
 
 class EmulatorWrapperContract(unittest.TestCase):
