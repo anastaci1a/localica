@@ -46,7 +46,7 @@ internal fun Modifier.shadowViewportOutset(inset: Dp, horizontal: Boolean = fals
 
 /** The drawn, shape-deformed body in [rect]'s space, or null when it casts nothing. */
 internal fun glassCasterBody(rect: Rect, density: Density, radius: Dp?, anchor: GlassAnchor?, opacity: Float = 1f): RoundRect? {
-    if (opacity <= .001f || anchor?.shadowInModal == true && (anchor.surfaceNode as? SurfaceNode)?.windowRetained != true) return null
+    if (opacity <= .001f || anchor?.shadowInModal == true && anchor.surfaceNode?.windowRetained() != true) return null
     val corner = (radius?.let { with(density) { it.toPx() } } ?: minOf(rect.width, rect.height) / 2)
         .coerceIn(0f, minOf(rect.width, rect.height) / 2)
     // Anchored controls deform in draw space. Their coordinates alone
@@ -85,10 +85,11 @@ internal val LocalSurfaceShadows = staticCompositionLocalOf<ShadowPlane?> { null
     DisposableEffect(plane, anchor) { anchor?.shadowPlane = plane; onDispose { if (anchor?.shadowPlane === plane) anchor.shadowPlane = null } }
     val host = if (group == null) Modifier.shadowPlaneHost(plane, appearance.shadowStrength, appearance.shadowSpread) else Modifier
     return this.then(host).glassCaster(plane, key, if (group == null) ({ 1f }) else opacity, onNode = anchor?.let { owner -> { node, bound ->
-            if (bound) owner.surfaceNode = node else if (owner.surfaceNode === node && (node as? SurfaceNode)?.windowRetained != true) owner.surfaceNode = null
-        } }, retained = anchor?.surfaceNode as? SurfaceNode) {
+            if (bound) { owner.surfaceNode = node; owner.returningNode = node }
+            else if (owner.surfaceNode === node) { owner.surfaceNode = null; if (node.windowRetained().not()) owner.returningNode = null }
+        } }, retained = (anchor?.surfaceNode) ?: anchor?.returningNode?.takeIf { it.windowRetained() }, inheritsBodyScale = group == null) {
             if (group != null) glassCasterBody(it, density, radius, anchor, opacity())
-            else if (anchor?.shadowInModal == true && (anchor.surfaceNode as? SurfaceNode)?.windowRetained != true) null else glassCasterBody(it, density, radius, null)
+            else if (anchor?.shadowInModal == true && anchor.surfaceNode?.windowRetained() != true) null else glassCasterBody(it, density, radius, null)
         }
 }
 
@@ -157,9 +158,9 @@ internal val LocalSurfaceShadows = staticCompositionLocalOf<ShadowPlane?> { null
     val plane=rememberShadowPlane()
     val density=androidx.compose.ui.platform.LocalDensity.current
     return this.shadowPlaneHost(plane,0f,0f).glassCaster(plane,anchor,onNode={ node,bound ->
-        if(bound) { anchor.surfaceNode=node; anchor.shadowPlane=plane }
-        else if(anchor.surfaceNode===node && (node as SurfaceNode).windowRetained.not()) anchor.surfaceNode=null
-    },retained=anchor.surfaceNode as? SurfaceNode) { glassCasterBody(it,density,anchor.cornerRadius,null) }
+        if(bound) { anchor.surfaceNode=node; anchor.returningNode=node; anchor.shadowPlane=plane }
+        else if(anchor.surfaceNode===node) { anchor.surfaceNode=null; if (node.windowRetained().not()) anchor.returningNode=null }
+    },retained=(anchor.surfaceNode) ?: anchor.returningNode?.takeIf { it.windowRetained() }, inheritsBodyScale=true) { glassCasterBody(it,density,anchor.cornerRadius,null) }
 }
 
 /** The split pill's existing field fold registers both bodies; its left identity
@@ -170,8 +171,8 @@ internal val LocalSurfaceShadows = staticCompositionLocalOf<ShadowPlane?> { null
     val right=remember(anchor) { Any() }
     return this.shadowPlaneHost(plane,appearance.shadowStrength,appearance.shadowSpread)
         .glassCaster(plane,anchor,onNode={ node,bound ->
-            if(bound) { anchor.surfaceNode=node; anchor.shadowPlane=plane }
-            else if(anchor.surfaceNode===node && (node as SurfaceNode).windowRetained.not()) anchor.surfaceNode=null
-        },retained=anchor.surfaceNode as? SurfaceNode) { r -> shape.frame(r.size).bodies.firstOrNull()?.translate(r.topLeft) }
+            if(bound) { anchor.surfaceNode=node; anchor.returningNode=node; anchor.shadowPlane=plane }
+            else if(anchor.surfaceNode===node) { anchor.surfaceNode=null; if (node.windowRetained().not()) anchor.returningNode=null }
+        },retained=(anchor.surfaceNode) ?: anchor.returningNode?.takeIf { it.windowRetained() }) { r -> shape.frame(r.size).bodies.firstOrNull()?.translate(r.topLeft) }
         .glassCaster(plane,right) { r -> shape.frame(r.size).bodies.getOrNull(1)?.translate(r.topLeft) }
 }

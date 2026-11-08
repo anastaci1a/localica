@@ -1,17 +1,19 @@
 package io.github.anastaci1a.localica.ui
 
 import androidx.compose.runtime.*
+import kotlinx.coroutines.flow.first
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.layout.layout
 
 /** Optional origin shape; phase state survives visibility-keyed coroutine changes. */
 @Stable
-internal class GlassOriginPreparation {
-    private var phase by mutableStateOf<io.github.anastaci1a.localica.ui.engine.MotionValue?>(null)
-    private var curve = io.github.anastaci1a.localica.ui.engine.Curve.window(0f, .4f)
-    val progress: Float get() = phase?.let { curve.at(it.value()) } ?: 0f
-    fun bind(value: io.github.anastaci1a.localica.ui.engine.MotionValue, mapping: io.github.anastaci1a.localica.ui.engine.Curve) { phase = value; curve = mapping }
+internal class GlassOriginPreparation(private val projection: io.github.anastaci1a.localica.ui.engine.OriginPhaseProjection) {
+    val progress: Float get()=projection.value
+    val separated: Boolean get()=projection.separated
+    val active: Boolean get()=projection.active
+    fun captured(separated: Boolean)=projection.captured(separated)
+    fun bind(value: io.github.anastaci1a.localica.ui.engine.MotionValue,mapping: io.github.anastaci1a.localica.ui.engine.Curve)=projection.bind(value,mapping)
     private var placedProgress = Float.NaN
     private var drawnProgress = Float.NaN
     var originReceipt by mutableIntStateOf(0)
@@ -19,6 +21,8 @@ internal class GlassOriginPreparation {
     private var proofFlight: Long? = null
     private var placedReceipt = -1
     private var drawnReceipt = -1
+    private var presentedReceipt by mutableIntStateOf(-1)
+    private var presentedProgress = Float.NaN
 
     // Receipts describe the real origin at this gate generation, not an elapsed frame count.
     fun beginOriginProof(flight: Long) {
@@ -28,11 +32,18 @@ internal class GlassOriginPreparation {
     }
     fun placed(progress: Float, receipt: Int) { placedProgress = progress; placedReceipt = receipt }
     fun drawn(progress: Float, receipt: Int) { drawnProgress = progress; drawnReceipt = receipt }
-    fun preparedOriginDrawn(progress: Float) = placedProgress == progress && drawnProgress == progress &&
-        placedReceipt == originReceipt && drawnReceipt == originReceipt
+    fun presented(progress: Float, receipt: Int) {
+        if (placedProgress == progress && drawnProgress == progress && placedReceipt == receipt && drawnReceipt == receipt) {
+            presentedProgress=progress; presentedReceipt=receipt
+        }
+    }
+    fun preparedOriginDrawn(progress: Float) = presentedReceipt == originReceipt && presentedProgress == progress
+    suspend fun awaitDrawn(mounted: ()->Boolean={ true }) {
+        snapshotFlow { !mounted() || preparedOriginDrawn(progress) }.first { it }
+    }
 
     fun reset() {
-        phase = null
+        projection.clear()
         placedProgress = Float.NaN
         drawnProgress = Float.NaN
         proofFlight = null
@@ -41,20 +52,31 @@ internal class GlassOriginPreparation {
 }
 
 @Composable
-internal fun rememberGlassOriginPreparation() = remember { GlassOriginPreparation() }
+internal fun rememberGlassOriginPreparation(): GlassOriginPreparation {
+    val projection=io.github.anastaci1a.localica.ui.engine.rememberOriginPhaseProjection()
+    return remember(projection) { GlassOriginPreparation(projection) }
+}
 
 /** Required for phase-driven origins, including test fixtures. Place on the real
  * header/origin container so the acknowledgment describes its captured geometry. */
-internal fun Modifier.preparedOrigin(preparation: GlassOriginPreparation, progress: Float): Modifier {
-    val receipt = preparation.originReceipt
+@Composable internal fun Modifier.preparedOrigin(preparation: GlassOriginPreparation, progress: Float): Modifier =
+    preparedOrigin(preparation) { progress }
+
+/** Capture this actual layout pass; a posted draw receipt publishes outside draw. */
+@Composable internal fun Modifier.preparedOrigin(preparation: GlassOriginPreparation, progress: ()->Float): Modifier {
+    val receipt=preparation.originReceipt
+    val view=androidx.compose.ui.platform.LocalView.current
+    val placed=remember(preparation) { floatArrayOf(Float.NaN) }
     return layout { measurable, constraints ->
-        val child = measurable.measure(constraints)
+        val sample=progress()
+        val child=measurable.measure(constraints)
         layout(child.width, child.height) {
-            child.place(0, 0)
-            preparation.placed(progress, receipt)
+            child.place(0,0); placed[0]=sample; preparation.placed(sample,receipt)
         }
     }.drawWithContent {
         drawContent()
-        preparation.drawn(progress, receipt)
+        val sample=placed[0]
+        preparation.drawn(sample,receipt)
+        view.post { preparation.presented(sample,receipt) }
     }
 }

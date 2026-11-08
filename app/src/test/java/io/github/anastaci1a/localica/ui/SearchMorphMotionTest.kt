@@ -372,3 +372,15 @@ class SearchMorphMotionTest {
         assertEquals(raised, SearchMorphFlight(home, 0f, true).rectangle(1.1f, raised))
     }
 }
+
+/** Controlled read-only edge for the projection corpus; production binds a MotionRect bottom. */
+private fun SearchSlotMotion.bind(token: Long,reader: ()->Float) = bind(token,object: io.github.anastaci1a.localica.ui.engine.MotionValue {
+    override fun value()=reader()
+    override fun velocity()=0f
+    override fun sample()=io.github.anastaci1a.localica.ui.engine.Kinematic(value(),0f)
+    override fun valueAt(stamp: io.github.anastaci1a.localica.ui.engine.FrameStamp)=value()
+    override fun velocityAt(stamp: io.github.anastaci1a.localica.ui.engine.FrameStamp)=0f
+    override fun sampleAt(stamp: io.github.anastaci1a.localica.ui.engine.FrameStamp)=sample()
+    override val target get()=value()
+    override val settled get()=true
+})

@@ -291,7 +291,7 @@ class SearchImeMotionTest {
         text = initialQuery
         extraContentHeight = initialExtraContentHeight
         keyboardAllowed = !deferKeyboard
-        compose.setContent { LocalicaTheme {
+        compose.setContent { EngineTheme(reduced = reduced) {
             val speed = LocalMotionSpeed.current
             SideEffect { motionSpeed = speed }
             CompositionLocalProvider(LocalTextEditingObservation provides { event ->

@@ -10,9 +10,11 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.R
+import io.github.anastaci1a.localica.ui.engine.*
 
 /** One joined surface narrows its neck before handing two tangent bodies their
  * independent clocks. Rejoining follows the same geometry in reverse. */
@@ -22,12 +24,12 @@ internal fun LyricsHeaderActions(lyricsOpen: Boolean, reveal: Float, anchor: Gla
     val contacts = remember(anchor) { GlassSplitContact(anchor.contact) }
     fun horizontal(shape: GlassShape, contact: GlassContact) =
         if (contact.vertical) shape.copy(strain = -shape.strain) else shape
-    val progress = preparation.progress
-    val separated = progress >= .5f
-    val gap = ((progress - .5f) * 2f).coerceIn(0f, 1f)
+    val separated=preparation.separated
+    fun gap()=originGap(preparation.progress)
+    fun expanded()=originExpansion(reveal,preparation.progress)
     val originPresentation: (Float) -> GlassOriginPresentation = remember(anchor, contacts, preparation) {
         { homeHeight ->
-            val separation = ((preparation.progress - .5f) * 2f).coerceIn(0f, 1f)
+            val separation = originGap(preparation.progress)
             val common = horizontal(contacts.presentation(contacts.left, contacts.right, 0f), contacts.left)
             GlassOriginPresentation(
                 shape = contacts.presentation(contacts.left, contacts.right, separation),
@@ -37,19 +39,17 @@ internal fun LyricsHeaderActions(lyricsOpen: Boolean, reveal: Float, anchor: Gla
     }
     DisposableEffect(anchor, originPresentation) {
         anchor.originPresentation = originPresentation
-        onDispose { if (anchor.originPresentation === originPresentation) anchor.originPresentation = null }
+        onDispose { anchor.clearOriginPresentation(originPresentation) }
     }
     // A fast source tap can finish the still-growing two-action header without
     // substituting a full-width pill at the beginning of preparation.
-    val expanded = maxOf(reveal, (progress * 2f).coerceIn(0f, 1f))
-    val width = CompactControlSize * (1f + expanded + gap / 6f)
     val pill = rememberSplitPill { preparation.progress }
     val shadow = rememberGlassSilhouette { size ->
         val p = preparation.progress
         val bodies = pill.bodies(size)
-        if (p < .5f) bodies.map { it.deformed(contacts.joined.body.value, Offset(size.width / 2f, size.height / 2f)) }
+        if (!preparation.separated) bodies.map { it.deformed(contacts.joined.body.value, Offset(size.width / 2f, size.height / 2f)) }
         else {
-            val separation = ((p - .5f) * 2f).coerceIn(0f, 1f)
+            val separation = originGap(p)
             val common = horizontal(contacts.presentation(contacts.left, contacts.right, 0f), contacts.left)
             bodies.mapIndexedNotNull { index, body ->
                 run {
@@ -88,18 +88,23 @@ internal fun LyricsHeaderActions(lyricsOpen: Boolean, reveal: Float, anchor: Gla
             Icon(appIconPainter(AppIcon.ActionEyeOff), null, Modifier.size(24.dp), tint = foreground)
         }
     }
-    Box(Modifier.width(width).height(CompactControlSize).preparedOrigin(preparation, progress)
+    Box(Modifier.height(CompactControlSize).preparedOrigin(preparation) { preparation.captured(separated) }
+        .layout { measurable,constraints ->
+            val width=(CompactControlSize * (1f + expanded() + gap() / 6f)).roundToPx()
+            val child=measurable.measure(constraints.copy(minWidth=width,maxWidth=width))
+            layout(child.width,child.height) { child.place(0,0) }
+        }
         .then(pill.follow).testTag("player-lyrics-pill").splitGlassShadow(anchor, shadow)) {
         if (!separated) {
             LiquidGlassSurface(Modifier.fillMaxSize(), silhouette = pill.silhouette, shadow = false,
                 sharedContact = contacts.joined, depthScale = RaisedGlassDepthScale) {
                 Box(Modifier.align(Alignment.CenterStart).size(CompactControlSize).glassAnchor(anchor)) { leftAction() }
-                if (expanded > 0f) {
+                if (reveal > 0f || preparation.active) {
                     GlassPillDivider(Modifier.align(Alignment.Center).graphicsLayer {
-                        alpha = ((expanded - .4f) / .6f).coerceIn(0f, 1f) * (1f - progress * 2f)
+                        alpha = originDividerAlpha(reveal,preparation.progress)
                     })
                     Box(Modifier.align(Alignment.CenterEnd).size(CompactControlSize)
-                        .graphicsLayer { alpha = ((expanded - .25f) / .75f).coerceIn(0f, 1f) }
+                        .graphicsLayer { alpha = originRightAlpha(reveal,preparation.progress) }
                         .then(if (!lyricsOpen) Modifier.clearAndSetSemantics {} else Modifier)) { rightAction() }
                 }
             }
@@ -107,7 +112,7 @@ internal fun LyricsHeaderActions(lyricsOpen: Boolean, reveal: Float, anchor: Gla
             fun Modifier.pivotCompensation(side: Float) = drawWithContent {
                 val common = horizontal(contacts.presentation(contacts.left, contacts.right, 0f), contacts.left)
                 val shift = if (side < 0f) originPresentation(CompactControlSize.toPx()).horizontalShift
-                    else side * CompactControlSize.toPx() / 2f * (common.scaleX() - 1f) * (1f - gap)
+                    else side * CompactControlSize.toPx() / 2f * (common.scaleX() - 1f) * (1f - gap())
                 // Like shared contact scaling, this is a draw-space correction.
                 // Moving layout coordinates would resample the backdrop at the cut.
                 translate(left = shift) { this@drawWithContent.drawContent() }
@@ -118,7 +123,7 @@ internal fun LyricsHeaderActions(lyricsOpen: Boolean, reveal: Float, anchor: Gla
                 shadow = false, depthScale = RaisedGlassDepthScale) { leftAction() }
             LiquidGlassSurface(Modifier.align(Alignment.CenterEnd).size(CompactControlSize).pivotCompensation(1f),
                 sharedContact = contacts.right,
-                contactPresentation = { contacts.presentation(contacts.right, contacts.left, gap) },
+                contactPresentation = { contacts.presentation(contacts.right, contacts.left, gap()) },
                 shadow = false, depthScale = RaisedGlassDepthScale) { rightAction() }
         }
     }

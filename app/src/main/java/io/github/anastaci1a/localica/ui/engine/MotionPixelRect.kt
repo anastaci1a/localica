@@ -51,3 +51,7 @@ internal fun motionScale(value: Float) = if (abs(value - 1f) <= 1e-6f) 1f else v
 
 /** D16: the frame's one float rectangle → four rounded edges. */
 internal fun ShapeFrame.pixelRect(): MotionPixelRect = motionPixelRect(bounds)
+
+/** D23: a drawable popup extent has at least one physical pixel. */
+internal fun popupPixelBounds(rect: Rect)=motionPixelRect(Rect(rect.left,rect.top,
+    rect.left+rect.width.coerceAtLeast(1f),rect.top+rect.height.coerceAtLeast(1f)))

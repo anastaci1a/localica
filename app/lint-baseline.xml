@@ -408,192 +408,39 @@
             column="33"/>
     </issue>
 
-    <issue
-        id="IndependentUiClock"
-        message="Use the shared UiClock"
-        errorLine1="    LaunchedEffect(visible, reduced, speed, originPreparation, continuousOrigin,"
-        errorLine2="    ~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="375"
-            column="5"/>
-    </issue>
 
-    <issue
-        id="IndependentUiClock"
-        message="Use the shared UiClock"
-        errorLine1="            val now = withFrameNanos { it }"
-        errorLine2="                      ~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="381"
-            column="23"/>
-    </issue>
 
-    <issue
-        id="IndependentUiClock"
-        message="Use the shared UiClock"
-        errorLine1="                                owner.rejectOpening(token, frame.crossing, withFrameNanos { it })"
-        errorLine2="                                                                           ~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="409"
-            column="76"/>
-    </issue>
 
-    <issue
-        id="IndependentUiClock"
-        message="Use the shared UiClock"
-        errorLine1="                                var releaseAt = withFrameNanos { it }"
-        errorLine2="                                                ~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="412"
-            column="49"/>
-    </issue>
 
-    <issue
-        id="IndependentUiClock"
-        message="Use the shared UiClock"
-        errorLine1="                                    releaseAt = withFrameNanos { it }"
-        errorLine2="                                                ~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="416"
-            column="49"/>
-    </issue>
 
-    <issue
-        id="IndependentUiClock"
-        message="Use the shared UiClock"
-        errorLine1="                            var releaseAt = withFrameNanos { it }"
-        errorLine2="                                            ~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="440"
-            column="45"/>
-    </issue>
 
-    <issue
-        id="IndependentUiClock"
-        message="Use the shared UiClock"
-        errorLine1="                                releaseAt = withFrameNanos { it }"
-        errorLine2="                                            ~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="444"
-            column="45"/>
-    </issue>
 
-    <issue
-        id="IndependentUiClock"
-        message="Use the shared UiClock"
-        errorLine1="                frame = owner.advance(token, withFrameNanos { it })"
-        errorLine2="                                             ~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="468"
-            column="46"/>
-    </issue>
 
-    <issue
-        id="IndependentUiClock"
-        message="Use the shared UiClock"
-        errorLine1="                if (originPreparation != null) withFrameNanos { }"
-        errorLine2="                                               ~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="506"
-            column="48"/>
-    </issue>
 
-    <issue
-        id="IndependentUiClock"
-        message="Use the shared UiClock"
-        errorLine1="                if (!present &amp;&amp; anchor.bounds == Rect.Zero) withFrameNanos { }"
-        errorLine2="                                                            ~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="507"
-            column="61"/>
-    </issue>
 
-    <issue
-        id="IndependentUiClock"
-        message="Use the shared UiClock"
-        errorLine1="                    withFrameNanos { }; withFrameNanos { }"
-        errorLine2="                    ~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="520"
-            column="21"/>
-    </issue>
 
-    <issue
-        id="IndependentUiClock"
-        message="Use the shared UiClock"
-        errorLine1="                    withFrameNanos { }; withFrameNanos { }"
-        errorLine2="                                        ~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="520"
-            column="41"/>
-    </issue>
 
-    <issue
-        id="IndependentUiClock"
-        message="Use the shared UiClock"
-        errorLine1="            while (anchor.triggerMounted &amp;&amp; !anchor.restoredDrawn &amp;&amp; frames++ &lt; 6) withFrameNanos { }"
-        errorLine2="                                                                                   ~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="560"
-            column="84"/>
-    </issue>
 
-    <issue
-        id="IndependentUiClock"
-        message="Use the shared UiClock"
-        errorLine1="                LaunchedEffect(targetHeight, reduced, speed) {"
-        errorLine2="                ~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="707"
-            column="17"/>
-    </issue>
 
-    <issue
-        id="IndependentUiClock"
-        message="Use the shared UiClock"
-        errorLine1="                LaunchedEffect(placement, visible, searchTarget, searchFlight, searchShapeStarted, window,"
-        errorLine2="                ~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="744"
-            column="17"/>
-    </issue>
 
-    <issue
-        id="IndependentUiClock"
-        message="Use the shared UiClock"
-        errorLine1="                LaunchedEffect(placement, visible, searchTarget, searchFlight, imeHeight, imeSettled, childPanels.intValue, reduced, speed) {"
-        errorLine2="                ~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="761"
-            column="17"/>
-    </issue>
 
-    <issue
-        id="IndependentUiClock"
-        message="Use the shared UiClock"
-        errorLine1="                LaunchedEffect(measuredWidth, reduced, speed) {"
-        errorLine2="                ~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="775"
-            column="17"/>
-    </issue>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
     <issue
         id="IndependentUiClock"
@@ -833,7 +680,7 @@
         errorLine2="                                                                                    ~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/LiquidGlass.kt"
-            line="312"
+            line="322"
             column="85"/>
     </issue>
 
@@ -2650,7 +2497,7 @@
         errorLine2="                                                                                                        ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="154"
+            line="158"
             column="105"/>
     </issue>
 
@@ -2661,7 +2508,7 @@
         errorLine2="                                                                                    ~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="258"
+            line="263"
             column="85"/>
     </issue>
 
@@ -2672,7 +2519,7 @@
         errorLine2="                                                               ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="714"
+            line="623"
             column="64"/>
     </issue>
 
@@ -2683,7 +2530,7 @@
         errorLine2="                                                                                                            ~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="770"
+            line="654"
             column="109"/>
     </issue>
 
@@ -2694,7 +2541,7 @@
         errorLine2="                                                                                                                                                                          ~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="770"
+            line="654"
             column="171"/>
     </issue>
 
@@ -2738,7 +2585,7 @@
         errorLine2="                                         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="906"
+            line="774"
             column="42"/>
     </issue>
 
@@ -2760,7 +2607,7 @@
         errorLine2="                                                                                                                     ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="1054"
+            line="922"
             column="118"/>
     </issue>
 
@@ -3772,7 +3619,7 @@
         errorLine2="                                       ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/LiquidGlass.kt"
-            line="248"
+            line="258"
             column="40"/>
     </issue>
 
@@ -3783,7 +3630,7 @@
         errorLine2="                                          ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/LiquidGlass.kt"
-            line="249"
+            line="259"
             column="43"/>
     </issue>
 
@@ -3794,7 +3641,7 @@
         errorLine2="                                                                    ~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/LiquidGlass.kt"
-            line="366"
+            line="376"
             column="69"/>
     </issue>
 
@@ -3805,7 +3652,7 @@
         errorLine2="                                                                    ~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/LiquidGlass.kt"
-            line="367"
+            line="377"
             column="69"/>
     </issue>
 
@@ -8558,7 +8405,7 @@
         errorLine2="    ~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="258"
+            line="263"
             column="5"/>
     </issue>
 
@@ -8569,7 +8416,7 @@
         errorLine2="        ~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="674"
+            line="590"
             column="9"/>
     </issue>
 
@@ -8580,7 +8427,7 @@
         errorLine2="            ~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="696"
+            line="613"
             column="13"/>
     </issue>
 
@@ -8591,7 +8438,7 @@
         errorLine2="                ~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="851"
+            line="712"
             column="17"/>
     </issue>
 
@@ -8602,7 +8449,7 @@
         errorLine2="                        ~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="934"
+            line="796"
             column="25"/>
     </issue>
 
@@ -8613,7 +8460,7 @@
         errorLine2="                                      ~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="937"
+            line="799"
             column="39"/>
     </issue>
 
@@ -8624,7 +8471,7 @@
         errorLine2="                        ~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="964"
+            line="826"
             column="25"/>
     </issue>
 
@@ -8635,7 +8482,7 @@
         errorLine2="                        ~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="981"
+            line="844"
             column="25"/>
     </issue>
 
@@ -8987,7 +8834,7 @@
         errorLine2="    ~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/LiquidGlass.kt"
-            line="237"
+            line="247"
             column="5"/>
     </issue>
 
@@ -8998,7 +8845,7 @@
         errorLine2="            ~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/LiquidGlass.kt"
-            line="333"
+            line="343"
             column="13"/>
     </issue>
 
@@ -9231,7 +9078,7 @@
         errorLine2="                ~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/LyricsHeaderActions.kt"
-            line="96"
+            line="101"
             column="17"/>
     </issue>
 
@@ -9242,7 +9089,7 @@
         errorLine2="                    ~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/LyricsHeaderActions.kt"
-            line="101"
+            line="106"
             column="21"/>
     </issue>
 
@@ -12267,7 +12114,7 @@
         errorLine2="                                     ~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="934"
+            line="796"
             column="38"/>
     </issue>
 
@@ -12289,7 +12136,7 @@
         errorLine2="                                     ~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="964"
+            line="826"
             column="38"/>
     </issue>
 
@@ -12300,7 +12147,7 @@
         errorLine2="                                                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="964"
+            line="826"
             column="54"/>
     </issue>
 
@@ -12311,7 +12158,7 @@
         errorLine2="                                     ~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="981"
+            line="844"
             column="38"/>
     </issue>
 
@@ -12322,7 +12169,7 @@
         errorLine2="                                                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="981"
+            line="844"
             column="54"/>
     </issue>
 
@@ -12333,7 +12180,7 @@
         errorLine2="                                       ~~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="1036"
+            line="905"
             column="40"/>
     </issue>
 
@@ -12597,7 +12444,7 @@
         errorLine2="                                                                      ~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/LyricsHeaderActions.kt"
-            line="98"
+            line="103"
             column="71"/>
     </issue>
 
@@ -13306,7 +13153,7 @@
         errorLine2="                               ~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassShadow.kt"
-            line="103"
+            line="104"
             column="32"/>
     </issue>
 
@@ -13317,7 +13164,7 @@
         errorLine2="    ~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassShadow.kt"
-            line="110"
+            line="111"
             column="5"/>
     </issue>
 
@@ -13328,7 +13175,7 @@
         errorLine2="                                                      ~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassShadow.kt"
-            line="115"
+            line="116"
             column="55"/>
     </issue>
 
@@ -15469,152 +15316,35 @@
         errorLine2="                                                                    ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="294"
+            line="308"
             column="69"/>
     </issue>
 
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="    val searchOpeningShape = remember { Animatable(Rect.Zero, SearchRectConverter) }"
-        errorLine2="                                        ~~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="316"
-            column="41"/>
-    </issue>
 
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="    val searchPlacement = remember { Animatable(Rect.Zero, SearchRectConverter) }"
-        errorLine2="                                     ~~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="318"
-            column="38"/>
-    </issue>
 
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="            searchFlight = SearchMorphFlight(from, progress.value.coerceIn(0f, 1f), opening = false)"
-        errorLine2="                                                            ~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="331"
-            column="61"/>
-    </issue>
 
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="            anchor.searchSlot.bind(token) { fromFraction * (1f - returning.fraction(progress.value)) }"
-        errorLine2="                                                                                             ~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="338"
-            column="94"/>
-    </issue>
 
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="                progress.snapTo(frame.popup)"
-        errorLine2="                         ~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="398"
-            column="26"/>
-    </issue>
 
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="                searchFlight = SearchMorphFlight(from, progress.value.coerceIn(0f, 1f), opening = true)"
-        errorLine2="                                                                ~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="486"
-            column="65"/>
-    </issue>
 
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="            searchOpeningShape.snapTo(requireNotNull(searchFlight).from)"
-        errorLine2="                               ~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="533"
-            column="32"/>
-    </issue>
 
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="        if (reduced) progress.snapTo(if (visible) 1f else 0f)"
-        errorLine2="                              ~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="537"
-            column="31"/>
-    </issue>
 
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="        else progress.animateTo(if (visible) 1f else 0f,"
-        errorLine2="                      ~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="538"
-            column="23"/>
-    </issue>
 
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="                    !searchOpeningShape.isRunning &amp;&amp; searchOpeningShape.value == searchTarget }.first { it }"
-        errorLine2="                                        ~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="546"
-            column="41"/>
-    </issue>
 
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="                    !searchOpeningShape.isRunning &amp;&amp; searchOpeningShape.value == searchTarget }.first { it }"
-        errorLine2="                                                                        ~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="546"
-            column="73"/>
-    </issue>
 
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="                searchPlacement.snapTo(searchTarget)"
-        errorLine2="                                ~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="547"
-            column="33"/>
-    </issue>
 
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="            .drawBehind { drawRect(Color.Black.copy(alpha = .16f * progress.value.coerceIn(0f, 1f))) }"
-        errorLine2="                                                                            ~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="693"
-            column="77"/>
-    </issue>
+
+
+
+
+
+
+
+
+
+
+
+
+
 
     <issue
         id="RawUiMotion"
@@ -15623,317 +15353,65 @@
         errorLine2="                                                                                    ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="697"
+            line="614"
             column="85"/>
     </issue>
 
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="                val p = progress.value.coerceIn(0f, 1f)"
-        errorLine2="                                 ~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="700"
-            column="34"/>
-    </issue>
 
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="                val expandedHeight = remember { Animatable(-1f) }"
-        errorLine2="                                                ~~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="706"
-            column="49"/>
-    </issue>
 
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="                        if (expandedHeight.value &lt; 0f || reduced) expandedHeight.snapTo(targetHeight.toFloat())"
-        errorLine2="                                           ~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="709"
-            column="44"/>
-    </issue>
 
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="                        if (expandedHeight.value &lt; 0f || reduced) expandedHeight.snapTo(targetHeight.toFloat())"
-        errorLine2="                                                                                 ~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="709"
-            column="82"/>
-    </issue>
 
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="                        else expandedHeight.animateTo(targetHeight.toFloat(), glassMorphSpring(speed))"
-        errorLine2="                                            ~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="710"
-            column="45"/>
-    </issue>
 
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="                        val travel = SearchSlotTravel(anchor.searchSlot.fraction, searchOpeningShape.value.bottom, searchTarget.bottom)"
-        errorLine2="                                                                                                     ~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="751"
-            column="102"/>
-    </issue>
 
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="                        anchor.searchSlot.bind(token) { travel.fraction(searchOpeningShape.value.bottom) }"
-        errorLine2="                                                                                           ~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="753"
-            column="92"/>
-    </issue>
 
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="                        if (reduced) searchOpeningShape.snapTo(searchTarget)"
-        errorLine2="                                                        ~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="756"
-            column="57"/>
-    </issue>
 
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="                        else searchOpeningShape.animateTo(searchTarget, searchPlacementSpring(speed))"
-        errorLine2="                                                ~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="757"
-            column="49"/>
-    </issue>
 
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="                        if (reduced) searchPlacement.snapTo(searchTarget)"
-        errorLine2="                                                     ~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="765"
-            column="54"/>
-    </issue>
 
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="                        else searchPlacement.animateTo(searchTarget, searchPlacementSpring(speed))"
-        errorLine2="                                             ~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="766"
-            column="46"/>
-    </issue>
 
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="                val expandedWidth = remember { Animatable(-1f) }"
-        errorLine2="                                               ~~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="774"
-            column="48"/>
-    </issue>
 
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="                    if (expandedWidth.value &lt; 0f || reduced) expandedWidth.snapTo(measuredWidth.toFloat())"
-        errorLine2="                                      ~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="777"
-            column="39"/>
-    </issue>
 
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="                    if (expandedWidth.value &lt; 0f || reduced) expandedWidth.snapTo(measuredWidth.toFloat())"
-        errorLine2="                                                                           ~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="777"
-            column="76"/>
-    </issue>
 
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="                    else expandedWidth.animateTo(measuredWidth.toFloat(), glassMorphSpring(speed))"
-        errorLine2="                                       ~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="778"
-            column="40"/>
-    </issue>
 
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="                val targetWidth = (expandedWidth.value.takeIf { it > 0f } ?: measuredWidth.takeIf { it > 0 }?.toFloat() ?: widthLimit.toFloat())"
-        errorLine2="                                                 ~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="780"
-            column="50"/>
-    </issue>
 
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="                val openingBottom = searchOpeningShape.value.bottom.takeIf {"
-        errorLine2="                                                       ~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="835"
-            column="56"/>
-    </issue>
 
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="                        if (searchShapeStarted &amp;&amp; searchFlight?.opening == true) searchOpeningShape.value else it.from"
-        errorLine2="                                                                                                    ~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="843"
-            column="101"/>
-    </issue>
 
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="                    ?: searchPlacement.value.takeIf { placement == GlassPlacement.Search &amp;&amp; it.width > 0f })?.translate(-windowOrigin)"
-        errorLine2="                                       ~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="848"
-            column="40"/>
-    </issue>
 
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="                                imeHeight, imeSource, imeTarget, openingBottom, searchOpeningShape.value.takeIf { flight?.opening == true }, availableHeight.toFloat(),"
-        errorLine2="                                                                                                   ~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="870"
-            column="100"/>
-    </issue>
 
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="                                openingOwnedBounds = searchOpeningShape.value.takeIf { visible &amp;&amp; searchShapeStarted &amp;&amp; flight?.opening == true }))"
-        errorLine2="                                                                        ~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="873"
-            column="73"/>
-    </issue>
 
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="                                expandedHeight.value.takeIf { it >= 0f } ?: foreground.height.toFloat())"
-        errorLine2="                                               ~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="1029"
-            column="48"/>
-    </issue>
 
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="    private var motion by mutableStateOf(Animatable(0f))"
-        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/GlassOriginPreparation.kt"
-            line="12"
-            column="5"/>
-    </issue>
 
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="    private var motion by mutableStateOf(Animatable(0f))"
-        errorLine2="                                         ~~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/GlassOriginPreparation.kt"
-            line="12"
-            column="42"/>
-    </issue>
 
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="    val progress: Float get() = phasedProgress ?: motion.value.coerceIn(0f, 1f)"
-        errorLine2="                                                         ~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/GlassOriginPreparation.kt"
-            line="15"
-            column="58"/>
-    </issue>
 
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="        if (reduced) motion.snapTo(target)"
-        errorLine2="                            ~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/GlassOriginPreparation.kt"
-            line="41"
-            column="29"/>
-    </issue>
 
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="        else motion.animateTo(target, glassMorphSpring(speed))"
-        errorLine2="                    ~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/GlassOriginPreparation.kt"
-            line="42"
-            column="21"/>
-    </issue>
 
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="        motion = Animatable(0f)"
-        errorLine2="                 ~~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/GlassOriginPreparation.kt"
-            line="48"
-            column="18"/>
-    </issue>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
     <issue
         id="RawUiMotion"
@@ -16903,16 +16381,7 @@
             column="68"/>
     </issue>
 
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="    val expansion = Animatable(0f)"
-        errorLine2="                    ~~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/LiquidGlass.kt"
-            line="108"
-            column="21"/>
-    </issue>
+
 
     <issue
         id="RawUiMotion"
@@ -16921,7 +16390,7 @@
         errorLine2="                                                           ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/LiquidGlass.kt"
-            line="117"
+            line="127"
             column="60"/>
     </issue>
 
@@ -17277,159 +16746,33 @@
             column="63"/>
     </issue>
 
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="    private var animation: TargetBasedAnimation&lt;Float, AnimationVector1D>? = null"
-        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/LyricsSourcePhase.kt"
-            line="48"
-            column="5"/>
-    </issue>
 
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="        val next = if (reduced) target else motion.getValueFromNanos(elapsed)"
-        errorLine2="                                                   ~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/LyricsSourcePhase.kt"
-            line="119"
-            column="52"/>
-    </issue>
 
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="                val v = motion.getVelocityVectorFromNanos(time).value"
-        errorLine2="                               ~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/LyricsSourcePhase.kt"
-            line="130"
-            column="32"/>
-    </issue>
 
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="                val v = motion.getVelocityVectorFromNanos(time).value"
-        errorLine2="                                                                ~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/LyricsSourcePhase.kt"
-            line="130"
-            column="65"/>
-    </issue>
 
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="                furthest = motion.getValueFromNanos(high)"
-        errorLine2="                                  ~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/LyricsSourcePhase.kt"
-            line="139"
-            column="35"/>
-    </issue>
 
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="                    val value = motion.getValueFromNanos(middle)"
-        errorLine2="                                       ~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/LyricsSourcePhase.kt"
-            line="155"
-            column="40"/>
-    </issue>
 
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="            velocity = if (reduced) 0f else motion.getVelocityVectorFromNanos(high).value"
-        errorLine2="                                                   ~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/LyricsSourcePhase.kt"
-            line="161"
-            column="52"/>
-    </issue>
 
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="            velocity = if (reduced) 0f else motion.getVelocityVectorFromNanos(high).value"
-        errorLine2="                                                                                    ~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/LyricsSourcePhase.kt"
-            line="161"
-            column="85"/>
-    </issue>
 
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="        } else if (reduced || motion.isFinishedFromNanos(elapsed)) {"
-        errorLine2="                                     ~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/LyricsSourcePhase.kt"
-            line="164"
-            column="38"/>
-    </issue>
 
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="            velocity = motion.getVelocityVectorFromNanos(elapsed).value"
-        errorLine2="                              ~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/LyricsSourcePhase.kt"
-            line="170"
-            column="31"/>
-    </issue>
 
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="            velocity = motion.getVelocityVectorFromNanos(elapsed).value"
-        errorLine2="                                                                  ~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/LyricsSourcePhase.kt"
-            line="170"
-            column="67"/>
-    </issue>
 
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="        animation = TargetBasedAnimation(glassMorphSpring(speed), Float.VectorConverter,"
-        errorLine2="                    ~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/LyricsSourcePhase.kt"
-            line="178"
-            column="21"/>
-    </issue>
 
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="        animation = TargetBasedAnimation(glassMorphSpring(speed), Float.VectorConverter,"
-        errorLine2="                                                                        ~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/LyricsSourcePhase.kt"
-            line="178"
-            column="73"/>
-    </issue>
 
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="            q, target, AnimationVector1D(velocity))"
-        errorLine2="                       ~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/LyricsSourcePhase.kt"
-            line="179"
-            column="24"/>
-    </issue>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
     <issue
         id="RawUiMotion"
@@ -18571,7 +17914,7 @@
         errorLine2="                                                                       ~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/LiquidGlass.kt"
-            line="224"
+            line="234"
             column="72"/>
     </issue>
 
@@ -18582,7 +17925,7 @@
         errorLine2="                                                                   ~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/LiquidGlass.kt"
-            line="343"
+            line="353"
             column="68"/>
     </issue>
 
@@ -19231,7 +18574,7 @@
         errorLine2="                      ~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="582"
+            line="488"
             column="23"/>
     </issue>
 
@@ -19242,7 +18585,7 @@
         errorLine2="                                                                    ~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="685"
+            line="602"
             column="69"/>
     </issue>
 

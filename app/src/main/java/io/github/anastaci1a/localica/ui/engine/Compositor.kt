@@ -38,12 +38,13 @@ enum class Stratum { Page,Lifted,Floating,Drawer,Player,Modal,Overlay,Diagnostic
 }
 /** U04.01a foundation (no production caller before U04.01b/U11.00, D03). The field has one [owner] plane: the destination from the moment its transfer starts, the source again only once a reversal settles there (D27). w is the continuous exclusion weight of [high] against 1−w of [low] (D27/D29): at most {low, high, pending}; A→B→A reverses w, a third plane waits for w to settle and for its draw receipt (D28). */
 @Stable class SurfaceNode internal constructor(private val clock: UiClock,override val key: Any,override val shape: ShapeView,initial: SurfaceTarget,home: ShadowPlane): SurfaceView {
-    private val px=requireNotNull(clock.spec.geometry) { "Publish measured ExpansionGeometryDomain through U11.00 before creating a surface" }.maxViewportDiagonalPx.also { require(home.sameClock(clock)) { "A surface and its home share one clock" } }; private var low: ShadowPlane?=home; private var owner by mutableStateOf(home); private var high: ShadowPlane?=null; private var pending: Triple<ShadowPlane,Long,MotionProfileId>?=null; private var last: Any?=null; private var dismissed by mutableStateOf(false); private var retired by mutableStateOf(false); private var disposed=false
+    private val px=requireNotNull(clock.spec.geometry) { "Publish measured ExpansionGeometryDomain through U11.00 before creating a surface" }.maxViewportDiagonalPx.also { require(home.sameClock(clock)) { "A surface and its home share one clock" } }; private var low by mutableStateOf<ShadowPlane?>(home); private var owner by mutableStateOf(home); private var high: ShadowPlane?=null; private var pending: Triple<ShadowPlane,Long,MotionProfileId>?=null; private var last: Any?=null; private var dismissed by mutableStateOf(false); private var retired by mutableStateOf(false); private var disposed=false
     override var stratum by mutableStateOf(initial.stratum); private set; internal var role=initial.shadow; private set
     private val ownOpacity=MotionFloat(clock,initial.opacity,1f,0.0..1.0,key to "opacity"); private var following by mutableStateOf<SurfacePhase?>(null)
     override val opacity: MotionValue get()=following?.opacity?:ownOpacity
     private val ownOwnership=MotionFloat(clock,0f,1f,0.0..1.0,key to "ownership");
     private var windowLeases=0; private var sourceReleased=false
+    internal var fieldInheritsBodyScale by mutableStateOf(true)
     internal val windowRetained get()=windowLeases>0
     internal val sourcePlane get()=low
     internal var sourceGeneration=0L; private set
@@ -152,14 +153,14 @@ internal class LayoutShape(override val key: Any,internal var plane: ShadowPlane
     override fun outline(): ShapeFrame { val b=laidOut(); return ShapeFrame(listOfNotNull(b),b?.boundingRect?:Rect.Zero,b?.topLeftCornerRadius?.x?:0f,GlassStrain.None) }
     override fun outlineAt(stamp: FrameStamp)=outline() }
 @Composable internal fun Modifier.glassCaster(plane: ShadowPlane,key: Any,opacity: ()->Float={ 1f },onNode: ((SurfaceView,Boolean)->Unit)?=null,
-    retained: SurfaceNode?=null,body: (Rect)->RoundRect?): Modifier {
+    retained: SurfaceView?=null,inheritsBodyScale: Boolean=false,body: (Rect)->RoundRect?): Modifier {
     val clock=ownerClock()
     val node=remember(clock,plane,key) {
-        val existing=retained?:plane.node(key)
+        val existing=(retained as? SurfaceNode)?:plane.node(key)
         existing?:SurfaceNode(clock,key,LayoutShape(key,plane),SurfaceTarget(Stratum.Floating,1f,ShadowRole.Glass),plane)
     }
     val shape=requireNotNull(node.shape as? LayoutShape)
-    SideEffect { shape.plane=plane; shape.body=body; shape.opacity=opacity }
+    SideEffect { shape.plane=plane; shape.body=body; shape.opacity=opacity; node.fieldInheritsBodyScale=inheritsBodyScale }
     DisposableEffect(node,plane) {
         val generation=node.attachSource(plane)
         onNode?.invoke(node,true)
