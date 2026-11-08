@@ -522,6 +522,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
             }
         }
         DisposableEffect(window) {
+            window?.let { motion.attached(it, windowPlane) }
             modalWindow = window
             if (continuousOrigin != null && (!originAdmitted || readyWindow !== window)) {
                 window?.glassInput(false)

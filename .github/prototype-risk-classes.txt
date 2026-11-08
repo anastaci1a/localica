@@ -355,6 +355,7 @@ io.github.anastaci1a.localica.QueueHeaderMaterialBoundaryTest
 io.github.anastaci1a.localica.PinchRecognitionContinuityTest
 
 io.github.anastaci1a.localica.PopupHostNavigationTest
+io.github.anastaci1a.localica.PopupChromeDepthTest
 
 io.github.anastaci1a.localica.GlassRendererPreferenceTest
 io.github.anastaci1a.localica.GlassRendererSettingsTest
@@ -382,3 +383,4 @@ io.github.anastaci1a.localica.MotionFollowupTest
 io.github.anastaci1a.localica.GlassMorphSubpixelTest
 io.github.anastaci1a.localica.MorphFacesTest
 io.github.anastaci1a.localica.PlayerLyricsOwnerContinuityTest
+io.github.anastaci1a.localica.PopupWindowHostContractTest

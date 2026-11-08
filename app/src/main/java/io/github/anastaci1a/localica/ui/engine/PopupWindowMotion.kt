@@ -23,7 +23,17 @@ import io.github.anastaci1a.localica.ui.spec.ExpansionSpec
     val bounds: MotionRectView? get() = rectangle
     private var shown = false
     private var openingEnvelope: Rect? = null
+    private var nativeWindow: java.lang.ref.WeakReference<Any>? = null
+    private var firstNativeMeasurement = false
+    private var nativeHost: java.lang.ref.WeakReference<ShadowPlane>? = null
     init { expansion.nativeGate(if (prepared) .25f else 0f) }
+    fun attached(window: Any, host: ShadowPlane) {
+        nativeHost = java.lang.ref.WeakReference(host)
+        if (nativeWindow?.get() !== window) {
+            firstNativeMeasurement = rectangle != null
+            nativeWindow = java.lang.ref.WeakReference(window)
+        }
+    }
     fun show(visible: Boolean) { shown = visible; if (rectangle != null) expansion.target(visible) }
     fun place(home: Rect, envelope: Rect, density: Float) {
         if (shown || openingEnvelope == null) openingEnvelope = envelope
@@ -33,7 +43,11 @@ import io.github.anastaci1a.localica.ui.spec.ExpansionSpec
             val rect = MotionRect(clock, home, ranges, expansion)
             expansion.bind(rect, geometryCurve)
             rectangle = rect
-        } else expansion.setBasis(basis)
+        } else {
+            val initialized = firstNativeMeasurement && nativeHost?.get()?.let { expansion.initializeNativeHome(basis, it) } == true
+            if (!initialized) expansion.setBasis(basis)
+        }
+        firstNativeMeasurement = false
         expansion.target(shown)
     }
     fun updateSpec(spec: ExpansionSpec) = expansion.updateSpec(spec)
