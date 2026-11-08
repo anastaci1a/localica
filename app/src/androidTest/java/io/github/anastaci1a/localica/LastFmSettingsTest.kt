@@ -11,10 +11,12 @@ import kotlinx.coroutines.flow.*
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.RuleChain
 import java.io.File
 
 class LastFmSettingsTest {
-    @get:Rule val compose = localicaComposeRule()
+    private val compose = localicaComposeRule()
+    @get:Rule val rules: RuleChain = RuleChain.outerRule(FreshSystemIme()).around(compose)
     private val song = Track("song", "Song", "Artist", "Album", 1000, "song.mp3", "song.mp3")
 
     @Test fun settingsSyncReviewProviderSwitchAndDisconnectKeepLocalCountsUntouched() {
