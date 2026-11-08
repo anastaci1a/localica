@@ -35,6 +35,10 @@ class SettingsRootSearchTest {
     private fun header(page: String) = hasContentDescription("Back from settings") and hasAnySibling(hasText(page))
     private fun back(page: String) = compose.onNode(header(page))
     private fun view(page: String): View = (back(page).fetchSemanticsNode().root as ViewRootForTest).view
+    private fun token(page: String): android.os.IBinder? {
+        val nativeView = view(page)
+        return compose.runOnUiThread { nativeView.windowToken }
+    }
     private fun output(name: String) = File(nativeEvidenceDirectory("settings-root-search-696", instrumentation.targetContext.getExternalFilesDir(null)), "api${Build.VERSION.SDK_INT}-$name")
     private fun show() {
         compose.setContent { LocalicaTheme {
@@ -90,29 +94,29 @@ class SettingsRootSearchTest {
     @Test fun rootAndTwoSubpagesKeepTheNativeWindowAndHaveNoVacantSearchSlot() {
         show()
         compose.onNodeWithContentDescription("Search settings input").assertIsDisplayed()
-        val token = compose.runOnUiThread { view("Settings").windowToken }
+        val token = token("Settings")
         capture("Settings", "root")
         compose.onNodeWithText("Interface", substring = false).performClick()
         val appearance = compose.onNode(hasText("Appearance") and hasClickAction())
         assertNoGap("Interface", appearance)
-        assertEquals(token, compose.runOnUiThread { view("Interface").windowToken })
+        assertEquals(token, token("Interface"))
         capture("Interface", "interface")
         appearance.performClick()
         assertNoGap("Appearance", compose.onNodeWithText("Adjust secondary text and inactive icons throughout the app."))
-        assertEquals(token, compose.runOnUiThread { view("Appearance").windowToken })
+        assertEquals(token, token("Appearance"))
         capture("Appearance", "appearance")
         back("Appearance").performClick()
         assertNoGap("Interface", compose.onNode(hasText("Appearance") and hasClickAction()))
         back("Interface").performClick()
         compose.onNodeWithContentDescription("Search settings input").assertIsDisplayed()
-        assertEquals(token, compose.runOnUiThread { view("Settings").windowToken })
+        assertEquals(token, token("Settings"))
         saveReceipt()
     }
 
     @Test fun forwardAndInterruptedBackReverseTheExistingPageMotionAndRetireFocusedInput() {
         show()
         val home = back("Settings").fetchSemanticsNode().boundsInRoot.center.x
-        val token = compose.runOnUiThread { view("Settings").windowToken }
+        val token = token("Settings")
         compose.mainClock.autoAdvance = false
         compose.onNodeWithText("Interface", substring = false).performClick()
         compose.mainClock.advanceTimeBy(80)
@@ -127,10 +131,11 @@ class SettingsRootSearchTest {
         compose.onNodeWithContentDescription("Search settings input").assertIsDisplayed().performClick()
         compose.onNodeWithText("Interface", substring = false).performClick()
         assertNoGap("Interface", compose.onNode(hasText("Appearance") and hasClickAction()))
+        val childView = view("Interface")
         compose.waitUntil(5000) { compose.runOnUiThread {
-            ViewCompat.getRootWindowInsets(view("Interface"))?.isVisible(WindowInsetsCompat.Type.ime()) != true
+            ViewCompat.getRootWindowInsets(childView)?.isVisible(WindowInsetsCompat.Type.ime()) != true
         } }
-        assertEquals(token, compose.runOnUiThread { view("Interface").windowToken })
+        assertEquals(token, token("Interface"))
         capture("Interface", "focused-field-retired")
         saveReceipt()
     }
