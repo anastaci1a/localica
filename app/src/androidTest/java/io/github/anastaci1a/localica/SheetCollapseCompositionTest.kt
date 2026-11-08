@@ -83,18 +83,18 @@ class SheetCollapseCompositionTest {
 
     @Test fun closedObserverRetainsSemanticsGateThroughMovingAndRetargeting() = localicaRunComposeUiTest {
         val scene = Scene(observeClosed = true)
-        var open by mutableStateOf(true)
-        setContent { Fixture(open, { mainClock.currentTime * 1_000_000 }, scene) }
+        // Drive the handle directly: count observer invalidations independently of parent intent composition.
+        setContent { Fixture(true, { mainClock.currentTime * 1_000_000 }, scene) }
         mainClock.autoAdvance = false
         mainClock.advanceTimeBy(64)
         var before = 0
-        runOnIdle { before = scene.closedCompositions; open = false }
+        runOnIdle { before = scene.closedCompositions; scene.sheet!!.collapse() }
         mainClock.advanceTimeBy(96)
         runOnIdle { assertFalse(scene.closed); assertEquals(before, scene.closedCompositions) }
         onNodeWithContentDescription("Underlying player").assertDoesNotExist()
-        runOnIdle { open = true }
+        runOnIdle { scene.sheet!!.expand() }
         mainClock.advanceTimeBy(2000)
-        runOnIdle { assertFalse(scene.closed); assertEquals(before, scene.closedCompositions); open = false }
+        runOnIdle { assertFalse(scene.closed); assertEquals(before, scene.closedCompositions); scene.sheet!!.collapse() }
         mainClock.advanceTimeBy(2000)
         runOnIdle { assertTrue(scene.closed); assertEquals(before + 1, scene.closedCompositions) }
         onNodeWithContentDescription("Underlying player").assertExists()
