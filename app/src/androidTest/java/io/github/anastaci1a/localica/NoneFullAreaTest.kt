@@ -24,6 +24,47 @@ import org.junit.Test
 class NoneFullAreaTest {
     @get:Rule val compose = localicaComposeRule()
 
+    @Test fun mixedSettingsRowsHaveTheSameNoneMaterial() = settingsRows(1f)
+
+    @Test fun mixedSettingsRowsHaveTheSameNoneMaterialAtLargeFontScale() = settingsRows(1.5f)
+
+    private fun settingsRows(fontScale: Float) {
+        lateinit var source: FrostedBackdrop
+        compose.setContent { CompositionLocalProvider(
+            LocalDensity provides Density(1f, fontScale),
+            LocalGlassRendererRuntime provides remember { GlassRendererRuntime(GlassRendererMode.None) },
+            LocalGlassAppearance provides GlassAppearance(whiteTint = 0f, contrast = 0f)
+        ) { LocalicaTheme {
+            source = rememberFrostedBackdrop(Unit, dark = false)
+            Box(Modifier.size(320.dp, 480.dp)) {
+                Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(source)) {
+                    drawRect(Color(0xFFF8F8FA))
+                }
+                CompositionLocalProvider(LocalFrostedBackdrop provides source) {
+                    Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        SettingsLink("Appearance", "Interface gray", AppIcon.TabLibrary) {}
+                        SettingsLink("Navigation", "Main tabs, Back history, and exit confirmation", AppIcon.TabHome) {}
+                        SettingsLink("Glass", "Blur and tint", AppIcon.ActionSettings) {}
+                    }
+                }
+            }
+        } } }
+        compose.waitUntil(15_000) { source.recorded && (Build.VERSION.SDK_INT >= 33 || source.snapshot != null) }
+        fun row(title: String) = compose.onNode(hasText(title) and hasClickAction())
+        val images = listOf("Appearance", "Navigation", "Glass").map { row(it).captureToImage().toPixelMap() }
+        assertTrue("The wrapping subtitle must exercise a taller row at fontScale=$fontScale",
+            images[1].height > images[0].height)
+        val colors = images.map { it[8, it.height / 2] }
+        val reference = colors.first()
+        colors.forEachIndexed { index, color ->
+            assertTrue("Material is present rather than transparent or unrecorded", color.alpha > .99f && color.red > .9f)
+            for ((channel, pair) in listOf("red" to (reference.red to color.red),
+                "green" to (reference.green to color.green), "blue" to (reference.blue to color.blue))) {
+                assertEquals("Row $index $channel at fontScale=$fontScale: $colors", pair.first, pair.second, 2f / 255f)
+            }
+        }
+    }
+
     @Test fun noneControlSceneReadsDensityAndAveragesItsFullBounds() {
         var split by mutableFloatStateOf(48f)
         compose.setContent { CompositionLocalProvider(
