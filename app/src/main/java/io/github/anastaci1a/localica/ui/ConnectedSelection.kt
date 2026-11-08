@@ -73,18 +73,22 @@ internal val LocalSelectionScene = staticCompositionLocalOf<SelectionScene?> { n
     var progress: () -> Float = { 0f }
 }
 
+internal enum class SelectionFieldOutset { None, Vertical, All }
+
 /** Scrolling content and its hovering selections share a single clip, fade and overscroll transform. */
 @Composable
 internal fun SelectionViewport(modifier: Modifier = Modifier, contentDrawing: Modifier = Modifier,
     observePlacement: () -> Unit = {}, visibleItemKeys: (() -> Set<Any>)? = null,
     scene: SelectionScene = remember { SelectionScene() }, liftEdges: LiftEdges = LiftEdges.Horizontal,
+    fieldOutset: SelectionFieldOutset = if (liftEdges == LiftEdges.Vertical) SelectionFieldOutset.Vertical else SelectionFieldOutset.None,
     content: @Composable (OverscrollEffect?) -> Unit) {
     val overscroll = rememberOverscrollEffect()
     val events = remember(overscroll) { overscroll?.withoutVisualEffect() }
-    val plane = if (liftEdges == LiftEdges.Vertical) rememberShadowPlane() else null
+    val plane = if (fieldOutset != SelectionFieldOutset.None) rememberShadowPlane() else null
     val outset = glassShadowInset()
     val clip = if (plane == null) Modifier.clipToBounds() else Modifier.drawWithContent {
-        clipRect(left=0f, top=-outset.toPx()-2f, right=size.width, bottom=size.height+outset.toPx()+2f) { this@drawWithContent.drawContent() }
+        val side = if (fieldOutset == SelectionFieldOutset.All) outset.toPx()+2f else 0f
+        clipRect(left=-side, top=-outset.toPx()-2f, right=size.width+side, bottom=size.height+outset.toPx()+2f) { this@drawWithContent.drawContent() }
     }
     val field = if (plane == null) Modifier else Modifier.shadowPlaneHost(plane,0f,0f)
     ConnectedSelectionHost(modifier.then(clip).then(if (overscroll != null) Modifier.overscroll(overscroll) else Modifier).then(field),

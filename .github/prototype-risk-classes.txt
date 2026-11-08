@@ -399,3 +399,5 @@ io.github.anastaci1a.localica.SelectionPlaneLifecycleTest
 io.github.anastaci1a.localica.SelectionPlaneStretchTest
 io.github.anastaci1a.localica.ScopedSearchPlaneGeometryTest
 io.github.anastaci1a.localica.QueueSelectionFieldTest
+io.github.anastaci1a.localica.SelectionFadeOutsetTest
+io.github.anastaci1a.localica.SearchHomeFieldContinuityTest

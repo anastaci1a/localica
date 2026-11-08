@@ -14,6 +14,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
+import androidx.compose.foundation.layout.padding
 
 /** Modal bodies opt in once; full-page navigation retains its own edge treatment. */
 internal val LocalPopupScrollEdges = staticCompositionLocalOf { false }
@@ -49,7 +51,7 @@ internal fun Modifier.scrollEdgeFade(scroll: LazyListState): Modifier =
         }
     })
 
-internal fun Modifier.scrollEdgeFade(scroll: LazyGridState): Modifier =
+internal fun Modifier.scrollEdgeFade(scroll: LazyGridState, outset: Dp = 0.dp): Modifier =
     modalScroll(scroll).fadingScrollEdges({ scroll.canScrollBackward || scroll.canScrollForward }, {
         val layout = scroll.layoutInfo
         val first = layout.visibleItemsInfo.firstOrNull()
@@ -67,21 +69,23 @@ internal fun Modifier.scrollEdgeFade(scroll: LazyGridState): Modifier =
             // A row's final item may be shorter than its neighbors.
             else -> ((layout.visibleItemsInfo.maxOfOrNull { it.offset.y + it.size.height } ?: 0) - layout.viewportEndOffset).toFloat()
         }
-    })
+    }, outset)
 
 private fun Modifier.fadingScrollEdges(overflow: () -> Boolean, hiddenAbove: () -> Float,
-    hiddenBelow: () -> Float): Modifier {
+    hiddenBelow: () -> Float, outset: Dp = 0.dp): Modifier {
     if (hasScrollEdgeFade()) return this
-    return then(ScrollEdgeFadeMarker).graphicsLayer {
+    return then(if (outset > 0.dp) Modifier.shadowViewportOutset(outset, horizontal = true) else Modifier)
+        .then(ScrollEdgeFadeMarker).graphicsLayer {
         compositingStrategy = if (overflow())
             CompositingStrategy.Offscreen else CompositingStrategy.Auto
     }.drawWithCache {
-        val band = 24.dp.toPx().coerceAtMost(size.height / 2)
-        val strip = Size(size.width, band)
-        val bottomOrigin = Offset(0f, size.height - band)
-        val topBrush = Brush.verticalGradient(listOf(Color.Black, Color.Transparent), endY = band)
+        val pad = outset.roundToPx().toFloat()
+        val band = 24.dp.toPx().coerceAtMost((size.height-2f*pad).coerceAtLeast(0f) / 2)
+        val strip = Size(size.width, pad+band)
+        val bottomOrigin = Offset(0f, size.height-pad-band)
+        val topBrush = Brush.verticalGradient(listOf(Color.Black, Color.Transparent), startY = pad, endY = pad+band)
         val bottomBrush = Brush.verticalGradient(listOf(Color.Transparent, Color.Black),
-            startY = bottomOrigin.y, endY = size.height)
+            startY = bottomOrigin.y, endY = size.height-pad)
         onDrawWithContent {
             drawContent()
             if (band > 0f && overflow()) {
@@ -92,5 +96,5 @@ private fun Modifier.fadingScrollEdges(overflow: () -> Boolean, hiddenAbove: () 
                     alpha = bottom, blendMode = BlendMode.DstOut)
             }
         }
-    }
+    }.then(if (outset > 0.dp) Modifier.padding(outset) else Modifier)
 }

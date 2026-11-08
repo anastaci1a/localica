@@ -75,7 +75,9 @@ internal fun QueueSelectorList(queues: List<ListeningQueue>, browsedId: String?,
         if (drag != null && !drag.dropping && drag.original.map { it.id } != queues.map { it.id })
             reorder.finish(true, reducedMotion, commit = commit)
     }
+    val popupEdges = LocalPopupScrollEdges.current
     val density = LocalDensity.current
+    val fieldOutset = glassShadowInset() + with(density) { 2f.toDp() }
     val edge = with(density) { 56.dp.toPx() }
     LaunchedEffect(reorder.drag) { if (reorder.drag != null) reorder.autoScroll(edge) }
     Box(modifier.fillMaxWidth().testTag("queue-selector-list")
@@ -91,7 +93,8 @@ internal fun QueueSelectorList(queues: List<ListeningQueue>, browsedId: String?,
         SelectionViewport(Modifier.then(if (observer == null) Modifier else Modifier.onPlaced { probe.viewport = it }),
             observePlacement = { grid.layoutInfo; if (observer != null) probe.hostDraws++; Unit },
             visibleItemKeys = { grid.layoutInfo.visibleItemsInfo.mapTo(mutableSetOf()) { it.key } },
-            contentDrawing = if (observer == null) Modifier else Modifier.drawWithContent {
+            fieldOutset = SelectionFieldOutset.All,
+            contentDrawing = (if (popupEdges) Modifier.scrollEdgeFade(grid, fieldOutset) else Modifier).then(if (observer == null) Modifier else Modifier.drawWithContent {
                 drawContent()
                 val scene = probe.scene
                 val viewport = probe.viewport
@@ -100,9 +103,10 @@ internal fun QueueSelectorList(queues: List<ListeningQueue>, browsedId: String?,
                     androidx.compose.runtime.snapshots.Snapshot.withoutReadObservation {
                         observe?.invoke(QueueSelectionDrawSource(scene, grid, viewport, content, probe.rows, browsedId, selectionView) { probe.hostDraws })
                     }
-            }) { overscroll ->
+            })) { overscroll ->
             val scene = LocalSelectionScene.current
             SideEffect { probe.scene = scene }
+            CompositionLocalProvider(LocalPopupScrollEdges provides false) {
             LazyVerticalGrid(columns = GridCells.Fixed(1), state = grid,
                 modifier = Modifier.testTag("queue-selector-grid").selectableGroup().padding(horizontal = 8.dp)
                     .controlScrollParent(grid, ControlScrollAxis.Vertical)
@@ -130,6 +134,7 @@ internal fun QueueSelectorList(queues: List<ListeningQueue>, browsedId: String?,
                         }
                     }
                 }
+            }
             }
         }
         KeyedDragOverlay(reorder, reducedMotion, countDescription = { "Dragging $it queues" }) { queue, appearance ->
