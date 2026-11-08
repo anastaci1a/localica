@@ -4,6 +4,9 @@ import android.os.ParcelFileDescriptor
 import androidx.activity.ComponentActivity
 import androidx.compose.runtime.*
 import androidx.compose.ui.test.*
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.unit.dp
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.anastaci1a.localica.localicaAndroidComposeRule as createAndroidComposeRule
@@ -13,6 +16,7 @@ import io.github.anastaci1a.localica.navigation.*
 import io.github.anastaci1a.localica.playlist.PlaylistState
 import io.github.anastaci1a.localica.ui.*
 import org.junit.Assert.*
+import org.junit.After
 import org.junit.Rule
 import org.junit.Test
 
@@ -23,7 +27,13 @@ class SearchReturnTopTest {
     private val songs = (0..79).map { Track("return-search:$it", "Song ${it.toString().padStart(3, '0')}",
         album = "Return album", artist = "Return artist", fileName = "$it.mp3", relativePath = "$it.mp3") }
     private val route = BrowseRoute(MainTab.Songs, key = "return-search-690")
+    private var originalStyle: BrowseStyle? = null
+    private var originalOverride = false
+    @After fun restorePreferences() {
+        originalStyle?.let { BrowsePreferences(instrumentation.targetContext).write(route, it, originalOverride) }
+    }
     private var sample: SearchMorphSample? = null
+    private var rtl by mutableStateOf(false)
     private var currentRoute by mutableStateOf(route)
     private var libraryProblem by mutableStateOf<LibraryProblem?>(null)
     private val list get() = compose.onNodeWithTag("browser-list")
@@ -34,9 +44,12 @@ class SearchReturnTopTest {
 
     private fun fixture(popup: Boolean) {
         val prefs = BrowsePreferences(instrumentation.targetContext)
+        originalStyle = prefs.read(route)
+        originalOverride = prefs.overridden(route)
         prefs.write(route, BrowseStyle(quickSearch = popup), false)
         compose.setContent { LocalicaTheme {
-            CompositionLocalProvider(LocalSearchMorphObserver provides { sample = it }) {
+            CompositionLocalProvider(LocalSearchMorphObserver provides { sample = it },
+                LocalLayoutDirection provides if (rtl) LayoutDirection.Rtl else LayoutDirection.Ltr) {
                 BrowserScreen(LibraryUiState(LibrarySnapshot(
                     folders = listOf(FolderSelection("return-search-root", "Music")), tracks = songs), loading = false, problem = libraryProblem),
                     PlaylistState(loading = false), currentRoute, {}, {}, {}, { _, _, _ -> }, null, null, true, false)
@@ -186,6 +199,60 @@ class SearchReturnTopTest {
         compose.runOnIdle { libraryProblem = null }
         compose.waitForIdle()
         arrow.assertDoesNotExist()
+    }
+
+    @Test fun rtlPopupHidesAtTopAfterTapAndKeepsItsNativeImeGap() = withKeyboard {
+        rtl = true
+        fixture(true)
+        arrow.assertDoesNotExist()
+        assertGap(true)
+        arrow.performClick()
+        arrow.assertDoesNotExist()
+        hiddenIme()
+        assertGap(false)
+        arrow.performClick()
+        arrow.assertDoesNotExist()
+    }
+
+    @Test fun headerAndBrowserExtentsSurviveReturnNewOwnerAndRtl() {
+        libraryProblem = LibraryProblem.LoadFailed
+        fixture(false)
+        val evidence = mutableListOf<String>()
+        fun bounds(): Pair<Rect, Rect> {
+            val browser = list.fetchSemanticsNode().boundsInRoot
+            val header = compose.onNodeWithTag("browse-full-span", true).fetchSemanticsNode().boundsInRoot
+            evidence += "rtl=$rtl route=$currentRoute browser=$browser header=$header"
+            return browser to header
+        }
+        fun unchanged(expected: Pair<Rect, Rect>) {
+            val actual = bounds()
+            for ((before, after) in listOf(expected.first to actual.first, expected.second to actual.second)) {
+                assertEquals("Pass-through measurement preserves width", before.width, after.width, 1f)
+                assertEquals("Pass-through measurement preserves height", before.height, after.height, 1f)
+                assertEquals("Return preserves top", before.top, after.top, 1f)
+            }
+        }
+        val before = bounds()
+        assertTrue("The test must measure a real notice", before.second.height > 0f)
+        try {
+            list.performScrollToIndex(50)
+            arrow.performClick()
+            arrow.assertDoesNotExist()
+            unchanged(before)
+            compose.runOnIdle { currentRoute = route.copy(key = "return-search-extents-new-owner") }
+            compose.waitForIdle()
+            unchanged(before)
+            compose.runOnIdle { rtl = true }
+            compose.waitForIdle()
+            unchanged(before)
+            list.performScrollToIndex(50)
+            arrow.performClick()
+            unchanged(before)
+        } finally {
+            val directory = nativeEvidenceDirectory("search-return-top", instrumentation.targetContext.getExternalFilesDir(null))
+            java.io.File(directory, "measured-extents-api${android.os.Build.VERSION.SDK_INT}.txt")
+                .writeText(evidence.joinToString("\n", postfix = "\n"))
+        }
     }
 
     @Test fun browseWithEmptyNoticeHidesAtTopAndAfterTap() {
