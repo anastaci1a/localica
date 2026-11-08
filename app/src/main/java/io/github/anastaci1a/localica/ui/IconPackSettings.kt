@@ -3,6 +3,9 @@ package io.github.anastaci1a.localica.ui
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
+import io.github.anastaci1a.localica.ui.layout.SettingsCaption
+import io.github.anastaci1a.localica.ui.spec.LocalUiSpec
+import io.github.anastaci1a.localica.ui.spec.ControlSize
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -130,8 +133,8 @@ internal fun IconPackViewer(id: String?) {
             Row(Modifier.fillMaxWidth().padding(vertical = 8.dp).testTag("pack-icon-${icon.id}"),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Icon(packIconPainter(icon, mask, vector), "Pack: ${icon.id}", Modifier.size(24.dp))
-                Icon(packIconPainter(icon, null), "Built-in: ${icon.id}", Modifier.size(24.dp))
-                Column(Modifier.weight(1f)) {
+                Icon(packIconPainter(icon, null), "Built-in: ${icon.id}", Modifier.size(LocalUiSpec.current.spec.control.getValue(ControlSize.SettingsIcon)))
+                SettingsCaption(Modifier.weight(1f)) {
                     Text(icon.id)
                     Text(if (vector != null) "Reassigned · Vector" else if (mask != null) "Reassigned" else if (pack == null) "Built-in" else "Built-in (fallback)", style = MaterialTheme.typography.bodySmall)
                 }

@@ -1,7 +1,7 @@
 package io.github.anastaci1a.localica.ui
 
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.tween
+import io.github.anastaci1a.localica.ui.components.rememberSettingsHighlight
+import io.github.anastaci1a.localica.ui.layout.*
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.ScrollState
@@ -19,7 +19,6 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.SemanticsPropertyKey
 import androidx.compose.ui.semantics.stateDescription
-import kotlinx.coroutines.delay
 
 internal val SettingsHighlightAlpha = SemanticsPropertyKey<Float>("SettingsHighlightAlpha")
 
@@ -42,28 +41,22 @@ internal fun SettingsEntry(label: String, content: @Composable () -> Unit) {
     val view = LocalView.current
     val reduced = LocalReducedMotion.current
     val tint = MaterialTheme.colorScheme.primary
-    val alpha = remember { Animatable(0f) }
     val highlighted = focus.highlighted == spec.id
+    val alpha = rememberSettingsHighlight(highlighted, reduced)
     LaunchedEffect(highlighted) {
         if (highlighted) {
             requester.requestFocus()
             view.announceForAccessibility("${spec.title}, ${focus.page}")
-            if (reduced) alpha.snapTo(.18f) else alpha.animateTo(.18f, tween(150))
-            delay(if (reduced) 1200 else 450)
-            if (reduced) alpha.snapTo(0f) else alpha.animateTo(0f, tween(600))
-        } else alpha.snapTo(0f)
+        }
     }
     DisposableEffect(focus, spec.id) { onDispose { focus.anchors.remove(spec.id) } }
-    Box(Modifier.fillMaxWidth().testTag("setting:${spec.id}")
+    SettingsEntryHost(Modifier.testTag("setting:${spec.id}")
         .onGloballyPositioned { focus.anchors[spec.id] = it.positionInWindow().y + focus.scroll.value }
         .focusRequester(requester).focusable()
-        .semantics { this[SettingsHighlightAlpha] = alpha.value }
-        .drawWithContent {
-            drawContent()
-            if (alpha.value > 0f) drawRect(tint.copy(alpha = alpha.value))
-        }) {
+        .semantics { this[SettingsHighlightAlpha] = alpha.value() }
+        .drawWithContent { with(alpha) { draw(tint) } }) {
         CompositionLocalProvider(LocalSettingEntry provides true) { content() }
-        if (highlighted) Box(Modifier.matchParentSize().testTag("setting-highlight:${spec.id}"))
+        if (highlighted) SettingsHighlightMarker(Modifier.testTag("setting-highlight:${spec.id}"))
     }
 }
 

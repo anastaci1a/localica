@@ -10,7 +10,8 @@ import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
-import androidx.compose.animation.core.tween
+import io.github.anastaci1a.localica.ui.components.rememberSettingsScroll
+import io.github.anastaci1a.localica.ui.layout.SettingsDialogBody
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
 import kotlinx.coroutines.flow.first
@@ -112,7 +113,7 @@ fun FolderSettings(state: LibraryUiState, onDismiss: () -> Unit, onChooseFolder:
             val scroll = rememberScrollState()
             val focus = remember(pageKey, scroll) { SettingsSearchFocus(page.orEmpty(), scroll) }
             val reduced = LocalReducedMotion.current
-            val speed = LocalMotionSpeed.current
+            val searchScroll = rememberSettingsScroll(scroll)
             LaunchedEffect(search.isNotBlank()) { if (search.isNotBlank()) scroll.scrollTo(0) }
             LaunchedEffect(pending, pageKey) {
                 val target = pending ?: return@LaunchedEffect
@@ -126,7 +127,7 @@ fun FolderSettings(state: LibraryUiState, onDismiss: () -> Unit, onChooseFolder:
                 }.first { it != null }!!
                 val y = ((focus.anchors.getValue(id) - focus.viewportTop) - focus.viewportHeight / 3f)
                     .toInt().coerceIn(0, scroll.maxValue)
-                if (reduced) scroll.scrollTo(y) else scroll.animateScrollTo(y, tween((350 / speed).toInt()))
+                if (reduced) scroll.scrollTo(y) else searchScroll.scrollTo(y)
                 focus.highlighted = id
                 pending = null
             }
@@ -254,7 +255,7 @@ private fun ExcludedFoldersPreference(folder: FolderSelection, preferences: Scan
         val lines = input.lineSequence().map { it.trim().replace('\\', '/').trimEnd('/') }.filter { it.isNotBlank() }.toSet()
         val valid = lines.all { !it.startsWith('/') && it.split('/').none { part -> part in setOf("", ".", "..") } }
         GlassAlertDialog(onDismissRequest = { open = false }, title = { Text("Excluded subfolders") }, text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            SettingsDialogBody {
                 Text("One path per line, relative to ${folder.name}. For example: Podcasts or Albums/Demos. No wildcards. Both scans skip these paths when Include subfolders is on. Run Full scan to remove indexed songs from excluded paths.")
                 GlassTextField(input, { input = it }, label = { Text("Subfolder paths") }, minLines = 3, maxLines = 6, isError = !valid)
             }

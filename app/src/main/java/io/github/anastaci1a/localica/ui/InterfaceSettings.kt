@@ -1,6 +1,8 @@
 package io.github.anastaci1a.localica.ui
 
 import androidx.compose.foundation.layout.*
+import io.github.anastaci1a.localica.ui.layout.SettingsOptionBody
+import io.github.anastaci1a.localica.ui.layout.SettingsOptionActions
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -62,9 +64,9 @@ internal fun InterfaceSettingsControls(value: InterfaceSettings, section: String
             SettingsEntry("Main tabs") { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             value.tabs.forEachIndexed { index, tab ->
                 Surface(shape = Corners.card, color = MaterialTheme.colorScheme.surfaceContainerLow) {
-                    Column(Modifier.fillMaxWidth().padding(12.dp)) {
+                    SettingsOptionBody {
                         Text(tab.label, style = MaterialTheme.typography.titleMedium)
-                        Row {
+                        SettingsOptionActions {
                             ActionTextButton(enabled = index > 0, onClick = {
                                 val tabs = io.github.anastaci1a.localica.library.OccurrenceMoves.byOffset(value.tabs, index, -1); onChange(value.copy(tabs = tabs))
                             }) { Text("Move up") }

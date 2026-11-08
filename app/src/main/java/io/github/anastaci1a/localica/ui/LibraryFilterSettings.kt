@@ -1,6 +1,7 @@
 package io.github.anastaci1a.localica.ui
 
 import androidx.compose.foundation.layout.*
+import io.github.anastaci1a.localica.ui.layout.SettingsOptionBody
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -15,7 +16,7 @@ internal fun LibraryFilterSettings(value: LibraryFilters, onChange: (LibraryFilt
     SettingsEntry("Visible filters") { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
     value.visible.forEachIndexed { index, filter ->
         Surface(shape = Corners.card, color = MaterialTheme.colorScheme.surfaceContainerLow) {
-            Column(Modifier.fillMaxWidth().padding(12.dp)) {
+            SettingsOptionBody {
                 Text(filter.label, style = MaterialTheme.typography.titleMedium)
                 FlowRow {
                     ActionTextButton(enabled = index > 0, onClick = {

@@ -1,6 +1,7 @@
 package io.github.anastaci1a.localica.ui
 
 import androidx.compose.foundation.layout.*
+import io.github.anastaci1a.localica.ui.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -91,13 +92,13 @@ internal fun SliderPreferenceFrame(label: String, low: String?, high: String?, d
 internal fun BooleanPreferenceFrame(label: String, modifier: Modifier = Modifier, control: @Composable () -> Unit) {
     val compact = LocalCompactPreferenceFrames.current
     val metrics = LocalSettingsRowMetrics.current
-    SettingsEntry(label) { Row(modifier.fillMaxWidth().heightIn(min = if (compact) 48.dp else 56.dp)
-        .padding(vertical = if (compact) 0.dp else 4.dp).settingsRowPart(SettingsRowPart.Row).padding(horizontal = metrics.inset),
-        verticalAlignment = Alignment.CenterVertically) {
-        Text(label, Modifier.weight(1f).padding(start = metrics.textStart - metrics.inset, end = 12.dp).settingsRowPart(SettingsRowPart.Text))
-        Box(Modifier.settingsRowPart(SettingsRowPart.Trailing)) { control() }
+    SettingsEntry(label) {
+        SettingsPreferenceRow(compact, metrics.inset, metrics.textStart - metrics.inset,
+            modifier, Modifier.settingsRowPart(SettingsRowPart.Row),
+            label = { Text(label, it.settingsRowPart(SettingsRowPart.Text)) },
+            control = { PreferenceTrailingSlot(Modifier.settingsRowPart(SettingsRowPart.Trailing), control) })
     }
-} }
+}
 
 /** One width decision for live choices and their inert measurement faces. */
 internal fun choiceFitsInline(count: Int, cellWidth: Float, availableWidth: Float, popup: Boolean) =
@@ -131,20 +132,12 @@ internal fun ChoicePreferenceFrame(title: String, labels: List<String>, popup: B
 /** Material text-button sizing without installing its interaction or semantics owners. */
 @Composable
 internal fun TextButtonMeasurement(label: String, labelStyle: TextStyle? = null) {
-    Box(Modifier.minimumInteractiveComponentSize()) {
-        Row(Modifier.defaultMinSize(minWidth = ButtonDefaults.MinWidth, minHeight = ButtonDefaults.MinHeight)
-            .padding(ButtonDefaults.TextButtonContentPadding),
-            horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
-            Text(label, style = labelStyle ?: MaterialTheme.typography.labelLarge)
-        }
-    }
+    SettingsTextButtonMeasurement { Text(label, style = labelStyle ?: MaterialTheme.typography.labelLarge) }
 }
 
 @Composable
 internal fun GlassChoiceFace(label: String, icon: AppIcon? = null, tab: Boolean = false, labelStyle: TextStyle? = null) {
-    Row(Modifier.padding(horizontal = ChoiceLabelHorizontalInset), verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        icon?.let { Icon(appIconPainter(it), null, Modifier.size(24.dp)) }
+    SettingsChoiceFace(icon = if (icon == null) null else { modifier -> Icon(appIconPainter(icon), null, modifier) }) {
         Text(label, style = labelStyle ?: if (tab) MaterialTheme.typography.titleMedium else MaterialTheme.typography.bodyLarge,
             maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
     }
