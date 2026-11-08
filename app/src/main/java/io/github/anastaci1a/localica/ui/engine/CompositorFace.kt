@@ -66,3 +66,11 @@ internal class CompositorRecording(private val graphics: GraphicsContext) {
         layout(size.width,size.height) { if(visible) child.place(0,0) }
     }
 }
+
+/** Structural visibility only; geometry and opacity remain layout/draw reads. */
+@Composable internal fun retainedFacePresent(expansion: ExpansionView, visible: Boolean): Boolean {
+    val present = remember(expansion) { derivedStateOf { expansion.expanded || expansion.phase.value() > 0f } }
+    return visible || present.value
+}
+
+internal fun retainedFaceProgress(expansion: ExpansionView) = expansion.phase.value().coerceIn(0f, 1f)

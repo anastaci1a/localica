@@ -19,36 +19,6 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.*
 import kotlin.math.roundToInt
 
-/** U04.02a: a face that places its children only while [visible]; otherwise it draws its last recording at [alpha] (0..1), with input and
- * semantics revoked. [inset] pads the recording for an external shadow, [retainSize] keeps the last visible footprint and [scale] is the
- * size at alpha 0 (presence). Moved from GlassMorphContent's RetainedGlassFace; SurfaceNode.retained replaces it in part B. */
-@Composable fun RetainedFace(visible: Boolean, alpha: () -> Float, modifier: Modifier = Modifier, inset: Dp = 0.dp, retainSize: Boolean = false,
-    scale: Float = 1f, onMeasured: (IntSize) -> Unit = {}, content: @Composable () -> Unit) {
-    val layer = rememberGraphicsLayer()
-    val measurement = remember { RetainedMeasurement() }
-    Layout(modifier = modifier.then(if (visible) Modifier else Modifier.clearAndSetSemantics { })
-        .drawWithContent {
-            val pad = inset.roundToPx()
-            if (visible) layer.record(size = IntSize(size.width.toInt() + pad * 2, size.height.toInt() + pad * 2)) {
-                translate(pad.toFloat(), pad.toFloat()) { this@drawWithContent.drawContent() }
-            }
-            val opacity = alpha().coerceIn(0f, 1f)
-            if (opacity > 0f && layer.size.width > 0) {
-                layer.alpha = opacity
-                if (scale != 1f) { layer.scaleX = scale + (1f - scale) * opacity; layer.scaleY = layer.scaleX }
-                translate(-pad.toFloat(), -pad.toFloat()) { drawLayer(layer) }
-            }
-        }, content = { Box { content() } }) { children, constraints ->
-        val child = children.single().measure(constraints)
-        if (visible || measurement.size == IntSize.Zero) measurement.size = IntSize(child.width, child.height)
-        val size = if (retainSize && !visible) measurement.size else IntSize(child.width, child.height)
-        onMeasured(size)
-        layout(size.width, size.height) { if (visible) child.place(0, 0) }
-    }
-}
-
-private class RetainedMeasurement { var size = IntSize.Zero }
-
 /** A face's frame centred on its origin at [scale], for an [ExpansionBasis] between centred faces. */
 internal fun centeredFrame(size: IntSize, scale: Float = 1f) = Size(size.width * scale, size.height * scale).let { Rect(Offset(-it.width / 2, -it.height / 2), it) }
 /** D09: a shared element's frame at [p] eases every edge linearly between its compact and expanded slots. */
