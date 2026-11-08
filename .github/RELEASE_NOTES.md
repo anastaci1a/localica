@@ -1,6 +1,6 @@
-<!-- Release: v0.33.12 -->
+<!-- Release: v0.33.13 -->
 
-# Release v0.33.12
+# Release v0.33.13
 
 Android APK for Android 8 or newer. Keeps the existing `.debug` application ID and project development signing key for in-place updates. Separate production signing is not configured.
 
@@ -8,21 +8,20 @@ This is an optimized build (not debuggable, minified with R8, with a baseline pr
 
 ## Changes
 
-- New "Longest listened" sort beside Most played: it orders by qualified plays weighted by song length, everywhere the app sorts.
-- Artist photos come from Deezer, with a Wikimedia fallback and album art as the last resort. A shared **Online features** setting controls every online lookup.
-- Header glass no longer shows a stale fill after the content behind it changes.
-- The restored artwork chooser keeps its footer actions on short screens.
-- Faster, steadier device tests: shorter slow-test runs, the search keyboard settle, and qualified assumption skips from test results.
+- Reworked Settings: clearer menu order, a global search that opens the matching page and eases to the option, and a distinct icon on every row, aligned the same in one-line and multi-line rows.
+- Downloading items uses the download icon instead of a plain arrow.
+- With the None glass renderer, the taller Navigation settings row matches the other rows.
+- Pinch view changes keep a steady frame floor while easing, so subview headers settle right after release (follow-up to #560).
+- Test and CI reliability: API 26 test packages are fully compiled ahead of time, repeated prototype runs reuse the exact prebuilt APKs, and test inventories understand maximum SDK gates.
 
 ## Resolved issues
 
-- https://github.com/anastaci1a/localica/issues/666 - Add the Longest listened sort across the app.
-- https://github.com/anastaci1a/localica/issues/672 - Fetch artist photos from Deezer with a Wikimedia fallback, behind the shared Online features consent.
-- https://github.com/anastaci1a/localica/issues/680 - Invalidate stale header glass fills for every queued backdrop change.
-- https://github.com/anastaci1a/localica/issues/660 - Keep the restored artwork chooser's bounds and actions on API 26.
-- https://github.com/anastaci1a/localica/issues/674 - Fix the SearchImeMotionTest native keyboard settle flake.
-- https://github.com/anastaci1a/localica/issues/669 - Take observed assumption reasons from test results.
-- https://github.com/anastaci1a/localica/issues/678 - Trim slow device tests.
+- https://github.com/anastaci1a/localica/issues/641 - Rework settings order and add global settings search.
+- https://github.com/anastaci1a/localica/issues/655 - Align settings row icons and chevrons in one-line and multi-line rows.
+- https://github.com/anastaci1a/localica/issues/649 - Use the download icon for downloading items.
+- https://github.com/anastaci1a/localica/issues/668 - Match the two-line Navigation row's None material to the other rows.
+- https://github.com/anastaci1a/localica/issues/677 - Compile API 26 test packages ahead of time so performance budgets hold on CI.
+- https://github.com/anastaci1a/localica/issues/683 - Validate repeated multi-class prototype runs against the exact prebuilt APKs.
 
 ## Known issues
 
@@ -31,7 +30,7 @@ This is an optimized build (not debuggable, minified with R8, with a baseline pr
 
 ## Install
 
-1. Download `localica-v0.33.12-debug.apk` from **Assets** below (Android 8+).
+1. Download `localica-v0.33.13-debug.apk` from **Assets** below (Android 8+).
 2. Open the APK and allow installation from your browser or file manager if prompted. It updates the existing development app.
 3. First use: open **More → Scan music**, choose **Folders to scan**, then **Scan now**.
 
