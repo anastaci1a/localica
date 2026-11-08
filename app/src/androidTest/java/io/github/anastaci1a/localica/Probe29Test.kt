@@ -169,6 +169,8 @@ class Probe29Test {
             main { host.topRequest++; stall(stalls) }
             Thread.sleep(2500)
             main { io.github.anastaci1a.localica.ui.P635Debug.dump = true }; Thread.sleep(300)
+            // Layout truth for the same moment: semantics bounds of each fully visible cell, art and text.
+            cells().forEach { (key, r) -> android.util.Log.i("P635", "sem $key cell=${r[0].left},${r[0].top} art=${r[1].left},${r[1].top} text=${r[2].left},${r[2].top}") }
             val landed = shot("it$i-landed")
             scrollDeep(0)
             Thread.sleep(1500)
