@@ -52,7 +52,7 @@ internal fun LyricsHeaderActions(lyricsOpen: Boolean, reveal: Float, anchor: Gla
             val separation = ((p - .5f) * 2f).coerceIn(0f, 1f)
             val common = horizontal(contacts.presentation(contacts.left, contacts.right, 0f), contacts.left)
             bodies.mapIndexedNotNull { index, body ->
-                if (index == 0 && anchor.shadowInModal) null else {
+                run {
                     val shape = if (index == 0) horizontal(contacts.presentation(contacts.left, contacts.right, separation), contacts.left)
                         else horizontal(contacts.presentation(contacts.right, contacts.left, separation), contacts.right)
                     val shift = (if (index == 0) -1f else 1f) * size.height / 2f * (common.scaleX() - 1f) * (1f - separation)
@@ -89,7 +89,7 @@ internal fun LyricsHeaderActions(lyricsOpen: Boolean, reveal: Float, anchor: Gla
         }
     }
     Box(Modifier.width(width).height(CompactControlSize).preparedOrigin(preparation, progress)
-        .then(pill.follow).testTag("player-lyrics-pill").silhouetteGlassShadow(shadow)) {
+        .then(pill.follow).testTag("player-lyrics-pill").splitGlassShadow(anchor, shadow)) {
         if (!separated) {
             LiquidGlassSurface(Modifier.fillMaxSize(), silhouette = pill.silhouette, shadow = false,
                 sharedContact = contacts.joined, depthScale = RaisedGlassDepthScale) {

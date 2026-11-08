@@ -30,6 +30,51 @@ import kotlin.math.abs
 class CompositorAdoptionTest {
     @get:Rule val compose = createComposeRule()
 
+    /** U04.03/U07.01: a real native popup must transfer the trigger's same registry owner to that window. */
+    @Test fun nativePopupKeepsTheTriggerNodeOnItsOwnWindowPlane() {
+        var open by mutableStateOf(false)
+        lateinit var anchor: GlassAnchor
+        var sourcePlane: ShadowPlane? = null
+        var popupPlane: ShadowPlane? = null
+        var popupRoot: android.view.View? = null
+        compose.setContent { EngineTheme {
+            GlassShadowScope(Modifier.fillMaxSize()) {
+                val plane = requireNotNull(LocalSurfaceShadows.current)
+                SideEffect { sourcePlane = plane }
+                anchor = rememberGlassAnchor()
+                LiquidGlassSurface(Modifier.padding(48.dp).size(48.dp).glassAnchor(anchor),
+                    cornerRadius = 24.dp, pressFeedback = false) { }
+                GlassMenu(open, anchor, { open = false }) {
+                    val destination = LocalShadowPlane.current
+                    val root = androidx.compose.ui.platform.LocalView.current.rootView
+                    SideEffect { popupPlane = destination; popupRoot = root }
+                    Box(Modifier.size(180.dp, 100.dp).testTag("window-plane-body"))
+                }
+            }
+        } }
+        compose.waitForIdle()
+        lateinit var owner: SurfaceNode
+        compose.runOnIdle { owner = requireNotNull(sourcePlane).casters.single { it.key === anchor }; open = true }
+        compose.onNodeWithTag("window-plane-body").assertExists()
+        compose.waitForIdle()
+        compose.runOnIdle {
+            val destination = requireNotNull(popupPlane) { "A native popup must provide a window plane" }
+            assertSame("The destination plane belongs to the actual native root", popupRoot, destination.host.window)
+            assertTrue("Window plane differs from its page source", destination !== sourcePlane)
+            assertSame("Transfer preserves the trigger's exact SurfaceNode", owner,
+                destination.casters.single { it.key === anchor })
+            assertTrue("The drawable destination acknowledges a traversal", destination.generation > 0)
+            assertTrue("That exact caster owns the destination field", owner.owns(destination))
+        }
+        compose.runOnIdle { open = false }
+        compose.waitForIdle()
+        compose.runOnIdle {
+            assertSame("Return restores the same source owner", owner,
+                requireNotNull(sourcePlane).casters.single { it.key === anchor })
+            assertTrue("Returned owner leaves the native plane", requireNotNull(popupPlane).casters.none { it === owner })
+        }
+    }
+
     @Test fun physicalTriggerBindsItsActualCasterAndAWindowLeaseSurvivesItsRemoval() {
         var shown by mutableStateOf(true)
         var grouped by mutableStateOf(true)

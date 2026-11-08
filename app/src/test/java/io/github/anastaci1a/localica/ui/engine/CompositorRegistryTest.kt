@@ -141,6 +141,31 @@ class CompositorRegistryTest {
         assertThrows(IllegalStateException::class.java) { node.request(shown,profile) }
     }
 
+    @Test fun remountRebindsTheLeasedSourceWithoutReplacingItsNodeOrStealingItsWindow() = EngineHarness(spec=geometry).use { h ->
+        val a=plane(h); val b=plane(h); val c=plane(h)
+        val shape=shape(h); val node=SurfaceNode(h.clock,"returning",shape,shown,a)
+        val first=node.attachSource(a)
+        val release=node.retainWindow()
+        val popup=PopupWindowMotion(h.clock,geometry.expansion,"popup",false,false)
+        popup.show(true); popup.place(Rect(0f,0f,200f,64f),Rect(20f,30f,400f,600f),1f)
+        node.follow(popup.expansion,Curve.constant(1f),requireNotNull(popup.bounds))
+        node.transfer(b,profile); b.acknowledge()
+        popup.expansion.acknowledgeNativeGate(popup.expansion.nativeGeneration); h.advance(2.0)
+        node.releaseSource(first)
+        val second=node.attachSource(c)
+        assertSame(shape,node.shape); assertSame(node,c.casters.single())
+        assertTrue(a.casters.isEmpty()); assertTrue(node.owns(b)); assertFalse(node.owns(c))
+        node.releaseSource(first) // A late disposal from the old composition cannot release the remount.
+        assertTrue(node.owns(b)); assertSame(c,node.sourcePlane)
+        popup.show(false); h.advance(2.0)
+        node.transfer(c,profile); c.acknowledge()
+        assertTrue(node.owns(c)); assertTrue(b.casters.isEmpty())
+        popup.expansion.acknowledgeNativeGate(popup.expansion.nativeGeneration)
+        release(); assertSame(node,c.casters.single())
+        node.releaseSource(second); assertTrue(c.casters.isEmpty()); assertEquals(0,h.clock.activeCount)
+        popup.dispose()
+    }
+
     /** 10,000 request/transfer/receipt/dismiss/reopen/advance steps: shares stay a partition, the ledger is bounded, and every join is C0/C1. */
     @Test fun tenThousandRequestSequencesKeepPartitionBoundAndContinuity() = EngineHarness(spec=geometry).use { h ->
         val r=Random(60401); val planes=List(4) { plane(h) }; val node=SurfaceNode(h.clock,"fuzz",shape(h),shown,planes[0]); var dismissed=false; var retired=false

@@ -23,6 +23,8 @@ enum class Stratum { Page,Lifted,Floating,Drawer,Player,Modal,Overlay,Diagnostic
 @Stable class ShadowPlane internal constructor(private val clock: UiClock,val host: HostKey) {
     private val registered=linkedMapOf<Any,SurfaceNode>(); private var registrations=0; internal var generation=0L; private set
     internal fun sameClock(value: UiClock)=clock===value
+    internal fun node(key: Any) = registered[key]
+    internal fun requestDraw() { androidx.compose.runtime.snapshots.Snapshot.withoutReadObservation { revision++ }; view?.invalidate() }
     internal val casters: List<SurfaceNode> get() { revision; return registered.values.toList() }
     internal fun enter(node: SurfaceNode): Int { clock.checkMutation(); require(registered[node.key].let { it==null || it===node }) { "One SurfaceNode per key per host" }; if(registered[node.key]===node) return registrations; registered[node.key]=node; androidx.compose.runtime.snapshots.Snapshot.withoutReadObservation { revision++ }; return ++registrations }
     internal fun leave(node: SurfaceNode) { clock.checkMutation(); if(registered[node.key]===node) { registered.remove(node.key); androidx.compose.runtime.snapshots.Snapshot.withoutReadObservation { revision++ } } }
@@ -42,6 +44,14 @@ enum class Stratum { Page,Lifted,Floating,Drawer,Player,Modal,Overlay,Diagnostic
     override val opacity: MotionValue get()=following?.opacity?:ownOpacity
     private val ownOwnership=MotionFloat(clock,0f,1f,0.0..1.0,key to "ownership");
     private var windowLeases=0; private var sourceReleased=false
+    internal val windowRetained get()=windowLeases>0
+    internal val sourcePlane get()=low
+    internal var sourceGeneration=0L; private set
+    private val projections=mutableMapOf<ShadowPlane,()->ShapeFrame>()
+    internal fun frameOn(plane: ShadowPlane)=projections[plane]?.invoke()?:shape.outline()
+    internal fun project(plane: ShadowPlane,frame: (()->ShapeFrame)?) { if(frame==null) projections.remove(plane) else projections[plane]=frame }
+    internal fun attachSource(plane: ShadowPlane): Long { clock.checkMutation(); check(!disposed); require(plane.sameClock(clock)); check(sourceReleased || sourceGeneration==0L || low!==plane) { "A source key has one live attachment" }; if(low!==plane) { low?.leave(this); low=plane; plane.enter(this); if(high==null) owner=plane }; sourceReleased=false; return ++sourceGeneration }
+    internal fun releaseSource(generation: Long) { if(generation==sourceGeneration) dispose() }
     override val shadowOwnership: MotionValue get()=following?.ownership?:ownOwnership; private val ownTransform=MotionRect(clock,initial.transform.map(bounds()),EdgeRanges(px,px,px,px),key to "transform")
     override val transform: MotionRectView get()=following?.bounds?:ownTransform
     internal val registration=home.enter(this); internal val order get()=stratum.ordinal+registration/(registration+1f)
@@ -74,7 +84,7 @@ enum class Stratum { Page,Lifted,Floating,Drawer,Player,Modal,Overlay,Diagnostic
         if(following!=null) {
             val queued=pending; if(queued!=null && queued.first!==to && queued.first!==low && queued.first!==high) queued.first.leave(this)
             pending=null
-            if(to!==owner) { to.enter(this); pending=Triple(to,if(queued?.first===to) queued.second else to.generation,profile); advance() }
+            if(to!==owner) { to.enter(this); pending=Triple(to,if(queued?.first===to) queued.second else to.generation,profile); to.requestDraw(); advance() }
             return
         }
         val queued=pending; pending=null; if(queued!=null && queued.first!==to && queued.first!==low && queued.first!==high) queued.first.leave(this)
@@ -99,7 +109,7 @@ enum class Stratum { Page,Lifted,Floating,Drawer,Player,Modal,Overlay,Diagnostic
     /** A native presenter leases the actual trigger node through return; removing the source composition cannot revoke its field. */
     internal fun retainWindow(): ()->Unit { clock.checkMutation(); check(!disposed && !sourceReleased); windowLeases++; var released=false; return { clock.checkMutation(); if(!released) { released=true; windowLeases--; if(sourceReleased && windowLeases==0) disposeNow() } } }
     internal fun dispose() { clock.checkMutation(); if(disposed || sourceReleased) return; sourceReleased=true; if(windowLeases==0) disposeNow() }
-    private fun disposeNow() { planes().forEach { it.leave(this) }; disposed=true; following?.expansion?.lifecycle?.remove(::followLifetime); listOf(ownOpacity,ownOwnership).forEach { it.dispose() }; ownTransform.dispose() }
+    private fun disposeNow() { projections.clear(); planes().forEach { it.leave(this) }; disposed=true; following?.expansion?.lifecycle?.remove(::followLifetime); listOf(ownOpacity,ownOwnership).forEach { it.dispose() }; ownTransform.dispose() }
 }
 /** Engine host adapter: one plane per native window; U04.01b installs it on its host with the draw receipt. */ internal val LocalShadowPlane=staticCompositionLocalOf<ShadowPlane?> { null }
 @Composable internal fun rememberShadowPlane(): ShadowPlane { val clock=ownerClock(); val view=LocalView.current.rootView; return remember(clock,view) { ShadowPlane(clock,HostKey.next(view)) } }
@@ -108,7 +118,7 @@ enum class Stratum { Page,Lifted,Floating,Drawer,Player,Modal,Overlay,Diagnostic
 fun Modifier.surface(node: SurfaceView): Modifier { require(node is SurfaceNode) { "Surfaces come from rememberSurfaceNode" }; return layout { m,c -> val p=m.measure(c); layout(p.width,p.height) { p.place(0,0,zIndex=node.order) } } }
 /** D25/D28: the host draws its owned casters' field after its content, then publishes the draw receipt; queued transfers start on the next frame. */
 @Composable internal fun Modifier.shadowPlaneHost(plane: ShadowPlane,strength: Float,spread: Float): Modifier { val cache=rememberGlassShadow(); val view=LocalView.current; SideEffect { plane.view=view }
-    return onPlaced { plane.layout=it }.drawWithContent { drawContent(); plane.revision; with(cache) { draw(plane.casters.flatMap { n -> if(!n.owns(plane)) emptyList() else { val opacity=n.opacity.value()*((n.shape as? LayoutShape)?.opacity?.invoke()?:1f); if(opacity>0f) n.shape.outline().bodies.map { it to opacity } else emptyList() } },strength,spread) }; if(plane.receipt()) view.postOnAnimation { plane.admit() } } }
+    return onPlaced { plane.layout=it }.drawWithContent { drawContent(); plane.revision; with(cache) { draw(plane.casters.flatMap { n -> if(!n.owns(plane)) emptyList() else { val opacity=n.opacity.value()*((n.shape as? LayoutShape)?.opacity?.invoke()?:1f); if(opacity>0f) n.frameOn(plane).bodies.map { it to opacity } else emptyList() } },strength,spread) }; if(plane.receipt()) view.postOnAnimation { plane.admit() } } }
 /** The existing host layout provides its registry to descendant surface owners; the modifier also fits a page's existing layout. */
 @Composable internal fun ShadowPlaneHost(plane: ShadowPlane,strength: Float,spread: Float,modifier: Modifier,content: @Composable androidx.compose.foundation.layout.BoxScope.()->Unit) {
     CompositionLocalProvider(LocalShadowPlane provides plane) { androidx.compose.foundation.layout.Box(modifier.shadowPlaneHost(plane,strength,spread),content=content) } }
@@ -136,11 +146,24 @@ fun Modifier.surface(node: SurfaceView): Modifier { require(node is SurfaceNode)
     }
 }
 /** D26 live-compat caster (expires U06.01/U09.01a): an Engine-owned implicit node whose shape follows its layout in [plane]'s host; [body] maps that rectangle to the drawn body, or null. */
-internal class LayoutShape(override val key: Any,private val plane: ShadowPlane): ShapeView { var coordinates: LayoutCoordinates?=null; var body: (Rect)->RoundRect? = { null }; var opacity by mutableStateOf<()->Float>({ 1f })
+internal class LayoutShape(override val key: Any,internal var plane: ShadowPlane): ShapeView { var coordinates: LayoutCoordinates?=null; var body: (Rect)->RoundRect? = { null }; var opacity by mutableStateOf<()->Float>({ 1f })
     /** The laid-out body in host space, read in draw; not a motion read. */
     fun laidOut(): RoundRect? { val host=plane.layout?.takeIf { it.isAttached }; val own=coordinates?.takeIf { it.isAttached }; return if(host==null || own==null) null else body(host.localBoundingBoxOf(own,clipBounds=false)) }
     override fun outline(): ShapeFrame { val b=laidOut(); return ShapeFrame(listOfNotNull(b),b?.boundingRect?:Rect.Zero,b?.topLeftCornerRadius?.x?:0f,GlassStrain.None) }
     override fun outlineAt(stamp: FrameStamp)=outline() }
-@Composable internal fun Modifier.glassCaster(plane: ShadowPlane,key: Any,opacity: ()->Float={ 1f },onNode: ((SurfaceView,Boolean)->Unit)?=null,body: (Rect)->RoundRect?): Modifier { val clock=ownerClock(); val shape=remember(plane,key) { LayoutShape(key,plane) }; SideEffect { shape.body=body; shape.opacity=opacity }
-    val node=remember(clock,plane,key) { SurfaceNode(clock,key,shape,SurfaceTarget(Stratum.Floating,1f,ShadowRole.Glass),plane) }; DisposableEffect(node) { onNode?.invoke(node,true); onDispose { onNode?.invoke(node,false); node.dispose() } }
-    return onGloballyPositioned { shape.coordinates=it; androidx.compose.runtime.snapshots.Snapshot.withoutReadObservation { plane.revision++ } } }
+@Composable internal fun Modifier.glassCaster(plane: ShadowPlane,key: Any,opacity: ()->Float={ 1f },onNode: ((SurfaceView,Boolean)->Unit)?=null,
+    retained: SurfaceNode?=null,body: (Rect)->RoundRect?): Modifier {
+    val clock=ownerClock()
+    val node=remember(clock,plane,key) {
+        val existing=retained?:plane.node(key)
+        existing?:SurfaceNode(clock,key,LayoutShape(key,plane),SurfaceTarget(Stratum.Floating,1f,ShadowRole.Glass),plane)
+    }
+    val shape=requireNotNull(node.shape as? LayoutShape)
+    SideEffect { shape.plane=plane; shape.body=body; shape.opacity=opacity }
+    DisposableEffect(node,plane) {
+        val generation=node.attachSource(plane)
+        onNode?.invoke(node,true)
+        onDispose { if(node.sourceGeneration==generation) onNode?.invoke(node,false); node.releaseSource(generation) }
+    }
+    return onGloballyPositioned { shape.coordinates=it; androidx.compose.runtime.snapshots.Snapshot.withoutReadObservation { plane.revision++ } }
+}

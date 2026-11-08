@@ -89,8 +89,19 @@ private fun FrostedBackdrop?.surfaceDrawSource(location: BackdropLocation, exten
         registration?.inverse()?.corners(androidx.compose.ui.geometry.Rect(Offset.Zero, extent))?.surfaceDrawScalars())
 }
 
-@Stable
-internal class GlassContact {
+/** Legacy contact readers borrow the popup phase; they never own its trajectory. */
+@Stable internal class GlassExpansion {
+    private var owner by mutableStateOf<io.github.anastaci1a.localica.ui.engine.ExpandCollapse?>(null)
+    private var curve = io.github.anastaci1a.localica.ui.engine.Curve.linear(0f, 1f)
+    val value: Float get() = owner?.let { curve.at(it.phase.value()) } ?: 0f
+    val velocity: Float get() = owner?.let { curve.slope(it.phase.value()) * it.phase.velocity() } ?: 0f
+    val targetValue: Float get() = owner?.let { curve.at(if (it.expanded) 1f else 0f) } ?: 0f
+    val isRunning: Boolean get() = owner?.retirementReady == false
+    fun bind(value: io.github.anastaci1a.localica.ui.engine.ExpandCollapse, mapping: io.github.anastaci1a.localica.ui.engine.Curve) { owner = value; curve = mapping }
+    fun unbind(value: io.github.anastaci1a.localica.ui.engine.ExpandCollapse) { if (owner === value) { owner = null } }
+}
+
+@Stable internal class GlassContact {
     var pressed by mutableStateOf(false)
     var travel by mutableFloatStateOf(0f)
     var modal by mutableStateOf(false)
@@ -105,7 +116,7 @@ internal class GlassContact {
             state.output.value = state.momentum.shape
             verticalAxis = value
         }
-    val expansion = Animatable(0f)
+    val expansion = GlassExpansion()
     val state = GlassBodyState()
     val body: State<GlassShape> get() = state.output
 }
