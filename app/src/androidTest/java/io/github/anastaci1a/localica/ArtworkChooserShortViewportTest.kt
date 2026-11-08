@@ -95,8 +95,9 @@ class ArtworkChooserShortViewportTest {
             for (label in listOf("Open gallery", "Browse files")) {
                 val action = compose.onNode(hasText(label) and hasClickAction())
                 action.performScrollTo().assertIsDisplayed().assertHasClickAction()
+                val bounds = action.getUnclippedBoundsInRoot()
                 assertTrue("$label keeps its full touch target in the short chooser",
-                    action.getUnclippedBoundsInRoot().height >= 48.dp)
+                    bounds.bottom - bounds.top >= 48.dp)
             }
         } catch (failure: Throwable) {
             primary = failure
