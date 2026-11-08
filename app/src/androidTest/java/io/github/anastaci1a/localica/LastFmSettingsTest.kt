@@ -47,10 +47,14 @@ class LastFmSettingsTest {
             compose.onNodeWithTag("lastfm-sync").performScrollTo().performClick()
             compose.waitUntil(5000) { controller.matches.value.counts["song"] == 42L }
             compose.onNodeWithTag("lastfm-review-summary").performScrollTo().assertTextEquals("1 matched · 1 to review")
+            compose.onNodeWithText("Data", useUnmergedTree = true).performScrollTo().performClick()
             compose.onNode(isToggleable() and hasText("Use Last.fm counts")).performScrollTo().performClick()
             compose.waitUntil(5000) { controller.state.value.saved.useCounts }
             assertEquals(42L, runBlocking { controller.applyTo(flowOf(local)).first().tracks["song"] })
-            compose.onNodeWithText("Use A · a.mp3").performScrollTo().performClick()
+            compose.onNodeWithText("Matches", useUnmergedTree = true).performScrollTo().performClick()
+            compose.onNodeWithText("Artist — Ambiguous").performScrollTo().performClick()
+            compose.onNodeWithText("Ambiguous · Artist · A", useUnmergedTree = true).performScrollTo().performClick()
+            compose.onNodeWithText("Use selection").performClick()
             compose.waitUntil(5000) { controller.matches.value.review.isEmpty() }
             assertEquals("a", runBlocking { store.read().mappings.values.single() })
             compose.onNode(isToggleable() and hasText("Use Last.fm counts")).performScrollTo().performClick()
