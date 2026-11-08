@@ -1,7 +1,7 @@
 package io.github.anastaci1a.localica.ui
 
-import io.github.anastaci1a.localica.ui.engine.ScrollExecution
-import io.github.anastaci1a.localica.ui.engine.withScrollExecution
+import io.github.anastaci1a.localica.ui.components.ListScrollMotion
+import io.github.anastaci1a.localica.ui.components.withListScrollMotion
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyLayoutScrollScope as listScrollScope
 import androidx.compose.foundation.lazy.grid.LazyGridState
@@ -56,7 +56,7 @@ private suspend fun LazyLayoutScrollScope.jumpNear(index: Int, offset: Int, lead
 
 /** Foundation targeting/consumption policy, sampled on the root Engine timeline. */
 private suspend fun LazyLayoutScrollScope.glideToItem(initialIndex: Int, initialOffset: Int, duration: Int,
-    execution: ScrollExecution, flyEvery: Int = 0, viewport: () -> Int, columns: () -> Int,
+    execution: ListScrollMotion, flyEvery: Int = 0, viewport: () -> Int, columns: () -> Int,
     target: (() -> ListScrollTarget)? = null, onTime: (Float) -> Unit = {}) {
     var index = initialIndex
     var offset = initialOffset
@@ -100,7 +100,7 @@ private suspend fun LazyLayoutScrollScope.glideToItem(initialIndex: Int, initial
 private suspend fun LazyLayoutScrollScope.approachItem(index: Int, offset: Int, duration: Int, style: LongScrollStyle,
     fade: LongScrollFade?, viewport: () -> Int, columns: () -> Int, target: (() -> ListScrollTarget)? = null, grid: Boolean = false) {
     if (index !in 0 until itemCount) return
-    withScrollExecution {
+    withListScrollMotion {
         val duration = if (grid) spec.gridMs else if (duration == 350) spec.listMs else duration
         val lead = (viewport() * 1.5f).toInt().coerceAtLeast(1)
         val far = abs(calculateDistanceTo(index, offset).toFloat()) > lead * 1.5f && index !in firstVisibleItemIndex..lastVisibleItemIndex
