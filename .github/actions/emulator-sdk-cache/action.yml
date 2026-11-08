@@ -23,7 +23,8 @@ runs:
       shell: bash
       run: python3 .github/emulator-sdk.py prepare
     - uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
-      if: steps.cached.outputs.cache-hit != 'true'
+      # A branch-scoped entry is invisible to other branches: it only duplicates the shared default-branch copy and evicts it (#681).
+      if: steps.cached.outputs.cache-hit != 'true' && github.event.repository != null && github.ref_name == github.event.repository.default_branch
       with:
         path: ${{ steps.package.outputs.path }}
         key: ${{ steps.package.outputs.key }}
