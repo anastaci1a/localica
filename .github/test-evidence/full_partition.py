@@ -76,6 +76,7 @@ def expected_for(root, api):
     # Optical-detail contracts require runtime shaders; None coverage runs on both APIs.
     sdk_contracts = {
         'BackdropInvalidationTest': [
+            ('rasterlessBackingRecordInvalidatesItsDependentRecording', 32, 'maxSdkVersion'),
             ('queuedFinalRecordingSurvivesASuspendedThumbnailCaptureAndThenSettles', 32, 'maxSdkVersion'),
         ],
         'ScopedSearchOpticsTest': [
