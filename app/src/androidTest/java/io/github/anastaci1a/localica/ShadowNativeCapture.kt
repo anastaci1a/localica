@@ -119,7 +119,8 @@ internal class ShadowNativeCapture(private val rule: ComposeContentTestRule,
             }
         }
         val listeners = sources.mapIndexed { index, _ -> Window.OnFrameMetricsAvailableListener { _, frame, _ ->
-            if (!submitted[index] && ledgers[index].values.any { it.second == frame.getMetric(FrameMetrics.VSYNC_TIMESTAMP) }) {
+            if (!submitted[index] && ledgers[index].size >= 2 &&
+                ledgers[index].values.last().second == frame.getMetric(FrameMetrics.VSYNC_TIMESTAMP)) {
                 submitted[index] = true; drawn.countDown()
             }
         } }
@@ -143,11 +144,16 @@ internal class ShadowNativeCapture(private val rule: ComposeContentTestRule,
                         if (ledgers[index].size == 32) overflow = true else
                             ledgers[index][source.marker.token] = state.copy(bodies = state.bodies.toList(),
                                 exclusion = state.exclusion?.let { it.copy(bodies = it.bodies.toList()) }) to nativeVsync
+                        // Complete a second native traversal so the first request buffer can be latched.
+                        // This is submission readiness, never screenshot polling or presentation evidence.
+                        if (ledgers[index].size == 1) source.view.postOnAnimation {
+                            source.marker.invalidateSelf(); source.view.invalidate()
+                        }
                     }
                     source.marker.invalidateSelf(); source.view.invalidate()
                 }
             }
-            check(drawn.await(5, TimeUnit.SECONDS)) { "Incomplete: not every window submitted its native marker traversal" }
+            check(drawn.await(5, TimeUnit.SECONDS)) { "Incomplete: not every window completed both native marker traversals" }
             // Submission readiness only. The original pixels, never these callbacks, grant correlation.
             InstrumentationRegistry.getInstrumentation().uiAutomation.waitForIdle(100, 5000)
             val bitmap = checkNotNull(InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot()) {
