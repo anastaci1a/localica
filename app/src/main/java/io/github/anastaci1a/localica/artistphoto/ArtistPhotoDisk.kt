@@ -72,6 +72,9 @@ internal class ArtistPhotoDisk(private val cache: File, private val choices: Fil
         trim()
         return requireNotNull(cached(artist, now))
     }
+    fun cacheBytes(): Long = cache.listFiles().orEmpty().sumOf { it.length() }
+    fun clearCache() { cache.listFiles().orEmpty().filter { it.isFile }.forEach { it.delete() } }
+
     fun trim() {
         if (!cache.exists()) return
         // A crash between picture and metadata writes leaves an orphan; it is safe to discard.

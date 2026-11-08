@@ -168,7 +168,7 @@ internal object SettingsCatalog {
             score(spec.title, spec.keywords + " " + spec.values.joinToString(" "), spec.page)
                 ?.let { Result(spec.title, spec.page, spec, it) }
         }
-        val pages = parents.keys.mapNotNull { page ->
+        val pages = parents.keys.filterNot { page -> entries.any { it.id == page && it.page == page } }.mapNotNull { page ->
             val summary = entries.filter { it.page == page }.joinToString(" ") { it.title + " " + it.keywords }
             score(page, summary, page)?.let { Result(page, page, null, it - 1) }
         }

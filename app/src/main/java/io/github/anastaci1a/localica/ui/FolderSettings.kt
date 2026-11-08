@@ -32,7 +32,7 @@ private val settingsDestinations = listOf(
     SettingsDestination("Navigation", "Interface", AppIcon.SettingsNavigation, "Main tabs, Back history, and exit confirmation"),
     SettingsDestination("Player", "Interface", AppIcon.SettingsPlayer, "Artwork, gestures, and player actions"),
     SettingsDestination("Motion", "Interface", AppIcon.SettingsMotion, "Animation speed and reduced motion"),
-    SettingsDestination("Online features", null, AppIcon.MenuStation, "Privacy, Last.fm, and artist photos"),
+    SettingsDestination("Online features", null, AppIcon.MenuDownload, "Privacy, Last.fm, and artist photos"),
     SettingsDestination("Last.fm", "Online features", AppIcon.MenuStation, "Read-only listening statistics"),
     SettingsDestination("Artist photos", "Online features", AppIcon.TabArtists, "Sources, cache, and photo matching"),
     SettingsDestination("Playback and queues", null, AppIcon.TransportPlay, "Preloading, queue switching, and retention"),

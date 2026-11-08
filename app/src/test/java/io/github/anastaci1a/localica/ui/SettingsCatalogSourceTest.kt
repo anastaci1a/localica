@@ -8,7 +8,7 @@ import org.junit.Test
 class SettingsCatalogSourceTest {
     @Test fun everyStaticSettingsControlHasACatalogIdentity() {
         val directory = File("src/main/java/io/github/anastaci1a/localica/ui")
-        val sources = listOf("FolderSettings.kt", "InterfaceSettings.kt", "GlassSettings.kt", "QueueScreen.kt",
+        val sources = listOf("FolderSettings.kt", "OnlineFeaturesSettings.kt", "ArtistPhotosSettings.kt", "InterfaceSettings.kt", "GlassSettings.kt", "QueueScreen.kt",
             "IconPackSettings.kt", "LibraryFilterSettings.kt", "DiagnosticsSettings.kt", "LibraryLicenses.kt", "TagEditor.kt")
         val call = Regex("""(?:BooleanPreference|SliderPreference|GlassSlider|ArtworkActionPreference|ChoicePreference|SettingsLink|SettingsEntry)\("([^"\n]+)"""")
         val known = SettingsCatalog.entries.map { it.id }.toSet() + SettingsCatalog.parents.keys

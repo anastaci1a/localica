@@ -398,3 +398,9 @@ io.github.anastaci1a.localica.BackdropInvalidationTest
 io.github.anastaci1a.localica.HeaderGlassFreshnessTest
 io.github.anastaci1a.localica.SettingsRowAlignmentTest
 io.github.anastaci1a.localica.SettingsSearchTest
+io.github.anastaci1a.localica.ArtistPhotoDisplayTest
+io.github.anastaci1a.localica.ArtistPhotoHeaderTest
+io.github.anastaci1a.localica.OnlineFeaturesNavigationTest
+io.github.anastaci1a.localica.OnlineFeaturesSearchTest
+io.github.anastaci1a.localica.ArtistPhotoCacheControlsTest
+io.github.anastaci1a.localica.ArtistPhotoActionsTest

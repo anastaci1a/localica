@@ -17,7 +17,7 @@ internal fun OnlineFeaturesSettings(consent: NetworkConsent) {
         catch (cancelled: CancellationException) { throw cancelled }
         catch (_: Exception) { problem = true }
     } })
-    Text("Allow artist and release names to reach Deezer, MusicBrainz and Wikimedia for photos, and your username to reach Last.fm for manual statistics sync. Audio and local listening history stay on this device.",
+    Text("Allow artist and release names to reach Deezer, MusicBrainz and Wikimedia for photos, and your username to reach Last.fm for statistics sync. Audio and local listening history stay on this device.",
         style = MaterialTheme.typography.bodySmall)
     if (problem) Text("Could not save online features preference. Try again.", color = MaterialTheme.colorScheme.error)
 }

@@ -92,7 +92,7 @@ internal fun BrowseItemLayout(item: BrowserItem, style: BrowseStyle, geometry: B
             if (numberAlpha > 0f) Text(numberLabel ?: retainedNumberLabel.orEmpty(), Modifier.fillMaxSize().graphicsLayer { alpha = numberAlpha * (loadingReveal?.alpha ?: 1f) }.wrapContentSize(),
                 color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
             if (artworkAlpha > 0f || artwork(style) || from?.let(::artwork) == true)
-                MediaArtwork(item.coverUris, textReveal = textReveal, modifier = Modifier.fillMaxSize()
+                ArtistMediaArtwork(item, textReveal = textReveal, modifier = Modifier.fillMaxSize()
                     .then(if (pinch != null) Modifier.retainPinchArtwork(item.key, pinch) else Modifier).graphicsLayer {
                     alpha = artworkAlpha * incomingAlpha * (loadingReveal?.alpha ?: 1f)
                     shape = RoundedCornerShape(browseLoadingArtCorner(artCorner.floatValue, size.minDimension,

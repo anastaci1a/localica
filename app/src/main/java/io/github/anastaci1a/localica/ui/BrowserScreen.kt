@@ -257,7 +257,10 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
         playlistHeroUri(detailPlaylist, library.snapshot)
             ?: seededCollection?.coverUris?.firstOrNull().takeIf { detailPlaylist == null && playlists.loading }
     } else collectionHeroUri(loadedResult?.let { result }, seededCollection)
-    val hero = if (artDetail) rememberCollectionVisual(heroUri) else PlayerVisual()
+    val albumHero = if (artDetail) rememberCollectionVisual(heroUri) else PlayerVisual()
+    val photoEnvironment = artistPhotoEnvironment()
+    val artistPhotoConsentAllowed = if (artistDetail) photoEnvironment?.consent?.allowed?.collectAsState()?.value == true else false
+    val hero = rememberArtistCollectionVisual(route.collection, route.title, sourceResult, heroUri, albumHero)
     val lightCollection = collectionIsLight(hero)
     val collectionInk = if (lightCollection) androidx.compose.ui.graphics.Color(0xFF202124) else androidx.compose.ui.graphics.Color.White
     SideEffect { if (selectionVisible) onAppearance(if (artDetail) collectionInk else androidx.compose.ui.graphics.Color.Black,
@@ -906,7 +909,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
         LocalEmptySearchBack provides popupDismiss?.takeIf { route.text.isBlank() }) {
     Box(Modifier.then(if (popupDismiss != null) Modifier.fillMaxWidth() else Modifier.fillMaxSize())) {
     if (artDetail) CollectionBackground(hero, gridState, collectionSource, reducedMotion,
-        Modifier.matchParentSize(), pinchHeader)
+        Modifier.matchParentSize(), pinchHeader, artworkResetKey = if (artistDetail) route.collection to artistPhotoConsentAllowed else null)
     Column(Modifier.then(if (popupDismiss != null) Modifier.fillMaxWidth() else Modifier.fillMaxSize())
         .then(if (route.search) Modifier.focusRequester(resultsFocus).focusable() else Modifier)
         .then(if (searchAnchor.hidden) Modifier.clearAndSetSemantics { } else Modifier)) {

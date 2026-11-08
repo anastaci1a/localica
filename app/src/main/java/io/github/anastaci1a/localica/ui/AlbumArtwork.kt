@@ -25,7 +25,7 @@ internal fun AlbumArtwork(uri: String?, modifier: Modifier = Modifier.size(200.d
 @Composable
 internal fun MediaArtwork(uris: List<String>, modifier: Modifier, provider: CoverProvider = EmbeddedCoverProvider,
     shape: androidx.compose.ui.graphics.Shape = Corners.artwork, contentScale: ContentScale = ContentScale.Crop,
-    textReveal: ArtworkTextReveal? = null) {
+    textReveal: ArtworkTextReveal? = null, replacementArtwork: androidx.compose.ui.graphics.ImageBitmap? = null) {
     val context = LocalContext.current.applicationContext
     ArtworkCache.configure(context)
     val revision by ArtworkCache.revision.collectAsState()
@@ -71,7 +71,7 @@ internal fun MediaArtwork(uris: List<String>, modifier: Modifier, provider: Cove
     val indexedMissing = provider === EmbeddedCoverProvider && ArtworkColors.peek(uris) == ArtworkColors.MISSING
     val loading = cached == null && uris.isNotEmpty() && artwork == null && !indexedMissing &&
         (deferred || pixels == 0 || loaded.first != request)
-    ArtworkImage(artwork, loading, measured, shape, contentScale, tintUris = uris, textReveal = textReveal,
+    ArtworkImage(replacementArtwork ?: artwork, loading, measured, shape, contentScale, tintUris = uris, textReveal = textReveal,
         expectsArtwork = provider === EmbeddedCoverProvider && ArtworkColors.peek(uris).let { it != null && it != ArtworkColors.MISSING })
 }
 

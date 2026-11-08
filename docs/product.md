@@ -136,3 +136,13 @@ Matching normalizes artist and title, then uses album and recording MusicBrainz 
 Disconnect cancels pending sync, deletes the external snapshot and mappings, and turns external counts off. It preserves local history, playlists and audio tags. Playlist origin counts remain local because Last.fm cannot identify a local playlist traversal.
 
 Builds without an application API key disable syncing and external counts with an explanatory settings message. Build configuration is documented in [Build](build.md#lastfm-build-key).
+
+## Online features
+
+Online features are off by default. Settings groups the shared privacy switch, Last.fm, and Artist photos under one Online features page. Search finds their individual controls.
+
+Artist rows, gallery tiles, and the artist page show album art immediately. With consent on, a cached or fetched artist photo crossfades over it. Turning consent off immediately restores album art, including when a photo is cached.
+
+Photos match artist names and local releases through Deezer, then Wikimedia, with album art as fallback. The 64 MiB disk cache refreshes after 30 days. Artist photos settings can clear cached images or refresh the library while preserving match choices.
+
+The artist menu can choose another provider match or clear a photo. Clear keeps album art until another photo is chosen. The chooser shows Wikimedia attribution and licence information. Photos never change audio files or embedded artwork.
