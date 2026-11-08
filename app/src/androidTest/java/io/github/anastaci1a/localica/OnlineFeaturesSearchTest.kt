@@ -31,10 +31,15 @@ class OnlineFeaturesSearchTest {
             compose.onNodeWithTag("setting:Clear photo cache").assertIsDisplayed()
             compose.onNodeWithTag("setting-highlight:Clear photo cache", useUnmergedTree = true).assertExists()
             compose.onNodeWithText("Refresh all photos").performScrollTo().assertIsNotEnabled()
+            compose.onNodeWithContentDescription("Search settings input").assertDoesNotExist()
+            compose.onNodeWithContentDescription("Back from settings").performClick()
+            compose.onNodeWithContentDescription("Search settings input").assertDoesNotExist()
+            compose.onNodeWithContentDescription("Back from settings").performClick()
             compose.onNodeWithContentDescription("Search settings input").performTextReplacement("Last.fm username")
             compose.onNodeWithTag("search-result:Last.fm username").performClick()
             compose.onNodeWithTag("setting:Last.fm username").assertIsDisplayed()
             compose.onNodeWithTag("setting-highlight:Last.fm username", useUnmergedTree = true).assertExists()
+            compose.onNodeWithContentDescription("Search settings input").assertDoesNotExist()
         } finally { root.deleteRecursively() }
     }
 }
