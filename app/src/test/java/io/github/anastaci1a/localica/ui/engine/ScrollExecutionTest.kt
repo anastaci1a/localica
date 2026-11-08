@@ -3,6 +3,8 @@ package io.github.anastaci1a.localica.ui.engine
 import androidx.compose.runtime.MonotonicFrameClock
 import io.github.anastaci1a.localica.ui.spec.*
 import kotlinx.coroutines.*
+import kotlinx.coroutines.test.setMain
+import kotlinx.coroutines.test.resetMain
 import org.junit.Assert.*
 import org.junit.Test
 import org.junit.Before
