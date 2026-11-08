@@ -14,7 +14,7 @@ import io.github.anastaci1a.localica.navigation.InterfaceSettings
 import io.github.anastaci1a.localica.playback.PlaybackState
 import io.github.anastaci1a.localica.ui.*
 import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.android.asCoroutineDispatcher
 import kotlin.coroutines.EmptyCoroutineContext
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -24,7 +24,7 @@ import java.io.File
 /** Functional #680 probe. Native screenshots and wall time after Current do not pump the Compose clock. */
 class HeaderGlassFreshnessTest {
     private val liveEffects = InstrumentationRegistry.getArguments().getString("glassLiveEffects", "true").toBoolean()
-    @get:Rule val compose = localicaComposeRule(if (liveEffects) Dispatchers.Main.immediate else EmptyCoroutineContext)
+    @get:Rule val compose = localicaComposeRule(if (liveEffects) android.os.Handler(android.os.Looper.getMainLooper()).asCoroutineDispatcher().immediate else EmptyCoroutineContext)
 
     @Test fun artworkSwitchWithoutUnrelatedRedraw() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
