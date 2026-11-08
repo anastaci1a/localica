@@ -23,7 +23,7 @@ class QueueSelectionFieldTest {
     @get:Rule val compose=localicaComposeRule()
 
     @Test fun selectedQueueSpillsAtRestAndKeepsItsFieldUntilTheRowLeaves() {
-        val queues=(0..9).map { ListeningQueue(name="Queue $it") }
+        val queues=(0..9).map { ListeningQueue(name="Queue $it",entries=emptyList()) }
         lateinit var source: QueueSelectionDrawSource
         lateinit var scope: kotlinx.coroutines.CoroutineScope
         compose.setContent { LocalicaTheme {
