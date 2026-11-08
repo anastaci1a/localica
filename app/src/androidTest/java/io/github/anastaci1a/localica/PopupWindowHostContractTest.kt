@@ -1,6 +1,7 @@
 package io.github.anastaci1a.localica
 
 import io.github.anastaci1a.localica.ui.engine.PopupWindowMotionTest
+import io.github.anastaci1a.localica.ui.engine.PreparedOverlapTest
 import org.junit.Test
 
 /** Run the same numerical host contracts on ART as on the JVM, alongside real window witnesses. */
@@ -15,4 +16,6 @@ class PopupWindowHostContractTest {
         PopupWindowMotionTest().replacingAWindowDuringAFlightPreservesItsPresentedKinematics()
     @Test fun presentedHostCannotInitializeAgain() =
         PopupWindowMotionTest().aPresentedHostCannotReinitializeTheSourceRectangle()
+    @Test fun preparationOverlapAtBothRefreshRatesRejectsTheOldWindow() =
+        PreparedOverlapTest().preparationOverlapsVisibleOpeningAtSixtyAndOneTwentyHertz()
 }

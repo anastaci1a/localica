@@ -320,12 +320,17 @@ class GlassOriginPreparationTest {
             compose.runOnIdle { assertTrue("Return must expose a reversible rejoin stage", rejoining) }
             var before = 0f
             compose.runOnIdle { before = preparation.progress; open = true }
+            compose.waitForIdle()
+            compose.runOnIdle {
+                assertEquals("Reversal preserves the presented origin at the intent", before, preparation.progress, .0001f)
+            }
             compose.mainClock.advanceTimeByFrame()
             compose.runOnIdle {
                 assertFalse("Reopen prepares the moving origin before taking ownership", anchor.modalPresent)
                 assertFalse(anchor.hidden)
-                assertTrue("Reversal cannot replace the current shape with an endpoint",
-                    kotlin.math.abs(preparation.progress - before) < .15f)
+                // C1 preserves velocity at the intent; a finite frame may continue
+                // toward the source before turning. The shared Engine contracts
+                // check the exact phase and bound-edge kinematics on both APIs.
             }
             advanceWithNativeFrames(4000)
             compose.runOnIdle {
