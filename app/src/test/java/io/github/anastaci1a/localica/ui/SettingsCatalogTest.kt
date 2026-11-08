@@ -34,7 +34,7 @@ class SettingsCatalogTest {
     }
 
     @Test fun topLevelOrderAndPlayerParentStayConstantAndGlassHasInternalPages() {
-        assertEquals(listOf("Interface", "Playback and queues", "Library and tags", "About and licenses"),
+        assertEquals(listOf("Interface", "Online features", "Playback and queues", "Library and tags", "About and licenses"),
             SettingsCatalog.parents.filterValues { it == null }.keys.toList())
         assertEquals(listOf("Interface", "Player"), SettingsCatalog.path("Player"))
         for (page in listOf("Glass appearance", "Glass advanced", "Navigation selector")) {
