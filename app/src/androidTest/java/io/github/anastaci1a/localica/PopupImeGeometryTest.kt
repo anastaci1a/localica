@@ -47,13 +47,15 @@ class PopupImeGeometryTest {
             assertNull(controller.state.value.recovery)
             controller.close(); controller.hideJobs()
         }
+        val telemetry = mutableMapOf<String, Float>()
         compose.setContent { LocalicaTheme {
             val source = rememberFrostedBackdrop(Unit, dark = false)
             var adding by remember { mutableStateOf(false) }
             Box(Modifier.fillMaxSize()) {
                 Canvas(Modifier.matchParentSize().recordFrostedBackdrop(source)) { drawRect(Color.White) }
                 CompositionLocalProvider(LocalFrostedBackdrop provides source, LocalModalBackdrop provides source,
-                    LocalReducedMotion provides false) {
+                    LocalReducedMotion provides false,
+                    LocalGlassMorphWorkObserver provides { name, _, value -> if (value != null) telemetry[name] = value }) {
                     TagEditorHost(controller) {
                         val edit = presentedTagEdit()
                         ActionTextButton(onClick = { if (editor) edit?.invoke(listOf(track), {}) else adding = true }) { Text("Open fixture") }
@@ -75,7 +77,7 @@ class PopupImeGeometryTest {
             "field" to field.fetchSemanticsNode().layoutInfo.coordinates)
         if (editor) for (slot in listOf("sheet", "frame", "header", "body", "footer"))
             slots[slot] = compose.onNodeWithTag("tag-editor-$slot", true).fetchSemanticsNode().layoutInfo.coordinates
-        val probe = NativeProbe(view, slots)
+        val probe = NativeProbe(view, slots, telemetry)
         compose.runOnIdle {
             (window.decorView as ViewGroup).addView(probe, ViewGroup.LayoutParams(0, 0))
             view.viewTreeObserver.addOnDrawListener(probe.draw)
@@ -103,12 +105,12 @@ class PopupImeGeometryTest {
         }
     }
 
-    private inner class NativeProbe(private val host: View, private val slots: Map<String, LayoutCoordinates>) : View(host.context) {
+    private inner class NativeProbe(private val host: View, private val slots: Map<String, LayoutCoordinates>, private val telemetry: Map<String, Float>) : View(host.context) {
         var phase = "idle"
         val opened = CountDownLatch(1)
         val closed = CountDownLatch(1)
         val nativeInsets = mutableListOf<Int>()
-        val rows = mutableListOf("uptime,phase,event,ime,source,target,nativeTarget,viewHeight,slot,x,y,width,height,scaleX,scaleY")
+        val rows = mutableListOf("uptime,phase,event,ime,source,target,nativeTarget,viewHeight,slot,x,y,width,height,scaleX,scaleY,composeCurrent,composeSource,composeTarget,consumed,viewport")
         private var ime = 0
         private var source = 0
         private var target = 0
@@ -139,7 +141,8 @@ class PopupImeGeometryTest {
             slots.forEach { (name, c) -> if (c.isAttached) {
                 val a = c.localToScreen(Offset.Zero)
                 val b = c.localToScreen(Offset(c.size.width.toFloat(), c.size.height.toFloat()))
-                rows += "$prefix,$name,${a.x},${a.y},${c.size.width},${c.size.height},${(b.x-a.x)/c.size.width.coerceAtLeast(1)},${(b.y-a.y)/c.size.height.coerceAtLeast(1)}"
+                val layout = listOf("current", "source", "target", "consumed", "viewport").joinToString(",") { telemetry["layout-$it"]?.toString() ?: "NaN" }
+                rows += "$prefix,$name,${a.x},${a.y},${c.size.width},${c.size.height},${(b.x-a.x)/c.size.width.coerceAtLeast(1)},${(b.y-a.y)/c.size.height.coerceAtLeast(1)},$layout"
             } }
         }
     }
