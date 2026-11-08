@@ -62,6 +62,9 @@ class GlassOriginPreparationTest {
     private fun frame() {
         compose.mainClock.advanceTimeByFrame()
         compose.waitForIdle()
+        android.util.Log.i("OriginSharedPhase", "time=${compose.mainClock.currentTime} origin=${preparation.progress} " +
+            "popup=${anchor.contact.expansion.value} modal=${anchor.modalPresent} hidden=${anchor.hidden} " +
+            "window=${popupWindow?.let(System::identityHashCode)}")
     }
 
     private fun advanceWithNativeFrames(durationMillis: Long) {
