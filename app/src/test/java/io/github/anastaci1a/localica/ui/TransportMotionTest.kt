@@ -19,6 +19,29 @@ class TransportMotionTest {
         }
     }
 
+    @Test fun edgeTaperRampsSymmetricallyOutsideTheRestBounds() {
+        assertTrue(SkipTaperMargin > 0f && SkipTaperBand > 0f)
+        assertEquals(SkipRestInset, SkipTaperMargin + SkipTaperBand, .00001f)
+        // Rest wedges span the rest bounds; the mask is opaque there and a margin beyond.
+        for (i in 0..1000) {
+            val x = SkipRestInset - SkipTaperMargin + i / 1000f * (1f - 2f * SkipTaperBand)
+            assertEquals("Opaque at $x", 1f, skipTaperAlpha(x), .0001f)
+        }
+        assertEquals(0f, skipTaperAlpha(0f), 0f)
+        assertEquals(0f, skipTaperAlpha(1f), 0f)
+        var previous = 0f
+        var levels = 0
+        for (i in 1..1000) {
+            val x = i / 1000f * SkipTaperBand
+            val alpha = skipTaperAlpha(x)
+            assertTrue("Ramp at $x", alpha >= previous && alpha - previous < .01f)
+            if (alpha > previous) levels++
+            previous = alpha
+            assertEquals("Symmetric at $x", alpha, skipTaperAlpha(1f - x), .0001f)
+        }
+        assertTrue("Ramps rather than steps", levels > 500)
+    }
+
     @Test fun easingIsMonotonicWithSmoothEndsAndALongerSettle() {
         var previous = 0f
         for (i in 0..1000) {

@@ -433,7 +433,9 @@ System interruption or failed persistence restores order, selection and the pane
 
 The mini-player appears whenever an active queue has a current song, including paused playback. Inset its artwork/title together inside the leading curve. Use black filled Previous/Play/Pause/Next icons. Pause appears only while playing or buffering with playback requested. Paused skips retain Play.
 
-The settled Play triangle uses a single filled contour. It morphs into Pause using configurable endpoint shapes. Skips scroll overlapping rounded triangles one step, crossfading departing and arriving elements symmetrically. Repeated presses preserve presented position and velocity. The 380 ms normal cycle has a longer settle; Faster shortens it and Reduce motion snaps.
+The settled Play triangle uses a single filled contour. It morphs into Pause using configurable endpoint shapes. Skips scroll overlapping rounded triangles one step, crossfading departing and arriving elements symmetrically. Symmetric opacity tapers just outside the rest bounds fade them at the edges instead of clipping.
+
+Repeated skip presses preserve presented position and velocity. The 380 ms normal cycle has a longer settle; Faster shortens it and Reduce motion snaps.
 
 Imported play and pause icons share that morph when play is one shape and pause is two separate shapes: the play shape splits vertically at the centre of its ink and each half morphs into its bar with the same timing, easing and Reduce motion behaviour. Other pack art cross-fades, and the log names the reason.
 
