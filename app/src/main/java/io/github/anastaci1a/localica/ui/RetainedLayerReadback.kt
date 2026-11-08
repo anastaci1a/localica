@@ -26,7 +26,9 @@ internal class RetainedLayerReadback(private val onStage: ((ReadbackStage) -> Un
         layoutDirection: LayoutDirection, copy: (suspend (GraphicsLayer) -> ImageBitmap)? = null): ImageBitmap {
         check(Looper.myLooper() == Looper.getMainLooper()) { "Layer readbacks belong to the owning UI thread" }
         val readLayer: suspend (GraphicsLayer) -> ImageBitmap = copy ?: { copyLayerBitmap(it, density, layoutDirection) }
-        return completion.capture(
+        val traceCookie = System.identityHashCode(this)
+        if (android.os.Build.VERSION.SDK_INT >= 29) android.os.Trace.beginAsyncSection("L691 readback", traceCookie)
+        try { return completion.capture(
             acquire = {
                 check(!source.isReleased && source.size.width > 0 && source.size.height > 0)
                 graphicsContext.createGraphicsLayer()
@@ -40,5 +42,8 @@ internal class RetainedLayerReadback(private val onStage: ((ReadbackStage) -> Un
                 graphicsContext.releaseGraphicsLayer(parent)
                 onStage?.invoke(ReadbackStage.RELEASED)
             })
+        } finally {
+            if (android.os.Build.VERSION.SDK_INT >= 29) android.os.Trace.endAsyncSection("L691 readback", traceCookie)
+        }
     }
 }

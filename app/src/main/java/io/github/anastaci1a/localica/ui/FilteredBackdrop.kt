@@ -77,8 +77,12 @@ private fun OpticalBackdrop(modifier: Modifier, source: FrostedBackdrop, locatio
     val canUseAverage = average != null && (forceAverage || source.materialOnly || homeSource?.materialOnly == true)
     val averageRenderer = remember(canUseAverage) { if (android.os.Build.VERSION.SDK_INT >= 33 && canUseAverage) MaterialAverageRenderer() else null }
     val rawAverageRenderer = remember(canUseAverage) { if (android.os.Build.VERSION.SDK_INT >= 33 && canUseAverage) MaterialAverageRenderer() else null }
-    val areaSource = if (forceAverage) rememberMaterialAreaReduction() else null
-    val areaHome = if (forceAverage && homeSource != null) rememberMaterialAreaReduction() else null
+    val areaSource = if (forceAverage) rememberMaterialAreaReduction().also {
+        it.diagnosticLabel = "src=${System.identityHashCode(source)} consumer=${System.identityHashCode(location)} primary"
+    } else null
+    val areaHome = if (forceAverage && homeSource != null) rememberMaterialAreaReduction().also {
+        it.diagnosticLabel = "src=${System.identityHashCode(homeSource)} consumer=${System.identityHashCode(location)} home"
+    } else null
     val areaSourceRenderer = remember(forceAverage) { if (forceAverage && android.os.Build.VERSION.SDK_INT >= 33) MaterialAverageRenderer(true) else null }
     val areaHomeRenderer = remember(forceAverage) { if (forceAverage && android.os.Build.VERSION.SDK_INT >= 33) MaterialAverageRenderer(true) else null }
     val averageSource = if (average != null && (forceAverage || source.materialOnly)) rememberGraphicsLayer() else null
