@@ -254,6 +254,8 @@ Pinch and scrollbar requests carry cancellation generations. Geometry restoratio
 
 Measure glass from foreground content, then fit its padded backdrop independently. Uniformly scale fixed menu layout into the moving viewport. Search keeps its field unscaled and top-aligned, with one opening rectangle animation and captured rendered geometry for reversible closing.
 
+Dialog height sizing is fixed for a retained presentation. Content-sized dialogs retain measured-height easing and fit. The tag editor declares a viewport fraction once; its shared Sheet host measures the remaining IME viewport and fixes content height. Popup intent still owns opening and return.
+
 `GlassMorphContent` shares the glass spring for in-surface size and face transitions. Only the destination's children are placed; outgoing faces retain drawing without input. The selection panel uses the same spring for its visible occupancy and retains its complete material and shadow during dismissal.
 
 Its own window's reported IME target or safe-bottom compatibility destination drives size and placement together. Retargets retain current position and velocity. Release modal input at dismissal, retaining its drawing until the trigger acknowledges restoration. Trigger and popup share deformation, corner policy and optical parameters. Blend their source recordings before handoff, without discarding unsettled rebound.

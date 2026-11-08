@@ -107,9 +107,10 @@ internal fun TagEditorDialog(state: TagEditorState, controller: TagEditingContro
         (changed.isNotEmpty() || cover != null || removeImage)
     fun patch() = TagPatch(changed.associate { name -> EditField.valueOf(name) to JSONObject(values).getString(name) },
         if (removeImage) ArtworkChange.Remove else cover?.let { ArtworkChange.Replace(it) } ?: ArtworkChange.Keep)
-    if (!state.artworkOnly || !choosing) GlassDialog({ if (!state.busy) controller.close() }, GlassPlacement.Sheet) {
+    if (!state.artworkOnly || !choosing) GlassDialog({ if (!state.busy) controller.close() }, GlassPlacement.Sheet,
+        heightSizing = GlassDialogHeight.ViewportFraction(.94f)) {
         val chrome = DialogChrome.Regular
-        Surface(Modifier.fillMaxWidth().fillMaxHeight(.94f).testTag("tag-editor-sheet"), color = androidx.compose.ui.graphics.Color.Transparent) {
+        Surface(Modifier.fillMaxWidth().fillMaxHeight().testTag("tag-editor-sheet"), color = androidx.compose.ui.graphics.Color.Transparent) {
             Column(Modifier.fillMaxSize().imePadding().testTag("tag-editor-frame").padding(chrome.perimeterDp.dp),
                 verticalArrangement = Arrangement.spacedBy(chrome.gapDp.dp)) {
                 Row(Modifier.fillMaxWidth().testTag("tag-editor-header"), verticalAlignment = Alignment.CenterVertically) {
