@@ -2,7 +2,6 @@ package io.github.anastaci1a.localica.ui
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.ScrollState
@@ -10,6 +9,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -41,6 +41,7 @@ internal fun SettingsEntry(label: String, content: @Composable () -> Unit) {
     val requester = remember { FocusRequester() }
     val view = LocalView.current
     val reduced = LocalReducedMotion.current
+    val tint = MaterialTheme.colorScheme.primary
     val alpha = remember { Animatable(0f) }
     val highlighted = focus.highlighted == spec.id
     LaunchedEffect(highlighted) {
@@ -57,7 +58,10 @@ internal fun SettingsEntry(label: String, content: @Composable () -> Unit) {
         .onGloballyPositioned { focus.anchors[spec.id] = it.positionInWindow().y + focus.scroll.value }
         .focusRequester(requester).focusable()
         .semantics { this[SettingsHighlightAlpha] = alpha.value }
-        .background(MaterialTheme.colorScheme.primary.copy(alpha = alpha.value))) {
+        .drawWithContent {
+            drawContent()
+            if (alpha.value > 0f) drawRect(tint.copy(alpha = alpha.value))
+        }) {
         CompositionLocalProvider(LocalSettingEntry provides true) { content() }
         if (highlighted) Box(Modifier.matchParentSize().testTag("setting-highlight:${spec.id}"))
     }
