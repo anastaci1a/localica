@@ -52,11 +52,13 @@ class MaterialAreaAtlasTest {
         var epoch: Atlas? = null
         var heldEpoch: Atlas? = null
         var heldInputB: GraphicsLayer? = null
+        var heldRequestB: Request? = null
+        var heldDownstreamRecordsB = 0
         var frame: Frame? = null
     }
     private data class Frame(val a: List<GraphicsLayer>, val b: List<GraphicsLayer>,
         val atlas: Atlas, val extractedA: GraphicsLayer, val extractedB: GraphicsLayer,
-        val heldB: GraphicsLayer, val parents: Int)
+        val heldB: GraphicsLayer, val parents: Int, val bInputRecords: Int, val bDownstreamRecords: Int)
 
     @Test fun nativeAtlasMatchesEveryOriginalStageAndRetainedChildUpdate() {
         val requests = listOf(
@@ -69,7 +71,8 @@ class MaterialAreaAtlasTest {
             Request("one-texel-fallback", 1f, 1f, phase = 6),
             Request("held-member", 17f, 13f, phase = 7, retainB = true),
             Request("released-member-live-child", 17f, 13f, phase = 8, memberB = false),
-            Request("last-held-lease-released", 17f, 13f, phase = 9, memberB = false, dropHeld = true)
+            Request("other-member-resizes-held-b", 33f, 21f, phase = 9, memberB = false),
+            Request("last-held-lease-released", 33f, 21f, phase = 10, memberB = false, dropHeld = true)
         )
         val request = mutableStateOf(requests.first())
         val state = State()
@@ -134,7 +137,16 @@ class MaterialAreaAtlasTest {
                         record(extent) { crop(parentB, Offset(input.x + 7.5f, input.y + 3.25f)) }
                     } else {
                         // Consumer removal does not end the retained output's producer lease.
-                        // Keep the input and retired epoch live until dropHeld, without rerecording B.
+                        // The held face still prepares its exact original crop, just as a normal
+                        // visible consumer does. Its downstream native links are not rerecorded.
+                        if (!input.dropHeld) {
+                            val held = requireNotNull(state.heldRequestB)
+                            with(b) { recordInput(IntSize(ceil(held.width).toInt(), ceil(held.height).toInt())) {
+                                clipRect(right = held.width, bottom = held.height) {
+                                    translate(-held.x - 7.5f, -held.y - 3.25f) { drawLayer(parentB) }
+                                }
+                            } }
+                        }
                         b.stages
                     }
                     val previous = state.epoch
@@ -157,6 +169,8 @@ class MaterialAreaAtlasTest {
                         heldB.record(size = IntSize(1, 1)) { drawLayer(extractedB) }
                         state.heldEpoch = epoch
                         state.heldInputB = oldB.first()
+                        state.heldRequestB = input
+                        state.heldDownstreamRecordsB = b.downstreamRecords
                     }
                     // Every stage has a presented provider before raw readback, including
                     // the original chain, which the atlas itself does not consume.
@@ -173,7 +187,8 @@ class MaterialAreaAtlasTest {
                     translate(220f, 0f) { scale(32f, 32f, Offset.Zero) {
                         drawLayer(if (input.memberB) extractedB else heldB)
                     } }
-                    state.frame = Frame(oldA, oldB, epoch, extractedA, extractedB, heldB, state.parents)
+                    state.frame = Frame(oldA, oldB, epoch, extractedA, extractedB, heldB,
+                        state.parents, b.inputRecords, b.downstreamRecords)
                 }
             }
         }
@@ -229,13 +244,16 @@ class MaterialAreaAtlasTest {
                             if (input.retainB) heldBefore = finalB.bytes.copyOf()
                         } else if (!input.dropHeld) {
                             assertFalse("A held output owns a live producer lease", requireNotNull(state.heldInputB).isReleased)
+                            assertEquals("Held update does not rerecord any old B downstream level",
+                                state.heldDownstreamRecordsB, frame.bDownstreamRecords)
                             val held = copy(frame.heldB, "released-held-b")
                             assertRaw("${input.label} released B live child", copy(frame.b.last(), "released-old-b"), held, 0, receipts)
                             assertFalse("A held member must update, not freeze its pre-release raster",
                                 requireNotNull(heldBefore).contentEquals(held.bytes))
+                            heldBefore = held.bytes.copyOf()
                         } else assertTrue("Last held lease releases the old input", requireNotNull(state.heldInputB).isReleased)
                         assertEquals("Parent counters remain unchanged", 1, frame.parents)
-                        receipts += "${input.label} PASS stages=${frame.a.size} oldDownstreamTargets=${(frame.a.size - 1) * 2} atlasTargets=${frame.atlas.levels.size} activeB=${input.memberB}"
+                        receipts += "${input.label} PASS stages=${frame.a.size} oldDownstreamTargets=${(frame.a.size - 1) * 2} atlasTargets=${frame.atlas.levels.size} activeB=${input.memberB} BcropRecords=${frame.bInputRecords} BdownstreamRecords=${frame.bDownstreamRecords}"
                     } catch (error: Throwable) { failure = error }
                     finally {
                         File(output, "comparison.txt").writeText(receipts.joinToString("\n", postfix = "\n") +
@@ -270,6 +288,8 @@ class MaterialAreaAtlasTest {
     }
     private class Original(private val graphics: GraphicsContext) {
         private val owned = mutableListOf<GraphicsLayer>()
+        var inputRecords = 0; private set
+        var downstreamRecords = 0; private set
         var stages: List<GraphicsLayer> = emptyList(); private set
         private fun level(index: Int): GraphicsLayer {
             while (owned.size <= index) owned += graphics.createGraphicsLayer().apply { compositingStrategy = CompositingStrategy.Offscreen; clip = true }
@@ -277,13 +297,13 @@ class MaterialAreaAtlasTest {
         }
         fun DrawScope.record(extent: IntSize, draw: DrawScope.() -> Unit): List<GraphicsLayer> {
             var dimensions = materialReductionExtent(extent)
-            var previous = level(0)
-            previous.record(Density(density, fontScale), layoutDirection, dimensions, draw)
+            var previous = recordInput(extent, draw)
             var index = 1
             while (dimensions.width > 1 || dimensions.height > 1) {
                 val next = IntSize((dimensions.width / 2).coerceAtLeast(1), (dimensions.height / 2).coerceAtLeast(1))
                 val input = previous; val before = dimensions
                 previous = level(index++)
+                downstreamRecords++
                 previous.record(size = next) {
                     scale(next.width.toFloat() / before.width, next.height.toFloat() / before.height, Offset.Zero) { drawLayer(input) }
                 }
@@ -291,6 +311,10 @@ class MaterialAreaAtlasTest {
             }
             stages = owned.take(index)
             return stages
+        }
+        fun DrawScope.recordInput(extent: IntSize, draw: DrawScope.() -> Unit): GraphicsLayer = level(0).also {
+            inputRecords++
+            it.record(Density(density, fontScale), layoutDirection, materialReductionExtent(extent), draw)
         }
         fun release() { owned.filterNot { it.isReleased }.forEach(graphics::releaseGraphicsLayer); owned.clear(); stages = emptyList() }
     }
