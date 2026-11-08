@@ -116,14 +116,16 @@ class ArtistPhotoDisplayTest {
                 color.red > .98f
             }
             assertTrue("The existing resolution blend must present intermediate album/photo pixels", mixed)
-            runBlocking { consent.setAllowed(false) }
+            compose.runOnIdle { consent.allowed.value = false }
+            compose.mainClock.advanceTimeByFrame()
             compose.waitForIdle()
-            assertTrue("Revocation drops the outgoing photo without advancing the fade clock", center("artist").blue > .9f)
+            assertTrue("Revocation drops the outgoing photo on the next frame, without waiting for a fade", center("artist").blue > .9f)
             val count = requests.get()
             runBlocking { consent.setAllowed(true) }
             compose.waitUntil(10000) { compose.mainClock.advanceTimeByFrame(); center("artist").red > .98f }
             assertEquals("Cached photo reuse does not refetch", count, requests.get())
             compose.runOnIdle { current = item("other", "Other Artist", "album:other") }
+            compose.mainClock.advanceTimeByFrame()
             compose.waitForIdle()
             assertTrue("A reused row immediately shows its new artist's fallback", center("artist").green > .9f)
             compose.mainClock.autoAdvance = true
