@@ -66,6 +66,16 @@ class PopupViewChangeTransitionTest {
         }
     }
 
+    // The exact same channel tolerances as the pixel classifier, indexed without boxing.
+    private val channelLevel = IntArray(256) { value ->
+        when { value <= 12 -> 0; abs(value - 128) <= 12 -> 1; value >= 243 -> 2; else -> -1 }
+    }
+    private val paletteIndex = IntArray(27) { -1 }.apply {
+        palette.forEachIndexed { i, (r, g, b) ->
+            this[channelLevel[r] * 9 + channelLevel[g] * 3 + channelLevel[b]] = i
+        }
+    }
+
     private fun inspect(source: BrowseStyle, target: BrowseStyle, selected: Boolean = false, subview: Boolean = false) {
         val started = SystemClock.elapsedRealtime()
         var captureMs = 0L
@@ -257,15 +267,13 @@ class PopupViewChangeTransitionTest {
         val marker = (10 * density).toInt()
         val rows = Array(palette.size) { IntArray(height) }
         val columns = Array(palette.size) { IntArray(width) }
-        val index = HashMap<Int, Int>().apply { palette.forEachIndexed { i, (r, g, b) -> put(r * 65536 + g * 256 + b, i) } }
-        fun level(value: Int) = when { value <= 12 -> 0; abs(value - 128) <= 12 -> 128; value >= 243 -> 255; else -> -1 }
         for (y in 0 until height) for (x in 0 until width) {
             if (x < marker && y < marker) continue
             val pixel = pixels[y * width + x]
-            val r = level(android.graphics.Color.red(pixel)); if (r < 0) continue
-            val g = level(android.graphics.Color.green(pixel)); if (g < 0) continue
-            val b = level(android.graphics.Color.blue(pixel)); if (b < 0) continue
-            val i = index[r * 65536 + g * 256 + b] ?: continue
+            val r = channelLevel[(pixel ushr 16) and 255]; if (r < 0) continue
+            val g = channelLevel[(pixel ushr 8) and 255]; if (g < 0) continue
+            val b = channelLevel[pixel and 255]; if (b < 0) continue
+            val i = paletteIndex[r * 9 + g * 3 + b]; if (i < 0) continue
             rows[i][y]++; columns[i][x]++
         }
         val result = palette.indices.map { i ->
