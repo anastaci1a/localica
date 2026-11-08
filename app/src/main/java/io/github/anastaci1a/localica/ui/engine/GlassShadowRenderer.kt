@@ -289,7 +289,7 @@ internal class RetainedGlassShadow(private val scope: CoroutineScope) {
             if (outline == null) geometry.update(normalized.map { it.first }, (4f + spread * 28f).dp.toPx(), 2.dp.toPx())
             // Keep the cutout in the destination renderer. Baking a software clip
             // would change edge coverage when a fractional-position shadow moves.
-            clipPath(outline ?: geometry.body, ClipOp.Difference) {
+            clipPath(Path().apply { addPath(outline ?: geometry.body, Offset(1f, 0f)) }, ClipOp.Difference) {
                 translate(prepared.inset.x, prepared.inset.y) {
                     drawImage(prepared.image, dstSize = IntSize(prepared.image.width, prepared.image.height), filterQuality = FilterQuality.Low)
                 }
