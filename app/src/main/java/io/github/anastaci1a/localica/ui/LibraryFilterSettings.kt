@@ -12,7 +12,7 @@ import io.github.anastaci1a.localica.navigation.MediaKind
 internal fun LibraryFilterSettings(value: LibraryFilters, onChange: (LibraryFilters) -> Unit) {
     SettingsHeading("Visible filters")
     Text("Choose the resting order of Library filters. Selecting a filter brings it to the front; tapping it again restores the combined Library view. Global search keeps all item types available.", style = MaterialTheme.typography.bodyMedium)
-    SettingsEntry("Visible filters") { Column {
+    SettingsEntry("Visible filters") { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
     value.visible.forEachIndexed { index, filter ->
         Surface(shape = Corners.card, color = MaterialTheme.colorScheme.surfaceContainerLow) {
             Column(Modifier.fillMaxWidth().padding(12.dp)) {
