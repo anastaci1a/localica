@@ -1264,8 +1264,8 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                     label = if (playbackReturn) "Current song" else "Return to top",
                     visible = showReturn, reducedMotion = reducedMotion,
                     returning = returning,
-                    modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = obscuredInset + floatingControlClearance)
-                        .onSizeChanged { if (it.height > 0) returnControlHeight = it.height }) {
+                    onHeightMeasured = { returnControlHeight = it },
+                    modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = obscuredInset + floatingControlClearance)) {
                     if (!playbackReturn) returnToList(if (artDetail) ListReturnAction.ScrollSongs else ListReturnAction.ScrollTop)
                     else {
                         orderScroll.cancel()
