@@ -377,3 +377,4 @@ io.github.anastaci1a.localica.QueueOwnerContinuityTest
 io.github.anastaci1a.localica.PlayerLyricsOwnerContinuityTest
 
 io.github.anastaci1a.localica.SheetCollapseCompositionTest
+io.github.anastaci1a.localica.ArtworkVelocityTest
