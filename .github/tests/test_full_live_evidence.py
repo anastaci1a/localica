@@ -17,6 +17,7 @@ spec.loader.exec_module(guard_fixture)
 SHA = 'c8d5f906505c0d5dd6b67509d98760ef0a6ef96c'
 SELECTED = 'io.github.anastaci1a.localica.SelectedTest'
 FULL_ARGS = ['connectedDebugAndroidTest', '--no-daemon', '--max-workers=2']
+AOT_ARGS = FULL_ARGS + ['-I', '.github/api26-aot.gradle']
 # These tests assert ordering, receipts and exit status, not host throughput.
 # One runner may execute two phases; each supervisor permits 20s publisher drain
 # plus 5s termination grace. Leave room for interpreter startup and restoration
@@ -166,8 +167,8 @@ if a==['get-serialno']:""")
 
     def test_full_is_unfiltered_and_monitoring_complete_before_restore(self):
         self.run_runner()
-        self.assertEqual([FULL_ARGS], self.state['gradleArgs'])
-        self.assertEqual(FULL_ARGS, self.manifest()['argv'][1:])
+        self.assertEqual([AOT_ARGS], self.state['gradleArgs'])
+        self.assertEqual(AOT_ARGS, self.manifest()['argv'][1:])
         self.assertEqual('native', self.manifest()['lane'])
         self.assertEqual('completed', self.manifest()['status'])
         supervision=json.loads((self.root/'native-live-evidence/full/supervision.json').read_text())
@@ -229,7 +230,7 @@ if a==['get-serialno']:""")
 
     def test_passing_preflight_then_disjoint_remaining_reconciles_complete_union(self):
         self.run_runner(RISK_CLASSES=SELECTED)
-        self.assertEqual([FULL_ARGS+['-Pandroid.testInstrumentationRunnerArguments.class='+SELECTED],FULL_ARGS+['-Pandroid.testInstrumentationRunnerArguments.notClass='+SELECTED]],self.state['gradleArgs'])
+        self.assertEqual([AOT_ARGS+['-Pandroid.testInstrumentationRunnerArguments.class='+SELECTED],AOT_ARGS+['-Pandroid.testInstrumentationRunnerArguments.notClass='+SELECTED]],self.state['gradleArgs'])
         self.assertEqual('complete_union',json.loads((self.root/'preflight-reports/complete-union.json').read_text())['status'])
         self.assertEqual('preflight',self.manifest('preflight')['lane'])
         self.assertEqual('native',self.manifest()['lane'])

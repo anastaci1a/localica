@@ -296,6 +296,14 @@ esac
         self.assertEqual(expected,result.returncode,result.stdout+'\n'+result.stderr)
         return result
 
+    def test_post_install_aot_is_requested_only_on_api26(self):
+        self.run_case(TEST_API='26')
+        args=json.loads((self.root/'argv.json').read_text())
+        self.assertEqual('-I', args[args.index('.github/api26-aot.gradle')-1])
+        self.rerun(TEST_API='36')
+        args=json.loads((self.root/'argv.json').read_text())
+        self.assertNotIn('.github/api26-aot.gradle', args)
+
     def test_duplicate_selectors_deduplicate(self):
         self.run_case(AFFECTED_CLASSES=AFFECTED+','+AFFECTED)
         args=json.loads((self.root/'argv.json').read_text())
