@@ -131,7 +131,9 @@ A complete paginated snapshot replaces the previous snapshot only after every pa
 
 Local qualified events and Last.fm counts remain separate. Use Last.fm counts is off by default. When enabled, positive Last.fm totals feed per-song play-based sorting and all-time rankings; songs without positive remote totals use local counts. Recent time ranges continue using local events. Turning the setting off restores local counts without a sync.
 
-Matching normalizes artist and title, then uses album and recording MusicBrainz IDs when available. Ambiguous editions remain unresolved until the user chooses a local candidate. Unmatched entries remain visible for review and are reconsidered as the library changes. Resetting match choices removes only manual mappings.
+Matching normalizes artist credits, punctuation, diacritics and remaster suffixes. Recording MusicBrainz IDs take precedence; conflicting IDs never match automatically. Copies with identical normalized artist and title across album editions receive the same plays. Live, remix and part labels remain distinct.
+
+Only ambiguous local candidates need review, ordered by plays. Entries absent from the library remain in the snapshot and are reconsidered when the library changes. They never count as review items. Resetting match choices removes only manual mappings.
 
 Disconnect cancels pending sync, deletes the external snapshot and mappings, and turns external counts off. It preserves local history, playlists and audio tags. Playlist origin counts remain local because Last.fm cannot identify a local playlist traversal.
 
