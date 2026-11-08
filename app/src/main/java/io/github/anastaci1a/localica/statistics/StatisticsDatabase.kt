@@ -18,6 +18,8 @@ interface StatisticsDao {
     @Insert(onConflict = OnConflictStrategy.IGNORE) suspend fun record(play: QualifiedPlay)
     @Query("SELECT trackId AS id, COUNT(*) AS count FROM qualified_plays GROUP BY trackId")
     fun tracks(): Flow<List<PlayCount>>
+    @Query("SELECT trackId AS id, COUNT(*) AS count FROM qualified_plays WHERE playedAt >= :from AND playedAt <= :through GROUP BY trackId")
+    fun tracksBetween(from: Long, through: Long): Flow<List<PlayCount>>
     @Query("SELECT playlistId AS id, COUNT(*) AS count FROM qualified_plays WHERE playlistId IS NOT NULL GROUP BY playlistId")
     fun playlists(): Flow<List<PlayCount>>
 }
@@ -73,4 +75,11 @@ class StatisticsRepository(private val dao: StatisticsDao,
     fun record(source: ListeningSource, eventId: String) {
         pending.trySend(Write.Play(QualifiedPlay(id = eventId, trackId = source.trackId, playlistId = source.playlistId)))
     }
+}
+
+class LocalPlayCountSource(private val dao: StatisticsDao) : PlayCountSource {
+    override fun counts(window: ListeningWindow): Flow<Map<String, Long>> =
+        dao.tracksBetween(window.from, window.through).map { rows ->
+            rows.associate { it.id to it.count }
+        }
 }
