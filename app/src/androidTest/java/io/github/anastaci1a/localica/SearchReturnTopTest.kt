@@ -295,6 +295,53 @@ class SearchReturnTopTest {
         }
     }
 
+    @Test fun noticeModeToggleReleasesThePinnedNoticeAndMeasuresItAgain() {
+        fixture(false)
+        fun frame(): BrowseScrollFrame {
+            val serial = scrollProbe.serial
+            compose.runOnIdle { scrollProbe.request++ }
+            compose.waitUntil(5000) { scrollProbe.serial > serial }
+            return requireNotNull(scrollProbe.frame)
+        }
+        arrow.assertDoesNotExist()
+        val pinned = frame()
+        assertEquals("The canonical zero notice is measured while pinned", pinned.viewportWidth, pinned.noticeWidth)
+        assertEquals(1, pinned.index); assertEquals(0, pinned.offset); assertNull(pinned.headerHeight)
+        // A quick-search pill moves into the header: the notice is no longer the measured mode and
+        // its pin and receipt are released. The grid keeps item 1 / offset 0, so the grown header
+        // now sits above the viewport: that is ordinary scrolled content, and Return reveals it.
+        val prefs = BrowsePreferences(instrumentation.targetContext)
+        compose.runOnIdle { prefs.write(route, BrowseStyle(quickSearch = true), false) }
+        compose.waitUntil(5000) { compose.onAllNodesWithTag("list-search-pill").fetchSemanticsNodes().isNotEmpty() }
+        compose.waitForIdle()
+        val released = frame()
+        assertNull("No receipt while the notice is not measured", released.noticeWidth)
+        assertEquals(1, released.index); assertEquals(0, released.offset); assertNull(released.headerHeight)
+        arrow.assertIsDisplayed().performClick()
+        arrow.assertDoesNotExist()
+        val revealed = frame()
+        assertEquals(0, revealed.index)
+        assertTrue("The pill header is a real visible first item", requireNotNull(revealed.headerHeight) > 0)
+        assertNull(revealed.noticeWidth)
+        list.performScrollToIndex(50)
+        arrow.assertIsDisplayed().performClick()
+        compose.onNodeWithTag("media-return-search:0").assertIsDisplayed()
+        arrow.assertDoesNotExist()
+        // Back to the measured mode: the zero notice is pinned and measured again at the canonical top.
+        compose.runOnIdle { prefs.write(route, BrowseStyle(quickSearch = false), false) }
+        compose.waitUntil(5000) { compose.onAllNodesWithTag("list-search-pill").fetchSemanticsNodes().isEmpty() }
+        compose.waitForIdle()
+        arrow.assertDoesNotExist()
+        val restored = frame()
+        assertEquals(restored.viewportWidth, restored.noticeWidth)
+        assertEquals(1, restored.index); assertEquals(0, restored.offset); assertNull(restored.headerHeight)
+        assertEquals("Row bounds are unchanged by the pinned notice", pinned.rowHeight, restored.rowHeight)
+        list.performScrollToIndex(50)
+        arrow.assertIsDisplayed().performClick()
+        compose.onNodeWithTag("media-return-search:0").assertIsDisplayed()
+        arrow.assertDoesNotExist()
+    }
+
     @Test fun browseWithEmptyNoticeHidesAtTopAndAfterTap() {
         fixture(false)
         arrow.assertDoesNotExist()
