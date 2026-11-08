@@ -117,6 +117,29 @@ for i,selector in enumerate(os.environ['CASES'].split(',') if os.environ.get('CA
             self.assertEqual([], receipt['required_selectors'])
         self.assertEqual(3, (self.root/'lifecycle').read_text().count('setup'))
 
+    def test_green_method_repetition_is_accepted_by_the_delivery_decision(self):
+        # #657: the decision must accept the runner's own green repeat_methods evidence on both APIs.
+        import yaml, hashlib
+        workflow=yaml.safe_load((ROOT/'.github/workflows/prototype.yml').read_text())
+        script=workflow['jobs']['evidence']['steps'][1]['run']
+        decision=self.root/'decision'; evidence=decision/'evidence'
+        for api in ('26','36'):
+            self.run_case(PROTOTYPE_REPEAT='2', PROTOTYPE_METHODS=AFFECTED+'#regression', TEST_API=api, _timeout=30)
+            shutil.move(str(self.root/'prototype-evidence'), evidence/f'prototype-focused-api-{api}'/'prototype-evidence')
+            (self.root/'lifecycle').unlink()
+            compatibility=evidence/f'prototype-compatibility-api-{api}'; compatibility.mkdir()
+            (compatibility/'provenance.json').write_text(json.dumps({'source_sha':SHA}))
+        canonical=evidence/'prototype-build-internal-unvalidated'; canonical.mkdir()
+        (canonical/'app-debug.apk').write_bytes(b'canonical')
+        (canonical/'provenance.json').write_text(json.dumps({'sha':SHA,'apk_sha256':hashlib.sha256(b'canonical').hexdigest(),'run_id':'1','run_attempt':'1','signing_certificate':'verified-test-certificate'}))
+        checks={k:{'result':'success'} for k in workflow['jobs']['evidence']['needs']}
+        env=dict(os.environ,PROTOTYPE_METHODS=AFFECTED+'#regression',PROTOTYPE_REPEAT='2',CHECKS=json.dumps(checks),KNOWN_ISSUES='Not a release',AFFECTED_CLASSES=AFFECTED,COVERAGE_REASON='Queue regression',GITHUB_SHA=SHA,GITHUB_REF='refs/heads/test',GITHUB_RUN_ID='1',GITHUB_RUN_ATTEMPT='1',GITHUB_STEP_SUMMARY=str(decision/'summary'))
+        result=subprocess.run(['bash','-c',script],cwd=decision,env=env,capture_output=True,text=True)
+        manifest=json.loads((decision/'prototype-delivery/manifest.json').read_text())
+        self.assertEqual([],manifest['validation_errors'],result.stdout+'\n'+result.stderr)
+        self.assertTrue(manifest['ready_for_prototype_delivery'])
+        self.assertEqual(0,result.returncode,result.stderr)
+
     def test_method_selection_rejects_unknown_source_method(self):
         self.run_case(1, PROTOTYPE_METHODS=AFFECTED+'#unknown')
         self.assertFalse((self.root/'lifecycle').exists())
@@ -814,8 +837,6 @@ class WorkflowContract(unittest.TestCase):
         android=yaml.safe_load((ROOT/'.github/workflows/android.yml').read_text())['jobs']['static-checks']
         build=next(s for s in prototype['steps'] if s.get('name')=='Build and check')['run']
         checks=next(s for s in android['steps'] if s.get('name')=='Unit tests, lint and release build')['run']
-        # The step may run other Gradle invocations first (#600's :lint:test); compare the one that compiles the app.
-        checks=next(line for line in checks.splitlines() if 'testDebugUnitTest' in line.split())
         for task in ('testDebugUnitTest','lintDebug','assembleDebug','assembleRelease'):
             self.assertIn(task,build.split())
         heap=lambda run: re.search(r"(-Dorg\.gradle\.jvmargs='[^']*')",run).group(1)

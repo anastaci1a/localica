@@ -29,7 +29,8 @@ runs:
         path: ${{ steps.image.outputs.path }}
         key: ${{ steps.image.outputs.key }}
     - uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
-      if: inputs.mode == 'save' && steps.image.outputs.save == 'true'
+      # Saved only from the default branch; branch-scoped entries duplicate the shared copy and evict it (#681).
+      if: inputs.mode == 'save' && steps.image.outputs.save == 'true' && github.event.repository != null && github.ref_name == github.event.repository.default_branch
       with:
         path: ${{ steps.image.outputs.path }}
         key: ${{ steps.image.outputs.key }}
