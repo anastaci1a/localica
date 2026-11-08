@@ -66,15 +66,15 @@ class TransportAnimationFrameTest {
     /** #654: departing and arriving wedges fade through feathered edges instead of a hard clip. */
     @Test fun skipEdgesTaperSymmetricallyAndTheRestFrameIsTheStaticIcon() {
         var phase by mutableFloatStateOf(0f)
+        var static by mutableStateOf(false)
         compose.setContent {
             Row {
                 for (glyph in listOf(TransportGlyph.Next, TransportGlyph.Previous)) {
+                    // The same slot draws both, since API 36's GPU anti-aliasing varies by 1/255 across window positions.
                     Canvas(Modifier.size(100.dp).background(Color.White).testTag(glyph.name)) {
-                        drawTransportGlyph(glyph, 0f, phase, Color.Black, TransportShapes())
-                    }
-                    // The static icon: both rest wedges, drawn without any mask or clip.
-                    Canvas(Modifier.size(100.dp).background(Color.White).testTag("static-${glyph.name}")) {
-                        scale(if (glyph == TransportGlyph.Previous) -1f else 1f, 1f) {
+                        if (!static) drawTransportGlyph(glyph, 0f, phase, Color.Black, TransportShapes())
+                        // The static icon: both rest wedges, drawn without any mask or clip.
+                        else scale(if (glyph == TransportGlyph.Previous) -1f else 1f, 1f) {
                             for (x in listOf(.08f, .48f)) translate(left = x * size.width) {
                                 TransportShapes().skipTriangle(this, Color.Black)
                             }
@@ -83,9 +83,12 @@ class TransportAnimationFrameTest {
                 }
             }
         }
-        for (glyph in listOf(TransportGlyph.Next, TransportGlyph.Previous))
-            same(compose.onNodeWithTag("static-${glyph.name}").captureNativeFrame(),
-                compose.onNodeWithTag(glyph.name).captureNativeFrame())
+        val rest = listOf(TransportGlyph.Next, TransportGlyph.Previous).associateWith {
+            compose.onNodeWithTag(it.name).captureNativeFrame()
+        }
+        compose.runOnIdle { static = true }
+        for ((glyph, frame) in rest) same(compose.onNodeWithTag(glyph.name).captureNativeFrame(), frame)
+        compose.runOnIdle { static = false }
         // Mid-cycle both outer wedges cross the edges at alpha .5 along the centre row.
         compose.runOnIdle { phase = .5f }
         for (glyph in listOf(TransportGlyph.Next, TransportGlyph.Previous)) {
