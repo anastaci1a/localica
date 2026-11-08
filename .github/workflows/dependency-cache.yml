@@ -4,7 +4,7 @@ name: Dependency cache
 'on':
   workflow_dispatch:
   push:
-    branches: [main, fix/ci-dependency-cache-681]
+    branches: [main]
     paths:
       - 'gradle.properties'
       - 'settings.gradle.kts'
