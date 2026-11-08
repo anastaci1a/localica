@@ -18,6 +18,7 @@ internal data class PresentedCapture(
     val nativePresentedNanos: Long?, val captureNanos: Long,
     val nativeGeneration: NativeShadowGeneration? = null, val offscreen: Boolean = false,
     val sceneBounds: Rect? = null,
+    val origin: String = "synthetic-oracle-fixture",
 )
 
 internal data class ShadowComparison(

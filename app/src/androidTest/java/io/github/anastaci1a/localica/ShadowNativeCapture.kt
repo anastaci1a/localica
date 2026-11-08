@@ -94,7 +94,7 @@ internal class ShadowNativeCapture(private val rule: ComposeContentTestRule,
         var result = PresentedCapture(bitmap.asImageBitmap(), listOf("activity-window-$windowId"), hostEpoch,
             token.toLong(), -1, null, System.nanoTime(), NativeShadowGeneration(token, point),
             sceneBounds = androidx.compose.ui.geometry.Rect(screenBounds.left.toFloat(), screenBounds.top.toFloat(),
-                screenBounds.right.toFloat(), screenBounds.bottom.toFloat()))
+                screenBounds.right.toFloat(), screenBounds.bottom.toFloat()), origin = "original-system-composited-display")
         try {
             check(screenBounds.left >= 0 && screenBounds.top >= 0 && screenBounds.right <= bitmap.width && screenBounds.bottom <= bitmap.height) {
                 "Incomplete: native scene is clipped by the display"
@@ -157,7 +157,7 @@ internal fun shadowOracleEvidence(label: String, actual: PresentedCapture, refer
     }
     image("actual", actual); reference?.let { image("reference", it) }
     File(directory, "$label.json").writeText(JSONObject().put("windows", actual.windowIds)
-        .put("captureSource", if (actual.offscreen) "independent-offscreen-reference" else "original-system-composited-display")
+        .put("captureSource", actual.origin)
         .put("sceneBounds", actual.sceneBounds?.toString())
         .put("hostEpoch", actual.hostEpoch).put("drawGeneration", actual.drawGeneration)
         .put("clockSequence", actual.clockSequence).put("nativeGeneration", actual.nativeGeneration?.token)
