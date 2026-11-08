@@ -668,16 +668,16 @@ jobs:
             try:
                 provenance = json.loads((canonical / 'provenance.json').read_text())
                 digest = hashlib.sha256(apk.read_bytes()).hexdigest()
-                assert provenance['sha'] == manifest['sha'] and provenance['apk_sha256'] == digest
-                assert provenance['run_id'] == manifest['run_id']
+                assert provenance['sha'] == manifest['sha'] and provenance['apk_sha256'] == digest, 'Canonical APK SHA or digest does not match provenance'
+                assert provenance['run_id'] == manifest['run_id'], 'Canonical APK provenance belongs to a different run'
                 # A single-job retry retains the canonical APK from an earlier build attempt.
-                assert 1 <= int(provenance['run_attempt']) <= int(manifest['run_attempt'])
+                assert 1 <= int(provenance['run_attempt']) <= int(manifest['run_attempt']), 'Canonical APK build attempt is outside this run attempt'
                 manifest['build_run_attempt'] = provenance['run_attempt']
                 manifest['apk_sha256'] = digest
                 manifest['signing_certificate'] = provenance['signing_certificate']
                 canonical_valid = True
             except (AssertionError, KeyError, ValueError, OSError) as error:
-                errors.append('Canonical APK provenance validation failed: ' + type(error).__name__)
+                errors.append('Canonical APK provenance validation failed: ' + type(error).__name__ + ': ' + str(error))
         expected = set(manifest['requested_affected_classes']) | set(manifest['required_regression_classes'])
         for api in (26, 36):
             focused = root / f'prototype-focused-api-{api}' / 'prototype-evidence'
@@ -691,29 +691,29 @@ jobs:
                     if requested_methods:
                         summary = json.loads((focused / 'iterations/summary.json').read_text())
                         gate_class = summary['gate']['class']
-                        assert gate_class in manifest['requested_affected_classes'] and gate_class not in required
-                        assert summary['gate']['status'] == 'passed' and summary['gate']['exit_code'] == 0
-                        assert hashlib.sha256(receipt.read_bytes()).hexdigest() == summary['gate']['receipt_sha256']
+                        assert gate_class in manifest['requested_affected_classes'] and gate_class not in required, f'API {api}: Mandatory method gate is not an affected non-regression class'
+                        assert summary['gate']['status'] == 'passed' and summary['gate']['exit_code'] == 0, f'API {api}: Mandatory method gate did not pass'
+                        assert hashlib.sha256(receipt.read_bytes()).hexdigest() == summary['gate']['receipt_sha256'], f'API {api}: Mandatory method gate receipt digest does not match its summary'
                         api_expected = required | {gate_class}
-                    assert data['sha'] == manifest['sha'] and str(data['api']) == str(api)
-                    assert set(data['selectors']) == api_expected and set(data['counts']) == api_expected
+                    assert data['sha'] == manifest['sha'] and str(data['api']) == str(api), f'API {api}: Focused receipt SHA or API does not match the requested candidate'
+                    assert set(data['selectors']) == api_expected and set(data['counts']) == api_expected, f'API {api}: Focused selectors or count classes differ from the requested selection'
                     source_bytes = (focused / 'expected-methods.json').read_bytes()
                     source_inventory = json.loads(source_bytes)
-                    assert hashlib.sha256(source_bytes).hexdigest() == data['source_inventory_sha256']
-                    assert set(source_inventory['selectors']) == api_expected
-                    assert set(data['methods']) == set(source_inventory['runtime_methods'])
+                    assert hashlib.sha256(source_bytes).hexdigest() == data['source_inventory_sha256'], f'API {api}: Focused source inventory digest does not match its receipt'
+                    assert set(source_inventory['selectors']) == api_expected, f'API {api}: Source inventory selectors differ from the requested selection'
+                    assert set(data['methods']) == set(source_inventory['runtime_methods']), f'API {api}: Focused method identities differ from the source inventory'
                     required = set(manifest['required_regression_classes'])
-                    assert set(data['required_selectors']) == required
+                    assert set(data['required_selectors']) == required, f'API {api}: Focused mandatory regressions differ from the requested regressions'
                     derived = {c: {'passed': 0, 'failed': 0, 'errors': 0, 'skipped': 0} for c in api_expected}
                     for method, outcome in data['methods'].items():
                         cls, name = method.rsplit('#', 1)
-                        assert cls in api_expected and name and outcome in derived[cls]
+                        assert cls in api_expected and name and outcome in derived[cls], f'API {api}: Focused receipt has an unexpected class, empty method or invalid outcome'
                         derived[cls][outcome] += 1
-                        assert cls not in required or outcome == 'passed'
-                    assert derived == data['counts']
+                        assert cls not in required or outcome == 'passed', f'API {api}: A mandatory regression did not pass'
+                    assert derived == data['counts'], f'API {api}: Focused counts differ from the method outcomes'
                     # #464: a class whose every method is SdkSuppress-gated above this API legitimately runs nothing.
                     gated_classes = set(source_inventory.get('gated_absent_classes', []))
-                    assert not gated_classes & required
+                    assert not gated_classes & required, f'API {api}: A mandatory regression class is SDK-excluded'
                     # ...or one that only skips methods whose own assumeTrue(SDK_INT >= N) is above this API.
                     gates = source_inventory.get('gates', {})
                     def only_source_gated_skips(cls):
@@ -723,79 +723,79 @@ jobs:
                     assert all(value['failed'] == 0 and value['errors'] == 0 and
                                (value['passed'] > 0 or (cls in gated_classes and not any(value.values()))
                                 or only_source_gated_skips(cls))
-                               for cls, value in data['counts'].items())
+                               for cls, value in data['counts'].items()), f'API {api}: A selected class failed or lacks passing or qualified SDK coverage'
                     data['independent_test_apk_hashes'] = (focused / 'test-input-apks.sha256').read_text()
                     repetitions = manifest['requested_iterations']
-                    assert 1 <= repetitions <= 30
+                    assert 1 <= repetitions <= 30, f'API {api}: Requested repetition count is outside 1..30'
                     if repetitions > 1 and not requested_methods:
                         iteration_root = focused / 'iterations'
                         summary = json.loads((iteration_root / 'summary.json').read_text())
-                        assert summary['sha'] == manifest['sha'] and str(summary['api']) == str(api)
-                        assert summary['requested'] == repetitions
-                        assert [item['iteration'] for item in summary['iterations']] == list(range(1, repetitions + 1))
+                        assert summary['sha'] == manifest['sha'] and str(summary['api']) == str(api), f'API {api}: Repetition summary SHA or API differs from the candidate'
+                        assert summary['requested'] == repetitions, f'API {api}: Repetition summary count differs from the request'
+                        assert [item['iteration'] for item in summary['iterations']] == list(range(1, repetitions + 1)), f'API {api}: Repetition summary has missing, duplicate or unordered iterations'
                         for item in summary['iterations']:
-                            assert item['status'] == 'passed' and item['exit_code'] == 0
+                            assert item['status'] == 'passed' and item['exit_code'] == 0, f'API {api} iteration {item["iteration"]}: Iteration did not pass'
                             folder = iteration_root / f"iteration-{item['iteration']:02d}" / 'prototype-evidence'
                             raw = (folder / 'reconciled-tests.json').read_bytes()
-                            assert hashlib.sha256(raw).hexdigest() == item['receipt_sha256']
+                            assert hashlib.sha256(raw).hexdigest() == item['receipt_sha256'], f'API {api} iteration {item["iteration"]}: Iteration receipt digest differs from its summary'
                             repeated = json.loads(raw)
-                            assert repeated['sha'] == manifest['sha'] and str(repeated['api']) == str(api)
-                            assert repeated['selectors'] == data['selectors']
-                            assert repeated['methods'] == data['methods'] and repeated['counts'] == data['counts']
-                            assert repeated['source_inventory_sha256'] == data['source_inventory_sha256']
-                            assert (folder / 'test-input-apks.sha256').read_bytes() == (focused / 'test-input-apks.sha256').read_bytes()
+                            assert repeated['sha'] == manifest['sha'] and str(repeated['api']) == str(api), f'API {api} iteration {item["iteration"]}: Iteration receipt SHA or API differs from the candidate'
+                            assert repeated['selectors'] == data['selectors'], f'API {api} iteration {item["iteration"]}: Iteration selectors differ from the focused receipt'
+                            assert repeated['methods'] == data['methods'] and repeated['counts'] == data['counts'], f'API {api} iteration {item["iteration"]}: Iteration method outcomes or counts differ from the focused receipt'
+                            assert repeated['source_inventory_sha256'] == data['source_inventory_sha256'], f'API {api} iteration {item["iteration"]}: Iteration source inventory digest differs from the focused receipt'
+                            assert (folder / 'test-input-apks.sha256').read_bytes() == (focused / 'test-input-apks.sha256').read_bytes(), f'API {api} iteration {item["iteration"]}: Iteration test APK digests differ from the focused receipt'
                         data['repetition_summary'] = summary
                     if requested_methods:
                         iteration_root = focused / 'iterations'
-                        assert summary['kind'] == 'methods'
-                        assert summary['sha'] == manifest['sha'] and str(summary['api']) == str(api)
-                        assert summary['requested'] == repetitions
-                        assert summary['methods'] == sorted(requested_methods)
-                        assert len(requested_methods) == len(set(requested_methods))
+                        assert summary['kind'] == 'methods', f'API {api}: Method repetition summary has the wrong kind'
+                        assert summary['sha'] == manifest['sha'] and str(summary['api']) == str(api), f'API {api}: Method repetition summary SHA or API differs from the candidate'
+                        assert summary['requested'] == repetitions, f'API {api}: Method repetition summary count differs from the request'
+                        assert summary['methods'] == sorted(requested_methods), f'API {api}: Method repetition summary selectors differ from the requested methods'
+                        assert len(requested_methods) == len(set(requested_methods)), f'API {api}: Requested method selectors contain duplicates'
                         requested_classes = {method.rsplit('#', 1)[0] for method in requested_methods}
-                        assert requested_classes == set(manifest['requested_affected_classes'])
+                        assert requested_classes == set(manifest['requested_affected_classes']), f'API {api}: Requested method classes differ from the affected classes'
                         inventory_bytes = (iteration_root / 'requested-methods.json').read_bytes()
                         method_inventory = json.loads(inventory_bytes)
-                        assert set(method_inventory['runtime_methods']) == set(requested_methods)
-                        assert set(method_inventory['selectors']) == requested_classes
-                        assert [item['iteration'] for item in summary['iterations']] == list(range(1, repetitions + 1))
+                        assert set(method_inventory['runtime_methods']) == set(requested_methods), f'API {api}: Method inventory identities differ from the requested methods'
+                        assert set(method_inventory['selectors']) == requested_classes, f'API {api}: Method inventory classes differ from the requested classes'
+                        assert [item['iteration'] for item in summary['iterations']] == list(range(1, repetitions + 1)), f'API {api}: Method summary has missing, duplicate or unordered iterations'
                         command_ids = set()
                         for item in summary['iterations']:
-                            assert item['status'] == 'passed' and item['exit_code'] == 0
+                            assert item['status'] == 'passed' and item['exit_code'] == 0, f'API {api} iteration {item["iteration"]}: Iteration did not pass'
                             folder = iteration_root / f"iteration-{item['iteration']:02d}" / 'prototype-evidence'
                             raw = (folder / 'reconciled-tests.json').read_bytes()
-                            assert hashlib.sha256(raw).hexdigest() == item['receipt_sha256']
+                            assert hashlib.sha256(raw).hexdigest() == item['receipt_sha256'], f'API {api} iteration {item["iteration"]}: Iteration receipt digest differs from its summary'
                             repeated = json.loads(raw)
-                            assert repeated['sha'] == manifest['sha'] and str(repeated['api']) == str(api)
-                            assert set(repeated['selectors']) == requested_classes
-                            assert repeated['methods'] == {method: 'passed' for method in requested_methods}
+                            assert repeated['sha'] == manifest['sha'] and str(repeated['api']) == str(api), f'API {api} iteration {item["iteration"]}: Iteration receipt SHA or API differs from the candidate'
+                            assert set(repeated['selectors']) == requested_classes, f'API {api} iteration {item["iteration"]}: Iteration method classes differ from the requested classes'
+                            assert repeated['methods'] == {method: 'passed' for method in requested_methods}, f'API {api} iteration {item["iteration"]}: Iteration method outcomes differ from the requested passing methods'
                             method_counts = {c: {'passed': 0, 'failed': 0, 'errors': 0, 'skipped': 0} for c in requested_classes}
                             for method in requested_methods:
                                 method_counts[method.rsplit('#', 1)[0]]['passed'] += 1
-                            assert repeated['counts'] == method_counts
+                            assert repeated['counts'] == method_counts, f'API {api} iteration {item["iteration"]}: Iteration counts differ from the requested method counts'
                             source_bytes = (folder / 'expected-methods.json').read_bytes()
-                            assert hashlib.sha256(source_bytes).hexdigest() == repeated['source_inventory_sha256']
-                            assert json.loads(source_bytes) == method_inventory
-                            assert (folder / 'test-input-apks.sha256').read_bytes() == (focused / 'test-input-apks.sha256').read_bytes()
+                            assert hashlib.sha256(source_bytes).hexdigest() == repeated['source_inventory_sha256'], f'API {api} iteration {item["iteration"]}: Iteration source inventory digest differs from its receipt'
+                            assert json.loads(source_bytes) == method_inventory, f'API {api} iteration {item["iteration"]}: Iteration source inventory differs from the requested method inventory'
+                            assert (folder / 'test-input-apks.sha256').read_bytes() == (focused / 'test-input-apks.sha256').read_bytes(), f'API {api} iteration {item["iteration"]}: Iteration test APK digests differ from the focused receipt'
                             observed = json.loads((folder / 'live/observed/manifest.json').read_text())
-                            assert observed['status'] == 'completed' and observed['child_returncode'] == 0
-                            assert observed['observer_exit_status'] == 0 and observed['observed_failure_lines'] == 0
-                            assert observed['sha'] == manifest['sha'] and str(observed['api']) == str(api)
-                            assert observed['command_id'] not in command_ids
+                            assert observed['status'] == 'completed' and observed['child_returncode'] == 0, f'API {api} iteration {item["iteration"]}: Iteration observer did not complete with a successful child exit'
+                            assert observed['observer_exit_status'] == 0 and observed['observed_failure_lines'] == 0, f'API {api} iteration {item["iteration"]}: Iteration observer failed or recorded failing tests'
+                            assert observed['sha'] == manifest['sha'] and str(observed['api']) == str(api), f'API {api} iteration {item["iteration"]}: Iteration observer SHA or API differs from the candidate'
+                            assert observed['command_id'] not in command_ids, f'API {api} iteration {item["iteration"]}: Iteration observer command identity was reused'
                             command_ids.add(observed['command_id'])
                         data['method_repetition_summary'] = summary
                     manifest['focused_evidence'][str(api)] = data
                 except (AssertionError, KeyError, ValueError, TypeError, OSError) as error:
-                    errors.append(f'Focused API {api} evidence is not passing: ' + type(error).__name__)
+                    errors.append(f'Focused API {api} evidence is not passing: ' + type(error).__name__ + ': ' + str(error))
             compatibility = root / f'prototype-compatibility-api-{api}' / 'provenance.json'
             if compatibility.exists():
                 try:
                     data = json.loads(compatibility.read_text())
-                    assert data['source_sha'] == manifest['sha']
+                    assert data['source_sha'] == manifest['sha'], f'API {api}: Compatibility provenance SHA differs from the candidate'
                     manifest['compatibility_evidence'][str(api)] = {
                         'source_sha': data['source_sha'], 'private_variants_not_distributed': True}
                 except (AssertionError, KeyError, ValueError, OSError) as error:
-                    errors.append(f'Compatibility API {api} provenance validation failed: ' + type(error).__name__)
+                    errors.append(f'Compatibility API {api} provenance validation failed: ' + type(error).__name__ + ': ' + str(error))
         all_checks_passed = all(value == 'passed' for value in results.values())
         complete = canonical_valid and len(manifest['focused_evidence']) == 2 and len(manifest['compatibility_evidence']) == 2
         if all_checks_passed and not complete:
