@@ -23,6 +23,8 @@ data class Track(
     val addedAt: Long? = null,
     /** Live local statistics; never written into audio files or saved track snapshots. */
     val playCount: Long = 0,
+    val releaseType: String? = null,
+    val compilation: Boolean? = null,
 )
 
 data class TrackLocation(val folderUri: String, val uri: String, val relativePath: String)
@@ -72,6 +74,8 @@ data class AudioMetadata(
     val year: Int? = null,
     val genre: String? = null,
     val comment: String? = null,
+    val releaseType: String? = null,
+    val compilation: Boolean? = null,
 )
 
 data class ScanDocument(
