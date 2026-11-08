@@ -8,6 +8,7 @@ import androidx.compose.ui.test.*
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.anastaci1a.localica.editing.CoverImages
 import io.github.anastaci1a.localica.library.Track
+import io.github.anastaci1a.localica.ui.ArtworkRecentQueryProbe
 import io.github.anastaci1a.localica.localicaAndroidComposeRule as createAndroidComposeRule
 import java.io.ByteArrayOutputStream
 import java.io.File
@@ -27,6 +28,90 @@ class ArtworkChooserPendingReadTest {
     private val controller get() = (context.applicationContext as LocalicaApplication).tagEditing
     private fun track(name: String) = Track("file:///missing-pending-preview.mp3", name,
         fileName = "missing-pending-preview.mp3", relativePath = "missing-pending-preview.mp3", id = name)
+
+    @Test fun replacingEditorBeforeOldRecentQueryReturnsLoadsTheNewRecentImage() {
+        val preferences = context.getSharedPreferences("cover-images", 0)
+        val original = preferences.getString("recent", null)
+        val originalProbe = ArtworkRecentQueryProbe.observer
+        val first = File.createTempFile("old-query-", ".png", context.cacheDir)
+        val replacement = File.createTempFile("new-query-", ".png", context.cacheDir)
+        val oldReached = CountDownLatch(1)
+        val newReached = CountDownLatch(1)
+        val oldRelease = CountDownLatch(1)
+        val newRelease = CountDownLatch(1)
+        var primary: Throwable? = null
+        try {
+            val bitmap = Bitmap.createBitmap(80, 48, Bitmap.Config.ARGB_8888)
+            try {
+                first.outputStream().use { assertTrue(bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)) }
+            } finally { bitmap.recycle() }
+            replacement.writeBytes(first.readBytes())
+            assertTrue(preferences.edit().remove("recent").commit())
+            CoverImages(context).remember(Uri.fromFile(first).toString())
+            compose.runOnUiThread { controller.open(listOf(track("Old query session"))) }
+            val oldSession = controller.state.value.sessionId
+            ArtworkRecentQueryProbe.observer = { owner ->
+                val reached = if (owner == oldSession) oldReached else newReached
+                val release = if (owner == oldSession) oldRelease else newRelease
+                reached.countDown()
+                check(release.await(20, TimeUnit.SECONDS))
+            }
+            compose.onNode(hasSetTextAction() and hasText("Old query session"))
+                .performScrollTo().performTextReplacement("Discard this query draft")
+            compose.onNodeWithContentDescription("Choose artwork").performScrollTo().performClick()
+            compose.waitUntil(10_000) { oldReached.count == 0L }
+            compose.awaitExpectedWindowFocus(compose.onNodeWithText("Open gallery"))
+            compose.onAllNodesWithContentDescription("Choose recent image").assertCountEquals(0)
+            android.util.Log.i("Chooser660Session", "old recent query result held; replacing real editor")
+            assertTrue(preferences.edit().remove("recent").commit())
+            val uri = Uri.fromFile(replacement).toString()
+            CoverImages(context).remember(uri)
+            compose.runOnUiThread { controller.close(); controller.openArtwork(track("New query session")) }
+            assertNotEquals(oldSession, controller.state.value.sessionId)
+            compose.waitUntil(10_000) { newReached.count == 0L }
+            newRelease.countDown()
+            val tag = "recent-artwork-$uri"
+            compose.waitUntil(10_000) { compose.onAllNodesWithTag(tag).fetchSemanticsNodes().size == 1 }
+            assertEquals("Replacement query publishes while the old result remains held", 1L, oldRelease.count)
+            android.util.Log.i("Chooser660Session", "new recent visible before old query result release")
+            oldRelease.countDown()
+            compose.waitForIdle()
+            compose.onNodeWithTag(tag).assertExists()
+            compose.onNodeWithTag("recent-artwork-${Uri.fromFile(first)}").assertDoesNotExist()
+            compose.awaitExpectedWindowFocus(compose.onNodeWithTag(tag))
+            compose.onNodeWithTag(tag).performClick()
+            compose.waitUntil(10_000) { compose.onAllNodesWithTag("artwork-crop").fetchSemanticsNodes().size == 1 }
+            compose.runOnUiThread { controller.openArtwork(track("Final query session")) }
+            compose.activityRule.scenario.recreate()
+            compose.waitUntil(10_000) { compose.onAllNodesWithTag(tag).fetchSemanticsNodes().size == 1 }
+            assertEquals("Final query session", controller.state.value.tracks.single().id)
+            compose.onNodeWithTag("artwork-crop").assertDoesNotExist()
+        } catch (failure: Throwable) {
+            primary = failure
+            throw failure
+        } finally {
+            oldRelease.countDown(); newRelease.countDown()
+            ArtworkRecentQueryProbe.observer = originalProbe
+            val bodyFailure = primary
+            var cleanupFailure: Throwable? = null
+            fun cleanup(action: () -> Unit) {
+                try { action() } catch (failure: Throwable) {
+                    if (bodyFailure != null) bodyFailure.addSuppressed(failure)
+                    else if (cleanupFailure == null) cleanupFailure = failure
+                    else cleanupFailure!!.addSuppressed(failure)
+                }
+            }
+            cleanup { compose.runOnUiThread { controller.close() }; compose.waitForIdle() }
+            cleanup {
+                val edit = preferences.edit()
+                if (original == null) edit.remove("recent") else edit.putString("recent", original)
+                check(edit.commit())
+            }
+            cleanup { check(first.delete()) }
+            cleanup { check(replacement.delete()) }
+            if (bodyFailure == null) cleanupFailure?.let { throw it }
+        }
+    }
 
     @Test fun replacingEditorWithAnOldPreviewReadPendingLoadsTheNewRecentImage() {
         val preferences = context.getSharedPreferences("cover-images", 0)

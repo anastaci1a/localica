@@ -28,6 +28,11 @@ import io.github.anastaci1a.localica.editing.CoverImages
 /** Optional decoder-entry observation; callbacks run in the decoder context. */
 internal val LocalImagePreviewDecodeObserver = staticCompositionLocalOf<(() -> Unit)?> { null }
 
+/** Diagnostic handoff observation; invoked on IO after querying, before publishing recent state. */
+internal object ArtworkRecentQueryProbe {
+    @Volatile var observer: ((String) -> Unit)? = null
+}
+
 @Composable
 internal fun ImageChooser(onDismiss: () -> Unit, onChosen: (String) -> Unit) {
     ImageChooser(rememberArtworkWorkflow("standalone", startChoosing = true), onDismiss, onChosen)
@@ -38,6 +43,8 @@ internal fun ImageChooser(workflow: ArtworkWorkflow, onDismiss: () -> Unit, onCh
     val context = LocalContext.current
     val images = remember { CoverImages(context) }
     val decodeObserver = LocalImagePreviewDecodeObserver.current
+    val queryObserver = ArtworkRecentQueryProbe.observer
+    val queryTarget = workflow.target
     val traceId = remember { java.util.UUID.randomUUID().toString().take(8) }
     val traceEnabled = remember(context) {
         context.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0
@@ -61,7 +68,9 @@ internal fun ImageChooser(workflow: ArtworkWorkflow, onDismiss: () -> Unit, onCh
     val recent by produceState(emptyList<String>(), revision, hasPermission) {
         trace("recent start revision=$revision permission=$hasPermission previous=${value.size}")
         try {
-            value = images.recent(includeDevicePhotos = hasPermission)
+            value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                images.recent(includeDevicePhotos = hasPermission).also { queryObserver?.invoke(queryTarget) }
+            }
             trace("recent delivered revision=$revision count=${value.size}")
         } finally { trace("recent end revision=$revision") }
     }
