@@ -11,6 +11,8 @@ ROOT = Path(__file__).resolve().parents[2]
 GITHUB = ROOT / '.github'
 WORKFLOWS = GITHUB / 'workflows'
 AUDIT = GITHUB / 'dependency-cache-audit.sh'
+RETRY = GITHUB / 'gradle-transient-retry.sh'
+WRAPPED = 'bash .github/gradle-transient-retry.sh ./gradlew'
 SETUP_GRADLE = 'gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a'
 DEFAULT_BRANCH_ONLY = 'github.event.repository != null && github.ref_name == github.event.repository.default_branch'
 HOSTED_ONLY = "inputs.runner != 'self-hosted'"
@@ -60,6 +62,8 @@ def run(step):
 def gradle_tasks(command):
     """Task names from one `./gradlew ...` line; arguments starting with '-' are options."""
     words = command.split()
+    if words[:2] == WRAPPED.split()[:2]:
+        words = words[2:]
     assert words and words[0] == './gradlew', command
     return {word for word in words[1:] if not word.startswith('-')}
 
@@ -67,13 +71,13 @@ def gradle_tasks(command):
 def compile_steps(job):
     """Steps that compile before any emulator starts: inline gradlew lines and the compatibility build script."""
     return [step for step in job['steps']
-            if run(step).startswith('./gradlew') or COMPATIBILITY_BUILD in run(step)]
+            if run(step).startswith(('./gradlew', WRAPPED)) or COMPATIBILITY_BUILD in run(step)]
 
 
 def compile_tasks(job):
     tasks = set()
     for step in compile_steps(job):
-        if run(step).startswith('./gradlew'):
+        if run(step).startswith(('./gradlew', WRAPPED)):
             tasks |= gradle_tasks(run(step))
         else:
             script = (GITHUB / 'compatibility' / 'build.sh').read_text()
@@ -168,19 +172,29 @@ class SharedDependencyCacheContract(unittest.TestCase):
                 self.assertTrue(saves[0]['if'].endswith(' && ' + DEFAULT_BRANCH_ONLY), saves[0]['if'])
                 self.assertNotIn('default_branch', restores[0].get('if', ''), 'branches still restore the shared copy')
 
-    def test_dependency_downloads_retry_transient_failures_boundedly(self):
-        properties = {}
-        for line in (ROOT / 'gradle.properties').read_text().splitlines():
-            if line and not line.startswith('#'):
-                key, value = line.split('=', 1)
-                properties[key.strip()] = value.strip()
-        attempts = int(properties['systemProp.org.gradle.internal.network.retry.max.attempts'])
-        backoff = int(properties['systemProp.org.gradle.internal.network.retry.initial.backOff'])
-        self.assertGreaterEqual(attempts, 3, 'at least the Gradle default')
-        self.assertLessEqual(attempts, 6, 'bounded: a real outage must still fail within the job budget')
-        self.assertGreaterEqual(backoff, 1000)
-        self.assertLessEqual(backoff, 5000)
-        self.assertLessEqual(backoff * (2 ** (attempts - 1) - 1) / 1000, 60, 'total back-off stays under a minute')
+    def test_every_compile_step_runs_gradle_through_the_bounded_transient_retry(self):
+        # Gradle 8.13 retries nothing on dependency downloads; the wrapper re-runs a compile only on a transient signature.
+        for (workflow, name) in CACHE_KEYS:
+            job = load(workflow)['jobs'][name]
+            with self.subTest(workflow=workflow, job=name):
+                for step in job['steps']:
+                    command = run(step)
+                    if './gradlew' in command:
+                        self.assertTrue(command.startswith(WRAPPED), command)
+                        self.assertNotIn('connected', command, 'a device test run is never wrapped')
+        build = (GITHUB / 'compatibility' / 'build.sh').read_text()
+        self.assertIn('cd "$tree" && ' + WRAPPED + ' assembleDebug assembleDebugAndroidTest', build)
+        for script in ('run-prototype-tests.sh', 'run-device-tests.sh', 'compatibility/run.sh', 'prepare-device-tests.sh'):
+            self.assertNotIn('gradle-transient-retry', (GITHUB / script).read_text(), script + ' runs tests; never retried')
+
+    def test_transient_retry_is_bounded_and_gradle_properties_carry_no_dead_retry_settings(self):
+        text = RETRY.read_text()
+        self.assertIn('attempts=${GRADLE_TRANSIENT_ATTEMPTS:-3}', text)
+        self.assertIn('"${GRADLE_TRANSIENT_WAITS:-30 60}"', text)
+        properties = (ROOT / 'gradle.properties').read_text()
+        # org.gradle.internal.network.retry.* only affects Maven/Ivy publishing in Gradle 8.13.
+        self.assertNotIn('network.retry', properties)
+        self.assertNotIn('repository.max.retries', properties)
 
     def test_no_blanket_test_retries(self):
         for path in sorted(WORKFLOWS.glob('*.yml')):
@@ -251,6 +265,89 @@ class DependencyCacheAuditContract(unittest.TestCase):
         self.assertEqual(0, snapshot.returncode, snapshot.stderr)
         self.assertEqual('dependency-cache-restored-files=0\n', snapshot.stdout)
         self.assertEqual(2, self.audit('nonsense').returncode)
+
+
+class TransientRetryContract(unittest.TestCase):
+    GATEWAY = ["> Could not download kotlin-compiler-embeddable-2.1.21.jar (org.jetbrains.kotlin:kotlin-compiler-embeddable:2.1.21)",
+               "> Could not GET 'https://github.com/JetBrains/kotlin/releases/download/v2.1.21/kotlin-compiler-embeddable-2.1.21.jar'."
+               " Received status code 504 from server: Gateway Time-out"]
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.root = Path(self.temp.name)
+        self.fake = self.root / 'fake-gradlew'
+        self.counter = self.root / 'calls'
+        self.env = dict(os.environ, RUNNER_TEMP=str(self.root), GRADLE_TRANSIENT_WAITS='0 0')
+
+    def tearDown(self):
+        self.temp.cleanup()
+
+    def gradlew(self, outcomes):
+        """A fake build that prints the n-th outcome on its n-th call; the outcome 'ok' succeeds."""
+        lines = ['#!/usr/bin/env bash',
+                 'n=$(( $(cat "%s" 2>/dev/null || echo 0) + 1 ))' % self.counter,
+                 'echo "$n" > "%s"' % self.counter,
+                 'case "$n" in']
+        for index, outcome in enumerate(outcomes, 1):
+            if outcome == 'ok':
+                lines.append('  %d) echo "BUILD SUCCESSFUL"; exit 0;;' % index)
+            else:
+                quoted = ' '.join("'%s'" % line.replace("'", "'\\''") for line in outcome)
+                lines.append('  %d) printf "%%s\\n" %s; echo "FAILURE: Build failed with an exception."; exit 1;;' % (index, quoted))
+        lines += ['esac', 'exit 99']
+        self.fake.write_text('\n'.join(lines) + '\n')
+        self.fake.chmod(0o755)
+        if self.counter.exists():
+            self.counter.unlink()
+
+    def run_wrapper(self):
+        return subprocess.run(['bash', str(RETRY), str(self.fake)], cwd=self.root, env=self.env,
+                              capture_output=True, text=True)
+
+    def calls(self):
+        return int(self.counter.read_text())
+
+    def test_transient_download_failure_is_retried_until_success_within_the_bound(self):
+        (self.root / 'prototype-runner-environment.txt').write_text('identity\n')
+        self.gradlew([self.GATEWAY, self.GATEWAY, 'ok'])
+        result = self.run_wrapper()
+        self.assertEqual(0, result.returncode, result.stdout)
+        self.assertEqual(3, self.calls())
+        self.assertEqual(2, result.stdout.count('::warning title=Transient dependency download failure::'))
+        self.assertEqual('identity\ngradle-transient-retries=2\n',
+                         (self.root / 'prototype-runner-environment.txt').read_text())
+
+    def test_exhausted_attempts_fail_with_the_build_status(self):
+        self.gradlew([self.GATEWAY, self.GATEWAY, self.GATEWAY, 'ok'])
+        result = self.run_wrapper()
+        self.assertEqual(1, result.returncode)
+        self.assertEqual(3, self.calls())
+
+    def test_test_failures_compile_errors_and_client_errors_never_retry(self):
+        cases = {
+            'tests': self.GATEWAY + ["> There were failing tests. See the report at: file:///w/app/build/reports/tests/index.html"],
+            'compile': ["e: file:///w/app/src/main/java/Foo.kt:1:1 Unresolved reference: bar",
+                        "> Compilation error. See log for more details"],
+            'client': ["> Could not GET 'https://repo.maven.apache.org/maven2/x/y/1/y-1.jar'."
+                       " Received status code 403 from server: Forbidden"],
+            'timeout-in-test-task': ["Execution failed for task ':app:testDebugUnitTest'.",
+                                     "> Could not download x.jar", "> Read timed out"],
+        }
+        for name, lines in cases.items():
+            with self.subTest(case=name):
+                self.gradlew([lines, 'ok'])
+                result = self.run_wrapper()
+                self.assertEqual(1, result.returncode, name)
+                self.assertEqual(1, self.calls(), name)
+                self.assertNotIn('::warning', result.stdout)
+
+    def test_successful_build_runs_once_and_records_zero_retries(self):
+        (self.root / 'prototype-runner-environment.txt').write_text('')
+        self.gradlew(['ok'])
+        result = self.run_wrapper()
+        self.assertEqual(0, result.returncode)
+        self.assertEqual(1, self.calls())
+        self.assertEqual('gradle-transient-retries=0\n', (self.root / 'prototype-runner-environment.txt').read_text())
 
 
 if __name__ == '__main__':
