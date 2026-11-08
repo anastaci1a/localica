@@ -29,11 +29,12 @@ class SelectionPlaneOpticsTest {
 
     private fun compare(glow: Boolean) {
         var alpha by mutableFloatStateOf(0f)
+        var mode by mutableIntStateOf(0)
         val sources = mutableListOf<FrostedBackdrop>()
         val background = if (glow) Color(.18f,.18f,.18f) else Color(.82f,.82f,.82f)
         val style = LiftShadow(1f,1f,if(glow) Color.White else Color.Black)
         @Composable fun panel(mode: Int) {
-            val source = rememberFrostedBackdrop(mode, dark = glow)
+            val source = rememberFrostedBackdrop(Unit, dark = glow)
             BackdropLease(source)
             DisposableEffect(source) { sources+=source; onDispose { sources-=source } }
             val graphics = LocalGraphicsContext.current
@@ -43,12 +44,13 @@ class SelectionPlaneOpticsTest {
             val shadowA = remember { HoverGroupRenderer(graphics,scope) }
             val shadowB = remember { HoverGroupRenderer(graphics,scope) }
             DisposableEffect(a,b,shadowA,shadowB) { onDispose { listOf(a,b,shadowA,shadowB).forEach { it.release() } } }
-            val plane = if(mode==1) rememberShadowPlane() else null
-            val field = plane?.let { rememberNativePathField(it,mode,if(glow) ShadowRole.Glow else ShadowRole.Lift) }
+            val plane = rememberShadowPlane()
+            val sourceField = rememberNativePathField(plane,Unit,if(glow) ShadowRole.Glow else ShadowRole.Lift)
+            val field = sourceField.takeIf { mode==1 }
             val location = remember { BackdropLocation() }
             val density = LocalDensity.current
             val direction = LocalLayoutDirection.current
-            Box(Modifier.width(320.dp).height(180.dp).testTag("optics-$mode").backdropLocation(location)
+            Box(Modifier.width(320.dp).height(180.dp).testTag("optics").backdropLocation(location)
                 .drawWithContent {
                     drawContent()
                     field?.beginFrame()
@@ -78,18 +80,21 @@ class SelectionPlaneOpticsTest {
             }
         }
         compose.setContent { LocalicaTheme {
-            Column(Modifier.size(320.dp,580.dp).background(background), verticalArrangement=Arrangement.spacedBy(20.dp)) {
-                panel(0); panel(1); panel(2)
-            }
+            Box(Modifier.size(320.dp,180.dp).background(background)) { panel(mode) }
         } }
-        compose.waitUntil(5000) { sources.size==3 && sources.all { it.recorded && (Build.VERSION.SDK_INT>=33 || it.snapshot!=null) } }
+        compose.waitUntil(5000) { sources.size==1 && sources.all { it.recorded && (Build.VERSION.SDK_INT>=33 || it.snapshot!=null) } }
         val output=nativeEvidenceDirectory("selection-plane-optics",File(androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().targetContext.getExternalFilesDir(null),"selection-plane-optics")).apply { mkdirs() }
-        val report=StringBuilder("glow,alpha,inlineMax,splitMax\n")
+        val report=StringBuilder("glow,alpha,inlineMax,splitMax,oldControlMax\n")
         var worst=0
         var sensitivity=0
         for((index,value) in listOf(0f,.5f,1f,.5f,0f).withIndex()) {
             compose.runOnIdle { alpha=value }
-            val images=(0..2).map { mode -> compose.onNodeWithTag("optics-$mode").captureNativeFrame() }
+            // Compare each renderer at the SAME physical origin; displaced native saveLayers
+            // can quantize fractional fields differently even with identical drawing code.
+            val images=listOf(0,1,2,0).map { next ->
+                compose.runOnIdle { mode=next }
+                compose.onNodeWithTag("optics").captureNativeFrame()
+            }
             val pixels=images.map { it.toPixelMap() }
             fun maximum(other: Int): Int {
                 var max=0
@@ -99,8 +104,9 @@ class SelectionPlaneOpticsTest {
                 }
                 return max
             }
-            val inline=maximum(1); val split=maximum(2)
-            report.append("$glow,$value,$inline,$split\n")
+            val inline=maximum(1); val split=maximum(2); val control=maximum(3)
+            assertEquals("The unchanged renderer must reproduce the same origin and state",0,control)
+            report.append("$glow,$value,$inline,$split,$control\n")
             worst=maxOf(worst,inline); sensitivity=maxOf(sensitivity,split)
             images.forEachIndexed { mode,image -> File(output,"${if(glow) "glow" else "lift"}-$index-$mode.png").outputStream().use { image.asAndroidBitmap().compress(android.graphics.Bitmap.CompressFormat.PNG,100,it) } }
         }

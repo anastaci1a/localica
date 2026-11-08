@@ -397,3 +397,4 @@ io.github.anastaci1a.localica.ScopedSearchShadowOutsetTest
 io.github.anastaci1a.localica.SelectionPlaneOpticsTest
 io.github.anastaci1a.localica.SelectionPlaneLifecycleTest
 io.github.anastaci1a.localica.SelectionPlaneStretchTest
+io.github.anastaci1a.localica.ScopedSearchPlaneGeometryTest

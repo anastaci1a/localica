@@ -32,7 +32,9 @@ class SelectionPlaneStretchTest {
 
     private fun stretch(bottom: Boolean) {
         val target=if(bottom)4 else 0
+        lateinit var view: android.view.View
         compose.setContent { LocalicaTheme {
+            view=androidx.compose.ui.platform.LocalView.current
             Box(Modifier.size(320.dp,500.dp).background(Color.Black).testTag("stretch-scene")) {
                 SelectionViewport(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(400.dp)) { effect ->
                     val state=rememberLazyListState()
@@ -64,10 +66,28 @@ class SelectionPlaneStretchTest {
         compose.mainClock.autoAdvance=false
         val scene=compose.onNodeWithTag("stretch-scene")
         val d=compose.density.density
+        val sceneBounds=scene.fetchSemanticsNode().boundsInRoot
+        val instrumentation=androidx.test.platform.app.InstrumentationRegistry.getInstrumentation()
+        val windowOrigin=IntArray(2)
+        val screenOrigin=IntArray(2)
+        instrumentation.runOnMainSync { view.getLocationInWindow(windowOrigin); view.getLocationOnScreen(screenOrigin) }
+        val crop=android.graphics.Rect((sceneBounds.left+windowOrigin[0]).roundToInt(),(sceneBounds.top+windowOrigin[1]).roundToInt(),(sceneBounds.right+windowOrigin[0]).roundToInt(),(sceneBounds.bottom+windowOrigin[1]).roundToInt())
+        var context=view.context
+        while(context !is android.app.Activity) context=(context as android.content.ContextWrapper).baseContext
+        val window=(context as android.app.Activity).window
+        fun nativeFrame(): ImageBitmap {
+            val drawn=java.util.concurrent.CountDownLatch(1)
+            val listener=android.view.ViewTreeObserver.OnDrawListener { view.post { drawn.countDown() } }
+            instrumentation.runOnMainSync { view.viewTreeObserver.addOnDrawListener(listener); androidx.compose.runtime.snapshots.Snapshot.sendApplyNotifications(); view.invalidate() }
+            try {
+                assertTrue("Native stretched traversal completes",drawn.await(5,java.util.concurrent.TimeUnit.SECONDS))
+                return copyNativeWindowOnce(window,android.graphics.Bitmap.createBitmap(crop.width(),crop.height(),android.graphics.Bitmap.Config.ARGB_8888),"Stretched native window copy timed out",crop) { "Stretched native window copy failed: $it" }.asImageBitmap()
+            } finally { instrumentation.runOnMainSync { view.viewTreeObserver.removeOnDrawListener(listener) } }
+        }
         val directory=nativeEvidenceDirectory("selection-plane-stretch",File(androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().targetContext.getExternalFilesDir(null),"selection-plane-stretch")).apply { mkdirs() }
         val report=StringBuilder("frame,referenceTop,fieldCutoutTop,fixedTop\n")
         fun capture(frame: Int): Triple<Int,Int,Int> {
-            val image=scene.captureNativeFrame()
+            val image=nativeFrame()
             File(directory,"${if(bottom) "bottom" else "top"}-$frame.png").outputStream().use { image.asAndroidBitmap().compress(android.graphics.Bitmap.CompressFormat.PNG,100,it) }
             val p=image.toPixelMap()
             val markerX=(40*d).roundToInt()
@@ -81,19 +101,34 @@ class SelectionPlaneStretchTest {
             val fixed=(0 until p.height).first { y -> p[fixedX,y].red>.8f && p[fixedX,y].blue>.8f && p[fixedX,y].green<.2f }
             return Triple(top,requireNotNull(cutout),fixed).also { report.append("$frame,${it.first},${it.second},${it.third}\n") }
         }
+        val wasDrawing=androidx.test.platform.graphics.HardwareRendererCompat.isDrawingEnabled()
+        if(!wasDrawing) androidx.test.platform.graphics.HardwareRendererCompat.setDrawingEnabled(true)
         val rest=capture(0)
         val edgeDelta=rest.second-rest.first
         var moved=false
-        list.performTouchInput { down(Offset(width-12f,centerY)) }
+        val downTime=android.os.SystemClock.uptimeMillis()
+        val x=sceneBounds.left+screenOrigin[0]+280*d
+        val startY=sceneBounds.top+screenOrigin[1]+300*d
+        var y=startY
+        fun input(action: Int) {
+            val event=android.view.MotionEvent.obtain(downTime,android.os.SystemClock.uptimeMillis(),action,x,y,0).apply { source=android.view.InputDevice.SOURCE_TOUCHSCREEN }
+            try { assertTrue(instrumentation.uiAutomation.injectInputEvent(event,false)) } finally { event.recycle() }
+        }
+        input(android.view.MotionEvent.ACTION_DOWN)
         try {
             repeat(5) { i ->
-                list.performTouchInput { moveBy(Offset(0f,(if(bottom)-24f else 24f)*d),delayMillis=32) }
+                android.os.SystemClock.sleep(32)
+                y+=(if(bottom)-24f else 24f)*d
+                input(android.view.MotionEvent.ACTION_MOVE)
                 val frame=capture(i+1)
                 moved=moved || abs(frame.first-rest.first)>1
                 assertTrue("Field and content share the native deformation, frame=$i delta=${frame.second-frame.first} rest=$edgeDelta",abs((frame.second-frame.first)-edgeDelta)<=1)
                 assertEquals("Fixed chrome stays outside the stretch",rest.third,frame.third)
             }
-        } finally { list.performTouchInput { up() } }
+        } finally {
+            input(android.view.MotionEvent.ACTION_UP)
+            if(!wasDrawing) androidx.test.platform.graphics.HardwareRendererCompat.setDrawingEnabled(false)
+        }
         File(directory,"${if(bottom) "bottom" else "top"}.csv").writeText(report.toString())
         if(Build.VERSION.SDK_INT>=31)assertTrue("The witness must contain actual platform stretch",moved)
     }
