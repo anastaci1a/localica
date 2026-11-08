@@ -355,7 +355,7 @@ The entire divided Sort/View pill expands into one frosted panel, initially show
 
 Measure inert faces for the complete body, title and action-footer alternatives. Wrap their maximum natural width within the shared window cap. Reserve title/footer space before bounding body height. Do not use a separate screen-percentage cap. Both tabs share one draft: switching preserves edits. Save applies both and Cancel discards them.
 
-Choice controls follow the [shared staged/inline rules](#settings-controls). Defaults: catalogs/search title ascending. Album songs disc/track. Playlists/queues saved order. Recent newest. Frequent most played. Pins manual. Offer applicable title/count/duration/year/date/artist/Album Artist/composer/genre fields. Date added/modified start newest-first. Most played highest-first, all reversible. Rules for dates/counts: [Product](product.md#dates-and-listening-statistics).
+Choice controls follow the [shared staged/inline rules](#settings-controls). Defaults: catalogs/search title ascending. Album songs disc/track. Playlists/queues saved order. Recent newest. Frequent most played. Pins manual. Offer applicable title/count/duration/year/date/artist/Album Artist/composer/genre fields. Date added/modified start newest-first. Most played and Longest listened highest-first, all reversible. Rules for dates/counts: [Product](product.md#dates-and-listening-statistics).
 
 Extra information starts with None, then Follow sort order. Unfiltered Library and global search additionally offer Automatic between them and default to it when no choice is saved. Automatic inherits each row type’s catalog/filter extra information and, for Follow sort order, that type’s own sort.
 
@@ -393,7 +393,7 @@ Compact/Normal/Large/Gallery show ordinary covers without track numbers. Existin
 
 Artist and Album Artist headers follow the first displayed song, including the active album filter. No artwork scraping. Sort/View sits at top right and collection actions at bottom right. Below the header, a horizontal album multiselect filters contiguous album groups in the same order as the carousel.
 
-Artist/Album Artist contents default to Year Ascending. The retired Album/disc/track choice migrates to it while other explicit choices remain. Sort direction changes album order only. Inner disc/track stays ascending. Year/Added use earliest known values, Modified latest, Duration/Most played distinct-track sums, and Folder the earliest case-folded nonblank relative path.
+Artist/Album Artist contents default to Year Ascending. The retired Album/disc/track choice migrates to it while other explicit choices remain. Sort direction changes album order only. Inner disc/track stays ascending. Year/Added use earliest known values, Modified latest, Duration/Most played/Longest listened distinct-track sums, and Folder the earliest case-folded nonblank relative path.
 
 Missing aggregates stay last. Ties use album title then canonical album ID ascending. Short tap focuses only that album. Long press toggles only that album with one recognition haptic and no trailing tap. All mode highlights both All albums and every cover.
 

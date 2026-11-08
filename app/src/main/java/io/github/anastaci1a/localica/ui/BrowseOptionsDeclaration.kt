@@ -49,6 +49,7 @@ internal fun sortLabel(sort: TrackSort) = when (sort) {
     TrackSort.Added -> "Date added"
     TrackSort.Modified -> "Date modified"
     TrackSort.MostPlayed -> "Most played"
+    TrackSort.LongestListened -> "Longest listened"
     TrackSort.Count -> "Number of songs"
     else -> sort.name
 }
@@ -59,6 +60,7 @@ internal fun extraInfoLabel(info: ExtraInfo) = when (info) {
     ExtraInfo.Count -> "Number of songs"
     ExtraInfo.Added -> "Date added"
     ExtraInfo.MostPlayed -> "Play count"
+    ExtraInfo.LongestListened -> "Listening time"
     ExtraInfo.Modified -> "Date modified"
     ExtraInfo.AlbumArtist -> "Album Artist"
     else -> info.name

@@ -132,7 +132,7 @@ internal fun BrowseSortDialog(route: BrowseRoute, value: BrowseStyle, overridden
                         HorizontalDivider(Modifier.padding(vertical = 8.dp), color = LocalContentColor.current.copy(alpha = .12f))
                     }
                     ChoicePreference("Sort by", edited.sort, fields, ::sortLabel, popup = true) { field ->
-                        edited = edited.copy(sort = field, ascending = if (field != edited.sort && field in setOf(TrackSort.Added, TrackSort.Modified, TrackSort.MostPlayed)) false else edited.ascending)
+                        edited = edited.copy(sort = field, ascending = if (field != edited.sort && field in setOf(TrackSort.Added, TrackSort.Modified, TrackSort.MostPlayed, TrackSort.LongestListened)) false else edited.ascending)
                     }
                     if (!declaration.topology(edited).manual) SortDirection(edited.ascending) { edited = edited.copy(ascending = it) }
                     if (failure) Text("Couldn’t save this order. Try again.", color = MaterialTheme.colorScheme.error)
