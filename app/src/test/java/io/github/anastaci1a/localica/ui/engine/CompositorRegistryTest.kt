@@ -124,6 +124,23 @@ class CompositorRegistryTest {
         node.dismiss(); node.request(shown.copy(opacity=0f),profile); assertTrue(b.casters.isEmpty()); assertFalse(node.retained)
     }
 
+    @Test fun nativeLeasesKeepTheSameNodeAfterTheTriggerUnmountsUntilTheLastWindowReleases() = EngineHarness(spec=geometry).use { h ->
+        val a=plane(h); val b=plane(h); val original=shape(h); val node=SurfaceNode(h.clock,"native",original,shown,a)
+        val release=node.retainWindow(); val releaseOther=node.retainWindow()
+        node.transfer(b,profile); b.acknowledge(); h.advance(2.0)
+        node.dispose(); node.dispose()
+        assertEquals(listOf(node),b.casters); assertSame(original,node.shape)
+        assertThrows(IllegalStateException::class.java) { node.retainWindow() }
+        node.request(shown.copy(opacity=.5f),profile); h.advance(2.0)
+        assertEquals(.5f,b.contributionAt(node,h.clock.stampNow),0f)
+        release(); release(); assertEquals(listOf(node),b.casters)
+        node.request(shown.copy(opacity=.75f),profile); assertTrue(h.clock.activeCount>0)
+        releaseOther(); releaseOther(); assertTrue(a.casters.isEmpty()); assertTrue(b.casters.isEmpty())
+        assertFalse(node.owns(b)); assertEquals(0f,b.contributionAt(node,h.clock.stampNow),0f)
+        assertEquals(0f,node.shareAt(b,h.clock.stampNow),0f); assertEquals(0,h.clock.activeCount)
+        assertThrows(IllegalStateException::class.java) { node.request(shown,profile) }
+    }
+
     /** 10,000 request/transfer/receipt/dismiss/reopen/advance steps: shares stay a partition, the ledger is bounded, and every join is C0/C1. */
     @Test fun tenThousandRequestSequencesKeepPartitionBoundAndContinuity() = EngineHarness(spec=geometry).use { h ->
         val r=Random(60401); val planes=List(4) { plane(h) }; val node=SurfaceNode(h.clock,"fuzz",shape(h),shown,planes[0]); var dismissed=false; var retired=false

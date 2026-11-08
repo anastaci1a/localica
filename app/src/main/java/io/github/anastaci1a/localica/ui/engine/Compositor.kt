@@ -41,6 +41,7 @@ enum class Stratum { Page,Lifted,Floating,Drawer,Player,Modal,Overlay,Diagnostic
     private val ownOpacity=MotionFloat(clock,initial.opacity,1f,0.0..1.0,key to "opacity"); private var following by mutableStateOf<SurfacePhase?>(null)
     override val opacity: MotionValue get()=following?.opacity?:ownOpacity
     private val ownOwnership=MotionFloat(clock,0f,1f,0.0..1.0,key to "ownership");
+    private var windowLeases=0; private var sourceReleased=false
     override val shadowOwnership: MotionValue get()=following?.ownership?:ownOwnership; private val ownTransform=MotionRect(clock,initial.transform.map(bounds()),EdgeRanges(px,px,px,px),key to "transform")
     override val transform: MotionRectView get()=following?.bounds?:ownTransform
     internal val registration=home.enter(this); internal val order get()=stratum.ordinal+registration/(registration+1f)
@@ -48,8 +49,8 @@ enum class Stratum { Page,Lifted,Floating,Drawer,Player,Modal,Overlay,Diagnostic
     init { ownOwnership.onRest={ settle() }; ownOpacity.onRest={ if(dismissed && ownOpacity.target==0f) retire() } }
     private fun bounds(): Rect { var b=Rect.Zero; clock.observe { b=shape.outlineAt(clock.stamp).bounds }; return b } // Observing read: never marks the shape presented.
     private fun planes()=listOfNotNull(low,high,pending?.first).distinct()
-    internal fun owns(plane: ShadowPlane)=!retired && plane===owner; internal val waiting get()=pending!=null
-    internal fun shareAt(plane: ShadowPlane,stamp: FrameStamp): Float { if(retired) return 0f; if(following!=null && high==null) return if(plane===owner) 1f else 0f; val w=shadowOwnership.valueAt(stamp); return (if(plane===high) w else 0f)+(if(plane===low) 1-w else 0f) }
+    internal fun owns(plane: ShadowPlane)=!disposed && !retired && plane===owner; internal val waiting get()=pending!=null
+    internal fun shareAt(plane: ShadowPlane,stamp: FrameStamp): Float { if(disposed || retired) return 0f; if(following!=null && high==null) return if(plane===owner) 1f else 0f; val w=shadowOwnership.valueAt(stamp); return (if(plane===high) w else 0f)+(if(plane===low) 1-w else 0f) }
     /** Equal target, profile, spec and access are idempotent; opacity and the presented rectangle join at one stamp. */
     fun request(target: SurfaceTarget,profile: MotionProfileId) {
         clock.checkMutation(); check(!disposed); check(following==null) { "A followed surface receives intents through its expansion" }; val data=clock.spec.motion[MotionProfile.valueOf(profile.name)] as? MotionProfileSpec?:throw IllegalArgumentException("Surface intents require a scalar profile"); val rect=target.transform.map(bounds()); val identity=listOf(target,rect,profile,data,clock.context?.access); if(identity==last) return
@@ -95,7 +96,10 @@ enum class Stratum { Page,Lifted,Floating,Drawer,Player,Modal,Overlay,Diagnostic
     /** Revokes logical presence at once (D30: no profile here); the node retires when the owner's opacity trajectory settles at 0. */
     fun dismiss() { clock.checkMutation(); check(!disposed); if(dismissed) return; dismissed=true; last=null; if(following!=null) { if(following?.expansion?.expanded==false) followLifetime() } else if(ownOpacity.settled && ownOpacity.target==0f) retire() }
     private fun retire() { planes().forEach { it.leave(this) }; pending=null; retired=true }
-    internal fun dispose() { clock.checkMutation(); if(disposed) return; planes().forEach { it.leave(this) }; disposed=true; following?.expansion?.lifecycle?.remove(::followLifetime); listOf(ownOpacity,ownOwnership).forEach { it.dispose() }; ownTransform.dispose() }
+    /** A native presenter leases the actual trigger node through return; removing the source composition cannot revoke its field. */
+    internal fun retainWindow(): ()->Unit { clock.checkMutation(); check(!disposed && !sourceReleased); windowLeases++; var released=false; return { clock.checkMutation(); if(!released) { released=true; windowLeases--; if(sourceReleased && windowLeases==0) disposeNow() } } }
+    internal fun dispose() { clock.checkMutation(); if(disposed || sourceReleased) return; sourceReleased=true; if(windowLeases==0) disposeNow() }
+    private fun disposeNow() { planes().forEach { it.leave(this) }; disposed=true; following?.expansion?.lifecycle?.remove(::followLifetime); listOf(ownOpacity,ownOwnership).forEach { it.dispose() }; ownTransform.dispose() }
 }
 /** Engine host adapter: one plane per native window; U04.01b installs it on its host with the draw receipt. */ internal val LocalShadowPlane=staticCompositionLocalOf<ShadowPlane?> { null }
 @Composable internal fun rememberShadowPlane(): ShadowPlane { val clock=ownerClock(); val view=LocalView.current.rootView; return remember(clock,view) { ShadowPlane(clock,HostKey.next(view)) } }
