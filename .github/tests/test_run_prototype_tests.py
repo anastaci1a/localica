@@ -829,20 +829,23 @@ class WorkflowContract(unittest.TestCase):
         self.assertEqual(20,jobs['build']['timeout-minutes'])
         self.assertEqual(10,jobs['evidence']['timeout-minutes'])
 
-    def test_prototype_build_compiles_both_variants_with_the_android_static_checks_heap(self):
-        # #636: debug and release Kotlin compile concurrently in one Kotlin daemon,
-        # which inherits the Gradle heap; the 2g default ran out of memory.
+    def test_prototype_build_bounds_variants_without_dropping_checks(self):
+        # #679: retain #636's explicit heap, but avoid simultaneous variant compiles.
         import re, yaml
         prototype=yaml.safe_load((ROOT/'.github/workflows/prototype.yml').read_text())['jobs']['build']
-        android=yaml.safe_load((ROOT/'.github/workflows/android.yml').read_text())['jobs']['static-checks']
         build=next(s for s in prototype['steps'] if s.get('name')=='Build and check')['run']
-        checks=next(s for s in android['steps'] if s.get('name')=='Unit tests, lint and release build')['run']
-        for task in ('testDebugUnitTest','lintDebug','assembleDebug','assembleRelease'):
-            self.assertIn(task,build.split())
-        heap=lambda run: re.search(r"(-Dorg\.gradle\.jvmargs='[^']*')",run).group(1)
-        self.assertEqual("-Dorg.gradle.jvmargs='-Xmx6g -Dfile.encoding=UTF-8'",heap(build))
-        self.assertEqual(heap(checks),heap(build))
-        self.assertIn('--max-workers=4',build.split())
+        commands=[line for line in build.splitlines() if './gradlew' in line]
+        self.assertEqual(2,len(commands))
+        for task in ('testDebugUnitTest','lintDebug','assembleDebug'):
+            self.assertIn(task,commands[0].split())
+            self.assertNotIn(task,commands[1].split())
+        self.assertNotIn('assembleRelease',commands[0].split())
+        self.assertIn('assembleRelease',commands[1].split())
+        for command in commands:
+            self.assertIn("-Dorg.gradle.jvmargs='-Xmx4g -Dfile.encoding=UTF-8'",command)
+            self.assertIn('--max-workers=2',command.split())
+            self.assertIn('--build-cache',command.split())
+            self.assertIn('--profile',command.split())
         self.assertNotIn('kotlin.daemon.jvmargs',build)
 
     def test_full_shards_bound_hangs_and_summary_rejects_non_success(self):
