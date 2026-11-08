@@ -1,24 +1,32 @@
 package io.github.anastaci1a.localica
 
+import android.graphics.Bitmap
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Canvas
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Paint
+import androidx.compose.ui.graphics.FilterQuality
+import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.CanvasDrawScope
 import androidx.compose.ui.graphics.drawscope.scale
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.ComposeContentTestRule
 import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.navigation.GlassAppearance
 import io.github.anastaci1a.localica.navigation.GlassRendererMode
@@ -31,6 +39,53 @@ internal fun shadowScreenBodies(bodies: List<Pair<RoundRect, Float>>, offset: an
         r.topLeftCornerRadius, r.topRightCornerRadius, r.bottomRightCornerRadius, r.bottomLeftCornerRadius) to alpha
 }
 
+/** Immutable receipt inputs only: normalized field, destination filtering, independently proven cutout. */
+private fun shadowUnionReference(rule: ComposeContentTestRule, width: Int, height: Int,
+    state: ShadowDrawState): ImageBitmap {
+    check(state.scaleX == 1f && state.scaleY == 1f && state.bodies.isNotEmpty())
+    val origin = Offset(state.bodies.minOf { it.first.left }, state.bodies.minOf { it.first.top })
+    val local = shadowScreenBodies(state.bodies, -origin)
+    val density = rule.density.density
+    val padding = (4f + state.spread * 28f) * density + 2f * density + 2f
+    val inset = Offset(kotlin.math.floor(-padding), kotlin.math.floor(-padding))
+    val field = ImageBitmap(kotlin.math.ceil(local.maxOf { it.first.right } + padding - inset.x).toInt(),
+        kotlin.math.ceil(local.maxOf { it.first.bottom } + padding - inset.y).toInt())
+    val receiver = state.receiver?.let {
+        it.copy(bounds = it.bounds.translate(-origin), sampleBounds = it.sampleBounds.translate(-origin))
+    }
+    CanvasDrawScope().draw(rule.density, LayoutDirection.Ltr, Canvas(field), Size(field.width.toFloat(), field.height.toFloat())) {
+        translate(-inset.x, -inset.y) {
+            glassShadows(local, state.strength, state.spread, GlassShadowGeometry(), excludeInterior = false,
+                receiver = receiver, exclusion = state.exclusion?.renderer(), exclusionTranslation = -origin, rasterizing = true)
+        }
+    }
+    val extent = Size(width.toFloat(), height.toFloat())
+    val filtered = ImageBitmap(width, height)
+    CanvasDrawScope().draw(rule.density, LayoutDirection.Ltr, Canvas(filtered), extent) {
+        translate(origin.x + inset.x, origin.y + inset.y) {
+            drawImage(field, dstSize = IntSize(field.width, field.height), filterQuality = FilterQuality.Low)
+        }
+    }
+    // White is the interior left by the bare cutout control; black is full outside coverage.
+    // These pixels come from the independent mask renderer, never the production capture.
+    val cutout = destinationShadowCutoutReference(rule, width, height, state.bodies).asAndroidBitmap()
+    val pixels = IntArray(width * height)
+    cutout.getPixels(pixels, 0, width, 0, 0, width, height)
+    for (index in pixels.indices) {
+        val red = pixels[index] ushr 16 and 255
+        pixels[index] = ((255 - red) shl 24) or 0x00ffffff
+    }
+    val outside = Bitmap.createBitmap(pixels, width, height, Bitmap.Config.ARGB_8888).asImageBitmap()
+    CanvasDrawScope().draw(rule.density, LayoutDirection.Ltr, Canvas(filtered), extent) {
+        drawImage(outside, blendMode = BlendMode.DstIn)
+    }
+    return ImageBitmap(width, height).also { expected ->
+        CanvasDrawScope().draw(rule.density, LayoutDirection.Ltr, Canvas(expected), extent) {
+            drawRect(state.background); drawImage(filtered)
+        }
+    }
+}
+
 /** Current canonical bodies are supplied in screen space, after their actual plane/layout mapping. */
 internal fun verifyShadowUnion(rule: ComposeContentTestRule, actual: PresentedCapture,
     bodies: List<Pair<RoundRect, Float>>, background: Color, regions: List<Rect>, label: String,
@@ -40,17 +95,10 @@ internal fun verifyShadowUnion(rule: ComposeContentTestRule, actual: PresentedCa
         receipt.strength == strength && receipt.spread == spread) {
         "Incomplete: reference differs from the decoded native draw geometry"
     }
-    val expected = ImageBitmap(actual.image.width, actual.image.height)
+    val expected = shadowUnionReference(rule, actual.image.width, actual.image.height, receipt)
     val blank = ImageBitmap(actual.image.width, actual.image.height)
     val extent = Size(expected.width.toFloat(), expected.height.toFloat())
     CanvasDrawScope().draw(rule.density, LayoutDirection.Ltr, Canvas(blank), extent) { drawRect(background) }
-    CanvasDrawScope().draw(rule.density, LayoutDirection.Ltr, Canvas(expected), extent) {
-        drawRect(background)
-        drawContext.canvas.saveLayer(Rect(0f, 0f, size.width, size.height), Paint())
-        glassShadows(bodies, strength, spread, GlassShadowGeometry(), receiver = receipt.receiver,
-            exclusion = receipt.exclusion?.renderer(), rasterizing = true)
-        drawContext.canvas.restore()
-    }
     val reference = actual.copy(image = expected, offscreen = true)
     val probe = ShadowFieldProbe(regions, 1f / 255f)
     var result: ShadowComparison? = null

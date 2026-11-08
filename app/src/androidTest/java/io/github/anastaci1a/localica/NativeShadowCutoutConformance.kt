@@ -25,6 +25,16 @@ private fun DrawScope.bareDestinationCutout(bodies: List<Pair<RoundRect, Float>>
     translate(origin.x, origin.y) { clipPath(geometry.body, ClipOp.Difference) { drawRect(Color.Black, -origin, size) } }
 }
 
+/** API26 retains the proven software mask operations; newer APIs use the conformant native mask. */
+internal fun destinationShadowCutoutReference(rule: ComposeContentTestRule, width: Int, height: Int,
+    bodies: List<Pair<RoundRect, Float>>): ImageBitmap = if (Build.VERSION.SDK_INT >= 29) {
+    nativeShadowCutoutReference(width, height, bodies)
+} else ImageBitmap(width, height).also {
+    CanvasDrawScope().draw(rule.density, LayoutDirection.Ltr, Canvas(it), Size(it.width.toFloat(), it.height.toFloat())) {
+        drawRect(Color.White); bareDestinationCutout(bodies)
+    }
+}
+
 internal fun verifyNativeDestinationCutoutReference(rule: ComposeContentTestRule) {
     var shift by mutableStateOf(0f)
     lateinit var bodies: List<Pair<RoundRect, Float>>
@@ -46,13 +56,7 @@ internal fun verifyNativeDestinationCutoutReference(rule: ComposeContentTestRule
             val actual = native.capture { scene -> ShadowDrawState(clock.stampNow.sequence, 0,
                 shadowScreenBodies(bodies, scene.topLeft)) }
             val state = actual.nativeWindows.single().state
-            val expected = if (Build.VERSION.SDK_INT >= 29) nativeShadowCutoutReference(
-                actual.image.width, actual.image.height, state.bodies) else ImageBitmap(actual.image.width, actual.image.height).also {
-                // API26's established software construction stays byte-for-byte the same operations.
-                CanvasDrawScope().draw(rule.density, LayoutDirection.Ltr, Canvas(it), Size(it.width.toFloat(), it.height.toFloat())) {
-                    drawRect(Color.White); bareDestinationCutout(state.bodies)
-                }
-            }
+            val expected = destinationShadowCutoutReference(rule, actual.image.width, actual.image.height, state.bodies)
             val blank = ImageBitmap(expected.width, expected.height)
             CanvasDrawScope().draw(rule.density, LayoutDirection.Ltr, Canvas(blank), Size(blank.width.toFloat(), blank.height.toFloat())) { drawRect(Color.White) }
             val scene = checkNotNull(actual.sceneBounds)
