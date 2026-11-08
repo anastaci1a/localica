@@ -35,7 +35,7 @@ class LibraryQuerySortKeysTest {
     }
 
     @Test fun everySortAndDirectionMatchesFrozenComparator() {
-        assertEquals(14, TrackSort.entries.size)
+        assertEquals(15, TrackSort.entries.size)
         val rows = edgeRows()
         val inputs = listOf(rows, rows.reversed(), rows.drop(3) + rows.take(3))
         for (input in inputs) for (sort in TrackSort.entries) for (ascending in listOf(true, false)) {
@@ -198,6 +198,26 @@ class LibraryQuerySortKeysTest {
         }
     }
 
+    @Test fun longestListenedWeightsSelectedPlaysByDurationWithUnknownAsZeroAndSaturation() {
+        val rows = listOf(
+            SongRow("short-often", track("short", "Short").copy(durationMs = 60_000, playCount = 10)),
+            SongRow("long-once", track("long", "Long").copy(durationMs = 900_000, playCount = 1)),
+            SongRow("unknown-length", track("unknown", "Unknown").copy(durationMs = null, playCount = 50)),
+            SongRow("negative-length", track("negative", "Negative").copy(durationMs = -5, playCount = 50)),
+            SongRow("never", track("never", "Never").copy(durationMs = 500_000, playCount = 0)),
+            SongRow("huge", track("huge", "Huge").copy(durationMs = Long.MAX_VALUE, playCount = 3)),
+        )
+        val descending = LibraryQueries.rows(rows, LibraryQuery(sort = TrackSort.LongestListened, ascending = false)).map { it.id }
+        assertEquals(listOf("huge", "long-once", "short-often", "negative-length", "never", "unknown-length"), descending)
+        val ascending = LibraryQueries.rows(rows, LibraryQuery(sort = TrackSort.LongestListened, ascending = true)).map { it.id }
+        assertEquals(listOf("negative-length", "never", "unknown-length", "short-often", "long-once", "huge"), ascending)
+        assertEquals(Long.MAX_VALUE, rows.last().track.longestListenedMs)
+        assertEquals(0L, track("x").copy(durationMs = 10, playCount = -4).longestListenedMs)
+        assertEquals(1_500_000L, longestListenedMs(rows.take(2).map { it.track } + rows.first().track))
+        assertEquals(Long.MAX_VALUE, longestListenedMs(rows.map { it.track }))
+        assertEquals(listOf(TrackSort.MostPlayed, TrackSort.LongestListened), TrackSort.entries.filter { it.usesPlays })
+    }
+
     private fun observed(rows: List<SongRow>, onNext: () -> Unit = {}, onExhausted: () -> Unit = {}): List<SongRow> =
         object : AbstractList<SongRow>() {
             override val size: Int get() = rows.size
@@ -238,6 +258,7 @@ class LibraryQuerySortKeysTest {
                 TrackSort.Modified -> compare(a.modifiedAt, b.modifiedAt)
                 TrackSort.Added -> compare(a.addedAt, b.addedAt)
                 TrackSort.MostPlayed -> compare(a.playCount, b.playCount)
+                TrackSort.LongestListened -> compare(originalListened(a), originalListened(b))
                 TrackSort.Count -> 0
             }
             if (query.sort == TrackSort.Manual) 0 else primary.takeIf { it != 0 } ?: a.title.lowercase(Locale.ROOT).compareTo(b.title.lowercase(Locale.ROOT)).takeIf { it != 0 }
@@ -262,6 +283,13 @@ class LibraryQuerySortKeysTest {
         }.sortedWith { a, b -> order.compare(a.track, b.track) }.toList()
         checkActive()
         return if (query.sort == TrackSort.Manual && !query.ascending) result.reversed() else result
+    }
+
+    // Frozen #666 measure: plays weighted by length, unknown or negative length as zero, saturating.
+    private fun originalListened(track: Track): Long {
+        val plays = track.playCount.coerceAtLeast(0)
+        val length = track.durationMs?.coerceAtLeast(0) ?: 0
+        return if (length > 0 && plays > Long.MAX_VALUE / length) Long.MAX_VALUE else plays * length
     }
 
     private fun <T : Comparable<T>> originalCompareKnown(a: T?, b: T?, ascending: Boolean): Int = when {

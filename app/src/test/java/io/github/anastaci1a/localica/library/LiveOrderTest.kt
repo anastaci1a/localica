@@ -49,6 +49,20 @@ class LiveOrderTest {
         assertEquals(listOf(20L, 1L), rows.map { it.track.playCount })
     }
 
+    @Test fun longestListenedResolvesLiveCountsAndLengthsLikeMostPlayed() {
+        val rows = listOf(row("first", track("a", playCount = 200).copy(durationMs = 1_000)),
+            row("second", track("b", playCount = 1).copy(durationMs = 100_000)))
+        val order = SavedOrder(rows.map { it.id }, TrackSort.LongestListened, false)
+        assertTrue(LiveOrder(LibrarySnapshot(tracks = rows.map { it.track })).isApplied(order, rows, TrackSort.LongestListened, false))
+        val live = LiveOrder(LibrarySnapshot(tracks = listOf(
+            rows[0].track.copy(playCount = 2), rows[1].track.copy(playCount = 12),
+        )))
+        assertEquals(listOf("second", "first"), live.target(order, rows, TrackSort.LongestListened, false))
+        assertFalse(live.isApplied(order, rows, TrackSort.LongestListened, false))
+        assertTrue(live.isApplied(order, rows.reversed(), TrackSort.LongestListened, false))
+        assertEquals(listOf(200L, 1L), rows.map { it.track.playCount })
+    }
+
     @Test fun unchangedPhysicalOrderStillAllowsSavingAnotherSortChoiceOrDirection() {
         val rows = listOf(
             row("first", track("a", "Same").copy(artist = "Artist")),

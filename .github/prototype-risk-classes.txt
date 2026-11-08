@@ -151,6 +151,7 @@ io.github.anastaci1a.localica.ListeningIdentityStorageTest
 io.github.anastaci1a.localica.LiveOrderDialogTest
 io.github.anastaci1a.localica.LiveOrderPersistenceTest
 io.github.anastaci1a.localica.LoadingMaterialOpacityTest
+io.github.anastaci1a.localica.LongestListenedSortTest
 io.github.anastaci1a.localica.LyricsArtworkEntryTest
 io.github.anastaci1a.localica.LyricsHeaderActionsTest
 io.github.anastaci1a.localica.LyricsInteractionTest
