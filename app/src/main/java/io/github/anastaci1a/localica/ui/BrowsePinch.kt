@@ -222,6 +222,8 @@ internal class BrowsePinchMotion {
         capture?.cancel(); tracking?.cancel(); settling?.cancel()
         clearTransaction()
     }
+    /** The departure and arrival fades of [transaction]'s current destination layout (#559). */
+    var fadePlan: PinchFadePlan? = null
     var pixelDensity = 1f
     fun resolveHover(key: Any?, current: HoverGeometry, geometryProgress: Float = progress.value): HoverGeometry {
         if (key == null || visualSource == null) return current
