@@ -34,6 +34,7 @@ import io.github.anastaci1a.localica.ui.*
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
+import org.junit.After
 import java.io.File
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
@@ -45,13 +46,27 @@ class PopupImeGeometryTest {
     private val instrumentation get() = InstrumentationRegistry.getInstrumentation()
     private val controller get() = (instrumentation.targetContext.applicationContext as LocalicaApplication).tagEditing
     private val track = Track("ime-geometry:missing", "IME geometry song", fileName = "ime.mp3", relativePath = "ime.mp3")
+    private var savedActions: PlayerActionSettings? = null
+
+    @After fun restorePlayerActions() {
+        savedActions?.let { PlayerActionPreferences(instrumentation.targetContext).write(it) }
+        savedActions = null
+        compose.runOnIdle { if (!controller.state.value.busy) controller.close() }
+    }
 
     @Test fun tagEditorNativeImeTrace() = trace(true)
     @Test fun addToPlaylistsNativeImeTrace() = trace(false)
     @Test fun playerAddToPlaylistsNativeImeTrace() = trace(false, playerScene = true)
+    @Test fun playerTagEditorNativeImeTrace() = trace(true, playerScene = true)
     @Test fun mixedContentDuringNativeImeTrace() = trace(false, mixedContent = true)
 
     private fun trace(editor: Boolean, playerScene: Boolean = false, mixedContent: Boolean = false) {
+        val opticalOnly = InstrumentationRegistry.getArguments().getString("popupImeOpticalOnly") == "true"
+        if (playerScene && editor) {
+            val actions = PlayerActionPreferences(instrumentation.targetContext)
+            savedActions = actions.read()
+            actions.write(savedActions!!.place(PlayerAction.Edit, ActionSlot(0, 0)))
+        }
         compose.runOnIdle {
             assertFalse(controller.state.value.busy)
             assertNull(controller.state.value.recovery)
@@ -73,12 +88,12 @@ class PopupImeGeometryTest {
                 Canvas(Modifier.matchParentSize().recordFrostedBackdrop(source)) { drawRect(Color.White) }
                 CompositionLocalProvider(LocalFrostedBackdrop provides source, LocalModalBackdrop provides source,
                     LocalReducedMotion provides false,
-                    LocalGlassMorphWorkObserver provides { name, window, value ->
+                    LocalGlassMorphWorkObserver provides (if (opticalOnly) null else { name, window, value ->
                         if (value != null) telemetry[name] = value
                         if (name.startsWith("trace@") || name.startsWith("layout-")) events +=
                             "${SystemClock.uptimeMillis()},${System.nanoTime()},$name,${System.identityHashCode(window)},$value,${Thread.currentThread().id}"
                         if (name.startsWith("trace@content-after-draw")) activeProbe?.contentDraw()
-                    }) {
+                    })) {
                     TagEditorHost(controller) {
                         val edit = presentedTagEdit()
                         if (playerScene) {
@@ -98,16 +113,30 @@ class PopupImeGeometryTest {
         } }
         if (playerScene) {
             compose.onNodeWithText(sceneTrack.title).performClick()
-            compose.onNodeWithContentDescription("Add to playlist").performClick()
+            compose.onNodeWithContentDescription(if (editor) "Edit tags" else "Add to playlist").performClick()
         } else compose.onNodeWithText("Open fixture").performClick()
         val surface = compose.onNodeWithTag("glass-morph-surface", true)
         compose.awaitExpectedWindowFocus(surface)
-        val field = compose.onNode(hasSetTextAction() and hasText(if (editor) "Name" else "New playlist name"))
+        val field = if (editor) compose.onNode(hasSetTextAction() and hasText("Name")) else compose.onNode(hasSetTextAction())
         if (mixedContent) field.performSemanticsAction(SemanticsActions.SetText) { it(AnnotatedString("Existing")) }
         if (editor) field.performScrollTo()
         val sheetNode = (if (editor) compose.onNodeWithTag("tag-editor-sheet", true) else surface).fetchSemanticsNode()
         val view = (sheetNode.root as ViewRootForTest).view
         val window = (view.parent as DialogWindowProvider).window
+        if (opticalOnly) {
+            // Fixed holds keep both complete native transitions in the external recording.
+            // No callback, draw observer, invalidation, frame driver or slowed animation is installed.
+            field.performClick()
+            SystemClock.sleep(1000)
+            field.assertIsFocused().performTextInput("IME optical draft")
+            SystemClock.sleep(1000)
+            UiDevice.getInstance(instrumentation).pressBack()
+            SystemClock.sleep(1000)
+            field.assertTextContains("IME optical draft").assertIsDisplayed()
+            compose.runOnIdle { controller.close() }
+            sceneAudio?.delete()
+            return
+        }
         val slots = linkedMapOf("surface" to surface.fetchSemanticsNode().layoutInfo.coordinates,
             "field" to field.fetchSemanticsNode().layoutInfo.coordinates)
         if (editor) for (slot in listOf("sheet", "frame", "header", "body", "footer"))
@@ -150,7 +179,7 @@ class PopupImeGeometryTest {
                 ViewCompat.setWindowInsetsAnimationCallback(probe, null)
                 (probe.parent as? ViewGroup)?.removeView(probe)
                 val dir = File(instrumentation.targetContext.getExternalFilesDir(null), "popup-ime-geometry").apply { mkdirs() }
-                val name = if (editor) "tag-editor" else if (playerScene) "player-add-to-playlists" else if (mixedContent) "mixed-content" else "add-to-playlists"
+                val name = if (editor && playerScene) "player-tag-editor" else if (editor) "tag-editor" else if (playerScene) "player-add-to-playlists" else if (mixedContent) "mixed-content" else "add-to-playlists"
                 File(dir, "$name.csv").writeText(probe.rows.joinToString("\n"))
                 File(dir, "$name-events.csv").writeText(
                     "uptime,nanos,event,windowId,value,threadId\n" + events.joinToString("\n"))
@@ -165,7 +194,7 @@ class PopupImeGeometryTest {
         val opened = CountDownLatch(1)
         val closed = CountDownLatch(1)
         val nativeInsets = mutableListOf<Int>()
-        val rows = mutableListOf("uptime,phase,event,ime,source,target,nativeTarget,viewHeight,slot,x,y,width,height,scaleX,scaleY,composeCurrent,composeSource,composeTarget,consumed,viewport,viewId,windowId,probeId,callbackId,traversalId,animationIds")
+        val rows = mutableListOf("uptime,nanos,phase,event,ime,source,target,nativeTarget,viewHeight,slot,x,y,width,height,scaleX,scaleY,composeCurrent,composeSource,composeTarget,consumed,viewport,viewId,windowId,probeId,callbackId,traversalId,animationIds,measureSequence,normalizedTarget,heightCorrection,expandedHeight")
         private var ime = 0
         private var source = 0
         private var target = 0
@@ -200,12 +229,13 @@ class PopupImeGeometryTest {
         }
         private fun record(event: String) {
             val nativeTarget = ViewCompat.getRootWindowInsets(this)?.getInsets(WindowInsetsCompat.Type.ime())?.bottom ?: -1
-            val prefix = "${SystemClock.uptimeMillis()},$phase,$event,$ime,$source,$target,$nativeTarget,${host.height}"
+            val prefix = "${SystemClock.uptimeMillis()},${System.nanoTime()},$phase,$event,$ime,$source,$target,$nativeTarget,${host.height}"
             slots.forEach { (name, c) -> if (c.isAttached) {
                 val a = c.localToScreen(Offset.Zero)
                 val b = c.localToScreen(Offset(c.size.width.toFloat(), c.size.height.toFloat()))
                 val layout = listOf("current", "source", "target", "consumed", "viewport").joinToString(",") { telemetry["layout-$it"]?.toString() ?: "NaN" }
-                rows += "$prefix,$name,${a.x},${a.y},${c.size.width},${c.size.height},${(b.x-a.x)/c.size.width.coerceAtLeast(1)},${(b.y-a.y)/c.size.height.coerceAtLeast(1)},$layout,${System.identityHashCode(host)},${System.identityHashCode((host.parent as DialogWindowProvider).window)},${System.identityHashCode(this)},$callbackId,$traversalId,$animationIds"
+                val heightMotion = listOf("sequence", "normalized", "correction", "expanded").joinToString(",") { telemetry["layout-$it"]?.toString() ?: "NaN" }
+                rows += "$prefix,$name,${a.x},${a.y},${c.size.width},${c.size.height},${(b.x-a.x)/c.size.width.coerceAtLeast(1)},${(b.y-a.y)/c.size.height.coerceAtLeast(1)},$layout,${System.identityHashCode(host)},${System.identityHashCode((host.parent as DialogWindowProvider).window)},${System.identityHashCode(this)},$callbackId,$traversalId,$animationIds,$heightMotion"
             } }
         }
     }
