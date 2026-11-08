@@ -79,13 +79,14 @@ class LastFmTest {
         assertEquals(7L, result.counts["song"])
     }
 
-    @Test fun persistedSnapshotRoundTripsSeparatelyFromLocalCountsAndRejectsWrongAccount() {
+    @Test fun persistedSnapshotRoundTripsAndRetainsAnArchiveAfterDisconnect() {
         val remote = LastFmTrack("Dream Theater", "Learning to Live", 42, mbid = mbid)
         val saved = SavedLastFm("user", true, LastFmSnapshot("user", 20, listOf(remote)), mapOf(remote.key to "song"), 10)
         assertEquals(saved, LastFmSnapshotCodec.decode(LastFmSnapshotCodec.encode(saved)))
         assertEquals(SavedLastFm(), LastFmSnapshotCodec.decode(LastFmSnapshotCodec.encode(SavedLastFm())))
-        try { LastFmSnapshotCodec.decode(LastFmSnapshotCodec.encode(saved.copy(username = "other"))); fail("Cross-account snapshot") }
-        catch (_: IllegalArgumentException) { }
+        val disconnected = saved.copy(username = "", active = false)
+        assertEquals(disconnected, LastFmSnapshotCodec.decode(LastFmSnapshotCodec.encode(disconnected)))
+        assertEquals("user", disconnected.snapshot!!.username)
     }
 
     @Test fun syncSettingAndDisconnectChangeEffectiveCountsWithoutWritingLocalState() = runBlocking {
@@ -109,8 +110,10 @@ class LastFmTest {
             assertEquals(1, requests)
             controller.useCounts(false); withTimeout(2000) { controller.state.first { !it.saved.useCounts } }
             assertEquals(local, controller.applyTo(flowOf(local)).first())
-            controller.disconnect(); withTimeout(2000) { controller.state.first { it.saved.snapshot == null } }
-            assertNull(store.saved.snapshot); assertTrue(store.saved.mappings.isEmpty()); assertFalse(store.saved.useCounts)
+            controller.disconnect(); withTimeout(2000) { controller.state.first { it.saved.username.isEmpty() && !it.saved.active } }
+            assertNotNull(store.saved.snapshot)
+            controller.deleteSyncedData(); withTimeout(2000) { controller.state.first { it.saved.snapshot == null } }
+            assertTrue(store.saved.mappings.isEmpty()); assertFalse(store.saved.useCounts)
         } finally { scope.cancel() }
     }
 
@@ -124,7 +127,7 @@ class LastFmTest {
         try {
             controller.ready(); controller.sync("user")
             withTimeout(2000) { controller.state.first { it.problem == "Offline" } }
-            assertEquals(old.snapshot, store.saved.snapshot); assertTrue(store.saved.useCounts)
+            assertEquals(old.snapshot!!.tracks, store.saved.snapshot!!.tracks); assertEquals(old.snapshot!!.syncedAt, store.saved.snapshot!!.syncedAt); assertTrue(store.saved.useCounts)
         } finally { scope.cancel() }
     }
 

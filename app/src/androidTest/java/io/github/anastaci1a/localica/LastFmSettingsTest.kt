@@ -59,6 +59,15 @@ class LastFmSettingsTest {
             assertEquals(7L, local.tracks["song"])
             assertEquals(42L, runBlocking { store.read().snapshot!!.tracks.first().plays })
             compose.onNodeWithTag("lastfm-disconnect").performScrollTo().performClick()
+            compose.waitUntil(5000) { controller.state.value.saved.username.isEmpty() && !controller.state.value.saved.active }
+            assertNotNull(runBlocking { store.read().snapshot })
+            assertTrue(runBlocking { store.read().mappings.isNotEmpty() })
+            compose.onNodeWithTag("lastfm-delete").performScrollTo().performClick()
+            compose.onNodeWithText("Cancel").performClick()
+            compose.waitUntil(5000) { compose.onAllNodesWithText("Delete synced data").fetchSemanticsNodes().isEmpty() }
+            assertNotNull(runBlocking { store.read().snapshot })
+            compose.onNodeWithTag("lastfm-delete").performScrollTo().performClick()
+            compose.onNodeWithText("Delete synced data").performClick()
             compose.waitUntil(5000) { controller.state.value.saved.snapshot == null }
             val persisted = runBlocking { FileLastFmStore(file).read() }
             assertNull(persisted.snapshot); assertTrue(persisted.mappings.isEmpty()); assertFalse(persisted.useCounts)

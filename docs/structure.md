@@ -78,7 +78,9 @@ The artist data source prepares release groups, five ranked songs, current-year 
 
 Ranking windows use the caller's time zone and inclusive event boundaries. The caller refreshes the window when time advances. Duration-weighted totals use selected counts and distinct songs, treating missing duration as zero and saturating overflow. Albums and artists expose the same measure for future sort integration.
 
-A provider interface keeps local and external counts separate. Typed settings select external counts with per-song local fallback; unsupported windows also fall back locally. Artist hub UI and additional sort controls remain separate work. The Last.fm provider stores its snapshot, account selection and mappings in a dedicated atomic file.
+A provider interface keeps local and external counts separate. Typed settings select external counts with per-song local fallback; unsupported windows also fall back locally. Artist hub UI and additional sort controls remain separate work. 
+
+The Last.fm provider stores its snapshot, account selection, mappings and local counter baseline in a dedicated atomic file. Completed refreshes replace the remote base and local baseline together. Temporary qualified-play additions are derived from local counters; the provider never writes to local history.
 
 Appears On and Similar Artists currently return empty through an enrichment interface.
 
