@@ -46,7 +46,13 @@ class PopupWindowMotionTest {
         assertTrue(motion.preparationCurve.at(q) > .5f)
         assertEquals(0f, motion.popupCurve.at(q), 0f)
         assertEquals(home, requireNotNull(motion.bounds).valueAt(h.clock.stampNow))
-        e.acknowledgeNativeGate(e.nativeGeneration); h.advance(2.0)
+        e.acknowledgeNativeGate(e.nativeGeneration)
+        repeat(4) { frame ->
+            h.advance(1.0 / 60)
+            val phase = e.phase.valueAt(h.clock.stampNow)
+            println("Prepared gate frame=$frame phase=$phase origin=${motion.preparationCurve.at(phase)} popup=${motion.popupCurve.at(phase)}")
+        }
+        h.advance(2.0)
         assertEquals(envelope, requireNotNull(motion.bounds).valueAt(h.clock.stampNow))
         motion.show(false); h.advance(2.0)
         assertTrue(e.awaitingNativeGate)
