@@ -106,8 +106,10 @@ private class NoticeMeasureNode(var state: BrowseNoticeMeasurement, var content:
         measuring = true
         try {
             val child = measurable.measure(constraints)
-            measured = true
-            state.measured(this@NoticeMeasureNode, content, child.width, child.height, this, layoutDirection)
+            if (!isLookingAhead) {
+                measured = true
+                state.measured(this@NoticeMeasureNode, content, child.width, child.height, this, layoutDirection)
+            }
             return layout(child.width, child.height) { child.placeRelative(0, 0) }
         } finally { measuring = false }
     }
