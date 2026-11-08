@@ -92,16 +92,91 @@ class NavbarHapticsTest {
         compose.runOnIdle { assertEquals(List(2) { ControlHaptic.Weak }, pulses) }
     }
 
-    @Test fun pendingSecondPointerCancelsNavbarWithoutCommitOrPulse() {
+    @Test fun secondPointerAfterFingerDownCommitAddsNoCommitOrPulse() {
         fixture()
         compose.onNodeWithTag("tab-option-1").performTouchInput {
             down(0, center); down(1, center + Offset(2f, 0f)); up(0); up(1)
         }
-        compose.runOnIdle { assertEquals(0, selections); assertEquals(0f, page); assertTrue(pulses.isEmpty()) }
-        compose.onNodeWithTag("tab-option-1").performTouchInput { click() }
+        // #664: the first finger already committed; the handed-off contact drops once.
         compose.runOnIdle {
-            assertEquals(1, selections); assertEquals(1f, page); assertEquals(listOf(ControlHaptic.Weak), pulses)
+            assertEquals(1, selections); assertEquals(1f, page)
+            assertEquals(listOf(ControlHaptic.Weak, ControlHaptic.Strong), pulses)
         }
+    }
+
+    @Test fun fittingOtherOptionCommitsAndPulsesWithinOneFrameOfFingerDown() {
+        reduced = true
+        fixture()
+        val option = compose.onNodeWithTag("tab-option-2")
+        compose.mainClock.autoAdvance = false
+        try {
+            option.performTouchInput { down(center) }
+            compose.mainClock.advanceTimeByFrame()
+            assertEquals("Finger-down switches without a hold or drag threshold", 2f, page)
+            assertEquals(1, selections)
+            assertEquals(listOf(ControlHaptic.Weak), pulses)
+            option.performTouchInput { up() }
+            compose.mainClock.advanceTimeByFrame()
+            assertEquals("A tap release adds no second commit or pulse", 1, selections)
+            assertEquals(listOf(ControlHaptic.Weak), pulses)
+        } finally { compose.mainClock.autoAdvance = true }
+    }
+
+    @Test fun fittingSlideAcrossTabsPulsesOncePerTabChange() {
+        reduced = true
+        fixture()
+        val target = compose.onNodeWithTag("haptic-tabs")
+        compose.mainClock.autoAdvance = false
+        try {
+            target.performTouchInput { down(Offset(width / 2f, centerY)) }
+            compose.mainClock.advanceTimeByFrame()
+            assertEquals(1f, page); assertEquals(listOf(ControlHaptic.Weak), pulses)
+            target.performTouchInput { moveBy(Offset(width * .2f, 0f)) }
+            compose.mainClock.advanceTimeByFrame()
+            target.performTouchInput { moveBy(Offset(width * .2f, 0f)) }
+            compose.mainClock.advanceTimeByFrame()
+            assertEquals(2f, page); assertEquals(2, selections)
+            assertEquals(List(2) { ControlHaptic.Weak }, pulses)
+            target.performTouchInput { up() }
+            compose.mainClock.advanceTimeByFrame()
+            assertEquals(List(2) { ControlHaptic.Weak } + ControlHaptic.Strong, pulses)
+        } finally { compose.mainClock.autoAdvance = true }
+    }
+
+    @Test fun fittingLensPressPulsesWithinOneFrame() = lensPress(overflow = false)
+    @Test fun overflowLensPressPulsesWithinOneFrame() = lensPress(overflow = true)
+
+    private fun lensPress(overflow: Boolean) {
+        reduced = true
+        fixture(overflow = overflow)
+        val lens = compose.onNodeWithTag("tab-option-0")
+        compose.mainClock.autoAdvance = false
+        try {
+            lens.performTouchInput { down(center) }
+            compose.mainClock.advanceTimeByFrame()
+            assertEquals("The lens press pulses without a hold threshold", listOf(ControlHaptic.Weak), pulses)
+            assertEquals(0, selections)
+            lens.performTouchInput { up() }
+            compose.mainClock.advanceTimeByFrame()
+            assertEquals(listOf(ControlHaptic.Weak), pulses)
+            assertEquals(0f, page)
+        } finally { compose.mainClock.autoAdvance = true }
+    }
+
+    @Test fun overflowOtherOriginStaysSilentOnFingerDownThenTapReleaseSelects() {
+        reduced = true
+        fixture(overflow = true)
+        val option = compose.onNodeWithTag("tab-option-2")
+        compose.mainClock.autoAdvance = false
+        try {
+            option.performTouchInput { down(center) }
+            compose.mainClock.advanceTimeBy(160)
+            // #366: an overflow origin away from the lens may still become a scroll.
+            assertEquals(0f, page); assertTrue(pulses.isEmpty())
+            option.performTouchInput { up() }
+            compose.mainClock.advanceTimeByFrame()
+            assertEquals(2f, page); assertEquals(listOf(ControlHaptic.Weak), pulses)
+        } finally { compose.mainClock.autoAdvance = true }
     }
 
     @Test fun pointerHandoffRetainsOneOwnedGestureAndOneRelease() {
@@ -125,7 +200,7 @@ class NavbarHapticsTest {
         compose.runOnIdle { assertEquals(emptyList<ControlHaptic>(), pulses) }
     }
 
-    @Test fun fittingOtherOptionPreviewRemainsSilentUntilHeldPickup() {
+    @Test fun fittingHeldOptionKeepsItsPickupThenDragsAndDropsOnce() {
         reduced = true
         fixture()
         val option = compose.onNodeWithTag("tab-option-2")
@@ -133,7 +208,7 @@ class NavbarHapticsTest {
         try {
             option.performTouchInput { down(center) }
             compose.mainClock.advanceTimeBy(160)
-            compose.runOnIdle { assertEquals(0f, page); assertTrue(pulses.isEmpty()) }
+            compose.runOnIdle { assertEquals(2f, page); assertEquals(listOf(ControlHaptic.Weak), pulses) }
             val lens = compose.onNodeWithTag("tab-selector").getUnclippedBoundsInRoot()
             val target = option.getUnclippedBoundsInRoot()
             assertEquals((target.left.value + target.right.value) / 2f,
@@ -148,7 +223,7 @@ class NavbarHapticsTest {
         } finally { compose.mainClock.autoAdvance = true }
     }
 
-    @Test fun canceledPreviewReturnsToAnUnfinishedTapDestination() {
+    @Test fun canceledPressRestoresAnUnfinishedTapDestination() {
         reduced = true
         fixture(deferSelection = true)
         compose.onNodeWithTag("tab-option-1").performTouchInput { click() }
@@ -158,7 +233,8 @@ class NavbarHapticsTest {
         val target = compose.onNodeWithTag("tab-option-1").getUnclippedBoundsInRoot()
         assertEquals((target.left.value + target.right.value) / 2f,
             (lens.left.value + lens.right.value) / 2f, 1f)
-        compose.runOnIdle { assertEquals(1, selections); assertEquals(listOf(ControlHaptic.Weak), pulses) }
+        // Tap, finger-down commit, then the cancel restores Library without a pulse.
+        compose.runOnIdle { assertEquals(3, selections); assertEquals(List(2) { ControlHaptic.Weak }, pulses) }
     }
 
     @Test fun overflowVisibleLensOriginDragsWithoutScrollingStrip() = overflowLensDrag(false)
@@ -174,12 +250,13 @@ class NavbarHapticsTest {
             down(center)
             moveBy(Offset(width * 1.2f * if (rtl) -1f else 1f, 0f), delayMillis = 100)
         }
-        compose.runOnIdle { assertEquals(1f, page); assertEquals(listOf(ControlHaptic.Weak), pulses) }
+        // The lens press pulses on finger-down, then the crossing pulses once.
+        compose.runOnIdle { assertEquals(1f, page); assertEquals(List(2) { ControlHaptic.Weak }, pulses) }
         assertEquals("The owned contact cannot scroll the strip", before, scrollValue(), 0f)
         compose.onNodeWithTag("tab-option-0").performTouchInput { up() }
         compose.runOnIdle {
             assertEquals(1f, page)
-            assertEquals(listOf(ControlHaptic.Weak, ControlHaptic.Strong), pulses)
+            assertEquals(List(2) { ControlHaptic.Weak } + ControlHaptic.Strong, pulses)
         }
         // Existing selected-page centering may move the strip after genuine release.
         compose.onNodeWithTag("tab-option-1").assertIsDisplayed()
@@ -200,11 +277,14 @@ class NavbarHapticsTest {
         compose.runOnIdle { assertEquals(2f, page); assertEquals(listOf(ControlHaptic.Weak), pulses) }
     }
 
-    @Test fun verticalMotionDoesNotClaimNavbarHaptics() {
+    @Test fun verticalMotionAddsNoOptionTicksAfterTheLensPress() {
         fixture()
         compose.onNodeWithTag("haptic-tabs").performTouchInput {
             down(Offset(width / 6f, centerY)); moveBy(Offset(0f, height * 2f)); up()
         }
-        compose.runOnIdle { assertEquals(emptyList<ControlHaptic>(), pulses) }
+        compose.runOnIdle {
+            assertEquals(0f, page)
+            assertEquals(listOf(ControlHaptic.Weak, ControlHaptic.Strong), pulses)
+        }
     }
 }
