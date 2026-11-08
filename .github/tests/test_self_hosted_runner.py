@@ -86,7 +86,8 @@ class SelfHostedPrototypeContract(unittest.TestCase):
                 self.assertLess(steps.index(local), names.index('Prepare the verified emulator SDK'))
                 for step in steps:
                     label = step.get('name', step.get('uses', ''))
-                    needs_host = ('sudo ' in step.get('run', '') or label.startswith('gradle/actions/setup-gradle@')
+                    # The JIT image carries JDK 17, Node 24 and the Gradle wrapper: toolchain actions would fetch GitHub releases (#681).
+                    needs_host = ('sudo ' in step.get('run', '') or label.startswith(('gradle/actions/setup-gradle@', 'actions/setup-java@', 'actions/setup-node@'))
                                   or label in ('Prepare the verified emulator SDK', 'Restore the exact SDK system image revision',
                                                'Cache the installed SDK system image') or step is hosted)
                     if needs_host:
