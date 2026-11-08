@@ -20,10 +20,18 @@ import io.github.anastaci1a.localica.navigation.*
 import io.github.anastaci1a.localica.playlist.PlaylistState
 import io.github.anastaci1a.localica.ui.*
 import kotlinx.coroutines.Dispatchers
+import org.junit.AfterClass
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
 import java.io.File
+import java.util.Arrays
+import java.util.concurrent.ArrayBlockingQueue
+import java.util.concurrent.Callable
+import java.util.concurrent.Future
+import java.util.concurrent.ThreadPoolExecutor
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicLong
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
@@ -54,33 +62,75 @@ class PopupViewChangeTransitionTest {
     @Test fun subviewListToGallery4WithSelection() = inspect(list, gallery(4), subview = true, selected = true)
 
     private class Cover(val area: Int, val box: Rect?)
-    private class Frame(val label: String, val time: Long, val covers: List<Cover>)
+    private class Capture(val pixels: IntArray, val width: Int, val height: Int)
 
-    // Saturated palette in {0, 128, 255}; greys and the frame marker's green family excluded.
-    private val palette = buildList {
-        val levels = listOf(0, 128, 255)
-        for (r in levels) for (g in levels) for (b in levels) {
-            if (r == g && g == b) continue
-            if (g == 255 && b == 0) continue
-            add(Triple(r, g, b))
-        }
+    /** A presented frame; its covers are measured on a worker while the next frame is captured. */
+    private class Frame(val label: String, val time: Long, private val analysis: Future<List<Cover>>) {
+        val covers: List<Cover> get() = analysis.get()
     }
 
-    // The exact same channel tolerances as the pixel classifier, indexed without boxing.
-    private val channelLevel = IntArray(256) { value ->
-        when { value <= 12 -> 0; abs(value - 128) <= 12 -> 1; value >= 243 -> 2; else -> -1 }
-    }
-    private val paletteIndex = IntArray(27) { -1 }.apply {
-        palette.forEachIndexed { i, (r, g, b) ->
-            this[channelLevel[r] * 9 + channelLevel[g] * 3 + channelLevel[b]] = i
+    companion object {
+        // Saturated palette in {0, 128, 255}; greys and the frame marker's green family excluded.
+        private val palette = buildList {
+            val levels = listOf(0, 128, 255)
+            for (r in levels) for (g in levels) for (b in levels) {
+                if (r == g && g == b) continue
+                if (g == 255 && b == 0) continue
+                add(Triple(r, g, b))
+            }
         }
+
+        // The exact same channel tolerances as the pixel classifier, indexed without boxing.
+        private val channelLevel = IntArray(256) { value ->
+            when { value <= 12 -> 0; abs(value - 128) <= 12 -> 1; value >= 243 -> 2; else -> -1 }
+        }
+        private val paletteIndex = IntArray(27) { -1 }.apply {
+            palette.forEachIndexed { i, (r, g, b) ->
+                this[channelLevel[r] * 9 + channelLevel[g] * 3 + channelLevel[b]] = i
+            }
+        }
+
+        /**
+         * The palette index (or -1) of every RGB value, alpha ignored: one array load per pixel. The
+         * API 26 test process runs this loop interpreted, where the per-channel lookups cost about
+         * 400 ms per frame. Built from runs of equal channel level with native fills, so the table
+         * is the exact composition of [channelLevel] and [paletteIndex]; released after the class.
+         */
+        private var classifier: ByteArray? = null
+        private fun classifier(): ByteArray = classifier ?: ByteArray(1 shl 24).also { table ->
+            Arrays.fill(table, (-1).toByte())
+            val runs = buildList {
+                var start = 0
+                for (value in 1..256) if (value == 256 || channelLevel[value] != channelLevel[start]) {
+                    add(Triple(start, value, channelLevel[start])); start = value
+                }
+            }
+            for ((rStart, rEnd, rLevel) in runs) { if (rLevel < 0) continue
+                for ((gStart, gEnd, gLevel) in runs) { if (gLevel < 0) continue
+                    for ((bStart, bEnd, bLevel) in runs) { if (bLevel < 0) continue
+                        val index = paletteIndex[rLevel * 9 + gLevel * 3 + bLevel]
+                        if (index < 0) continue
+                        for (r in rStart until rEnd) for (g in gStart until gEnd) {
+                            val base = (r shl 16) or (g shl 8)
+                            Arrays.fill(table, base + bStart, base + bEnd, index.toByte())
+                        }
+                    }
+                }
+            }
+            classifier = table
+        }
+
+        @JvmStatic @AfterClass fun releaseClassifier() { classifier = null }
     }
 
     private fun inspect(source: BrowseStyle, target: BrowseStyle, selected: Boolean = false, subview: Boolean = false) {
         val started = SystemClock.elapsedRealtime()
         var captureMs = 0L
-        var analysisMs = 0L
+        val analysisMs = AtomicLong()
         var samples = 0
+        val classifier = classifier()
+        // Two measuring workers overlap the next frame's draw and copy; the bounded queue caps live pixel buffers.
+        val workers = ThreadPoolExecutor(2, 2, 0L, TimeUnit.MILLISECONDS, ArrayBlockingQueue(2), ThreadPoolExecutor.CallerRunsPolicy())
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val density = context.resources.displayMetrics.density
         val tracks = List(140) { index -> Track("popup-view:$index", "Item ${index.toString().padStart(3, '0')}",
@@ -160,9 +210,20 @@ class PopupViewChangeTransitionTest {
                 compose.runOnUiThread { stage = (stage + 1) % 24 }
                 compose.mainClock.advanceTimeByFrame()
                 val png = if (label in setOf("popup-open", "source", "apply-0", "apply-6", "apply-30", "settled-3")) File(output, "$label.png") else null
-                val frame = Frame(label, compose.mainClock.currentTime, measure(scene, stage, density, png) { capture, analysis ->
-                    captureMs += capture; analysisMs += analysis; samples++
-                })
+                val captureStart = SystemClock.elapsedRealtime()
+                val capture = capture(scene, stage)
+                captureMs += SystemClock.elapsedRealtime() - captureStart
+                samples++
+                val frame = Frame(label, compose.mainClock.currentTime, workers.submit(Callable {
+                    val analysisStart = SystemClock.elapsedRealtime()
+                    val covers = measure(capture, density, classifier)
+                    analysisMs.addAndGet(SystemClock.elapsedRealtime() - analysisStart)
+                    if (png != null) {
+                        val bitmap = Bitmap.createBitmap(capture.pixels, capture.width, capture.height, Bitmap.Config.ARGB_8888)
+                        try { png.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) } } finally { bitmap.recycle() }
+                    }
+                    covers
+                }))
                 frames += frame
                 return frame
             }
@@ -227,7 +288,8 @@ class PopupViewChangeTransitionTest {
                 "a${anchor + it},l${anchor + it},t${anchor + it},r${anchor + it},b${anchor + it}" } + "\n" +
                 frames.joinToString("\n") { frame -> "${frame.label},${frame.time}," + frame.covers.joinToString(",") {
                     "${it.area},${it.box?.left},${it.box?.top},${it.box?.right},${it.box?.bottom}" } })
-            Log.i("PopupViewTiming", "$name samples=$samples captureMs=$captureMs analysisMs=$analysisMs totalMs=${SystemClock.elapsedRealtime() - started}")
+            workers.shutdown()
+            Log.i("PopupViewTiming", "$name samples=$samples captureMs=$captureMs analysisMs=${analysisMs.get()} totalMs=${SystemClock.elapsedRealtime() - started}")
             compose.mainClock.autoAdvance = true
             prefs.write(route, original, overridden)
             bitmaps.forEach { it.recycle() }
@@ -247,8 +309,7 @@ class PopupViewChangeTransitionTest {
     private fun BrowseStyle.label() = if (presentation == Presentation.List) "list" else "gallery$itemsPerRow"
 
     /** Captures the scene's own window (never the popup's) once the marker proves the frame. */
-    private fun measure(scene: SemanticsNodeInteraction, stage: Int, density: Float, png: File? = null, timing: (Long, Long) -> Unit): List<Cover> {
-        val captureStart = SystemClock.elapsedRealtime()
+    private fun capture(scene: SemanticsNodeInteraction, stage: Int): Capture {
         lateinit var pixels: IntArray
         var width = 0; var height = 0
         compose.waitUntil(5000) {
@@ -259,22 +320,25 @@ class PopupViewChangeTransitionTest {
                 val ok = android.graphics.Color.green(marker) > 230 && android.graphics.Color.blue(marker) < 25 &&
                     abs(android.graphics.Color.red(marker) - stage * 8) <= 2
                 if (ok) pixels = IntArray(width * height).also { bitmap.getPixels(it, 0, width, 0, 0, width, height) }
-                if (ok && png != null) png.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
                 ok
             } finally { bitmap.recycle() }
         }
-        val analysisStart = SystemClock.elapsedRealtime()
+        return Capture(pixels, width, height)
+    }
+
+    /** Locates every palette cover: row and column pixel counts, then the half-peak box. */
+    private fun measure(capture: Capture, density: Float, classifier: ByteArray): List<Cover> {
+        val pixels = capture.pixels; val width = capture.width; val height = capture.height
         val marker = (10 * density).toInt()
         val rows = Array(palette.size) { IntArray(height) }
         val columns = Array(palette.size) { IntArray(width) }
-        for (y in 0 until height) for (x in 0 until width) {
-            if (x < marker && y < marker) continue
-            val pixel = pixels[y * width + x]
-            val r = channelLevel[(pixel ushr 16) and 255]; if (r < 0) continue
-            val g = channelLevel[(pixel ushr 8) and 255]; if (g < 0) continue
-            val b = channelLevel[pixel and 255]; if (b < 0) continue
-            val i = paletteIndex[r * 9 + g * 3 + b]; if (i < 0) continue
-            rows[i][y]++; columns[i][x]++
+        for (y in 0 until height) {
+            val row = y * width
+            // The frame marker's corner is skipped, never classified.
+            for (x in (if (y < marker) marker else 0) until width) {
+                val i = classifier[pixels[row + x] and 0xFFFFFF].toInt(); if (i < 0) continue
+                rows[i][y]++; columns[i][x]++
+            }
         }
         val result = palette.indices.map { i ->
             val area = rows[i].sum()
@@ -287,7 +351,6 @@ class PopupViewChangeTransitionTest {
                 Cover(area, Rect(left.toFloat(), top.toFloat(), right.toFloat(), bottom.toFloat()))
             }
         }
-        timing(analysisStart - captureStart, SystemClock.elapsedRealtime() - analysisStart)
         return result
     }
 }
