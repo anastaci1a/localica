@@ -212,8 +212,9 @@ internal fun rememberFrostedBackdrop(key: Any?, enabled: Boolean = true, dark: B
     // An unreferenced scene needs a display list, not another full-window raster.
     // Sampled scenes retain pixels so sibling lenses never replay all their children.
     val sampled = source.consumers > 0
+    val diagnosticAllNone = source.diagnosticNoneConsumers == source.consumers
     SideEffect {
-        if (!source.layer.isReleased) source.layer.compositingStrategy = if (retainRaster && sampled && !(NoneAblation.removeSources && source.diagnosticNoneConsumers == source.consumers)) androidx.compose.ui.graphics.layer.CompositingStrategy.Offscreen
+        if (!source.layer.isReleased) source.layer.compositingStrategy = if (retainRaster && sampled && !(NoneAblation.removeSources && diagnosticAllNone)) androidx.compose.ui.graphics.layer.CompositingStrategy.Offscreen
             else androidx.compose.ui.graphics.layer.CompositingStrategy.Auto
         source.lightMix = lightMix ?: if (dark) 1f else 0f
     }
@@ -284,9 +285,9 @@ internal fun androidx.compose.ui.layout.LayoutCoordinates.backdropPosition(view:
 internal fun Modifier.recordFrostedBackdrop(source: FrostedBackdrop, backing: FrostedBackdrop? = null,
     enabled: Boolean = true, displayCutout: (DrawScope.() -> Path?)? = null,
     readbackRequest: (() -> Int)? = null, onRecorded: ((Int) -> Unit)? = null,
-    displayBacking: Boolean = true): Modifier {
+    displayBacking: Boolean = true, diagnosticNoneBacking: Boolean = false): Modifier {
     val renderer = currentGlassRendererGeneration()
-    BackdropLease(backing.takeIf { enabled })
+    BackdropLease(backing.takeIf { enabled }, diagnosticNone = diagnosticNoneBacking)
     return backdropLocation(source.location)
         .onSizeChanged { source.size = it }
         .graphicsLayer()

@@ -127,7 +127,8 @@ internal fun BoxScope.BrowseBackdropRecording(scene: BrowseBackdropScene, backin
     val source = scene.source
     Canvas(Modifier.matchParentSize().recordFrostedBackdrop(source, backing, displayCutout = {
         Path().apply { addRect(Rect(Offset.Zero, size)) }
-    }, readbackRequest = { source.readbackRequest }, onRecorded = {
+    }, diagnosticNoneBacking = source.consumers > 0 && source.diagnosticNoneConsumers == source.consumers,
+        readbackRequest = { source.readbackRequest }, onRecorded = {
         scene.readback.compositeRecorded(it, scene.compositeDraws)
     }).then(BrowseReadbackDraw(scene.readback))) {
         scene.compositeDraws = emptyMap()
