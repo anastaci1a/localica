@@ -892,7 +892,7 @@ class WorkflowContract(unittest.TestCase):
                         'reactivecircus/android-emulator-runner@'))
                     self.assertIn('-show-kernel', emulator['with']['emulator-options'])
                     uploads = [step for step in steps if step.get('uses', '').startswith(
-                        'actions/upload-artifact@') and step.get('with', {}).get('path') ==
+                        ('actions/upload-artifact@', './.github/actions/upload-artifact-retry')) and step.get('with', {}).get('path') ==
                         '/tmp/android-runner/emu-crash-*/']
                     self.assertEqual(1, len(uploads), 'Missing retained emulator crash database')
                     self.assertIn(uploads[0]['if'], ('failure()', 'always()'))

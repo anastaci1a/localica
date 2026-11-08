@@ -78,7 +78,7 @@ jobs:
           fi
       - name: Preserve the original verification identity
         if: steps.find.outputs.reused == 'true'
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: ./.github/actions/upload-artifact-retry
         with:
           name: reused-verification
           path: verified-provenance.json
@@ -115,7 +115,7 @@ jobs:
       - name: Freeze shared instrumentation APKs
         id: test-apks
         run: echo "sha256=$(python3 .github/shared-test-apks.py freeze --output native-test-apks)" >> "$GITHUB_OUTPUT"
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: ./.github/actions/upload-artifact-retry
         with:
           name: native-test-apks
           path: native-test-apks/
@@ -168,14 +168,14 @@ jobs:
         run: |
           sha256sum app-debug.apk > app-debug.apk.sha256
           echo "sha256=$(cut -d ' ' -f 1 app-debug.apk.sha256)" >> "$GITHUB_OUTPUT"
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: ./.github/actions/upload-artifact-retry
         with:
           name: localica-debug
           path: |
             app/build/outputs/apk/debug/app-debug.apk
             app/build/outputs/apk/debug/app-debug.apk.sha256
           if-no-files-found: error
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: ./.github/actions/upload-artifact-retry
         if: always()
         with:
           name: build-reports
@@ -207,7 +207,7 @@ jobs:
           echo "LOCALICA_DEBUG_KEYSTORE=$KEYSTORE_PATH" >> "$GITHUB_ENV"
       - name: Unit tests, lint and release build
         run: ./gradlew testDebugUnitTest lintDebug assembleRelease --no-daemon --max-workers=4 -Dorg.gradle.jvmargs='-Xmx6g -Dfile.encoding=UTF-8'
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: ./.github/actions/upload-artifact-retry
         if: always()
         with:
           name: static-check-reports
@@ -295,20 +295,20 @@ jobs:
           mode: save
       - name: Preserve emulator readiness observations
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: ./.github/actions/upload-artifact-retry
         with:
           name: emulator-readiness-${{ github.job }}-${{ strategy.job-index }}
           path: emulator-readiness.json
           if-no-files-found: warn
       - name: Preserve native monitoring evidence
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: ./.github/actions/upload-artifact-retry
         if: always()
         with:
           name: native-live-evidence-api-${{ matrix.api }}-shard-${{ matrix.shard }}
           path: native-live-evidence/
           if-no-files-found: error
       - name: Preserve focused preflight evidence
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: ./.github/actions/upload-artifact-retry
         if: always() && github.event_name == 'workflow_dispatch' && inputs.risk_classes != ''
         with:
           name: preflight-reports-api-${{ matrix.api }}-shard-${{ matrix.shard }}
@@ -319,7 +319,7 @@ jobs:
           free -h
           df -h
           sudo dmesg --ctime | tail -100
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: ./.github/actions/upload-artifact-retry
         if: always()
         with:
           name: device-reports-api-${{ matrix.api }}-shard-${{ matrix.shard }}
@@ -328,7 +328,7 @@ jobs:
             app/build/reports/androidTests/
             app/build/outputs/androidTest-results/
             app/build/outputs/connected_android_test_additional_output/
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: ./.github/actions/upload-artifact-retry
         if: failure()
         with:
           name: emulator-crashes-api-${{ matrix.api }}-shard-${{ matrix.shard }}
@@ -378,7 +378,7 @@ jobs:
         env:
           DELIVERY_APK_SHA256: ${{ needs.build.outputs.delivery-apk-sha256 }}
         run: python3 .github/release-verification.py record --apk-sha256 "$DELIVERY_APK_SHA256"
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: ./.github/actions/upload-artifact-retry
         with:
           name: complete-verification
           path: |
@@ -453,18 +453,18 @@ jobs:
           mode: save
       - name: Preserve emulator readiness observations
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: ./.github/actions/upload-artifact-retry
         with:
           name: emulator-readiness-${{ github.job }}-${{ strategy.job-index }}
           path: emulator-readiness.json
           if-no-files-found: warn
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: ./.github/actions/upload-artifact-retry
         if: always()
         with:
           name: compatibility-reports-api-${{ matrix.api }}
           path: ${{ runner.temp }}/shuffle-compatibility/reports/
           if-no-files-found: warn
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: ./.github/actions/upload-artifact-retry
         if: always()
         with:
           name: compatibility-seed-app-api-${{ matrix.api }}
@@ -472,7 +472,7 @@ jobs:
             ${{ runner.temp }}/shuffle-compatibility/apks/seed/compatibility-seed-app.apk
             ${{ runner.temp }}/shuffle-compatibility/apks/seed/compatibility-seed-app.apk.sha256
           if-no-files-found: warn
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: ./.github/actions/upload-artifact-retry
         if: always()
         with:
           name: compatibility-seed-test-api-${{ matrix.api }}
@@ -480,7 +480,7 @@ jobs:
             ${{ runner.temp }}/shuffle-compatibility/apks/seed/compatibility-seed-test.apk
             ${{ runner.temp }}/shuffle-compatibility/apks/seed/compatibility-seed-test.apk.sha256
           if-no-files-found: warn
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: ./.github/actions/upload-artifact-retry
         if: always()
         with:
           name: compatibility-bridge-app-api-${{ matrix.api }}
@@ -488,7 +488,7 @@ jobs:
             ${{ runner.temp }}/shuffle-compatibility/apks/bridge/compatibility-bridge-app.apk
             ${{ runner.temp }}/shuffle-compatibility/apks/bridge/compatibility-bridge-app.apk.sha256
           if-no-files-found: warn
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: ./.github/actions/upload-artifact-retry
         if: always()
         with:
           name: compatibility-bridge-test-api-${{ matrix.api }}
@@ -496,7 +496,7 @@ jobs:
             ${{ runner.temp }}/shuffle-compatibility/apks/bridge/compatibility-bridge-test.apk
             ${{ runner.temp }}/shuffle-compatibility/apks/bridge/compatibility-bridge-test.apk.sha256
           if-no-files-found: warn
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: ./.github/actions/upload-artifact-retry
         if: always()
         with:
           name: compatibility-verify-app-api-${{ matrix.api }}
@@ -504,7 +504,7 @@ jobs:
             ${{ runner.temp }}/shuffle-compatibility/apks/verify/compatibility-verify-app.apk
             ${{ runner.temp }}/shuffle-compatibility/apks/verify/compatibility-verify-app.apk.sha256
           if-no-files-found: warn
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: ./.github/actions/upload-artifact-retry
         if: always()
         with:
           name: compatibility-verify-test-api-${{ matrix.api }}
@@ -553,7 +553,7 @@ jobs:
             exit 1
           fi
       - name: Preserve release verification provenance
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: ./.github/actions/upload-artifact-retry
         with:
           name: release-verification-provenance
           path: verified-provenance.json
@@ -629,12 +629,12 @@ jobs:
           mode: save
       - name: Preserve emulator readiness observations
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: ./.github/actions/upload-artifact-retry
         with:
           name: emulator-readiness-${{ github.job }}-${{ strategy.job-index }}
           path: emulator-readiness.json
           if-no-files-found: warn
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: ./.github/actions/upload-artifact-retry
         if: always()
         with:
           name: distribution-smoke-logcat-api-${{ matrix.api }}
