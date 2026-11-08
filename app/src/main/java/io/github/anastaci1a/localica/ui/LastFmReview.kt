@@ -63,7 +63,7 @@ internal fun LastFmDecision(row: LastFmMatchRow, library: List<Track>, onDismiss
     ChoiceDialog(ChoiceDialogActions("Use selection", "Skip", enabled = !saving), "Choose a match", choices, selected,
         label = { id -> candidates.firstOrNull { it.id == id }?.let {
             "${it.title} · ${it.artist ?: "Unknown artist"} · ${it.album ?: "Unknown album"}"
-        } ?: "None of these" }, onDismiss = onSkip,
+        } ?: "None of these" }, onDismiss = onDismiss, onCancel = onSkip,
         onSelect = { id -> if (id == LastFmMatcher.NONE) { picking = true; selected = null } else if (!saving) {
             saving = true
             scope.launch {
