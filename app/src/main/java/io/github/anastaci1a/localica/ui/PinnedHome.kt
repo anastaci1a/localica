@@ -127,7 +127,7 @@ internal fun PinnedHome(library: LibraryUiState, playlists: PlaylistState, pins:
                         else onOpen(item, songs)
                     },
                     onLongClickLabel = "Pinned item actions", onLongClick = { menu = item.ref }).padding(horizontal = inset)) {
-                    MediaArtwork(item.coverUris, Modifier.fillMaxWidth().aspectRatio(1f).contextMenuAnchor(anchor, item.ref.kind in setOf(MediaKind.Artist, MediaKind.AlbumArtist)), shape = artworkShape(item.ref.kind))
+                    ArtistMediaArtwork(item, Modifier.fillMaxWidth().aspectRatio(1f).contextMenuAnchor(anchor, item.ref.kind in setOf(MediaKind.Artist, MediaKind.AlbumArtist)), shape = artworkShape(item.ref.kind))
                     Text(item.title, style = MaterialTheme.typography.titleMedium, maxLines = 2)
                     Text(item.ref.kind.label, style = MaterialTheme.typography.bodySmall)
                 }

@@ -136,4 +136,71 @@ class ArtistPhotoDisplayTest {
             root.deleteRecursively()
         }
     }
+    @Test fun pinnedTilesRespectConsentAndIdentityForBothArtistScopesAndKeepAlbumFallback() {
+        val root = File(InstrumentationRegistry.getInstrumentation().targetContext.cacheDir, "photo-home-${java.util.UUID.randomUUID()}")
+        val consent = Consent()
+        val requests = AtomicInteger()
+        val disk = ArtistPhotoDisk(File(root, "photos"), File(root, "choices"), 8L * 1024 * 1024)
+        val photos = ArtistPhotos(consent, disk, PhotoTransport { _, _ -> requests.incrementAndGet(); error("Fresh cached pins need no network") })
+        val first = Track("home:first", "First", "Fixture Artist", "Fixture Album", fileName = "first.mp3", relativePath = "first.mp3", albumArtist = "Fixture Artist")
+        val other = first.copy(uri = "home:other", id = "home:other", title = "Other", artist = "Other Artist", albumArtist = "Other Artist", album = "Other Album")
+        val snapshot = LibrarySnapshot(tracks = listOf(first, other))
+        fun ref(kind: MediaKind, view: SongListView, title: String) = MediaRef(kind,
+            LibraryViews.groups(snapshot, view, LibraryViews.defaults(view)).first { it.title == title }.id)
+        val artist = ref(MediaKind.Artist, SongListView.Artists, "Fixture Artist")
+        val otherArtist = ref(MediaKind.Artist, SongListView.Artists, "Other Artist")
+        val albumArtist = ref(MediaKind.AlbumArtist, SongListView.AlbumArtists, "Fixture Artist")
+        val otherAlbumArtist = ref(MediaKind.AlbumArtist, SongListView.AlbumArtists, "Other Artist")
+        val album = ref(MediaKind.Album, SongListView.Albums, "Other Album")
+        var pin by mutableStateOf(artist)
+        fun tag() = "pin-${pin.kind}:${pin.id}"
+        val retention = BrowseArtworkScope().apply {
+            hold("first", listOf(first.uri), ArtworkCache.CachedArtwork(bitmap(android.graphics.Color.BLUE), 768))
+            hold("other", listOf(other.uri), ArtworkCache.CachedArtwork(bitmap(android.graphics.Color.GREEN), 768))
+        }
+        try {
+            val bytes = ByteArrayOutputStream().also { bitmap(android.graphics.Color.RED).compress(Bitmap.CompressFormat.PNG, 100, it) }.toByteArray()
+            runBlocking(Dispatchers.IO) {
+                for (selected in listOf(artist, albumArtist)) disk.savePhoto("${selected.kind}:${selected.id}",
+                    RemoteArtist(ArtistPhotoChoice(ArtistPhotoProvider.DEEZER, "8"), "Fixture Artist", listOf("Fixture Album")), bytes, System.currentTimeMillis())
+                for (cleared in listOf(otherArtist, otherAlbumArtist)) disk.saveChoice("${cleared.kind}:${cleared.id}", SavedPhotoChoice("cleared"))
+            }
+            compose.setContent { LocalicaTheme {
+                CompositionLocalProvider(LocalArtistPhotoEnvironment provides ArtistPhotoEnvironment(photos, consent), LocalBrowseArtwork provides retention) {
+                    PinnedHome(LibraryUiState(snapshot, loading = false), io.github.anastaci1a.localica.playlist.PlaylistState(loading = false), listOf(pin),
+                        {}, {}, { _, _ -> }, {}, { _, _ -> }, queryDispatcher = Dispatchers.Unconfined)
+                }
+            } }
+            fun tileReady() { compose.waitUntil(5000) { compose.onAllNodesWithTag(tag()).fetchSemanticsNodes().isNotEmpty() } }
+            fun photoOn() {
+                compose.runOnIdle { consent.allowed.value = true }
+                compose.waitUntil(10000) { center(tag()).red > .98f }
+            }
+            fun photoOff() {
+                compose.mainClock.autoAdvance = false
+                compose.runOnIdle { consent.allowed.value = false }
+                compose.mainClock.advanceTimeByFrame()
+                compose.waitForIdle()
+                assertTrue("Pinned artist revocation must discard the photo on its next frame", center(tag()).blue > .9f)
+                compose.mainClock.autoAdvance = true
+            }
+            fun switchTo(value: MediaRef) { compose.runOnIdle { pin = value }; tileReady(); compose.waitForIdle() }
+            tileReady()
+            assertTrue("Pinned artist starts with album art while consent is off", center(tag()).blue > .9f)
+            photoOn(); photoOff(); photoOn()
+            switchTo(otherArtist)
+            assertTrue("A new pinned artist cannot inherit the previous photo", center(tag()).green > .9f)
+            switchTo(albumArtist)
+            photoOn(); photoOff(); photoOn()
+            switchTo(otherAlbumArtist)
+            assertTrue("A new pinned album artist cannot inherit the previous photo", center(tag()).green > .9f)
+            switchTo(album)
+            assertTrue("Ordinary album pins keep their original artwork", center(tag()).green > .9f)
+            compose.runOnIdle { consent.allowed.value = false }
+            compose.waitForIdle()
+            assertTrue("Ordinary album artwork is independent of online consent", center(tag()).green > .9f)
+            assertEquals(0, requests.get())
+        } finally { compose.mainClock.autoAdvance = true; consent.allowed.value = false; root.deleteRecursively() }
+    }
+
 }
