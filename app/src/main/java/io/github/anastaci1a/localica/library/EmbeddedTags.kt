@@ -21,6 +21,8 @@ internal suspend fun embeddedTags(context: Context, uri: String): EmbeddedTags =
         val groups = retriever.retrieveTrackGroups().awaitResult()
         val builder = MediaMetadata.Builder()
         var comment: String? = null
+        var releaseType: String? = null
+        var compilation: Boolean? = null
         val lyrics = mutableListOf<String>()
         for (groupIndex in 0 until groups.length) {
             val group = groups[groupIndex]
@@ -39,6 +41,18 @@ internal suspend fun embeddedTags(context: Context, uri: String): EmbeddedTags =
                             "ALBUMARTIST", "ALBUM_ARTIST" -> builder.setAlbumArtist(entry.value)
                         }
                     }
+                    val releaseField = when (entry) {
+                        is VorbisComment -> entry.key to entry.value
+                        is TextInformationFrame -> (if (entry.id == "TXXX") entry.description else entry.id) to entry.values.joinToString(";")
+                        else -> null
+                    }
+                    releaseField?.let { (key, value) ->
+                        when (key?.uppercase(java.util.Locale.ROOT)) {
+                            "RELEASETYPE", "ALBUMTYPE", "MUSICBRAINZ_ALBUMTYPE", "MUSICBRAINZ ALBUM TYPE" ->
+                                if (value.isNotBlank()) releaseType = value
+                            "TCMP", "COMPILATION" -> compilation = compilationFlag(value)
+                        }
+                    }
                     val text = when (entry) {
                         is TextInformationFrame -> entry.values.firstOrNull().takeIf { entry.id == "TXXX" && entry.description.equals("comment", true) }
                         is CommentFrame -> entry.text.takeUnless { entry.description.startsWith("iTun") }
@@ -49,11 +63,12 @@ internal suspend fun embeddedTags(context: Context, uri: String): EmbeddedTags =
                 }
             }
         }
-        EmbeddedTags(builder.build(), comment, lyrics.distinct())
+        EmbeddedTags(builder.build(), comment, lyrics.distinct(), releaseType, compilation)
     }
 } ?: EmbeddedTags(MediaMetadata.EMPTY, null)
 
-internal data class EmbeddedTags(val metadata: MediaMetadata, val comment: String?, val lyrics: List<String> = emptyList())
+internal data class EmbeddedTags(val metadata: MediaMetadata, val comment: String?, val lyrics: List<String> = emptyList(),
+    val releaseType: String? = null, val compilation: Boolean? = null)
 
 private suspend fun <T> ListenableFuture<T>.awaitResult(): T = suspendCancellableCoroutine { continuation ->
     continuation.invokeOnCancellation { cancel(true) }
