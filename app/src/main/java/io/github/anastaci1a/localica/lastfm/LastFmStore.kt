@@ -47,7 +47,8 @@ object LastFmSnapshotCodec {
                 tracks.getJSONObject(index).run {
                     val plays = getLong("plays"); require(plays >= 0)
                     LastFmTrack(getString("artist"), getString("title"), plays,
-                        optString("album").takeIf(String::isNotBlank), optString("mbid").takeIf(String::isNotBlank))
+                        if (isNull("album")) null else optString("album").takeIf(String::isNotBlank),
+                        if (isNull("mbid")) null else optString("mbid").takeIf(String::isNotBlank))
                 }
             })
         }

@@ -46,6 +46,9 @@ class HttpLastFmApi(private val key: String) : LastFmApi {
 }
 
 object LastFmResponses {
+    private fun JSONObject.optionalText(key: String): String? =
+        if (isNull(key)) null else optString(key).takeIf(String::isNotBlank)
+
     fun parse(body: String): LastFmPage {
         try {
             val json = JSONObject(body)
@@ -70,18 +73,18 @@ object LastFmResponses {
             val tracks = (0 until raw.length()).map { index ->
                 val track = raw.getJSONObject(index)
                 val artist = when (val value = track.get("artist")) {
-                    is JSONObject -> value.optString("name").ifBlank { value.optString("#text") }
+                    is JSONObject -> value.optionalText("name") ?: value.optionalText("#text").orEmpty()
                     is String -> value
                     else -> error("Invalid artist")
                 }
                 val title = track.getString("name"); val plays = track.get("playcount").toString().toLong()
                 require(artist.isNotBlank() && title.isNotBlank() && plays >= 0)
                 val album = when (val value = track.opt("album")) {
-                    is JSONObject -> value.optString("#text").ifBlank { value.optString("name") }
+                    is JSONObject -> value.optionalText("#text") ?: value.optionalText("name")
                     is String -> value
                     else -> null
                 }?.takeIf(String::isNotBlank)
-                LastFmTrack(artist, title, plays, album, track.optString("mbid").takeIf(String::isNotBlank))
+                LastFmTrack(artist, title, plays, album, track.optionalText("mbid"))
             }
             require(total != 0 || tracks.isEmpty())
             return LastFmPage(page, maxOf(1, total), tracks)

@@ -140,4 +140,11 @@ class LastFmTest {
             assertEquals(1, requests)
         } finally { scope.cancel() }
     }
+    @Test fun explicitNullOptionalIdsDoNotPreventNameMatchingWithTaggedLocalSongs() {
+        val page = LastFmResponses.parse("""{"toptracks":{"track":[{"artist":{"name":"Dream Theater"},"name":"Learning to Live","playcount":"5","mbid":null,"album":{"#text":null}}],"@attr":{"page":"1","totalPages":"1"}}}""")
+        assertNull(page.tracks.single().mbid); assertNull(page.tracks.single().album)
+        val matches = LastFmMatcher.match(LastFmSnapshot("user", 1, page.tracks), listOf(track("song").copy(musicBrainzId = mbid)))
+        assertEquals(mapOf("song" to 5L), matches.counts); assertTrue(matches.review.isEmpty())
+    }
+
 }
