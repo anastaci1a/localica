@@ -68,6 +68,16 @@ internal fun boundedPlan(stamp: FrameStamp,core: EasingSpec,T: Double,sigma: Dou
         val next=pendingBasis?:basis; val prepared=try { next?.let { prepare(logical,stamp,it,rect) }.also { rect.claim(this) } } catch(failure: Throwable) { boundCurve=oldCurve; throw failure }; bound=rect; rect.channels.forEach { it.onRest={ notifyLifecycle() } }; if(prepared!=null) { pendingBasis=null; basis=next; apply(prepared,logical,stamp) } }
 
     fun setBasis(value: ExpansionBasis): BasisChange { val stamp=clock.stampNow; guard(stamp); if(value==basis) { pendingBasis=null; return BasisChange.Rescale }; val change=classify(value,stamp); if(touching) { pendingBasis=value; lastStamp=stamp; return change }; if(basis==null && bound==null) { basis=value; lastStamp=stamp; return change }; if(change==BasisChange.Rebase && bound==null) { pendingBasis=value; applyPendingNoop(); return change }; val prepared=prepare(logical,stamp,value,bound); basis=value; pendingBasis=null; apply(prepared,logical,stamp); return change }
+    /** A new native window has no presented rectangle to preserve. At the ordinary
+     * source gate only, seed its first measured home without reusing a dead window's edges. */
+    internal fun initializeNativeHome(value: ExpansionBasis, host: ShadowPlane): Boolean {
+        val stamp=clock.stampNow; guard(stamp)
+        require(host.sameClock(clock)) { "A native host shares its expansion clock" }
+        if(host.generation!=0L || nativeBoundary!=0f || nativeSide || !physicalRest || motion.rawValue(stamp)!=0.0 || motion.rawVelocity(stamp)!=0.0) return false
+        val prepared=prepare(logical,stamp,value,bound,initialize=true)
+        basis=value; pendingBasis=null; apply(prepared,logical,stamp)
+        return true
+    }
     private data class Prepared(val entries: List<Pair<MotionFloat,MotionIntent>>,val plan: EasedPlan,val duration: Double,val approvedTau: Double,val spec: ExpansionSpec,val gate: Boolean?)
     private fun prepare(q: Boolean,stamp: FrameStamp,next: ExpansionBasis,rect: MotionRect?,releaseVelocity: Double?=null,initialize: Boolean=false): Prepared {
         val law=contact?.spec?:spec; val ctx=context(); val sigma=if(ctx.access==MotionAccess.Faster) 2.0/3 else 1.0; val x=motion.rawValue(stamp); val v=releaseVelocity?:motion.rawVelocity(stamp); val waiting=if(nativeBoundary==null) null else if(awaitingNativeGate) pendingNative else q.takeIf { it!=nativeSide }; val target=waiting?.let { requireNotNull(nativeBoundary).toDouble() }?:if(q) 1.0 else 0.0; val geometry=contact?.basis?:next; val reference=contact?.reference?:ctx.fullPlayerReferenceTravelPx.toDouble(); val T=if(ctx.access==MotionAccess.Reduced || initialize) 2*ctx.displayIntervalSeconds.toDouble() else expansionDuration(law,geometry.edgeTravelPx.toDouble(),reference,x,v,target,sigma,ctx.displayIntervalSeconds.toDouble())

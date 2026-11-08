@@ -382,3 +382,4 @@ io.github.anastaci1a.localica.MotionFollowupTest
 io.github.anastaci1a.localica.GlassMorphSubpixelTest
 io.github.anastaci1a.localica.MorphFacesTest
 io.github.anastaci1a.localica.PlayerLyricsOwnerContinuityTest
+io.github.anastaci1a.localica.PopupWindowHostContractTest

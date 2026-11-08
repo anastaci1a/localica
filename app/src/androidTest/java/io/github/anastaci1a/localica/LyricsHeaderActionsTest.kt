@@ -83,7 +83,11 @@ class LyricsHeaderActionsTest {
             compose.onNodeWithContentDescription("Lyrics sources").performTouchInput { down(center) }
             compose.mainClock.advanceTimeBy(32)
             compose.onNodeWithContentDescription("Lyrics sources").performTouchInput { up() }
-            compose.mainClock.advanceTimeBy(64)
+            compose.waitUntil(5000) {
+                compose.mainClock.advanceTimeByFrame()
+                compose.waitForIdle()
+                preparation.progress > 0f
+            }
             capture("preparing")
             compose.runOnIdle {
                 assertTrue(preparation.progress > 0f)
@@ -99,7 +103,7 @@ class LyricsHeaderActionsTest {
                 assertEquals(1f, preparation.progress, 0f)
             }
             compose.runOnIdle { sources = false }
-            compose.mainClock.advanceTimeBy(100)
+            compose.mainClock.advanceTimeByFrame()
             compose.runOnIdle { assertEquals(1f, preparation.progress, 0f) }
             advanceWithNativeFrames(4000)
             capture("rejoined")

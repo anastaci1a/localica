@@ -112,7 +112,15 @@ class PopupHostNavigationTest {
         compose.mainClock.autoAdvance = false
         compose.mainClock.advanceTimeBy(1600)
         compose.runOnIdle { open = true }
-        compose.advanceMorphOpening(if (expanding) 720 else 3200, anchor) { popupView }
+        if (expanding) {
+            // Interrupt the actual #608 flight; the legacy 720 ms spring budget
+            // can run the new expansion to rest before Back is delivered.
+            compose.waitUntil(5000) {
+                compose.mainClock.advanceTimeByFrame()
+                compose.waitForIdle()
+                anchor.contact.expansion.value >= .7f
+            }
+        } else compose.advanceMorphOpening(3200, anchor) { popupView }
         if (expanding) assertTrue("Back interrupts an unfinished expansion", anchor.contact.expansion.value < .99f)
         fun back(view: View?, condition: () -> Boolean) {
             compose.waitUntil(5000) { view?.hasWindowFocus() == true }

@@ -2519,7 +2519,7 @@
         errorLine2="                                                               ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="623"
+            line="621"
             column="64"/>
     </issue>
 
@@ -2530,7 +2530,7 @@
         errorLine2="                                                                                                            ~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="654"
+            line="652"
             column="109"/>
     </issue>
 
@@ -2541,7 +2541,7 @@
         errorLine2="                                                                                                                                                                          ~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="654"
+            line="652"
             column="171"/>
     </issue>
 
@@ -2585,7 +2585,7 @@
         errorLine2="                                         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="774"
+            line="772"
             column="42"/>
     </issue>
 
@@ -2607,7 +2607,7 @@
         errorLine2="                                                                                                                     ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="922"
+            line="920"
             column="118"/>
     </issue>
 
@@ -8416,7 +8416,7 @@
         errorLine2="        ~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="590"
+            line="588"
             column="9"/>
     </issue>
 
@@ -8427,7 +8427,7 @@
         errorLine2="            ~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="613"
+            line="611"
             column="13"/>
     </issue>
 
@@ -8438,7 +8438,7 @@
         errorLine2="                ~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="712"
+            line="710"
             column="17"/>
     </issue>
 
@@ -8449,7 +8449,7 @@
         errorLine2="                        ~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="796"
+            line="794"
             column="25"/>
     </issue>
 
@@ -8460,7 +8460,7 @@
         errorLine2="                                      ~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="799"
+            line="797"
             column="39"/>
     </issue>
 
@@ -12114,7 +12114,7 @@
         errorLine2="                                     ~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="796"
+            line="794"
             column="38"/>
     </issue>
 
@@ -15309,16 +15309,7 @@
             column="79"/>
     </issue>
 
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="    val body = rememberGlassBody({ anchor.contact.travel + progress.value },"
-        errorLine2="                                                                    ~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="308"
-            column="69"/>
-    </issue>
+
 
 
 
@@ -15353,7 +15344,7 @@
         errorLine2="                                                                                    ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="614"
+            line="612"
             column="85"/>
     </issue>
 
@@ -16383,16 +16374,7 @@
 
 
 
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="    rememberGlassBody({ contact.travel + contact.expansion.value }, contact = { if (contact.pressed) 1f else 0f },"
-        errorLine2="                                                           ~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/LiquidGlass.kt"
-            line="127"
-            column="60"/>
-    </issue>
+
 
     <issue
         id="RawUiMotion"
@@ -18574,7 +18556,7 @@
         errorLine2="                      ~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="488"
+            line="485"
             column="23"/>
     </issue>
 
@@ -18585,7 +18567,7 @@
         errorLine2="                                                                    ~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="602"
+            line="600"
             column="69"/>
     </issue>
 
