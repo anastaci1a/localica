@@ -1,6 +1,8 @@
 package io.github.anastaci1a.localica
 
 import android.graphics.Bitmap
+import android.os.SystemClock
+import android.util.Log
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.*
@@ -65,6 +67,10 @@ class PopupViewChangeTransitionTest {
     }
 
     private fun inspect(source: BrowseStyle, target: BrowseStyle, selected: Boolean = false, subview: Boolean = false) {
+        val started = SystemClock.elapsedRealtime()
+        var captureMs = 0L
+        var analysisMs = 0L
+        var samples = 0
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val density = context.resources.displayMetrics.density
         val tracks = List(140) { index -> Track("popup-view:$index", "Item ${index.toString().padStart(3, '0')}",
@@ -144,7 +150,9 @@ class PopupViewChangeTransitionTest {
                 compose.runOnUiThread { stage = (stage + 1) % 24 }
                 compose.mainClock.advanceTimeByFrame()
                 val png = if (label in setOf("popup-open", "source", "apply-0", "apply-6", "apply-30", "settled-3")) File(output, "$label.png") else null
-                val frame = Frame(label, compose.mainClock.currentTime, measure(scene, stage, density, png))
+                val frame = Frame(label, compose.mainClock.currentTime, measure(scene, stage, density, png) { capture, analysis ->
+                    captureMs += capture; analysisMs += analysis; samples++
+                })
                 frames += frame
                 return frame
             }
@@ -209,6 +217,7 @@ class PopupViewChangeTransitionTest {
                 "a${anchor + it},l${anchor + it},t${anchor + it},r${anchor + it},b${anchor + it}" } + "\n" +
                 frames.joinToString("\n") { frame -> "${frame.label},${frame.time}," + frame.covers.joinToString(",") {
                     "${it.area},${it.box?.left},${it.box?.top},${it.box?.right},${it.box?.bottom}" } })
+            Log.i("PopupViewTiming", "$name samples=$samples captureMs=$captureMs analysisMs=$analysisMs totalMs=${SystemClock.elapsedRealtime() - started}")
             compose.mainClock.autoAdvance = true
             prefs.write(route, original, overridden)
             bitmaps.forEach { it.recycle() }
@@ -228,11 +237,12 @@ class PopupViewChangeTransitionTest {
     private fun BrowseStyle.label() = if (presentation == Presentation.List) "list" else "gallery$itemsPerRow"
 
     /** Captures the scene's own window (never the popup's) once the marker proves the frame. */
-    private fun measure(scene: SemanticsNodeInteraction, stage: Int, density: Float, png: File? = null): List<Cover> {
+    private fun measure(scene: SemanticsNodeInteraction, stage: Int, density: Float, png: File? = null, timing: (Long, Long) -> Unit): List<Cover> {
+        val captureStart = SystemClock.elapsedRealtime()
         lateinit var pixels: IntArray
         var width = 0; var height = 0
         compose.waitUntil(5000) {
-            val bitmap = scene.captureToImage().asAndroidBitmap()
+            val bitmap = scene.captureNativeFrame().asAndroidBitmap()
             try {
                 width = bitmap.width; height = bitmap.height
                 val marker = bitmap.getPixel(2, 2)
@@ -243,6 +253,7 @@ class PopupViewChangeTransitionTest {
                 ok
             } finally { bitmap.recycle() }
         }
+        val analysisStart = SystemClock.elapsedRealtime()
         val marker = (10 * density).toInt()
         val rows = Array(palette.size) { IntArray(height) }
         val columns = Array(palette.size) { IntArray(width) }
@@ -257,7 +268,7 @@ class PopupViewChangeTransitionTest {
             val i = index[r * 65536 + g * 256 + b] ?: continue
             rows[i][y]++; columns[i][x]++
         }
-        return palette.indices.map { i ->
+        val result = palette.indices.map { i ->
             val area = rows[i].sum()
             val peakRow = rows[i].max(); val peakColumn = columns[i].max()
             // Ignore sparse look-alike pixels (antialiasing, glass) outside the solid cover.
@@ -268,5 +279,7 @@ class PopupViewChangeTransitionTest {
                 Cover(area, Rect(left.toFloat(), top.toFloat(), right.toFloat(), bottom.toFloat()))
             }
         }
+        timing(analysisStart - captureStart, SystemClock.elapsedRealtime() - analysisStart)
+        return result
     }
 }
