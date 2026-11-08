@@ -8,16 +8,7 @@ import androidx.compose.runtime.getValue
 internal const val BrowseViewFadeMillis = 120
 internal const val BrowseViewTransitionFraction = .45f
 
-/** Longer journeys disappear earlier; the reverse arrival uses the identical window. */
-internal fun browsePinchFadeWindow(distance: Float, viewport: Float): Float =
-    BrowseViewTransitionFraction / (1f + distance.coerceAtLeast(0f) / viewport.coerceAtLeast(1f))
-
-/** Departures stop at their fade-end position and size, without accelerating either. */
-internal fun browsePinchGeometryProgress(departing: Boolean, progress: Float,
-    fadeWindow: Float = BrowseViewTransitionFraction): Float =
-    progress.coerceIn(0f, if (departing) fadeWindow.coerceIn(0f, 1f) else 1f)
-
-/** Visibility finishes before live geometry; departures share its cutoff and reversibility. */
+/** A part present at only one endpoint (number, cover, menu) finishes its fade before live geometry. */
 internal fun browseViewVisibility(source: Boolean, target: Boolean, progress: Float,
     fadeWindow: Float = BrowseViewTransitionFraction): Float {
     if (source == target) return if (target) 1f else 0f
