@@ -132,7 +132,7 @@ class ArtistDataSourceTest {
         val all = ListeningWindow(Long.MIN_VALUE, 10)
         assertEquals(7L, source.counts(all, settings).first().plays("a"))
         settings.value = RankingSettings(true)
-        assertEquals(2L, source.counts(all, settings).first().plays("a"))
+        assertEquals(2L, withTimeout(2000) { source.counts(all, settings).first { it.origin("a") == PlayCountOrigin.External } }.plays("a"))
         assertEquals(7L, source.counts(ListeningWindow(0, 10), settings).first().plays("a"))
         assertEquals(7L, PlayRankingSource(local).counts(all, settings).first().plays("a"))
         settings.value = RankingSettings(false)
