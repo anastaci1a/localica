@@ -5,9 +5,16 @@ if (System.getenv('GITHUB_ACTIONS') != 'true' || System.getenv('TEST_API') != '2
 }
 gradle.beforeProject { project ->
     project.plugins.withId('com.android.application') {
-        project.extensions.getByName('androidComponents').onVariants { variant ->
-            if (variant.name == 'debug') {
-                variant.androidTest.experimentalProperties.put('android.experimental.force-aot-compilation', true)
+        def components = project.extensions.getByName('androidComponents')
+        components.onVariants(components.selector().withBuildType('debug'), { variant ->
+            variant.androidTest.experimentalProperties.put('android.experimental.force-aot-compilation', true)
+        } as org.gradle.api.Action)
+        project.tasks.matching { it.name == 'connectedDebugAndroidTest' }.configureEach { task ->
+            task.doFirst {
+                if (!task.testRunnerFactory.forceCompilation.get()) {
+                    throw new GradleException('API 26 CI requires full post-install AOT for both packages')
+                }
+                logger.lifecycle('API 26 CI: full post-install AOT enabled for app and test packages')
             }
         }
     }
