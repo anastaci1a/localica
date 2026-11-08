@@ -136,19 +136,19 @@ class SearchImeMotionTest {
     private fun legacyImeWindowVisible(dump: String): Boolean {
         check(dump.startsWith("WINDOW MANAGER WINDOWS")) { "Missing native WindowManager evidence: $dump" }
         val imeWindows = dump.split(Regex("(?m)^  Window #\\d+ "))
-            .drop(1).filter { it.contains("mIsImWindow=true") }
+            .drop(1).filter { it.contains("mIsImWindow=true") && Regex("\\bty=2011\\b").containsMatchIn(it) }
         check(imeWindows.size <= 1) { "Ambiguous native IME windows: $dump" }
         val window = imeWindows.singleOrNull() ?: return false
         val surface = window.lineSequence().firstOrNull { it.contains("Surface: shown=") } ?: return false
         val alpha = Regex("\\balpha=([^\\s]+)").find(surface)?.groupValues?.get(1)?.toFloatOrNull()
             ?: return false
-        val exitRunning = window.contains("mAnimatingExit=true") &&
-            window.contains("mAnimating=true") && window.contains("mLocalAnimating=true") &&
-            window.contains("mAnimationIsEntrance=false")
+        // Exit ownership precedes the first local animation step. A positive,
+        // shown native surface in that pending interval has not finished hiding.
+        val exiting = window.contains("mAnimatingExit=true")
         val shownBeforeExit = window.contains("mViewVisibility=0x0") &&
             !window.contains("mPolicyVisibility=false")
         return window.contains("mHasSurface=true") && window.contains("mLastHidden=false") &&
-            surface.contains("Surface: shown=true") && alpha > 0f && (shownBeforeExit || exitRunning)
+            surface.contains("Surface: shown=true") && alpha > 0f && (shownBeforeExit || exiting)
     }
 
     private var nativeReturnProbe: NativeReturnProbe? = null
