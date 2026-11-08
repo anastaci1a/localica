@@ -478,7 +478,10 @@ fun LocalicaScreen(
             DiagnosticsExportAction()
             LibraryLicenses()
         }, lastFmContent = {
-            (context.applicationContext as? io.github.anastaci1a.localica.LocalicaApplication)?.let { LastFmSettings(it.lastfm) }
+            (context.applicationContext as? io.github.anastaci1a.localica.LocalicaApplication)?.let {
+                OnlineFeaturesSettings(it.onlineMetadataConsent)
+                LastFmSettings(it.lastfm)
+            }
         }, initialCategory = settingsCategory, onFullScan = onScanAll, onQuickScan = onQuickScan, libraryFiltersContent = {
             LibraryFilterSettings(libraryFilters) { libraryFilters = it; libraryFilterPreferences.write(it) }
         })

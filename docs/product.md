@@ -2,7 +2,7 @@
 
 ## Scope
 
-Localica plays audio stored on an Android device: Musicolet-inspired organization and an Apple Music-inspired interface. Core playback, editing, lyrics, and local statistics work offline without an account. Optional Last.fm statistics use explicit read-only network requests. 
+Localica plays audio stored on an Android device: Musicolet-inspired organization and an Apple Music-inspired interface. Core playback, editing, lyrics, and local statistics work offline without an account. Optional online metadata uses explicit consent.
 
 Prioritize quick access, large libraries, background playback, accessibility, meaningful customization, and explicit, recoverable file operations. UI defaults live in [Interface](interface.md). Future capabilities live in [Roadmap](roadmap.md).
 
@@ -113,9 +113,19 @@ Timed lyrics interpolate Media3's latency-aware position between samples, freezi
 | Aggregation | Collections sum current distinct songs' counts. Playlist counts follow each queue occurrence's originating playlist, even after queue switches; legacy unknown origins remain unknown. |
 | Retention | Qualified plays are local, all-time, durable, and independent of folder/queue deletion. Never invent historical dates or counts. Most played uses selected per-song counts, highest first. |
 
+## Online features and artist photos
+
+Online features is one app-level consent switch in Settings → Last.fm. It defaults off. Consent covers artist photos and manual Last.fm sync. Turning it off prevents new network requests; cached photos and saved counts remain available offline.
+
+Artist photo lookup sends artist and release names to Deezer, then MusicBrainz, Wikidata and Wikimedia Commons when needed. It never uses Last.fm images. Automatic matching requires a normalized artist name and a release title shared with the local library. Missing matches retain the caller's latest album artwork.
+
+The photo data API fetches lazily when collected, emitting album artwork before disk or network work. The artist page presentation is separate work. Callers can review candidates, re-pick, clear or reset a match. Clear suppresses automatic lookup until a deliberate re-pick or reset.
+
+Photos refresh after 30 days. Failed attempts wait 24 hours before retrying. A 64 MiB disk cache evicts old pictures while preserving artist match choices. Commons pictures require saved licence and attribution metadata. No library audio or local listening history is uploaded.
+
 ## Optional Last.fm statistics
 
-Settings → Last.fm accepts a username and explicitly starts a read-only sync. No password, account login or OAuth is used. The only network endpoint is Last.fm's HTTPS API. Requests fetch listening statistics; they never upload local history or audio. Sync is manual, with no automatic launch request.
+Settings → Last.fm accepts a username and explicitly starts a read-only sync. No password, account login or OAuth is used. Last.fm requests use its HTTPS API. Requests fetch listening statistics; they never upload local history or audio. Sync is manual, with no automatic launch request.
 
 A complete paginated snapshot replaces the previous snapshot only after every page succeeds. Requests are paced, transient failures retry with backoff, and complete sync attempts are limited to once a minute. Failed same-account syncs preserve the last complete offline snapshot. Changing username clears the previous account's snapshot and turns external counts off.
 
