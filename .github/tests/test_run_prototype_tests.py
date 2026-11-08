@@ -38,6 +38,7 @@ class RunnerContract(unittest.TestCase):
         (self.root/'.github/test-evidence/observe.py').symlink_to(OBSERVER.resolve())
         (self.root/'.github/test-evidence/supervise.py').symlink_to((ROOT/'.github/test-evidence/supervise.py').resolve())
         (self.root/'.github/test-evidence/source_methods.py').symlink_to((ROOT/'.github/test-evidence/source_methods.py').resolve())
+        (self.root/'.github/test-evidence/teardown_offline.py').symlink_to((ROOT/'.github/test-evidence/teardown_offline.py').resolve())
         self.executable('bin/node', '''#!/usr/bin/env python3
 import json,pathlib,sys,time
 a=sys.argv
@@ -70,6 +71,11 @@ if mode=='cancel':
 if mode=='exit7': sys.exit(7)
 if mode=='silent': sys.exit(0)
 if mode=='observed': print(classes[0]+' > regression[emulator-5554 - 16] FAILED',flush=True)
+with pathlib.Path('gradle-invocations').open('a') as log: log.write('x'+chr(10))
+invocation=len(pathlib.Path('gradle-invocations').read_text().split())
+# #675: one invocation completes every test, then loses adb during UTP teardown.
+offline=mode.startswith('teardown-offline') and invocation==int(os.environ.get('OFFLINE_ON_INVOCATION','1'))
+if offline: pathlib.Path('offline-attempt').touch()
 root=pathlib.Path('app/build/outputs/androidTest-results/connected/debug');root.mkdir(parents=True,exist_ok=True)
 for i,selector in enumerate(os.environ['CASES'].split(',') if os.environ.get('CASES') else classes):
     cls, _, method = selector.partition('#')
@@ -77,7 +83,7 @@ for i,selector in enumerate(os.environ['CASES'].split(',') if os.environ.get('CA
     if mode=='missing-class' and i==1: continue
     suite=E.Element('testsuite',tests='1')
     case=E.SubElement(suite,'testcase',classname=cls,name=method)
-    if mode=='xml-failure' and i==0:E.SubElement(case,'failure')
+    if mode in ('xml-failure','teardown-offline-failure') and i==0:E.SubElement(case,'failure')
     if mode=='all-skipped' and i==0:E.SubElement(case,'skipped')
     if os.environ.get('SKIP_CLASS')==cls:
         method=os.environ['SKIP_METHOD']
@@ -99,6 +105,13 @@ for i,selector in enumerate(os.environ['CASES'].split(',') if os.environ.get('CA
             (folder/('logcat-'+cls+'-'+method+'.txt')).write_text(chr(10).join(lines)+chr(10))
     if mode=='bad-count':suite.set('tests','2')
     E.ElementTree(suite).write(root/('TEST-'+str(i)+'.xml'))
+if offline:
+    n=len(classes)
+    print('emulator-5554 - 16 Tests %d/%d completed. (0 skipped) (0 failed)'%(n,n))
+    print('Finished %d tests on emulator-5554 - 16'%n)
+    print('Exception thrown during onAfterAll invocation of plugin AndroidTestApkInstallerPlugin: device offline')
+    print('com.android.ddmlib.AdbCommandRejectedException: device offline',flush=True)
+    sys.exit(1)
 ''')
         self.env = dict(os.environ, PATH=str(self.root/'bin')+os.pathsep+os.environ['PATH'], AFFECTED_CLASSES=AFFECTED, TEST_API='36', GITHUB_SHA=SHA, GITHUB_RUN_ID='1', GITHUB_RUN_ATTEMPT='1', GITHUB_ACTIONS='true', RUNNER_ENVIRONMENT='github-hosted')
 
@@ -159,6 +172,121 @@ for i,selector in enumerate(os.environ['CASES'].split(',') if os.environ.get('CA
         summary=json.loads((self.root/'prototype-evidence/iterations/summary.json').read_text())
         self.assertEqual('failed', summary['gate']['status'])
         self.assertTrue(all(item['status']=='not-run' for item in summary['iterations']))
+
+    def reconnecting_adb(self):
+        # The same guest answers again after the drop unless ADB_STATE or ADB_BOOT_ID_AFTER says otherwise.
+        self.executable('bin/adb', '''#!/bin/sh
+case "$*" in
+  *get-state*) echo "${ADB_STATE:-device}" ;;
+  *sys.boot_completed*) echo 1 ;;
+  *ro.build.version.sdk*) echo "${ACTUAL_API:-$TEST_API}" ;;
+  *boot_id*) if [ -e offline-attempt ]; then echo "${ADB_BOOT_ID_AFTER:-boot-1}"; else echo boot-1; fi ;;
+  *uninstall*) echo Success ;;
+  *"pm list packages"*) [ -z "${ADB_STUCK_PACKAGE:-}" ] || echo "package:$ADB_STUCK_PACKAGE" ;;
+  *) echo "${ACTUAL_API:-$TEST_API}" ;;
+esac
+''')
+
+    def gradle_invocations(self):
+        path=self.root/'gradle-invocations'
+        return len(path.read_text().splitlines()) if path.exists() else 0
+
+    def test_teardown_offline_after_a_complete_pass_accepts_the_first_attempt(self):
+        self.reconnecting_adb()
+        result=self.run_case(0, _timeout=30, MODE='teardown-offline')
+        # Never a second run: it would give every test another chance.
+        self.assertEqual(1, self.gradle_invocations())
+        self.assertIn('::warning title=#675 adb offline after a complete pass::', result.stdout)
+        offline=self.root/'prototype-evidence/teardown-offline'
+        observed=json.loads((self.root/'prototype-evidence/live/observed/manifest.json').read_text())
+        self.assertEqual(('failed', 1, 0), (observed['status'], observed['child_returncode'], observed['observed_failure_lines']))
+        self.assertTrue(json.loads((offline/'classification.json').read_text())['accepted'])
+        recovery=json.loads((offline/'recovery.json').read_text())
+        self.assertTrue(recovery['recovered'])
+        self.assertEqual('boot-1', recovery['observed_boot_id'])
+        uninstalled=json.loads((offline/'uninstall.json').read_text())
+        self.assertEqual(['io.github.anastaci1a.localica.debug', 'io.github.anastaci1a.localica.debug.test'], sorted(uninstalled))
+        self.assertTrue(all(entry['removed'] for entry in uninstalled.values()))
+        self.assertEqual('first_attempt_exit=1\n', (offline/'recovered.txt').read_text())
+        evidence=json.loads((self.root/'prototype-evidence/reconciled-tests.json').read_text())
+        self.assertEqual({REQUIRED,FOCUS,CONTRAST,AFFECTED}, set(evidence['counts']))
+        self.assertEqual('setup\nrestore\n', (self.root/'lifecycle').read_text())
+        self.assertIn('boot_id=boot-1', (self.root/'prototype-evidence/context.txt').read_text())
+
+    def test_teardown_offline_with_a_failed_test_keeps_the_failure(self):
+        self.reconnecting_adb()
+        self.run_case(1, _timeout=30, MODE='teardown-offline-failure')
+        self.assertEqual(1, self.gradle_invocations())
+        record=json.loads((self.root/'prototype-evidence/teardown-offline/classification.json').read_text())
+        self.assertFalse(record['accepted'])
+        self.assertTrue(any(reason.startswith('Failed test ') for reason in record['reasons']), record['reasons'])
+        self.assertFalse((self.root/'prototype-evidence/teardown-offline/recovery.json').exists())
+        self.assertFalse((self.root/'prototype-evidence/reconciled-tests.json').exists())
+        self.assertEqual('setup\nrestore\n', (self.root/'lifecycle').read_text())
+
+    def test_teardown_offline_with_a_rebooted_guest_keeps_the_failure(self):
+        self.reconnecting_adb()
+        self.run_case(1, _timeout=30, MODE='teardown-offline', ADB_BOOT_ID_AFTER='boot-2')
+        self.assertEqual(1, self.gradle_invocations())
+        recovery=json.loads((self.root/'prototype-evidence/teardown-offline/recovery.json').read_text())
+        self.assertFalse(recovery['recovered'])
+        self.assertIn('rebooted', recovery['reason'])
+        self.assertFalse((self.root/'prototype-evidence/teardown-offline/recovered.txt').exists())
+        self.assertFalse((self.root/'prototype-evidence/reconciled-tests.json').exists())
+
+    def test_teardown_offline_without_a_returning_device_keeps_the_failure(self):
+        self.reconnecting_adb()
+        self.run_case(1, _timeout=40, MODE='teardown-offline', ADB_STATE='offline', PROTOTYPE_OFFLINE_RECOVERY_SECONDS='1')
+        self.assertEqual(1, self.gradle_invocations())
+        recovery=json.loads((self.root/'prototype-evidence/teardown-offline/recovery.json').read_text())
+        self.assertFalse(recovery['recovered'])
+        self.assertIn('did not return', recovery['reason'])
+        self.assertTrue(all(state['state']=='offline' for state in recovery['states']))
+        self.assertFalse((self.root/'prototype-evidence/reconciled-tests.json').exists())
+
+    def test_teardown_offline_with_an_incomplete_uninstall_keeps_the_failure(self):
+        self.reconnecting_adb()
+        self.run_case(1, _timeout=30, MODE='teardown-offline', ADB_STUCK_PACKAGE='io.github.anastaci1a.localica.debug')
+        offline=self.root/'prototype-evidence/teardown-offline'
+        self.assertTrue(json.loads((offline/'recovery.json').read_text())['recovered'])
+        uninstalled=json.loads((offline/'uninstall.json').read_text())
+        self.assertFalse(uninstalled['io.github.anastaci1a.localica.debug']['removed'])
+        self.assertFalse((offline/'recovered.txt').exists())
+        self.assertFalse((self.root/'prototype-evidence/reconciled-tests.json').exists())
+
+    def test_teardown_offline_with_a_publisher_failure_keeps_the_failure(self):
+        self.reconnecting_adb()
+        self.executable('bin/node', '#!/bin/sh\nexit 17\n')
+        self.run_case(1, _timeout=30, MODE='teardown-offline')
+        offline=self.root/'prototype-evidence/teardown-offline'
+        self.assertTrue(json.loads((offline/'recovery.json').read_text())['recovered'])
+        self.assertFalse((offline/'recovered.txt').exists())
+        self.assertFalse((self.root/'prototype-evidence/reconciled-tests.json').exists())
+
+    def test_repeat_records_the_recovered_iteration(self):
+        self.reconnecting_adb()
+        result=self.run_case(0, _timeout=40, PROTOTYPE_REPEAT='2', MODE='teardown-offline')
+        self.assertEqual(2, self.gradle_invocations())
+        summary=json.loads((self.root/'prototype-evidence/iterations/summary.json').read_text())
+        first, second=summary['iterations']
+        self.assertEqual(('passed', 0, 'passed', 0), (first['status'], first['exit_code'], second['status'], second['exit_code']))
+        self.assertEqual({'issue': 675, 'signature': 'teardown-device-offline', 'first_attempt_exit': 'first_attempt_exit=1',
+                          'evidence': 'prototype-evidence/teardown-offline'},
+                         {k: v for k, v in first['infrastructure_recovered'].items() if k != 'recovered_after_seconds'})
+        self.assertNotIn('infrastructure_recovered', second)
+        self.assertIn('Prototype iteration 1/2: passed (recovered from a #675 teardown adb drop)', result.stdout)
+        self.assertIn('Prototype iteration 2/2: passed\n', result.stdout)
+        self.assertTrue((self.root/'prototype-evidence/iterations/iteration-01/prototype-evidence/teardown-offline/recovery.json').is_file())
+
+    def test_exact_method_iterations_are_not_recovered(self):
+        # The delivery decision requires a clean observer exit for every exact-method iteration.
+        self.reconnecting_adb()
+        self.run_case(1, _timeout=40, PROTOTYPE_REPEAT='2', PROTOTYPE_METHODS=AFFECTED+'#regression', MODE='teardown-offline', OFFLINE_ON_INVOCATION='2')
+        self.assertEqual(2, self.gradle_invocations())
+        summary=json.loads((self.root/'prototype-evidence/iterations/summary.json').read_text())
+        self.assertEqual('passed', summary['gate']['status'])
+        self.assertEqual(('failed', 1, 'not-run'), (summary['iterations'][0]['status'], summary['iterations'][0]['exit_code'], summary['iterations'][1]['status']))
+        self.assertFalse((self.root/'prototype-evidence/iterations/iteration-01/prototype-evidence/teardown-offline').exists())
 
     def executable(self,path,text):
         target=self.root/path;target.write_text(text);target.chmod(0o755)
