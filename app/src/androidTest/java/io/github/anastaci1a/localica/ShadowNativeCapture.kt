@@ -42,10 +42,10 @@ internal fun checkNativeShadowMarker(capture: PresentedCapture) {
     }
 }
 
-/** One existing Activity window, one original PixelCopy per sample; never polls or retries pixels.
+/** One system-composited display screenshot per sample; never polls or retries pixels.
  * The diagnostic overlay is outside the tested field. It adds no Compose/layout/rendering wrapper.
  * Its counter advances only when Android draws it, independently of the frozen Engine clock.
- * A draw callback permits the request; only the token IN that request's image proves correlation.
+ * A native traversal permits the request; only the token IN the original display image proves correlation.
  */
 @OptIn(ExperimentalTestApi::class)
 internal class ShadowNativeCapture(private val rule: ComposeContentTestRule,
@@ -68,25 +68,46 @@ internal class ShadowNativeCapture(private val rule: ComposeContentTestRule,
 
     fun capture(hostEpoch: Long = 0): PresentedCapture {
         val drawn = CountDownLatch(1)
-        val crop = android.graphics.Rect(bounds.left.roundToInt(), bounds.top.roundToInt(),
+        val screenBounds = android.graphics.Rect(bounds.left.roundToInt(), bounds.top.roundToInt(),
             bounds.right.roundToInt(), bounds.bottom.roundToInt())
+        val drawings = linkedMapOf<Int, Long>()
+        var overflow = false
         rule.runOnUiThread {
             check(root.boundsInRoot == bounds && view.isAttachedToWindow && view.matrix.isIdentity) { "Capture transform or native host changed" }
-            val origin = IntArray(2).also(view::getLocationInWindow)
-            crop.offset(origin[0], origin[1])
-            marker.afterDraw = { view.post { drawn.countDown() } }
+            val origin = IntArray(2).also(view::getLocationOnScreen)
+            screenBounds.offset(origin[0], origin[1])
+            marker.afterDraw = {
+                if (drawings.size == 32) overflow = true else drawings[marker.token] = clockSequence()
+                // A one-shot native boundary allows submission; this is NOT presentation proof.
+                view.postOnAnimation { view.post { drawn.countDown() } }
+            }
             marker.invalidateSelf()
             view.invalidate()
         }
         check(drawn.await(5, TimeUnit.SECONDS)) { "Incomplete: no native marker traversal" }
-        val token = rule.runOnUiThread { marker.token }
-        val sequence = rule.runOnUiThread(clockSequence)
-        val bitmap = copyNativeWindowOnce(window,
-            Bitmap.createBitmap(crop.width(), crop.height(), Bitmap.Config.ARGB_8888),
-            "Incomplete: single native shadow copy timed out", crop) { "Incomplete: single native shadow copy failed: $it" }
-        val result = PresentedCapture(bitmap.asImageBitmap(), listOf("activity-window-$windowId"), hostEpoch,
-            token.toLong(), sequence, null, System.nanoTime(), NativeShadowGeneration(token, IntOffset(2, 2)))
-        try { checkNativeShadowMarker(result) } catch (failure: Throwable) {
+        val bitmap = checkNotNull(InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot()) {
+            "Incomplete: single system-composited screenshot failed"
+        }
+        val point = IntOffset(screenBounds.left + 2, screenBounds.top + 2)
+        val token = if (point.x >= 0 && point.y >= 0 && point.x + 4 < bitmap.width && point.y < bitmap.height)
+            bitmap.getPixel(point.x, point.y) and 0xffffff else -1
+        var result = PresentedCapture(bitmap.asImageBitmap(), listOf("activity-window-$windowId"), hostEpoch,
+            token.toLong(), -1, null, System.nanoTime(), NativeShadowGeneration(token, point),
+            sceneBounds = androidx.compose.ui.geometry.Rect(screenBounds.left.toFloat(), screenBounds.top.toFloat(),
+                screenBounds.right.toFloat(), screenBounds.bottom.toFloat()))
+        try {
+            check(screenBounds.left >= 0 && screenBounds.top >= 0 && screenBounds.right <= bitmap.width && screenBounds.bottom <= bitmap.height) {
+                "Incomplete: native scene is clipped by the display"
+            }
+            val sequence = rule.runOnUiThread {
+                marker.afterDraw = null
+                check(!overflow) { "Incomplete: native draw ledger overflow" }
+                checkNotNull(drawings[token]) { "Incomplete: display image is stale or belongs to a different native traversal" }
+                    .also { check(it == clockSequence()) { "Incomplete: Engine state changed during native capture" } }
+            }
+            result = result.copy(clockSequence = sequence)
+            checkNativeShadowMarker(result)
+        } catch (failure: Throwable) {
             shadowOracleEvidence("incomplete-$token", result, failure = failure.toString())
             throw failure
         }
@@ -136,6 +157,8 @@ internal fun shadowOracleEvidence(label: String, actual: PresentedCapture, refer
     }
     image("actual", actual); reference?.let { image("reference", it) }
     File(directory, "$label.json").writeText(JSONObject().put("windows", actual.windowIds)
+        .put("captureSource", if (actual.offscreen) "independent-offscreen-reference" else "original-system-composited-display")
+        .put("sceneBounds", actual.sceneBounds?.toString())
         .put("hostEpoch", actual.hostEpoch).put("drawGeneration", actual.drawGeneration)
         .put("clockSequence", actual.clockSequence).put("nativeGeneration", actual.nativeGeneration?.token)
         .put("nativePresentedNanos", actual.nativePresentedNanos ?: JSONObject.NULL)

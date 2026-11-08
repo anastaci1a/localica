@@ -17,6 +17,7 @@ internal data class PresentedCapture(
     val drawGeneration: Long, val clockSequence: Long,
     val nativePresentedNanos: Long?, val captureNanos: Long,
     val nativeGeneration: NativeShadowGeneration? = null, val offscreen: Boolean = false,
+    val sceneBounds: Rect? = null,
 )
 
 internal data class ShadowComparison(

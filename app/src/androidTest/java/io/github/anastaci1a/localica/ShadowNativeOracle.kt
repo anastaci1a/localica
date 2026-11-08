@@ -98,22 +98,24 @@ private fun assertShadowField(rule: ComposeContentTestRule, actual: PresentedCap
     val expected = ImageBitmap(actual.image.width, actual.image.height)
     val background = ImageBitmap(actual.image.width, actual.image.height)
     val extent = Size(expected.width.toFloat(), expected.height.toFloat())
+    val scene = checkNotNull(actual.sceneBounds)
+    val screenBody = body.translate(scene.topLeft)
     CanvasDrawScope().draw(rule.density, LayoutDirection.Ltr, Canvas(background), extent) { drawRect(Color.White) }
     // Independent same-geometry field, with the existing moving-reference compositing allowance.
     CanvasDrawScope().draw(rule.density, LayoutDirection.Ltr, Canvas(expected), extent) {
         drawRect(Color.White)
         drawContext.canvas.saveLayer(Rect(0f, 0f, size.width, size.height), Paint().apply { alpha = opacity })
-        scale(sx, sy, body.center) {
-            glassShadows(listOf(RoundRect(body, CornerRadius(radius)) to 1f), 1f, 1f, GlassShadowGeometry(), rasterizing = true)
+        scale(sx, sy, screenBody.center) {
+            glassShadows(listOf(RoundRect(screenBody, CornerRadius(radius)) to 1f), 1f, 1f, GlassShadowGeometry(), rasterizing = true)
         }
         drawContext.canvas.restore()
     }
-    val box = Rect(body.center.x - body.width * sx / 2, body.center.y - body.height * sy / 2,
-        body.center.x + body.width * sx / 2, body.center.y + body.height * sy / 2).inflate(2f)
-    val width = extent.width; val height = extent.height
+    val box = Rect(screenBody.center.x - body.width * sx / 2, screenBody.center.y - body.height * sy / 2,
+        screenBody.center.x + body.width * sx / 2, screenBody.center.y + body.height * sy / 2).inflate(2f)
     // All four exterior sides, including the complete outer tail; the control's own material is excluded.
-    val regions = listOf(Rect(0f, 10f, width, box.top), Rect(0f, box.bottom, width, height),
-        Rect(0f, box.top, box.left, box.bottom), Rect(box.right, box.top, width, box.bottom))
+    val regions = listOf(Rect(scene.left, scene.top + 10f, scene.right, box.top),
+        Rect(scene.left, box.bottom, scene.right, scene.bottom),
+        Rect(scene.left, box.top, box.left, box.bottom), Rect(box.right, box.top, scene.right, box.bottom))
     val probe = ShadowFieldProbe(regions, 1f / 255f)
     val reference = actual.copy(image = expected, offscreen = true)
     val blank = actual.copy(image = background, offscreen = true)
