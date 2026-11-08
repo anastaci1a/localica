@@ -51,6 +51,9 @@ def load(name):
     return data
 
 
+UPLOAD_RETRY = './.github/actions/upload-artifact-retry'
+
+
 def uses(step):
     return step.get('uses', '')
 
@@ -202,13 +205,26 @@ class SharedDependencyCacheContract(unittest.TestCase):
             for name, job in load(path.name)['jobs'].items():
                 for step in job['steps']:
                     with self.subTest(workflow=path.name, job=name):
-                        self.assertNotIn('retry', uses(step).lower())
+                        # #670's local action retries artifact uploads only (see the test below).
+                        if uses(step) != UPLOAD_RETRY:
+                            self.assertNotIn('retry', uses(step).lower())
                         self.assertNotIn('rerunFailingTestsCount', run(step))
         for build in (ROOT / 'build.gradle.kts', ROOT / 'app' / 'build.gradle.kts', ROOT / 'gradle' / 'libs.versions.toml'):
             text = build.read_text()
             self.assertNotIn('test-retry', text)
             self.assertNotIn('rerunFailingTestsCount', text)
             self.assertNotIn('retry', text.lower())
+
+    def test_upload_retry_action_only_uploads_artifacts(self):
+        # The one allowed retry wraps artifact uploads after a step has run, never Gradle or tests.
+        action = yaml.safe_load((ROOT / UPLOAD_RETRY / 'action.yml').read_text())
+        steps = action['runs']['steps']
+        self.assertTrue(any(uses(step) for step in steps))
+        for step in steps:
+            if uses(step):
+                self.assertTrue(uses(step).startswith('actions/upload-artifact@'), uses(step))
+            for command in ('gradlew', 'gradle ', 'connectedDebugAndroidTest', 'am instrument', 'run-device-tests', 'run-prototype-tests'):
+                self.assertNotIn(command, run(step))
 
 
 class DependencyCacheAuditContract(unittest.TestCase):
