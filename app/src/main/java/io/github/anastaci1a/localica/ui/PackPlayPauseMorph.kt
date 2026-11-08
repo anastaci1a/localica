@@ -31,7 +31,7 @@ internal class MorphPiece(val from: Contour, val to: Contour) {
     fun at(progress: Float): Contour = from.indices.map { from[it] + (to[it] - from[it]) * progress }
 }
 
-/** The precomputed pack morph: the play shape split at the centre of its ink, each half paired with a pause bar. */
+/** The precomputed pack morph: the play shape split in the pause bars' width proportion, each half paired with its bar. */
 internal class PackPlayPauseMorph(val left: MorphPiece, val right: MorphPiece, val cutX: Float, val matching: String)
 
 internal sealed interface PackPlayPausePlan {
@@ -57,7 +57,7 @@ internal fun planPackPlayPause(play: List<Contour>, pause: List<Contour>, points
     require(isSimple(triangle)) { "the play shape crosses itself" }
     bars.forEach { require(isSimple(it)) { "a pause shape crosses itself" } }
     require(bars[0].maxOf { it.x } <= bars[1].minOf { it.x } + EPSILON) { "the pause shapes overlap horizontally" }
-    val cutX = centroid(triangle).x
+    val cutX = proportionalCut(triangle, bars)
     val halves = listOf(clip(triangle, cutX, keepLeft = true), clip(triangle, cutX, keepLeft = false))
     halves.forEach { half ->
         require(half.size >= 3 && half.count { abs(it.x - cutX) <= EPSILON } == 2 && isSimple(half)) {
@@ -347,6 +347,14 @@ internal fun disjoint(a: Contour, b: Contour): Boolean {
     for (i in a.indices) for (j in b.indices)
         if (segmentsIntersect(a[i], a[(i + 1) % a.size], b[j], b[(j + 1) % b.size])) return false
     return !contains(a, b[0]) && !contains(b, a[0])
+}
+
+/** The vertical cut splits the play ink's width in the same proportion as the two bars' widths (operator rule,
+ * 2026-11-08): usually 1:1, the middle, like the built-in morph. */
+internal fun proportionalCut(play: Contour, bars: List<Contour>): Float {
+    val left = play.minOf { it.x }
+    val widths = bars.map { bar -> bar.maxOf { it.x } - bar.minOf { it.x } }
+    return left + (play.maxOf { it.x } - left) * widths[0] / (widths[0] + widths[1])
 }
 
 private fun clip(c: Contour, cutX: Float, keepLeft: Boolean): Contour {

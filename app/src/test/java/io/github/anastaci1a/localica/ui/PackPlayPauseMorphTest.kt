@@ -78,7 +78,10 @@ class PackPlayPauseMorphTest {
         assertEquals("arc-length", morph(eggPlay, capsulePause).matching)
         val m = morph(builtinPlay, builtinPause)
         assertTrue(abs(m.left.from.size - PACK_MORPH_POINTS) <= 4 && m.left.from.size == m.left.to.size)
-        assertEquals(centroid(builtinPlay.fillContours().single()).x, m.cutX, 1e-6f)
+        val play = builtinPlay.fillContours().single()
+        assertEquals("Equal bars cut the ink width in the middle", (play.minOf { it.x } + play.maxOf { it.x }) / 2f, m.cutX, 1e-6f)
+        val unequal = morph(syntheticPlay, svg(path("M4 3H6V21H4Z"), path("M14 3H20V21H14Z")))
+        assertEquals("Bars 2:6 cut a quarter of the way in", 3f / 24f + 19f / 24f * .25f, unequal.cutX, 1e-6f)
     }
 
     @Test fun everyGeneratedMorphIsPredictable() {
@@ -88,7 +91,7 @@ class PackPlayPauseMorphTest {
         privatePack()?.let { (play, pause) -> verify("private pack", morph(play, pause), play, pause) }
     }
 
-    @Test fun theRightPieceFollowsTheHandTunedMorphDirectionsAndTheLeftPieceGrowsFromTheCentroidSplit() {
+    @Test fun theRightPieceGrowsAndMovesRightLikeTheHandTunedMorph() {
         val tuned = PlayPauseShapes()
         fun tunedPiece(from: List<Offset>, to: List<Offset>, p: Float) = from.indices.map { from[it] + (to[it] - from[it]) * p }
         val m = morph(builtinPlay, builtinPause)
@@ -97,10 +100,9 @@ class PackPlayPauseMorphTest {
         assertTrue(signedArea(m.right.at(1f)) > signedArea(m.right.at(0f)))
         assertTrue(centroid(tunedPiece(tuned.playRight, tuned.pauseRight, 1f)).x > centroid(tunedPiece(tuned.playRight, tuned.pauseRight, 0f)).x)
         assertTrue(centroid(m.right.at(1f)).x > centroid(m.right.at(0f)).x)
-        // Left piece: the hand-tuned split sits at x=.5 so its left piece shrinks; the operator's centroid split
-        // leaves a smaller left half that grows into its bar. Both are monotonic (verified above).
-        assertTrue(signedArea(tunedPiece(tuned.playLeft, tuned.pauseLeft, 1f)) < signedArea(tunedPiece(tuned.playLeft, tuned.pauseLeft, 0f)))
-        assertTrue(signedArea(m.left.at(1f)) > signedArea(m.left.at(0f)))
+        // The left piece holds most of the ink at a middle cut; whether it grows or shrinks depends on the bar width,
+        // so only its monotonicity is asserted (in verify).
+        assertTrue(centroid(m.left.at(1f)).x <= centroid(m.left.at(0f)).x + .05f)
     }
 
     @Test fun plansAreCachedPerPublishedPackAndRasterIconsFallBack() {
@@ -143,9 +145,12 @@ class PackPlayPauseMorphTest {
             row.name + (row.morph?.let { " matching=${it.matching} cutX=${"%.4f".format(it.cutX)} points=${it.left.from.size}+${it.right.from.size}" } ?: " (reference)")
         } + "\n")
         File(dir, "metrics-662.csv").writeText(buildString {
-            appendLine("row,piece,progress,area,centroid_x,centroid_y,min_x,max_x,min_y,max_y")
-            for (row in rows) for (p in steps) for ((piece, name) in row.pieces(p)) {
-                appendLine("${row.name},$name,${"%.1f".format(p)},${"%.5f".format(signedArea(piece))},${"%.5f".format(centroid(piece).x)},${"%.5f".format(centroid(piece).y)}," +
+            appendLine("row,piece,progress,area,area_ratio_to_target,centroid_x,centroid_y,min_x,max_x,min_y,max_y")
+            for (row in rows) for (p in steps) for ((index, named) in row.pieces(p).withIndex()) {
+                val (piece, name) = named
+                val targets = row.frame(1f)
+                val ratio = if (index < targets.size && (row.morph != null || p > 0f)) "%.4f".format(signedArea(piece) / signedArea(targets[index])) else ""
+                appendLine("${row.name},$name,${"%.1f".format(p)},${"%.5f".format(signedArea(piece))},$ratio,${"%.5f".format(centroid(piece).x)},${"%.5f".format(centroid(piece).y)}," +
                     "${"%.5f".format(piece.minOf { it.x })},${"%.5f".format(piece.maxOf { it.x })},${"%.5f".format(piece.minOf { it.y })},${"%.5f".format(piece.maxOf { it.y })}")
             }
         })
