@@ -32,7 +32,8 @@ def utp(results):
     for (cls, method), reason in results.items():
         package, simple = cls.rsplit('.', 1)
         trace = 'org.junit.AssumptionViolatedException: '+reason+'\n\tat org.junit.Assume.assumeTrue(Assume.java:68)'
-        case = field(1, simple)+field(2, package)+field(3, method)
+        # Field 6 is a nested start-time message whose bytes are not text, as in real records.
+        case = field(1, simple)+field(2, package)+field(3, method)+field(6, b'\x08\xd2\x99\xff\xff\x06')
         error = field(1, trace)+field(2, 'org.junit.AssumptionViolatedException')+field(3, trace)
         body += field(3, field(1, case)+varint(2 << 3)+varint(4)+field(3, error))
     return body

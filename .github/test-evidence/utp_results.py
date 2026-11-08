@@ -47,12 +47,16 @@ def fields(data):
         yield number, wire, value
 
 
-def _strings(message):
-    return {number: value.decode('utf-8') for number, wire, value in fields(message) if wire == 2}
+def _strings(message, wanted=(1, 2, 3)):
+    # Other length-delimited fields (timestamps, device labels) are nested messages, not text.
+    return {number: value.decode('utf-8') for number, wire, value in fields(message) if wire == 2 and number in wanted}
 
 
-def assumption_reasons(path):
-    """Map 'package.Class#method' to the first message line of each assumption error in one file."""
+def assumption_errors(path):
+    """Map 'package.Class#method' to (reason, stack trace, test status) for each assumption error in one file.
+
+    The reason is the first message line; None when that line lacks the exception prefix.
+    """
     path = Path(path)
     if path.is_symlink() or path.stat().st_size > MAX_BYTES:
         raise ValueError('Invalid test-result.pb input')
@@ -60,17 +64,25 @@ def assumption_reasons(path):
     for number, wire, result in fields(path.read_bytes()):
         if number != 3 or wire != 2:
             continue
-        case = error = None
+        case = error = status = None
         for inner, inner_wire, value in fields(result):
             if inner == 1 and inner_wire == 2:
                 case = _strings(value)
+            elif inner == 2 and inner_wire == 0:
+                status = value
             elif inner == 3 and inner_wire == 2:
                 error = _strings(value)
         if case is None or error is None or error.get(2) not in ASSUMPTION_TYPES:
             continue
         identity = case.get(2, '')+'.'+case.get(1, '')+'#'+case.get(3, '')
         prefix = error[2]+': '
-        lines = (error.get(1) or error.get(3) or '').splitlines()
+        trace = error.get(3) or error.get(1) or ''
+        lines = (error.get(1) or trace).splitlines()
         reason = lines[0][len(prefix):] if lines and lines[0].startswith(prefix) else None
-        observed.setdefault(identity, []).append(reason)
+        observed.setdefault(identity, []).append((reason, trace, status))
     return observed
+
+
+def assumption_reasons(path):
+    """Map 'package.Class#method' to the observed reason of each assumption error in one file."""
+    return {identity: [error[0] for error in errors] for identity, errors in assumption_errors(path).items()}
