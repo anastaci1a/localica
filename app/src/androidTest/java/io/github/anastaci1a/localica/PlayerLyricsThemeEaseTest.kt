@@ -33,7 +33,7 @@ import org.junit.Test
  * open/close clock, for the foreground (text and icons) and for the controls' own ink, in both artwork layouts,
  * in both directions, reversibly mid-way, and snaps under Reduced Motion. The real PlayerSurface runs on a manual
  * clock; the sampled decision is pinned so the test chooses exactly when the theme changes. Each frame's values are
- * recorded and the sequences are checked for monotonic interpolation and the absence of a single-frame jump.
+ * recorded and checked against the cubic boundary constraints at each #608 phase, including target and reversal joins.
  */
 class PlayerLyricsThemeEaseTest {
     @get:Rule val compose = createComposeRule()
@@ -45,9 +45,13 @@ class PlayerLyricsThemeEaseTest {
     @Volatile private var inkComposition: PlayerInkComposition? = null
     private var sampleHeld by mutableStateOf(false)
     /** Latest drawn ink of every glass surface, by surface identity. */
-    private val glassInk = ConcurrentHashMap<Int, Float>()
+    private val glassInk = ConcurrentHashMap<Int, GlassInk>()
 
-    private class Frame(val foreground: Float, val glass: Map<Int, Float>)
+    private class GlassInk(val red: Float, val overridden: Boolean)
+    private class Frame(val foreground: Float, val glass: Map<Int, GlassInk>, val mix: Float, val previousMix: Float)
+    private var reference: LyricsPhaseReference? = null
+    private var pendingInk: Float? = null
+    private var pendingEnd = 0f
     private val recorded = ArrayList<Frame>()
 
     private fun mount(realDecision: Boolean = false) {
@@ -65,7 +69,7 @@ class PlayerLyricsThemeEaseTest {
             CompositionLocalProvider(LocalDensity provides Density(1f),
                 LocalPlayerBackgroundPreparationBarrier provides preparationBarrier,
                 LocalPlayerInkCompositionObserver provides { inkComposition = it },
-                LocalGlassSurfaceDrawObserver provides { glassInk[it.surfaceIdentity] = Color(it.inkArgb).red }) {
+                LocalGlassSurfaceDrawObserver provides { glassInk[it.surfaceIdentity] = GlassInk(Color(it.inkArgb).red, it.inkOverridden) }) {
                 BoxWithConstraints(Modifier.fillMaxSize()) {
                     BoxWithConstraints(Modifier.width(300.dp).height(minOf(560.dp, maxHeight))) {
                         PlayerSurface(PlaybackState(connected = true, title = "Region", artist = "Artwork", durationMs = 120000),
@@ -78,41 +82,69 @@ class PlayerLyricsThemeEaseTest {
             }
         } }
         compose.waitForIdle()
+        reference = LyricsPhaseReference(owner.lightMix, requireNotNull(inkComposition).lyricsProgress, if (lyrics) 1f else 0f)
     }
 
     private fun frame() { compose.mainClock.advanceTimeByFrame(); compose.waitForIdle() }
-    private fun record(count: Int) = repeat(count) {
+    private fun record(count: Int, assertLyricsPhase: Boolean = true) { repeat(count) {
+        val previous = owner.lightMix
+        glassInk.clear()
         frame()
-        recorded += Frame(inkComposition?.contentColor?.red ?: Float.NaN, glassInk.toMap())
+        if (assertLyricsPhase) compose.onNodeWithContentDescription("Play").captureNativeFrame()
+        val ink = requireNotNull(inkComposition)
+        pendingInk?.let { target ->
+            requireNotNull(reference).join(target, ink.lyricsProgress, pendingEnd)
+            pendingInk = null
+        }
+        val mix = requireNotNull(reference).expected(ink.lyricsProgress)
+        val expected = lerp(Color.Black, Color.White, mix).red
+        if (assertLyricsPhase) {
+            assertEquals("foreground follows the lyrics phase", expected, ink.contentColor.red, .015f)
+            assertEquals("shared material follows the lyrics phase", requireNotNull(reference).expected(ink.lyricsProgress), owner.lightMix, .015f)
+        }
+        recorded += Frame(ink.contentColor.red, glassInk.toMap(), mix, previous)
     }
-    private fun openLyrics(open: Boolean) { compose.runOnIdle { lyrics = open } }
-    private fun pin(light: Boolean) { compose.runOnIdle { owner.pin(light) } }
+        if (!assertLyricsPhase) return
+        recorded.flatMap { it.glass.keys }.distinct().forEach { id ->
+            val samples = recorded.filter { id in it.glass }
+            val values = samples.map { it.glass.getValue(id).red }
+            // Constant surfaces need not consume the player polarity; every changing surface must.
+            if (values.max() - values.min() > .05f) samples.forEach {
+                val ink = it.glass.getValue(id)
+                val dark = if (ink.overridden) Color.Black else Color(0xFF202124)
+                val current = lerp(dark, Color.White, it.mix).red
+                val previous = lerp(dark, Color.White, it.previousMix).red
+                assertTrue("drawn glass ink #$id follows its endpoint colors at this or the preceding phase: "+
+                    ink.red + " vs $previous -> $current", minOf(abs(ink.red - current), abs(ink.red - previous)) <= .02f)
+            }
+        }
+    }
+    private fun openLyrics(open: Boolean) { compose.runOnIdle {
+        pendingInk = if (owner.decision.lightInk) 1f else 0f; pendingEnd = if (open) 1f else 0f
+        lyrics = open
+    } }
+    private fun pin(light: Boolean) { compose.runOnIdle {
+        if (settings.reducedMotion) reference = LyricsPhaseReference(if (light) 1f else 0f, if (lyrics) 1f else 0f, if (lyrics) 1f else 0f)
+        else { pendingInk = if (light) 1f else 0f; pendingEnd = if (lyrics) 1f else 0f }
+        owner.pin(light)
+    } }
 
     private fun foreground() = recorded.map { it.foreground }
     /** Each glass surface's drawn ink over the frames it was present in. */
     private fun glassSequences(): List<List<Float>> = recorded.flatMap { it.glass.keys }.distinct()
-        .map { id -> recorded.mapNotNull { it.glass[id] } }
+        .map { id -> recorded.mapNotNull { it.glass[id]?.red } }
 
-    private fun assertEased(name: String, values: List<Float>, towardLight: Boolean?, maxStep: Float, minIntermediates: Int = 4) {
-        val low = values.min(); val high = values.max()
-        assertTrue("$name never changed polarity: $values", high - low > .3f)
-        values.zipWithNext().forEachIndexed { i, (a, b) ->
-            assertTrue("$name single-frame jump at $i: $a -> $b", abs(b - a) <= maxStep)
-            if (towardLight == true) assertTrue("$name not monotonic at $i: $a -> $b", b >= a - 1e-3f)
-            if (towardLight == false) assertTrue("$name not monotonic at $i: $a -> $b", b <= a + 1e-3f)
+    private fun assertEveryChannelEased(towardLight: Boolean?) {
+        val values = foreground()
+        assertTrue("foreground changed polarity: $values", values.max() - values.min() > .3f)
+        values.zipWithNext().forEach { (a, b) ->
+            if (towardLight == true) assertTrue("ink moves toward light", b >= a - 1e-3f)
+            if (towardLight == false) assertTrue("ink moves toward dark", b <= a + 1e-3f)
         }
-        val intermediates = values.count { it > low + .05f && it < high - .05f }
-        assertTrue("$name should pass through $minIntermediates+ intermediate frames, saw $intermediates: $values", intermediates >= minIntermediates)
+        assertTrue("some glass control follows the polarity", glassSequences().any { it.max() - it.min() > .3f })
+        // record() compares every channel with the cubic boundary-value oracle at this frame's
+        // actual #608 phase. Its successive expected values supply the law-derived frame bound.
     }
-
-    private fun assertEveryChannelEased(towardLight: Boolean?, maxStep: Float = .4f) {
-        assertEased("foreground", foreground(), towardLight, maxStep)
-        val glass = glassSequences()
-        assertTrue("glass controls were drawn", glass.isNotEmpty())
-        glass.forEachIndexed { i, sequence -> if (sequence.max() - sequence.min() > .3f) assertEased("glass ink #$i", sequence, towardLight, maxStep) }
-        assertTrue("some glass control follows the polarity", glass.any { it.max() - it.min() > .3f })
-    }
-
 
     /** No pin: the real sampler must supply BOTH endpoints before the layout moves. */
     @Test fun sampledThemeTracksEveryLyricsFrameInBothDirectionsAndOnReversal() {
@@ -163,7 +195,7 @@ class PlayerLyricsThemeEaseTest {
         if (inkComposition?.lyricsProgress != 0f) failures += "closing did not reach the player endpoint"
         release()
         capture("close-settled", 4)
-        begin(true); capture("partial-open", 12)
+        begin(true); capture("partial-open", 2)
         if (requireNotNull(inkComposition).lyricsProgress !in .05f..0.95f) failures += "reversal did not interrupt intermediate progress"
         openLyrics(false); capture("reverse", 40)
         if (inkComposition?.lyricsProgress != 0f) failures += "reversal did not return to the player endpoint"
@@ -186,7 +218,7 @@ class PlayerLyricsThemeEaseTest {
         settings = settings.copy(artworkLayout = layout)
         pin(true); mount()
         compose.mainClock.autoAdvance = false
-        openLyrics(true); record(6)
+        openLyrics(true); record(1)
         recorded.clear()
         pin(false)            // the lyrics theme differs: this arrives part-way through the animation
         record(40)
@@ -201,7 +233,7 @@ class PlayerLyricsThemeEaseTest {
         settings = settings.copy(artworkLayout = layout)
         lyrics = true; pin(false); mount()
         compose.mainClock.autoAdvance = false
-        openLyrics(false); record(6)
+        openLyrics(false); record(1)
         recorded.clear()
         pin(true)
         record(40)
@@ -215,29 +247,28 @@ class PlayerLyricsThemeEaseTest {
     @Test fun reversingTheLyricsAnimationMidEaseContinuesWithoutAJump() {
         pin(true); mount()
         compose.mainClock.autoAdvance = false
-        openLyrics(true); record(6)
+        openLyrics(true); record(1)
         recorded.clear()
-        pin(false); record(6)
+        pin(false); record(2)
+        assertTrue("reversal interrupts the lyrics phase", requireNotNull(inkComposition).lyricsProgress in .05f..0.95f)
         openLyrics(false)      // reversed part-way through the ease
         record(40)
         foreground().zipWithNext().forEachIndexed { i, (a, b) ->
-            assertTrue("foreground jump at $i: $a -> $b", abs(b - a) <= .4f)
             assertTrue("foreground drifted back toward the old ink at $i", b <= a + 1e-3f)
         }
         glassSequences().forEachIndexed { i, s -> s.zipWithNext().forEach { (a, b) ->
-            assertTrue("glass ink #$i jump $a -> $b", abs(b - a) <= .4f); assertTrue("glass ink #$i drifted back", b <= a + 1e-3f) } }
+            assertTrue("glass ink #$i drifted back", b <= a + 1e-3f) } }
         assertEquals(0f, foreground().last(), .02f)
     }
 
     @Test fun aThemeThatChangesBackMidEaseTurnsAroundWithoutAJump() {
         pin(true); mount()
         compose.mainClock.autoAdvance = false
-        openLyrics(true); record(6)
+        openLyrics(true); record(1)
         recorded.clear()
-        pin(false); record(5)
+        pin(false); record(2)
+        assertTrue("theme rejoin interrupts the lyrics phase", requireNotNull(inkComposition).lyricsProgress in .05f..0.95f)
         pin(true); record(40)
-        foreground().zipWithNext().forEachIndexed { i, (a, b) -> assertTrue("foreground jump at $i: $a -> $b", abs(b - a) <= .4f) }
-        glassSequences().forEachIndexed { i, s -> s.zipWithNext().forEach { (a, b) -> assertTrue("glass ink #$i jump $a -> $b", abs(b - a) <= .4f) } }
         assertEquals(1f, foreground().last(), .02f)
     }
 
@@ -257,19 +288,21 @@ class PlayerLyricsThemeEaseTest {
     @Test fun collapsingAndExpandingWithLyricsOpenNeverChangesThePolarity() {
         lyrics = true; pin(true); mount()
         compose.mainClock.autoAdvance = false
-        record(4); recorded.clear(); glassInk.clear()
-        compose.runOnIdle { expanded = false }; record(40)
-        compose.runOnIdle { expanded = true }; record(40)
+        record(4, assertLyricsPhase = false); recorded.clear(); glassInk.clear()
+        compose.runOnIdle { expanded = false }; record(40, assertLyricsPhase = false)
+        compose.runOnIdle { expanded = true }; record(40, assertLyricsPhase = false)
         glassSequences().forEachIndexed { i, s -> assertTrue("glass ink #$i constant while the player moves: ${s.min()}..${s.max()}", s.max() - s.min() < .02f) }
     }
 
     @Test fun aThemeDecidedWhileCollapsedEasesInWithTheExpansion() {
         lyrics = true; pin(true); expanded = false; mount()
         compose.mainClock.autoAdvance = false
-        record(4)
+        record(4, assertLyricsPhase = false)
         pin(false)            // decided while the mini player is showing; nothing visible changes
-        record(4); recorded.clear()
-        compose.runOnIdle { expanded = true }; record(40)
-        foreground().zipWithNext().forEachIndexed { i, (a, b) -> assertTrue("foreground jump at $i: $a -> $b", abs(b - a) <= .4f) }
+        record(4, assertLyricsPhase = false); recorded.clear()
+        compose.runOnIdle { expanded = true }; record(40, assertLyricsPhase = false)
+        foreground().zipWithNext().forEachIndexed { i, (a, b) ->
+            assertTrue("expansion foreground jump at $i: $a -> $b", abs(b - a) <= .4f)
+        }
     }
 }

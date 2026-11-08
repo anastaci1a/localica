@@ -42,6 +42,7 @@ android {
             applicationIdSuffix = ".debug"
             signingConfig = signingConfigs.getByName("debug")
             isDebuggable = false
+            isProfileable = true
             isMinifyEnabled = true
             isShrinkResources = false
             matchingFallbacks += "release"
@@ -51,7 +52,15 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
+    lint { baseline = file("lint-baseline.xml") }
     buildFeatures { compose = true; buildConfig = true }
+    defaultConfig {
+        val sourceSha = providers.gradleProperty("localicaSourceSha").orElse(
+            providers.exec { commandLine("git", "rev-parse", "HEAD") }.standardOutput.asText
+        ).get().trim()
+        require(sourceSha.matches(Regex("[a-f0-9]{40}"))) { "A full source SHA is required" }
+        buildConfigField("String", "SOURCE_SHA", "\"$sourceSha\"")
+    }
     // Platform-free helpers are test-only, shared by host contracts and device callers.
     sourceSets.getByName("test").java.srcDir("src/sharedTest/java")
     sourceSets.getByName("androidTest").java.srcDir("src/sharedTest/java")
@@ -64,6 +73,7 @@ kotlin { compilerOptions { jvmTarget.set(JvmTarget.JVM_17) } }
 ksp { arg("room.schemaLocation", "$projectDir/schemas") }
 
 dependencies {
+    lintChecks(project(":lint"))
     implementation(libs.jaudiotagger)
     implementation(libs.androidx.core)
     implementation(libs.androidx.profileinstaller)

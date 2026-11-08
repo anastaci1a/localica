@@ -1,0 +1,68 @@
+# One-off U10.03 transfer relabel (tag U10.03-relabel-2026-11-07)
+# Lead decision 2026-11-07 10:10 AM, #600 Stage 2 option (b): transfer entries whose real owner is another step move to that step.
+# U10.03 keeps the 18 tagged U10.02-ledger-2026-11-07 entries and the 29 untagged player phase consumers (47 entries remain).
+# check-ui-lint admits this relabel once, in one commit, for at most 22 entries (transferRelabels). Line numbers are at stage2/600 b7229619.
+# Owners: U10.04 = artwork swipe offset/feather/neighbor geometry (U10.04 swipe continuation, Stage 4); U04.02a = glass snapshot-recording gate (U04.02a retained faces and compositor recording); U04.01c = branch-dependent cover/metadata order (U04.01c stratum/content order; movingCover is its only input); U11.04 = title-to-lyrics input band bounds from player geometry (#472; U11.04 player stock geometry)
+# rule                   anchor                 from      to      codeSha256    code
+RawMotionMap             PlayerSurface.kt:125  U10.03 -> U04.02a a4ed50deff89  val lyricBackdrop = rememberFrostedBackdrop(listOf(artwork, settings.artworkLayout, settings.glass), p > .7f, 
+RawMotionMap             PlayerSurface.kt:273  U10.03 -> U04.01c 193bba0aa25c  val movingCover = p > 0f && p < 1f
+RawMotionMap             PlayerSurface.kt:273  U10.03 -> U04.01c 7d18dd49dd84  val movingCover = p > 0f && p < 1f
+RawMotionMap             PlayerSurface.kt:274  U10.03 -> U04.01c 9638baca2844  val metadataLayer = if (movingCover) -.5f else 0f
+RawMotionMap             PlayerSurface.kt:311  U10.03 -> U10.04  f0b2ab5bbc3d  val swipeFraction = (kotlin.math.abs(swipeOffset) / (artPixels)).coerceIn(0f, 1f)
+RawMotionMap             PlayerSurface.kt:332  U10.03 -> U10.04  167dc80e4d3b  footprints, backgroundProgress * (1f - lyricProgress), maxOf(1f - coverBlend, swipeFeather / .9f),
+RawMotionMap             PlayerSurface.kt:340  U10.03 -> U10.04  d673060ccbd2  if (p < .999f || artSwipe.active || swipeOffset != 0f) return null
+RawMotionMap             PlayerSurface.kt:388  U10.03 -> U04.02a 9b1f4f640591  .then(if (frostedBackdrop != null) Modifier.recordFrostedBackdrop(frostedBackdrop, enabled = p >= .99f) else M
+RawMotionMap             PlayerSurface.kt:409  U10.03 -> U10.04  dee9cbe9d709  alpha = lyricMotion.artworkAlpha * if (artSwipe.active) (remaining / (artPixels * .08f)).coerceIn(0f, 1f) else
+RawMotionMap             PlayerSurface.kt:411  U10.03 -> U10.04  d58dca48feda  rotationY = (offset / artPixels).coerceIn(-1f, 1f) * -27f
+RawMotionMap             PlayerSurface.kt:413  U10.03 -> U10.04  0abaebaf1d4e  val depth = kotlin.math.abs(offset / artPixels).coerceIn(0f, 1f)
+RawMotionMap             PlayerSurface.kt:421  U10.03 -> U10.04  9ced4906a1f4  .artworkEdgeFeather(maxOf(edgeSoftness, swipeFeather),
+RawMotionMap             PlayerSurface.kt:428  U10.03 -> U04.02a 6745207be818  .recordFrostedBackdrop(if (lyricProgress > 0f) lyricBackdrop else artworkWash, enabled = p > .7f),
+RawMotionMap             PlayerSurface.kt:428  U10.03 -> U04.02a cacae530d569  .recordFrostedBackdrop(if (lyricProgress > 0f) lyricBackdrop else artworkWash, enabled = p > .7f),
+RawMotionMap             PlayerSurface.kt:444  U10.03 -> U10.04  f117dc2ba011  with(density) { artX.toPx() } + swipeOffset, artPixels, softness = maxOf(1f - coverBlend, swipeFeather / .9f),
+RawMotionMap             PlayerSurface.kt:449  U10.03 -> U10.04  042d8f309652  with(density) { artX.toPx() } + neighborOffset, artPixels, softness = maxOf(1f - coverBlend, swipeFeather / .9
+RawMotionMap             PlayerSurface.kt:490  U10.03 -> U04.01c 6cd3530ea480  .zIndex(if (movingCover || lyricProgress > 0f) 0f else -1f)
+RawMotionMap             PlayerSurface.kt:491  U10.03 -> U04.02a 342be6facfd5  .recordPlayerCoverBackdrop(lyricBackdrop, artworkWash, enabled = p > .7f && lyricProgress <= 0f),
+RawMotionMap             PlayerSurface.kt:491  U10.03 -> U04.02a 9b6139532f5e  .recordPlayerCoverBackdrop(lyricBackdrop, artworkWash, enabled = p > .7f && lyricProgress <= 0f),
+RawMotionMap             PlayerSurface.kt:545  U10.03 -> U11.04  1c0f88107fba  val inputTop = ((statusInset + 48.dp).roundToPx() - origin).coerceIn(0, height)
+RawMotionMap             PlayerSurface.kt:546  U10.03 -> U11.04  4970cf84c028  val inputBottom = minOf(height, seekY.roundToPx() - padding - origin).coerceAtLeast(inputTop)
+RawMotionMap             PlayerSurface.kt:546  U10.03 -> U11.04  5ac821870dad  val inputBottom = minOf(height, seekY.roundToPx() - padding - origin).coerceAtLeast(inputTop)
+# Recorded addition (lead decision 2026-11-07 11:00 AM): untagged, admitted by check-ui-lint recordedOwnerMoves (pinned to this codeSha256 only).
+# U11.04 = the player Column on this line is a baselined NonPresetScreenLayout that U11.04 replaces; any text edit re-identifies it. Line number at stage2/600 da4efd64.
+RawMotionMap             PlayerSurface.kt:405  U10.03 -> U11.04  f7cb4d564f22  Column(Modifier.fillMaxSize().controlVerticalScroll(playerScroll, enabled = p > 0.99f && virtualHeight > this@PlayerSurf
+# Second recorded U10.03 relabel (tag U10.03-relabel-2-2026-11-07). Lead decision 2026-11-07 12:10 PM (2): U10.03 completes on the
+# tween and curve work. Its remaining 22 transfers (the player phase read and the phase-derived lifetime gates) can only clear when their
+# consumers sample in Engine-owned layout/draw, so they move once, in one commit, to that step. check-ui-lint admits this tag once, at most 22.
+# Owners: U11.04 = player frame/artwork placement sampling (phase read, mini-artwork content-scale key, edge feather draw gate);
+# U11.01 = the shell chrome join maxOf(playerPhase, 1 - chromePhase) (U11 spec RawMotionMap table; the decision named U11.04/U10.05, U11.01 is the step that owns this line, veto open);
+# U10.05 = lyrics, seek/action rows, handle and backdrop lifetime/availability gates (U10.05 exact scope PlayerSurface134-158, PlayerActions, Backdrop host). Line numbers at stage2/600 df39d04f.
+MotionReadInComposition  PlayerSurface.kt:87   U10.03 -> U11.04  f5468d16120a  val p = sheet.expansion.phase.value()
+RawMotionMap             LocalicaScreen.kt:386 U10.03 -> U11.01  1145c7d02d17  .offset { androidx.compose.ui.unit.IntOffset(0, kotlin.math.round((80.dp + inset).toPx() * maxOf(pha
+RawMotionMap             PlayerSurface.kt:150  U10.03 -> U10.05  b0761800e8e4  val lyricsResult = if (lyricsOpen || lyricProgress > 0f) rememberLyrics(track) else null
+RawMotionMap             PlayerSurface.kt:267  U10.03 -> U11.04  7f5b31755f97  val artContentScale = remember(miniArtworkPixels, artCropRetention, p == 0f) {
+RawMotionMap             PlayerSurface.kt:268  U10.03 -> U11.04  9c024792ee59  playerArtworkContentScale(miniArtworkPixels, artCropRetention, p == 0f)
+RawMotionMap             PlayerSurface.kt:327  U10.03 -> U10.05  9006d8670726  if (rowMotion.seekAlpha > 0f) add("seek")
+RawMotionMap             PlayerSurface.kt:328  U10.03 -> U10.05  32fee3179e70  if (rowMotion.actionsAlpha > 0f) add("actions")
+RawMotionMap             PlayerSurface.kt:343  U10.03 -> U10.05  d4fbe2073b40  val geometry = backgroundGeometry ?: return null
+RawMotionMap             PlayerSurface.kt:359  U10.03 -> U10.05  feb188eeba44  if (controls.size < 4) return null
+RawMotionMap             PlayerSurface.kt:370  U10.03 -> U10.05  31a1ca51c1ff  p < .999f || backgroundReveal < 1f -> PlayerBackgroundUnavailable.PartialPlayer
+RawMotionMap             PlayerSurface.kt:370  U10.03 -> U10.05  c54c09d1df57  p < .999f || backgroundReveal < 1f -> PlayerBackgroundUnavailable.PartialPlayer
+RawMotionMap             PlayerSurface.kt:374  U10.03 -> U10.05  c5699af739e1  }, GlassTone(), if (ordinaryEndpoint != null && lyricsEndpoint != null) ordinaryEndpoint to lyricsEn
+RawMotionMap             PlayerSurface.kt:374  U10.03 -> U10.05  e8f80717d909  }, GlassTone(), if (ordinaryEndpoint != null && lyricsEndpoint != null) ordinaryEndpoint to lyricsEn
+RawMotionMap             PlayerSurface.kt:402  U10.03 -> U10.05  5221315d4e59  if (backgroundReveal < 1f) LiquidGlassSurface(Modifier.fillMaxSize(), source = glassBackdrop,
+RawMotionMap             PlayerSurface.kt:421  U10.03 -> U11.04  30251e79e9f5  if (edgeSoftness > 0f && frame.softArtwork != null) androidx.compose.foundation.Image(frame.softArtw
+RawMotionMap             PlayerSurface.kt:445  U10.03 -> U10.05  4cf66d003240  if (backgroundReveal > 0f) Box(Modifier.fillMaxSize().graphicsLayer { alpha = backgroundReveal }) {
+RawMotionMap             PlayerSurface.kt:469  U10.03 -> U10.05  ac48d65bd98f  if (lyricProgress > 0f) CompositionLocalProvider(LocalFrostedBackdrop provides lyricBackdrop) { Lyri
+RawMotionMap             PlayerSurface.kt:478  U10.03 -> U10.05  e1751cf21d30  if (lyricMotion.contentAlpha > 0f) child.place(0, 0)
+RawMotionMap             PlayerSurface.kt:504  U10.03 -> U10.05  3f9191bd211b  if (handleReveal > 0f) Box(Modifier.offset(y = statusInset).fillMaxWidth().height(48.dp).graphicsLay
+RawMotionMap             PlayerSurface.kt:518  U10.03 -> U10.05  c30ed0ae4ad7  onSources = { if (lyricsResult?.sources?.isNotEmpty() == true) sourcesVisible = true },
+RawMotionMap             PlayerSurface.kt:569  U10.03 -> U10.05  fe82c0027853  if (rowMotion.seekAlpha > 0f) Column(Modifier.offset(x = contentInset, y = seekY).width(contentWidth
+RawMotionMap             PlayerSurface.kt:575  U10.03 -> U10.05  1ed7353e7425  if (rowMotion.actionsAlpha > 0f) Box(Modifier.offset(x = contentInset, y = actionsY)
+# Recorded scope moves of baseline incidents (lead decision 2026-11-07 12:55 PM (3)/(4), design/STAGE2-CLOSEOUT.md §1a). These tweens are
+# baselined, not transfers, so no ledger entry changes: U10.03 no longer claims them, and the named step's receipt must remove these fingerprints.
+# aspect feeds composition geometry; a 4th composition-read exception was declined, so it moves to U11.04 with the U08.02b blend stamp.
+RawUiMotion              PlayerSurface.kt:111  U10.03 -> U11.04  7ce691df4c94  val aspect by animateFloatAsState(artwork.palette.aspect, tween(paletteDuration), label = "Cover proportions")
+RawUiMotion              PlayerSurface.kt:111  U10.03 -> U11.04  aa764612c602  val aspect by animateFloatAsState(artwork.palette.aspect, tween(paletteDuration), label = "Cover proportions")
+RawUiMotion              LocalicaScreen.kt:153 U10.03 -> U11.01  ba7b247b6083  val chromeVisibility by androidx.compose.animation.core.animateFloatAsState(if (insideCollection) 0f else 1f,
+RawUiMotion              LocalicaScreen.kt:154 U10.03 -> U11.01  37fff52770d0  androidx.compose.animation.core.tween(settings.motionDuration(300)), label = "Detail navigation")
+RawUiMotion              LocalicaScreen.kt:279 U10.03 -> U10.05  19bc7350796f  val miniInk by androidx.compose.animation.animateColorAsState(browseInk,
+RawUiMotion              LocalicaScreen.kt:280 U10.03 -> U10.05  5e5231ebea25  androidx.compose.animation.core.tween(settings.motionDuration(220)), label = "Mini-player foreground")

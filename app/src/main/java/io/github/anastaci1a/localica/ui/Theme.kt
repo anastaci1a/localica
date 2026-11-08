@@ -1,5 +1,6 @@
 package io.github.anastaci1a.localica.ui
 
+import io.github.anastaci1a.localica.ui.engine.ProvideUiClock
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
@@ -116,6 +117,6 @@ fun LocalicaTheme(grayTone: Float = .4f, content: @Composable () -> Unit) {
             LocalGlassRendererRuntime provides renderer,
             androidx.compose.material3.LocalContentColor provides MaterialTheme.colorScheme.onSurface,
             androidx.compose.material3.LocalRippleConfiguration provides null,
-        ) { ModalGestureRoot { TextEditingFocusHost { GlassDialogHost { GlassPopupHome(content = content) } } } }
+        ) { ProvideUiClock { ModalGestureRoot { TextEditingFocusHost { GlassDialogHost { GlassPopupHome(content = content) } } } } }
     }
 }

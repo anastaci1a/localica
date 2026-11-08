@@ -10,6 +10,7 @@ name: Dependency cache
       - 'settings.gradle.kts'
       - 'build.gradle.kts'
       - 'app/build.gradle.kts'
+      - 'lint/**'
       - 'gradle/**'
       - '.github/workflows/dependency-cache.yml'
 permissions:
@@ -41,6 +42,8 @@ jobs:
       - name: Resolve the static-checks task set
         # The same tasks and sizing as the prototype build job (a superset of Android static-checks).
         run: bash .github/gradle-transient-retry.sh ./gradlew testDebugUnitTest lintDebug assembleDebug assembleRelease --no-daemon --max-workers=4 -Dorg.gradle.jvmargs='-Xmx6g -Dfile.encoding=UTF-8'
+      - name: Warm UI lint detector test dependencies
+        run: bash .github/gradle-transient-retry.sh ./gradlew :lint:test --no-daemon --max-workers=2 -Dorg.gradle.jvmargs='-Xmx2g -Dfile.encoding=UTF-8'
       - name: Record downloaded dependency files
         if: ${{ !cancelled() }}
         run: bash .github/dependency-cache-audit.sh report

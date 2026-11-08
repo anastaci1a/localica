@@ -3,11 +3,12 @@ set -euo pipefail
 root="$RUNNER_TEMP/shuffle-compatibility"
 tools="$ANDROID_HOME/build-tools/35.0.0"
 runner=$(python3 "$GITHUB_WORKSPACE/.github/compatibility/instrumentation_runner.py" "$root/reports/provenance.json")
+source_sha=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["source_sha"])' "$root/reports/provenance.json")
 expected=$(keytool -exportcert -alias androiddebugkey -keystore "$LOCALICA_DEBUG_KEYSTORE" -storepass android | sha256sum | cut -d ' ' -f 1)
 for phase in seed bridge verify; do
   tree="$root/$phase"
   mkdir -p "$root/apks/$phase"
-  (cd "$tree" && bash .github/gradle-transient-retry.sh ./gradlew assembleDebug assembleDebugAndroidTest --no-daemon --max-workers=2) 2>&1 | tee "$root/reports/$phase-build.log"
+  (cd "$tree" && bash .github/gradle-transient-retry.sh ./gradlew assembleDebug assembleDebugAndroidTest "-PlocalicaSourceSha=$source_sha" --no-daemon --max-workers=2) 2>&1 | tee "$root/reports/$phase-build.log"
   cp "$tree/app/build/outputs/apk/debug/app-debug.apk" "$root/apks/$phase/compatibility-$phase-app.apk"
   cp "$tree/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk" "$root/apks/$phase/compatibility-$phase-test.apk"
   code=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["variants"][sys.argv[2]]["version_code"])' "$root/reports/provenance.json" "$phase")

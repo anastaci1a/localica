@@ -210,6 +210,8 @@ io.github.anastaci1a.localica.PlayerContrastTest
 io.github.anastaci1a.localica.PlayerExpandReadinessTest
 io.github.anastaci1a.localica.PlayerExpansionMotionTest
 io.github.anastaci1a.localica.PlayerFeedbackTest
+io.github.anastaci1a.localica.PlayerDragLyricsBackTest
+io.github.anastaci1a.localica.PlayerDragVelocityTest
 io.github.anastaci1a.localica.PlayerGestureTest
 io.github.anastaci1a.localica.PlayerLayoutTest
 io.github.anastaci1a.localica.PlayerLyricsForegroundTest
@@ -374,6 +376,9 @@ io.github.anastaci1a.localica.PresentationMarkerTest
 io.github.anastaci1a.localica.FrameStatsTest
 io.github.anastaci1a.localica.FrameStatsSettingsTest
 
+io.github.anastaci1a.localica.UiSpecFoundationTest
+io.github.anastaci1a.localica.UiClockFoundationTest
+io.github.anastaci1a.localica.UiExpansionFoundationTest
 io.github.anastaci1a.localica.SelectionMergeGeometryTest
 io.github.anastaci1a.localica.SelectionMergeSequenceTest
 io.github.anastaci1a.localica.PopupViewChangeTransitionTest
@@ -396,3 +401,9 @@ io.github.anastaci1a.localica.ArtworkChooserShortViewportTest
 io.github.anastaci1a.localica.MotionFollowupTest
 io.github.anastaci1a.localica.BackdropInvalidationTest
 io.github.anastaci1a.localica.HeaderGlassFreshnessTest
+io.github.anastaci1a.localica.PlayerReleaseContinuityTest
+io.github.anastaci1a.localica.QueueOwnerContinuityTest
+io.github.anastaci1a.localica.PlayerLyricsOwnerContinuityTest
+
+io.github.anastaci1a.localica.SheetCollapseCompositionTest
+io.github.anastaci1a.localica.ArtworkVelocityTest

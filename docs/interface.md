@@ -629,3 +629,5 @@ Include subfolders applies to every chosen folder. Off scans only that folder; o
 Folders to scan also owns removal and Add folder. Duplicate basenames use stable fractions such as Media (1/2). Unique names stay plain.
 
 Adding a folder only grants access. Metadata failures are never a persistent queue warning. From a shortcut’s initial settings page, Android Back returns to the caller. The header Back still visits the settings parent. Safety/lifecycle guarantees: [Structure](structure.md#file-operations).
+
+The [UI migration policy](structure.md#ui-migration-enforcement) prevents new raw control timing, transforms and spacing debt. Existing behavior remains the compatibility reference while callers migrate to shared controls.

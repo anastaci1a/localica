@@ -22,7 +22,10 @@ class FrameStatsTest {
                 val view = View(activity)
                 activity.setContentView(view)
                 view.post {
+                    FrameStats.setScenarioTag("player-expand-collapse")
+                    assertTrue(runCatching { FrameStats.setScenarioTag("user text") }.isFailure)
                     FrameStats.start(activity)
+                    assertTrue(runCatching { FrameStats.setScenarioTag("queue-drawer") }.isFailure)
                     var frame = 0
                     val callback = object : Choreographer.FrameCallback {
                         override fun doFrame(frameTimeNanos: Long) {
@@ -39,6 +42,10 @@ class FrameStatsTest {
             scenario.onActivity { activity -> FrameStats.stopFor(activity); assertFalse(FrameStats.recording.value) }
             Thread.sleep(300)
             val report = JSONObject(FrameStats.report())
+            assertEquals(2, report.getInt("schema"))
+            assertEquals("player-expand-collapse", report.getString("scenarioTag"))
+            assertEquals(BuildConfig.SOURCE_SHA, report.getString("buildSource"))
+            assertEquals(26, FrameStats.scenarioTags.distinct().size)
             val window = report.getJSONArray("windows").getJSONObject(0)
             assertTrue(window.getInt("frames") >= 10)
             assertFalse(window.isNull("p50Ms"))
@@ -47,6 +54,7 @@ class FrameStatsTest {
                 val file = DiagnosticsExport.write(activity)
                 assertTrue(file.readText().contains("estimatedMissedVsyncs"))
                 assertTrue(file.length() < 100_000)
+                FrameStats.setScenarioTag("")
                 FrameStats.start(activity)
                 FrameStats.stopFor(activity)
                 assertFalse(FrameStats.recording.value)

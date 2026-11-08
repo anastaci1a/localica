@@ -287,3 +287,17 @@ APK-producing Gradle steps receive the optional Actions secret LASTFM_API_KEY. G
 The Android workflow's distribution build produces the canonical APK used by tag releases. Its build step receives the same key. Reusable prototype callers forward the optional secret explicitly or inherit secrets. Diagnostics, evidence publishers and release upload steps never receive it.
 
 The application key is bundled into the client APK for read-only API calls. No Last.fm shared secret is used or bundled. Offline tooling contracts enforce secret scope and prevent workflow commands from printing its environment variable. JVM and device fixtures make no live API requests.
+
+## UI policy checks
+
+The app consumes thirteen ERROR rules from `:lint`. Run `./gradlew :lint:test :app:lintDebug` and `bash .github/run-ui-lint.sh app/build/reports/ui-lint`. The second command fetches main once and records its immutable SHA.
+
+The generated `app/lint-baseline.xml` records inherited debt. Initial bootstrap requires the frozen Stage 0 approval and source receipt. Subsequent changes may only remove incident identities; equal-count replacements fail. Never regenerate the baseline to accept new debt.
+
+`app/ui-escapes.yaml` starts empty. An exact adapter exception needs a tracking issue, owner, concrete expiry and recorded lead review. Frozen stage metadata supplies completed steps and release identity. Tests, runtime dependencies and source-only changes trigger the tooling contracts.
+
+Frame export schema 2 retains schema 1 keys and adds an allow-listed scenario tag, frozen build source, capture ID, clock bounds and per-Window identities. Each raw frame sample contains app VSYNC timestamp, work duration, refresh budget and nullable deadline in nanoseconds. Native presentation and tail acknowledgment remain unavailable from FrameMetrics.
+
+The optimized distribution variant is profileable for explicit Perfetto capture. Export occurs after Stop through the existing diagnostics share sheet. No frame listener or trace capture starts before the user chooses Start.
+
+Builds record the checkout’s full Git SHA. For a source archive without Git metadata, pass `-PlocalicaSourceSha=FULL_SOURCE_SHA` from its verified provenance. The compatibility builder supplies the immutable archived candidate SHA.

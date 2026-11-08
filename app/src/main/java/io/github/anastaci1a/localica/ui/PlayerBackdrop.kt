@@ -34,32 +34,15 @@ internal fun thumbnailPalette(bitmap: android.graphics.Bitmap): PlayerPalette {
     return PlayerPalette(band(0), band(1), band(2), bitmap.width.toFloat() / bitmap.height)
 }
 
-/** Pure palette-color retargeting on the artwork reveal clock. */
-internal class PlayerPaletteTransition(initial: PlayerPalette) {
-    internal data class Step(val shown: PlayerPalette, val start: PlayerPalette, val target: PlayerPalette,
-        val startProgress: Float = 0f, val lastProgress: Float = 1f)
-    private var committed = Step(initial, initial, initial)
-    fun resolve(target: PlayerPalette, clock: Float): Step {
-        val progress = clock.coerceIn(0f, 1f)
-        if (progress >= 1f) return Step(target, target, target)
-        val old = committed
-        val restart = target != old.target || progress < old.lastProgress - .001f
-        val start = if (restart) old.shown else old.start
-        val startProgress = if (restart) progress else old.startProgress
-        val fraction = ((progress - startProgress) / (1f - startProgress).coerceAtLeast(.001f)).coerceIn(0f, 1f)
-        val shown = target.copy(top = lerp(start.top, target.top, fraction),
-            middle = lerp(start.middle, target.middle, fraction), bottom = lerp(start.bottom, target.bottom, fraction))
-        return Step(shown, start, target, startProgress, progress)
-    }
-    fun commit(step: Step) { committed = step }
-}
-
+/** Palette colors follow the artwork blend clock through one C1 map (U10.03, U08.02a rule). */
 @Composable
 internal fun animatedPlayerPalette(palette: PlayerPalette, clock: Float): PlayerPalette {
-    val transition = remember { PlayerPaletteTransition(palette) }
-    val step = transition.resolve(palette, clock)
-    SideEffect { transition.commit(step) }
-    return step.shown
+    val target = listOf(palette.top, palette.middle, palette.bottom)
+    val binding = remember { io.github.anastaci1a.localica.ui.components.ColorBinding(target) }
+    val steps = binding.resolve(target, clock)
+    SideEffect { binding.present(steps) }
+    val (top, middle, bottom) = binding.colors(steps, target)
+    return palette.copy(top = top, middle = middle, bottom = bottom)
 }
 
 /** Derived with the full cover, so both become ready in the same frame. */

@@ -19,6 +19,7 @@ import java.io.File
 import io.github.anastaci1a.localica.navigation.*
 import io.github.anastaci1a.localica.playback.PlaybackState
 import io.github.anastaci1a.localica.ui.*
+import io.github.anastaci1a.localica.ui.engine.*
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.launch
@@ -43,6 +44,8 @@ class LyricsArtworkEntryTest {
     private lateinit var scope: CoroutineScope
     private var density = 1f
     private var statusInset = 0f
+    private var clock: UiClock? = null
+    private val joins = JoinRecorder("player-lyrics")
 
     private fun setPlayer(track: io.github.anastaci1a.localica.library.Track? = null) {
         compose.setContent { LocalicaTheme { BoxWithConstraints(Modifier.fillMaxSize()) {
@@ -51,7 +54,10 @@ class LyricsArtworkEntryTest {
             statusInset = WindowInsets.statusBars.asPaddingValues().calculateTopPadding().value
             PlayerSurface(if (track == null) state else state.copy(trackId = track.id, trackUri = track.uri), false, {},
                 InterfaceSettings(artworkLayout = layoutMode), progress, {}, {}, {}, {}, {}, {},
-                lyricsOpen = lyricsMode, track = track, visual = visual)
+                lyricsOpen = lyricsMode, track = track, visual = visual) {
+                val owner = LocalClockOwner.current
+                SideEffect { clock = owner; owner?.events = joins }
+            }
         } } }
     }
 
@@ -150,18 +156,37 @@ class LyricsArtworkEntryTest {
             compose.runOnIdle { lyricsMode = false }
             snap(1f)
             val ordinary = artTop()
+            val closedTitle = bounds("player-title").top
+            compose.runOnIdle { lyricsMode = true }
+            compose.waitForIdle()
+            val openArt = artTop()
+            val titleTravel = bounds("player-title").top - closedTitle
+            compose.runOnIdle { lyricsMode = false }
+            compose.waitForIdle()
+            joins.joins.clear()
             compose.mainClock.autoAdvance = false
             try {
                 compose.runOnIdle { lyricsMode = true }
-                val tops = mutableListOf(ordinary)
-                repeat(60) { compose.mainClock.advanceTimeBy(16); tops += artTop() }
+                val started = compose.mainClock.currentTime * 1_000_000
+                val frames = mutableListOf<PhaseFrame>()
+                repeat(60) {
+                    compose.mainClock.advanceTimeByFrame()
+                    val phase = (bounds("player-title").top - closedTitle) / titleTravel
+                    frames += PhaseFrame(compose.mainClock.currentTime * 1_000_000, phase.toDouble())
+                    // #508 geometry is linear in the same title phase. A fast legal frame
+                    // can travel farther than one quarter of the old tween's distance.
+                    assertEquals("Artwork follows the presented title in $layout at phase=$phase",
+                        ordinary + (openArt - ordinary) * phase, artTop(), 1.5f)
+                }
+                assertTrue("The lyrics Engine records its motion joins", joins.joins.isNotEmpty())
+                verifyReleaseLaw("Artwork/title opening in $layout", frames, joins.joins,
+                    fallbackJoin(started, 0.0, 0.0, true),
+                    Law.objectTime(titleTravel.toDouble(), requireNotNull(clock).context!!.fullPlayerReferenceTravelPx.toDouble()))
                 compose.mainClock.autoAdvance = true
                 compose.waitForIdle()
                 val end = artTop()
                 assertEquals("Opening ends at the lyrics-layout band in $layout", expectedTop(), end, 1.5f)
                 assertTrue("The artwork actually moved in $layout", end - ordinary > 4f)
-                for (i in 1 until tops.size) assertTrue("No jump while opening in $layout at frame $i: ${tops[i - 1]} -> ${tops[i]}",
-                    kotlin.math.abs(tops[i] - tops[i - 1]) <= (end - ordinary) / 4f + 2f)
             } finally { compose.mainClock.autoAdvance = true }
         }
     }

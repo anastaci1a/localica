@@ -1,5 +1,6 @@
 """Contract for the shared Gradle dependency cache and bounded dependency download retries (#681)."""
 import os
+import shlex
 from pathlib import Path
 import subprocess
 import tempfile
@@ -64,7 +65,7 @@ def run(step):
 
 def gradle_tasks(command):
     """Task names from one `./gradlew ...` line; arguments starting with '-' are options."""
-    words = command.split()
+    words = shlex.split(command)
     if words[:2] == WRAPPED.split()[:2]:
         words = words[2:]
     assert words and words[0] == './gradlew', command

@@ -1,0 +1,246 @@
+{
+  "schemaVersion": 1,
+  "scriptVersion": "stage0-v1",
+  "seed": 600,
+  "tracks": 2000,
+  "artwork": "placeholders; no media I/O",
+  "glassRequested": "None",
+  "glassEffective": "None",
+  "warmups": 1,
+  "measuredRuns": 3,
+  "viewports": {
+    "26": {
+      "width": 1080,
+      "height": 1920,
+      "dpi": 420
+    },
+    "36": {
+      "width": 720,
+      "height": 1280,
+      "dpi": 280
+    }
+  },
+  "sourceFiles": {
+    "app/src/androidTest/java/io/github/anastaci1a/localica/UiPerformanceTest.kt": "1a7acd0332766ba06187b4fb68df5728b01ae147a22ab60ea2c543b5c9141895",
+    "app/src/main/java/io/github/anastaci1a/localica/browse/BrowsePreferences.kt": "185d574d6fa5941d8e5c025fb559d0166ec5829f80870ed3dc626e8f2c76f7d0",
+    "app/src/main/java/io/github/anastaci1a/localica/diagnostics/FrameStats.kt": "2506e575ee72e927b302878e050e2eeaa39ea498f190bb4ca6472db312e536d3",
+    "tools/performance/run-ui-benchmarks.sh": "beb0181f04a208a1dd41686158038f919af6ce111960dc8418fb94462ebb28f7",
+    "tools/performance/frametimeline.pbtxt": "8b1c9f8fa9500cd54d4bc48519ca90bb1877220abda989d9102c73d15a8226ec",
+    "tools/performance/none-contract.mjs": "cd2e56c8045e810b94e1c039945735f9b6adef1d285ca83b7072beda1bddec01",
+    "tools/performance/freeze-scenarios.mjs": "4424d64986580a04e50c56602b00ec124633d09e675bc660cde28e66378eee38",
+    "tools/performance/summarize-ui.mjs": "92e219262da23ba61b75d2be6a8fd70fd7c57db55c61cfec3b9bfb7b7fb8daea"
+  },
+  "actionHashDefinition": "SHA256(full UiPerformanceTest source hash + NUL + selected scenario ID); any harness change invalidates all scenarios",
+  "scenarios": [
+    {
+      "id": "list-smallest",
+      "actionScriptSha256": "fee478f8819a0bd442c9a179ffaa9ce462807d0f7c03e661b03dcb9edfadb48e",
+      "expectedWindows": [
+        "activity"
+      ],
+      "note": ""
+    },
+    {
+      "id": "list-small",
+      "actionScriptSha256": "0fbd8b0c884c89666dcaacaa7f596ec868509bccfd8634d617425a5918d8efd8",
+      "expectedWindows": [
+        "activity"
+      ],
+      "note": ""
+    },
+    {
+      "id": "list-tracklist",
+      "actionScriptSha256": "f606d48567fb60ae29bed9854ae9fdac50f2028966c134b20c754786f107c422",
+      "expectedWindows": [
+        "activity"
+      ],
+      "note": ""
+    },
+    {
+      "id": "list-compact",
+      "actionScriptSha256": "02fd7330b00e6c593e8f29ec748db3d472a5aeafa13f6b70df2fac08471ac796",
+      "expectedWindows": [
+        "activity"
+      ],
+      "note": ""
+    },
+    {
+      "id": "list-normal",
+      "actionScriptSha256": "ce21301231f8aa72530466216859fffbc63b465bb9f887d202ede08261a7db9a",
+      "expectedWindows": [
+        "activity"
+      ],
+      "note": ""
+    },
+    {
+      "id": "list-large",
+      "actionScriptSha256": "360bf2f74acbf247e220802e896558551df56486fd8f58a431027c8ace09faf3",
+      "expectedWindows": [
+        "activity"
+      ],
+      "note": ""
+    },
+    {
+      "id": "gallery-1",
+      "actionScriptSha256": "c7be21743cfaa561a7516bd91aeb3a3d769e4f7becb1a9215322f8f0f9f79425",
+      "expectedWindows": [
+        "activity"
+      ],
+      "note": ""
+    },
+    {
+      "id": "gallery-2",
+      "actionScriptSha256": "b22eede4b61820fb0b4a05cd6e4410e1a4c46f569daecc36cba61ab551dfd313",
+      "expectedWindows": [
+        "activity"
+      ],
+      "note": ""
+    },
+    {
+      "id": "gallery-3",
+      "actionScriptSha256": "a66154299c7304314cb074c19cb7cc5dbe970798616d0fbd35a2c70febf6a039",
+      "expectedWindows": [
+        "activity"
+      ],
+      "note": ""
+    },
+    {
+      "id": "gallery-4",
+      "actionScriptSha256": "cb3f220d5d4ffb31921516ef5dd2d73b6641fc535f588ca6ff96f5121912f0b5",
+      "expectedWindows": [
+        "activity"
+      ],
+      "note": ""
+    },
+    {
+      "id": "gallery-5",
+      "actionScriptSha256": "6a76489facaac4fc3675aa66d6bbe961de5ac9128168da7b2a44e61d7407675f",
+      "expectedWindows": [
+        "activity"
+      ],
+      "note": ""
+    },
+    {
+      "id": "subview-scroll",
+      "actionScriptSha256": "68c8f3d2ccebd89ee8965462577870f095e98cbc1725f1a38cc9ded2b477ed8e",
+      "expectedWindows": [
+        "activity"
+      ],
+      "note": ""
+    },
+    {
+      "id": "carousel",
+      "actionScriptSha256": "a5a5bd4f695647235e0a9a704e532f9bfc829c536067110a15eb55b203d8ecf3",
+      "expectedWindows": [
+        "activity"
+      ],
+      "note": ""
+    },
+    {
+      "id": "artist-album-carousel",
+      "actionScriptSha256": "bc85719c622a1071ec22594b3668f75970956825655d8addf531111b00381457",
+      "expectedWindows": [
+        "activity"
+      ],
+      "note": ""
+    },
+    {
+      "id": "queue-drawer",
+      "actionScriptSha256": "4848084f2d9665b47d977d1fee677a8dc4bd4b234551d05653ecbdb5f19975e4",
+      "expectedWindows": [
+        "activity"
+      ],
+      "note": ""
+    },
+    {
+      "id": "player-expand-collapse",
+      "actionScriptSha256": "1e75568cf45f08084684ed7bbff14f0c6b36bdce733d0bad7b9fd1728ecc835b",
+      "expectedWindows": [
+        "activity"
+      ],
+      "note": ""
+    },
+    {
+      "id": "popup-open-close",
+      "actionScriptSha256": "b9f825ff89420c8e8a7080e323dd18a7c56540ca82b732326579e20dcfebfae1",
+      "expectedWindows": [
+        "activity",
+        "modal"
+      ],
+      "note": ""
+    },
+    {
+      "id": "lyrics-open-close",
+      "actionScriptSha256": "2b8e426fa5491de80336882442e8574bf92ec337a6ea694cde613ad711e62597",
+      "expectedWindows": [
+        "activity"
+      ],
+      "note": ""
+    },
+    {
+      "id": "lyrics-content-theme",
+      "actionScriptSha256": "80f708b8e588d81ca48af15ecdb0f9198f1ead966957ce0799f792db8091b56c",
+      "expectedWindows": [
+        "activity"
+      ],
+      "note": ""
+    },
+    {
+      "id": "search-typing",
+      "actionScriptSha256": "3ab416665511c56674e9e95192ebf5b07db3881cd0252838f85ba78414549be6",
+      "expectedWindows": [
+        "activity"
+      ],
+      "note": "Inline search; system IME excluded"
+    },
+    {
+      "id": "pinch-sizes",
+      "actionScriptSha256": "668bdf27d2e099ebd827ac7da01a00f188859866c33f4b0f90f927528ad5a6e9",
+      "expectedWindows": [
+        "activity"
+      ],
+      "note": ""
+    },
+    {
+      "id": "multi-select-drag",
+      "actionScriptSha256": "f64a686ca2717460e76adfa21b4b9d55a694cf3de341e5761835a665ff969bf3",
+      "expectedWindows": [
+        "activity"
+      ],
+      "note": ""
+    },
+    {
+      "id": "interrupted-player-drag",
+      "actionScriptSha256": "0e731e07f25f016deef9228701b191c151def9b388d82aca98821aba1148fb8a",
+      "expectedWindows": [
+        "activity"
+      ],
+      "note": ""
+    },
+    {
+      "id": "back-during-popup-retract",
+      "actionScriptSha256": "c4cea0f58f6c83dfc371cb6938b83fe767b1d3a36f5ca7dea0c8e77f9b8bc2e5",
+      "expectedWindows": [
+        "activity",
+        "modal"
+      ],
+      "note": ""
+    },
+    {
+      "id": "queue-pull-during-player-collapse",
+      "actionScriptSha256": "4f2222edd50484e1f388dad68319ddba3fb1b234abdb885df57938888a99d3f3",
+      "expectedWindows": [
+        "activity"
+      ],
+      "note": "Current behaviour: Player owns pull; Stage 2 (U10) decides whether Queue takeover should exist"
+    },
+    {
+      "id": "drag-start-end-in-list",
+      "actionScriptSha256": "c8c231f023eae56a1146cbf1b6f61eafd6d486a0de68012a9af80feadc7a4d1c",
+      "expectedWindows": [
+        "activity"
+      ],
+      "note": "One selected Queue row starts and ends inside the list"
+    }
+  ]
+}
