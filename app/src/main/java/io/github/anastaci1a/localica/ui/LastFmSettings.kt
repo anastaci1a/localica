@@ -7,7 +7,8 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.unit.dp
+import io.github.anastaci1a.localica.ui.layout.SettingsStack
+import io.github.anastaci1a.localica.ui.spec.Space
 import io.github.anastaci1a.localica.lastfm.LastFmController
 import java.text.DateFormat
 import java.util.Date
@@ -51,8 +52,8 @@ internal fun LastFmSettings(controller: LastFmController) {
     if (saved.mappings.isNotEmpty()) ActionTextButton(onClick = controller::resetMappings) { Text("Reset Last.fm match choices") }
     if (reviewOpen) SettingsPage("Review matches", onBack = { reviewOpen = false }, backLabel = "Back from Last.fm review") {
         val scroll = androidx.compose.foundation.rememberScrollState()
-        Column(Modifier.fillMaxSize().scrollEdgeFade(scroll).controlVerticalScroll(scroll).padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        SettingsStack(Modifier.fillMaxSize().scrollEdgeFade(scroll).controlVerticalScroll(scroll),
+            inset = Space.Comfortable, gap = Space.Base) {
             LastFmSummary(state, matches, "lastfm-review-page-summary")
             LastFmReviewList(matches, controller::map)
         }

@@ -8,11 +8,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.unit.dp
+import io.github.anastaci1a.localica.ui.layout.*
+import io.github.anastaci1a.localica.ui.spec.Space
 import io.github.anastaci1a.localica.lastfm.*
 import java.text.DateFormat
 import java.util.Date
@@ -21,8 +21,8 @@ import java.util.Date
 internal fun LastFmSummary(state: LastFmState, matches: LastFmMatches, summaryTag: String = "lastfm-review-summary") {
     val snapshot = state.saved.snapshot
     val stats = remember(snapshot) { snapshot?.accountStats() }
-    LiquidGlassSurface(Modifier.fillMaxWidth(), cornerRadius = 20.dp, pressFeedback = false) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    LiquidGlassSurface(Modifier.fillMaxWidth(), cornerRadius = settingsReviewRadius(), pressFeedback = false) {
+        SettingsStack(inset = Space.Comfortable, gap = Space.Compact) {
             Text("Listening statistics", style = MaterialTheme.typography.titleMedium)
             Text("${matches.matched} matched · ${matches.review.size} need review · ${matches.notInLibrary} not in library",
                 Modifier.testTag(summaryTag), style = MaterialTheme.typography.bodyLarge)
@@ -71,8 +71,8 @@ internal fun LastFmReviewList(matches: LastFmMatches, onMap: (String, String) ->
         AppIcon.TabAlbums) { editionsOpen = !editionsOpen }
     if (editionsOpen) {
         matches.editions.take(editionsShown).forEach { edition ->
-            LiquidGlassSurface(Modifier.fillMaxWidth(), cornerRadius = 20.dp, pressFeedback = false) {
-                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            LiquidGlassSurface(Modifier.fillMaxWidth(), cornerRadius = settingsReviewRadius(), pressFeedback = false) {
+                SettingsStack(inset = Space.Comfortable, gap = Space.Tight) {
                     Text("${edition.remote.artist} — ${edition.remote.title}", style = MaterialTheme.typography.titleSmall)
                     Text("${edition.remote.plays} plays on each copy", style = MaterialTheme.typography.bodyMedium)
                     Text(edition.candidates.mapNotNull { it.album }.distinct().joinToString(" · "), style = MaterialTheme.typography.bodySmall)
@@ -91,8 +91,7 @@ private fun LastFmDecision(review: LastFmReview, onDismiss: () -> Unit, onSkip: 
     var selected by remember(review.remote.key) { mutableStateOf<String?>(null) }
     val scroll = rememberScrollState()
     GlassAlertDialog(onDismissRequest = onDismiss, title = { Text("Choose a match") }, text = {
-        Column(Modifier.fillMaxWidth().scrollEdgeFade(scroll).controlVerticalScroll(scroll).selectableGroup(),
-            verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        SettingsStack(Modifier.fillMaxWidth().scrollEdgeFade(scroll).controlVerticalScroll(scroll).selectableGroup(), gap = Space.Base) {
             Text("${review.remote.artist} — ${review.remote.title}", style = MaterialTheme.typography.titleSmall)
             Text("${review.remote.plays} plays · choose the recording in your library")
             review.candidates.forEach { candidate ->
@@ -108,12 +107,10 @@ private fun LastFmDecision(review: LastFmReview, onDismiss: () -> Unit, onSkip: 
 /** SettingsLink's existing glass shell and press feedback, with accessible single-choice semantics. */
 @Composable
 private fun LastFmCandidate(label: String, selected: Boolean, onClick: () -> Unit) {
-    LiquidGlassSurface(Modifier.fillMaxWidth(), cornerRadius = 20.dp) {
-        Row(Modifier.fillMaxWidth().ownButtonDrag().selectable(selected, role = Role.RadioButton,
-            onClick = controlActivation(true, onClick)).padding(16.dp), verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+    LiquidGlassSurface(Modifier.fillMaxWidth(), cornerRadius = settingsReviewRadius()) {
+        SettingsCandidateRow(Modifier.ownButtonDrag().selectable(selected, role = Role.RadioButton,
+            onClick = controlActivation(true, onClick)), indicator = {
             Text(if (selected) "●" else "○", color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface)
-            Text(label, Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
-        }
+        }, label = { modifier -> Text(label, modifier, style = MaterialTheme.typography.bodyLarge) })
     }
 }
