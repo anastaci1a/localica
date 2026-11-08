@@ -79,6 +79,15 @@ internal fun ImageChooser(workflow: ArtworkWorkflow, onDismiss: () -> Unit, onCh
     val files = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument(), ::chosen)
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { revision++ }
     if (workflow.stage == ArtworkStage.Chooser) GlassAlertDialog(onDismissRequest = onDismiss, title = { Text("Choose artwork") }, text = {
+        val popupView = androidx.compose.ui.platform.LocalView.current
+        val density = androidx.compose.ui.platform.LocalDensity.current
+        val imeBottom = WindowInsets.ime.getBottom(density)
+        SideEffect {
+            val nativeInsets = androidx.core.view.ViewCompat.getRootWindowInsets(popupView)
+            trace("popup ime=$imeBottom nativeIme=${nativeInsets?.getInsets(androidx.core.view.WindowInsetsCompat.Type.ime())?.bottom} " +
+                "nativeImeVisible=${nativeInsets?.isVisible(androidx.core.view.WindowInsetsCompat.Type.ime())} " +
+                "view=${popupView.width}x${popupView.height}")
+        }
         Column(Modifier.traceMeasure("body"), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             if (hasPermission && recent.isEmpty()) Text("No recent photos", style = MaterialTheme.typography.bodySmall)
             if (unavailableRecent) Text("Some recent images are unavailable. Choose them again using gallery or files.", style = MaterialTheme.typography.bodySmall)
