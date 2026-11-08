@@ -203,4 +203,48 @@ class ArtistPhotoDisplayTest {
         } finally { compose.mainClock.autoAdvance = true; consent.allowed.value = false; root.deleteRecursively() }
     }
 
+    @Test fun artistHeaderKeepsAlbumArtUntilLibraryRowsCanSupplyMatchEvidence() {
+        val root = File(InstrumentationRegistry.getInstrumentation().targetContext.cacheDir, "photo-header-readiness-${java.util.UUID.randomUUID()}")
+        val consent = Consent().apply { allowed.value = true }
+        val ready = java.util.concurrent.atomic.AtomicBoolean(false)
+        val early = java.util.concurrent.atomic.AtomicBoolean(false)
+        val calls = AtomicInteger()
+        val bytes = ByteArrayOutputStream().also { bitmap(android.graphics.Color.RED).compress(Bitmap.CompressFormat.PNG, 100, it) }.toByteArray()
+        val photos = ArtistPhotos(consent, ArtistPhotoDisk(File(root, "photos"), File(root, "choices"), 8L * 1024 * 1024), PhotoTransport { url, _ ->
+            if (!ready.get()) early.set(true)
+            calls.incrementAndGet()
+            when {
+                url.contains("/search/artist?") -> """{"data":[{"id":8,"name":"Fixture Artist","picture_big":"https://cdn-images.dzcdn.net/fixture.jpg"}]}""".toByteArray()
+                url.contains("/top?") -> """{"data":[{"album":{"title":"Fixture Album"}}]}""".toByteArray()
+                url.contains("cdn-images") -> bytes
+                else -> """{"artists":[]}""".toByteArray()
+            }
+        })
+        val artist = item()
+        var result by mutableStateOf(io.github.anastaci1a.localica.browse.BrowseResult())
+        val known = io.github.anastaci1a.localica.browse.BrowseResult(artist.songs.map { row ->
+            BrowserItem(MediaRef(MediaKind.Song, row.track.id), row.track.title, row.track.artist, listOf(row), row = row)
+        })
+        val album = PlayerVisual(bitmap(android.graphics.Color.BLUE).asImageBitmap(), contentKey = "loading-album")
+        try {
+            compose.setContent { LocalicaTheme {
+                CompositionLocalProvider(LocalArtistPhotoEnvironment provides ArtistPhotoEnvironment(photos, consent)) {
+                    Column {
+                        val hero = rememberArtistCollectionVisual(artist.ref, artist.title, result, "album:fixture", album)
+                        PlayerArtwork(hero, Modifier.size(100.dp).testTag("header-readiness"), androidx.compose.ui.graphics.RectangleShape,
+                            androidx.compose.ui.layout.ContentScale.Crop, 240)
+                        ActionButton({ ready.set(true); result = known }) { Text("Library rows ready") }
+                    }
+                }
+            } }
+            compose.waitForIdle()
+            assertTrue("Loading library rows keep the album fallback", center("header-readiness").blue > .9f)
+            assertEquals("An empty artist result cannot spend the retry window", 0, calls.get())
+            compose.onNodeWithText("Library rows ready").performClick()
+            compose.waitUntil(10000) { center("header-readiness").red > .98f }
+            assertFalse("Provider matching must wait for local release evidence", early.get())
+            assertEquals(3, calls.get())
+        } finally { consent.allowed.value = false; root.deleteRecursively() }
+    }
+
 }
