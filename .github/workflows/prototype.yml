@@ -61,6 +61,8 @@ name: Prototype (not release certified)
         default: hosted
         type: string
     secrets:
+      LASTFM_API_KEY:
+        required: false
       ANDROID_DEBUG_KEYSTORE:
         required: true
 permissions:
@@ -96,6 +98,8 @@ jobs:
     - name: Build and check
       # The Kotlin daemon inherits this heap; debug and release compile concurrently in it (#636).
       # Same sizing as the Android workflow static-checks job on the same 16 GB hosted runner.
+      env:
+        LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
       run: ./gradlew testDebugUnitTest lintDebug assembleDebug assembleRelease --no-daemon --max-workers=4 -Dorg.gradle.jvmargs='-Xmx6g -Dfile.encoding=UTF-8'
     - name: Verify development signing certificate
       run: |
@@ -177,6 +181,8 @@ jobs:
         sudo rm -rf /usr/share/dotnet
         df -h "$HOME"
     - name: Compile instrumentation APKs before starting emulator
+      env:
+        LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
       run: ./gradlew assembleDebug assembleDebugAndroidTest --no-daemon --max-workers=2
     - name: Run on a disposable emulator (self-hosted JIT runner)
       if: ${{ inputs.runner == 'self-hosted' }}
@@ -291,6 +297,8 @@ jobs:
         sudo udevadm trigger --name-match=kvm
         sudo rm -rf /usr/share/dotnet
     - name: Build and inspect private compatibility APKs sequentially
+      env:
+        LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
       run: bash .github/compatibility/build.sh
     - name: Prepare the verified emulator SDK
       uses: ./.github/actions/emulator-sdk-cache
@@ -380,6 +388,8 @@ jobs:
         sudo rm -rf /usr/share/dotnet
         df -h "$HOME"
     - name: Compile instrumentation APKs before starting emulator
+      env:
+        LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
       run: ./gradlew assembleDebug assembleDebugAndroidTest --no-daemon --max-workers=2
     - name: Run on a disposable emulator (self-hosted JIT runner)
       if: ${{ inputs.runner == 'self-hosted' }}
@@ -494,6 +504,8 @@ jobs:
         sudo udevadm trigger --name-match=kvm
         sudo rm -rf /usr/share/dotnet
     - name: Build and inspect private compatibility APKs sequentially
+      env:
+        LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
       run: bash .github/compatibility/build.sh
     - name: Prepare the verified emulator SDK
       uses: ./.github/actions/emulator-sdk-cache
