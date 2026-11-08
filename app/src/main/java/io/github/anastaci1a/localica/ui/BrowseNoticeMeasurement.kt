@@ -26,17 +26,22 @@ internal class BrowseNoticeMeasurement {
     private var receipt by mutableStateOf<Receipt?>(null)
     private var attached: Any? = null
 
-    val width: Int? get() = receipt?.takeIf { it.node === attached }?.width
+    val width: Int? get() = receipt?.width
     fun hasReceipt(node: Any, content: Any): Boolean = receipt?.let {
         it.node === node && it.node === attached && it.content === content
     } == true
 
     fun height(content: Any, width: Int, density: Density, direction: LayoutDirection): Int? =
-        receipt?.takeIf { it.node === attached && it.content === content && it.width == width &&
+        receipt?.takeIf { it.content === content && it.width == width &&
             it.density == density.density && it.fontScale == density.fontScale && it.direction == direction }?.height
 
-    fun attach(node: Any) { attached = node; receipt = null }
-    fun detach(node: Any) { if (attached === node) { attached = null; receipt = null } }
+    fun attach(node: Any) { attached = node }
+    fun detach(node: Any, cached: Boolean = false) {
+        if (attached === node) {
+            attached = null
+            if (!cached) receipt = null
+        }
+    }
     fun invalidate(node: Any) { if (attached === node) receipt = null }
     fun measured(node: Any, content: Any, width: Int, height: Int, density: Density, direction: LayoutDirection) {
         if (attached === node) receipt = Receipt(node, content, width, density.density, density.fontScale, direction, height)
@@ -55,6 +60,8 @@ private data class NoticeMeasureElement(val state: BrowseNoticeMeasurement, val 
 
 private class NoticeMeasureNode(var state: BrowseNoticeMeasurement, var content: Any) :
     Modifier.Node(), LayoutModifierNode, CompositionLocalConsumerModifierNode {
+    private val token = Any()
+    private var cachedReset = false
     private var measured = false
     private var measuring = false
     private var postedHost: View? = null
@@ -64,19 +71,32 @@ private class NoticeMeasureNode(var state: BrowseNoticeMeasurement, var content:
         pending = null
         postedHost = null
     }
-    override fun onAttach() { state.attach(this) }
-    override fun onDetach() { cancelRemeasure(); state.detach(this); measured = false }
-    override fun onReset() { cancelRemeasure(); state.invalidate(this); measured = false }
+    override fun onAttach() { cachedReset = false; state.attach(token) }
+    override fun onDetach() {
+        cancelRemeasure()
+        state.detach(token, cached = cachedReset)
+        cachedReset = false
+        measured = false
+    }
+    override fun onReset() {
+        // Pinned LazyLayout deactivation resets, then detaches a cached item. Its
+        // immutable receipt still describes this logical notice/content/constraints;
+        // detach revokes the writer without inventing or remeasuring geometry.
+        cancelRemeasure()
+        cachedReset = true
+        state.detach(token, cached = true)
+        measured = false
+    }
 
     fun update(next: BrowseNoticeMeasurement, identity: Any) {
         if (next === state && identity === content) return
         if (next !== state) {
-            state.detach(this)
+            state.detach(token)
             state = next
-            if (isAttached) state.attach(this)
+            if (isAttached) state.attach(token)
         }
         content = identity
-        state.invalidate(this)
+        state.invalidate(token)
         // A cached item can be just outside the visible lines. Invalidate its actual
         // node after child updates apply, instead of waiting for another scroll.
         cancelRemeasure()
@@ -90,7 +110,7 @@ private class NoticeMeasureNode(var state: BrowseNoticeMeasurement, var content:
                         postedHost = null
                         if (isAttached && measured && !measuring && content === identity && state === next &&
                             host.isAttachedToWindow && currentValueOf(LocalView) === host &&
-                            !state.hasReceipt(this@NoticeMeasureNode, identity)) remeasureSync()
+                            !state.hasReceipt(token, identity)) remeasureSync()
                     }
                 }
                 postedHost = host
@@ -108,7 +128,7 @@ private class NoticeMeasureNode(var state: BrowseNoticeMeasurement, var content:
             val child = measurable.measure(constraints)
             if (!isLookingAhead) {
                 measured = true
-                state.measured(this@NoticeMeasureNode, content, child.width, child.height, this, layoutDirection)
+                state.measured(token, content, child.width, child.height, this, layoutDirection)
             }
             return layout(child.width, child.height) { child.placeRelative(0, 0) }
         } finally { measuring = false }
