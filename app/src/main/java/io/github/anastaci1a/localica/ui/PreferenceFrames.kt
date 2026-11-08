@@ -61,8 +61,9 @@ internal fun SettingsLinkFace(title: String, summary: String?, icon: AppIcon?, m
             Text(title, Modifier.settingsRowPart(SettingsRowPart.Text), style = headlineStyle, color = colors.headlineColor)
             summary?.let { Text(it, style = summaryStyle, color = colors.supportingTextColor) }
         }
-        Icon(appIconPainter(AppIcon.ActionBack), null, Modifier.padding(start = 16.dp).size(20.dp).rotate(180f)
-            .settingsRowPart(SettingsRowPart.Trailing), tint = colors.trailingIconColor)
+        // The test handle sits outside the rotation so its bounds are the drawn bounds.
+        Icon(appIconPainter(AppIcon.ActionBack), null, Modifier.padding(start = 16.dp).size(20.dp)
+            .settingsRowPart(SettingsRowPart.Trailing).rotate(180f), tint = colors.trailingIconColor)
     }
 }
 
