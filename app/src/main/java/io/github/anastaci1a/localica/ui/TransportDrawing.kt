@@ -3,8 +3,12 @@ package io.github.anastaci1a.localica.ui
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
@@ -27,6 +31,29 @@ internal fun skipElements(travel: Float): List<SkipElement> {
     return listOf(SkipElement(.08f + (phase - 1f) * .4f, phase),
         SkipElement(.08f + phase * .4f, 1f),
         SkipElement(.08f + (phase + 1f) * .4f, 1f - phase))
+}
+
+/** The rest wedges span [SkipRestInset, 1 - SkipRestInset] of the canvas. */
+internal const val SkipRestInset = .08f
+/** Each fade band starts this far outside the rest bounds, so the rest icon is never dimmed. */
+internal const val SkipTaperMargin = .02f
+/** The band then ramps linearly to transparent at the canvas edge. */
+internal const val SkipTaperBand = SkipRestInset - SkipTaperMargin
+
+/** Horizontal opacity mask for travelling skip wedges, symmetric about the canvas centre. */
+internal fun skipTaperAlpha(x: Float): Float = (minOf(x, 1f - x) / SkipTaperBand).coerceIn(0f, 1f)
+
+/** Fade content through the edge bands instead of clipping it. A settled cycle draws only rest
+ * wedges, where the mask is opaque, so it skips the layer and stays the static icon exactly.
+ */
+private inline fun DrawScope.drawWithSkipTaper(phase: Float, content: DrawScope.() -> Unit) {
+    if (phase == 0f) return content()
+    val canvas = drawContext.canvas
+    canvas.saveLayer(Rect(Offset.Zero, size), Paint())
+    content()
+    drawRect(Brush.horizontalGradient(0f to Color.Transparent, SkipTaperBand to Color.Black,
+        1f - SkipTaperBand to Color.Black, 1f to Color.Transparent), blendMode = BlendMode.DstIn)
+    canvas.restore()
 }
 
 /** Normalized, corresponding contours retain the existing two-piece play/pause morph.
@@ -71,7 +98,9 @@ internal data class TransportShapes(
 internal val LocalTransportShapes = staticCompositionLocalOf { TransportShapes() }
 
 /** Arbitrary imported contours share transport timing and interruption state.
- * Play/pause endpoints fade in fixed bounds when no [PackPlayPauseMorph] applies; skip glyphs travel through a clipped cycle.
+ * Play/pause endpoints fade in fixed bounds when no [PackPlayPauseMorph] applies; imported skip glyphs
+ * travel through a clipped cycle, since their rest bounds are the whole canvas and leave no room outside
+ * them for a taper.
  */
 internal fun DrawScope.drawTransportPainters(glyph: TransportGlyph, pause: Float, travel: Float,
     color: Color, painter: Painter, pausePainter: Painter) {
@@ -99,7 +128,7 @@ internal fun DrawScope.drawTransportGlyph(glyph: TransportGlyph, pause: Float, t
             morph(p.playLeft, p.pauseLeft)
             morph(p.playRight, p.pauseRight)
         }
-    } else clipRect {
+    } else drawWithSkipTaper(travel - floor(travel)) {
         scale(if (glyph == TransportGlyph.Previous) -1f else 1f, 1f) {
             for (element in skipElements(travel)) if (element.alpha > 0f) {
                 translate(left = element.x * size.width) {
