@@ -15,7 +15,13 @@ import org.junit.Test
 /** #676: native Back may close lyrics, but it must not retire an already owned closing contact. */
 @OptIn(ExperimentalTestApi::class)
 class PlayerDragLyricsBackTest {
-    @Test fun backDuringClosingDragKeepsItsReleaseAndCommitsCollapse() = localicaRunComposeUiTest {
+    @Test fun backEarlyInClosingDragKeepsItsReleaseAndCommitsCollapse() = closingDrag(6)
+    @Test fun backMidClosingDragKeepsItsReleaseAndCommitsCollapse() = closingDrag(18)
+    @Test fun backLateInClosingDragKeepsItsReleaseAndCommitsCollapse() = closingDrag(30)
+
+    private fun closingDrag(backStep: Int) = localicaRunComposeUiTest {
+        fun checkpoint(stage: String) = android.util.Log.i("BackCollapse676", "step=$backStep $stage")
+        checkpoint("start")
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         instrumentation.targetContext.getSharedPreferences("interface", 0).edit().clear().commit()
         val track = Track("back-drag", "Back during drag", fileName = "missing.mp3", relativePath = "missing.mp3")
@@ -47,6 +53,7 @@ class PlayerDragLyricsBackTest {
             }
         }
         waitForIdle()
+        checkpoint("content ready")
         mainClock.autoAdvance = false
         fun settleOwners() {
             // Drain pending composition intents, then follow owner lifetime, not an old tween duration.
@@ -57,12 +64,14 @@ class PlayerDragLyricsBackTest {
             assertEquals("All admitted owners must reach rest", 0, clock.activeCount)
         }
         val collapsed = onNodeWithTag("player-surface").fetchSemanticsNode().boundsInRoot
-        // Fixed orderings put the lyrics cross-fade's retirement before, near and after the next closing moves.
-        for (backStep in listOf(6, 18, 30)) {
+        // Each ordering has its own bounded test lifetime on the software emulator.
+        run {
             onNodeWithTag("player-surface").performClick()
             settleOwners()
+            checkpoint("player open")
             onNodeWithContentDescription("Show lyrics").performClick()
             settleOwners()
+            checkpoint("lyrics open")
             onNodeWithContentDescription("Hide lyrics").assertExists()
             val handle = onNodeWithContentDescription("Player handle").fetchSemanticsNode().boundsInRoot.center
             val full = onNodeWithTag("player-surface").fetchSemanticsNode().boundsInRoot
@@ -73,14 +82,18 @@ class PlayerDragLyricsBackTest {
                 onRoot().performTouchInput { moveBy(Offset(0f, step), delayMillis = 16) }
                 mainClock.advanceTimeByFrame()
                 if (i == backStep) {
+                    checkpoint("before Back at move $i")
                     val moving = onNodeWithTag("player-surface").fetchSemanticsNode().boundsInRoot
                     assertTrue("Back must arrive during an admitted closing drag", moving.top > full.top + 1f && moving.top < collapsed.top)
                     instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
                     mainClock.advanceTimeByFrame()
+                    checkpoint("after Back")
                 }
             }
+            checkpoint("before UP; joins=${recorder.joins.map { it.target to it.policy }}")
             onRoot().performTouchInput { advanceEventTime(16); up() }
             settleOwners()
+            checkpoint("released; releases=$releases")
             assertEquals("Back must preserve exactly one release (step=$backStep; joins=${recorder.joins.map { it.target to it.policy }})",
                 before + 1, releases)
             onNodeWithContentDescription("Collapse player").assertDoesNotExist()
@@ -88,6 +101,7 @@ class PlayerDragLyricsBackTest {
             assertEquals("The released player must return to its compact seat", collapsed.top, closed.top, 1f)
             onNodeWithTag("player-surface").performClick()
             settleOwners()
+            checkpoint("complete")
             onNodeWithContentDescription("Show lyrics").assertExists()
             onNodeWithContentDescription("Hide lyrics").assertDoesNotExist()
             instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
