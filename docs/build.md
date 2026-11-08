@@ -117,6 +117,10 @@ The opt-in `prototype.yml` lane builds an explicitly uncertified development APK
 
 Full native shards and focused prototype jobs time out after 35 minutes. A timed-out shard fails the summary even if its XML is complete; rerun failed jobs to retry it.
 
+The hosted emulator's adb transport can drop while UTP pulls outputs and uninstalls the APKs after a complete, failure-free run (#675). The prototype runner then runs that gate once more and keeps the first attempt under `prototype-evidence/teardown-offline/`. The repeat summary records the retry.
+
+The retry requires a final XML with every expected method and no failures, no observed failure line, a Gradle failure caused only by that teardown plugin error, and the same guest (unchanged boot id) answering adb within three minutes. Any other failure, a rebooted guest or a device that stays offline keeps the original failure.
+
 Search IME, search-focus and contrast coverage is mandatory on API 26/36. Build/JVM/lint/signature and both preserved-data compatibility jobs also remain required. Known issues never waive failures.
 
 The `runner` input defaults to `hosted`. `runner=self-hosted` moves only the two focused emulator jobs to the owner’s locked-down single-job runner, for the owner’s manual dispatch on a branch (#592). A queued self-hosted job waits for the owner’s launcher and is never rerouted.
