@@ -17,6 +17,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.browse.*
@@ -65,6 +67,9 @@ internal fun PinnedHome(library: LibraryUiState, playlists: PlaylistState, pins:
         onOpen(item, item.songs)
     }
     var menu by remember { mutableStateOf<MediaRef?>(null) }
+    val density = LocalDensity.current
+    val obscuredInset = LocalBrowseObscuredInset.current
+    var returnControlHeight by remember { mutableIntStateOf(0) }
     val scroll = androidx.compose.foundation.lazy.rememberLazyListState()
     val artworkTransit = remember { ArtworkTransit() }
     val carousel = androidx.compose.foundation.lazy.rememberLazyListState()
@@ -96,7 +101,7 @@ internal fun PinnedHome(library: LibraryUiState, playlists: PlaylistState, pins:
                 returnToList.cancel()
             }
         }
-        .recordFrostedBackdrop(listBackdrop, surroundingBackdrop).testTag("home-list"), state = scroll, contentPadding = PaddingValues(top = 16.dp, bottom = LocalBrowseObscuredInset.current + 16.dp)) {
+        .recordFrostedBackdrop(listBackdrop, surroundingBackdrop).testTag("home-list"), state = scroll, contentPadding = PaddingValues(top = 16.dp, bottom = obscuredInset + with(density) { returnControlHeight.toDp() } + 16.dp)) {
         item { Column(Modifier.padding(horizontal = 24.dp)) {
             Text("Your music", style = MaterialTheme.typography.headlineMedium)
             Text("${library.snapshot.tracks.size} songs in your library")
@@ -137,12 +142,14 @@ internal fun PinnedHome(library: LibraryUiState, playlists: PlaylistState, pins:
             } }
         } } }
     }
+    BrowseScrollbar(scroll, Modifier.align(Alignment.CenterEnd).padding(bottom = obscuredInset), onUserScroll = returnToList::cancel)
     CompositionLocalProvider(LocalFrostedBackdrop provides listBackdrop) {
         FloatingReturnToPositionButton(up = true, label = "Return to top",
             visible = selectionVisible && !playerOpen && currentOrder && songs.isNotEmpty() && !session.active && scroll.canScrollBackward && !returnToList.pending,
             reducedMotion = reducedMotion,
             returning = returnToList.pending,
-            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = LocalBrowseObscuredInset.current)) {
+            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = obscuredInset)
+                .onSizeChanged { if (it.height > 0) returnControlHeight = it.height }) {
             returnToList(ListReturnAction.ScrollTop)
         }
     }

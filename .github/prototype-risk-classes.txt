@@ -371,3 +371,8 @@ io.github.anastaci1a.localica.FrameStatsTest
 io.github.anastaci1a.localica.SelectionMergeGeometryTest
 io.github.anastaci1a.localica.SelectionMergeSequenceTest
 io.github.anastaci1a.localica.PopupViewChangeTransitionTest
+
+io.github.anastaci1a.localica.ListForegroundClearanceTest
+io.github.anastaci1a.localica.ListEndContextsTest
+io.github.anastaci1a.localica.ScrollbarRowInputTest
+io.github.anastaci1a.localica.ShellChromeClearanceTest
