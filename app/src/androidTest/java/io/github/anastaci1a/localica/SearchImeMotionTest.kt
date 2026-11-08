@@ -133,12 +133,22 @@ class SearchImeMotionTest {
     // end (or restore a cached positive inset) independently of the native window.
     // Read WM after actual movement: a still-shown surface then proves that the
     // earlier placed frame preceded native hide completion. Never synthesize it.
-    private fun legacyImeWindowVisible(dump: String): Boolean {
+    private fun legacyImeWindow(dump: String): String? {
         check(dump.startsWith("WINDOW MANAGER WINDOWS")) { "Missing native WindowManager evidence: $dump" }
-        val imeWindows = dump.split(Regex("(?m)^  Window #\\d+ "))
-            .drop(1).filter { it.contains("mIsImWindow=true") && Regex("\\bty=2011\\b").containsMatchIn(it) }
-        check(imeWindows.size <= 1) { "Ambiguous native IME windows: $dump" }
-        val window = imeWindows.singleOrNull() ?: return false
+        // Footer lists repeat windows pending removal/surface destruction. Scope
+        // each live Window entry before selecting its own root IME attributes.
+        val entries = Regex("(?m)^  Window #\\d+ [^\\n]*:\\n(?:    [^\\n]*\\n|\\n)*")
+        val imeWindows = entries.findAll(dump).map { it.value }.filter { window ->
+            val attrs = window.lineSequence().firstOrNull { it.trimStart().startsWith("mAttrs=") }
+            window.contains("mIsImWindow=true") && attrs != null &&
+                Regex("\\bty=2011\\b").containsMatchIn(attrs)
+        }.toList()
+        check(imeWindows.size <= 1) { "Ambiguous native root IME windows: $dump" }
+        return imeWindows.singleOrNull()
+    }
+
+    private fun legacyImeWindowVisible(dump: String): Boolean {
+        val window = legacyImeWindow(dump) ?: return false
         val surface = window.lineSequence().firstOrNull { it.contains("Surface: shown=") } ?: return false
         val alpha = Regex("\\balpha=([^\\s]+)").find(surface)?.groupValues?.get(1)?.toFloatOrNull()
             ?: return false
