@@ -36,12 +36,13 @@ class GlassRenderModesTest {
                 contrast = 0f, shadowStrength = 0f)) {
                 SideEffect { compositions++ }
                 source = rememberFrostedBackdrop(Unit, dark = false)
-                Box(Modifier.size(240.dp, 220.dp)) {
+                Box(Modifier.size(240.dp, 300.dp)) {
                     Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(source)) {
                         repeat(8) { x -> drawRect(if (x % 2 == 0) Color.Red else Color.Blue,
                             Offset(x * size.width / 8, 0f), Size(size.width / 8, size.height)) }
                     }
-                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    // Both lenses need the same real scene beyond their padded optical bounds.
+                    Column(Modifier.padding(vertical = 48.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         PopupMaterialReference(source, phase)
                         LiquidGlassSurface(Modifier.fillMaxWidth().height(96.dp).testTag("phase-material"), source,
                             pressFeedback = false, shadow = false, presentation = {
