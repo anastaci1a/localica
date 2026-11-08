@@ -57,7 +57,7 @@ class GlassPresenceTest {
     @Test fun reversingPresenceKeepsItsFootprintAndReducedMotionRemovesExitImmediately() {
         var visible by mutableStateOf(true)
         var reduced by mutableStateOf(false)
-        compose.setContent { LocalicaTheme { CompositionLocalProvider(LocalReducedMotion provides reduced) {
+        compose.setContent { EngineTheme(reduced = reduced) { CompositionLocalProvider(LocalReducedMotion provides reduced) {
             Box(Modifier.padding(40.dp).testTag("slot")) {
                 GlassPresence(visible) { GlassActionButton(AppIcon.ActionRevert, "Revert", onClick = {}) }
             }

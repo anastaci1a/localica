@@ -19,6 +19,7 @@ import io.github.anastaci1a.localica.ui.engine.*
 @Stable class FaceExpansion internal constructor(private val motion: PopupMotion, private val density: Float) {
     private var last: ExpansionBasis? = null
     val view: ExpansionView get() = motion.expansion
+    internal val bounds: MotionRectView? get() = motion.bounds
     fun request(expanded: Boolean) = motion.show(expanded)
     fun measured(start: Rect, end: Rect) { val basis = ExpansionBasis(start, end, density); if (basis != last) { last = basis; motion.place(basis) } }
 }
@@ -57,7 +58,7 @@ internal class MorphHost(val slots: MorphSlots) {
 @Composable fun MorphFaces(expanded: Boolean, shared: @Composable SharedScope.(key: Any) -> Unit, modifier: Modifier = Modifier,
     compact: @Composable MorphScope.() -> Unit, content: @Composable MorphScope.() -> Unit) {
     val expansion = rememberFaceExpansion(expanded)
-    val slots = rememberMorphSlots(expansion.view.phase)
+    val slots = rememberMorphSlots(expansion.view) { expansion.bounds }
     val host = remember(slots) { MorphHost(slots) }
     host.expanded = expanded; host.shared = shared
     slots.Faces(expanded, { small, large -> expansion.measured(centeredFrame(small), centeredFrame(large)) }, modifier,

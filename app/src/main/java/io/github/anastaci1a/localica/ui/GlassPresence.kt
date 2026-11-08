@@ -3,7 +3,8 @@ package io.github.anastaci1a.localica.ui
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import io.github.anastaci1a.localica.ui.components.rememberFaceExpansion
-import io.github.anastaci1a.localica.ui.engine.RetainedFace
+import io.github.anastaci1a.localica.ui.engine.CompositorFace
+import io.github.anastaci1a.localica.ui.engine.Curve
 import io.github.anastaci1a.localica.ui.engine.centeredFrame
 
 /** A compact surface resolves into its resting footprint from this scale on its expansion's phase. */
@@ -20,7 +21,7 @@ internal fun GlassPresence(visible: Boolean, modifier: Modifier = Modifier, cont
     // The retained layer owns the whole material, including its shadow. Hoisting
     // that shadow outside this lifetime would leave a dark silhouette on exit.
     CompositionLocalProvider(LocalSurfaceShadows provides null, LocalPageShadows provides null) {
-        RetainedFace(visible, face.view.phase::value, modifier, inset, scale = PresenceScale,
+        CompositorFace(visible, face.view, { face.bounds }, Curve.linear(0f,1f), modifier, inset, scale = PresenceScale,
             onMeasured = { face.measured(centeredFrame(it, PresenceScale), centeredFrame(it)) }, content = content)
     }
 }

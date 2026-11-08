@@ -2220,7 +2220,7 @@
         errorLine2="                                  ~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/FloatingSelectionPanel.kt"
-            line="24"
+            line="26"
             column="35"/>
     </issue>
 
@@ -2231,20 +2231,11 @@
         errorLine2="                                           ~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/FloatingSelectionPanel.kt"
-            line="38"
+            line="40"
             column="44"/>
     </issue>
 
-    <issue
-        id="LiteralUiSpacing"
-        message="Use validated Spec tokens"
-        errorLine1="    val progress = animateFloatAsState(if (visible &amp;&amp; height.value > 0.dp) 1f else 0f,"
-        errorLine2="                                                                     ~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/FloatingSelectionPanel.kt"
-            line="43"
-            column="70"/>
-    </issue>
+
 
     <issue
         id="LiteralUiSpacing"
@@ -8177,16 +8168,7 @@
             column="5"/>
     </issue>
 
-    <issue
-        id="NonPresetScreenLayout"
-        message="Use stock screen layout slots"
-        errorLine1="    if (state.visible || state.progress > 0f) Box(modifier"
-        errorLine2="                                              ~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/FloatingSelectionPanel.kt"
-            line="52"
-            column="47"/>
-    </issue>
+
 
     <issue
         id="NonPresetScreenLayout"
@@ -12008,27 +11990,9 @@
             column="13"/>
     </issue>
 
-    <issue
-        id="RawPresentationTransform"
-        message="Bind presentation through Modifier.surface"
-        errorLine1="    }.graphicsLayer { alpha = state.progress }) {"
-        errorLine2="      ~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/FloatingSelectionPanel.kt"
-            line="66"
-            column="7"/>
-    </issue>
 
-    <issue
-        id="RawPresentationTransform"
-        message="Bind presentation through Modifier.surface"
-        errorLine1="    }.graphicsLayer { alpha = state.progress }) {"
-        errorLine2="                      ~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/FloatingSelectionPanel.kt"
-            line="66"
-            column="23"/>
-    </issue>
+
+
 
     <issue
         id="RawPresentationTransform"
@@ -15111,27 +15075,9 @@
             column="101"/>
     </issue>
 
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="    val progress = animateFloatAsState(if (visible &amp;&amp; height.value > 0.dp) 1f else 0f,"
-        errorLine2="                   ~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/FloatingSelectionPanel.kt"
-            line="43"
-            column="20"/>
-    </issue>
 
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="        if (reduced) androidx.compose.animation.core.snap() else glassMorphSpring(speed), label = &quot;Selection panel occupancy&quot;)"
-        errorLine2="                                                     ~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/FloatingSelectionPanel.kt"
-            line="44"
-            column="54"/>
-    </issue>
+
+
 
     <issue
         id="RawUiMotion"

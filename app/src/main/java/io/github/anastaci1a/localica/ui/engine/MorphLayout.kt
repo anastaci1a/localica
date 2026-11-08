@@ -19,36 +19,6 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.*
 import kotlin.math.roundToInt
 
-/** U04.02a: a face that places its children only while [visible]; otherwise it draws its last recording at [alpha] (0..1), with input and
- * semantics revoked. [inset] pads the recording for an external shadow, [retainSize] keeps the last visible footprint and [scale] is the
- * size at alpha 0 (presence). Moved from GlassMorphContent's RetainedGlassFace; SurfaceNode.retained replaces it in part B. */
-@Composable fun RetainedFace(visible: Boolean, alpha: () -> Float, modifier: Modifier = Modifier, inset: Dp = 0.dp, retainSize: Boolean = false,
-    scale: Float = 1f, onMeasured: (IntSize) -> Unit = {}, content: @Composable () -> Unit) {
-    val layer = rememberGraphicsLayer()
-    val measurement = remember { RetainedMeasurement() }
-    Layout(modifier = modifier.then(if (visible) Modifier else Modifier.clearAndSetSemantics { })
-        .drawWithContent {
-            val pad = inset.roundToPx()
-            if (visible) layer.record(size = IntSize(size.width.toInt() + pad * 2, size.height.toInt() + pad * 2)) {
-                translate(pad.toFloat(), pad.toFloat()) { this@drawWithContent.drawContent() }
-            }
-            val opacity = alpha().coerceIn(0f, 1f)
-            if (opacity > 0f && layer.size.width > 0) {
-                layer.alpha = opacity
-                if (scale != 1f) { layer.scaleX = scale + (1f - scale) * opacity; layer.scaleY = layer.scaleX }
-                translate(-pad.toFloat(), -pad.toFloat()) { drawLayer(layer) }
-            }
-        }, content = { Box { content() } }) { children, constraints ->
-        val child = children.single().measure(constraints)
-        if (visible || measurement.size == IntSize.Zero) measurement.size = IntSize(child.width, child.height)
-        val size = if (retainSize && !visible) measurement.size else IntSize(child.width, child.height)
-        onMeasured(size)
-        layout(size.width, size.height) { if (visible) child.place(0, 0) }
-    }
-}
-
-private class RetainedMeasurement { var size = IntSize.Zero }
-
 /** A face's frame centred on its origin at [scale], for an [ExpansionBasis] between centred faces. */
 internal fun centeredFrame(size: IntSize, scale: Float = 1f) = Size(size.width * scale, size.height * scale).let { Rect(Offset(-it.width / 2, -it.height / 2), it) }
 /** D09: a shared element's frame at [p] eases every edge linearly between its compact and expanded slots. */
@@ -57,7 +27,8 @@ private fun ease(a: IntSize, b: IntSize, p: Float) = IntSize((a.width + (b.width
 
 /** D09 shared-element bookkeeping of one two-face morph: per key, both faces' slot frames and endpoint sizes, their ink, and the one
  * instance's recording. Slots write only plain fields in layout and draw, so nothing here invalidates. */
-@Stable class MorphSlots internal constructor(private val phase: MotionValue) {
+@Stable class MorphSlots internal constructor(private val expansion: ExpansionView,private val bounds: ()->MotionRectView?) {
+    private val phase get()=expansion.phase
     internal class Slot { val frames = arrayOfNulls<LayoutCoordinates>(2); val sizes = arrayOf(IntSize.Zero, IntSize.Zero)
         val ink = arrayOf(Color.Unspecified, Color.Unspecified); var layer: GraphicsLayer? = null; var drawn = IntSize.Zero }
     internal val slots = mutableMapOf<Any, Slot>()
@@ -71,8 +42,8 @@ private fun ease(a: IntSize, b: IntSize, p: Float) = IntSize((a.width + (b.width
     @Composable fun Faces(expanded: Boolean, onMeasured: (IntSize, IntSize) -> Unit, modifier: Modifier, compact: @Composable () -> Unit,
         content: @Composable () -> Unit) {
         Layout(modifier = modifier.onPlaced { root = it }.drawWithContent { drawContent(); drawShared() }, content = {
-            RetainedFace(!expanded, { 1f - progress() }, content = compact)
-            RetainedFace(expanded, progress, content = content)
+            CompositorFace(!expanded, expansion, bounds, Curve.linear(1f,0f), content = compact)
+            CompositorFace(expanded, expansion, bounds, Curve.linear(0f,1f), content = content)
         }) { children, constraints ->
             val loose = constraints.copy(minWidth = 0, minHeight = 0)
             val faces = arrayOfNulls<Placeable>(2)
@@ -117,4 +88,7 @@ private fun ease(a: IntSize, b: IntSize, p: Float) = IntSize((a.width + (b.width
     }
 }
 
-@Composable fun rememberMorphSlots(phase: MotionValue) = remember(phase) { MorphSlots(phase) }
+@Composable fun rememberMorphSlots(expansion: ExpansionView,bounds: ()->MotionRectView?): MorphSlots {
+    val latest by rememberUpdatedState(bounds)
+    return remember(expansion) { MorphSlots(expansion) { latest() } }
+}
