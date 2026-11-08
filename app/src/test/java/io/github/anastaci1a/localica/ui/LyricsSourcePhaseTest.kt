@@ -25,7 +25,7 @@ class LyricsSourcePhaseTest {
         assertEquals(0f, popup.at(.25f), 0f)
         assertTrue(preparation.at(.3f) < 1f)
         assertTrue(popup.at(.3f) > 0f)
-        assertEquals(1f, preparation.at(.4f), 0f)
+        assertEquals(1f, preparation.at(.75f), 0f)
     }
 
     @Test fun mappingIsMonotonicWithZeroScalarEndpointSlopes() = mappings { preparation,popup ->
@@ -42,7 +42,7 @@ class LyricsSourcePhaseTest {
         }
         val h = .0001f
         assertEquals(0f, preparation.at(h) / h, .01f)
-        assertEquals(0f, (1f - preparation.at(.4f - h)) / h, .01f)
+        assertEquals(0f, (1f - preparation.at(.75f - h)) / h, .01f)
         assertEquals(0f, popup.at(.25f + h) / h, .01f)
         assertEquals(0f, (1f - popup.at(1f - h)) / h, .01f)
     }
