@@ -32,6 +32,9 @@ internal class MaterialAreaReduction(private val graphics: GraphicsContext) {
         try { block() } finally { android.os.Trace.endSection() }
     }
     private val levels = mutableListOf<GraphicsLayer>()
+    private data class Structure(val extent: IntSize, val minimum: Int, val density: Float,
+        val fontScale: Float, val direction: LayoutDirection)
+    private var structure: Structure? = null
     /** Optional passive test instrumentation; counts actual recording attempts. */
     internal var onLevelRecord: ((Int, IntSize) -> Unit)? = null
     private fun level(index: Int): GraphicsLayer {
@@ -46,6 +49,10 @@ internal class MaterialAreaReduction(private val graphics: GraphicsContext) {
         try { return recordLevels(extent, minimum, draw) } finally { android.os.Trace.endSection() }
     }
     private fun DrawScope.recordLevels(extent: IntSize, minimum: Int, draw: DrawScope.() -> Unit): GraphicsLayer {
+        val nextStructure = Structure(extent, minimum, density, fontScale, layoutDirection)
+        val rebuild = structure != nextStructure
+        // A failed crop, hook or partial rebuild must never leave a reusable key.
+        structure = null
         var dimensions = materialReductionExtent(extent)
         var previous = level(0)
         onLevelRecord?.invoke(0, dimensions)
@@ -57,19 +64,25 @@ internal class MaterialAreaReduction(private val graphics: GraphicsContext) {
             val input = previous
             val before = dimensions
             previous = level(index++)
-            onLevelRecord?.invoke(index - 1, next)
-            tracedRecord(index - 1, next) {
-                previous.record(size = next) {
-                    scale(next.width.toFloat() / before.width, next.height.toFloat() / before.height, Offset.Zero) {
-                        drawLayer(input)
+            if (rebuild) {
+                onLevelRecord?.invoke(index - 1, next)
+                tracedRecord(index - 1, next) {
+                    previous.record(size = next) {
+                        scale(next.width.toFloat() / before.width, next.height.toFloat() / before.height, Offset.Zero) {
+                            drawLayer(input)
+                        }
                     }
                 }
             }
             dimensions = next
         }
+        // GraphicsLayer defers discarding released content until retained parents
+        // drop their references, including the previous consumer output recording.
+        while (levels.size > index) graphics.releaseGraphicsLayer(levels.removeAt(levels.lastIndex))
+        structure = nextStructure
         return previous
     }
-    fun release() { levels.forEach(graphics::releaseGraphicsLayer); levels.clear() }
+    fun release() { structure = null; levels.forEach(graphics::releaseGraphicsLayer); levels.clear() }
 }
 
 @Composable internal fun rememberMaterialAreaReduction(): MaterialAreaReduction {
