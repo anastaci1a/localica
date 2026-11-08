@@ -55,8 +55,8 @@ internal fun ImageChooser(workflow: ArtworkWorkflow, onDismiss: () -> Unit, onCh
     val files = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument(), ::chosen)
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { revision++ }
     if (workflow.stage == ArtworkStage.Chooser) GlassAlertDialog(onDismissRequest = onDismiss, title = { Text("Choose artwork") }, text = {
-        // Recent images arrive after the first layout; scroll within the dialog's body limit so
-        // they can never squeeze the gallery and files actions to zero height (#660).
+        // Keyboard insets can leave less space than the recent row and permission prompt need.
+        // Keep this content scrollable while the source actions stay in fixed dialog chrome.
         val bodyScroll = rememberScrollState()
         Column(Modifier.scrollEdgeFade(bodyScroll).controlVerticalScroll(bodyScroll), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             if (hasPermission && recent.isEmpty()) Text("No recent photos", style = MaterialTheme.typography.bodySmall)
@@ -82,6 +82,9 @@ internal fun ImageChooser(workflow: ArtworkWorkflow, onDismiss: () -> Unit, onCh
                 else -> arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
             }) }
             }
+        }
+    }, footer = {
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             HorizontalDivider(Modifier.padding(vertical = 4.dp))
             GlassActionButton(AppIcon.TabAlbums, "Open gallery", Modifier.fillMaxWidth()) {
                 gallery.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
