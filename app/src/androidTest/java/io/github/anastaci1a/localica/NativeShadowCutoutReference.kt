@@ -32,21 +32,32 @@ internal fun nativeShadowCutoutReference(width: Int, height: Int, bodies: List<P
                 r.bottomRightCornerRadius.x, r.bottomRightCornerRadius.y,
                 r.bottomLeftCornerRadius.x, r.bottomLeftCornerRadius.y), Path.Direction.CW) }
     }
-    val thread = HandlerThread("cutout-reference-readback").apply { start() }
-    val reader = ImageReader.newInstance(width, height, PixelFormat.RGBA_8888, 2)
-    val renderer = HardwareRenderer()
-    val node = RenderNode("independent-cutout-reference")
-    try {
-        val available = CountDownLatch(1)
-        reader.setOnImageAvailableListener({ available.countDown() }, Handler(thread.looper))
-        node.setPosition(0, 0, width, height)
-        val canvas = node.beginRecording(width, height)
+    return renderNativeReferenceImage(width, height, "independent-cutout-reference") { canvas ->
         canvas.drawColor(AndroidColor.WHITE)
         canvas.save()
         canvas.translate(ox, oy)
         canvas.clipOutPath(path)
         canvas.drawColor(AndroidColor.BLACK)
         canvas.restore()
+    }
+}
+
+/** Offscreen native raster/readback only; callers supply independent plain Canvas primitives. */
+@RequiresApi(29)
+internal fun renderNativeReferenceImage(width: Int, height: Int, name: String,
+    draw: (android.graphics.Canvas) -> Unit): ImageBitmap {
+    require(width > 0 && height > 0)
+    check(Build.VERSION.SDK_INT >= 29)
+    val thread = HandlerThread("native-reference-readback").apply { start() }
+    val reader = ImageReader.newInstance(width, height, PixelFormat.RGBA_8888, 2)
+    val renderer = HardwareRenderer()
+    val node = RenderNode(name)
+    try {
+        val available = CountDownLatch(1)
+        reader.setOnImageAvailableListener({ available.countDown() }, Handler(thread.looper))
+        node.setPosition(0, 0, width, height)
+        val canvas = node.beginRecording(width, height)
+        draw(canvas)
         node.endRecording()
         renderer.setSurface(reader.surface)
         renderer.setContentRoot(node)

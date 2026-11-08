@@ -166,6 +166,7 @@ io.github.anastaci1a.localica.ModalGestureCancellationTest
 io.github.anastaci1a.localica.ModalGestureTakeoverTest
 io.github.anastaci1a.localica.MotionSubpixelTest
 io.github.anastaci1a.localica.NativeReaderAdmissionTest
+io.github.anastaci1a.localica.NativeShadowFieldConformanceTest
 io.github.anastaci1a.localica.NativeWindowCopyOwnershipTest
 io.github.anastaci1a.localica.NavbarHapticsTest
 io.github.anastaci1a.localica.NavigationSettingsTest
