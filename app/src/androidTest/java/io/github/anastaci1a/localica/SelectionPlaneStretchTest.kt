@@ -112,7 +112,8 @@ class SelectionPlaneStretchTest {
         var y=startY
         fun input(action: Int) {
             val event=android.view.MotionEvent.obtain(downTime,android.os.SystemClock.uptimeMillis(),action,x,y,0).apply { source=android.view.InputDevice.SOURCE_TOUCHSCREEN }
-            try { assertTrue(instrumentation.uiAutomation.injectInputEvent(event,false)) } finally { event.recycle() }
+            event.offsetLocation(-screenOrigin[0].toFloat(),-screenOrigin[1].toFloat())
+            try { instrumentation.runOnMainSync { assertTrue(view.dispatchTouchEvent(event)) }; compose.mainClock.advanceTimeByFrame() } finally { event.recycle() }
         }
         input(android.view.MotionEvent.ACTION_DOWN)
         try {

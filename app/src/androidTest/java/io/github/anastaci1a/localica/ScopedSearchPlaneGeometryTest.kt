@@ -53,7 +53,8 @@ class ScopedSearchPlaneGeometryTest {
             if(value<1f) {
                 fun bounds(tag: String): androidx.compose.ui.geometry.Rect {
                     val host=compose.onNodeWithTag("slot-$tag").fetchSemanticsNode().boundsInRoot
-                    return compose.onNodeWithTag("pill-$tag",useUnmergedTree=true).fetchSemanticsNode().boundsInRoot.translate(-host.topLeft)
+                    val pill=compose.onNodeWithTag("pill-$tag",useUnmergedTree=true).fetchSemanticsNode().boundsInRoot
+                    return if(pill.isEmpty) androidx.compose.ui.geometry.Rect.Zero else pill.translate(-host.topLeft)
                 }
                 assertEquals("The measured pill/hit geometry stays identical at vacancy=$value",bounds("old"),bounds("plane"))
             }
