@@ -102,7 +102,13 @@ class PopupHomeShapeTest {
         compose.waitForIdle()
     }
 
+    // #678 instrumentation (log only): every sampled rect sequence per check, to compare runs.
+    private fun Rect.text() = "%.2f,%.2f,%.2f,%.2f".format(left, top, right, bottom)
+    private fun log(label: String, rects: List<Rect>) = android.util.Log.i("Trim678", "$label n=${rects.size} ${rects.joinToString(" ") { it.text() }}")
+
     private fun check(height: Dp, liftedItem: Boolean) {
+        val started = System.nanoTime()
+        val id = "check h=$height lifted=$liftedItem"
         compose.runOnIdle { itemHeight = height; selected = liftedItem }
         compose.waitForIdle()
         compose.mainClock.autoAdvance = false
@@ -110,16 +116,19 @@ class PopupHomeShapeTest {
             repeat(30) { frame() } // Lift settles.
             val rest = compose.runOnIdle { anchor.bounds }
             val presented = compose.runOnIdle { anchor.presentedBounds }
+            android.util.Log.i("Trim678", "$id rest=${rest.text()} presented=${presented.text()}")
             if (liftedItem) {
                 assertTrue("A selected item's trigger is presented larger: $presented vs $rest", presented.width > rest.width + .5f)
                 assertTrue("...and displaced from its resting position: $presented vs $rest",
                     abs(presented.left - rest.left) + abs(presented.top - rest.top) > .5f || presented.width > rest.width)
             } else assertEquals("An unselected trigger is presented where it is laid out", rest, presented)
             val first = openFrames(2)
+            log("$id first", first)
             assertTrue("Expansion starts at the presented trigger, not the resting one: ${first.first()} presented=$presented rest=$rest",
                 distance(first.first(), presented) <= distance(first.first(), rest) + .5f)
             repeat(40) { frame() }
             val back = closeFrames()
+            log("$id back", back)
             assertTrue("The return is observed", back.size >= 3)
             val tail = back.takeLast(3)
             assertTrue("Retraction converges on the presented trigger: $tail presented=$presented",
@@ -136,6 +145,7 @@ class PopupHomeShapeTest {
             repeat(3) { frame() }
             compose.runOnIdle { open = false }
             val interrupted = closeFrames()
+            log("$id interrupted", interrupted)
             if (interrupted.isNotEmpty()) assertTrue("Interrupted return ends at the presented trigger: ${interrupted.last()} $presented",
                 distance(interrupted.last(), presented) <= distance(interrupted.last(), rest) + 3f)
             // Deselecting during the return lowers the home with it.
@@ -147,11 +157,16 @@ class PopupHomeShapeTest {
                 var guard = 0
                 while (guard++ < 600) { frame(); surface()?.let { lowering += it } ?: break }
                 val restFinal = compose.runOnIdle { anchor.presentedBounds }
+                log("$id lowering", lowering)
+                android.util.Log.i("Trim678", "$id restFinal=${restFinal.text()}")
                 assertEquals("Lowered item presents at rest", compose.runOnIdle { anchor.bounds }, restFinal)
                 if (lowering.isNotEmpty()) assertTrue("Return follows the lowering item: ${lowering.last()} $restFinal",
                     distance(lowering.last(), restFinal) <= 4f)
             }
-        } finally { compose.mainClock.autoAdvance = true }
+        } finally {
+            compose.mainClock.autoAdvance = true
+            android.util.Log.i("Trim678", "$id ms=${(System.nanoTime() - started) / 1_000_000}")
+        }
     }
 
     @Test fun selectedListMoreHomesOnTheLiftedButtonAtEveryListSize() {
@@ -190,6 +205,7 @@ class PopupHomeShapeTest {
                 val contrast = mutableListOf<Int>()
                 var guard = 0
                 while (guard++ < 600) { frame(); if (surface() == null) break; contrast += glass() }
+                android.util.Log.i("Trim678", "fade $trigger contrast n=${contrast.size} ${contrast.joinToString(" ")}")
                 assertTrue("The return is sampled frame by frame: $contrast", contrast.size >= 4)
                 val peak = contrast.max()
                 val peakAt = contrast.indexOf(peak)
