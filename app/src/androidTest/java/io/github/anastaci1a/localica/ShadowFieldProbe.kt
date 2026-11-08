@@ -19,6 +19,7 @@ internal data class PresentedCapture(
     val nativeGeneration: NativeShadowGeneration? = null, val offscreen: Boolean = false,
     val sceneBounds: Rect? = null,
     val origin: String = "synthetic-oracle-fixture",
+    val nativeWindows: List<ShadowWindowReceipt> = emptyList(),
 )
 
 internal data class ShadowComparison(
@@ -51,10 +52,17 @@ internal class ShadowFieldProbe internal constructor(
         check(captures.all { it.image.colorSpace == reference.image.colorSpace }) { "Capture color spaces differ" }
         check(actual.windowIds.isNotEmpty() && actual.windowIds.distinct().size == actual.windowIds.size) { "Missing or duplicate native windows" }
         if (!actual.offscreen) {
-            check(actual.windowIds.size == 1) { "Incomplete: every native window needs its own presented-generation correlation" }
-            val native = checkNotNull(actual.nativeGeneration) { "Incomplete: native presentation correlation is missing" }
-            check(native == reference.nativeGeneration) { "Incomplete: different native generations at the same Engine stamp" }
+            check(actual.nativeGeneration != null || actual.nativeWindows.isNotEmpty()) { "Incomplete: native presentation correlation is missing" }
+            check(actual.nativeGeneration == reference.nativeGeneration && actual.nativeWindows == reference.nativeWindows) {
+                "Incomplete: different native generations at the same Engine stamp"
+            }
             checkNativeShadowMarker(actual)
+            actual.nativeWindows.forEach { receipt ->
+                val p = receipt.generation.marker
+                check(regions.none { it.overlaps(Rect(p.x - 1f, p.y - 1f, p.x + 7f, p.y + 7f)) }) {
+                    "Incomplete: native marker overlaps the measured field"
+                }
+            }
             if (!reference.offscreen) checkNativeShadowMarker(reference)
         }
         check(actual.drawGeneration == reference.drawGeneration && actual.hostEpoch == reference.hostEpoch && actual.windowIds == reference.windowIds) {

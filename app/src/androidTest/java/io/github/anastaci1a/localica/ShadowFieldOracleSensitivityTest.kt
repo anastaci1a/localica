@@ -131,6 +131,29 @@ class ShadowFieldOracleSensitivityTest {
         probe.assertWithin(probe.compare(reference, reference), .008f, "native marker")
     }
 
+    @Test fun everyWindowNeedsItsOwnOriginalGenerationAndCoherentDrawState() {
+        val state = ShadowDrawState(1, 1, listOf(probeBody to 1f))
+        val first = ShadowWindowReceipt("native-window-1", NativeShadowGeneration(12,
+            androidx.compose.ui.unit.IntOffset(2, 2), 1000), state)
+        val second = ShadowWindowReceipt("native-window-2", NativeShadowGeneration(19,
+            androidx.compose.ui.unit.IntOffset(12, 2), 2000), state)
+        val original = edit(nativeField(12)) {
+            it.setPixel(12, 2, android.graphics.Color.BLACK or 19)
+            it.setPixel(16, 2, android.graphics.Color.MAGENTA)
+        }.copy(windowIds = listOf(first.windowId, second.windowId), nativeWindows = listOf(first, second))
+        probe.assertWithin(probe.compare(original, original), 2f / 255f, "different native window generations")
+        shadowOracleEvidence("multiwindow-valid-distinct-generations", original, original)
+        val missing = original.copy(nativeWindows = listOf(first))
+        val stale = edit(original) { it.setPixel(12, 2, android.graphics.Color.BLACK or 18) }
+        val dimmed = edit(original) { it.setPixel(16, 2, android.graphics.Color.rgb(127, 0, 127)) }
+        val foreign = original.copy(nativeWindows = listOf(first, second.copy(state = state.copy(epoch = 2))))
+        for ((label, actual) in listOf("missing-root" to missing, "stale-root" to stale,
+            "dimmed-root" to dimmed, "foreign-state" to foreign)) {
+            assertThrows(IllegalStateException::class.java) { probe.compare(actual, actual) }
+            shadowOracleEvidence("multiwindow-$label", actual, original)
+        }
+    }
+
     @Test fun realShadowCallersHaveCompleteNativeFieldsInNormal() = verifyNativeShadowCallers(compose, GlassRendererMode.Normal)
     @Test fun realShadowCallersHaveCompleteNativeFieldsInNone() = verifyNativeShadowCallers(compose, GlassRendererMode.None)
 }
