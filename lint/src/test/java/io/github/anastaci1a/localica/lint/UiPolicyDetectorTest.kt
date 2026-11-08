@@ -254,6 +254,38 @@ class UiPolicyDetectorTest : LintDetectorTest() {
         """, 1, "components", factory)
     }
 
+    fun testInheritedHandleIdentityAndSamplesStayDistinct() {
+        val factory = """
+            package helpers
+            import io.github.anastaci1a.localica.ui.engine.*
+            class Child : MotionFloat()
+            fun sampledHandle(view: MotionValue): Child { view.value(); return Child() }
+        """
+        check(UiRuleId.RawMotionMap, """
+            import helpers.*
+            import io.github.anastaci1a.localica.ui.engine.*
+            fun compare(view: MotionValue, other: Child) {
+                val handle = sampledHandle(view)
+                val same = handle === other
+                val first = handle.value() > .5f
+                val second = handle.sample().value > .5f
+            }
+        """, 2, "components", factory)
+    }
+
+    fun testConditionalSurfaceQueryKeepsEveryCallSite() {
+        check(UiRuleId.UnownedSurfaceLifetime, """
+            fun Popup(content: () -> Unit) {}
+            fun helper() { Popup {} }
+            fun host(ready: Boolean) {
+                helper()
+                if (ready) helper()
+                helper()
+                if (!ready) helper()
+            }
+        """, 2)
+    }
+
     fun testImmediateAndDeferredMotionReads() {
         val imports = "import androidx.compose.runtime.*\nimport io.github.anastaci1a.localica.ui.engine.*\n"
         for (read in listOf("value()", "velocity()", "sample()", "valueAt(FrameStamp())", "velocityAt(FrameStamp())", "sampleAt(FrameStamp())")) {
