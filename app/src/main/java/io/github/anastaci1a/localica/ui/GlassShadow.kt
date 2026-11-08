@@ -189,7 +189,7 @@ internal fun DrawScope.glassShadows(bodies: List<Pair<RoundRect, Float>>, streng
     excludeInterior: Boolean = true, receiver: GlassShadowReceiver? = null,
     exclusion: GlassShadowExclusion? = null, exclusionTranslation: Offset = Offset.Zero, color: Color = Color.Black,
     rasterizing: Boolean = false) {
-    if (strength <= 0f || bodies.isEmpty()) return
+    if (NoneAblation.noShadow || strength <= 0f || bodies.isEmpty()) return
     val opacity = bodies.maxOf { it.second }.coerceIn(0f, 1f)
     val reach = (4f + spread * 28f).dp.toPx()
     val shift = 2.dp.toPx()
@@ -311,7 +311,7 @@ internal class RetainedGlassShadow(private val scope: CoroutineScope) {
     var rasterizations = 0; private set
     fun DrawScope.draw(bodies: List<Pair<RoundRect, Float>>, strength: Float, spread: Float,
         receiver: GlassShadowReceiver? = null, exclusion: GlassShadowExclusion? = null, color: Color = Color.Black) {
-        if (bodies.isEmpty() || strength <= 0f) return
+        if (NoneAblation.noShadow || bodies.isEmpty() || strength <= 0f) return
         // Software textures change the nonlinear popup/home receiver response.
         // Keep it native and in the caller's coordinates: normalizing a fractional
         // origin also changes legacy clip coverage around an offscreen layer.
@@ -329,7 +329,7 @@ internal class RetainedGlassShadow(private val scope: CoroutineScope) {
     }
     /** The field's normalized path is immutable until its input changes. Translation is free. */
     fun DrawScope.draw(path: Path, origin: Offset, strength: Float, spread: Float, color: Color = Color.Black) {
-        if (strength <= 0f || path.isEmpty) return
+        if (NoneAblation.noShadow || strength <= 0f || path.isEmpty) return
         drawNormalized(Key(emptyList(),strength,spread,density,color,path),origin,null)
     }
     private fun DrawScope.drawNormalized(key: Key,origin: Offset,exclusion: GlassShadowExclusion?) {

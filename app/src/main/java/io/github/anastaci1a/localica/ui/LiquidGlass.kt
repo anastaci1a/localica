@@ -338,6 +338,7 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
  * Shared by live/mesh controls and connected selections at the final display resolution. */
 internal fun androidx.compose.ui.graphics.drawscope.DrawScope.drawGlassRim(
     bounds: androidx.compose.ui.geometry.Rect, radius: Float, path: Path? = null, tone: GlassTone = GlassTone(), opacity: Float = 1f, cache: GlassRimCache? = null) {
+    if (NoneAblation.noRim) return
     val (shine, shade) = cache?.brushes(bounds.center, tone) ?: glassRimBrushes(bounds.center, tone)
     val silhouette = path ?: cache?.roundedPath(bounds, radius) ?: Path().apply { addRoundRect(RoundRect(bounds, CornerRadius(radius))) }
     clipPath(silhouette) {

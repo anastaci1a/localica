@@ -69,8 +69,8 @@ private fun OpticalBackdrop(modifier: Modifier, source: FrostedBackdrop, locatio
     val opticalWork = LocalGlassOpticalWork.current
     val samplingObserver by rememberUpdatedState(LocalHomeBackdropSamplingObserver.current)
     val drawObserver = LocalBackdropSamplingObserver.current
-    BackdropLease(source)
-    BackdropLease(homeSource?.takeUnless { it === source })
+    BackdropLease(source, diagnosticNone = forceAverage)
+    BackdropLease(homeSource?.takeUnless { it === source }, diagnosticNone = forceAverage)
     val layer = rememberGraphicsLayer()
     val primary = if (homeSource != null) rememberGraphicsLayer() else null
     val home = if (primary != null) rememberGraphicsLayer() else null
@@ -154,6 +154,13 @@ private fun OpticalBackdrop(modifier: Modifier, source: FrostedBackdrop, locatio
                 if (region.isEmpty || !region.width.isFinite() || !region.height.isFinite()) return
                 val extent = IntSize(ceil(region.width).toInt(), ceil(region.height).toInt())
                 val padded = materialReductionExtent(extent)
+                if (NoneAblation.fixed) {
+                    // Keep the original final 1px effect, style, blend and material draw.
+                    // Actual source production must be verified in the native pass graph.
+                    output.renderEffect = renderer.effect(average.forBacking(backing), 1f)
+                    output.record(size = IntSize(1, 1)) { drawRect(NoneAblation.color) }
+                    return
+                }
                 val result = with(reduction) { record(extent) {
                     clipRect(right = region.width, bottom = region.height) {
                         translate(-region.left, -region.top) {

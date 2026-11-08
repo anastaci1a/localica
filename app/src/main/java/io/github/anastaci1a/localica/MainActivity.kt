@@ -38,6 +38,10 @@ class MainActivity : ComponentActivity() {
     }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        io.github.anastaci1a.localica.ui.NoneAblation.mode = intent.getStringExtra("none-ablation") ?: "baseline"
+        require(io.github.anastaci1a.localica.ui.NoneAblation.mode in
+            setOf("baseline", "fixed", "sources", "shadow", "rim", "sources-shadow", "sources-rim"))
+        android.util.Log.i("NoneAblation", "mode=" + io.github.anastaci1a.localica.ui.NoneAblation.mode)
         enableEdgeToEdge()
         model = ViewModelProvider(this, object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")

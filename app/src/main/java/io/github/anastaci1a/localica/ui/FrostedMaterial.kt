@@ -56,6 +56,7 @@ internal class FrostedBackdrop(val layer: GraphicsLayer, dark: Boolean,
     var materialOnly by mutableStateOf(false)
     var materialCorner by mutableFloatStateOf(0f)
     var consumers by mutableIntStateOf(0)
+    var diagnosticNoneConsumers by mutableIntStateOf(0)
     /** How far the scene's ink is toward light ink (1) from dark ink (0); fractional while a polarity change eases. */
     var lightMix by mutableFloatStateOf(if (dark) 1f else 0f)
     var dark: Boolean
@@ -212,7 +213,7 @@ internal fun rememberFrostedBackdrop(key: Any?, enabled: Boolean = true, dark: B
     // Sampled scenes retain pixels so sibling lenses never replay all their children.
     val sampled = source.consumers > 0
     SideEffect {
-        if (!source.layer.isReleased) source.layer.compositingStrategy = if (retainRaster && sampled) androidx.compose.ui.graphics.layer.CompositingStrategy.Offscreen
+        if (!source.layer.isReleased) source.layer.compositingStrategy = if (retainRaster && sampled && !(NoneAblation.removeSources && source.diagnosticNoneConsumers == source.consumers)) androidx.compose.ui.graphics.layer.CompositingStrategy.Offscreen
             else androidx.compose.ui.graphics.layer.CompositingStrategy.Auto
         source.lightMix = lightMix ?: if (dark) 1f else 0f
     }
@@ -265,10 +266,10 @@ internal fun rememberFrostedBackdrop(key: Any?, enabled: Boolean = true, dark: B
 
 /** Lifetime of a sampling edge in the backdrop graph; no per-frame registration. */
 @Composable
-internal fun BackdropLease(source: FrostedBackdrop?) {
-    DisposableEffect(source) {
-        if (source != null) source.consumers++
-        onDispose { if (source != null) source.consumers-- }
+internal fun BackdropLease(source: FrostedBackdrop?, diagnosticNone: Boolean = false) {
+    DisposableEffect(source, diagnosticNone) {
+        if (source != null) { source.consumers++; if (diagnosticNone) source.diagnosticNoneConsumers++ }
+        onDispose { if (source != null) { source.consumers--; if (diagnosticNone) source.diagnosticNoneConsumers-- } }
     }
 }
 
@@ -338,7 +339,7 @@ internal fun FrostedSurface(modifier: Modifier = Modifier, shape: Shape = Corner
     source: FrostedBackdrop? = LocalFrostedBackdrop.current, compact: Boolean = false,
     tint: Color = Color.Transparent, shadow: Boolean = true, content: @Composable BoxScope.() -> Unit) {
     val renderer = currentGlassRendererGeneration()
-    if (renderer.backend == GlassBackend.None) BackdropLease(source)
+    if (renderer.backend == GlassBackend.None) BackdropLease(source, diagnosticNone = true)
     val location = remember { BackdropLocation() }
     val lightMix = source?.lightMix ?: 0f
     val dark = lightMix >= .5f
