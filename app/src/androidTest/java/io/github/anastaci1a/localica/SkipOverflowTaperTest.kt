@@ -46,6 +46,18 @@ class SkipOverflowTaperTest {
         return image
     }
 
+    @Test fun movingTrianglesEscapeTheOldViewportClip() {
+        for (isPack in listOf(false, true)) for (glyph in listOf(TransportGlyph.Next, TransportGlyph.Previous)) {
+            var outsideViewport = 0f
+            for (step in 1..19) {
+                val frame = render(isPack, step / 20f, glyph).toPixelMap()
+                for (y in 32 until 160) for (x in 0 until frame.width)
+                    if (x < 128 || x >= 256) outsideViewport = maxOf(outsideViewport, frame[x,y].alpha)
+            }
+            assertTrue("Moving triangles escape the old viewport clip pack=$isPack $glyph: $outsideViewport", outsideViewport > .05f)
+        }
+    }
+
     @Test fun stockAndPackTravelBeyondInkWithoutTouchingAnyBoundary() {
         for (isPack in listOf(false, true)) for (glyph in listOf(TransportGlyph.Next, TransportGlyph.Previous)) {
             val rest = render(isPack, 0f, glyph).toPixelMap()
