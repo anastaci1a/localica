@@ -14,6 +14,13 @@ internal class ShadowFrameProbe(private val region: Rect = Rect.Zero) {
     var maximumDelta = 0f; private set
     val luminances = mutableListOf<Float>()
 
+    /** The legacy region is scene-local; the original display image stays in screen space. */
+    fun sample(capture: PresentedCapture): Float {
+        if (!capture.offscreen) checkNativeShadowMarker(capture)
+        val bounds = checkNotNull(capture.sceneBounds) { "Incomplete: no native scene bounds" }
+        return observeLuminance(ShadowFrameProbe(region.translate(bounds.topLeft)).sample(capture.image))
+    }
+
     fun sample(image: ImageBitmap): Float {
         val pixels = image.toPixelMap()
         val left = floor(region.left).toInt().coerceAtLeast(0)

@@ -3,16 +3,23 @@ package io.github.anastaci1a.localica
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.toPixelMap
+import androidx.compose.ui.unit.IntOffset
 import org.junit.Assert.assertTrue
 import kotlin.math.abs
 import kotlin.math.ceil
 import kotlin.math.floor
 
 /** U12.01c: one presented native composition and the identities that make two captures comparable. [image] is retained, never recycled, for the test's lifetime. */
+internal data class NativeShadowGeneration(val token: Int, val marker: IntOffset, val drawVsyncNanos: Long? = null)
+
 internal data class PresentedCapture(
     val image: ImageBitmap, val windowIds: List<String>, val hostEpoch: Long,
     val drawGeneration: Long, val clockSequence: Long,
     val nativePresentedNanos: Long?, val captureNanos: Long,
+    val nativeGeneration: NativeShadowGeneration? = null, val offscreen: Boolean = false,
+    val sceneBounds: Rect? = null,
+    val origin: String = "synthetic-oracle-fixture",
+    val nativeWindows: List<ShadowWindowReceipt> = emptyList(),
 )
 
 internal data class ShadowComparison(
@@ -43,6 +50,21 @@ internal class ShadowFieldProbe internal constructor(
         val captures = listOfNotNull(actual, reference, background)
         check(captures.all { it.image.width == reference.image.width && it.image.height == reference.image.height }) { "Capture sizes differ" }
         check(captures.all { it.image.colorSpace == reference.image.colorSpace }) { "Capture color spaces differ" }
+        check(actual.windowIds.isNotEmpty() && actual.windowIds.distinct().size == actual.windowIds.size) { "Missing or duplicate native windows" }
+        if (!actual.offscreen) {
+            check(actual.nativeGeneration != null || actual.nativeWindows.isNotEmpty()) { "Incomplete: native presentation correlation is missing" }
+            check(actual.nativeGeneration == reference.nativeGeneration && actual.nativeWindows == reference.nativeWindows) {
+                "Incomplete: different native generations at the same Engine stamp"
+            }
+            checkNativeShadowMarker(actual)
+            actual.nativeWindows.forEach { receipt ->
+                val p = receipt.generation.marker
+                check(regions.none { it.overlaps(Rect(p.x - 1f, p.y - 1f, p.x + 7f, p.y + 7f)) }) {
+                    "Incomplete: native marker overlaps the measured field"
+                }
+            }
+            if (!reference.offscreen) checkNativeShadowMarker(reference)
+        }
         check(actual.drawGeneration == reference.drawGeneration && actual.hostEpoch == reference.hostEpoch && actual.windowIds == reference.windowIds) {
             "Not the same native composition: actual ${actual.windowIds}/${actual.hostEpoch}/${actual.drawGeneration}, reference ${reference.windowIds}/${reference.hostEpoch}/${reference.drawGeneration}"
         }
@@ -72,6 +94,7 @@ internal class ShadowFieldProbe internal constructor(
     }
 
     fun assertWithin(result: ShadowComparison, limit: Float, context: String) {
+        require(limit.isFinite() && limit >= 0f)
         assertTrue("$context: shadow field error ${result.maximumRgbaError} > $limit at (${result.worstX},${result.worstY}), mean ${result.meanRgbaError}",
             result.maximumRgbaError <= limit)
         assertTrue("$context: ${result.missingCoveragePixels} reference shadow pixels missing", result.missingCoveragePixels == 0)

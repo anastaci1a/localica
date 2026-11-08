@@ -35,7 +35,11 @@ class ShadowContinuityTest {
         var moving by mutableStateOf(false)
         var background by mutableStateOf(Color.White)
         lateinit var shadow: RetainedGlassShadow
+        lateinit var clock: UiClock
+        lateinit var currentBodies: List<Pair<RoundRect, Float>>
         compose.setContent {
+            val currentClock = LocalUiClock.current
+            SideEffect { clock = currentClock }
             val scope = rememberCoroutineScope()
             shadow = remember { RetainedGlassShadow(scope) }
             Box(Modifier.size(240.dp).background(background).testTag("shadow-scene")
@@ -46,7 +50,7 @@ class ShadowContinuityTest {
                     // Popup neighbor exclusion selects the live path even at identical geometry.
                     val exclusion = if (moving) GlassShadowExclusion(emptyList(),
                         androidx.compose.ui.geometry.Offset.Zero, size, 1f, 1f, 0f, 1f) else null
-                    with(shadow) { draw(listOf(body to 1f), 1f, 1f, exclusion = exclusion) }
+                    with(shadow) { draw(listOf(body to 1f).also { currentBodies = it }, 1f, 1f, exclusion = exclusion) }
                 })
         }
         compose.waitUntil(5000) { shadow.rasterizations > 0 }
@@ -54,18 +58,30 @@ class ShadowContinuityTest {
         val d = compose.density.density
         val probe = ShadowFrameProbe(Rect(90*d, 122*d, 130*d, 130*d))
         val scene = compose.onNodeWithTag("shadow-scene")
-        for (level in listOf(1f, .5f, .25f)) {
-            compose.runOnIdle { background = Color(level, level, level); moving = false }
-            compose.mainClock.advanceTimeByFrame()
-            probe.beginSegment()
-            probe.sample(scene.captureNativeFrame())
-            repeat(4) { index ->
-                compose.runOnIdle { moving = index % 2 == 0 }
-                compose.mainClock.advanceTimeByFrame()
-                probe.sample(scene.captureNativeFrame())
+        ShadowNativeCapture(compose, scene) { clock.stampNow.sequence }.use { native ->
+            var sample = 0
+            fun capture() {
+                val actual = native.capture { bounds -> ShadowDrawState(clock.stampNow.sequence, 0,
+                    shadowScreenBodies(currentBodies, bounds.topLeft), background) }
+                val bounds = checkNotNull(actual.sceneBounds)
+                val state = actual.nativeWindows.first().state
+                verifyShadowUnion(compose, actual, state.bodies, state.background,
+                    listOf(Rect(bounds.left, bounds.top + 10f, bounds.right, bounds.bottom)), "retained-handoff-${sample++}")
+                probe.sample(actual)
             }
+            for (level in listOf(1f, .5f, .25f)) {
+                compose.runOnIdle { background = Color(level, level, level); moving = false }
+                compose.mainClock.advanceTimeByFrame()
+                probe.beginSegment()
+                capture()
+                repeat(4) { index ->
+                    compose.runOnIdle { moving = index % 2 == 0 }
+                    compose.mainClock.advanceTimeByFrame()
+                    capture()
+                }
+            }
+            probe.assertContinuous(.008f, "retained/direct handoff without perceptible geometry motion")
         }
-        probe.assertContinuous(.008f, "retained/direct handoff without perceptible geometry motion")
     }
 
     @Test fun buttonAvailabilityDoesNotCutItsShadowAtEitherEndpoint() = availability("button")
@@ -73,7 +89,11 @@ class ShadowContinuityTest {
     @Test fun retainedUnionKeepsTheInteriorCutoutOnTheSamePixels() {
         var moving by mutableStateOf(false)
         lateinit var shadow: RetainedGlassShadow
+        lateinit var clock: UiClock
+        lateinit var currentBodies: List<Pair<RoundRect, Float>>
         compose.setContent {
+            val currentClock = LocalUiClock.current
+            SideEffect { clock = currentClock }
             val scope = rememberCoroutineScope()
             shadow = remember { RetainedGlassShadow(scope) }
             Box(Modifier.size(240.dp).background(Color.White).testTag("union-shadow")
@@ -85,18 +105,44 @@ class ShadowContinuityTest {
                     }
                     val exclusion = if (moving) GlassShadowExclusion(emptyList(),
                         androidx.compose.ui.geometry.Offset.Zero, size, 1f, 1f, 0f, 1f) else null
-                    with(shadow) { draw(bodies, 1f, 1f, exclusion = exclusion) }
+                    with(shadow) { draw(bodies.also { currentBodies = it }, 1f, 1f, exclusion = exclusion) }
                 })
         }
         compose.waitUntil(5000) { shadow.rasterizations > 0 }
         val scene = compose.onNodeWithTag("union-shadow")
-        val retained = scene.captureNativeFrame().toPixelMap()
-        compose.runOnIdle { moving = true }
-        val live = scene.captureNativeFrame().toPixelMap()
-        var maximum = 0f
-        for (y in 0 until live.height) for (x in 0 until live.width)
-            maximum = maxOf(maximum, kotlin.math.abs(live[x, y].red - retained[x, y].red))
-        assertTrue("The same contour pixels must be cut out: maximum delta=$maximum", maximum <= .03f)
+        ShadowNativeCapture(compose, scene) { clock.stampNow.sequence }.use { native ->
+            fun capture(label: String): PresentedCapture {
+                val actual = native.capture { bounds -> ShadowDrawState(clock.stampNow.sequence, 0,
+                    shadowScreenBodies(currentBodies, bounds.topLeft)) }
+                val bounds = checkNotNull(actual.sceneBounds)
+                verifyShadowUnion(compose, actual, actual.nativeWindows.first().state.bodies,
+                    Color.White, listOf(Rect(bounds.left, bounds.top + 10f, bounds.right, bounds.bottom)), label)
+                return actual
+            }
+            val retainedCapture = capture("retained-union-rest")
+            val retained = retainedCapture.image.toPixelMap()
+            compose.runOnIdle { moving = true }
+            val liveCapture = capture("retained-union-live")
+            assertEquals(retainedCapture.sceneBounds, liveCapture.sceneBounds)
+            val live = liveCapture.image.toPixelMap()
+            val bounds = checkNotNull(liveCapture.sceneBounds)
+            val markers = liveCapture.nativeWindows.map { receipt ->
+                val p = receipt.generation.marker
+                Rect(p.x - 1f, p.y - 1f, p.x + 7f, p.y + 7f)
+            }
+            assertEquals(retainedCapture.nativeWindows.map { it.generation.marker }, liveCapture.nativeWindows.map { it.generation.marker })
+            val reach = 34f * compose.density.density + 2f
+            assertTrue("Diagnostic markers are outside every shadow tail", markers.all { marker ->
+                liveCapture.nativeWindows.first().state.bodies.all { (body, _) ->
+                    !marker.overlaps(Rect(body.left, body.top, body.right, body.bottom).inflate(reach))
+                }
+            })
+            var maximum = 0f
+            for (y in bounds.top.toInt() until bounds.bottom.toInt()) for (x in bounds.left.toInt() until bounds.right.toInt())
+                if (markers.none { x >= it.left && x < it.right && y >= it.top && y < it.bottom })
+                    maximum = maxOf(maximum, kotlin.math.abs(live[x, y].red - retained[x, y].red))
+            assertTrue("The same contour pixels must be cut out: maximum delta=$maximum", maximum <= .03f)
+        }
     }
     @Test fun filterAvailabilityDoesNotCutItsShadowAtEitherEndpoint() = availability("filter")
     @Test fun settingsAvailabilityDoesNotCutItsShadowAtEitherEndpoint() = availability("settings")
