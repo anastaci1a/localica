@@ -39,14 +39,14 @@ class SettingsSearchTest {
         for ((query, result) in listOf("Lift shadow" to "Lift shadow strength", "Carousel" to "Song-change transition",
             "Preload" to "Preload next track", "Shape damping" to "Shape damping", "grey" to "Interface gray",
             "minimum duration" to "Exclude short files", "sync" to "Lyrics timing correction")) {
-            compose.onNodeWithText("Search settings").performTextReplacement(query)
+            compose.onNodeWithContentDescription("Search settings input").performTextReplacement(query)
             compose.onNodeWithTag("search-result:$result").assertExists()
         }
     }
 
     @Test fun resultNavigatesScrollsAndHighlightsTheActualRow() {
         show()
-        compose.onNodeWithText("Search settings").performTextInput("Control expansion")
+        compose.onNodeWithContentDescription("Search settings input").performTextInput("Control expansion")
         compose.mainClock.autoAdvance = false
         compose.onNodeWithTag("search-result:Control expansion").performClick()
         compose.mainClock.advanceTimeUntil(timeoutMillis = 5000) {
@@ -63,12 +63,12 @@ class SettingsSearchTest {
         compose.mainClock.autoAdvance = true
         compose.onNodeWithTag("setting:Control expansion").assertIsDisplayed()
         compose.onNodeWithTag("setting-highlight:Control expansion", useUnmergedTree = true).assertExists()
-        compose.onNodeWithText("Search settings").assertExists()
+        compose.onNodeWithContentDescription("Search settings input").assertExists()
     }
 
     @Test fun hiddenOptionJumpsToItsRevealingChoice() {
         show()
-        compose.onNodeWithText("Search settings").performTextInput("Gray pill opacity")
+        compose.onNodeWithContentDescription("Search settings input").performTextInput("Gray pill opacity")
         compose.onNodeWithTag("search-result:Gray pill opacity").performClick()
         compose.onNodeWithTag("setting:Selector style").assertIsDisplayed()
         compose.onNodeWithTag("setting-highlight:Selector style", useUnmergedTree = true).assertExists()
@@ -183,7 +183,7 @@ class SettingsSearchTest {
             compose.onNode(hasText("Quick Scan") and isToggleable()).performScrollTo().assertIsOn()
             compose.onNode(hasText("Full scan") and isToggleable()).performScrollTo().assertIsOff()
             compose.onNodeWithText("Include subfolders").performScrollTo().assertIsOff()
-            compose.onNodeWithText("Search settings").performTextInput("Songs")
+            compose.onNodeWithContentDescription("Search settings input").performTextInput("Songs")
             compose.onNodeWithTag("search-result:Songs").performClick()
             compose.onNode(hasText("Songs") and hasText("Add next")).assertIsDisplayed()
             restoration.emulateSavedInstanceStateRestore()
