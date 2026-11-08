@@ -126,9 +126,21 @@ class ShadowContinuityTest {
             assertEquals(retainedCapture.sceneBounds, liveCapture.sceneBounds)
             val live = liveCapture.image.toPixelMap()
             val bounds = checkNotNull(liveCapture.sceneBounds)
+            val markers = liveCapture.nativeWindows.map { receipt ->
+                val p = receipt.generation.marker
+                Rect(p.x - 1f, p.y - 1f, p.x + 7f, p.y + 7f)
+            }
+            assertEquals(retainedCapture.nativeWindows.map { it.generation.marker }, liveCapture.nativeWindows.map { it.generation.marker })
+            val reach = 34f * compose.density.density + 2f
+            assertTrue("Diagnostic markers are outside every shadow tail", markers.all { marker ->
+                liveCapture.nativeWindows.first().state.bodies.all { (body, _) ->
+                    !marker.overlaps(Rect(body.left, body.top, body.right, body.bottom).inflate(reach))
+                }
+            })
             var maximum = 0f
             for (y in bounds.top.toInt() until bounds.bottom.toInt()) for (x in bounds.left.toInt() until bounds.right.toInt())
-                maximum = maxOf(maximum, kotlin.math.abs(live[x, y].red - retained[x, y].red))
+                if (markers.none { x >= it.left && x < it.right && y >= it.top && y < it.bottom })
+                    maximum = maxOf(maximum, kotlin.math.abs(live[x, y].red - retained[x, y].red))
             assertTrue("The same contour pixels must be cut out: maximum delta=$maximum", maximum <= .03f)
         }
     }
