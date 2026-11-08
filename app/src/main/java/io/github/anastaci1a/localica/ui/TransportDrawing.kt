@@ -71,7 +71,7 @@ internal data class TransportShapes(
 internal val LocalTransportShapes = staticCompositionLocalOf { TransportShapes() }
 
 /** Arbitrary imported contours share transport timing and interruption state.
- * Play/pause endpoints fade in fixed bounds; skip glyphs travel through a clipped cycle.
+ * Play/pause endpoints fade in fixed bounds when no [PackPlayPauseMorph] applies; skip glyphs travel through a clipped cycle.
  */
 internal fun DrawScope.drawTransportPainters(glyph: TransportGlyph, pause: Float, travel: Float,
     color: Color, painter: Painter, pausePainter: Painter) {
