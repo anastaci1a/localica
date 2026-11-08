@@ -86,4 +86,19 @@ class LastFmMatchingTest {
         val strong = match(listOf(LastFmTrack("Old artist credit", "Old title", 9, mbid = "RECORDING-A")), listOf(first, other))
         assertEquals(mapOf("first" to 9L), strong.counts)
     }
+    @Test fun titleConnectorsAndRemasterAfterFeaturedCreditMatchWithoutDroppingTheGuest() {
+        val songs = listOf(local("song", "Rock & Roll (feat. Guest) - 2020 Remaster", "A & B"),
+            local("other-guest", "Rock and Roll (feat. Other Guest)", "A and B"))
+        val result = match(listOf(LastFmTrack("A x B ft Guest", "Rock and Roll", 10)), songs)
+        assertEquals(mapOf("song" to 10L), result.counts); assertTrue(result.review.isEmpty())
+    }
+
+    @Test fun aSavedManualChoiceAppliesToItsEditionCopiesButNotOtherRecordings() {
+        val remote = LastFmTrack("Older credit", "Older title", 42)
+        val original = local("original", "Song")
+        val deluxe = local("deluxe", "Song", album = "Album (Deluxe)")
+        val other = local("other", "Song", album = "A different recording")
+        val result = LastFmMatcher.match(LastFmSnapshot("u", 1, listOf(remote)), listOf(original, deluxe, other), mapOf(remote.key to original.id))
+        assertEquals(mapOf("original" to 42L, "deluxe" to 42L), result.counts)
+    }
 }
