@@ -264,7 +264,7 @@ class UiPolicyDetectorTest : LintDetectorTest() {
         check(UiRuleId.RawMotionMap, """
             import helpers.*
             import io.github.anastaci1a.localica.ui.engine.*
-            fun compare(view: MotionValue, other: Child) {
+            fun compare(view: MotionValue, other: MotionValue) {
                 val handle = sampledHandle(view)
                 val same = handle === other
                 val first = handle.value() > .5f
