@@ -45,6 +45,7 @@ internal enum class AppIcon(val id: String, @DrawableRes val builtin: Int) {
     MenuFavorite("menu.favorite", R.drawable.ic_star),
     MenuSuggestLess("menu.suggest_less", R.drawable.ic_thumb_down),
     ActionEdit("action.edit", R.drawable.ic_edit),
+    ActionCheck("action.check", R.drawable.ic_check),
     ActionClose("action.close", R.drawable.ic_close),
     ActionChevronUp("action.chevron_up", R.drawable.ic_chevron_up),
     ActionChevronDown("action.chevron_down", R.drawable.ic_down),
