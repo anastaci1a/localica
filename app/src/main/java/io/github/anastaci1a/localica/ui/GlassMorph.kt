@@ -703,8 +703,6 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                 // A visibility reversal can lay out once before its effect resets state.
                 // The synthetic reopening flight must not borrow the old opening bottom.
                 val physical = motion.bounds
-                val slotTravel = searchSlotTravel
-                val slotReturnFrom = searchSlotReturnFrom
                 fun surfaceOpacity() = if (!admittedDraw) 0f else if (detached) phase() else
                     if (present && window != null && readyWindow === window) 1f else 0f
                 Box(Modifier.fillMaxSize().onGloballyPositioned {
@@ -723,6 +721,9 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                         if (placement == GlassPlacement.Search) {
                             val flight=flight()
                             val slotFraction=anchor.searchSlot.fraction
+                            val slotTravel=searchSlotTravel
+                            val slotReturnFrom=searchSlotReturnFrom
+                            val slotBottom=motion.bounds?.bottom?.value()
                             val openingBottom=physical?.bottom?.value().takeIf { searchOpeningPositioned && visible && searchTransitioning }
                             val bounds = Rect(it.backdropPosition(view), Size(it.size.width.toFloat(), it.size.height.toFloat()))
                             searchMotion.rendered = bounds
@@ -732,7 +733,8 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                                 imeHeight, imeSource, imeTarget, openingBottom, motion.bounds?.value().takeIf { visible && searchTransitioning }, availableHeight.toFloat(),
                                 surfaceOpacity = surfaceOpacity(), nativeIme = nativeIme, windowFocused = windowFocused,
                                 slotFraction = slotFraction, slotTravel = slotTravel, slotReturnFrom = slotReturnFrom,
-                                openingOwnedBounds = motion.bounds?.value().takeIf { visible && searchShapeStarted && searchTransitioning }))
+                                openingOwnedBounds = motion.bounds?.value().takeIf { visible && searchShapeStarted && searchTransitioning },
+                                slotBottom = slotBottom))
                         }
                     }.onPlaced { wellCoordinates[0] = it; windowPlane.layout=it }.drawWithContent {
                         if (!hasViewport) return@drawWithContent
@@ -891,7 +893,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                                 val rect=requireNotNull(motion.bounds)
                                 val travel=anchor.searchSlot.bindBottom(searchSlotToken,rect.bottom,
                                     if(visible) envelope.bottom else home.bottom,if(visible) 1f else 0f)
-                                searchSlotTravel=travel.takeIf { visible }
+                                searchSlotTravel=travel
                             }
                         }
                         val pixels = glassMorphPixelBounds(requireNotNull(motion.bounds).value().translate(-windowOrigin))

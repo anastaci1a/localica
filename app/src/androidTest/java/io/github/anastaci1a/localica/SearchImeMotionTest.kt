@@ -652,11 +652,15 @@ class SearchImeMotionTest {
             advanceUntil { anchor.contact.expansion.value in .2f.. .8f }
             val partial = compose.runOnUiThread { samples.last().bounds }
             val partialSurface = compose.onNodeWithTag("glass-morph-surface").fetchSemanticsNode().boundsInRoot
+            val boundView = compose.runOnUiThread { requireNotNull(anchor.surfaceNode).transform }
+            val windowOffset = partialSurface.topLeft - partial.topLeft
             compose.runOnUiThread { visible = true }
             compose.mainClock.advanceTimeByFrame()
             compose.waitForIdle()
-            assertRect("First reopening placement cannot borrow the previous opening bottom",
-                partialSurface, compose.onNodeWithTag("glass-morph-surface").fetchSemanticsNode().boundsInRoot)
+            compose.runOnUiThread { assertSame("Reopening retains the actual bound view", boundView, requireNotNull(anchor.surfaceNode).transform) }
+            assertRect("First reopening placement uses the live bound rectangle, not the old opening bottom",
+                compose.runOnUiThread { boundView.value().translate(windowOffset) },
+                compose.onNodeWithTag("glass-morph-surface").fetchSemanticsNode().boundsInRoot)
             opened()
             val reopening = compose.runOnUiThread { samples.filter { it.opening && it.flight != null } }
             assertTrue("Observe retained-window reopening", reopening.isNotEmpty())

@@ -223,16 +223,20 @@ class ListSearchTest {
             }
             open()
             fun openingWitness() = frames.firstOrNull { frame -> frame.sample.let {
-                it.opening && it.windowFocused && it.ime > 0 && it.nativeIme > 0 &&
-                    if (reduced) it.slotFraction == 1f && it.progress == 1f &&
-                        kotlin.math.abs(it.bounds.bottom - it.destination.bottom) <= 1.1f
-                    else it.placementBottom != null && it.slotFraction in .1f.. .8f
+                it.opening && if (reduced) it.windowFocused && it.ime > 0 && it.nativeIme > 0 &&
+                    it.slotFraction == 1f && it.progress == 1f &&
+                    kotlin.math.abs(it.bounds.bottom - it.destination.bottom) <= 1.1f
+                else it.placementBottom != null && it.slotFraction in .1f.. .8f
             } }?.sample
             // Focus acknowledgement may follow a valid recorded travel frame. It
             // must not require that an already-observed interval remains current.
             pumpUntil { openingWitness() != null }
             val owned = compose.runOnUiThread { requireNotNull(openingWitness()) }
-            assertTrue("Placement must use this popup's actual focused native IME: $owned", owned.windowFocused && owned.ime > 0 && owned.nativeIme > 0)
+            // The #608 flight may complete before the native IME acknowledgement.
+            // Retain both proofs without delaying motion to manufacture an overlap.
+            pumpUntil { frames.any { it.sample.let { sample -> sample.opening && sample.windowFocused && sample.ime > 0 && sample.nativeIme > 0 } } }
+            val focused = compose.runOnUiThread { frames.last { it.sample.let { sample -> sample.opening && sample.windowFocused && sample.ime > 0 && sample.nativeIme > 0 } }.sample }
+            assertTrue("Placement must use this popup's actual focused native IME: $focused", focused.windowFocused && focused.ime > 0 && focused.nativeIme > 0)
             beginReturn()
             if (!reduced) {
                 pumpUntil { last()?.let { !it.opening && it.slotFraction > .01f && it.slotFraction < owned.slotFraction } == true }
@@ -294,7 +298,8 @@ class ListSearchTest {
                 if (sample.opening && bottom != null && travel != null)
                     assertEquals("Use actual bottom travel, not another timer", travel.fraction(bottom), sample.slotFraction, .0001f)
                 if (!sample.opening && flight != null)
-                    assertEquals("Reverse the actual captured return flight", sample.slotReturnFrom * (1f - flight.fraction(sample.progress)), sample.slotFraction, .0001f)
+                    assertEquals("Return uses the same bound bottom edge, including its C1 residual",
+                        requireNotNull(sample.slotTravel).fraction(requireNotNull(sample.slotBottom)), sample.slotFraction, .0001f)
                 if (reduced) assertTrue("Reduced motion has only placement endpoints", sample.slotFraction == 0f || sample.slotFraction == 1f)
                 if (!sample.opening) heldFlight = null
             }
