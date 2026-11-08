@@ -31,11 +31,11 @@ import org.junit.Test
 class ShadowContinuityTest {
     @get:Rule val compose = localicaComposeRule()
 
-    @OptIn(ExperimentalLayoutApi::class)
     @Test fun retainedShadowDoesNotPopWhenMotionStartsOrSettles() {
         var moving by mutableStateOf(false)
         var background by mutableStateOf(Color.White)
         var clearStatusChrome by mutableStateOf(false)
+        var statusClearancePixels by mutableIntStateOf(0)
         lateinit var view: android.view.View
         lateinit var shadow: RetainedGlassShadow
         lateinit var clock: UiClock
@@ -47,9 +47,10 @@ class ShadowContinuityTest {
             val scope = rememberCoroutineScope()
             shadow = remember { RetainedGlassShadow(scope) }
             // Move the entire unchanged fixture clear of system chrome; no capture crop or mask.
-            // Ignoring visibility keeps this placement independent of system-bar visibility.
+            // The native inset is captured before moving; Compose may already consume it.
+            val clearance = with(androidx.compose.ui.platform.LocalDensity.current) { statusClearancePixels.toDp() }
             Box(Modifier.padding(top = if (clearStatusChrome)
-                WindowInsets.statusBarsIgnoringVisibility.asPaddingValues().calculateTopPadding() else 0.dp)) {
+                clearance else 0.dp)) {
             Box(Modifier.size(240.dp).background(background).testTag("shadow-scene")
                 .drawBehind {
                     val width = 100f
@@ -77,7 +78,11 @@ class ShadowContinuityTest {
         }
         val included = ShadowNativeCapture(compose, scene) { clock.stampNow.sequence }.use { geometryCapture(it) }
         val includedInsets = insetsReceipt()
-        compose.runOnIdle { clearStatusChrome = true }
+        compose.runOnIdle {
+            statusClearancePixels = checkNotNull(androidx.core.view.ViewCompat.getRootWindowInsets(view))
+                .getInsetsIgnoringVisibility(androidx.core.view.WindowInsetsCompat.Type.statusBars()).top
+            clearStatusChrome = true
+        }
         compose.mainClock.advanceTimeByFrame()
         // Each unchanged capture owner freezes its own placement, including its native marker.
         ShadowNativeCapture(compose, scene) { clock.stampNow.sequence }.use { native ->
@@ -85,14 +90,10 @@ class ShadowContinuityTest {
             val excludedInsets = insetsReceipt()
             fun localBodies(capture: PresentedCapture) = shadowScreenBodies(
                 capture.nativeWindows.single().state.bodies, -checkNotNull(capture.sceneBounds).topLeft)
-            assertEquals("Chrome clearance preserves scene dimensions", included.sceneBounds!!.size, excluded.sceneBounds!!.size)
-            assertEquals("Chrome clearance preserves every scene-local body", localBodies(included), localBodies(excluded))
-            assertEquals("Chrome clearance leaves native insets unchanged", includedInsets.toString(), excludedInsets.toString())
             val statusBottom = compose.runOnIdle {
                 checkNotNull(androidx.core.view.ViewCompat.getRootWindowInsets(view))
                     .getInsetsIgnoringVisibility(androidx.core.view.WindowInsetsCompat.Type.statusBars()).top
             }
-            assertTrue("Entire scene clears status chrome", excluded.sceneBounds!!.top >= statusBottom)
             shadowOracleEvidence("retained-layout-chrome-included", included)
             shadowOracleEvidence("retained-layout-chrome-excluded", excluded)
             val context = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().targetContext
@@ -102,7 +103,13 @@ class ShadowContinuityTest {
                 .put("included", includedInsets).put("excluded", excludedInsets)
                 .put("includedBounds", included.sceneBounds.toString()).put("excludedBounds", excluded.sceneBounds.toString())
                 .put("includedLocalBodies", localBodies(included).toString()).put("excludedLocalBodies", localBodies(excluded).toString())
-                .put("sceneRelativeLayoutUnchanged", true).toString(2))
+                .put("capturedStatusInsetPixels", statusClearancePixels)
+                .put("sceneRelativeLayoutUnchanged", included.sceneBounds!!.size == excluded.sceneBounds!!.size &&
+                    localBodies(included) == localBodies(excluded)).toString(2))
+            assertEquals("Chrome clearance preserves scene dimensions", included.sceneBounds!!.size, excluded.sceneBounds!!.size)
+            assertEquals("Chrome clearance preserves every scene-local body", localBodies(included), localBodies(excluded))
+            assertEquals("Chrome clearance leaves native insets unchanged", includedInsets.toString(), excludedInsets.toString())
+            assertTrue("Entire scene clears status chrome", excluded.sceneBounds!!.top >= statusBottom)
             var sample = 0
             fun capture() {
                 val actual = native.capture { bounds -> ShadowDrawState(clock.stampNow.sequence, 0,

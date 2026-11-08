@@ -444,6 +444,14 @@ class SearchImeMotionTest {
         assertEquals("$message bottom", expected.bottom, actual.bottom, 2f)
     }
 
+    private fun assertReopeningFrom(partial: Rect, placed: List<SearchMorphSample>) {
+        // Visibility can place once before the opening effect admits its flight.
+        // Keep that placed frame, but do not mistake its old closing flight for the new one.
+        val reopening = placed.filter { it.opening && it.flight?.opening == true }
+        assertTrue("Observe retained-window reopening", reopening.isNotEmpty())
+        assertRect("Reopen from the rendered partial return", partial, requireNotNull(reopening.first().flight).from)
+    }
+
     private fun between(from: Rect, to: Rect, fraction: Float): Rect {
         fun part(a: Float, b: Float) = a + (b - a) * fraction
         return Rect(part(from.left, to.left), part(from.top, to.top),
@@ -662,9 +670,31 @@ class SearchImeMotionTest {
                 compose.runOnUiThread { boundView.value().translate(windowOffset) },
                 compose.onNodeWithTag("glass-morph-surface").fetchSemanticsNode().boundsInRoot)
             opened()
-            val reopening = compose.runOnUiThread { samples.filter { it.opening && it.flight != null } }
-            assertTrue("Observe retained-window reopening", reopening.isNotEmpty())
-            assertRect("Reopen from the rendered partial return", partial, requireNotNull(reopening.first().flight).from)
+            val placed = compose.runOnUiThread { samples.toList() }
+            val firstVisible = placed.first { it.opening }
+            // Check the first placed frame itself at its recorded stamp, including when its
+            // flight metadata still belongs to the closing effect. A one-frame offset fails.
+            assertRect("FIRST visible reopening placement matches its bound physical rectangle",
+                requireNotNull(firstVisible.openingOwnedBounds), firstVisible.bounds)
+            assertReopeningFrom(partial, placed)
+            val wrongFrom = placed.map { sample ->
+                val flight = sample.flight
+                if (sample.opening && flight?.opening == true)
+                    sample.copy(flight = flight.copy(from = flight.from.translate(androidx.compose.ui.geometry.Offset(8f, 0f))))
+                else sample
+            }
+            val rejection = assertThrows(AssertionError::class.java) { assertReopeningFrom(partial, wrongFrom) }
+            assertTrue("Reject wrong opening origin, not missing samples", rejection.message.orEmpty()
+                .contains("Reopen from the rendered partial return left"))
+            val context = InstrumentationRegistry.getInstrumentation().targetContext
+            val directory = nativeEvidenceDirectory("search-ime-motion", context.getExternalFilesDir("search-ime-motion"))
+            check(directory.isDirectory || directory.mkdirs())
+            java.io.File(directory, "${name.methodName}-oracle-sensitivity.json").writeText(org.json.JSONObject()
+                .put("firstVisibleBounds", firstVisible.bounds.toString())
+                .put("firstVisibleOwnedBounds", firstVisible.openingOwnedBounds.toString())
+                .put("firstVisibleFlightOpening", firstVisible.flight?.opening)
+                .put("wrongOpeningFromShiftPixels", 8).put("wrongOpeningFromRejected", true)
+                .put("rejection", rejection.message).put("allOriginalSamplesRetained", placed.size).toString(2))
             assertRect("Reopen reaches the same absent-IME endpoint", raised, compose.runOnUiThread { samples.last().bounds })
         } finally {
             compose.runOnUiThread { visible = false }

@@ -130,7 +130,7 @@ internal data class ShadowNativeWindow(val window: Window, val view: android.vie
     val marker: IntOffset, val popup: (() -> PopupShadowComposition)? = null,
     val state: (androidx.compose.ui.geometry.Rect) -> ShadowDrawState)
 internal data class ShadowWindowReceipt(val windowId: String, val generation: NativeShadowGeneration,
-    val state: ShadowDrawState, val popup: PopupShadowReceipt? = null)
+    val state: ShadowDrawState, val popup: PopupShadowReceipt? = null, val readinessTraversals: Int = 0)
 
 @OptIn(ExperimentalTestApi::class)
 internal class ShadowNativeCapture(private val rule: ComposeContentTestRule,
@@ -208,10 +208,13 @@ internal class ShadowNativeCapture(private val rule: ComposeContentTestRule,
                         if (ledgers[index].size == 32) overflow = true else
                             ledgers[index][source.marker.token] = Draw(state.copy(bodies = state.bodies.toList(),
                                 exclusion = state.exclusion?.let { it.copy(bodies = it.bodies.toList()) }), nativeVsync, composition)
-                        // Complete a second native traversal so the first request buffer can be latched.
+                        // FrameMetrics can drop a VSYNC on API 26. Keep real draws bounded by
+                        // the existing ledger cap until a post-first traversal matches metrics.
                         // This is submission readiness, never screenshot polling or presentation evidence.
-                        if (ledgers[index].size == 1) source.view.postOnAnimation {
-                            source.marker.invalidateSelf(); source.view.invalidate()
+                        if (!submitted[index] && ledgers[index].size < 32) source.view.postOnAnimation {
+                            if (!submitted[index] && !overflow) {
+                                source.marker.invalidateSelf(); source.view.invalidate()
+                            }
                         }
                     }
                     source.marker.invalidateSelf(); source.view.invalidate()
@@ -219,7 +222,10 @@ internal class ShadowNativeCapture(private val rule: ComposeContentTestRule,
             }
             check(drawn.await(5, TimeUnit.SECONDS)) {
                 "Incomplete: not every window completed both native marker traversals; " +
-                    rule.runOnUiThread { sources.indices.map { "${sources[it].id}: ledger=${ledgers[it]} metrics=${metricsVsyncs[it]}" } }
+                    rule.runOnUiThread { sources.indices.map {
+                        "${sources[it].id}: readinessTraversals=${ledgers[it].size} " +
+                            "extraReadinessTraversals=${(ledgers[it].size - 2).coerceAtLeast(0)} ledger=${ledgers[it]} metrics=${metricsVsyncs[it]}"
+                    } }
             }
             // Submission readiness only. The original pixels, never these callbacks, grant correlation.
             InstrumentationRegistry.getInstrumentation().uiAutomation.waitForIdle(100, 5000)
@@ -246,7 +252,8 @@ internal class ShadowNativeCapture(private val rule: ComposeContentTestRule,
                         }
                         check(point.x >= 0 && point.y >= 0 && point.x + 4 < bitmap.width && point.y < bitmap.height)
                         val candidates = ledgers[index].map { (token, entry) -> ShadowWindowReceipt(source.id,
-                            NativeShadowGeneration(token, point, entry.vsync), entry.state, entry.popup) }.filter { candidate ->
+                            NativeShadowGeneration(token, point, entry.vsync), entry.state, entry.popup,
+                            readinessTraversals = ledgers[index].size) }.filter { candidate ->
                             shadowMarkerMatches(result.image, candidate,
                                 listOf(candidate) + decoded.drop(index + 1).filterNotNull(), sources.size)
                         }
@@ -335,6 +342,8 @@ internal fun shadowOracleEvidence(label: String, actual: PresentedCapture, refer
         .put("nativeWindows", org.json.JSONArray(actual.nativeWindows.map { JSONObject()
             .put("window", it.windowId).put("token", it.generation.token).put("marker", it.generation.marker.toString())
             .put("drawVsyncNanos", it.generation.drawVsyncNanos).put("engineSequence", it.state.sequence)
+            .put("readinessTraversals", it.readinessTraversals)
+            .put("extraReadinessTraversals", (it.readinessTraversals - 2).coerceAtLeast(0))
             .put("hostEpoch", it.state.epoch).put("bodies", it.state.bodies.toString())
             .put("background", it.state.background.toString()).put("scaleX", it.state.scaleX).put("scaleY", it.state.scaleY) }))
         .put("popupComposition", org.json.JSONArray(actual.nativeWindows.map { receipt -> org.json.JSONObject()
