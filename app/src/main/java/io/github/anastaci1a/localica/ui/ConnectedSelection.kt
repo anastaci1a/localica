@@ -133,14 +133,14 @@ internal fun ConnectedSelectionHost(modifier: Modifier = Modifier, contentDrawin
                 scene.lastDrawnRegions = emptyList()
                 scene.hover.clear()
                 scene.viewportHover.clear()
-                return@drawWithContent withSelectionBodyClip(bodyClip) { drawContent() }
+                return@drawWithContent withSelectionBodyClip(bodyClip) { this@drawWithContent.drawContent() }
             }
             // Lazy scrolling can update retained child layers without replacing LayoutCoordinates.
             // Subscribe THIS drawing to its owner's layout result, then read live coordinates.
             observePlacement()
             scene.placement
             // Hovering items skip their in-place drawing; everything else is unchanged.
-            withSelectionBodyClip(bodyClip) { drawContent() }
+            withSelectionBodyClip(bodyClip) { this@drawWithContent.drawContent() }
             val host = coordinates ?: return@drawWithContent
             // Lazy prefetch may keep an unplaced item's coordinates attached.
             // Its owner's public native keys, rather than attachment, admit it.
