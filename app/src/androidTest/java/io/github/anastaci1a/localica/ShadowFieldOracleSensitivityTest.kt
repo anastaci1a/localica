@@ -18,6 +18,8 @@ import io.github.anastaci1a.localica.ui.engine.GlassShadowGeometry
 import io.github.anastaci1a.localica.ui.engine.glassShadows
 import org.junit.Assert.*
 import org.junit.Test
+import org.junit.Rule
+import io.github.anastaci1a.localica.navigation.GlassRendererMode
 
 /** Offscreen capture at density 1 with the given composition identities. */
 internal fun shadowCapture(width: Int = 200, height: Int = 140, generation: Long = 1, draw: DrawScope.() -> Unit): PresentedCapture {
@@ -31,6 +33,7 @@ internal val probeRegion = Rect(16f, 16f, 184f, 116f)
 
 /** U12.01c red witness: every mutation below passes a mean-only probe or a max-only probe, and the full-field oracle rejects it. */
 class ShadowFieldOracleSensitivityTest {
+    @get:Rule val compose = localicaComposeRule()
     private val probe = ShadowFieldProbe(listOf(probeRegion), 1f / 255)
     private fun field(white: Boolean = false) = shadowCapture { if (white) drawRect(Color.White); glassShadows(listOf(probeBody to 1f), 1f, .5f, GlassShadowGeometry()) }
     private fun edit(capture: PresentedCapture, change: (Bitmap) -> Unit): PresentedCapture {
@@ -38,8 +41,13 @@ class ShadowFieldOracleSensitivityTest {
         return capture.copy(image = bitmap.asImageBitmap())
     }
     private fun meanLuminance(capture: PresentedCapture) = ShadowFrameProbe(probeRegion).sample(capture.image)
-    private fun rejects(actual: PresentedCapture, reference: PresentedCapture, background: PresentedCapture? = null) =
-        assertThrows(AssertionError::class.java) { probe.assertWithin(probe.compare(actual, reference, background), .008f, "mutation") }
+    private var mutation = 0
+    private fun rejects(actual: PresentedCapture, reference: PresentedCapture, background: PresentedCapture? = null) {
+        val result = probe.compare(actual, reference, background)
+        val caller = Throwable().stackTrace.first { it.className == javaClass.name && it.methodName != "rejects" }.methodName
+        shadowOracleEvidence("$caller-${++mutation}", actual, reference, result)
+        assertThrows(AssertionError::class.java) { probe.assertWithin(result, .008f, "mutation") }
+    }
 
     @Test fun identicalFieldPasses() {
         val reference = field()
@@ -104,6 +112,7 @@ class ShadowFieldOracleSensitivityTest {
         assertThrows(IllegalStateException::class.java) {
             probe.compare(reference.copy(nativeGeneration = null), reference)
         }
+        shadowOracleEvidence("missing-native-correlation", reference.copy(nativeGeneration = null), reference)
     }
 
     @Test fun sameClockWithDifferentNativeGenerationIsRejected() {
@@ -114,5 +123,14 @@ class ShadowFieldOracleSensitivityTest {
         assertThrows(IllegalStateException::class.java) { probe.compare(stale, reference) }
         // A fresh metadata label cannot turn an old original image into a new presentation.
         assertThrows(IllegalStateException::class.java) { probe.compare(reference.copy(image = stale.image), reference) }
+        shadowOracleEvidence("stale-same-clock", stale, reference)
     }
+
+    @Test fun matchingOriginalNativeMarkerPasses() {
+        val reference = nativeField(12)
+        probe.assertWithin(probe.compare(reference, reference), .008f, "native marker")
+    }
+
+    @Test fun realShadowCallersHaveCompleteNativeFieldsInNormal() = verifyNativeShadowCallers(compose, GlassRendererMode.Normal)
+    @Test fun realShadowCallersHaveCompleteNativeFieldsInNone() = verifyNativeShadowCallers(compose, GlassRendererMode.None)
 }

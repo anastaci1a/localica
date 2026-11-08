@@ -47,6 +47,14 @@ internal class ShadowFieldProbe internal constructor(
         val captures = listOfNotNull(actual, reference, background)
         check(captures.all { it.image.width == reference.image.width && it.image.height == reference.image.height }) { "Capture sizes differ" }
         check(captures.all { it.image.colorSpace == reference.image.colorSpace }) { "Capture color spaces differ" }
+        check(actual.windowIds.isNotEmpty() && actual.windowIds.distinct().size == actual.windowIds.size) { "Missing or duplicate native windows" }
+        if (!actual.offscreen) {
+            check(actual.windowIds.size == 1) { "Incomplete: every native window needs its own presented-generation correlation" }
+            val native = checkNotNull(actual.nativeGeneration) { "Incomplete: native presentation correlation is missing" }
+            check(native == reference.nativeGeneration) { "Incomplete: different native generations at the same Engine stamp" }
+            checkNativeShadowMarker(actual)
+            if (!reference.offscreen) checkNativeShadowMarker(reference)
+        }
         check(actual.drawGeneration == reference.drawGeneration && actual.hostEpoch == reference.hostEpoch && actual.windowIds == reference.windowIds) {
             "Not the same native composition: actual ${actual.windowIds}/${actual.hostEpoch}/${actual.drawGeneration}, reference ${reference.windowIds}/${reference.hostEpoch}/${reference.drawGeneration}"
         }
@@ -76,6 +84,7 @@ internal class ShadowFieldProbe internal constructor(
     }
 
     fun assertWithin(result: ShadowComparison, limit: Float, context: String) {
+        require(limit.isFinite() && limit >= 0f)
         assertTrue("$context: shadow field error ${result.maximumRgbaError} > $limit at (${result.worstX},${result.worstY}), mean ${result.meanRgbaError}",
             result.maximumRgbaError <= limit)
         assertTrue("$context: ${result.missingCoveragePixels} reference shadow pixels missing", result.missingCoveragePixels == 0)
