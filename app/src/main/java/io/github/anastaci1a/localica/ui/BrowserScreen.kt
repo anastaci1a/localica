@@ -63,7 +63,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlin.math.roundToInt
 
 /** Optional screen and per-cell work evidence (kind, route or item key); no behavior depends on it. */
-internal data class BrowseScrollFrame(val index: Int, val offset: Int, val headerHeight: Int?, val rowHeight: Int?)
+internal data class BrowseScrollFrame(val index: Int, val offset: Int, val headerHeight: Int?, val rowHeight: Int?,
+    val viewportWidth: Int = 0, val noticeWidth: Int? = null)
 internal class BrowseScrollFrameProbe {
     var request by mutableIntStateOf(0)
     @Volatile var serial = 0
@@ -657,18 +658,24 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     val returnListMatches = loadedResult != null && (!queryPending || presentedReturnOwner === returnOwner)
     // A zero-height notice is canonicalized to item 1 at offset 0 by the grid.
     // Its index alone cannot distinguish that visual home from a scrolled list.
-    val noticeOwner = remember(returnOwner, library.problem, library.loading,
-        library.unavailableFolders, playlists.problem, showFilters, showSearchPill,
-        result.items.isEmpty(), queryPending) { Any() }
-    var noticeHeight by remember(noticeOwner) { mutableIntStateOf(-1) }
-    val scrolledFromTop by remember(gridState, noticeOwner) { derivedStateOf {
-        gridState.canScrollBackward && !(noticeHeight == 0 &&
+    val noticeMeasurement = remember { BrowseNoticeMeasurement() }
+    val noticeContent = remember(library.problem, library.unavailableFolders.isNotEmpty(),
+        playlists.problem, library.loading,
+        library.snapshot.folders.isEmpty() && route.collection?.kind != MediaKind.Queue,
+        result.items.isEmpty() && !library.loading && !queryPending) { Any() }
+    val measuresNotice = !artDetail && !showSearchPill && !showFilters
+    val noticeDirection = androidx.compose.ui.platform.LocalLayoutDirection.current
+    val scrolledFromTop by remember(gridState, noticeMeasurement, noticeContent, measuresNotice,
+        density, noticeDirection) { derivedStateOf {
+        val height = noticeMeasurement.height(noticeContent, gridState.layoutInfo.viewportSize.width,
+            density, noticeDirection)
+        gridState.canScrollBackward && !(measuresNotice && height == 0 &&
             gridState.firstVisibleItemIndex == 1 && gridState.firstVisibleItemScrollOffset == 0)
     } }
     val clearableFilter = (route.tab == MainTab.Library && route.collection == null && route.filter != null) ||
         (artistDetail && validAlbums.isNotEmpty())
     // Recompose only when the offered action changes, not at every scroll start/stop.
-    val returnAction by remember(gridState, clearableFilter, noticeOwner) { derivedStateOf {
+    val returnAction by remember(gridState, clearableFilter, noticeContent, measuresNotice, density, noticeDirection) { derivedStateOf {
         listReturnAction(scrolledFromTop, gridState.isScrollInProgress, clearableFilter)
     } }
     DisposableEffect(playbackFollow) { onDispose { playbackFollow.cancel() } }
@@ -1026,7 +1033,8 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                     val layout = gridState.layoutInfo
                     scrollFrameProbe.frame = BrowseScrollFrame(gridState.firstVisibleItemIndex, gridState.firstVisibleItemScrollOffset,
                         layout.visibleItemsInfo.firstOrNull { it.index == 0 }?.size?.height,
-                        layout.visibleItemsInfo.firstOrNull { it.index > 0 }?.size?.height)
+                        layout.visibleItemsInfo.firstOrNull { it.index > 0 }?.size?.height,
+                        layout.viewportSize.width, noticeMeasurement.width)
                     scrollFrameProbe.serial++
                 })
                 .controlScrollParent(gridState, ControlScrollAxis.Vertical)
@@ -1073,11 +1081,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                 item(key = "browser-notice", contentType = "notice", span = { GridItemSpan(maxLineSpan) }) {
                     // Grid gutters belong to tiles; full-span headers keep their viewport alignment.
                     Column(Modifier.requiredWidth(with(density) { viewportWidth.toDp() }).testTag("browse-full-span")
-                        .layout { measurable, constraints ->
-                            val measured = measurable.measure(constraints)
-                            noticeHeight = measured.height
-                            layout(measured.width, measured.height) { measured.placeRelative(0, 0) }
-                        }
+                        .then(if (measuresNotice) Modifier.measureBrowseNotice(noticeMeasurement, noticeContent) else Modifier)
                         .onSizeChanged { if (artDetail) collectionHeaderHeight = it.height }
                         .then(if (pinchHeader != null) Modifier.collectionPinchHeader(pinchHeader, displayedStyle) else Modifier)) {
                         if (artDetail) {
