@@ -387,3 +387,4 @@ io.github.anastaci1a.localica.ListForegroundClearanceTest
 io.github.anastaci1a.localica.ListEndContextsTest
 io.github.anastaci1a.localica.ScrollbarRowInputTest
 io.github.anastaci1a.localica.ShellChromeClearanceTest
+io.github.anastaci1a.localica.SearchSlotReversalTest
