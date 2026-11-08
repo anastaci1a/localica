@@ -13,14 +13,16 @@ import java.io.File
 
 class OnlineFeaturesSearchTest {
     @get:Rule val compose = localicaComposeRule()
-    @Test fun deepSearchNavigatesToTheArtistPhotoControlAndHighlightsIt() {
+    @Test fun deepSearchNavigatesToPhotoAndLastFmControlsAndHighlightsThem() {
         val root = File(InstrumentationRegistry.getInstrumentation().targetContext.cacheDir, "online-search-${java.util.UUID.randomUUID()}")
+        val app = InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as LocalicaApplication
         val consent = OnlineMetadataConsent(File(root, "consent"))
         val photos = ArtistPhotos(consent, File(root, "photos"), File(root, "choices"))
         try {
             compose.setContent { LocalicaTheme {
                 FolderSettings(LibraryUiState(loading = false), {}, {}, {},
                     onlineFeaturesContent = { OnlineFeaturesSettings(consent) },
+                    lastFmContent = { LastFmSettings(app.lastfm) },
                     artistPhotosContent = { ArtistPhotosSettings(photos, consent, LibrarySnapshot()) })
             } }
             compose.onNodeWithText("Last.fm").assertDoesNotExist()
@@ -29,6 +31,10 @@ class OnlineFeaturesSearchTest {
             compose.onNodeWithTag("setting:Clear photo cache").assertIsDisplayed()
             compose.onNodeWithTag("setting-highlight:Clear photo cache", useUnmergedTree = true).assertExists()
             compose.onNodeWithText("Refresh all photos").performScrollTo().assertIsNotEnabled()
+            compose.onNodeWithContentDescription("Search settings input").performTextReplacement("Last.fm username")
+            compose.onNodeWithTag("search-result:Last.fm username").performClick()
+            compose.onNodeWithTag("setting:Last.fm username").assertIsDisplayed()
+            compose.onNodeWithTag("setting-highlight:Last.fm username", useUnmergedTree = true).assertExists()
         } finally { root.deleteRecursively() }
     }
 }
