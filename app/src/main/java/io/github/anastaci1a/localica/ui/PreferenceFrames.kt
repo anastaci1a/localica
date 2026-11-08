@@ -78,26 +78,26 @@ internal val InterfaceSwitchHeight = 48.dp
 @Composable
 internal fun SliderPreferenceFrame(label: String, low: String?, high: String?, description: String?,
     track: @Composable () -> Unit) {
-    Column(Modifier.fillMaxWidth().padding(top = 12.dp)) {
+    SettingsEntry(label) { Column(Modifier.fillMaxWidth().padding(top = 12.dp)) {
         val textStart = LocalSettingsRowMetrics.current.textStart
         Text(label, Modifier.padding(start = textStart).settingsRowPart(SettingsRowPart.Text), style = MaterialTheme.typography.titleMedium)
         track()
         if (low != null && high != null) SliderEndpoints(low, high)
         if (description != null) Text(description, Modifier.padding(start = textStart), style = MaterialTheme.typography.bodySmall)
     }
-}
+} }
 
 @Composable
 internal fun BooleanPreferenceFrame(label: String, modifier: Modifier = Modifier, control: @Composable () -> Unit) {
     val compact = LocalCompactPreferenceFrames.current
     val metrics = LocalSettingsRowMetrics.current
-    Row(modifier.fillMaxWidth().heightIn(min = if (compact) 48.dp else 56.dp)
+    SettingsEntry(label) { Row(modifier.fillMaxWidth().heightIn(min = if (compact) 48.dp else 56.dp)
         .padding(vertical = if (compact) 0.dp else 4.dp).settingsRowPart(SettingsRowPart.Row).padding(horizontal = metrics.inset),
         verticalAlignment = Alignment.CenterVertically) {
         Text(label, Modifier.weight(1f).padding(start = metrics.textStart - metrics.inset, end = 12.dp).settingsRowPart(SettingsRowPart.Text))
         Box(Modifier.settingsRowPart(SettingsRowPart.Trailing)) { control() }
     }
-}
+} }
 
 /** One width decision for live choices and their inert measurement faces. */
 internal fun choiceFitsInline(count: Int, cellWidth: Float, availableWidth: Float, popup: Boolean) =

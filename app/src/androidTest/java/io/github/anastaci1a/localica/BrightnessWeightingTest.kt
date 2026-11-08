@@ -32,7 +32,7 @@ class BrightnessWeightingTest {
         compose.setContent { LocalicaTheme {
             CompositionLocalProvider(LocalReducedMotion provides true) {
                 Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-                    GlassSettingsControls(value) { value = it }
+                    GlassSettingsControls(value, "Glass advanced") { value = it }
                 }
             }
         } }

@@ -15,7 +15,7 @@ internal fun DiagnosticsExportAction() {
     var open by remember { mutableStateOf(false) }
     var failed by remember { mutableStateOf(false) }
     val context = LocalContext.current
-    ActionTextButton(onClick = { open = true }) { Text("Export diagnostics") }
+    SettingsEntry("Export diagnostics") { ActionTextButton(onClick = { open = true }) { Text("Export diagnostics") } }
     FrameStatsActions()
     if (open) GlassAlertDialog(onDismissRequest = { open = false }, title = { Text("Export diagnostics") },
         text = {
@@ -44,9 +44,9 @@ private fun FrameStatsActions() {
     val recording by io.github.anastaci1a.localica.diagnostics.FrameStats.recording
     if (activity != null) {
         Text("Record up to two minutes of frame timings while you repeat an action. Stop here, then export diagnostics. No song names or search text are captured.")
-        ActionTextButton(onClick = {
+        SettingsEntry("Frame capture") { ActionTextButton(onClick = {
             if (recording) io.github.anastaci1a.localica.diagnostics.FrameStats.stop()
             else io.github.anastaci1a.localica.diagnostics.FrameStats.start(activity)
-        }) { Text(if (recording) "Stop frame capture" else "Start frame capture") }
+        }) { Text(if (recording) "Stop frame capture" else "Start frame capture") } }
     }
 }
