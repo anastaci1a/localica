@@ -73,14 +73,19 @@ class GlassRendererSettingsTest {
         var changes = 0
         compose.setContent { LocalicaTheme {
             CompositionLocalProvider(LocalReducedMotion provides true) {
-                Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-                    GlassSettingsControls(value) { value = it; changes++ }
-                }
+                FolderSettings(LibraryUiState(loading = false), {}, {}, {}, initialCategory = "Glass",
+                    interfaceContent = { section -> GlassSettingsControls(value, section) { value = it; changes++ } })
             }
         } }
         compose.onNodeWithText(explanation(GlassRendererMode.None)).assertIsDisplayed()
+        compose.onNodeWithText("Glass advanced").assertIsNotEnabled()
+        compose.onNodeWithText("Glass renderer").performClick()
+        choice(GlassRendererMode.Normal).performClick()
+        compose.onNodeWithText("Select", substring = false).performClick()
+        compose.onNodeWithText("Glass advanced").performScrollTo().performClick()
         compose.onNodeWithText("Reset glass appearance").performScrollTo().performClick()
-        compose.runOnIdle { assertEquals(GlassAppearance(), value); assertEquals(1, changes) }
+        compose.runOnIdle { assertEquals(GlassAppearance(), value); assertEquals(2, changes) }
+        compose.onNodeWithContentDescription("Back from settings").performClick()
         compose.onNodeWithText("Glass renderer").performScrollTo()
         compose.onNodeWithText(explanation(GlassRendererMode.Normal))
             .assertIsDisplayed()

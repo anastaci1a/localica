@@ -94,15 +94,11 @@ internal fun GlassControlScene(modifier: Modifier, horizontalPadding: Dp = 20.dp
             // None uniformly averages the material's own full bounds.
             val region = shape.bounds
             val sceneOffset = origin - region.topLeft
-            val extentOfRegion = IntSize(ceil(region.width).toInt().coerceAtLeast(1), ceil(region.height).toInt().coerceAtLeast(1))
             if (averageLayer != null && averageRenderer != null && areaReduction != null && Build.VERSION.SDK_INT >= 33) {
-                val padded = materialReductionExtent(extentOfRegion)
-                val reduced = with(areaReduction) { record(extentOfRegion) {
-                    clipRect(right = region.width, bottom = region.height) {
-                        translate(sceneOffset.x, sceneOffset.y) { recordScene() }
-                    }
+                val reduced = with(areaReduction) { recordFullBounds(region.size) {
+                    translate(sceneOffset.x, sceneOffset.y) { recordScene() }
                 } }
-                averageLayer.renderEffect = averageRenderer.effect(coverage = region.width * region.height / (padded.width.toFloat() * padded.height))
+                averageLayer.renderEffect = averageRenderer.effect()
                 averageLayer.alpha = none
                 averageLayer.blendMode = if (blending) BlendMode.Plus else BlendMode.SrcOver
                 averageLayer.record(Density(density, fontScale), layoutDirection, IntSize(1, 1)) { drawLayer(reduced) }
