@@ -41,26 +41,30 @@ class TransportAnimationFrameTest {
 
     @Test fun renderedFramesMirrorCrossfadeSymmetricallyAndWrapWithoutAJump() {
         var phase by mutableFloatStateOf(0f)
+        var glyph by mutableStateOf(TransportGlyph.Next)
         compose.setContent {
-            Row {
-                for (glyph in listOf(TransportGlyph.Next, TransportGlyph.Previous)) {
-                    Canvas(Modifier.size(100.dp).background(Color.White).testTag(glyph.name)) {
-                        drawTransportGlyph(glyph, 0f, phase, Color.Black, TransportShapes())
-                    }
+            // Travelling ink intentionally overflows the icon. Adjacent canvases would paint
+            // over one another, so compare both directions in one isolated physical slot.
+            Box(Modifier.padding(64.dp)) {
+                Canvas(Modifier.size(100.dp).background(Color.White).testTag("glyph")) {
+                    drawTransportGlyph(glyph, 0f, phase, Color.Black, TransportShapes())
                 }
             }
         }
-        val first = compose.onNodeWithTag("Next").captureNativeFrame()
+        val node = compose.onNodeWithTag("glyph")
+        val first = node.captureNativeFrame()
         for (p in listOf(0f, .1f, .25f, .5f, .75f, .9f, .9999f, 1f)) {
-            compose.runOnIdle { phase = p }
-            val next = compose.onNodeWithTag("Next").captureNativeFrame().toPixelMap()
-            val previous = compose.onNodeWithTag("Previous").captureNativeFrame().toPixelMap()
+            compose.runOnIdle { phase = p; glyph = TransportGlyph.Next }
+            val next = node.captureNativeFrame().toPixelMap()
+            compose.runOnIdle { glyph = TransportGlyph.Previous }
+            val previous = node.captureNativeFrame().toPixelMap()
             for (y in 0 until next.height) for (x in 0 until next.width)
                 assertEquals("Mirrored at $p $x,$y", next[x,y].red, previous[next.width - 1 - x,y].red, .025f)
         }
-        same(first, compose.onNodeWithTag("Next").captureNativeFrame())
+        compose.runOnIdle { glyph = TransportGlyph.Next; phase = 1f }
+        same(first, node.captureNativeFrame())
         compose.runOnIdle { phase = .99999f }
-        same(first, compose.onNodeWithTag("Next").captureNativeFrame(), .015f)
+        same(first, node.captureNativeFrame(), .015f)
     }
 
     /** #654: departing and arriving wedges fade through feathered edges instead of a hard clip. */
