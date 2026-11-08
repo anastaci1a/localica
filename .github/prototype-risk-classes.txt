@@ -390,3 +390,5 @@ io.github.anastaci1a.localica.ShellChromeClearanceTest
 
 io.github.anastaci1a.localica.OnlineFeaturesSettingsTest
 io.github.anastaci1a.localica.ArtistPhotoStorageTest
+
+io.github.anastaci1a.localica.ArtworkChooserShortViewportTest

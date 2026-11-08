@@ -8,6 +8,7 @@ import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -54,7 +55,10 @@ internal fun ImageChooser(workflow: ArtworkWorkflow, onDismiss: () -> Unit, onCh
     val files = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument(), ::chosen)
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { revision++ }
     if (workflow.stage == ArtworkStage.Chooser) GlassAlertDialog(onDismissRequest = onDismiss, title = { Text("Choose artwork") }, text = {
-        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        // Keyboard insets can leave less space than the recent row and permission prompt need.
+        // Keep this content scrollable while the source actions stay in fixed dialog chrome.
+        val bodyScroll = rememberScrollState()
+        Column(Modifier.scrollEdgeFade(bodyScroll).controlVerticalScroll(bodyScroll), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             if (hasPermission && recent.isEmpty()) Text("No recent photos", style = MaterialTheme.typography.bodySmall)
             if (unavailableRecent) Text("Some recent images are unavailable. Choose them again using gallery or files.", style = MaterialTheme.typography.bodySmall)
             val recentScroll = androidx.compose.foundation.lazy.rememberLazyListState()
@@ -78,6 +82,9 @@ internal fun ImageChooser(workflow: ArtworkWorkflow, onDismiss: () -> Unit, onCh
                 else -> arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
             }) }
             }
+        }
+    }, footer = {
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             HorizontalDivider(Modifier.padding(vertical = 4.dp))
             GlassActionButton(AppIcon.TabAlbums, "Open gallery", Modifier.fillMaxWidth()) {
                 gallery.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
