@@ -58,19 +58,63 @@ class SessionSelectionTest {
         assertEquals(SongSelectionTarget(source, listOf(row)), item.selectionTarget(source))
         assertEquals(SongSelectionTarget(null, listOf(row)), item.selectionTarget())
     }
-    @Test fun standaloneSongMembershipDoesNotBorrowPlaylistOccurrenceButCollectionsSummarizeTracks() {
-        val source = MediaRef(MediaKind.Playlist, "playlist")
+    @Test fun librarySelectionFollowsTheSameOccurrenceAcrossViewsAndKeepsFirstProvenance() {
+        val album = MediaRef(MediaKind.Album, "album")
+        val artist = MediaRef(MediaKind.Artist, "artist")
         val row = SongRow(track.id, track)
         val song = BrowserItem(MediaRef(MediaKind.Song, track.id), track.title, null, listOf(row), row)
-        val collection = BrowserItem(source, "Playlist", null, listOf(row))
         val state = SessionSelection()
-        state.select(source, listOf(row))
+        state.select(album, listOf(row))
+        for (source in listOf(null, album, artist, MediaRef(MediaKind.Folder, "folder"))) {
+            assertEquals(1, state.selectedCount(song, source))
+            state.select(source, listOf(row.copy(track = track.copy(title = "Updated"))))
+        }
+        assertEquals(1, state.entries.size)
+        assertEquals(album, state.entries.single().source)
+        state.toggle(artist, row)
+        assertTrue(state.entries.isEmpty())
+    }
+    @Test fun libraryAndMutableOccurrencesDoNotBorrowEachOthersMembership() {
+        val playlist = MediaRef(MediaKind.Playlist, "same")
+        val queue = MediaRef(MediaKind.Queue, "same")
+        val row = SongRow(track.id, track)
+        val song = BrowserItem(MediaRef(MediaKind.Song, track.id), track.title, null, listOf(row), row)
+        val state = SessionSelection()
+        state.select(playlist, listOf(row))
         assertEquals(0, state.selectedCount(song))
-        assertEquals(1, state.selectedCount(song, source))
-        assertEquals(1, state.selectedCount(collection))
+        assertEquals(0, state.selectedCount(song, queue))
+        assertEquals(1, state.selectedCount(song, playlist))
+        state.select(null, listOf(row))
+        state.select(queue, listOf(row))
+        assertEquals(3, state.entries.size)
         state.toggle(null, row)
-        assertEquals(1, state.selectedCount(song))
         assertEquals(2, state.entries.size)
+        assertEquals(1, state.selectedCount(song, playlist))
+        assertEquals(1, state.selectedCount(song, queue))
+    }
+    @Test fun collectionSummariesUseOccurrenceMembershipRatherThanTrackMembership() {
+        val state = SessionSelection()
+        val playlist = MediaRef(MediaKind.Playlist, "playlist")
+        val rows = listOf(SongRow("entry1", track), SongRow("entry2", track))
+        val item = BrowserItem(playlist, "Playlist", null, rows)
+        state.select(playlist, listOf(rows.first()))
+        assertEquals(1, state.selectedCount(item))
+        state.select(playlist, listOf(rows.last()))
+        assertEquals(2, state.selectedCount(item))
+        state.clear()
+        state.select(null, listOf(SongRow(track.id, track)))
+        assertEquals(0, state.selectedCount(item))
+    }
+    @Test fun libraryRangeRecognizesEndpointsSelectedInOtherViews() {
+        val state = SessionSelection()
+        val album = MediaRef(MediaKind.Album, "album")
+        val artist = MediaRef(MediaKind.Artist, "artist")
+        val rows = (0..4).map { SongRow("$it", track.copy(id = "$it")) }
+        state.select(album, listOf(rows[3], rows[1]))
+        state.source = artist
+        state.visible = rows
+        state.range()
+        assertEquals(listOf("3", "1", "2"), state.entries.map { it.row.id })
     }
     @Test fun selectingAPlaylistInItsCatalogRetainsItsOccurrencesInsideThePlaylist() {
         val source = MediaRef(MediaKind.Playlist, "playlist")
