@@ -24,6 +24,8 @@ class SearchReturnTopTest {
         album = "Return album", artist = "Return artist", fileName = "$it.mp3", relativePath = "$it.mp3") }
     private val route = BrowseRoute(MainTab.Songs, key = "return-search-690")
     private var sample: SearchMorphSample? = null
+    private var currentRoute by mutableStateOf(route)
+    private var libraryProblem by mutableStateOf<LibraryProblem?>(null)
     private val list get() = compose.onNodeWithTag("browser-list")
     private val arrow get() = compose.onNodeWithContentDescription("Return to top")
 
@@ -36,8 +38,8 @@ class SearchReturnTopTest {
         compose.setContent { LocalicaTheme {
             CompositionLocalProvider(LocalSearchMorphObserver provides { sample = it }) {
                 BrowserScreen(LibraryUiState(LibrarySnapshot(
-                    folders = listOf(FolderSelection("return-search-root", "Music")), tracks = songs), loading = false),
-                    PlaylistState(loading = false), route, {}, {}, {}, { _, _, _ -> }, null, null, true, false)
+                    folders = listOf(FolderSelection("return-search-root", "Music")), tracks = songs), loading = false, problem = libraryProblem),
+                    PlaylistState(loading = false), currentRoute, {}, {}, {}, { _, _, _ -> }, null, null, true, false)
             }
         } }
         compose.waitUntil(5000) { compose.onAllNodesWithTag("media-return-search:0").fetchSemanticsNodes().isNotEmpty() }
@@ -62,7 +64,10 @@ class SearchReturnTopTest {
 
     private fun withKeyboard(block: () -> Unit) {
         val original = shell("settings get secure show_ime_with_hard_keyboard")
+        val scales = listOf("animator_duration_scale", "transition_animation_scale", "window_animation_scale")
+            .associateWith { shell("settings get global $it") }
         try {
+            scales.keys.forEach { shell("settings put global $it 1") }
             shell("settings put secure show_ime_with_hard_keyboard 1")
             compose.activityRule.scenario.onActivity {
                 androidx.core.view.WindowCompat.setDecorFitsSystemWindows(it.window, false)
@@ -74,6 +79,9 @@ class SearchReturnTopTest {
             if (original == "null") shell("settings delete secure show_ime_with_hard_keyboard")
             else shell("settings put secure show_ime_with_hard_keyboard $original")
             compose.awaitSystemImeHardKeyboardPolicy(::shell, (original.toIntOrNull() ?: 0) != 0)
+            scales.forEach { (key, value) ->
+                if (value == "null") shell("settings delete global $key") else shell("settings put global $key $value")
+            }
         }
     }
 
@@ -92,6 +100,29 @@ class SearchReturnTopTest {
         compose.onNodeWithTag("media-return-search:0").assertIsDisplayed()
         arrow.assertDoesNotExist()
         compose.onNodeWithTag("floating-return-control", true).assertDoesNotExist()
+    }
+
+    @Test fun popupTapRetainsItsDrawingUntilTopThenUsesNormalExit() = withKeyboard {
+        fixture(true); hiddenIme()
+        list.performScrollToIndex(50)
+        arrow.assertIsDisplayed()
+        compose.mainClock.autoAdvance = false
+        try {
+            arrow.performClick()
+            compose.mainClock.advanceTimeBy(64)
+            compose.onNodeWithTag("floating-return-control", true).assertExists()
+            arrow.assertExists()
+            var frames = 0
+            while (compose.onAllNodesWithContentDescription("Return to top").fetchSemanticsNodes().isNotEmpty() && frames++ < 100) {
+                compose.mainClock.advanceTimeByFrame()
+            }
+            arrow.assertDoesNotExist()
+            compose.onNodeWithTag("media-return-search:0").assertIsDisplayed()
+            // Logical dismissal revokes input while the normal fade/rise still draws.
+            compose.onNodeWithTag("floating-return-control", true).assertExists()
+            compose.mainClock.advanceTimeBy(450)
+            compose.onNodeWithTag("floating-return-control", true).assertDoesNotExist()
+        } finally { compose.mainClock.autoAdvance = true }
     }
 
     @Test fun popupManualReturnRetiresTheArrow() = withKeyboard {
@@ -127,6 +158,34 @@ class SearchReturnTopTest {
             val bounds = android.graphics.Rect().also(keyboard::getBoundsInScreen)
             assertTrue("Popup ends above the actual keyboard: $current / $bounds", current.bounds.bottom <= bounds.top + 1f)
         }
+    }
+
+    @Test fun noticeMeasurementTracksNonzeroContentAndNewRouteOwnership() {
+        fixture(false)
+        // Initial UNKNOWN must become a measured zero before an arrow is offered.
+        arrow.assertDoesNotExist()
+        compose.runOnIdle { libraryProblem = LibraryProblem.LoadFailed }
+        compose.waitForIdle()
+        list.performScrollToIndex(1)
+        // The notice now has real height: item 1/offset 0 is away from home.
+        arrow.assertIsDisplayed()
+        list.performScrollToIndex(0)
+        arrow.assertDoesNotExist()
+        compose.runOnIdle {
+            currentRoute = route.copy(key = "return-search-690-new-owner")
+            libraryProblem = null
+        }
+        compose.waitForIdle()
+        arrow.assertDoesNotExist()
+        list.performScrollToIndex(50)
+        arrow.assertIsDisplayed().performClick()
+        arrow.assertDoesNotExist()
+        compose.runOnIdle { libraryProblem = LibraryProblem.ScanFailed }
+        list.performScrollToIndex(1)
+        arrow.assertIsDisplayed()
+        compose.runOnIdle { libraryProblem = null }
+        compose.waitForIdle()
+        arrow.assertDoesNotExist()
     }
 
     @Test fun browseWithEmptyNoticeHidesAtTopAndAfterTap() {
