@@ -63,7 +63,11 @@ internal fun LastFmSettings(controller: LastFmController) {
             LastFmMatchingBar(segments)
             segments.forEach { segment -> key(segment.id) {
                 val anchor = rememberGlassAnchor()
-                SettingsLink(segment.label, "${segment.count} songs", anchor = anchor) { group = LastFmGroup.valueOf(segment.id); tab = 1 }
+                SettingsCandidateRow(Modifier, indicator = { Text("●", color = segment.color) }, label = { modifier ->
+                    SettingsEntryHost(modifier) {
+                        SettingsLink(segment.label, "${segment.count} songs", anchor = anchor) { group = LastFmGroup.valueOf(segment.id); tab = 1 }
+                    }
+                })
             } }
             SettingsLink("Auto-matched editions (${matches.editions.size})", "Same recording on several albums · count on every copy") { group = LastFmGroup.EDITIONS; tab = 1 }
             LastFmConnection(controller, state, onlineAllowed, active, username, { username = it }, canSync)
