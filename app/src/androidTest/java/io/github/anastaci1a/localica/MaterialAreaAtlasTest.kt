@@ -144,7 +144,7 @@ class MaterialAreaAtlasTest {
                             state.epoch = it
                         }
                     } else previous
-                    with(epoch) { record(oldA.first(), oldB.first().takeIf { input.memberB }) }
+                    with(epoch) { record(oldA.first(), oldB.firstOrNull()?.takeIf { input.memberB }) }
                     fun DrawScope.extract(output: GraphicsLayer, memberB: Boolean) {
                         output.record(size = IntSize(1, 1)) {
                             if (epoch.levels.isEmpty()) drawLayer(if (memberB) oldB.last() else oldA.last())
