@@ -35,9 +35,10 @@ class BrowseNoticeMeasurementTest {
             val actual = Density(physical.density * densityScale, physical.fontScale * fontScale)
             val content = remember(notice) { Any() }
             val currentIntent = intent
-            SideEffect { identity = content; density = actual; pixels = with(actual) { width.roundToPx() }; currentIntent.hashCode() }
+            val currentWidth = width
+            SideEffect { identity = content; density = actual; pixels = with(actual) { currentWidth.roundToPx() }; currentIntent.hashCode() }
             CompositionLocalProvider(LocalDensity provides actual, LocalLayoutDirection provides direction) {
-                if (mounted) Box(Modifier.width(width).measureBrowseNotice(measurement, content)) {
+                if (mounted) Box(Modifier.width(currentWidth).measureBrowseNotice(measurement, content)) {
                     if (notice) Text("A measured notice")
                 }
             }
