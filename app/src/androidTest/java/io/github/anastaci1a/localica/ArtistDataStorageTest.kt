@@ -32,7 +32,7 @@ class ArtistDataStorageTest {
             for (i in 0 until entities.length()) {
                 val entity = entities.getJSONObject(i)
                 old.execSQL(entity.getString("createSql").replace("\${TABLE_NAME}", entity.getString("tableName")))
-                val indices = entity.getJSONArray("indices")
+                val indices = entity.optJSONArray("indices") ?: org.json.JSONArray()
                 for (j in 0 until indices.length()) old.execSQL(indices.getJSONObject(j).getString("createSql")
                     .replace("\${TABLE_NAME}", entity.getString("tableName")))
             }
@@ -49,6 +49,11 @@ class ArtistDataStorageTest {
             assertEquals(42L, migrated.addedAt); assertEquals(99L, migrated.modifiedAt)
             assertEquals("uri", migrated.uri); assertEquals(1, migrated.locations.size)
             assertNull(migrated.releaseType); assertNull(migrated.compilation)
+            val expected = instrumentation.context.assets.open("io.github.anastaci1a.localica.library.LibraryDatabase/8.json")
+                .bufferedReader().use { JSONObject(it.readText()).getJSONObject("database").getString("identityHash") }
+            db.openHelper.readableDatabase.query("SELECT identity_hash FROM room_master_table WHERE id = 42").use {
+                assertTrue(it.moveToFirst()); assertEquals(expected, it.getString(0))
+            }
             assertEquals(123, db.libraryDao().observeArtworkColors().first().single().color)
             store.updateMetadata(migrated.copy(releaseType = "album; live", compilation = true, addedAt = 100))
             val saved = store.current().tracks.single()

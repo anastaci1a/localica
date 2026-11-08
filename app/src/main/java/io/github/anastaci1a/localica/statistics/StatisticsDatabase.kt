@@ -76,3 +76,10 @@ class StatisticsRepository(private val dao: StatisticsDao,
         pending.trySend(Write.Play(QualifiedPlay(id = eventId, trackId = source.trackId, playlistId = source.playlistId)))
     }
 }
+
+class LocalPlayCountSource(private val dao: StatisticsDao) : PlayCountSource {
+    override fun counts(window: ListeningWindow): Flow<Map<String, Long>> =
+        dao.tracksBetween(window.from, window.through).map { rows ->
+            rows.associate { it.id to it.count }
+        }
+}

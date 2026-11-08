@@ -4,7 +4,6 @@ import io.github.anastaci1a.localica.library.Track
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.flow.map
 import java.time.ZonedDateTime
 
 /** Calendar ranges use the caller's zone; the rolling month/week ranges retain local wall time. */
@@ -28,13 +27,6 @@ data class ListeningWindow(val from: Long, val through: Long) {
 /** Providers return only counts available for this exact window. Unsupported windows return empty. */
 fun interface PlayCountSource {
     fun counts(window: ListeningWindow): Flow<Map<String, Long>>
-}
-
-class LocalPlayCountSource(private val dao: StatisticsDao) : PlayCountSource {
-    override fun counts(window: ListeningWindow): Flow<Map<String, Long>> =
-        dao.tracksBetween(window.from, window.through).map { rows ->
-            rows.associate { it.id to it.count }
-        }
 }
 
 data class RankingSettings(val useExternalCounts: Boolean = false)
