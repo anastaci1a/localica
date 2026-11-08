@@ -19,7 +19,7 @@ private fun ExpansionView.rest() = if (inContact || !phase.settled) ExpansionRes
 }
 /** Projects the endpoint predicate before publication; Open → Moving does not invalidate a retained host. */
 @Composable fun rememberExpansionClosed(view: ExpansionView?): State<Boolean> = remember(view) {
-    derivedStateOf { if (view == null) true else { view.phase.value(); view.rest() == ExpansionRest.Closed } }
+    derivedStateOf(structuralEqualityPolicy()) { if (view == null) true else { view.phase.value(); view.rest() == ExpansionRest.Closed } }
 }
 private val ScrimAlpha = Curve.smooth(0f, .2f)
 /** The drawer's retained scrim: always composed, drawn from the shared phase through one C1 map, dismissing while shown. */
