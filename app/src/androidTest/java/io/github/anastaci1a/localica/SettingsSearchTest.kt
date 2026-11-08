@@ -50,11 +50,21 @@ class SettingsSearchTest {
         compose.onNodeWithTag("search-result:Control expansion").assertExists()
         compose.mainClock.autoAdvance = false
         compose.onNodeWithTag("search-result:Control expansion").performClick()
-        compose.mainClock.advanceTimeUntil(timeoutMillis = 5000) {
-            compose.onAllNodesWithTag("setting:Control expansion").fetchSemanticsNodes().any {
+        var tinted = false
+        val positions = mutableSetOf<Int>()
+        val deadline = compose.mainClock.currentTime + 5000
+        while (!tinted && compose.mainClock.currentTime < deadline) {
+            compose.mainClock.advanceTimeByFrame()
+            tinted = compose.onAllNodesWithTag("setting:Control expansion").fetchSemanticsNodes().any {
                 (it.config.getOrNull(SettingsHighlightAlpha) ?: 0f) > .01f
             }
+            compose.onAllNodes(SemanticsMatcher.keyIsDefined(SemanticsProperties.VerticalScrollAxisRange))
+                .fetchSemanticsNodes().forEach {
+                    positions += it.config[SemanticsProperties.VerticalScrollAxisRange].value().toInt()
+                }
         }
+        assertTrue("The selected row must show its tint", tinted)
+        assertTrue("The eased scroll must present intermediate positions", positions.count { it > 0 } > 1)
         compose.onNodeWithTag("setting:Control expansion").assertIsDisplayed()
         val scrollers = compose.onAllNodes(SemanticsMatcher.keyIsDefined(SemanticsProperties.VerticalScrollAxisRange))
             .fetchSemanticsNodes()
