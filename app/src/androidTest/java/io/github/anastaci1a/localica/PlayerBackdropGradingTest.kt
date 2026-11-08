@@ -60,6 +60,8 @@ class PlayerBackdropGradingTest {
         val root = InstrumentationRegistry.getArguments().getString("additionalTestOutputDir")?.let(::File)
             ?: requireNotNull(instrumentation.targetContext.getExternalFilesDir(null))
         val output = File(root, "backdrop-grading"); assertTrue(output.isDirectory || output.mkdirs())
+        val observationMs = InstrumentationRegistry.getArguments().getString("backdropObservationMs")?.toLong() ?: 8000L
+        require(observationMs in 0L..8000L)
         val failures = mutableListOf<String>()
         var cover by mutableStateOf(covers[0])
         var context by mutableStateOf("player")
@@ -111,7 +113,7 @@ class PlayerBackdropGradingTest {
             android.util.Log.i("Trim678", "$tagLog waitUntil ${if (waited) "satisfied" else "TIMED OUT"} after ${(System.nanoTime() - started) / 1_000_000} ms")
             // The old impossible predicate pumped frames for eight seconds. Its legacy header glass still
             // needs that observation window for identical PNGs, independently of the now-valid grade check.
-            val observationUntil = started + 8_000_000_000L
+            val observationUntil = started + observationMs * 1_000_000L
             while (System.nanoTime() < observationUntil) {
                 compose.mainClock.advanceTimeByFrame()
                 Thread.sleep(10)
