@@ -9,6 +9,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -38,7 +40,20 @@ internal fun ReturnToPositionButton(up: Boolean, label: String, visible: Boolean
 /** Retain exit drawing without retaining its click, drag ownership or accessible action. */
 @Composable
 internal fun FloatingReturnToPositionButton(up: Boolean, label: String, visible: Boolean,
-    reducedMotion: Boolean, modifier: Modifier = Modifier, returning: Boolean = false, onClick: () -> Unit) {
+    reducedMotion: Boolean, modifier: Modifier = Modifier, returning: Boolean = false,
+    onHeightMeasured: ((Int) -> Unit)? = null, onClick: () -> Unit) {
+    if (onHeightMeasured != null) {
+        // The list needs its end clearance before scrolling can reveal the arrow.
+        // Measure the actual control without placing a drawing or an input target.
+        Layout(content = {
+            Box(Modifier.onSizeChanged { onHeightMeasured(it.height) }) {
+                ReturnToPositionButton(up, label, visible = false, onClick = {})
+            }
+        }) { measurables, constraints ->
+            measurables.single().measure(constraints.copy(minWidth = 0, minHeight = 0))
+            layout(0, 0) {}
+        }
+    }
     val motion = rememberFloatingControlMotion(visible, reducedMotion)
     val rise = with(LocalDensity.current) { FloatingControlRise.toPx() }
     if (motion.retained && !returning) Box(modifier.testTag("floating-return-control")
