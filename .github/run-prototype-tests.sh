@@ -104,8 +104,8 @@ assert source_inventory.get('api') == int(observed['api']), 'Inventory API diffe
 gates = source_inventory['gates']
 gated_classes = set(source_inventory['gated_absent_classes'])
 required = set(filter(None, sys.argv[2].split(',')))
-# AGP's observed XML serializes assumptions as <skipped />. Its EXISTING per-method
-# logcat carries the reason. Never infer that reason from a count or source predicate.
+# AGP's observed XML serializes assumptions as <skipped />. UTP's test-result.pb and the per-method
+# logcat carry the reason (#669). Never infer that reason from a count or source predicate.
 package = 'io.github.anastaci1a.localica.'
 profile_reasons = {
     'RepeatOptionsEnvelopeTest#native360x640Font2SectionsExposeEveryControlAndStageDrafts': 'Exact native window profile requires sufficient display space and actual Android font scale 2',
@@ -124,6 +124,19 @@ selection_sdk33_callsites = {
 }
 qualified_skips = []
 assume_gated_skips = {}
+sys.path.insert(0, '.github/test-evidence')
+import utp_results
+def observed_assumptions():
+    if not hasattr(observed_assumptions, 'errors'):
+        records = sorted(pathlib.Path('app/build/outputs/androidTest-results').rglob('test-result.pb'))
+        if not records:
+            raise ValueError('Missing UTP test-result.pb for an observed skip')
+        observed_assumptions.records = [{'file': str(r), 'sha256': hashlib.sha256(r.read_bytes()).hexdigest()} for r in records]
+        observed_assumptions.errors = {}
+        for record in records:
+            for identity, errors in utp_results.assumption_errors(record).items():
+                observed_assumptions.errors.setdefault(identity, []).extend(errors)
+    return observed_assumptions.errors
 def qualify_skip(name, method, skipped, xml_file):
     identity = name+'#'+method
     api = str(observed['api'])
@@ -147,25 +160,30 @@ def qualify_skip(name, method, skipped, xml_file):
         raise ValueError('Require one bounded original per-method assumption log: '+identity)
     text = logs[0].read_text(encoding='utf-8')
     marker = method+'('+name+')'
-    if text.count('TestRunner: started: '+marker) != 1 or text.count('TestRunner: assumption failed: '+marker) != 1:
-        raise ValueError('Assumption log lacks unique matching method boundaries: '+identity)
-    reasons = re.findall(r'TestRunner: org\.junit\.AssumptionViolatedException: ([^\r\n]*)', text)
-    if assume_gated and len(reasons) == 1:
-        expected = reasons[0]
-    if reasons != [expected]:
-        raise ValueError('Missing, ambiguous or wrong observed skip reason: '+identity)
+    # logd can drop this log's entries under load (#669). UTP's test-result.pb, built from the
+    # instrumentation status stream, is the observed record; the log may only confirm it.
+    boundaries = re.findall(r'TestRunner: (started|assumption failed|finished): ([^\r\n]*)', text)
+    terminal = [('started', marker), ('assumption failed', marker), ('finished', marker)]
+    if [b for b in terminal if b in boundaries] != boundaries:
+        raise ValueError('Assumption log has foreign, repeated or unordered method boundaries: '+identity)
+    errors = sorted(set(observed_assumptions().get(identity, [])), key=str)
+    if len(errors) != 1 or errors[0][0] is None:
+        raise ValueError('Missing or ambiguous observed skip reason: '+identity)
+    reason, trace, status = errors[0]
+    if assume_gated:
+        expected = reason
+    if reason != expected:
+        raise ValueError('Wrong observed skip reason: '+identity)
+    if re.findall(r'TestRunner: org\.junit\.AssumptionViolatedException: ([^\r\n]*)', text) not in ([], [expected]):
+        raise ValueError('Logged skip reason contradicts the observed record: '+identity)
     if sdk33_line is not None:
         callsite = 'at '+name+'.'+method+'(SelectionLensTest.kt:'+str(sdk33_line)+')'
-        boundaries = re.findall(r'TestRunner: (started|assumption failed|finished): ([^\r\n]*)', text)
-        callsites = re.findall(r'TestRunner:\s+(at '+re.escape(name+'.'+method)+r'\(SelectionLensTest\.kt:[0-9]+\))', text)
-        if boundaries != [('started', marker), ('assumption failed', marker), ('finished', marker)] or callsites != [callsite]:
+        pattern = r'(at '+re.escape(name+'.'+method)+r'\(SelectionLensTest\.kt:[0-9]+\))'
+        # The record's terminal status (4: ignored by an assumption) replaces the log's 'finished'.
+        if re.findall(pattern, trace) != [callsite] or status != 4:
             raise ValueError('Missing, mixed or ambiguous SDK assumption callsite/terminal: '+identity)
-        ordered = ['TestRunner: started: '+marker, 'TestRunner: assumption failed: '+marker,
-                   'TestRunner: org.junit.AssumptionViolatedException: '+expected, callsite,
-                   'TestRunner: finished: '+marker]
-        positions = [text.index(value) for value in ordered]
-        if positions != sorted(positions) or re.search(r'TestRunner: (?:failed|failure|error):', text):
-            raise ValueError('Unordered or contradictory SDK assumption evidence: '+identity)
+        if re.findall(r'TestRunner:\s+'+pattern, text) not in ([], [callsite]) or re.search(r'TestRunner: (?:failed|failure|error):', text):
+            raise ValueError('Contradictory SDK assumption evidence: '+identity)
     # If another adapter supplies XML reason text, it must not contradict the paired log.
     message = skipped.attrib.get('message', '')
     detail = (skipped.text or '').strip()
@@ -173,8 +191,9 @@ def qualify_skip(name, method, skipped, xml_file):
         raise ValueError('Contradictory XML assumption reason: '+identity)
     if assume_gated:
         assume_gated_skips[name] = assume_gated_skips.get(name, 0) + 1
-    qualified_skips.append({'id': identity, 'api': api, 'reason': reasons[0], 'evidence': str(logs[0]),
+    qualified_skips.append({'id': identity, 'api': api, 'reason': reason, 'evidence': str(logs[0]),
         'evidence_sha256': hashlib.sha256(logs[0].read_bytes()).hexdigest(), 'xml': str(xml_file),
+        'reason_records': observed_assumptions.records,
         'qualification': ('Source assumeTrue(SDK_INT >= '+str(assume_gate)+') above API'+api+'; skip is not a pass'
                           if assume_gated else 'Observed API26 SDK>=33 guard; shader path not exercised and API36 must execute'
                           if sdk33_line is not None else 'Observed assumption only; not a passed profile or optical proof')})
