@@ -14,9 +14,15 @@ class BrowseOptionsDeclarationTest {
         assertEquals(TrackSort.entries - setOf(TrackSort.Manual, TrackSort.Album, TrackSort.Folder), catalog.sortFields)
         assertEquals(ListSize.densityOrder - ListSize.Tracklist, catalog.sizes)
         assertEquals(ExtraInfo.entries.toSet(), catalog.information.toSet())
+        // #666 sits right after the play-count sort in every selectable domain.
+        assertEquals(listOf(TrackSort.MostPlayed, TrackSort.LongestListened),
+            catalog.sortFields.dropWhile { it != TrackSort.MostPlayed }.take(2))
+        assertTrue(ExtraInfo.LongestListened in catalog.information)
         for (tab in listOf(MainTab.Songs, MainTab.MostPlayed)) {
             val songs = browseOptionsDeclaration(BrowseRoute(tab))
             assertEquals(TrackSort.entries - setOf(TrackSort.Manual, TrackSort.Count), songs.sortFields)
+            assertEquals(listOf(TrackSort.MostPlayed, TrackSort.LongestListened),
+                songs.sortFields.dropWhile { it != TrackSort.MostPlayed }.take(2))
             assertTrue(songs.quickSearch)
         }
         val filtered = browseOptionsDeclaration(BrowseRoute(MainTab.Library, filter = MediaKind.Song))
@@ -29,6 +35,8 @@ class BrowseOptionsDeclarationTest {
             val route = BrowseRoute(MainTab.Library, MediaRef(kind, "collection"))
             val declaration = browseOptionsDeclaration(route, mutable = true, randomize = true, overridden = true, reverse = true)
             assertEquals(kind in setOf(MediaKind.Queue, MediaKind.Playlist), TrackSort.Manual in declaration.sortFields)
+            assertEquals(listOf(TrackSort.MostPlayed, TrackSort.LongestListened),
+                declaration.sortFields.dropWhile { it != TrackSort.MostPlayed }.take(2))
             assertFalse(TrackSort.Count in declaration.sortFields)
             assertEquals(kind in setOf(MediaKind.Album, MediaKind.Playlist, MediaKind.Queue), ListSize.Tracklist in declaration.sizes)
             assertEquals(kind != MediaKind.Album, declaration.quickSearch)

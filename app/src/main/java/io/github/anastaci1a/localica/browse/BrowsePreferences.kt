@@ -5,7 +5,7 @@ import io.github.anastaci1a.localica.library.*
 import io.github.anastaci1a.localica.navigation.*
 
 enum class Presentation(val label: String) { List("List"), Compact("Compact gallery"), Standard("Standard gallery"), Large("Large gallery") }
-enum class ExtraInfo { Automatic, Inherited, None, Count, Duration, Year, Modified, Added, MostPlayed, Artist, AlbumArtist, Composer, Genre }
+enum class ExtraInfo { Automatic, Inherited, None, Count, Duration, Year, Modified, Added, MostPlayed, LongestListened, Artist, AlbumArtist, Composer, Genre }
 enum class SongGrouping(val label: String) { None("None"), Artist("Artist"), AlbumArtist("Album Artist"), Composer("Composer") }
 // Names are persisted; density order is explicit so existing values stay compatible.
 enum class ListSize { Compact, Normal, Large, Small, Smallest, Tracklist;

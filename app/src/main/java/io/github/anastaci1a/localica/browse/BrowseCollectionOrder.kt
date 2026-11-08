@@ -11,7 +11,7 @@ internal fun orderCollectionItems(items: List<BrowserItem>, query: LibraryQuery,
     data class Key(val item: BrowserItem, val title: String, val identity: String,
         val number: Long?, val text: String?)
     val numeric = query.sort in setOf(TrackSort.Count, TrackSort.Duration, TrackSort.Year,
-        TrackSort.Modified, TrackSort.Added, TrackSort.MostPlayed)
+        TrackSort.Modified, TrackSort.Added, TrackSort.MostPlayed, TrackSort.LongestListened)
     val prepared = items.mapIndexed { index, item ->
         if (index % 128 == 0) checkActive()
         val title = item.title.lowercase(Locale.ROOT)
@@ -22,6 +22,7 @@ internal fun orderCollectionItems(items: List<BrowserItem>, query: LibraryQuery,
             TrackSort.Modified -> item.modifiedAt
             TrackSort.Added -> item.addedAt
             TrackSort.MostPlayed -> item.playCount
+            TrackSort.LongestListened -> item.longestListenedMs()
             else -> null
         }, when (query.sort) {
             TrackSort.Artist, TrackSort.AlbumArtist, TrackSort.Composer, TrackSort.Genre ->

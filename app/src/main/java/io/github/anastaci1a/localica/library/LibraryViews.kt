@@ -24,7 +24,7 @@ object LibraryViews {
     internal class Preparation(private val snapshot: LibrarySnapshot, private val checkActive: () -> Unit) {
         private val ordered = mutableMapOf<LibraryQuery, List<SongRow>>()
         fun groups(view: SongListView, query: LibraryQuery): List<LibraryGroup> =
-            if (query.sort != TrackSort.MostPlayed) snapshot.groupingSource.groupPlans.groups(snapshot, view, query, checkActive)
+            if (!query.sort.usesPlays) snapshot.groupingSource.groupPlans.groups(snapshot, view, query, checkActive)
             else groupRows(snapshot, view, query, {
                 checkActive()
                 ordered.getOrPut(query) {
@@ -42,7 +42,7 @@ object LibraryViews {
         fun groups(current: LibrarySnapshot, view: SongListView, query: LibraryQuery,
             checkActive: () -> Unit): List<LibraryGroup> {
             checkActive()
-            require(current.groupingSource === source && query.sort != TrackSort.MostPlayed)
+            require(current.groupingSource === source && !query.sort.usesPlays)
             val key = view to query
             val plan = synchronized(lock) { grouped[key] } ?: groupRows(source, view, query, {
                 checkActive()

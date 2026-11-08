@@ -111,7 +111,7 @@ Timed lyrics interpolate Media3's latency-aware position between samples, freezi
 | Qualified play | Actual listening for 30 seconds or half the duration, whichever is shorter, once per traversal. Exclude paused time and seek jumps. |
 | Traversal | Pauses resume it; automatic repeats, occurrence switches, and explicit restarts at zero begin another. Tag edits preserve the same visit and exclude editing time. Unqualified partial listening may be lost on process death. |
 | Aggregation | Collections sum current distinct songs' counts. Playlist counts follow each queue occurrence's originating playlist, even after queue switches; legacy unknown origins remain unknown. |
-| Retention | Qualified plays are local, all-time, durable, and independent of folder/queue deletion. Never invent historical dates or counts. Most played uses selected per-song counts, highest first. |
+| Retention | Qualified plays are local, all-time, durable, and independent of folder/queue deletion. Never invent historical dates or counts. Most played uses selected per-song counts, highest first. Longest listened weights each selected count by the song duration (unknown counts as zero); collections, playlists included, sum current distinct songs. |
 
 ## Online features and artist photos
 

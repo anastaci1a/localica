@@ -39,6 +39,30 @@ class CollectionSortingTest {
         assertEquals("mix", sorted.last().ref.id)
         assertEquals("3 plays", mix.information(BrowseStyle(sort = TrackSort.MostPlayed)))
     }
+    @Test fun longestListenedSortsEveryCollectionKindBySummedListeningTimeAndLabelsIt() {
+        // one: 4 plays x 100 s = 400 s; two: 2 x 400 s = 800 s; playlist Mix holds "one" twice, counted once.
+        val timed = snapshot.copy(tracks = listOf(first.copy(durationMs = 100_000), second.copy(durationMs = 400_000)))
+        val byTime = LibraryQuery(sort = TrackSort.LongestListened, ascending = false)
+        assertEquals(listOf("two", "one"), BrowseQueries.evaluate(timed, listOf(playlist), BrowseRoute(MainTab.Songs), byTime).rows.map { it.track.id })
+        assertEquals(listOf("one", "two"), BrowseQueries.evaluate(timed, listOf(playlist), BrowseRoute(MainTab.Songs),
+            LibraryQuery(sort = TrackSort.MostPlayed, ascending = false)).rows.map { it.track.id })
+        val all = BrowseQueries.libraryKinds.toSet()
+        val items = BrowseQueries.evaluate(timed, listOf(playlist), BrowseRoute(MainTab.Library), byTime, allCollections = all).items
+        val mix = items.first { it.ref.kind == MediaKind.Playlist }
+        assertEquals(400_000L, mix.longestListenedMs())
+        items.filterNot { it.ref.kind == MediaKind.Playlist }.forEach { assertEquals(it.title, 1_200_000L, it.longestListenedMs()) }
+        assertEquals("mix", items.last().ref.id)
+        assertEquals("mix", BrowseQueries.evaluate(timed, listOf(playlist), BrowseRoute(MainTab.Library),
+            byTime.copy(ascending = true), allCollections = all).items.first().ref.id)
+        assertEquals("20:00", items.first().information(BrowseStyle(sort = TrackSort.LongestListened)))
+        assertEquals("6:40", mix.information(BrowseStyle(extraInfo = ExtraInfo.LongestListened)))
+        val partial = mix.copy(songs = mix.songs + SongRow("extra", first.copy(id = "extra", durationMs = null, playCount = 1)))
+        assertEquals("6:40 (partial)", partial.information(BrowseStyle(extraInfo = ExtraInfo.LongestListened)))
+        assertEquals("1:00:05", listeningTimeLabel(3_605_000))
+        assertEquals("0:00", listeningTimeLabel(0))
+        assertEquals("59:59", listeningTimeLabel(3_599_999))
+    }
+
     @Test fun dateSortingKeepsUnknownLastInEitherDirectionWithStableTies() {
         val unknown = first.copy(id = "missing", title = "Unknown", addedAt = null, modifiedAt = null)
         for (sort in listOf(TrackSort.Added, TrackSort.Modified)) for (ascending in listOf(true, false)) {
