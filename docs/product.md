@@ -127,7 +127,7 @@ The artist menu can review provider candidates, choose another match, or clear a
 
 ## Optional Last.fm statistics
 
-Settings → Online features → Last.fm accepts a username and explicitly starts a read-only sync. No password, account login or OAuth is used. Last.fm requests use its HTTPS API. Requests fetch listening statistics; they never upload local history or audio. Sync is manual, with no automatic launch request.
+Settings → Online features → Last.fm accepts a username and explicitly starts a read-only sync. No password, account login or OAuth is used. Last.fm requests use its HTTPS API. Requests fetch listening statistics; they never upload local history or audio. Sync starts explicitly, with no automatic launch request. Background continuation defaults on and uses unique scheduled work with a progress notification.
 
 A refresh publishes one complete snapshot only after every request succeeds. Existing accounts use recent scrobbles and authoritative per-song user counts; large change sets fall back to full paging. Full rescan is also available explicitly. Requests are paced with retry backoff and a one-minute attempt limit. Failure preserves the archive; another account cannot use its counts.
 

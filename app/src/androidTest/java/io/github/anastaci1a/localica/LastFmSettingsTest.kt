@@ -57,6 +57,7 @@ class LastFmSettingsTest {
             compose.onNodeWithText("Use selection").performClick()
             compose.waitUntil(5000) { controller.matches.value.review.isEmpty() }
             assertEquals("a", runBlocking { store.read().mappings.values.single() })
+            compose.onNodeWithText("Data").performScrollTo().performClick()
             compose.onNode(isToggleable() and hasText("Use Last.fm counts")).performScrollTo().performClick()
             compose.waitUntil(5000) { !controller.state.value.saved.useCounts }
             assertEquals(local, runBlocking { controller.applyTo(flowOf(local)).first() })

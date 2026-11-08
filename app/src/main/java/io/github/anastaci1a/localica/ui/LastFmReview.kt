@@ -10,6 +10,7 @@ import androidx.compose.ui.platform.testTag
 import io.github.anastaci1a.localica.lastfm.*
 import io.github.anastaci1a.localica.library.Track
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.CancellationException
 
 @Composable
 internal fun LastFmReviewList(matches: LastFmMatches, group: LastFmGroup, library: List<Track>,
@@ -63,10 +64,14 @@ internal fun LastFmDecision(row: LastFmMatchRow, library: List<Track>, onDismiss
         label = { id -> candidates.firstOrNull { it.id == id }?.let {
             "${it.title} · ${it.artist ?: "Unknown artist"} · ${it.album ?: "Unknown album"}"
         } ?: "None of these" }, onDismiss = onSkip,
-        onSelect = { id -> if (id == LastFmMatcher.NONE) { picking = true; selected = null } else scope.launch {
+        onSelect = { id -> if (id == LastFmMatcher.NONE) { picking = true; selected = null } else if (!saving) {
             saving = true
-            try { if (!onChoose(id)) problem = "Could not save the match. Try again." }
-            finally { saving = false }
+            scope.launch {
+                try { if (!onChoose(id)) problem = "Could not save the match. Try again." }
+                catch (cancelled: CancellationException) { throw cancelled }
+                catch (_: Exception) { problem = "Could not save the match. Try again." }
+                finally { saving = false }
+            }
         } },
         onDraft = { id -> if (id == LastFmMatcher.NONE) { picking = true; selected = null } else selected = id },
         header = {

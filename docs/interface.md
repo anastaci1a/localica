@@ -128,7 +128,7 @@ Long titles pause, scroll and fade at their edges. Reduced motion uses ellipsis.
 
 Browsing/settings stay light, with a pink selected-tab accent, shared neutral gray for secondary text/inactive icons, and red for errors/destructive actions. Use Inter with compact tracking and bold mini-player titles. Do not bundle Apple's system font. **Interface → Appearance** persistently adjusts gray, with reset to the darker default. Broader themes remain [planned](roadmap.md).
 
-Settings categories stay in this order: Interface, Playback and queues, Library and tags, About/licenses. Player stays inside Interface. Category rows have icons, summaries and chevrons. Both Back controls reverse the page entrance direction.
+Settings categories stay in this order: Interface, Online features, Playback and queues, Library and tags, About/licenses. Player stays inside Interface. Category rows have icons, summaries and chevrons. Both Back controls reverse the page entrance direction.
 
 Every settings page has global search. Results cover controls, choice values and synonyms without typo correction. Selecting a result scrolls to its row and briefly highlights it. Hidden options lead to the control that reveals them. Reduce motion uses an immediate scroll and a static highlight.
 
@@ -213,7 +213,13 @@ The [appearance settings](#appearance-and-settings) own thumb finish and expansi
 
 ### Last.fm settings
 
-The Last.fm settings page uses shared text fields, buttons and switches. It shows username, explicit Sync now, last successful sync, source selection, errors and unresolved matches. Candidate buttons resolve ambiguous recordings. Disconnect retains the archive; deleting synced data requires a separate confirmation. See the [statistics contract](product.md#optional-lastfm-statistics) for privacy, fallback and retention rules.
+Settings → Online features → Last.fm starts with a sync ring, percent and live song, artist and album counts. Its archive card shows scrobbles, songs, artists, albums and matched share. Overview, Matches and Data use shared glass tabs.
+
+Matching shows an exact-proportion colour strip with tappable labelled legend rows. Matched, Judgment calls, Needs review, Auto-matched editions and Not in your library are searchable. Every row opens the shared glass chooser and can match any library song. Judgment rows show the reason and Undo.
+
+The chooser stages a candidate until Use selection saves it. None of these opens an entire-library search. Skip preserves the current match. Failed saves keep the popup open for retry.
+
+Data offers background continuation, enabled by default, quick refresh and Full rescan. Sync notifications show percent and live counts with Stop. Disconnect retains the archive; Delete synced Last.fm data requires confirmation. See the [statistics contract](product.md#optional-lastfm-statistics) for privacy, fallback and retention.
 
 ## Navigation and Back
 
