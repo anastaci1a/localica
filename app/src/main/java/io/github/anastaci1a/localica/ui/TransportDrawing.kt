@@ -14,6 +14,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
+import kotlin.math.ceil
 import kotlin.math.floor
 import kotlin.math.roundToInt
 
@@ -51,7 +52,8 @@ private inline fun DrawScope.drawWithSkipTaper(phase: Float, ink: Rect, content:
     val left = ink.left * size.width - width * (SkipTaperMargin + SkipTaperBand)
     val right = ink.right * size.width + width * (SkipTaperMargin + SkipTaperBand)
     val band = width * SkipTaperBand / (right - left)
-    val layer = Rect(left - 2f, -2f, right + 2f, size.height + 2f)
+    // Integral layer origins preserve static-path rasterization as phase approaches zero.
+    val layer = Rect(floor(left) - 2f, -2f, ceil(right) + 2f, size.height + 2f)
     val canvas = drawContext.canvas
     canvas.saveLayer(layer, Paint())
     try {
