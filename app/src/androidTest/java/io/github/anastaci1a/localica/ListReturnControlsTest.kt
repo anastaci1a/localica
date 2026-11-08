@@ -298,7 +298,7 @@ class ListReturnControlsTest {
         try {
             compose.onNodeWithContentDescription("Return to top").performClick()
             compose.mainClock.advanceTimeByFrame()
-            compose.onNodeWithContentDescription("Return to top").assertDoesNotExist()
+            compose.onNodeWithContentDescription("Return to top").assertExists()
             var previous = pixels()
             repeat(45) {
                 compose.mainClock.advanceTimeByFrame()
@@ -317,7 +317,7 @@ class ListReturnControlsTest {
         compose.onNodeWithContentDescription("Return to top").assertDoesNotExist()
     }
 
-    @Test fun activatedReturnRemovesItsRetainedHostBeforeTheListFinishes() {
+    @Test fun activatedTopReturnRetainsItsHostUntilTheListReachesHome() {
         fixture(BrowseRoute(MainTab.Songs), reducedMotion = false)
         awaitRow(tracks.first().id)
         list.performScrollToIndex(65)
@@ -328,8 +328,8 @@ class ListReturnControlsTest {
             compose.onNodeWithContentDescription("Return to top").performClick()
             compose.mainClock.advanceTimeByFrame()
             assertTrue("The actual list has not reached its destination", position() > 0f)
-            compose.onNodeWithContentDescription("Return to top").assertDoesNotExist()
-            compose.onNodeWithTag("floating-return-control", true).assertDoesNotExist()
+            compose.onNodeWithContentDescription("Return to top").assertExists()
+            compose.onNodeWithTag("floating-return-control", true).assertExists()
         } finally {
             compose.mainClock.autoAdvance = true
         }
