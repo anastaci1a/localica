@@ -297,6 +297,26 @@ class UiPolicyDetectorTest : LintDetectorTest() {
         """, 3)
     }
 
+    fun testCyclicMotionDependenciesDoNotCachePartialNegativeAnswers() {
+        check(UiRuleId.RawMotionMap, """
+            import io.github.anastaci1a.localica.ui.engine.MotionValue
+            fun first(view: MotionValue): Float = second(view) + view.value()
+            fun second(view: MotionValue): Float = first(view)
+            fun bad(view: MotionValue) {
+                val one = first(view) > .5f
+                val two = second(view) > .5f
+            }
+        """, 2)
+        check(UiRuleId.RawMotionMap, """
+            fun first(): Float = second()
+            fun second(): Float = first()
+            fun good() {
+                val one = first() > .5f
+                val two = second() > .5f
+            }
+        """, 0)
+    }
+
     fun testSpacingAliasesAndValidatedSpecData() {
         val body = """
             import androidx.compose.ui.unit.*
