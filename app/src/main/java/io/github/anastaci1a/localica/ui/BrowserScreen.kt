@@ -145,11 +145,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     val resultsFocus = remember(route.key) { androidx.compose.ui.focus.FocusRequester() }
     val submitSearch = browseSearchAutofocus(route, scopedEditor, focusRequest, playerOpen, focus, resultsFocus, keyboard, density,
         onSearchCommit, searchEditTrace)
-    LaunchedEffect(libraryFilters.visible, route.key, route.filter, selectionVisible) {
-        if (selectionVisible && route.tab == MainTab.Library && route.collection == null && !route.globalSearch && route.filter != null && filters.none { it.kind == route.filter }) {
-            onRoute(route.copy(filter = null))
-        }
-    }
+    BrowseVisibleFilterEffect(libraryFilters, route, selectionVisible, filters, onRoute)
     val touchExploration = remember(context) { (context.getSystemService(android.content.Context.ACCESSIBILITY_SERVICE)
         as? android.view.accessibility.AccessibilityManager)?.isTouchExplorationEnabled == true }
     val playbackFollow = androidx.compose.runtime.saveable.rememberSaveable(route.key, route.collection,
@@ -1526,6 +1522,17 @@ private fun BrowseScrollResetEffect(route: BrowseRoute, scrollResetInput: Triple
         if (previousScrollResetInput != scrollResetInput) {
             previousScrollResetInput = scrollResetInput
             gridState.requestScrollToItem(0)
+        }
+    }
+}
+
+@Composable
+@NonRestartableComposable
+private fun BrowseVisibleFilterEffect(libraryFilters: LibraryFilters, route: BrowseRoute, selectionVisible: Boolean,
+    filters: List<LibraryFilter>, onRoute: (BrowseRoute) -> Unit) {
+    LaunchedEffect(libraryFilters.visible, route.key, route.filter, selectionVisible) {
+        if (selectionVisible && route.tab == MainTab.Library && route.collection == null && !route.globalSearch && route.filter != null && filters.none { it.kind == route.filter }) {
+            onRoute(route.copy(filter = null))
         }
     }
 }
