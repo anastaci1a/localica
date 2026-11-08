@@ -109,13 +109,14 @@ internal fun MaterialAverageStyle.color(mean: Color): Color {
 @Composable
 internal fun AverageBackdrop(modifier: Modifier, source: FrostedBackdrop, location: BackdropLocation,
     style: MaterialAverageStyle, home: FrostedBackdrop? = null, homeWeight: () -> Float = { 0f },
-    homeBounds: (() -> Rect)? = null, homeFootprint: (() -> HomeBackdropFootprint?)? = null) {
+    homeBounds: (() -> Rect)? = null, homeFootprint: (() -> HomeBackdropFootprint?)? = null, styleReader: (() -> MaterialAverageStyle)? = null) {
     val drawObserver = LocalBackdropSamplingObserver.current
     val backing = source.noneMaterialSource()
     val homeBacking = home?.noneMaterialSource()
     BackdropLease(backing)
     BackdropLease(homeBacking?.takeUnless { it === backing })
     Canvas(modifier) {
+        val style = styleReader?.invoke() ?: style
         val bounds = Rect(Offset.Zero, size)
         val localToSource = location.registrationTo(backing.location) ?: return@Canvas
         val primary = backing.averageColor(localToSource, bounds) ?: return@Canvas

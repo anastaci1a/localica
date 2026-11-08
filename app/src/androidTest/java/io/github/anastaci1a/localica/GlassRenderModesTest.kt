@@ -26,6 +26,56 @@ import java.util.concurrent.atomic.AtomicInteger
 class GlassRenderModesTest {
     @get:Rule val compose = localicaComposeRule()
 
+    @Test fun popupMaterialSamplesItsPhaseInDrawingAndMatchesStaticMaterials() {
+        val runtime = GlassRendererRuntime(GlassRendererMode.Normal)
+        val phase = mutableFloatStateOf(0f)
+        var compositions = 0
+        lateinit var source: FrostedBackdrop
+        compose.setContent { CompositionLocalProvider(LocalGlassRendererRuntime provides runtime) { LocalicaTheme {
+            CompositionLocalProvider(LocalGlassAppearance provides GlassAppearance(blur = .3f, whiteTint = .2f,
+                contrast = 0f, shadowStrength = 0f)) {
+                SideEffect { compositions++ }
+                source = rememberFrostedBackdrop(Unit, dark = false)
+                Box(Modifier.size(240.dp, 220.dp)) {
+                    Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(source)) {
+                        repeat(8) { x -> drawRect(if (x % 2 == 0) Color.Red else Color.Blue,
+                            Offset(x * size.width / 8, 0f), Size(size.width / 8, size.height)) }
+                    }
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        PopupMaterialReference(source, phase)
+                        LiquidGlassSurface(Modifier.fillMaxWidth().height(96.dp).testTag("phase-material"), source,
+                            pressFeedback = false, shadow = false, presentation = {
+                                val p = phase.floatValue
+                                GlassSurfacePresentation((12 + 16 * p).dp, p, p, 1f - p)
+                            })
+                    }
+                }
+            }
+        } } }
+        compose.waitUntil(15_000) { source.recorded && (Build.VERSION.SDK_INT >= 33 || source.snapshot != null) }
+        for (mode in listOf(GlassRendererMode.Normal, GlassRendererMode.None)) {
+            compose.runOnIdle { runtime.request(mode) }
+            compose.waitForIdle()
+            val settled = compositions
+            for (p in listOf(0f, .4f, 1f, .4f, 0f)) {
+                compose.runOnIdle { phase.floatValue = p }
+                compose.waitForIdle()
+                val reference = compose.onNodeWithTag("static-material").captureToImage().toPixelMap()
+                val actual = compose.onNodeWithTag("phase-material").captureToImage().toPixelMap()
+                assertEquals(reference.width, actual.width)
+                assertEquals(reference.height, actual.height)
+                for (y in 0 until actual.height step 7) for (x in 0 until actual.width step 7) {
+                    val a = actual[x, y]; val b = reference[x, y]
+                    assertEquals("Red mode=$mode p=$p ($x,$y)", b.red, a.red, .025f)
+                    assertEquals("Green mode=$mode p=$p ($x,$y)", b.green, a.green, .025f)
+                    assertEquals("Blue mode=$mode p=$p ($x,$y)", b.blue, a.blue, .025f)
+                    assertEquals("Alpha mode=$mode p=$p ($x,$y)", b.alpha, a.alpha, .025f)
+                }
+                assertEquals("Draw-time phase must not recompose the material owner", settled, compositions)
+            }
+        }
+    }
+
     @Test fun noneAveragesMovingContentAndNeverInvokesTheOpticalFilter() {
         val runtime = GlassRendererRuntime(GlassRendererMode.None)
         val optical = AtomicInteger()
@@ -188,4 +238,11 @@ class GlassRenderModesTest {
             compose.runOnIdle { assertEquals("Mode changes retain the existing surface", 1, owners.size) }
         } finally { compose.mainClock.autoAdvance = true }
     }
+}
+
+@Composable private fun PopupMaterialReference(source: FrostedBackdrop, phase: androidx.compose.runtime.State<Float>) {
+    val p = phase.value
+    LiquidGlassSurface(Modifier.fillMaxWidth().height(96.dp).testTag("static-material"), source,
+        cornerRadius = (12 + 16 * p).dp, frostProgress = p, panelProgress = p, refraction = 1f - p,
+        pressFeedback = false, shadow = false)
 }

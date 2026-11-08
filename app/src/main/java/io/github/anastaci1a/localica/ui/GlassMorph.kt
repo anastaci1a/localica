@@ -945,7 +945,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                                         else if (anchor.samplingLocation.coordinates?.isAttached == true) anchor.samplingFootprint()
                                         else anchor.lastSamplingFootprint
                                     }),
-                                    cornerRadius = radius, frostProgress = p, panelProgress = p, panelDark = dark,
+                                    panelDark = dark,
                                     // Material and popup foreground share the resolved page polarity,
                                     // including explicit overrides and detached dialogs. The trigger's
                                     // original foreground is rendered separately during its return.
@@ -956,7 +956,9 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                                         else body.value
                                     },
                                     depthScale = anchor.depthScale,
-                                    refraction = if (anchor.quiet) (p / .14f).coerceIn(0f, 1f) else 1f)
+                                    presentation = {
+                                        GlassSurfacePresentation(radius, p, p, if (anchor.quiet) (p / .14f).coerceIn(0f, 1f) else 1f)
+                                    })
                             }
                         }
                         Box(Modifier.graphicsLayer { alpha = if (page) 1f else ((p - .18f) / .65f).coerceIn(0f, 1f) }

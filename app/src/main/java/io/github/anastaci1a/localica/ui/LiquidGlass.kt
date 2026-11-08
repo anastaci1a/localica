@@ -179,6 +179,9 @@ internal fun Modifier.observeGlassContact(admit: () -> Boolean = { true }, yield
     }
 }
 
+/** Draw-time popup material inputs, sampled from the same phase as its bound geometry. */
+internal data class GlassSurfacePresentation(val radius: Dp?, val frost: Float, val panel: Float, val refraction: Float)
+
 /** Adjustable lens over a separately recorded scene. Foreground content is never filtered. */
 @Composable
 internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
@@ -191,6 +194,7 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
     silhouette: GlassSilhouette? = null, sharedContact: GlassContact? = null,
     contactPresentation: (() -> GlassShape)? = null,
     contactAdmission: () -> Boolean = { true },
+    presentation: (() -> GlassSurfacePresentation)? = null,
     content: (@Composable BoxScope.() -> Unit)? = null) {
     val renderer = currentGlassRendererGeneration()
     val drawObserver = LocalGlassSurfaceDrawObserver.current
@@ -231,7 +235,7 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
     } }
     val lens = remember { lazy { if (Build.VERSION.SDK_INT >= 33) LensRenderer() else null } }
     val rim = remember { GlassRimCache() }
-    val popupRim = if (panel > 0f && silhouette == null) remember { PopupGlassRimCache() } else null
+    val popupRim = if ((panel > 0f || presentation != null) && silhouette == null) remember { PopupGlassRimCache() } else null
     // Transform the surface and its shadow together in the draw pass; a legacy
     // ViewLayer would clip the shadow outside its bounds even with clipping disabled.
     Box(modifier.then(if (pressFeedback) Modifier.glassPress(contact, contactShape,
@@ -241,11 +245,14 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
     } else Modifier)
         .then(if (!shadow) Modifier else if (silhouette != null) Modifier.silhouetteGlassShadow(silhouette)
             else Modifier.surfaceGlassShadow(cornerRadius, anchor))
-        .clip(surfaceClip)
+        .then(if (presentation == null) Modifier.clip(surfaceClip) else Modifier.graphicsLayer {
+            shape = if (silhouette != null) surfaceClip else presentation().radius?.let { RoundedCornerShape(it) } ?: CircleShape
+            clip = true
+        })
         .backdropLocation(location).onGloballyPositioned { surfaceSize = it.size }, propagateMinConstraints = true) {
         if (visible && source != null && Build.VERSION.SDK_INT >= 33) {
             val density = androidx.compose.ui.platform.LocalDensity.current
-            val blur = with(density) { 22.dp.toPx() } * (appearance.blur + (1f - appearance.blur) * frost)
+            val blurRadius = with(density) { 22.dp.toPx() }; val blur = blurRadius * (appearance.blur + (1f - appearance.blur) * frost)
             val padding = with(density) { 32.dp.toPx() }
             // Crossing into panel scattering must not swap backing resolution in
             // one frame. Clear glass stays sharp; visible blur gradually permits
@@ -253,7 +260,15 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
             val scattering = ((blur - 1f) / 5f).coerceIn(0f, 1f)
             val resolution = 1f - .5f * scattering * scattering * (3f - 2f * scattering)
             FilteredBackdrop(Modifier.matchParentSize(), source, location, resolution, padding,
-                homeSource, homeWeight, MaterialAverageStyle(appearance.whiteTint * (1f - panel), tone), homeBounds, homeFootprint) { extent, resolution, flatWeight ->
+                homeSource, homeWeight, MaterialAverageStyle(appearance.whiteTint * (1f - panel), tone), homeBounds, homeFootprint,
+                resolutionReader = presentation?.let { read -> { val b = blurRadius * (appearance.blur + (1f - appearance.blur) * read().frost.coerceIn(0f, 1f))
+                    val scatter = ((b - 1f) / 5f).coerceIn(0f, 1f); 1f - .5f * scatter * scatter * (3f - 2f * scatter) } },
+                averageReader = presentation?.let { read -> { MaterialAverageStyle(appearance.whiteTint * (1f - read().panel.coerceIn(0f, 1f)), tone) } }) { extent, resolution, flatWeight ->
+                val frame = presentation?.invoke()
+                val cornerRadius = if (frame != null) frame.radius else cornerRadius
+                val panel = frame?.panel?.coerceIn(0f, 1f) ?: panel
+                val refraction = frame?.refraction ?: refraction
+                val blur = frame?.let { blurRadius * (appearance.blur + (1f - appearance.blur) * it.frost.coerceIn(0f, 1f)) } ?: blur
                 val pad = padding * resolution
                 val radius = (cornerRadius?.let { with(density) { it.toPx() } }?.times(resolution)
                     ?: ((extent.minDimension - 2 * pad) / 2)).coerceAtLeast(0f)
@@ -275,9 +290,15 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
 
         if (visible && source != null && Build.VERSION.SDK_INT < 33) {
             AverageBackdrop(Modifier.matchParentSize(), source, location,
-                MaterialAverageStyle(appearance.whiteTint * (1f - panel), tone), homeSource, homeWeight, homeBounds, homeFootprint)
+                MaterialAverageStyle(appearance.whiteTint * (1f - panel), tone), homeSource, homeWeight, homeBounds, homeFootprint,
+                styleReader = presentation?.let { read -> { MaterialAverageStyle(appearance.whiteTint * (1f - read().panel.coerceIn(0f, 1f)), tone) } })
         }
         Canvas(Modifier.matchParentSize()) {
+            val frame = presentation?.invoke()
+            val cornerRadius = if (frame != null) frame.radius else cornerRadius
+            val panel = frame?.panel?.coerceIn(0f, 1f) ?: panel
+            val frost = frame?.frost?.coerceIn(0f, 1f) ?: frost
+            val refraction = frame?.refraction ?: refraction
             drawRect(tone.color(tint))
             if (panel > 0f && renderer.backend != GlassBackend.None) drawFrostCoating(coatingLightMix, Color.Transparent, panel)
             val outline = silhouette?.frame(size)
