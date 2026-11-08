@@ -3,6 +3,7 @@
 # Selection remains explicit; this inventory does not claim affected coverage.
 io.github.anastaci1a.localica.IconPackVectorTest
 io.github.anastaci1a.localica.IconPackTransportTest
+io.github.anastaci1a.localica.IconPackPlayPauseMorphTest
 io.github.anastaci1a.localica.RepeatOneIconTest
 io.github.anastaci1a.localica.AacEditListExtractionTest
 io.github.anastaci1a.localica.ActionStripDrawingTest

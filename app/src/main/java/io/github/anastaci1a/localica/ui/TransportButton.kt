@@ -12,8 +12,12 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.platform.LocalContext
 import kotlinx.coroutines.launch
 import io.github.anastaci1a.localica.icons.IconPacks
+import io.github.anastaci1a.localica.icons.SvgIconParser
+import io.github.anastaci1a.localica.icons.builtinSvg
+import io.github.anastaci1a.localica.icons.toImageVector
 
 internal enum class TransportGlyph { Previous, PlayPause, Next }
 
@@ -31,6 +35,11 @@ internal fun TransportButton(glyph: TransportGlyph, playing: Boolean, label: Str
     }
     fun replaced(id: AppIcon) = id.id in images.vectors || id.id in images.masks
     val custom = replaced(icon) || (glyph == TransportGlyph.PlayPause && replaced(AppIcon.TransportPause))
+    val context = LocalContext.current
+    // Planned once per published pack; the cache answers by identity on every later composition.
+    val morph = if (custom && glyph == TransportGlyph.PlayPause) (PackPlayPauseMorphs.plan(images, builtin = { icon ->
+        SvgIconParser.parse(builtinSvg(context, icon)).toImageVector()
+    }) as? PackPlayPausePlan.Morph)?.morph else null
     val painter = appIconPainter(icon)
     val pausePainter = if (glyph == TransportGlyph.PlayPause) appIconPainter(AppIcon.TransportPause) else painter
     val pause by animateFloatAsState(if (playing) 1f else 0f,
@@ -69,7 +78,8 @@ internal fun TransportButton(glyph: TransportGlyph, playing: Boolean, label: Str
             val progress = if (reduced) { if (playing) 1f else 0f } else pause
             val cycle = if (reduced) 0f else travel.value
             val color = tint.copy(alpha = tint.alpha * opacity)
-            if (custom) drawTransportPainters(glyph, progress, cycle, color, painter, pausePainter)
+            if (morph != null) drawPackPlayPause(progress, color, morph, painter, pausePainter)
+            else if (custom) drawTransportPainters(glyph, progress, cycle, color, painter, pausePainter)
             else drawTransportGlyph(glyph, progress, cycle, color, shapes)
         }
     }
