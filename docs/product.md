@@ -2,7 +2,9 @@
 
 ## Scope
 
-Localica plays audio stored on an Android device: Musicolet-inspired organization and an Apple Music-inspired interface. Core playback, editing, lyrics, and statistics need no account or network permission. Prioritize quick access, large libraries, background playback, accessibility, meaningful customization, and explicit, recoverable file operations. UI defaults live in [Interface](interface.md). Future capabilities live in [Roadmap](roadmap.md).
+Localica plays audio stored on an Android device: Musicolet-inspired organization and an Apple Music-inspired interface. Core playback, editing, lyrics, and local statistics work offline without an account. Optional Last.fm statistics use explicit read-only network requests. 
+
+Prioritize quick access, large libraries, background playback, accessibility, meaningful customization, and explicit, recoverable file operations. UI defaults live in [Interface](interface.md). Future capabilities live in [Roadmap](roadmap.md).
 
 ## Library and playlists
 
@@ -109,4 +111,18 @@ Timed lyrics interpolate Media3's latency-aware position between samples, freezi
 | Qualified play | Actual listening for 30 seconds or half the duration, whichever is shorter, once per traversal. Exclude paused time and seek jumps. |
 | Traversal | Pauses resume it; automatic repeats, occurrence switches, and explicit restarts at zero begin another. Tag edits preserve the same visit and exclude editing time. Unqualified partial listening may be lost on process death. |
 | Aggregation | Collections sum current distinct songs' counts. Playlist counts follow each queue occurrence's originating playlist, even after queue switches; legacy unknown origins remain unknown. |
-| Retention | Qualified plays are local, all-time, durable, and independent of folder/queue deletion. Never invent historical dates or counts. Most played shows qualified songs, highest count first. |
+| Retention | Qualified plays are local, all-time, durable, and independent of folder/queue deletion. Never invent historical dates or counts. Most played uses selected per-song counts, highest first. |
+
+## Optional Last.fm statistics
+
+Settings → Last.fm accepts a username and explicitly starts a read-only sync. No password, account login or OAuth is used. The only network endpoint is Last.fm's HTTPS API. Requests fetch listening statistics; they never upload local history or audio. Sync is manual, with no automatic launch request.
+
+A complete paginated snapshot replaces the previous snapshot only after every page succeeds. Requests are paced, transient failures retry with backoff, and complete sync attempts are limited to once a minute. Failed same-account syncs preserve the last complete offline snapshot. Changing username clears the previous account's snapshot and turns external counts off.
+
+Local qualified events and Last.fm counts remain separate. Use Last.fm counts is off by default. When enabled, positive Last.fm totals feed per-song play-based sorting and all-time rankings; songs without positive remote totals use local counts. Recent time ranges continue using local events. Turning the setting off restores local counts without a sync.
+
+Matching normalizes artist and title, then uses album and recording MusicBrainz IDs when available. Ambiguous editions remain unresolved until the user chooses a local candidate. Unmatched entries remain visible for review and are reconsidered as the library changes. Resetting match choices removes only manual mappings.
+
+Disconnect cancels pending sync, deletes the external snapshot and mappings, and turns external counts off. It preserves local history, playlists and audio tags. Playlist origin counts remain local because Last.fm cannot identify a local playlist traversal.
+
+Builds without an application API key disable syncing and external counts with an explanatory settings message. Build configuration is documented in [Build](build.md#lastfm-build-key).

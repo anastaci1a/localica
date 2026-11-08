@@ -21,6 +21,7 @@ internal suspend fun embeddedTags(context: Context, uri: String): EmbeddedTags =
         val groups = retriever.retrieveTrackGroups().awaitResult()
         val builder = MediaMetadata.Builder()
         var comment: String? = null
+        var musicBrainzId: String? = null
         var releaseType: String? = null
         var compilation: Boolean? = null
         val lyrics = mutableListOf<String>()
@@ -50,6 +51,7 @@ internal suspend fun embeddedTags(context: Context, uri: String): EmbeddedTags =
                         when (key?.uppercase(java.util.Locale.ROOT)) {
                             "RELEASETYPE", "ALBUMTYPE", "MUSICBRAINZ_ALBUMTYPE", "MUSICBRAINZ ALBUM TYPE" ->
                                 if (value.isNotBlank()) releaseType = value
+                            "MUSICBRAINZ_TRACKID", "MUSICBRAINZ RECORDING ID" -> musicBrainzId = value.takeIf(String::isNotBlank)
                             "TCMP", "COMPILATION" -> compilation = compilationFlag(value)
                         }
                     }
@@ -63,12 +65,12 @@ internal suspend fun embeddedTags(context: Context, uri: String): EmbeddedTags =
                 }
             }
         }
-        EmbeddedTags(builder.build(), comment, lyrics.distinct(), releaseType, compilation)
+        EmbeddedTags(builder.build(), comment, lyrics.distinct(), releaseType, compilation, musicBrainzId)
     }
 } ?: EmbeddedTags(MediaMetadata.EMPTY, null)
 
 internal data class EmbeddedTags(val metadata: MediaMetadata, val comment: String?, val lyrics: List<String> = emptyList(),
-    val releaseType: String? = null, val compilation: Boolean? = null)
+    val releaseType: String? = null, val compilation: Boolean? = null, val musicBrainzId: String? = null)
 
 private suspend fun <T> ListenableFuture<T>.awaitResult(): T = suspendCancellableCoroutine { continuation ->
     continuation.invokeOnCancellation { cancel(true) }

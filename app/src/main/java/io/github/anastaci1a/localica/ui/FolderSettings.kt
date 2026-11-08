@@ -25,6 +25,7 @@ private val settingsDestinations = listOf(
     SettingsDestination("Navigation", "Interface", AppIcon.TabHome, "Main tabs, Back history, and exit confirmation"),
     SettingsDestination("Player", "Interface", AppIcon.TabAlbums, "Artwork, gestures, and player actions"),
     SettingsDestination("Motion", "Interface", AppIcon.TransportNext, "Animation speed and reduced motion"),
+    SettingsDestination("Last.fm", null, AppIcon.TabSongs, "Read-only listening statistics"),
     SettingsDestination("Playback and queues", null, AppIcon.TransportPlay, "Preloading, queue switching, and retention"),
     SettingsDestination("Song tap behavior", "Playback and queues", AppIcon.TabSongs, "Default action and per-list overrides"),
     SettingsDestination("Library and tags", null, AppIcon.TabLibrary, "Folders, scanner configuration, tag jobs and recovery"),
@@ -66,7 +67,7 @@ private fun settingsPath(title: String?): List<String> {
 fun FolderSettings(state: LibraryUiState, onDismiss: () -> Unit, onChooseFolder: () -> Unit,
     onRemove: (String) -> Unit, extraContent: @Composable () -> Unit = {},
     interfaceContent: @Composable (String) -> Unit = {}, playbackContent: @Composable (String) -> Unit = {},
-    aboutContent: @Composable () -> Unit = {}, initialCategory: String? = null, onFullScan: () -> Unit = {}, onQuickScan: () -> Unit = {}, libraryFiltersContent: @Composable () -> Unit = {}) {
+    aboutContent: @Composable () -> Unit = {}, initialCategory: String? = null, onFullScan: () -> Unit = {}, onQuickScan: () -> Unit = {}, libraryFiltersContent: @Composable () -> Unit = {}, lastFmContent: @Composable () -> Unit = {}) {
     var path by rememberSaveable(stateSaver = settingsPathSaver) { mutableStateOf(settingsPath(initialCategory)) }
     var iconPackId by rememberSaveable { mutableStateOf<String?>(null) }
     var search by rememberSaveable { mutableStateOf("") }
@@ -116,6 +117,7 @@ fun FolderSettings(state: LibraryUiState, onDismiss: () -> Unit, onChooseFolder:
                     "Song tap behavior" -> playbackContent(page)
                     "About and licenses" -> aboutContent()
                     "Library filters" -> libraryFiltersContent()
+                    "Last.fm" -> lastFmContent()
                     "Tag jobs and recovery" -> { Text("Interrupted edits keep a recovery copy until you resolve them."); extraContent() }
                     "Folders to scan" -> {
                         Text("Your files stay where they are. Start scanning from More → Scan music.", style = MaterialTheme.typography.bodyMedium)
