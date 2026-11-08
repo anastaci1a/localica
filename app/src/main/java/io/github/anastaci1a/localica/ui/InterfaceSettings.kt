@@ -59,7 +59,7 @@ internal fun InterfaceSettingsControls(value: InterfaceSettings, section: String
             BooleanPreference("Retrace tab history", value.tabHistory) { onChange(value.copy(tabHistory = it)) }
             BooleanPreference("Confirm before exiting", value.confirmExit) { onChange(value.copy(confirmExit = it)) }
             SettingsHeading("Main tabs")
-            SettingsEntry("Main tabs") { Column {
+            SettingsEntry("Main tabs") { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             value.tabs.forEachIndexed { index, tab ->
                 Surface(shape = Corners.card, color = MaterialTheme.colorScheme.surfaceContainerLow) {
                     Column(Modifier.fillMaxWidth().padding(12.dp)) {
