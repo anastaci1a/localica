@@ -269,6 +269,7 @@ api,class,tests,total_seconds,skipped
 26,io.github.anastaci1a.localica.PopupScrollEdgesTest,5,7.655,0
 26,io.github.anastaci1a.localica.PopupShadowContinuityTest,4,119.023,0
 26,io.github.anastaci1a.localica.PopupShadowFrameExportTest,5,0.003,0
+26,io.github.anastaci1a.localica.PopupViewChangeTransitionTest,11,233.388,0
 26,io.github.anastaci1a.localica.PreparedPlayerVisualCacheTest,8,5.378,0
 26,io.github.anastaci1a.localica.PreparedQueuePlaybackTest,1,87.328,0
 26,io.github.anastaci1a.localica.PresentationMarkerTest,1,0.727,0
@@ -663,6 +664,7 @@ api,class,tests,total_seconds,skipped
 36,io.github.anastaci1a.localica.PopupScrollEdgesTest,5,12.992,0
 36,io.github.anastaci1a.localica.PopupShadowContinuityTest,4,93.87,0
 36,io.github.anastaci1a.localica.PopupShadowFrameExportTest,5,0.095,0
+36,io.github.anastaci1a.localica.PopupViewChangeTransitionTest,11,164.339,0
 36,io.github.anastaci1a.localica.PreparedPlayerVisualCacheTest,8,4.972,0
 36,io.github.anastaci1a.localica.PreparedQueuePlaybackTest,1,19.566,0
 36,io.github.anastaci1a.localica.PresentationMarkerTest,1,1.837,0
