@@ -61,7 +61,7 @@ private fun nativeShadowUnionReference(rule: ComposeContentTestRule, width: Int,
 }
 
 /** Immutable receipt inputs only: normalized field, destination filtering, independently proven cutout. */
-private fun shadowUnionReference(rule: ComposeContentTestRule, width: Int, height: Int,
+internal fun shadowUnionReference(rule: ComposeContentTestRule, width: Int, height: Int,
     state: ShadowDrawState): ImageBitmap {
     check(state.scaleX == 1f && state.scaleY == 1f && state.bodies.isNotEmpty())
     if (Build.VERSION.SDK_INT >= 29) return nativeShadowUnionReference(rule, width, height, state)

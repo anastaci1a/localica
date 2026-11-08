@@ -234,6 +234,7 @@ io.github.anastaci1a.localica.PopupFamilyPresentationTest
 io.github.anastaci1a.localica.PopupHomeShapeTest
 io.github.anastaci1a.localica.PopupImeBackTest
 io.github.anastaci1a.localica.PopupScrollEdgesTest
+io.github.anastaci1a.localica.PopupCancelledReturnShadowTest
 io.github.anastaci1a.localica.PopupShadowContinuityTest
 io.github.anastaci1a.localica.PreparedPlayerVisualCacheTest
 io.github.anastaci1a.localica.PreparedQueuePlaybackTest

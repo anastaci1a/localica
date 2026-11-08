@@ -21,6 +21,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalView
 import io.github.anastaci1a.localica.localicaComposeRule as createComposeRule
@@ -41,6 +42,21 @@ import kotlin.math.roundToInt
  * Compare against one field at the current outline, not just registration counts. */
 class PopupShadowContinuityTest {
     @get:Rule val compose = createComposeRule()
+    private val fixture = PopupShadowContinuityFixture(compose)
+    @Test fun utilityShadowHasOneUnclippedFieldThroughoutRepeatedReversals() = fixture.verify(nested = false)
+    @Test fun nestedShadowHasOneUnclippedFieldThroughoutRepeatedReversals() = fixture.verify(nested = true)
+    @Test fun sharedNeighborShadowHasNoOwnershipHandoffThroughRepeatedCycles() = fixture.verifySharedNeighborShadow()
+    @Test fun capsuleReferenceKeepsItsZeroWidthCenterRangeOrdered() = fixture.verifyCapsuleReference()
+}
+
+/** Separate selection keeps the #693 diagnostic independent of the older endpoint oracles. */
+class PopupCancelledReturnShadowTest {
+    @get:Rule val compose = createComposeRule()
+    private val fixture = PopupShadowContinuityFixture(compose)
+    @Test fun cancelledPartialOpeningKeepsItsShadowThroughEveryReturnFrame() = fixture.verifyCancelledPartialOpening()
+}
+
+internal class PopupShadowContinuityFixture(private val compose: androidx.compose.ui.test.junit4.ComposeContentTestRule) {
     private var open by mutableStateOf(false)
     private var strength by mutableFloatStateOf(.8f)
     private lateinit var anchor: GlassAnchor
@@ -54,13 +70,11 @@ class PopupShadowContinuityTest {
     private var neighboringBody = Rect.Zero
     private var sweptBounds = Rect.Zero
 
-    @Test fun utilityShadowHasOneUnclippedFieldThroughoutRepeatedReversals() = verify(nested = false)
-    @Test fun nestedShadowHasOneUnclippedFieldThroughoutRepeatedReversals() = verify(nested = true)
 
     /** #693: sample every Engine frame through an admitted partial opening, its
      * cancellation, a reversal, and the actual source/native return boundary.
      * Native markers correlate both windows; no endpoint batching at the seam. */
-    @Test fun cancelledPartialOpeningKeepsItsShadowThroughEveryReturnFrame() {
+    fun verifyCancelledPartialOpening() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val root = InstrumentationRegistry.getArguments().getString("additionalTestOutputDir")?.let(::File)
             ?: requireNotNull(instrumentation.targetContext.getExternalFilesDir(null))
@@ -87,7 +101,17 @@ class PopupShadowContinuityTest {
                 }
                 if (phase <= .002f) {
                     seamSamples++
-                    assertEquals("$label home shadow differs from the original field\n$log", baselineGap, gap, 3f)
+                    // Near-zero expansion does not imply a resting contact body.
+                    // Use the shown geometry, including its continuing rebound.
+                    val reference = currentHomeFieldReference(image, label)
+                    try {
+                        val expectedGap = sharedGapDarkness(reference)
+                        log.append("$label expectedGap=$expectedGap\n")
+                        File(output, "reference-${(token - 1).toString().padStart(3, '0')}-$label.png")
+                            .outputStream().use { assertTrue(reference.compress(Bitmap.CompressFormat.PNG, 100, it)) }
+                        assertTrue("The current reference must contain a field", expectedGap > 8f)
+                        assertEquals("$label differs from its current-geometry field\n$log", expectedGap, gap, 3f)
+                    } finally { reference.recycle() }
                 }
             } finally { image.recycle() }
         }
@@ -130,10 +154,36 @@ class PopupShadowContinuityTest {
 
     private var baselineGap = 0f
 
+    /** Diagnostic input geometry, not a fabricated native draw receipt. The native
+     * field/cutout reference remains the independently proved test renderer. */
+    private fun currentHomeFieldReference(image: Bitmap, label: String): Bitmap {
+        val popup = popupWindow != null && anchor.hidden
+        val local = if (popup) compose.onAllNodesWithTag("glass-morph-surface").fetchSemanticsNodes()
+            .minBy { it.boundsInRoot.width * it.boundsInRoot.height }.boundsInRoot else anchor.bounds
+        val offset = IntArray(2)
+        if (popup) compose.runOnIdle { requireNotNull(popupView).getLocationOnScreen(offset) }
+        val bounds = if (popup) local.translate(Offset(offset[0].toFloat(), offset[1].toFloat())) else local
+        val d = compose.density.density
+        val phase = anchor.contact.expansion.value.coerceIn(0f, 1f)
+        val radius = (anchor.bounds.height / 2 * (1f - phase) + 28f * d * phase)
+            .coerceAtMost(minOf(bounds.width, bounds.height) / 2)
+        val body = requireNotNull(glassCasterBody(bounds, compose.density, (radius / d).dp, anchor))
+        val neighbor = androidx.compose.ui.geometry.RoundRect(neighboringBody,
+            androidx.compose.ui.geometry.CornerRadius(neighboringBody.height / 2))
+        val state = ShadowDrawState(0, 0, listOf(neighbor to 1f, body to 1f),
+            androidx.compose.ui.graphics.Color.White, strength = .8f, spread = .6f)
+        File(output, "reference-$label.json").writeText(org.json.JSONObject()
+            .put("geometrySource", "current-layout-and-shared-contact-body; not a native draw receipt")
+            .put("phase", phase).put("nominalBounds", bounds.toString())
+            .put("body", body.toString()).put("neighbor", neighbor.toString())
+            .put("state", state.toString()).toString(2))
+        return shadowUnionReference(compose, image.width, image.height, state).asAndroidBitmap()
+    }
+
     /** #465: a neighbor shares the trigger's union shadow. Ownership moves between the
      * page and popup windows at identical geometry on every open and return, so their
      * shared gap must not switch between union and stacked coverage at either handoff. */
-    @Test fun sharedNeighborShadowHasNoOwnershipHandoffThroughRepeatedCycles() {
+    fun verifySharedNeighborShadow() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val root = InstrumentationRegistry.getArguments().getString("additionalTestOutputDir")?.let(::File)
             ?: requireNotNull(instrumentation.targetContext.getExternalFilesDir(null))
@@ -260,7 +310,7 @@ class PopupShadowContinuityTest {
         } catch (failure: Throwable) { screenshot?.recycle(); throw failure }
     }
 
-    @Test fun capsuleReferenceKeepsItsZeroWidthCenterRangeOrdered() {
+    fun verifyCapsuleReference() {
         // Reproduce the API36 64dp capsule at density 1.75 and its outermost ring.
         val height = 112f
         val radius = height / 2f
@@ -287,7 +337,7 @@ class PopupShadowContinuityTest {
         // otherwise round in opposite directions and make coerceIn reject the range.
         coordinate.coerceIn(radius + shift, (extent - radius) + shift)
 
-    private fun verify(nested: Boolean) {
+    fun verify(nested: Boolean) {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val root = InstrumentationRegistry.getArguments().getString("additionalTestOutputDir")?.let(::File)
             ?: requireNotNull(instrumentation.targetContext.getExternalFilesDir(null))
