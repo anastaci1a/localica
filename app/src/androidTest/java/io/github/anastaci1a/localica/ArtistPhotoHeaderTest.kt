@@ -56,6 +56,7 @@ class ArtistPhotoHeaderTest {
         }
         compose.mainClock.autoAdvance = false
         compose.runOnIdle { reset = false }
+        compose.mainClock.advanceTimeByFrame()
         compose.waitForIdle()
         compose.runOnIdle {
             assertEquals("Discarding photo pixels must retain the CollectionScroll owner", before, requireNotNull(pinch.ordinaryTop), .01f)
