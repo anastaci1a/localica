@@ -1,0 +1,97 @@
+package io.github.anastaci1a.localica
+
+import android.view.KeyEvent
+import androidx.compose.runtime.*
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.test.*
+import androidx.test.platform.app.InstrumentationRegistry
+import io.github.anastaci1a.localica.library.*
+import io.github.anastaci1a.localica.playback.PlaybackState
+import io.github.anastaci1a.localica.ui.*
+import io.github.anastaci1a.localica.ui.engine.*
+import org.junit.Assert.*
+import org.junit.Test
+
+/** #676: native Back may close lyrics, but it must not retire an already owned closing contact. */
+@OptIn(ExperimentalTestApi::class)
+class PlayerDragLyricsBackTest {
+    @Test fun backDuringClosingDragKeepsItsReleaseAndCommitsCollapse() = localicaRunComposeUiTest {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        instrumentation.targetContext.getSharedPreferences("interface", 0).edit().clear().commit()
+        val track = Track("back-drag", "Back during drag", fileName = "missing.mp3", relativePath = "missing.mp3")
+        lateinit var clock: UiClock
+        val recorder = JoinRecorder("player")
+        var releases = 0
+        setContent {
+            val root = remember {
+                UiClock(object : FrameSource {
+                    override suspend fun awaitFrame() = withFrameNanos { it }
+                    override suspend fun <R> awaitFrame(onFrame: (Long) -> R) = withFrameNanos(onFrame)
+                }, { mainClock.currentTime * 1_000_000 })
+            }
+            SideEffect {
+                clock = root
+                root.events = object : MotionEvents by recorder {
+                    override fun releaseBridge(motion: MotionFloat, tau: Double, approvedTau: Double, displayInterval: Double) {
+                        if (motion.key == ("player" to "phase")) releases++
+                    }
+                }
+            }
+            LaunchedEffect(root) { root.run() }
+            CompositionLocalProvider(LocalClockOwner provides root, LocalUiClock provides root) {
+                LocalicaTheme {
+                    LocalicaScreen(LibraryUiState(LibrarySnapshot(tracks = listOf(track)), loading = false),
+                        PlaybackState(connected = true, trackId = track.id, trackUri = track.uri, title = track.title),
+                        {}, {}, {}, {}, {}, {})
+                }
+            }
+        }
+        waitForIdle()
+        mainClock.autoAdvance = false
+        fun settleOwners() {
+            // Drain pending composition intents, then follow owner lifetime, not an old tween duration.
+            repeat(2) { mainClock.advanceTimeByFrame() }
+            var frames = 0
+            while (clock.activeCount > 0 && frames++ < 240) mainClock.advanceTimeByFrame()
+            waitForIdle()
+            assertEquals("All admitted owners must reach rest", 0, clock.activeCount)
+        }
+        val collapsed = onNodeWithTag("player-surface").fetchSemanticsNode().boundsInRoot
+        // Fixed orderings put the lyrics cross-fade's retirement before, near and after the next closing moves.
+        for (backStep in listOf(6, 18, 30)) {
+            onNodeWithTag("player-surface").performClick()
+            settleOwners()
+            onNodeWithContentDescription("Show lyrics").performClick()
+            settleOwners()
+            onNodeWithContentDescription("Hide lyrics").assertExists()
+            val handle = onNodeWithContentDescription("Player handle").fetchSemanticsNode().boundsInRoot.center
+            val full = onNodeWithTag("player-surface").fetchSemanticsNode().boundsInRoot
+            val step = (collapsed.top - full.top) * .65f / 40
+            val before = releases
+            onRoot().performTouchInput { down(handle) }
+            for (i in 1..40) {
+                onRoot().performTouchInput { moveBy(Offset(0f, step), delayMillis = 16) }
+                mainClock.advanceTimeByFrame()
+                if (i == backStep) {
+                    val moving = onNodeWithTag("player-surface").fetchSemanticsNode().boundsInRoot
+                    assertTrue("Back must arrive during an admitted closing drag", moving.top > full.top + 1f && moving.top < collapsed.top)
+                    instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
+                    mainClock.advanceTimeByFrame()
+                }
+            }
+            onRoot().performTouchInput { advanceEventTime(16); up() }
+            settleOwners()
+            assertEquals("Back must preserve exactly one release (step=$backStep; joins=${recorder.joins.map { it.target to it.policy }})",
+                before + 1, releases)
+            onNodeWithContentDescription("Collapse player").assertDoesNotExist()
+            val closed = onNodeWithTag("player-surface").fetchSemanticsNode().boundsInRoot
+            assertEquals("The released player must return to its compact seat", collapsed.top, closed.top, 1f)
+            onNodeWithTag("player-surface").performClick()
+            settleOwners()
+            onNodeWithContentDescription("Show lyrics").assertExists()
+            onNodeWithContentDescription("Hide lyrics").assertDoesNotExist()
+            instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
+            settleOwners()
+        }
+    }
+}
