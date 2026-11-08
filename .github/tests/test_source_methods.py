@@ -297,9 +297,9 @@ class SourceMethodsContract(unittest.TestCase):
         self.gated_fixture()
         full = self.inventory("sample.Mixed", "sample.Whole")
         self.assertEqual(7, len(full["runtime_methods"]))
-        self.assertEqual({"min_sdk": 33, "assume_min_sdk": 0}, full["gates"]["sample.Mixed#before"])
-        self.assertEqual({"min_sdk": 30, "assume_min_sdk": 0}, full["gates"]["sample.Mixed#after"])
-        self.assertEqual({"min_sdk": 0, "assume_min_sdk": 33}, full["gates"]["sample.Mixed#byAssume"])
+        self.assertEqual({"min_sdk": 33, "max_sdk": None, "assume_min_sdk": 0}, full["gates"]["sample.Mixed#before"])
+        self.assertEqual({"min_sdk": 30, "max_sdk": None, "assume_min_sdk": 0}, full["gates"]["sample.Mixed#after"])
+        self.assertEqual({"min_sdk": 0, "max_sdk": None, "assume_min_sdk": 33}, full["gates"]["sample.Mixed#byAssume"])
         self.assertEqual(33, full["gates"]["sample.Whole#one"]["min_sdk"])
         old = source_methods.inventory(self.root, ["sample.Mixed", "sample.Whole"], 26)
         self.assertEqual(["sample.Mixed#byAssume", "sample.Mixed#lowGate", "sample.Mixed#plain"],
@@ -315,8 +315,54 @@ class SourceMethodsContract(unittest.TestCase):
         self.assertEqual([], new["gated_absent_methods"])
         self.assertEqual(full["runtime_methods"], old["all_runtime_methods"])
 
+    def test_maximum_and_combined_bounds_are_inclusive_and_intersect_class_gates(self):
+        for suffix, method in (("kt", "fun"), ("java", "public void")):
+            with self.subTest(suffix=suffix):
+                path = self.source("Bounded." + suffix, '''
+                    package sample;
+                    import org.junit.Test;
+                    @androidx.test.filters.SdkSuppress(minSdkVersion = 26, maxSdkVersion = 36)
+                    class Bounded {
+                        @androidx.test.filters.SdkSuppress(maxSdkVersion = 32)
+                        @Test METHOD before() {}
+                        @Test @androidx.test.filters.SdkSuppress(maxSdkVersion = 32, minSdkVersion = 30)
+                        METHOD after() {}
+                        @Test METHOD plain() {}
+                    }
+                '''.replace("METHOD", method))
+                for api, expected in ((25, []), (26, ["before", "plain"]), (30, ["after", "before", "plain"]),
+                                      (32, ["after", "before", "plain"]), (33, ["plain"]),
+                                      (36, ["plain"]), (37, [])):
+                    result = source_methods.inventory(self.root, ["sample.Bounded"], api)
+                    self.assertEqual(["sample.Bounded#" + m for m in expected], result["runtime_methods"])
+                self.assertEqual(32, result["gates"]["sample.Bounded#before"]["max_sdk"])
+                self.assertEqual("SdkSuppress(maxSdkVersion=32) excludes API 37",
+                                 result["gated_absent_reasons"]["sample.Bounded#before"])
+                path.unlink()
+
+    def test_contradictory_class_and_method_bounds_reject(self):
+        self.source("EmptyRange.kt", '''
+            package sample
+            import org.junit.Test
+            @SdkSuppress(minSdkVersion = 33)
+            class EmptyRange { @Test @SdkSuppress(maxSdkVersion = 32) fun never() {} }
+        ''')
+        with self.assertRaisesRegex(source_methods.InventoryError, "Contradictory SdkSuppress"):
+            self.inventory("sample.EmptyRange")
+
+    def test_real_680_queued_capture_runs_on_26_and_is_qualified_absent_on_36(self):
+        cls = "io.github.anastaci1a.localica.BackdropInvalidationTest"
+        identity = cls + "#queuedFinalRecordingSurvivesASuspendedThumbnailCaptureAndThenSettles"
+        old = source_methods.inventory(ROOT, [cls], 26)
+        new = source_methods.inventory(ROOT, [cls], 36)
+        self.assertIn(identity, old["runtime_methods"])
+        self.assertNotIn(identity, new["runtime_methods"])
+        self.assertEqual("SdkSuppress(maxSdkVersion=32) excludes API 36", new["gated_absent_reasons"][identity])
+
     def test_unsupported_sdk_suppress_arguments_fail_closed(self):
-        for args in ("maxSdkVersion = 30", "minSdkVersion = Build.VERSION_CODES.TIRAMISU", "codeName = \"U\"", ""):
+        for args in ("maxSdkVersion = Build.VERSION_CODES.S_V2", "maxSdkVersion = 32, codeName = \"U\"",
+                     "maxSdkVersion = 32, maxSdkVersion = 33", "minSdkVersion = 33, maxSdkVersion = 32",
+                     "maxSdkVersion = -1", "maxSdkVersion = 32,", "minSdkVersion = Build.VERSION_CODES.TIRAMISU", "codeName = \"U\"", ""):
             with self.subTest(args=args):
                 self.source("Odd.kt", "package sample\nimport org.junit.Test\nclass Odd { @Test "
                             "@androidx.test.filters.SdkSuppress(" + args + ") fun x() {} }")
