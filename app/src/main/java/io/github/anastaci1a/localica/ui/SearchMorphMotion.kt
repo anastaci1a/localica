@@ -150,6 +150,8 @@ internal data class SearchMorphSample(
     val slotReturnFrom: Float = 0f,
     /** Same rectangle animation owns opening movement and size, before actual placement. */
     val openingOwnedBounds: Rect? = null,
+    /** Bound bottom sampled in this placement callback, in both directions. */
+    val slotBottom: Float? = null,
 )
 internal val LocalSearchMorphObserver = staticCompositionLocalOf<((SearchMorphSample) -> Unit)?> { null }
 

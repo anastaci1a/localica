@@ -384,3 +384,4 @@ io.github.anastaci1a.localica.GlassMorphSubpixelTest
 io.github.anastaci1a.localica.MorphFacesTest
 io.github.anastaci1a.localica.PlayerLyricsOwnerContinuityTest
 io.github.anastaci1a.localica.PopupWindowHostContractTest
+io.github.anastaci1a.localica.SearchOracleSensitivityTest
