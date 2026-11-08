@@ -238,6 +238,8 @@ internal fun rememberFrostedBackdrop(key: Any?, enabled: Boolean = true, dark: B
                 val extent = source.size
                 val generation = source.rendererGeneration
                 fun valid() = source.recorded && source.size == extent && !source.layer.isReleased && !thumbnail.isReleased
+                val capturedRecording = source.recordings
+                val capturedRevision = source.revision
                 val image = source.captureCurrent(graphicsContext, currentDensity, currentDirection, ::valid,
                     captureLayer = thumbnail, record = {
                         thumbnail.record(currentDensity, currentDirection, IntSize(32, 32)) {
@@ -252,8 +254,8 @@ internal fun rememberFrostedBackdrop(key: Any?, enabled: Boolean = true, dark: B
                 val padded = materialReductionExtent(extent)
                 if (valid()) source.publish(generation, pixels, pixels, request, draws,
                     IntSize(padded.width.coerceAtLeast(32), padded.height.coerceAtLeast(32)))
-                completedRecording = source.recordings
-                completedRevision = source.revision
+                completedRecording = capturedRecording
+                completedRevision = capturedRevision
                 } finally { ticket?.close() }
             }
         }
@@ -294,7 +296,10 @@ internal fun Modifier.recordFrostedBackdrop(source: FrostedBackdrop, backing: Fr
             }
             // Retained children and consumers in another window need explicit draw invalidation.
             val dependency = backing ?: source.parent
-            if (Build.VERSION.SDK_INT < 33) dependency?.snapshot
+            if (Build.VERSION.SDK_INT < 33) {
+                dependency?.snapshot
+                dependency?.recordings
+            }
             else dependency?.let { source.location.observeRecordingAcrossWindows(it) }
             val request = readbackRequest?.invoke()
             val viewport = size

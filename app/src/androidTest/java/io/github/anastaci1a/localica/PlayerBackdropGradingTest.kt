@@ -82,7 +82,7 @@ class PlayerBackdropGradingTest {
                 val frame = polarity.frame; val d = polarity.decision
                 return "conf=${d.confidence} unavailable=${d.unavailable} light=${d.lightInk} dest=${polarity.destinationLightInk} " +
                     "clock=${polarity.artworkClock} transitioning=${frame?.transitioning} frozen=${frame?.frozenVisible} liveBlur=${frame?.liveBlur} " +
-                    "roles=${frame?.roles?.map { "${if (it.visual === visuals.getValue(c.name)) "same" else "other"}/${if (it.soft) "soft" else "main"}/${if (it.incoming) "in" else "out"}/${it.weight}" }} " +
+                    "roles=${frame?.roles?.map { "${if (it.visual == visuals.getValue(c.name)) "same" else "other"}/${if (it.soft) "soft" else "main"}/${if (it.incoming) "in" else "out"}/${it.weight}" }} " +
                     "grades=${polarity.roleGrades.size}"
             }
             var last = ""
@@ -92,6 +92,8 @@ class PlayerBackdropGradingTest {
                 if (now != last) { android.util.Log.i("Trim678", "$tagLog $phase +${(System.nanoTime() - started) / 1_000_000} ms $now"); last = now }
             }
             compose.runOnIdle { cover = c; context = ctx }
+            // Apply the context before accepting a Current decision left over from its predecessor.
+            compose.waitForIdle()
             val raw = Color(0xFF000000.toInt() or c.base)
             var waited = false
             try {
@@ -99,11 +101,22 @@ class PlayerBackdropGradingTest {
                     observe("wait")
                     val frame = polarity.frame
                     polarity.decision.confidence == PlayerBackgroundConfidence.Current && frame != null &&
-                        frame.roles.isNotEmpty() && frame.roles.all { it.visual === visuals.getValue(c.name) }
+                        !frame.transitioning && frame.roles.isNotEmpty() && frame.roles.all { it.visual == visuals.getValue(c.name) }
                 }
                 waited = true
-            } catch (_: Throwable) { /* a context whose sampler is unavailable is still photographed */ }
+            } catch (failure: ComposeTimeoutException) {
+                failures += "$tagLog: backdrop did not settle with current fixture pixels within 8000 ms: ${state()}"
+                android.util.Log.e("Trim678", failures.last(), failure)
+            }
             android.util.Log.i("Trim678", "$tagLog waitUntil ${if (waited) "satisfied" else "TIMED OUT"} after ${(System.nanoTime() - started) / 1_000_000} ms")
+            // The old impossible predicate pumped frames for eight seconds. Its legacy header glass still
+            // needs that observation window for identical PNGs, independently of the now-valid grade check.
+            val observationUntil = started + 8_000_000_000L
+            while (System.nanoTime() < observationUntil) {
+                compose.mainClock.advanceTimeByFrame()
+                Thread.sleep(10)
+                observe("settle")
+            }
             val sleepUntil = System.nanoTime() + 1_500_000_000L
             while (System.nanoTime() < sleepUntil) { Thread.sleep(50); observe("sleep") }
             compose.waitForIdle(); observe("idle")
