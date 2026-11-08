@@ -1,5 +1,6 @@
 package io.github.anastaci1a.localica.ui
 
+import io.github.anastaci1a.localica.ui.components.rememberControlAverageRecorder
 import android.os.Build
 import androidx.compose.foundation.Canvas
 import androidx.compose.runtime.*
@@ -36,7 +37,7 @@ internal fun GlassControlScene(modifier: Modifier, horizontalPadding: Dp = 20.dp
     val location = remember { BackdropLocation() }
     val lens = remember { lazy { if (Build.VERSION.SDK_INT >= 33) LensRenderer() else null } }
     val averageRenderer = remember { if (Build.VERSION.SDK_INT >= 33) MaterialAverageRenderer(true) else null }
-    val averageLayer = if (optical && modern) rememberGraphicsLayer() else null
+    val averageLayer = if (optical && modern) rememberControlAverageRecorder() else null
     val areaReduction = if (optical && modern) rememberMaterialAreaReduction() else null
     val rim = remember { GlassRimCache() }
     val layer = if (optical && modern) rememberGraphicsLayer() else null
@@ -102,13 +103,10 @@ internal fun GlassControlScene(modifier: Modifier, horizontalPadding: Dp = 20.dp
                         translate(sceneOffset.x, sceneOffset.y) { recordScene() }
                     }
                 } }
-                averageLayer.renderEffect = averageRenderer.effect(coverage = region.width * region.height / (padded.width.toFloat() * padded.height))
-                averageLayer.alpha = none
-                averageLayer.blendMode = if (blending) BlendMode.Plus else BlendMode.SrcOver
-                averageLayer.record(Density(density, fontScale), layoutDirection, IntSize(1, 1)) { drawLayer(reduced) }
-                clipPath(silhouette) { translate(shape.bounds.left, shape.bounds.top) {
-                    scale(shape.bounds.width, shape.bounds.height, Offset.Zero) { drawLayer(averageLayer) }
-                } }
+                with(averageLayer) {
+                    record(reduced, averageRenderer.effect(coverage = region.width * region.height / (padded.width.toFloat() * padded.height)), none, blending)
+                    draw(shape.bounds, silhouette)
+                }
             } else if (averageBitmap != null && !region.isEmpty) {
                 // Software path: rasterize the region at full resolution (bounded) and
                 // take its exact pixel mean.

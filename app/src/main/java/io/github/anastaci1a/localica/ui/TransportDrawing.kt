@@ -8,7 +8,7 @@ import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
-import androidx.compose.ui.graphics.Paint
+import io.github.anastaci1a.localica.ui.components.withTransportLayer
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
@@ -48,12 +48,11 @@ internal fun skipTaperAlpha(x: Float): Float = (minOf(x, 1f - x) / SkipTaperBand
  */
 private inline fun DrawScope.drawWithSkipTaper(phase: Float, content: DrawScope.() -> Unit) {
     if (phase == 0f) return content()
-    val canvas = drawContext.canvas
-    canvas.saveLayer(Rect(Offset.Zero, size), Paint())
-    content()
-    drawRect(Brush.horizontalGradient(0f to Color.Transparent, SkipTaperBand to Color.Black,
-        1f - SkipTaperBand to Color.Black, 1f to Color.Transparent), blendMode = BlendMode.DstIn)
-    canvas.restore()
+    withTransportLayer(Rect(Offset.Zero, size)) {
+        content()
+        drawRect(Brush.horizontalGradient(0f to Color.Transparent, SkipTaperBand to Color.Black,
+            1f - SkipTaperBand to Color.Black, 1f to Color.Transparent), blendMode = BlendMode.DstIn)
+    }
 }
 
 /** Normalized, corresponding contours retain the existing two-piece play/pause morph.

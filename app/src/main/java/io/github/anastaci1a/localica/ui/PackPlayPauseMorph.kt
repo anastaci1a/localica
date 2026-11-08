@@ -3,7 +3,7 @@ package io.github.anastaci1a.localica.ui
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
-import androidx.compose.ui.graphics.Path
+import io.github.anastaci1a.localica.ui.components.TransportContour
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -32,7 +32,9 @@ internal class MorphPiece(val from: Contour, val to: Contour) {
 }
 
 /** The precomputed pack morph: the play shape split in the pause bars' width proportion, each half paired with its bar. */
-internal class PackPlayPauseMorph(val left: MorphPiece, val right: MorphPiece, val cutX: Float, val matching: String)
+internal class PackPlayPauseMorph(val left: MorphPiece, val right: MorphPiece, val cutX: Float, val matching: String) {
+    internal val contour = TransportContour()
+}
 
 internal sealed interface PackPlayPausePlan {
     class Morph(val morph: PackPlayPauseMorph) : PackPlayPausePlan
@@ -111,16 +113,16 @@ internal fun DrawScope.drawPackPlayPause(pause: Float, color: Color, morph: Pack
         pause >= 1f -> with(pausePainter) { draw(size, colorFilter = ColorFilter.tint(color)) }
         else -> {
             // One path for both pieces: shared winding unions them without an anti-aliased seam.
-            val path = Path()
-            for (piece in listOf(morph.left, morph.right)) {
-                for (i in piece.from.indices) {
-                    val p = piece.from[i] + (piece.to[i] - piece.from[i]) * pause
-                    if (i == 0) path.moveTo(p.x * size.width, p.y * size.height)
-                    else path.lineTo(p.x * size.width, p.y * size.height)
+            morph.contour.draw(this, color) {
+                for (piece in listOf(morph.left, morph.right)) {
+                    for (i in piece.from.indices) {
+                        val p = piece.from[i] + (piece.to[i] - piece.from[i]) * pause
+                        if (i == 0) moveTo(p.x * size.width, p.y * size.height)
+                        else lineTo(p.x * size.width, p.y * size.height)
+                    }
+                    close()
                 }
-                path.close()
             }
-            drawPath(path, color)
         }
     }
 }

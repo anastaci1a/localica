@@ -4,6 +4,8 @@
 io.github.anastaci1a.localica.IconPackVectorTest
 io.github.anastaci1a.localica.IconPackTransportTest
 io.github.anastaci1a.localica.IconPackPlayPauseMorphTest
+io.github.anastaci1a.localica.TransportDrawingResourcesTest
+io.github.anastaci1a.localica.MainTransportRasterTest
 io.github.anastaci1a.localica.RepeatOneIconTest
 io.github.anastaci1a.localica.AacEditListExtractionTest
 io.github.anastaci1a.localica.ActionStripDrawingTest
