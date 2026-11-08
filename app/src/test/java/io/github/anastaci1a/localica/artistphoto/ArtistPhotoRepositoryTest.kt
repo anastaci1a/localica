@@ -98,6 +98,16 @@ class ArtistPhotoRepositoryTest {
         })
         assertTrue(providers.search(ArtistPhotoProvider.DEEZER, request).first().image!!.contains("1000x1000"))
     }
+    @Test fun emptyDeezerPictureIdentifiersAreNotArtistPhotos() = runBlocking {
+        for (extra in listOf("\"md5_image\":\"\",", "")) {
+            val providers = ArtistPhotoProviders(PhotoTransport { url, _ ->
+                if (url.contains("search/artist"))
+                    """{"data":[{"id":8,"name":"Twin",${extra}"picture_xl":"https://cdn-images.dzcdn.net/images/artist//1000x1000.jpg"}]}""".toByteArray()
+                else fixture("deezer-top")
+            })
+            assertNull(providers.search(ArtistPhotoProvider.DEEZER, request).single().image)
+        }
+    }
     @Test fun deezerUnavailableOrInvalidPictureFallsBackThroughMbidWikidataAndCommons() = runBlocking {
         for (mode in 0..1) {
             val server = Server().apply { deezer = mode == 1; invalidImage = true }
