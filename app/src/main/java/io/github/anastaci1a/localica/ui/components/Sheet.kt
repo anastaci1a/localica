@@ -10,11 +10,11 @@ import io.github.anastaci1a.localica.ui.engine.*
 /** Owner-created contact intents: edge displacement since contact start and release velocity, px and px/s toward expansion. */
 @Stable class SheetContact internal constructor(val onDragStart: () -> Boolean, val onDrag: (Float) -> Unit,
     val onRelease: (Float) -> ReleaseDecision, val onDragCancel: () -> Unit)
-private class SheetHandle(override val expansion: ExpansionView, initial: Boolean) : SheetState {
+private class SheetHandle(override val expansion: ExpandCollapse, initial: Boolean) : SheetState {
     var requested by mutableStateOf(initial)
     override val expanded get() = requested
     override var contact = SheetContact({ false }, {}, { error("No contact") }, {})
-    override fun expand() { requested = true }; override fun collapse() { requested = false }
+    override fun expand() { requested = true; expansion.target(true) }; override fun collapse() { requested = false; expansion.target(false) }
 }
 /** One ExpandCollapse owner; its physical frame follows the live endpoint basis (Rebase-capable, A2.3c). */
 @Composable fun rememberSheetState(key: Any, initiallyExpanded: Boolean = false, basis: ExpansionBasis): SheetState {
@@ -22,11 +22,9 @@ private class SheetHandle(override val expansion: ExpansionView, initial: Boolea
     val range = remember(key) { maxOf(1f, 4f * basis.edgeTravelPx) }
     val frame = rememberMotionRect(key to "frame", if (initiallyExpanded) basis.endBounds else basis.startBounds, EdgeRanges(range, range, range, range))
     val handle = remember(owner) { SheetHandle(owner, initiallyExpanded) }
-    val requested = handle.requested
     val clock = LocalUiClock.current
     SideEffect {
         owner.bind(frame); owner.setBasis(basis)
-        if (owner.expanded != requested) owner.target(requested)
         handle.contact = SheetContact(onDragStart = { owner.canContact.also { if (it) owner.contactBegin(clock.stampNow) } },
             onDrag = { owner.contactMove(it, clock.stampNow) },
             onRelease = { owner.contactRelease(it, clock.stampNow).also { decision -> handle.requested = decision.expanded } },
