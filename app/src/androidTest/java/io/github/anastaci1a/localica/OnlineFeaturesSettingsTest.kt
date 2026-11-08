@@ -31,6 +31,14 @@ class OnlineFeaturesSettingsTest {
             assertTrue(restored.allowed.value)
             toggle.performClick()
             compose.waitUntil(5000) { !consent.allowed.value }
+            // Revocation closes the live gate before its atomic disk write finishes.
+            compose.waitUntil(5000) {
+                runBlocking {
+                    val reopened = OnlineMetadataConsent(file)
+                    reopened.load()
+                    !reopened.allowed.value
+                }
+            }
             val disabled = OnlineMetadataConsent(file)
             runBlocking { disabled.load() }
             assertFalse(disabled.allowed.value)
