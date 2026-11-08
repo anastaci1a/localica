@@ -128,10 +128,16 @@ class MotionSubpixelTest {
             // Cover: painted extent through the centre of its laid-out bounds (rounded corners stay outside).
             // Title: the ink bounding box inside its laid-out box (below the cover edge), against the background beside it.
             class Frame(val cover: Rect, val coverPainted: Rect, val title: Rect, val titleInk: Rect)
+            // #678 instrumentation (log only).
+            var laidNs = 0L; var captureNs = 0L; var scanNs = 0L; var frames = 0
             fun frame(): Frame {
+                frames++
+                var t = System.nanoTime()
                 val bounds = laid("browse-art-$uri")
                 val title = laid("browse-text-$uri")
+                laidNs += System.nanoTime() - t; t = System.nanoTime()
                 val image = compose.onNodeWithTag("window").captureNativeFrame().toPixelMap()
+                captureNs += System.nanoTime() - t; t = System.nanoTime()
                 val x = bounds.center.x.toInt(); val y = bounds.center.y.toInt()
                 assertTrue("Cover must be painted at $bounds", red(image[x, y]))
                 var left = x; while (left > 0 && red(image[left - 1, y])) left--
@@ -147,8 +153,10 @@ class MotionSubpixelTest {
                             kotlin.math.abs(c.blue - background.blue) > .45f) ink = Rect(minOf(ink.left, tx.toFloat()),
                             minOf(ink.top, ty.toFloat()), maxOf(ink.right, tx + 1f), maxOf(ink.bottom, ty + 1f))
                     }
+                scanNs += System.nanoTime() - t
                 return Frame(bounds, Rect(left.toFloat(), top.toFloat(), right + 1f, bottom + 1f), title, ink)
             }
+            val methodStart = System.nanoTime()
             compose.waitUntil(5000) { runCatching { frame() }.isSuccess }
             val list = compose.onNodeWithTag("browser-list")
             for (outward in listOf(false, true)) {
@@ -190,6 +198,8 @@ class MotionSubpixelTest {
                 val settled = frame()
                 assertEquals("Settled cover is painted exactly at its bounds", settled.cover, settled.coverPainted)
             }
+            android.util.Log.i("Trim678", "MotionSubpixelTest.galleryPinch totalMs=${(System.nanoTime() - methodStart) / 1_000_000} frames=$frames " +
+                "laidMs=${laidNs / 1_000_000} captureMs=${captureNs / 1_000_000} scanMs=${scanNs / 1_000_000}")
         } finally { compose.mainClock.autoAdvance = true; prefs.write(route, old, false); cover.delete() }
     }
 
@@ -205,19 +215,29 @@ class MotionSubpixelTest {
             PlayerSurface(state, false, {}, InterfaceSettings(artworkLayout = ArtworkLayout.Floating), progress,
                 {}, {}, {}, {}, {}, {}, visual = visual) { Text("Album-only action") }
         } } }
+        // #678 instrumentation (log only).
+        val methodStart = System.nanoTime()
+        var snapNs = 0L; var surfaceNs = 0L
         fun snap(p: Float) {
+            val t = System.nanoTime()
             compose.runOnIdle {
                 val update = scope.launch(start = CoroutineStart.UNDISPATCHED) { progress.snapTo(p) }
                 assertTrue(update.isCompleted)
             }
             compose.mainClock.advanceTimeByFrame()
             compose.waitForIdle()
+            snapNs += System.nanoTime() - t
         }
-        fun surface() = compose.onNodeWithTag("player-surface").fetchSemanticsNode().boundsInRoot
+        fun surface(): Rect {
+            val t = System.nanoTime()
+            return compose.onNodeWithTag("player-surface").fetchSemanticsNode().boundsInRoot.also { surfaceNs += System.nanoTime() - t }
+        }
         val window = compose.onNodeWithTag("window").fetchSemanticsNode().boundsInRoot
         val sweep = (0..19).map { it / 50f } + (400..1000 step 4).map { it / 1000f }
         val surfaces = mutableListOf<Rect>()
         for (p in sweep) { snap(p); surfaces += surface() }
+        android.util.Log.i("Trim678", "MotionSubpixelTest.playerExpansionSweep sweepMs=${(System.nanoTime() - methodStart) / 1_000_000} samples=${sweep.size} " +
+            "snapMs=${snapNs / 1_000_000} surfaceMs=${surfaceNs / 1_000_000}")
         assertMonotone("player left", surfaces.map { it.left })
         assertMonotone("player right", surfaces.map { it.right })
         assertMonotone("player top", surfaces.map { it.top })
@@ -231,7 +251,9 @@ class MotionSubpixelTest {
             assertTrue("Within a pixel of full size both edges land together at $p: $full / $window",
                 full.left == window.left && full.right == window.right || full.left > window.left && full.right < window.right)
             if (p < 1f) continue
+            val captureStart = System.nanoTime()
             val image = compose.onNodeWithTag("window").captureNativeFrame().toPixelMap()
+            val scanStart = System.nanoTime()
             for (y in (image.height / 4) until (image.height * 3 / 4) step 8) for ((edge, inner) in
                 listOf(0 to 4, image.width - 1 to image.width - 5)) {
                 val outer = image[edge, y]
@@ -239,6 +261,8 @@ class MotionSubpixelTest {
                 assertTrue("Edge pixel ($edge,$y) blends the backdrop: $outer vs $reference",
                     outer.green <= reference.green + .03f)
             }
+            android.util.Log.i("Trim678", "MotionSubpixelTest.playerExpansionSweep totalMs=${(System.nanoTime() - methodStart) / 1_000_000} " +
+                "edgeCaptureMs=${(scanStart - captureStart) / 1_000_000} edgeScanMs=${(System.nanoTime() - scanStart) / 1_000_000}")
         }
     }
 }

@@ -59,6 +59,10 @@ class ScrollbarContinuityTest {
 
     private fun sweep(step: Float, forward: Boolean) {
         if (!forward) compose.runOnIdle { scope.launch { state.scrollBy(1e7f) } }.also { compose.waitForIdle() }
+        // #678 instrumentation (log only): the track bounds before and after, every sampled top, and the sweep time.
+        val label = "step=$step ${if (forward) "forward" else "backward"}"
+        val started = System.nanoTime()
+        val trackBefore = bar().fetchSemanticsNode().boundsInRoot
         compose.mainClock.autoAdvance = false
         val tops = mutableListOf<Float>()
         var guard = 0
@@ -70,6 +74,9 @@ class ScrollbarContinuityTest {
             if (done) break
         }
         compose.mainClock.autoAdvance = true
+        val trackAfter = bar().fetchSemanticsNode().boundsInRoot
+        android.util.Log.i("Trim678", "$label samples=${tops.size} ms=${(System.nanoTime() - started) / 1_000_000} track=$trackBefore -> $trackAfter")
+        tops.chunked(120).forEachIndexed { i, chunk -> android.util.Log.i("Trim678", "$label tops[$i] ${chunk.joinToString(" ")}") }
         val deltas = tops.zipWithNext { a, b -> if (forward) b - a else a - b }
         val travel = 500f * density
         assertTrue("monotonic: ${deltas.min()}", deltas.min() >= -.5f)
