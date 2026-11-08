@@ -62,7 +62,7 @@ class ArtistPhotoActionsTest {
             compose.onNodeWithContentDescription("Artist actions").performClick()
             compose.onNodeWithText("Artist photo information").performScrollTo().performClick()
             compose.waitUntil(5000) { compose.onAllNodesWithText("Fixture Photographer", substring = true).fetchSemanticsNodes().isNotEmpty() }
-            compose.onNodeWithText("CC BY 4.0", substring = true).assertExists()
+            compose.onNodeWithText("CC BY 4.0", substring = true).assertExists().assert(hasScrollAction())
             compose.onNodeWithText("https://commons.wikimedia.org/wiki/File:Fixture.jpg", substring = true).assertExists()
             compose.onNodeWithText("Close").performClick()
             compose.onNodeWithContentDescription("Artist actions").performClick()

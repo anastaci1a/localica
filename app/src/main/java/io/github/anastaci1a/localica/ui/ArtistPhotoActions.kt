@@ -1,5 +1,7 @@
 package io.github.anastaci1a.localica.ui
 
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.ui.Modifier
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import io.github.anastaci1a.localica.artistphoto.*
@@ -60,7 +62,7 @@ internal fun ArtistPhotoDialog(actions: ArtistPhotoActions?) {
         } ?: photo?.let { "Photo source: ${it.provider.name.lowercase()}" }
             ?: "No artist photo is ready. Album art is used as the fallback."
         GlassAlertDialog({ actions.information = false }, title = { Text("Artist photo information") },
-            text = { Text(details) }, confirmButton = {
+            text = { Text(details, Modifier.controlVerticalScroll(rememberScrollState())) }, confirmButton = {
                 ActionTextButton({ actions.information = false }) { Text("Close") }
             })
     }
