@@ -39,6 +39,7 @@ class RunnerContract(unittest.TestCase):
         (self.root/'.github/test-evidence/supervise.py').symlink_to((ROOT/'.github/test-evidence/supervise.py').resolve())
         (self.root/'.github/test-evidence/source_methods.py').symlink_to((ROOT/'.github/test-evidence/source_methods.py').resolve())
         (self.root/'.github/test-evidence/teardown_offline.py').symlink_to((ROOT/'.github/test-evidence/teardown_offline.py').resolve())
+        (self.root/'.github/test-evidence/utp_results.py').symlink_to((ROOT/'.github/test-evidence/utp_results.py').resolve())
         self.executable('bin/node', '''#!/usr/bin/env python3
 import json,pathlib,sys,time
 a=sys.argv
@@ -99,8 +100,25 @@ for i,selector in enumerate(os.environ['CASES'].split(',') if os.environ.get('CA
             reason=os.environ.get('SKIP_REASON','')
             lines=['10-27 12:00:00.000 123 456 I TestRunner: started: '+marker,
                 '10-27 12:00:00.001 123 456 E TestRunner: assumption failed: '+marker]
-            if reason:lines.append('10-27 12:00:00.002 123 456 E TestRunner: org.junit.AssumptionViolatedException: '+reason)
-            if os.environ.get('SKIP_CALLSITE'):lines.append('10-27 12:00:00.002 123 456 E TestRunner: '+os.environ['SKIP_CALLSITE'])
+            logged=os.environ.get('SKIP_LOG_REASON',reason)
+            if logged and logged!='no':lines.append('10-27 12:00:00.002 123 456 E TestRunner: org.junit.AssumptionViolatedException: '+logged)
+            if os.environ.get('SKIP_CALLSITE') and os.environ.get('SKIP_LOG_CALLSITE','yes')=='yes':lines.append('10-27 12:00:00.002 123 456 E TestRunner: '+os.environ['SKIP_CALLSITE'])
+            if reason and os.environ.get('SKIP_UTP','yes')=='yes':
+                # UTP's TestSuiteResult.test_result: TestCase, status, assumption Error (#669).
+                def varint(v):
+                    out=bytearray()
+                    while True:
+                        out.append((v&0x7f)|(0x80 if v>0x7f else 0));v>>=7
+                        if not v:return bytes(out)
+                def field(n,p):
+                    p=p.encode() if isinstance(p,str) else p
+                    return varint(n<<3|2)+varint(len(p))+p
+                trace='org.junit.AssumptionViolatedException: '+reason+chr(10)+chr(9)+(os.environ.get('SKIP_CALLSITE') or 'at org.junit.Assume.assumeTrue(Assume.java:68)')
+                package,simple=cls.rsplit('.',1)
+                result=field(1,field(1,simple)+field(2,package)+field(3,method)+field(6,bytes([8,0xd2,0x99,0xff])))
+                result+=varint(2<<3)+varint(int(os.environ.get('SKIP_UTP_STATUS','4')))
+                result+=field(3,field(1,trace)+field(2,'org.junit.AssumptionViolatedException')+field(3,trace))
+                (folder/'test-result.pb').write_bytes(field(3,result))
             if os.environ.get('SKIP_FINISHED')=='yes':lines.append('10-27 12:00:00.003 123 456 I TestRunner: finished: '+marker)
             (folder/('logcat-'+cls+'-'+method+'.txt')).write_text(chr(10).join(lines)+chr(10))
     if mode=='bad-count':suite.set('tests','2')
@@ -684,8 +702,37 @@ p=pathlib.Path(sys.argv[sys.argv.index('--state-dir')+1]);p.mkdir();(p/'complete
     def test_selection_missing_sdk_callsite_rejected(self):
         self.run_case(1,**self.selection_sdk_skip('translatingASelectionReusesItsDistanceField',303,SKIP_CALLSITE=''))
 
-    def test_selection_missing_terminal_rejected(self):
-        self.run_case(1,**self.selection_sdk_skip('translatingASelectionReusesItsDistanceField',303,SKIP_FINISHED='no'))
+    def test_selection_non_assumption_terminal_rejected(self):
+        # The record's status replaces the log's 'finished' line; a failed terminal cannot qualify.
+        self.run_case(1,**self.selection_sdk_skip('translatingASelectionReusesItsDistanceField',303,SKIP_UTP_STATUS='2'))
+
+    def test_selection_guard_survives_dropped_log_entries(self):
+        # #669: logd dropped the reason, callsite and terminal; UTP's record still proves them.
+        self.run_case(**self.selection_sdk_skip('translatingASelectionReusesItsDistanceField',303,
+            SKIP_LOG_REASON='no',SKIP_LOG_CALLSITE='no',SKIP_FINISHED='no'))
+        result=json.loads((self.root/'prototype-evidence/reconciled-tests.json').read_text())
+        self.assertEqual('got: <false>, expected: is <true>',result['qualified_skips'][0]['reason'])
+
+    def test_selection_record_callsite_is_required(self):
+        self.run_case(1,**self.selection_sdk_skip('translatingASelectionReusesItsDistanceField',303,
+            SKIP_CALLSITE='at org.junit.Assume.assumeTrue(Assume.java:68)'))
+
+    def profile_skip(self, **overrides):
+        cls='io.github.anastaci1a.localica.DialogChromeLayoutTest'
+        method='native360x640Font2RetainsSharedChromeAndEveryRepeatControl'
+        return dict(self.skip_source(cls,method),SKIP_REASON='Requires sufficient display space and actual Android font scale 2',**overrides)
+
+    def test_profile_reason_survives_dropped_log_reason(self):
+        self.run_case(**self.profile_skip(SKIP_LOG_REASON='no'))
+        evidence=json.loads((self.root/'prototype-evidence/reconciled-tests.json').read_text())
+        self.assertEqual('Requires sufficient display space and actual Android font scale 2',evidence['qualified_skips'][0]['reason'])
+        self.assertTrue(evidence['qualified_skips'][0]['reason_records'][0]['file'].endswith('test-result.pb'))
+
+    def test_profile_reason_requires_the_utp_record(self):
+        self.run_case(1,**self.profile_skip(SKIP_UTP='no'))
+
+    def test_profile_log_cannot_contradict_the_utp_record(self):
+        self.run_case(1,**self.profile_skip(SKIP_LOG_REASON='Different assumption'))
 
     def test_selection_wrong_assumption_reason_rejected(self):
         self.run_case(1,**self.selection_sdk_skip('translatingASelectionReusesItsDistanceField',303,SKIP_REASON='Different assumption'))

@@ -2,7 +2,8 @@
 
 Source discovery is restricted to the existing direct JUnit4 parser. No inheritance,
 generated tests or unknown SDK omission is inferred. Android runner assumptions remain
-skips (never passes), with their original per-method log retained in the receipt.
+skips (never passes). Their reason comes from UTP's test-result.pb; the original per-method log
+is retained in the receipt and may confirm, never contradict, that reason.
 """
 import argparse
 import csv
@@ -16,6 +17,7 @@ import statistics
 import xml.etree.ElementTree as ET
 
 import source_methods as source
+import utp_results
 
 
 def require(value, reason):
@@ -142,6 +144,7 @@ def outcomes(folder):
     files = sorted(folder.rglob('*.xml'))
     require(files, 'No instrumentation XML')
     rows, evidence = {}, []
+    observed = observed_records = None
     for path in files:
         require(not path.is_symlink() and path.stat().st_size <= 32*1024*1024, 'Invalid XML input')
         raw = path.read_bytes()
@@ -169,12 +172,24 @@ def outcomes(folder):
                     require(len(logs) == 1 and not logs[0].is_symlink() and logs[0].stat().st_size <= 4*1024*1024, 'Missing bounded assumption log: '+identity)
                     text = logs[0].read_text()
                     marker = method+'('+name+')'
-                    require(text.count('TestRunner: started: '+marker) == text.count('TestRunner: assumption failed: '+marker) == 1, 'Ambiguous assumption boundaries')
-                    reasons = re.findall(r'TestRunner: org\.junit\.AssumptionViolatedException: ([^\r\n]*)', text)
-                    require(len(reasons) == 1, 'Missing observed assumption reason')
+                    # logd can drop this log's entries under load (#669). The reason comes from UTP's
+                    # instrumentation record; the log may only confirm it, never contradict it.
+                    require(text.count('TestRunner: started: '+marker) <= 1 and text.count('TestRunner: assumption failed: '+marker) <= 1, 'Ambiguous assumption boundaries')
+                    if observed is None:
+                        records = sorted(folder.rglob('test-result.pb'))
+                        require(records, 'Missing UTP test-result.pb')
+                        observed = {}
+                        observed_records = [{'file': str(record), 'sha256': digest(record)} for record in records]
+                        for record in records:
+                            for key, values in utp_results.assumption_reasons(record).items():
+                                observed.setdefault(key, []).extend(values)
+                    reasons = sorted(set(observed.get(identity, [])), key=str)
+                    require(len(reasons) == 1 and reasons[0] is not None, 'Missing observed assumption reason')
+                    logged = re.findall(r'TestRunner: org\.junit\.AssumptionViolatedException: ([^\r\n]*)', text)
+                    require(logged in ([], reasons), 'Contradictory logged assumption reason')
                     skipped = case.find('skipped')
                     require(skipped.get('message', '') in ('', reasons[0]) and (skipped.text or '').strip() in ('', reasons[0], 'org.junit.AssumptionViolatedException: '+reasons[0]), 'Contradictory XML assumption reason')
-                    row.update(reason=reasons[0], log=str(logs[0]), log_sha256=digest(logs[0]))
+                    row.update(reason=reasons[0], reason_records=observed_records, log=str(logs[0]), log_sha256=digest(logs[0]))
                 rows[identity] = row
         evidence.append({'file': str(path), 'sha256': digest(path)})
     return rows, evidence

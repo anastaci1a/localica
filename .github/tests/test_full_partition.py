@@ -12,6 +12,33 @@ sys.path.insert(0, str(ROOT/'.github/test-evidence'))
 import full_partition as partition
 
 
+def varint(value):
+    out = bytearray()
+    while True:
+        out.append((value & 0x7f) | (0x80 if value > 0x7f else 0))
+        value >>= 7
+        if not value:
+            return bytes(out)
+
+
+def field(number, payload):
+    payload = payload.encode() if isinstance(payload, str) else payload
+    return varint(number << 3 | 2)+varint(len(payload))+payload
+
+
+def utp(results):
+    """A UTP TestSuiteResult holding assumption errors: {(package.Class, method): reason}."""
+    body = b''
+    for (cls, method), reason in results.items():
+        package, simple = cls.rsplit('.', 1)
+        trace = 'org.junit.AssumptionViolatedException: '+reason+'\n\tat org.junit.Assume.assumeTrue(Assume.java:68)'
+        # Field 6 is a nested start-time message whose bytes are not text, as in real records.
+        case = field(1, simple)+field(2, package)+field(3, method)+field(6, b'\x08\xd2\x99\xff\xff\x06')
+        error = field(1, trace)+field(2, 'org.junit.AssumptionViolatedException')+field(3, trace)
+        body += field(3, field(1, case)+varint(2 << 3)+varint(4)+field(3, error))
+    return body
+
+
 class FullPartitionTest(unittest.TestCase):
     def setUp(self):
         temp = tempfile.TemporaryDirectory()
@@ -35,6 +62,8 @@ class FullPartitionTest(unittest.TestCase):
             if outcome: ET.SubElement(case,outcome)
             if outcome=='skipped':
                 (folder/('logcat-'+cls+'-'+method+'.txt')).write_text('TestRunner: started: '+method+'('+cls+')\nTestRunner: assumption failed: '+method+'('+cls+')\nTestRunner: org.junit.AssumptionViolatedException: Existing environment assumption\n')
+        if outcome=='skipped':
+            (folder/'test-result.pb').write_bytes(utp({tuple(i.split('#')): 'Existing environment assumption' for i in ids}))
         ET.ElementTree(suite).write(folder/'TEST.xml')
 
     def complete(self):
@@ -72,6 +101,38 @@ class FullPartitionTest(unittest.TestCase):
         self.assertTrue(all(row['reason']=='Existing environment assumption' for row in receipt['remaining'].values()))
         next(self.remaining.glob('logcat-*')).unlink()
         with self.assertRaises(ValueError):self.complete()
+
+    def test_assumption_reason_survives_dropped_log_entries(self):
+        # #669: logd dropped 'begin exception' and the reason line; UTP still recorded the reason.
+        self.xml(self.remaining,self.manifest['remaining'],'skipped')
+        for identity in self.manifest['remaining']:
+            cls, method = identity.split('#')
+            (self.remaining/('logcat-'+cls+'-'+method+'.txt')).write_text(
+                'TestRunner: started: '+method+'('+cls+')\nTestRunner: assumption failed: '+method+'('+cls+')\n'
+                'TestRunner: \tat org.junit.runners.ParentRunner.runLeaf(ParentRunner.java:366)\n')
+        receipt=self.complete()
+        self.assertTrue(all(row['reason']=='Existing environment assumption' for row in receipt['remaining'].values()))
+        self.assertTrue(all(row['reason_records'][0]['file'].endswith('test-result.pb') for row in receipt['remaining'].values()))
+
+    def test_assumption_reason_needs_one_uncontradicted_utp_record(self):
+        ids=self.manifest['remaining']
+        record=self.remaining/'test-result.pb'
+        def disagree():
+            (self.remaining/'device').mkdir(exist_ok=True)
+            (self.remaining/'device/test-result.pb').write_bytes(utp({tuple(i.split('#')): 'Another assumption' for i in ids}))
+        def contradict():
+            for log in self.remaining.glob('logcat-*'):
+                log.write_text(log.read_text().replace('Existing environment','Another'))
+        cases={'missing record': record.unlink,
+               'identity absent': lambda: record.write_bytes(utp({tuple(ids[0].split('#')): 'Existing environment assumption'})),
+               'records disagree': disagree, 'log contradicts': contradict,
+               'malformed record': lambda: record.write_bytes(b'\x1a\xff')}
+        for name,mutate in cases.items():
+            with self.subTest(case=name):
+                self.xml(self.remaining,ids,'skipped')
+                (self.remaining/'device/test-result.pb').unlink(missing_ok=True)
+                mutate()
+                with self.assertRaises(ValueError):self.complete()
 
     def test_source_addition_or_helper_mutation_invalidates_plan(self):
         (self.folder/'Helper.kt').write_text('package example\nclass Helper {}')
