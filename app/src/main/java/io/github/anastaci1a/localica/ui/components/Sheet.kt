@@ -10,18 +10,18 @@ import io.github.anastaci1a.localica.ui.engine.*
 /** Owner-created contact intents: edge displacement since contact start and release velocity, px and px/s toward expansion. */
 @Stable class SheetContact internal constructor(val onDragStart: () -> Boolean, val onDrag: (Float) -> Unit,
     val onRelease: (Float) -> ReleaseDecision, val onDragCancel: () -> Unit)
-private class SheetHandle(override val expansion: ExpandCollapse, initial: Boolean) : SheetState {
+private class SheetHandle(override val expansion: ExpansionView, initial: Boolean, private val onTarget: (Boolean) -> Unit) : SheetState {
     var requested by mutableStateOf(initial)
     override val expanded get() = requested
     override var contact = SheetContact({ false }, {}, { error("No contact") }, {})
-    override fun expand() { requested = true; expansion.target(true) }; override fun collapse() { requested = false; expansion.target(false) }
+    override fun expand() { requested = true; onTarget(true) }; override fun collapse() { requested = false; onTarget(false) }
 }
 /** One ExpandCollapse owner; its physical frame follows the live endpoint basis (Rebase-capable, A2.3c). */
 @Composable fun rememberSheetState(key: Any, initiallyExpanded: Boolean = false, basis: ExpansionBasis): SheetState {
     val owner = rememberExpandCollapse(key, initiallyExpanded)
     val range = remember(key) { maxOf(1f, 4f * basis.edgeTravelPx) }
     val frame = rememberMotionRect(key to "frame", if (initiallyExpanded) basis.endBounds else basis.startBounds, EdgeRanges(range, range, range, range))
-    val handle = remember(owner) { SheetHandle(owner, initiallyExpanded) }
+    val handle = remember(owner) { SheetHandle(owner, initiallyExpanded) { owner.target(it) } }
     val clock = LocalUiClock.current
     SideEffect {
         owner.bind(frame); owner.setBasis(basis)
