@@ -117,6 +117,40 @@ class SearchImeMotionTest {
     private val keyboardSetup = mutableListOf<String>()
     private val motionTimeline = mutableListOf<String>()
     private var nativeActionReturnGate: java.util.concurrent.CountDownLatch? = null
+    private var nativeDismissalAt: Long? = null
+    private var legacyNativeReturn: LegacyNativeReturn? = null
+    private data class LegacyNativeReturn(
+        val sample: SearchMorphSample,
+        val requestedAt: Long,
+        val placedAt: Long,
+        val queryStartedAt: Long,
+        val queryEndedAt: Long,
+        val nativeWindowVisible: Boolean,
+        val windowDump: String,
+    )
+
+    // API 26 has no platform IME animation callbacks. Its compat animation may
+    // end (or restore a cached positive inset) independently of the native window.
+    // Read WM after actual movement: a still-shown surface then proves that the
+    // earlier placed frame preceded native hide completion. Never synthesize it.
+    private fun legacyImeWindowVisible(dump: String): Boolean {
+        check(dump.startsWith("WINDOW MANAGER WINDOWS")) { "Missing native WindowManager evidence: $dump" }
+        val imeWindows = dump.split(Regex("(?m)^  Window #\\d+ "))
+            .drop(1).filter { it.contains("mIsImWindow=true") }
+        check(imeWindows.size <= 1) { "Ambiguous native IME windows: $dump" }
+        val window = imeWindows.singleOrNull() ?: return false
+        val surface = window.lineSequence().firstOrNull { it.contains("Surface: shown=") } ?: return false
+        val alpha = Regex("\\balpha=([^\\s]+)").find(surface)?.groupValues?.get(1)?.toFloatOrNull()
+            ?: return false
+        val exitRunning = window.contains("mAnimatingExit=true") &&
+            window.contains("mAnimating=true") && window.contains("mLocalAnimating=true") &&
+            window.contains("mAnimationIsEntrance=false")
+        val shownBeforeExit = window.contains("mViewVisibility=0x0") &&
+            !window.contains("mPolicyVisibility=false")
+        return window.contains("mHasSurface=true") && window.contains("mLastHidden=false") &&
+            surface.contains("Surface: shown=true") && alpha > 0f && (shownBeforeExit || exitRunning)
+    }
+
     private var nativeReturnProbe: NativeReturnProbe? = null
     private val nativeReturnFrames = mutableListOf<Pair<SearchMorphSample, NativeReturnEvidence>>()
 
@@ -280,6 +314,8 @@ class SearchImeMotionTest {
             val additional = InstrumentationRegistry.getArguments().getString("additionalTestOutputDir")?.takeIf { it.isNotBlank() }
             val root = additional?.let { java.io.File(it) } ?: requireNotNull(compose.activity.getExternalFilesDir(null))
             val directory = java.io.File(root, "search-ime-motion").apply { mkdirs() }
+            java.io.File(directory, "${name.methodName}-native-return-window.txt")
+                .writeText(legacyNativeReturn?.toString() ?: "No API26 intermediate dismissal was requested")
             java.io.File(directory, "${name.methodName}.txt").writeText(compose.runOnUiThread { samples.toList() }.joinToString("\n"))
             java.io.File(directory, "${name.methodName}-keyboard-setup.txt").writeText(keyboardSetup.joinToString("\n"))
             java.io.File(directory, "${name.methodName}-timeline.txt").writeText(
@@ -305,6 +341,18 @@ class SearchImeMotionTest {
             }, LocalReducedMotion provides reduced,
                 LocalSearchMorphObserver provides {
                     samples += it
+                    if (android.os.Build.VERSION.SDK_INT == 26 && !it.opening &&
+                        it.progress >= .01f && it.progress < .99f && legacyNativeReturn == null) {
+                        val requested = requireNotNull(nativeDismissalAt)
+                        val placed = SystemClock.uptimeMillis()
+                        val started = SystemClock.uptimeMillis()
+                        val dump = shell("dumpsys -t 2 window windows")
+                        val ended = SystemClock.uptimeMillis()
+                        legacyNativeReturn = LegacyNativeReturn(it, requested, placed, started, ended,
+                            legacyImeWindowVisible(dump), dump)
+                        motionTimeline += "$ended legacyNativeReturn requested=$requested placed=$placed " +
+                            "queryStarted=$started queryEnded=$ended visible=${legacyNativeReturn?.nativeWindowVisible}"
+                    }
                     if (!it.opening && it.progress in .01f.. .99f) nativeActionReturnGate?.countDown()
                     motionTimeline += "${SystemClock.uptimeMillis()} $it"
                     nativeReturnProbe?.snapshot()?.let { evidence ->
@@ -488,7 +536,15 @@ class SearchImeMotionTest {
             // resets source/target onEnd. Current insets may already be zero when
             // a closing window loses IME control, before that animation finishes.
             val nativeFrames = compose.runOnUiThread { nativeReturnFrames.toList() }
+            val legacy = compose.runOnUiThread { legacyNativeReturn }
             val overlap = returning.indexOfFirst { sample ->
+                if (android.os.Build.VERSION.SDK_INT == 26) {
+                    // Insets on a released legacy popup are neither an end signal
+                    // nor proof of continued visibility. Require its native window.
+                    return@indexOfFirst legacy != null && legacy.sample === sample &&
+                        legacy.placedAt >= legacy.requestedAt && legacy.queryStartedAt >= legacy.placedAt &&
+                        legacy.queryEndedAt >= legacy.queryStartedAt && legacy.nativeWindowVisible
+                }
                 // A released popup can report all-zero insets before the surviving
                 // activity's native hide has even started. Count independently observed
                 // native evidence only on this exact intermediate placed return frame.
@@ -560,6 +616,7 @@ class SearchImeMotionTest {
                     probe.arm()
                 }
             }
+            compose.runOnUiThread { nativeDismissalAt = SystemClock.uptimeMillis() }
             android.util.Log.i("SearchImeMotionTest", "Native dismissal requested outside=$outside uptime=${SystemClock.uptimeMillis()}")
             val returnGate = java.util.concurrent.CountDownLatch(1).takeIf { awaitFirstReturn }
             compose.runOnUiThread { nativeActionReturnGate = returnGate }
