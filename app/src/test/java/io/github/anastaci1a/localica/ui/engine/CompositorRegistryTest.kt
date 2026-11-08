@@ -124,7 +124,7 @@ class CompositorRegistryTest {
         node.dismiss(); node.request(shown.copy(opacity=0f),profile); assertTrue(b.casters.isEmpty()); assertFalse(node.retained)
     }
 
-    @Test fun nativeLeasesKeepTheSameNodeAfterTheTriggerUnmountsUntilTheLastWindowReleases() = EngineHarness(spec=geometry).use { h ->
+    @Test fun nativeLeasesKeepTheSameNodeAfterTheTriggerUnmountsUntilTheLastWindowReleases(): Unit = EngineHarness(spec=geometry).use { h ->
         val a=plane(h); val b=plane(h); val original=shape(h); val node=SurfaceNode(h.clock,"native",original,shown,a)
         val release=node.retainWindow(); val releaseOther=node.retainWindow()
         node.transfer(b,profile); b.acknowledge(); h.advance(2.0)
