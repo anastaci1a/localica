@@ -81,9 +81,15 @@ internal fun SelectionViewport(modifier: Modifier = Modifier, contentDrawing: Mo
     content: @Composable (OverscrollEffect?) -> Unit) {
     val overscroll = rememberOverscrollEffect()
     val events = remember(overscroll) { overscroll?.withoutVisualEffect() }
-    ConnectedSelectionHost(modifier.clipToBounds().then(if (overscroll != null) Modifier.overscroll(overscroll) else Modifier),
+    val plane = if (liftEdges == LiftEdges.Vertical) rememberShadowPlane() else null
+    val outset = glassShadowInset()
+    val clip = if (plane == null) Modifier.clipToBounds() else Modifier.drawWithContent {
+        clipRect(left=0f, top=-outset.toPx()-2f, right=size.width, bottom=size.height+outset.toPx()+2f) { this@drawWithContent.drawContent() }
+    }
+    val field = if (plane == null) Modifier else Modifier.shadowPlaneHost(plane,0f,0f)
+    ConnectedSelectionHost(modifier.then(clip).then(if (overscroll != null) Modifier.overscroll(overscroll) else Modifier).then(field),
         contentDrawing = contentDrawing, observePlacement = observePlacement, visibleItemKeys = visibleItemKeys,
-        scene = scene, liftEdges = liftEdges) {
+        scene = scene, liftEdges = liftEdges, fieldPlane = plane) {
         content(events)
     }
 }
@@ -98,8 +104,9 @@ internal fun SelectionViewport(modifier: Modifier = Modifier, contentDrawing: Mo
 internal fun ConnectedSelectionHost(modifier: Modifier = Modifier, contentDrawing: Modifier = Modifier,
     observePlacement: () -> Unit = {}, visibleItemKeys: (() -> Set<Any>)? = null,
     scene: SelectionScene = remember { SelectionScene() }, liftEdges: LiftEdges = LiftEdges.Horizontal,
-    content: @Composable () -> Unit) {
+    fieldPlane: ShadowPlane? = null, content: @Composable () -> Unit) {
     val liftStyle = rememberLiftShadow()
+    val field = fieldPlane?.let { rememberNativePathField(it,scene,if (liftStyle.color==Color.White) ShadowRole.Glow else ShadowRole.Lift) }
     val averageProgress = glassAverageProgress()
     // Older Android uses the shared solid-average path.
     val blurEffects = Build.VERSION.SDK_INT >= 33
@@ -116,6 +123,9 @@ internal fun ConnectedSelectionHost(modifier: Modifier = Modifier, contentDrawin
     val recordingDirection = LocalLayoutDirection.current
     CompositionLocalProvider(LocalSelectionScene provides scene) {
         Box(modifier.then(contentDrawing).backdropLocation(location).onPlaced { coordinates = it }.drawWithContent {
+            field?.beginFrame()
+            val bodyClip = if (field == null) null else Rect(Offset.Zero,size)
+            try {
             // Pager placement also moves unselected rows. Do not subscribe their
             // otherwise reusable display lists to the selection geometry clock.
             if (!hasSelection && scene.retainedHover.isEmpty()) {
@@ -123,14 +133,14 @@ internal fun ConnectedSelectionHost(modifier: Modifier = Modifier, contentDrawin
                 scene.lastDrawnRegions = emptyList()
                 scene.hover.clear()
                 scene.viewportHover.clear()
-                return@drawWithContent drawContent()
+                return@drawWithContent withSelectionBodyClip(bodyClip) { drawContent() }
             }
             // Lazy scrolling can update retained child layers without replacing LayoutCoordinates.
             // Subscribe THIS drawing to its owner's layout result, then read live coordinates.
             observePlacement()
             scene.placement
             // Hovering items skip their in-place drawing; everything else is unchanged.
-            drawContent()
+            withSelectionBodyClip(bodyClip) { drawContent() }
             val host = coordinates ?: return@drawWithContent
             // Lazy prefetch may keep an unplaced item's coordinates attached.
             // Its owner's public native keys, rather than attachment, admit it.
@@ -180,18 +190,19 @@ internal fun ConnectedSelectionHost(modifier: Modifier = Modifier, contentDrawin
                 val parts = orderedMembers.map { lifts[it] }
                 val strengths = { a: Int, b: Int -> min(parts[a].progress, parts[b].progress) }
                 val opacity = members.maxOf { opacities[it] }
-                drawHoverGroup(group, parts, strengths, backing, location, blurEffects, recordingDensity, recordingDirection, gap, opacity = opacity, itemOpacity = orderedMembers.map { opacities[it] }, splitRestComponents = true, lift = liftStyle, averageProgress = averageProgress.value)
+                drawHoverGroup(group, parts, strengths, backing, location, blurEffects, recordingDensity, recordingDirection, gap, opacity = opacity, itemOpacity = orderedMembers.map { opacities[it] }, splitRestComponents = true, lift = liftStyle, averageProgress = averageProgress.value, pathField = field, bodyClip = bodyClip)
                 members.forEach { member ->
                     val item = hovering.getOrNull(member) ?: return@forEach
                     val lift = lifts[member]
                     val layer = item.entry.layer ?: return@forEach
-                    translate(item.at.x, item.at.y) {
+                    withSelectionBodyClip(bodyClip) { translate(item.at.x, item.at.y) {
                         val pivot = lift.pivot - item.at
                         layer.alpha = item.entry.alpha().coerceIn(0f, 1f)
                         scale(lift.scale, lift.scale, pivot) { drawLayer(layer) }
-                    }
+                    } }
                 }
             }
+            } finally { field?.endFrame() }
         }) { content() }
     }
 }
@@ -202,7 +213,7 @@ internal class HoverSurfaceRenderer(private val graphics: GraphicsContext,scope:
     val flatOutput=graphics.createGraphicsLayer()
     val average = if (Build.VERSION.SDK_INT >= 33) MaterialAverageRenderer() else null
     private val lifetime=kotlinx.coroutines.Job(scope.coroutineContext[kotlinx.coroutines.Job])
-    val shadow=RetainedGlassShadow(kotlinx.coroutines.CoroutineScope(scope.coroutineContext+lifetime))
+    val shadow by lazy { RetainedGlassShadow(kotlinx.coroutines.CoroutineScope(scope.coroutineContext+lifetime)) }
     /** Root adapter for callers outside the D04 allowance (HoverDrag): the same retained renderer call. */
     fun androidx.compose.ui.graphics.drawscope.DrawScope.drawShadow(bodies: List<Pair<androidx.compose.ui.geometry.RoundRect,Float>>,strength: Float,spread: Float,color: androidx.compose.ui.graphics.Color)=with(shadow) { draw(bodies,strength,spread,color=color) }
     fun release() { lifetime.cancel();graphics.releaseGraphicsLayer(output);graphics.releaseGraphicsLayer(flatOutput) }
@@ -224,7 +235,7 @@ internal fun DrawScope.drawHoverGroup(group: HoverGroupRenderer, parts: List<Hov
     backing: FrostedBackdrop?, location: BackdropLocation, blurEffects: Boolean,
     density: androidx.compose.ui.unit.Density, direction: LayoutDirection, gap: Float,
     sampleOffset: Offset = Offset.Zero, shadow: Boolean = true, opacity: Float = 1f,
-    itemOpacity: List<Float>? = null, splitRestComponents: Boolean = false, lift: LiftShadow, averageProgress: Float = 0f) {
+    itemOpacity: List<Float>? = null, splitRestComponents: Boolean = false, lift: LiftShadow, averageProgress: Float = 0f, pathField: NativePathField? = null, bodyClip: Rect? = null) {
     if(parts.isEmpty()) { group.release();return }
     val progress=parts.maxOf { it.progress }*opacity.coerceIn(0f,1f)
     if(progress<=0f) { group.release();return }
@@ -238,7 +249,7 @@ internal fun DrawScope.drawHoverGroup(group: HoverGroupRenderer, parts: List<Hov
     if(layers.isEmpty())return
     fun DrawScope.paint(layer: SelectionOutlineLayer) {
         for(outline in layer.groups) drawHoverSurface(group.surface(outline.members),outline.members.map { parts[it] },
-            outline,progress,backing,location,blurEffects,density,direction,sampleOffset,shadow,lift,averageProgress)
+            outline,progress,backing,location,blurEffects,density,direction,sampleOffset,shadow,lift,averageProgress,pathField,bodyClip)
     }
     if(layers.size==1 && layers[0].weight==1f) { paint(layers[0]);return }
     val padding=if(shadow)(6f+lift.spread*28f).dp.toPx()+2f else gap/2f
@@ -257,11 +268,12 @@ internal fun DrawScope.drawHoverGroup(group: HoverGroupRenderer, parts: List<Hov
 private fun DrawScope.drawHoverSurface(surface: HoverSurfaceRenderer,parts: List<HoverGeometry>,
     outline: SelectionOutlineGroup,progress: Float,backing: FrostedBackdrop?,location: BackdropLocation,
     blurEffects: Boolean,density: androidx.compose.ui.unit.Density,direction: LayoutDirection,
-    sampleOffset: Offset,shadow: Boolean,lift: LiftShadow,averageProgress: Float) {
+    sampleOffset: Offset,shadow: Boolean,lift: LiftShadow,averageProgress: Float,pathField: NativePathField?,bodyClip: Rect?) {
     val path=outline.path
     val rest=parts.map { SelectionRegion(it.rest.bounds,it.rest.corner) }
-    if(shadow)with(surface.shadow) {
-        draw(outline.localPath,outline.origin,lift.strength*progress,lift.spread,color=lift.color)
+    if(shadow) {
+        if(pathField!=null) pathField.draw(this,surface,outline.localPath,outline.origin,lift.strength*progress,lift.spread,lift.color)
+        else with(surface.shadow) { draw(outline.localPath,outline.origin,lift.strength*progress,lift.spread,color=lift.color) }
     }
     val source = backing?.takeIf { it.recorded && !it.layer.isReleased } ?: return
     if (blurEffects) location.observeRecordingAcrossWindows(source)
@@ -274,7 +286,7 @@ private fun DrawScope.drawHoverSurface(surface: HoverSurfaceRenderer,parts: List
         translate(sampleOffset.x, sampleOffset.y)
     }) { withBackdropRegistration(registration, draw) }
     val blur = HoverLift.Blur.toPx() * progress
-    clipPath(path) {
+    withSelectionBodyClip(bodyClip) { clipPath(path) {
         val blending = averageProgress > 0f && averageProgress < 1f
         if (blending) drawContext.canvas.saveLayer(path.getBounds(), Paint())
         if (blurEffects && averageProgress < 1f && blur > .5f) {
@@ -312,7 +324,11 @@ private fun DrawScope.drawHoverSurface(surface: HoverSurfaceRenderer,parts: List
             }
         }
         if (blending) drawContext.canvas.restore()
-    }
+    } }
+}
+
+private inline fun DrawScope.withSelectionBodyClip(bounds: Rect?, draw: DrawScope.()->Unit) {
+    if(bounds==null) draw() else clipRect(bounds.left,bounds.top,bounds.right,bounds.bottom) { draw() }
 }
 
 private fun Rect.union(other: Rect) = Rect(min(left, other.left), min(top, other.top), max(right, other.right), max(bottom, other.bottom))

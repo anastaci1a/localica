@@ -392,3 +392,7 @@ io.github.anastaci1a.localica.D46PopupOpenStripTest
 
 io.github.anastaci1a.localica.SheetCollapseCompositionTest
 io.github.anastaci1a.localica.ArtworkVelocityTest
+io.github.anastaci1a.localica.CarouselShadowOutsetTest
+io.github.anastaci1a.localica.ScopedSearchShadowOutsetTest
+io.github.anastaci1a.localica.SelectionPlaneOpticsTest
+io.github.anastaci1a.localica.SelectionPlaneLifecycleTest
