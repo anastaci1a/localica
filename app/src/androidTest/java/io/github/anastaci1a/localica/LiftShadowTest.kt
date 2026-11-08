@@ -149,9 +149,8 @@ class LiftShadowTest {
         var value by mutableStateOf(GlassAppearance())
         compose.setContent { LocalicaTheme {
             CompositionLocalProvider(LocalReducedMotion provides true) {
-                Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-                    GlassSettingsControls(value, "Glass appearance") { value = it }
-                }
+                FolderSettings(LibraryUiState(loading = false), {}, {}, {}, initialCategory = "Glass appearance",
+                    interfaceContent = { page -> GlassSettingsControls(value, page) { value = it } })
             }
         } }
         compose.onNodeWithContentDescription("Lift shadow strength").performScrollTo()
@@ -165,6 +164,8 @@ class LiftShadowTest {
         compose.runOnIdle { assertEquals(1.5f, value.liftShadowStrength, .0001f) }
         compose.onNodeWithContentDescription("Lift shadow strength").performSemanticsAction(SemanticsActions.SetProgress) { it(0f) }
         compose.runOnIdle { assertEquals(.5f, value.liftShadowStrength, .0001f) }
+        compose.onNodeWithContentDescription("Back from settings").performClick()
+        compose.onNodeWithText("Glass advanced").performScrollTo().performClick()
         compose.onNodeWithText("Reset glass appearance").performScrollTo().performClick()
         compose.runOnIdle { assertEquals(1f, value.liftShadowStrength, 0f) }
     }
