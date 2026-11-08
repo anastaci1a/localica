@@ -117,7 +117,7 @@ jobs:
         certificate=subprocess.check_output([os.environ['ANDROID_HOME']+'/build-tools/35.0.0/apksigner','verify','--print-certs',str(apk)],text=True)
         json.dump({'schema_version':1,'lane':'prototype','release_certified':False,'sha':os.environ['GITHUB_SHA'],'ref':os.environ['GITHUB_REF'],'run_id':os.environ['GITHUB_RUN_ID'],'run_attempt':os.environ['GITHUB_RUN_ATTEMPT'],'apk_sha256':hashlib.sha256(apk.read_bytes()).hexdigest(),'signing_certificate':certificate,'requested_affected_classes':os.environ['AFFECTED_CLASSES'].split(','),'coverage_reason':os.environ['COVERAGE_REASON'],'native_test_apks':'independent same-SHA builds; see each focused job hash receipt'},open(apk.parent/'provenance.json','w'),indent=2)
         PYCODE
-    - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+    - uses: ./.github/actions/upload-artifact-retry
       with:
         name: prototype-build-internal-unvalidated
         path: |-
@@ -126,7 +126,7 @@ jobs:
 
           app/build/outputs/apk/debug/provenance.json
         if-no-files-found: error
-    - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+    - uses: ./.github/actions/upload-artifact-retry
       if: always()
       with:
         name: prototype-build-reports
@@ -225,14 +225,14 @@ jobs:
         mode: save
     - name: Preserve emulator readiness observations
       if: always()
-      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      uses: ./.github/actions/upload-artifact-retry
       with:
         name: emulator-readiness-${{ github.job }}-${{ strategy.job-index }}
         path: emulator-readiness.json
         if-no-files-found: warn
     - name: Preserve emulator crash database
       if: failure()
-      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      uses: ./.github/actions/upload-artifact-retry
       with:
         name: prototype-emulator-crashes-api-26
         path: /tmp/android-runner/emu-crash-*/
@@ -243,7 +243,7 @@ jobs:
         free -h
         df -h
         sudo dmesg --ctime | tail -100
-    - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+    - uses: ./.github/actions/upload-artifact-retry
       if: always()
       with:
         name: prototype-focused-api-26
@@ -321,7 +321,7 @@ jobs:
         mode: save
     - name: Preserve emulator readiness observations
       if: always()
-      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      uses: ./.github/actions/upload-artifact-retry
       with:
         name: emulator-readiness-${{ github.job }}-${{ strategy.job-index }}
         path: emulator-readiness.json
@@ -331,7 +331,7 @@ jobs:
       run: |
         mkdir -p "$RUNNER_TEMP/shuffle-compatibility/reports"
         cp prototype-runner-environment.txt "$RUNNER_TEMP/shuffle-compatibility/reports/prototype-runner-environment.txt"
-    - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+    - uses: ./.github/actions/upload-artifact-retry
       if: always()
       with:
         name: prototype-compatibility-api-26
@@ -428,14 +428,14 @@ jobs:
         mode: save
     - name: Preserve emulator readiness observations
       if: always()
-      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      uses: ./.github/actions/upload-artifact-retry
       with:
         name: emulator-readiness-${{ github.job }}-${{ strategy.job-index }}
         path: emulator-readiness.json
         if-no-files-found: warn
     - name: Preserve emulator crash database
       if: failure()
-      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      uses: ./.github/actions/upload-artifact-retry
       with:
         name: prototype-emulator-crashes-api-36
         path: /tmp/android-runner/emu-crash-*/
@@ -446,7 +446,7 @@ jobs:
         free -h
         df -h
         sudo dmesg --ctime | tail -100
-    - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+    - uses: ./.github/actions/upload-artifact-retry
       if: always()
       with:
         name: prototype-focused-api-36
@@ -524,7 +524,7 @@ jobs:
         mode: save
     - name: Preserve emulator readiness observations
       if: always()
-      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      uses: ./.github/actions/upload-artifact-retry
       with:
         name: emulator-readiness-${{ github.job }}-${{ strategy.job-index }}
         path: emulator-readiness.json
@@ -534,7 +534,7 @@ jobs:
       run: |
         mkdir -p "$RUNNER_TEMP/shuffle-compatibility/reports"
         cp prototype-runner-environment.txt "$RUNNER_TEMP/shuffle-compatibility/reports/prototype-runner-environment.txt"
-    - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+    - uses: ./.github/actions/upload-artifact-retry
       if: always()
       with:
         name: prototype-compatibility-api-36
