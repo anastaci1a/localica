@@ -43,7 +43,7 @@ class MainActivity : ComponentActivity() {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T =
                 LibraryViewModel((application as LocalicaApplication).library, PlaybackConnection(applicationContext),
-                    (application as LocalicaApplication).playlists, (application as LocalicaApplication).scanner, (application as LocalicaApplication).statistics.counts) as T
+                    (application as LocalicaApplication).playlists, (application as LocalicaApplication).scanner, (application as LocalicaApplication).effectiveStatistics) as T
         })[LibraryViewModel::class.java]
         consumeScannerIntent(intent)
         val scanPreferences = io.github.anastaci1a.localica.scanner.ScanPreferences(this)

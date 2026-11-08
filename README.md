@@ -2,7 +2,7 @@
 
 An Android player for music stored on your device. Browse folders, albums and artists, organize playlists, and keep separate listening queues.
 
-Saved queues, configurable navigation, bulk tag/artwork editing, local synced lyrics, and background playback. No account or internet access. Liquid Glass floating controls complement a frosted Queue drawer.
+Saved queues, configurable navigation, bulk tag/artwork editing, local synced lyrics, and background playback. Core features work offline without an account. Optional Last.fm sync reads listening statistics by username. Liquid Glass floating controls complement a frosted Queue drawer.
 
 Requires **Android 8+**. Supports MP3 and AAC/M4A, plus WAV, FLAC, Ogg, and Opus where the device provides a decoder. Songs advance through the active queue.
 

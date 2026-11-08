@@ -25,6 +25,7 @@ data class Track(
     val playCount: Long = 0,
     val releaseType: String? = null,
     val compilation: Boolean? = null,
+    val musicBrainzId: String? = null,
 )
 
 data class TrackLocation(val folderUri: String, val uri: String, val relativePath: String)
@@ -76,6 +77,7 @@ data class AudioMetadata(
     val comment: String? = null,
     val releaseType: String? = null,
     val compilation: Boolean? = null,
+    val musicBrainzId: String? = null,
 )
 
 data class ScanDocument(

@@ -201,6 +201,10 @@ Track and thumb share one coordinate model for fill, travel and boundary contact
 
 The [appearance settings](#appearance-and-settings) own thumb finish and expansion. The [motion rules](#motion-and-access) own pickup, haptics and reduced motion. Playback retains its separate [scrub cancellation](#player-and-queue-drawer).
 
+### Last.fm settings
+
+The Last.fm settings page uses shared text fields, buttons and switches. It shows username, explicit Sync now, last successful sync, source selection, errors and unresolved matches. Candidate buttons resolve ambiguous recordings; Disconnect clears the external snapshot. See the [statistics contract](product.md#optional-lastfm-statistics) for privacy, fallback and retention rules.
+
 ## Navigation and Back
 
 ### Destinations

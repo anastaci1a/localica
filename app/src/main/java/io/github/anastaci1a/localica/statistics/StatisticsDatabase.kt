@@ -26,10 +26,6 @@ interface StatisticsDao {
 @Database(entities = [QualifiedPlay::class], version = 1, exportSchema = true)
 abstract class StatisticsDatabase : RoomDatabase() { abstract fun statistics(): StatisticsDao }
 
-data class ListeningStatistics(val tracks: Map<String, Long> = emptyMap(), val playlists: Map<String, Long> = emptyMap()) {
-    fun applyTo(snapshot: LibrarySnapshot): LibrarySnapshot = snapshot.withPlayCounts(tracks, playlists)
-}
-
 /** Both the statistics map preparation and track overlay stay off the UI collector. Each published
  * snapshot also carries its prepared ID lookup, so synchronous UI projections (queue opening) never build it on Main. */
 internal fun Flow<LibrarySnapshot>.withListeningStatistics(statistics: Flow<ListeningStatistics>,

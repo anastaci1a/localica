@@ -477,6 +477,8 @@ fun LocalicaScreen(
             Text("Offline music, organized your way.")
             DiagnosticsExportAction()
             LibraryLicenses()
+        }, lastFmContent = {
+            (context.applicationContext as? io.github.anastaci1a.localica.LocalicaApplication)?.let { LastFmSettings(it.lastfm) }
         }, initialCategory = settingsCategory, onFullScan = onScanAll, onQuickScan = onQuickScan, libraryFiltersContent = {
             LibraryFilterSettings(libraryFilters) { libraryFilters = it; libraryFilterPreferences.write(it) }
         })
