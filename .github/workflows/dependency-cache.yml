@@ -34,6 +34,8 @@ jobs:
       - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4
         with:
           cache-read-only: false
+          # The writer replaces an entry saved by a failed build at the same SHA with the complete set.
+          cache-overwrite-existing: true
       - name: Record restored dependency files
         run: bash .github/dependency-cache-audit.sh snapshot
       - name: Resolve the static-checks task set
@@ -58,6 +60,8 @@ jobs:
       - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4
         with:
           cache-read-only: false
+          # The writer replaces an entry saved by a failed build at the same SHA with the complete set.
+          cache-overwrite-existing: true
       - name: Record restored dependency files
         run: bash .github/dependency-cache-audit.sh snapshot
       - name: Resolve the test-apks task set
