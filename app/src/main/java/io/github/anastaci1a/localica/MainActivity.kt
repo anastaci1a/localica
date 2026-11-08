@@ -30,7 +30,11 @@ private const val STARTUP_SCAN_DELAY_MILLIS = 1_000L
 class MainActivity : ComponentActivity() {
     private lateinit var model: LibraryViewModel
     private var scannerRequest by mutableIntStateOf(0)
+    private var lastFmSettingsRequest by mutableIntStateOf(0)
     private fun consumeScannerIntent(intent: Intent?) {
+        if (intent?.getBooleanExtra("localica.openLastFmSettings", false) == true) {
+            lastFmSettingsRequest++; intent.removeExtra("localica.openLastFmSettings")
+        }
         if (intent?.getBooleanExtra("show-tag-jobs", false) == true) {
             (application as LocalicaApplication).tagEditing.showJobs(); intent.removeExtra("show-tag-jobs")
         }
@@ -87,7 +91,7 @@ class MainActivity : ComponentActivity() {
                     queues = queues, queueController = model.playback.queues,
                     onPrevious = model.playback::previous, onNext = model.playback::next,
                     playlist = playlist, playlistController = model.playlists,
-                    onScanAll = model::scanAll, onQuickScan = model::scanNewFiles, scannerRequest = scannerRequest, onRetryPlayback = model.playback::retry,
+                    onScanAll = model::scanAll, onQuickScan = model::scanNewFiles, scannerRequest = scannerRequest, lastFmSettingsRequest = lastFmSettingsRequest, onRetryPlayback = model.playback::retry,
                     onSeekRequest = model.playback::requestSeek, playbackSample = playbackObservation.sample)
                 }
             }

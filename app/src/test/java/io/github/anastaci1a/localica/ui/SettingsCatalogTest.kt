@@ -20,7 +20,7 @@ class SettingsCatalogTest {
             assertTrue("${spec.id} cannot be reached by $value", SettingsCatalog.search(value, limit = Int.MAX_VALUE).any { it.setting == spec })
         } }
         assertTrue(SettingsCatalog.search("grey").any { it.title == "Interface gray" })
-        assertEquals("Lyrics timing correction", SettingsCatalog.search("sync").first().title)
+        assertEquals("Sync now", SettingsCatalog.search("sync").first().title)
         assertEquals("Exclude short files", SettingsCatalog.search("minimum duration").first().title)
         assertEquals("Control expansion", SettingsCatalog.search("control expansion").first().title)
     }

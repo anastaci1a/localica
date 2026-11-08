@@ -174,7 +174,7 @@ internal fun ArtistAlbumChoices(albums: List<LibraryGroup>, selectedIds: List<St
 /** Scroll-driven decoration owns its frame reads; the collection/query tree stays stable. */
 @Composable
 internal fun CollectionBackground(visual: PlayerVisual, grid: LazyGridState, source: FrostedBackdrop,
-    reducedMotion: Boolean, modifier: Modifier, pinchHeader: CollectionPinchHeader? = null) {
+    reducedMotion: Boolean, modifier: Modifier, pinchHeader: CollectionPinchHeader? = null, artworkResetKey: Any? = null) {
     val scroll = remember(grid) { CollectionScroll() }
     val items = grid.layoutInfo.visibleItemsInfo.map {
         CollectionScroll.Item(it.key, it.index, it.offset.y, it.size.height)
@@ -183,7 +183,7 @@ internal fun CollectionBackground(visual: PlayerVisual, grid: LazyGridState, sou
     pinchHeader?.ordinaryTop = ordinary
     pinchHeader?.presentedTop()?.let { scroll.presented(it, items) }
     val top = pinchHeader?.heroTop() ?: ordinary
-    ArtworkBlend(visual, modifier.onPlaced { pinchHeader?.background = it }.drawWithContent {
+    key(artworkResetKey) { ArtworkBlend(visual, modifier.onPlaced { pinchHeader?.background = it }.drawWithContent {
         // Read outside the cached scene recording: header progress also owns
         // background invalidation when the source image itself is unchanged.
         val presentedTop = pinchHeader?.heroTop() ?: top
@@ -193,7 +193,7 @@ internal fun CollectionBackground(visual: PlayerVisual, grid: LazyGridState, sou
     }.recordFrostedBackdrop(source),
         duration = if (reducedMotion) 120 else 240, opacityBlend = true) { frame ->
         CollectionBackdrop(frame, top, Modifier.fillMaxSize(), pinchHeader)
-    }
+    } }
 }
 
 @Composable
