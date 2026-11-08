@@ -71,3 +71,12 @@ import io.github.anastaci1a.localica.ui.spec.*
     SettingsStack(Modifier.padding(vertical = StockUiSpec.space.getValue(Space.Compact)), gap = Space.Tight,
         content = content)
 }
+
+/** The chooser footer retains its wrapping column and stock divider inset. */
+@Composable internal fun SettingsChooserFooter(content: @Composable ColumnScope.() -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(StockUiSpec.space.getValue(Space.Base)), content = content)
+}
+
+@Composable internal fun SettingsChooserDivider(content: @Composable (Modifier) -> Unit) {
+    content(Modifier.padding(vertical = StockUiSpec.space.getValue(Space.Tight)))
+}

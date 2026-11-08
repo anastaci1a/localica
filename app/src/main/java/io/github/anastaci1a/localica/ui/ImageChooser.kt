@@ -23,6 +23,8 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import io.github.anastaci1a.localica.ui.layout.SettingsChooserFooter
+import io.github.anastaci1a.localica.ui.layout.SettingsChooserDivider
 import io.github.anastaci1a.localica.editing.CoverImages
 
 /** Optional decoder-entry observation; callbacks run in the decoder context. */
@@ -84,8 +86,8 @@ internal fun ImageChooser(workflow: ArtworkWorkflow, onDismiss: () -> Unit, onCh
             }
         }
     }, footer = {
-        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            HorizontalDivider(Modifier.padding(vertical = 4.dp))
+        SettingsChooserFooter {
+            SettingsChooserDivider { HorizontalDivider(it) }
             GlassActionButton(AppIcon.TabAlbums, "Open gallery", Modifier.fillMaxWidth()) {
                 gallery.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
             }
