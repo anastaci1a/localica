@@ -2771,7 +2771,7 @@
         errorLine2="                                                                             ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassPopupHome.kt"
-            line="157"
+            line="178"
             column="78"/>
     </issue>
 
@@ -3959,7 +3959,7 @@
         errorLine2="                       ~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt"
-            line="155"
+            line="156"
             column="24"/>
     </issue>
 
@@ -3970,7 +3970,7 @@
         errorLine2="                              ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt"
-            line="155"
+            line="156"
             column="31"/>
     </issue>
 
@@ -3981,7 +3981,7 @@
         errorLine2="                                                           ~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt"
-            line="287"
+            line="288"
             column="60"/>
     </issue>
 
@@ -3992,7 +3992,7 @@
         errorLine2="                                                                                             ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt"
-            line="338"
+            line="339"
             column="94"/>
     </issue>
 
@@ -4003,7 +4003,7 @@
         errorLine2="                                                                                                                         ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt"
-            line="338"
+            line="339"
             column="122"/>
     </issue>
 
@@ -4014,7 +4014,7 @@
         errorLine2="                                                                 ~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt"
-            line="339"
+            line="340"
             column="66"/>
     </issue>
 
@@ -4025,7 +4025,7 @@
         errorLine2="                                                                        ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt"
-            line="386"
+            line="388"
             column="73"/>
     </issue>
 
@@ -4036,7 +4036,7 @@
         errorLine2="                                      ~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt"
-            line="387"
+            line="389"
             column="39"/>
     </issue>
 
@@ -4047,7 +4047,7 @@
         errorLine2="                                                                               ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt"
-            line="388"
+            line="390"
             column="80"/>
     </issue>
 
@@ -4058,7 +4058,7 @@
         errorLine2="                                                         ~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt"
-            line="391"
+            line="393"
             column="58"/>
     </issue>
 
@@ -4069,7 +4069,7 @@
         errorLine2="                               ~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt"
-            line="412"
+            line="415"
             column="32"/>
     </issue>
 
@@ -4080,7 +4080,7 @@
         errorLine2="                                  ~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt"
-            line="426"
+            line="430"
             column="35"/>
     </issue>
 
@@ -4091,7 +4091,7 @@
         errorLine2="                                                                                            ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt"
-            line="520"
+            line="524"
             column="93"/>
     </issue>
 
@@ -8646,7 +8646,7 @@
         errorLine2="    ~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassPopupHome.kt"
-            line="125"
+            line="146"
             column="5"/>
     </issue>
 
@@ -9066,7 +9066,7 @@
         errorLine2="        ~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt"
-            line="314"
+            line="315"
             column="9"/>
     </issue>
 
@@ -9077,7 +9077,7 @@
         errorLine2="        ~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt"
-            line="315"
+            line="316"
             column="9"/>
     </issue>
 
@@ -9088,7 +9088,7 @@
         errorLine2="            ~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt"
-            line="335"
+            line="336"
             column="13"/>
     </issue>
 
@@ -9099,7 +9099,7 @@
         errorLine2="                                           ~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt"
-            line="337"
+            line="338"
             column="44"/>
     </issue>
 
@@ -9110,7 +9110,7 @@
         errorLine2="                                       ~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt"
-            line="338"
+            line="339"
             column="40"/>
     </issue>
 
@@ -9121,7 +9121,7 @@
         errorLine2="                ~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt"
-            line="349"
+            line="350"
             column="17"/>
     </issue>
 
@@ -9132,7 +9132,7 @@
         errorLine2="        ~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt"
-            line="386"
+            line="388"
             column="9"/>
     </issue>
 
@@ -9143,7 +9143,7 @@
         errorLine2="            ~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt"
-            line="392"
+            line="394"
             column="13"/>
     </issue>
 
@@ -9154,7 +9154,7 @@
         errorLine2="            ~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt"
-            line="428"
+            line="432"
             column="13"/>
     </issue>
 
@@ -9165,7 +9165,7 @@
         errorLine2="            ~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt"
-            line="460"
+            line="464"
             column="13"/>
     </issue>
 
@@ -9176,7 +9176,7 @@
         errorLine2="            ~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt"
-            line="467"
+            line="471"
             column="13"/>
     </issue>
 
@@ -9187,7 +9187,7 @@
         errorLine2="        ~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt"
-            line="520"
+            line="524"
             column="9"/>
     </issue>
 
@@ -11035,7 +11035,7 @@
         errorLine2="                                                                                                       ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt"
-            line="388"
+            line="390"
             column="104"/>
     </issue>
 
@@ -12575,7 +12575,7 @@
         errorLine2="             ~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt"
-            line="389"
+            line="391"
             column="14"/>
     </issue>
 
@@ -12586,7 +12586,7 @@
         errorLine2="                             ~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt"
-            line="389"
+            line="391"
             column="30"/>
     </issue>
 
@@ -13398,7 +13398,7 @@
         errorLine2="                                                    ~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt"
-            line="338"
+            line="339"
             column="53"/>
     </issue>
 
@@ -15942,7 +15942,7 @@
         errorLine2="    ~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassPopupHome.kt"
-            line="158"
+            line="179"
             column="5"/>
     </issue>
 
@@ -15953,7 +15953,7 @@
         errorLine2="             ~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassPopupHome.kt"
-            line="160"
+            line="181"
             column="14"/>
     </issue>
 
@@ -15964,7 +15964,7 @@
         errorLine2="                    ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassPopupHome.kt"
-            line="160"
+            line="181"
             column="21"/>
     </issue>
 
@@ -15975,7 +15975,7 @@
         errorLine2="                                       ~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassPopupHome.kt"
-            line="160"
+            line="181"
             column="40"/>
     </issue>
 
@@ -15986,7 +15986,7 @@
         errorLine2="                                                           ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassPopupHome.kt"
-            line="160"
+            line="181"
             column="60"/>
     </issue>
 
@@ -15997,7 +15997,7 @@
         errorLine2="                 ~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassPopupHome.kt"
-            line="161"
+            line="182"
             column="18"/>
     </issue>
 
@@ -16008,7 +16008,7 @@
         errorLine2="                              ~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassPopupHome.kt"
-            line="161"
+            line="182"
             column="31"/>
     </issue>
 
@@ -16019,7 +16019,7 @@
         errorLine2="                                      ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassPopupHome.kt"
-            line="161"
+            line="182"
             column="39"/>
     </issue>
 
@@ -16030,7 +16030,7 @@
         errorLine2="                                                         ~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassPopupHome.kt"
-            line="161"
+            line="182"
             column="58"/>
     </issue>
 
@@ -16041,7 +16041,7 @@
         errorLine2="                                                                              ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassPopupHome.kt"
-            line="161"
+            line="182"
             column="79"/>
     </issue>
 
@@ -17053,7 +17053,7 @@
         errorLine2="                                                            ~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt"
-            line="153"
+            line="154"
             column="61"/>
     </issue>
 
@@ -17064,7 +17064,7 @@
         errorLine2="                                        ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt"
-            line="154"
+            line="155"
             column="41"/>
     </issue>
 
@@ -17075,7 +17075,7 @@
         errorLine2="                                              ~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt"
-            line="279"
+            line="280"
             column="47"/>
     </issue>
 
@@ -17086,7 +17086,7 @@
         errorLine2="                                        ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt"
-            line="280"
+            line="281"
             column="41"/>
     </issue>
 
@@ -17097,7 +17097,7 @@
         errorLine2="                                               ~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt"
-            line="341"
+            line="342"
             column="48"/>
     </issue>
 
@@ -17108,7 +17108,7 @@
         errorLine2="                                                                                                        ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt"
-            line="342"
+            line="343"
             column="105"/>
     </issue>
 
@@ -17119,7 +17119,7 @@
         errorLine2="                                                                                                                  ~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/LocalicaScreen.kt"
-            line="404"
+            line="406"
             column="115"/>
     </issue>
 
@@ -19246,16 +19246,7 @@
             column="69"/>
     </issue>
 
-    <issue
-        id="UnownedSurfaceLifetime"
-        message="Retain the SurfaceNode host until dismissal completes"
-        errorLine1="                translate(delta.x, delta.y) { drawLayer(layer) }"
-        errorLine2="                                              ~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/GlassPopupHome.kt"
-            line="103"
-            column="47"/>
-    </issue>
+
 
     <issue
         id="UnownedSurfaceLifetime"
