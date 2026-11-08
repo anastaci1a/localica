@@ -335,7 +335,9 @@ Playlist detail repeats these actions in its floating overflow control.
 
 Scrolled song lists offer a bottom-center return-to-top control without clearing filters or changing the current list. Home returns its vertical list without resetting the pinned carousel. Active Queue uses its current-occurrence following control instead (below). Return and song-drag cancel controls use the collection utility row above bottom chrome/mini-player.
 
-Queue return and foreground song-drag cancel controls share 12 dp clearance below the circle. Activating Return removes its drawing and input immediately while that return command owns readiness or motion. Cancellation restores normal visibility from the current list state. Return and drag/seek-cancel controls otherwise fade in while rising, continuing through reversals.
+Ordinary return-to-top controls appear only away from the measured list start. They remain while traveling and hide with their normal animation on arrival or manual return. Scoped Search keeps the shared floating surface gap below its return control, inside the native keyboard viewport. List-end clearance includes the measured control and gap.
+
+Queue return and foreground song-drag cancel controls share 12 dp clearance below the circle. Activating Queue Return removes its drawing and input immediately while that command owns readiness or motion. Cancellation restores normal visibility from the current list state. Return and drag/seek-cancel controls otherwise fade in while rising, continuing through reversals.
 
 Seek and slider cancel targets reverse their rise on ordinary release. Release over X fades it in place. Both exits retain the release placement and continue through a new drag without disappearing between frames.
 
