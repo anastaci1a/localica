@@ -97,7 +97,7 @@ class LastFmWorker internal constructor(context: Context, parameters: WorkerPara
             Intent(applicationContext, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
                 .putExtra(LastFmWork.OPEN_SETTINGS, true), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val notification = NotificationCompat.Builder(applicationContext, "lastfm-sync").setSmallIcon(R.drawable.ic_music)
-            .setContentTitle("Syncing Last.fm statistics").setContentText(progress.label).setContentIntent(open)
+            .setContentTitle("Syncing Last.fm statistics").setContentText("${progress.percent}% · ${progress.countSummary(applicationContext.resources)}").setContentIntent(open)
             .setOngoing(true).setOnlyAlertOnce(true)
             .setProgress(100, progress.percent, progress.totalPages == 0 && progress.reportedPercent == null)
             .addAction(0, "Cancel", WorkManager.getInstance(applicationContext).createCancelPendingIntent(id)).build()
