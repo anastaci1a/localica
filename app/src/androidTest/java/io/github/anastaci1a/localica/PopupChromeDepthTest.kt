@@ -136,9 +136,12 @@ class PopupChromeDepthTest {
                         // Preserve both originals and classify by the routing receipt, never by optical pixels.
                         if (before != after) { sample.put("status", "mixed-routing-epoch"); save(); continue }
                         val rootAt = IntArray(2); val modalAt = IntArray(2)
+                        var nativeAlpha = 1f
                         compose.runOnUiThread {
                             activity.decorView.getLocationOnScreen(rootAt); window.decorView.getLocationOnScreen(modalAt)
+                            nativeAlpha = window.attributes.alpha
                         }
+                        sample.put("nativeWindowAlpha", nativeAlpha)
                         val counts = JSONArray()
                         regions.forEach { (name, bounds) ->
                             var count = 0; var bad = 0
@@ -149,7 +152,7 @@ class PopupChromeDepthTest {
                                     val r = root.getPixel(x, y)
                                     val mx = x + rootAt[0] - modalAt[0]; val my = y + rootAt[1] - modalAt[1]
                                     val m = if (mx in 0 until modal.width && my in 0 until modal.height) modal.getPixel(mx, my) else Color.TRANSPARENT
-                                    val a = Color.alpha(m) / 255f
+                                    val a = Color.alpha(m) / 255f * nativeAlpha
                                     val norm = channels.sumOf { (it(b) * it(b)).toDouble() }.toFloat()
                                     val dot = channels.sumOf { (it(b) * (it(m) * a + it(r) * (1f - a))).toDouble() }.toFloat()
                                     val gain = (if (norm == 0f) 1f else dot / norm).coerceIn(1f - .16f * p, 1f)
@@ -161,6 +164,7 @@ class PopupChromeDepthTest {
                                     count++
                                 }
                             counts.put(JSONObject().put("region", name).put("pixels", count).put("changed", bad))
+                            assertTrue("A real interior chrome region is sampled: $name=$bounds", count > 100)
                             if (bad > max(4, count / 1000)) violations += "frame=$frame p=$p $name changed=$bad/$count projected=$after"
                         }
                         sample.put("regions", counts).put("status", "sampled")
