@@ -320,6 +320,7 @@ io.github.anastaci1a.localica.SettingsMotionTest
 io.github.anastaci1a.localica.SettingsOptionsTest
 io.github.anastaci1a.localica.SettingsPathRestorationTest
 io.github.anastaci1a.localica.ShadowContinuityTest
+io.github.anastaci1a.localica.MaterialAreaAtlasTest
 io.github.anastaci1a.localica.SharedKeyedDragRefreshTest
 io.github.anastaci1a.localica.ShuffleApkCompatibilityTest
 io.github.anastaci1a.localica.ShuffleModePlaybackTest
