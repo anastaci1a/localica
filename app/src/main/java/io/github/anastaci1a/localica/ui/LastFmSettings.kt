@@ -31,8 +31,7 @@ internal fun LastFmSettings(controller: LastFmController) {
     val progress = state.progress ?: LastFmProgress(songs = stats?.songs ?: 0, artists = stats?.artists ?: 0,
         albums = stats?.albums ?: 0, reportedPercent = if (saved.snapshot == null) 0 else 100)
     val context = LocalContext.current
-    val lastSync = saved.snapshot?.let { DateUtils.getRelativeDateTimeString(context, it.syncedAt,
-        DateUtils.DAY_IN_MILLIS, DateUtils.WEEK_IN_MILLIS, DateUtils.FORMAT_SHOW_TIME or DateUtils.FORMAT_ABBREV_RELATIVE) }
+    val lastSync = saved.snapshot?.let { lastFmSyncTime(context, it.syncedAt) }
     val focus = LocalSettingsSearchFocus.current
     val highlight = focus?.highlighted
     LaunchedEffect(highlight) { if (highlight == "Data") tab = 2 }
@@ -127,6 +126,7 @@ internal fun LastFmSettings(controller: LastFmController) {
 @Composable
 private fun LastFmConnection(controller: LastFmController, state: LastFmState, onlineAllowed: Boolean, active: Boolean,
     username: String, onUsername: (String) -> Unit, canSync: Boolean) {
+    val context = LocalContext.current
     BooleanPreference("Last.fm", active, controller::setActive)
     Text("Read-only sync sends your username to Last.fm to fetch play counts. It never uploads listening history or audio.", style = MaterialTheme.typography.bodyMedium)
     SettingsEntry("Last.fm username") { GlassTextField(username, onUsername, label = { Text("Last.fm username") }, singleLine = true,
@@ -135,6 +135,10 @@ private fun LastFmConnection(controller: LastFmController, state: LastFmState, o
     SettingsEntry("Sync now") { GlassActionButton(AppIcon.MenuDownload, if (state.syncing) "Syncing…" else if (state.saved.snapshot == null) "Sync now" else "Quick refresh",
         enabled = canSync, modifier = Modifier.testTag("lastfm-sync")) { controller.sync(username) } }
     Text("Wait a minute between syncs. Quick refresh fetches recent changes; Full rescan fetches the complete account.", style = MaterialTheme.typography.bodySmall)
-    SettingsEntry("Last sync") { Text(state.saved.snapshot?.let { "Last sync: ${DateFormat.getDateTimeInstance().format(Date(it.syncedAt))} · ${it.username}" }
+    SettingsEntry("Last sync") { Text(state.saved.snapshot?.let { "Last sync: ${lastFmSyncTime(context, it.syncedAt)} · ${it.username}" }
         ?: "Last sync: never", Modifier.testTag("lastfm-last-sync")) }
 }
+
+private fun lastFmSyncTime(context: android.content.Context, timestamp: Long): CharSequence =
+    DateUtils.getRelativeDateTimeString(context, timestamp, DateUtils.DAY_IN_MILLIS, DateUtils.WEEK_IN_MILLIS,
+        DateUtils.FORMAT_SHOW_TIME or DateUtils.FORMAT_ABBREV_RELATIVE)
