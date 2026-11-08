@@ -1,4 +1,5 @@
 """Contract for the opt-in, owner-only self-hosted prototype path (#592)."""
+import copy
 import os
 from pathlib import Path
 import subprocess
@@ -41,8 +42,14 @@ class SelfHostedPrototypeContract(unittest.TestCase):
             with self.subTest(job=name):
                 if name in ('focused_26', 'focused_36'):
                     self.assertEqual(RUNS_ON, job['runs-on'])
-                    # No repository secret is exposed to a job that may run on the owner's host.
-                    self.assertNotIn('secrets.', yaml.safe_dump(job))
+                    # The bundled read-only key is the sole exception; no signing or machine credentials.
+                    audited = copy.deepcopy(job)
+                    for step in audited['steps']:
+                        env = step.get('env', {})
+                        if 'LASTFM_API_KEY' in env:
+                            self.assertEqual('Compile instrumentation APKs before starting emulator', step['name'])
+                            self.assertEqual('${{ secrets.LASTFM_API_KEY }}', env.pop('LASTFM_API_KEY'))
+                    self.assertNotIn('secrets.', yaml.safe_dump(audited))
                 else:
                     self.assertEqual('ubuntu-24.04', job['runs-on'])
 

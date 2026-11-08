@@ -373,3 +373,4 @@ io.github.anastaci1a.localica.ArtistDataStorageTest
 io.github.anastaci1a.localica.ReleaseSnapshotContractTest
 io.github.anastaci1a.localica.LastFmSettingsTest
 io.github.anastaci1a.localica.LastFmMetadataStorageTest
+io.github.anastaci1a.localica.LastFmEntryContractTest
