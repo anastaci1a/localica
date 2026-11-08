@@ -141,6 +141,7 @@ io.github.anastaci1a.localica.ListBackTest
 io.github.anastaci1a.localica.ListControlsTest
 io.github.anastaci1a.localica.ListDensityGeometryTest
 io.github.anastaci1a.localica.ListDensityRevisionTest
+io.github.anastaci1a.localica.ListMotionClockTest
 io.github.anastaci1a.localica.ListMotionTest
 io.github.anastaci1a.localica.ListReturnControlsTest
 io.github.anastaci1a.localica.ListSearchTest
