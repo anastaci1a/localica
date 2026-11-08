@@ -88,6 +88,27 @@ class FullPartitionTest(unittest.TestCase):
             p.write_text(changed)
             with self.assertRaises(ValueError):partition.plan(self.root,['example.RiskTest'],'26','a'*40)
 
+    def test_reviewed_legacy_capture_is_omitted_only_above_32(self):
+        folder = self.root/'app/src/androidTest/java/io/github/anastaci1a/localica'
+        folder.mkdir(parents=True)
+        method = 'queuedFinalRecordingSurvivesASuspendedThumbnailCaptureAndThenSettles'
+        identity = 'io.github.anastaci1a.localica.BackdropInvalidationTest#' + method
+        path = folder/'BackdropInvalidationTest.kt'
+        original = ('package io.github.anastaci1a.localica\nimport org.junit.Test\n'
+                    'class BackdropInvalidationTest { @Test '
+                    '@androidx.test.filters.SdkSuppress(maxSdkVersion = 32) fun ' + method + '() {} }')
+        path.write_text(original)
+        old = partition.plan(self.root, ['example.RiskTest'], '26', 'a'*40)
+        new = partition.plan(self.root, ['example.RiskTest'], '36', 'a'*40)
+        self.assertIn(identity, old['expected'])
+        self.assertNotIn(identity, new['expected'])
+        self.assertEqual('Reviewed maxSdkVersion=32 annotation', new['sdk_omissions'][0]['reason'])
+        for changed in (original.replace('maxSdkVersion = 32', 'maxSdkVersion = 31'),
+                        original.replace(method, 'differentMethod')):
+            path.write_text(changed)
+            with self.assertRaises(ValueError):
+                partition.plan(self.root, ['example.RiskTest'], '36', 'a'*40)
+
     def test_reviewed_sdk_contracts_excluded_only_below_their_minimum(self):
         folder = self.root/'app/src/androidTest/java/io/github/anastaci1a/localica'
         folder.mkdir(parents=True)

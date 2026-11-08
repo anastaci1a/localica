@@ -75,6 +75,9 @@ def expected_for(root, api):
     # file/method/annotation guards; every other SDK filter fails closed.
     # Optical-detail contracts require runtime shaders; None coverage runs on both APIs.
     sdk_contracts = {
+        'BackdropInvalidationTest': [
+            ('queuedFinalRecordingSurvivesASuspendedThumbnailCaptureAndThenSettles', 32, 'maxSdkVersion'),
+        ],
         'ScopedSearchOpticsTest': [
             ('searchLensRedrawsWhenItsListBackdropArrivesLater', 33),
         ],
@@ -124,15 +127,17 @@ def expected_for(root, api):
                     'Unreviewed SDK-filtered source')
             reviewed = sdk_contracts[cls]
             require(text.count('SdkSuppress') == len(reviewed), 'Additional SDK exclusions require review')
-            for method, minimum in reviewed:
-                annotation = r'@androidx\.test\.filters\.SdkSuppress\(minSdkVersion = ' + str(minimum) + r'\)'
+            for contract in reviewed:
+                method, bound = contract[:2]
+                argument = contract[2] if len(contract) == 3 else 'minSdkVersion'
+                annotation = r'@androidx\.test\.filters\.SdkSuppress\(' + argument + ' = ' + str(bound) + r'\)'
                 declaration = (r'(?:@Test\s+' + annotation + r'|' + annotation + r'\s+@Test)' +
                                r'\s+fun ' + re.escape(method) + r'\(')
                 require(re.search(declaration, text), 'Changed SDK exclusion declaration')
                 sdk_id = 'io.github.anastaci1a.localica.' + cls + '#' + method
                 require(sdk_id in inv['runtime_methods'], 'SDK exclusion lacks source method')
-                if int(api) < minimum:
-                    omissions.append({'id': sdk_id, 'reason': 'Reviewed minSdkVersion=' + str(minimum) + ' annotation',
+                if (int(api) < bound if argument == 'minSdkVersion' else int(api) > bound):
+                    omissions.append({'id': sdk_id, 'reason': 'Reviewed ' + argument + '=' + str(bound) + ' annotation',
                                       'source': path, 'source_sha256': inv['all_source_sha256'][path]})
     return inv, omissions, set(inv['runtime_methods']) - {x['id'] for x in omissions}
 
