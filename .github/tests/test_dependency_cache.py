@@ -1,5 +1,6 @@
 """Contract for the shared Gradle dependency cache and bounded dependency download retries (#681)."""
 import os
+import shlex
 from pathlib import Path
 import subprocess
 import tempfile
@@ -60,12 +61,16 @@ def run(step):
 
 
 def gradle_tasks(command):
-    """Task names from one `./gradlew ...` line; arguments starting with '-' are options."""
-    words = command.split()
-    if words[:2] == WRAPPED.split()[:2]:
-        words = words[2:]
-    assert words and words[0] == './gradlew', command
-    return {word for word in words[1:] if not word.startswith('-')}
+    """Tasks from Gradle invocations, preserving quoted options and ignoring other shell lines."""
+    tasks = set()
+    for line in command.splitlines():
+        words = shlex.split(line)
+        if words[:2] == WRAPPED.split()[:2]:
+            words = words[2:]
+        if words and words[0] == './gradlew':
+            tasks |= {word for word in words[1:] if not word.startswith('-')}
+    assert tasks, command
+    return tasks
 
 
 def compile_steps(job):
@@ -94,6 +99,16 @@ def step_index(job, predicate):
 
 
 class SharedDependencyCacheContract(unittest.TestCase):
+    def test_reader_tasks_exclude_quoted_source_sha_options(self):
+        self.assertEqual({'assembleDebug', 'assembleDebugAndroidTest'}, gradle_tasks(
+            WRAPPED + ' assembleDebug assembleDebugAndroidTest "-PlocalicaSourceSha=$source_sha" --no-daemon'))
+
+    def test_reader_tasks_preserve_each_gradle_invocation_without_shell_checksums(self):
+        self.assertEqual({':lint:test', 'testDebugUnitTest', 'lintDebug', 'assembleRelease'}, gradle_tasks(
+            WRAPPED + " :lint:test -Dorg.gradle.jvmargs='-Xmx2g -Dfile.encoding=UTF-8'\n" +
+            WRAPPED + ' testDebugUnitTest lintDebug assembleRelease --no-daemon\n' +
+            'sha256sum lint/build/libs/lint.jar > app/build/reports/ui-lint/registry-artifact.sha256'))
+
     def test_every_setup_gradle_job_names_the_shared_entry_it_restores(self):
         seen = set()
         for path in sorted(WORKFLOWS.glob('*.yml')):
@@ -155,7 +170,11 @@ class SharedDependencyCacheContract(unittest.TestCase):
                 self.assertLess(setup, snapshot)
                 self.assertLess(snapshot, min(compiles))
                 self.assertEqual(max(compiles) + 1, report, 'the report follows the compile step directly')
-                self.assertIn('!cancelled()', job['steps'][report].get('if', ''))
+                if workflow == 'prototype.yml' and name == 'build':
+                    self.assertEqual('${{ always() }}', job['steps'][report].get('if', ''),
+                                     'the build audit must survive the job deadline')
+                else:
+                    self.assertIn('!cancelled()', job['steps'][report].get('if', ''))
                 if workflow == 'prototype.yml' and name.startswith('focused_'):
                     self.assertEqual(HOSTED_ONLY, job['steps'][snapshot]['if'])
                     self.assertIn(HOSTED_ONLY, job['steps'][report]['if'])
@@ -181,7 +200,9 @@ class SharedDependencyCacheContract(unittest.TestCase):
                 for step in job['steps']:
                     command = run(step)
                     if './gradlew' in command:
-                        self.assertTrue(command.startswith(WRAPPED), command)
+                        for line in command.splitlines():
+                            if './gradlew' in line:
+                                self.assertTrue(line.strip().startswith(WRAPPED), line)
                         self.assertNotIn('connected', command, 'a device test run is never wrapped')
         build = (GITHUB / 'compatibility' / 'build.sh').read_text()
         self.assertIn('cd "$tree" && ' + WRAPPED + ' assembleDebug assembleDebugAndroidTest', build)
