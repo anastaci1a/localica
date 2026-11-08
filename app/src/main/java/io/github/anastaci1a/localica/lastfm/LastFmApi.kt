@@ -1,6 +1,7 @@
 package io.github.anastaci1a.localica.lastfm
 
 import kotlinx.coroutines.*
+import io.github.anastaci1a.localica.network.NetworkConsent
 import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
@@ -14,17 +15,20 @@ fun interface LastFmApi {
 }
 
 /** Read-only, fixed HTTPS endpoint. URLs and transport exceptions never reach diagnostics/UI. */
-class HttpLastFmApi(private val key: String) : LastFmApi {
+class HttpLastFmApi(private val key: String, private val consent: NetworkConsent,
+    private val connectionFactory: (URL) -> HttpURLConnection = { it.openConnection() as HttpURLConnection }) : LastFmApi {
     override suspend fun page(username: String, number: Int): LastFmPage = withContext(Dispatchers.IO) {
+        if (!consent.allowed.value) throw LastFmFailure("Online features are off. Enable them before syncing.")
         check(key.isNotBlank())
         val url = URL("https://ws.audioscrobbler.com/2.0/?method=user.getTopTracks&period=overall&format=json&limit=200&page=$number&user=" +
             URLEncoder.encode(username, "UTF-8") + "&api_key=" + URLEncoder.encode(key, "UTF-8"))
-        val connection = url.openConnection() as HttpURLConnection
+        val connection = connectionFactory(url)
         try {
             connection.requestMethod = "GET"
             connection.instanceFollowRedirects = false
             connection.connectTimeout = 15_000; connection.readTimeout = 20_000
             connection.setRequestProperty("Accept", "application/json")
+            if (!consent.allowed.value) throw LastFmFailure("Online features are off. Enable them before syncing.")
             val status = connection.responseCode
             if (status != 200) throw LastFmFailure(if (status == 429) "Last.fm rate limit reached. Try again later." else "Last.fm could not be reached.", status == 429 || status >= 500)
             val body = connection.inputStream.bufferedReader().use { reader ->
@@ -95,12 +99,13 @@ object LastFmResponses {
 
 /** A failed/cancelled page never publishes a partial snapshot. Every request is paced, including retries. */
 class LastFmSync(private val api: LastFmApi, private val pause: suspend (Long) -> Unit = { delay(it) }) {
-    suspend fun fetch(username: String): List<LastFmTrack> {
+    suspend fun fetch(username: String, mayRequest: () -> Boolean = { true }): List<LastFmTrack> {
         val collected = linkedMapOf<String, LastFmTrack>(); var page = 1; var total = 1; var requests = 0
         while (page <= total) {
             var result: LastFmPage? = null
             for (attempt in 0..2) {
                 if (requests++ > 0) pause(if (attempt == 0) 500 else 2000L * attempt)
+                if (!mayRequest()) throw LastFmFailure("Online features are off. Enable them before syncing.")
                 try { result = api.page(username, page); break }
                 catch (failure: LastFmFailure) { if (!failure.retryable || attempt == 2) throw failure }
             }

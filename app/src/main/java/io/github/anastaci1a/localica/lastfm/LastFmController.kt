@@ -1,6 +1,7 @@
 package io.github.anastaci1a.localica.lastfm
 
 import io.github.anastaci1a.localica.library.LibrarySnapshot
+import io.github.anastaci1a.localica.network.NetworkConsent
 import io.github.anastaci1a.localica.statistics.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
@@ -8,7 +9,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
 class LastFmController(private val store: LastFmStore, private val syncer: LastFmSync,
-    library: Flow<LibrarySnapshot>, val enabled: Boolean,
+    library: Flow<LibrarySnapshot>, val enabled: Boolean, val networkConsent: NetworkConsent,
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
     private val now: () -> Long = System::currentTimeMillis) : PlayCountSource {
     private val mutable = MutableStateFlow(LastFmState())
@@ -22,6 +23,7 @@ class LastFmController(private val store: LastFmStore, private val syncer: LastF
     private var generation = 0L
     private var syncJob: Job? = null
     init {
+        scope.launch { networkConsent.allowed.collect { if (!it) syncJob?.cancel() } }
         scope.launch {
             try { mutable.value = LastFmState(saved = store.read(), loading = false) }
             catch (cancelled: CancellationException) { throw cancelled }
@@ -74,6 +76,7 @@ class LastFmController(private val store: LastFmStore, private val syncer: LastF
             try {
                 val user = username.trim()
                 if (!enabled) throw LastFmFailure("Last.fm is disabled in this build because it has no API key.")
+                if (!networkConsent.allowed.value) throw LastFmFailure("Online features are off. Enable them before syncing.")
                 if (user.isBlank() || user.length > 128 || user.any { it.isWhitespace() || it.isISOControl() })
                     throw LastFmFailure("Enter a valid Last.fm username.")
                 writes.withLock {
@@ -88,9 +91,9 @@ class LastFmController(private val store: LastFmStore, private val syncer: LastF
                     save(next)
                     mutable.value = state.value.copy(syncing = true)
                 }
-                val tracks = syncer.fetch(user)
+                val tracks = syncer.fetch(user) { networkConsent.allowed.value }
                 writes.withLock {
-                    if (generation == token) save(state.value.saved.copy(snapshot = LastFmSnapshot(user, now(), tracks)))
+                    if (generation == token && networkConsent.allowed.value) save(state.value.saved.copy(snapshot = LastFmSnapshot(user, now(), tracks)))
                 }
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (failure: Exception) {

@@ -16,6 +16,11 @@ import org.junit.rules.RuleChain
 import java.io.File
 
 class LastFmSettingsTest {
+    private fun consent(initial: Boolean = true) = object : io.github.anastaci1a.localica.network.NetworkConsent {
+        override val allowed = MutableStateFlow(initial)
+        override suspend fun setAllowed(value: Boolean) { allowed.value = value }
+    }
+
     private val compose = localicaComposeRule()
     @get:Rule val rules: RuleChain = RuleChain.outerRule(FreshSystemIme()).around(compose)
     private val song = Track("song", "Song", "Artist", "Album", 1000, "song.mp3", "song.mp3")
@@ -30,7 +35,7 @@ class LastFmSettingsTest {
         val controller = LastFmController(store, LastFmSync(LastFmApi { user, _ ->
             assertEquals("fixture-user", user)
             LastFmPage(1, 1, listOf(LastFmTrack("Artist", "Song", 42), LastFmTrack("Artist", "Ambiguous", 9), LastFmTrack("Absent", "Unmatched", 2)))
-        }, {}), flowOf(snapshot), true, scope, { 100_000 })
+        }, {}), flowOf(snapshot), true, consent(), scope, { 100_000 })
         val local = ListeningStatistics(mapOf("song" to 7L), mapOf("playlist" to 3L))
         try {
             compose.setContent { LocalicaTheme {
@@ -67,7 +72,7 @@ class LastFmSettingsTest {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         var calls = 0
         val controller = LastFmController(FileLastFmStore(file), LastFmSync(LastFmApi { _, _ -> calls++; error("No network") }, {}),
-            flowOf(LibrarySnapshot()), false, scope)
+            flowOf(LibrarySnapshot()), false, consent(), scope)
         try {
             compose.setContent { LocalicaTheme {
                 FolderSettings(LibraryUiState(loading = false), {}, {}, {}, initialCategory = "Last.fm", lastFmContent = { LastFmSettings(controller) })
@@ -80,6 +85,30 @@ class LastFmSettingsTest {
             controller.sync("fixture-user")
             compose.waitUntil(5000) { controller.state.value.problem?.contains("disabled") == true }
             assertEquals(0, calls)
+        } finally { scope.cancel(); file.delete() }
+    }
+
+    @Test fun onlineConsentOffDisablesSyncAndNeverCallsTheApi() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val file = File(context.cacheDir, "lastfm-consent-off-" + java.util.UUID.randomUUID() + ".json")
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        val calls = java.util.concurrent.atomic.AtomicInteger()
+        val controller = LastFmController(FileLastFmStore(file), LastFmSync(LastFmApi { _, _ ->
+            calls.incrementAndGet(); error("No network allowed")
+        }, {}), flowOf(LibrarySnapshot()), true, consent(false), scope)
+        try {
+            compose.setContent { LocalicaTheme {
+                FolderSettings(LibraryUiState(loading = false), {}, {}, {}, initialCategory = "Last.fm",
+                    lastFmContent = { LastFmSettings(controller) })
+            } }
+            compose.onNodeWithText("Online features are off. Enable them to sync.").assertIsDisplayed()
+            compose.onNode(SemanticsMatcher.keyIsDefined(SemanticsProperties.EditableText) and hasAnyAncestor(hasTestTag("lastfm-username")),
+                useUnmergedTree = true).assertIsNotEnabled()
+            compose.onNodeWithTag("lastfm-sync").assertIsNotEnabled()
+            controller.sync("fixture-user")
+            compose.waitUntil(5000) { controller.state.value.problem?.contains("Online features are off") == true }
+            assertEquals(0, calls.get())
+            assertNull(controller.state.value.saved.snapshot)
         } finally { scope.cancel(); file.delete() }
     }
 }
