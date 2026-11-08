@@ -107,11 +107,11 @@ class SettingsOptionsTest {
         }
     }
 
-    @Test fun settingsSearchIsAvailableOnEveryPageAndScannerLinksReachSharedFolderPage() {
+    @Test fun rootSettingsSearchReachesScannerAndItsSharedFolderPages() {
         compose.setContent { LocalicaTheme { FolderSettings(LibraryUiState(loading = false), {}, {}, {}) } }
         compose.onNode(hasSetTextAction()).performTextInput("scanner")
         compose.onNodeWithText("Scanner").performClick()
-        compose.onNodeWithContentDescription("Search settings input").assertExists().assert(SemanticsMatcher.expectValue(SemanticsProperties.EditableText, AnnotatedString("")))
+        compose.onNodeWithContentDescription("Search settings input").assertDoesNotExist()
         compose.onNodeWithText("Folders to scan").assertDoesNotExist()
         compose.onNodeWithText("Metadata read failures").performScrollTo().performClick()
         compose.onNodeWithText("No metadata read failures.").assertIsDisplayed()

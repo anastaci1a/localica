@@ -36,7 +36,7 @@ class LibraryFilterTest {
             compose.onNodeWithText("Songs").performTouchInput { longClick() }
             compose.onNodeWithText("Edit library filters and order").performClick()
             compose.onNodeWithText("Library filters").assertIsDisplayed()
-            compose.onNodeWithText("Search settings").assertIsDisplayed()
+            compose.onNodeWithText("Search settings").assertDoesNotExist()
             compose.onNode(isToggleable() and hasText("Artists")).performScrollTo().performClick()
             compose.onNodeWithContentDescription("Close settings").performClick()
             compose.waitUntil(5000) { compose.onAllNodesWithText("Singer").fetchSemanticsNodes().isNotEmpty() }
