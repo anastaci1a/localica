@@ -117,6 +117,7 @@ io.github.anastaci1a.localica.IconPackLibraryRegressionTest
 io.github.anastaci1a.localica.IconPackLibraryTest
 io.github.anastaci1a.localica.IconPackResolverTest
 io.github.anastaci1a.localica.IconPackTest
+io.github.anastaci1a.localica.IconViewerControlParityTest
 io.github.anastaci1a.localica.ImageChooserTest
 io.github.anastaci1a.localica.IncompleteScanTest
 io.github.anastaci1a.localica.InheritedInformationPreferencesTest
@@ -277,6 +278,7 @@ io.github.anastaci1a.localica.RetainedLayerReadbackTest
 io.github.anastaci1a.localica.ReverseOrderPersistenceTest
 io.github.anastaci1a.localica.RevertIconTest
 io.github.anastaci1a.localica.RevertOrderPersistenceTest
+io.github.anastaci1a.localica.RotationIconTest
 io.github.anastaci1a.localica.RowMenuRevealTest
 io.github.anastaci1a.localica.RowTextScrollTest
 io.github.anastaci1a.localica.ScopedSearchHistoryTest
