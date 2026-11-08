@@ -75,6 +75,10 @@ def expected_for(root, api):
     # file/method/annotation guards; every other SDK filter fails closed.
     # Optical-detail contracts require runtime shaders; None coverage runs on both APIs.
     sdk_contracts = {
+        # Independent HardwareRenderer field conformance; the software API26 oracle remains covered separately.
+        'NativeShadowFieldConformanceTest': [
+            ('independentUncutFieldMatchesBareNativeAtBothOrigins', 29),
+        ],
         'ScopedSearchOpticsTest': [
             ('searchLensRedrawsWhenItsListBackdropArrivesLater', 33),
         ],

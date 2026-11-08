@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.unit.Dp
 import io.github.anastaci1a.localica.ui.engine.*
+import kotlinx.coroutines.flow.first
 
 @Stable interface SheetState { val expanded: Boolean; val expansion: ExpansionView; val contact: SheetContact; fun expand(); fun collapse() }
 @Stable interface SheetScope { val expanded: Boolean; val navigationInset: Dp }
@@ -22,11 +23,14 @@ private class SheetHandle(override val expansion: ExpansionView, initial: Boolea
     val range = remember(key) { maxOf(1f, 4f * basis.edgeTravelPx) }
     val frame = rememberMotionRect(key to "frame", if (initiallyExpanded) basis.endBounds else basis.startBounds, EdgeRanges(range, range, range, range))
     val handle = remember(owner) { SheetHandle(owner, initiallyExpanded) }
-    val requested = handle.requested
     val clock = LocalUiClock.current
+    LaunchedEffect(handle) {
+        val requests = snapshotFlow { handle.requested }
+        var requested = initiallyExpanded
+        while (true) { requested = requests.first { it != requested }; owner.target(requested) }
+    }
     SideEffect {
         owner.bind(frame); owner.setBasis(basis)
-        if (owner.expanded != requested) owner.target(requested)
         handle.contact = SheetContact(onDragStart = { owner.canContact.also { if (it) owner.contactBegin(clock.stampNow) } },
             onDrag = { owner.contactMove(it, clock.stampNow) },
             onRelease = { owner.contactRelease(it, clock.stampNow).also { decision -> handle.requested = decision.expanded } },

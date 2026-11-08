@@ -523,7 +523,7 @@ internal class UiPolicyDetector : Detector(), SourceCodeScanner {
             node.accept(object : AbstractUastVisitor() {
                 override fun visitCallExpression(call: UCallExpression): Boolean {
                     val kind = mutableKind(call.receiverType)
-                    if (kind != null && call.methodName in mutators.getValue(kind) ||
+                    if (kind != null && call.methodName in mutators.getValue(kind) && !owned(call.receiver, call, kind) ||
                         call.methodName in setOf("animateTo", "animateBy") && symbolName(call.resolve()).orEmpty().startsWith("androidx.compose.animation.")) result = true
                     return false
                 }
