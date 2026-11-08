@@ -19,6 +19,7 @@ io.github.anastaci1a.localica.ArtworkCacheTest
 io.github.anastaci1a.localica.ArtworkCropLoadingTest
 io.github.anastaci1a.localica.ArtworkCropTest
 io.github.anastaci1a.localica.ArtworkEditRestorationTest
+io.github.anastaci1a.localica.ImageChooserLateRecentTest
 io.github.anastaci1a.localica.ArtworkGrantsTest
 io.github.anastaci1a.localica.ArtworkLoadingFallbackTest
 io.github.anastaci1a.localica.ArtworkOccurrenceTransitionTest
