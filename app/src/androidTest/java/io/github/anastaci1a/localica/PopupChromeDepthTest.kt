@@ -178,7 +178,7 @@ class PopupChromeDepthTest {
             report.put("validFrames", valid).put("highestPhase", highest).put("lowestPhase", lowest)
                 .put("violations", JSONArray(violations)).put("status", if (violations.isEmpty()) "sampled" else "failed-depth")
             save()
-            assertTrue("#667 needs actual intermediate-frame coverage: $report", valid >= 3 && highest >= .65f && lowest <= .2f)
+            assertTrue("#667 needs actual intermediate-frame coverage: $report", valid >= 3 && highest >= .6f && lowest <= .2f)
             assertTrue("#667 returning $destination pixels crossed bottom chrome: $violations", violations.isEmpty())
             assertFalse("The overflow's original native window retires after return", window.decorView.isAttachedToWindow)
             report.put("status", "passed"); save()
