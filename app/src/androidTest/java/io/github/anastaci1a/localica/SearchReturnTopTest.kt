@@ -15,6 +15,7 @@ import io.github.anastaci1a.localica.library.*
 import io.github.anastaci1a.localica.navigation.*
 import io.github.anastaci1a.localica.playlist.PlaylistState
 import io.github.anastaci1a.localica.ui.*
+import io.github.anastaci1a.localica.queue.*
 import org.junit.Assert.*
 import org.junit.After
 import org.junit.Rule
@@ -27,11 +28,14 @@ class SearchReturnTopTest {
     private val songs = (0..79).map { Track("return-search:$it", "Song ${it.toString().padStart(3, '0')}",
         album = "Return album", artist = "Return artist", fileName = "$it.mp3", relativePath = "$it.mp3") }
     private val route = BrowseRoute(MainTab.Songs, key = "return-search-690")
-    private var originalStyle: BrowseStyle? = null
-    private var originalOverride = false
+    private val originalStyles = linkedMapOf<BrowseRoute, Pair<BrowseStyle, Boolean>>()
     @After fun restorePreferences() {
-        originalStyle?.let { BrowsePreferences(instrumentation.targetContext).write(route, it, originalOverride) }
+        val prefs = BrowsePreferences(instrumentation.targetContext)
+        originalStyles.forEach { (route, saved) -> prefs.write(route, saved.first, saved.second) }
     }
+    private var foldersEmpty by mutableStateOf(false)
+    private var queueState by mutableStateOf(QueueUiState(loading = false))
+    private val scrollProbe = BrowseScrollFrameProbe()
     private var sample: SearchMorphSample? = null
     private var rtl by mutableStateOf(false)
     private var currentRoute by mutableStateOf(route)
@@ -44,18 +48,21 @@ class SearchReturnTopTest {
 
     private fun fixture(popup: Boolean) {
         val prefs = BrowsePreferences(instrumentation.targetContext)
-        originalStyle = prefs.read(route)
-        originalOverride = prefs.overridden(route)
-        prefs.write(route, BrowseStyle(quickSearch = popup), false)
+        for (target in listOf(route, currentRoute).distinct()) {
+            originalStyles[target] = prefs.read(target) to prefs.overridden(target)
+            prefs.write(target, BrowseStyle(quickSearch = popup), false)
+        }
         compose.setContent { LocalicaTheme {
             CompositionLocalProvider(LocalSearchMorphObserver provides { sample = it },
-                LocalLayoutDirection provides if (rtl) LayoutDirection.Rtl else LayoutDirection.Ltr) {
+                LocalLayoutDirection provides if (rtl) LayoutDirection.Rtl else LayoutDirection.Ltr,
+                LocalBrowseScrollFrameProbe provides scrollProbe) {
                 BrowserScreen(LibraryUiState(LibrarySnapshot(
-                    folders = listOf(FolderSelection("return-search-root", "Music")), tracks = songs), loading = false, problem = libraryProblem),
-                    PlaylistState(loading = false), currentRoute, {}, {}, {}, { _, _, _ -> }, null, null, true, false)
+                    folders = if (foldersEmpty) emptyList() else listOf(FolderSelection("return-search-root", "Music")), tracks = songs), loading = false, problem = libraryProblem),
+                    PlaylistState(loading = false), currentRoute, {}, {}, {}, { _, _, _ -> }, null, null, true, false, queueState = queueState)
             }
         } }
-        compose.waitUntil(5000) { compose.onAllNodesWithTag("media-return-search:0").fetchSemanticsNodes().isNotEmpty() }
+        val first = queueState.library.queues.firstOrNull { it.id == currentRoute.collection?.id }?.entries?.firstOrNull()?.id ?: "return-search:0"
+        compose.waitUntil(5000) { compose.onAllNodesWithTag("media-$first").fetchSemanticsNodes().isNotEmpty() }
         if (popup) {
             compose.onNodeWithTag("list-search-pill").performClick()
             compose.awaitExpectedWindowFocus(compose.onNodeWithTag("list-search-popup"))
@@ -221,7 +228,13 @@ class SearchReturnTopTest {
         fun bounds(): Pair<Rect, Rect> {
             val browser = list.fetchSemanticsNode().boundsInRoot
             val header = compose.onNodeWithTag("browse-full-span", true).fetchSemanticsNode().boundsInRoot
-            evidence += "rtl=$rtl route=$currentRoute browser=$browser header=$header"
+            val serial = scrollProbe.serial
+            compose.runOnIdle { scrollProbe.request++ }
+            compose.waitUntil(5000) { scrollProbe.serial > serial }
+            val frame = requireNotNull(scrollProbe.frame)
+            assertEquals("Receipt width equals the actual grid viewport", frame.viewportWidth, frame.noticeWidth)
+            assertEquals("Required notice width equals that viewport", frame.viewportWidth.toFloat(), header.width, 0f)
+            evidence += "rtl=$rtl route=$currentRoute browser=$browser header=$header frame=$frame"
             return browser to header
         }
         fun unchanged(expected: Pair<Rect, Rect>) {
@@ -252,6 +265,28 @@ class SearchReturnTopTest {
             val directory = nativeEvidenceDirectory("search-return-top", instrumentation.targetContext.getExternalFilesDir(null))
             java.io.File(directory, "measured-extents-api${android.os.Build.VERSION.SDK_INT}.txt")
                 .writeText(evidence.joinToString("\n", postfix = "\n"))
+        }
+    }
+
+    @Test fun queueAndSongRoutesMeasureTheActualAddFoldersVisibility() {
+        val queue = QueueEdits.create(songs, 0, "Notice route")
+        queueState = QueueUiState(QueueLibrary(listOf(queue), queue.id), loading = false)
+        val queueRoute = BrowseRoute(MainTab.Queues, MediaRef(MediaKind.Queue, queue.id), key = "notice-queue")
+        currentRoute = queueRoute
+        foldersEmpty = true
+        fixture(false)
+        arrow.assertDoesNotExist()
+        compose.onNodeWithText("Add music folders").assertDoesNotExist()
+        repeat(2) {
+            compose.runOnIdle { currentRoute = route }
+            compose.waitUntil(5000) { compose.onAllNodesWithText("Add music folders").fetchSemanticsNodes().isNotEmpty() }
+            list.performScrollToIndex(1)
+            arrow.assertIsDisplayed()
+            compose.runOnIdle { currentRoute = queueRoute }
+            compose.waitUntil(5000) { compose.onAllNodesWithTag("media-" + queue.entries.first().id).fetchSemanticsNodes().isNotEmpty() }
+            compose.waitForIdle()
+            arrow.assertDoesNotExist()
+            compose.onNodeWithText("Add music folders").assertDoesNotExist()
         }
     }
 
