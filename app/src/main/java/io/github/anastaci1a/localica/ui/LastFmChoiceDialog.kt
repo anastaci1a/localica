@@ -5,27 +5,42 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import io.github.anastaci1a.localica.ui.layout.SettingsStack
+import io.github.anastaci1a.localica.ui.spec.Space
 
-/** Required config distinguishes this overload; existing ChoiceDialog calls remain unchanged. */
 internal data class ChoiceDialogActions(val confirm: String, val dismiss: String, val enabled: Boolean = true)
 
+/** The original single-select dialog is unchanged. This decision stages one field value until confirmed. */
 @Composable
 internal fun <T> ChoiceDialog(actions: ChoiceDialogActions, title: String, choices: List<T>, selected: T?,
     label: (T) -> String, onDismiss: () -> Unit, onSelect: (T) -> Unit,
     onDraft: (T) -> Unit = {}, header: @Composable () -> Unit = {},
-    footer: @Composable () -> Unit = {}, onCancel: () -> Unit = onDismiss) {
+    footer: @Composable () -> Unit = {}, onCancel: () -> Unit = onDismiss,
+    isValue: (T) -> Boolean = { true }) {
     var draft by remember(choices, selected) { mutableStateOf(selected) }
+    var choosing by remember { mutableStateOf(false) }
+    val anchor = rememberGlassAnchor()
+    fun valid(value: T?): Boolean = value != null && value in choices && isValue(value)
     GlassAlertDialog(onDismissRequest = onDismiss, title = { Text(title) }, text = {
         val scroll = rememberScrollState()
-        SettingsStack(Modifier.fillMaxWidth().scrollEdgeFade(scroll).controlVerticalScroll(scroll)) {
+        SettingsStack(Modifier.fillMaxWidth().scrollEdgeFade(scroll).controlVerticalScroll(scroll), gap = Space.Base) {
             header()
-            GlassChoices(choices.map(label), choices.indexOf(draft)) { index ->
-                draft = choices[index]; onDraft(choices[index])
-            }
+            SettingsLink(draft?.takeIf { valid(it) }?.let(label) ?: "Choose…", anchor = anchor,
+                enabled = actions.enabled && choices.isNotEmpty(), modifier = Modifier.testTag("lastfm-match-field")) { choosing = true }
             footer()
         }
     }, confirmButton = {
-        GlassActionButton(AppIcon.ActionSave, actions.confirm, enabled = actions.enabled && draft != null && draft in choices) { draft?.takeIf { actions.enabled && it in choices }?.let(onSelect) }
+        GlassActionButton(true, AppIcon.ActionCheck, actions.confirm, enabled = actions.enabled && valid(draft)) {
+            draft?.takeIf { actions.enabled && valid(it) }?.let(onSelect)
+        }
     }, dismissButton = { GlassActionButton(AppIcon.ActionForward, actions.dismiss, onClick = onCancel) })
+    if (choosing) CompositionLocalProvider(LocalGlassOrigin provides anchor) {
+        ChoiceDialog<T?>("Select match", choices, draft, { it?.let(label).orEmpty() }, { choosing = false }) { next ->
+            if (actions.enabled && next != null && next in choices) {
+                draft = next.takeIf(isValue)
+                onDraft(next)
+            }
+        }
+    }
 }

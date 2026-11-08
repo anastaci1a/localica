@@ -86,12 +86,14 @@ class LastFmWorkerTest {
         val file = File(context.cacheDir, "lastfm-cancel-${UUID.randomUUID()}.json")
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO); val consent = Consent()
         var calls = 0
+        val secondEntered = CompletableDeferred<Unit>()
         try {
             FileLastFmStore(file).write(old)
             val controller = controller(file, scope, consent, LastFmApi { _, page -> calls++
-                if (page == 1) LastFmPage(1, 2, listOf(LastFmTrack("New", "First", 99))) else awaitCancellation() }, 100_000)
+                if (page == 1) LastFmPage(1, 2, listOf(LastFmTrack("New", "First", 99))) else { secondEntered.complete(Unit); awaitCancellation() } }, 100_000)
             val work = async(Dispatchers.IO) { worker(controller, UUID.randomUUID(), CopyOnWriteArrayList(), CopyOnWriteArrayList()).doWork() }
             withTimeout(5000) { controller.state.first { it.progress?.page == 1 } }
+            withTimeout(5000) { secondEntered.await() }
             consent.setAllowed(false)
             withTimeout(5000) { work.join() }
             assertTrue(work.isCancelled)

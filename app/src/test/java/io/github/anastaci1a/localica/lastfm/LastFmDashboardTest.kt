@@ -10,7 +10,8 @@ class LastFmDashboardTest {
     @Test fun everyGroupRetainsRemoteIdentityCandidatesAndReasonForManualRepair() {
         val matches = LastFmMatches(emptyMap(), listOf(LastFmReview(remote, listOf(song), "Review reason")),
             editions = listOf(LastFmReview(remote, listOf(song, song.copy(id = "copy")), "Edition reason")),
-            resolutions = listOf(LastFmResolution(remote, listOf(song), LastFmMatchTier.PROBABLE, "Artist parsed from title", 75)),
+            resolutions = listOf(LastFmResolution(remote, listOf(song), LastFmMatchTier.PROBABLE, "Artist parsed from title", 75),
+                LastFmResolution(remote, listOf(song), LastFmMatchTier.CLEAR, "Exact recording", 100)),
             unmatched = listOf(remote))
         LastFmGroup.entries.forEach { group ->
             assertEquals(remote, matches.rows(group).single().remote)

@@ -30,57 +30,78 @@ internal fun LastFmSettings(controller: LastFmController) {
     val stats = remember(saved.snapshot) { saved.snapshot?.accountStats() }
     val progress = state.progress ?: LastFmProgress(songs = stats?.songs ?: 0, artists = stats?.artists ?: 0,
         albums = stats?.albums ?: 0, reportedPercent = if (saved.snapshot == null) 0 else 100)
+    val lastSync = saved.snapshot?.let { DateFormat.getDateTimeInstance().format(Date(it.syncedAt)) }
     val focus = LocalSettingsSearchFocus.current
     val highlight = focus?.highlighted
     LaunchedEffect(highlight) { if (highlight == "Data") tab = 2 }
     SettingsEntry("Listening statistics") {
-        LiquidGlassSurface(Modifier.fillMaxWidth(), cornerRadius = settingsReviewRadius(), pressFeedback = false) {
-            LastFmDashboardHeader(progress, state.syncing) {
-                Text("${progress.songs} songs · ${progress.artists} artists · ${progress.albums} known albums",
-                    Modifier.testTag(if (state.syncing) "lastfm-progress" else "lastfm-archive-summary"), style = MaterialTheme.typography.bodySmall)
-                if (state.syncing) GlassActionButton(AppIcon.ActionClose, "Stop sync", onClick = controller::cancelSync)
+        SettingsStack(gap = Space.Base) {
+            LiquidGlassSurface(Modifier.fillMaxWidth().testTag("lastfm-dashboard-card"), cornerRadius = settingsReviewRadius(), pressFeedback = false) {
+                SettingsStack {
+                    LastFmDashboardHeader(progress, state.syncing) {
+                        Text("${progress.songs} songs · ${progress.artists} artists · ${progress.albums} known albums",
+                            Modifier.testTag(if (state.syncing) "lastfm-progress" else "lastfm-archive-summary"), style = MaterialTheme.typography.bodySmall)
+                        Text(if (lastSync == null) "Last sync: never" else "Last sync: $lastSync",
+                            Modifier.testTag("lastfm-dashboard-last-sync"), style = MaterialTheme.typography.bodySmall)
+                    }
+                    GlassActionRow {
+                        if (state.syncing) GlassActionButton(AppIcon.ActionClose, "Stop sync", onClick = controller::cancelSync)
+                        else {
+                            GlassActionButton(AppIcon.MenuDownload, "Sync now", enabled = canSync, modifier = Modifier.testTag("lastfm-dashboard-sync")) { controller.sync(username) }
+                            GlassActionButton(AppIcon.MenuDownload, "Full rescan", enabled = canSync && saved.snapshot != null,
+                                modifier = Modifier.testTag("lastfm-dashboard-full-rescan")) { controller.sync(username, fullRescan = true) }
+                        }
+                    }
+                }
             }
-        }
-        LiquidGlassSurface(Modifier.fillMaxWidth(), cornerRadius = settingsReviewRadius(), pressFeedback = false) {
-            val share = if (saved.snapshot?.tracks.isNullOrEmpty()) "—" else "${100L * matches.matched / saved.snapshot!!.tracks.size}%"
-            LastFmStatsGrid(listOf("Scrobbles" to (stats?.scrobbles?.toString() ?: "—"), "Songs" to (stats?.songs?.toString() ?: "—"),
-                "Artists" to (stats?.artists?.toString() ?: "—"), "Albums" to (stats?.albums?.toString() ?: "—"), "Matched share" to share))
+            LiquidGlassSurface(Modifier.fillMaxWidth().testTag("lastfm-stats-card"), cornerRadius = settingsReviewRadius(), pressFeedback = false) {
+                val share = if (saved.snapshot?.tracks.isNullOrEmpty()) "—" else "${100L * matches.matched / saved.snapshot!!.tracks.size}%"
+                LastFmStatsGrid(listOf("Scrobbles" to (stats?.scrobbles?.toString() ?: "—"), "Songs" to (stats?.songs?.toString() ?: "—"),
+                    "Artists" to (stats?.artists?.toString() ?: "—"), "Albums" to (stats?.albums?.toString() ?: "—"), "Matched share" to share))
+            }
         }
     }
     SettingsEntry("Data") {
-        GlassChoices(listOf("Overview", "Matches", "Data"), tab, horizontal = true) { tab = it }
+        GlassChoices(listOf("Overview", "Matches", "Data"), tab, Modifier.testTag("lastfm-tabs"), horizontal = true) { tab = it }
     }
+    if (!controller.enabled) Text("Last.fm is disabled in this build: no bundled API key.")
+    if (!onlineAllowed) Text("Online features are off. Enable them to sync.")
+    if (!active) Text("Last.fm is off. The saved archive and match choices are kept on this device.")
     state.problem?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.testTag("lastfm-problem")) }
     when (tab) {
         0 -> {
-            SettingsEntry("Review matches") { SettingsHeading("Matching") }
-            Text("${matches.matched} matched · ${matches.review.size} to review", Modifier.testTag("lastfm-review-summary"))
-            val segments = listOf(
-                LastFmMatchSegment(LastFmGroup.MATCHED.name, "Matched", matches.clearCount, Color(0xFF71C9A2)),
-                LastFmMatchSegment(LastFmGroup.JUDGMENTS.name, "Judgment calls", matches.judgments.size, Color(0xFFE6BC64)),
-                LastFmMatchSegment(LastFmGroup.REVIEW.name, "Needs review", matches.review.size, Color(0xFFFF7B70)),
-                LastFmMatchSegment(LastFmGroup.ABSENT.name, "Not in your library", matches.notInLibrary, Color(0xFF8E91A7)))
-            LastFmMatchingBar(segments)
-            segments.forEach { segment -> key(segment.id) {
-                val anchor = rememberGlassAnchor()
-                SettingsCandidateRow(Modifier, indicator = { Text("●", color = segment.color) }, label = { modifier ->
-                    SettingsEntryHost(modifier) {
-                        SettingsLink(segment.label, "${segment.count} songs", anchor = anchor) { group = LastFmGroup.valueOf(segment.id); tab = 1 }
-                    }
-                })
-            } }
-            SettingsLink("Auto-matched editions (${matches.editions.size})", "Same recording on several albums · count on every copy") { group = LastFmGroup.EDITIONS; tab = 1 }
+            if (saved.snapshot != null) {
+                SettingsEntry("Review matches") { SettingsHeading("Matching") }
+                SettingsTextLine(LocalSettingsRowMetrics.current.textStart) { modifier ->
+                    Text("${matches.matched} matched · ${matches.review.size} to review", modifier.testTag("lastfm-review-summary"))
+                }
+                val segments = listOf(
+                    LastFmMatchSegment(LastFmGroup.MATCHED.name, "Matched", matches.clearCount, Color(0xFF71C9A2)),
+                    LastFmMatchSegment(LastFmGroup.JUDGMENTS.name, "Judgment calls", matches.judgments.size, Color(0xFFE6BC64)),
+                    LastFmMatchSegment(LastFmGroup.REVIEW.name, "Needs review", matches.review.size, Color(0xFFFF7B70)),
+                    LastFmMatchSegment(LastFmGroup.ABSENT.name, "Not in your library", matches.notInLibrary, Color(0xFF8E91A7)))
+                LastFmMatchingBar(segments)
+                segments.forEach { segment -> key(segment.id) {
+                    val anchor = rememberGlassAnchor()
+                    SettingsLink(markerColor = segment.color, title = segment.label, summary = "${segment.count} songs", anchor = anchor,
+                        modifier = Modifier.testTag("lastfm-legend-${segment.id}")) { group = LastFmGroup.valueOf(segment.id); tab = 1 }
+                } }
+                SettingsLink("Auto-matched editions (${matches.editions.size})", "Same recording on several albums · count on every copy") { group = LastFmGroup.EDITIONS; tab = 1 }
+            }
             LastFmConnection(controller, state, onlineAllowed, active, username, { username = it }, canSync)
         }
         1 -> {
             ChoicePreference("Match group", group, LastFmGroup.entries, { it.label }, popup = true) { group = it }
-            LastFmReviewList(matches, group, library.tracks, controller::mapAndAwait, controller::undoJudgment)
+            LastFmReviewList(matches, group, library.tracks, controller::mapAndAwait, { key ->
+                if (group == LastFmGroup.ABSENT) controller.resetMapping(key) else controller.undoJudgment(key)
+            }, saved.mappings)
         }
         2 -> {
             SettingsHeading("Account and data")
             LastFmConnection(controller, state, onlineAllowed, active, username, { username = it }, canSync)
             BooleanPreference("Keep syncing in the background", saved.keepSyncingInBackground, controller::keepSyncingInBackground)
             Text("A sync you start can finish after you leave Localica. Its notification shows progress and lets you stop it.", style = MaterialTheme.typography.bodySmall)
+            LastFmNotificationPreference()
             SettingsEntry("Use Last.fm counts") {
                 if (controller.enabled && onlineAllowed && active && saved.snapshot != null) BooleanPreference("Use Last.fm counts", saved.useCounts, controller::useCounts)
                 else Text("Use Last.fm counts: off")
@@ -105,10 +126,7 @@ internal fun LastFmSettings(controller: LastFmController) {
 private fun LastFmConnection(controller: LastFmController, state: LastFmState, onlineAllowed: Boolean, active: Boolean,
     username: String, onUsername: (String) -> Unit, canSync: Boolean) {
     BooleanPreference("Last.fm", active, controller::setActive)
-    if (!active) Text("Last.fm is off. The saved archive and match choices are kept on this device.")
     Text("Read-only sync sends your username to Last.fm to fetch play counts. It never uploads listening history or audio.", style = MaterialTheme.typography.bodyMedium)
-    if (!controller.enabled) Text("Last.fm is disabled in this build: no bundled API key.")
-    if (!onlineAllowed) Text("Online features are off. Enable them to sync.")
     SettingsEntry("Last.fm username") { GlassTextField(username, onUsername, label = { Text("Last.fm username") }, singleLine = true,
         enabled = controller.enabled && onlineAllowed && active && !state.loading && !state.syncing,
         modifier = Modifier.fillMaxWidth().testTag("lastfm-username")) }

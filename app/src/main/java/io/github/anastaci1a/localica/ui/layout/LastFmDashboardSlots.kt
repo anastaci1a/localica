@@ -2,11 +2,14 @@ package io.github.anastaci1a.localica.ui.layout
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.clip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
@@ -34,10 +37,10 @@ internal fun LastFmDashboardHeader(progress: LastFmProgress?, syncing: Boolean, 
             Canvas(Modifier.fillMaxSize()) {
                 val stroke = spaces.getValue(Space.Tight).toPx()
                 val inset = stroke / 2
-                drawArc(track, -90f, 360f, false, Offset(inset, inset), Size(size.width - stroke, size.height - stroke), style = Stroke(stroke))
-                drawArc(accent, -90f, 360f * percent / 100, false, Offset(inset, inset), Size(size.width - stroke, size.height - stroke), style = Stroke(stroke))
+                drawArc(track, -90f, 360f, false, Offset(inset, inset), Size(size.width - stroke, size.height - stroke), style = Stroke(stroke, cap = StrokeCap.Round))
+                drawArc(accent, -90f, 360f * percent / 100, false, Offset(inset, inset), Size(size.width - stroke, size.height - stroke), style = Stroke(stroke, cap = StrokeCap.Round))
             }
-            Text("$percent%", style = MaterialTheme.typography.titleMedium)
+            Text("$percent%", Modifier.testTag("lastfm-sync-percent"), style = MaterialTheme.typography.bodyMedium)
         }
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(spaces.getValue(Space.Tight))) {
             Text(if (syncing) "Syncing…" else "Last.fm archive", style = MaterialTheme.typography.titleMedium)
@@ -53,10 +56,12 @@ internal fun LastFmStatsGrid(stats: List<Pair<String, String>>) {
         verticalArrangement = Arrangement.spacedBy(spaces.getValue(Space.Base))) {
         stats.chunked(3).forEach { row ->
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(spaces.getValue(Space.Compact))) {
-                row.forEach { (label, value) ->
+                repeat(3) { index ->
                     Column(Modifier.weight(1f)) {
-                        Text(value, style = MaterialTheme.typography.titleLarge)
-                        Text(label, style = MaterialTheme.typography.bodySmall)
+                        row.getOrNull(index)?.let { (label, value) ->
+                            Text(value, style = MaterialTheme.typography.titleLarge)
+                            Text(label, style = MaterialTheme.typography.bodySmall)
+                        }
                     }
                 }
             }
@@ -70,7 +75,7 @@ internal data class LastFmMatchSegment(val id: String, val label: String, val co
 @Composable
 internal fun LastFmMatchingBar(segments: List<LastFmMatchSegment>) {
     val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
-    Canvas(Modifier.fillMaxWidth().height(StockUiSpec.space.getValue(Space.Base)).testTag("lastfm-matching-strip")) {
+    Canvas(Modifier.fillMaxWidth().height(StockUiSpec.space.getValue(Space.Base)).clip(CircleShape).testTag("lastfm-matching-strip")) {
         val total = segments.sumOf { it.count.toLong().coerceAtLeast(0) }
         var start = 0f
         segments.forEach { segment ->
