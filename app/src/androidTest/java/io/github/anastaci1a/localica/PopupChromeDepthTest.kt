@@ -220,10 +220,18 @@ class PopupChromeDepthTest {
         try { assertTrue("Native draw receipt for $name", ready.await(2, TimeUnit.SECONDS)) }
         finally { compose.runOnUiThread { if (tree.isAlive) tree.removeOnDrawListener(watch) } }
         val image = Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)
-        // Explicit decor bounds exclude the native surface shadow insets. A null
-        // source rect copies the padded buffer and rescales the frame token/ROIs.
+        // API 26 passes Window crop coordinates directly to the padded Surface.
+        // API 28+ adds these insets inside PixelCopy; compensate only on the old path.
+        val crop = android.graphics.Rect(0, 0, view.width, view.height)
+        val insets = if (Build.VERSION.SDK_INT < 28) compose.runOnUiThread {
+            android.graphics.Rect(android.view.WindowManager.LayoutParams::class.java
+                .getField("surfaceInsets").get(window.attributes) as android.graphics.Rect)
+        } else android.graphics.Rect()
+        crop.offset(insets.left, insets.top)
+        File(output, "$name-copy.json").writeText(JSONObject().put("api", Build.VERSION.SDK_INT)
+            .put("crop", crop.toShortString()).put("surfaceInsets", insets.toShortString()).toString(2))
         val result = copyNativeWindowOnce(window, image, "#667 original $name copy timed out",
-            sourceBounds = android.graphics.Rect(0, 0, view.width, view.height),
+            sourceBounds = crop,
             failureMessage = { "#667 original $name copy failed: $it; no retry" })
         try {
             File(output, "$name.png").outputStream().use { assertTrue(result.compress(Bitmap.CompressFormat.PNG, 100, it)) }
