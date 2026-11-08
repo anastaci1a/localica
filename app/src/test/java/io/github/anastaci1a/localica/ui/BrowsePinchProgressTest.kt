@@ -82,4 +82,40 @@ class BrowsePinchProgressTest {
         val off = settle(listOf(1000.0 / 60), 0f)
         assertEquals("Animations off settle on the first frame", 1, off.values.size)
     }
+
+    /** #641 train × #560: the API 36 emulator manages ~5 fps under the pinch anchor loop. Capping every
+     * frame at 60 Hz animation time stretched the 220 ms settle to 14 frames (2.6 s), which held the
+     * header transaction past SubviewFlingPinchTimelineTest's 2.4 s retirement deadline. */
+    @Test fun sustainedSlowFramesKeepTheSettleWithinAFewDisplayedFrames() {
+        for (interval in listOf(100.0, 200.0, 400.0)) {
+            val progress = BrowsePinchProgress(.3f)
+            val frames = Frames(listOf(interval)) { progress.value }
+            runBlocking(frames) { progress.animateTo(0f, tween(220)) }
+            assertEquals(0f, progress.value, 0f)
+            val displayed = frames.values.size
+            assertTrue("A settle at $interval ms frames shows $displayed frames, more than ${PinchEaseMinimumFrames + 2}",
+                displayed <= PinchEaseMinimumFrames + 2)
+            assertTrue("A settle at $interval ms frames is still an ease, not a snap: ${frames.values}",
+                displayed >= PinchEaseMinimumFrames + 1)
+            assertTrue("The settle ends by ${(PinchEaseMinimumFrames + 1) * interval} ms, not ${frames.times.last()}",
+                frames.times.last() <= (PinchEaseMinimumFrames + 1) * interval + 1)
+            assertTrue("The first slow frame still cannot snap back: ${frames.values}", frames.values[1] > .3f * .8f)
+            assertTrue("No frame closes more than half the gap: ${frames.largestStep(.3f, 0f)}", frames.largestStep(.3f, 0f) < .5f)
+        }
+    }
+
+    /** PinchSlowFrameTest stalls two consecutive frames on the device; the later-frame floor must
+     * still keep each frame under half the gap across the steep middle of the ease. */
+    @Test fun twoConsecutiveSlowFramesCloseLessThanHalfTheGap() {
+        for (stall in listOf(120.0, 150.0, 400.0)) {
+            val frames = catchUp(listOf(stall, stall) + List(40) { 1000.0 / 120 })
+            assertTrue("Two $stall ms frames: a frame closes ${frames.largestStep(0f, .3f)} of the catch-up: ${frames.values}",
+                frames.largestStep(0f, .3f) < .5f)
+            val progress = BrowsePinchProgress(.3f)
+            val settle = Frames(listOf(stall, stall) + List(40) { 1000.0 / 60 }) { progress.value }
+            runBlocking(settle) { progress.animateTo(0f, tween(220)) }
+            assertTrue("Two $stall ms frames: a frame returns ${settle.largestStep(.3f, 0f)} of the settle: ${settle.values}",
+                settle.largestStep(.3f, 0f) < .5f)
+        }
+    }
 }

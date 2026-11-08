@@ -15,9 +15,17 @@ import androidx.compose.ui.MotionDurationScale
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.job
 
-/** The most animation time one displayed frame may consume. A slow frame (the destination's
+/** The most animation time the first displayed frame may consume. A slow frame (the destination's
  * first composition, a release's recomposition) otherwise finished an ease in one step (#560). */
 internal const val PinchFrameBudgetNanos = 1_000_000_000L / 60
+
+/** Later frames keep an ease on screen for at least this many displayed frames. Capping every frame
+ * at 60 Hz animation time ran a 220 ms settle over 14 frames: at the ~5 fps an emulator manages
+ * under the pinch anchor loop that held the header transaction and every frozen row for 2.6 s
+ * (SubviewFlingPinchTimelineTest, #641 train × #560). A fifth of the ease per frame also keeps
+ * two consecutive slow frames from closing half the gap across the steep middle of the ease
+ * (PinchSlowFrameTest). */
+internal const val PinchEaseMinimumFrames = 5
 
 /** One transaction's frame-driven value, shared by layout and drawing. */
 @Stable
@@ -53,17 +61,22 @@ internal class BrowsePinchProgress(initial: Float) {
 }
 
 /** Calls [frame] with the played time on every frame, starting at zero on the first one.
- * Each frame adds its real interval, capped at [PinchFrameBudgetNanos]. */
+ * Each frame adds its real interval, capped: the first at [PinchFrameBudgetNanos] (the slow
+ * frame #560 guards against), later ones at a [PinchEaseMinimumFrames]th of the duration, so a
+ * sustained slow frame rate stretches an ease by a bounded factor instead of indefinitely. */
 internal suspend fun pinchFrames(durationNanos: Long, scale: Float, frame: (Long) -> Unit) {
     val owner = currentCoroutineContext().job
     if (scale <= 0f || durationNanos <= 0L) { withFrameNanos { if (owner.isActive) frame(durationNanos) }; return }
+    val laterBudget = maxOf(PinchFrameBudgetNanos, durationNanos / PinchEaseMinimumFrames)
+    var budget = PinchFrameBudgetNanos
     var previous = withFrameNanos { if (owner.isActive) frame(0L); it }
     var played = 0L
     while (played < durationNanos) {
         previous = withFrameNanos { now ->
-            played = minOf(durationNanos, played + ((now - previous).coerceIn(0L, PinchFrameBudgetNanos) / scale).toLong())
+            played = minOf(durationNanos, played + ((now - previous).coerceIn(0L, budget) / scale).toLong())
             if (owner.isActive) frame(played)
             now
         }
+        budget = laterBudget
     }
 }
