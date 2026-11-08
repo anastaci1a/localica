@@ -341,7 +341,7 @@ class SearchImeMotionTest {
             }, LocalReducedMotion provides reduced,
                 LocalSearchMorphObserver provides {
                     samples += it
-                    if (android.os.Build.VERSION.SDK_INT == 26 && !it.opening &&
+                    if (android.os.Build.VERSION.SDK_INT == 26 && nativeDismissalAt != null && !it.opening &&
                         it.progress >= .01f && it.progress < .99f && legacyNativeReturn == null) {
                         val requested = requireNotNull(nativeDismissalAt)
                         val placed = SystemClock.uptimeMillis()
