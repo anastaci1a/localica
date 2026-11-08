@@ -15,7 +15,7 @@ internal sealed interface MotionOwner {
     fun admitsReduced(trajectory: Trajectory,spec: UiSpec): Boolean=false
 }
 internal data object RootMotionOwner : MotionOwner
-internal interface ActiveMotion { val followsRoot: Boolean get()=true; val admitsReduced: Boolean get()=settled; fun prepareFrame() {} fun sampleFrame(stamp: FrameStamp) {} val id: Long; val presented: Boolean; val settled: Boolean; fun endsAt(stamp: FrameStamp): Boolean; fun finish(stamp: FrameStamp); fun reduce(stamp: FrameStamp) }
+internal interface ActiveMotion { val followsRoot: Boolean get()=true; val admitsReduced: Boolean get()=settled; val frameTransaction: Any? get()=null; fun prepareFrame() {} fun sampleFrame(stamp: FrameStamp) {} val id: Long; val presented: Boolean; val settled: Boolean; fun endsAt(stamp: FrameStamp): Boolean; fun finish(stamp: FrameStamp); fun reduce(stamp: FrameStamp) }
 internal fun interface FrameObserver { fun onFrame(stamp: FrameStamp,active: List<ActiveMotion>) }
 internal data class EngineContext(val displayIntervalSeconds: Float,val fullPlayerReferenceTravelPx: Float,val access: MotionAccess) { init { require(displayIntervalSeconds.isFinite() && displayIntervalSeconds>0 && (2*displayIntervalSeconds).isFinite() && 2e9*displayIntervalSeconds<=Long.MAX_VALUE.toDouble() && fullPlayerReferenceTravelPx.isFinite() && fullPlayerReferenceTravelPx>0) } }
 internal val LocalUiClock=staticCompositionLocalOf<UiClock> { error("UiClock is provided by LocalicaTheme") }
@@ -43,11 +43,17 @@ internal val LocalEngineContext=staticCompositionLocalOf<EngineContext> { requir
         checkMutation()
         try { while(true) {
             if(active.isEmpty()) { wake.receive(); continue }
-            val frame=active.toList()
-            frame.forEach { if(it in active) it.prepareFrame() }
+            val prepared=linkedMapOf<ActiveMotion,Any?>()
+            active.toList().forEach { motion -> if(motion in active) {
+                val token=motion.frameTransaction; motion.prepareFrame()
+                check(motion.frameTransaction===token) { "Frame preparation cannot replace its transaction" }
+                prepared[motion]=token
+            } }
             source.awaitFrame { nanos -> checkMutation(); check(nanos>last.nanos) { "Frame source must advance monotonically" }; last=FrameStamp(nanos,last.sequence+1); state.value=last
-            frame.forEach { if(it in active) it.sampleFrame(last) }
-            frame.forEach { if(it in active && it.endsAt(last)) { active.remove(it); it.finish(last) } }
+            val frame=active.map { it to it.frameTransaction }.filter { (motion,token) -> token==null || prepared.containsKey(motion) && prepared[motion]===token }
+            fun eligible(motion: ActiveMotion,token: Any?)=motion in active && motion.frameTransaction===token
+            frame.forEach { (motion,token) -> if(eligible(motion,token)) motion.sampleFrame(last) }
+            frame.forEach { (motion,token) -> if(eligible(motion,token) && motion.endsAt(last) && eligible(motion,token)) { active.remove(motion); motion.finish(last) } }
             if(observers.isNotEmpty()) observe { val frame=active.toList(); observers.forEach { it.onFrame(last,frame) } } }
         } } finally { active.clear() }
     }

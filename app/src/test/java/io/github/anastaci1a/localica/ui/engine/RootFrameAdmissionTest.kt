@@ -15,6 +15,7 @@ class RootFrameAdmissionTest {
             var scale = 1
             fun probe(id: Long) = object : ActiveMotion {
                 private var captured = 0
+                override val frameTransaction: Any = this
                 override val id = id; override val presented = true; override val settled = false
                 override fun prepareFrame() { captured = scale; calls += "prepare-$id-$captured" }
                 override fun sampleFrame(stamp: FrameStamp) { calls += "sample-$id-$captured" }
@@ -34,6 +35,87 @@ class RootFrameAdmissionTest {
             h.advance(.01)
             assertEquals(listOf("prepare-1-1", "prepare-2-2", "sample-2-2", "finish-2"), calls)
             assertEquals(0, h.clock.activeCount)
+        }
+    }
+
+    @Test fun retargetedTransactionDuringAwaitCannotConsumeThePreviousPreparation() {
+        EngineHarness().use { h ->
+            val calls = mutableListOf<Int>()
+            var transaction = Any()
+            var scale = 1
+            val motion = object : ActiveMotion {
+                private var captured = 0
+                override val frameTransaction get() = transaction
+                override val id = 1L; override val presented = true; override val settled = false
+                override fun prepareFrame() { captured = scale }
+                override fun sampleFrame(stamp: FrameStamp) { calls += captured }
+                override fun endsAt(stamp: FrameStamp) = true
+                override fun finish(stamp: FrameStamp) = Unit
+                override fun reduce(stamp: FrameStamp) = Unit
+            }
+            h.clock.register(motion)
+            transaction = Any(); scale = 2
+            h.advance(.01)
+            assertTrue(calls.isEmpty())
+            assertEquals(1, h.clock.activeCount)
+            h.advance(.01)
+            assertEquals(listOf(2), calls)
+            assertEquals(0, h.clock.activeCount)
+        }
+    }
+
+    @Test fun firstSampleRetargetingSecondSkipsItsUnpreparedSampleAndFinish() {
+        EngineHarness().use { h ->
+            var firstSamples = 0
+            var secondSamples = 0
+            var secondFinishes = 0
+            var secondTransaction = Any()
+            val first = object : ActiveMotion {
+                override val frameTransaction = Any()
+                override val id = 1L; override val presented = true; override val settled = false
+                override fun sampleFrame(stamp: FrameStamp) {
+                    firstSamples++
+                    if (firstSamples == 2) secondTransaction = Any()
+                }
+                override fun endsAt(stamp: FrameStamp) = firstSamples >= 3
+                override fun finish(stamp: FrameStamp) = Unit
+                override fun reduce(stamp: FrameStamp) = Unit
+            }
+            val second = object : ActiveMotion {
+                override val frameTransaction get() = secondTransaction
+                override val id = 2L; override val presented = true; override val settled = false
+                override fun sampleFrame(stamp: FrameStamp) { secondSamples++ }
+                override fun endsAt(stamp: FrameStamp) = true
+                override fun finish(stamp: FrameStamp) { secondFinishes++ }
+                override fun reduce(stamp: FrameStamp) = Unit
+            }
+            h.clock.register(first); h.clock.register(second)
+            h.advance(.01); h.advance(.01)
+            assertEquals(2, firstSamples); assertEquals(0, secondSamples); assertEquals(0, secondFinishes)
+            h.advance(.01)
+            assertEquals(1, secondSamples); assertEquals(1, secondFinishes)
+            assertEquals(0, h.clock.activeCount)
+        }
+    }
+
+    @Test fun selfRetargetDuringSampleSkipsFinishUntilNewPreparation() {
+        EngineHarness().use { h ->
+            var transaction = Any()
+            var samples = 0
+            var finishes = 0
+            val motion = object : ActiveMotion {
+                override val frameTransaction get() = transaction
+                override val id = 1L; override val presented = true; override val settled = false
+                override fun sampleFrame(stamp: FrameStamp) { if (++samples == 1) transaction = Any() }
+                override fun endsAt(stamp: FrameStamp) = true
+                override fun finish(stamp: FrameStamp) { finishes++ }
+                override fun reduce(stamp: FrameStamp) = Unit
+            }
+            h.clock.register(motion)
+            h.advance(.01)
+            assertEquals(1, samples); assertEquals(0, finishes); assertEquals(1, h.clock.activeCount)
+            h.advance(.01)
+            assertEquals(2, samples); assertEquals(1, finishes); assertEquals(0, h.clock.activeCount)
         }
     }
 
@@ -78,6 +160,7 @@ class RootFrameAdmissionTest {
                 override fun reduce(stamp: FrameStamp) = Unit
             }
             fun probe(id: Long) = object : ActiveMotion {
+                override val frameTransaction: Any = this
                 override val id = id; override val presented = true; override val settled = false
                 override fun sampleFrame(stamp: FrameStamp) {
                     calls += "sample-$id"
