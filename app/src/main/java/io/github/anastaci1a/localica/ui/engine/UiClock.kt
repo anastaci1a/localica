@@ -10,7 +10,12 @@ import kotlinx.coroutines.channels.Channel
 @Immutable class FrameStamp internal constructor(val nanos: Long,val sequence: Long) { fun secondsSince(other: FrameStamp)=(nanos-other.nanos)/1e9f }
 /** [onFrame] runs inside the frame callback, so state it writes is read by that same frame's composition, layout and draw. */
 interface FrameSource { suspend fun awaitFrame(): Long; suspend fun <R> awaitFrame(onFrame: (Long)->R): R=onFrame(awaitFrame()) }
-internal interface ActiveMotion { val id: Long; val presented: Boolean; val settled: Boolean; fun endsAt(stamp: FrameStamp): Boolean; fun finish(stamp: FrameStamp); fun reduce(stamp: FrameStamp) }
+internal sealed interface MotionOwner {
+    val followsRoot: Boolean get()=true
+    fun admitsReduced(trajectory: Trajectory,spec: UiSpec): Boolean=false
+}
+internal data object RootMotionOwner : MotionOwner
+internal interface ActiveMotion { val followsRoot: Boolean get()=true; val admitsReduced: Boolean get()=settled; fun prepareFrame() {} fun sampleFrame(stamp: FrameStamp) {} val id: Long; val presented: Boolean; val settled: Boolean; fun endsAt(stamp: FrameStamp): Boolean; fun finish(stamp: FrameStamp); fun reduce(stamp: FrameStamp) }
 internal fun interface FrameObserver { fun onFrame(stamp: FrameStamp,active: List<ActiveMotion>) }
 internal data class EngineContext(val displayIntervalSeconds: Float,val fullPlayerReferenceTravelPx: Float,val access: MotionAccess) { init { require(displayIntervalSeconds.isFinite() && displayIntervalSeconds>0 && (2*displayIntervalSeconds).isFinite() && 2e9*displayIntervalSeconds<=Long.MAX_VALUE.toDouble() && fullPlayerReferenceTravelPx.isFinite() && fullPlayerReferenceTravelPx>0) } }
 internal val LocalUiClock=staticCompositionLocalOf<UiClock> { error("UiClock is provided by LocalicaTheme") }
@@ -30,16 +35,19 @@ internal val LocalEngineContext=staticCompositionLocalOf<EngineContext> { requir
     internal val isObserving: Boolean get()=observing
     internal fun checkMutation() { checkOwner(); check(!observing) { "An observer cannot drive presentation" } }
     internal fun allocateId(): Long { checkMutation(); return ++nextId }
-    internal fun register(motion: ActiveMotion) { checkMutation(); if(active.add(motion)) wake.trySend(Unit) }
+    internal fun register(motion: ActiveMotion) { checkMutation(); check(context?.access!=MotionAccess.Reduced || motion.admitsReduced) { "Motion must admit Rest or its dedicated owner preset under Reduced" }; if(!motion.settled && active.add(motion)) wake.trySend(Unit) }
     internal fun unregister(motion: ActiveMotion) { checkMutation(); active.remove(motion) }
     internal fun observe(block: ()->Unit) { checkOwner(); check(!observing); observing=true; try { Snapshot.withoutReadObservation(block) } finally { observing=false } }
-    internal fun configure(value: EngineContext,data: UiSpec) { checkMutation(); val reduced=context?.access!=MotionAccess.Reduced && value.access==MotionAccess.Reduced; context=value; spec=data; if(reduced) { val s=stampNow; while(active.isNotEmpty()) active.first().reduce(s) } }
+    internal fun configure(value: EngineContext,data: UiSpec) { checkMutation(); val reduced=context?.access!=MotionAccess.Reduced && value.access==MotionAccess.Reduced; context=value; spec=data; if(reduced) { val s=stampNow; val snapshot=active.toList(); snapshot.forEach { if(it in active && !it.settled && it.followsRoot) it.reduce(s) } } }
     internal suspend fun run(): Nothing {
         checkMutation()
         try { while(true) {
             if(active.isEmpty()) { wake.receive(); continue }
+            val frame=active.toList()
+            frame.forEach { if(it in active) it.prepareFrame() }
             source.awaitFrame { nanos -> checkMutation(); check(nanos>last.nanos) { "Frame source must advance monotonically" }; last=FrameStamp(nanos,last.sequence+1); state.value=last
-            val iterator=active.iterator(); while(iterator.hasNext()) { val motion=iterator.next(); if(motion.endsAt(last)) { iterator.remove(); motion.finish(last) } }
+            frame.forEach { if(it in active) it.sampleFrame(last) }
+            frame.forEach { if(it in active && it.endsAt(last)) { active.remove(it); it.finish(last) } }
             if(observers.isNotEmpty()) observe { val frame=active.toList(); observers.forEach { it.onFrame(last,frame) } } }
         } } finally { active.clear() }
     }

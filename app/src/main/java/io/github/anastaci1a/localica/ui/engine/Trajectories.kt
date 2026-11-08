@@ -5,7 +5,7 @@ import io.github.anastaci1a.localica.ui.spec.*
 import kotlin.math.*
 
 @Immutable data class Kinematic(val value: Float,val velocity: Float)
-internal sealed interface Trajectory { val kind: Int; val duration: Double; fun value(t: Double): Double; fun velocity(t: Double): Double; fun at(t: Float)=Kinematic(value(t.toDouble()).toFloat(),velocity(t.toDouble()).toFloat()) }
+internal sealed interface Trajectory { val kind: Int; val duration: Double; val completionPolicy: String get()="Continuous"; fun value(t: Double): Double; fun velocity(t: Double): Double; fun at(t: Float)=Kinematic(value(t.toDouble()).toFloat(),velocity(t.toDouble()).toFloat()) }
 internal class Rest(private val x: Double): Trajectory { override val kind=0; override val duration=Double.POSITIVE_INFINITY; override fun value(t: Double)=x; override fun velocity(t: Double)=0.0 }
 internal class Driven(private val x: Double,private val v: Double): Trajectory { override val kind=3; override val duration=Double.POSITIVE_INFINITY; override fun value(t: Double)=x; override fun velocity(t: Double)=v }
 internal class Bezier(private val e: EasingSpec) {
