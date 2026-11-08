@@ -112,21 +112,24 @@ class EmulatorWrapperContract(unittest.TestCase):
                 self.assertEqual(2, result.returncode)
                 self.assertIn('not the locked-down self-hosted JIT runner', result.stderr)
 
-    def test_refuses_repeats_so_they_stay_hosted(self):
-        # Lead decision (#592): self-hosted is for single focused runs; repeat=5 hung under the 7g limit.
+    def test_refuses_long_repeats_so_they_stay_hosted(self):
+        # Lead decision (#592, revised 2026-11-07): up to 5 repeats run self-hosted in the 10g container.
         marker = dict(GITHUB_ACTIONS='true', RUNNER_ENVIRONMENT='self-hosted', LOCALICA_JIT_RUNNER='1',
                       LOCALICA_EPHEMERAL_RUNNER='localica-kvm')
-        for repeat in ({'PROTOTYPE_REPEAT': '2'}, {'PROTOTYPE_REPEAT': '30'},
-                       {'PROTOTYPE_REPEAT': '1', 'PROTOTYPE_METHODS': 'io.github.anastaci1a.localica.X#m'}):
+        for repeat in ({'PROTOTYPE_REPEAT': '6'}, {'PROTOTYPE_REPEAT': '30'}, {'PROTOTYPE_REPEAT': '0'},
+                       {'PROTOTYPE_REPEAT': '5;id'}):
             with self.subTest(repeat=repeat):
                 result = self.run_wrapper(**marker, **repeat)
                 self.assertEqual(2, result.returncode, result.stderr)
-                self.assertIn('single focused passes only', result.stderr)
+                self.assertIn('at most 5 repeats', result.stderr)
         with tempfile.TemporaryDirectory() as home:
-            # A single pass gets past the guard to the image checks (no SDK here, so it stops there).
-            result = self.run_wrapper(HOME=home, PROTOTYPE_REPEAT='1', PROTOTYPE_METHODS='', **marker)
-            self.assertEqual(2, result.returncode, result.stderr)
-            self.assertNotIn('single focused passes only', result.stderr)
+            for ok in ({'PROTOTYPE_REPEAT': '1', 'PROTOTYPE_METHODS': ''},
+                       {'PROTOTYPE_REPEAT': '5', 'PROTOTYPE_METHODS': 'io.github.anastaci1a.localica.X#m'}):
+                with self.subTest(ok=ok):
+                    # Allowed counts get past the guard to the image checks (no SDK here, so it stops there).
+                    result = self.run_wrapper(HOME=home, **marker, **ok)
+                    self.assertEqual(2, result.returncode, result.stderr)
+                    self.assertNotIn('at most 5 repeats', result.stderr)
 
     def test_rejects_unknown_images_before_touching_an_emulator(self):
         marker = dict(GITHUB_ACTIONS='true', RUNNER_ENVIRONMENT='self-hosted', LOCALICA_JIT_RUNNER='1',
