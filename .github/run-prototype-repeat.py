@@ -76,6 +76,13 @@ def main():
             item.update(status='failed', exit_code=result, error='Missing reconciled receipt')
         if receipt.is_file():
             item['receipt_sha256'] = hashlib.sha256(receipt.read_bytes()).hexdigest()
+        recovery = folder / 'prototype-evidence/teardown-offline/recovery.json'
+        if recovery.is_file():
+            # #675: the runner re-ran this gate once after a teardown-only adb drop; keep it visible.
+            record = json.loads(recovery.read_text())
+            item['infrastructure_retry'] = {'issue': 675, 'signature': 'teardown-device-offline',
+                                            'recovered_after_seconds': record.get('recovered_after_seconds'),
+                                            'evidence': str(recovery.parent.relative_to(folder))}
         save()
         return result
 
@@ -110,7 +117,8 @@ def main():
             result = execute(folder, item, {'PROTOTYPE_METHOD_ITERATION':
                              'true' if requested_methods else 'false'})
             last = folder
-            print(f"Prototype iteration {item['iteration']}/{count}: {item['status']}", flush=True)
+            retried = ' (after one #675 teardown-offline retry)' if 'infrastructure_retry' in item else ''
+            print(f"Prototype iteration {item['iteration']}/{count}: {item['status']}{retried}", flush=True)
             if result:
                 break
     # Default proofs retain the final full selection. Method proofs retain their

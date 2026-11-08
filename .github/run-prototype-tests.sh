@@ -59,7 +59,10 @@ serial=${ANDROID_SERIAL:-emulator-5554}
 [[ "$serial" =~ ^emulator-[0-9]+$ ]] || { echo 'Require an explicit emulator serial' >&2; exit 2; }
 actual_api=$(adb -s "$serial" shell getprop ro.build.version.sdk | tr -d '\r')
 [[ "$actual_api" == "$TEST_API" ]] || { echo "Actual SDK $actual_api differs from requested $TEST_API" >&2; exit 2; }
-printf 'serial=%s\nactual_api=%s\n' "$serial" "$actual_api" >> prototype-evidence/context.txt
+# The pre-run boot id proves that a reconnected device is the same guest (#675).
+boot_id=$(adb -s "$serial" shell cat /proc/sys/kernel/random/boot_id | tr -d '\r')
+[[ -n "$boot_id" ]] || { echo 'Require the emulator boot id' >&2; exit 2; }
+printf 'serial=%s\nactual_api=%s\nboot_id=%s\n' "$serial" "$actual_api" "$boot_id" >> prototype-evidence/context.txt
 source .github/prepare-device-tests.sh
 # Retain the setup's EXIT restoration trap; forward cancellation to the observer,
 # which owns its child process group, before restoration runs.
@@ -72,11 +75,45 @@ stop_child() {
 }
 trap 'stop_child TERM 143' TERM
 trap 'stop_child INT 130' INT
+run_gate() {
+  local status
+  python3 .github/test-evidence/supervise.py --output prototype-evidence/live --run-id "$GITHUB_RUN_ID" --attempt "$GITHUB_RUN_ATTEMPT" --sha "$GITHUB_SHA" --api "$TEST_API" --lane prototype -- ./gradlew connectedDebugAndroidTest --no-daemon --max-workers=2 "-Pandroid.testInstrumentationRunnerArguments.class=$instrument_selector" &
+  child=$!
+  wait "$child"
+  status=$?
+  child=''
+  return "$status"
+}
+# #675: the emulator's adb transport can drop in the second after a complete, all-pass
+# instrumentation run, while UTP pulls outputs and uninstalls the APKs. Gradle then fails
+# on a teardown-only plugin error although every test passed. Only that exact signature,
+# with the SAME guest answering again, earns one more run of this gate; the first attempt's
+# evidence is retained. Any failed, missing or uncounted test keeps the original failure.
+offline=prototype-evidence/teardown-offline
+prepare_teardown_offline_retry() {
+  local path
+  mkdir "$offline/first-attempt" || return 1
+  mv prototype-evidence/live "$offline/first-attempt/live" || return 1
+  for path in app/build/outputs/androidTest-results app/build/outputs/connected_android_test_additional_output app/build/reports/androidTests; do
+    [[ ! -e "$path" ]] || mv "$path" "$offline/first-attempt/$(basename "$path")" || return 1
+  done
+  # The teardown that the drop interrupted: remove both packages so the retry installs fresh.
+  python3 .github/test-evidence/teardown_offline.py uninstall --serial "$serial" --output "$offline/uninstall.json" || return 1
+  if declare -F guard_error_dialogs >/dev/null; then guard_error_dialogs retry; fi
+}
 set +e
-python3 .github/test-evidence/supervise.py --output prototype-evidence/live --run-id "$GITHUB_RUN_ID" --attempt "$GITHUB_RUN_ATTEMPT" --sha "$GITHUB_SHA" --api "$TEST_API" --lane prototype -- ./gradlew connectedDebugAndroidTest --no-daemon --max-workers=2 "-Pandroid.testInstrumentationRunnerArguments.class=$instrument_selector" &
-child=$!
-wait "$child"
+run_gate
 result=$?
+if [[ "$result" != 0 ]] \
+  && python3 .github/test-evidence/teardown_offline.py classify --live prototype-evidence/live --results app/build/outputs/androidTest-results --expected prototype-evidence/expected-methods.json --output "$offline/classification.json" \
+  && python3 .github/test-evidence/teardown_offline.py recover --serial "$serial" --api "$TEST_API" --boot-id "$boot_id" --timeout "${PROTOTYPE_OFFLINE_RECOVERY_SECONDS:-180}" --output "$offline" \
+  && prepare_teardown_offline_retry; then
+  echo "::warning title=#675 adb offline after a complete pass::API $TEST_API emulator went offline during UTP teardown after a complete, failure-free run (exit $result); the same guest reconnected, so this gate runs once more. First attempt retained under $offline/first-attempt."
+  printf 'first_attempt_exit=%s\n' "$result" > "$offline/retry.txt"
+  run_gate
+  result=$?
+  printf 'retry_exit=%s\n' "$result" >> "$offline/retry.txt"
+fi
 set -e
 [[ "$result" == 0 ]] || exit "$result"
 python3 - "$selector" "$required_selector" <<'PYXML'
