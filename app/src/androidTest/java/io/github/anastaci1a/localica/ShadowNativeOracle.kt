@@ -19,6 +19,7 @@ import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.drawscope.CanvasDrawScope
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
@@ -79,11 +80,28 @@ private fun shadowUnionReference(rule: ComposeContentTestRule, width: Int, heigh
     CanvasDrawScope().draw(rule.density, LayoutDirection.Ltr, Canvas(filtered), extent) {
         drawImage(outside, blendMode = BlendMode.DstIn)
     }
-    return ImageBitmap(width, height).also { expected ->
-        CanvasDrawScope().draw(rule.density, LayoutDirection.Ltr, Canvas(expected), extent) {
-            drawRect(state.background); drawImage(filtered)
+    // Native framebuffer source-over rounds to the nearest 8-bit value. Software Canvas
+    // can truncate instead (e.g. a one-level black tail over background 64 becomes 63).
+    // Calculate the reference independently; no production capture enters this operation.
+    val source = filtered.asAndroidBitmap()
+    source.getPixels(pixels, 0, width, 0, 0, width, height)
+    val background = state.background.toArgb()
+    val backgroundAlpha = background ushr 24
+    for (index in pixels.indices) {
+        val color = pixels[index]
+        val alpha = color ushr 24
+        val remaining = backgroundAlpha * (255 - alpha)
+        val outputAlpha = alpha * 255 + remaining
+        fun channel(shift: Int): Int {
+            if (outputAlpha == 0) return 0
+            val sourceChannel = color ushr shift and 255
+            val backgroundChannel = background ushr shift and 255
+            return (sourceChannel * alpha * 255 + backgroundChannel * remaining + outputAlpha / 2) / outputAlpha
         }
+        pixels[index] = (((outputAlpha + 127) / 255) shl 24) or
+            (channel(16) shl 16) or (channel(8) shl 8) or channel(0)
     }
+    return Bitmap.createBitmap(pixels, width, height, Bitmap.Config.ARGB_8888).asImageBitmap()
 }
 
 /** Current canonical bodies are supplied in screen space, after their actual plane/layout mapping. */

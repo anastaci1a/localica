@@ -9,6 +9,7 @@ import org.jetbrains.kotlin.psi.KtAnnotationEntry
 import org.jetbrains.kotlin.psi.KtProperty
 import org.jetbrains.kotlin.psi.KtNamedFunction
 import org.jetbrains.uast.visitor.AbstractUastVisitor
+import java.util.IdentityHashMap
 
 private const val UI = "io.github.anastaci1a.localica.ui"
 private val mutators = mapOf(
@@ -53,6 +54,9 @@ internal class UiPolicyDetector : Detector(), SourceCodeScanner {
         // Cycle-pruned recursive branches are not independently negative.
         private val derivedSymbols = mutableMapOf<PsiElement, Boolean>()
         private val surfaceMethods = mutableMapOf<PsiElement, Boolean>()
+        // Type identity is independent of the dependency search and its cycle cuts.
+        private val handleExpressions = IdentityHashMap<UExpression, Boolean>()
+        private val handleClasses = mutableMapOf<PsiClass, Boolean>()
         private val dependencyRanges = mutableListOf<Triple<String, Int, Int>>()
         private val assignments by lazy {
             val result = mutableMapOf<PsiElement, MutableList<UExpression>>()
@@ -223,7 +227,7 @@ internal class UiPolicyDetector : Detector(), SourceCodeScanner {
                     report(UiRuleId.ReplacePersistentShape, node)
                 }
                 if ((compose && name in setOf("rememberGraphicsLayer", "drawLayer")) ||
-                    (hostsSurface(node) && conditional(node))) report(UiRuleId.UnownedSurfaceLifetime, node)
+                    (conditional(node) && hostsSurface(node))) report(UiRuleId.UnownedSurfaceLifetime, node)
                 val mutableType = mutableKind(node.receiverType) ?: mutableKind(method.containingClass?.let { context.evaluator.getClassType(it) })
                 if (mutableType != null && name in mutators.getValue(mutableType) && !owned(node.receiver, node, mutableType)) {
                     report(UiRuleId.RawMotionMap, node)
@@ -377,12 +381,21 @@ internal class UiPolicyDetector : Detector(), SourceCodeScanner {
             return result
         }
 
+        private fun motionHandle(node: UExpression): Boolean = handleExpressions.getOrPut(node) {
+            (node.getExpressionType() as? PsiClassType)?.resolve()?.let(::handleClass) == true
+        }
+
+        private fun handleClass(value: PsiClass): Boolean = handleClasses.getOrPut(value) {
+            (value.qualifiedName.orEmpty().startsWith("$UI.engine.") && value.name in views - setOf("ShapeFrame", "Kinematic")) ||
+                value.supers.any(::handleClass)
+        }
+
         private fun derivedNode(node: UElement?, seen: MutableSet<PsiElement>): Boolean {
             if (node == null) return false
             // A handle's identity is structural. Only sampling it yields presentation:
             // do not inherit reads performed inside its factory/constructor. Samples
             // (ShapeFrame/Kinematic) remain derived, as do value()/outline() results.
-            if (node is UExpression && motionHandleType(node.getExpressionType())) return false
+            if (node is UExpression && motionHandle(node)) return false
             if (node is UCallExpression) {
                 // Measured geometry does not inherit reads used only to render subcomposed children.
                 // Keep motion-derived slot arguments and receivers visible; only the SDK content callback is excluded.
@@ -668,11 +681,6 @@ private fun symbolName(symbol: PsiElement?): String? = when (symbol) {
     else -> null
 }
 private fun motionClass(type: PsiClass): Boolean = (type.qualifiedName.orEmpty().startsWith("$UI.engine.") && type.name in views) || type.supers.any { motionClass(it) }
-private fun motionHandleType(type: PsiType?): Boolean {
-    fun handle(value: PsiClass): Boolean =
-        (value.qualifiedName.orEmpty().startsWith("$UI.engine.") && value.name in views - setOf("ShapeFrame", "Kinematic")) || value.supers.any(::handle)
-    return (type as? PsiClassType)?.resolve()?.let(::handle) == true
-}
 private fun motionType(type: PsiType?): Boolean = (type as? PsiClassType)?.resolve()?.let { motionClass(it) } == true
 private fun mutableKind(type: PsiType?): String? {
     val clazz = (type as? PsiClassType)?.resolve() ?: return null
