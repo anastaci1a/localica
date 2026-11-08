@@ -16,6 +16,10 @@ if [[ ${LOCALICA_PREBUILT_TEST_APKS:-false} == true ]]; then
   verify_prebuilt_apks
   prebuilt_args=(-I .github/prebuilt-device-tests.gradle)
 fi
+# AGP applies full AOT to both installed packages before each CI instrumentation run.
+if [[ ${GITHUB_ACTIONS:-} == true && ${TEST_API:-} == 26 ]]; then
+  prebuilt_args+=(-I .github/api26-aot.gradle)
+fi
 # Full native shards use measured class costs. Risk preflight retains the existing
 # method partition; the workflow summary still proves the once-only union.
 shard_count=${LOCALICA_SHARD_COUNT:-}
