@@ -57,7 +57,8 @@ private fun ease(a: IntSize, b: IntSize, p: Float) = IntSize((a.width + (b.width
 
 /** D09 shared-element bookkeeping of one two-face morph: per key, both faces' slot frames and endpoint sizes, their ink, and the one
  * instance's recording. Slots write only plain fields in layout and draw, so nothing here invalidates. */
-@Stable class MorphSlots internal constructor(private val phase: MotionValue) {
+@Stable class MorphSlots internal constructor(private val expansion: ExpansionView,private val bounds: ()->MotionRectView?) {
+    private val phase get()=expansion.phase
     internal class Slot { val frames = arrayOfNulls<LayoutCoordinates>(2); val sizes = arrayOf(IntSize.Zero, IntSize.Zero)
         val ink = arrayOf(Color.Unspecified, Color.Unspecified); var layer: GraphicsLayer? = null; var drawn = IntSize.Zero }
     internal val slots = mutableMapOf<Any, Slot>()
@@ -71,8 +72,8 @@ private fun ease(a: IntSize, b: IntSize, p: Float) = IntSize((a.width + (b.width
     @Composable fun Faces(expanded: Boolean, onMeasured: (IntSize, IntSize) -> Unit, modifier: Modifier, compact: @Composable () -> Unit,
         content: @Composable () -> Unit) {
         Layout(modifier = modifier.onPlaced { root = it }.drawWithContent { drawContent(); drawShared() }, content = {
-            RetainedFace(!expanded, { 1f - progress() }, content = compact)
-            RetainedFace(expanded, progress, content = content)
+            CompositorFace(!expanded, expansion, bounds, Curve.linear(1f,0f), content = compact)
+            CompositorFace(expanded, expansion, bounds, Curve.linear(0f,1f), content = content)
         }) { children, constraints ->
             val loose = constraints.copy(minWidth = 0, minHeight = 0)
             val faces = arrayOfNulls<Placeable>(2)
@@ -117,4 +118,7 @@ private fun ease(a: IntSize, b: IntSize, p: Float) = IntSize((a.width + (b.width
     }
 }
 
-@Composable fun rememberMorphSlots(phase: MotionValue) = remember(phase) { MorphSlots(phase) }
+@Composable fun rememberMorphSlots(expansion: ExpansionView,bounds: ()->MotionRectView?): MorphSlots {
+    val latest by rememberUpdatedState(bounds)
+    return remember(expansion) { MorphSlots(expansion) { latest() } }
+}

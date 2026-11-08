@@ -91,6 +91,15 @@ internal fun boundedPlan(stamp: FrameStamp,core: EasingSpec,T: Double,sigma: Dou
 @Composable fun rememberExpandCollapse(key: Any,initiallyExpanded: Boolean): ExpandCollapse { val clock=ownerClock(); val spec=LocalUiSpec.current.spec.expansion; val owner=remember(clock,key) { ExpandCollapse(clock,spec,initiallyExpanded,key) }; SideEffect { owner.updateSpec(spec) }; DisposableEffect(owner) { onDispose { owner.dispose() } }; return owner }
 /** U07.00 (D41–D43): a popup's one expansion, driven only by its components PopupState. The basis (presented home → envelope) comes with the presenter's measurement; an earlier intent waits for it. U04.02a: retained faces (MorphFaces, presence, panel) start the same owner at [initial]. */
 @Stable internal class PopupMotion(private val clock: UiClock,spec: ExpansionSpec,key: Any,initial: Boolean=false) { internal val expansion=ExpandCollapse(clock,spec,initial,key to "popup"); private var placed=false; private var shown=initial
+    internal var bounds by mutableStateOf<MotionRect?>(null); private set
     internal fun show(visible: Boolean) { clock.checkMutation(); if(placed) expansion.target(visible); shown=visible }
-    internal fun place(basis: ExpansionBasis) { expansion.setBasis(basis); placed=true; expansion.target(shown) } }
+    internal fun place(basis: ExpansionBasis) {
+        expansion.setBasis(basis)
+        if(!placed) {
+            val span=requireNotNull(clock.spec.geometry).maxViewportDiagonalPx
+            val rect=MotionRect(clock,if(expansion.expanded) basis.endBounds else basis.startBounds,EdgeRanges(span,span,span,span),expansion)
+            expansion.bind(rect); bounds=rect
+        }
+        placed=true; expansion.target(shown)
+    } }
 @Composable internal fun rememberPopupMotion(key: Any,initial: Boolean=false): PopupMotion { val clock=ownerClock(); val spec=LocalUiSpec.current.spec.expansion; val owner=remember(clock,key) { PopupMotion(clock,spec,key,initial) }; SideEffect { owner.expansion.updateSpec(spec) }; DisposableEffect(owner) { onDispose { owner.expansion.dispose() } }; return owner }

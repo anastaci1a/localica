@@ -39,7 +39,7 @@ enum class Stratum { Page,Lifted,Floating,Drawer,Player,Modal,Overlay,Diagnostic
 /** U04.01a foundation (no production caller before U04.01b/U11.00, D03). The field has one [owner] plane: the destination from the moment its transfer starts, the source again only once a reversal settles there (D27). w is the continuous exclusion weight of [high] against 1−w of [low] (D27/D29): at most {low, high, pending}; A→B→A reverses w, a third plane waits for w to settle and for its draw receipt (D28). */
 @Stable class SurfaceNode internal constructor(private val clock: UiClock,override val key: Any,override val shape: ShapeView,initial: SurfaceTarget,home: ShadowPlane): SurfaceView {
     private val px=requireNotNull(clock.spec.geometry) { "Publish measured ExpansionGeometryDomain through U11.00 before creating a surface" }.maxViewportDiagonalPx.also { require(home.sameClock(clock)) { "A surface and its home share one clock" } }; private var low: ShadowPlane?=home; private var owner by mutableStateOf(home); private var high: ShadowPlane?=null; private var pending: Triple<ShadowPlane,Long,MotionProfileId>?=null; private var last: Any?=null; private var dismissed by mutableStateOf(false); private var retired by mutableStateOf(false); private var disposed=false
-    override var stratum by mutableStateOf(initial.stratum); private set; internal var role=initial.shadow; private set
+    override var stratum by mutableStateOf(initial.stratum); private set; internal var role by mutableStateOf(initial.shadow); private set
     private val ownOpacity=MotionFloat(clock,initial.opacity,1f,0.0..1.0,key to "opacity"); private var following by mutableStateOf<SurfacePhase?>(null)
     override val opacity: MotionValue get()=following?.opacity?:ownOpacity
     private val ownOwnership=MotionFloat(clock,0f,1f,0.0..1.0,key to "ownership");
@@ -47,6 +47,7 @@ enum class Stratum { Page,Lifted,Floating,Drawer,Player,Modal,Overlay,Diagnostic
     internal val windowRetained get()=windowLeases>0
     internal val sourcePlane get()=low
     internal var sourceGeneration=0L; private set
+    internal var recording: CompositorRecording?=null
     private val projections=mutableMapOf<ShadowPlane,()->ShapeFrame>()
     internal fun frameOn(plane: ShadowPlane)=projections[plane]?.invoke()?:shape.outline()
     internal fun project(plane: ShadowPlane,frame: (()->ShapeFrame)?) { if(frame==null) projections.remove(plane) else projections[plane]=frame }
@@ -78,7 +79,7 @@ enum class Stratum { Page,Lifted,Floating,Drawer,Player,Modal,Overlay,Diagnostic
         followLifetime(true)
     }
     private fun revive() { dismissed=false; if(retired) { retired=false; listOfNotNull(low,high).forEach { it.enter(this) } } }
-    private fun followLifetime(intent: Boolean=false) { if(disposed) return; val f=following?:return; if(f.expansion.expanded) { if(intent && dismissed) revive() } else if(dismissed && f.opacity.settled && f.opacity.target==0f) retire(); if(!retired) advance() }
+    private fun followLifetime(intent: Boolean=false) { if(disposed) return; val f=following?:return; if(f.opacity.target>0f) { if(intent && dismissed) revive() } else if(dismissed && f.opacity.settled && f.opacity.target==0f) retire(); if(!retired) advance() }
     fun transfer(to: ShadowPlane,profile: MotionProfileId) {
         clock.checkMutation(); check(!disposed && !retired) { "A retired surface has no field to transfer" }; require(to.sameClock(clock)) { "Transfer hosts share the surface clock" }; require(clock.spec.motion[MotionProfile.valueOf(profile.name)] is MotionProfileSpec) { "Transfers require a scalar profile" }; val goal=ownOwnership.target; val towards=if(goal==1f) high else low; val away=if(goal==1f) low else high
         if(following!=null) {
@@ -104,12 +105,12 @@ enum class Stratum { Page,Lifted,Floating,Drawer,Player,Modal,Overlay,Diagnostic
     }
     private fun settle() { owner=(if(ownOwnership.target==1f) high else low)?:owner; if(ownOwnership.target==1f) { low?.takeIf { it!==pending?.first }?.leave(this); low=null } else { high?.takeIf { it!==pending?.first }?.leave(this); high=null }; advance() }
     /** Revokes logical presence at once (D30: no profile here); the node retires when the owner's opacity trajectory settles at 0. */
-    fun dismiss() { clock.checkMutation(); check(!disposed); if(dismissed) return; dismissed=true; last=null; if(following!=null) { if(following?.expansion?.expanded==false) followLifetime() } else if(ownOpacity.settled && ownOpacity.target==0f) retire() }
+    fun dismiss() { clock.checkMutation(); check(!disposed); if(dismissed) return; dismissed=true; last=null; if(following!=null) { followLifetime() } else if(ownOpacity.settled && ownOpacity.target==0f) retire() }
     private fun retire() { planes().forEach { it.leave(this) }; pending=null; retired=true }
     /** A native presenter leases the actual trigger node through return; removing the source composition cannot revoke its field. */
     internal fun retainWindow(): ()->Unit { clock.checkMutation(); check(!disposed && !sourceReleased); windowLeases++; var released=false; return { clock.checkMutation(); if(!released) { released=true; windowLeases--; if(sourceReleased && windowLeases==0) disposeNow() } } }
     internal fun dispose() { clock.checkMutation(); if(disposed || sourceReleased) return; sourceReleased=true; if(windowLeases==0) disposeNow() }
-    private fun disposeNow() { projections.clear(); planes().forEach { it.leave(this) }; disposed=true; following?.expansion?.lifecycle?.remove(::followLifetime); listOf(ownOpacity,ownOwnership).forEach { it.dispose() }; ownTransform.dispose() }
+    private fun disposeNow() { recording?.dispose(); recording=null; projections.clear(); planes().forEach { it.leave(this) }; disposed=true; following?.expansion?.lifecycle?.remove(::followLifetime); listOf(ownOpacity,ownOwnership).forEach { it.dispose() }; ownTransform.dispose() }
 }
 /** Engine host adapter: one plane per native window; U04.01b installs it on its host with the draw receipt. */ internal val LocalShadowPlane=staticCompositionLocalOf<ShadowPlane?> { null }
 @Composable internal fun rememberShadowPlane(): ShadowPlane { val clock=ownerClock(); val view=LocalView.current.rootView; return remember(clock,view) { ShadowPlane(clock,HostKey.next(view)) } }
@@ -118,7 +119,7 @@ enum class Stratum { Page,Lifted,Floating,Drawer,Player,Modal,Overlay,Diagnostic
 fun Modifier.surface(node: SurfaceView): Modifier { require(node is SurfaceNode) { "Surfaces come from rememberSurfaceNode" }; return layout { m,c -> val p=m.measure(c); layout(p.width,p.height) { p.place(0,0,zIndex=node.order) } } }
 /** D25/D28: the host draws its owned casters' field after its content, then publishes the draw receipt; queued transfers start on the next frame. */
 @Composable internal fun Modifier.shadowPlaneHost(plane: ShadowPlane,strength: Float,spread: Float): Modifier { val cache=rememberGlassShadow(); val view=LocalView.current; SideEffect { plane.view=view }
-    return onPlaced { plane.layout=it }.drawWithContent { drawContent(); plane.revision; with(cache) { draw(plane.casters.flatMap { n -> if(!n.owns(plane)) emptyList() else { val opacity=n.opacity.value()*((n.shape as? LayoutShape)?.opacity?.invoke()?:1f); if(opacity>0f) n.frameOn(plane).bodies.map { it to opacity } else emptyList() } },strength,spread) }; if(plane.receipt()) view.postOnAnimation { plane.admit() } } }
+    return onPlaced { plane.layout=it }.drawWithContent { drawContent(); plane.revision; with(cache) { draw(plane.casters.flatMap { n -> if(!n.owns(plane) || n.role==ShadowRole.None) emptyList() else { val opacity=n.opacity.value()*((n.shape as? LayoutShape)?.opacity?.invoke()?:1f); if(opacity>0f) n.frameOn(plane).bodies.map { it to opacity } else emptyList() } },strength,spread) }; if(plane.receipt()) view.postOnAnimation { plane.admit() } } }
 /** The existing host layout provides its registry to descendant surface owners; the modifier also fits a page's existing layout. */
 @Composable internal fun ShadowPlaneHost(plane: ShadowPlane,strength: Float,spread: Float,modifier: Modifier,content: @Composable androidx.compose.foundation.layout.BoxScope.()->Unit) {
     CompositionLocalProvider(LocalShadowPlane provides plane) { androidx.compose.foundation.layout.Box(modifier.shadowPlaneHost(plane,strength,spread),content=content) } }
