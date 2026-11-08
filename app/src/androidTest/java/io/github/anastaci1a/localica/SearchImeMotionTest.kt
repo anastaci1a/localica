@@ -145,7 +145,9 @@ class SearchImeMotionTest {
             targetVisible == false && targetIme == 0 && ime > navigation && activeHideIds.isNotEmpty()
     }
 
-    // API 30+ uses platform animation callbacks, not synthetic legacy compat animation.
+    // Observe the surviving host on every API: a released legacy popup can report
+    // zero before this host receives the native hide. Only API 30+ installs platform
+    // animation callbacks; synthetic legacy callbacks cannot prove native overlap.
     // This visible zero-size decor sibling never takes input or replaces Compose listeners.
     // A callback can change native frame synchronization: this is not timing-equivalent
     // evidence to the uninstrumented baseline, and cannot establish optical acceptance.
@@ -222,7 +224,9 @@ class SearchImeMotionTest {
         fun snapshot(): NativeReturnEvidence {
             val target = ViewCompat.getRootWindowInsets(this)
             return NativeReturnEvidence(SystemClock.uptimeMillis(), compose.mainClock.currentTime,
-                requested, progressAt, isAttachedToWindow, hasWindowFocus(), animatedIme, animatedNavigation,
+                requested, progressAt, isAttachedToWindow, hasWindowFocus(), animatedIme,
+                if (android.os.Build.VERSION.SDK_INT >= 30) animatedNavigation
+                else target?.getInsets(WindowInsetsCompat.Type.navigationBars())?.bottom ?: 0,
                 target?.isVisible(WindowInsetsCompat.Type.ime()),
                 target?.getInsets(WindowInsetsCompat.Type.ime())?.bottom,
                 progressed.filter { it in activeHides }.map { System.identityHashCode(it) })
