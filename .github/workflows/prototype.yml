@@ -102,7 +102,7 @@ jobs:
     - name: Build and check
       # The Kotlin daemon inherits this heap; debug and release compile concurrently in it (#636).
       # Same sizing as the Android workflow static-checks job on the same 16 GB hosted runner.
-      run: bash .github/gradle-transient-retry.sh ./gradlew testDebugUnitTest lintDebug assembleDebug assembleRelease --no-daemon --max-workers=4 -Dorg.gradle.jvmargs='-Xmx6g -Dfile.encoding=UTF-8'
+      run: bash .github/gradle-transient-retry.sh ./gradlew testDebugUnitTest lintDebug assembleDebug assembleRelease --no-daemon --max-workers=4 -Dorg.gradle.jvmargs='-Xmx6g -Dfile.encoding=UTF-8' --profile
     - name: Record downloaded dependency files
       if: ${{ !cancelled() }}
       run: bash .github/dependency-cache-audit.sh report
@@ -141,6 +141,7 @@ jobs:
         name: prototype-build-reports
         path: |-
           app/build/reports/
+          build/reports/profile/
           prototype-runner-environment.txt
     name: Prototype build, unit tests and lint
   focused_26:
