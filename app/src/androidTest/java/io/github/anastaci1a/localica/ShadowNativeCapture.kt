@@ -110,6 +110,7 @@ internal class ShadowNativeCapture(private val rule: ComposeContentTestRule,
         val drawn = CountDownLatch(sources.size)
         val ledgers = sources.map { linkedMapOf<Int, Pair<ShadowDrawState, Long>>() }
         val submitted = BooleanArray(sources.size)
+        val metricsVsyncs = sources.map { mutableListOf<Long>() }
         var overflow = false
         var nativeVsync = 0L
         val choreographer = rule.runOnUiThread { Choreographer.getInstance() }
@@ -119,8 +120,10 @@ internal class ShadowNativeCapture(private val rule: ComposeContentTestRule,
             }
         }
         val listeners = sources.mapIndexed { index, _ -> Window.OnFrameMetricsAvailableListener { _, frame, _ ->
+            val vsync = frame.getMetric(FrameMetrics.VSYNC_TIMESTAMP)
+            if (metricsVsyncs[index].size < 32) metricsVsyncs[index] += vsync
             if (!submitted[index] && ledgers[index].size >= 2 &&
-                ledgers[index].values.last().second == frame.getMetric(FrameMetrics.VSYNC_TIMESTAMP)) {
+                ledgers[index].values.drop(1).any { it.second == vsync }) {
                 submitted[index] = true; drawn.countDown()
             }
         } }
@@ -153,7 +156,10 @@ internal class ShadowNativeCapture(private val rule: ComposeContentTestRule,
                     source.marker.invalidateSelf(); source.view.invalidate()
                 }
             }
-            check(drawn.await(5, TimeUnit.SECONDS)) { "Incomplete: not every window completed both native marker traversals" }
+            check(drawn.await(5, TimeUnit.SECONDS)) {
+                "Incomplete: not every window completed both native marker traversals; " +
+                    rule.runOnUiThread { sources.indices.map { "${sources[it].id}: ledger=${ledgers[it]} metrics=${metricsVsyncs[it]}" } }
+            }
             // Submission readiness only. The original pixels, never these callbacks, grant correlation.
             InstrumentationRegistry.getInstrumentation().uiAutomation.waitForIdle(100, 5000)
             val bitmap = checkNotNull(InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot()) {
@@ -178,7 +184,7 @@ internal class ShadowNativeCapture(private val rule: ComposeContentTestRule,
                         check(point.x >= 0 && point.y >= 0 && point.x + 4 < bitmap.width && point.y < bitmap.height)
                         val token = bitmap.getPixel(point.x, point.y) and 0xffffff
                         val entry = checkNotNull(ledgers[index][token]) {
-                            "Incomplete: stale, occluded or dimmed display for ${source.id}; token=$token ledger=${ledgers[index].keys}"
+                            "Incomplete: stale, occluded or dimmed display for ${source.id}; token=$token ledger=${ledgers[index]}"
                         }
                         check(entry.first.sequence == clockSequence()) { "Incomplete: Engine changed during native capture" }
                         ShadowWindowReceipt(source.id, NativeShadowGeneration(token, point, entry.second), entry.first)

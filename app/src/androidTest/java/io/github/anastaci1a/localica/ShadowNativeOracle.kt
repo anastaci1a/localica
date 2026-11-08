@@ -46,8 +46,10 @@ internal fun verifyShadowUnion(rule: ComposeContentTestRule, actual: PresentedCa
     CanvasDrawScope().draw(rule.density, LayoutDirection.Ltr, Canvas(blank), extent) { drawRect(background) }
     CanvasDrawScope().draw(rule.density, LayoutDirection.Ltr, Canvas(expected), extent) {
         drawRect(background)
+        drawContext.canvas.saveLayer(Rect(0f, 0f, size.width, size.height), Paint())
         glassShadows(bodies, strength, spread, GlassShadowGeometry(), receiver = receipt.receiver,
             exclusion = receipt.exclusion?.renderer(), rasterizing = true)
+        drawContext.canvas.restore()
     }
     val reference = actual.copy(image = expected, offscreen = true)
     val probe = ShadowFieldProbe(regions, 1f / 255f)
