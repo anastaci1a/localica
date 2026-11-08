@@ -21,9 +21,9 @@ import org.junit.Rule
 import org.junit.Test
 import java.io.File
 
-/** Functional #680 probe. Native screenshots and wall time after Current do not pump the Compose clock. */
+/** Functional #680 probe. Drain queued fixture work at observations; record native screenshots and actual wall time. */
 class HeaderGlassFreshnessTest {
-    private val liveEffects = InstrumentationRegistry.getArguments().getString("glassLiveEffects", "true").toBoolean()
+    private val liveEffects = InstrumentationRegistry.getArguments().getString("glassLiveEffects", "false").toBoolean()
     @get:Rule val compose = localicaComposeRule(if (liveEffects) android.os.Handler(android.os.Looper.getMainLooper()).asCoroutineDispatcher().immediate else EmptyCoroutineContext)
 
     @Test fun artworkSwitchWithoutUnrelatedRedraw() {
@@ -60,6 +60,7 @@ class HeaderGlassFreshnessTest {
             }
         } }
         fun screenshot(name: String) {
+            if (!liveEffects) compose.waitForIdle()
             val bitmap = requireNotNull(instrumentation.uiAutomation.takeScreenshot())
             File(output, "$name.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
             bitmap.recycle()
