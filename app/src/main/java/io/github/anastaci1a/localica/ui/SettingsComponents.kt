@@ -36,7 +36,7 @@ internal fun <T : Any> SettingsNavigationPage(target: T, title: (T) -> String, o
             Column(Modifier.fillMaxSize().safeDrawingPadding()) {
                 Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp).heightIn(min = 64.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    ActionIcon(AppIcon.ActionBack, backLabel, onClick = onBack)
+                    ActionIcon(AppIcon.ActionChevronLeft, backLabel, onClick = onBack)
                     Text(title(shown), Modifier.weight(1f), style = MaterialTheme.typography.titleLarge)
                     ActionIcon(AppIcon.ActionClose, "Close settings", onClick = onClose)
                 }

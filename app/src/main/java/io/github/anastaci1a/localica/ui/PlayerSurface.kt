@@ -556,7 +556,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
                 }
                 CompositionLocalProvider(LocalFrostedBackdrop provides lyricBackdrop) {
                     Box(Modifier.align(Alignment.TopStart).padding(start = 16.dp)) {
-                        ActionIcon(AppIcon.ActionDown, "Collapse player") { settle(false) }
+                        ActionIcon(AppIcon.ActionChevronDown, "Collapse player") { settle(false) }
                     }
                     Box(Modifier.align(Alignment.TopEnd).padding(end = 16.dp)) {
                         LyricsHeaderActions(lyricsOpen, lyricProgress, sourcesAnchor, sourcesPreparation,

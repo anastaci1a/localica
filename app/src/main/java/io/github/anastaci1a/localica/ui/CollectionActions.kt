@@ -56,10 +56,10 @@ import kotlinx.coroutines.*
             ActionMenuItem("New queue", icon = AppIcon.TabQueues, enabled = queues != null, onClick = { act(SongTap.NewQueue) })
             ActionMenuItem("Play now", icon = AppIcon.TransportPlay, enabled = queues != null, onClick = { act(SongTap.PlayNow) })
         }
-        ActionMenuItem("Play next", icon = AppIcon.MenuPlayNext, enabled = item.songs.isNotEmpty() && queues != null, onClick = { act(SongTap.PlayNext) })
-        ActionMenuItem("Add to current queue", icon = AppIcon.MenuQueueAdd, enabled = item.songs.isNotEmpty() && queues != null, onClick = { act(SongTap.Append) })
-        ActionMenuItem("Add to a queue", icon = AppIcon.MenuQueueAdd, enabled = item.songs.isNotEmpty() && queues != null, onClick = { onDismiss(); queuePicker = true })
-        ActionMenuItem("Add to playlist", icon = AppIcon.MenuPlaylistAdd, enabled = item.songs.isNotEmpty() && controller != null, onClick = { onDismiss(); adding = true })
+        ActionMenuItem("Play next", icon = AppIcon.MenuListAddNext, enabled = item.songs.isNotEmpty() && queues != null, onClick = { act(SongTap.PlayNext) })
+        ActionMenuItem("Add to current queue", icon = AppIcon.MenuListAddLast, enabled = item.songs.isNotEmpty() && queues != null, onClick = { act(SongTap.Append) })
+        ActionMenuItem("Add to a queue", icon = AppIcon.MenuListAddLast, enabled = item.songs.isNotEmpty() && queues != null, onClick = { onDismiss(); queuePicker = true })
+        ActionMenuItem("Add to playlist", icon = AppIcon.MenuListAddLast, enabled = item.songs.isNotEmpty() && controller != null, onClick = { onDismiss(); adding = true })
         if (item.ref.kind in io.github.anastaci1a.localica.home.PinEdits.supported) {
             HorizontalDivider(Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
             ActionMenuItem(if (item.ref in pins) "Unpin from Home" else "Pin to Home", icon = AppIcon.MenuPin, onClick = { onPin(item.ref); onDismiss() })
