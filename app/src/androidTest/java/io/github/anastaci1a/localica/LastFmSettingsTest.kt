@@ -37,7 +37,7 @@ class LastFmSettingsTest {
                     lastFmContent = { LastFmSettings(controller) })
             } }
             compose.waitUntil(5000) { !controller.state.value.loading }
-            compose.onNodeWithTag("lastfm-username").performTextInput("fixture-user")
+            compose.onNode(hasSetTextAction() and hasAnyAncestor(hasTestTag("lastfm-username")), useUnmergedTree = true).performTextInput("fixture-user")
             compose.onNodeWithTag("lastfm-sync").performScrollTo().performClick()
             compose.waitUntil(5000) { controller.matches.value.counts["song"] == 42L }
             compose.onNodeWithTag("lastfm-review-summary").performScrollTo().assertTextEquals("1 matched · 2 to review")
@@ -72,7 +72,7 @@ class LastFmSettingsTest {
                 FolderSettings(LibraryUiState(loading = false), {}, {}, {}, initialCategory = "Last.fm", lastFmContent = { LastFmSettings(controller) })
             } }
             compose.onNodeWithText("Last.fm is disabled in this build: no bundled API key.").assertIsDisplayed()
-            compose.onNodeWithTag("lastfm-username").assertIsNotEnabled()
+            compose.onNode(hasSetTextAction() and hasAnyAncestor(hasTestTag("lastfm-username")), useUnmergedTree = true).assertIsNotEnabled()
             compose.onNodeWithTag("lastfm-sync").assertIsNotEnabled()
             controller.sync("fixture-user")
             compose.waitUntil(5000) { controller.state.value.problem?.contains("disabled") == true }
