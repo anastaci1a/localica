@@ -1,5 +1,8 @@
 package io.github.anastaci1a.localica
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
@@ -23,13 +26,15 @@ import org.junit.Test
 /** Counts committed root compositions, independently of animation frame count. */
 @OptIn(ExperimentalTestApi::class)
 class SheetCollapseCompositionTest {
-    private class Scene(val observeClosed: Boolean = false) {
+    private class Scene(val observeClosed: Boolean = false, val compareControl: Boolean = false) {
         var sheet: SheetState? = null; var compositions = 0
         var closed = false; var closedCompositions = 0
+        var presentedPhase = 1f; var controlPhase = 1f
     }
     @Composable private fun Fixture(open: Boolean, now: () -> Long, scene: Scene) {
         val clock = remember { UiClock(object : FrameSource {
             override suspend fun awaitFrame() = withFrameNanos { it }
+            override suspend fun <R> awaitFrame(onFrame: (Long) -> R) = withFrameNanos(onFrame)
         }, now) }
         LaunchedEffect(clock) { clock.run() }
         val spec = remember { ResolvedUiSpec((uiSpec(InterfaceSettings(), geometry =
@@ -41,7 +46,13 @@ class SheetCollapseCompositionTest {
                 ExpansionBasis(Rect(0f, 1000f, 100f, 1100f), Rect(0f, 0f, 100f, 1100f), 1f))
             LaunchedEffect(open) { if (open) sheet.expand() else sheet.collapse() }
             SideEffect { scene.sheet = sheet; scene.compositions++ }
-            Canvas(Modifier.size(20.dp)) { sheet.expansion.phase.value() }
+            Canvas(Modifier.size(20.dp)) { scene.presentedPhase = sheet.expansion.phase.value() }
+            if (scene.compareControl) {
+                val control = remember { Animatable(1f) }
+                // Control 7c9a1bd8 LocalicaScreen: queueOpen effect, handed-off popup, 400ms tween.
+                LaunchedEffect(open) { control.animateTo(if (open) 1f else 0f, tween(400)) }
+                Canvas(Modifier.size(20.dp)) { scene.controlPhase = control.value }
+            }
             if (scene.observeClosed) ClosedHost(sheet.expansion, scene)
         }
     }
@@ -99,6 +110,10 @@ class SheetCollapseCompositionTest {
             assertTrue(sheet.contact.onDragStart())
             sheet.contact.onDrag(-200f)
             sheet.collapse()
+        }
+        mainClock.advanceTimeByFrame()
+        runOnIdle {
+            val sheet = scene.sheet!!
             val owner = sheet.expansion as ExpandCollapse
             assertEquals(false, owner.pendingTarget)
             assertTrue(owner.inContact)
@@ -109,6 +124,31 @@ class SheetCollapseCompositionTest {
         }
         mainClock.advanceTimeBy(2000)
         runOnIdle { assertTrue(scene.sheet!!.expansion.phase.settled); assertFalse(scene.sheet!!.expansion.expanded) }
+    }
+
+    @Test fun firstPresentedCollapseFrameIsNoLaterThanControl() = localicaRunComposeUiTest {
+        val scene = Scene(compareControl = true)
+        var open by mutableStateOf(true)
+        setContent {
+            Fixture(open, { mainClock.currentTime * 1_000_000 }, scene)
+            Box(Modifier.size(20.dp).testTag("collapse-intent").clickable { open = false })
+        }
+        mainClock.autoAdvance = false
+        mainClock.advanceTimeBy(64)
+        runOnIdle { assertEquals(1f, scene.presentedPhase); assertEquals(1f, scene.controlPhase) }
+        onNodeWithTag("collapse-intent").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick)
+        val fixed = mutableListOf<Float>()
+        val control = mutableListOf<Float>()
+        repeat(6) {
+            mainClock.advanceTimeByFrame()
+            runOnIdle { fixed += scene.presentedPhase; control += scene.controlPhase }
+        }
+        val fixedFrame = fixed.indexOfFirst { it < 1f } + 1
+        val controlFrame = control.indexOfFirst { it < 1f } + 1
+        android.util.Log.i("SheetCollapseLatency", "fixedFirst=$fixedFrame controlFirst=$controlFrame fixed=$fixed control=$control")
+        assertTrue("Control must start within six frames: $control", controlFrame > 0)
+        assertTrue("Fixed must start within six frames: $fixed", fixedFrame > 0)
+        assertTrue("Fixed=$fixedFrame must be no later than control=$controlFrame; fixed=$fixed control=$control", fixedFrame <= controlFrame)
     }
 
 }
