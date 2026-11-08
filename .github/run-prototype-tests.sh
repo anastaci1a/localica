@@ -60,6 +60,10 @@ serial=${ANDROID_SERIAL:-emulator-5554}
 actual_api=$(adb -s "$serial" shell getprop ro.build.version.sdk | tr -d '\r')
 [[ "$actual_api" == "$TEST_API" ]] || { echo "Actual SDK $actual_api differs from requested $TEST_API" >&2; exit 2; }
 printf 'serial=%s\nactual_api=%s\n' "$serial" "$actual_api" >> prototype-evidence/context.txt
+aot_args=()
+if [[ $TEST_API == 26 ]]; then
+  aot_args=(-I .github/api26-aot.gradle)
+fi
 source .github/prepare-device-tests.sh
 # Retain the setup's EXIT restoration trap; forward cancellation to the observer,
 # which owns its child process group, before restoration runs.
@@ -73,7 +77,7 @@ stop_child() {
 trap 'stop_child TERM 143' TERM
 trap 'stop_child INT 130' INT
 set +e
-python3 .github/test-evidence/supervise.py --output prototype-evidence/live --run-id "$GITHUB_RUN_ID" --attempt "$GITHUB_RUN_ATTEMPT" --sha "$GITHUB_SHA" --api "$TEST_API" --lane prototype -- ./gradlew connectedDebugAndroidTest --no-daemon --max-workers=2 "-Pandroid.testInstrumentationRunnerArguments.class=$instrument_selector" &
+python3 .github/test-evidence/supervise.py --output prototype-evidence/live --run-id "$GITHUB_RUN_ID" --attempt "$GITHUB_RUN_ATTEMPT" --sha "$GITHUB_SHA" --api "$TEST_API" --lane prototype -- ./gradlew connectedDebugAndroidTest "${aot_args[@]}" --no-daemon --max-workers=2 "-Pandroid.testInstrumentationRunnerArguments.class=$instrument_selector" &
 child=$!
 wait "$child"
 result=$?
