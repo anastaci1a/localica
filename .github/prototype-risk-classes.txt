@@ -396,3 +396,5 @@ io.github.anastaci1a.localica.ArtworkChooserShortViewportTest
 io.github.anastaci1a.localica.MotionFollowupTest
 io.github.anastaci1a.localica.BackdropInvalidationTest
 io.github.anastaci1a.localica.HeaderGlassFreshnessTest
+
+SkipOverflowTaperTest
