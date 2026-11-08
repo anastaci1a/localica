@@ -62,7 +62,7 @@ internal fun glassCasterBody(rect: Rect, density: Density, radius: Dp?, anchor: 
 internal fun glassShadowNeighbors(anchor: GlassAnchor, density: Density): List<RoundRect> {
     val plane = anchor.shadowPlane ?: return emptyList()
     val origin = plane.layout?.takeIf { it.isAttached }?.backdropPosition(plane.view ?: return emptyList()) ?: return emptyList()
-    return plane.casters.filter { it.key !== anchor }.mapNotNull { (it.shape as? LayoutShape)?.laidOut()?.translate(origin) }
+    return plane.casters.filter { it.key !== anchor && it.owns(plane) }.mapNotNull { (it.shape as? LayoutShape)?.laidOut()?.translate(origin) }
 }
 internal val LocalPageShadows = staticCompositionLocalOf<ShadowPlane?> { null }
 internal val LocalSurfaceShadows = staticCompositionLocalOf<ShadowPlane?> { null }
@@ -81,9 +81,15 @@ internal val LocalSurfaceShadows = staticCompositionLocalOf<ShadowPlane?> { null
     val appearance = LocalGlassAppearance.current
     val density = androidx.compose.ui.platform.LocalDensity.current
     val key = anchor ?: remember { Any() }
-    if (group != null) DisposableEffect(group, anchor) { anchor?.shadowPlane = group; onDispose { if (anchor?.shadowPlane === group) anchor.shadowPlane = null } }
-    return if (group == null) clearGlassShadow(appearance.shadowStrength, appearance.shadowSpread, radius) { anchor?.shadowInModal != true }
-        else glassCaster(group, key, opacity) { glassCasterBody(it, density, radius, anchor, opacity()) }
+    val plane = group ?: rememberShadowPlane()
+    DisposableEffect(plane, anchor) { anchor?.shadowPlane = plane; onDispose { if (anchor?.shadowPlane === plane) anchor.shadowPlane = null } }
+    val host = if (group == null) Modifier.shadowPlaneHost(plane, appearance.shadowStrength, appearance.shadowSpread) else Modifier
+    return host.glassCaster(plane, key, if (group == null) ({ 1f }) else opacity, onNode = anchor?.let { owner -> { node, bound ->
+            if (bound) owner.surfaceNode = node else if (owner.surfaceNode === node) owner.surfaceNode = null
+        } }) {
+            if (group != null) glassCasterBody(it, density, radius, anchor, opacity())
+            else if (anchor?.shadowInModal == true) null else glassCasterBody(it, density, radius, null)
+        }
 }
 
 /** Keep visibility compositing outside the surface clip without a tight ViewLayer.

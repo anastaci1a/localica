@@ -51,6 +51,7 @@ import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlin.math.roundToInt
 import io.github.anastaci1a.localica.ui.engine.GlassOriginWell
+import io.github.anastaci1a.localica.ui.engine.SurfaceView
 import io.github.anastaci1a.localica.ui.engine.MotionPixelRect
 import io.github.anastaci1a.localica.ui.engine.motionPixelRect
 import io.github.anastaci1a.localica.ui.engine.GlassShadowExclusion
@@ -70,6 +71,7 @@ internal data class GlassLift(val scale: Float, val pivot: Offset) {
 
 @Stable
 internal class GlassAnchor {
+    var surfaceNode: SurfaceView? by mutableStateOf(null)
     var popupHome: GlassPopupHome? = null
     /** Live presented transform of [bounds], supplied by whatever moves the trigger in draw rather
      * than layout (the selection lift). Null when it is drawn where it is laid out. */

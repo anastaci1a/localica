@@ -141,6 +141,6 @@ internal class LayoutShape(override val key: Any,private val plane: ShadowPlane)
     fun laidOut(): RoundRect? { val host=plane.layout?.takeIf { it.isAttached }; val own=coordinates?.takeIf { it.isAttached }; return if(host==null || own==null) null else body(host.localBoundingBoxOf(own,clipBounds=false)) }
     override fun outline(): ShapeFrame { val b=laidOut(); return ShapeFrame(listOfNotNull(b),b?.boundingRect?:Rect.Zero,b?.topLeftCornerRadius?.x?:0f,GlassStrain.None) }
     override fun outlineAt(stamp: FrameStamp)=outline() }
-@Composable internal fun Modifier.glassCaster(plane: ShadowPlane,key: Any,opacity: ()->Float={ 1f },body: (Rect)->RoundRect?): Modifier { val clock=ownerClock(); val shape=remember(plane,key) { LayoutShape(key,plane) }; SideEffect { shape.body=body; shape.opacity=opacity }
-    val node=remember(clock,plane,key) { SurfaceNode(clock,key,shape,SurfaceTarget(Stratum.Floating,1f,ShadowRole.Glass),plane) }; DisposableEffect(node) { onDispose { node.dispose() } }
+@Composable internal fun Modifier.glassCaster(plane: ShadowPlane,key: Any,opacity: ()->Float={ 1f },onNode: ((SurfaceView,Boolean)->Unit)?=null,body: (Rect)->RoundRect?): Modifier { val clock=ownerClock(); val shape=remember(plane,key) { LayoutShape(key,plane) }; SideEffect { shape.body=body; shape.opacity=opacity }
+    val node=remember(clock,plane,key) { SurfaceNode(clock,key,shape,SurfaceTarget(Stratum.Floating,1f,ShadowRole.Glass),plane) }; DisposableEffect(node) { onNode?.invoke(node,true); onDispose { onNode?.invoke(node,false); node.dispose() } }
     return onGloballyPositioned { shape.coordinates=it; androidx.compose.runtime.snapshots.Snapshot.withoutReadObservation { plane.revision++ } } }

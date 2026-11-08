@@ -20,6 +20,7 @@ import io.github.anastaci1a.localica.ui.engine.*
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Assert.assertSame
+import org.junit.Assert.assertNull
 import org.junit.Rule
 import org.junit.Test
 import kotlin.math.abs
@@ -28,6 +29,41 @@ import kotlin.math.abs
  * and reordering the casters' zIndex leaves the plane's single field unchanged (the plane draws the union after its content). */
 class CompositorAdoptionTest {
     @get:Rule val compose = createComposeRule()
+
+    @Test fun physicalTriggerBindsItsActualCasterAndAWindowLeaseSurvivesItsRemoval() {
+        var shown by mutableStateOf(true)
+        var grouped by mutableStateOf(true)
+        lateinit var anchor: GlassAnchor
+        compose.setContent { EngineTheme {
+            anchor = rememberGlassAnchor()
+            @Composable fun trigger() {
+                if (shown) LiquidGlassSurface(Modifier.size(48.dp).glassAnchor(anchor), pressFeedback = false)
+            }
+            if (grouped) GlassShadowScope(Modifier.size(100.dp)) { trigger() }
+            else Box(Modifier.size(100.dp)) { trigger() }
+        } }
+        for (shared in listOf(true, false)) {
+            compose.runOnIdle { grouped = shared; shown = true }
+            compose.waitForIdle()
+            lateinit var host: ShadowPlane
+            lateinit var source: SurfaceNode
+            lateinit var release: ()->Unit
+            compose.runOnIdle {
+                host = requireNotNull(anchor.shadowPlane)
+                source = requireNotNull(anchor.surfaceNode) as SurfaceNode
+                assertSame("The trigger borrows the registered source, never a proxy node (shared=$shared)", source, host.casters.single())
+                release = source.retainWindow()
+                shown = false
+            }
+            compose.waitForIdle()
+            compose.runOnIdle {
+                assertNull("Unmounting revokes the physical home binding", anchor.surfaceNode)
+                assertSame("The closing native lifetime keeps the same source node", source, host.casters.single())
+                release()
+                assertTrue("Final native release removes the source registration", host.casters.isEmpty())
+            }
+        }
+    }
 
     @Test fun descendantOwnersUseTheHostRegistryAndUnregisterOnRemoval() {
         var shown by mutableStateOf(true)
