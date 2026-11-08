@@ -1040,8 +1040,9 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                                     }, playlist = playlistDetail, pinchHeader = pinchHeader,
                                     onActionBottom = { collectionActionBottom = it })
                                 if (artistDetail) ArtistAlbumChoices(albums, validAlbums, ::chooseArtistAlbums)
-                                if ((artistDetail || playlistDetail) && showSearchPill) Box(Modifier.fillMaxWidth().then(searchSlotLayout)
-                                    .onSizeChanged { measuredSearchSlotHeight = it.height }.clipToBounds()) {
+                                if ((artistDetail || playlistDetail) && showSearchPill) GlassShadowScope(Modifier.fillMaxWidth().then(searchSlotLayout)
+                                    .onSizeChanged { measuredSearchSlotHeight = it.height }) {
+                                    Box(Modifier.fillMaxWidth().clipToBounds()) {
                                     ListSearchPill("Search " + (route.title ?: route.tab.label), {
                                         if (searchVacancy == 0f && searchOriginalOffset < 0) {
                                             searchOriginalOffset = if (gridState.firstVisibleItemIndex == 0) gridState.firstVisibleItemScrollOffset else -1
@@ -1050,6 +1051,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                                         }
                                         localSearch = freshSearch(); localFocusRequest++; localSearchOpen = true
                                     }, Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = ListPillVerticalInset), anchor = searchAnchor)
+                                    }
                                 }
                             }
                         }
