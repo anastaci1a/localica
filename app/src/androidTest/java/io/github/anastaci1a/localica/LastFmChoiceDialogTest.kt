@@ -95,4 +95,22 @@ class LastFmChoiceDialogTest {
         compose.onNodeWithText("Skip").performClick()
         assertEquals(1, skips)
     }
+
+    @Test fun cancellingPendingSaveClosesOnceAndCannotSubmitAgain() {
+        val result = CompletableDeferred<Boolean>()
+        var open by mutableStateOf(true)
+        var closes = 0; var calls = 0
+        val song = Track("one", "Song", "Artist", "Album", 1000, "one.flac", "one.flac")
+        compose.setContent { LocalicaTheme {
+            if (open) LastFmDecision(LastFmMatchRow(LastFmTrack("Artist", "Song", 1), listOf(song), "Check"), listOf(song),
+                { open = false; closes++ }, { calls++; result.await().also { if (it) { open = false; closes++ } } },
+                { open = false; closes++ }) else Text("Closed")
+        } }
+        compose.onNodeWithText("Song · Artist · Album").performClick()
+        compose.onNodeWithText("Use selection").performClick()
+        compose.onNodeWithText("Skip").performClick()
+        compose.onNodeWithText("Closed").assertExists()
+        compose.runOnIdle { result.complete(true) }
+        compose.runOnIdle { assertEquals(1, calls); assertEquals(1, closes) }
+    }
 }

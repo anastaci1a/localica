@@ -26,9 +26,9 @@ class LastFmWorkerTest {
     }
     private fun controller(file: File, scope: CoroutineScope, consent: Consent, api: LastFmApi, time: Long) =
         LastFmController(FileLastFmStore(file), LastFmSync(api, {}), flowOf(LibrarySnapshot()), true, consent, scope, { time })
-    private fun worker(controller: LastFmController, id: UUID, notifications: MutableList<ForegroundInfo>, pages: MutableList<Data>): LastFmWorker =
+    private fun worker(controller: LastFmController, id: UUID, notifications: MutableList<ForegroundInfo>, pages: MutableList<Data>, fullRescan: Boolean = false): LastFmWorker =
         TestListenableWorkerBuilder<LastFmWorker>(context).setId(id)
-            .setInputData(workDataOf(LastFmWork.USERNAME to "user"))
+            .setInputData(workDataOf(LastFmWork.USERNAME to "user", LastFmWork.FULL_RESCAN to fullRescan))
             .setWorkerFactory(object : WorkerFactory() {
                 override fun createWorker(appContext: Context, workerClassName: String, workerParameters: WorkerParameters): ListenableWorker =
                     LastFmWorker(appContext, workerParameters, LastFmWorkRuntime { controller })
@@ -140,5 +140,34 @@ class LastFmWorkerTest {
             // Explicit seed leaves the blocked worker and its durable files for the host to kill, without graceful cancellation.
             if (phase != "seed") { firstScope.cancel(); resumedScope.cancel(); dispose(file); receipt.delete() }
         }
+    }
+
+    @Test fun fullRescanWorkUsesCompletePagingAndPublishesLiveNotificationCounts() = runBlocking {
+        val file = File(context.cacheDir, "lastfm-full-" + UUID.randomUUID() + ".json")
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        val notifications = CopyOnWriteArrayList<ForegroundInfo>(); val pages = CopyOnWriteArrayList<Data>()
+        var fullCalls = 0; var recentCalls = 0
+        try {
+            FileLastFmStore(file).write(old.copy(snapshot = old.snapshot!!.copy(refreshBoundarySeconds = 1)))
+            val api = object : LastFmApi {
+                override fun supportsQuickRefresh() = true
+                override suspend fun page(username: String, number: Int): LastFmPage {
+                    fullCalls++
+                    return LastFmPage(1, 1, listOf(LastFmTrack("Artist", "Complete", 9, album = "Album")))
+                }
+                override suspend fun recent(username: String, number: Int, from: Long, through: Long): LastFmRecentPage {
+                    recentCalls++; error("Full rescan must not use recent history")
+                }
+            }
+            val controller = controller(file, scope, Consent(), api, 100_000)
+            assertEquals(ListenableWorker.Result.success(), worker(controller, UUID.randomUUID(), notifications, pages, true).doWork())
+            assertEquals(1, fullCalls); assertEquals(0, recentCalls)
+            assertEquals(1, pages.last().getInt("songs", -1))
+            assertEquals(1, pages.last().getInt("artists", -1))
+            assertEquals(1, pages.last().getInt("albums", -1))
+            assertEquals(100, pages.last().getInt("percent", -1))
+            assertTrue(notifications.last().notification.extras.getCharSequence("android.text")!!.contains("1 songs · 1 artists · 1 known albums"))
+            assertNotNull(notifications.last().notification.contentIntent)
+        } finally { scope.cancel(); dispose(file) }
     }
 }
