@@ -35,7 +35,7 @@ internal object LastFmNames {
     data class Name(val artist: String, val title: String, val featured: String)
     fun text(value: String?): String = Normalizer.normalize(value.orEmpty(), Normalizer.Form.NFKD)
         .replace(marks, "").lowercase(Locale.ROOT).replace(Regex("['’'.]"), "")
-        .replace(punctuation, " ").trim().replace(spaces, " ")
+        .replace("&", " and ").replace(punctuation, " ").trim().replace(spaces, " ")
     private fun credit(value: String): String = value.split(collaboration).map(::text).filter(String::isNotBlank).sorted().joinToString(" & ")
     fun album(value: String?): String = text(stripEdition(value.orEmpty()))
     private fun stripEdition(value: String): String {
@@ -48,7 +48,7 @@ internal object LastFmNames {
     }
     fun name(artist: String?, title: String): Name {
         val artists = artist.orEmpty().split(feature, limit = 2)
-        val rawTitle = title.replace(fileExtension, "").replace(trackNumber, "")
+        val rawTitle = stripEdition(title.replace(fileExtension, "").replace(trackNumber, ""))
         val titles = rawTitle.split(feature, limit = 2)
         val guests = listOfNotNull(artists.getOrNull(1), titles.getOrNull(1))
             .map { it.trim().trimEnd(')', ']') }.filter(String::isNotBlank)
@@ -85,7 +85,11 @@ object LastFmMatcher {
             }
             val manual = mappings[remote.key]?.let(byId::get)
             val chosen = when {
-                manual != null -> listOf(manual)
+                manual != null -> {
+                    val family = byName[names.getValue(manual.id)].orEmpty().filter {
+                        LastFmNames.album(it.album) == LastFmNames.album(manual.album) }
+                    if (family.size > 1 && sameSong(family, names)) family else listOf(manual)
+                }
                 strong.isNotEmpty() -> candidates
                 candidates.size == 1 -> candidates
                 candidates.size > 1 && sameSong(candidates, names) -> candidates
