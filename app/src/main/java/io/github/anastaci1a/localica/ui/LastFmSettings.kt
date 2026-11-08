@@ -49,8 +49,8 @@ internal fun LastFmSettings(controller: LastFmController) {
                     SettingsStack(inset = Space.Comfortable) { GlassActionRow {
                         if (state.syncing) GlassActionButton(AppIcon.ActionClose, "Stop sync", onClick = controller::cancelSync)
                         else {
-                            GlassActionButton(AppIcon.MenuDownload, "Sync now", enabled = canSync, modifier = Modifier.testTag("lastfm-dashboard-sync")) { controller.sync(username) }
-                            GlassActionButton(AppIcon.MenuDownload, "Full rescan", enabled = canSync && saved.snapshot != null,
+                            GlassActionButton(AppIcon.ActionRefresh, "Sync now", enabled = canSync, modifier = Modifier.testTag("lastfm-dashboard-sync")) { controller.sync(username) }
+                            GlassActionButton(AppIcon.ActionRescan, "Full rescan", enabled = canSync && saved.snapshot != null,
                                 modifier = Modifier.testTag("lastfm-dashboard-full-rescan")) { controller.sync(username, fullRescan = true) }
                         }
                     } }
@@ -110,7 +110,7 @@ internal fun LastFmSettings(controller: LastFmController) {
                 else Text("Use Last.fm counts: off")
             }
             Text("Local plays add temporarily to the archived counts. A refresh replaces that base and clears the additions. Local listening history is kept. Recent ranges use local history.", style = MaterialTheme.typography.bodyMedium)
-            SettingsEntry("Full rescan") { GlassActionButton(AppIcon.MenuDownload, "Full rescan", enabled = canSync) { controller.sync(username, fullRescan = true) } }
+            SettingsEntry("Full rescan") { GlassActionButton(AppIcon.ActionRescan, "Full rescan", enabled = canSync) { controller.sync(username, fullRescan = true) } }
             SettingsEntry("Disconnect Last.fm") { GlassActionButton(AppIcon.ActionClose, "Disconnect Last.fm", enabled = saved.username.isNotBlank(),
                 modifier = Modifier.testTag("lastfm-disconnect"), onClick = controller::disconnect) }
             Text("Turning Last.fm off or disconnecting keeps the archive and match choices on this device.", style = MaterialTheme.typography.bodySmall)
@@ -134,7 +134,7 @@ private fun LastFmConnection(controller: LastFmController, state: LastFmState, o
     SettingsEntry("Last.fm username") { GlassTextField(username, onUsername, label = { Text("Last.fm username") }, singleLine = true,
         enabled = controller.enabled && onlineAllowed && active && !state.loading && !state.syncing,
         modifier = Modifier.fillMaxWidth().testTag("lastfm-username")) }
-    SettingsEntry("Sync now") { GlassActionButton(AppIcon.MenuDownload, if (state.syncing) "Syncing…" else if (state.saved.snapshot == null) "Sync now" else "Quick refresh",
+    SettingsEntry("Sync now") { GlassActionButton(AppIcon.ActionRefresh, if (state.syncing) "Syncing…" else if (state.saved.snapshot == null) "Sync now" else "Quick refresh",
         enabled = canSync, modifier = Modifier.testTag("lastfm-sync")) { controller.sync(username) } }
     Text("Wait a minute between syncs. Quick refresh fetches recent changes; Full rescan fetches the complete account.", style = MaterialTheme.typography.bodySmall)
     SettingsEntry("Last sync") { Text(state.saved.snapshot?.let { "Last sync: ${lastFmSyncTime(context, it.syncedAt)} · ${it.username}" }
