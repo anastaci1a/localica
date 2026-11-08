@@ -18,9 +18,10 @@ class PlayerDragLyricsBackTest {
     @Test fun backEarlyInClosingDragKeepsItsReleaseAndCommitsCollapse() = closingDrag(6)
     @Test fun backMidClosingDragKeepsItsReleaseAndCommitsCollapse() = closingDrag(18)
     @Test fun backLateInClosingDragKeepsItsReleaseAndCommitsCollapse() = closingDrag(30)
+    @Test fun queuedMovesAcrossBackKeepTheirReleaseAndCommitCollapse() = closingDrag(18, 4)
 
-    private fun closingDrag(backStep: Int) = localicaRunComposeUiTest {
-        fun checkpoint(stage: String) = android.util.Log.i("BackCollapse676", "step=$backStep $stage")
+    private fun closingDrag(backStep: Int, movesPerFrame: Int = 1) = localicaRunComposeUiTest {
+        fun checkpoint(stage: String) = android.util.Log.i("BackCollapse676", "step=$backStep batch=$movesPerFrame $stage")
         checkpoint("start")
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         instrumentation.targetContext.getSharedPreferences("interface", 0).edit().clear().commit()
@@ -80,7 +81,9 @@ class PlayerDragLyricsBackTest {
             onRoot().performTouchInput { down(handle) }
             for (i in 1..40) {
                 onRoot().performTouchInput { moveBy(Offset(0f, step), delayMillis = 16) }
-                mainClock.advanceTimeByFrame()
+                // The A35 failure delivered several MOVE samples between presented frames.
+                // Keep that ordering fixed, including Back between two queued move groups.
+                if (i % movesPerFrame == 0 || i == 40) mainClock.advanceTimeByFrame()
                 if (i == backStep) {
                     checkpoint("before Back at move $i")
                     val moving = onNodeWithTag("player-surface").fetchSemanticsNode().boundsInRoot
