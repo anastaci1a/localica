@@ -141,6 +141,7 @@ io.github.anastaci1a.localica.ListBackTest
 io.github.anastaci1a.localica.ListControlsTest
 io.github.anastaci1a.localica.ListDensityGeometryTest
 io.github.anastaci1a.localica.ListDensityRevisionTest
+io.github.anastaci1a.localica.ListMotionClockTest
 io.github.anastaci1a.localica.ListMotionTest
 io.github.anastaci1a.localica.ListReturnControlsTest
 io.github.anastaci1a.localica.ListSearchTest
@@ -209,6 +210,7 @@ io.github.anastaci1a.localica.PlayerDragLyricsBackTest
 io.github.anastaci1a.localica.PlayerDragVelocityTest
 io.github.anastaci1a.localica.PlayerGestureTest
 io.github.anastaci1a.localica.PlayerLayoutTest
+io.github.anastaci1a.localica.PlayerHarnessClockTest
 io.github.anastaci1a.localica.PlayerLyricsForegroundTest
 io.github.anastaci1a.localica.PlayerLyricsMaterialEaseTest
 io.github.anastaci1a.localica.PlayerLyricsThemeEaseTest
