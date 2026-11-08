@@ -57,6 +57,79 @@ class PopupShadowContinuityTest {
     @Test fun utilityShadowHasOneUnclippedFieldThroughoutRepeatedReversals() = verify(nested = false)
     @Test fun nestedShadowHasOneUnclippedFieldThroughoutRepeatedReversals() = verify(nested = true)
 
+    /** #693: sample every Engine frame through an admitted partial opening, its
+     * cancellation, a reversal, and the actual source/native return boundary.
+     * Native markers correlate both windows; no endpoint batching at the seam. */
+    @Test fun cancelledPartialOpeningKeepsItsShadowThroughEveryReturnFrame() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val root = InstrumentationRegistry.getArguments().getString("additionalTestOutputDir")?.let(::File)
+            ?: requireNotNull(instrumentation.targetContext.getExternalFilesDir(null))
+        output = File(root, "popup-shadow-continuity/cancelled-settle-api${Build.VERSION.SDK_INT}")
+        assertTrue(output.isDirectory || output.mkdirs())
+        compose.setContent { Fixture(false) }
+        compose.waitForIdle()
+        compose.mainClock.autoAdvance = false
+        val log = StringBuilder("api=${Build.VERSION.SDK_INT} density=${compose.density.density}\n")
+        var token = 0
+        var seamSamples = 0
+        fun frame(label: String) {
+            compose.mainClock.advanceTimeByFrame()
+            compose.waitForIdle()
+            val phase = anchor.contact.expansion.value
+            val image = syncedScreenshot()
+            try {
+                val gap = sharedGapDarkness(image)
+                log.append("$label phase=$phase hidden=${anchor.hidden} modal=${anchor.modalPresent} " +
+                    "inModal=${anchor.shadowInModal} window=${popupWindow != null} gap=$gap\n")
+                // Preserve the original failing frame before evaluating its optical gate.
+                File(output, "frame-${(token++).toString().padStart(3, '0')}-$label.png").outputStream().use {
+                    assertTrue(image.compress(Bitmap.CompressFormat.PNG, 100, it))
+                }
+                if (phase <= .002f) {
+                    seamSamples++
+                    assertEquals("$label home shadow differs from the original field\n$log", baselineGap, gap, 3f)
+                }
+            } finally { image.recycle() }
+        }
+        try {
+            baselineGap = sharedGapDarkness()
+            assertTrue("Resting field must be visible: $baselineGap", baselineGap > 8f)
+            repeat(2) { cycle ->
+                compose.runOnIdle { open = true }
+                var admitted = false
+                for (index in 0 until 90) {
+                    frame("opening-$cycle-$index")
+                    if (anchor.hidden && anchor.contact.expansion.value in .05f.. .8f) {
+                        admitted = true
+                        break
+                    }
+                }
+                assertTrue("Must cancel a genuinely admitted partial opening\n$log", admitted)
+                compose.runOnIdle { open = false }
+                if (cycle == 1) {
+                    repeat(3) { frame("reverse-close-$it") }
+                    compose.runOnIdle { open = true }
+                    repeat(3) { frame("reverse-open-$it") }
+                    compose.runOnIdle { open = false }
+                }
+                var settledFrames = 0
+                for (index in 0 until 180) {
+                    frame("return-$cycle-$index")
+                    if (popupWindow == null && !anchor.modalPresent) settledFrames++ else settledFrames = 0
+                    if (settledFrames == 4) break
+                }
+                assertEquals("Return must dispose its native window\n$log", 4, settledFrames)
+            }
+            assertTrue("Include both handoffs and settled source frames", seamSamples >= 8)
+        } finally {
+            File(output, "frames.txt").writeText(log.toString())
+            compose.runOnIdle { open = false }
+            compose.mainClock.autoAdvance = true
+        }
+    }
+
+    private var baselineGap = 0f
+
     /** #465: a neighbor shares the trigger's union shadow. Ownership moves between the
      * page and popup windows at identical geometry on every open and return, so their
      * shared gap must not switch between union and stacked coverage at either handoff. */
@@ -132,7 +205,10 @@ class PopupShadowContinuityTest {
     /** Mean shadow levels (red channel, 0-255) in the gap between the neighbor and trigger. */
     private fun sharedGapDarkness(): Float {
         val on = syncedScreenshot()
-        try {
+        try { return sharedGapDarkness(on) } finally { on.recycle() }
+    }
+
+    private fun sharedGapDarkness(on: Bitmap): Float {
             val d = compose.density.density
             val gx = ((neighboringBody.right + anchor.bounds.left) / 2f).roundToInt()
             // The flat white page at the same rows, beyond the trigger's shadow reach.
@@ -145,7 +221,6 @@ class PopupShadowContinuityTest {
                 sum += AndroidColor.red(on.getPixel(reference, y)) - AndroidColor.red(on.getPixel(gx + dx, y)); count++
             }
             return sum / count
-        } finally { on.recycle() }
     }
 
     /** Wait until the page window and any popup window have both drawn this token:
