@@ -313,7 +313,7 @@ fun LocalicaScreen(
         SongDragScene(dragHost, Modifier.fillMaxSize()) {
         CompositionLocalProvider(LocalGlassPopupHome provides browsePopupHome) {
         Box(Modifier.fillMaxSize().glassPopupHome(browsePopupHome)) {
-        Column(Modifier.fillMaxSize()
+        Column(Modifier.fillMaxSize().glassPopupProjection(utilityPopupHome, browseBackdrop)
             // The opaque full player covers this entire scene. Keep its composition,
             // scroll state and cached recording, but do not submit hidden pixels.
             .drawWithContent { if (!hasPlayer || !playerFullyOpen) drawContent() }
@@ -383,7 +383,6 @@ fun LocalicaScreen(
             }
             }
         }
-        Box(Modifier.fillMaxSize().glassPopupProjection(utilityPopupHome, browseBackdrop))
         val tabActivity = rememberSelectorTrackActivity()
         Row(Modifier.align(Alignment.BottomCenter).padding(horizontal = 12.dp)
             .padding(bottom = inset + 8.dp).height(NavigationPillHeight).fillMaxWidth()
