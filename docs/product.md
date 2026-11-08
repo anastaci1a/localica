@@ -145,4 +145,4 @@ Artist rows, gallery tiles, and the artist page show album art immediately. With
 
 Photos match artist names and local releases through Deezer, then Wikimedia, with album art as fallback. The 64 MiB disk cache refreshes after 30 days. Artist photos settings can clear cached images or refresh the library while preserving match choices.
 
-The artist menu can choose another provider match or clear a photo. Clear keeps album art until another photo is chosen. The chooser shows Wikimedia attribution and licence information. Photos never change audio files or embedded artwork.
+The artist menu can choose another provider match or clear a photo. Clear keeps album art until another photo is chosen. Artist photo information shows Wikimedia attribution and licence information. Photos never change audio files or embedded artwork.
