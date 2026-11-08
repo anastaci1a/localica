@@ -118,6 +118,31 @@ class IconPackAliasTest {
             }
     }
 
+    @Test fun canonicalMixedFormatWinnersSurviveInstallAndReloadWithOriginalBytes() {
+        val canonical = "action.ellipsis"
+        val old = "action.more"
+        for (canonicalFormat in listOf("png", "svg")) for (reverse in listOf(false, true)) {
+            val winner = if (canonicalFormat == "png") png(true) else horizontal
+            val aliasFormat = if (canonicalFormat == "png") "svg" else "png"
+            val loser = if (aliasFormat == "png") png(false) else vertical
+            val entries = listOf("icons/$canonical.$canonicalFormat" to winner, "icons/$old.$aliasFormat" to loser)
+            import(if (reverse) entries.reversed() else entries)
+            val directory = File(context.filesDir, "icon-packs/${IconPacks.activeId.value}/icons")
+            assertEquals(setOf("$canonical.$canonicalFormat"), directory.list()!!.toSet())
+            assertArrayEquals(winner, File(directory, "$canonical.$canonicalFormat").readBytes())
+            IconPacks.load(context)
+            if (canonicalFormat == "svg") {
+                assertEquals(SvgIconParser.parse(horizontal).toImageVector(), IconPacks.images.value.vectors[canonical])
+                assertTrue(IconPacks.images.value.masks.isEmpty())
+            } else {
+                val bitmap = requireNotNull(IconPacks.images.value.masks[canonical])
+                assertEquals(255, Color.alpha(bitmap.getPixel(bitmap.width / 4, bitmap.height / 2)))
+                assertEquals(0, Color.alpha(bitmap.getPixel(bitmap.width * 3 / 4, bitmap.height / 2)))
+                assertTrue(IconPacks.images.value.vectors.isEmpty())
+            }
+        }
+    }
+
     @Test fun rejectedCanonicalFallsBackToAliasAndBuiltinsRemainAvailable() {
         for ((old, canonical) in aliases) {
             val report = import(listOf("icons/$canonical.svg" to "<svg><script/></svg>".toByteArray(), "icons/$old.svg" to vertical))
