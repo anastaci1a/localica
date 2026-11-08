@@ -64,7 +64,7 @@ import kotlin.math.roundToInt
 
 /** Optional screen and per-cell work evidence (kind, route or item key); no behavior depends on it. */
 internal data class BrowseScrollFrame(val index: Int, val offset: Int, val headerHeight: Int?, val rowHeight: Int?,
-    val viewportWidth: Int = 0, val noticeWidth: Int? = null)
+    val viewportWidth: Int = 0, val noticeWidth: Int? = null, val noticeLookahead: Boolean? = null, val noticeContent: Int? = null)
 internal class BrowseScrollFrameProbe {
     var request by mutableIntStateOf(0)
     @Volatile var serial = 0
@@ -1034,7 +1034,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                     scrollFrameProbe.frame = BrowseScrollFrame(gridState.firstVisibleItemIndex, gridState.firstVisibleItemScrollOffset,
                         layout.visibleItemsInfo.firstOrNull { it.index == 0 }?.size?.height,
                         layout.visibleItemsInfo.firstOrNull { it.index > 0 }?.size?.height,
-                        layout.viewportSize.width, noticeMeasurement.width)
+                        layout.viewportSize.width, noticeMeasurement.width, noticeMeasurement.lookahead, noticeMeasurement.contentIdentity)
                     scrollFrameProbe.serial++
                 })
                 .controlScrollParent(gridState, ControlScrollAxis.Vertical)
@@ -1079,6 +1079,13 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                         maxOf(with(density) { returnControlHeight.toDp() } + floatingControlClearance,
                             with(density) { actionControlHeight.toDp() }) + 16.dp)) {
                 item(key = "browser-notice", contentType = "notice", span = { GridItemSpan(maxLineSpan) }) {
+                    if (measuresNotice) {
+                        // The grid canonicalizes a zero-height notice to item 1 / offset 0 and then
+                        // deactivates item 0. Pinning keeps the actual notice composed and measured
+                        // there, so its content changes are observed instead of inferred.
+                        val pinnable = androidx.compose.ui.layout.LocalPinnableContainer.current
+                        DisposableEffect(pinnable) { val pin = pinnable?.pin(); onDispose { pin?.release() } }
+                    }
                     // Grid gutters belong to tiles; full-span headers keep their viewport alignment.
                     Column(Modifier.requiredWidth(with(density) { viewportWidth.toDp() }).testTag("browse-full-span")
                         .then(if (measuresNotice) Modifier.measureBrowseNotice(noticeMeasurement, noticeContent) else Modifier)

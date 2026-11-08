@@ -22,11 +22,18 @@ import androidx.compose.ui.unit.LayoutDirection
 /** A receipt from the actual notice node; query/return intent does not own its lifetime. */
 internal class BrowseNoticeMeasurement {
     private data class Receipt(val node: Any, val content: Any, val width: Int,
-        val density: Float, val fontScale: Float, val direction: LayoutDirection, val height: Int)
+        val density: Float, val fontScale: Float, val direction: LayoutDirection, val height: Int,
+        val lookahead: Boolean) {
+        fun sameKey(other: Receipt) = content === other.content && width == other.width &&
+            density == other.density && fontScale == other.fontScale && direction == other.direction
+    }
     private var receipt by mutableStateOf<Receipt?>(null)
     private var attached: Any? = null
 
     val width: Int? get() = receipt?.width
+    /** Evidence only: which pass published the current receipt and for which notice identity. */
+    val lookahead: Boolean? get() = receipt?.lookahead
+    val contentIdentity: Int? get() = receipt?.let { System.identityHashCode(it.content) }
     fun hasReceipt(node: Any, content: Any): Boolean = receipt?.let {
         it.node === node && it.node === attached && it.content === content
     } == true
@@ -43,8 +50,19 @@ internal class BrowseNoticeMeasurement {
         }
     }
     fun invalidate(node: Any) { if (attached === node) receipt = null }
-    fun measured(node: Any, content: Any, width: Int, height: Int, density: Density, direction: LayoutDirection) {
-        if (attached === node) receipt = Receipt(node, content, width, density.density, density.fontScale, direction, height)
+    /**
+     * Publishes one pass of the attached node. The approach pass always wins. A lookahead
+     * pass only fills a missing or differently keyed receipt: when the lazy grid canonicalizes
+     * a zero-height notice away from its visible lines, that lookahead result is the only
+     * geometry it ever used, and no approach pass follows for the same node and frame.
+     */
+    fun measured(node: Any, content: Any, width: Int, height: Int, density: Density, direction: LayoutDirection,
+        lookahead: Boolean = false) {
+        if (attached !== node) return
+        val next = Receipt(node, content, width, density.density, density.fontScale, direction, height, lookahead)
+        val current = receipt
+        if (lookahead && current != null && !current.lookahead && current.node === node && current.sameKey(next)) return
+        receipt = next
     }
 }
 
@@ -126,10 +144,12 @@ private class NoticeMeasureNode(var state: BrowseNoticeMeasurement, var content:
         measuring = true
         try {
             val child = measurable.measure(constraints)
-            if (!isLookingAhead) {
+            // The grid measures its items with an unbounded main axis. A bounded height is
+            // some other owner's constraint, not notice geometry: publish nothing for it.
+            if (constraints.maxHeight == Constraints.Infinity) {
                 measured = true
-                state.measured(token, content, child.width, child.height, this, layoutDirection)
-            }
+                state.measured(token, content, child.width, child.height, this, layoutDirection, lookahead = isLookingAhead)
+            } else state.invalidate(token)
             return layout(child.width, child.height) { child.placeRelative(0, 0) }
         } finally { measuring = false }
     }
