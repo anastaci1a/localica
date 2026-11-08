@@ -19,27 +19,42 @@ class TransportMotionTest {
         }
     }
 
-    @Test fun edgeTaperRampsSymmetricallyOutsideTheRestBounds() {
-        assertEquals(.25f, SkipTaperMargin, 0f)
-        assertEquals(.25f, SkipTaperBand, 0f)
-        for ((left, right) in listOf(.08f to .895f, .2f to .8f, .1f to .45f)) {
-            val width = right - left
+    @Test fun edgeTaperStartsAtInkAndReachesZeroAtTheOutermostTriangleEdge() {
+        for ((left, right, pitch) in listOf(Triple(.08f, .895f, .4f), Triple(.2f, .8f, .3f))) {
+            assertEquals(1f, skipTaperAlpha(left, left, right, pitch), 0f)
+            assertEquals(1f, skipTaperAlpha(right, left, right, pitch), 0f)
+            assertEquals(0f, skipTaperAlpha(left - pitch, left, right, pitch), .00001f)
+            assertEquals(0f, skipTaperAlpha(right + pitch, left, right, pitch), .00001f)
             for (i in 0..1000) {
-                val distance = i / 1000f * width
-                val l = skipTaperAlpha(left - distance, left, right)
-                val r = skipTaperAlpha(right + distance, left, right)
-                assertEquals("Symmetric for ink $left..$right", l, r, .00001f)
-                if (distance <= width * SkipTaperMargin) assertEquals(1f, l, .00001f)
-                if (distance >= width * (SkipTaperMargin + SkipTaperBand)) assertEquals(0f, l, .00001f)
-                if (i > 0) {
-                    val before = skipTaperAlpha(left - (i - 1) / 1000f * width, left, right)
-                    assertTrue("No spatial alpha step", kotlin.math.abs(before - l) < .005f)
-                }
+                val distance = i / 1000f * pitch
+                val l = skipTaperAlpha(left - distance, left, right, pitch)
+                val r = skipTaperAlpha(right + distance, left, right, pitch)
+                assertEquals("Symmetric bands", l, r, 1f / 255f)
+                assertEquals("Linear ramp", 1f - i / 1000f, l, .00001f)
             }
-            // Equal normalized band positions and alpha ramps for stock and padded pack glyphs.
-            for (i in 0..100) {
-                val distance = (.25f + .25f * i / 100f) * width
-                assertEquals(1f - i / 100f, skipTaperAlpha(left - distance, left, right), .00001f)
+        }
+    }
+
+    @Test fun packTravelIsOneTriangleAndBothSourceHalvesConvergeToTheirStaticEndpoints() {
+        for (width in listOf(.6f, .815f, 1f)) {
+            val a = packSkipElements(.25f, width)
+            val b = packSkipElements(.75f, width)
+            for (i in a.indices) assertEquals("Half cycle travels half of one triangle", width / 4f, b[i].offset - a[i].offset, .00001f)
+            assertEquals(packSkipElements(0f, width), packSkipElements(1f, width))
+            for (phase in listOf(.00001f, .99999f)) {
+                val visible = packSkipElements(phase, width).filter { it.alpha > .5f }
+                assertEquals(2, visible.size)
+                assertEquals(setOf(false, true), visible.map { it.rightHalf }.toSet())
+                visible.forEach {
+                    assertTrue("Visible halves approach their exact static positions", kotlin.math.abs(it.offset) <= width * .00001f)
+                    assertTrue("Visible halves approach full opacity", it.alpha >= .99998f)
+                }
+                assertTrue(packSkipElements(phase, width).filter { it.alpha < .5f }.all { it.alpha <= .00002f })
+                val stock = skipElements(phase).filter { it.alpha > .5f }
+                for ((i, element) in stock.withIndex()) {
+                    assertEquals("Stock positions converge", listOf(.08f, .48f)[i], element.x, .00001f)
+                    assertTrue(element.alpha >= .99998f)
+                }
             }
         }
     }

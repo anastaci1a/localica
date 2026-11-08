@@ -447,7 +447,7 @@ The mini-player appears whenever an active queue has a current song, including p
 
 The settled Play triangle uses a single filled contour. It morphs into Pause using configurable endpoint shapes. Skips scroll overlapping rounded triangles one step, crossfading departing and arriving elements symmetrically.
 
-Stock and imported skip glyphs travel beyond their measured ink bounds. Symmetric fade bands span one-quarter to one-half of the ink width outside each edge. Outside parts fade in and out at cycle endpoints; settled icons remain identical.
+Stock and imported skip glyphs travel beyond their measured ink bounds. Each symmetric taper starts at the static ink edge and reaches zero at the farthest travelling triangle edge. Imported glyphs move by one triangle, half their ink width. Outside parts fade in and out at cycle endpoints; settled icons remain identical.
 
 Repeated skip presses preserve presented position and velocity. The 380 ms normal cycle has a longer settle; Faster shortens it and Reduce motion snaps.
 

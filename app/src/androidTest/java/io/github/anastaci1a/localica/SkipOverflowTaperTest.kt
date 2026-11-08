@@ -51,12 +51,22 @@ class SkipOverflowTaperTest {
             val rest = render(isPack, 0f, glyph).toPixelMap()
             val left = (0 until rest.width).first { x -> (0 until rest.height).any { y -> rest[x,y].alpha > 0f } }
             val right = (0 until rest.width).last { x -> (0 until rest.height).any { y -> rest[x,y].alpha > 0f } }
+            val shapes = TransportShapes()
+            val ink = if (isPack) SkipInk.measure(pack) { with(pack) { draw(size) } }
+                else SkipInk.measure(shapes) { drawTransportGlyph(TransportGlyph.Next, 0f, 0f, Color.Black, shapes) }
+            val inkLeft = if (!isPack && glyph == TransportGlyph.Previous) 1f - ink.right else ink.left
+            val inkRight = if (!isPack && glyph == TransportGlyph.Previous) 1f - ink.left else ink.right
+            val pitch = if (isPack) ink.width / 2f else SkipTrianglePitch
+            val zeroLeft = 128f + (inkLeft - pitch) * 128f
+            val zeroRight = 128f + (inkRight + pitch) * 128f
             var outside = 0f
             for (step in 1..19) {
                 val frame = render(isPack, step / 20f, glyph).toPixelMap()
                 for (y in 0 until frame.height) for (x in 0 until frame.width) {
                     val alpha = frame[x,y].alpha
                     if (x < left || x > right) outside = maxOf(outside, alpha)
+                    if (x + 1f <= zeroLeft || x >= zeroRight)
+                        assertEquals("No residual alpha beyond taper pack=$isPack $glyph at $step ($x,$y)", 0f, alpha, 0f)
                     if (x == 0 || x == frame.width - 1 || y == 0 || y == frame.height - 1)
                         assertEquals("Transparent boundary pack=$isPack $glyph at $step ($x,$y)", 0f, alpha, 0f)
                 }
@@ -68,46 +78,83 @@ class SkipOverflowTaperTest {
     @Test fun noOutsideInkPopsAcrossCycleStartAndEndAndRestIsStatic() {
         for (isPack in listOf(false, true)) for (glyph in listOf(TransportGlyph.Next, TransportGlyph.Previous)) {
             val rest = render(isPack, 0f, glyph)
-            assertTrue(rest.asAndroidBitmap().sameAs(render(isPack, 1f, glyph).asAndroidBitmap()))
+            assertTrue("Exact rest endpoints", rest.asAndroidBitmap().sameAs(render(isPack, 1f, glyph).asAndroidBitmap()))
             val expected = rest.toPixelMap()
+            val edge = BooleanArray(expected.width * expected.height)
+            for (y in 1 until expected.height - 1) for (x in 1 until expected.width - 1) {
+                val alpha = expected[x,y].alpha
+                edge[y * expected.width + x] = alpha > 0f && (alpha < 1f ||
+                    (-1..1).any { dy -> (-1..1).any { dx -> expected[x + dx,y + dy].alpha == 0f } })
+            }
+            val contourLength = edge.count { it }
             for (phase in listOf(.00001f, .99999f, 1.00001f, -.00001f)) {
                 val actual = render(isPack, phase, glyph).toPixelMap()
-                for (y in 0 until actual.height) for (x in 0 until actual.width)
-                    assertEquals("Continuous pack=$isPack $glyph at $phase ($x,$y)", expected[x,y].alpha, actual[x,y].alpha, .01f)
+                var changed = 0
+                for (y in 0 until actual.height) for (x in 0 until actual.width) {
+                    if (expected[x,y].alpha == 0f)
+                        assertEquals("Exactly zero outside rest ink near endpoint", 0f, actual[x,y].alpha, 0f)
+                    if (expected[x,y].alpha != actual[x,y].alpha) {
+                        changed++
+                        val nearContour = (-1..1).any { dy -> (-1..1).any { dx ->
+                            val px = x + dx
+                            val py = y + dy
+                            px in 0 until expected.width && py in 0 until expected.height && edge[py * expected.width + px]
+                        } }
+                        assertTrue("Only contour AA may change pack=$isPack $glyph at $phase ($x,$y)", nearContour)
+                    }
+                }
+                assertTrue("Changed pixels bounded by static contour length: $changed <= $contourLength", changed <= contourLength)
             }
         }
-    }
-    @Test fun syntheticPackInkAndRenderedAlphaBandsMatchTheStockGeometry() {
-        val ink = SkipInk.measure(pack) { with(pack) { draw(size) } }
-        assertEquals(.2f, ink.left, 1f / 512f)
-        assertEquals(.8f, ink.right, 1f / 512f)
-        val image = render(true, .5f).toPixelMap()
-        val y = 96
-        var levels = 0
-        var previous = 0f
-        // Incoming rectangle has constant .5 opacity; its edge profile is the mask itself.
-        for (x in 115..134) {
-            val expected = .5f * skipTaperAlpha((x + .5f - 128f) / 128f, ink.left, ink.right)
-            val actual = image[x,y].alpha
-            assertEquals("Rendered pack taper follows shared ink-relative mask at $x", expected, actual, .025f)
-            assertTrue("No alpha jump in rendered band", actual - previous < .06f)
-            if (actual > previous) levels++
-            previous = actual
-            assertEquals("Symmetric rendered bands", actual, image[383 - x,y].alpha, .025f)
-        }
-        assertTrue("Multiple alpha levels", levels >= 10)
     }
 
-    @Test fun packCopiesUseTheSameIncomingAndDepartingOpacityTimingAsStock() {
-        val ink = SkipInk.measure(pack) { with(pack) { draw(size) } }
-        for (step in 1..99) {
-            val phase = step / 100f
-            val image = render(true, phase).toPixelMap()
-            for ((copy, alpha) in listOf(-1f to skipElements(phase)[0].alpha, 0f to skipElements(phase)[2].alpha)) {
-                val x = (128f + (.5f + (copy + phase) * ink.width) * 128f).toInt()
-                val expected = alpha * skipTaperAlpha((x + .5f - 128f) / 128f, ink.left, ink.right)
-                assertEquals("Shared copy timing at $phase", expected, image[x,96].alpha, .025f)
+    @Test fun stockAndPackMaskProfilesAreSymmetricWithinOneAlphaLevel() {
+        val shapes = TransportShapes()
+        val stockInk = SkipInk.measure(shapes) { drawTransportGlyph(TransportGlyph.Next, 0f, 0f, Color.Black, shapes) }
+        val packInk = SkipInk.measure(pack) { with(pack) { draw(size) } }
+        assertEquals(.2f, packInk.left, 1f / 512f)
+        assertEquals(.8f, packInk.right, 1f / 512f)
+        for ((ink, pitch) in listOf(stockInk to SkipTrianglePitch, packInk to packInk.width / 2f)) {
+            val image = ImageBitmap(384, 192)
+            val origin = 192f - ink.center.x * 128f
+            CanvasDrawScope().draw(Density(1f), LayoutDirection.Ltr, Canvas(image), Size(128f, 128f)) {
+                translate(origin, 32f) {
+                    drawWithSkipTaper(.5f, ink, pitch) {
+                        drawRect(Color.Black, androidx.compose.ui.geometry.Offset(-128f, 0f), Size(384f, 128f))
+                    }
+                }
             }
+            val pixels = image.toPixelMap()
+            val y = 96
+            var levels = 0
+            for (x in 0 until pixels.width / 2) {
+                assertEquals("Left versus mirrored right", pixels[x,y].alpha, pixels[pixels.width - 1 - x,y].alpha, 1f / 255f)
+                val position = (x + .5f - origin) / 128f
+                assertEquals("Rendered mask follows ink-to-outer-bound ramp", skipTaperAlpha(position, ink.left, ink.right, pitch), pixels[x,y].alpha, 1f / 255f)
+                if (x > 0 && pixels[x,y].alpha > pixels[x - 1,y].alpha) levels++
+            }
+            assertTrue("Many intermediate alpha levels", levels >= 30)
+            val insideLeft = kotlin.math.ceil(origin + ink.left * 128f).toInt()
+            val outsideLeft = kotlin.math.floor(origin + (ink.left - pitch) * 128f).toInt() - 1
+            assertEquals("Opaque at static ink edge", 1f, pixels[insideLeft,y].alpha, 0f)
+            assertEquals("Zero at computed outer bound", 0f, pixels[outsideLeft,y].alpha, 0f)
+        }
+    }
+
+    @Test fun packMovesByOneTriangleAndKeepsTheMiddleTriangleOpaque() {
+        val ink = SkipInk.measure(pack) { with(pack) { draw(size) } }
+        fun center(phase: Float): Double {
+            val pixels = render(true, phase).toPixelMap()
+            val opaque = (0 until pixels.width).filter { pixels[it,96].alpha >= .99f }
+            assertTrue("Opaque middle triangle at $phase", opaque.isNotEmpty())
+            return opaque.average()
+        }
+        assertEquals("Half a cycle moves half of one triangle", ink.width / 4f * 128f.toDouble(), center(.75f) - center(.25f), 1.0)
+        for (phase in listOf(.25f, .5f, .75f)) {
+            val pieces = packSkipElements(phase, ink.width)
+            assertEquals("One triangle is half the ink width", ink.width / 2f, pieces[1].offset - pieces[0].offset, 0f)
+            assertEquals(skipElements(phase)[0].alpha, pieces[0].alpha, 0f)
+            assertEquals(skipElements(phase)[2].alpha, pieces[3].alpha, 0f)
         }
     }
 

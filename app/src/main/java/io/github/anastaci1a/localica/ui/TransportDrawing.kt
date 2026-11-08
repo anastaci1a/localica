@@ -4,6 +4,7 @@ import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -12,6 +13,7 @@ import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
 import kotlin.math.ceil
@@ -33,26 +35,36 @@ internal fun skipElements(travel: Float): List<SkipElement> {
         SkipElement(.08f + (phase + 1f) * .4f, 1f - phase))
 }
 
-/** Fractions of visible ink width: fade outside the icon, reaching zero before the layer. */
-internal const val SkipTaperMargin = .25f
-internal const val SkipTaperBand = .25f
+internal const val SkipTrianglePitch = .4f
 
-internal fun skipTaperAlpha(x: Float, left: Float, right: Float): Float {
-    val width = right - left
-    val outside = maxOf(left - x, x - right)
-    return (1f - (outside / width - SkipTaperMargin) / SkipTaperBand).coerceIn(0f, 1f)
+/** Opacity is one at either static ink edge and zero at the farthest travelling triangle edge. */
+internal fun skipTaperAlpha(x: Float, left: Float, right: Float, pitch: Float): Float =
+    (1f - maxOf(left - x, x - right) / pitch).coerceIn(0f, 1f)
+
+internal data class PackSkipElement(val rightHalf: Boolean, val offset: Float, val alpha: Float)
+
+/** The middle triangle blends the two source halves additively. Thus different pack halves
+ * converge to their own static endpoints, while equal halves retain a fully opaque middle.
+ */
+internal fun packSkipElements(travel: Float, inkWidth: Float): List<PackSkipElement> {
+    val phase = travel - floor(travel)
+    val pitch = inkWidth / 2f
+    return listOf(PackSkipElement(false, (phase - 1f) * pitch, phase),
+        PackSkipElement(false, phase * pitch, 1f - phase),
+        PackSkipElement(true, (phase - 1f) * pitch, phase),
+        PackSkipElement(true, phase * pitch, 1f - phase))
 }
 
 /** The same ink-relative mask for stock and pack. Layer bounds extend beyond the zero-alpha
  * points, so their edges cannot cut visible ink. Settled drawing bypasses the layer exactly.
  */
-private inline fun DrawScope.drawWithSkipTaper(phase: Float, ink: Rect, content: DrawScope.() -> Unit) {
+internal inline fun DrawScope.drawWithSkipTaper(phase: Float, ink: Rect, pitch: Float, content: DrawScope.() -> Unit) {
     if (phase == 0f) return content()
-    val width = ink.width * size.width
-    val left = ink.left * size.width - width * (SkipTaperMargin + SkipTaperBand)
-    val right = ink.right * size.width + width * (SkipTaperMargin + SkipTaperBand)
-    val band = width * SkipTaperBand / (right - left)
-    // Integral layer origins preserve static-path rasterization as phase approaches zero.
+    val reach = pitch * size.width
+    val left = ink.left * size.width - reach
+    val right = ink.right * size.width + reach
+    val band = reach / (right - left)
+    // Integral padded bounds keep the layer edge beyond the zero-alpha mask.
     val layer = Rect(floor(left) - 2f, -2f, ceil(right) + 2f, size.height + 2f)
     val canvas = drawContext.canvas
     canvas.saveLayer(layer, Paint())
@@ -60,7 +72,9 @@ private inline fun DrawScope.drawWithSkipTaper(phase: Float, ink: Rect, content:
         content()
         drawRect(Brush.horizontalGradient(0f to Color.Transparent, band to Color.Black,
             1f - band to Color.Black, 1f to Color.Transparent, startX = left, endX = right),
-            topLeft = layer.topLeft, size = layer.size, blendMode = BlendMode.DstIn)
+            // Cover the layer completely, including fractional transformed edge pixels.
+            topLeft = layer.topLeft - Offset(2f, 2f),
+            size = Size(layer.width + 4f, layer.height + 4f), blendMode = BlendMode.DstIn)
     } finally {
         canvas.restore()
     }
@@ -108,7 +122,7 @@ internal data class TransportShapes(
 internal val LocalTransportShapes = staticCompositionLocalOf { TransportShapes() }
 
 /** Arbitrary imported contours share transport timing and interruption state. Skip copies travel
- * by their visible ink width, crossfading continuously through the same outside bands as stock.
+ * by one triangle (half their visible ink width), through the same outside bands as stock.
  */
 internal fun DrawScope.drawTransportPainters(glyph: TransportGlyph, pause: Float, travel: Float,
     color: Color, painter: Painter, pausePainter: Painter) {
@@ -123,10 +137,21 @@ internal fun DrawScope.drawTransportPainters(glyph: TransportGlyph, pause: Float
         if (phase == 0f) return draw(painter)
         val ink = SkipInk.measure(painter) { with(painter) { draw(size) } }
         val direction = if (glyph == TransportGlyph.Previous) -1f else 1f
-        drawWithSkipTaper(phase, ink) {
-            // Both outside copies vanish at the corresponding endpoint; no copy appears at wrap.
-            translate(left = (phase - 1f) * ink.width * size.width * direction) { draw(painter, phase) }
-            translate(left = phase * ink.width * size.width * direction) { draw(painter, 1f - phase) }
+        drawWithSkipTaper(phase, ink, ink.width / 2f) {
+            val split = ink.center.x * size.width
+            for (element in packSkipElements(travel, ink.width)) if (element.alpha > 0f) {
+                translate(left = element.offset * size.width * direction) {
+                    val canvas = drawContext.canvas
+                    // Additive isolation preserves the middle triangle's opacity while unequal
+                    // source halves crossfade continuously into their exact static endpoints.
+                    canvas.saveLayer(Rect(-2f, -2f, size.width + 2f, size.height + 2f),
+                        Paint().apply { blendMode = BlendMode.Plus })
+                    try {
+                        clipRect(left = if (element.rightHalf) split else 0f,
+                            right = if (element.rightHalf) size.width else split) { draw(painter, element.alpha) }
+                    } finally { canvas.restore() }
+                }
+            }
         }
     }
 }
@@ -150,7 +175,7 @@ internal fun DrawScope.drawTransportGlyph(glyph: TransportGlyph, pause: Float, t
             }
         }
         scale(if (glyph == TransportGlyph.Previous) -1f else 1f, 1f) {
-            drawWithSkipTaper(phase, ink) {
+            drawWithSkipTaper(phase, ink, SkipTrianglePitch) {
                 for (element in skipElements(travel)) if (element.alpha > 0f) {
                     translate(left = element.x * size.width) {
                         shapes.skipTriangle(this, color.copy(alpha = color.alpha * element.alpha))
