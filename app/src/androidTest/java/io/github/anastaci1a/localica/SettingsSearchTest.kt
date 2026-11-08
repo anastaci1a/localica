@@ -1,6 +1,13 @@
 package io.github.anastaci1a.localica
 
 import androidx.compose.runtime.*
+import androidx.compose.foundation.layout.Column
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getOrNull
+import io.github.anastaci1a.localica.browse.LibraryFilters
 import androidx.compose.ui.test.*
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.anastaci1a.localica.navigation.*
@@ -26,7 +33,7 @@ class SettingsSearchTest {
 
     @Test fun deepSearchFindsOptionsAndValuesFromEveryPage() {
         show("Player")
-        for ((query, result) in listOf("Lift shadow" to "Lift shadow strength", "Carousel" to "Player artwork",
+        for ((query, result) in listOf("Lift shadow" to "Lift shadow strength", "Carousel" to "Song-change transition",
             "Preload" to "Preload next track", "Shape damping" to "Shape damping", "grey" to "Interface gray",
             "minimum duration" to "Exclude short files", "sync" to "Lyrics timing correction")) {
             compose.onNodeWithText("Search settings").performTextReplacement(query)
@@ -59,12 +66,57 @@ class SettingsSearchTest {
         compose.onNodeWithText("Glass renderer").assertIsEnabled()
     }
 
+    @Test fun disabledSliderIgnoresTapsAndDragsAndExposesDisabledSemantics() {
+        var changes = 0
+        compose.setContent { LocalicaTheme {
+            CompositionLocalProvider(LocalSettingsEnabled provides false) {
+                Column { SliderPreference("Disabled slider", .4f, { changes++ },
+                    Modifier.semantics { contentDescription = "Disabled slider" }) }
+            }
+        } }
+        val slider = compose.onNodeWithContentDescription("Disabled slider")
+        slider.assertIsNotEnabled()
+        slider.performTouchInput { click(centerRight); swipeLeft() }
+        compose.runOnIdle { assertEquals(0, changes) }
+        slider.assertIsNotEnabled()
+    }
+
+    @Test fun everyCatalogSettingHasARenderedAnchorOrItsRevealingControl() {
+        var category by mutableStateOf("Appearance")
+        compose.setContent { LocalicaTheme {
+            key(category) {
+                val context = androidx.compose.ui.platform.LocalContext.current
+                FolderSettings(LibraryUiState(loading = false), {}, {}, {}, initialCategory = category,
+                    interfaceContent = { section ->
+                        if (section == "Player") SettingsLink("Customize player actions") {}
+                        InterfaceSettingsControls(InterfaceSettings(), section) {}
+                    }, playbackContent = { section -> QueueSettingsControls(QueueSettings(), section) {} },
+                    aboutContent = { DiagnosticsExportAction(); LibraryLicenses() },
+                    libraryFiltersContent = { LibraryFilterSettings(LibraryFilters()) {} },
+                    extraContent = { (context.applicationContext as? LocalicaApplication)?.let { TagRecoverySettings(it.tagEditing) } })
+            }
+        } }
+        for ((page, entries) in SettingsCatalog.entries.groupBy { it.page }) {
+            compose.runOnIdle { category = page }
+            val tags = compose.onAllNodes(SemanticsMatcher("setting anchor") {
+                it.config.getOrNull(SemanticsProperties.TestTag)?.startsWith("setting:") == true
+            }, useUnmergedTree = true).fetchSemanticsNodes().map {
+                it.config[SemanticsProperties.TestTag].removePrefix("setting:")
+            }.toSet()
+            for (spec in entries) {
+                assertTrue("Unreachable "+spec.id+" on "+page+": "+tags,
+                    spec.id in tags || spec.revealedBy in tags)
+                assertTrue(SettingsCatalog.search(spec.title).any { it.setting == spec })
+            }
+        }
+    }
+
     @Test fun existingPreferenceKeysAndValuesSurviveOpeningTheReworkedPages() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val store = context.getSharedPreferences("interface", 0)
         val before = store.all.toMap()
         try {
-            assertTrue(store.edit().putFloat("glass-blur", .65f).putFloat("glass-depth", .9f)
+            assertTrue(store.edit().clear().putFloat("glass-blur", .65f).putFloat("glass-depth", .9f)
                 .putString("glass-renderer", "None").putInt("lyric-delay-ms", -750)
                 .putBoolean("expand-on-play", false).commit())
             val seeded = store.all.toMap()
