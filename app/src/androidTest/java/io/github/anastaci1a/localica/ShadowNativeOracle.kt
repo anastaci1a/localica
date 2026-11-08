@@ -1,6 +1,7 @@
 package io.github.anastaci1a.localica
 
 import android.graphics.Bitmap
+import android.os.Build
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
@@ -40,10 +41,30 @@ internal fun shadowScreenBodies(bodies: List<Pair<RoundRect, Float>>, offset: an
         r.topLeftCornerRadius, r.topRightCornerRadius, r.bottomRightCornerRadius, r.bottomLeftCornerRadius) to alpha
 }
 
+/** Proven independent native field and destination coverage; no captured pixels or production field calls. */
+@androidx.annotation.RequiresApi(29)
+private fun nativeShadowUnionReference(rule: ComposeContentTestRule, width: Int, height: Int,
+    state: ShadowDrawState): ImageBitmap {
+    check(state.receiver == null && state.exclusion == null) {
+        "Incomplete: native reference requires an independent receiver/exclusion model"
+    }
+    val cutout = destinationShadowCutoutReference(rule, width, height, state.bodies).asAndroidBitmap()
+    val pixels = IntArray(width * height)
+    cutout.getPixels(pixels, 0, width, 0, 0, width, height)
+    for (index in pixels.indices) {
+        val interior = pixels[index] ushr 16 and 255
+        pixels[index] = ((255 - interior) shl 24) or 0x00ffffff
+    }
+    val outside = Bitmap.createBitmap(pixels, width, height, Bitmap.Config.ARGB_8888)
+    return nativeShadowFieldReference(width, height, state.bodies, rule.density.density,
+        state.strength, state.spread, state.background.toArgb(), outside)
+}
+
 /** Immutable receipt inputs only: normalized field, destination filtering, independently proven cutout. */
 private fun shadowUnionReference(rule: ComposeContentTestRule, width: Int, height: Int,
     state: ShadowDrawState): ImageBitmap {
     check(state.scaleX == 1f && state.scaleY == 1f && state.bodies.isNotEmpty())
+    if (Build.VERSION.SDK_INT >= 29) return nativeShadowUnionReference(rule, width, height, state)
     val origin = Offset(state.bodies.minOf { it.first.left }, state.bodies.minOf { it.first.top })
     val local = shadowScreenBodies(state.bodies, -origin)
     val density = rule.density.density
