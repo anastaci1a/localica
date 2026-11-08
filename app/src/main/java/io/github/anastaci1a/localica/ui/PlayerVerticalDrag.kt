@@ -43,6 +43,7 @@ internal fun Modifier.playerVerticalDrag(onDelta: (Float) -> Unit, onStart: susp
                 val change = event.changes.firstOrNull { it.id == down.id } ?: break
                 // The release sample lets a still hold report zero velocity (no move events arrive while still).
                 if (!change.pressed) { velocity.addPosition(change.uptimeMillis, total + change.positionChange())
+                    android.os.Trace.beginSection("player676:up caught=$caught owned=$owned dragging=$dragging used=${change.isConsumed} y=${total.y}"); android.os.Trace.endSection()
                     released = caught || !change.isConsumed; if (caught) change.consume(); break }
                 if (event.changes.count { it.pressed } > 1 || !owned && change.isConsumed) break
                 val movement = change.positionChange()
@@ -58,6 +59,7 @@ internal fun Modifier.playerVerticalDrag(onDelta: (Float) -> Unit, onStart: susp
                 else if (abs(total.x) > viewConfiguration.touchSlop && abs(total.x) > abs(total.y) * 1.3f) break
             } while (event.changes.any { it.pressed }) }
             finally {
+                android.os.Trace.beginSection("player676:end caught=$caught owned=$owned dragging=$dragging released=$released"); android.os.Trace.endSection()
                 if (owned) scope.launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) {
                     if (released || caught) stop(if (dragging) velocity.calculateVelocity().y else 0f) else cancel()
                 }

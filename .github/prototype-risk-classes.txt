@@ -205,6 +205,7 @@ io.github.anastaci1a.localica.PlayerContrastTest
 io.github.anastaci1a.localica.PlayerExpandReadinessTest
 io.github.anastaci1a.localica.PlayerExpansionMotionTest
 io.github.anastaci1a.localica.PlayerFeedbackTest
+io.github.anastaci1a.localica.PlayerDragLyricsBackTest
 io.github.anastaci1a.localica.PlayerGestureTest
 io.github.anastaci1a.localica.PlayerLayoutTest
 io.github.anastaci1a.localica.PlayerLyricsForegroundTest

@@ -187,17 +187,23 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
         onCatch = { val drawer = queue?.takeIf { !it.expansion.phase.settled }
             (drawer ?: sheet.takeIf { !it.expansion.phase.settled })?.contact?.onDragStart() == true && run {
                 startExpanded = expanded; startQueueOpen = queue?.expanded == true; movement = 0f
-                owner = if (drawer != null) VerticalOwner.Queue else VerticalOwner.Player; touching = true; dragging = true; true } },
+                owner = if (drawer != null) VerticalOwner.Queue else VerticalOwner.Player; touching = true; dragging = true
+                android.os.Trace.beginSection("player676:catch owner=$owner expanded=$startExpanded queue=$startQueueOpen"); android.os.Trace.endSection()
+                true } },
         onStart = { startExpanded = expanded; startQueueOpen = queue?.expanded == true; movement = 0f
-            owner = VerticalOwner.Undecided; dragging = true },
+            owner = VerticalOwner.Undecided; dragging = true
+            android.os.Trace.beginSection("player676:start expanded=$startExpanded queue=$startQueueOpen"); android.os.Trace.endSection()
+        },
         onStop = { velocity ->
             dragging = false
             val open = if (touching) contact()?.onRelease(-velocity)?.expanded else null
+            android.os.Trace.beginSection("player676:stop owner=$owner touching=$touching velocity=$velocity open=$open"); android.os.Trace.endSection()
             touching = false
             if (owner == VerticalOwner.Queue) { onExpanded(true); if (open == true) onQueue() } else if (open != null) onExpanded(open)
         }, onCancel = {
             dragging = false
             // Cancellation restores the previous logical surface from the current kinematics.
+            android.os.Trace.beginSection("player676:cancel owner=$owner touching=$touching"); android.os.Trace.endSection()
             if (touching) { touching = false; contact()?.onDragCancel() }
         })
     // Finish the cover mask late, independently of the backing's color. Delaying the
