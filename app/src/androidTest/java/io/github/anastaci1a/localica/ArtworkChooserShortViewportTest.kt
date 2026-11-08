@@ -29,7 +29,11 @@ import java.util.concurrent.atomic.AtomicInteger
 class ArtworkChooserShortViewportTest {
     @get:Rule val compose = createComposeRule()
 
-    @Test fun replacingChooserDuringDecodeKeepsLateRecentAndActionsReachable() {
+    @Test fun replacingChooserDuringDecodeKeepsLateRecentAndActionsReachable() = replaceChooser(inline = true)
+
+    @Test fun replacingNativeChooserWhileOldDecodeIsPendingLoadsNewRecentImage() = replaceChooser(inline = false)
+
+    private fun replaceChooser(inline: Boolean) {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val preferences = context.getSharedPreferences("cover-images", 0)
         val original = preferences.getString("recent", null)
@@ -69,7 +73,7 @@ class ArtworkChooserShortViewportTest {
                         // The native hit's surface was approximately 388 x 353 dp. Inline mode
                         // retains ImageChooser/GlassAlertDialog/DialogViewport, controlling only space.
                         Box(Modifier.width(388.dp).height(353.dp)) {
-                            CompositionLocalProvider(LocalInlineGlassDialog provides true) {
+                            CompositionLocalProvider(LocalInlineGlassDialog provides inline) {
                                 if (visible) key(target) {
                                     ImageChooser(rememberArtworkWorkflow(target, startChoosing = true), { visible = false }, {})
                                 }
@@ -81,8 +85,10 @@ class ArtworkChooserShortViewportTest {
             compose.waitUntil(10_000) { started.get() > 0 }
             val priorStarts = started.get()
             compose.onAllNodesWithContentDescription("Choose recent image").assertCountEquals(0)
-            compose.runOnIdle { visible = false }
-            compose.onNodeWithText("Choose artwork").assertDoesNotExist()
+            if (inline) {
+                compose.runOnIdle { visible = false }
+                compose.onNodeWithText("Choose artwork").assertDoesNotExist()
+            }
             assertTrue(preferences.edit().remove("recent").commit())
             CoverImages(context).remember(Uri.fromFile(second).toString())
             compose.runOnIdle { target = "replacement"; visible = true }
