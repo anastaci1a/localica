@@ -23,7 +23,7 @@ import org.junit.Test
 internal fun shadowCapture(width: Int = 200, height: Int = 140, generation: Long = 1, draw: DrawScope.() -> Unit): PresentedCapture {
     val image = ImageBitmap(width, height)
     CanvasDrawScope().draw(Density(1f), LayoutDirection.Ltr, Canvas(image), Size(width.toFloat(), height.toFloat()), draw)
-    return PresentedCapture(image, listOf("offscreen"), 1, generation, generation, null, System.nanoTime())
+    return PresentedCapture(image, listOf("offscreen"), 1, generation, generation, null, System.nanoTime(), offscreen = true)
 }
 internal val probeBody = RoundRect(40f, 40f, 160f, 88f, CornerRadius(24f))
 /** The whole ring field of [probeBody] at spread .5 (reach 18 px, shift 2 px) plus margin. */
@@ -91,5 +91,28 @@ class ShadowFieldOracleSensitivityTest {
         assertThrows(IllegalStateException::class.java) { probe.compare(reference.copy(hostEpoch = 2), reference) }
         assertThrows(IllegalStateException::class.java) { probe.compare(shadowCapture(width = 201) { }, reference) }
         assertThrows(IllegalStateException::class.java) { ShadowFieldProbe(listOf(Rect(150f, 100f, 260f, 160f)), 1f / 255).compare(reference, reference) }
+    }
+
+    private fun nativeField(token: Int): PresentedCapture = edit(field()) { bitmap ->
+        bitmap.setPixel(2, 2, android.graphics.Color.rgb(token shr 16, token shr 8 and 255, token and 255))
+        bitmap.setPixel(6, 2, android.graphics.Color.MAGENTA)
+    }.copy(windowIds = listOf("native-window-1"), nativeGeneration = NativeShadowGeneration(token,
+        androidx.compose.ui.unit.IntOffset(2, 2)), offscreen = false)
+
+    @Test fun missingNativePresentationCorrelationIsIncomplete() {
+        val reference = nativeField(10)
+        assertThrows(IllegalStateException::class.java) {
+            probe.compare(reference.copy(nativeGeneration = null), reference)
+        }
+    }
+
+    @Test fun sameClockWithDifferentNativeGenerationIsRejected() {
+        val reference = nativeField(11)
+        val stale = nativeField(10)
+        assertEquals(reference.clockSequence, stale.clockSequence)
+        assertEquals(reference.drawGeneration, stale.drawGeneration)
+        assertThrows(IllegalStateException::class.java) { probe.compare(stale, reference) }
+        // A fresh metadata label cannot turn an old original image into a new presentation.
+        assertThrows(IllegalStateException::class.java) { probe.compare(reference.copy(image = stale.image), reference) }
     }
 }

@@ -3,16 +3,20 @@ package io.github.anastaci1a.localica
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.toPixelMap
+import androidx.compose.ui.unit.IntOffset
 import org.junit.Assert.assertTrue
 import kotlin.math.abs
 import kotlin.math.ceil
 import kotlin.math.floor
 
 /** U12.01c: one presented native composition and the identities that make two captures comparable. [image] is retained, never recycled, for the test's lifetime. */
+internal data class NativeShadowGeneration(val token: Int, val marker: IntOffset)
+
 internal data class PresentedCapture(
     val image: ImageBitmap, val windowIds: List<String>, val hostEpoch: Long,
     val drawGeneration: Long, val clockSequence: Long,
     val nativePresentedNanos: Long?, val captureNanos: Long,
+    val nativeGeneration: NativeShadowGeneration? = null, val offscreen: Boolean = false,
 )
 
 internal data class ShadowComparison(
