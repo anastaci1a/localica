@@ -273,7 +273,7 @@ In all lists, including queues and album details, pinch outward through Smallest
 
 Change one adjacent view per gesture, requiring all fingers to lift before another step. A 4% span change picks the direction. The first presented frame keeps the source, then geometry catches up to the full finger distance over 100 ms.
 
-A slow frame advances that ease and the release settle by at most one 60 Hz frame, so neither finishes in a single step.
+A slow first frame advances that ease and the release settle by at most one 60 Hz frame, so neither finishes in a single step. Later frames advance at most a quarter of the ease, so a sustained slow frame rate still shows each ease over at least four frames instead of stretching it indefinitely.
 
 Shared pinch geometry carries the captured selection lift into both live and retained items. Reversing restores items virtualized out by the destination. All text draws below a separate artwork pass. Within each pass earlier items draw on top.
 
