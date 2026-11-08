@@ -83,7 +83,7 @@ class NoneFullAreaTest {
             assertTrue("Material is present rather than transparent or unrecorded", color.alpha > .99f && color.red > .9f)
             for ((channel, pair) in listOf("red" to (reference.red to color.red),
                 "green" to (reference.green to color.green), "blue" to (reference.blue to color.blue))) {
-                assertEquals("Row $index $channel at fontScale=$fontScale: $colors", pair.first, pair.second, 2f / 255f)
+                assertEquals("Row $index $channel at fontScale=$fontScale: $colors", pair.first, pair.second, 1f / 255f)
             }
         }
     }
