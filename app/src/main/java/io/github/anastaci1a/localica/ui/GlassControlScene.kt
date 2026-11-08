@@ -35,11 +35,12 @@ internal fun GlassControlScene(modifier: Modifier, horizontalPadding: Dp = 20.dp
     if (sampled) BackdropLease(source)
     val location = remember { BackdropLocation() }
     val lens = remember { lazy { if (Build.VERSION.SDK_INT >= 33) LensRenderer() else null } }
-    val averageRenderer = remember { if (Build.VERSION.SDK_INT >= 33) MaterialAverageRenderer() else null }
+    val averageRenderer = remember { if (Build.VERSION.SDK_INT >= 33) MaterialAverageRenderer(true) else null }
     val averageLayer = if (optical && modern) rememberGraphicsLayer() else null
+    val areaReduction = if (optical && modern) rememberMaterialAreaReduction() else null
     val rim = remember { GlassRimCache() }
     val layer = if (optical && modern) rememberGraphicsLayer() else null
-    val averageBitmap = if (optical && !modern) remember { ImageBitmap(8, 8) } else null
+    val averageBitmap = if (optical && !modern) remember { arrayOfNulls<ImageBitmap>(1) } else null
     val onLensDraw = LocalControlLensDraw.current
     val opticalWork = LocalGlassOpticalWork.current
     Canvas(modifier.backdropLocation(location)) {
@@ -90,30 +91,46 @@ internal fun GlassControlScene(modifier: Modifier, horizontalPadding: Dp = 20.dp
             clipPath(silhouette) { translate(origin.x, origin.y) { drawLayer(layer) } }
         }
         if (none > 0f) {
-            if (averageLayer != null && averageRenderer != null && Build.VERSION.SDK_INT >= 33) {
-                averageLayer.renderEffect = averageRenderer.effect()
+            // None uniformly averages the material's own full bounds.
+            val region = shape.bounds
+            val sceneOffset = origin - region.topLeft
+            val extentOfRegion = IntSize(ceil(region.width).toInt().coerceAtLeast(1), ceil(region.height).toInt().coerceAtLeast(1))
+            if (averageLayer != null && averageRenderer != null && areaReduction != null && Build.VERSION.SDK_INT >= 33) {
+                val padded = materialReductionExtent(extentOfRegion)
+                val reduced = with(areaReduction) { record(extentOfRegion) {
+                    clipRect(right = region.width, bottom = region.height) {
+                        translate(sceneOffset.x, sceneOffset.y) { recordScene() }
+                    }
+                } }
+                averageLayer.renderEffect = averageRenderer.effect(coverage = region.width * region.height / (padded.width.toFloat() * padded.height))
                 averageLayer.alpha = none
                 averageLayer.blendMode = if (blending) BlendMode.Plus else BlendMode.SrcOver
-                averageLayer.record(Density(density, fontScale), layoutDirection, IntSize(8, 8)) {
-                    scale(8f / shape.bounds.width, 8f / shape.bounds.height, Offset.Zero) {
-                        translate(-pad, -pad) { recordScene() }
-                    }
-                }
+                averageLayer.record(Density(density, fontScale), layoutDirection, IntSize(1, 1)) { drawLayer(reduced) }
                 clipPath(silhouette) { translate(shape.bounds.left, shape.bounds.top) {
-                    scale(shape.bounds.width / 8f, shape.bounds.height / 8f, Offset.Zero) { drawLayer(averageLayer) }
+                    scale(shape.bounds.width, shape.bounds.height, Offset.Zero) { drawLayer(averageLayer) }
                 } }
-            } else {
-                if (averageBitmap != null) {
-                    averageBitmap.asAndroidBitmap().eraseColor(android.graphics.Color.TRANSPARENT)
-                    CanvasDrawScope().draw(Density(density, fontScale), layoutDirection, Canvas(averageBitmap), Size(8f, 8f)) {
-                        scale(8f / shape.bounds.width, 8f / shape.bounds.height, Offset.Zero) {
-                            translate(-pad, -pad) { recordScene() }
+            } else if (averageBitmap != null && !region.isEmpty) {
+                // Software path: rasterize the region at full resolution (bounded) and
+                // take its exact pixel mean.
+                val factor = minOf(1f, 96f / maxOf(region.width, region.height))
+                val bitmapSize = IntSize(ceil(region.width * factor).toInt().coerceAtLeast(1),
+                    ceil(region.height * factor).toInt().coerceAtLeast(1))
+                val bitmap = averageBitmap[0]?.takeIf { it.width == bitmapSize.width && it.height == bitmapSize.height }
+                    ?: ImageBitmap(bitmapSize.width, bitmapSize.height).also { averageBitmap[0] = it }
+                bitmap.asAndroidBitmap().eraseColor(android.graphics.Color.TRANSPARENT)
+                CanvasDrawScope().draw(Density(density, fontScale), layoutDirection, Canvas(bitmap),
+                    Size(bitmapSize.width.toFloat(), bitmapSize.height.toFloat())) {
+                    scale(factor, factor, Offset.Zero) {
+                        clipRect(right = region.width, bottom = region.height) {
+                            translate(sceneOffset.x, sceneOffset.y) { recordScene() }
                         }
                     }
-                    val image = averageBitmap.asAndroidBitmap()
-                    val average = averageGlassColor { x, y -> image.getPixel(x, y) }
-                    clipPath(silhouette) { drawRect(average, alpha = none) }
                 }
+                val image = bitmap.asAndroidBitmap()
+                val pixels = IntArray(image.width * image.height).also { image.getPixels(it, 0, image.width, 0, 0, image.width, image.height) }
+                val coveredArea = region.width * region.height * factor * factor
+                val average = averageGlassPixels(pixels, coveredArea)
+                clipPath(silhouette) { drawRect(average, alpha = none) }
             }
         }
         if (blending) drawContext.canvas.restore()

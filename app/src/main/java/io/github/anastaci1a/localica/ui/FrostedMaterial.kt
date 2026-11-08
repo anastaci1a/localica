@@ -333,7 +333,7 @@ internal fun FrostedSurface(modifier: Modifier = Modifier, shape: Shape = Corner
     source: FrostedBackdrop? = LocalFrostedBackdrop.current, compact: Boolean = false,
     tint: Color = Color.Transparent, shadow: Boolean = true, content: @Composable BoxScope.() -> Unit) {
     val renderer = currentGlassRendererGeneration()
-    if (renderer.backend == GlassBackend.None) BackdropLease(source?.noneMaterialSource())
+    if (renderer.backend == GlassBackend.None) BackdropLease(source)
     val location = remember { BackdropLocation() }
     val lightMix = source?.lightMix ?: 0f
     val dark = lightMix >= .5f
@@ -353,8 +353,8 @@ internal fun FrostedSurface(modifier: Modifier = Modifier, shape: Shape = Corner
             Color.White.copy(alpha = .06f), Color.White.copy(alpha = .17f))), shape)) {
         Box(Modifier.matchParentSize().recordFrostedBackdrop(material)) {
         if (source != null) {
+            val blur = with(LocalDensity.current) { 22.dp.toPx() }
             if (Build.VERSION.SDK_INT >= 33) {
-                val blur = with(LocalDensity.current) { 22.dp.toPx() }
                 FilteredBackdrop(Modifier.matchParentSize(), source, location, .5f, blur * 1.5f,
                     average = MaterialAverageStyle(0f, tone, opaque = true)) { _, resolution, _ ->
                     toneRenderer.value?.effect(tone, blur * resolution)

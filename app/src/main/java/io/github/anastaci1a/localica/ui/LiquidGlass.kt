@@ -199,9 +199,8 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
     val observedShadowAppearance = if (drawObserver == null) null else LocalGlassAppearance.current
     val visible = LocalGlassVisible.current
     if (visible && renderer.backend == GlassBackend.None) {
-        val materialSource = source?.noneMaterialSource()
-        BackdropLease(materialSource)
-        BackdropLease(homeSource?.noneMaterialSource()?.takeUnless { it === materialSource })
+        BackdropLease(source)
+        BackdropLease(homeSource?.takeUnless { it === source })
     }
     val location = remember { BackdropLocation() }
     var surfaceSize by remember { mutableStateOf(androidx.compose.ui.unit.IntSize.Zero) }
@@ -243,10 +242,10 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
             else Modifier.surfaceGlassShadow(cornerRadius, anchor))
         .clip(surfaceClip)
         .backdropLocation(location).onGloballyPositioned { surfaceSize = it.size }, propagateMinConstraints = true) {
+        val density = androidx.compose.ui.platform.LocalDensity.current
+        val blur = with(density) { 22.dp.toPx() } * (appearance.blur + (1f - appearance.blur) * frost)
+        val padding = with(density) { 32.dp.toPx() }
         if (visible && source != null && Build.VERSION.SDK_INT >= 33) {
-            val density = androidx.compose.ui.platform.LocalDensity.current
-            val blur = with(density) { 22.dp.toPx() } * (appearance.blur + (1f - appearance.blur) * frost)
-            val padding = with(density) { 32.dp.toPx() }
             // Crossing into panel scattering must not swap backing resolution in
             // one frame. Clear glass stays sharp; visible blur gradually permits
             // the cheaper half-resolution recording during the same morph.

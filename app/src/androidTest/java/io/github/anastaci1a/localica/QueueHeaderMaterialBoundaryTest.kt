@@ -179,11 +179,9 @@ class QueueHeaderMaterialBoundaryTest {
         compose.waitUntil(5000) { compose.runOnUiThread {
             val page = scene
             val draw = drawn.get()
-            val parentMaterialReady = if (material.rendererGeneration.backend == GlassBackend.None) {
-                // None lenses lease the finished parent, not the unused foreground scene.
-                page?.source?.noneMaterialSource() === material && material.consumers > 0 &&
-                    (Build.VERSION.SDK_INT >= 33 || backing.fallback != null && material.snapshot != null)
-            } else Build.VERSION.SDK_INT >= 33 ||
+            // Both renderers sample the foreground scene the lens refracts (#624): None averages
+            // its refraction preimage, so it keeps the same foreground lease and snapshot.
+            val parentMaterialReady = Build.VERSION.SDK_INT >= 33 ||
                 backing.fallback != null && material.snapshot != null && page?.source?.snapshot != null
             root.isAttachedToWindow && root.isLaidOut && root.hasWindowFocus() && !root.isLayoutRequested &&
                 draw != null && draw.count > after && draw.requestedStrength == expected &&
@@ -196,8 +194,7 @@ class QueueHeaderMaterialBoundaryTest {
             assertEquals("Normal request resolves to the platform's actual backend",
                 if (Build.VERSION.SDK_INT >= 33) GlassBackend.Normal else GlassBackend.None,
                 material.rendererGeneration.backend)
-            if (material.rendererGeneration.backend == GlassBackend.Normal)
-                assertTrue("Normal keeps the foreground sampling lease", requireNotNull(scene).source.consumers > 0)
+            assertTrue("Both renderers keep the foreground sampling lease", requireNotNull(scene).source.consumers > 0)
             android.util.Log.i("QueueHeaderMaterialBoundary", "api=${Build.VERSION.SDK_INT} " +
                 "backend=${material.rendererGeneration.backend} parentConsumers=${material.consumers} " +
                 "foregroundConsumers=${requireNotNull(scene).source.consumers} " +
