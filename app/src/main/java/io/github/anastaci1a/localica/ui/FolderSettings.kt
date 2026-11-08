@@ -179,7 +179,7 @@ fun FolderSettings(state: LibraryUiState, onDismiss: () -> Unit, onChooseFolder:
                     "Folders to scan" -> {
                         Text("Your files stay where they are. Start scanning from More → Scan music.", style = MaterialTheme.typography.bodyMedium)
                         LibraryNotice(state)
-                        SettingsEntry("Music folders") { Column {
+                        SettingsEntry("Music folders") { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         state.snapshot.folders.forEach { folder ->
                             val count = state.snapshot.tracks.count { track -> track.locations.any { it.folderUri == folder.uri } }
                             SettingsLink(folderLabels.getValue(folder.uri), if (folder.uri in state.unavailableFolders) "Access lost · select this folder again" else "$count songs", AppIcon.TabFolders) {
