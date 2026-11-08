@@ -1,7 +1,13 @@
 package io.github.anastaci1a.localica
 
 import androidx.compose.runtime.*
-import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toPixelMap
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
@@ -75,6 +81,31 @@ class SettingsSearchTest {
         compose.onNodeWithTag("setting:Control expansion").assertIsDisplayed()
         compose.onNodeWithTag("setting-highlight:Control expansion", useUnmergedTree = true).assertExists()
         compose.onNodeWithContentDescription("Search settings input").assertExists()
+    }
+
+    @Test fun highlightRemainsVisibleOverOpaqueRowContent() {
+        lateinit var focus: SettingsSearchFocus
+        compose.setContent { LocalicaTheme {
+            val scroll = rememberScrollState()
+            focus = remember { SettingsSearchFocus("Glass", scroll) }
+            MaterialTheme(colorScheme = MaterialTheme.colorScheme.copy(primary = Color.Magenta)) {
+                CompositionLocalProvider(LocalSettingsSearchFocus provides focus, LocalReducedMotion provides true) {
+                    SettingsEntry("Glass renderer") {
+                        Box(Modifier.fillMaxWidth().height(80.dp).background(Color.White))
+                    }
+                }
+            }
+        } }
+        val before = compose.onNodeWithTag("setting:Glass renderer").captureToImage().toPixelMap()
+        compose.mainClock.autoAdvance = false
+        compose.runOnIdle { focus.highlighted = "Glass renderer" }
+        repeat(3) { compose.mainClock.advanceTimeByFrame(); compose.waitForIdle() }
+        val after = compose.onNodeWithTag("setting:Glass renderer").captureToImage().toPixelMap()
+        val x = before.width / 2
+        val y = before.height / 2
+        assertTrue("The tint must be drawn above an opaque descendant", after[x, y].green < before[x, y].green - .03f)
+        assertTrue(after[x, y].red > .95f && after[x, y].blue > .95f)
+        compose.mainClock.autoAdvance = true
     }
 
     @Test fun hiddenOptionJumpsToItsRevealingChoice() {
