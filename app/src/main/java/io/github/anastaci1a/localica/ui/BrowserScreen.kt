@@ -129,8 +129,10 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
         val unsubscribe = preferences.observeInformation { inheritedInformation = it }
         onDispose(unsubscribe)
     }
-    val currentRoute by rememberUpdatedState(route)
-    var style by remember(route.key, route.filter) { mutableStateOf(preferences.read(route).let { it.copy(sort = route.querySort ?: it.sort, ascending = route.queryAscending ?: it.ascending) }) }
+    val currentRouteState = rememberUpdatedState(route)
+    val currentRoute by currentRouteState
+    val styleState = remember(route.key, route.filter) { mutableStateOf(preferences.read(route).let { it.copy(sort = route.querySort ?: it.sort, ascending = route.queryAscending ?: it.ascending) }) }
+    var style by styleState
     DisposableEffect(preferences, route.key, route.filter) {
         val unsubscribe = preferences.observe(route) { updated ->
             style = updated.copy(sort = currentRoute.querySort ?: updated.sort, ascending = currentRoute.queryAscending ?: updated.ascending)
@@ -150,43 +152,8 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     val focus = scopedEditor?.focus ?: routeFocus
     val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
     val resultsFocus = remember(route.key) { androidx.compose.ui.focus.FocusRequester() }
-    var focusedOnce by androidx.compose.runtime.saveable.rememberSaveable(route.key) { mutableStateOf(false) }
-    var focusedRequest by androidx.compose.runtime.saveable.rememberSaveable(route.key) { mutableIntStateOf(-1) }
-    var inputCompletion by remember(route.key) { mutableIntStateOf(0) }
-    fun submitSearch() {
-        if (scopedEditor != null && !scopedEditor.active) return
-        // Cancel a pending frame-delayed focus request before ending this input session.
-        focusedOnce = true; focusedRequest = focusRequest; inputCompletion++
-        onSearchCommit(); resultsFocus.requestFocus(); keyboard?.hide()
-    }
-    val panelReady = LocalGlassPanelReady.current
-    val reportSearchOpening = LocalSearchOpeningReady.current
-    val windowFocused = androidx.compose.ui.platform.LocalWindowInfo.current.isWindowFocused
-    val keyboardClosing by rememberImeClosing(WindowInsets.ime,
-        WindowInsets.imeAnimationSource, WindowInsets.imeAnimationTarget, density)
-    var restoreResultsFocus by remember(route.key) { mutableStateOf(route.search && route.queryCommitted) }
-    LaunchedEffect(route.key, playerOpen, focusRequest, inputCompletion, panelReady, windowFocused, keyboardClosing, reportSearchOpening, scopedEditor?.focused) {
-        searchEditTrace?.invoke("autofocus decision key=${route.key.hashCode()} request=$focusRequest consumed=$focusedRequest once=$focusedOnce ready=$panelReady window=$windowFocused closing=$keyboardClosing player=$playerOpen editor=${scopedEditor?.let { System.identityHashCode(it) }} active=${scopedEditor?.active} focused=${scopedEditor?.focused}")
-        // Dialog attachment and IME focus happen outside Compose's animation clock.
-        // Do not consume an autofocus request while the returning window still owns input.
-        if (!panelReady || !windowFocused || keyboardClosing) return@LaunchedEffect
-        if (route.search && (!focusedOnce || focusedRequest != focusRequest) && !playerOpen) {
-            withFrameNanos { } // Wait until the field is attached.
-            if (scopedEditor != null && !scopedEditor.active) return@LaunchedEffect
-            focus.requestFocus(); keyboard?.show(); focusedOnce = true; focusedRequest = focusRequest
-            searchEditTrace?.invoke("autofocus requested key=${route.key.hashCode()} request=$focusRequest editor=${scopedEditor?.let { System.identityHashCode(it) }}")
-            restoreResultsFocus = false
-            reportSearchOpening?.invoke(true)
-        } else if (restoreResultsFocus && !playerOpen) {
-            // Replacing a focused field can transfer focus to the restored field even without
-            // requestFocus. Back restores results, so explicitly end that input session.
-            withFrameNanos { }
-            if (scopedEditor != null && !scopedEditor.active) return@LaunchedEffect
-            resultsFocus.requestFocus(); keyboard?.hide()
-            restoreResultsFocus = false
-            reportSearchOpening?.invoke(false)
-        } else if (route.search && !playerOpen) reportSearchOpening?.invoke(scopedEditor?.focused == true)
-    }
+    val submitSearch = browseSearchAutofocus(route, scopedEditor, focusRequest, playerOpen, focus, resultsFocus, keyboard, density,
+        onSearchCommit, searchEditTrace)
     LaunchedEffect(libraryFilters.visible, route.key, route.filter, selectionVisible) {
         if (selectionVisible && route.tab == MainTab.Library && route.collection == null && !route.globalSearch && route.filter != null && filters.none { it.kind == route.filter }) {
             onRoute(route.copy(filter = null))
@@ -264,7 +231,8 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
         if (artDetail) { if (lightCollection) androidx.compose.ui.graphics.Color(0xFFE5E5E5) else hero.palette.bottom } else androidx.compose.ui.graphics.Color(0xFFF9F9FB)) }
     val collectionSource = rememberFrostedBackdrop(hero, artDetail, dark = !lightCollection)
     var collectionView by remember { mutableStateOf(false) }
-    var collectionMenu by remember { mutableStateOf(false) }
+    val collectionMenuState = remember { mutableStateOf(false) }
+    var collectionMenu by collectionMenuState
     val collectionMenuAnchor = rememberGlassAnchor()
     val gridState = rememberLazyGridState()
     val scrollScope = rememberCoroutineScope()
@@ -306,14 +274,9 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     val modalBlocked = modalOwner?.blocked == true
     var listContact by remember { mutableStateOf(false) }
     val orderScroll = remember { BrowseOrderScrollCoordinator() }
-    fun dismissSorting() {
-        // Retire pending receipts before visibility changes; disposal can happen later.
-        orderScroll.cancelPending()
-        collectionMenu = false
-        onSortDismiss()
-    }
     val orderOwner = remember(route, selectionVisible, playerOpen) { Any() }
-    val currentOrderOwner by rememberUpdatedState(orderOwner)
+    val currentOrderOwnerState = rememberUpdatedState(orderOwner)
+    val currentOrderOwner by currentOrderOwnerState
     DisposableEffect(orderOwner) { onDispose { orderScroll.cancel() } }
     val mutableQueue = queueState.library.queues.firstOrNull { route.collection?.kind == MediaKind.Queue && it.id == route.collection.id }
     val mutablePlaylist = playlists.playlists.firstOrNull { route.collection?.kind == MediaKind.Playlist && it.id == route.collection.id }
@@ -323,86 +286,6 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     }
     val mutablePositions = remember(physicalOrder) { physicalOrder.orEmpty().withIndex().associate { it.value to it.index + 1 } }
     val pinchMotion = remember(route.key) { BrowsePinchMotion() }
-    /** A saved geometry change (View popup) takes the pinch transaction, not a reflow (#627).
-     * Its geometry commits like a pinch; the saved style (sort, information and so on) is
-     * written once the transaction ends, so a rollback, failure or disposal still saves it. */
-    fun changeViewInPlace(value: BrowseStyle, persist: () -> Unit = {}): Boolean {
-        if (route.search) return false
-        val view = displayedStyle.copy(presentation = value.presentation, itemsPerRow = value.itemsPerRow, listSize = value.listSize)
-        val finished = pinchMotion.viewChange?.invoke(view) { style = it } ?: return false
-        orderScroll.cancel()
-        scrollScope.launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) {
-            try { finished.await() } finally {
-                persist()
-                style = value
-            }
-        }
-        dismissSorting()
-        return true
-    }
-    fun commitStyle(value: BrowseStyle) {
-        orderScroll.cancel()
-        style = value
-        if (route.search) onRoute(route.copy(querySort = value.sort, queryAscending = value.ascending))
-        dismissSorting()
-    }
-    // Each origin owns its opening tab; an inactive origin must not override it.
-    @Composable fun sortingPanel(initialView: Boolean) {
-        // Closing a pending dialog invalidates its callback, but not an already accepted follow.
-        val lifetime = remember { booleanArrayOf(true) }
-        DisposableEffect(Unit) {
-            orderScroll.cancel()
-            onDispose { lifetime[0] = false }
-        }
-        fun orderAction(followCurrent: Boolean, done: (OrderCommit?) -> Unit,
-            action: ((OrderCommit?) -> Unit) -> Unit) {
-            val token = orderScroll.begin(orderOwner, route)
-            playbackFollow.cancel()
-            action { receipt ->
-                if (lifetime[0]) orderScroll.complete(token, currentOrderOwner, currentRoute,
-                    receipt?.changed == true,
-                    receipt?.let { BrowseOrderGeneration(token.route.collection!!, it.revision, it.order) },
-                    receipt?.currentEntryId.takeIf { followCurrent }, followCurrent = followCurrent)
-                done(receipt)
-            }
-        }
-        val mutableRows = remember(mutableQueue?.entries, mutablePlaylist?.entries) {
-            mutableQueue?.entries?.map { SongRow(it.id, it.track) } ?: mutablePlaylist?.entries
-        }
-        BrowseSortDialog(route, style, preferences.overridden(route), ::dismissSorting, { value, override ->
-        if (!changeViewInPlace(value) { preferences.write(route, value, override) }) {
-            preferences.write(route, value, override)
-            commitStyle(value)
-        }
-    }, {
-        val shown = style
-        preferences.reset(route)
-        val value = preferences.read(route)
-        // The observer reloads synchronously; restore the shown view before any frame so the
-        // defaults' geometry still enters the pinch transaction from the presented source.
-        style = shown
-        if (!changeViewInPlace(value)) commitStyle(value)
-    }, initialView,
-        onRandomize = when {
-            mutableQueue != null && queues != null -> ({ done -> orderAction(false, { done(it != null) }) { queues.randomizeOrder(mutableQueue.id, it) } })
-            mutablePlaylist != null && playlistController != null -> ({ done -> orderAction(false, { done(it != null) }) { playlistController.randomizeOrder(mutablePlaylist.id, it) } })
-            else -> null
-        }, onReverseOrder = when {
-            mutableQueue != null && queues != null -> ({ done -> orderAction(true, { done(it?.order) }) { queues.reverseOrder(mutableQueue.id, it) } })
-            mutablePlaylist != null && playlistController != null -> ({ done -> orderAction(false, { done(it?.order) }) { playlistController.reverseOrder(mutablePlaylist.id, it) } })
-            else -> null
-        }, mutableOrder = savedOrder, manualNeedsRestore = savedOrder != null && savedOrder.manual != physicalOrder,
-        mutableOrderRows = mutableRows, orderSnapshot = library.snapshot,
-        mutableOrderIds = physicalOrder, onRevertOrder = when {
-            mutableQueue != null && queues != null -> ({ checkpoint, done -> orderAction(true, { done(it != null) }) { queues.revertOrderWithCommit(mutableQueue.id, checkpoint, it) } })
-            mutablePlaylist != null && playlistController != null -> ({ checkpoint, done -> orderScroll.cancel(); playlistController.revertOrder(mutablePlaylist.id, checkpoint, done) })
-            else -> null
-        },
-        onApplySort = when {
-            mutableQueue != null && queues != null -> ({ method, ascending, done -> orderAction(true, { done(it != null) }) { queues.applySortOrder(mutableQueue.id, method, ascending, it) } })
-            mutablePlaylist != null && playlistController != null -> ({ method, ascending, done -> orderScroll.cancel(); playlistController.applySort(mutablePlaylist.id, method, ascending, done) })
-            else -> null
-        }) }
 
     val restoredSearchSlotHeight = with(density) { pillSlotHeight.roundToPx() }
     LaunchedEffect(localSearchOpen, searchAnchor, showSearchPill, restoredSearchSlotHeight) {
@@ -456,83 +339,10 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     val pinchHeader = if (artDetail) remember(pinchMotion, gridState) { CollectionPinchHeader(pinchMotion, gridState) } else null
     val headerFrameObserver = LocalCollectionHeaderFrameObserver.current
     SideEffect { pinchMotion.header = pinchHeader; pinchHeader?.observer = headerFrameObserver }
-    var zoomAnchor by remember(route.key) { mutableStateOf<BrowseZoomAnchor?>(null) }
-    LaunchedEffect(zoomAnchor, queryPending, displayedStyle) {
-        fun headerPhase(phase: String) {
-            if (pinchHeader != null) io.github.anastaci1a.localica.diagnostics.Diagnostics.info("CollectionHeaderAnchor",
-                "phase=$phase anchor=${zoomAnchor != null} pending=$queryPending " +
-                    "styleMatches=${zoomAnchor?.style == displayedStyle} rows=${result.items.size} " +
-                    "capturing=${pinchMotion.capturing} held=${pinchMotion.held}", alsoLog = headerFrameObserver != null)
-        }
-        headerPhase("admission")
-        val anchor = zoomAnchor ?: return@LaunchedEffect
-        if (anchor.route != route) { zoomAnchor = null; return@LaunchedEffect }
-        if (queryPending || displayedStyle != anchor.style) return@LaunchedEffect
-        val index = result.items.indexOfFirst { it.key == anchor.key }
-        try {
-            if (index >= 0) scrollOwnership.during {
-                headerPhase("position-request")
-                // Recognition already owns and consumes the two-finger contact.
-                // Retire the grid's earlier drag/fling mutation before requesting
-                // this pinch's measured anchor. Unheld restoration keeps normal priority.
-                if (pinchMotion.held) gridState.stopScroll(MutatePriority.UserInput)
-                when (anchor.edge) {
-                    -1 -> gridState.scrollToItem(0)
-                    1 -> gridState.scrollToItem((gridState.layoutInfo.totalItemsCount - 1).coerceAtLeast(0))
-                    else -> gridState.scrollToItem(index + 1, -anchor.top)
-                }
-                headerPhase("position-measured")
-                gridState.scroll(if (pinchMotion.held) MutatePriority.UserInput else MutatePriority.Default) {
-                    fun correctAnchor() {
-                        val layout = gridState.layoutInfo
-                        when (anchor.edge) {
-                            -1 -> scrollBy(-gridState.firstVisibleItemScrollOffset.toFloat())
-                            1 -> layout.visibleItemsInfo.lastOrNull()?.let {
-                                scrollBy((it.offset.y + it.size.height + layout.afterContentPadding - layout.viewportEndOffset).toFloat())
-                            }
-                            else -> layout.visibleItemsInfo.firstOrNull {
-                                it.key == anchor.key && it.index == index + 1 && it.size.height > 0
-                            }?.let {
-                                scrollBy(anchor.correction(it.offset.y, it.size.height))
-                            }
-                        }
-                    }
-                    // displayedStyle gates the destination; scrollToItem forces its
-                    // remeasurement. Read that measured item, never the source bounds,
-                    // and correct before yielding a frame of coarse top alignment.
-                    // Both this correction and the continuing loop own the same scroll.
-                    correctAnchor()
-                    headerPhase("anchor-corrected")
-                    pinchHeader?.anchorCorrected(displayedStyle)
-                    val start = withFrameNanos { it }
-                    do {
-                        val now = withFrameNanos { it }
-                        correctAnchor()
-                        pinchHeader?.anchorCorrected(displayedStyle)
-                    // The same anchor owns preview AND release settlement. Ending it at
-                    // finger-up lets onRelease recreate it and expose the initial coarse
-                    // scrollToItem placement before fractional correction on the next frame.
-                    } while (pinchMotion.source != null || now - start < if (reducedMotion) 32_000_000L else 450_000_000L)
-                }
-            }
-        } catch (cancelled: kotlinx.coroutines.CancellationException) {
-            headerPhase("mutation-cancelled type=${cancelled.javaClass.simpleName}")
-            throw cancelled
-        } finally {
-            val active = kotlinx.coroutines.currentCoroutineContext()[kotlinx.coroutines.Job]?.isActive == true
-            headerPhase("retired active=$active")
-            // A relaunch (a library refresh flips queryPending, or the style changes) cancels this
-            // run. While the pinch still owns its anchor, keep it: the relaunched run verifies it.
-            if (zoomAnchor == anchor && (active || pinchMotion.source == null)) {
-                zoomAnchor = null
-                // Still active, nothing will run this anchor again: a user scroll took its mutation
-                // (#535), or it ended without verifying because the anchor row left the result.
-                // Hand the header back instead of leaving the settle, and every later pinch, waiting.
-                // A verified handoff has already completed, so this is then a no-op (#542).
-                if (active) pinchHeader?.abandonHandoff()
-            }
-        }
-    }
+    val zoomAnchorState = remember(route.key) { mutableStateOf<BrowseZoomAnchor?>(null) }
+    var zoomAnchor by zoomAnchorState
+    BrowseZoomAnchorEffect(zoomAnchorState, route, queryPending, displayedStyle, result, pinchMotion, pinchHeader, headerFrameObserver,
+        gridState, scrollOwnership, reducedMotion)
     val surroundingBackdrop = LocalFrostedBackdrop.current
     val hasSongItems = result.items.any { it.row != null }
     val needsListBackdrop = (artDetail || hasSongItems || showFilters || showSearchPill || route.collection?.kind == MediaKind.Queue ||
@@ -562,86 +372,19 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                 "${gridState.firstVisibleItemScrollOffset}"
         },
         recoveredReport = { pinchMotion.diagnostics() })
-    val refreshBackdrop = LocalBackdropRefresh.current
-    // Observe scroll start/stop in the effect, not this screen's composition.
-    val currentRefreshBackdrop by rememberUpdatedState(refreshBackdrop)
-    val currentArtDetail by rememberUpdatedState(artDetail)
-    val currentCollectionSource by rememberUpdatedState(collectionSource)
-    LaunchedEffect(presentation) {
-        snapshotFlow { gridState.isScrollInProgress }.collectLatest { scrolling ->
-            if (!scrolling) {
-                kotlinx.coroutines.delay(150)
-                currentRefreshBackdrop()
-                if (currentArtDetail) currentCollectionSource.refresh()
-            }
-        }
-    }
+    BrowseScrollSettleBackdropEffect(presentation, gridState, artDetail, collectionSource)
     val artworkTransit = remember { ArtworkTransit() }
-    val latestBrowse by rememberUpdatedState(browse)
-    val latestReducedMotion by rememberUpdatedState(rememberEffectiveReducedMotion(reducedMotion || LocalReducedMotion.current))
-    val latestTopInset by rememberUpdatedState(with(density) {
+    val latestBrowseState = rememberUpdatedState(browse)
+    val latestBrowse by latestBrowseState
+    val latestReducedMotionState = rememberUpdatedState(rememberEffectiveReducedMotion(reducedMotion || LocalReducedMotion.current))
+    val latestReducedMotion by latestReducedMotionState
+    val latestTopInsetState = rememberUpdatedState(with(density) {
         (if (showSearchPill || showFilters) pillSlotHeight else 0.dp).toPx()
     })
-    var followingOrder by remember { mutableStateOf<BrowseOrderScrollRequest?>(null) }
-    fun sourceStillCommitted(request: BrowseOrderScrollRequest): Boolean {
-        val source = BrowseSourceRevision(library.snapshot,
-            playlistController?.state?.value?.playlists ?: playlists.playlists,
-            queues?.state?.value?.library?.queues ?: queueState.library.queues, libraryFilters)
-        return request.committed.matches(source)
-    }
-    // A post-commit prop publication may catch up while readiness waits. It must not
-    // restart/cancel the request; only a different actor-current structure does.
-    val visibleOrderSource = BrowseSourceRevision(library.snapshot, playlists.playlists, queueState.library.queues, libraryFilters)
-    LaunchedEffect(orderScroll.request, visibleOrderSource) {
-        orderScroll.request?.let { if (!sourceStillCommitted(it)) orderScroll.finish(it) }
-    }
-    // Cursor captures replace outer queue snapshots, not the committed entries generation.
-    LaunchedEffect(orderScroll.revision, orderScroll.request, orderOwner) {
-        val request = orderScroll.request ?: return@LaunchedEffect
-        if (!selectionVisible || playerOpen || !orderScroll.isCurrent(request, currentOrderOwner, currentRoute) ||
-            !sourceStillCommitted(request)) { orderScroll.finish(request); return@LaunchedEffect }
-        fun destination(): Int? {
-            if (latestBrowse.pending) return null
-            // Resolve the live active occurrence once readiness completes, not the
-            // potentially older cursor at commit. Motion itself never chases playback.
-            val target = if (request.followCurrent) queues?.state?.value?.library?.let { live ->
-                live.active?.takeIf { it.id == request.committed.collection.id }?.currentEntryId
-            } else request.targetOccurrenceId
-            return request.targetIndex(latestBrowse.current, currentOrderOwner, currentRoute, target)
-        }
-        try {
-            var target: Int
-            while (true) {
-                snapshotFlow { destination() }.first { it != null }
-                // Publication precedes lazy measurement. A cursor-only refresh may
-                // temporarily retain old rows again; wait rather than lose the request.
-                withFrameNanos { }; withFrameNanos { }
-                val resolved = destination()
-                if (resolved != null && gridState.layoutInfo.totalItemsCount ==
-                    (latestBrowse.current?.result?.items?.size ?: 0) + 1) {
-                    target = resolved
-                    break
-                }
-            }
-            if (!orderScroll.isCurrent(request, currentOrderOwner, currentRoute) || !sourceStillCommitted(request)) return@LaunchedEffect
-            followingOrder = request
-            playbackFollow.cancel()
-            scrollOwnership.during { artworkTransit.during(!latestReducedMotion &&
-                kotlin.math.abs(target - gridState.firstVisibleItemIndex) > gridState.layoutInfo.visibleItemsInfo.size * 2) {
-                if (target == 0) gridState.easeToTop(latestReducedMotion)
-                else gridState.easeToTarget(ListScrollTarget.below(target, latestTopInset), latestReducedMotion)
-            } }
-        } finally {
-            if (followingOrder === request) followingOrder = null
-            orderScroll.finish(request)
-        }
-    }
-    // Accessibility/programmatic user scrolling can supersede a request still awaiting rows.
-    LaunchedEffect(gridState) {
-        snapshotFlow { gridState.isScrollInProgress }.collect { scrolling ->
-            if (scrolling && followingOrder == null) orderScroll.cancel()
-        }
-    }
+    val latestTopInset by latestTopInsetState
+    BrowseOrderScrollEffects(library, playlists, queueState, queues, playlistController, libraryFilters, orderScroll, orderOwner,
+        currentOrderOwnerState, currentRouteState, selectionVisible, playerOpen, latestBrowseState, latestReducedMotionState,
+        latestTopInsetState, gridState, scrollOwnership, artworkTransit, playbackFollow)
     val session = LocalSessionSelection.current ?: remember { SessionSelection() }
     OnModalGestureCancellation { playbackFollow.interrupt() }
     val readyToScroll by rememberUpdatedState(!queryPending && loadedResult != null)
@@ -708,34 +451,12 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     BindSelectionScope(session, route.collection, result.rows, selectionVisible && !localSearchOpen)
     // The selection host publishes hover lifts; a drag starts its cards from them (#533).
     val selectionScene = remember(route.key) { SelectionScene() }
-    SideEffect {
-        reorder.hoverLift = { key -> selectionScene.hover[key] }; reorder.hoverBacking = backdropBacking
-        reorder.currentSongKey = playingEntryId.takeIf { route.collection?.kind == MediaKind.Queue }
-    }
     val dragHost = LocalSongDragHost.current
     val floatingControlClearance = if (route.collection?.kind == MediaKind.Queue) 12.dp else 0.dp
-    SideEffect {
-        reorder.onDragStarted = {
-            dragHost?.cancelBottomMargin = floatingControlClearance
-            dragHost?.source = if (needsListBackdrop) listBackdrop else if (artDetail) collectionSource else surroundingBackdrop
-            dragHost?.state = reorder; dragHost?.reducedMotion = reducedMotion
-        }
-        if (reorder.drag != null) reorder.onDragStarted()
-        // Keep the foreground owner attached through the return to the resting rows.
-        // Its shared overlay observes drag == null directly; a later SideEffect must
-        // not remove and rebuild that owner across the pickup/landing frame boundary.
-    }
-    DisposableEffect(reorder, dragHost) { onDispose {
-        reorder.onDragStarted = {}
-        if (dragHost?.state === reorder) {
-        dragHost.state = null
-        dragHost.cancelBottomMargin = 0.dp
-    } } }
+    BrowseReorderBindings(reorder, selectionScene, backdropBacking, playingEntryId, route, dragHost, floatingControlClearance,
+        needsListBackdrop, listBackdrop, artDetail, collectionSource, surroundingBackdrop, reducedMotion, result, density, obscuredInset)
     val editableOrder = route.text.isBlank() &&
         route.collection?.kind in setOf(MediaKind.Queue, MediaKind.Playlist)
-    SideEffect { reorder.reconcile(result.items); reorder.obscuredBottom = with(density) { obscuredInset.toPx() } }
-    val edge = with(androidx.compose.ui.platform.LocalDensity.current) { 64.dp.toPx() }
-    LaunchedEffect(reorder.drag) { if (reorder.drag != null) reorder.autoScroll(edge) }
     // Only this collection's canonical occurrence order owns the drag lifetime. A
     // playback checkpoint can refresh all browse presentations without changing it.
     val dragSourceOrder = physicalOrder
@@ -788,30 +509,8 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
         }
         return true
     }
-    val filterRangeRequest = artistFilterRange.request
-    val filterRangeViewport by remember(gridState) { derivedStateOf { gridState.layoutInfo.viewportSize } }
-    LaunchedEffect(filterRangeRequest, artistFilterRange.interruption, listContact, selectionVisible,
-        playerOpen, modalBlocked, latestReducedMotion, displayedStyle, pinchMotion.source, zoomAnchor,
-        result.items, filterRangeViewport, obscuredInset, density.density, density.fontScale) {
-        val request = filterRangeRequest ?: return@LaunchedEffect
-        if (listContact || !selectionVisible || playerOpen || modalBlocked || pinchMotion.source != null || zoomAnchor != null) return@LaunchedEffect
-        // A touch/fling/key scroll owns its full mutation before any range reconciliation.
-        withFrameNanos { }
-        snapshotFlow { gridState.isScrollInProgress }.first { !it }
-        val layout = snapshotFlow { gridState.layoutInfo }.first { measured ->
-            measured !== request.previousLayout && measured.totalItemsCount == result.items.size + 2 &&
-                measured.visibleItemsInfo.all { item -> item.key == "browser-notice" ||
-                    item.key == ArtistFilterRange.GuardKey || result.items.getOrNull(item.index - 1)?.key == item.key }
-        }
-        if (!artistFilterRange.owns(request)) return@LaunchedEffect
-        val guard = layout.visibleItemsInfo.firstOrNull { it.key == ArtistFilterRange.GuardKey }
-        val excess = ArtistFilterRange.excess(guard?.offset?.y, layout.viewportEndOffset, layout.afterContentPadding)
-        if (excess < 0f) {
-            artistFilterRange.correct(request, gridState, scrollOwnership, excess, latestReducedMotion)
-        }
-        // Removing the reserve now exposes only the new real range; valid offsets never moved.
-        artistFilterRange.finish(request)
-    }
+    BrowseFilterRangeEffect(artistFilterRange, gridState, listContact, selectionVisible, playerOpen, modalBlocked, latestReducedMotionState,
+        displayedStyle, pinchMotion, zoomAnchorState, result, obscuredInset, density, scrollOwnership)
     val latestUserScroll by rememberUpdatedState(::userScroll)
     val userScrollConnection = remember {
         object : NestedScrollConnection {
@@ -913,7 +612,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
         header()
         if (route.search && popupDismiss != null) {
             val input = ScopedSearchEditorParameters(route.text, ::editSearchText,
-                "Search " + (route.title ?: route.tab.label), focus, ::submitSearch)
+                "Search " + (route.title ?: route.tab.label), focus, submitSearch)
             if (scopedEditor != null) scopedEditor.content(input) else ScopedSearchEditor(input)
         }
         else if (route.search) GlassSearchField(route.text, ::editSearchText,
@@ -1340,7 +1039,10 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
         CollectionToolbar(gridState, reorder.viewportWidth, route.title.orEmpty(), collectionMenuAnchor,
             onBack, { view -> collectionView = view; collectionMenu = true }, backdropScene, pinchHeader,
             onBackBottom = { collectionBackBottom = it }) {
-            if (collectionMenu) CompositionLocalProvider(LocalGlassOrigin provides collectionMenuAnchor) { sortingPanel(initialView = collectionView) }
+            if (collectionMenu) CompositionLocalProvider(LocalGlassOrigin provides collectionMenuAnchor) {
+                BrowseSortingPanel(collectionView, route, styleState, displayedStyle, preferences, pinchMotion, orderScroll, orderOwner, currentOrderOwnerState,
+                currentRouteState, playbackFollow, scrollScope, mutableQueue, mutablePlaylist, savedOrder, physicalOrder, queues, playlistController,
+                library, collectionMenuState, onRoute, onSortDismiss) }
         }
     }
     if (needsListBackdrop) BrowseBackdropRecording(backdropScene, backdropBacking)
@@ -1388,6 +1090,402 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
         val owner = informationLookupOwner
         collectionLookup.open(action, song) { info == null && currentInformationLookupOwner === owner }
     } } }
-    if (sorting) CompositionLocalProvider(LocalGlassOrigin provides sortOrigin) { sortingPanel(initialView = presentationOnly) }
+    if (sorting) CompositionLocalProvider(LocalGlassOrigin provides sortOrigin) {
+        BrowseSortingPanel(presentationOnly, route, styleState, displayedStyle, preferences, pinchMotion, orderScroll, orderOwner, currentOrderOwnerState,
+        currentRouteState, playbackFollow, scrollScope, mutableQueue, mutablePlaylist, savedOrder, physicalOrder, queues, playlistController,
+        library, collectionMenuState, onRoute, onSortDismiss) }
 }
 
+
+// #682: BrowserScreen exceeded ART's compile limit (16383 code units), so it ran interpreted. The hosts below
+// are the verbatim effect clusters that used to sit inline, called from the same composition position with
+// exactly the values that code read. Effect keys, relative order and updated-state freshness are unchanged.
+// They are non-restartable, so their snapshot reads still invalidate BrowserScreen's own scope, as inline
+// code did; only the dex code moved. Measure with tools/performance/method-size.sh.
+
+/** Search-field autofocus for this route; owns its per-route focus bookkeeping and returns submitSearch. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun browseSearchAutofocus(route: BrowseRoute, scopedEditor: ScopedSearchEditorSession?, focusRequest: Int, playerOpen: Boolean,
+    focus: androidx.compose.ui.focus.FocusRequester, resultsFocus: androidx.compose.ui.focus.FocusRequester,
+    keyboard: androidx.compose.ui.platform.SoftwareKeyboardController?, density: androidx.compose.ui.unit.Density,
+    onSearchCommit: () -> Unit, searchEditTrace: ((String) -> Unit)?): () -> Unit {
+    var focusedOnce by androidx.compose.runtime.saveable.rememberSaveable(route.key) { mutableStateOf(false) }
+    var focusedRequest by androidx.compose.runtime.saveable.rememberSaveable(route.key) { mutableIntStateOf(-1) }
+    var inputCompletion by remember(route.key) { mutableIntStateOf(0) }
+    fun submitSearch() {
+        if (scopedEditor != null && !scopedEditor.active) return
+        // Cancel a pending frame-delayed focus request before ending this input session.
+        focusedOnce = true; focusedRequest = focusRequest; inputCompletion++
+        onSearchCommit(); resultsFocus.requestFocus(); keyboard?.hide()
+    }
+    val panelReady = LocalGlassPanelReady.current
+    val reportSearchOpening = LocalSearchOpeningReady.current
+    val windowFocused = androidx.compose.ui.platform.LocalWindowInfo.current.isWindowFocused
+    val keyboardClosing by rememberImeClosing(WindowInsets.ime,
+        WindowInsets.imeAnimationSource, WindowInsets.imeAnimationTarget, density)
+    var restoreResultsFocus by remember(route.key) { mutableStateOf(route.search && route.queryCommitted) }
+    LaunchedEffect(route.key, playerOpen, focusRequest, inputCompletion, panelReady, windowFocused, keyboardClosing, reportSearchOpening, scopedEditor?.focused) {
+        searchEditTrace?.invoke("autofocus decision key=${route.key.hashCode()} request=$focusRequest consumed=$focusedRequest once=$focusedOnce ready=$panelReady window=$windowFocused closing=$keyboardClosing player=$playerOpen editor=${scopedEditor?.let { System.identityHashCode(it) }} active=${scopedEditor?.active} focused=${scopedEditor?.focused}")
+        // Dialog attachment and IME focus happen outside Compose's animation clock.
+        // Do not consume an autofocus request while the returning window still owns input.
+        if (!panelReady || !windowFocused || keyboardClosing) return@LaunchedEffect
+        if (route.search && (!focusedOnce || focusedRequest != focusRequest) && !playerOpen) {
+            withFrameNanos { } // Wait until the field is attached.
+            if (scopedEditor != null && !scopedEditor.active) return@LaunchedEffect
+            focus.requestFocus(); keyboard?.show(); focusedOnce = true; focusedRequest = focusRequest
+            searchEditTrace?.invoke("autofocus requested key=${route.key.hashCode()} request=$focusRequest editor=${scopedEditor?.let { System.identityHashCode(it) }}")
+            restoreResultsFocus = false
+            reportSearchOpening?.invoke(true)
+        } else if (restoreResultsFocus && !playerOpen) {
+            // Replacing a focused field can transfer focus to the restored field even without
+            // requestFocus. Back restores results, so explicitly end that input session.
+            withFrameNanos { }
+            if (scopedEditor != null && !scopedEditor.active) return@LaunchedEffect
+            resultsFocus.requestFocus(); keyboard?.hide()
+            restoreResultsFocus = false
+            reportSearchOpening?.invoke(false)
+        } else if (route.search && !playerOpen) reportSearchOpening?.invoke(scopedEditor?.focused == true)
+    }
+    return ::submitSearch
+}
+
+@Composable @NonRestartableComposable
+private fun BrowseZoomAnchorEffect(zoomAnchorState: MutableState<BrowseZoomAnchor?>, route: BrowseRoute, queryPending: Boolean,
+    displayedStyle: BrowseStyle, result: BrowseResult, pinchMotion: BrowsePinchMotion, pinchHeader: CollectionPinchHeader?,
+    headerFrameObserver: ((CollectionHeaderFrame) -> Unit)?, gridState: LazyGridState, scrollOwnership: BrowseScrollOwnership,
+    reducedMotion: Boolean) {
+    var zoomAnchor by zoomAnchorState
+    LaunchedEffect(zoomAnchor, queryPending, displayedStyle) {
+        fun headerPhase(phase: String) {
+            if (pinchHeader != null) io.github.anastaci1a.localica.diagnostics.Diagnostics.info("CollectionHeaderAnchor",
+                "phase=$phase anchor=${zoomAnchor != null} pending=$queryPending " +
+                    "styleMatches=${zoomAnchor?.style == displayedStyle} rows=${result.items.size} " +
+                    "capturing=${pinchMotion.capturing} held=${pinchMotion.held}", alsoLog = headerFrameObserver != null)
+        }
+        headerPhase("admission")
+        val anchor = zoomAnchor ?: return@LaunchedEffect
+        if (anchor.route != route) { zoomAnchor = null; return@LaunchedEffect }
+        if (queryPending || displayedStyle != anchor.style) return@LaunchedEffect
+        val index = result.items.indexOfFirst { it.key == anchor.key }
+        try {
+            if (index >= 0) scrollOwnership.during {
+                headerPhase("position-request")
+                // Recognition already owns and consumes the two-finger contact.
+                // Retire the grid's earlier drag/fling mutation before requesting
+                // this pinch's measured anchor. Unheld restoration keeps normal priority.
+                if (pinchMotion.held) gridState.stopScroll(MutatePriority.UserInput)
+                when (anchor.edge) {
+                    -1 -> gridState.scrollToItem(0)
+                    1 -> gridState.scrollToItem((gridState.layoutInfo.totalItemsCount - 1).coerceAtLeast(0))
+                    else -> gridState.scrollToItem(index + 1, -anchor.top)
+                }
+                headerPhase("position-measured")
+                gridState.scroll(if (pinchMotion.held) MutatePriority.UserInput else MutatePriority.Default) {
+                    fun correctAnchor() {
+                        val layout = gridState.layoutInfo
+                        when (anchor.edge) {
+                            -1 -> scrollBy(-gridState.firstVisibleItemScrollOffset.toFloat())
+                            1 -> layout.visibleItemsInfo.lastOrNull()?.let {
+                                scrollBy((it.offset.y + it.size.height + layout.afterContentPadding - layout.viewportEndOffset).toFloat())
+                            }
+                            else -> layout.visibleItemsInfo.firstOrNull {
+                                it.key == anchor.key && it.index == index + 1 && it.size.height > 0
+                            }?.let {
+                                scrollBy(anchor.correction(it.offset.y, it.size.height))
+                            }
+                        }
+                    }
+                    // displayedStyle gates the destination; scrollToItem forces its
+                    // remeasurement. Read that measured item, never the source bounds,
+                    // and correct before yielding a frame of coarse top alignment.
+                    // Both this correction and the continuing loop own the same scroll.
+                    correctAnchor()
+                    headerPhase("anchor-corrected")
+                    pinchHeader?.anchorCorrected(displayedStyle)
+                    val start = withFrameNanos { it }
+                    do {
+                        val now = withFrameNanos { it }
+                        correctAnchor()
+                        pinchHeader?.anchorCorrected(displayedStyle)
+                    // The same anchor owns preview AND release settlement. Ending it at
+                    // finger-up lets onRelease recreate it and expose the initial coarse
+                    // scrollToItem placement before fractional correction on the next frame.
+                    } while (pinchMotion.source != null || now - start < if (reducedMotion) 32_000_000L else 450_000_000L)
+                }
+            }
+        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            headerPhase("mutation-cancelled type=${cancelled.javaClass.simpleName}")
+            throw cancelled
+        } finally {
+            val active = kotlinx.coroutines.currentCoroutineContext()[kotlinx.coroutines.Job]?.isActive == true
+            headerPhase("retired active=$active")
+            // A relaunch (a library refresh flips queryPending, or the style changes) cancels this
+            // run. While the pinch still owns its anchor, keep it: the relaunched run verifies it.
+            if (zoomAnchor == anchor && (active || pinchMotion.source == null)) {
+                zoomAnchor = null
+                // Still active, nothing will run this anchor again: a user scroll took its mutation
+                // (#535), or it ended without verifying because the anchor row left the result.
+                // Hand the header back instead of leaving the settle, and every later pinch, waiting.
+                // A verified handoff has already completed, so this is then a no-op (#542).
+                if (active) pinchHeader?.abandonHandoff()
+            }
+        }
+    }
+}
+
+@Composable @NonRestartableComposable
+private fun BrowseScrollSettleBackdropEffect(presentation: PresentedBrowse?, gridState: LazyGridState, artDetail: Boolean,
+    collectionSource: FrostedBackdrop) {
+    val refreshBackdrop = LocalBackdropRefresh.current
+    // Observe scroll start/stop in the effect, not this screen's composition.
+    val currentRefreshBackdrop by rememberUpdatedState(refreshBackdrop)
+    val currentArtDetail by rememberUpdatedState(artDetail)
+    val currentCollectionSource by rememberUpdatedState(collectionSource)
+    LaunchedEffect(presentation) {
+        snapshotFlow { gridState.isScrollInProgress }.collectLatest { scrolling ->
+            if (!scrolling) {
+                kotlinx.coroutines.delay(150)
+                currentRefreshBackdrop()
+                if (currentArtDetail) currentCollectionSource.refresh()
+            }
+        }
+    }
+}
+
+@Composable @NonRestartableComposable
+private fun BrowseOrderScrollEffects(library: LibraryUiState, playlists: PlaylistState, queueState: QueueUiState, queues: QueueController?,
+    playlistController: PlaylistController?, libraryFilters: LibraryFilters, orderScroll: BrowseOrderScrollCoordinator, orderOwner: Any,
+    currentOrderOwnerState: State<Any>, currentRouteState: State<BrowseRoute>, selectionVisible: Boolean, playerOpen: Boolean,
+    latestBrowseState: State<BrowsePresentationState>, latestReducedMotionState: State<Boolean>, latestTopInsetState: State<Float>,
+    gridState: LazyGridState, scrollOwnership: BrowseScrollOwnership, artworkTransit: ArtworkTransit,
+    playbackFollow: QueuePlaybackFollowCoordinator) {
+    val currentOrderOwner by currentOrderOwnerState
+    val currentRoute by currentRouteState
+    val latestBrowse by latestBrowseState
+    val latestReducedMotion by latestReducedMotionState
+    val latestTopInset by latestTopInsetState
+    var followingOrder by remember { mutableStateOf<BrowseOrderScrollRequest?>(null) }
+    fun sourceStillCommitted(request: BrowseOrderScrollRequest): Boolean {
+        val source = BrowseSourceRevision(library.snapshot,
+            playlistController?.state?.value?.playlists ?: playlists.playlists,
+            queues?.state?.value?.library?.queues ?: queueState.library.queues, libraryFilters)
+        return request.committed.matches(source)
+    }
+    // A post-commit prop publication may catch up while readiness waits. It must not
+    // restart/cancel the request; only a different actor-current structure does.
+    val visibleOrderSource = BrowseSourceRevision(library.snapshot, playlists.playlists, queueState.library.queues, libraryFilters)
+    LaunchedEffect(orderScroll.request, visibleOrderSource) {
+        orderScroll.request?.let { if (!sourceStillCommitted(it)) orderScroll.finish(it) }
+    }
+    // Cursor captures replace outer queue snapshots, not the committed entries generation.
+    LaunchedEffect(orderScroll.revision, orderScroll.request, orderOwner) {
+        val request = orderScroll.request ?: return@LaunchedEffect
+        if (!selectionVisible || playerOpen || !orderScroll.isCurrent(request, currentOrderOwner, currentRoute) ||
+            !sourceStillCommitted(request)) { orderScroll.finish(request); return@LaunchedEffect }
+        fun destination(): Int? {
+            if (latestBrowse.pending) return null
+            // Resolve the live active occurrence once readiness completes, not the
+            // potentially older cursor at commit. Motion itself never chases playback.
+            val target = if (request.followCurrent) queues?.state?.value?.library?.let { live ->
+                live.active?.takeIf { it.id == request.committed.collection.id }?.currentEntryId
+            } else request.targetOccurrenceId
+            return request.targetIndex(latestBrowse.current, currentOrderOwner, currentRoute, target)
+        }
+        try {
+            var target: Int
+            while (true) {
+                snapshotFlow { destination() }.first { it != null }
+                // Publication precedes lazy measurement. A cursor-only refresh may
+                // temporarily retain old rows again; wait rather than lose the request.
+                withFrameNanos { }; withFrameNanos { }
+                val resolved = destination()
+                if (resolved != null && gridState.layoutInfo.totalItemsCount ==
+                    (latestBrowse.current?.result?.items?.size ?: 0) + 1) {
+                    target = resolved
+                    break
+                }
+            }
+            if (!orderScroll.isCurrent(request, currentOrderOwner, currentRoute) || !sourceStillCommitted(request)) return@LaunchedEffect
+            followingOrder = request
+            playbackFollow.cancel()
+            scrollOwnership.during { artworkTransit.during(!latestReducedMotion &&
+                kotlin.math.abs(target - gridState.firstVisibleItemIndex) > gridState.layoutInfo.visibleItemsInfo.size * 2) {
+                if (target == 0) gridState.easeToTop(latestReducedMotion)
+                else gridState.easeToTarget(ListScrollTarget.below(target, latestTopInset), latestReducedMotion)
+            } }
+        } finally {
+            if (followingOrder === request) followingOrder = null
+            orderScroll.finish(request)
+        }
+    }
+    // Accessibility/programmatic user scrolling can supersede a request still awaiting rows.
+    LaunchedEffect(gridState) {
+        snapshotFlow { gridState.isScrollInProgress }.collect { scrolling ->
+            if (scrolling && followingOrder == null) orderScroll.cancel()
+        }
+    }
+}
+
+@Composable @NonRestartableComposable
+private fun BrowseReorderBindings(reorder: SongDragState, selectionScene: SelectionScene, backdropBacking: FrostedBackdrop?,
+    playingEntryId: String?, route: BrowseRoute, dragHost: SongDragHost?, floatingControlClearance: androidx.compose.ui.unit.Dp,
+    needsListBackdrop: Boolean, listBackdrop: FrostedBackdrop, artDetail: Boolean, collectionSource: FrostedBackdrop,
+    surroundingBackdrop: FrostedBackdrop?, reducedMotion: Boolean, result: BrowseResult, density: androidx.compose.ui.unit.Density,
+    obscuredInset: androidx.compose.ui.unit.Dp) {
+    SideEffect {
+        reorder.hoverLift = { key -> selectionScene.hover[key] }; reorder.hoverBacking = backdropBacking
+        reorder.currentSongKey = playingEntryId.takeIf { route.collection?.kind == MediaKind.Queue }
+    }
+    SideEffect {
+        reorder.onDragStarted = {
+            dragHost?.cancelBottomMargin = floatingControlClearance
+            dragHost?.source = if (needsListBackdrop) listBackdrop else if (artDetail) collectionSource else surroundingBackdrop
+            dragHost?.state = reorder; dragHost?.reducedMotion = reducedMotion
+        }
+        if (reorder.drag != null) reorder.onDragStarted()
+        // Keep the foreground owner attached through the return to the resting rows.
+        // Its shared overlay observes drag == null directly; a later SideEffect must
+        // not remove and rebuild that owner across the pickup/landing frame boundary.
+    }
+    DisposableEffect(reorder, dragHost) { onDispose {
+        reorder.onDragStarted = {}
+        if (dragHost?.state === reorder) {
+        dragHost.state = null
+        dragHost.cancelBottomMargin = 0.dp
+    } } }
+    SideEffect { reorder.reconcile(result.items); reorder.obscuredBottom = with(density) { obscuredInset.toPx() } }
+    val edge = with(androidx.compose.ui.platform.LocalDensity.current) { 64.dp.toPx() }
+    LaunchedEffect(reorder.drag) { if (reorder.drag != null) reorder.autoScroll(edge) }
+}
+
+@Composable @NonRestartableComposable
+private fun BrowseFilterRangeEffect(artistFilterRange: ArtistFilterRange, gridState: LazyGridState, listContact: Boolean,
+    selectionVisible: Boolean, playerOpen: Boolean, modalBlocked: Boolean, latestReducedMotionState: State<Boolean>,
+    displayedStyle: BrowseStyle, pinchMotion: BrowsePinchMotion, zoomAnchorState: State<BrowseZoomAnchor?>, result: BrowseResult,
+    obscuredInset: androidx.compose.ui.unit.Dp, density: androidx.compose.ui.unit.Density, scrollOwnership: BrowseScrollOwnership) {
+    val latestReducedMotion by latestReducedMotionState
+    val zoomAnchor by zoomAnchorState
+    val filterRangeRequest = artistFilterRange.request
+    val filterRangeViewport by remember(gridState) { derivedStateOf { gridState.layoutInfo.viewportSize } }
+    LaunchedEffect(filterRangeRequest, artistFilterRange.interruption, listContact, selectionVisible,
+        playerOpen, modalBlocked, latestReducedMotion, displayedStyle, pinchMotion.source, zoomAnchor,
+        result.items, filterRangeViewport, obscuredInset, density.density, density.fontScale) {
+        val request = filterRangeRequest ?: return@LaunchedEffect
+        if (listContact || !selectionVisible || playerOpen || modalBlocked || pinchMotion.source != null || zoomAnchor != null) return@LaunchedEffect
+        // A touch/fling/key scroll owns its full mutation before any range reconciliation.
+        withFrameNanos { }
+        snapshotFlow { gridState.isScrollInProgress }.first { !it }
+        val layout = snapshotFlow { gridState.layoutInfo }.first { measured ->
+            measured !== request.previousLayout && measured.totalItemsCount == result.items.size + 2 &&
+                measured.visibleItemsInfo.all { item -> item.key == "browser-notice" ||
+                    item.key == ArtistFilterRange.GuardKey || result.items.getOrNull(item.index - 1)?.key == item.key }
+        }
+        if (!artistFilterRange.owns(request)) return@LaunchedEffect
+        val guard = layout.visibleItemsInfo.firstOrNull { it.key == ArtistFilterRange.GuardKey }
+        val excess = ArtistFilterRange.excess(guard?.offset?.y, layout.viewportEndOffset, layout.afterContentPadding)
+        if (excess < 0f) {
+            artistFilterRange.correct(request, gridState, scrollOwnership, excess, latestReducedMotion)
+        }
+        // Removing the reserve now exposes only the new real range; valid offsets never moved.
+        artistFilterRange.finish(request)
+    }
+}
+
+/** The sorting panel and its commit helpers; each origin owns its opening tab, an inactive origin must not override it. */
+@Composable @NonRestartableComposable
+private fun BrowseSortingPanel(initialView: Boolean, route: BrowseRoute, styleState: MutableState<BrowseStyle>, displayedStyle: BrowseStyle,
+    preferences: BrowsePreferences, pinchMotion: BrowsePinchMotion, orderScroll: BrowseOrderScrollCoordinator, orderOwner: Any,
+    currentOrderOwnerState: State<Any>, currentRouteState: State<BrowseRoute>, playbackFollow: QueuePlaybackFollowCoordinator,
+    scrollScope: kotlinx.coroutines.CoroutineScope, mutableQueue: ListeningQueue?, mutablePlaylist: ManualPlaylist?, savedOrder: SavedOrder?,
+    physicalOrder: List<String>?, queues: QueueController?, playlistController: PlaylistController?, library: LibraryUiState,
+    collectionMenuState: MutableState<Boolean>, onRoute: (BrowseRoute) -> Unit, onSortDismiss: () -> Unit) {
+    var style by styleState
+    var collectionMenu by collectionMenuState
+    val currentOrderOwner by currentOrderOwnerState
+    val currentRoute by currentRouteState
+    fun dismissSorting() {
+        // Retire pending receipts before visibility changes; disposal can happen later.
+        orderScroll.cancelPending()
+        collectionMenu = false
+        onSortDismiss()
+    }
+    /** A saved geometry change (View popup) takes the pinch transaction, not a reflow (#627).
+     * Its geometry commits like a pinch; the saved style (sort, information and so on) is
+     * written once the transaction ends, so a rollback, failure or disposal still saves it. */
+    fun changeViewInPlace(value: BrowseStyle, persist: () -> Unit = {}): Boolean {
+        if (route.search) return false
+        val view = displayedStyle.copy(presentation = value.presentation, itemsPerRow = value.itemsPerRow, listSize = value.listSize)
+        val finished = pinchMotion.viewChange?.invoke(view) { style = it } ?: return false
+        orderScroll.cancel()
+        scrollScope.launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) {
+            try { finished.await() } finally {
+                persist()
+                style = value
+            }
+        }
+        dismissSorting()
+        return true
+    }
+    fun commitStyle(value: BrowseStyle) {
+        orderScroll.cancel()
+        style = value
+        if (route.search) onRoute(route.copy(querySort = value.sort, queryAscending = value.ascending))
+        dismissSorting()
+    }
+    // Closing a pending dialog invalidates its callback, but not an already accepted follow.
+    val lifetime = remember { booleanArrayOf(true) }
+    DisposableEffect(Unit) {
+        orderScroll.cancel()
+        onDispose { lifetime[0] = false }
+    }
+    fun orderAction(followCurrent: Boolean, done: (OrderCommit?) -> Unit,
+        action: ((OrderCommit?) -> Unit) -> Unit) {
+        val token = orderScroll.begin(orderOwner, route)
+        playbackFollow.cancel()
+        action { receipt ->
+            if (lifetime[0]) orderScroll.complete(token, currentOrderOwner, currentRoute,
+                receipt?.changed == true,
+                receipt?.let { BrowseOrderGeneration(token.route.collection!!, it.revision, it.order) },
+                receipt?.currentEntryId.takeIf { followCurrent }, followCurrent = followCurrent)
+            done(receipt)
+        }
+    }
+    val mutableRows = remember(mutableQueue?.entries, mutablePlaylist?.entries) {
+        mutableQueue?.entries?.map { SongRow(it.id, it.track) } ?: mutablePlaylist?.entries
+    }
+    BrowseSortDialog(route, style, preferences.overridden(route), ::dismissSorting, { value, override ->
+    if (!changeViewInPlace(value) { preferences.write(route, value, override) }) {
+        preferences.write(route, value, override)
+        commitStyle(value)
+    }
+    }, {
+    val shown = style
+    preferences.reset(route)
+    val value = preferences.read(route)
+    // The observer reloads synchronously; restore the shown view before any frame so the
+    // defaults' geometry still enters the pinch transaction from the presented source.
+    style = shown
+    if (!changeViewInPlace(value)) commitStyle(value)
+    }, initialView,
+    onRandomize = when {
+        mutableQueue != null && queues != null -> ({ done -> orderAction(false, { done(it != null) }) { queues.randomizeOrder(mutableQueue.id, it) } })
+        mutablePlaylist != null && playlistController != null -> ({ done -> orderAction(false, { done(it != null) }) { playlistController.randomizeOrder(mutablePlaylist.id, it) } })
+        else -> null
+    }, onReverseOrder = when {
+        mutableQueue != null && queues != null -> ({ done -> orderAction(true, { done(it?.order) }) { queues.reverseOrder(mutableQueue.id, it) } })
+        mutablePlaylist != null && playlistController != null -> ({ done -> orderAction(false, { done(it?.order) }) { playlistController.reverseOrder(mutablePlaylist.id, it) } })
+        else -> null
+    }, mutableOrder = savedOrder, manualNeedsRestore = savedOrder != null && savedOrder.manual != physicalOrder,
+    mutableOrderRows = mutableRows, orderSnapshot = library.snapshot,
+    mutableOrderIds = physicalOrder, onRevertOrder = when {
+        mutableQueue != null && queues != null -> ({ checkpoint, done -> orderAction(true, { done(it != null) }) { queues.revertOrderWithCommit(mutableQueue.id, checkpoint, it) } })
+        mutablePlaylist != null && playlistController != null -> ({ checkpoint, done -> orderScroll.cancel(); playlistController.revertOrder(mutablePlaylist.id, checkpoint, done) })
+        else -> null
+    },
+    onApplySort = when {
+        mutableQueue != null && queues != null -> ({ method, ascending, done -> orderAction(true, { done(it != null) }) { queues.applySortOrder(mutableQueue.id, method, ascending, it) } })
+        mutablePlaylist != null && playlistController != null -> ({ method, ascending, done -> orderScroll.cancel(); playlistController.applySort(mutablePlaylist.id, method, ascending, done) })
+        else -> null
+    })
+}
