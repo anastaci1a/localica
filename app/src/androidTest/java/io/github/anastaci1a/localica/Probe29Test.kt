@@ -6,6 +6,7 @@ import android.view.View
 import android.view.ViewGroup
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.*
@@ -95,6 +96,8 @@ class Probe29Test {
         val host = Host(route)
         scenario = ActivityScenario.launch(ComponentActivity::class.java)
         requireNotNull(scenario).onActivity { activity = it }
+        // Like MainActivity; API 35+ forces edge-to-edge anyway, so this matches the API 33 layout to API 36.
+        if (InstrumentationRegistry.getArguments().getString("edge") == "1") main { it.enableEdgeToEdge() }
         main { it.setContent { LocalicaTheme {
             Box(Modifier.fillMaxSize()) {
                 key(host.generation) {
