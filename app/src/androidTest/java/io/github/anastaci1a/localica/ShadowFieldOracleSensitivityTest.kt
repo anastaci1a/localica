@@ -44,7 +44,7 @@ class ShadowFieldOracleSensitivityTest {
     private var mutation = 0
     private fun rejects(actual: PresentedCapture, reference: PresentedCapture, background: PresentedCapture? = null) {
         val result = probe.compare(actual, reference, background)
-        val caller = Throwable().stackTrace.first { it.className == javaClass.name && it.methodName != "rejects" }.methodName
+        val caller = Throwable().stackTrace.first { it.className == javaClass.name && !it.methodName.startsWith("rejects") }.methodName
         shadowOracleEvidence("$caller-${++mutation}", actual, reference, result)
         assertThrows(AssertionError::class.java) { probe.assertWithin(result, .008f, "mutation") }
     }
