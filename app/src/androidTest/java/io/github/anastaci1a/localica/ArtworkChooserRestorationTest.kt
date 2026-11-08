@@ -76,7 +76,12 @@ class ArtworkChooserRestorationTest {
         }
     }
 
-    @Test fun restoredChooserKeepsActionsReachableWhenItsRecentImageArrivesLate() {
+    @Test fun restoredChooserKeepsActionsReachableWhenItsRecentImageArrivesLate() = restore(textDraft = false)
+
+    // As in the acceptance hit: an edited title (focused editor, possible keyboard) before choosing.
+    @Test fun restoredChooserAfterATextDraftKeepsActionsReachable() = restore(textDraft = true)
+
+    private fun restore(textDraft: Boolean) {
         val preferences = context.getSharedPreferences("cover-images", 0)
         val original = preferences.getString("recent", null)
         val png = ByteArrayOutputStream().also { output ->
@@ -95,6 +100,8 @@ class ArtworkChooserRestorationTest {
                     fileName = "missing-chooser-restoration.mp3", relativePath = "missing-chooser-restoration.mp3",
                     id = "Chooser restoration song")))
             }
+            if (textDraft) compose.onNode(hasSetTextAction() and hasText("Chooser restoration song"))
+                .performScrollTo().performTextReplacement("Unsaved title")
             compose.onNodeWithContentDescription("Choose artwork").performScrollTo().performClick()
             compose.waitUntil(10_000) { recentRows() >= 1 }
             compose.awaitExpectedWindowFocus(compose.onNodeWithText("Open gallery"))
