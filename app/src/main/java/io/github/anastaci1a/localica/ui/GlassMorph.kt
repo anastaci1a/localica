@@ -435,6 +435,11 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                     originAdmitted = true
                     anchor.modalPresent = true; anchor.contact.modal = true
                     anchor.hidden = true; anchor.shadowInModal = true
+                    // A closing gate can finish after visibility reversed; its
+                    // input release must not outlive the new native admission.
+                    if (continuousOrigin == null) {
+                        window.glassInput(true); gestures.activate()
+                    }
                 } else if (motion.expansion.nativeOpening == false) {
                     modalWindow?.glassInput(false)
                     gestures.deactivate()
