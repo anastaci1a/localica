@@ -53,16 +53,24 @@ private class EngineRecordRule(private val rule: ComposeContentTestRule) : Compo
 
 internal inline fun <reified A : ComponentActivity> localicaAndroidComposeRule(
     effectContext: CoroutineContext = EmptyCoroutineContext
-): AndroidComposeTestRule<ActivityScenarioRule<A>, A> =
+): EngineAndroidComposeRule<A> =
     localicaAndroidComposeRule(A::class.java, effectContext)
 
 @OptIn(ExperimentalTestApi::class)
 internal fun <A : ComponentActivity> localicaAndroidComposeRule(
     activityClass: Class<A>,
     effectContext: CoroutineContext = EmptyCoroutineContext
-): AndroidComposeTestRule<ActivityScenarioRule<A>, A> =
-    createAndroidComposeRule(activityClass, effectContext = queuedEffects(effectContext))
-        .also { rule -> FixtureTime.nanos = { rule.mainClock.currentTime * 1_000_000 } }
+): EngineAndroidComposeRule<A> =
+    EngineAndroidComposeRule(createAndroidComposeRule(activityClass, effectContext = queuedEffects(effectContext))
+        .also { rule -> FixtureTime.nanos = { rule.mainClock.currentTime * 1_000_000 } })
+
+/** Keep the Android rule's activity API while sharing the existing root-record and FixtureTime content wrapper. */
+class EngineAndroidComposeRule<A : ComponentActivity> internal constructor(
+    private val rule: AndroidComposeTestRule<ActivityScenarioRule<A>, A>
+) : ComposeContentTestRule by EngineRecordRule(rule) {
+    val activity: A get() = rule.activity
+    val activityRule: ActivityScenarioRule<A> get() = rule.activityRule
+}
 
 @OptIn(ExperimentalTestApi::class)
 internal fun localicaRunComposeUiTest(

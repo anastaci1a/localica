@@ -7,7 +7,6 @@ import android.widget.EditText
 import android.widget.FrameLayout
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.ComposeTimeoutException
-import androidx.compose.ui.test.junit4.AndroidComposeTestRule
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import org.junit.Assert.assertEquals
@@ -15,7 +14,7 @@ import org.junit.Assert.assertEquals
 /** Prove native docked input and a completed hide before the measured Compose editor.
  * Policy ownership/restoration and output logging remain with each calling fixture. */
 internal fun prepareNativeDockedKeyboard(
-    compose: AndroidComposeTestRule<*, ComponentActivity>,
+    compose: EngineAndroidComposeRule<ComponentActivity>,
     keyboardSetup: MutableList<String>,
     shell: (String) -> String,
 ) {
