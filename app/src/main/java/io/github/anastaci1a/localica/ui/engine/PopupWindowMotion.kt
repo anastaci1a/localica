@@ -39,3 +39,13 @@ import io.github.anastaci1a.localica.ui.spec.ExpansionSpec
     fun updateSpec(spec: ExpansionSpec) = expansion.updateSpec(spec)
     fun dispose() = expansion.dispose()
 }
+
+/** The Engine owns construction, spec updates and disposal; hosts borrow its view. */
+@Composable internal fun rememberPopupWindowMotion(key: Any, prepared: Boolean, quiet: Boolean): PopupWindowMotion {
+    val clock = ownerClock()
+    val spec = io.github.anastaci1a.localica.ui.spec.LocalUiSpec.current.spec.expansion
+    val motion = remember(clock, key) { PopupWindowMotion(clock, spec, key, prepared, quiet) }
+    SideEffect { motion.updateSpec(spec) }
+    DisposableEffect(motion) { onDispose { motion.dispose() } }
+    return motion
+}

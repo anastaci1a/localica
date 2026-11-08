@@ -1,12 +1,15 @@
 package io.github.anastaci1a.localica.ui.engine
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.graphics.GraphicsContext
+import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.drawscope.ContentDrawScope
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.layer.GraphicsLayer
@@ -68,9 +71,14 @@ internal class CompositorRecording(private val graphics: GraphicsContext) {
 }
 
 /** Structural visibility only; geometry and opacity remain layout/draw reads. */
-@Composable internal fun retainedFacePresent(expansion: ExpansionView, visible: Boolean): Boolean {
-    val present = remember(expansion) { derivedStateOf { expansion.expanded || expansion.phase.value() > 0f } }
-    return visible || present.value
+@Composable internal fun RetainedFaceHost(expansion: ExpansionView, visible: Boolean, modifier: Modifier,
+    contentModifier: Modifier, content: @Composable BoxScope.() -> Unit) {
+    val owner = requireNotNull(expansion as? ExpandCollapse)
+    val present = remember(owner) { derivedStateOf { owner.expanded || !owner.retirementReady } }
+    if (visible || present.value) Box(modifier.graphicsLayer {
+        shape = RectangleShape
+        clip = expansion.phase.value() < 1f
+    }.then(contentModifier), content = content)
 }
 
 internal fun retainedFaceProgress(expansion: ExpansionView) = expansion.phase.value().coerceIn(0f, 1f)

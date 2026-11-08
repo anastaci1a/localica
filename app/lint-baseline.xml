@@ -2220,7 +2220,7 @@
         errorLine2="                                  ~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/FloatingSelectionPanel.kt"
-            line="24"
+            line="26"
             column="35"/>
     </issue>
 
@@ -2231,20 +2231,11 @@
         errorLine2="                                           ~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/FloatingSelectionPanel.kt"
-            line="38"
+            line="40"
             column="44"/>
     </issue>
 
-    <issue
-        id="LiteralUiSpacing"
-        message="Use validated Spec tokens"
-        errorLine1="    val progress = animateFloatAsState(if (visible &amp;&amp; height.value > 0.dp) 1f else 0f,"
-        errorLine2="                                                                     ~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/FloatingSelectionPanel.kt"
-            line="43"
-            column="70"/>
-    </issue>
+
 
     <issue
         id="LiteralUiSpacing"
@@ -2519,7 +2510,7 @@
         errorLine2="                                                               ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="623"
+            line="620"
             column="64"/>
     </issue>
 
@@ -2530,7 +2521,7 @@
         errorLine2="                                                                                                            ~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="654"
+            line="651"
             column="109"/>
     </issue>
 
@@ -2541,7 +2532,7 @@
         errorLine2="                                                                                                                                                                          ~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="654"
+            line="651"
             column="171"/>
     </issue>
 
@@ -2585,7 +2576,7 @@
         errorLine2="                                         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="774"
+            line="771"
             column="42"/>
     </issue>
 
@@ -2607,7 +2598,7 @@
         errorLine2="                                                                                                                     ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="922"
+            line="919"
             column="118"/>
     </issue>
 
@@ -8177,16 +8168,7 @@
             column="5"/>
     </issue>
 
-    <issue
-        id="NonPresetScreenLayout"
-        message="Use stock screen layout slots"
-        errorLine1="    if (state.visible || state.progress > 0f) Box(modifier"
-        errorLine2="                                              ~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/FloatingSelectionPanel.kt"
-            line="52"
-            column="47"/>
-    </issue>
+
 
     <issue
         id="NonPresetScreenLayout"
@@ -8416,7 +8398,7 @@
         errorLine2="        ~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="590"
+            line="587"
             column="9"/>
     </issue>
 
@@ -8427,7 +8409,7 @@
         errorLine2="            ~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="613"
+            line="610"
             column="13"/>
     </issue>
 
@@ -8438,7 +8420,7 @@
         errorLine2="                ~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="712"
+            line="709"
             column="17"/>
     </issue>
 
@@ -8449,7 +8431,7 @@
         errorLine2="                        ~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="796"
+            line="793"
             column="25"/>
     </issue>
 
@@ -8460,7 +8442,7 @@
         errorLine2="                                      ~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="799"
+            line="796"
             column="39"/>
     </issue>
 
@@ -12008,27 +11990,9 @@
             column="13"/>
     </issue>
 
-    <issue
-        id="RawPresentationTransform"
-        message="Bind presentation through Modifier.surface"
-        errorLine1="    }.graphicsLayer { alpha = state.progress }) {"
-        errorLine2="      ~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/FloatingSelectionPanel.kt"
-            line="66"
-            column="7"/>
-    </issue>
 
-    <issue
-        id="RawPresentationTransform"
-        message="Bind presentation through Modifier.surface"
-        errorLine1="    }.graphicsLayer { alpha = state.progress }) {"
-        errorLine2="                      ~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/FloatingSelectionPanel.kt"
-            line="66"
-            column="23"/>
-    </issue>
+
+
 
     <issue
         id="RawPresentationTransform"
@@ -12114,7 +12078,7 @@
         errorLine2="                                     ~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="796"
+            line="793"
             column="38"/>
     </issue>
 
@@ -15111,27 +15075,9 @@
             column="101"/>
     </issue>
 
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="    val progress = animateFloatAsState(if (visible &amp;&amp; height.value > 0.dp) 1f else 0f,"
-        errorLine2="                   ~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/FloatingSelectionPanel.kt"
-            line="43"
-            column="20"/>
-    </issue>
 
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="        if (reduced) androidx.compose.animation.core.snap() else glassMorphSpring(speed), label = &quot;Selection panel occupancy&quot;)"
-        errorLine2="                                                     ~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/FloatingSelectionPanel.kt"
-            line="44"
-            column="54"/>
-    </issue>
+
+
 
     <issue
         id="RawUiMotion"
@@ -15309,16 +15255,7 @@
             column="79"/>
     </issue>
 
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="    val body = rememberGlassBody({ anchor.contact.travel + progress.value },"
-        errorLine2="                                                                    ~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="308"
-            column="69"/>
-    </issue>
+
 
 
 
@@ -15353,7 +15290,7 @@
         errorLine2="                                                                                    ~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="614"
+            line="611"
             column="85"/>
     </issue>
 
@@ -16383,16 +16320,7 @@
 
 
 
-    <issue
-        id="RawUiMotion"
-        message="Use Engine trajectories"
-        errorLine1="    rememberGlassBody({ contact.travel + contact.expansion.value }, contact = { if (contact.pressed) 1f else 0f },"
-        errorLine2="                                                           ~~~~~">
-        <location
-            file="src/main/java/io/github/anastaci1a/localica/ui/LiquidGlass.kt"
-            line="127"
-            column="60"/>
-    </issue>
+
 
     <issue
         id="RawUiMotion"
@@ -18574,7 +18502,7 @@
         errorLine2="                      ~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="488"
+            line="485"
             column="23"/>
     </issue>
 
@@ -18585,7 +18513,7 @@
         errorLine2="                                                                    ~~~~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/GlassMorph.kt"
-            line="602"
+            line="599"
             column="69"/>
     </issue>
 

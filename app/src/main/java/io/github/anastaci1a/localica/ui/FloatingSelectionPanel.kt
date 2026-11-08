@@ -1,10 +1,7 @@
 package io.github.anastaci1a.localica.ui
 
-import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.RectangleShape
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
@@ -14,7 +11,7 @@ import io.github.anastaci1a.localica.ui.components.FaceExpansion
 import io.github.anastaci1a.localica.ui.components.rememberFaceExpansion
 import io.github.anastaci1a.localica.ui.engine.CompositorFace
 import io.github.anastaci1a.localica.ui.engine.Curve
-import io.github.anastaci1a.localica.ui.engine.retainedFacePresent
+import io.github.anastaci1a.localica.ui.engine.RetainedFaceHost
 import io.github.anastaci1a.localica.ui.engine.retainedFaceProgress
 import androidx.compose.ui.geometry.Rect
 import kotlin.math.roundToInt
@@ -51,10 +48,7 @@ internal fun rememberFloatingSelectionPanel(visible: Boolean, reducedMotion: Boo
 internal fun FloatingSelectionPanel(state: FloatingSelectionPanelState, modifier: Modifier = Modifier,
     content: @Composable () -> Unit) {
     val density = LocalDensity.current
-    if (retainedFacePresent(state.face.view, state.visible)) Box(modifier
-        // Clip only during reveal; settled floating materials retain their external shadows.
-        .graphicsLayer { shape = RectangleShape; clip = state.progress < 1f }
-        .layout { measurable, constraints ->
+    RetainedFaceHost(state.face.view, state.visible, modifier, Modifier.layout { measurable, constraints ->
         val gap = FloatingSurfaceGap.roundToPx()
         val child = measurable.measure(constraints.copy(minHeight = 0,
             maxHeight = if (constraints.hasBoundedHeight) (constraints.maxHeight - gap).coerceAtLeast(0) else constraints.maxHeight))

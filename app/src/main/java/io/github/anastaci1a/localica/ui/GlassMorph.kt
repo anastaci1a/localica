@@ -292,15 +292,12 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
     val wellStrength = LocalGlassAppearance.current.shadowStrength
     val speed = LocalMotionSpeed.current
     val progress = anchor.contact.expansion
-    val clock = ownerClock()
-    val uiSpec = LocalUiSpec.current.spec
     val continuousOrigin = originPreparation.takeUnless { placement == GlassPlacement.Search }
-    val motion = remember(clock, anchor) { PopupWindowMotion(clock, uiSpec.expansion, anchor, continuousOrigin != null, anchor.quiet) }
-    SideEffect { motion.updateSpec(uiSpec.expansion) }
+    val motion = rememberPopupWindowMotion(anchor, continuousOrigin != null, anchor.quiet)
     DisposableEffect(motion, continuousOrigin) {
         progress.bind(motion.expansion, motion.popupCurve)
         continuousOrigin?.bind(motion.expansion.phase, motion.preparationCurve)
-        onDispose { progress.unbind(motion.expansion); continuousOrigin?.reset(); motion.dispose() }
+        onDispose { progress.unbind(motion.expansion); continuousOrigin?.reset() }
     }
     var originAdmitted by remember { mutableStateOf(false) }
     var measuredOriginWindow by remember { mutableStateOf<android.view.Window?>(null) }
