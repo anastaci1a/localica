@@ -50,7 +50,9 @@ internal fun TagRecoverySettings(controller: TagEditingController) {
     var confirming by remember { mutableStateOf(false) }
     SettingsLink("Tag editing jobs", if (state.busy) "${state.results.size} of ${state.tracks.size} files checked" else "Recent outcomes and interrupted work",
         icon = AppIcon.ActionEdit, onClick = controller::showJobs)
-    if (state.recovery != null) ActionTextButton(onClick = { confirming = true }) { Text("Recover tag edit: ${state.recovery}") }
+    if (state.recovery != null) SettingsEntry("Recover tag edit") {
+        ActionTextButton(onClick = { confirming = true }) { Text("Recover tag edit: ${state.recovery}") }
+    }
     if (confirming) GlassAlertDialog(onDismissRequest = { confirming = false }, title = { Text(if (state.recoveryProblem == null) "Restore original file?" else "Retry tag recovery?") },
         text = { Text(state.recoveryProblem ?: "This replaces ${state.recovery} with the copy saved before its interrupted edit.") },
         confirmButton = { ActionTextButton(onClick = { confirming = false; controller.recover() }) { Text(if (state.recoveryProblem == null) "Restore original" else "Retry recovery") } },

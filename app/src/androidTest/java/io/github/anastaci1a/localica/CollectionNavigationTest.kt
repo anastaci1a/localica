@@ -28,9 +28,14 @@ class CollectionNavigationTest {
             }
         }
         compose.onNodeWithText("Playback and queues").assertIsDisplayed()
-        compose.onAllNodes(hasSetTextAction()).assertCountEquals(0)
+        // #641 keeps a separate search editor on every settings page.
+        val queueLimitEditor = hasSetTextAction() and hasText("Maximum queues (blank = unlimited)")
+        compose.onNodeWithText("Search settings").assertIsDisplayed()
+            .assert(hasSetTextAction() and !queueLimitEditor)
+        compose.onAllNodes(queueLimitEditor).assertCountEquals(0)
         compose.onNodeWithText("Maximum queues: unlimited").performScrollTo().performClick()
-        val input = compose.onNodeWithText("Maximum queues (blank = unlimited)")
+        compose.onAllNodes(queueLimitEditor).assertCountEquals(1)
+        val input = compose.onNode(queueLimitEditor)
         input.performTextInput("3")
         input.assertTextContains("3")
         // Activate the real accessible action: a coordinate tap can race the
@@ -38,7 +43,9 @@ class CollectionNavigationTest {
         compose.onNodeWithText("Save queue limit").assertIsEnabled()
             .performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick) { it() }
         compose.runOnIdle { assertEquals(3, saved?.maximum) }
-        compose.onAllNodes(hasSetTextAction()).assertCountEquals(0)
+        compose.onAllNodes(queueLimitEditor).assertCountEquals(0)
+        compose.onNodeWithText("Search settings").assertIsDisplayed()
+            .assert(hasSetTextAction() and !queueLimitEditor)
     }
 
     @Test fun albumGroupsAndViewChoicesAreReachable() {
