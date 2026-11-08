@@ -226,6 +226,8 @@ class LastFmDashboardTest {
                 assertEquals("stats grid $font/$rtl", rowText, start(compose.onNodeWithText("Scrobbles", useUnmergedTree = true)), .5f)
                 evidence.put(org.json.JSONObject().put("fontScale", font).put("rtl", rtl).put("edges", edges)
                     .put("textStart", rowText).put("textHeight", textHeight).put("actualFontScale", layouts.single().layoutInput.density.fontScale))
+                compose.onNodeWithTag("lastfm-tabs").performScrollTo()
+                capture("12-grid-top-font${font.toInt()}-${if (rtl) "rtl" else "ltr"}")
                 compose.onNodeWithTag("lastfm-legend-ABSENT").performScrollTo()
                 capture("12-grid-font${font.toInt()}-${if (rtl) "rtl" else "ltr"}")
             }
