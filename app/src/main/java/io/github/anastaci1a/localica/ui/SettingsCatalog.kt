@@ -39,7 +39,7 @@ internal object SettingsCatalog {
     val entries = listOf(
         SettingSpec("Online features", "Online features", "network privacy consent internet", values = listOf("On", "Off")),
         SettingSpec("Last.fm username", "Last.fm", "account"),
-        SettingSpec("Sync now", "Last.fm", "fetch play counts"),
+        SettingSpec("Sync now", "Last.fm", "fetch play counts quick refresh"),
         SettingSpec("Use Last.fm counts", "Last.fm", "rankings all time", revealedBy = "Data"),
         SettingSpec("Review matches", "Last.fm", "ambiguous unmatched tracks"),
         SettingSpec("Match group", "Last.fm", "matched judgment editions absent search", revealedBy = "Review matches"),

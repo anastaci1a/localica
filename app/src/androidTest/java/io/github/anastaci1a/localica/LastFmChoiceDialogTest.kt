@@ -25,12 +25,12 @@ class LastFmChoiceDialogTest {
                 { dismissed++ }, { confirmed = it })
         } }
         compose.onNodeWithText("Use selection").assertIsNotEnabled()
-        compose.onNodeWithText("One", useUnmergedTree = true).assertIsNotSelected()
-        compose.onNodeWithText("Two", useUnmergedTree = true).performClick().assertIsSelected()
+        compose.onNodeWithText("One").assertIsNotSelected()
+        compose.onNodeWithText("Two").performClick().assertIsSelected()
         compose.onNodeWithText("Use selection").performClick()
         assertEquals("Two", confirmed); assertEquals(0, dismissed)
         compose.runOnIdle { selected = "Two"; choices = listOf("Two", "One"); confirmed = null }
-        compose.onNodeWithText("Two", useUnmergedTree = true).assertIsSelected()
+        compose.onNodeWithText("Two").assertIsSelected()
         compose.onNodeWithText("Use selection").performClick()
         assertEquals("Two", confirmed)
         compose.runOnIdle { choices = listOf("One"); confirmed = null }
@@ -64,7 +64,7 @@ class LastFmChoiceDialogTest {
                 result.await().also { if (it) { open = false; closes++ } }
             }, onSkip = { open = false; closes++ }) else Text("Closed")
         } }
-        compose.onNodeWithText("Song · Artist · Album", useUnmergedTree = true).performClick()
+        compose.onNodeWithText("Song · Artist · Album").performClick()
         compose.onNodeWithText("Use selection").performClick()
         compose.onNodeWithText("Use selection").assertIsNotEnabled().performClick()
         compose.runOnIdle { assertEquals(1, calls); result.complete(false) }
@@ -85,11 +85,11 @@ class LastFmChoiceDialogTest {
             LastFmDecision(LastFmMatchRow(LastFmTrack("Artist", "Song", 12), listOf(candidate), "Check"),
                 listOf(candidate, unrelated), {}, { chosen = it; true }, { skips++ })
         } }
-        compose.onNodeWithText("None of these", useUnmergedTree = true).performClick()
+        compose.onNodeWithText("None of these").performClick()
         compose.onNode(hasSetTextAction() and hasAnyAncestor(hasTestTag("lastfm-library-search")), useUnmergedTree = true)
             .performTextInput("Unrelated")
         compose.onNodeWithText("Use selection").assertIsNotEnabled()
-        compose.onNodeWithText("Unrelated · Other · Different", useUnmergedTree = true).performClick()
+        compose.onNodeWithText("Unrelated · Other · Different").performClick()
         compose.onNodeWithText("Use selection").performClick()
         compose.runOnIdle { assertEquals("any", chosen) }
         compose.onNodeWithText("Skip").performClick()

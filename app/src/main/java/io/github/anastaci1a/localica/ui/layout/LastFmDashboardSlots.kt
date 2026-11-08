@@ -9,6 +9,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.LayoutDirection
 import io.github.anastaci1a.localica.lastfm.LastFmProgress
 import io.github.anastaci1a.localica.ui.spec.ControlSize
@@ -69,7 +70,7 @@ internal data class LastFmMatchSegment(val id: String, val label: String, val co
 @Composable
 internal fun LastFmMatchingBar(segments: List<LastFmMatchSegment>) {
     val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
-    Canvas(Modifier.fillMaxWidth().height(StockUiSpec.space.getValue(Space.Base))) {
+    Canvas(Modifier.fillMaxWidth().height(StockUiSpec.space.getValue(Space.Base)).testTag("lastfm-matching-strip")) {
         val total = segments.sumOf { it.count.toLong().coerceAtLeast(0) }
         var start = 0f
         segments.forEach { segment ->
