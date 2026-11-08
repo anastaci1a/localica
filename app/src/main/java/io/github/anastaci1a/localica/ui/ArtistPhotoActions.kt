@@ -1,11 +1,7 @@
 package io.github.anastaci1a.localica.ui
 
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.artistphoto.*
 import io.github.anastaci1a.localica.browse.BrowserItem
 import kotlinx.coroutines.CancellationException
@@ -15,6 +11,7 @@ import kotlinx.coroutines.launch
 @Stable
 internal class ArtistPhotoActions(val environment: ArtistPhotoEnvironment, val request: ArtistPhotoRequest, val scope: CoroutineScope) {
     var open by mutableStateOf(false)
+    var information by mutableStateOf(false)
     var problem by mutableStateOf<String?>(null)
 }
 
@@ -36,6 +33,9 @@ internal fun ArtistPhotoMenu(actions: ArtistPhotoActions?, onDismiss: () -> Unit
     ActionMenuItem("Choose artist photo", icon = AppIcon.TabArtists, enabled = allowed, onClick = {
         onDismiss(); actions.open = true
     })
+    ActionMenuItem("Artist photo information", icon = AppIcon.TabArtists, onClick = {
+        onDismiss(); actions.information = true
+    })
     ActionMenuItem("Clear artist photo", icon = AppIcon.MenuTrash, onClick = {
         onDismiss()
         scope.launch {
@@ -53,47 +53,53 @@ internal fun ArtistPhotoDialog(actions: ArtistPhotoActions?) {
         GlassAlertDialog({ actions.problem = null }, title = { Text("Artist photo") }, text = { Text(problem) },
             confirmButton = { ActionTextButton({ actions.problem = null }) { Text("Close") } })
     }
+    if (actions.information) {
+        val photo = rememberArtistPhoto(actions.request, actions.environment)?.photo
+        val details = photo?.attribution?.let { credit ->
+            "${credit.artist} · ${credit.credit} · ${credit.licence}\n${credit.licenceUrl}\n${credit.sourcePage}"
+        } ?: photo?.let { "Photo source: ${it.provider.name.lowercase()}" }
+            ?: "No artist photo is ready. Album art is used as the fallback."
+        GlassAlertDialog({ actions.information = false }, title = { Text("Artist photo information") },
+            text = { Text(details) }, confirmButton = {
+                ActionTextButton({ actions.information = false }) { Text("Close") }
+            })
+    }
     if (!actions.open) return
     val allowed by actions.environment.consent.allowed.collectAsState()
     var candidates by remember(actions) { mutableStateOf<List<ArtistPhotoCandidate>?>(null) }
-    var busy by remember { mutableStateOf(false) }
     var problem by remember { mutableStateOf<String?>(null) }
-    val photo = rememberArtistPhoto(actions.request, actions.environment)
     val scope = actions.scope
     LaunchedEffect(actions, allowed) {
         candidates = null
+        problem = null
         if (allowed) {
             try { candidates = actions.environment.photos.candidates(actions.request) }
             catch (cancelled: CancellationException) { throw cancelled }
             catch (_: Exception) { problem = "Could not look up artist photos. Try again."; candidates = emptyList() }
         }
     }
-    GlassAlertDialog({ actions.open = false }, title = { Text("Choose artist photo") }, text = {
-        Column(Modifier.controlVerticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(actions.request.name)
-            if (!allowed) Text("Enable Online features before choosing a photo.")
-            else if (candidates == null) Text("Finding artist photos…")
-            else if (candidates!!.isEmpty()) Text("No artist photos found. Album art is kept.")
-            photo?.photo?.attribution?.let { credit ->
-                Text("${credit.artist} · ${credit.credit} · ${credit.licence}\n${credit.licenceUrl}\n${credit.sourcePage}")
+    val matches = candidates.orEmpty()
+    if (allowed && matches.isNotEmpty()) {
+        ChoiceDialog("Choose artist photo", matches, matches.first(), label = { candidate ->
+            "${candidate.name} · ${candidate.choice.provider.name.lowercase()}\n" +
+                candidate.releases.take(3).joinToString(" · ") +
+                if (!candidate.overlapsLibrary) "\nNo matching local release; choose only if this is the right artist." else ""
+        }, onDismiss = { actions.open = false }, onSelect = { candidate ->
+            scope.launch {
+                try { actions.environment.photos.pick(actions.request.artistKey, candidate.choice) }
+                catch (cancelled: CancellationException) { throw cancelled }
+                catch (_: Exception) { actions.problem = "Could not save photo choice. Try again." }
             }
-            candidates.orEmpty().forEach { candidate ->
-                ActionTextButton(enabled = allowed && !busy, onClick = {
-                    scope.launch {
-                        busy = true
-                        try {
-                            actions.environment.photos.pick(actions.request.artistKey, candidate.choice)
-                            actions.open = false
-                        } catch (cancelled: CancellationException) { throw cancelled }
-                        catch (_: Exception) { problem = "Could not save photo choice. Try again." }
-                        finally { busy = false }
-                    }
-                }) {
-                    Text("${candidate.name} · ${candidate.choice.provider.name.lowercase()}\n" +
-                        candidate.releases.take(3).joinToString(" · ") + if (!candidate.overlapsLibrary) "\nNo matching local release; choose only if this is the right artist." else "")
-                }
-            }
-            problem?.let { Text(it) }
+        })
+    } else {
+        val message = when {
+            !allowed -> "Enable Online features before choosing a photo."
+            problem != null -> problem!!
+            candidates == null -> "Finding artist photos…"
+            else -> "No artist photos found. Album art is kept."
         }
-    }, confirmButton = { ActionTextButton({ actions.open = false }) { Text("Close") } })
+        GlassAlertDialog({ actions.open = false }, title = { Text("Choose artist photo") },
+            text = { Text("${actions.request.name}\n$message") },
+            confirmButton = { ActionTextButton({ actions.open = false }) { Text("Close") } })
+    }
 }
