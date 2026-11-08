@@ -22,6 +22,7 @@ enum class Stratum { Page,Lifted,Floating,Drawer,Player,Modal,Overlay,Diagnostic
 /** D25/D28: one plane per host. A key registers once per plane; [acknowledge] is the host's draw receipt, which admits transfers waiting for this plane. */
 @Stable class ShadowPlane internal constructor(private val clock: UiClock,val host: HostKey) {
     private val registered=linkedMapOf<Any,SurfaceNode>(); private var registrations=0; internal var generation=0L; private set
+    internal fun sameClock(value: UiClock)=clock===value
     internal val casters: List<SurfaceNode> get() { revision; return registered.values.toList() }
     internal fun enter(node: SurfaceNode): Int { clock.checkMutation(); require(registered[node.key].let { it==null || it===node }) { "One SurfaceNode per key per host" }; if(registered[node.key]===node) return registrations; registered[node.key]=node; androidx.compose.runtime.snapshots.Snapshot.withoutReadObservation { revision++ }; return ++registrations }
     internal fun leave(node: SurfaceNode) { clock.checkMutation(); if(registered[node.key]===node) { registered.remove(node.key); androidx.compose.runtime.snapshots.Snapshot.withoutReadObservation { revision++ } } }
@@ -35,19 +36,20 @@ enum class Stratum { Page,Lifted,Floating,Drawer,Player,Modal,Overlay,Diagnostic
 }
 /** U04.01a foundation (no production caller before U04.01b/U11.00, D03). The field has one [owner] plane: the destination from the moment its transfer starts, the source again only once a reversal settles there (D27). w is the continuous exclusion weight of [high] against 1−w of [low] (D27/D29): at most {low, high, pending}; A→B→A reverses w, a third plane waits for w to settle and for its draw receipt (D28). */
 @Stable class SurfaceNode internal constructor(private val clock: UiClock,override val key: Any,override val shape: ShapeView,initial: SurfaceTarget,home: ShadowPlane): SurfaceView {
-    private val px=requireNotNull(clock.spec.geometry) { "Publish measured ExpansionGeometryDomain through U11.00 before creating a surface" }.maxViewportDiagonalPx; private var low: ShadowPlane?=home; private var owner by mutableStateOf(home); private var high: ShadowPlane?=null; private var pending: Triple<ShadowPlane,Long,MotionProfileId>?=null; private var last: Any?=null; private var dismissed by mutableStateOf(false); private var retired by mutableStateOf(false); private var disposed=false
+    private val px=requireNotNull(clock.spec.geometry) { "Publish measured ExpansionGeometryDomain through U11.00 before creating a surface" }.maxViewportDiagonalPx.also { require(home.sameClock(clock)) { "A surface and its home share one clock" } }; private var low: ShadowPlane?=home; private var owner by mutableStateOf(home); private var high: ShadowPlane?=null; private var pending: Triple<ShadowPlane,Long,MotionProfileId>?=null; private var last: Any?=null; private var dismissed by mutableStateOf(false); private var retired by mutableStateOf(false); private var disposed=false
     override var stratum by mutableStateOf(initial.stratum); private set; internal var role=initial.shadow; private set
     private val ownOpacity=MotionFloat(clock,initial.opacity,1f,0.0..1.0,key to "opacity"); private var following by mutableStateOf<SurfacePhase?>(null)
     override val opacity: MotionValue get()=following?.opacity?:ownOpacity
-    override val shadowOwnership=MotionFloat(clock,0f,1f,0.0..1.0,key to "ownership"); private val ownTransform=MotionRect(clock,initial.transform.map(bounds()),EdgeRanges(px,px,px,px),key to "transform")
+    private val ownOwnership=MotionFloat(clock,0f,1f,0.0..1.0,key to "ownership");
+    override val shadowOwnership: MotionValue get()=following?.ownership?:ownOwnership; private val ownTransform=MotionRect(clock,initial.transform.map(bounds()),EdgeRanges(px,px,px,px),key to "transform")
     override val transform: MotionRectView get()=following?.bounds?:ownTransform
     internal val registration=home.enter(this); internal val order get()=stratum.ordinal+registration/(registration+1f)
     override val retained get()=dismissed && !retired
-    init { shadowOwnership.onRest={ settle() }; ownOpacity.onRest={ if(dismissed && ownOpacity.target==0f) retire() } }
+    init { ownOwnership.onRest={ settle() }; ownOpacity.onRest={ if(dismissed && ownOpacity.target==0f) retire() } }
     private fun bounds(): Rect { var b=Rect.Zero; clock.observe { b=shape.outlineAt(clock.stamp).bounds }; return b } // Observing read: never marks the shape presented.
     private fun planes()=listOfNotNull(low,high,pending?.first).distinct()
     internal fun owns(plane: ShadowPlane)=!retired && plane===owner; internal val waiting get()=pending!=null
-    internal fun shareAt(plane: ShadowPlane,stamp: FrameStamp): Float { if(retired) return 0f; val w=shadowOwnership.valueAt(stamp); return (if(plane===high) w else 0f)+(if(plane===low) 1-w else 0f) }
+    internal fun shareAt(plane: ShadowPlane,stamp: FrameStamp): Float { if(retired) return 0f; if(following!=null && high==null) return if(plane===owner) 1f else 0f; val w=shadowOwnership.valueAt(stamp); return (if(plane===high) w else 0f)+(if(plane===low) 1-w else 0f) }
     /** Equal target, profile, spec and access are idempotent; opacity and the presented rectangle join at one stamp. */
     fun request(target: SurfaceTarget,profile: MotionProfileId) {
         clock.checkMutation(); check(!disposed); check(following==null) { "A followed surface receives intents through its expansion" }; val data=clock.spec.motion[MotionProfile.valueOf(profile.name)] as? MotionProfileSpec?:throw IllegalArgumentException("Surface intents require a scalar profile"); val rect=target.transform.map(bounds()); val identity=listOf(target,rect,profile,data,clock.context?.access); if(identity==last) return
@@ -55,27 +57,45 @@ enum class Stratum { Page,Lifted,Floating,Drawer,Player,Modal,Overlay,Diagnostic
         stratum=target.stratum; role=target.shadow; last=identity; if(dismissed && target.opacity>0f) revive()
     }
     /** D30 amendment: borrow the expansion's bound physical edges and analytic opacity; no second trajectory. */
-    internal fun follow(expansion: ExpansionView,opacity: Curve,bounds: MotionRectView) {
+    internal fun follow(expansion: ExpansionView,opacity: Curve,bounds: MotionRectView,ownership: Curve=Curve.linear(0f,1f)) {
         clock.checkMutation(); check(!disposed); val owner=requireNotNull(expansion as? ExpandCollapse)
         require(owner.ownerClock===clock && owner.owns(bounds)) { "Follow the same clock and expansion-bound rectangle" }
-        val old=following; require(old==null || old.expansion===owner && old.bounds===bounds) { "A surface keeps one expansion binding" }
-        if(old==null) { check(ownOpacity.settled && ownTransform.channels.all { it.settled } && shadowOwnership.settled) { "Bind before starting standalone surface motion" }; following=SurfacePhase(owner,opacity,bounds); owner.lifecycle.add(::followLifetime) } else old.curve=opacity
+        val old=following; val same=old!=null && old.expansion===owner && old.bounds===bounds
+        require(old==null || same || !old.expansion.expanded && old.expansion.retirementReady && this.owner===low && high==null && pending==null) { "A live surface keeps its expansion until its source return completes" }
+        if(old!=null && !same) old.expansion.lifecycle.remove(::followLifetime)
+        if(!same) { check(ownOpacity.settled && ownTransform.channels.all { it.settled } && ownOwnership.settled) { "Bind before starting standalone surface motion" }; following=SurfacePhase(owner,opacity,bounds,ownership); owner.lifecycle.add(::followLifetime) } else { old.curve=opacity; old.ownershipCurve=ownership }
         followLifetime(true)
     }
     private fun revive() { dismissed=false; if(retired) { retired=false; listOfNotNull(low,high).forEach { it.enter(this) } } }
-    private fun followLifetime(intent: Boolean=false) { if(disposed) return; val f=following?:return; if(f.expansion.expanded) { if(intent && dismissed) revive() } else if(dismissed && f.opacity.settled && f.opacity.target==0f) retire() }
+    private fun followLifetime(intent: Boolean=false) { if(disposed) return; val f=following?:return; if(f.expansion.expanded) { if(intent && dismissed) revive() } else if(dismissed && f.opacity.settled && f.opacity.target==0f) retire(); if(!retired) advance() }
     fun transfer(to: ShadowPlane,profile: MotionProfileId) {
-        clock.checkMutation(); check(!disposed && !retired) { "A retired surface has no field to transfer" }; require(clock.spec.motion[MotionProfile.valueOf(profile.name)] is MotionProfileSpec) { "Transfers require a scalar profile" }; val goal=shadowOwnership.target; val towards=if(goal==1f) high else low; val away=if(goal==1f) low else high
+        clock.checkMutation(); check(!disposed && !retired) { "A retired surface has no field to transfer" }; require(to.sameClock(clock)) { "Transfer hosts share the surface clock" }; require(clock.spec.motion[MotionProfile.valueOf(profile.name)] is MotionProfileSpec) { "Transfers require a scalar profile" }; val goal=ownOwnership.target; val towards=if(goal==1f) high else low; val away=if(goal==1f) low else high
+        if(following!=null) {
+            val queued=pending; if(queued!=null && queued.first!==to && queued.first!==low && queued.first!==high) queued.first.leave(this)
+            pending=null
+            if(to!==owner) { to.enter(this); pending=Triple(to,if(queued?.first===to) queued.second else to.generation,profile); advance() }
+            return
+        }
         val queued=pending; pending=null; if(queued!=null && queued.first!==to && queued.first!==low && queued.first!==high) queued.first.leave(this)
-        when { to===towards -> Unit; to===away -> shadowOwnership.retarget(1f-goal,profile); else -> { to.enter(this); pending=Triple(to,if(queued?.first===to) queued.second else to.generation,profile); advance() } }
+        when { to===towards -> Unit; to===away -> ownOwnership.retarget(1f-goal,profile); else -> { to.enter(this); pending=Triple(to,if(queued?.first===to) queued.second else to.generation,profile); advance() } }
     }
     /** Starts the queued transfer once the pair is at rest and the destination drew after the request. */
-    internal fun advance() { val (to,generation,profile)=pending?:return; if(!shadowOwnership.settled || to.generation<=generation) return; pending=null; owner=to; if(shadowOwnership.target==1f) { low=to; shadowOwnership.retarget(0f,profile) } else { high=to; shadowOwnership.retarget(1f,profile) } }
-    private fun settle() { owner=(if(shadowOwnership.target==1f) high else low)?:owner; if(shadowOwnership.target==1f) { low?.takeIf { it!==pending?.first }?.leave(this); low=null } else { high?.takeIf { it!==pending?.first }?.leave(this); high=null }; advance() }
+    internal fun advance() { val (to,generation,profile)=pending?:return; val bound=following
+        if(bound!=null) {
+            if(!(bound.expansion.retirementReady || bound.expansion.awaitingNativeGate) || to.generation<=generation) return
+            pending=null
+            if(to===low) { owner=to; high?.leave(this); high=null }
+            else { if(owner!==low) { low?.leave(this); low=owner }; high=to; owner=to }
+            return
+        }
+        if(!ownOwnership.settled || to.generation<=generation) return; pending=null; owner=to
+        if(ownOwnership.target==1f) { low=to; ownOwnership.retarget(0f,profile) } else { high=to; ownOwnership.retarget(1f,profile) }
+    }
+    private fun settle() { owner=(if(ownOwnership.target==1f) high else low)?:owner; if(ownOwnership.target==1f) { low?.takeIf { it!==pending?.first }?.leave(this); low=null } else { high?.takeIf { it!==pending?.first }?.leave(this); high=null }; advance() }
     /** Revokes logical presence at once (D30: no profile here); the node retires when the owner's opacity trajectory settles at 0. */
     fun dismiss() { clock.checkMutation(); check(!disposed); if(dismissed) return; dismissed=true; last=null; if(following!=null) { if(following?.expansion?.expanded==false) followLifetime() } else if(ownOpacity.settled && ownOpacity.target==0f) retire() }
     private fun retire() { planes().forEach { it.leave(this) }; pending=null; retired=true }
-    internal fun dispose() { clock.checkMutation(); if(disposed) return; planes().forEach { it.leave(this) }; disposed=true; following?.expansion?.lifecycle?.remove(::followLifetime); listOf(ownOpacity,shadowOwnership).forEach { it.dispose() }; ownTransform.dispose() }
+    internal fun dispose() { clock.checkMutation(); if(disposed) return; planes().forEach { it.leave(this) }; disposed=true; following?.expansion?.lifecycle?.remove(::followLifetime); listOf(ownOpacity,ownOwnership).forEach { it.dispose() }; ownTransform.dispose() }
 }
 /** Engine host adapter: one plane per native window; U04.01b installs it on its host with the draw receipt. */ internal val LocalShadowPlane=staticCompositionLocalOf<ShadowPlane?> { null }
 @Composable internal fun rememberShadowPlane(): ShadowPlane { val clock=ownerClock(); val view=LocalView.current.rootView; return remember(clock,view) { ShadowPlane(clock,HostKey.next(view)) } }

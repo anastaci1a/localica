@@ -108,6 +108,11 @@ class CompositorRegistryTest {
         assertThrows(IllegalArgumentException::class.java) { SurfaceTransform(translation=Offset(Float.NaN,0f)) }
         assertThrows(IllegalArgumentException::class.java) { node.request(shown,MotionProfileId("NoSuchProfile")) }
         assertEquals(epoch,(node.opacity as MotionFloat).epoch.intValue); assertEquals(Stratum.Floating,node.stratum)
+        EngineHarness(spec=geometry).use { foreign ->
+            val other=plane(foreign)
+            assertThrows(IllegalArgumentException::class.java) { node.transfer(other,profile) }
+            assertTrue(other.casters.isEmpty()); assertEquals(listOf(node),a.casters)
+        }
         var main=true; val off=UiClock(object: FrameSource { override suspend fun awaitFrame()=error("unused") },{ 1L },{ check(main) { "Engine mutation requires Main" } }).apply { configure(EngineContext(1f/120,1000f,MotionAccess.Standard),geometry) }
         val p=ShadowPlane(off,HostKey.next(Any())); val n=SurfaceNode(off,"n",PersistentShape(off,ShapeTarget(emptyList(),JoinPolicy.Union)),shown,p); main=false
         assertThrows(IllegalStateException::class.java) { n.request(shown.copy(opacity=.5f),profile) }; assertThrows(IllegalStateException::class.java) { n.transfer(p,profile) }; assertThrows(IllegalStateException::class.java) { p.acknowledge() }
