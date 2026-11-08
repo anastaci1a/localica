@@ -4,6 +4,8 @@ import io.github.anastaci1a.localica.library.Track
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.onStart
+import kotlinx.coroutines.flow.catch
 import java.time.ZonedDateTime
 
 /** Calendar ranges use the caller's zone; the rolling month/week ranges retain local wall time. */
@@ -47,7 +49,8 @@ data class RankingCounts(val local: Map<String, Long>, val external: Map<String,
 /** #20 can supply a cached Last.fm provider without writing into local statistics or Track.playCount. */
 class PlayRankingSource(private val local: PlayCountSource, private val external: PlayCountSource? = null) {
     fun counts(window: ListeningWindow, settings: Flow<RankingSettings>): Flow<RankingCounts> =
-        combine(local.counts(window), external?.counts(window) ?: flowOf(emptyMap()), settings) { own, remote, options ->
+        combine(local.counts(window), external?.counts(window)?.onStart { emit(emptyMap()) }
+            ?.catch { emit(emptyMap()) } ?: flowOf(emptyMap()), settings) { own, remote, options ->
             RankingCounts(own, remote, options)
         }
 }

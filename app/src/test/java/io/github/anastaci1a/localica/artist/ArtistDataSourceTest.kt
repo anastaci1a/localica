@@ -150,4 +150,16 @@ class ArtistDataSourceTest {
         }
     }
 
+    @Test fun unavailableExternalSnapshotsDoNotDelayOrBreakLocalFallback() = runBlocking {
+        val local = PlayCountSource { flowOf(mapOf("a" to 7L)) }
+        val pending = PlayCountSource { flow { awaitCancellation() } }
+        val failing = PlayCountSource { flow { throw IllegalStateException("Offline snapshot unavailable") } }
+        for (external in listOf(pending, failing)) {
+            val counts = withTimeout(2000) { PlayRankingSource(local, external)
+                .counts(ListeningWindow(0, 10), flowOf(RankingSettings(true))).first() }
+            assertEquals(7L, counts.plays("a"))
+            assertEquals(PlayCountOrigin.Local, counts.origin("a"))
+        }
+    }
+
 }
