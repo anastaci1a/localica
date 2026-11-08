@@ -59,6 +59,13 @@ trap 'exit 130' INT
 import json,os,pathlib,signal,sys,time,xml.etree.ElementTree as E
 pathlib.Path('argv.json').write_text(json.dumps(sys.argv))
 mode=os.environ.get('MODE','pass')
+# Model the first connected task rebuilding APKs when its BuildConfig input changes.
+if mode in ('repackage-unless-prebuilt', 'repackage-always'):
+    if mode == 'repackage-always' or '.github/prebuilt-device-tests.gradle' not in sys.argv:
+        for apk in ('app/build/outputs/apk/debug/app-debug.apk',
+                    'app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk'):
+            pathlib.Path(apk).write_bytes(b'repackaged-with-a-different-build-config')
+        pathlib.Path('repackaged').touch()
 classes=sys.argv[-1].split('=',1)[1].split(',')
 if mode=='cancel':
     def stop(sig,frame):
@@ -303,6 +310,34 @@ esac
         self.rerun(TEST_API='36')
         args=json.loads((self.root/'argv.json').read_text())
         self.assertNotIn('.github/api26-aot.gradle', args)
+
+    def test_five_class_repeat_reuses_the_precompiled_pair_when_rebuild_inputs_change(self):
+        import hashlib
+        affected=[AFFECTED] + [self.gated_source('Affected'+str(i)+'Test',
+                    '@org.junit.Test fun regression() {}') for i in range(4)]
+        self.run_case(PROTOTYPE_REPEAT='3', MODE='repackage-unless-prebuilt',
+                      AFFECTED_CLASSES=','.join(affected), _timeout=40)
+        self.assertFalse((self.root/'repackaged').exists())
+        args=json.loads((self.root/'argv.json').read_text())
+        self.assertIn('.github/prebuilt-device-tests.gradle', args)
+        root=self.root/'prototype-evidence'
+        summary=json.loads((root/'iterations/summary.json').read_text())
+        self.assertEqual(3,len(summary['iterations']))
+        recorded=(root/'test-input-apks.sha256').read_text()
+        for path in ('app/build/outputs/apk/debug/app-debug.apk',
+                     'app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk'):
+            self.assertIn(hashlib.sha256((self.root/path).read_bytes()).hexdigest()+'  '+path,recorded)
+        for item in summary['iterations']:
+            self.assertEqual('passed', item['status'])
+            folder=root/f"iterations/iteration-{item['iteration']:02d}/prototype-evidence"
+            self.assertEqual(recorded,(folder/'test-input-apks.sha256').read_text())
+            receipt=json.loads((folder/'reconciled-tests.json').read_text())
+            self.assertEqual(set(affected+[REQUIRED,FOCUS,CONTRAST]),set(receipt['selectors']))
+
+    def test_forbidden_repackaging_cannot_produce_a_passing_receipt(self):
+        result=self.run_case(1, MODE='repackage-always')
+        self.assertIn('app-debug.apk: FAILED', result.stdout)
+        self.assertFalse((self.root/'prototype-evidence/reconciled-tests.json').exists())
 
     def test_duplicate_selectors_deduplicate(self):
         self.run_case(AFFECTED_CLASSES=AFFECTED+','+AFFECTED)
@@ -779,8 +814,10 @@ p=pathlib.Path(sys.argv[sys.argv.index('--state-dir')+1]);p.mkdir();(p/'complete
 
 
 class WorkflowContract(unittest.TestCase):
-    def decision(self, failed=False, missing=False, wrong_sha=False, contradictory=False, malformed=False, partial_methods=False, skipped_required_method=False, build_attempt="1", decision_attempt="1", build_run="1", wrong_digest=False, repetitions=1, bad_iteration=False, missing_iteration=False, method_mode=False, missing_gate=False, bad_method=False, duplicate_command=False):
+    def decision(self, failed=False, missing=False, wrong_sha=False, contradictory=False, malformed=False, partial_methods=False, skipped_required_method=False, build_attempt="1", decision_attempt="1", build_run="1", wrong_digest=False, repetitions=1, bad_iteration=False, missing_iteration=False, method_mode=False, missing_gate=False, bad_method=False, duplicate_command=False, affected_classes=None, changed_iteration_apks=False):
         import yaml, hashlib
+        affected_classes=affected_classes or [AFFECTED]
+        selected=[REQUIRED,FOCUS,CONTRAST]+affected_classes
         workflow=yaml.safe_load((ROOT/'.github/workflows/prototype.yml').read_text())
         script=next(step['run'] for step in workflow['jobs']['evidence']['steps']
                     if step.get('name') == 'Record passed, failed and not-run checks')
@@ -794,10 +831,10 @@ class WorkflowContract(unittest.TestCase):
             if not missing:
                 for api in (26,36):
                     focused=evidence/f'prototype-focused-api-{api}'/'prototype-evidence';focused.mkdir(parents=True)
-                    inventory={'selectors':[REQUIRED,FOCUS,CONTRAST,AFFECTED],'runtime_methods':[c+'#regression' for c in (REQUIRED,FOCUS,CONTRAST,AFFECTED)]}
+                    inventory={'selectors':selected,'runtime_methods':[c+'#regression' for c in selected]}
                     inventory_bytes=json.dumps(inventory).encode()
                     (focused/'expected-methods.json').write_bytes(inventory_bytes)
-                    (focused/'reconciled-tests.json').write_text(json.dumps({'source_inventory_sha256':hashlib.sha256(inventory_bytes).hexdigest(),'required_selectors':[REQUIRED,FOCUS,CONTRAST],'methods':{c+'#regression':'passed' for c in (REQUIRED,FOCUS,CONTRAST,AFFECTED)},'sha':SHA,'api':str(api),'selectors':[REQUIRED,FOCUS,CONTRAST,AFFECTED],'counts':{c:{'passed':1,'failed':0,'errors':0,'skipped':0} for c in (REQUIRED,FOCUS,CONTRAST,AFFECTED)}}))
+                    (focused/'reconciled-tests.json').write_text(json.dumps({'source_inventory_sha256':hashlib.sha256(inventory_bytes).hexdigest(),'required_selectors':[REQUIRED,FOCUS,CONTRAST],'methods':{c+'#regression':'passed' for c in selected},'sha':SHA,'api':str(api),'selectors':selected,'counts':{c:{'passed':1,'failed':0,'errors':0,'skipped':0} for c in selected}}))
                     if partial_methods:
                         data=json.loads((focused/'reconciled-tests.json').read_text())
                         data['methods'].pop(REQUIRED+'#regression')
@@ -823,6 +860,8 @@ class WorkflowContract(unittest.TestCase):
                         for index in range(1, repetitions + 1):
                             folder = iterations/f'iteration-{index:02d}'/'prototype-evidence'
                             shutil.copytree(focused, folder, ignore=shutil.ignore_patterns('iterations'))
+                            if changed_iteration_apks and index == 1:
+                                (folder/'test-input-apks.sha256').write_text('changed APK pair')
                             raw = (folder/'reconciled-tests.json').read_bytes()
                             item = {'iteration': index, 'status': 'passed', 'exit_code': 0,
                                     'receipt_sha256': hashlib.sha256(raw).hexdigest()}
@@ -856,11 +895,34 @@ class WorkflowContract(unittest.TestCase):
                         (iterations/'summary.json').write_text(json.dumps(summary))
                     compatibility=evidence/f'prototype-compatibility-api-{api}';compatibility.mkdir()
                     (compatibility/'provenance.json').write_text(json.dumps({'source_sha':SHA}))
-            env=dict(os.environ,PROTOTYPE_METHODS=AFFECTED+'#regression' if method_mode else '',PROTOTYPE_REPEAT=str(repetitions),CHECKS=json.dumps(checks),KNOWN_ISSUES='Not a release',AFFECTED_CLASSES=AFFECTED,COVERAGE_REASON='Queue regression',GITHUB_SHA=SHA,GITHUB_REF='refs/heads/test',GITHUB_RUN_ID='1',GITHUB_RUN_ATTEMPT=decision_attempt,GITHUB_STEP_SUMMARY=str(root/'summary'))
+            env=dict(os.environ,PROTOTYPE_METHODS=AFFECTED+'#regression' if method_mode else '',PROTOTYPE_REPEAT=str(repetitions),CHECKS=json.dumps(checks),KNOWN_ISSUES='Not a release',AFFECTED_CLASSES=','.join(affected_classes),COVERAGE_REASON='Queue regression',GITHUB_SHA=SHA,GITHUB_REF='refs/heads/test',GITHUB_RUN_ID='1',GITHUB_RUN_ATTEMPT=decision_attempt,GITHUB_STEP_SUMMARY=str(root/'summary'))
             result=subprocess.run(['bash','-c',script],cwd=root,env=env,capture_output=True,text=True)
             out=root/'prototype-delivery'
             manifest=json.loads((out/'manifest.json').read_text()) if (out/'manifest.json').exists() else None
             return result,manifest,list(out.glob('*.apk'))
+
+    def test_five_class_repeat_manifest_passes_and_names_changed_apks(self):
+        affected=[AFFECTED]+['io.github.anastaci1a.localica.Affected'+str(i)+'Test' for i in range(4)]
+        result,manifest,apks=self.decision(repetitions=3,affected_classes=affected)
+        self.assertEqual(0,result.returncode,result.stderr)
+        self.assertTrue(manifest['ready_for_prototype_delivery'])
+        self.assertEqual(5,len(manifest['requested_affected_classes']))
+        result,manifest,apks=self.decision(repetitions=3,affected_classes=affected,changed_iteration_apks=True)
+        self.assertNotEqual(0,result.returncode)
+        self.assertFalse(manifest['ready_for_prototype_delivery'])
+        self.assertEqual([],apks)
+        self.assertIn('Focused API 26 evidence is not passing: AssertionError: API 26 iteration 1: '
+                      'Iteration test APK digests differ from the focused receipt',manifest['validation_errors'])
+
+    def test_every_delivery_validator_assertion_has_a_diagnostic_message(self):
+        import ast, yaml
+        workflow=yaml.safe_load((ROOT/'.github/workflows/prototype.yml').read_text())
+        script=next(step['run'] for step in workflow['jobs']['evidence']['steps']
+                    if step.get('name') == 'Record passed, failed and not-run checks')
+        tree=ast.parse('\n'.join(script.splitlines()[1:-1]))
+        assertions=[node for node in ast.walk(tree) if isinstance(node,ast.Assert)]
+        self.assertEqual(51,len(assertions))
+        self.assertTrue(all(node.msg is not None for node in assertions))
 
     def test_method_delivery_requires_gate_and_exact_repeated_methods(self):
         result, manifest, apks = self.decision(repetitions=2, method_mode=True)
