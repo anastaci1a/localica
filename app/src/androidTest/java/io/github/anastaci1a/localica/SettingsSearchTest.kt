@@ -47,6 +47,7 @@ class SettingsSearchTest {
     @Test fun resultNavigatesScrollsAndHighlightsTheActualRow() {
         show()
         compose.onNodeWithContentDescription("Search settings input").performTextInput("Control expansion")
+        compose.onNodeWithTag("search-result:Control expansion").assertExists()
         compose.mainClock.autoAdvance = false
         compose.onNodeWithTag("search-result:Control expansion").performClick()
         compose.mainClock.advanceTimeUntil(timeoutMillis = 5000) {
