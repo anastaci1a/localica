@@ -19,6 +19,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import io.github.anastaci1a.localica.R
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -37,6 +38,15 @@ internal fun ImageChooser(workflow: ArtworkWorkflow, onDismiss: () -> Unit, onCh
     val context = LocalContext.current
     val images = remember { CoverImages(context) }
     val decodeObserver = LocalImagePreviewDecodeObserver.current
+    val traceId = remember { java.util.UUID.randomUUID().toString().take(8) }
+    fun trace(message: String) {
+        if (io.github.anastaci1a.localica.BuildConfig.DEBUG)
+            android.util.Log.d("Chooser660", "id=$traceId target=${workflow.target} $message")
+    }
+    DisposableEffect(workflow) {
+        trace("enter stage=${workflow.stage}")
+        onDispose { trace("dispose stage=${workflow.stage}") }
+    }
     var revision by remember { mutableIntStateOf(0) }
     androidx.lifecycle.compose.LifecycleEventEffect(androidx.lifecycle.Lifecycle.Event.ON_RESUME) { revision++ }
     val hasPermission = remember(revision) {
@@ -45,7 +55,19 @@ internal fun ImageChooser(workflow: ArtworkWorkflow, onDismiss: () -> Unit, onCh
             (Build.VERSION.SDK_INT >= 34 && granted(Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED))
         else granted(Manifest.permission.READ_EXTERNAL_STORAGE)
     }
-    val recent by produceState(emptyList<String>(), revision, hasPermission) { value = images.recent(includeDevicePhotos = hasPermission) }
+    val recent by produceState(emptyList<String>(), revision, hasPermission) {
+        trace("recent start revision=$revision permission=$hasPermission previous=${value.size}")
+        try {
+            value = images.recent(includeDevicePhotos = hasPermission)
+            trace("recent delivered revision=$revision count=${value.size}")
+        } finally { trace("recent end revision=$revision") }
+    }
+    SideEffect { trace("compose stage=${workflow.stage} revision=$revision recent=${recent.size}") }
+    fun Modifier.traceMeasure(label: String): Modifier = layout { measurable, constraints ->
+        val placeable = measurable.measure(constraints)
+        trace("measure $label constraints=$constraints size=${placeable.width}x${placeable.height}")
+        layout(placeable.width, placeable.height) { placeable.placeRelative(0, 0) }
+    }
     var unavailableRecent by remember(recent, revision) { mutableStateOf(false) }
     fun chosen(uri: Uri?) { if (uri != null) {
         runCatching { images.selected(uri.toString()) }; revision++; workflow.crop(uri.toString())
@@ -54,17 +76,25 @@ internal fun ImageChooser(workflow: ArtworkWorkflow, onDismiss: () -> Unit, onCh
     val files = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument(), ::chosen)
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { revision++ }
     if (workflow.stage == ArtworkStage.Chooser) GlassAlertDialog(onDismissRequest = onDismiss, title = { Text("Choose artwork") }, text = {
-        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(Modifier.traceMeasure("body"), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             if (hasPermission && recent.isEmpty()) Text("No recent photos", style = MaterialTheme.typography.bodySmall)
             if (unavailableRecent) Text("Some recent images are unavailable. Choose them again using gallery or files.", style = MaterialTheme.typography.bodySmall)
             val recentScroll = androidx.compose.foundation.lazy.rememberLazyListState()
-            if (recent.isNotEmpty()) LazyRow(Modifier.modalScroll(recentScroll), state = recentScroll,
+            if (recent.isNotEmpty()) LazyRow(Modifier.traceMeasure("recent-row").modalScroll(recentScroll), state = recentScroll,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(recent) { uri ->
                     val cover by produceState<android.graphics.Bitmap?>(null, uri, recent, revision) {
+                        trace("decode start item=${recent.indexOf(uri)} revision=$revision")
                         value = try { images.decode(uri, 512) { decodeObserver?.invoke() } }
-                        catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
-                        catch (_: Exception) { null }
+                        catch (cancelled: kotlinx.coroutines.CancellationException) {
+                            trace("decode cancelled item=${recent.indexOf(uri)} revision=$revision")
+                            throw cancelled
+                        }
+                        catch (failure: Exception) {
+                            trace("decode failed item=${recent.indexOf(uri)} type=${failure.javaClass.simpleName}")
+                            null
+                        }
+                        trace("decode delivered item=${recent.indexOf(uri)} revision=$revision bitmap=${value?.let { "${it.width}x${it.height}" }}")
                         if (value == null) unavailableRecent = true
                     }
                     cover?.let { Image(it.asImageBitmap(), "Choose recent image", Modifier.testTag("recent-artwork-$uri").size(104.dp).clip(RoundedCornerShape(16.dp)).clickable { chosen(Uri.parse(uri)) }, contentScale = ContentScale.Crop) }
@@ -79,10 +109,10 @@ internal fun ImageChooser(workflow: ArtworkWorkflow, onDismiss: () -> Unit, onCh
             }) }
             }
             HorizontalDivider(Modifier.padding(vertical = 4.dp))
-            GlassActionButton(AppIcon.TabAlbums, "Open gallery", Modifier.fillMaxWidth()) {
+            GlassActionButton(AppIcon.TabAlbums, "Open gallery", Modifier.traceMeasure("gallery").fillMaxWidth()) {
                 gallery.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
             }
-            GlassActionButton(AppIcon.TabFolders, "Browse files", Modifier.fillMaxWidth()) { files.launch(arrayOf("image/*")) }
+            GlassActionButton(AppIcon.TabFolders, "Browse files", Modifier.traceMeasure("files").fillMaxWidth()) { files.launch(arrayOf("image/*")) }
         }
     }, confirmButton = {}, dismissButton = { ActionTextButton(onClick = onDismiss) { Text("Cancel") } })
     workflow.cropUri?.let { uri ->
