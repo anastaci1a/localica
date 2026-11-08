@@ -398,3 +398,4 @@ io.github.anastaci1a.localica.BackdropInvalidationTest
 io.github.anastaci1a.localica.HeaderGlassFreshnessTest
 io.github.anastaci1a.localica.SettingsRowAlignmentTest
 io.github.anastaci1a.localica.SettingsSearchTest
+io.github.anastaci1a.localica.SettingsRootSearchTest
