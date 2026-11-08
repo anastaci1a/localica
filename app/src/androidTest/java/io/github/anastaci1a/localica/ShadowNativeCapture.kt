@@ -10,6 +10,10 @@ import android.graphics.ColorFilter
 import android.graphics.Paint
 import android.graphics.PixelFormat
 import android.graphics.drawable.Drawable
+import android.os.Handler
+import android.os.Looper
+import android.view.Choreographer
+import android.view.FrameMetrics
 import android.view.Window
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.asImageBitmap
@@ -70,21 +74,29 @@ internal class ShadowNativeCapture(private val rule: ComposeContentTestRule,
         val drawn = CountDownLatch(1)
         val screenBounds = android.graphics.Rect(bounds.left.roundToInt(), bounds.top.roundToInt(),
             bounds.right.roundToInt(), bounds.bottom.roundToInt())
-        val drawings = linkedMapOf<Int, Long>()
+        val drawings = linkedMapOf<Int, Pair<Long, Long>>() // Engine sequence, native draw VSYNC
         var overflow = false
+        val metrics = Window.OnFrameMetricsAvailableListener { _, frame, _ ->
+            val vsync = frame.getMetric(FrameMetrics.VSYNC_TIMESTAMP)
+            if (drawings.values.any { it.second == vsync }) drawn.countDown()
+        }
         rule.runOnUiThread {
             check(root.boundsInRoot == bounds && view.isAttachedToWindow && view.matrix.isIdentity) { "Capture transform or native host changed" }
             val origin = IntArray(2).also(view::getLocationOnScreen)
             screenBounds.offset(origin[0], origin[1])
+            window.addOnFrameMetricsAvailableListener(metrics, Handler(Looper.getMainLooper()))
             marker.afterDraw = {
-                if (drawings.size == 32) overflow = true else drawings[marker.token] = clockSequence()
-                // A one-shot native boundary allows submission; this is NOT presentation proof.
-                view.postOnAnimation { view.post { drawn.countDown() } }
+                if (drawings.size == 32) overflow = true else drawings[marker.token] =
+                    clockSequence() to Choreographer.getInstance().frameTimeNanos
             }
             marker.invalidateSelf()
             view.invalidate()
         }
-        check(drawn.await(5, TimeUnit.SECONDS)) { "Incomplete: no native marker traversal" }
+        try {
+            check(drawn.await(5, TimeUnit.SECONDS)) { "Incomplete: no completed native frame matches the marker traversal" }
+        } finally { rule.runOnUiThread { window.removeOnFrameMetricsAvailableListener(metrics) } }
+        // Accessibility quiet is only a submission wait. It cannot grant an optical/native pass.
+        InstrumentationRegistry.getInstrumentation().uiAutomation.waitForIdle(100, 5000)
         val bitmap = checkNotNull(InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot()) {
             "Incomplete: single system-composited screenshot failed"
         }
@@ -99,13 +111,14 @@ internal class ShadowNativeCapture(private val rule: ComposeContentTestRule,
             check(screenBounds.left >= 0 && screenBounds.top >= 0 && screenBounds.right <= bitmap.width && screenBounds.bottom <= bitmap.height) {
                 "Incomplete: native scene is clipped by the display"
             }
-            val sequence = rule.runOnUiThread {
+            val nativeDraw = rule.runOnUiThread {
                 marker.afterDraw = null
                 check(!overflow) { "Incomplete: native draw ledger overflow" }
                 checkNotNull(drawings[token]) { "Incomplete: display image is stale or belongs to a different native traversal" }
-                    .also { check(it == clockSequence()) { "Incomplete: Engine state changed during native capture" } }
+                    .also { check(it.first == clockSequence()) { "Incomplete: Engine state changed during native capture" } }
             }
-            result = result.copy(clockSequence = sequence)
+            result = result.copy(clockSequence = nativeDraw.first,
+                nativeGeneration = NativeShadowGeneration(token, point, nativeDraw.second))
             checkNativeShadowMarker(result)
         } catch (failure: Throwable) {
             shadowOracleEvidence("incomplete-$token", result, failure = failure.toString())
@@ -161,6 +174,7 @@ internal fun shadowOracleEvidence(label: String, actual: PresentedCapture, refer
         .put("sceneBounds", actual.sceneBounds?.toString())
         .put("hostEpoch", actual.hostEpoch).put("drawGeneration", actual.drawGeneration)
         .put("clockSequence", actual.clockSequence).put("nativeGeneration", actual.nativeGeneration?.token)
+        .put("nativeDrawVsyncNanos", actual.nativeGeneration?.drawVsyncNanos ?: JSONObject.NULL)
         .put("nativePresentedNanos", actual.nativePresentedNanos ?: JSONObject.NULL)
         .put("captureNanos", actual.captureNanos).put("comparison", comparison?.toString())
         .put("failure", failure ?: JSONObject.NULL).toString(2))

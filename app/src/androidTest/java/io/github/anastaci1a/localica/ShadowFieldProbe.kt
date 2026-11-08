@@ -10,7 +10,7 @@ import kotlin.math.ceil
 import kotlin.math.floor
 
 /** U12.01c: one presented native composition and the identities that make two captures comparable. [image] is retained, never recycled, for the test's lifetime. */
-internal data class NativeShadowGeneration(val token: Int, val marker: IntOffset)
+internal data class NativeShadowGeneration(val token: Int, val marker: IntOffset, val drawVsyncNanos: Long? = null)
 
 internal data class PresentedCapture(
     val image: ImageBitmap, val windowIds: List<String>, val hostEpoch: Long,
