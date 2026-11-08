@@ -208,6 +208,7 @@ io.github.anastaci1a.localica.PlayerExpansionMotionTest
 io.github.anastaci1a.localica.PlayerFeedbackTest
 io.github.anastaci1a.localica.PlayerGestureTest
 io.github.anastaci1a.localica.PlayerLayoutTest
+io.github.anastaci1a.localica.PlayerHarnessClockTest
 io.github.anastaci1a.localica.PlayerLyricsForegroundTest
 io.github.anastaci1a.localica.PlayerLyricsMaterialEaseTest
 io.github.anastaci1a.localica.PlayerLyricsThemeEaseTest

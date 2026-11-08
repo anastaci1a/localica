@@ -1,6 +1,7 @@
 package io.github.anastaci1a.localica.ui
 
-import androidx.compose.animation.core.FastOutSlowInEasing
+import io.github.anastaci1a.localica.ui.engine.ScrollExecution
+import io.github.anastaci1a.localica.ui.engine.withScrollExecution
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyLayoutScrollScope as listScrollScope
 import androidx.compose.foundation.lazy.grid.LazyGridState
@@ -53,126 +54,65 @@ private suspend fun LazyLayoutScrollScope.jumpNear(index: Int, offset: Int, lead
     return true
 }
 
-/** The shared time curve: scrollBy toward the target, finishing exactly on it, over [duration]. */
+/** Foundation targeting/consumption policy, sampled on the root Engine timeline. */
 private suspend fun LazyLayoutScrollScope.glideToItem(initialIndex: Int, initialOffset: Int, duration: Int,
+    execution: ScrollExecution, flyEvery: Int = 0, viewport: () -> Int, columns: () -> Int,
     target: (() -> ListScrollTarget)? = null, onTime: (Float) -> Unit = {}) {
     var index = initialIndex
     var offset = initialOffset
     val direction = sign(calculateDistanceTo(index, offset).toFloat())
     if (direction == 0f) return
-    val start = withFrameNanos { it }
     var previous = 0f
-    while (true) {
-        val frame = withFrameNanos { it }
-        val time = ((frame - start) / (duration.coerceIn(1, 500) * 1_000_000f)).coerceIn(0f, 1f)
-        onTime((frame - start) / 1_000_000f)
-        val progress = FastOutSlowInEasing.transform(time)
+    execution.animate(duration) { progress, elapsed, frame, finished ->
+        onTime(elapsed)
         target?.invoke()?.let { index = it.index; offset = it.offset }
+        if (index !in 0 until itemCount) return@animate false
         val remaining = calculateDistanceTo(index, offset).toFloat()
-        if (abs(remaining) < .5f) return
-        if (time >= 1f) { snapToItem(index, offset); return }
-        val fraction = ((progress - previous) / (1f - previous)).coerceIn(0f, 1f)
-        previous = progress
-        val step = remaining * fraction
-        if (abs(scrollBy(step)) < .1f && abs(step) > .5f) return
-        if (index in firstVisibleItemIndex..lastVisibleItemIndex) {
-            val measured = calculateDistanceTo(index, offset).toFloat()
-            if (abs(measured) < .5f) return
-            if (sign(measured) != direction) { scrollBy(measured); return }
-        }
-    }
-}
-
-/** Jump, then glide: about two fresh viewports in total. */
-private suspend fun LazyLayoutScrollScope.jumpGlide(index: Int, offset: Int, duration: Int, viewport: () -> Int, columns: () -> Int,
-    target: (() -> ListScrollTarget)? = null) {
-    jumpNear(index, offset, (viewport() * 1.5f).toInt().coerceAtLeast(1), columns)
-    glideToItem(index, offset, duration, target)
-}
-
-private const val FadeMillis = 120
-
-/** Fade the list out, jump while it is hidden, fade back in during the glide of the remaining time. */
-private suspend fun LazyLayoutScrollScope.fadeGlide(index: Int, offset: Int, duration: Int, viewport: () -> Int,
-    columns: () -> Int, fade: LongScrollFade?, target: (() -> ListScrollTarget)? = null) {
-    val lead = (viewport() * 1.5f).toInt().coerceAtLeast(1)
-    val distance = calculateDistanceTo(index, offset).toFloat()
-    val far = abs(distance) > lead * 1.5f && index !in firstVisibleItemIndex..lastVisibleItemIndex
-    if (fade == null || !far) return jumpGlide(index, offset, duration, viewport, columns, target)
-    fade.fading = true
-    try {
-        val start = withFrameNanos { it }
-        while (true) {
-            val elapsed = (withFrameNanos { it } - start) / 1_000_000f
-            fade.alpha = (1f - elapsed / FadeMillis).coerceIn(0f, 1f)
-            if (elapsed >= FadeMillis) break
-        }
-        jumpNear(index, offset, lead, columns)
-        glideToItem(index, offset, (duration - FadeMillis).coerceAtLeast(1), target) { fade.alpha = (it / FadeMillis).coerceIn(0f, 1f) }
-    } finally { fade.alpha = 1f; fade.fading = false }
-}
-
-/** Fly-through: keep the visible rush on the same curve, but land a fresh region only every
- * [LongScroll.flyJumpEvery] frames. Frames between scroll at most half a viewport, so motion stays
- * continuous while the owed distance carries into the next landing. Rows should render lightly
- * while LocalArtworkTransit is active. */
-private suspend fun LazyLayoutScrollScope.flyThrough(initialIndex: Int, initialOffset: Int, duration: Int,
-    viewport: () -> Int, columns: () -> Int, target: (() -> ListScrollTarget)? = null) {
-    var index = initialIndex
-    var offset = initialOffset
-    if (index !in 0 until itemCount) return
-    val direction = sign(calculateDistanceTo(index, offset).toFloat())
-    if (direction == 0f) return
-    val every = LongScroll.flyJumpEvery.coerceAtLeast(1)
-    val start = withFrameNanos { it }
-    var previous = 0f
-    var frames = 0
-    while (true) {
-        val frame = withFrameNanos { it }
-        frames++
-        val time = ((frame - start) / (duration.coerceIn(1, 500) * 1_000_000f)).coerceIn(0f, 1f)
-        val progress = FastOutSlowInEasing.transform(time)
-        target?.invoke()?.let { index = it.index; offset = it.offset }
-        val remaining = calculateDistanceTo(index, offset).toFloat()
-        if (abs(remaining) < .5f) return
-        if (time >= 1f) { snapToItem(index, offset); return }
+        if (abs(remaining) < .5f) return@animate false
+        if (finished) { snapToItem(index, offset); return@animate false }
         val fraction = ((progress - previous) / (1f - previous)).coerceIn(0f, 1f)
         val step = remaining * fraction
-        val visible = index in firstVisibleItemIndex..lastVisibleItemIndex
-        val far = abs(step) > viewport() * .75f && !visible
-        if (far && frames % every != 0) {
-            // Smooth between landings; only the scrolled share of this frame's progress is consumed.
+        val far = flyEvery > 0 && abs(step) > viewport() * .75f && index !in firstVisibleItemIndex..lastVisibleItemIndex
+        if (far && frame % flyEvery != 0) {
             val part = step.coerceIn(-viewport() * .5f, viewport() * .5f)
             previous += (progress - previous) * (part / step)
-            if (abs(scrollBy(part)) < .1f && abs(part) > .5f) return
+            if (abs(scrollBy(part)) < .1f && abs(part) > .5f) return@animate false
         } else {
             previous = progress
-            if (far) {
-                val slots = columns().coerceAtLeast(1)
-                val rows = (index - firstVisibleItemIndex).toFloat() / slots
-                val advance = (rows * fraction).toInt()
-                if (advance != 0) {
-                    val stride = (remaining + firstVisibleItemScrollOffset - offset) / rows
-                    val target = (firstVisibleItemIndex + advance * slots).coerceIn(0, itemCount - 1)
-                    snapToItem(target, (firstVisibleItemScrollOffset + step - advance * stride).roundToInt())
-                } else if (abs(scrollBy(step)) < .1f && abs(step) > .5f) return
-            } else if (abs(scrollBy(step)) < .1f && abs(step) > .5f) return
+            val slots = columns().coerceAtLeast(1)
+            val rows = (index - firstVisibleItemIndex).toFloat() / slots
+            val advance = if (far) (rows * fraction).toInt() else 0
+            if (advance != 0) {
+                val stride = (remaining + firstVisibleItemScrollOffset - offset) / rows
+                val landing = (firstVisibleItemIndex + advance * slots).coerceIn(0, itemCount - 1)
+                snapToItem(landing, (firstVisibleItemScrollOffset + step - advance * stride).roundToInt())
+            } else if (abs(scrollBy(step)) < .1f && abs(step) > .5f) return@animate false
         }
         if (index in firstVisibleItemIndex..lastVisibleItemIndex) {
             val measured = calculateDistanceTo(index, offset).toFloat()
-            if (abs(measured) < .5f) return
-            if (sign(measured) != direction) { scrollBy(measured); return }
+            if (abs(measured) < .5f) return@animate false
+            if (sign(measured) != direction) { scrollBy(measured); return@animate false }
         }
+        true
     }
 }
 
 private suspend fun LazyLayoutScrollScope.approachItem(index: Int, offset: Int, duration: Int, style: LongScrollStyle,
-    fade: LongScrollFade?, viewport: () -> Int, columns: () -> Int, target: (() -> ListScrollTarget)? = null) {
+    fade: LongScrollFade?, viewport: () -> Int, columns: () -> Int, target: (() -> ListScrollTarget)? = null, grid: Boolean = false) {
     if (index !in 0 until itemCount) return
-    when (style) {
-        LongScrollStyle.FlyThrough -> flyThrough(index, offset, duration, viewport, columns, target)
-        LongScrollStyle.JumpGlide -> jumpGlide(index, offset, duration, viewport, columns, target)
-        LongScrollStyle.Fade -> fadeGlide(index, offset, duration, viewport, columns, fade, target)
+    withScrollExecution {
+        val duration = if (grid) spec.gridMs else if (duration == 350) spec.listMs else duration
+        val lead = (viewport() * 1.5f).toInt().coerceAtLeast(1)
+        val far = abs(calculateDistanceTo(index, offset).toFloat()) > lead * 1.5f && index !in firstVisibleItemIndex..lastVisibleItemIndex
+        val fading = style == LongScrollStyle.Fade && fade != null && far
+        if (fading) fade!!.fading = true
+        try {
+            if (fading) animate(spec.fadeMs, fade = true) { p, _, _, _ -> fade!!.alpha = 1f - p; true }
+            if (style != LongScrollStyle.FlyThrough) jumpNear(index, offset, lead, columns)
+            glideToItem(index, offset, if (fading) (duration - spec.fadeMs).coerceAtLeast(1) else duration,
+                this, if (style == LongScrollStyle.FlyThrough) LongScroll.flyJumpEvery.coerceAtLeast(1) else 0,
+                viewport, columns, target) { if (fading) fade!!.alpha = fadeProgress(it) }
+        } finally { if (fading) { fade!!.alpha = 1f; fade.fading = false } }
     }
 }
 
@@ -202,7 +142,7 @@ internal suspend fun LazyGridState.easeToItem(index: Int, reducedMotion: Boolean
         if (index < scope.itemCount) {
             if (reducedMotion) scope.snapToItem(index, -topInset.roundToInt())
             else scope.approachItem(index, -topInset.roundToInt(), 500, style, synchronized(fadeHolders) { fadeHolders[this@easeToItem] },
-                { layoutInfo.viewportSize.height }, { (layoutInfo.visibleItemsInfo.maxOfOrNull { it.column } ?: 0) + 1 }, target)
+                { layoutInfo.viewportSize.height }, { (layoutInfo.visibleItemsInfo.maxOfOrNull { it.column } ?: 0) + 1 }, target, grid = true)
         }
     }
 }
