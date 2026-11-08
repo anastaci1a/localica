@@ -11,7 +11,9 @@ import io.github.anastaci1a.localica.browse.LibraryFilters
 import androidx.compose.ui.test.*
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.anastaci1a.localica.navigation.*
-import io.github.anastaci1a.localica.queue.QueueSettings
+import io.github.anastaci1a.localica.queue.*
+import io.github.anastaci1a.localica.library.SongListView
+import androidx.compose.ui.test.junit4.StateRestorationTester
 import io.github.anastaci1a.localica.ui.*
 import org.junit.Assert.*
 import org.junit.Rule
@@ -20,9 +22,10 @@ import org.junit.Test
 class SettingsSearchTest {
     @get:Rule val compose = localicaComposeRule()
 
-    private fun show(initial: String? = null, glass: GlassAppearance = GlassAppearance()) {
+    private fun show(initial: String? = null, glass: GlassAppearance = GlassAppearance(),
+        interfaceSettings: InterfaceSettings = InterfaceSettings(glass = glass)) {
         compose.setContent { LocalicaTheme {
-            var settings by remember { mutableStateOf(InterfaceSettings(glass = glass)) }
+            var settings by remember { mutableStateOf(interfaceSettings) }
             CompositionLocalProvider(LocalGlassAppearance provides settings.glass) {
                 FolderSettings(LibraryUiState(loading = false), {}, {}, {}, initialCategory = initial,
                     interfaceContent = { section -> InterfaceSettingsControls(settings, section) { settings = it } },
@@ -44,7 +47,20 @@ class SettingsSearchTest {
     @Test fun resultNavigatesScrollsAndHighlightsTheActualRow() {
         show()
         compose.onNodeWithText("Search settings").performTextInput("Control expansion")
+        compose.mainClock.autoAdvance = false
         compose.onNodeWithTag("search-result:Control expansion").performClick()
+        compose.mainClock.advanceTimeUntil(timeoutMillis = 5000) {
+            compose.onAllNodesWithTag("setting:Control expansion").fetchSemanticsNodes().any {
+                (it.config.getOrNull(SettingsHighlightAlpha) ?: 0f) > .01f
+            }
+        }
+        compose.onNodeWithTag("setting:Control expansion").assertIsDisplayed()
+        val scrollers = compose.onAllNodes(SemanticsMatcher.keyIsDefined(SemanticsProperties.VerticalScrollAxisRange))
+            .fetchSemanticsNodes()
+        assertTrue("Search must scroll beyond the top", scrollers.any {
+            it.config[SemanticsProperties.VerticalScrollAxisRange].value() > 0f
+        })
+        compose.mainClock.autoAdvance = true
         compose.onNodeWithTag("setting:Control expansion").assertIsDisplayed()
         compose.onNodeWithTag("setting-highlight:Control expansion", useUnmergedTree = true).assertExists()
         compose.onNodeWithText("Search settings").assertExists()
@@ -124,7 +140,9 @@ class SettingsSearchTest {
             assertEquals(.65f, restored.glass.blur)
             assertEquals(-750, restored.lyricDelayMs)
             assertFalse(restored.expandOnPlay)
-            show("Glass", restored.glass)
+            show("Player", interfaceSettings = restored)
+            compose.onNodeWithText("Expand player when a song starts").assertIsOff()
+            compose.onNodeWithText("Correction: -750 ms").performScrollTo().assertIsDisplayed()
             compose.waitForIdle()
             assertEquals(seeded, store.all)
         } finally {
@@ -135,8 +153,60 @@ class SettingsSearchTest {
                 is Float -> editor.putFloat(key, value)
                 is Int -> editor.putInt(key, value)
                 is Long -> editor.putLong(key, value)
+                is Set<*> -> editor.putStringSet(key, value.filterIsInstance<String>().toSet())
             } }
             assertTrue(editor.commit())
         }
     }
+
+    @Test fun queueOverridesAndScannerValuesSurviveSearchAndRecreation() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val queueStore = context.getSharedPreferences("queue-settings", 0)
+        val scanStore = context.getSharedPreferences("scanner", 0)
+        val originals = listOf(queueStore, scanStore).associateWith { it.all.toMap() }
+        val preferences = QueuePreferences(context)
+        val queues = QueueSettings(songTap = SongTap.Append, switching = QueueSwitch.Resume, maximum = 7,
+            preloadNext = false, previousBehavior = PreviousBehavior.PreviousSong,
+            tapOverrides = mapOf(SongListView.Songs to SongTap.PlayNext))
+        try {
+            preferences.write(queues)
+            assertTrue(scanStore.edit().clear().putBoolean("subfolders", false).putInt("minimum-seconds", 17)
+                .putBoolean("on-launch", true).putBoolean("full-on-launch", false)
+                .putStringSet("excluded:seed", setOf("Podcasts", "Demos")).commit())
+            val seededQueues = queueStore.all.toMap()
+            val seededScan = scanStore.all.toMap()
+            val restoration = StateRestorationTester(compose)
+            restoration.setContent { LocalicaTheme {
+                FolderSettings(LibraryUiState(loading = false), {}, {}, {}, initialCategory = "Scanner",
+                    playbackContent = { QueueSettingsControls(preferences.read(), it) {} })
+            } }
+            compose.onNode(hasText("Quick Scan") and isToggleable()).performScrollTo().assertIsOn()
+            compose.onNode(hasText("Full scan") and isToggleable()).performScrollTo().assertIsOff()
+            compose.onNodeWithText("Include subfolders").performScrollTo().assertIsOff()
+            compose.onNodeWithText("Search settings").performTextInput("Songs")
+            compose.onNodeWithTag("search-result:Songs").performClick()
+            compose.onNode(hasText("Songs") and hasText("Add next")).assertIsDisplayed()
+            restoration.emulateSavedInstanceStateRestore()
+            compose.onNode(hasText("Songs") and hasText("Add next")).assertIsDisplayed()
+            compose.runOnIdle {
+                assertEquals(queues, preferences.read())
+                assertEquals(seededQueues, queueStore.all)
+                assertEquals(seededScan, scanStore.all)
+            }
+        } finally {
+            originals.forEach { (store, values) ->
+                val editor = store.edit().clear()
+                values.forEach { (key, value) -> when (value) {
+                    is String -> editor.putString(key, value)
+                    is Boolean -> editor.putBoolean(key, value)
+                    is Int -> editor.putInt(key, value)
+                    is Long -> editor.putLong(key, value)
+                    is Float -> editor.putFloat(key, value)
+                    is Set<*> -> editor.putStringSet(key, value.filterIsInstance<String>().toSet())
+                } }
+                assertTrue(editor.commit())
+            }
+        }
+    }
+
 }

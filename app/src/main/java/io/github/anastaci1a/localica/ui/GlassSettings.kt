@@ -68,8 +68,16 @@ internal fun GlassSettingsControls(value: GlassAppearance, section: String = "Gl
         return
     }
     CompositionLocalProvider(LocalSettingsEnabled provides (value.renderer != GlassRendererMode.None)) {
-    when (section) {
-    "Glass appearance" -> {
+        when (section) {
+            "Glass appearance" -> GlassAppearanceSettings(value, onChange)
+            "Glass advanced" -> GlassAdvancedSettings(value, onChange)
+            "Navigation selector" -> GlassSelectorSettings(value, onChange)
+        }
+    }
+}
+
+@Composable
+private fun GlassAppearanceSettings(value: GlassAppearance, onChange: (GlassAppearance) -> Unit) {
     Text("Tune floating glass and the navigation selector.")
     var previewLightInk by remember { mutableStateOf(false) }
     CompositionLocalProvider(LocalGlassAppearance provides value) {
@@ -96,8 +104,10 @@ internal fun GlassSettingsControls(value: GlassAppearance, section: String = "Gl
         { onChange(value.copy(liftShadowStrength = normalizedLiftShadowStrength(it))) }, Modifier.semantics { contentDescription = "Lift shadow strength" },
         valueRange = LiftShadowMin..LiftShadowMax, steps = LiftShadowSteps, low = "50%", high = "150%",
         description = "Selected and floating items lift with Glass shadow spread, or a white glow on white-icon menus, at this share of Glass shadow strength.")
-    }
-    "Glass advanced" -> {
+}
+
+@Composable
+private fun GlassAdvancedSettings(value: GlassAppearance, onChange: (GlassAppearance) -> Unit) {
     SettingsHeading("Adaptive contrast")
     Text("Compress background brightness away from the page’s icon color.", style = MaterialTheme.typography.bodySmall)
     GlassSlider("Brightness trim", value.contrast, "Off", "50%", maximum = .5f) { onChange(value.copy(contrast = it)) }
@@ -121,8 +131,10 @@ internal fun GlassSettingsControls(value: GlassAppearance, section: String = "Gl
         { onChange(value.copy(controlExpansion = it)) }, Modifier.semantics { contentDescription = "Control expansion" },
         valueRange = 1f..2f, steps = 19, low = "1×", high = "2×")
     SettingsEntry("Reset glass appearance") { ActionTextButton(enabled = LocalSettingsEnabled.current, onClick = { onChange(GlassAppearance()) }) { Text("Reset glass appearance") } }
-    }
-    "Navigation selector" -> {
+}
+
+@Composable
+private fun GlassSelectorSettings(value: GlassAppearance, onChange: (GlassAppearance) -> Unit) {
     SettingsHeading("Navigation selector")
     ChoicePreference("Selector style", value.tabStyle, io.github.anastaci1a.localica.navigation.TabLensStyle.entries, { it.label }) {
         onChange(value.copy(tabStyle = it))
@@ -137,9 +149,6 @@ internal fun GlassSettingsControls(value: GlassAppearance, section: String = "Gl
             onChange(value.copy(overlayDarkening = it))
         }
         BooleanPreference("Refract icons and labels", value.overlayForeground) { onChange(value.copy(overlayForeground = it)) }
-    }
-    }
-    }
     }
 }
 

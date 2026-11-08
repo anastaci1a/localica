@@ -1,5 +1,6 @@
 package io.github.anastaci1a.localica.ui
 
+import io.github.anastaci1a.localica.navigation.*
 import java.text.Normalizer
 import java.util.Locale
 
@@ -35,7 +36,7 @@ internal object SettingsCatalog {
     val entries = listOf(
         SettingSpec("Interface gray", "Appearance", "grey contrast secondary text"),
         SettingSpec("Reset gray tone", "Appearance", "default"),
-        SettingSpec("Glass renderer", "Glass", "render normal none disable effects", values = listOf("Normal", "None")),
+        SettingSpec("Glass renderer", "Glass", "render normal none disable effects", values = GlassRendererMode.entries.map { it.label }),
         SettingSpec("Blur", "Glass appearance", "frosted background blur"),
         SettingSpec("White tint", "Glass appearance", "opacity transparent"),
         SettingSpec("Shadow strength", "Glass appearance", "floating darkness"),
@@ -47,7 +48,7 @@ internal object SettingsCatalog {
         SettingSpec("Resting depth", "Glass advanced", "refraction flatten"),
         SettingSpec("Control expansion", "Glass advanced", "sliders switches size"),
         SettingSpec("Reset glass appearance", "Glass advanced", "defaults"),
-        SettingSpec("Selector style", "Navigation selector", "tabs lens", values = listOf("Adjustable glass", "Clear overlay lens", "Classic gray pill")),
+        SettingSpec("Selector style", "Navigation selector", "tabs lens", values = TabLensStyle.entries.map { it.label }),
         SettingSpec("Selector blur", "Navigation selector", "frosted", revealedBy = "Selector style"),
         SettingSpec("Selector white tint", "Navigation selector", "opacity", revealedBy = "Selector style"),
         SettingSpec("Gray pill opacity", "Navigation selector", "grey classic", revealedBy = "Selector style"),
@@ -63,14 +64,14 @@ internal object SettingsCatalog {
         SettingSpec("Show Album Artist first", "Player", "artist"),
         SettingSpec("Lyrics timing correction", "Player", "delay offset sync correction"),
         SettingSpec("Reset lyrics timing", "Player", "default"),
-        SettingSpec("Player artwork", "Player", "background matte floating", values = listOf("Full-background artwork", "Floating artwork with matte background")),
-        SettingSpec("Song-change transition", "Player", "carousel blur through", values = listOf("Blur through", "Carousel")),
+        SettingSpec("Player artwork", "Player", "background matte floating", values = ArtworkLayout.entries.map { it.label }),
+        SettingSpec("Song-change transition", "Player", "carousel blur through", values = ArtworkTransition.entries.map { it.label }),
         SettingSpec("Swipe artwork to change songs", "Player", "previous next"),
-        SettingSpec("Artwork tap", "Player", "touch lyrics menu", values = listOf("Toggle lyrics", "Show artwork menu", "View artwork", "Change artwork", "Do nothing")),
-        SettingSpec("Artwork hold", "Player", "long press", values = listOf("Toggle lyrics", "Show artwork menu", "View artwork", "Change artwork", "Do nothing")),
+        SettingSpec("Artwork tap", "Player", "touch lyrics menu", values = ArtworkAction.entries.map { it.label }),
+        SettingSpec("Artwork hold", "Player", "long press", values = ArtworkAction.entries.map { it.label }),
         SettingSpec("Reduce motion", "Motion", "animation accessibility disable animations"),
         SettingSpec("Faster animations", "Motion", "speed"),
-        SettingSpec("Long scroll animation", "Motion", "fly through jump glide fade return top", values = listOf("Fly-through", "Jump, then glide", "Fade")),
+        SettingSpec("Long scroll animation", "Motion", "fly through jump glide fade return top", values = LongScrollStyle.entries.map { it.label }),
         SettingSpec("Preload next track", "Playback and queues", "gapless buffering"),
         SettingSpec("Previous button", "Playback and queues", "back restart rewind", values = listOf("Restart after threshold", "Always previous song", "Always restart song")),
         SettingSpec("Restart threshold", "Playback and queues", "seconds delay", revealedBy = "Previous button"),
@@ -88,6 +89,11 @@ internal object SettingsCatalog {
         SettingSpec("Visible filters", "Library filters", "order reorder remove"),
         SettingSpec("Add library filter", "Library filters", "types"),
         SettingSpec("Unfiltered Library collections", "Library filters", "all collections"),
+        SettingSpec("Unfiltered Albums", "Library filters", "all collections visible", values = listOf("On", "Off")),
+        SettingSpec("Unfiltered Artists", "Library filters", "all collections visible", values = listOf("On", "Off")),
+        SettingSpec("Unfiltered Album Artists", "Library filters", "all collections visible", values = listOf("On", "Off")),
+        SettingSpec("Unfiltered Folders", "Library filters", "all collections visible", values = listOf("On", "Off")),
+        SettingSpec("Unfiltered Playlists", "Library filters", "all collections visible", values = listOf("On", "Off")),
         SettingSpec("Reset library filters", "Library filters", "default"),
         SettingSpec("Music folders", "Folders to scan", "choose add folder storage directory"),
         SettingSpec("Excluded subfolders", "Folders to scan", "exclude paths nested", revealedBy = "Music folders"),
@@ -122,7 +128,7 @@ internal object SettingsCatalog {
         .split(Regex("[^\\p{L}\\p{N}]+" )).filter { it.isNotBlank() }.joinToString(" ")
 
     data class Result(val title: String, val page: String, val setting: SettingSpec?, val score: Int)
-    fun search(query: String): List<Result> {
+    fun search(query: String, limit: Int = 30): List<Result> {
         val normalized = normalize(query)
         if (normalized.isEmpty()) return emptyList()
         val tokens = normalized.split(' ')
@@ -149,6 +155,6 @@ internal object SettingsCatalog {
             val summary = entries.filter { it.page == page }.joinToString(" ") { it.title + " " + it.keywords }
             score(page, summary, page)?.let { Result(page, page, null, it - 1) }
         }
-        return (settings + pages).sortedByDescending { it.score }.take(30)
+        return (settings + pages).sortedByDescending { it.score }.take(limit)
     }
 }

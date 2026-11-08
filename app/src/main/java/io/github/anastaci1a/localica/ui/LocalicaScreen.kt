@@ -477,7 +477,7 @@ fun LocalicaScreen(
             Text("Offline music, organized your way.")
             DiagnosticsExportAction()
             LibraryLicenses()
-        }, initialCategory = settingsCategory, onFullScan = onScanAll, onQuickScan = onQuickScan, libraryFiltersContent = {
+        }, searchValues = settingsSearchValues(settings, queues.settings, libraryFilters), initialCategory = settingsCategory, onFullScan = onScanAll, onQuickScan = onQuickScan, libraryFiltersContent = {
             LibraryFilterSettings(libraryFilters) { libraryFilters = it; libraryFilterPreferences.write(it) }
         })
     // The app-owned scanner is the live count source; LibraryUiState carries scan milestones only.
