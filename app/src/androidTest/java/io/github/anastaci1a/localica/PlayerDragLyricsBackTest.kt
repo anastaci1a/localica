@@ -19,8 +19,9 @@ class PlayerDragLyricsBackTest {
     @Test fun backMidClosingDragKeepsItsReleaseAndCommitsCollapse() = closingDrag(18)
     @Test fun backLateInClosingDragKeepsItsReleaseAndCommitsCollapse() = closingDrag(30)
     @Test fun queuedMovesAcrossBackKeepTheirReleaseAndCommitCollapse() = closingDrag(18, 4)
+    @Test fun lyricsRetireBeforeQueuedClosingMovesRelease() = closingDrag(18, 4, elapsedBatches = true)
 
-    private fun closingDrag(backStep: Int, movesPerFrame: Int = 1) = localicaRunComposeUiTest {
+    private fun closingDrag(backStep: Int, movesPerFrame: Int = 1, elapsedBatches: Boolean = false) = localicaRunComposeUiTest {
         fun checkpoint(stage: String) = android.util.Log.i("BackCollapse676", "step=$backStep batch=$movesPerFrame $stage")
         checkpoint("start")
         val instrumentation = InstrumentationRegistry.getInstrumentation()
@@ -28,6 +29,7 @@ class PlayerDragLyricsBackTest {
         val track = Track("back-drag", "Back during drag", fileName = "missing.mp3", relativePath = "missing.mp3")
         lateinit var clock: UiClock
         val recorder = JoinRecorder("player")
+        var lyricsPhase: MotionValue? = null
         var releases = 0
         setContent {
             val root = remember {
@@ -39,6 +41,10 @@ class PlayerDragLyricsBackTest {
             SideEffect {
                 clock = root
                 root.events = object : MotionEvents by recorder {
+                    override fun joined(motion: MotionFloat, join: MotionJoin) {
+                        recorder.joined(motion, join)
+                        if (motion.key == ("player-lyrics" to "phase")) lyricsPhase = motion
+                    }
                     override fun releaseBridge(motion: MotionFloat, tau: Double, approvedTau: Double, displayInterval: Double) {
                         if (motion.key == ("player" to "phase")) releases++
                     }
@@ -83,7 +89,9 @@ class PlayerDragLyricsBackTest {
                 onRoot().performTouchInput { moveBy(Offset(0f, step), delayMillis = 16) }
                 // The A35 failure delivered several MOVE samples between presented frames.
                 // Keep that ordering fixed, including Back between two queued move groups.
-                if (i % movesPerFrame == 0 || i == 40) mainClock.advanceTimeByFrame()
+                if (i % movesPerFrame == 0 || i == 40) {
+                    if (elapsedBatches) mainClock.advanceTimeBy(16L * movesPerFrame) else mainClock.advanceTimeByFrame()
+                }
                 if (i == backStep) {
                     checkpoint("before Back at move $i")
                     val moving = onNodeWithTag("player-surface").fetchSemanticsNode().boundsInRoot
@@ -92,6 +100,11 @@ class PlayerDragLyricsBackTest {
                     mainClock.advanceTimeByFrame()
                     checkpoint("after Back")
                 }
+            }
+            if (elapsedBatches) {
+                val lyrics = requireNotNull(lyricsPhase) { "The actual lyrics owner must be observed" }
+                assertTrue("The outgoing lyrics owner must retire before releasing the held contact", lyrics.settled)
+                assertEquals(0f, lyrics.target, 0f)
             }
             checkpoint("before UP; joins=${recorder.joins.map { it.target to it.policy }}")
             onRoot().performTouchInput { advanceEventTime(16); up() }
