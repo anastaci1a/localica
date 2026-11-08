@@ -63,7 +63,7 @@ internal fun SelectionActions(rows: List<SongRow>, selected: Set<String>, onSele
     @Composable fun FrequentActions() {
         ActionIcon(AppIcon.TabQueues, "Play next", enabled = chosen.isNotEmpty() && queues != null,
             glass = false) { act(SongTap.PlayNext) }
-        ActionIcon(AppIcon.ActionPlaylistAdd, "Add to playlist", enabled = chosen.isNotEmpty(),
+        ActionIcon(AppIcon.ActionListAddLast, "Add to playlist", enabled = chosen.isNotEmpty(),
             glass = false) { adding = chosen.map { it.track } }
         ActionIcon(AppIcon.ActionEllipsis, "More selection actions", anchor = moreAnchor,
             glass = false) { menu = true }
@@ -71,7 +71,7 @@ internal fun SelectionActions(rows: List<SongRow>, selected: Set<String>, onSele
     @Composable fun Collapse() {
         if (onCollapse != null) {
             GlassPillDivider()
-            ActionIcon(AppIcon.ActionDown, "Collapse selection", glass = false, onClick = onCollapse)
+            ActionIcon(AppIcon.ActionChevronDown, "Collapse selection", glass = false, onClick = onCollapse)
         }
     }
     Box(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp), contentAlignment = Alignment.Center) {
@@ -106,7 +106,7 @@ internal fun SelectionActions(rows: List<SongRow>, selected: Set<String>, onSele
     }
     GlassMenu(menu && !minimized, moreAnchor, { menu = false }) {
         ActionMenuItem("Play now", enabled = chosen.isNotEmpty() && queues != null, icon = AppIcon.TransportPlay) { act(SongTap.PlayNow) }
-        ActionMenuItem("Add to queue", enabled = chosen.isNotEmpty() && queues != null, icon = AppIcon.MenuQueueAdd) { act(SongTap.Append) }
+        ActionMenuItem("Add to queue", enabled = chosen.isNotEmpty() && queues != null, icon = AppIcon.MenuListAddLast) { act(SongTap.Append) }
         ActionMenuItem("New queue", enabled = chosen.isNotEmpty() && queues != null, icon = AppIcon.TabQueues) { act(SongTap.NewQueue) }
         if (editTags != null) ActionMenuItem("Edit tags", enabled = chosen.isNotEmpty(), icon = AppIcon.ActionEdit) {
             menu = false; editTags(chosen.map { it.track }.distinctBy { it.id }) { if (it) onSelection(emptySet()) }

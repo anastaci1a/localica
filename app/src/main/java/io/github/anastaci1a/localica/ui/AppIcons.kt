@@ -35,9 +35,9 @@ internal enum class AppIcon(val id: String, @DrawableRes val builtin: Int) {
     TransportNext("transport.next", R.drawable.ic_next),
     MenuPin("menu.pin", R.drawable.ic_menu_pin),
     MenuTrash("menu.trash", R.drawable.ic_menu_trash),
-    MenuPlaylistAdd("menu.playlist_add", R.drawable.ic_menu_playlist_add),
-    MenuPlayNext("menu.play_next", R.drawable.ic_menu_play_next),
-    MenuQueueAdd("menu.queue_add", R.drawable.ic_menu_queue_add),
+    MenuListCreate("menu.list_create", R.drawable.ic_menu_playlist_add),
+    MenuListAddNext("menu.list_add_next", R.drawable.ic_menu_play_next),
+    MenuListAddLast("menu.list_add_last", R.drawable.ic_menu_queue_add),
     MenuInfo("menu.info", R.drawable.ic_menu_info),
     MenuDownload("menu.download", R.drawable.ic_download),
     MenuShare("menu.share", R.drawable.ic_share),
@@ -46,12 +46,15 @@ internal enum class AppIcon(val id: String, @DrawableRes val builtin: Int) {
     MenuSuggestLess("menu.suggest_less", R.drawable.ic_thumb_down),
     ActionEdit("action.edit", R.drawable.ic_edit),
     ActionClose("action.close", R.drawable.ic_close),
-    ActionBack("action.back", R.drawable.ic_back),
-    ActionForward("action.forward", R.drawable.ic_forward),
-    ActionDown("action.down", R.drawable.ic_down),
+    ActionChevronUp("action.chevron_up", R.drawable.ic_chevron_up),
+    ActionChevronDown("action.chevron_down", R.drawable.ic_down),
+    ActionChevronLeft("action.chevron_left", R.drawable.ic_back),
+    ActionChevronRight("action.chevron_right", R.drawable.ic_chevron_right),
+    ActionArrowUp("action.arrow_up", R.drawable.ic_arrow_up),
     ActionArrowDown("action.arrow_down", R.drawable.ic_arrow_down),
+    ActionArrowLeft("action.arrow_left", R.drawable.ic_arrow_left),
+    ActionArrowRight("action.arrow_right", R.drawable.ic_arrow_right),
     ActionSearch("action.search", R.drawable.ic_search),
-    ActionMore("action.more", R.drawable.ic_more),
     ActionEllipsis("action.ellipsis", R.drawable.ic_ellipsis),
     ActionPlus("action.plus", R.drawable.ic_plus),
     ActionSort("action.sort", R.drawable.ic_sort),
@@ -60,8 +63,7 @@ internal enum class AppIcon(val id: String, @DrawableRes val builtin: Int) {
     ActionDrag("action.drag", R.drawable.ic_drag),
     ActionRevert("action.revert", R.drawable.ic_revert),
     ActionReverse("action.reverse", R.drawable.ic_reverse),
-    ActionSave("action.save", R.drawable.ic_save),
-    ActionSaveArtwork("action.save_artwork", R.drawable.ic_download),
+    ActionSave("action.save", R.drawable.ic_download),
     ActionSettings("action.settings", R.drawable.ic_settings),
     ActionShuffle("action.shuffle", R.drawable.ic_shuffle),
     ActionRepeat("action.repeat", R.drawable.ic_repeat),
@@ -71,7 +73,7 @@ internal enum class AppIcon(val id: String, @DrawableRes val builtin: Int) {
     ActionLyrics("action.lyrics", R.drawable.ic_lyrics),
     ActionInfo("action.info", R.drawable.ic_info),
     ActionTrash("action.trash", R.drawable.ic_trash),
-    ActionPlaylistAdd("action.playlist_add", R.drawable.ic_playlist_add),
+    ActionListAddLast("action.list_add_last", R.drawable.ic_playlist_add),
     SettingsInterface("settings.interface", R.drawable.ic_settings_interface),
     SettingsAppearance("settings.appearance", R.drawable.ic_settings_appearance),
     SettingsIconPacks("settings.icon_packs", R.drawable.ic_settings_icon_packs),
@@ -84,7 +86,16 @@ internal enum class AppIcon(val id: String, @DrawableRes val builtin: Int) {
     SettingsTagJobs("settings.tag_jobs", R.drawable.ic_settings_tag_jobs);
     companion object {
         val ids: Set<String> = entries.mapTo(linkedSetOf()) { it.id }
-        fun byId(id: String): AppIcon? = entries.firstOrNull { it.id == id }
+        val legacyIds: Map<String, String> = mapOf(
+            "action.back" to "action.chevron_left", "action.forward" to "action.arrow_right",
+            "action.down" to "action.chevron_down", "action.save_artwork" to "action.save",
+            "action.more" to "action.ellipsis", "menu.playlist_add" to "menu.list_create",
+            "menu.play_next" to "menu.list_add_next", "menu.queue_add" to "menu.list_add_last",
+            "action.playlist_add" to "action.list_add_last",
+        )
+        fun byId(id: String): AppIcon? = entries.firstOrNull { it.id == (legacyIds[id] ?: id) }
+        /** Canonical mappings win over aliases, independent of archive order or image format. */
+        fun packIds(icon: AppIcon): List<String> = listOf(icon.id) + legacyIds.filterValues { it == icon.id }.keys
     }
 }
 
