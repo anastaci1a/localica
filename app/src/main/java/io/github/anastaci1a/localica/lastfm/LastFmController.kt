@@ -32,8 +32,9 @@ class LastFmController(private val store: LastFmStore, private val syncer: LastF
                 if (work.active) {
                     observedWork = true
                     mutable.value = state.value.copy(syncing = true, progress = work.progress ?: state.value.progress ?: LastFmProgress())
-                } else if (observedWork && workerJob?.isActive != true) {
-                    mutable.value = state.value.copy(syncing = false, progress = null,
+                } else if (observedWork) {
+                    observedWork = false
+                    if (workerJob?.isActive != true) mutable.value = state.value.copy(syncing = false, progress = null,
                         problem = work.problem ?: state.value.problem)
                 }
             } }

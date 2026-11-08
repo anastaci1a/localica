@@ -119,4 +119,35 @@ class LastFmSyncLifecycleTest {
         assertEquals(100, LastFmProgress(3, 3, 200).percent)
         assertEquals("Page 1 of 2 · 50% · 200 songs fetched", LastFmProgress(1, 2, 200).label)
     }
+    @Test fun restoredBackgroundProgressDoesNotLetOldFinishedWorkClearANewInProcessSync() = runBlocking {
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
+        val store = Store(old)
+        val events = MutableStateFlow(LastFmBackgroundState(true, LastFmProgress(3, 10, 600)))
+        val background = object : LastFmBackground {
+            override val updates = events
+            override suspend fun enqueue(username: String) = Unit
+            override fun cancel() = Unit
+        }
+        val second = CompletableDeferred<LastFmPage>()
+        val controller = controller(store, scope, LastFmApi { _, page -> if (page == 1)
+            LastFmPage(1, 2, listOf(LastFmTrack("New", "First", 20))) else second.await() }, background = background)
+        try {
+            controller.ready()
+            withTimeout(2000) { controller.state.first { it.progress?.songs == 600 } }
+            assertEquals(old.snapshot, controller.state.value.saved.snapshot)
+            events.value = LastFmBackgroundState(false)
+            withTimeout(2000) { controller.state.first { !it.syncing } }
+            controller.keepSyncingInBackground(false)
+            withTimeout(2000) { controller.state.first { !it.saved.keepSyncingInBackground } }
+            controller.sync("user")
+            withTimeout(2000) { controller.state.first { it.progress?.page == 1 } }
+            events.value = LastFmBackgroundState(false, problem = "Historical finished job")
+            yield()
+            assertTrue(controller.state.value.syncing)
+            assertNull(controller.state.value.problem)
+            second.complete(LastFmPage(2, 2, listOf(LastFmTrack("New", "Second", 30))))
+            withTimeout(2000) { controller.state.first { !it.syncing } }
+            assertEquals(2, store.read().snapshot!!.tracks.size)
+        } finally { scope.cancel() }
+    }
 }

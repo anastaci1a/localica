@@ -13,15 +13,21 @@ import io.github.anastaci1a.localica.LocalicaApplication
 import io.github.anastaci1a.localica.MainActivity
 import io.github.anastaci1a.localica.R
 import kotlinx.coroutines.*
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.flow
 
 /** Only explicit manual requests are enqueued. KEEP prevents concurrent scans of the same account. */
 class LastFmWork(private val app: LocalicaApplication) : LastFmBackground {
-    override val updates get() = WorkManager.getInstance(app).getWorkInfosForUniqueWorkFlow(NAME).map { work ->
-        val active = work.firstOrNull { !it.state.isFinished }
-        if (active == null) LastFmBackgroundState(false, problem = work.firstOrNull()?.outputData?.getString("problem"))
-        else LastFmBackgroundState(true, LastFmProgress(active.progress.getInt("page", 0),
-            active.progress.getInt("totalPages", 0), active.progress.getInt("songs", 0)))
+    override val updates get() = flow {
+        var observed: java.util.UUID? = null
+        WorkManager.getInstance(app).getWorkInfosForUniqueWorkFlow(NAME).collect { work ->
+            val active = work.firstOrNull { !it.state.isFinished }
+            if (active != null) {
+                observed = active.id
+                emit(LastFmBackgroundState(true, LastFmProgress(active.progress.getInt("page", 0),
+                    active.progress.getInt("totalPages", 0), active.progress.getInt("songs", 0))))
+            } else emit(LastFmBackgroundState(false, problem = work.firstOrNull { it.id == observed }?.outputData?.getString("problem")))
+        }
     }
     override suspend fun enqueue(username: String) {
         WorkManager.getInstance(app).enqueueUniqueWork(NAME, ExistingWorkPolicy.KEEP,
