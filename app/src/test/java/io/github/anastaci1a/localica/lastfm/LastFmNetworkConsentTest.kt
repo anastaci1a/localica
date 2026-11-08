@@ -19,7 +19,7 @@ class LastFmNetworkConsentTest {
     }
     @Test fun consentOffMeansZeroApiCallsAndKeepsExistingSnapshotAndMappings() = runBlocking {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
-        val old = SavedLastFm("user", true, LastFmSnapshot("user", 1, listOf(LastFmTrack("A", "Old", 7))), mapOf("remote" to "local"))
+        val old = SavedLastFm("user", true, LastFmSnapshot("user", 1, listOf(LastFmTrack("A", "Old", 7)), localBaseline = emptyMap()), mapOf("remote" to "local"))
         val store = Store(old); var calls = 0
         val controller = LastFmController(store, LastFmSync(LastFmApi { _, _ -> calls++; error("Forbidden") }, {}),
             flowOf(LibrarySnapshot()), true, Consent(false), scope)
@@ -49,7 +49,7 @@ class LastFmNetworkConsentTest {
     @Test fun revocationCancelsPendingSyncAndDoesNotPublishPartialResults() = runBlocking {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
         val consent = Consent(true); val pending = CompletableDeferred<LastFmPage>()
-        val old = SavedLastFm("user", false, LastFmSnapshot("user", 1, listOf(LastFmTrack("A", "Old", 7))))
+        val old = SavedLastFm("user", false, LastFmSnapshot("user", 1, listOf(LastFmTrack("A", "Old", 7)), localBaseline = emptyMap()))
         val store = Store(old); var calls = 0
         val controller = LastFmController(store, LastFmSync(LastFmApi { _, _ -> calls++; pending.await() }, {}),
             flowOf(LibrarySnapshot()), true, consent, scope)
