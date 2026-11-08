@@ -553,6 +553,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
     - name: Download available prototype evidence
       uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
       with:
@@ -751,7 +752,7 @@ jobs:
             raise SystemExit('Prototype evidence validation failed; see the held decision manifest')
         PYCODE
     - name: Upload explicit delivery decision and eligible APK
-      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      uses: ./.github/actions/upload-artifact-retry
       with:
         name: prototype-delivery-decision
         path: prototype-delivery/
