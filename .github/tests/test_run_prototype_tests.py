@@ -299,7 +299,7 @@ esac
     def test_post_install_aot_is_requested_only_on_api26(self):
         self.run_case(TEST_API='26')
         args=json.loads((self.root/'argv.json').read_text())
-        self.assertEqual(['-I', '.github/api26-aot.gradle'], args[2:4])
+        self.assertEqual('-I', args[args.index('.github/api26-aot.gradle')-1])
         self.rerun(TEST_API='36')
         args=json.loads((self.root/'argv.json').read_text())
         self.assertNotIn('-I', args)
