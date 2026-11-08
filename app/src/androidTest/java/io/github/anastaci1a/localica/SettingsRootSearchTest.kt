@@ -128,7 +128,11 @@ class SettingsRootSearchTest {
         capture("Settings", "reverse-64ms")
         compose.mainClock.advanceTimeBy(500)
         compose.mainClock.autoAdvance = true
-        compose.onNodeWithContentDescription("Search settings input").assertIsDisplayed().performClick()
+        compose.onNodeWithContentDescription("Search settings input").assertIsDisplayed().performClick().assertIsFocused()
+        val inputView = view("Settings")
+        compose.waitUntil(5000) { compose.runOnUiThread {
+            ViewCompat.getRootWindowInsets(inputView)?.isVisible(WindowInsetsCompat.Type.ime()) == true
+        } }
         compose.onNodeWithText("Interface", substring = false).performClick()
         assertNoGap("Interface", compose.onNode(hasText("Appearance") and hasClickAction()))
         val childView = view("Interface")
