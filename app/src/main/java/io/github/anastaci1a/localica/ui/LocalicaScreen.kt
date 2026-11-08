@@ -408,7 +408,7 @@ fun LocalicaScreen(
                 }
 
             }
-            CompositionLocalProvider(LocalGlassPopupHome provides utilityPopupHome) {
+            CompositionLocalProvider(LocalGlassPopupHome provides browsePopupHome) {
             val utilityAnchor = rememberGlassAnchor()
             NavigationUtilityPill(utilityAnchor, browseBackdrop,
                 Modifier.width(104.dp).fillMaxHeight(),
