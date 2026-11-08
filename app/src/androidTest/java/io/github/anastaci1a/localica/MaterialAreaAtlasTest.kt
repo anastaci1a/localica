@@ -23,6 +23,8 @@ import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalGraphicsContext
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
@@ -84,13 +86,13 @@ class MaterialAreaAtlasTest {
                 val childB = rememberGraphicsLayer()
                 val parentA = rememberGraphicsLayer()
                 val parentB = rememberGraphicsLayer()
-                val extractedA = rememberGraphicsLayer()
-                val extractedB = rememberGraphicsLayer()
-                val heldB = rememberGraphicsLayer()
+                val extractedA = rememberGraphicsLayer().apply { clip = true; compositingStrategy = CompositingStrategy.Offscreen }
+                val extractedB = rememberGraphicsLayer().apply { clip = true; compositingStrategy = CompositingStrategy.Offscreen }
+                val heldB = rememberGraphicsLayer().apply { clip = true; compositingStrategy = CompositingStrategy.Offscreen }
                 DisposableEffect(graphics) {
                     onDispose { state.epoch?.release(); a.release(); b.release() }
                 }
-                Canvas(Modifier.size(240.dp, 160.dp)) {
+                Canvas(Modifier.size(300.dp, 200.dp)) {
                     val input = request.value
                     fun DrawScope.paint(isB: Boolean) {
                         val even = input.phase % 2 == 0
@@ -141,10 +143,21 @@ class MaterialAreaAtlasTest {
                     extract(extractedA, false)
                     if (input.memberB) extract(extractedB, true)
                     if (input.retainB) heldB.record(size = IntSize(1, 1)) { drawLayer(extractedB) }
-                    // Live references establish a real native graph. Raw stage copies are independent.
-                    scale(64f, 64f, Offset.Zero) { drawLayer(extractedA) }
-                    if (input.memberB) translate(80f, 0f) { scale(64f, 64f, Offset.Zero) { drawLayer(extractedB) } }
-                    else translate(80f, 0f) { scale(64f, 64f, Offset.Zero) { drawLayer(heldB) } }
+                    // Every stage has a presented provider before raw readback, including
+                    // the original chain, which the atlas itself does not consume.
+                    var y = 0f
+                    for (stage in oldA) { translate(0f, y) { drawLayer(stage) }; y += stage.size.height + 2f }
+                    y = 0f
+                    for (stage in oldB) {
+                        if (!stage.isReleased) translate(80f, y) { drawLayer(stage) }
+                        y += stage.size.height + 2f
+                    }
+                    y = 90f
+                    for (tile in epoch.levels) { translate(0f, y) { drawLayer(tile.layer) }; y += tile.size.height + 2f }
+                    translate(180f, 0f) { scale(32f, 32f, Offset.Zero) { drawLayer(extractedA) } }
+                    translate(220f, 0f) { scale(32f, 32f, Offset.Zero) {
+                        drawLayer(if (input.memberB) extractedB else heldB)
+                    } }
                     state.frame = Frame(oldA, oldB, epoch, extractedA, extractedB, heldB, state.parents)
                 }
             }
@@ -157,6 +170,9 @@ class MaterialAreaAtlasTest {
         for (input in requests) {
             compose.runOnIdle { request.value = input }
             compose.waitForIdle()
+            // Admit the native producer frame before comparing snapshots. Old/old
+            // comparisons still reject any missing or unstable subsequent readback.
+            compose.onRoot().captureToImage()
             val frame = compose.runOnUiThread { requireNotNull(state.frame) }
             val done = AtomicBoolean(false)
             var failure: Throwable? = null
