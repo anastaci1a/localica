@@ -140,7 +140,7 @@
         errorLine2="                                        ~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/ArtworkSwipe.kt"
-            line="78"
+            line="79"
             column="41"/>
     </issue>
 
@@ -14396,7 +14396,7 @@
         errorLine2="                             ~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/ArtworkSwipe.kt"
-            line="75"
+            line="76"
             column="30"/>
     </issue>
 
@@ -14484,7 +14484,7 @@
         errorLine2="                         ~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/ArtworkSwipe.kt"
-            line="100"
+            line="101"
             column="26"/>
     </issue>
 
@@ -14495,7 +14495,7 @@
         errorLine2="                             ~~~~~~">
         <location
             file="src/main/java/io/github/anastaci1a/localica/ui/ArtworkSwipe.kt"
-            line="111"
+            line="112"
             column="30"/>
     </issue>
 
