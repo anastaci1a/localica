@@ -121,7 +121,8 @@ for i,selector in enumerate(os.environ['CASES'].split(',') if os.environ.get('CA
         # #657: the decision must accept the runner's own green repeat_methods evidence on both APIs.
         import yaml, hashlib
         workflow=yaml.safe_load((ROOT/'.github/workflows/prototype.yml').read_text())
-        script=workflow['jobs']['evidence']['steps'][1]['run']
+        script=next(step['run'] for step in workflow['jobs']['evidence']['steps']
+                    if step.get('name') == 'Record passed, failed and not-run checks')
         decision=self.root/'decision'; evidence=decision/'evidence'
         for api in ('26','36'):
             self.run_case(PROTOTYPE_REPEAT='2', PROTOTYPE_METHODS=AFFECTED+'#regression', TEST_API=api, _timeout=30)
@@ -625,7 +626,8 @@ class WorkflowContract(unittest.TestCase):
     def decision(self, failed=False, missing=False, wrong_sha=False, contradictory=False, malformed=False, partial_methods=False, skipped_required_method=False, build_attempt="1", decision_attempt="1", build_run="1", wrong_digest=False, repetitions=1, bad_iteration=False, missing_iteration=False, method_mode=False, missing_gate=False, bad_method=False, duplicate_command=False):
         import yaml, hashlib
         workflow=yaml.safe_load((ROOT/'.github/workflows/prototype.yml').read_text())
-        script=workflow['jobs']['evidence']['steps'][1]['run']
+        script=next(step['run'] for step in workflow['jobs']['evidence']['steps']
+                    if step.get('name') == 'Record passed, failed and not-run checks')
         with tempfile.TemporaryDirectory() as folder:
             root=Path(folder); evidence=root/'evidence';evidence.mkdir()
             canonical=evidence/'prototype-build-internal-unvalidated';canonical.mkdir()
