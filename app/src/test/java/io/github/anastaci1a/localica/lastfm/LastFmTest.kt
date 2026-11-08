@@ -8,6 +8,11 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class LastFmTest {
+    private fun consent(initial: Boolean = true) = object : io.github.anastaci1a.localica.network.NetworkConsent {
+        override val allowed = MutableStateFlow(initial)
+        override suspend fun setAllowed(value: Boolean) { allowed.value = value }
+    }
+
     private val mbid = "11111111-1111-1111-1111-111111111111"
     private fun track(id: String, album: String? = "Studio", title: String = "Learning to Live", artist: String = "Dream Theater") =
         Track(id, title, artist, album, 100_000, "$id.mp3", "$id.mp3")
@@ -88,7 +93,7 @@ class LastFmTest {
         val store = MemoryStore(); var clock = 100_000L; var requests = 0
         val source = MutableStateFlow(LibrarySnapshot(tracks = listOf(track("song"), track("local", title = "Local only"))))
         val controller = LastFmController(store, LastFmSync(LastFmApi { _, _ -> requests++; LastFmPage(1, 1,
-            listOf(LastFmTrack("Dream Theater", "Learning to Live", 42))) }, {}), source, true, scope, { clock })
+            listOf(LastFmTrack("Dream Theater", "Learning to Live", 42))) }, {}), source, true, consent(), scope, { clock })
         val local = ListeningStatistics(mapOf("song" to 7L, "local" to 3L), mapOf("playlist" to 2L))
         try {
             controller.ready(); controller.sync("user"); controller.finished()
@@ -115,7 +120,7 @@ class LastFmTest {
         val store = MemoryStore(old)
         val controller = LastFmController(store, LastFmSync(LastFmApi { _, page ->
             if (page == 1) LastFmPage(1, 2, listOf(LastFmTrack("A", "New", 99))) else throw LastFmFailure("Offline")
-        }, {}), flowOf(LibrarySnapshot()), true, scope, { 100_000 })
+        }, {}), flowOf(LibrarySnapshot()), true, consent(), scope, { 100_000 })
         try {
             controller.ready(); controller.sync("user")
             withTimeout(2000) { controller.state.first { it.problem == "Offline" } }
@@ -128,8 +133,8 @@ class LastFmTest {
         var requests = 0; val pending = CompletableDeferred<LastFmPage>()
         val api = LastFmApi { _, _ -> requests++; pending.await() }
         val store = MemoryStore()
-        val controller = LastFmController(store, LastFmSync(api, {}), flowOf(LibrarySnapshot()), true, scope, { 100_000 })
-        val disabled = LastFmController(MemoryStore(), LastFmSync(api, {}), flowOf(LibrarySnapshot()), false, scope)
+        val controller = LastFmController(store, LastFmSync(api, {}), flowOf(LibrarySnapshot()), true, consent(), scope, { 100_000 })
+        val disabled = LastFmController(MemoryStore(), LastFmSync(api, {}), flowOf(LibrarySnapshot()), false, consent(), scope)
         try {
             controller.ready(); controller.sync("user"); withTimeout(2000) { controller.state.first { it.syncing } }
             controller.disconnect(); withTimeout(2000) { controller.state.first { it.saved.username.isEmpty() && !it.syncing } }

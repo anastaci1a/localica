@@ -32,6 +32,7 @@ class LocalicaApplication : Application() {
             // here so those Main reads find them in memory. Values and write paths are unchanged.
             for (name in STARTUP_PREFERENCES) runCatching { getSharedPreferences(name, MODE_PRIVATE).contains("") }
         }
+        startup.launch { onlineMetadataConsent.load() }
         startup.launch { io.github.anastaci1a.localica.icons.IconPacks.load(this@LocalicaApplication) }
         startup.launch { startArtworkColors(this) }
         startup.launch {
@@ -64,11 +65,18 @@ class LocalicaApplication : Application() {
             identities = io.github.anastaci1a.localica.statistics.ListeningIdentityStore(
                 getSharedPreferences("listening-identity", MODE_PRIVATE)))
     }
+    val onlineMetadataConsent by lazy {
+        io.github.anastaci1a.localica.network.OnlineMetadataConsent(java.io.File(filesDir, "online-metadata-consent"))
+    }
+    val artistPhotos by lazy {
+        io.github.anastaci1a.localica.artistphoto.ArtistPhotos(onlineMetadataConsent,
+            java.io.File(cacheDir, "artist-photos"), java.io.File(filesDir, "artist-photo-matches"))
+    }
     val lastfm by lazy {
         io.github.anastaci1a.localica.lastfm.LastFmController(
             io.github.anastaci1a.localica.lastfm.FileLastFmStore(java.io.File(filesDir, "lastfm-snapshot.json")),
-            io.github.anastaci1a.localica.lastfm.LastFmSync(io.github.anastaci1a.localica.lastfm.HttpLastFmApi(BuildConfig.LASTFM_API_KEY)),
-            library.snapshots, BuildConfig.LASTFM_API_KEY.isNotBlank())
+            io.github.anastaci1a.localica.lastfm.LastFmSync(io.github.anastaci1a.localica.lastfm.HttpLastFmApi(BuildConfig.LASTFM_API_KEY, onlineMetadataConsent)),
+            library.snapshots, BuildConfig.LASTFM_API_KEY.isNotBlank(), onlineMetadataConsent)
     }
     val effectiveStatistics by lazy { lastfm.applyTo(statistics.counts) }
     val playRankings by lazy { io.github.anastaci1a.localica.statistics.PlayRankingSource(
