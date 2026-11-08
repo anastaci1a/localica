@@ -84,7 +84,7 @@ internal val LocalSurfaceShadows = staticCompositionLocalOf<ShadowPlane?> { null
     val plane = group ?: rememberShadowPlane()
     DisposableEffect(plane, anchor) { anchor?.shadowPlane = plane; onDispose { if (anchor?.shadowPlane === plane) anchor.shadowPlane = null } }
     val host = if (group == null) Modifier.shadowPlaneHost(plane, appearance.shadowStrength, appearance.shadowSpread) else Modifier
-    return host.glassCaster(plane, key, if (group == null) ({ 1f }) else opacity, onNode = anchor?.let { owner -> { node, bound ->
+    return this.then(host).glassCaster(plane, key, if (group == null) ({ 1f }) else opacity, onNode = anchor?.let { owner -> { node, bound ->
             if (bound) owner.surfaceNode = node else if (owner.surfaceNode === node) owner.surfaceNode = null
         } }) {
             if (group != null) glassCasterBody(it, density, radius, anchor, opacity())
