@@ -36,9 +36,8 @@ import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.R
 import io.github.anastaci1a.localica.ui.components.SheetState
-import io.github.anastaci1a.localica.ui.components.ExpansionRest
 import io.github.anastaci1a.localica.ui.components.DrawerScrim
-import io.github.anastaci1a.localica.ui.components.rememberExpansionRest
+import io.github.anastaci1a.localica.ui.components.rememberExpansionClosed
 
 internal val CollapsedQueueHeight = 64.dp
 
@@ -124,8 +123,8 @@ internal fun BoxWithConstraintsScope.QueueSurface(sheet: SheetState,
             }
         }
     }
-    val rest by rememberExpansionRest(sheet.expansion)
-    val shown = rest != ExpansionRest.Closed
+    val closed by rememberExpansionClosed(sheet.expansion)
+    val shown = !closed
     DrawerScrim(sheet.expansion, shown, MaterialTheme.colorScheme.scrim) { onSettled(false) }
     // Keep the list viewport fixed while the drawer moves. Resizing every frame
     // repeatedly measures/virtualizes rows and their glass; the window clips the reveal.

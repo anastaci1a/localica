@@ -10,6 +10,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.util.VelocityTracker
+import androidx.compose.ui.input.pointer.util.addPointerInputChange
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
@@ -147,6 +148,8 @@ internal fun rememberArtworkSwipe(visit: String?, visual: PlayerVisual, previous
         if (gestureEnabled && currentNavigate != null) {
             awaitEachGesture {
                 val down = awaitFirstDown(requireUnconsumed = false)
+                val velocity = VelocityTracker()
+                velocity.addPointerInputChange(down)
                 // Claim at the initial pass before the parent's vertical recognizer. A
                 // modest diagonal bias favors covers; clear vertical intent remains untouched.
                 var total = Offset.Zero
@@ -154,6 +157,7 @@ internal fun rememberArtworkSwipe(visit: String?, visual: PlayerVisual, previous
                 while (start == null) {
                     val event = awaitPointerEvent(PointerEventPass.Initial)
                     val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                    velocity.addPointerInputChange(change)
                     if (!change.pressed || event.changes.count { it.pressed } > 1) break
                     total += change.positionChange()
                     if (abs(total.x) > viewConfiguration.touchSlop && abs(total.x) > abs(total.y) * .55f) {
@@ -161,8 +165,6 @@ internal fun rememberArtworkSwipe(visit: String?, visual: PlayerVisual, previous
                     } else if (abs(total.y) > viewConfiguration.touchSlop && abs(total.y) > abs(total.x) / .55f) break
                 }
                 if (start != null) {
-                    val velocity = VelocityTracker()
-                    velocity.addPosition(down.uptimeMillis, down.position)
                     swipe.animation?.cancel()
                     swipe.dragging = true
                     val committed = swipe.pending
@@ -179,7 +181,6 @@ internal fun rememberArtworkSwipe(visit: String?, visual: PlayerVisual, previous
                     swipe.cancelled = false
                     fun drag(change: androidx.compose.ui.input.pointer.PointerInputChange, delta: Float) {
                         change.consume()
-                        velocity.addPosition(change.uptimeMillis, change.position)
                         if (swipe.pending != null && swipe.pending == currentVisit) {
                             val rebased = swipe.offset.value - sign(swipe.offset.value) * stride
                             swipe.source = swipe.destination?.visual ?: currentVisual
@@ -202,13 +203,11 @@ internal fun rememberArtworkSwipe(visit: String?, visual: PlayerVisual, previous
                         while (true) {
                             val event = awaitPointerEvent(PointerEventPass.Initial)
                             val change = event.changes.firstOrNull { it.id == start.id } ?: break
+                            velocity.addPointerInputChange(change)
                             if (!change.pressed) { released = !change.isConsumed; break }
                             drag(change, change.positionChange().x)
                         }
                         if (released) {
-                            currentEvent.changes.firstOrNull { it.id == start.id }?.let {
-                                velocity.addPosition(it.uptimeMillis, it.position)
-                            }
                             finish(velocity.calculateVelocity().x)
                         }
                     } finally {

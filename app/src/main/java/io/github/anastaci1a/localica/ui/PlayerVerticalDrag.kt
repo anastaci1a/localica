@@ -7,6 +7,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.*
 import androidx.compose.ui.input.pointer.util.VelocityTracker
+import androidx.compose.ui.input.pointer.util.addPointerInputChange
 import kotlin.math.abs
 import kotlinx.coroutines.launch
 
@@ -37,18 +38,18 @@ internal fun Modifier.playerVerticalDrag(onDelta: (Float) -> Unit, onStart: susp
             var dragging = false
             var released = false
             val velocity = VelocityTracker()
-            velocity.addPosition(down.uptimeMillis, Offset.Zero)
+            velocity.addPointerInputChange(down)
             try { do {
                 val event = awaitPointerEvent(pass)
                 val change = event.changes.firstOrNull { it.id == down.id } ?: break
-                // The release sample lets a still hold report zero velocity (no move events arrive while still).
-                if (!change.pressed) { velocity.addPosition(change.uptimeMillis, total + change.positionChange())
+                // Preserve native history and original coordinates; the tracker handles release and still holds.
+                velocity.addPointerInputChange(change)
+                if (!change.pressed) {
                     released = caught || !change.isConsumed; if (caught) change.consume(); break }
                 if (event.changes.count { it.pressed } > 1 || !owned && change.isConsumed) break
                 val movement = change.positionChange()
                 total += movement
                 // The surface moves under the pointer; integrate deltas in a stable frame.
-                velocity.addPosition(change.uptimeMillis, total)
                 if (!dragging && abs(total.y) > viewConfiguration.touchSlop && (caught || abs(total.y) > abs(total.x) * 1.3f)) {
                     owned = true; dragging = true
                     if (!caught) scope.launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) { start() }

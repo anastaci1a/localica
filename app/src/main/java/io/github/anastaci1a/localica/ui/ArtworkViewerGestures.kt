@@ -11,6 +11,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChanged
 import androidx.compose.ui.input.pointer.util.VelocityTracker
+import androidx.compose.ui.input.pointer.util.addPointerInputChange
 import kotlinx.coroutines.CoroutineScope
 import kotlin.math.abs
 
@@ -22,7 +23,7 @@ internal fun Modifier.artworkViewerGestures(state: ArtworkViewerState, scope: Co
         state.stopMotion() // Re-grab freezes the displayed frame before touch slop.
         val generation = state.generation
         val velocity = VelocityTracker()
-        velocity.addPosition(down.uptimeMillis, down.position)
+        velocity.addPointerInputChange(down)
         var trackedPointer = down.id
         var singlePointer = true
         var totalPan = Offset.Zero
@@ -34,9 +35,9 @@ internal fun Modifier.artworkViewerGestures(state: ArtworkViewerState, scope: Co
             if (event.changes.any { it.isConsumed } || generation != state.generation) break
             val pressed = event.changes.filter { it.pressed }
             if (pressed.isEmpty()) {
-                // Include the release time so holding still before lifting cannot fling.
+                // The pointer adapter handles held release without adding UP to the fit.
                 if (singlePointer) event.changes.firstOrNull { it.id == trackedPointer }?.let {
-                    velocity.addPosition(it.uptimeMillis, it.position)
+                    velocity.addPointerInputChange(it)
                 }
                 released = true
                 break
@@ -53,7 +54,7 @@ internal fun Modifier.artworkViewerGestures(state: ArtworkViewerState, scope: Co
                 val pointer = pressed.single()
                 if (!singlePointer || trackedPointer != pointer.id) velocity.resetTracking()
                 trackedPointer = pointer.id
-                velocity.addPosition(pointer.uptimeMillis, pointer.position)
+                velocity.addPointerInputChange(pointer)
                 singlePointer = true
             } else {
                 // Never mistake a changed finger count or pinch velocity for a pan fling.
