@@ -33,7 +33,8 @@ internal fun artistPhotoEnvironment(): ArtistPhotoEnvironment? {
 }
 
 internal fun artistPhotoRequest(ref: MediaRef, name: String, tracks: List<Track>, fallback: String?): ArtistPhotoRequest? {
-    if (ref.kind !in setOf(MediaKind.Artist, MediaKind.AlbumArtist)) return null
+    // A cold header has no rows yet; do not spend its persisted retry window before the query returns.
+    if (tracks.isEmpty() || ref.kind !in setOf(MediaKind.Artist, MediaKind.AlbumArtist)) return null
     return ArtistPhotoRequest("${ref.kind}:${ref.id}", name, tracks.mapNotNull { it.album }.toSet(), fallback)
 }
 
