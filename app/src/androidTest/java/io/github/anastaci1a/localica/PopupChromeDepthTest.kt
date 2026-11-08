@@ -57,7 +57,7 @@ class PopupChromeDepthTest {
             destination.replace(' ', '-')).apply { mkdirs() }
         val samples = JSONArray()
         val report = JSONObject().put("source", BuildConfig.SOURCE_SHA).put("destination", destination)
-            .put("samples", samples).put("status", "preparing")
+            .put("samples", samples).put("status", "preparing").put("captureOrder", "popup-before-activity")
             .put("comparison", "Original activity and overflow buffers, SrcOver in source space; destination excluded; neutral black scrim only")
         fun save() { File(output, "frames.json").writeText(report.toString(2)) }
         var baseline: Bitmap? = null
@@ -127,9 +127,10 @@ class PopupChromeDepthTest {
                 val sample = JSONObject().put("frame", frame).put("clockMs", compose.mainClock.currentTime)
                     .put("phase", p).put("projectedBefore", before)
                 samples.put(sample); save()
-                val root = original(activity, output, "frame-$frame-root")
+                // Update the native flight recording before its Activity projection.
+                val modal = original(window, output, "frame-$frame-popup")
                 try {
-                    val modal = original(window, output, "frame-$frame-popup")
+                    val root = original(activity, output, "frame-$frame-root")
                     try {
                         val after = compose.runOnUiThread { flight.handedOff }
                         sample.put("projectedAfter", after)
@@ -170,8 +171,8 @@ class PopupChromeDepthTest {
                         }
                         sample.put("regions", counts).put("status", "sampled")
                         valid++; highest = maxOf(highest, p); lowest = minOf(lowest, p)
-                    } finally { modal.recycle() }
-                } finally { root.recycle() }
+                    } finally { root.recycle() }
+                } finally { modal.recycle() }
                 save()
             }
             report.put("validFrames", valid).put("highestPhase", highest).put("lowestPhase", lowest)
@@ -224,8 +225,10 @@ class PopupChromeDepthTest {
         // API 28+ adds these insets inside PixelCopy; compensate only on the old path.
         val crop = android.graphics.Rect(0, 0, view.width, view.height)
         val insets = if (Build.VERSION.SDK_INT < 28) compose.runOnUiThread {
+            val root = View::class.java.getDeclaredMethod("getViewRootImpl").apply { isAccessible = true }.invoke(view)
+            val attributes = root.javaClass.getDeclaredField("mWindowAttributes").apply { isAccessible = true }.get(root)
             android.graphics.Rect(android.view.WindowManager.LayoutParams::class.java
-                .getField("surfaceInsets").get(window.attributes) as android.graphics.Rect)
+                .getField("surfaceInsets").get(attributes) as android.graphics.Rect)
         } else android.graphics.Rect()
         crop.offset(insets.left, insets.top)
         File(output, "$name-copy.json").writeText(JSONObject().put("api", Build.VERSION.SDK_INT)
@@ -236,7 +239,7 @@ class PopupChromeDepthTest {
         try {
             File(output, "$name.png").outputStream().use { assertTrue(result.compress(Bitmap.CompressFormat.PNG, 100, it)) }
             val marker = result.getPixel(8, 104)
-            assertTrue("Original $name carries requested frame token $token",
+            assertTrue("Original $name carries requested frame token $token, actual RGBA=${Color.red(marker)},${Color.green(marker)},${Color.blue(marker)},${Color.alpha(marker)} crop=$crop",
                 abs(Color.red(marker) - token * 8) <= 1 && Color.green(marker) >= 254 && abs(Color.blue(marker) - 128) <= 1)
             return result
         } catch (failure: Throwable) { result.recycle(); throw failure }
