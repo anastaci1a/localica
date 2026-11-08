@@ -220,7 +220,10 @@ class PopupChromeDepthTest {
         try { assertTrue("Native draw receipt for $name", ready.await(2, TimeUnit.SECONDS)) }
         finally { compose.runOnUiThread { if (tree.isAlive) tree.removeOnDrawListener(watch) } }
         val image = Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)
+        // Explicit decor bounds exclude the native surface shadow insets. A null
+        // source rect copies the padded buffer and rescales the frame token/ROIs.
         val result = copyNativeWindowOnce(window, image, "#667 original $name copy timed out",
+            sourceBounds = android.graphics.Rect(0, 0, view.width, view.height),
             failureMessage = { "#667 original $name copy failed: $it; no retry" })
         try {
             File(output, "$name.png").outputStream().use { assertTrue(result.compress(Bitmap.CompressFormat.PNG, 100, it)) }
