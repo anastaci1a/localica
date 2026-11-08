@@ -1,5 +1,6 @@
 package io.github.anastaci1a.localica
 
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.anastaci1a.localica.lastfm.*
@@ -72,7 +73,9 @@ class LastFmSettingsTest {
                 FolderSettings(LibraryUiState(loading = false), {}, {}, {}, initialCategory = "Last.fm", lastFmContent = { LastFmSettings(controller) })
             } }
             compose.onNodeWithText("Last.fm is disabled in this build: no bundled API key.").assertIsDisplayed()
-            compose.onNode(hasSetTextAction() and hasAnyAncestor(hasTestTag("lastfm-username")), useUnmergedTree = true).assertIsNotEnabled()
+            // A disabled text field publishes no SetText action, so select the editor by its editable text instead.
+            compose.onNode(SemanticsMatcher.keyIsDefined(SemanticsProperties.EditableText) and hasAnyAncestor(hasTestTag("lastfm-username")),
+                useUnmergedTree = true).assertIsNotEnabled()
             compose.onNodeWithTag("lastfm-sync").assertIsNotEnabled()
             controller.sync("fixture-user")
             compose.waitUntil(5000) { controller.state.value.problem?.contains("disabled") == true }
