@@ -12,7 +12,6 @@ import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
 import kotlin.math.floor
@@ -33,27 +32,36 @@ internal fun skipElements(travel: Float): List<SkipElement> {
         SkipElement(.08f + (phase + 1f) * .4f, 1f - phase))
 }
 
-/** The rest wedges span [SkipRestInset, 1 - SkipRestInset] of the canvas. */
-internal const val SkipRestInset = .08f
-/** Each fade band starts this far outside the rest bounds, so the rest icon is never dimmed. */
-internal const val SkipTaperMargin = .02f
-/** The band then ramps linearly to transparent at the canvas edge. */
-internal const val SkipTaperBand = SkipRestInset - SkipTaperMargin
+/** Fractions of visible ink width: fade outside the icon, reaching zero before the layer. */
+internal const val SkipTaperMargin = .25f
+internal const val SkipTaperBand = .25f
 
-/** Horizontal opacity mask for travelling skip wedges, symmetric about the canvas centre. */
-internal fun skipTaperAlpha(x: Float): Float = (minOf(x, 1f - x) / SkipTaperBand).coerceIn(0f, 1f)
+internal fun skipTaperAlpha(x: Float, left: Float, right: Float): Float {
+    val width = right - left
+    val outside = maxOf(left - x, x - right)
+    return (1f - (outside / width - SkipTaperMargin) / SkipTaperBand).coerceIn(0f, 1f)
+}
 
-/** Fade content through the edge bands instead of clipping it. A settled cycle draws only rest
- * wedges, where the mask is opaque, so it skips the layer and stays the static icon exactly.
+/** The same ink-relative mask for stock and pack. Layer bounds extend beyond the zero-alpha
+ * points, so their edges cannot cut visible ink. Settled drawing bypasses the layer exactly.
  */
-private inline fun DrawScope.drawWithSkipTaper(phase: Float, content: DrawScope.() -> Unit) {
+private inline fun DrawScope.drawWithSkipTaper(phase: Float, ink: Rect, content: DrawScope.() -> Unit) {
     if (phase == 0f) return content()
+    val width = ink.width * size.width
+    val left = ink.left * size.width - width * (SkipTaperMargin + SkipTaperBand)
+    val right = ink.right * size.width + width * (SkipTaperMargin + SkipTaperBand)
+    val band = width * SkipTaperBand / (right - left)
+    val layer = Rect(left - 2f, -2f, right + 2f, size.height + 2f)
     val canvas = drawContext.canvas
-    canvas.saveLayer(Rect(Offset.Zero, size), Paint())
-    content()
-    drawRect(Brush.horizontalGradient(0f to Color.Transparent, SkipTaperBand to Color.Black,
-        1f - SkipTaperBand to Color.Black, 1f to Color.Transparent), blendMode = BlendMode.DstIn)
-    canvas.restore()
+    canvas.saveLayer(layer, Paint())
+    try {
+        content()
+        drawRect(Brush.horizontalGradient(0f to Color.Transparent, band to Color.Black,
+            1f - band to Color.Black, 1f to Color.Transparent, startX = left, endX = right),
+            topLeft = layer.topLeft, size = layer.size, blendMode = BlendMode.DstIn)
+    } finally {
+        canvas.restore()
+    }
 }
 
 /** Normalized, corresponding contours retain the existing two-piece play/pause morph.
@@ -97,10 +105,8 @@ internal data class TransportShapes(
 )
 internal val LocalTransportShapes = staticCompositionLocalOf { TransportShapes() }
 
-/** Arbitrary imported contours share transport timing and interruption state.
- * Play/pause endpoints fade in fixed bounds when no [PackPlayPauseMorph] applies; imported skip glyphs
- * travel through a clipped cycle, since their rest bounds are the whole canvas and leave no room outside
- * them for a taper.
+/** Arbitrary imported contours share transport timing and interruption state. Skip copies travel
+ * by their visible ink width, crossfading continuously through the same outside bands as stock.
  */
 internal fun DrawScope.drawTransportPainters(glyph: TransportGlyph, pause: Float, travel: Float,
     color: Color, painter: Painter, pausePainter: Painter) {
@@ -110,10 +116,16 @@ internal fun DrawScope.drawTransportPainters(glyph: TransportGlyph, pause: Float
     if (glyph == TransportGlyph.PlayPause) {
         draw(painter, 1f - pause)
         draw(pausePainter, pause)
-    } else clipRect {
+    } else {
         val phase = travel - floor(travel)
+        if (phase == 0f) return draw(painter)
+        val ink = SkipInk.measure(painter) { with(painter) { draw(size) } }
         val direction = if (glyph == TransportGlyph.Previous) -1f else 1f
-        for (copy in -1..1) translate(left = (copy + phase) * size.width * direction) { draw(painter) }
+        drawWithSkipTaper(phase, ink) {
+            // Both outside copies vanish at the corresponding endpoint; no copy appears at wrap.
+            translate(left = (phase - 1f) * ink.width * size.width * direction) { draw(painter, phase) }
+            translate(left = phase * ink.width * size.width * direction) { draw(painter, 1f - phase) }
+        }
     }
 }
 
@@ -128,11 +140,19 @@ internal fun DrawScope.drawTransportGlyph(glyph: TransportGlyph, pause: Float, t
             morph(p.playLeft, p.pauseLeft)
             morph(p.playRight, p.pauseRight)
         }
-    } else drawWithSkipTaper(travel - floor(travel)) {
+    } else {
+        val phase = travel - floor(travel)
+        val ink = if (phase == 0f) Rect.Zero else SkipInk.measure(shapes) {
+            for (element in skipElements(0f)) if (element.alpha > 0f) translate(left = element.x * size.width) {
+                shapes.skipTriangle(this, Color.Black)
+            }
+        }
         scale(if (glyph == TransportGlyph.Previous) -1f else 1f, 1f) {
-            for (element in skipElements(travel)) if (element.alpha > 0f) {
-                translate(left = element.x * size.width) {
-                    shapes.skipTriangle(this, color.copy(alpha = color.alpha * element.alpha))
+            drawWithSkipTaper(phase, ink) {
+                for (element in skipElements(travel)) if (element.alpha > 0f) {
+                    translate(left = element.x * size.width) {
+                        shapes.skipTriangle(this, color.copy(alpha = color.alpha * element.alpha))
+                    }
                 }
             }
         }

@@ -110,6 +110,6 @@ Limits keep import and drawing bounded: 256 KB per SVG, 256 paths, 1,024 element
 
 The `transport.*` ids are the rest-state glyphs; Play and Pause also provide the end states of the play/pause animation. Ids and their built-in files are tracked in `ui/AppIcons.kt`; every id must appear in this table.
 
-Imported transport contours share the existing timing, interruption handling, tint and availability fades. Arbitrary play/pause contours crossfade; skip icons travel through clipped cycles. Missing endpoints use their built-in icons.
+Imported transport contours share the existing timing, interruption handling, tint and availability fades. Arbitrary play/pause contours crossfade; skip icons travel through symmetric opacity tapers outside their measured ink bounds. Missing endpoints use their built-in icons.
 
 Repeat One uses its own vector, never a text overlay on a pack's Repeat icon. Missing `action.repeat_one` entries use the dedicated built-in glyph. Repeat state changes crossfade with the shared control motion.

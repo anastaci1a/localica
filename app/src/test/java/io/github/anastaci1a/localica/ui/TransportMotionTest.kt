@@ -20,26 +20,28 @@ class TransportMotionTest {
     }
 
     @Test fun edgeTaperRampsSymmetricallyOutsideTheRestBounds() {
-        assertTrue(SkipTaperMargin > 0f && SkipTaperBand > 0f)
-        assertEquals(SkipRestInset, SkipTaperMargin + SkipTaperBand, .00001f)
-        // Rest wedges span the rest bounds; the mask is opaque there and a margin beyond.
-        for (i in 0..1000) {
-            val x = SkipRestInset - SkipTaperMargin + i / 1000f * (1f - 2f * SkipTaperBand)
-            assertEquals("Opaque at $x", 1f, skipTaperAlpha(x), .0001f)
+        assertEquals(.25f, SkipTaperMargin, 0f)
+        assertEquals(.25f, SkipTaperBand, 0f)
+        for ((left, right) in listOf(.08f to .895f, .2f to .8f, .1f to .45f)) {
+            val width = right - left
+            for (i in 0..1000) {
+                val distance = i / 1000f * width
+                val l = skipTaperAlpha(left - distance, left, right)
+                val r = skipTaperAlpha(right + distance, left, right)
+                assertEquals("Symmetric for ink $left..$right", l, r, .00001f)
+                if (distance <= width * SkipTaperMargin) assertEquals(1f, l, .00001f)
+                if (distance >= width * (SkipTaperMargin + SkipTaperBand)) assertEquals(0f, l, .00001f)
+                if (i > 0) {
+                    val before = skipTaperAlpha(left - (i - 1) / 1000f * width, left, right)
+                    assertTrue("No spatial alpha step", kotlin.math.abs(before - l) < .005f)
+                }
+            }
+            // Equal normalized band positions and alpha ramps for stock and padded pack glyphs.
+            for (i in 0..100) {
+                val distance = (.25f + .25f * i / 100f) * width
+                assertEquals(1f - i / 100f, skipTaperAlpha(left - distance, left, right), .00001f)
+            }
         }
-        assertEquals(0f, skipTaperAlpha(0f), 0f)
-        assertEquals(0f, skipTaperAlpha(1f), 0f)
-        var previous = 0f
-        var levels = 0
-        for (i in 1..1000) {
-            val x = i / 1000f * SkipTaperBand
-            val alpha = skipTaperAlpha(x)
-            assertTrue("Ramp at $x", alpha >= previous && alpha - previous < .01f)
-            if (alpha > previous) levels++
-            previous = alpha
-            assertEquals("Symmetric at $x", alpha, skipTaperAlpha(1f - x), .0001f)
-        }
-        assertTrue("Ramps rather than steps", levels > 500)
     }
 
     @Test fun easingIsMonotonicWithSmoothEndsAndALongerSettle() {

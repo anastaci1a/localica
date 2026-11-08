@@ -89,26 +89,12 @@ class TransportAnimationFrameTest {
         compose.runOnIdle { static = true }
         for ((glyph, frame) in rest) same(compose.onNodeWithTag(glyph.name).captureNativeFrame(), frame)
         compose.runOnIdle { static = false }
-        // Mid-cycle both outer wedges cross the edges at alpha .5 along the centre row.
+        // #654's corrected contract keeps visible travel beyond the original canvas. The padded
+        // stock/pack render tests in SkipOverflowTaperTest inspect the actual outside fade bands.
         compose.runOnIdle { phase = .5f }
         for (glyph in listOf(TransportGlyph.Next, TransportGlyph.Previous)) {
             val frame = compose.onNodeWithTag(glyph.name).captureNativeFrame().toPixelMap()
-            val w = frame.width
-            val y = frame.height / 2
-            fun red(x: Int) = frame[x, y].red
-            val band = (w * .06f).toInt()
-            assertEquals("$glyph plateau before the band", .5f, red(w - 1 - band - 2), .04f)
-            assertTrue("$glyph right edge fades out: ${red(w - 1)}", red(w - 1) > .9f)
-            assertTrue("$glyph left edge fades out: ${red(0)}", red(0) > .9f)
-            var levels = 0
-            for (x in w - 1 - band until w - 1) {
-                assertTrue("$glyph ramp is monotonic at $x", red(x + 1) >= red(x) - .01f)
-                assertTrue("$glyph ramp has no step at $x", red(x + 1) - red(x) < .12f)
-                if (red(x + 1) - red(x) > .004f) levels++
-            }
-            assertTrue("$glyph ramp passes through intermediate alphas ($levels)", levels >= 3)
-            // Only the outer wedges reach the bands, so the edge profiles mirror about the centre.
-            for (x in 0..band + 4) assertEquals("$glyph mask symmetric at $x", red(x), red(w - 1 - x), .03f)
+            assertTrue("Moving ink reaches the original canvas edge", frame[frame.width - 1, frame.height / 2].red < .9f)
         }
     }
 
