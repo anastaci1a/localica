@@ -32,15 +32,20 @@ class AtlasBenchmarkActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val packed = intent.getBooleanExtra("atlas", false)
+        val churn = intent.getBooleanExtra("churn", false)
         setContent {
             val graphics = LocalGraphicsContext.current
             var scroll by remember { mutableFloatStateOf(0f) }
+            var generation by remember { mutableIntStateOf(0) }
+            val members = if (churn && generation % 3 == 1) 1 else 2
+            val cropWidth = if (churn && generation % 2 == 1) 96f else 192f
+            val cropHeight = if (churn && generation % 2 == 1) 77f else 99f
             val child = rememberGraphicsLayer()
             val source = rememberGraphicsLayer().apply { clip = true; compositingStrategy = CompositingStrategy.Offscreen }
-            val buffers = remember(graphics) { Buffers(graphics) }
+            val buffers = remember(graphics, members, cropWidth, cropHeight) { Buffers(graphics, members) }
             DisposableEffect(buffers) { onDispose { buffers.release() } }
             Canvas(Modifier.fillMaxSize().pointerInput(Unit) {
-                detectDragGestures { change, amount -> change.consume(); scroll += amount.y }
+                detectDragGestures(onDragStart = { if (churn) generation++ }) { change, amount -> change.consume(); scroll += amount.y }
             }) {
                 val extent = IntSize(size.width.toInt(), size.height.toInt())
                 val offset = scroll
@@ -58,9 +63,9 @@ class AtlasBenchmarkActivity : ComponentActivity() {
                     source.record(size = extent) { drawLayer(child) }
                     buffers.sourceSize = extent
                 }
-                val cropSize = IntSize(256, 128)
-                for (i in 0..1) buffers.crop[i].record(size = cropSize) {
-                    clipRect(right = 192f, bottom = 99f) {
+                val cropSize = IntSize(if (cropWidth == 96f) 128 else 256, 128)
+                for (i in 0 until members) buffers.crop[i].record(size = cropSize) {
+                    clipRect(right = cropWidth, bottom = cropHeight) {
                         translate(if (i == 0) -32.25f else -580.5f,
                             if (i == 0) -64.75f else -420.25f) { drawLayer(source) }
                     }
@@ -70,19 +75,19 @@ class AtlasBenchmarkActivity : ComponentActivity() {
                     buffers.ready = true
                 }
                 drawLayer(source)
-                for (i in 0..1) translate(if (i == 0) 32.25f else 580.5f,
+                for (i in 0 until members) translate(if (i == 0) 32.25f else 580.5f,
                     if (i == 0) 64.75f else 420.25f) {
-                    scale(192f, 99f, Offset.Zero) { drawLayer(buffers.output[i]) }
+                    scale(cropWidth, cropHeight, Offset.Zero) { drawLayer(buffers.output[i]) }
                 }
             }
         }
     }
-    private class Buffers(private val graphics: GraphicsContext) {
+    private class Buffers(private val graphics: GraphicsContext, private val members: Int) {
         private val owned = mutableListOf<GraphicsLayer>()
         private fun layer() = graphics.createGraphicsLayer().apply {
             compositingStrategy = CompositingStrategy.Offscreen; clip = true; owned += this
         }
-        val crop = listOf(layer(), layer())
+        val crop = List(members) { layer() }
         val output = mutableListOf<GraphicsLayer>()
         var sourceSize: IntSize? = null
         var ready = false
@@ -108,7 +113,7 @@ class AtlasBenchmarkActivity : ComponentActivity() {
                 val next = IntSize((before.width / 2).coerceAtLeast(1), (before.height / 2).coerceAtLeast(1))
                 val prior = previous; val priorSize = before
                 previous = layer().also { it.record(size = IntSize(next.width * 4, next.height)) {
-                    for (member in 0..1) translate(if (member == 0) 0f else next.width + 1f, 0f) {
+                    for (member in 0 until members) translate(if (member == 0) 0f else next.width + 1f, 0f) {
                         clipRect(right = next.width.toFloat(), bottom = next.height.toFloat()) {
                             scale(next.width.toFloat() / priorSize.width, next.height.toFloat() / priorSize.height, Offset.Zero) {
                                 translate(if (member == 1 && prior != null) -(priorSize.width + 1f) else 0f, 0f) {
