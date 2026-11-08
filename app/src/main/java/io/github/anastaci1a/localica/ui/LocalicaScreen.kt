@@ -142,6 +142,7 @@ fun LocalicaScreen(
     var exitPrompt by remember { mutableStateOf(false) }
     var consumedRequest by rememberSaveable { mutableLongStateOf(queues.playerRequest) }
     val browsePopupHome = rememberGlassPopupHome(expanded || settingsOpen)
+    val utilityPopupHome = rememberGlassPopupHome(!moreOpen || expanded || settingsOpen, browsePopupHome)
     var settingsPresented by remember { mutableStateOf(false) }
     LaunchedEffect(settingsOpen) {
         if (settingsOpen) browsePopupHome.awaitHandoff()
@@ -312,7 +313,7 @@ fun LocalicaScreen(
         SongDragScene(dragHost, Modifier.fillMaxSize()) {
         CompositionLocalProvider(LocalGlassPopupHome provides browsePopupHome) {
         Box(Modifier.fillMaxSize().glassPopupHome(browsePopupHome)) {
-        Column(Modifier.fillMaxSize()
+        Column(Modifier.fillMaxSize().glassPopupProjection(utilityPopupHome, browseBackdrop)
             // The opaque full player covers this entire scene. Keep its composition,
             // scroll state and cached recording, but do not submit hidden pixels.
             .drawWithContent { if (!hasPlayer || !playerFullyOpen) drawContent() }
@@ -407,6 +408,7 @@ fun LocalicaScreen(
                 }
 
             }
+            CompositionLocalProvider(LocalGlassPopupHome provides utilityPopupHome) {
             val utilityAnchor = rememberGlassAnchor()
             NavigationUtilityPill(utilityAnchor, browseBackdrop,
                 Modifier.width(104.dp).fillMaxHeight(),
@@ -416,6 +418,7 @@ fun LocalicaScreen(
             GlassMenu(moreOpen, utilityAnchor, { moreOpen = false }) {
                 ActionMenuItem("Scan music", icon = AppIcon.TabFolders, onClick = { moreOpen = false; scannerOpen = true })
                 ActionMenuItem("Settings", icon = AppIcon.ActionSettings, onClick = { moreOpen = false; settingsCategory = null; settingsOpen = true })
+            }
             }
         }
         // The pill is a standard Liquid Glass pill over the page: it samples the browse backdrop and takes the
