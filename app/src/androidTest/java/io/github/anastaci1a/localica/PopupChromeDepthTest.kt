@@ -7,6 +7,7 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.drawable.Drawable
+import android.os.Build
 import android.view.View
 import android.view.ViewTreeObserver
 import android.view.Window
@@ -199,10 +200,19 @@ class PopupChromeDepthTest {
         val ready = CountDownLatch(1)
         val token = stage % 24 + 1; stage = token
         lateinit var tree: ViewTreeObserver
-        val watch = ViewTreeObserver.OnDrawListener { view.postOnAnimation { ready.countDown() } }
+        var draws = 0
+        val committed = Build.VERSION.SDK_INT >= 29 && view.isHardwareAccelerated
+        val watch = ViewTreeObserver.OnDrawListener {
+            if (!committed) {
+                draws++
+                if (draws == 1) view.postOnAnimation { view.invalidate() }
+                else view.post { ready.countDown() }
+            }
+        }
         compose.runOnUiThread {
             tree = view.viewTreeObserver
             tree.addOnDrawListener(watch)
+            if (Build.VERSION.SDK_INT >= 29 && committed) tree.registerFrameCommitCallback { ready.countDown() }
             val marker = markers.getOrPut(view) { Marker().also { view.overlay.add(it) } }
             marker.stage = token; marker.invalidateSelf()
             view.invalidate()
