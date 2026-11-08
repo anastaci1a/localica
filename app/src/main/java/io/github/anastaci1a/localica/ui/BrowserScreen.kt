@@ -124,21 +124,12 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     val context = androidx.compose.ui.platform.LocalContext.current
     val sorts = rememberBrowseSortSnapshot()
     val preferences = remember(context) { BrowsePreferences(context) }
-    var inheritedInformation by remember(preferences) { mutableStateOf(preferences.informationStyles()) }
-    DisposableEffect(preferences) {
-        val unsubscribe = preferences.observeInformation { inheritedInformation = it }
-        onDispose(unsubscribe)
-    }
+    val inheritedInformation by rememberBrowseInheritedInformation(preferences)
     val currentRouteState = rememberUpdatedState(route)
     val currentRoute by currentRouteState
     val styleState = remember(route.key, route.filter) { mutableStateOf(preferences.read(route).let { it.copy(sort = route.querySort ?: it.sort, ascending = route.queryAscending ?: it.ascending) }) }
     var style by styleState
-    DisposableEffect(preferences, route.key, route.filter) {
-        val unsubscribe = preferences.observe(route) { updated ->
-            style = updated.copy(sort = currentRoute.querySort ?: updated.sort, ascending = currentRoute.queryAscending ?: updated.ascending)
-        }
-        onDispose(unsubscribe)
-    }
+    BrowseStyleObserver(preferences, route, currentRouteState, styleState)
     fun editSearchText(text: String) {
         searchEditTrace?.invoke("editor value key=${route.key.hashCode()} oldLength=${route.text.length} newLength=${text.length} committed=${route.queryCommitted}")
         onSearchEdit(route.copy(text = text, querySort = style.sort, queryAscending = style.ascending))
@@ -184,29 +175,17 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     val playlistDetail = artDetail && route.collection?.kind == MediaKind.Playlist
     val detailPlaylist = if (playlistDetail) playlists.playlists.firstOrNull { it.id == route.collection?.id } else null
     val seededCollection = LocalBrowseArtwork.current?.collection?.takeIf { it.ref == route.collection }
-    val entrySweep = remember(route.key, route.filter, route.search && route.text.isNotBlank()) {
-        androidx.compose.animation.core.Animatable(if (browse.cached && !route.search) 1f else 0f)
-    }
-    LaunchedEffect(entrySweep, loadedResult != null, queryPending, reducedMotion) {
-        if (loadedResult != null && !queryPending && entrySweep.value < 1f) {
-            if (reducedMotion) entrySweep.snapTo(1f)
-            else entrySweep.animateTo(1f, androidx.compose.animation.core.tween(600, easing = androidx.compose.animation.core.LinearEasing))
-        }
-    }
+    val entrySweep = rememberBrowseEntrySweep(route, browse.cached, loadedResult != null, queryPending, reducedMotion)
     val artistDetail = artDetail && route.collection?.kind in setOf(MediaKind.Artist, MediaKind.AlbumArtist)
-    var selectedAlbums by androidx.compose.runtime.saveable.rememberSaveable(route.key) { mutableStateOf(emptyList<String>()) }
+    val selectedAlbumsState = androidx.compose.runtime.saveable.rememberSaveable(route.key) { mutableStateOf(emptyList<String>()) }
+    var selectedAlbums by selectedAlbumsState
     // The completed query owns both orders. Per-album view overrides must not
     // reverse inner tracks or reorder this carousel independently of its rows.
     val albums = if (artistDetail) sourceResult.artistAlbums else emptyList()
     val validAlbums = remember(albums, selectedAlbums) {
         ArtistAlbumSelection.reconcile(selectedAlbums, albums.map { it.id })
     }
-    LaunchedEffect(albums, selectedAlbums, queryPending, loadedResult != null) {
-        // Persist the canonical mode after completed library changes, never a loading placeholder.
-        if (artistDetail && loadedResult != null && !queryPending && selectedAlbums != validAlbums) {
-            selectedAlbums = validAlbums
-        }
-    }
+    BrowseSelectedAlbumsEffect(albums, selectedAlbumsState, queryPending, loadedResult != null, artistDetail, validAlbums)
     val selectedTrackIds = remember(albums, validAlbums) {
         albums.filter { it.id in validAlbums }.flatMap { it.tracks }.map { it.id }.toSet()
     }
@@ -245,13 +224,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     }
     // A fresh mount restores its route's saved viewport. Only an input change
     // within that page must discard LazyGrid's retained item/key anchor.
-    var previousScrollResetInput by remember(route.key) { mutableStateOf(scrollResetInput) }
-    SideEffect {
-        if (previousScrollResetInput != scrollResetInput) {
-            previousScrollResetInput = scrollResetInput
-            gridState.requestScrollToItem(0)
-        }
-    }
+    BrowseScrollResetEffect(route, scrollResetInput, gridState)
     var collectionHeaderHeight by androidx.compose.runtime.saveable.rememberSaveable(route.key) { mutableIntStateOf(0) }
     var collectionActionBottom by androidx.compose.runtime.saveable.rememberSaveable(route.key) { mutableFloatStateOf(0f) }
     var collectionBackBottom by remember { mutableFloatStateOf(0f) }
@@ -1488,4 +1461,71 @@ private fun BrowseSortingPanel(initialView: Boolean, route: BrowseRoute, styleSt
         mutablePlaylist != null && playlistController != null -> ({ method, ascending, done -> orderScroll.cancel(); playlistController.applySort(mutablePlaylist.id, method, ascending, done) })
         else -> null
     })
+}
+
+@Composable
+@NonRestartableComposable
+private fun rememberBrowseInheritedInformation(preferences: BrowsePreferences): State<Map<MediaKind, BrowseStyle>> {
+    val informationState = remember(preferences) { mutableStateOf(preferences.informationStyles()) }
+    var inheritedInformation by informationState
+    DisposableEffect(preferences) {
+        val unsubscribe = preferences.observeInformation { inheritedInformation = it }
+        onDispose(unsubscribe)
+    }
+    return informationState
+}
+
+@Composable
+@NonRestartableComposable
+private fun BrowseStyleObserver(preferences: BrowsePreferences, route: BrowseRoute,
+    currentRouteState: State<BrowseRoute>, styleState: MutableState<BrowseStyle>) {
+    val currentRoute by currentRouteState
+    var style by styleState
+    DisposableEffect(preferences, route.key, route.filter) {
+        val unsubscribe = preferences.observe(route) { updated ->
+            style = updated.copy(sort = currentRoute.querySort ?: updated.sort, ascending = currentRoute.queryAscending ?: updated.ascending)
+        }
+        onDispose(unsubscribe)
+    }
+}
+
+@Composable
+@NonRestartableComposable
+private fun rememberBrowseEntrySweep(route: BrowseRoute, cached: Boolean, hasLoadedResult: Boolean,
+    queryPending: Boolean, reducedMotion: Boolean): androidx.compose.animation.core.Animatable<Float, androidx.compose.animation.core.AnimationVector1D> {
+    val entrySweep = remember(route.key, route.filter, route.search && route.text.isNotBlank()) {
+        androidx.compose.animation.core.Animatable(if (cached && !route.search) 1f else 0f)
+    }
+    LaunchedEffect(entrySweep, hasLoadedResult, queryPending, reducedMotion) {
+        if (hasLoadedResult && !queryPending && entrySweep.value < 1f) {
+            if (reducedMotion) entrySweep.snapTo(1f)
+            else entrySweep.animateTo(1f, androidx.compose.animation.core.tween(600, easing = androidx.compose.animation.core.LinearEasing))
+        }
+    }
+    return entrySweep
+}
+
+@Composable
+@NonRestartableComposable
+private fun BrowseSelectedAlbumsEffect(albums: List<LibraryGroup>, selectedAlbumsState: MutableState<List<String>>,
+    queryPending: Boolean, hasLoadedResult: Boolean, artistDetail: Boolean, validAlbums: List<String>) {
+    var selectedAlbums by selectedAlbumsState
+    LaunchedEffect(albums, selectedAlbums, queryPending, hasLoadedResult) {
+        // Persist the canonical mode after completed library changes, never a loading placeholder.
+        if (artistDetail && hasLoadedResult && !queryPending && selectedAlbums != validAlbums) {
+            selectedAlbums = validAlbums
+        }
+    }
+}
+
+@Composable
+@NonRestartableComposable
+private fun BrowseScrollResetEffect(route: BrowseRoute, scrollResetInput: Triple<Boolean, MediaKind?, String>?, gridState: LazyGridState) {
+    var previousScrollResetInput by remember(route.key) { mutableStateOf(scrollResetInput) }
+    SideEffect {
+        if (previousScrollResetInput != scrollResetInput) {
+            previousScrollResetInput = scrollResetInput
+            gridState.requestScrollToItem(0)
+        }
+    }
 }
