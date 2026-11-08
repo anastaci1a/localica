@@ -53,21 +53,33 @@ class DragHandoffArtworkTest {
 
     private data class Frame(val covers: IntArray, val titles: IntArray, val lightInk: BooleanArray, val image: ImageBitmap)
 
+    // #678 instrumentation (log only): where counts() spends its time per method.
+    private var semanticsNs = 0L; private var captureNs = 0L; private var coverLoopNs = 0L; private var titleLoopNs = 0L; private var frames = 0
+    private fun logProfile(scenario: String, started: Long) {
+        android.util.Log.i("Trim678", "DragHandoffArtworkTest $scenario totalMs=${(System.nanoTime() - started) / 1_000_000} frames=$frames " +
+            "semanticsMs=${semanticsNs / 1_000_000} captureMs=${captureNs / 1_000_000} coverLoopMs=${coverLoopNs / 1_000_000} titleLoopMs=${titleLoopNs / 1_000_000}")
+    }
+
     /** Cover colours and title ink from the same presented frame, including both handoff owners. */
     private fun counts(indices: List<Int>, lightInk: BooleanArray? = null): Frame {
+        frames++
+        var t = System.nanoTime()
         val root = compose.onRoot()
         val origin = root.fetchSemanticsNode().boundsInRoot.topLeft
         val titleBounds = indices.map { index ->
             compose.onAllNodesWithText("Song $index", useUnmergedTree = true).fetchSemanticsNodes()
                 .map { it.boundsInRoot.translate(-origin).inflate(4 * compose.density.density) }.distinct()
         }
+        semanticsNs += System.nanoTime() - t; t = System.nanoTime()
         val image = root.captureToImage()
         val map = image.toPixelMap()
+        captureNs += System.nanoTime() - t; t = System.nanoTime()
         val result = IntArray(indices.size)
         for (y in 0 until map.height step 2) for (x in 0 until map.width step 2) {
             val c = map[x, y]
             indices.forEachIndexed { i, colour -> if (near(c, colours[colour])) result[i]++ }
         }
+        coverLoopNs += System.nanoTime() - t; t = System.nanoTime()
         // Playlist detail inherits white ink over its coloured artwork backdrop; queue
         // rows can use dark ink. Infer the baseline polarity from the title's surrounding
         // background, then hold it fixed so an empty frame cannot redefine the probe.
@@ -94,10 +106,13 @@ class DragHandoffArtworkTest {
                 ink
             } ?: 0
         }
+        titleLoopNs += System.nanoTime() - t
         return Frame(result, titles, polarity, image)
     }
 
     private fun drag(scenario: String, rowTag: (Int) -> String, moved: List<Int>, target: Int) {
+        val started = System.nanoTime()
+        semanticsNs = 0; captureNs = 0; coverLoopNs = 0; titleLoopNs = 0; frames = 0
         val failures = mutableListOf<String>()
         lateinit var base: Frame
         compose.waitUntil(10000) { base = counts(moved); base.covers.all { it > 20 } && base.titles.all { it > 20 } }
@@ -107,6 +122,7 @@ class DragHandoffArtworkTest {
         // Trailing cards fly under the top card, so per frame the top card's cover must stay; all settle.
         fun check(label: String, all: Boolean = false) {
             val now = counts(moved, base.lightInk)
+            android.util.Log.i("Trim678", "$scenario $label covers=${now.covers.toList()} titles=${now.titles.toList()}")
             val before = failures.size
             (if (all) now.covers.indices else 0..0).forEach {
                 if (now.covers[it] < base.covers[it] * .5f)
@@ -141,6 +157,7 @@ class DragHandoffArtworkTest {
         compose.waitUntil(5000) { compose.onAllNodesWithTag("drag-stack").fetchSemanticsNodes().isEmpty() }
         compose.waitForIdle()
         check("settled", all = true)
+        logProfile(scenario, started)
         assertTrue(failures.take(30).joinToString("\n"), failures.isEmpty())
     }
 

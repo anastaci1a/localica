@@ -188,18 +188,25 @@ class LyricsArtworkEntryTest {
      * A cover underneath adds less green to ink, because the glyph masks the artwork. This paired
      * measurement includes the actual feather, shading and opacity rather than assuming their values. */
     private fun assertLyricsUnderArtwork(tag: String) {
+        // #678 instrumentation (log only).
+        val methodStart = System.nanoTime()
+        var captureNs = 0L; var pngNs = 0L; var boundsNs = 0L; var loopNs = 0L
         snap(1f)
         compose.waitUntil(10000) {
             compose.mainClock.advanceTimeByFrame()
             compose.onAllNodesWithTag(tag, true).fetchSemanticsNodes().isNotEmpty()
         }
+        val readyMs = (System.nanoTime() - methodStart) / 1_000_000
         forEachLayout { layout ->
             for (p in listOf(.88f, .91f, .94f)) {
                 snap(p)
                 fun capture(frame: PlayerVisual, name: String): androidx.compose.ui.graphics.PixelMap {
+                    val t = System.nanoTime()
                     compose.runOnIdle { visual = frame }
                     compose.waitForIdle()
                     val capture = compose.onNodeWithTag("player-surface").captureToImage()
+                    captureNs += System.nanoTime() - t
+                    val pngStart = System.nanoTime()
                     val output = InstrumentationRegistry.getArguments().getString("additionalTestOutputDir")
                     if (output != null) {
                         val dir = File(output, "lyrics-artwork-entry").apply { mkdirs() }
@@ -207,14 +214,18 @@ class LyricsArtworkEntryTest {
                             capture.asAndroidBitmap().compress(Bitmap.CompressFormat.PNG, 100, it)
                         }
                     }
+                    pngNs += System.nanoTime() - pngStart
                     return capture.toPixelMap()
                 }
                 val redPixels = capture(red, "red")
                 val whitePixels = capture(white, "white")
+                val boundsStart = System.nanoTime()
                 val surface = bounds("player-surface")
                 val content = bounds(tag)
                 val cover = bounds("player-artwork")
                 val viewport = bounds("lyrics-panel")
+                boundsNs += System.nanoTime() - boundsStart
+                val loopStart = System.nanoTime()
                 // The middle of the cover has a flat horizontal feather; compare ink and blank on the same row.
                 val left = maxOf(content.left, cover.left + cover.width * .3f, viewport.left)
                 val right = minOf(content.right, cover.right - cover.width * .3f, viewport.right)
@@ -240,12 +251,16 @@ class LyricsArtworkEntryTest {
                     overError += kotlin.math.abs(inkGain - blankGain * (1f - glyphOpacity))
                     rows++
                 }
+                loopNs += System.nanoTime() - loopStart
                 val message = "$tag $layout p=$p rows=$rows underError=$underError overError=$overError " +
                     "content=$content cover=$cover"
                 println("LyricsArtworkZOrder $message")
+                android.util.Log.i("Trim678", "LyricsArtworkEntryTest $message")
                 assertTrue("Matched frames must contain visible ink and cover: $message", rows >= 5)
                 assertTrue("Lyrics draw under the artwork: $message", underError < overError)
             }
         }
+        android.util.Log.i("Trim678", "LyricsArtworkEntryTest $tag totalMs=${(System.nanoTime() - methodStart) / 1_000_000} readyMs=$readyMs " +
+            "captureMs=${captureNs / 1_000_000} pngMs=${pngNs / 1_000_000} boundsMs=${boundsNs / 1_000_000} loopMs=${loopNs / 1_000_000}")
     }
 }
