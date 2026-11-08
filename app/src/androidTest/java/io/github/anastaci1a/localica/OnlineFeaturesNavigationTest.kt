@@ -22,7 +22,7 @@ class OnlineFeaturesNavigationTest {
     private fun lastFm() {
         compose.waitUntil(10000) { compose.onAllNodesWithTag("lastfm-username").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithTag("lastfm-username").assertExists()
-        compose.onNodeWithContentDescription("Search settings input").assertExists()
+        compose.onNodeWithContentDescription("Search settings input").assertDoesNotExist()
     }
     @Test fun coldNotificationConsumesItsExtraAndOpensLastFm() {
         ActivityScenario.launch<MainActivity>(intent(true)).use { scenario ->
@@ -38,9 +38,13 @@ class OnlineFeaturesNavigationTest {
             context.startActivity(intent(true))
             lastFm()
             scenario.onActivity { assertFalse(it.intent.hasExtra("localica.openLastFmSettings")) }
+            compose.onNodeWithContentDescription("Back from settings").performClick()
+            compose.onNodeWithContentDescription("Search settings input").assertDoesNotExist()
+            compose.onNodeWithContentDescription("Back from settings").performClick()
             compose.onNodeWithContentDescription("Search settings input").performTextReplacement("Photo cache size")
             compose.onNodeWithTag("search-result:Photo cache size").performClick()
             compose.onNodeWithTag("setting:Photo cache size").assertIsDisplayed()
+            compose.onNodeWithContentDescription("Search settings input").assertDoesNotExist()
             compose.onNodeWithTag("lastfm-username").assertDoesNotExist()
             context.startActivity(intent(true))
             lastFm()
