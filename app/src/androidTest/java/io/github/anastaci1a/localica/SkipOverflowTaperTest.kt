@@ -75,37 +75,40 @@ class SkipOverflowTaperTest {
         }
     }
 
-    @Test fun noOutsideInkPopsAcrossCycleStartAndEndAndRestIsStatic() {
-        for (isPack in listOf(false, true)) for (glyph in listOf(TransportGlyph.Next, TransportGlyph.Previous)) {
-            val rest = render(isPack, 0f, glyph)
-            assertTrue("Exact rest endpoints", rest.asAndroidBitmap().sameAs(render(isPack, 1f, glyph).asAndroidBitmap()))
-            val expected = rest.toPixelMap()
-            val edge = BooleanArray(expected.width * expected.height)
-            for (y in 1 until expected.height - 1) for (x in 1 until expected.width - 1) {
-                val alpha = expected[x,y].alpha
-                edge[y * expected.width + x] = alpha > 0f && (alpha < 1f ||
-                    (-1..1).any { dy -> (-1..1).any { dx -> expected[x + dx,y + dy].alpha == 0f } })
-            }
-            val contourLength = edge.count { it }
-            for (phase in listOf(.00001f, .99999f, 1.00001f, -.00001f)) {
-                val actual = render(isPack, phase, glyph).toPixelMap()
-                var changed = 0
-                for (y in 0 until actual.height) for (x in 0 until actual.width) {
-                    if (expected[x,y].alpha == 0f)
-                        assertEquals("Exactly zero outside rest ink near endpoint", 0f, actual[x,y].alpha, 0f)
-                    if (expected[x,y].alpha != actual[x,y].alpha) {
-                        changed++
-                        val nearContour = (-1..1).any { dy -> (-1..1).any { dx ->
-                            val px = x + dx
-                            val py = y + dy
-                            px in 0 until expected.width && py in 0 until expected.height && edge[py * expected.width + px]
-                        } }
-                        assertTrue("Only contour AA may change pack=$isPack $glyph at $phase ($x,$y)", nearContour)
-                    }
-                }
-                assertTrue("Changed pixels bounded by static contour length: $changed <= $contourLength", changed <= contourLength)
-            }
+    private fun assertEndpoints(isPack: Boolean, glyph: TransportGlyph, painter: Painter = pack) {
+        val rest = render(isPack, 0f, glyph, painter)
+        assertTrue("Exact rest endpoints", rest.asAndroidBitmap().sameAs(render(isPack, 1f, glyph, painter).asAndroidBitmap()))
+        val expected = rest.toPixelMap()
+        val edge = BooleanArray(expected.width * expected.height)
+        for (y in 1 until expected.height - 1) for (x in 1 until expected.width - 1) {
+            val alpha = expected[x,y].alpha
+            edge[y * expected.width + x] = alpha > 0f && (alpha < 1f ||
+                (-1..1).any { dy -> (-1..1).any { dx -> expected[x + dx,y + dy].alpha == 0f } })
         }
+        val contourLength = edge.count { it }
+        for (phase in listOf(.00001f, .99999f, 1.00001f, -.00001f)) {
+            val actual = render(isPack, phase, glyph, painter).toPixelMap()
+            var changed = 0
+            for (y in 0 until actual.height) for (x in 0 until actual.width) {
+                if (expected[x,y].alpha == 0f)
+                    assertEquals("Exactly zero outside rest ink near endpoint", 0f, actual[x,y].alpha, 0f)
+                if (expected[x,y].alpha != actual[x,y].alpha) {
+                    changed++
+                    val nearContour = (-1..1).any { dy -> (-1..1).any { dx ->
+                        val px = x + dx
+                        val py = y + dy
+                        px in 0 until expected.width && py in 0 until expected.height && edge[py * expected.width + px]
+                    } }
+                    assertTrue("Only contour AA may change pack=$isPack $glyph at $phase ($x,$y)", nearContour)
+                }
+            }
+            assertTrue("Changed pixels bounded by static contour length: $changed <= $contourLength", changed <= contourLength)
+        }
+    }
+
+    @Test fun noOutsideInkPopsAcrossCycleStartAndEndAndRestIsStatic() {
+        for (isPack in listOf(false, true)) for (glyph in listOf(TransportGlyph.Next, TransportGlyph.Previous))
+            assertEndpoints(isPack, glyph)
     }
 
     @Test fun stockAndPackMaskProfilesAreSymmetricWithinOneAlphaLevel() {
@@ -184,6 +187,7 @@ class SkipOverflowTaperTest {
                 ?: requireNotNull(context.getExternalFilesDir(null)), "skip-654").apply { mkdirs() }
             for (glyph in listOf(TransportGlyph.Next, TransportGlyph.Previous)) for (isPack in listOf(false, true)) {
                 val painter = if (glyph == TransportGlyph.Next) next else previous
+                assertEndpoints(isPack, glyph, painter)
                 val strip = android.graphics.Bitmap.createBitmap(384 * 6, 192 * 3, android.graphics.Bitmap.Config.ARGB_8888)
                 val canvas = android.graphics.Canvas(strip)
                 canvas.drawColor(android.graphics.Color.WHITE)
