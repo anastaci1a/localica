@@ -2,7 +2,9 @@ package io.github.anastaci1a.localica.ui
 
 import androidx.compose.runtime.*
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.GraphicsContext
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.layer.CompositingStrategy
@@ -11,6 +13,7 @@ import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.platform.LocalGraphicsContext
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntSize
+import kotlin.math.ceil
 
 internal fun materialReductionExtent(size: IntSize): IntSize {
     fun power(value: Int): Int {
@@ -51,6 +54,17 @@ internal class MaterialAreaReduction(private val graphics: GraphicsContext) {
             dimensions = next
         }
         return previous
+    }
+    /** Map the exact footprint onto the whole reduction texture. Transparent power-of-two
+     * padding would otherwise amplify RGBA8 rounding when the mean is unpremultiplied,
+     * giving identical backdrops different colours for different material dimensions. */
+    fun DrawScope.recordFullBounds(bounds: Size, draw: DrawScope.() -> Unit): GraphicsLayer {
+        val extent = materialReductionExtent(IntSize(ceil(bounds.width).toInt(), ceil(bounds.height).toInt()))
+        return record(extent) {
+            scale(extent.width / bounds.width, extent.height / bounds.height, Offset.Zero) {
+                clipRect(right = bounds.width, bottom = bounds.height, block = draw)
+            }
+        }
     }
     fun release() { levels.forEach(graphics::releaseGraphicsLayer); levels.clear() }
 }
