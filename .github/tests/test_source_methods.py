@@ -357,6 +357,8 @@ class SourceMethodsContract(unittest.TestCase):
         new = source_methods.inventory(ROOT, [cls], 36)
         self.assertIn(identity, old["runtime_methods"])
         self.assertNotIn(identity, new["runtime_methods"])
+        self.assertEqual([], new["runtime_methods"])
+        self.assertEqual(2, len(old["runtime_methods"]))
         self.assertEqual("SdkSuppress(maxSdkVersion=32) excludes API 36", new["gated_absent_reasons"][identity])
 
     def test_unsupported_sdk_suppress_arguments_fail_closed(self):

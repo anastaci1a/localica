@@ -7,7 +7,7 @@ and runner rewrites are not inferred. Reconciliation must reject every
 missing/extra/duplicate runtime ID.
 API gating (#464): a literal @SdkSuppress(minSdkVersion = N) on a class or method, and a
 direct Assume.assumeTrue([message,] Build.VERSION.SDK_INT >= N) statement in a method
-body, are recorded per method in "gates" (min_sdk, assume_min_sdk). With --api,
+body, are recorded per method in "gates" (min_sdk, max_sdk, assume_min_sdk). With --api,
 runtime_methods is the exact expectation for that API: a method with min_sdk above the
 API is expected ABSENT (listed in gated_absent_methods; gated_absent_classes when no
 method of a class remains) and every other method is still required. Any other

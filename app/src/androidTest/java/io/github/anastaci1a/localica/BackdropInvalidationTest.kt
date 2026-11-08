@@ -20,7 +20,8 @@ import org.junit.Test
 class BackdropInvalidationTest {
     @get:Rule val compose = localicaComposeRule()
 
-    @Test fun rasterlessBackingRecordInvalidatesItsDependentRecording() {
+    @Test @androidx.test.filters.SdkSuppress(maxSdkVersion = 32)
+    fun rasterlessBackingRecordInvalidatesItsDependentRecording() {
         assumeTrue("CPU thumbnail scheduling is the pre-33 adapter", Build.VERSION.SDK_INT < 33)
         lateinit var backing: FrostedBackdrop
         lateinit var dependent: FrostedBackdrop

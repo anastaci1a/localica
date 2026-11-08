@@ -96,7 +96,9 @@ class FullPartitionTest(unittest.TestCase):
         path = folder/'BackdropInvalidationTest.kt'
         original = ('package io.github.anastaci1a.localica\nimport org.junit.Test\n'
                     'class BackdropInvalidationTest { @Test '
-                    '@androidx.test.filters.SdkSuppress(maxSdkVersion = 32) fun ' + method + '() {} }')
+                    '@androidx.test.filters.SdkSuppress(maxSdkVersion = 32) fun ' + method + '() {} '
+                    '@Test @androidx.test.filters.SdkSuppress(maxSdkVersion = 32) '
+                    'fun rasterlessBackingRecordInvalidatesItsDependentRecording() {} }')
         path.write_text(original)
         old = partition.plan(self.root, ['example.RiskTest'], '26', 'a'*40)
         new = partition.plan(self.root, ['example.RiskTest'], '36', 'a'*40)
