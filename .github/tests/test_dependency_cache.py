@@ -118,6 +118,7 @@ class SharedDependencyCacheContract(unittest.TestCase):
             writer = load(workflow)['jobs'][writer_name]
             setup = [step for step in writer['steps'] if uses(step) == SETUP_GRADLE]
             self.assertIs(False, setup[0]['with']['cache-read-only'], 'the warm writer saves even when dispatched on a branch')
+            self.assertIs(True, setup[0]['with']['cache-overwrite-existing'], 'a complete set replaces an entry saved by a failed build')
             writer_tasks = compile_tasks(writer)
             self.assertTrue(writer_tasks)
             for (reader_workflow, reader_name), reader_key in CACHE_KEYS.items():
