@@ -251,7 +251,7 @@ Its lens and menu-opening controls are deeper than the tab shelf/selector (1.3×
 
 Three aligned floating pills follow the Apple Music reference: full-width mini-player above flexible tabs at left and a divided Search/More pill with 28 dp icons at right. Search is immediately left of More. More offers Scan music and Settings. About/licenses lives only in Settings.
 
-Lists draw behind these controls, with enough content padding to reveal final items. Inside album, artist, Album Artist, playlist and folder details, tabs and utility controls leave. The mini-player moves down and remains available.
+Lists draw behind these controls. Bottom content padding includes lower chrome and selection occupancy, plus the measured floating return and overflow/add controls and a 16 dp gap, so final rows clear foreground controls. Inside album, artist, Album Artist, playlist and folder details, tabs and utility controls leave. The mini-player moves down and remains available.
 
 Library/Playlists have an aligned circular + matching the mini-player's height. It morphs into its frosted creation menu and returns on dismissal, offering Create playlist and Import playlist from file ([import rules](product.md#library-and-playlists)).
 
@@ -371,7 +371,9 @@ Collection/search overrides use **Save only for this list** above Cancel/Save. M
 
 Revert uses shared glass emergence/disappearance in a reserved slot and disappears whenever the physical order matches the opening snapshot, including after two reversals. Manual restores the saved baseline. Sort by and Extra information use the same staged selector trigger and frosted dialog.
 
-View offers presentation, list Size or gallery Items per row, extra information and applicable scoped search. Overflowing lists of at least 40 items get a narrow edge scrollbar and accessible scroll action. Show letter/year previews only during dragging under title/year sort.
+View offers presentation, list Size or gallery Items per row, extra information and applicable scoped search.
+
+Every overflowing browse list, including Queue, details, search and Home, gets a narrow edge scrollbar and accessible scroll action. Its 48 dp touch strip keeps the thumb’s visual size. The thumb fades after 1.2 seconds without list or drag movement and reappears on movement. Show letter/year previews only during dragging under title/year sort.
 
 ## Collection details
 
