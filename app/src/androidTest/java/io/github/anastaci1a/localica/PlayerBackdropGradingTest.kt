@@ -76,16 +76,50 @@ class PlayerBackdropGradingTest {
             }
         } }
         for (c in covers) for (ctx in listOf("player", "lyrics", "queue")) {
+            // #678 instrumentation (log only): which iterations hit the 8 s cap, and what the sampler state is.
+            val tagLog = "${c.name}/$ctx"
+            fun state(): String {
+                val frame = polarity.frame; val d = polarity.decision
+                return "conf=${d.confidence} unavailable=${d.unavailable} light=${d.lightInk} dest=${polarity.destinationLightInk} " +
+                    "clock=${polarity.artworkClock} transitioning=${frame?.transitioning} frozen=${frame?.frozenVisible} liveBlur=${frame?.liveBlur} " +
+                    "roles=${frame?.roles?.map { "${if (it.visual == visuals.getValue(c.name)) "same" else "other"}/${if (it.soft) "soft" else "main"}/${if (it.incoming) "in" else "out"}/${it.weight}" }} " +
+                    "grades=${polarity.roleGrades.size}"
+            }
+            var last = ""
+            val started = System.nanoTime()
+            fun observe(phase: String) {
+                val now = state()
+                if (now != last) { android.util.Log.i("Trim678", "$tagLog $phase +${(System.nanoTime() - started) / 1_000_000} ms $now"); last = now }
+            }
             compose.runOnIdle { cover = c; context = ctx }
+            // Apply the context before accepting a Current decision left over from its predecessor.
+            compose.waitForIdle()
             val raw = Color(0xFF000000.toInt() or c.base)
+            var waited = false
             try {
                 compose.waitUntil(8000) {
+                    observe("wait")
                     val frame = polarity.frame
                     polarity.decision.confidence == PlayerBackgroundConfidence.Current && frame != null &&
-                        frame.roles.isNotEmpty() && frame.roles.all { it.visual === visuals.getValue(c.name) }
+                        !frame.transitioning && frame.roles.isNotEmpty() && frame.roles.all { it.visual == visuals.getValue(c.name) }
                 }
-            } catch (_: Throwable) { /* a context whose sampler is unavailable is still photographed */ }
-            Thread.sleep(1500); compose.waitForIdle()
+                waited = true
+            } catch (failure: ComposeTimeoutException) {
+                failures += "$tagLog: backdrop did not settle with current fixture pixels within 8000 ms: ${state()}"
+                android.util.Log.e("Trim678", failures.last(), failure)
+            }
+            android.util.Log.i("Trim678", "$tagLog waitUntil ${if (waited) "satisfied" else "TIMED OUT"} after ${(System.nanoTime() - started) / 1_000_000} ms")
+            // The old impossible predicate pumped frames for eight seconds. Its legacy header glass still
+            // needs that observation window for identical PNGs, independently of the now-valid grade check.
+            val observationUntil = started + 8_000_000_000L
+            while (System.nanoTime() < observationUntil) {
+                compose.mainClock.advanceTimeByFrame()
+                Thread.sleep(10)
+                observe("settle")
+            }
+            val sleepUntil = System.nanoTime() + 1_500_000_000L
+            while (System.nanoTime() < sleepUntil) { Thread.sleep(50); observe("sleep") }
+            compose.waitForIdle(); observe("idle")
             val image = compose.onRoot().captureToImage()
             File(output, "${c.name}-$ctx-api${Build.VERSION.SDK_INT}.png").outputStream().use {
                 image.asAndroidBitmap().compress(Bitmap.CompressFormat.PNG, 100, it)
@@ -103,6 +137,8 @@ class PlayerBackdropGradingTest {
             val contrast = if (light) 1.05f / (y + .05f) else (y + .05f) / .05f
             val before = oklab(raw.red, raw.green, raw.blue); val after = oklab(r, g, b)
             val tag = "${c.name}/$ctx lightInk=$light"
+            android.util.Log.i("Trim678", "$tagLog measured +${(System.nanoTime() - started) / 1_000_000} ms n=$n rgb=$r,$g,$b light=$light y=$y contrast=$contrast " +
+                "L=${before[0]}->${after[0]} chroma=${hypot(before[1], before[2])}->${hypot(after[1], after[2])}")
             // Lightness never moves away from contrast: no darkening behind dark ink, no lightening behind light ink.
             if (light && after[0] > before[0] + .06f) failures += "$tag lightened behind light ink: ${before[0]} -> ${after[0]}"
             if (!light && after[0] < before[0] - .06f) failures += "$tag darkened behind dark ink: ${before[0]} -> ${after[0]}"
