@@ -369,3 +369,4 @@ io.github.anastaci1a.localica.FrameStatsTest
 
 io.github.anastaci1a.localica.SelectionMergeGeometryTest
 io.github.anastaci1a.localica.SelectionMergeSequenceTest
+io.github.anastaci1a.localica.ReleaseSnapshotContractTest
