@@ -267,3 +267,11 @@ Open `build/docs-site/docs/index.html` to review the site locally. No Android SD
 The [documentation workflow](../.github/workflows/documentation.yml) runs these checks for pull requests and pushes to main, and uploads the built site as a workflow artifact. Nothing is published.
 
 [Writing rules](../DOCUMENTATION.md) define the maintained inventory and historical exclusions. Automated checks cover prose limits, local links and fragments, headings, image descriptions and rendered navigation. Review contract meaning and remote evidence separately.
+
+## Last.fm build key
+
+APK-producing Gradle steps receive the optional Actions secret LASTFM_API_KEY. Gradle also accepts the lastfmApiKey project property. Both inputs populate BuildConfig.LASTFM_API_KEY. Missing keys compile successfully with syncing disabled; fork pull requests need no secret.
+
+The Android workflow's distribution build produces the canonical APK used by tag releases. Its build step receives the same key. Reusable prototype callers forward the optional secret explicitly or inherit secrets. Diagnostics, evidence publishers and release upload steps never receive it.
+
+The application key is bundled into the client APK for read-only API calls. No Last.fm shared secret is used or bundled. Offline tooling contracts enforce secret scope and prevent workflow commands from printing its environment variable. JVM and device fixtures make no live API requests.
