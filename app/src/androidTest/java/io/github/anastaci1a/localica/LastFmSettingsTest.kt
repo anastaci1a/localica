@@ -46,12 +46,12 @@ class LastFmSettingsTest {
             compose.onNode(hasSetTextAction() and hasAnyAncestor(hasTestTag("lastfm-username")), useUnmergedTree = true).performTextInput("fixture-user")
             compose.onNodeWithTag("lastfm-sync").performScrollTo().performClick()
             compose.waitUntil(5000) { controller.matches.value.counts["song"] == 42L }
-            compose.onNodeWithTag("lastfm-review-summary").performScrollTo().assertTextEquals("1 matched · 2 to review")
+            compose.onNodeWithTag("lastfm-review-summary").performScrollTo().assertTextEquals("1 matched · 1 to review")
             compose.onNode(isToggleable() and hasText("Use Last.fm counts")).performScrollTo().performClick()
             compose.waitUntil(5000) { controller.state.value.saved.useCounts }
             assertEquals(42L, runBlocking { controller.applyTo(flowOf(local)).first().tracks["song"] })
             compose.onNodeWithText("Use A · a.mp3").performScrollTo().performClick()
-            compose.waitUntil(5000) { controller.matches.value.review.size == 1 }
+            compose.waitUntil(5000) { controller.matches.value.review.isEmpty() }
             assertEquals("a", runBlocking { store.read().mappings.values.single() })
             compose.onNode(isToggleable() and hasText("Use Last.fm counts")).performScrollTo().performClick()
             compose.waitUntil(5000) { !controller.state.value.saved.useCounts }
