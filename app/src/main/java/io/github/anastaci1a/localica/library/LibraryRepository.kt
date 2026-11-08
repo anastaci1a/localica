@@ -33,6 +33,7 @@ class LibraryRepository(
     private fun metadataTrack(track: Track, metadata: AudioMetadata) = track.copy(title = metadata.title?.takeIf { it.isNotBlank() } ?: track.fileName.substringBeforeLast('.'),
             artist = metadata.artist, album = metadata.album, albumArtist = metadata.albumArtist,
             year = metadata.year, discNumber = metadata.discNumber, trackNumber = metadata.trackNumber,
+            releaseType = metadata.releaseType, compilation = metadata.compilation,
             genre = metadata.genre, comment = metadata.comment, composer = metadata.composer, lyricist = metadata.lyricist,
             modifiedAt = metadata.modifiedAt ?: track.modifiedAt, durationMs = metadata.durationMs)
 

@@ -18,6 +18,8 @@ interface StatisticsDao {
     @Insert(onConflict = OnConflictStrategy.IGNORE) suspend fun record(play: QualifiedPlay)
     @Query("SELECT trackId AS id, COUNT(*) AS count FROM qualified_plays GROUP BY trackId")
     fun tracks(): Flow<List<PlayCount>>
+    @Query("SELECT trackId AS id, COUNT(*) AS count FROM qualified_plays WHERE playedAt >= :from AND playedAt <= :through GROUP BY trackId")
+    fun tracksBetween(from: Long, through: Long): Flow<List<PlayCount>>
     @Query("SELECT playlistId AS id, COUNT(*) AS count FROM qualified_plays WHERE playlistId IS NOT NULL GROUP BY playlistId")
     fun playlists(): Flow<List<PlayCount>>
 }
