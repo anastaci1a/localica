@@ -233,6 +233,27 @@ class UiPolicyDetectorTest : LintDetectorTest() {
         """, 1)
     }
 
+    fun testMotionHandleIdentityDoesNotSampleItsPresentation() {
+        val factory = """
+            package io.github.anastaci1a.localica.ui.engine
+            fun sampledHandle(view: MotionValue): MotionValue { view.value(); return view }
+        """
+        check(UiRuleId.RawMotionMap, """
+            import io.github.anastaci1a.localica.ui.engine.*
+            fun receipt(view: MotionValue, other: MotionValue): Boolean {
+                val handle=sampledHandle(view)
+                return handle === other
+            }
+        """, 0, "components", factory)
+        check(UiRuleId.RawMotionMap, """
+            import io.github.anastaci1a.localica.ui.engine.*
+            fun bad(view: MotionValue): Boolean {
+                val handle=sampledHandle(view)
+                return handle.value() > .5f
+            }
+        """, 1, "components", factory)
+    }
+
     fun testImmediateAndDeferredMotionReads() {
         val imports = "import androidx.compose.runtime.*\nimport io.github.anastaci1a.localica.ui.engine.*\n"
         for (read in listOf("value()", "velocity()", "sample()", "valueAt(FrameStamp())", "velocityAt(FrameStamp())", "sampleAt(FrameStamp())")) {

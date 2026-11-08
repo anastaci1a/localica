@@ -360,6 +360,10 @@ internal class UiPolicyDetector : Detector(), SourceCodeScanner {
 
         private fun derived(node: UElement?, seen: MutableSet<PsiElement> = mutableSetOf()): Boolean {
             if (node == null) return false
+            // A handle's identity is structural. Only sampling it yields presentation:
+            // do not inherit reads performed inside its factory/constructor. Samples
+            // (ShapeFrame/Kinematic) remain derived, as do value()/outline() results.
+            if (node is UExpression && motionHandleType(node.getExpressionType())) return false
             if (node is UCallExpression) {
                 // Measured geometry does not inherit reads used only to render subcomposed children.
                 // Keep motion-derived slot arguments and receivers visible; only the SDK content callback is excluded.
@@ -632,6 +636,11 @@ private fun symbolName(symbol: PsiElement?): String? = when (symbol) {
     else -> null
 }
 private fun motionClass(type: PsiClass): Boolean = (type.qualifiedName.orEmpty().startsWith("$UI.engine.") && type.name in views) || type.supers.any { motionClass(it) }
+private fun motionHandleType(type: PsiType?): Boolean {
+    fun handle(value: PsiClass): Boolean =
+        (value.qualifiedName.orEmpty().startsWith("$UI.engine.") && value.name in views - setOf("ShapeFrame", "Kinematic")) || value.supers.any(::handle)
+    return (type as? PsiClassType)?.resolve()?.let(::handle) == true
+}
 private fun motionType(type: PsiType?): Boolean = (type as? PsiClassType)?.resolve()?.let { motionClass(it) } == true
 private fun mutableKind(type: PsiType?): String? {
     val clazz = (type as? PsiClassType)?.resolve() ?: return null
