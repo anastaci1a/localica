@@ -4,6 +4,9 @@ import androidx.compose.runtime.*
 import androidx.compose.foundation.lazy.layout.LazyLayoutScrollScope
 import io.github.anastaci1a.localica.ui.spec.*
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.yield
 import kotlin.coroutines.coroutineContext
 
@@ -24,7 +27,7 @@ internal fun registerScrollClock(key: MonotonicFrameClock, clock: UiClock): () -
 internal suspend fun <T> withScrollExecution(block: suspend ScrollExecution.() -> T): T {
     val clock = requireNotNull(scrollClocks[coroutineContext[MonotonicFrameClock]]?.clock) { "Scroll requires its registered root UiClock" }
     val execution = ScrollExecution(clock)
-    try { return execution.block() } finally { execution.close() }
+    try { return execution.block() } finally { withContext(NonCancellable + Dispatchers.Main.immediate) { execution.close() } }
 }
 
 internal class ScrollExecution(private val clock: UiClock) : ActiveMotion, AutoCloseable {

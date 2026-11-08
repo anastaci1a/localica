@@ -48,6 +48,7 @@ class PlayerHarnessClockTest {
             assertEquals("First idle intent uses virtual now", compose.mainClock.currentTime * 1_000_000, root.stampNow.nanos)
             shown = false
         }
+        compose.mainClock.advanceTimeByFrame()
         compose.waitForIdle()
         compose.runOnIdle { assertNull(root.intentNow); assertEquals(0, root.activeCount) }
         compose.mainClock.autoAdvance = true

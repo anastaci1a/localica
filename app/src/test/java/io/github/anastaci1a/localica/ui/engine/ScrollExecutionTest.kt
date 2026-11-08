@@ -5,6 +5,8 @@ import io.github.anastaci1a.localica.ui.spec.*
 import kotlinx.coroutines.*
 import org.junit.Assert.*
 import org.junit.Test
+import org.junit.Before
+import org.junit.After
 import kotlin.coroutines.coroutineContext
 
 private suspend fun <T> withScrollClock(clock: UiClock, block: suspend () -> T): T {
@@ -12,7 +14,10 @@ private suspend fun <T> withScrollClock(clock: UiClock, block: suspend () -> T):
     try { return block() } finally { release() }
 }
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class ScrollExecutionTest {
+    @Before fun installMain() { Dispatchers.setMain(Dispatchers.Unconfined) }
+    @After fun resetMain() { Dispatchers.resetMain() }
     private val frameClock = object : MonotonicFrameClock {
         override suspend fun <R> withFrameNanos(onFrame: (Long) -> R): R = error("A scroll must not request its own frame")
     }
@@ -74,6 +79,29 @@ class ScrollExecutionTest {
             assertEquals(0, fixture.clock.activeCount)
             assertTrue(fixture.clock.observers.isEmpty())
         } }
+    }
+    @Test fun cancellationFromAWorkerConfinesFinalCleanupToTheMainOwner() {
+        java.util.concurrent.Executors.newSingleThreadExecutor().asCoroutineDispatcher().use { main ->
+            Dispatchers.setMain(main)
+            try { runBlocking(frameClock) {
+                val clock = withContext(main) {
+                    val owner = Thread.currentThread()
+                    UiClock(object : FrameSource { override suspend fun awaitFrame(): Long = error("No frame required") },
+                        { 1L }, { check(Thread.currentThread() === owner) { "Wrong owner thread" } })
+                }
+                val release = withContext(main) { registerScrollClock(frameClock, clock) }
+                val errors = java.util.concurrent.CopyOnWriteArrayList<Throwable>()
+                val scope = CoroutineScope(Dispatchers.Unconfined + frameClock + SupervisorJob() + CoroutineExceptionHandler { _, e -> errors += e })
+                try {
+                    val job = withContext(main) { scope.launch(start = CoroutineStart.UNDISPATCHED) {
+                        withScrollExecution { awaitCancellation() }
+                    } }
+                    job.cancelAndJoin()
+                    withContext(main) { assertEquals(0, clock.activeCount); assertTrue(clock.observers.isEmpty()) }
+                    assertTrue("Cleanup must not throw on the cancelling worker: $errors", errors.isEmpty())
+                } finally { scope.cancel(); withContext(main) { release() } }
+            } } finally { Dispatchers.setMain(Dispatchers.Unconfined) }
+        }
     }
     @Test fun liveReductionFinishesWithoutAnotherNativeFrame() = runBlocking(frameClock) {
         EngineHarness().use { fixture -> withScrollClock(fixture.clock) {
