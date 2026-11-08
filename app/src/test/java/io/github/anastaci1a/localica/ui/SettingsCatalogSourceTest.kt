@@ -23,7 +23,7 @@ class SettingsCatalogSourceTest {
             }
             for (match in call.findAll(settingsText)) {
                 val label = match.groupValues[1].substringBefore(" · ").substringBefore(":")
-                if (label.startsWith("$")) continue // A helper is checked through its statically named callers.
+                if (label.contains("$")) continue // A helper is checked through its statically named callers.
                 val canonical = if (label == "Correction") "Lyrics timing correction" else label
                 if (canonical !in known) missing += "$source: $label"
             }

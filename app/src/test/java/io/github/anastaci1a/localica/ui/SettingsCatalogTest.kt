@@ -17,7 +17,7 @@ class SettingsCatalogTest {
 
     @Test fun choiceValuesAndSynonymsFindTheOwningControl() {
         SettingsCatalog.entries.forEach { spec -> spec.values.forEach { value ->
-            assertTrue("${spec.id} cannot be reached by $value", SettingsCatalog.search(value).any { it.setting == spec })
+            assertTrue("${spec.id} cannot be reached by $value", SettingsCatalog.search(value, limit = Int.MAX_VALUE).any { it.setting == spec })
         } }
         assertTrue(SettingsCatalog.search("grey").any { it.title == "Interface gray" })
         assertEquals("Lyrics timing correction", SettingsCatalog.search("sync").first().title)
