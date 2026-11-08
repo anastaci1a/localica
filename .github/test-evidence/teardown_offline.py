@@ -7,9 +7,11 @@ uninstalls the test APKs. The instrumentation XML is already complete, every
 test has passed and the emulator process is still alive, yet Gradle fails the
 task with a PLUGIN_ERROR from a teardown-only plugin. This module recognises
 exactly that signature so the prototype runner can wait for the same guest to
-reconnect and run the iteration once more. Any failed, errored, missing or
-uncounted test, any observed failure line, any other plugin or message, or a
-rebooted guest keeps the original failure.
+reconnect, finish the interrupted cleanup and accept the first attempt's
+complete results (never a second run, which would give every test another
+chance). Any failed, errored, missing or uncounted test, any observed failure
+line, any other plugin or message, a rebooted guest or an uninstall that cannot
+complete keeps the original failure.
 """
 import argparse
 import json
@@ -170,8 +172,14 @@ def recover(serial, api, boot_id, timeout, output, now=time.monotonic, sleep=tim
 
 
 def uninstall(serial):
-    """The skipped teardown step: remove both test packages so the retry starts fresh."""
-    return {package: adb(serial, 'uninstall', package, timeout=60)[1] for package in PACKAGES}
+    """Finish the interrupted teardown: both test packages must be gone afterwards. Return (done, record)."""
+    record = {}
+    for package in PACKAGES:
+        _, output = adb(serial, 'uninstall', package, timeout=60)
+        _, listed = adb(serial, 'shell', 'pm', 'list', 'packages', package)
+        record[package] = {'uninstall': output, 'listed': listed,
+                           'removed': 'package:' + package not in (listed or '').split()}
+    return all(entry['removed'] for entry in record.values()), record
 
 
 def main(argv=None):
@@ -207,9 +215,12 @@ def main(argv=None):
         print(('Device reconnected after %ss' % record.get('recovered_after_seconds')) if recovered
               else 'Device did not recover: ' + str(record['reason']), file=sys.stderr)
         return 0 if recovered else 1
+    done, record = uninstall(args.serial)
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(json.dumps(uninstall(args.serial), indent=2) + '\n')
-    return 0
+    args.output.write_text(json.dumps(record, indent=2) + '\n')
+    if not done:
+        print('Interrupted teardown could not complete: a test package is still installed', file=sys.stderr)
+    return 0 if done else 1
 
 
 if __name__ == '__main__':
