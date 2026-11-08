@@ -1,6 +1,7 @@
 package io.github.anastaci1a.localica.ui
 
 import androidx.compose.foundation.lazy.grid.LazyGridState
+import androidx.compose.foundation.lazy.LazyListState
 
 /** One laid-out item of a vertical lazy list or grid, in pixels relative to the content start. */
 internal class ScrollbarItem(val index: Int, val top: Int, val height: Int)
@@ -15,6 +16,17 @@ internal fun LazyGridState.scrollbarFrame(): ScrollbarFrame {
     val info = layoutInfo
     return ScrollbarFrame(
         info.visibleItemsInfo.map { ScrollbarItem(it.index, it.offset.y, it.size.height) },
+        info.totalItemsCount, firstVisibleItemScrollOffset,
+        info.viewportEndOffset - info.afterContentPadding,
+        (info.viewportEndOffset - info.afterContentPadding - info.viewportStartOffset - info.beforeContentPadding).coerceAtLeast(1),
+        !canScrollForward,
+    )
+}
+
+internal fun LazyListState.scrollbarFrame(): ScrollbarFrame {
+    val info = layoutInfo
+    return ScrollbarFrame(
+        info.visibleItemsInfo.map { ScrollbarItem(it.index, it.offset, it.size) },
         info.totalItemsCount, firstVisibleItemScrollOffset,
         info.viewportEndOffset - info.afterContentPadding,
         (info.viewportEndOffset - info.afterContentPadding - info.viewportStartOffset - info.beforeContentPadding).coerceAtLeast(1),
@@ -152,7 +164,7 @@ internal object ScrollbarGrip {
     const val MaxTrackShare = .35f
     const val HeldScale = 1.5f
     /** Touch strip along the edge; the drawn thumb is unchanged. */
-    const val HitWidthDp = 32f
+    const val HitWidthDp = 48f
     const val HitVerticalPaddingDp = 8f
     private const val BaseMillis = 240f
 
