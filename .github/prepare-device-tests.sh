@@ -130,6 +130,13 @@ guard_error_dialogs() {
       dialog_adb shell settings put "$ns" "$key" "$value" >/dev/null 2>&1 || true
       echo "error-dialog setting $ns/$key=$(dialog_adb shell settings get "$ns" "$key" 2>/dev/null | tr -d '\r') (wanted $value)"
     done
+    # API 36 System UI aborts when its jank tracker flushes data for a transition leash that WM
+    # Shell is releasing (#673: FrameTracker nativeSurfaceFlushJankData vs SurfaceControl.release),
+    # killing the instrumentation run. That tracker measures System UI, not the app: turn it off,
+    # and stop flag sync from turning it back on.
+    dialog_adb shell device_config set_sync_disabled_for_tests persistent >/dev/null 2>&1 || true
+    dialog_adb shell device_config put interaction_jank_monitor enabled false >/dev/null 2>&1 || true
+    echo "system-ui jank monitor interaction_jank_monitor/enabled=$(dialog_adb shell device_config get interaction_jank_monitor enabled 2>/dev/null | tr -d '\r') (wanted false)"
   fi
   found=$(focused_error_dialog)
   if [[ -z "$found" ]]; then echo "error-dialog check before $lane: none found"; return 0; fi
