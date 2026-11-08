@@ -5,6 +5,7 @@ import android.graphics.Color
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.anastaci1a.localica.icons.IconPacks
 import io.github.anastaci1a.localica.icons.SvgIconParser
+import io.github.anastaci1a.localica.icons.toImageVector
 import io.github.anastaci1a.localica.ui.AppIcon
 import org.junit.After
 import org.junit.Assert.*
