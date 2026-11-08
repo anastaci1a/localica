@@ -399,3 +399,4 @@ io.github.anastaci1a.localica.HeaderGlassFreshnessTest
 io.github.anastaci1a.localica.SettingsRowAlignmentTest
 io.github.anastaci1a.localica.SettingsSearchTest
 io.github.anastaci1a.localica.IconPackAliasTest
+io.github.anastaci1a.localica.IconRegistryVisualTest
