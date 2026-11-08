@@ -11,6 +11,7 @@ import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.platform.LocalGraphicsContext
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.LayoutDirection
 
 internal fun materialReductionExtent(size: IntSize): IntSize {
     fun power(value: Int): Int {
@@ -25,6 +26,11 @@ internal fun materialReductionExtent(size: IntSize): IntSize {
  * every 2x step; it must be divided out only after the final premultiplied sum. */
 internal class MaterialAreaReduction(private val graphics: GraphicsContext) {
     private val levels = mutableListOf<GraphicsLayer>()
+    private data class Structure(val extent: IntSize, val minimum: Int, val density: Float,
+        val fontScale: Float, val direction: LayoutDirection)
+    private var structure: Structure? = null
+    /** Optional passive test instrumentation; counts actual recording attempts. */
+    internal var onLevelRecord: ((Int, IntSize) -> Unit)? = null
     private fun level(index: Int): GraphicsLayer {
         while (levels.size <= index) levels += graphics.createGraphicsLayer().apply {
             compositingStrategy = CompositingStrategy.Offscreen
@@ -33,8 +39,13 @@ internal class MaterialAreaReduction(private val graphics: GraphicsContext) {
         return levels[index]
     }
     fun DrawScope.record(extent: IntSize, minimum: Int = 1, draw: DrawScope.() -> Unit): GraphicsLayer {
+        val nextStructure = Structure(extent, minimum, density, fontScale, layoutDirection)
+        val rebuild = structure != nextStructure
+        // A failed crop, hook or partial rebuild must never leave a reusable key.
+        structure = null
         var dimensions = materialReductionExtent(extent)
         var previous = level(0)
+        onLevelRecord?.invoke(0, dimensions)
         previous.record(Density(density, fontScale), layoutDirection, dimensions, draw)
         var index = 1
         while (dimensions.width > minimum || dimensions.height > minimum) {
@@ -43,16 +54,23 @@ internal class MaterialAreaReduction(private val graphics: GraphicsContext) {
             val input = previous
             val before = dimensions
             previous = level(index++)
-            previous.record(size = next) {
-                scale(next.width.toFloat() / before.width, next.height.toFloat() / before.height, Offset.Zero) {
-                    drawLayer(input)
+            if (rebuild) {
+                onLevelRecord?.invoke(index - 1, next)
+                previous.record(size = next) {
+                    scale(next.width.toFloat() / before.width, next.height.toFloat() / before.height, Offset.Zero) {
+                        drawLayer(input)
+                    }
                 }
             }
             dimensions = next
         }
+        // GraphicsLayer defers discarding released content until retained parents
+        // drop their references, including the previous consumer output recording.
+        while (levels.size > index) graphics.releaseGraphicsLayer(levels.removeAt(levels.lastIndex))
+        structure = nextStructure
         return previous
     }
-    fun release() { levels.forEach(graphics::releaseGraphicsLayer); levels.clear() }
+    fun release() { structure = null; levels.forEach(graphics::releaseGraphicsLayer); levels.clear() }
 }
 
 @Composable internal fun rememberMaterialAreaReduction(): MaterialAreaReduction {

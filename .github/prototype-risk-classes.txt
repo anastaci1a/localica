@@ -321,6 +321,7 @@ io.github.anastaci1a.localica.SettingsOptionsTest
 io.github.anastaci1a.localica.SettingsPathRestorationTest
 io.github.anastaci1a.localica.ShadowContinuityTest
 io.github.anastaci1a.localica.SharedBackdropReductionComparisonTest
+io.github.anastaci1a.localica.MaterialAreaReductionReuseTest
 io.github.anastaci1a.localica.SharedKeyedDragRefreshTest
 io.github.anastaci1a.localica.ShuffleApkCompatibilityTest
 io.github.anastaci1a.localica.ShuffleModePlaybackTest
