@@ -49,7 +49,7 @@ class ArtistDataStorageTest {
             assertEquals(42L, migrated.addedAt); assertEquals(99L, migrated.modifiedAt)
             assertEquals("uri", migrated.uri); assertEquals(1, migrated.locations.size)
             assertNull(migrated.releaseType); assertNull(migrated.compilation)
-            val expected = instrumentation.context.assets.open("io.github.anastaci1a.localica.library.LibraryDatabase/8.json")
+            val expected = instrumentation.context.assets.open("io.github.anastaci1a.localica.library.LibraryDatabase/9.json")
                 .bufferedReader().use { JSONObject(it.readText()).getJSONObject("database").getString("identityHash") }
             db.openHelper.readableDatabase.query("SELECT identity_hash FROM room_master_table WHERE id = 42").use {
                 assertTrue(it.moveToFirst()); assertEquals(expected, it.getString(0))

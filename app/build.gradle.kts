@@ -17,6 +17,9 @@ android {
         targetSdk = 36
         versionCode = 99
         versionName = "0.33.9"
+        val lastFmKey = providers.gradleProperty("lastfmApiKey").orElse(providers.environmentVariable("LASTFM_API_KEY")).orElse("").get().trim()
+        require(lastFmKey.isEmpty() || lastFmKey.matches(Regex("[A-Fa-f0-9]{32}"))) { "Invalid Last.fm application key format" }
+        buildConfigField("String", "LASTFM_API_KEY", "\"$lastFmKey\"")
         testInstrumentationRunner = "io.github.anastaci1a.localica.NavigationRandomOwnedSession"
     }
     signingConfigs {
@@ -48,7 +51,7 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    buildFeatures { compose = true }
+    buildFeatures { compose = true; buildConfig = true }
     // Platform-free helpers are test-only, shared by host contracts and device callers.
     sourceSets.getByName("test").java.srcDir("src/sharedTest/java")
     sourceSets.getByName("androidTest").java.srcDir("src/sharedTest/java")
@@ -79,6 +82,7 @@ dependencies {
     implementation(libs.media3.inspector)
     implementation(libs.coroutines.android)
     testImplementation(libs.junit)
+    testImplementation("org.json:json:20240303")
     testImplementation(libs.coroutines.test)
     androidTestImplementation(platform(libs.compose.bom))
     androidTestImplementation(libs.compose.test)
