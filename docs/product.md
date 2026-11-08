@@ -115,17 +115,19 @@ Timed lyrics interpolate Media3's latency-aware position between samples, freezi
 
 ## Online features and artist photos
 
-Online features is one app-level consent switch in Settings → Last.fm. It defaults off. Consent covers artist photos and manual Last.fm sync. Turning it off prevents new network requests; cached photos and saved counts remain available offline.
+Online features is one app-level consent switch. It defaults off. Settings groups this switch, Last.fm, and Artist photos under Online features. Search finds their individual controls. Turning consent off prevents new network requests and hides artist photos; cached images and saved counts remain stored.
+
+Artist and Album Artist rows, gallery tiles, Home pins, and the artist page show album art immediately. With consent on, a cached or fetched artist photo crossfades over it. Turning consent off immediately restores album art, including when a photo is cached.
 
 Artist photo lookup sends artist and release names to Deezer, then MusicBrainz, Wikidata and Wikimedia Commons when needed. It never uses Last.fm images. Automatic matching requires a normalized artist name and a release title shared with the local library. Missing matches retain the caller's latest album artwork.
 
-The photo data API fetches lazily when collected, emitting album artwork before disk or network work. The artist page presentation is separate work. Callers can review candidates, re-pick, clear or reset a match. Clear suppresses automatic lookup until a deliberate re-pick or reset.
+Photos refresh after 30 days. Failed attempts wait 24 hours before retrying. A 64 MiB disk cache evicts old pictures while preserving artist match choices. Artist photos settings can clear the cache or refresh the library. No library audio or local listening history is uploaded.
 
-Photos refresh after 30 days. Failed attempts wait 24 hours before retrying. A 64 MiB disk cache evicts old pictures while preserving artist match choices. Commons pictures require saved licence and attribution metadata. No library audio or local listening history is uploaded.
+The artist menu can review provider candidates, choose another match, or clear a photo. Clear suppresses automatic lookup until a deliberate re-pick or reset. Artist photo information shows saved Wikimedia attribution and licence information, which Commons pictures require. Photos never change audio files or embedded artwork.
 
 ## Optional Last.fm statistics
 
-Settings → Last.fm accepts a username and explicitly starts a read-only sync. No password, account login or OAuth is used. Last.fm requests use its HTTPS API. Requests fetch listening statistics; they never upload local history or audio. Sync is manual, with no automatic launch request.
+Settings → Online features → Last.fm accepts a username and explicitly starts a read-only sync. No password, account login or OAuth is used. Last.fm requests use its HTTPS API. Requests fetch listening statistics; they never upload local history or audio. Sync is manual, with no automatic launch request.
 
 A complete paginated snapshot replaces the previous snapshot only after every page succeeds. Requests are paced, transient failures retry with backoff, and complete sync attempts are limited to once a minute. Failed same-account syncs preserve the last complete offline snapshot. Changing username clears the previous account's snapshot and turns external counts off.
 
@@ -136,13 +138,3 @@ Matching normalizes artist and title, then uses album and recording MusicBrainz 
 Disconnect cancels pending sync, deletes the external snapshot and mappings, and turns external counts off. It preserves local history, playlists and audio tags. Playlist origin counts remain local because Last.fm cannot identify a local playlist traversal.
 
 Builds without an application API key disable syncing and external counts with an explanatory settings message. Build configuration is documented in [Build](build.md#lastfm-build-key).
-
-## Online features
-
-Online features are off by default. Settings groups the shared privacy switch, Last.fm, and Artist photos under one Online features page. Search finds their individual controls.
-
-Artist rows, gallery tiles, and the artist page show album art immediately. With consent on, a cached or fetched artist photo crossfades over it. Turning consent off immediately restores album art, including when a photo is cached.
-
-Photos match artist names and local releases through Deezer, then Wikimedia, with album art as fallback. The 64 MiB disk cache refreshes after 30 days. Artist photos settings can clear cached images or refresh the library while preserving match choices.
-
-The artist menu can choose another provider match or clear a photo. Clear keeps album art until another photo is chosen. Artist photo information shows Wikimedia attribution and licence information. Photos never change audio files or embedded artwork.
