@@ -7,6 +7,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.*
 import androidx.compose.ui.unit.dp
@@ -50,8 +51,8 @@ class ScrollbarContinuityTest {
 
     private fun thumb() = compose.onNodeWithTag("browse-scrollbar-thumb").fetchSemanticsNode().boundsInRoot
     // The point of the thumb at fraction f of the track is where the finger or scroll position really is.
-    private fun covered(): Float {
-        val t = thumb(); val b = compose.onNodeWithTag("browse-scrollbar").fetchSemanticsNode().boundsInRoot
+    private fun covered(track: Rect? = null): Float {
+        val t = thumb(); val b = track ?: compose.onNodeWithTag("browse-scrollbar").fetchSemanticsNode().boundsInRoot
         val f = ((t.top - b.top) / (b.height - t.height)).coerceIn(0f, 1f)
         return t.top + f * t.height
     }
@@ -66,12 +67,18 @@ class ScrollbarContinuityTest {
         compose.mainClock.autoAdvance = false
         val tops = mutableListOf<Float>()
         var guard = 0
+        var first = true
         while (guard++ < 4000) {
-            compose.runOnIdle { scope.launch { state.scrollBy(if (forward) step else -step) } }
-            compose.mainClock.advanceTimeByFrame(); compose.waitForIdle()
-            tops += covered()
-            val done = compose.runOnIdle { if (forward) !state.canScrollForward else !state.canScrollBackward }
+            // The previous sample's idle state also admits the next scroll. Always retain the first sample.
+            val done = compose.runOnIdle {
+                if (!first && (if (forward) !state.canScrollForward else !state.canScrollBackward)) true
+                else { scope.launch { state.scrollBy(if (forward) step else -step) }; false }
+            }
             if (done) break
+            first = false
+            compose.mainClock.advanceTimeByFrame()
+            // The fixed-height track does not move; fetching the thumb already waits for idle.
+            tops += covered(trackBefore)
         }
         compose.mainClock.autoAdvance = true
         val trackAfter = bar().fetchSemanticsNode().boundsInRoot
