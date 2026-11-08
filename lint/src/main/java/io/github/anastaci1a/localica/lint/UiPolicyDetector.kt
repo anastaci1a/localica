@@ -371,19 +371,23 @@ internal class UiPolicyDetector : Detector(), SourceCodeScanner {
                 if (symbol != null && seen.add(symbol)) {
                     if (symbol is PsiVariable && (derived(symbol.toUElementOfType<UVariable>()?.uastInitializer, seen) ||
                         assignments[symbol.navigationElement].orEmpty().any { derived(it, seen) })) return true
-                    if (symbol is PsiMethod && derived(symbol.toUElementOfType<UMethod>()?.uastBody, seen)) return true
+                    if (symbol is PsiMethod && !unitMethod(symbol) && derived(symbol.toUElementOfType<UMethod>()?.uastBody, seen)) return true
                 }
             }
             var result = false
             node.accept(object : AbstractUastVisitor() {
                 override fun visitElement(child: UElement): Boolean {
                     if (child === node) return false
+                    // A nested Unit call produces no value, so nothing inside it can flow into this expression.
+                    if (child is UCallExpression && !isRead(child) && child.resolve()?.let { unitMethod(it) } == true) return true
                     if (derived(child, seen)) result = true
                     return true
                 }
             })
             return result
         }
+
+        private fun unitMethod(method: PsiMethod): Boolean = !method.isConstructor && method.returnType == PsiTypes.voidType()
 
         private fun owned(receiver: UExpression?, at: UElement, kind: String, seen: MutableSet<PsiElement> = mutableSetOf()): Boolean {
             val ownerMethod = enclosingMethod(at) ?: return false
