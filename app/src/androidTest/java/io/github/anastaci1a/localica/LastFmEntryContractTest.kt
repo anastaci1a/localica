@@ -1,7 +1,7 @@
 package io.github.anastaci1a.localica
 
 import androidx.compose.ui.test.*
-import io.github.anastaci1a.localica.library.LibraryUiState
+import io.github.anastaci1a.localica.ui.LibraryUiState
 import io.github.anastaci1a.localica.ui.FolderSettings
 import io.github.anastaci1a.localica.ui.LocalicaTheme
 import org.junit.Rule
