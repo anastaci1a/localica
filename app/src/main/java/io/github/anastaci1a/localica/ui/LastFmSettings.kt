@@ -10,6 +10,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalContext
 import android.text.format.DateUtils
+import io.github.anastaci1a.localica.R
 import io.github.anastaci1a.localica.lastfm.*
 import io.github.anastaci1a.localica.ui.layout.*
 import io.github.anastaci1a.localica.ui.spec.Space
@@ -84,7 +85,8 @@ internal fun LastFmSettings(controller: LastFmController) {
                 LastFmMatchingBar(segments)
                 segments.forEach { segment -> key(segment.id) {
                     val anchor = rememberGlassAnchor()
-                    SettingsLink(markerColor = segment.color, title = segment.label, summary = "${segment.count} songs", anchor = anchor,
+                    SettingsLink(markerColor = segment.color, title = segment.label,
+                        summary = context.resources.getQuantityString(R.plurals.lastfm_song_count, segment.count, segment.count), anchor = anchor,
                         modifier = Modifier.testTag("lastfm-legend-${segment.id}")) { group = LastFmGroup.valueOf(segment.id); tab = 1 }
                 } }
                 SettingsLink("Auto-matched editions (${matches.editions.size})", "Same recording on several albums · count on every copy") { group = LastFmGroup.EDITIONS; tab = 1 }
