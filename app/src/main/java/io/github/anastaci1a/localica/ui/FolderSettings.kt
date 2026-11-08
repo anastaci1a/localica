@@ -8,6 +8,13 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.animation.core.tween
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
+import kotlinx.coroutines.flow.first
+import io.github.anastaci1a.localica.navigation.GlassRendererMode
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.R
@@ -61,11 +68,11 @@ private fun migrateSettingsPath(path: List<String>): List<String> {
     }
 }
 
-private fun settingsPath(title: String?): List<String> {
+internal fun settingsPath(title: String?): List<String> {
     if (title == null) return emptyList()
     val name = settingsTitle(title)
     if (name == "Pack icons") return settingsPath("Icon packs") + name
-    val destination = settingsDestinations.firstOrNull { it.title == name } ?: return emptyList()
+    val destination = settingsDestinations.firstOrNull { it.title == name } ?: return if (name in SettingsCatalog.parents) SettingsCatalog.path(name) else emptyList()
     return settingsPath(destination.parent) + name
 }
 
@@ -76,6 +83,10 @@ fun FolderSettings(state: LibraryUiState, onDismiss: () -> Unit, onChooseFolder:
     aboutContent: @Composable () -> Unit = {}, initialCategory: String? = null, onFullScan: () -> Unit = {}, onQuickScan: () -> Unit = {}, libraryFiltersContent: @Composable () -> Unit = {}) {
     var path by rememberSaveable(stateSaver = settingsPathSaver) { mutableStateOf(settingsPath(initialCategory)) }
     var iconPackId by rememberSaveable { mutableStateOf<String?>(null) }
+    var pending by remember { mutableStateOf<SettingSpec?>(null) }
+    val glass = LocalGlassAppearance.current
+    val focusManager = LocalFocusManager.current
+    val keyboard = LocalSoftwareKeyboardController.current
     var search by rememberSaveable { mutableStateOf("") }
     var folderUri by rememberSaveable { mutableStateOf<String?>(null) }
     var removing by remember { mutableStateOf<FolderSelection?>(null) }
@@ -94,40 +105,75 @@ fun FolderSettings(state: LibraryUiState, onDismiss: () -> Unit, onChooseFolder:
         }) { shown ->
         val page = shown.title.takeUnless { it == "Settings" }
         val pageKey = (page ?: "root") + shown.folderUri.orEmpty() + shown.iconPackId.orEmpty()
-        if (page == null) GlassSearchField(search, { search = it }, "Search settings",
+        GlassSearchField(search, { search = it }, "Search settings",
             modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp))
         key(pageKey) { holder.SaveableStateProvider(pageKey) {
-            if (page == "Metadata read failures") MetadataReadFailures(state, Modifier.weight(1f))
-            else CompositionLocalProvider(LocalSettingsRowMetrics provides
-                LocalSettingsRowMetrics.current.copy(iconSlot = reservesIconSlot(page))) { Column(Modifier.fillMaxWidth().weight(1f).controlVerticalScroll(rememberScrollState()).padding(24.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (page == null) {
-                    val shown = settingsDestinations.filter {
-                        if (search.isBlank()) it.parent == null else (it.title + " " + it.summary).contains(search, true)
+            val scroll = rememberScrollState()
+            val focus = remember(pageKey, scroll) { SettingsSearchFocus(page.orEmpty(), scroll) }
+            val reduced = LocalReducedMotion.current
+            val speed = LocalMotionSpeed.current
+            LaunchedEffect(search.isNotBlank()) { if (search.isNotBlank()) scroll.scrollTo(0) }
+            LaunchedEffect(pending, pageKey) {
+                val target = pending ?: return@LaunchedEffect
+                if (target.page != page) return@LaunchedEffect
+                val id = snapshotFlow {
+                    when {
+                        target.id in focus.anchors -> target.id
+                        target.revealedBy in focus.anchors -> target.revealedBy
+                        else -> null
                     }
-                    if (shown.isEmpty()) Text("No matching settings")
-                    shown.forEach { destination -> SettingsLink(destination.title,
-                        if (search.isBlank()) destination.summary else listOfNotNull(destination.parent, destination.summary).joinToString(" · "), destination.icon) {
-                        path = settingsPath(destination.title)
-                    } }
+                }.first { it != null }!!
+                val y = ((focus.anchors.getValue(id) - focus.viewportTop) - focus.viewportHeight / 3f)
+                    .toInt().coerceIn(0, scroll.maxValue)
+                if (reduced) scroll.scrollTo(y) else scroll.animateScrollTo(y, tween((350 / speed).toInt()))
+                focus.highlighted = id
+                pending = null
+            }
+            if (page == "Metadata read failures" && search.isBlank()) MetadataReadFailures(state, Modifier.weight(1f))
+            else CompositionLocalProvider(LocalSettingsSearchFocus provides focus.takeIf { search.isBlank() },
+                LocalSettingsNavigate provides { destination -> path = settingsPath(destination) }, LocalSettingsRowMetrics provides
+                LocalSettingsRowMetrics.current.copy(iconSlot = reservesIconSlot(page))) { Column(Modifier.fillMaxWidth().weight(1f).onGloballyPositioned { focus.viewportTop = it.positionInWindow().y; focus.viewportHeight = it.size.height }
+                .controlVerticalScroll(scroll).padding(24.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (search.isNotBlank()) {
+                    SettingsSearchResults(search) { result ->
+                        var target = result.setting
+                        var destination = result.page
+                        if (glass.renderer == GlassRendererMode.None &&
+                            "Glass" in SettingsCatalog.path(destination) && destination != "Glass") {
+                            target = SettingsCatalog.entries.first { it.id == "Glass renderer" }
+                            destination = "Glass"
+                        }
+                        focusManager.clearFocus()
+                        keyboard?.hide()
+                        search = ""
+                        focus.highlighted = null
+                        pending = target
+                        path = settingsPath(destination)
+                    }
+                } else if (page == null) {
+                    settingsDestinations.filter { it.parent == null }.forEach { destination ->
+                        SettingsLink(destination.title, destination.summary, destination.icon) { path = settingsPath(destination.title) }
+                    }
                 } else when (page) {
                     "Interface", "Library and tags" -> settingsDestinations.filter { it.parent == page }.forEach { child ->
                         SettingsLink(child.title, child.summary, child.icon) { path = path + child.title }
                     }
-                    "Navigation", "Player", "Motion", "Glass", "Appearance" -> interfaceContent(page)
+                    "Navigation", "Player", "Motion", "Glass", "Glass appearance", "Glass advanced", "Navigation selector", "Appearance" -> interfaceContent(page)
                     "Icon packs" -> IconPackSettings { id -> iconPackId = id; path = path + "Pack icons" }
                     "Pack icons" -> IconPackViewer(shown.iconPackId)
                     "Playback and queues" -> {
                         playbackContent(page)
                         SettingsLink("Song tap behavior", "Default action and per-list overrides", destinationIcon("Song tap behavior")) { path = path + "Song tap behavior" }
                     }
-                    "Song tap behavior" -> playbackContent(page)
+                    "Song tap behavior", "Per-list overrides" -> playbackContent(page)
                     "About and licenses" -> aboutContent()
                     "Library filters" -> libraryFiltersContent()
                     "Tag jobs and recovery" -> { Text("Interrupted edits keep a recovery copy until you resolve them."); extraContent() }
                     "Folders to scan" -> {
                         Text("Your files stay where they are. Start scanning from More → Scan music.", style = MaterialTheme.typography.bodyMedium)
                         LibraryNotice(state)
+                        SettingsEntry("Music folders") { Column {
                         state.snapshot.folders.forEach { folder ->
                             val count = state.snapshot.tracks.count { track -> track.locations.any { it.folderUri == folder.uri } }
                             SettingsLink(folderLabels.getValue(folder.uri), if (folder.uri in state.unavailableFolders) "Access lost · select this folder again" else "$count songs", AppIcon.TabFolders) {
@@ -137,6 +183,7 @@ fun FolderSettings(state: LibraryUiState, onDismiss: () -> Unit, onChooseFolder:
                         if (state.updatingFolders) LinearProgressIndicator(Modifier.fillMaxWidth())
                         ActionButton(onClick = onChooseFolder, enabled = !state.loading && !state.scanning && !state.updatingFolders,
                             modifier = Modifier.fillMaxWidth()) { Text(if (state.snapshot.folders.isEmpty()) "Choose folder" else "Add folder") }
+                        } }
                     }
                     "Folder options" -> state.snapshot.folders.firstOrNull { it.uri == shown.folderUri }?.let { folder ->
                         Text(folderLabels.getValue(folder.uri), style = MaterialTheme.typography.titleMedium)
@@ -172,8 +219,8 @@ private fun ScannerConfiguration(preferences: ScanPreferences, state: LibraryUiS
     SettingsLink("Exclude short files", if (options.minimumDurationSeconds == 0) "Off" else "Shorter than ${options.minimumDurationSeconds} seconds", anchor = durationOrigin) { durationOpen = true }
     Text("Unknown durations are kept. Quick Scan keeps indexed songs. Run Full scan to apply changed rules to them.", style = MaterialTheme.typography.bodySmall)
     SettingsHeading("On launch")
-    BooleanPreference("Quick Scan", onLaunch) { onLaunch = it; preferences.scanOnLaunch = it }
-    BooleanPreference("Full scan", fullOnLaunch) { fullOnLaunch = it; preferences.fullScanOnLaunch = it }
+    SettingsEntry("Quick Scan on launch") { BooleanPreference("Quick Scan", onLaunch) { onLaunch = it; preferences.scanOnLaunch = it } }
+    SettingsEntry("Full scan on launch") { BooleanPreference("Full scan", fullOnLaunch) { fullOnLaunch = it; preferences.fullScanOnLaunch = it } }
     Text("Both are off by default. Quick Scan finds new songs; Full scan also refreshes tags and removes missing files. Enable both to run Quick Scan first, then Full scan.", style = MaterialTheme.typography.bodySmall)
     if (durationOpen) CompositionLocalProvider(LocalGlassOrigin provides durationOrigin) {
         var input by remember { mutableStateOf(options.minimumDurationSeconds.toString()) }
