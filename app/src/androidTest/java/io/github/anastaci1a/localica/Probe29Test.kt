@@ -159,14 +159,16 @@ class Probe29Test {
         })
     }
 
-    private fun loop(route: BrowseRoute, stalls: List<Long> = emptyList()) {
+    private fun loop(route: BrowseRoute, stalls: List<Long> = emptyList(), coldBefore: Boolean = false, coldAfterMs: Long = 0) {
         val host = host(route)
         val problems = mutableListOf<String>()
         repeat(10) { i ->
             scrollDeep(albums - 1 - i * 3)
             Thread.sleep(1500)
             android.util.Log.i("P635", "iteration $i tap")
+            if (coldBefore) main { ArtworkCache.invalidate() }
             main { host.topRequest++; stall(stalls) }
+            if (coldAfterMs > 0) { Thread.sleep(coldAfterMs); main { ArtworkCache.invalidate() } }
             Thread.sleep(2500)
             main { io.github.anastaci1a.localica.ui.P635Debug.dump = true }; Thread.sleep(300)
             // Layout truth for the same moment: semantics bounds of each fully visible cell, art and text.
@@ -191,4 +193,11 @@ class Probe29Test {
         listOf(0L, 0, 90, 0, 40, 0, 0, 150, 0, 60, 0, 0, 180, 0, 0, 70, 0, 120, 0, 0, 100, 0, 0, 0))
     /** One long stall each time a frame lands near the end of the flight. */
     @Test fun albumsLateStall() = loop(BrowseRoute(MainTab.Albums), List(14) { 0L } + listOf(250L, 0, 0, 200L))
+    /** Every cover must be decoded again while the flight lands (an evicted artwork cache). */
+    @Test fun albumsColdBefore() = loop(BrowseRoute(MainTab.Albums), coldBefore = true)
+    /** The cache is emptied 200 ms into the flight, so landing rows get their art after arrival. */
+    @Test fun albumsColdMidFlight() = loop(BrowseRoute(MainTab.Albums), coldAfterMs = 200)
+    @Test fun albumsColdIrregularStall() = loop(BrowseRoute(MainTab.Albums),
+        listOf(0L, 0, 90, 0, 40, 0, 0, 150, 0, 60, 0, 0, 180, 0, 0, 70, 0, 120, 0, 0, 100, 0, 0, 0), coldAfterMs = 150)
+    @Test fun mixedColdMidFlight() = loop(BrowseRoute(MainTab.Library), coldAfterMs = 200)
 }
