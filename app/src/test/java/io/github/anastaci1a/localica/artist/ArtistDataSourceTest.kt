@@ -63,6 +63,7 @@ class ArtistDataSourceTest {
         assertFalse(ranked.usesFallbackOrder)
         assertEquals(listOf(8L, 2L, 2L), ranked.topSongs.map { it.plays })
         assertEquals(12L * 180_000, ranked.longestListenedMs)
+        assertEquals(8L * 180_000, ranked.releases.first { it.album.title == "Old" }.longestListenedMs)
         assertEquals(listOf("a", "b", "old"), load(tracks).topSongs.map { it.track.id })
         assertTrue(load(tracks).usesFallbackOrder)
     }
@@ -137,4 +138,16 @@ class ArtistDataSourceTest {
         settings.value = RankingSettings(false)
         assertEquals(7L, source.counts(all, settings).first().plays("a"))
     }
+    @Test fun observedArtistRankingUsesEachRequestedWindowAndFallbackWithinThatWindow() = runBlocking {
+        val now = ZonedDateTime.parse("2026-11-07T12:00:00Z")
+        val local = PlayCountSource { window -> flowOf(if (window.from == Long.MIN_VALUE) mapOf("old" to 5L) else emptyMap()) }
+        val library = flowOf(LibrarySnapshot(tracks = listOf(song("old", "Old", 2020), song("new", "New"))))
+        for (range in ListeningRange.entries) {
+            val page = ArtistDataSource().observe(ArtistScope("Artist"), library, flowOf(emptyList()),
+                PlayRankingSource(local), flowOf(RankingSettings()), range, now).first()
+            assertEquals(range != ListeningRange.AllTime, page.usesFallbackOrder)
+            assertEquals(if (range == ListeningRange.AllTime) "old" else "new", page.topSongs.first().track.id)
+        }
+    }
+
 }

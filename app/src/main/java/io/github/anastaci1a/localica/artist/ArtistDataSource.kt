@@ -14,7 +14,8 @@ data class ArtistScope(val name: String, val albumArtist: Boolean = false) {
         else track.artist) == normalized(name)
 }
 
-data class ArtistRelease(val album: LibraryGroup, val classification: ReleaseClassification, val year: Int?, val addedAt: Long)
+data class ArtistRelease(val album: LibraryGroup, val classification: ReleaseClassification, val year: Int?, val addedAt: Long,
+    val longestListenedMs: Long)
 data class RankedSong(val track: Track, val plays: Long, val longestListenedMs: Long, val origin: PlayCountOrigin)
 data class ArtistPlaylist(val playlist: ManualPlaylist, val matchingSongs: Int)
 data class ArtistPageData(val releases: List<ArtistRelease>, val latestRelease: ArtistRelease?,
@@ -47,7 +48,7 @@ class ArtistDataSource(private val enrichment: ArtistEnrichmentSource = EmptyArt
         val releases = LibraryViews.groups(library, SongListView.Albums, LibraryQuery())
             .filter { album -> album.tracks.any { it.id in ids } }
             .map { album -> ArtistRelease(album, ReleaseClassifier.classify(album), album.tracks.mapNotNull { it.year }.minOrNull(),
-                album.tracks.mapNotNull { it.addedAt }.maxOrNull() ?: Long.MIN_VALUE) }
+                album.tracks.mapNotNull { it.addedAt }.maxOrNull() ?: Long.MIN_VALUE, counts.longestListenedMs(album.tracks)) }
             .sortedWith(compareByDescending<ArtistRelease> { it.year ?: Int.MIN_VALUE }.thenByDescending { it.addedAt }
                 .thenBy { normalized(it.album.title) }.thenBy { it.album.id })
         val fallback = releases.flatMap { release -> release.album.tracks.filter { it.id in ids }.sortedWith(
