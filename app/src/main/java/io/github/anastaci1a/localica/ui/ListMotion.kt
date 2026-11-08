@@ -76,7 +76,7 @@ private suspend fun LazyLayoutScrollScope.glideToItem(initialIndex: Int, initial
         if (far && frame % flyEvery != 0) {
             val part = step.coerceIn(-viewport() * .5f, viewport() * .5f)
             previous += (progress - previous) * (part / step)
-            if (abs(scrollBy(part)) < .1f && abs(part) > .5f) return@animate false
+            if (abs(execution.consume(this@glideToItem, part)) < .1f && abs(part) > .5f) return@animate false
         } else {
             previous = progress
             val slots = columns().coerceAtLeast(1)
@@ -86,12 +86,12 @@ private suspend fun LazyLayoutScrollScope.glideToItem(initialIndex: Int, initial
                 val stride = (remaining + firstVisibleItemScrollOffset - offset) / rows
                 val landing = (firstVisibleItemIndex + advance * slots).coerceIn(0, itemCount - 1)
                 snapToItem(landing, (firstVisibleItemScrollOffset + step - advance * stride).roundToInt())
-            } else if (abs(scrollBy(step)) < .1f && abs(step) > .5f) return@animate false
+            } else if (abs(execution.consume(this@glideToItem, step)) < .1f && abs(step) > .5f) return@animate false
         }
         if (index in firstVisibleItemIndex..lastVisibleItemIndex) {
             val measured = calculateDistanceTo(index, offset).toFloat()
             if (abs(measured) < .5f) return@animate false
-            if (sign(measured) != direction) { scrollBy(measured); return@animate false }
+            if (sign(measured) != direction) { execution.consume(this@glideToItem, measured); return@animate false }
         }
         true
     }

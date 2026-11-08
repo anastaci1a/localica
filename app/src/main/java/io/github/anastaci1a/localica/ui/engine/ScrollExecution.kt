@@ -1,6 +1,7 @@
 package io.github.anastaci1a.localica.ui.engine
 
 import androidx.compose.runtime.*
+import androidx.compose.foundation.lazy.layout.LazyLayoutScrollScope
 import io.github.anastaci1a.localica.ui.spec.*
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.yield
@@ -41,6 +42,8 @@ internal class ScrollExecution(private val clock: UiClock) : ActiveMotion, AutoC
     override fun finish(stamp: FrameStamp) = Unit
     override fun reduce(stamp: FrameStamp) { reduced = true; clock.unregister(this); frames.trySend(stamp) }
     override fun close() { clock.checkMutation(); settled = true; clock.unregister(this); clock.observers.remove(observer); frames.close() }
+
+    suspend fun consume(scope: LazyLayoutScrollScope, pixels: Float) = scope.scrollBy(pixels)
 
     private suspend fun nextFrame(): FrameStamp = frames.receive().also { yield() }
 
