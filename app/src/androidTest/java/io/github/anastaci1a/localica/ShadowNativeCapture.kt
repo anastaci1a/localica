@@ -76,6 +76,14 @@ internal class ShadowNativeCapture(private val rule: ComposeContentTestRule,
             bounds.right.roundToInt(), bounds.bottom.roundToInt())
         val drawings = linkedMapOf<Int, Pair<Long, Long>>() // Engine sequence, native draw VSYNC
         var overflow = false
+        var nativeVsync = 0L
+        val choreographer = rule.runOnUiThread { Choreographer.getInstance() }
+        val frameCallback = object : Choreographer.FrameCallback {
+            override fun doFrame(frameTimeNanos: Long) {
+                nativeVsync = frameTimeNanos
+                choreographer.postFrameCallback(this)
+            }
+        }
         val metrics = Window.OnFrameMetricsAvailableListener { _, frame, _ ->
             val vsync = frame.getMetric(FrameMetrics.VSYNC_TIMESTAMP)
             if (drawings.values.any { it.second == vsync }) drawn.countDown()
@@ -85,46 +93,53 @@ internal class ShadowNativeCapture(private val rule: ComposeContentTestRule,
             val origin = IntArray(2).also(view::getLocationOnScreen)
             screenBounds.offset(origin[0], origin[1])
             window.addOnFrameMetricsAvailableListener(metrics, Handler(Looper.getMainLooper()))
+            choreographer.postFrameCallback(frameCallback)
             marker.afterDraw = {
                 if (drawings.size == 32) overflow = true else drawings[marker.token] =
-                    clockSequence() to Choreographer.getInstance().frameTimeNanos
+                    clockSequence() to nativeVsync.also { check(it > 0L) { "Incomplete: no native VSYNC before marker draw" } }
             }
             marker.invalidateSelf()
             view.invalidate()
         }
         try {
             check(drawn.await(5, TimeUnit.SECONDS)) { "Incomplete: no completed native frame matches the marker traversal" }
-        } finally { rule.runOnUiThread { window.removeOnFrameMetricsAvailableListener(metrics) } }
-        // Accessibility quiet is only a submission wait. It cannot grant an optical/native pass.
-        InstrumentationRegistry.getInstrumentation().uiAutomation.waitForIdle(100, 5000)
-        val bitmap = checkNotNull(InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot()) {
-            "Incomplete: single system-composited screenshot failed"
-        }
-        val point = IntOffset(screenBounds.left + 2, screenBounds.top + 2)
-        val token = if (point.x >= 0 && point.y >= 0 && point.x + 4 < bitmap.width && point.y < bitmap.height)
-            bitmap.getPixel(point.x, point.y) and 0xffffff else -1
-        var result = PresentedCapture(bitmap.asImageBitmap(), listOf("activity-window-$windowId"), hostEpoch,
-            token.toLong(), -1, null, System.nanoTime(), NativeShadowGeneration(token, point),
-            sceneBounds = androidx.compose.ui.geometry.Rect(screenBounds.left.toFloat(), screenBounds.top.toFloat(),
-                screenBounds.right.toFloat(), screenBounds.bottom.toFloat()), origin = "original-system-composited-display")
-        try {
-            check(screenBounds.left >= 0 && screenBounds.top >= 0 && screenBounds.right <= bitmap.width && screenBounds.bottom <= bitmap.height) {
-                "Incomplete: native scene is clipped by the display"
+            // Accessibility quiet is only a submission wait. It cannot grant an optical/native pass.
+            InstrumentationRegistry.getInstrumentation().uiAutomation.waitForIdle(100, 5000)
+            val bitmap = checkNotNull(InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot()) {
+                "Incomplete: single system-composited screenshot failed"
             }
-            val nativeDraw = rule.runOnUiThread {
+            val point = IntOffset(screenBounds.left + 2, screenBounds.top + 2)
+            val token = if (point.x >= 0 && point.y >= 0 && point.x + 4 < bitmap.width && point.y < bitmap.height)
+                bitmap.getPixel(point.x, point.y) and 0xffffff else -1
+            var result = PresentedCapture(bitmap.asImageBitmap(), listOf("activity-window-$windowId"), hostEpoch,
+                token.toLong(), -1, null, System.nanoTime(), NativeShadowGeneration(token, point),
+                sceneBounds = androidx.compose.ui.geometry.Rect(screenBounds.left.toFloat(), screenBounds.top.toFloat(),
+                    screenBounds.right.toFloat(), screenBounds.bottom.toFloat()), origin = "original-system-composited-display")
+            try {
+                check(screenBounds.left >= 0 && screenBounds.top >= 0 && screenBounds.right <= bitmap.width && screenBounds.bottom <= bitmap.height) {
+                    "Incomplete: native scene is clipped by the display"
+                }
+                val nativeDraw = rule.runOnUiThread {
+                    marker.afterDraw = null
+                    check(!overflow) { "Incomplete: native draw ledger overflow" }
+                    checkNotNull(drawings[token]) { "Incomplete: display image is stale or belongs to a different native traversal" }
+                        .also { check(it.first == clockSequence()) { "Incomplete: Engine state changed during native capture" } }
+                }
+                result = result.copy(clockSequence = nativeDraw.first,
+                    nativeGeneration = NativeShadowGeneration(token, point, nativeDraw.second))
+                checkNativeShadowMarker(result)
+            } catch (failure: Throwable) {
+                shadowOracleEvidence("incomplete-$token", result, failure = failure.toString())
+                throw failure
+            }
+            return result
+        } finally {
+            rule.runOnUiThread {
                 marker.afterDraw = null
-                check(!overflow) { "Incomplete: native draw ledger overflow" }
-                checkNotNull(drawings[token]) { "Incomplete: display image is stale or belongs to a different native traversal" }
-                    .also { check(it.first == clockSequence()) { "Incomplete: Engine state changed during native capture" } }
+                choreographer.removeFrameCallback(frameCallback)
+                window.removeOnFrameMetricsAvailableListener(metrics)
             }
-            result = result.copy(clockSequence = nativeDraw.first,
-                nativeGeneration = NativeShadowGeneration(token, point, nativeDraw.second))
-            checkNativeShadowMarker(result)
-        } catch (failure: Throwable) {
-            shadowOracleEvidence("incomplete-$token", result, failure = failure.toString())
-            throw failure
         }
-        return result
     }
 
     override fun close() {
