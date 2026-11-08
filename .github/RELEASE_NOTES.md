@@ -10,6 +10,7 @@ This is an optimized build (not debuggable, minified with R8, with a baseline pr
 
 - New "Longest listened" sort beside Most played: it orders by qualified plays weighted by song length, everywhere the app sorts.
 - Artist photos come from Deezer, with a Wikimedia fallback and album art as the last resort. A shared **Online features** setting controls every online lookup.
+- Header glass no longer shows a stale fill after the content behind it changes.
 - The restored artwork chooser keeps its footer actions on short screens.
 - Faster, steadier device tests: shorter slow-test runs, the search keyboard settle, and qualified assumption skips from test results.
 
@@ -17,6 +18,7 @@ This is an optimized build (not debuggable, minified with R8, with a baseline pr
 
 - https://github.com/anastaci1a/localica/issues/666 - Add the Longest listened sort across the app.
 - https://github.com/anastaci1a/localica/issues/672 - Fetch artist photos from Deezer with a Wikimedia fallback, behind the shared Online features consent.
+- https://github.com/anastaci1a/localica/issues/680 - Invalidate stale header glass fills for every queued backdrop change.
 - https://github.com/anastaci1a/localica/issues/660 - Keep the restored artwork chooser's bounds and actions on API 26.
 - https://github.com/anastaci1a/localica/issues/674 - Fix the SearchImeMotionTest native keyboard settle flake.
 - https://github.com/anastaci1a/localica/issues/669 - Take observed assumption reasons from test results.
