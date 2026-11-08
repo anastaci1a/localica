@@ -240,6 +240,7 @@ internal fun Modifier.pinchRetainedOverlay(motion: BrowsePinchMotion, grid: Lazy
             // per-frame key sets, placement maps or a sorted paint list while scrolling.
             clipRect {
                 val order = liveItemsInIndexOrder(visible) { it.index }.asReversed()
+                if (P635Debug.dump) { androidx.compose.runtime.snapshots.Snapshot.withoutReadObservation { P635Debug.dump = false }; order.forEach { e -> P635Debug.log(e.index, e.key, e.offset.y, motion.viewportCoordinates, motion.artwork[e.key]?.coordinates, motion.text[e.key]?.coordinates) } }
                 order.forEach { entry -> motion.text[entry.key]?.let { drawLive(it, entry.key) } }
                 order.forEach { entry -> motion.artwork[entry.key]?.let { drawLive(it, entry.key) } }
             }

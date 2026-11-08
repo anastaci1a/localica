@@ -78,6 +78,9 @@ class ScrollTopRetainedRowsTest {
 
     private fun pixels(node: SemanticsNodeInteraction): IntArray {
         val bitmap = node.captureToImage().asAndroidBitmap()
+        InstrumentationRegistry.getInstrumentation().targetContext.getExternalFilesDir(null)?.let { dir ->
+            java.io.File(dir, "probe-${System.nanoTime()}.png").outputStream().use { bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+        }
         return IntArray(bitmap.width * bitmap.height).also { bitmap.getPixels(it, 0, bitmap.width, 0, 0, bitmap.width, bitmap.height) }
     }
 }
