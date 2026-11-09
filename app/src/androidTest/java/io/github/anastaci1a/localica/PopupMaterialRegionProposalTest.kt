@@ -30,7 +30,7 @@ import kotlin.math.abs
 class PopupMaterialRegionProposalTest {
     @get:Rule val compose = createComposeRule()
     @get:Rule val method = org.junit.rules.TestName()
-    private val evidence = HomeNativeEvidence { method.methodName }
+    private val evidence = HomeNativeEvidence { "proposal-material-${method.methodName}" }
 
     private enum class Trigger { ListMore, PillMore, Cover }
 

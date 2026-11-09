@@ -25,7 +25,7 @@ import org.junit.Test
 class PopupOutgoingCodeProposalTest {
     @get:Rule val compose = localicaComposeRule()
     @get:Rule val method = org.junit.rules.TestName()
-    private val evidence = HomeNativeEvidence { method.methodName }
+    private val evidence = HomeNativeEvidence { "proposal-code-${method.methodName}" }
     private var nativeState: () -> org.json.JSONObject = { org.json.JSONObject() }
     private val workReceipts = org.json.JSONArray()
     private var evidencePhase = "setup"
