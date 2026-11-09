@@ -12,7 +12,7 @@ internal object NoneSamplingDiagnostic {
     val restingControls: Boolean get() = mode != "baseline"
     fun configure(intent: android.content.Intent) {
         mode = intent.getStringExtra("none-ablation") ?: "grid8"
-        require(mode in setOf("baseline", "grid8", "grid16"))
+        require(mode in setOf("baseline", "grid8", "grid16", "gather8"))
         artwork = intent.getBooleanExtra("none-artwork", false)
         witness = intent.getBooleanExtra("none-footprints", false)
         if (witness) NoneSamplingReceipts.reset()

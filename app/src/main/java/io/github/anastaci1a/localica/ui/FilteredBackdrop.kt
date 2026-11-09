@@ -67,6 +67,9 @@ private fun OpticalBackdrop(modifier: Modifier, source: FrostedBackdrop, locatio
     homeFootprint: (() -> HomeBackdropFootprint?)? = null,
     forceAverage: Boolean, effect: (Size, Float, Float) -> RenderEffect?) {
     val boundedAverage = forceAverage && requestedGlassNone()
+    val directGather = boundedAverage && NoneSamplingDiagnostic.mode == "gather8"
+    val cropSide = if (boundedAverage) NoneSamplingDiagnostic.sampleSide else null
+    require(!directGather || cropSide == 8)
     val opticalWork = LocalGlassOpticalWork.current
     val samplingObserver by rememberUpdatedState(LocalHomeBackdropSamplingObserver.current)
     val drawObserver = LocalBackdropSamplingObserver.current
@@ -80,8 +83,8 @@ private fun OpticalBackdrop(modifier: Modifier, source: FrostedBackdrop, locatio
     val rawAverageRenderer = remember(canUseAverage) { if (android.os.Build.VERSION.SDK_INT >= 33 && canUseAverage) MaterialAverageRenderer() else null }
     val areaSource = if (forceAverage) rememberMaterialAreaReduction() else null
     val areaHome = if (forceAverage && homeSource != null) rememberMaterialAreaReduction() else null
-    val areaSourceRenderer = remember(forceAverage) { if (forceAverage && android.os.Build.VERSION.SDK_INT >= 33) MaterialAverageRenderer(true) else null }
-    val areaHomeRenderer = remember(forceAverage) { if (forceAverage && android.os.Build.VERSION.SDK_INT >= 33) MaterialAverageRenderer(true) else null }
+    val areaSourceRenderer = remember(forceAverage, directGather) { if (forceAverage && android.os.Build.VERSION.SDK_INT >= 33) MaterialAverageRenderer(reduced = !directGather, uniformOpaque = true) else null }
+    val areaHomeRenderer = remember(forceAverage, directGather) { if (forceAverage && android.os.Build.VERSION.SDK_INT >= 33) MaterialAverageRenderer(reduced = !directGather, uniformOpaque = true) else null }
     val averageSource = if (average != null && (forceAverage || source.materialOnly)) rememberGraphicsLayer() else null
     val averageHome = if (average != null && (forceAverage || homeSource?.materialOnly == true)) rememberGraphicsLayer() else null
     layer.clip = true
@@ -155,14 +158,15 @@ private fun OpticalBackdrop(modifier: Modifier, source: FrostedBackdrop, locatio
                 if (region.isEmpty || !region.width.isFinite() || !region.height.isFinite()) return
                 if (NoneSamplingDiagnostic.witness) NoneSamplingReceipts.sample(backing, location, region,
                     registration, if (home) blend else 1f - blend, home,
-                    if (boundedAverage) NoneSamplingDiagnostic.sampleSide else null)
-                val result = with(reduction) { recordFullBounds(region.size, sampleSide = if (boundedAverage) NoneSamplingDiagnostic.sampleSide else null) {
+                    cropSide)
+                val result = with(reduction) { recordFullBounds(region.size, sampleSide = cropSide,
+                    minimum = if (directGather) 8 else 1) {
                     translate(-region.left, -region.top) {
                         drawSampledScene(backing, registration, toLocal)
                     }
                 } }
                 output.renderEffect = if (android.os.Build.VERSION.SDK_INT >= 33) renderer.effect(average.forBacking(backing)) else null
-                output.record(size = IntSize(1, 1)) { drawLayer(result) }
+                output.record(size = if (directGather) IntSize(8, 8) else IntSize(1, 1)) { drawLayer(result) }
             }
             if (blend < 1f) reduce(source, areaSource, averageSource, areaSourceRenderer)
             if (blend > 0f && homeSource != null && areaHome != null && averageHome != null && areaHomeRenderer != null)

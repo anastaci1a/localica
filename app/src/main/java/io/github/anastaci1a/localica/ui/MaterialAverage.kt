@@ -45,7 +45,7 @@ internal fun MaterialAverageStyle.forBacking(backing: FrostedBackdrop): Material
 /** An 8×8 GPU crop becomes one uniform color before scaling to the control.
  * No readback, full-control ray tracing, or full-panel averaging texture. */
 @RequiresApi(33)
-internal class MaterialAverageRenderer(private val reduced: Boolean = false) {
+internal class MaterialAverageRenderer(private val reduced: Boolean = false, private val uniformOpaque: Boolean = reduced) {
     private val shader = RuntimeShader("""
         uniform shader scene;
         uniform float whiteTint;
@@ -75,7 +75,7 @@ internal class MaterialAverageRenderer(private val reduced: Boolean = false) {
         shader.setFloatUniform("whiteTint", style.whiteTint)
         shader.setFloatUniform("tone", style.tone.trim, style.tone.weight, style.tone.lightMix)
         shader.setFloatUniform("coverage", coverage)
-        shader.setFloatUniform("opaque", if (reduced && style.opaque) 1f else 0f)
+        shader.setFloatUniform("opaque", if (uniformOpaque && style.opaque) 1f else 0f)
         return android.graphics.RenderEffect.createRuntimeShaderEffect(shader, "scene").asComposeRenderEffect().also { cached = it }
     }
 }
