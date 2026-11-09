@@ -36,7 +36,7 @@ internal val LocalNoneReductionAtlas = staticCompositionLocalOf<NoneReductionAtl
 internal fun NoneReductionAtlasHost(colorShader: String, enabled: Boolean = true, content: @Composable () -> Unit) {
     val graphics = LocalGraphicsContext.current
     val atlas = if (enabled && Build.VERSION.SDK_INT >= 33) remember(graphics, colorShader) { NoneReductionAtlases(graphics, colorShader) } else null
-    DisposableEffect(atlas) { onDispose { atlas?.release() } }
+    DisposableEffect(atlas) { onDispose { if (Build.VERSION.SDK_INT >= 33) atlas?.release() } }
     CompositionLocalProvider(LocalNoneReductionAtlas provides atlas, content = content)
 }
 

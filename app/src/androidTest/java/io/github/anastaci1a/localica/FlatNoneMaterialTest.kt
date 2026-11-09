@@ -117,19 +117,28 @@ class FlatNoneMaterialTest {
                 LocalicaTheme {
                     GlassPanelTheme(dark) {
                         source = rememberFrostedBackdrop(Unit)
-                        Box(Modifier.size(160.dp)) {
+                        val reference = flatGlassColor()
+                        assertEquals(if (dark) Color(0xFF242528) else Color.White, reference)
+                        Box(Modifier.size(160.dp, 280.dp).testTag("flat-stage")) {
                             // Adversarial scene must never be sampled, recorded, or blended into the fill.
                             Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(source)) { drawRect(Color.Magenta) }
                             LiquidGlassSurface(Modifier.size(120.dp).testTag("flat"), source = source,
                                 cornerRadius = 16.dp, shadow = false, pressFeedback = false) {}
+                            Canvas(Modifier.offset(y = 140.dp).size(120.dp)) { drawRect(reference) }
                         }
                     }
                 }
             } }
             fun assertFill(expected: Color) {
-                val pixels = compose.onNodeWithTag("flat").captureToImage().toPixelMap()
-                for (y in 24 until pixels.height - 24) for (x in 24 until pixels.width - 24)
-                    assertEquals("Opaque theme interior at $x,$y", expected.toArgb(), pixels[x, y].toArgb())
+                val image = compose.onNodeWithTag("flat-stage").captureToImage()
+                val pixels = image.toPixelMap()
+                val root = InstrumentationRegistry.getArguments().getString("additionalTestOutputDir")?.let(::File)
+                    ?: InstrumentationRegistry.getInstrumentation().targetContext.getExternalFilesDir(null)!!
+                File(root, "flat-fill-" + expected.toArgb() + ".png").outputStream().use { image.asAndroidBitmap().compress(Bitmap.CompressFormat.PNG, 100, it) }
+                // One native frame compares the material against an independently drawn opaque
+                // theme reference on the same adversarial backing; no color tolerance.
+                for (y in 24 until 96) for (x in 24 until 96)
+                    assertEquals("Opaque theme interior at $x,$y", pixels[x, y + 140].toArgb(), pixels[x, y].toArgb())
                 compose.runOnIdle {
                     assertFalse(source.hasGlassLayer)
                     assertEquals(0, source.consumers)
