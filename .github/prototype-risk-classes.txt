@@ -447,3 +447,11 @@ io.github.anastaci1a.localica.NoneRealAppWalkTest
 io.github.anastaci1a.localica.LyricsReturnBoundsTest
 
 io.github.anastaci1a.localica.IconOpticalCentringTest
+
+io.github.anastaci1a.localica.GlassMorphZeroConstraintsTest
+io.github.anastaci1a.localica.PopupViewportSlotTest
+io.github.anastaci1a.localica.PopupEditorFocusOwnershipTest
+io.github.anastaci1a.localica.PopupImeGeometryTest
+io.github.anastaci1a.localica.TagBatchControllerTest
+io.github.anastaci1a.localica.TagBatchTransactionTest
+io.github.anastaci1a.localica.TagSaveProgressPopupTest
