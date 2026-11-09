@@ -129,6 +129,11 @@ internal fun rememberArtistPhotoDisplay(request: ArtistPhotoRequest?, environmen
     }
     val loaded by produceState<Pair<List<Any?>, ArtistPhotoDisplay>?>(null, identity, allowed, indexReady, revision, edge, deferred, fetchAllowed) {
         if (request != null && environment != null && allowed && !deferred) {
+            fun failedDecode() {
+                // A completed failed initial decode admits album art. Replacements keep matching pixels.
+                val previous = value?.takeIf { it.first == identity }?.second?.photo ?: initial.photo
+                value = identity to ArtistPhotoDisplay(previous)
+            }
             try {
                 // Startup normally owns this. Injected/reopened environments share the same IO load.
                 if (!environment.photos.indexReady.value) environment.photos.loadIndex()
@@ -141,13 +146,13 @@ internal fun rememberArtistPhotoDisplay(request: ArtistPhotoRequest?, environmen
                         if (decoded != null) {
                             value = identity to ArtistPhotoDisplay(decoded)
                             environment.photos.displayed(request.artistKey)
-                        }
+                        } else failedDecode()
                     }
                 }
                 accept(environment.photos.peekKey(requireNotNull(cacheKey)) ?: ArtistPhotoState(null))
                 if (environment.work == null && fetchAllowed) environment.photos.observe(request).collect { if (it.photo != null) accept(it) }
             } catch (cancelled: CancellationException) { throw cancelled }
-            catch (_: Exception) { /* A failed replacement keeps matching ready pixels. */ }
+            catch (_: Exception) { failedDecode() }
         } else if (!allowed) value = null
     }
     return if (allowed && request != null) loaded?.takeIf { it.first == identity }?.second ?: initial else ArtistPhotoDisplay()
