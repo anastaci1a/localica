@@ -11,6 +11,10 @@ import androidx.test.uiautomator.Until
 import io.github.anastaci1a.localica.library.*
 import io.github.anastaci1a.localica.navigation.*
 import io.github.anastaci1a.localica.playback.PlaybackConnection
+import io.github.anastaci1a.localica.ui.ActionSlot
+import io.github.anastaci1a.localica.ui.PlayerAction
+import io.github.anastaci1a.localica.ui.PlayerActionPreferences
+import io.github.anastaci1a.localica.ui.PlayerActionSettings
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
 import org.junit.Test
@@ -24,6 +28,8 @@ class NoneRealAppWalkTest {
         val device = UiDevice.getInstance(instrumentation)
         val preferences = InterfacePreferences(context)
         val original = preferences.read()
+        val actionPreferences = PlayerActionPreferences(context)
+        val originalActions = actionPreferences.read()
         // Seed the application's existing Room store so its live invalidation tracker sees the write.
         // A second Room instance would race the application's already collected library snapshot.
         val app = context.applicationContext as LocalicaApplication
@@ -50,6 +56,7 @@ class NoneRealAppWalkTest {
         }
         try {
             runBlocking { store.replaceRoot(ScanResult(FolderSelection(root, "None walk"), listOf(track), 0)) }
+            actionPreferences.write(PlayerActionSettings(slots = mapOf(ActionSlot(0, 0) to PlayerAction.More)))
             preferences.write(InterfaceSettings(tabs = listOf(MainTab.Home, MainTab.Library, MainTab.Songs, MainTab.Albums),
                 expandOnPlay = true, glass = GlassAppearance(renderer = GlassRendererMode.None)))
             ActivityScenario.launch<MainActivity>(Intent(context, MainActivity::class.java)).use {
@@ -74,6 +81,7 @@ class NoneRealAppWalkTest {
                 visible(By.desc("Collapse player"))
                 checkpoint("player")
                 visible(By.desc("More actions")).click()
+                visible(By.text("Information"))
                 checkpoint("player-popup")
                 device.pressBack()
                 visible(By.desc("Collapse player")).click()
@@ -81,6 +89,7 @@ class NoneRealAppWalkTest {
             }
         } finally {
             playback?.let { connection -> instrumentation.runOnMainSync { connection.clear(); connection.close() } }
+            actionPreferences.write(originalActions)
             preferences.write(original)
             runBlocking { store.removeRoot(root) }
             file.delete()
