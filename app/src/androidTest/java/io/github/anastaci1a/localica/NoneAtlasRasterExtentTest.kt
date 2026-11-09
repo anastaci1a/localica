@@ -13,6 +13,7 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalGraphicsContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
 import androidx.compose.ui.unit.Density
@@ -29,6 +30,8 @@ import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
 import java.io.File
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 /** #691: the physical atlas shrinks without relocating live cells or changing retained output. */
 @SdkSuppress(minSdkVersion = 33)
@@ -40,8 +43,11 @@ class NoneAtlasRasterExtentTest {
         var paintRevision by mutableIntStateOf(0)
         var owner: NoneReductionAtlas? = null
         var admitted = 0
+        lateinit var host: android.view.View
+        var frameCommits = 0
         val receipt = JSONArray()
         compose.setContent { CompositionLocalProvider(LocalDensity provides Density(1f)) {
+            host = LocalView.current
             val graphics = LocalGraphicsContext.current
             val atlas = remember(graphics) { NoneReductionAtlas(graphics, GlassColorShader) }
             owner = atlas
@@ -77,6 +83,18 @@ class NoneAtlasRasterExtentTest {
         } }
         fun capture(tag: String): IntArray {
             compose.waitForIdle()
+            // Waiting for Compose idleness does not certify GPU completion. The large
+            // cold atlas can exceed WindowCapture's fixed two-second fence on SwiftShader.
+            // Commit an actual window frame first; never retry a failed pixel assertion.
+            val committed = CountDownLatch(1)
+            compose.runOnIdle {
+                if (Build.VERSION.SDK_INT >= 33) {
+                    host.viewTreeObserver.registerFrameCommitCallback { committed.countDown() }
+                    host.invalidate()
+                }
+            }
+            assertTrue("A complete GPU frame precedes $tag capture", committed.await(10, TimeUnit.SECONDS))
+            frameCommits++
             val pixels = compose.onNodeWithTag(tag).captureToImage().toPixelMap()
             return IntArray(pixels.width * pixels.height) { pixels[it % pixels.width, it / pixels.width].toArgb() }
         }
@@ -109,6 +127,6 @@ class NoneAtlasRasterExtentTest {
             ?: requireNotNull(InstrumentationRegistry.getInstrumentation().targetContext.getExternalFilesDir(null))
         output.mkdirs()
         File(output, "none-atlas-physical-extent-api${Build.VERSION.SDK_INT}.json").writeText(
-            JSONObject().put("cases", receipt).put("allRgba8Equal", true).toString(2))
+            JSONObject().put("cases", receipt).put("allRgba8Equal", true).put("gpuFrameCommits", frameCommits).toString(2))
     }
 }
