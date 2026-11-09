@@ -1,7 +1,6 @@
 package io.github.anastaci1a.localica
 
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.graphics.Color as NativeColor
 import android.graphics.Canvas
 import android.graphics.ColorFilter
@@ -16,15 +15,20 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.platform.ViewRootForTest
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.IntOffset
 import io.github.anastaci1a.localica.ui.engine.ownsWindow
+import io.github.anastaci1a.localica.ui.engine.UiClock
+import io.github.anastaci1a.localica.ui.engine.LocalUiClock
 import kotlin.math.ceil
 import androidx.compose.ui.layout.LayoutInfo
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.*
@@ -61,6 +65,7 @@ private class QueueSelectorCallerFixture(private val compose: androidx.compose.u
     private lateinit var sourceView: View
     private val markers = linkedMapOf<View, Marker>()
     private var token = 0
+    private lateinit var clock: UiClock
 
     fun verify(interrupted: Boolean, field: Boolean = false) {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
@@ -69,6 +74,8 @@ private class QueueSelectorCallerFixture(private val compose: androidx.compose.u
         val state = QueueUiState(QueueLibrary(listOf(ListeningQueue(id = "selected", name = "Persistent queue", entries = emptyList())), "selected"), loading = false)
         compose.setContent { LocalicaTheme {
             val view = LocalView.current
+            val ownerClock = LocalUiClock.current
+            SideEffect { clock = ownerClock }
             DisposableEffect(view) {
                 sourceView = view
                 attach(view.rootView)
@@ -78,7 +85,7 @@ private class QueueSelectorCallerFixture(private val compose: androidx.compose.u
                 LocalGlassMorphWorkObserver provides { kind, native, _ ->
                     if (kind == "dialog" && native != null) { window = native; attach(native.decorView) }
                 }) {
-                Box(Modifier.fillMaxSize().background(Color.White)) { QueueScreen(state, null, onMinimize = {}) }
+                Box(Modifier.fillMaxSize().background(Color.White).testTag("queue-selector-caller")) { QueueScreen(state, null, onMinimize = {}) }
             }
         } }
         compose.waitForIdle()
@@ -105,15 +112,15 @@ private class QueueSelectorCallerFixture(private val compose: androidx.compose.u
             val native = window?.takeIf { it.decorView.isAttachedToWindow }
             val phase = anchor.contact.expansion.value
             log.append("$frame $stage phase=$phase hidden=${anchor.hidden} modal=${anchor.modalPresent} inModal=${anchor.shadowInModal} native=${native != null} labels=${names.map { System.identityHashCode(it.layoutInfo) }}\n")
-            val bitmap = screenshot(native)
+            val input = if (field && phase <= .002f && !anchor.hidden)
+                captureHomeField(anchor, native, frame) else null
+            val bitmap = input?.capture?.image?.asAndroidBitmap() ?: screenshot(native)
             val actualFile = File(output, "${(frame++).toString().padStart(3, '0')}-$stage.png")
             try { actualFile.outputStream().use {
                 check(bitmap.compress(Bitmap.CompressFormat.PNG, 100, it))
             }
-                if (field && phase <= .002f && !anchor.hidden) {
-                    fieldInputs += captureHomeField(anchor, native, frame - 1, actualFile)
-                }
-            } finally { bitmap.recycle() }
+                if (input != null) fieldInputs += input.copy(actual = actualFile)
+            } finally { if (input == null) bitmap.recycle() }
         }
         fun close() { UiDevice.getInstance(instrumentation).pressBack() }
         compose.mainClock.autoAdvance = false
@@ -150,11 +157,13 @@ private class QueueSelectorCallerFixture(private val compose: androidx.compose.u
                 // Native reference work runs only after capturing the complete actual transition.
                 // It cannot consume unobserved native frames in the middle of the handoff.
                 for (input in fieldInputs) {
-                    val actual = requireNotNull(BitmapFactory.decodeFile(input.actual.absolutePath))
-                    try { inspectHomeField(actual, input, output, log)?.let(fieldFailures::add) }
-                    finally { actual.recycle() }
+                    inspectHomeField(input.capture.image.asAndroidBitmap(), input, output, log)?.let(fieldFailures::add)
                 }
                 assertTrue("The first restored frame and settled source frames must be included\n$log", fieldInputs.size >= 4)
+                assertTrue("Native-held restored source must have both real window receipts\n$log",
+                    fieldInputs.any { it.capture.windowIds.size == 2 })
+                assertTrue("Source ownership after native disposal must be included\n$log",
+                    fieldInputs.any { it.sourceOwned && it.capture.windowIds.size == 1 })
                 assertTrue("Actual Queue return differs from its independent current-geometry field: $fieldFailures\n$log", fieldFailures.isEmpty())
             } else {
                 assertTrue("One name remains present through every sampled caller frame: $missing\n$log", missing.isEmpty())
@@ -164,12 +173,14 @@ private class QueueSelectorCallerFixture(private val compose: androidx.compose.u
             File(output, "frames.txt").writeText(log.toString())
             compose.mainClock.autoAdvance = true
             compose.runOnUiThread { markers.keys.toList().forEach(::detach) }
+            fieldInputs.forEach { it.capture.image.asAndroidBitmap().recycle() }
         }
     }
 
-    private data class FieldInput(val frame: Int, val actual: File, val rect: Rect, val body: RoundRect, val sourceOwned: Boolean)
+    private data class FieldInput(val frame: Int, val actual: File?, val rect: Rect, val body: RoundRect,
+        val sourceOwned: Boolean, val capture: PresentedCapture)
 
-    private fun captureHomeField(anchor: GlassAnchor, native: Window?, frame: Int, actual: File): FieldInput {
+    private fun captureHomeField(anchor: GlassAnchor, native: Window?, frame: Int): FieldInput {
         check(!anchor.hidden) { "Unsupported: active native origin receiver requires its own independent model" }
         val node = anchor.surfaceNode
         val home = anchor.shadowPlane
@@ -186,35 +197,58 @@ private class QueueSelectorCallerFixture(private val compose: androidx.compose.u
         val radius = (anchor.bounds.height / 2 * (1f - phase) + 28f * density * phase)
             .coerceAtMost(minOf(rect.width, rect.height) / 2)
         val body = requireNotNull(glassCasterBody(rect, compose.density, (radius / density).dp, anchor))
-        return FieldInput(frame, actual, rect, body, sourceOwned)
+        val shape = anchor.contact.body.value
+        val sx = shape.scaleX(anchor.contact.vertical)
+        val sy = shape.scaleY(anchor.contact.vertical)
+        val sequence = clock.stampNow.sequence
+        val epoch = requireNotNull(home).host.routeEpoch
+        val state = ShadowDrawState(sequence, epoch, listOf(body to 1f), Color.White,
+            scaleX = sx, scaleY = sy, strength = .8f, spread = .6f)
+        fun receipt(): ShadowDrawState {
+            check(clock.stampNow.sequence == sequence && anchor.contact.expansion.value.coerceIn(0f, 1f) == phase &&
+                anchor.contact.body.value == shape && !anchor.hidden) { "Incomplete: Queue geometry changed during native capture" }
+            return state
+        }
+        val extras = listOfNotNull(native?.let { popup ->
+            ShadowNativeWindow(popup, popup.decorView, IntOffset(18, 1), popup = {
+                PopupShadowComposition(if (anchor.modalPresent) PopupShadowScrim(phase, (.16f * phase * 255f).roundToInt()) else null)
+            }) { receipt() }
+        })
+        val capture = ShadowNativeCapture(compose, compose.onNodeWithTag("queue-selector-caller"), extras,
+            invalidateWindow = false) { clock.stampNow.sequence }.use { owner ->
+            owner.capture(epoch, popup = native?.let { popup -> { PopupShadowComposition(higherWindows = listOf(popup)) } }) { receipt() }
+        }
+        return FieldInput(frame, null, rect, body, sourceOwned, capture)
     }
 
     private fun inspectHomeField(actual: Bitmap, input: FieldInput, output: File, log: StringBuilder): String? {
         val (frame, _, rect, body, sourceOwned) = input
         val density = compose.density.density
-        val state = ShadowDrawState(0, 0, listOf(body to 1f), Color.White, strength = .8f, spread = .6f)
+        val state = input.capture.nativeWindows.first().state
+        log.append("field-receipts frame=$frame state=$state native=${input.capture.nativeWindows}\n")
+        check(state.scaleX == 1f && state.scaleY == 1f) {
+            "Incomplete: independent Queue private-field reference must model anisotropic rebound, not substitute a fixed-pixel kernel: $state"
+        }
         val reference = shadowUnionReference(compose, actual.width, actual.height, state).asAndroidBitmap()
         try {
             val left = (((body.left + body.right) / 2f) - 6 * density).roundToInt().coerceAtLeast(0)
-            val right = (body.center.x + 6 * density).roundToInt().coerceAtMost(actual.width - 1)
+            val right = ((body.left + body.right) / 2f + 6 * density).roundToInt().coerceAtMost(actual.width - 1)
             val top = ceil(body.bottom + 2 * density).toInt()
             val bottom = ceil(body.bottom + 8 * density).toInt()
             check(top > body.bottom && bottom < actual.height) { "Field ROI must stay outside the current body" }
-            var actualDark = 0f
-            var expectedDark = 0f
-            var pixels = 0
-            for (y in top..bottom) for (x in left..right) {
-                actualDark += 255 - NativeColor.red(actual.getPixel(x, y))
-                expectedDark += 255 - NativeColor.red(reference.getPixel(x, y))
-                pixels++
-            }
-            actualDark /= pixels; expectedDark /= pixels
-            check(expectedDark > 8f) { "Independent current-geometry field must be visible: $expectedDark" }
-            log.append("field frame=$frame sourceOwned=$sourceOwned rect=$rect body=$body roi=$left,$top,$right,$bottom actual=$actualDark expected=$expectedDark\n")
+            val region = Rect(left.toFloat(), top.toFloat(), (right + 1).toFloat(), (bottom + 1).toFloat())
+            val blank = Bitmap.createBitmap(actual.width, actual.height, Bitmap.Config.ARGB_8888).apply { eraseColor(NativeColor.WHITE) }
+            val probe = ShadowFieldProbe(listOf(region), 1f / 255f)
+            val comparison = try {
+                probe.compare(input.capture, input.capture.copy(image = reference.asImageBitmap(), offscreen = true),
+                    input.capture.copy(image = blank.asImageBitmap(), offscreen = true))
+            } finally { blank.recycle() }
+            log.append("field frame=$frame sourceOwned=$sourceOwned rect=$rect body=$body roi=$region comparison=$comparison\n")
             File(output, "reference-${frame.toString().padStart(3, '0')}.png").outputStream().use {
                 check(reference.compress(Bitmap.CompressFormat.PNG, 100, it))
             }
-            return if (abs(actualDark - expectedDark) > 3f) "frame=$frame actual=$actualDark expected=$expectedDark" else null
+            return try { probe.assertWithin(comparison, 2f / 255f, "Actual Queue restored-source bottom field frame=$frame"); null }
+                catch (failure: AssertionError) { failure.message }
         } finally { reference.recycle() }
     }
 
