@@ -520,6 +520,8 @@ Once either the list or drawer acquires a contact, it keeps that contact through
 
 Rounded popup opens already positioned at the playback queue. Numbered rows show browsing selection, a separate playback marker, plain rename/delete icons and shared whole-row long-press reordering, with accessible move actions on the handle. Dragging previews order until release; cancellation or a failed save restores it without changing browsing/playback.
 
+The selected queue name moves as one visible element between the closed selector and its chosen row, including interrupted openings and returns.
+
 Short popups omit the repeated heading to retain a usable list. When more than one queue exists, Remove all other queues morphs from a glass button into confirmation; each confirmation name uses a single-line ellipsis. Selected long title marquees with an unfaded leading edge during its pause; other rows, closed selector and search prompts use single-line ellipsis.
 
 ### Queue Songs/actions

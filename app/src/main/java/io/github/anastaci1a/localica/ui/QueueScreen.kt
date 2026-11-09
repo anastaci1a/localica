@@ -136,7 +136,8 @@ fun QueueScreen(state: QueueUiState, controller: QueueController?, library: Libr
         AddToPlaylistDialog(active.entries.map { it.track }, playlists, playlistController, { saving = false }, { saving = false })
     }
     GlassMorphPopup(selector, selectorAnchor, { selector = false }, GlassPlacement.Center, sharedContent = nameMorph) {
-        CompositionLocalProvider(LocalQueueSelectorSharedName provides nameMorph) { BoxWithConstraints(Modifier.fillMaxWidth().heightIn(max = 560.dp)) {
+        CompositionLocalProvider(LocalQueueSelectorSharedName provides nameMorph) {
+        BoxWithConstraints(Modifier.fillMaxWidth().heightIn(max = 560.dp)) {
             val showHeading = maxHeight >= 240.dp
             Column(Modifier.padding(vertical = 12.dp)) {
                 if (showHeading) Row(Modifier.padding(horizontal = 20.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
