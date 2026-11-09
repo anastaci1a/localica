@@ -13,7 +13,7 @@ internal object GlassWork {
 @Composable
 internal fun rememberGlassLayer(): androidx.compose.ui.graphics.layer.GraphicsLayer {
     val layer = rememberGraphicsLayer()
-    DisposableEffect(layer) {
+    if (io.github.anastaci1a.localica.BuildConfig.DEBUG) DisposableEffect(layer) {
         GlassWork.event("layer")
         onDispose { }
     }

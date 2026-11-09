@@ -197,12 +197,12 @@ internal fun ConnectedSelectionHost(modifier: Modifier = Modifier, contentDrawin
 }
 
 /** One surface's retained blur/shadow resources; each active subset has its own recording. */
-internal class HoverSurfaceRenderer(private val graphics: GraphicsContext,scope: kotlinx.coroutines.CoroutineScope) {
-    private var opticalLayer: GraphicsLayer? = null
-    private var averageLayer: GraphicsLayer? = null
-    val output get() = opticalLayer ?: graphics.createGraphicsLayer().also { GlassWork.event("layer"); opticalLayer = it }
-    val flatOutput get() = averageLayer ?: graphics.createGraphicsLayer().also { GlassWork.event("layer"); averageLayer = it }
-    val average by lazy { if (Build.VERSION.SDK_INT >= 33) MaterialAverageRenderer() else null }
+internal class HoverSurfaceRenderer(private val graphics: GraphicsContext,scope: kotlinx.coroutines.CoroutineScope, val flat: Boolean = false) {
+    private val opticalLayer = if (flat) null else graphics.createGraphicsLayer().also { GlassWork.event("layer") }
+    private val averageLayer = if (flat) null else graphics.createGraphicsLayer().also { GlassWork.event("layer") }
+    val output get() = requireNotNull(opticalLayer)
+    val flatOutput get() = requireNotNull(averageLayer)
+    val average = if (!flat && Build.VERSION.SDK_INT >= 33) MaterialAverageRenderer() else null
     private val lifetime=kotlinx.coroutines.Job(scope.coroutineContext[kotlinx.coroutines.Job])
     val shadow=RetainedGlassShadow(kotlinx.coroutines.CoroutineScope(scope.coroutineContext+lifetime))
     fun release() { lifetime.cancel();opticalLayer?.let(graphics::releaseGraphicsLayer);averageLayer?.let(graphics::releaseGraphicsLayer) }
@@ -211,7 +211,10 @@ internal class HoverSurfaceRenderer(private val graphics: GraphicsContext,scope:
 internal class HoverGroupRenderer(private val graphics: GraphicsContext,private val scope: kotlinx.coroutines.CoroutineScope) {
     val outlines=SelectionOpacityPathCache()
     private val surfaces=mutableMapOf<List<Int>,HoverSurfaceRenderer>()
-    fun surface(members: List<Int>)=surfaces.getOrPut(members) { HoverSurfaceRenderer(graphics,scope) }
+    fun surface(members: List<Int>, flat: Boolean = false): HoverSurfaceRenderer {
+        surfaces[members]?.takeIf { it.flat != flat }?.let { it.release(); surfaces.remove(members) }
+        return surfaces.getOrPut(members) { HoverSurfaceRenderer(graphics,scope,flat) }
+    }
     fun retain(members: Set<List<Int>>) {
         val unused=surfaces.keys.filter { it !in members }
         unused.forEach { surfaces.remove(it)?.release() }
@@ -237,7 +240,7 @@ internal fun DrawScope.drawHoverGroup(group: HoverGroupRenderer, parts: List<Hov
     group.retain(layers.flatMap { layer -> layer.groups.map { it.members } }.toSet())
     if(layers.isEmpty())return
     fun DrawScope.paint(layer: SelectionOutlineLayer) {
-        for(outline in layer.groups) drawHoverSurface(group.surface(outline.members),outline.members.map { parts[it] },
+        for(outline in layer.groups) drawHoverSurface(group.surface(outline.members, flatColor != null),outline.members.map { parts[it] },
             outline,progress,backing,location,blurEffects,density,direction,sampleOffset,shadow,lift,averageProgress,flatColor)
     }
     if(layers.size==1 && layers[0].weight==1f) { paint(layers[0]);return }

@@ -27,11 +27,12 @@ internal class BrowseBackdropScene(val source: FrostedBackdrop, contentKey: () -
     schedule: (Long, () -> Unit) -> (() -> Unit)) {
     val layers = mutableStateListOf<BrowseBackdropLayer>()
     var compositeDraws: Map<Any, BackdropProducerDraws> = emptyMap()
-    val readback by lazy { BackdropReadback({ Snapshot.withoutReadObservation {
+    private val glassReadback = if (source.hasGlassLayer) BackdropReadback({ Snapshot.withoutReadObservation {
         BackdropReadbackScene(listOf(contentKey(), source.size, source.location.placement, source.rendererGeneration),
             layers.associate { layer -> layer to BackdropReadbackProducer(
                 listOf(layer.source.size, layer.source.location.placement), layer.masked) })
-    } }, schedule) }
+    } }, schedule) else null
+    val readback get() = requireNotNull(glassReadback) { "Flat None has no glass readback barrier" }
 }
 
 internal class BrowseBackdropLayer(val source: FrostedBackdrop, val masked: Boolean) {

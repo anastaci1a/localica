@@ -56,7 +56,8 @@ internal class FrostedBackdrop(private val glassLayer: GraphicsLayer?, dark: Boo
     private val renderer: GlassRendererRuntime? = null) {
     val hasGlassLayer get() = glassLayer != null
     val layer get() = requireNotNull(glassLayer) { "Flat None has no glass layer" }
-    val readback by lazy { RetainedLayerReadback() }
+    private val glassReadback = if (hasGlassLayer) RetainedLayerReadback() else null
+    val readback get() = requireNotNull(glassReadback) { "Flat None has no glass readback" }
     // Actual recorded-layer containment, independent of the sampling parent chain.
     private val recordingDebug = if (io.github.anastaci1a.localica.BuildConfig.DEBUG) BackdropRecordingDebug() else null
     val recordedLayoutChildren get() = requireNotNull(recordingDebug).layoutChildren

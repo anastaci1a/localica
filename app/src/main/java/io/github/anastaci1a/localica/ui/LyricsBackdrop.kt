@@ -35,14 +35,15 @@ internal class LyricsBackdropScene(val source: FrostedBackdrop, alpha: () -> Flo
     schedule: (Long, () -> Unit) -> (() -> Unit)) {
     val layers = mutableStateListOf<LyricsBackdropLayer>()
     var compositeDraws: Map<Any, BackdropProducerDraws> = emptyMap()
-    val readback by lazy { BackdropReadback({ Snapshot.withoutReadObservation {
+    private val glassReadback = if (source.hasGlassLayer) BackdropReadback({ Snapshot.withoutReadObservation {
         BackdropReadbackScene(listOf(alpha(), source.size, source.location.placement),
             layers.filter { it.alpha() > 0f }.associate { layer ->
                 layer to
                 BackdropReadbackProducer(listOf(layer.alpha(), layer.source.size,
                     layer.source.location.placement, layer.contentKey()), layer.hasMask)
             })
-    } }, schedule) }
+    } }, schedule) else null
+    val readback get() = requireNotNull(glassReadback) { "Flat None has no glass readback barrier" }
 
     fun recorded(layer: LyricsBackdropLayer, request: Int) {
         layer.recordedReadbackRequest = request
