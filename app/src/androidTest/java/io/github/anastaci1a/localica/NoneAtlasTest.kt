@@ -165,8 +165,9 @@ class NoneAtlasTest {
             val red = rememberFrostedBackdrop("red", dark = false)
             val alternate = rememberFrostedBackdrop("green", dark = false)
             val primary = rememberFrostedBackdrop("primary", dark = false)
+            val selectedParent = if (green) alternate else red
             SideEffect {
-                primary.parent = if (green) alternate else red
+                primary.parent = selectedParent
                 red.parent = base; alternate.parent = base
             }
             Box(Modifier.size(256.dp)) {
@@ -341,6 +342,39 @@ class NoneAtlasTest {
                 input.readers.remove(reader)
                 source.recordedChildren.clear()
                 BackdropRecordingAncestry.end(source)
+            }
+        }
+    }
+
+    @SdkSuppress(minSdkVersion = 33)
+    @Test fun replacingTheLastConsumerKeepsARegisteredLiveAtlasOwner() {
+        lateinit var source: FrostedBackdrop
+        var registry: io.github.anastaci1a.localica.ui.engine.NoneReductionAtlases? = null
+        var generation by mutableIntStateOf(0)
+        compose.setContent { CompositionLocalProvider(
+            LocalDensity provides Density(1f),
+            LocalGlassRendererRuntime provides remember { GlassRendererRuntime(GlassRendererMode.None) },
+            LocalGlassAppearance provides appearance) { LocalicaTheme { NoneReductionAtlasHost(GlassColorShader) {
+            registry = LocalNoneReductionAtlas.current
+            source = rememberFrostedBackdrop(Unit, dark = false)
+            Box(Modifier.size(128.dp)) {
+                Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(source)) { drawRect(Color.Green) }
+                key(generation) {
+                    LiquidGlassSurface(Modifier.size(96.dp).testTag("remounted"), source,
+                        noneAtlasInput = rememberNoneAtlasInput(source),
+                        cornerRadius = 0.dp, pressFeedback = false, shadow = false)
+                }
+            }
+        } } } }
+        for (next in 0..4) {
+            compose.runOnIdle { generation = next }
+            eventually {
+                assertEquals("Exactly one source owner after remount $next", 1, registry?.sourceCount)
+                assertEquals("The active registry owner hosts the new entry after remount $next", 1,
+                    registry?.forSource(source.layer)?.hostedExtents?.size)
+                val pixels = compose.onNodeWithTag("remounted").captureToImage().toPixelMap()
+                assertMean("Live owner after remount $next", Color.Green,
+                    pixels[pixels.width / 2, pixels.height / 2], Rect(0f, 0f, 96f, 96f))
             }
         }
     }
