@@ -440,13 +440,13 @@ class LyricsReturnBackdropTest {
         }
     }
 
-    /** The incoming document rests with its current line centred (#717): align its line 30 with the return control as
-     *  well, so both documents' glyphs genuinely overlap under the sampled interior. */
+    /** The incoming document rests with its current line centred (#717): place its line 30 a quarter row above the return
+     *  control, so its glyphs partly overlap the outgoing line's under the sampled interior while some stay uncovered. */
     private fun alignIncomingLine(incoming: ParsedLyrics) {
-        val delta = compose.onNodeWithText(incoming.lines[30].text).fetchSemanticsNode().boundsInRoot.center.y -
-            compose.onNodeWithContentDescription(ReturnLabel).fetchSemanticsNode().boundsInRoot.center.y
+        val line = compose.onNodeWithText(incoming.lines[30].text).fetchSemanticsNode().boundsInRoot
+        val delta = line.center.y - compose.onNodeWithContentDescription(ReturnLabel).fetchSemanticsNode().boundsInRoot.center.y
         compose.onNode(hasTestTag("lyric-lines") and hasAnyDescendant(hasText(incoming.lines[30].text)))
-            .performSemanticsAction(SemanticsActions.ScrollBy) { it(0f, delta) }
+            .performSemanticsAction(SemanticsActions.ScrollBy) { it(0f, delta + line.height / 4f) }
         compose.waitForIdle()
     }
 
