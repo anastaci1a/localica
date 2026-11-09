@@ -1,5 +1,6 @@
 package io.github.anastaci1a.localica.ui
 
+import android.os.Build
 import androidx.compose.runtime.*
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -25,9 +26,12 @@ internal fun materialReductionExtent(size: IntSize): IntSize {
 }
 
 /** Retained box-reduction levels. Transparent padding carries odd edge coverage through
- * every 2x step; it must be divided out only after the final premultiplied sum. */
+ * every step; it must be divided out only after the final premultiplied sum. */
 internal class MaterialAreaReduction(private val graphics: GraphicsContext) {
     private val levels = mutableListOf<GraphicsLayer>()
+    /** The level the latest [record] returned, with whatever effect its reader installed; null before any. */
+    var current: GraphicsLayer? = null
+        private set
     private fun level(index: Int): GraphicsLayer {
         while (levels.size <= index) levels += graphics.createGraphicsLayer().apply {
             compositingStrategy = CompositingStrategy.Offscreen
@@ -35,38 +39,57 @@ internal class MaterialAreaReduction(private val graphics: GraphicsContext) {
         }
         return levels[index]
     }
+    /** Reduce the power-of-two extent until both dimensions are at most [minimum] (a power of two).
+     * On Android 13+ every step is one exact block mean of up to 8×8 texels ([MaterialBlockMean]): a
+     * 512 px side takes three passes instead of nine, with every texel read once. Older Android keeps
+     * bilinear 2:1 halvings, which are exact boxes at that ratio, for the shared 32×32 thumbnail. */
     fun DrawScope.record(extent: IntSize, minimum: Int = 1, draw: DrawScope.() -> Unit): GraphicsLayer {
         var dimensions = materialReductionExtent(extent)
         var previous = level(0)
+        previous.renderEffect = null
         previous.record(Density(density, fontScale), layoutDirection, dimensions, draw)
         var index = 1
+        val blockMeans = Build.VERSION.SDK_INT >= 33
         while (dimensions.width > minimum || dimensions.height > minimum) {
-            val next = IntSize((dimensions.width / 2).coerceAtLeast(minimum).coerceAtMost(dimensions.width),
-                (dimensions.height / 2).coerceAtLeast(minimum).coerceAtMost(dimensions.height))
             val input = previous
             val before = dimensions
+            val next: IntSize
             previous = level(index++)
-            previous.record(size = next) {
-                scale(next.width.toFloat() / before.width, next.height.toFloat() / before.height, Offset.Zero) {
-                    drawLayer(input)
+            previous.renderEffect = null
+            if (blockMeans) {
+                fun block(side: Int) = minOf(8, maxOf(1, side / minimum))
+                val block = IntSize(block(before.width), block(before.height))
+                next = IntSize(before.width / block.width, before.height / block.height)
+                input.renderEffect = MaterialBlockMean.effect(block)
+                // Drawn unscaled: the destination clip keeps the first texel of every block, whose
+                // value is the block's mean. No draw samples a texture below half scale.
+                previous.record(size = next) { drawLayer(input) }
+            } else {
+                next = IntSize((before.width / 2).coerceAtLeast(minimum).coerceAtMost(before.width),
+                    (before.height / 2).coerceAtLeast(minimum).coerceAtMost(before.height))
+                previous.record(size = next) {
+                    scale(next.width.toFloat() / before.width, next.height.toFloat() / before.height, Offset.Zero) {
+                        drawLayer(input)
+                    }
                 }
             }
             dimensions = next
         }
+        current = previous
         return previous
     }
     /** Map the exact footprint onto the whole reduction texture. Transparent power-of-two
      * padding would otherwise amplify RGBA8 rounding when the mean is unpremultiplied,
      * giving identical backdrops different colours for different material dimensions. */
-    fun DrawScope.recordFullBounds(bounds: Size, draw: DrawScope.() -> Unit): GraphicsLayer {
+    fun DrawScope.recordFullBounds(bounds: Size, minimum: Int = 1, draw: DrawScope.() -> Unit): GraphicsLayer {
         val extent = materialReductionExtent(IntSize(ceil(bounds.width).toInt(), ceil(bounds.height).toInt()))
-        return record(extent) {
+        return record(extent, minimum) {
             scale(extent.width / bounds.width, extent.height / bounds.height, Offset.Zero) {
                 clipRect(right = bounds.width, bottom = bounds.height, block = draw)
             }
         }
     }
-    fun release() { levels.forEach(graphics::releaseGraphicsLayer); levels.clear() }
+    fun release() { levels.forEach(graphics::releaseGraphicsLayer); levels.clear(); current = null }
 }
 
 @Composable internal fun rememberMaterialAreaReduction(): MaterialAreaReduction {

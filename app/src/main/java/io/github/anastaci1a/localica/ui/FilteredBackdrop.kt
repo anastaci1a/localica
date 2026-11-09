@@ -79,8 +79,9 @@ private fun OpticalBackdrop(modifier: Modifier, source: FrostedBackdrop, locatio
     val rawAverageRenderer = remember(canUseAverage) { if (android.os.Build.VERSION.SDK_INT >= 33 && canUseAverage) MaterialAverageRenderer() else null }
     val areaSource = if (forceAverage) rememberMaterialAreaReduction() else null
     val areaHome = if (forceAverage && homeSource != null) rememberMaterialAreaReduction() else null
-    val areaSourceRenderer = remember(forceAverage) { if (forceAverage && android.os.Build.VERSION.SDK_INT >= 33) MaterialAverageRenderer(true) else null }
-    val areaHomeRenderer = remember(forceAverage) { if (forceAverage && android.os.Build.VERSION.SDK_INT >= 33) MaterialAverageRenderer(true) else null }
+    // The style shader takes the exact mean of the reduction's last level (at most 8×8 texels) itself.
+    val areaSourceRenderer = remember(forceAverage) { if (forceAverage && android.os.Build.VERSION.SDK_INT >= 33) MaterialAverageRenderer(uniformOpaque = true) else null }
+    val areaHomeRenderer = remember(forceAverage) { if (forceAverage && android.os.Build.VERSION.SDK_INT >= 33) MaterialAverageRenderer(uniformOpaque = true) else null }
     val averageSource = if (average != null && (forceAverage || source.materialOnly)) rememberGraphicsLayer() else null
     val averageHome = if (average != null && (forceAverage || homeSource?.materialOnly == true)) rememberGraphicsLayer() else null
     layer.clip = true
@@ -134,10 +135,12 @@ private fun OpticalBackdrop(modifier: Modifier, source: FrostedBackdrop, locatio
         }
         drawObserver?.let { observeBackdropSampling(it, location, localToSource, viewportBounds) }
         if (forceAverage && average != null && areaSource != null && averageSource != null && areaSourceRenderer != null) {
+            // Returns the reduction's last level (at most 8×8 texels) carrying the style shader, which draws
+            // the exact styled mean over any extent. Without a mix it is drawn directly: no 1×1 copies.
             fun androidx.compose.ui.graphics.drawscope.DrawScope.reduce(backing: FrostedBackdrop,
-                reduction: MaterialAreaReduction, output: androidx.compose.ui.graphics.layer.GraphicsLayer,
-                renderer: MaterialAverageRenderer, home: Boolean = false) {
-                val registration = (if (home) homeToFootprint else sourceToLocal) ?: return
+                reduction: MaterialAreaReduction, renderer: MaterialAverageRenderer,
+                home: Boolean = false): androidx.compose.ui.graphics.layer.GraphicsLayer? {
+                val registration = (if (home) homeToFootprint else sourceToLocal) ?: return reduction.current
                 val footprint = if (home) homeExtent else size
                 // Uniformly average the full material bounds over the actual scene.
                 val screenToHome = if (home) homeToScreen?.inverse() else null
@@ -150,19 +153,34 @@ private fun OpticalBackdrop(modifier: Modifier, source: FrostedBackdrop, locatio
                 // Nothing outside the recorded scene exists to read: one uniform fill must not
                 // turn translucent because its bounds extend past a screen or window edge.
                 val region = Rect(Offset.Zero, footprint)
-                    .intersect(sampledSceneBounds(backing, registration, toLocal) ?: return)
-                if (region.isEmpty || !region.width.isFinite() || !region.height.isFinite()) return
-                val result = with(reduction) { recordFullBounds(region.size) {
+                    .intersect(sampledSceneBounds(backing, registration, toLocal) ?: return reduction.current)
+                if (region.isEmpty || !region.width.isFinite() || !region.height.isFinite()) return reduction.current
+                val result = with(reduction) { recordFullBounds(region.size, minimum = 8) {
                     translate(-region.left, -region.top) {
                         drawSampledScene(backing, registration, toLocal)
                     }
                 } }
-                output.renderEffect = if (android.os.Build.VERSION.SDK_INT >= 33) renderer.effect(average.forBacking(backing)) else null
-                output.record(size = IntSize(1, 1)) { drawLayer(result) }
+                result.renderEffect = if (android.os.Build.VERSION.SDK_INT >= 33)
+                    renderer.effect(average.forBacking(backing), taps = result.size) else null
+                return result
             }
-            if (blend < 1f) reduce(source, areaSource, averageSource, areaSourceRenderer)
-            if (blend > 0f && homeSource != null && areaHome != null && averageHome != null && areaHomeRenderer != null)
-                reduce(homeSource, areaHome, averageHome, areaHomeRenderer, true)
+            fun androidx.compose.ui.graphics.drawscope.DrawScope.drawStyled(
+                styled: androidx.compose.ui.graphics.layer.GraphicsLayer, extent: Size) {
+                scale(extent.width / styled.size.width.coerceAtLeast(1), extent.height / styled.size.height.coerceAtLeast(1),
+                    Offset.Zero) { drawLayer(styled) }
+            }
+            val styledSource = if (blend < 1f) reduce(source, areaSource, areaSourceRenderer) else null
+            val styledHome = if (blend > 0f && homeSource != null && areaHome != null && areaHomeRenderer != null)
+                reduce(homeSource, areaHome, areaHomeRenderer, true) else null
+            if (blend <= 0f) {
+                styledSource?.let { drawStyled(it, size) }
+                return@Canvas
+            }
+            // A morph mixes two means: each styled level becomes one texel, added as before.
+            averageSource.renderEffect = null
+            averageSource.record(size = IntSize(1, 1)) { styledSource?.let { drawStyled(it, Size(1f, 1f)) } }
+            averageHome?.renderEffect = null
+            averageHome?.record(size = IntSize(1, 1)) { styledHome?.let { drawStyled(it, Size(1f, 1f)) } }
             layer.renderEffect = null
             averageSource.alpha = 1f - blend
             averageHome?.alpha = blend

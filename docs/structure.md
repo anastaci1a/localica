@@ -298,7 +298,7 @@ What None samples inside a finished panel material (frosted panels, the Queue dr
 
 The region stops where the recorded scene ends, so material bounds reaching past a screen or window edge never make a fill translucent. Opaque panels also ignore transparent pixels inside their source.
 
-On Android 13+, None maps the exact footprint onto the full power-of-two reduction texture. This avoids transparent padding that amplifies channel rounding differently for different material sizes.
+On Android 13+, None maps the exact footprint onto the full power-of-two reduction texture. This avoids transparent padding that amplifies channel rounding differently for different material sizes. Each reduction step is then one exact block mean of up to 8×8 texels in a single shader pass, drawn unscaled so no texture is sampled below half scale, and the tint/contrast shader takes the exact mean of the last level (at most 8×8 texels) directly: four GPU passes for a 512 px side instead of twelve, with the same coverage-weighted result.
 
 None replaces only the optical fill. Floating, panel, lift and selection shadows use the same appearance settings and drawing path in both renderers, so a renderer switch never changes a shadow.
 
