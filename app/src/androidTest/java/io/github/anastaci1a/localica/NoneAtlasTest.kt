@@ -320,7 +320,7 @@ class NoneAtlasTest {
         compose.setContent { LocalicaTheme {
             source = rememberFrostedBackdrop("input", dark = false)
             child = rememberFrostedBackdrop("retained-child", dark = false)
-            input = rememberNoneAtlasInput(source)
+            input = requireNotNull(rememberNoneAtlasInput(source))
             Canvas(Modifier.size(64.dp).recordFrostedBackdrop(source)) { drawRect(Color.Green) }
         } }
         compose.runOnIdle {

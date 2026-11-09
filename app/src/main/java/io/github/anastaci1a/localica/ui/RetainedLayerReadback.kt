@@ -19,8 +19,8 @@ private suspend fun copyLayerBitmap(layer: GraphicsLayer, density: Density, dire
     else layer.legacyLayerSnapshot(density, direction, straightAlpha = true)
 
 /** A recorded parent retains its source's native content until the copy completes. */
-internal class RetainedLayerReadback(private val onStage: ((ReadbackStage) -> Unit)? = null,
-    private val glassWork: Boolean = true) {
+internal class RetainedLayerReadback(private val glassWork: Boolean = true,
+    private val onStage: ((ReadbackStage) -> Unit)? = null) {
     init { if (glassWork) GlassWork.event("readback") }
     private val completion = ReadbackCompletion()
 

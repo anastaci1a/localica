@@ -304,7 +304,7 @@ The region stops where the recorded scene ends, so material bounds reaching past
 
 On Android 13+, Single-Tone Blur maps the exact footprint onto the full power-of-two reduction texture. This avoids transparent padding that amplifies channel rounding differently for different material sizes.
 
-Each reduction step is then one exact block mean of up to 8×8 texels in a single shader pass, drawn unscaled so no texture is sampled below half scale, and the tint/contrast shader takes the exact mean of the last level (at most 8×8 texels) directly: four GPU passes for a 512 px side instead of twelve, with the same coverage-weighted result.
+Each reduction step takes one exact block mean of up to 8×8 texels in a shader pass. Unscaled drawing avoids sampling below half scale. The tint/contrast shader averages the last level directly: four GPU passes for a 512 px side instead of twelve, with the same coverage-weighted result.
 
 Single-Tone Blur replaces only the optical fill. Floating, panel, lift and selection shadows use the same appearance settings and drawing path in all renderers, so a renderer switch never changes a shadow.
 
