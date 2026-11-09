@@ -10,8 +10,13 @@ enum class ArtistPhotoProvider { DEEZER, WIKIMEDIA }
 data class ArtistPhotoChoice(val provider: ArtistPhotoProvider, val id: String)
 data class ArtistPhotoCandidate(val choice: ArtistPhotoChoice, val name: String, val releases: List<String>, val overlapsLibrary: Boolean)
 data class PhotoAttribution(val artist: String, val credit: String, val licence: String, val licenceUrl: String, val sourcePage: String)
-data class CachedArtistPhoto(val file: File, val provider: ArtistPhotoProvider, val attribution: PhotoAttribution?, val fetchedAt: Long)
-data class ArtistPhotoState(val albumArt: String?, val photo: CachedArtistPhoto? = null)
+data class CachedArtistPhoto(val file: File, val provider: ArtistPhotoProvider, val attribution: PhotoAttribution?, val fetchedAt: Long,
+    val thumbnailFile: File? = null)
+data class PreparedArtistPhoto(val full: ByteArray, val thumbnail: ByteArray = full)
+data class ArtistPhotoState(val albumArt: String?, val photo: CachedArtistPhoto? = null, val failed: Boolean = false)
+data class ArtistPhotoSelection(val current: ArtistPhotoChoice?, val pending: ArtistPhotoChoice?, val failed: Boolean)
+data class ArtistPhotoCandidates(val items: List<ArtistPhotoCandidate> = emptyList(), val loading: Boolean = true,
+    val failed: Boolean = false)
 
 object ArtistPhotoMatching {
     fun normalize(value: String): String = Normalizer.normalize(value, Normalizer.Form.NFKC)

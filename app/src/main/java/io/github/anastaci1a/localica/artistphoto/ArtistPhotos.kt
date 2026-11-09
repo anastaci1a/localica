@@ -18,17 +18,46 @@ import java.util.concurrent.ConcurrentHashMap
 
 /** Lazy data API for #661. Collection emits album art before disk/network work; all work runs on IO. */
 class ArtistPhotos internal constructor(private val consent: NetworkConsent, private val disk: ArtistPhotoDisk,
-    private val http: PhotoTransport, private val now: () -> Long = System::currentTimeMillis) {
-    constructor(consent: NetworkConsent, cacheDirectory: File, matchDirectory: File, maxCacheBytes: Long = 64L * 1024 * 1024) :
-        this(consent, ArtistPhotoDisk(cacheDirectory, matchDirectory, maxCacheBytes), ArtistPhotoHttp(consent))
+    private val http: PhotoTransport, private val now: () -> Long = System::currentTimeMillis,
+    private val prepare: (ByteArray) -> PreparedArtistPhoto = { PreparedArtistPhoto(it) }) {
+    constructor(consent: NetworkConsent, cacheDirectory: File, matchDirectory: File, maxCacheBytes: Long = 512L * 1024 * 1024,
+        prepare: (ByteArray) -> PreparedArtistPhoto = { PreparedArtistPhoto(it) }) :
+        this(consent, ArtistPhotoDisk(cacheDirectory, matchDirectory, maxCacheBytes), ArtistPhotoHttp(consent), prepare = prepare)
     private val providers = ArtistPhotoProviders(http)
     private val lock = Mutex()
     private val fetches = ConcurrentHashMap<String, Mutex>()
+    private val candidateCache = ConcurrentHashMap<ArtistPhotoRequest, Pair<Long, ArtistPhotoCandidates>>()
+    private val remoteCandidates = ConcurrentHashMap<ArtistPhotoChoice, RemoteArtist>()
+    private val previewFetches = ConcurrentHashMap<ArtistPhotoChoice, Mutex>()
     private data class Snapshot(val saved: SavedPhotoChoice, val cached: CachedArtistPhoto?, val time: Long)
 
     private val mutableChanges = MutableStateFlow(0L)
     val changes = mutableChanges.asStateFlow()
+    suspend fun selection(artistKey: String): ArtistPhotoSelection = withContext(Dispatchers.IO) { lock.withLock {
+        val saved = disk.choice(artistKey)
+        ArtistPhotoSelection(saved.choice, saved.pendingChoice, saved.pendingChoice != null && saved.attemptedAt != null)
+    } }
+    suspend fun ready(request: ArtistPhotoRequest): ArtistPhotoState = withContext(Dispatchers.IO) { lock.withLock {
+        ArtistPhotoState(request.latestAlbumArt, if (disk.choice(request.artistKey).mode == "cleared") null
+            else disk.cached(request.artistKey, now()))
+    } }
+    suspend fun needsFetch(request: ArtistPhotoRequest): Boolean = withContext(Dispatchers.IO) { lock.withLock {
+        val saved = disk.choice(request.artistKey)
+        val time = now()
+        val cached = disk.cached(request.artistKey, time)
+        consent.allowed.value && saved.mode != "cleared" &&
+            saved.attemptedAt?.let { time < it || time - it < PHOTO_RETRY_MS } != true &&
+            (saved.pendingChoice != null || cached == null || time < cached.fetchedAt || time - cached.fetchedAt >= PHOTO_REFRESH_MS)
+    } }
     suspend fun cacheBytes(): Long = withContext(Dispatchers.IO) { lock.withLock { disk.cacheBytes() } }
+    suspend fun chosenBytes(): Long = withContext(Dispatchers.IO) { lock.withLock { disk.chosenBytes() } }
+    suspend fun cacheBudget(): Long = withContext(Dispatchers.IO) { lock.withLock { disk.budget() } }
+    suspend fun setCacheBudget(bytes: Long) = withContext(Dispatchers.IO) { lock.withLock {
+        disk.setBudget(bytes); mutableChanges.update { it + 1 }
+    } }
+    fun retainDisplay(artistKey: String): AutoCloseable = disk.retainDisplay(artistKey)
+    fun retainPreview(choice: ArtistPhotoChoice): AutoCloseable = disk.retainPreview(choice)
+    suspend fun displayed(artistKey: String) = withContext(Dispatchers.IO) { lock.withLock { disk.displayed(artistKey, now()) } }
     suspend fun clearCache() = withContext(Dispatchers.IO) { lock.withLock {
         disk.clearCache(); mutableChanges.update { it + 1 }
     } }
@@ -57,28 +86,37 @@ class ArtistPhotos internal constructor(private val consent: NetworkConsent, pri
                     time >= cached.fetchedAt && time - cached.fetchedAt < PHOTO_REFRESH_MS)) return@fetch
             if (!refresh && saved.attemptedAt?.let { time < it || time - it < PHOTO_RETRY_MS } == true) return@fetch
             val fetched = safely {
+                val preview = saved.pendingChoice?.let { choice -> lock.withLock { disk.preview(choice, time) } }
+                if (preview != null) {
+                    val choice = requireNotNull(saved.pendingChoice)
+                    RemoteArtist(choice, request.name, request.localReleases.toList(), attribution = preview.attribution) to preview.file.readBytes()
+                } else {
                 val selected = (saved.pendingChoice ?: saved.choice)?.let { choice -> providers.resolve(choice)?.takeIf {
                     saved.mode == "manual" || ArtistPhotoMatching.accepts(request, it.name, it.releases)
                 } }
                 selected?.let { download(it) } ?: if (saved.mode == "manual") null else find(request, saved.choice)
+                }
             }
             currentCoroutineContext().ensureActive()
             if (!consent.allowed.value) return@fetch
+            val encoded = fetched?.let { safely { prepare(it.second) } }
+            var superseded = false
             val refreshed = safely { lock.withLock {
                 // A pick/clear/reset arriving during IO owns the next commit, even if this read could not stop.
-                if (disk.choice(request.artistKey) != saved) return@withLock null
-                if (fetched == null) {
+                if (disk.choice(request.artistKey) != saved) { superseded = true; return@withLock null }
+                if (fetched == null || encoded == null) {
                     disk.saveChoice(request.artistKey, saved.copy(attemptedAt = time))
                     return@withLock null
                 }
                 val (remote, bytes) = fetched
-                disk.savePhoto(request.artistKey, remote, bytes, time) {
+                disk.savePhoto(request.artistKey, remote, encoded.full, time, encoded.thumbnail) {
                     disk.saveChoice(request.artistKey, SavedPhotoChoice(saved.mode, remote.choice, time))
                 }
             } }
-            if (refreshed != null) {
-                emit(ArtistPhotoState(request.latestAlbumArt, refreshed))
-            }
+            if (superseded) return@fetch
+            if (refreshed != null) emit(ArtistPhotoState(request.latestAlbumArt, refreshed))
+            else emit(ArtistPhotoState(request.latestAlbumArt, cached, failed = true))
+            mutableChanges.update { it + 1 }
         }
     }.flowOn(Dispatchers.IO)
 
@@ -102,6 +140,46 @@ class ArtistPhotos internal constructor(private val consent: NetworkConsent, pri
             }
         }
         return null
+    }
+
+    /** First emission is immediate; each provider match appears without waiting for the next match. */
+    fun candidatePages(request: ArtistPhotoRequest): Flow<ArtistPhotoCandidates> = flow {
+        val identity = request.copy(latestAlbumArt = null)
+        val cached = candidateCache[identity]
+        if (cached != null && now() - cached.first in 0 until PHOTO_RETRY_MS && !cached.second.loading) {
+            emit(cached.second); return@flow
+        }
+        val items = mutableListOf<ArtistPhotoCandidate>()
+        emit(ArtistPhotoCandidates())
+        if (!consent.allowed.value) return@flow
+        var failed = false
+        for (provider in ArtistPhotoProvider.entries) {
+            if (safely { providers.search(provider, request) { remote ->
+                remoteCandidates[remote.choice] = remote
+                items += ArtistPhotoCandidate(remote.choice, plainPhotoText(remote.name).orEmpty(),
+                    remote.releases.map { plainPhotoText(it).orEmpty() },
+                    ArtistPhotoMatching.accepts(request, remote.name, remote.releases))
+                emit(ArtistPhotoCandidates(items.toList()))
+            } } == null) failed = true
+        }
+        val result = ArtistPhotoCandidates(items.toList(), loading = false, failed = failed)
+        if (!failed) {
+            if (candidateCache.size >= 100) candidateCache.clear()
+            candidateCache[identity] = now() to result
+        }
+        emit(result)
+    }.flowOn(Dispatchers.IO)
+
+    suspend fun preview(choice: ArtistPhotoChoice): CachedArtistPhoto? = withContext(Dispatchers.IO) {
+        if (!consent.allowed.value) return@withContext null
+        previewFetches.computeIfAbsent(choice) { Mutex() }.withLock {
+            lock.withLock { disk.preview(choice, now()) }?.let { return@withLock it }
+            val remote = remoteCandidates[choice]?.takeIf { it.image != null } ?: providers.resolve(choice)
+                ?: return@withLock null
+            val (_, bytes) = download(remote) ?: return@withLock null
+            val encoded = prepare(bytes)
+            lock.withLock { if (consent.allowed.value) safely { disk.savePreview(remote, encoded, now()) } else null }
+        }
     }
 
     /** Explicit review API. Names and releases are bounded; remote image URLs are never returned. */
