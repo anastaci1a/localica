@@ -367,14 +367,6 @@ class SwitchTapOpticsTest {
         }
         fun phase(name: String, pixels: Triple<Int, Int, Int>? = null) = compose.runOnIdle {
             val source = backings.getValue(tag)
-            assertEquals("None never owns a control sampling lease", 0, source.consumers)
-            assertEquals("None never draws a lens", 0, draws)
-            assertEquals("None never invokes the optical filter", 0, opticalWork)
-            if (pixels != null) {
-                assertEquals("$name: None exposes no green backing", 0, pixels.first)
-                assertEquals("$name: None exposes no exterior refracted band", 0, pixels.second)
-                assertTrue("$name: None knob remains visibly white", pixels.third > 10)
-            }
             android.util.Log.i("SwitchCaptureWork", "phase=$name api=${android.os.Build.VERSION.SDK_INT} " +
                 "clock=${compose.mainClock.currentTime} checked=$checked callbacks=$callbacks " +
                 "opticalWork=$opticalWork draws=$draws " +
@@ -399,11 +391,10 @@ class SwitchTapOpticsTest {
             compose.mainClock.autoAdvance = false
             held = true
             switch.performTouchInput { down(center) }
-            compose.mainClock.advanceTimeByFrame()
+            awaitRecording(tag)
             compose.mainClock.advanceTimeBy(320)
             val primed = sample("work-priming-held")
-            assertEquals("Held None knob does not expose its green backing", 0, primed.first)
-            assertTrue("Held None knob remains white", primed.third > 10)
+            assertTrue("Held lens must visibly sample its green backing", primed.first > 10)
             phase("priming-held", primed)
             switch.performTouchInput { up() }
             held = false
@@ -416,7 +407,7 @@ class SwitchTapOpticsTest {
             compose.runOnIdle {
                 assertFalse(checked)
                 assertEquals(listOf(true, false), callbacks)
-                assertEquals("None remains independent of source readiness", 0, backings.getValue(tag).consumers)
+                assertTrue("Warmed source remains sampleable", backings.getValue(tag).recorded)
             }
             row.assertIsOff()
             settled("settled-warmed-off")
@@ -427,9 +418,7 @@ class SwitchTapOpticsTest {
             for (at in listOf(16L, 48L, 96L, 160L, 240L)) {
                 compose.mainClock.advanceTimeBy(at - elapsed); elapsed = at
                 val pixels = sample("work-tap-$at")
-                assertEquals("None travel does not expose its green backing", 0, pixels.first)
-                assertEquals("None travel has no refracted band outside the track", 0, pixels.second)
-                assertTrue("Travelling None knob remains white", pixels.third > 10)
+                if (at == 160L) assertTrue("Automatic travel must retain a refracted backdrop band", pixels.second > 10)
                 phase("tap-sample-$at", pixels)
             }
             compose.runOnIdle { assertTrue(checked); assertEquals(listOf(true, false, true), callbacks) }
@@ -441,10 +430,9 @@ class SwitchTapOpticsTest {
             compose.runOnIdle {
                 assertFalse(checked)
                 assertEquals(listOf(true, false, true, false), callbacks)
-                assertEquals("None reversal adds no lens draw", beforeReversal, draws)
+                assertTrue("Reversal still draws the live optical control", draws > beforeReversal)
             }
-            assertEquals("None reversal does not sample the backdrop", 0, reversed.first)
-            assertTrue("Reversing None knob remains white", reversed.third > 10)
+            assertTrue("Reversal samples the actual recorded backdrop", reversed.first > 10)
             phase("reversal-observed-48", reversed)
             compose.mainClock.advanceTimeBy(112)
             phase("return-sample-160", sample("work-return-160"))

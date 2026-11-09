@@ -23,15 +23,6 @@ internal fun GlassControlScene(modifier: Modifier, horizontalPadding: Dp = 20.dp
     active: () -> Float = { 1f }, face: () -> Color = { Color.Transparent },
     prepare: () -> Boolean = { false },
     scene: DrawScope.() -> Unit) {
-    if (requestedGlassNone()) {
-        // No recording, source subscription, lens, reduction or exclusive lease in None.
-        Canvas(modifier) {
-            scene()
-            val shape = geometry()
-            drawRoundRect(Color.White, shape.bounds.topLeft, shape.bounds.size, CornerRadius(shape.corner))
-        }
-        return
-    }
     val renderer = currentGlassRendererGeneration()
     val modern = Build.VERSION.SDK_INT >= 33
     val none by androidx.compose.animation.core.animateFloatAsState(
