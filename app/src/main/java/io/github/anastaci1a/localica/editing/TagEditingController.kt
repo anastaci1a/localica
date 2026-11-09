@@ -90,6 +90,7 @@ class TagEditingController(private val context: Context, private val library: Li
                 if (state.value.cancelPending || state.value.interruptedBatch ||
                     finished.phase != TagBatchPhase.AwaitingDecision || finished.saved != finished.tracks.size) return@withLock
                 transaction.commit(id)
+                recordJob("Complete")
                 completion?.invoke(true); completion = null
                 mutable.update { it.copy(batchId = null, tracks = emptyList(), results = emptyList(), progressVisible = false, draft = null) }
             }
@@ -165,6 +166,7 @@ class TagEditingController(private val context: Context, private val library: Li
                 val id = state.value.batchId ?: return@withLock
                 transaction.commit(id)
                 val success = state.value.saved == state.value.tracks.size
+                recordJob(if (success) "Complete" else "Finished with errors")
                 completion?.invoke(success); completion = null
                 mutable.update { it.copy(batchId = null, progressVisible = false, tracks = emptyList(), results = emptyList(), draft = null) }
             } catch (failure: Exception) { mutable.update { it.copy(error = failure.message) } }
@@ -256,6 +258,7 @@ class TagEditingController(private val context: Context, private val library: Li
                 recordJob(if (state.value.saved == batch.tracks.size) "Complete; awaiting Done" else "Finished with errors or stopped")
                 if (latest.background && state.value.saved == batch.tracks.size) {
                     transaction.commit(batch.id)
+                    recordJob("Complete")
                     completion?.invoke(true); completion = null
                     mutable.update { it.copy(batchId = null, tracks = emptyList(), results = emptyList(), progressVisible = false, draft = null) }
                 }
