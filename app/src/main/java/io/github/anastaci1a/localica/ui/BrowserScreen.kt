@@ -63,7 +63,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlin.math.roundToInt
 
 /** Optional screen and per-cell work evidence (kind, route or item key); no behavior depends on it. */
-internal data class BrowseScrollFrame(val index: Int, val offset: Int, val headerHeight: Int?, val rowHeight: Int?)
+internal data class BrowseScrollFrame(val index: Int, val offset: Int, val headerHeight: Int?, val rowHeight: Int?,
+    val viewportWidth: Int = 0, val noticeWidth: Int? = null, val noticeLookahead: Boolean? = null, val noticeContent: Int? = null)
 internal class BrowseScrollFrameProbe {
     var request by mutableIntStateOf(0)
     @Volatile var serial = 0
@@ -658,11 +659,27 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     // A cursor-only refresh need not blink a still-valid control. Genuine query or
     // occurrence changes hide it until the corresponding list has been presented.
     val returnListMatches = loadedResult != null && (!queryPending || presentedReturnOwner === returnOwner)
+    // A zero-height notice is canonicalized to item 1 at offset 0 by the grid.
+    // Its index alone cannot distinguish that visual home from a scrolled list.
+    val noticeMeasurement = remember { BrowseNoticeMeasurement() }
+    val noticeContent = remember(library.problem, library.unavailableFolders.isNotEmpty(),
+        playlists.problem, library.loading,
+        library.snapshot.folders.isEmpty() && route.collection?.kind != MediaKind.Queue,
+        result.items.isEmpty() && !library.loading && !queryPending) { Any() }
+    val measuresNotice = !artDetail && !showSearchPill && !showFilters
+    val noticeDirection = androidx.compose.ui.platform.LocalLayoutDirection.current
+    val scrolledFromTop by remember(gridState, noticeMeasurement, noticeContent, measuresNotice,
+        density, noticeDirection) { derivedStateOf {
+        val height = noticeMeasurement.height(noticeContent, gridState.layoutInfo.viewportSize.width,
+            density, noticeDirection)
+        gridState.canScrollBackward && !(measuresNotice && height == 0 &&
+            gridState.firstVisibleItemIndex == 1 && gridState.firstVisibleItemScrollOffset == 0)
+    } }
     val clearableFilter = (route.tab == MainTab.Library && route.collection == null && route.filter != null) ||
         (artistDetail && validAlbums.isNotEmpty())
     // Recompose only when the offered action changes, not at every scroll start/stop.
-    val returnAction by remember(gridState, clearableFilter) { derivedStateOf {
-        listReturnAction(gridState.canScrollBackward, gridState.isScrollInProgress, clearableFilter)
+    val returnAction by remember(gridState, clearableFilter, noticeContent, measuresNotice, density, noticeDirection) { derivedStateOf {
+        listReturnAction(scrolledFromTop, gridState.isScrollInProgress, clearableFilter)
     } }
     DisposableEffect(playbackFollow) { onDispose { playbackFollow.cancel() } }
     var movingReturn by remember { mutableStateOf<ListReturnAction?>(null) }
@@ -716,7 +733,11 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
         reorder.currentSongKey = playingEntryId.takeIf { route.collection?.kind == MediaKind.Queue }
     }
     val dragHost = LocalSongDragHost.current
-    val floatingControlClearance = if (route.collection?.kind == MediaKind.Queue) 12.dp else 0.dp
+    val floatingControlClearance = when {
+        route.collection?.kind == MediaKind.Queue -> 12.dp
+        popupDismiss != null -> FloatingSurfaceGap
+        else -> 0.dp
+    }
     SideEffect {
         reorder.onDragStarted = {
             dragHost?.cancelBottomMargin = floatingControlClearance
@@ -1015,7 +1036,8 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                     val layout = gridState.layoutInfo
                     scrollFrameProbe.frame = BrowseScrollFrame(gridState.firstVisibleItemIndex, gridState.firstVisibleItemScrollOffset,
                         layout.visibleItemsInfo.firstOrNull { it.index == 0 }?.size?.height,
-                        layout.visibleItemsInfo.firstOrNull { it.index > 0 }?.size?.height)
+                        layout.visibleItemsInfo.firstOrNull { it.index > 0 }?.size?.height,
+                        layout.viewportSize.width, noticeMeasurement.width, noticeMeasurement.lookahead, noticeMeasurement.contentIdentity)
                     scrollFrameProbe.serial++
                 })
                 .controlScrollParent(gridState, ControlScrollAxis.Vertical)
@@ -1060,8 +1082,16 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                         maxOf(with(density) { returnControlHeight.toDp() } + floatingControlClearance,
                             with(density) { actionControlHeight.toDp() }) + 16.dp)) {
                 item(key = "browser-notice", contentType = "notice", span = { GridItemSpan(maxLineSpan) }) {
+                    if (measuresNotice) {
+                        // The grid canonicalizes a zero-height notice to item 1 / offset 0 and then
+                        // deactivates item 0. Pinning keeps the actual notice composed and measured
+                        // there, so its content changes are observed instead of inferred.
+                        val pinnable = androidx.compose.ui.layout.LocalPinnableContainer.current
+                        DisposableEffect(pinnable) { val pin = pinnable?.pin(); onDispose { pin?.release() } }
+                    }
                     // Grid gutters belong to tiles; full-span headers keep their viewport alignment.
                     Column(Modifier.requiredWidth(with(density) { viewportWidth.toDp() }).testTag("browse-full-span")
+                        .then(if (measuresNotice) Modifier.measureBrowseNotice(noticeMeasurement, noticeContent) else Modifier)
                         .onSizeChanged { if (artDetail) collectionHeaderHeight = it.height }
                         .then(if (pinchHeader != null) Modifier.collectionPinchHeader(pinchHeader, displayedStyle) else Modifier)) {
                         if (artDetail) {
@@ -1286,16 +1316,16 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                 collectionHome.displacement(gridState) < -1f
             } }
             val showReturn = selectionVisible && !playerOpen && !localSearchOpen && returnListMatches &&
-                !session.active && reorder.drag == null && !returning &&
+                !session.active && reorder.drag == null && !(playbackReturn && returning) &&
                 (if (playbackReturn) playingIndex != null && (if (route.search) currentOffscreen else !playbackFollow.attached)
-                    else hasSongItems && (if (artDetail) songsPastTop else gridState.canScrollBackward))
+                    else hasSongItems && (if (artDetail) songsPastTop else scrolledFromTop))
             // A drag owns this slot exclusively; retire a half-faded return drawing
             // instead of overlapping its replacement X during a quick hold-and-move.
             key(reorder.drag != null) { CompositionLocalProvider(LocalFrostedBackdrop provides listBackdrop) {
                 FloatingReturnToPositionButton(up = !playbackReturn || returnDirection < 0,
                     label = if (playbackReturn) "Current song" else "Return to top",
                     visible = showReturn, reducedMotion = reducedMotion,
-                    returning = returning,
+                    returning = playbackReturn && returning,
                     onHeightMeasured = { returnControlHeight = it },
                     modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = obscuredInset + floatingControlClearance)) {
                     if (!playbackReturn) returnToList(if (artDetail) ListReturnAction.ScrollSongs else ListReturnAction.ScrollTop)
