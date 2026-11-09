@@ -117,6 +117,10 @@ internal val LocalLoadingShimmer = compositionLocalOf<State<Float>?> { null }
  * Providers surround colored/stylized viewports; loaded content and final fallback ignore it.
  */
 internal val LocalLoadingMaterialOpacity = staticCompositionLocalOf { 1f }
+/** Loading material base, read by the same placeholder and text painters; null keeps the theme's
+ * neutral surfaceContainer. Artwork pages supply translucent page ink at Library's shade (#705).
+ * Like the opacity, loaded content and the final missing-art fallback ignore it. */
+internal val LocalLoadingMaterialColor = staticCompositionLocalOf<androidx.compose.ui.graphics.Color?> { null }
 internal val LocalLoadingShimmerActivity = staticCompositionLocalOf<LoadingShimmerActivity?> { null }
 
 /** Visible pending artwork keeps the existing viewport clock alive after catalog reveal. */

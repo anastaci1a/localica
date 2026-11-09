@@ -319,7 +319,11 @@ With no filter selected, Library combines collections: default Albums, Album Art
 
 Labels use **Album Artist / Album Artists**.
 
-Initial browsing waits for every catalog source used by the current view, never for artwork bytes. Fill the viewport with geometry-matched neutral artwork/title/information skeletons using one shimmer phase. Omit unsupported artwork/information slots. On Artist/Album Artist/Album/Playlist/Queue backgrounds, loading material alone uses 50% opacity.
+Initial browsing waits for every catalog source used by the current view, never for artwork bytes. Fill the viewport with geometry-matched neutral artwork/title/information skeletons using one shimmer phase. Omit unsupported artwork/information slots.
+
+On Artist/Album Artist/Album/Playlist artwork pages, loading artwork and text skeletons use the page ink at 4% opacity. This is Library's neutral shade, so they keep its contrast and sweep over any artwork background. Queue and in-collection search loading material uses 50% opacity.
+
+Loaded content and the final missing-art fallback keep their normal material on every page.
 
 Loading artwork is gradient-only, never a music note. Loaded content and the final missing-art fallback retain their normal appearance. Artist-only views start circular. Reveal ready rows at a fixed radial speed from the top-left, fading text/artwork over fading shapes. Mixed-view artist placeholders and artwork share one eased square-to-circle contour.
 

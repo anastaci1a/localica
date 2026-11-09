@@ -122,7 +122,8 @@ private fun ArtworkResolutionBlend(artwork: ImageBitmap, modifier: Modifier,
 internal fun ArtworkPlaceholder(loading: Boolean, modifier: Modifier = Modifier, showIcon: Boolean = true,
     tintUris: List<String>? = null) {
     val loadingOpacity = LocalLoadingMaterialOpacity.current.coerceIn(0f, 1f)
-    val base = MaterialTheme.colorScheme.surfaceContainer
+    // The loading material never reaches the final missing-art fallback (#705).
+    val base = (if (loading) LocalLoadingMaterialColor.current else null) ?: MaterialTheme.colorScheme.surfaceContainer
     val highlight = MaterialTheme.colorScheme.onSurface.copy(alpha = .065f)
     val dark = MaterialTheme.colorScheme.surface.luminance() < .5f
     val reducedMotion = LocalReducedMotion.current
