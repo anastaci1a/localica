@@ -39,7 +39,9 @@ Rules:
 
 Every glyph, built-in or imported, moves vertically half-way from its bounding-box centre toward its ink-weighted centre. Bottom-heavy glyphs such as Save rise, top-heavy glyphs drop, and symmetric glyphs keep their exact position. Moves below 0.05 dp are ignored and never push ink past the icon edge. Raster masks move by whole pixels.
 
-Vectors are measured from their paths during import and stay paths. Template exports contain the uncorrected geometry, so a re-imported template matches the built-in icons.
+Imported vectors are measured from their paths before publication and stay paths. Built-in offsets come from a generated table; JVM checks bind every entry to the resources and optical rule. Drawing never measures glyphs. Template exports contain uncorrected geometry, so a re-imported template matches the built-in icons.
+
+To regenerate the table, set `LOCALICA_ICON_OPTICAL_REPORT` to an output directory and run `OpticalCentringPacksTest.builtinPackFollowsTheRuleAndSymmetricGlyphsStay`. Copy its `BuiltinIconOffsets.kt` into the icons package, then run the complete class to verify the table. Qualified built-in resource variants require an explicit table-selection policy.
 
 ## SVG subset
 
