@@ -33,7 +33,7 @@ class ArtistPhotoCacheControlsTest {
             photos.clear(cleared.artistKey)
             photos.refreshAll(listOf(chosen, cleared))
             assertEquals(3, calls)
-            assertTrue(photos.cacheBytes() > 0)
+            assertTrue(photos.chosenBytes() > 0)
             assertEquals("manual", disk.choice(chosen.artistKey).mode)
             assertEquals("cleared", disk.choice(cleared.artistKey).mode)
             // Explicit refresh bypasses the 30-day cache lifetime while preserving the chosen provider.
@@ -41,6 +41,7 @@ class ArtistPhotoCacheControlsTest {
             assertEquals(6, calls)
             photos.clearCache()
             assertEquals(0L, photos.cacheBytes())
+            assertNotNull("Clearing evictable cache keeps the deliberately chosen image", photos.ready(chosen).photo)
             assertEquals(ArtistPhotoChoice(ArtistPhotoProvider.DEEZER, "8"), disk.choice(chosen.artistKey).choice)
             assertEquals("cleared", disk.choice(cleared.artistKey).mode)
             consent.setAllowed(false)

@@ -14,6 +14,7 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 class ArtistPhotoRepositoryTest {
+    private class AbruptExit : Error()
     @get:Rule val temporary = TemporaryFolder()
     private val request = ArtistPhotoRequest("artist:Twin", "Twin", setOf("Local Album"), "album:latest")
     private val jpg = byteArrayOf(0xff.toByte(), 0xd8.toByte(), 0xff.toByte()) + ByteArray(1021)
@@ -132,7 +133,7 @@ class ArtistPhotoRepositoryTest {
         for (wrong in listOf(false, true)) {
             val server = Server().apply { deezer = false; missingLicence = true; wrongReleases = wrong }
             val photos = repo(server); photos.reset(request.artistKey)
-            assertEquals(ArtistPhotoState("album:latest"), photos.observe(request).last())
+            assertEquals(ArtistPhotoState("album:latest", failed = true), photos.observe(request).last())
             assertFalse(server.calls.any { it.contains("upload.wikimedia.org") })
         }
     }
@@ -167,11 +168,11 @@ class ArtistPhotoRepositoryTest {
         val disk = disk((PHOTO_MAX_BYTES + 32768).toLong())
         val remote = RemoteArtist(ArtistPhotoChoice(ArtistPhotoProvider.DEEZER, "8"), "Twin", listOf("Local Album"))
         val large = jpg + ByteArray(3 * 1024 * 1024)
-        disk.saveChoice("a", SavedPhotoChoice("manual", remote.choice))
+        disk.saveChoice("a", SavedPhotoChoice("auto", remote.choice))
         disk.savePhoto("a", remote, large, 1)
         disk.savePhoto("b", remote, large, 2)
         assertNull(disk.cached("a", 3)); assertNotNull(disk.cached("b", 3))
-        assertEquals("manual", disk.choice("a").mode)
+        assertEquals("auto", disk.choice("a").mode)
         assertTrue(File(temporary.root, "cache").listFiles()!!.sumOf { it.length() } <= PHOTO_MAX_BYTES + 32768)
     }
     @Test fun oversizedResponsesAndUntrustedHostsFailWithoutLeakingErrors() = runBlocking {
@@ -290,5 +291,146 @@ class ArtistPhotoRepositoryTest {
         assertTrue("A failed selection commit must not retire the previous ready file", previous.file.isFile)
         assertArrayEquals(previousBytes, requireNotNull(disk().cached(request.artistKey, 100_002L)).file.readBytes())
         assertEquals(replacement, disk().choice(request.artistKey).pendingChoice)
+    }
+
+    @Test fun candidateGridEmitsBeforeProviderCompletionAndReopensWithoutNetwork() = runBlocking {
+        val server = Server()
+        val held = CompletableDeferred<Unit>()
+        val release = CompletableDeferred<Unit>()
+        val photos = ArtistPhotos(Consent(true), disk(), PhotoTransport { url, max ->
+            if (url.contains("musicbrainz.org/ws/2/artist/?")) { held.complete(Unit); release.await() }
+            server.get(url, max)
+        }, { 100_000L })
+        val pages = mutableListOf<ArtistPhotoCandidates>()
+        val collection = launch { photos.candidatePages(request).collect { pages += it } }
+        try {
+            withTimeout(2000) { held.await() }
+            assertTrue(pages.first().loading)
+            assertTrue(pages.first().items.isEmpty())
+            assertTrue("Deezer tiles must be visible before the next provider returns", pages.last().items.isNotEmpty())
+            assertTrue(pages.last().loading)
+            release.complete(Unit); collection.join()
+            server.calls.clear(); server.offline = true
+            val reopened = photos.candidatePages(request.copy(latestAlbumArt = "different fallback")).toList()
+            assertEquals(1, reopened.size)
+            assertFalse(reopened.single().loading)
+            assertEquals(pages.last().items, reopened.single().items)
+            assertTrue(server.calls.isEmpty())
+        } finally { collection.cancelAndJoin() }
+    }
+
+    @Test fun previewPixelsSurviveRepositoryReopenAndConsentOffDoesNotReadOrFetchThem() = runBlocking {
+        val server = Server(); val photos = repo(server)
+        val candidate = photos.candidatePages(request).last().items.first { it.choice.id == "8" }
+        val preview = requireNotNull(photos.preview(candidate.choice))
+        server.calls.clear(); server.offline = true
+        val reopened = repo(server)
+        assertArrayEquals(preview.file.readBytes(), requireNotNull(reopened.preview(candidate.choice)).file.readBytes())
+        assertTrue(server.calls.isEmpty())
+        assertNull(repo(server, Consent(false)).preview(candidate.choice))
+        assertTrue(server.calls.isEmpty())
+    }
+
+    @Test fun durableQueueResumesIncompleteArtistsAndOlderCompletionCannotConsumeANewerPick() {
+        val directory = File(temporary.root, "jobs")
+        val jobs = ArtistPhotoJobs(directory)
+        val original = jobs.enqueue(request, refresh = false)
+        val reopened = ArtistPhotoJobs(directory)
+        assertEquals(listOf(original), reopened.all())
+        val replacement = reopened.enqueue(request, refresh = true)
+        reopened.complete(original, succeeded = true)
+        assertEquals(listOf(replacement), ArtistPhotoJobs(directory).all())
+        reopened.complete(replacement, succeeded = false)
+        assertEquals("failed", ArtistPhotoJobs(directory).all().single().state)
+        reopened.retryFailures()
+        val retry = ArtistPhotoJobs(directory).all().single()
+        assertEquals("pending", retry.state)
+        assertTrue(retry.refresh)
+        reopened.complete(retry, succeeded = true)
+        assertTrue(ArtistPhotoJobs(directory).all().isEmpty())
+    }
+
+    @Test fun chosenPhotosLiveWithChoicesAndSurviveEvictionAndClearCache() {
+        val disk = disk((PHOTO_MAX_BYTES + 32768).toLong())
+        val choice = ArtistPhotoChoice(ArtistPhotoProvider.DEEZER, "8")
+        val remote = RemoteArtist(choice, "Twin", listOf("Local Album"))
+        val large = jpg + ByteArray(3 * 1024 * 1024)
+        disk.saveChoice("chosen", SavedPhotoChoice("manual", choice))
+        val photo = disk.savePhoto("chosen", remote, large, 1)
+        assertTrue(photo.file.absolutePath.startsWith(File(temporary.root, "choices/photos").absolutePath))
+        disk.savePhoto("other", remote, large, 2)
+        disk.savePhoto("another", remote, large, 3)
+        disk.clearCache()
+        assertTrue(photo.file.isFile)
+        assertNotNull(disk.cached("chosen", 4))
+        assertEquals(0L, disk.cacheBytes())
+        assertTrue(disk.chosenBytes() >= large.size)
+    }
+
+    @Test fun evictionUsesLastDisplayAndProtectsVisiblePhotosEvenWhenOverBudget() {
+        val disk = disk((PHOTO_MAX_BYTES + 32768).toLong())
+        val remote = RemoteArtist(ArtistPhotoChoice(ArtistPhotoProvider.DEEZER, "8"), "Twin", emptyList())
+        val large = jpg + ByteArray(2 * 1024 * 1024)
+        disk.savePhoto("first", remote, large, 1)
+        disk.savePhoto("second", remote, large, 2)
+        disk.displayed("first", 10)
+        disk.cached("second", 20) // Background reads must not promote LRU order.
+        disk.savePhoto("third", remote, large, 3)
+        assertNotNull(disk.cached("first", 20))
+        assertNull(disk.cached("second", 20))
+        val lease = disk.retainDisplay("first")
+        try {
+            disk.savePhoto("fourth", remote, large, 30)
+            assertNotNull(disk.cached("first", 31))
+            disk.clearCache()
+            assertNotNull(disk.cached("first", 32))
+        } finally { lease.close() }
+        disk.clearCache()
+        assertNull(disk.cached("first", 33))
+    }
+
+    @Test fun cacheBudgetSurvivesReopen() {
+        val disk = disk()
+        disk.setBudget(512L * 1024 * 1024)
+        assertEquals(512L * 1024 * 1024, disk().budget())
+        disk.setBudget(1024L * 1024 * 1024)
+        assertEquals(1024L * 1024 * 1024, disk().budget())
+    }
+
+    @Test fun processDeathBeforeSelectionCommitRestoresReadyPixelsAndKeepsPendingIntent() {
+        val disk = disk()
+        val choice = ArtistPhotoChoice(ArtistPhotoProvider.DEEZER, "8")
+        val remote = RemoteArtist(choice, "Twin", emptyList())
+        disk.saveChoice(request.artistKey, SavedPhotoChoice("manual", choice))
+        val previous = disk.savePhoto(request.artistKey, remote, jpg, 1)
+        disk.saveChoice(request.artistKey, SavedPhotoChoice("manual", choice, pendingChoice = choice))
+        try {
+            disk.savePhoto(request.artistKey, remote, jpg + byteArrayOf(1), 2) { throw AbruptExit() }
+            fail("Must interrupt between image and selection commits")
+        } catch (_: AbruptExit) { }
+        val restored = disk().cached(request.artistKey, 3)!!
+        assertEquals(previous.file, restored.file)
+        assertArrayEquals(jpg, restored.file.readBytes())
+        assertEquals(choice, disk().choice(request.artistKey).pendingChoice)
+    }
+
+    @Test fun processDeathAfterSelectionCommitRetainsNewPixelsAndFinishesOldImageRetirement() {
+        val disk = disk()
+        val choice = ArtistPhotoChoice(ArtistPhotoProvider.DEEZER, "8")
+        val remote = RemoteArtist(choice, "Twin", emptyList())
+        disk.saveChoice(request.artistKey, SavedPhotoChoice("manual", choice))
+        val previous = disk.savePhoto(request.artistKey, remote, jpg, 1)
+        disk.saveChoice(request.artistKey, SavedPhotoChoice("manual", choice, pendingChoice = choice))
+        val replacement = jpg + byteArrayOf(1)
+        try {
+            disk.savePhoto(request.artistKey, remote, replacement, 2) {
+                disk.saveChoice(request.artistKey, SavedPhotoChoice("manual", choice))
+                throw AbruptExit()
+            }
+            fail("Must interrupt before old-image cleanup")
+        } catch (_: AbruptExit) { }
+        assertArrayEquals(replacement, disk().cached(request.artistKey, 3)!!.file.readBytes())
+        assertFalse(previous.file.exists())
+        assertNull(disk().choice(request.artistKey).pendingChoice)
     }
 }
