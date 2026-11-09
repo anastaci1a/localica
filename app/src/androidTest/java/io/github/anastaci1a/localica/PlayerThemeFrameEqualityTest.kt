@@ -54,7 +54,10 @@ class PlayerThemeFrameEqualityTest {
         val glassDraws = mutableListOf<GlassSurfaceDrawObservation>()
         val glassObserver: (GlassSurfaceDrawObservation)->Unit = { if(glassDraws.size<1024) glassDraws+=it }
         compose.mainClock.autoAdvance = false
-        compose.setContent { LocalicaTheme {
+        compose.setContent {
+            val shadowTables = remember { mutableSetOf<androidx.compose.runtime.tooling.CompositionData>() }
+            CompositionLocalProvider(androidx.compose.runtime.tooling.LocalInspectionTables provides shadowTables) {
+            androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.pinLiveShadowBranch()) { LocalicaTheme {
             CompositionLocalProvider(LocalLayoutDirection provides direction, LocalGlassAppearance provides appearance,
                 LocalPlayerWorkObserver provides { kind, _ -> work += kind },
                 LocalLoadingShimmer provides shimmer, LocalLoadingMaterialColor provides material,
@@ -69,7 +72,7 @@ class PlayerThemeFrameEqualityTest {
                     }
                 }
             }
-        } }
+        } } } }
         // Each arm receives the same relative clock advances and the same immutable visual.
         data class Step(val p: Float, val loaded: Boolean = false, val tint: Color? = null)
         val samples = listOf(Step(1f), Step(.42f), Step(.8f, tint = Color(0xFF98512B)),

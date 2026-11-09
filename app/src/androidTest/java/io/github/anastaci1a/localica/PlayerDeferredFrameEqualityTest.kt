@@ -51,7 +51,10 @@ class PlayerDeferredFrameEqualityTest {
         var epoch by mutableIntStateOf(0)
         lateinit var scope: CoroutineScope
         val work = mutableListOf<String>()
-        compose.setContent { LocalicaTheme {
+        compose.setContent {
+            val shadowTables = remember { mutableSetOf<androidx.compose.runtime.tooling.CompositionData>() }
+            CompositionLocalProvider(androidx.compose.runtime.tooling.LocalInspectionTables provides shadowTables) {
+            androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.pinLiveShadowBranch()) { LocalicaTheme {
             CompositionLocalProvider(LocalLayoutDirection provides direction, LocalGlassAppearance provides appearance,
                 LocalPlayerWorkObserver provides { kind, _ -> work += kind }) {
                 scope = rememberCoroutineScope()
@@ -64,7 +67,7 @@ class PlayerDeferredFrameEqualityTest {
                     }
                 }
             }
-        } }
+        } } } }
         // Each arm receives the same relative clock advances and the same immutable visual.
         val samples = listOf(0f, .08f, .38f, .3801f, .7f, .7001f, .8f, .8301f, .99f, 1f, .6f, .25f, .75f, 0f)
         data class Frame(val pixels: IntArray, val width: Int, val height: Int, val bounds: Map<String, androidx.compose.ui.geometry.Rect>)

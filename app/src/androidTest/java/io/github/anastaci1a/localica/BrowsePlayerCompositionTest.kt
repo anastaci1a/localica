@@ -74,7 +74,10 @@ class BrowsePlayerCompositionTest {
         }
         var open by mutableStateOf(false)
         var reference by mutableStateOf(false)
-        compose.setContent { LocalicaTheme {
+        compose.setContent {
+            val shadowTables = remember { mutableSetOf<androidx.compose.runtime.tooling.CompositionData>() }
+            CompositionLocalProvider(androidx.compose.runtime.tooling.LocalInspectionTables provides shadowTables) {
+            androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.pinLiveShadowBranch()) { LocalicaTheme {
             CompositionLocalProvider(LocalBrowseCellWorkObserver provides observer,
                 LocalGlassAppearance provides GlassAppearance(renderer=GlassRendererMode.None)) {
                 key(reference) {
@@ -84,7 +87,7 @@ class BrowsePlayerCompositionTest {
                     reducedMotion=true,queryDispatcher=kotlinx.coroutines.Dispatchers.Unconfined)
                 }
             }
-        } }
+        } } } }
         compose.onNodeWithText("Quiet song 0").assertIsDisplayed()
         compose.waitForIdle()
         fun pixels(): IntArray {
@@ -96,7 +99,13 @@ class BrowsePlayerCompositionTest {
         for(value in listOf(true,false,true,false)) {
             compose.runOnIdle { open=value }
             compose.waitForIdle()
-            assertArrayEquals("Retained browse pixels at playerOpen=$value",original,pixels())
+            val actual = pixels()
+            compose.runOnIdle { android.util.Log.i("PERF2_P1", "album=$album open=$value screens=${work.count { it=="screen" }} rows=${work.count { it=="row" }} changedKeys=${work.filter { it.startsWith("row-key:") }}") }
+            if (!original.contentEquals(actual)) {
+                val image = compose.onNodeWithTag("browser-list").captureToImage()
+                savePlayerEqualityEvidence("browse-album$album-open$value", original, actual, image.width, image.height)
+            }
+            assertArrayEquals("Retained browse pixels at playerOpen=$value",original,actual)
         }
         compose.runOnIdle {
             android.util.Log.i("PERF2_P1", "album=$album screens=${work.count { it=="screen" }} rows=${work.count { it=="row" }} ownerIdentities=${rowOwners.map { System.identityHashCode(it) }.distinct().size} changedKeys=${work.filter { it.startsWith("row-key:") }}")
