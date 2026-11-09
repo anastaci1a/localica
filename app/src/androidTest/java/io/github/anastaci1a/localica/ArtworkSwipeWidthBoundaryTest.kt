@@ -17,7 +17,7 @@ import org.junit.Rule
 import org.junit.Test
 
 class ArtworkSwipeWidthBoundaryTest {
-    @get:Rule val compose = localicaComposeRule()
+    @get:Rule val compose = localicaAndroidComposeRule<androidx.activity.ComponentActivity>()
     @Test fun releaseBeforeWidthKeyApplyUsesTheAppliedThresholdAndStride() = inspect(false)
     @Test fun widthKeyApplyCancelsTheOldRecognizerBeforeRelease() = inspect(true)
 
@@ -40,7 +40,7 @@ class ArtworkSwipeWidthBoundaryTest {
             val downTime = SystemClock.uptimeMillis()
             fun send(action: Int, at: Offset, delta: Long) {
                 val event = MotionEvent.obtain(downTime, downTime + delta, action, at.x, at.y, 0)
-                try { compose.activity().window.callback.dispatchTouchEvent(event) } finally { event.recycle() }
+                try { compose.activity.window.callback.dispatchTouchEvent(event) } finally { event.recycle() }
             }
             compose.runOnUiThread {
                 send(MotionEvent.ACTION_DOWN, origin, 0)
