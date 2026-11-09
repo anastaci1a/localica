@@ -28,6 +28,7 @@ import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
 import java.io.File
+import kotlin.math.abs
 import kotlin.math.roundToInt
 
 /** Native actual-player fields, compared with the existing kernel at identical measured geometry.
@@ -47,6 +48,7 @@ class PlayerHeaderShadowTest {
     private lateinit var scope: CoroutineScope
     private val receipts = JSONArray()
     private val failures = mutableListOf<String>()
+    private var fullInkContrast = 0f
     private val output by lazy {
         nativeEvidenceDirectory("player-header-shadow-709", InstrumentationRegistry.getInstrumentation().targetContext.getExternalFilesDir(null))
     }
@@ -130,6 +132,19 @@ class PlayerHeaderShadowTest {
         val actual = shot("$name-actual")
         compose.runOnIdle { strength = 0f }
         val noShadow = shot("$name-no-shadow")
+        val icon = bounds(compose.onNodeWithContentDescription("Collapse player", true).fetchSemanticsNode())
+        val ink = buildList {
+            for (y in icon.top.roundToInt() until icon.bottom.roundToInt())
+                for (x in icon.left.roundToInt() until icon.right.roundToInt()) add(luma(noShadow, x, y))
+        }
+        val contrast = ink.max() - ink.min()
+        if (name == "full-open") {
+            fullInkContrast = contrast
+            check(fullInkContrast > .08f) { "The real Collapse glyph must be visible in the full-open reference" }
+        }
+        val alpha = ((p - .72f) / .28f).coerceIn(0f, 1f).let { it * it * (3f - 2f * it) }
+        val inkRatio = contrast / fullInkContrast
+        if (abs(inkRatio - alpha) > .10f) failures += "$name body opacity=$inkRatio expected once-only alpha=$alpha"
         compose.runOnIdle { strength = 1f }
         setReference(true, true)
         val expected = shot("$name-reference")
@@ -163,6 +178,7 @@ class PlayerHeaderShadowTest {
         }
         receipts.put(JSONObject().put("name", name).put("progress", p).put("player", player.toString())
             .put("header", Rect(player.left, collapse.top, player.right, collapse.bottom).toString())
+            .put("headerAlpha", alpha).put("nativeInkRatio", inkRatio)
             .put("bodies", bodies.toString()).put("maximumCornerPx", with(density) { frame.maximumCorner.toPx() })
             .put("probes", observations))
         listOf(actual, noShadow, expected, white).forEach { it.recycle() }
@@ -187,14 +203,24 @@ class PlayerHeaderShadowTest {
         compose.mainClock.advanceTimeBy(600)
         assertEquals(0f, progress.value, .0001f)
         compose.onNodeWithContentDescription("Collapse player", true).assertDoesNotExist()
-        shot("fully-hidden").recycle()
+        val hidden = shot("fully-hidden")
+        compose.runOnIdle { strength = 0f }
+        val hiddenNoShadow = shot("fully-hidden-no-shadow")
+        compose.runOnIdle { strength = 1f }
+        var ghost = 0f
+        for (y in open.top.roundToInt() until (open.bottom + 16 * density.density).roundToInt())
+            for (x in open.left.roundToInt() until open.right.roundToInt())
+                ghost = maxOf(ghost, abs(luma(hidden, x, y) - luma(hiddenNoShadow, x, y)))
+        assertTrue("The hidden header leaves no shadow at its old bounds: $ghost", ghost <= 1f / 255f)
+        hidden.recycle(); hiddenNoShadow.recycle()
         compose.onNodeWithTag("player-background-space", true).performClick()
-        while (progress.value < .84f) compose.mainClock.advanceTimeByFrame()
+        repeat(64) { if (progress.value < .84f) compose.mainClock.advanceTimeByFrame() }
+        check(progress.value in .84f.. .995f) { "Reopen must visit fractional header opacity: ${progress.value}" }
         sample("reopen")
         compose.mainClock.advanceTimeBy(600)
         assertEquals(1f, progress.value, .0001f)
         val root = compose.onRoot().fetchSemanticsNode().boundsInRoot
-        val start = Offset(root.center.x, root.height * .4f)
+        val start = Offset(8f, root.height * .4f)
         compose.onRoot().performTouchInput {
             down(start)
             repeat(8) { moveBy(Offset(0f, root.height * .015f), delayMillis = 32) }
