@@ -210,8 +210,6 @@ class LyricsReturnBackdropTest {
         compose.runOnIdle { state.incoming = document('|', dense = true); state.optics = false }
         alignIncomingLine(requireNotNull(state.incoming))
         val button = returnBounds()
-        val direct = capture("overlap-direct")|', dense = true); state.optics = false }
-        val button = returnBounds()
         val direct = capture("overlap-direct")
         assertTrue("Outgoing green glyph pixels must intersect the sampled interior", green(direct, button) > .008f)
         assertTrue("Incoming red glyph pixels must intersect the sampled interior", red(direct, button) > .008f)
