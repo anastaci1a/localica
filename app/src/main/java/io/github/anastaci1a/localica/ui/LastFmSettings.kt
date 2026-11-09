@@ -117,6 +117,7 @@ internal fun LastFmSettings(controller: LastFmController) {
             }
             Text("Local plays add temporarily to the archived counts. A refresh replaces that base and clears the additions. Local listening history is kept. Recent ranges use local history.", style = MaterialTheme.typography.bodyMedium)
             SettingsEntry("Full rescan") { GlassActionButton(AppIcon.ActionRescan, "Full rescan", enabled = canSync) { controller.sync(username, fullRescan = true) } }
+            LastFmMatchingReportAction(saved, library.tracks)
             SettingsEntry("Disconnect Last.fm") { GlassActionButton(AppIcon.ActionClose, "Disconnect Last.fm", enabled = saved.username.isNotBlank(),
                 modifier = Modifier.testTag("lastfm-disconnect"), onClick = controller::disconnect) }
             Text("Turning Last.fm off or disconnecting keeps the archive and match choices on this device.", style = MaterialTheme.typography.bodySmall)
