@@ -1,6 +1,7 @@
 package io.github.anastaci1a.localica
 
 import android.graphics.Bitmap
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.size
@@ -127,5 +128,32 @@ class ArtworkTintPlaceholderTest {
         // The light sweep may cross the sample; allow its small wash.
         assertColor(placeholderTint(stored, dark), pixel("a"), .09f, "First frame of a")
         assertColor(placeholderTint(0xFFB08020.toInt(), dark), pixel("b"), .09f, "First frame of b")
+    }
+
+    /** #705: an artwork page's loading material is loading-only; its tinted missing-art fallback is unchanged. */
+    @Test fun artworkPageLoadingMaterialNeverReachesTheTintedMissingFallback() {
+        ArtworkColors.publish(mapOf(uri to stored))
+        val page = Color(0xFF312A25)
+        content(reduced = true) {
+            MaterialTheme(colorScheme = MaterialTheme.colorScheme.copy(onSurface = Color.White, surface = page)) {
+                Column {
+                    for (loading in listOf(false, true)) for (collection in listOf(false, true)) {
+                        CompositionLocalProvider(LocalLoadingMaterialColor provides Color.White.copy(alpha = .04f).takeIf { collection }) {
+                            Box(Modifier.size(48.dp).background(page).testTag("fallback-$loading-$collection")) {
+                                // The fallback keeps its stored tint input; the loading control is untinted.
+                                ArtworkPlaceholder(loading, Modifier.size(48.dp), tintUris = if (loading) null else listOf(uri))
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        compose.waitForIdle()
+        fun pixels(tag: String) = compose.onNodeWithTag(tag).captureToImage().toPixelMap().let { map ->
+            (0 until map.height).flatMap { y -> (0 until map.width).map { x -> map[x, y] } } }
+        assertEquals("Final missing-art fallback pixels are unchanged on an artwork page",
+            pixels("fallback-false-false"), pixels("fallback-false-true"))
+        assertNotEquals("The loading material itself does change while loading",
+            pixels("fallback-true-false"), pixels("fallback-true-true"))
     }
 }
