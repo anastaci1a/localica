@@ -431,3 +431,7 @@ io.github.anastaci1a.localica.NoneReductionWitnessTest
 io.github.anastaci1a.localica.NestedGlassRegistrationTest
 io.github.anastaci1a.localica.SublistLoadingPlaceholderCaptureTest
 io.github.anastaci1a.localica.LoadingSweepContrastTest
+
+io.github.anastaci1a.localica.GlassMorphZeroConstraintsTest
+io.github.anastaci1a.localica.PopupViewportSlotTest
+io.github.anastaci1a.localica.PopupEditorFocusOwnershipTest
