@@ -128,11 +128,13 @@ class LyricsLineAnchorTest {
         }
         File(root, "lyrics-anchor-$case.csv").writeText(rows.joinToString("\n", postfix = "\n"))
         if (strip.isEmpty()) return
-        val first = strip.first()
-        val sheet = android.graphics.Bitmap.createBitmap(first.width * 8, first.height * ((strip.size + 7) / 8),
+        // Each cell fits the largest frame (the panel grows while it opens) plus a 4 px gutter, so no frame covers another.
+        val cellWidth = strip.maxOf { it.width } + 4
+        val cellHeight = strip.maxOf { it.height } + 4
+        val sheet = android.graphics.Bitmap.createBitmap(cellWidth * 8, cellHeight * ((strip.size + 7) / 8),
             android.graphics.Bitmap.Config.ARGB_8888)
         val canvas = android.graphics.Canvas(sheet)
-        strip.forEachIndexed { index, image -> canvas.drawBitmap(image, (index % 8 * first.width).toFloat(), (index / 8 * first.height).toFloat(), null) }
+        strip.forEachIndexed { index, image -> canvas.drawBitmap(image, (index % 8 * cellWidth).toFloat(), (index / 8 * cellHeight).toFloat(), null) }
         File(root, "lyrics-anchor-$case-strip.png").outputStream().use { sheet.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
     }
 
