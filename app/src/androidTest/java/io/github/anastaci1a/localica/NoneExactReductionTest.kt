@@ -1,7 +1,9 @@
 package io.github.anastaci1a.localica
 
 import android.graphics.Bitmap
+import android.graphics.LinearGradient
 import android.graphics.Paint
+import android.graphics.Shader
 import android.os.Build
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -23,25 +25,39 @@ import androidx.compose.ui.test.*
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import androidx.test.platform.app.InstrumentationRegistry
 import io.github.anastaci1a.localica.navigation.*
 import io.github.anastaci1a.localica.ui.*
+import org.json.JSONObject
+import org.junit.After
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
+import java.io.File
 
 /** #691 exact pass: the None material's fill is the coverage-weighted mean of the PRERASTERIZED backdrop
- * texture over the material's full bounds, within .015 per channel on Android 13+. The fixtures are the
- * ones point sampling fails (1 px stripes at several widths and phases, 2 px checkerboards, text bands,
- * list rows, glyph runs, an artwork split and alpha edges) at footprints just above, in the middle of and
- * just below a power-of-two interval. Expected means are integrated from the immutable source bitmap,
- * never from an analytic guess of what the rasterizer drew. */
+ * texture over the material's full bounds. Two budgets (lead judgment, 2026-11-09):
+ *  (a) ideal-mean error within .015 per channel on Android 13+ (legacy area bound below), on fixtures
+ *      point sampling fails (1 px stripes at several widths and phases, 2 px checkerboards, text bands,
+ *      list rows, glyph runs, artwork split, alpha edges) and fixtures that expose a wrong block mapping
+ *      (half splits, quadrants, a translated impulse, a gradient), at footprints just above, in the middle
+ *      of and just below a power-of-two interval;
+ *  (b) drift between the pre-#691 bilinear 2:1 chain and the block-mean chain on the same device: max
+ *      4/255 and mean 1/255 per channel, including low alpha and the styled (tinted, contrasted) output.
+ * Expected means are integrated from the immutable source bitmap, never from an analytic guess of what
+ * the rasterizer drew. Measured drift is written to additionalTestOutputDir as a receipt. */
 class NoneExactReductionTest {
     @get:Rule val compose = localicaComposeRule()
-    private val appearance = GlassAppearance(whiteTint = 0f, contrast = 0f, shadowStrength = 0f)
+    private val plain = GlassAppearance(whiteTint = 0f, contrast = 0f, shadowStrength = 0f)
+    private val styled = GlassAppearance(whiteTint = .35f, contrast = .3f, shadowStrength = 0f)
     private val sourceWidth = 640
     private val sourceHeight = 320
     private val origin = Offset(20f, 20f)
     private val tolerance = .015f
+    private val driftMaxCodes = 4f
+    private val driftMeanCodes = 1f
+
+    @After fun restoreChain() { MaterialAreaReduction.legacyHalvings = false }
 
     /** A pattern rasterized once into an immutable ARGB bitmap of the source size. */
     private class Fixture(val name: String, val paint: android.graphics.Canvas.(Float) -> Unit)
@@ -53,7 +69,29 @@ class NoneExactReductionTest {
             for (x in -40 until sourceWidth + 40) if (Math.floorMod(x, 32) < width)
                 drawRect(x + phase, 0f, x + phase + 1f, sourceHeight.toFloat(), paint)
         }
-        return listOf(stripes(8), stripes(16), stripes(24),
+        val white = Paint().apply { color = android.graphics.Color.WHITE }
+        return listOf(
+            Fixture("left black right white split") { phase ->
+                drawColor(android.graphics.Color.BLACK); drawRect(150f + phase, 0f, sourceWidth.toFloat(), sourceHeight.toFloat(), white)
+            },
+            Fixture("top black bottom white split") { phase ->
+                drawColor(android.graphics.Color.BLACK); drawRect(0f, 84f + phase, sourceWidth.toFloat(), sourceHeight.toFloat(), white)
+            },
+            Fixture("quadrants") { phase ->
+                drawColor(android.graphics.Color.WHITE)
+                drawRect(0f, 0f, 150f + phase, 84f, Paint().apply { color = android.graphics.Color.RED })
+                drawRect(150f + phase, 0f, sourceWidth.toFloat(), 84f, Paint().apply { color = android.graphics.Color.GREEN })
+                drawRect(0f, 84f, 150f + phase, sourceHeight.toFloat(), Paint().apply { color = android.graphics.Color.BLUE })
+            },
+            Fixture("translated impulse") { phase ->
+                drawColor(android.graphics.Color.BLACK); drawRect(200f + phase, 60f + phase, 232f + phase, 92f + phase, white)
+            },
+            Fixture("horizontal gradient") { phase ->
+                drawRect(0f, 0f, sourceWidth.toFloat(), sourceHeight.toFloat(), Paint().apply {
+                    shader = LinearGradient(phase, 0f, sourceWidth + phase, 0f, android.graphics.Color.BLACK, android.graphics.Color.WHITE, Shader.TileMode.CLAMP)
+                })
+            },
+            stripes(8), stripes(16), stripes(24),
             Fixture("1 px horizontal lines, period 2") { phase ->
                 drawColor(android.graphics.Color.WHITE)
                 val paint = Paint().apply { color = android.graphics.Color.BLACK; isAntiAlias = true }
@@ -99,6 +137,11 @@ class NoneExactReductionTest {
                 drawColor(android.graphics.Color.argb(64, 255, 0, 0))
                 drawRect(phase + 150f, 0f, sourceWidth.toFloat(), sourceHeight.toFloat(),
                     Paint().apply { color = android.graphics.Color.argb(191, 0, 255, 0); isAntiAlias = true })
+            },
+            Fixture("low alpha") { phase ->
+                drawColor(android.graphics.Color.argb(4, 255, 0, 0))
+                drawRect(phase + 150f, 0f, sourceWidth.toFloat(), sourceHeight.toFloat(),
+                    Paint().apply { color = android.graphics.Color.argb(12, 0, 0, 255); isAntiAlias = true })
             })
     }
 
@@ -161,51 +204,97 @@ class NoneExactReductionTest {
         }
     }
 
-    @Composable private fun Scene(bitmap: Bitmap, source: FrostedBackdrop, surface: @Composable () -> Unit) = CompositionLocalProvider(
-        LocalDensity provides Density(1f),
-        LocalGlassRendererRuntime provides remember { GlassRendererRuntime(GlassRendererMode.None) },
-        LocalGlassAppearance provides appearance) { LocalicaTheme {
-        // Black behind the source: what shows through translucent fixtures is known exactly.
-        Box(Modifier.size(sourceWidth.dp, sourceHeight.dp).background(Color.Black)) {
-            Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(source)) {
-                drawImage(bitmap.asImageBitmap(), filterQuality = FilterQuality.None)
+    /** Drift statistics between the legacy and block-mean chains, in 8-bit codes. */
+    private class Drift {
+        var samples = 0; var sum = 0.0; var max = 0f; var worst = ""
+        fun add(label: String, a: Color, b: Color) {
+            for ((x, y) in listOf(a.red to b.red, a.green to b.green, a.blue to b.blue)) {
+                val d = kotlin.math.abs(x - y) * 255f
+                samples++; sum += d
+                if (d > max) { max = d; worst = label }
             }
-            surface()
         }
-    } }
+        val mean get() = if (samples == 0) 0.0 else sum / samples
+    }
 
-    /** One mounted surface of [footprint] px at [origin]; every fixture and phase passes behind it. */
+    private fun receipt(name: String, drift: Drift, extra: Map<String, Any>) {
+        val root = InstrumentationRegistry.getArguments().getString("additionalTestOutputDir")?.let(::File)
+            ?: InstrumentationRegistry.getInstrumentation().targetContext.getExternalFilesDir(null)!!
+        val output = File(root, "none-exact-reduction-api" + Build.VERSION.SDK_INT).also { it.mkdirs() }
+        File(output, "$name.json").writeText(JSONObject(mapOf("samples" to drift.samples, "maxCodes" to drift.max,
+            "meanCodes" to drift.mean, "worst" to drift.worst, "budgetMaxCodes" to driftMaxCodes, "budgetMeanCodes" to driftMeanCodes) + extra).toString(2))
+    }
+
+    @Composable private fun Scene(bitmap: Bitmap, appearance: GlassAppearance, source: FrostedBackdrop, surface: @Composable () -> Unit) =
+        CompositionLocalProvider(
+            LocalDensity provides Density(1f),
+            LocalGlassRendererRuntime provides remember { GlassRendererRuntime(GlassRendererMode.None) },
+            LocalGlassAppearance provides appearance) { LocalicaTheme {
+            // Black behind the source: what shows through translucent fixtures is known exactly.
+            Box(Modifier.size(sourceWidth.dp, sourceHeight.dp).background(Color.Black)) {
+                Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(source)) {
+                    drawImage(bitmap.asImageBitmap(), filterQuality = FilterQuality.None)
+                }
+                surface()
+            }
+        } }
+
+    private fun centre(tag: String): Color = compose.onNodeWithTag(tag).captureToImage().toPixelMap().let { it[it.width / 2, it.height / 2] }
+
+    /** One surface of [footprint] px at [origin], remounted per chain; every fixture and phase passes behind it. */
     private fun footprint(footprint: IntSize) {
         lateinit var source: FrostedBackdrop
         var bitmap by mutableStateOf(rasterize(fixtures().first(), 0f))
+        var appearance by mutableStateOf(plain)
+        var legacy by mutableStateOf(false)
         compose.setContent {
             source = rememberFrostedBackdrop(Unit, dark = false)
-            Scene(bitmap, source) {
-                LiquidGlassSurface(Modifier.offset(origin.x.dp, origin.y.dp).size(footprint.width.dp, footprint.height.dp).testTag("glass"),
-                    source, cornerRadius = 0.dp, pressFeedback = false, shadow = false)
+            Scene(bitmap, appearance, source) {
+                key(legacy) {
+                    LiquidGlassSurface(Modifier.offset(origin.x.dp, origin.y.dp).size(footprint.width.dp, footprint.height.dp).testTag("glass"),
+                        source, cornerRadius = 0.dp, pressFeedback = false, shadow = false)
+                }
             }
         }
         compose.waitUntil(15_000) { source.recorded && (Build.VERSION.SDK_INT >= 33 || source.snapshot != null) }
         val region = Rect(origin, Size(footprint.width.toFloat(), footprint.height.toFloat()))
         val centre = IntSize(footprint.width / 2, footprint.height / 2)
-        for (fixture in fixtures()) for (phase in listOf(0f, .375f)) {
+        val drift = Drift()
+        val modern = Build.VERSION.SDK_INT >= 33
+        for (fixture in fixtures()) for ((look, phases) in listOf(plain to listOf(0f, .375f), styled to listOf(0f))) for (phase in phases) {
             val raster = rasterize(fixture, phase)
-            compose.runOnIdle { bitmap = raster }
+            val label = "${fixture.name} phase $phase ${if (look === plain) "plain" else "styled"}, footprint $footprint"
+            compose.runOnIdle { MaterialAreaReduction.legacyHalvings = false; legacy = false; appearance = look; bitmap = raster }
             val behind = Color(raster.getPixel(origin.x.toInt() + centre.width, origin.y.toInt() + centre.height)).let {
                 Color(it.red * it.alpha, it.green * it.alpha, it.blue * it.alpha)
             }
             val expected = expectedPixel(expectedMean(raster, region), behind)
-            val label = "${fixture.name} phase $phase, footprint $footprint"
-            eventually {
+            val fresh = eventually {
                 val pixels = compose.onNodeWithTag("glass").captureToImage().toPixelMap()
-                // Uniform fill: three points agree with the integrated mean.
+                // Uniform fill: three points agree with the integrated mean (the plain look is the ideal-mean budget).
                 for ((x, y) in listOf(centre.width to centre.height, footprint.width / 5 to footprint.height / 3, footprint.width * 4 / 5 to footprint.height * 2 / 3)) {
                     val point = pixels[x, y]
-                    if (fixture.name == "alpha edges" && (x != centre.width || y != centre.height)) continue
-                    assertFill("$label at $x,$y", expected, point, region)
+                    if (fixture.name.contains("alpha") && (x != centre.width || y != centre.height)) continue
+                    if (look === plain) assertFill("$label at $x,$y", expected, point, region)
+                    else assertEquals("$label uniform at $x,$y", pixels[centre.width, centre.height].red, point.red, 2f / 255f)
                 }
+                pixels[centre.width, centre.height]
             }
+            if (!modern) continue
+            // The same scene through the pre-#691 bilinear chain: the drift budget.
+            compose.runOnIdle { MaterialAreaReduction.legacyHalvings = true; legacy = true }
+            val old = eventually {
+                val point = centre("glass")
+                if (look === plain) assertFill("$label legacy", expected, point, region)
+                point
+            }
+            drift.add(label, fresh, old)
         }
+        compose.runOnIdle { MaterialAreaReduction.legacyHalvings = false }
+        if (!modern) return
+        receipt("footprint-${footprint.width}x${footprint.height}", drift, mapOf("footprint" to "$footprint", "fixtures" to fixtures().size))
+        assertTrue("Legacy vs block-mean drift max ${drift.max} codes at ${drift.worst} exceeds $driftMaxCodes", drift.max <= driftMaxCodes)
+        assertTrue("Legacy vs block-mean drift mean ${drift.mean} codes exceeds $driftMeanCodes", drift.mean <= driftMeanCodes)
     }
 
     @Test fun footprintJustAboveAPowerOfTwo() = footprint(IntSize(257, 129))
@@ -214,14 +303,46 @@ class NoneExactReductionTest {
 
     @Test fun footprintJustBelowAPowerOfTwo() = footprint(IntSize(511, 255))
 
+    /** A block mapping that repeats or crops blocks reduces a half split to one side; the mean is one half. */
+    @Test fun halfSplitReducesToItsMeanNotToOneSide() {
+        lateinit var source: FrostedBackdrop
+        var vertical by mutableStateOf(true)
+        val raster = { v: Boolean -> Bitmap.createBitmap(sourceWidth, sourceHeight, Bitmap.Config.ARGB_8888).also {
+            val canvas = android.graphics.Canvas(it)
+            canvas.drawColor(android.graphics.Color.BLACK)
+            val white = Paint().apply { color = android.graphics.Color.WHITE }
+            if (v) canvas.drawRect(256f, 0f, sourceWidth.toFloat(), sourceHeight.toFloat(), white)
+            else canvas.drawRect(0f, 64f, sourceWidth.toFloat(), sourceHeight.toFloat(), white)
+        } }
+        compose.setContent {
+            source = rememberFrostedBackdrop(Unit, dark = false)
+            Scene(raster(vertical), plain, source) {
+                // Footprint exactly 512x128 at the origin: a 512-column level 0 with no stretch.
+                LiquidGlassSurface(Modifier.size(512.dp, 128.dp).testTag("glass"), source, cornerRadius = 0.dp, pressFeedback = false, shadow = false)
+            }
+        }
+        compose.waitUntil(15_000) { source.recorded && (Build.VERSION.SDK_INT >= 33 || source.snapshot != null) }
+        val region = Rect(0f, 0f, 512f, 128f)
+        for (v in listOf(true, false)) {
+            compose.runOnIdle { vertical = v }
+            eventually {
+                val pixels = compose.onNodeWithTag("glass").captureToImage().toPixelMap()
+                for (x in listOf(8, 256, 500)) {
+                    val point = pixels[x, 64]
+                    assertFill("${if (v) "left/right" else "top/bottom"} half split at $x", Color(.5f, .5f, .5f), point, region)
+                }
+            }
+        }
+    }
+
     /** A scaled consumer maps to a fractional source region (321.25×161.25); the fill is read from the screen. */
     @Test fun scaledSurfaceAveragesItsFractionalSourceRegion() {
         lateinit var source: FrostedBackdrop
-        val fixture = fixtures()[1]
+        val fixture = fixtures()[4]
         var bitmap by mutableStateOf(rasterize(fixture, 0f))
         compose.setContent {
             source = rememberFrostedBackdrop(Unit, dark = false)
-            Scene(bitmap, source) {
+            Scene(bitmap, plain, source) {
                 Box(Modifier.offset(origin.x.dp, origin.y.dp).graphicsLayer { scaleX = 1.25f; scaleY = 1.25f; transformOrigin = TransformOrigin(0f, 0f) }) {
                     LiquidGlassSurface(Modifier.size(257.dp, 129.dp).testTag("glass"), source,
                         cornerRadius = 0.dp, pressFeedback = false, shadow = false)
@@ -238,7 +359,7 @@ class NoneExactReductionTest {
                 val node = compose.onNodeWithTag("glass").fetchSemanticsNode()
                 val location = IntArray(2).also { (node.root as androidx.compose.ui.platform.ViewRootForTest).view.getLocationOnScreen(it) }
                 val centre = node.boundsInRoot.center
-                val screen = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot()
+                val screen = InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot()
                 val actual = try { Color(screen.getPixel((centre.x + location[0]).toInt(), (centre.y + location[1]).toInt())) } finally { screen.recycle() }
                 assertFill("${fixture.name} phase $phase scaled 1.25", expected, actual, region)
             }

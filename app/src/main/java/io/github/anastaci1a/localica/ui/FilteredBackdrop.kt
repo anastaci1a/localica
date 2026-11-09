@@ -80,8 +80,8 @@ private fun OpticalBackdrop(modifier: Modifier, source: FrostedBackdrop, locatio
     val areaSource = if (forceAverage) rememberMaterialAreaReduction() else null
     val areaHome = if (forceAverage && homeSource != null) rememberMaterialAreaReduction() else null
     // The style shader takes the exact mean of the reduction's last level (at most 8×8 texels) itself.
-    val areaSourceRenderer = remember(forceAverage) { if (forceAverage && android.os.Build.VERSION.SDK_INT >= 33) MaterialAverageRenderer(uniformOpaque = true) else null }
-    val areaHomeRenderer = remember(forceAverage) { if (forceAverage && android.os.Build.VERSION.SDK_INT >= 33) MaterialAverageRenderer(uniformOpaque = true) else null }
+    val areaSourceRenderer = remember(forceAverage) { if (forceAverage && android.os.Build.VERSION.SDK_INT >= 33) MaterialAverageRenderer(uniformOpaque = true, variableTaps = true) else null }
+    val areaHomeRenderer = remember(forceAverage) { if (forceAverage && android.os.Build.VERSION.SDK_INT >= 33) MaterialAverageRenderer(uniformOpaque = true, variableTaps = true) else null }
     val averageSource = if (average != null && (forceAverage || source.materialOnly)) rememberGraphicsLayer() else null
     val averageHome = if (average != null && (forceAverage || homeSource?.materialOnly == true)) rememberGraphicsLayer() else null
     layer.clip = true
@@ -155,7 +155,8 @@ private fun OpticalBackdrop(modifier: Modifier, source: FrostedBackdrop, locatio
                 val region = Rect(Offset.Zero, footprint)
                     .intersect(sampledSceneBounds(backing, registration, toLocal) ?: return reduction.current)
                 if (region.isEmpty || !region.width.isFinite() || !region.height.isFinite()) return reduction.current
-                val result = with(reduction) { recordFullBounds(region.size, minimum = 8) {
+                // The legacy switch reproduces the old 1×1 chain (one tap) for drift measurements only.
+                val result = with(reduction) { recordFullBounds(region.size, minimum = if (MaterialAreaReduction.legacyHalvings) 1 else 8) {
                     translate(-region.left, -region.top) {
                         drawSampledScene(backing, registration, toLocal)
                     }

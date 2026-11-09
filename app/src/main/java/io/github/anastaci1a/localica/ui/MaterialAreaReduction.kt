@@ -49,7 +49,7 @@ internal class MaterialAreaReduction(private val graphics: GraphicsContext) {
         previous.renderEffect = null
         previous.record(Density(density, fontScale), layoutDirection, dimensions, draw)
         var index = 1
-        val blockMeans = Build.VERSION.SDK_INT >= 33
+        val blockMeans = Build.VERSION.SDK_INT >= 33 && !legacyHalvings
         while (dimensions.width > minimum || dimensions.height > minimum) {
             val input = previous
             val before = dimensions
@@ -90,6 +90,13 @@ internal class MaterialAreaReduction(private val graphics: GraphicsContext) {
         }
     }
     fun release() { levels.forEach(graphics::releaseGraphicsLayer); levels.clear(); current = null }
+
+    companion object {
+        /** Diagnostics only: the pre-#691 bilinear 2:1 chain on every API, so a test can measure the
+         * drift between the old and the block-mean reductions on one device. Never set in production. */
+        @androidx.annotation.VisibleForTesting
+        @Volatile var legacyHalvings = false
+    }
 }
 
 @Composable internal fun rememberMaterialAreaReduction(): MaterialAreaReduction {
