@@ -151,7 +151,7 @@ abstract class LibraryDao {
         upsertFolder(folder)
         val dates = addedDates().associate { it.id to it.addedAt }
         val now = System.currentTimeMillis()
-        upsertTracks(tracks.map { it.copy(addedAt = dates[it.id] ?: now) })
+        upsertTracks(tracks.map { it.copy(addedAt = addedDateAfterScan(dates[it.id], now)) })
         clearLocations(folder.uri)
         insertLocations(locations)
         pruneTracks()
@@ -166,6 +166,11 @@ abstract class LibraryDao {
         insertNewTracks(tracks.map { it.copy(addedAt = now) })
         insertNewLocations(locations)
     }
+
+    @Query("UPDATE tracks SET addedAt = :addedAt WHERE id = :id") protected abstract suspend fun setAddedAt(id: String, addedAt: Long): Int
+
+    /** Library data import (#720): every date in one transaction; returns the rows written. */
+    @Transaction open suspend fun applyAddedDates(dates: Map<String, Long>): Int = dates.entries.sumOf { (id, date) -> setAddedAt(id, date) }
 
     @Transaction
     open suspend fun removeRoot(uri: String) {
@@ -267,6 +272,8 @@ interface LibraryStore {
     suspend fun removeRoot(uri: String)
     suspend fun updateMetadata(track: Track)
     suspend fun updateMetadataBatch(tracks: List<Track>) { tracks.forEach { updateMetadata(it) } }
+    /** Writes imported dates added atomically; returns how many tracks were updated. */
+    suspend fun applyAddedDates(dates: Map<String, Long>): Int = throw UnsupportedOperationException("This library store cannot import data.")
 }
 
 class RoomLibraryStore(private val dao: LibraryDao) : LibraryStore {
@@ -296,6 +303,7 @@ class RoomLibraryStore(private val dao: LibraryDao) : LibraryStore {
         }, result.tracks.map { FolderTrackRecord(result.folder.uri, it.id, it.uri, it.relativePath, it.id in result.failedMetadataIds) })
     }
     override suspend fun removeRoot(uri: String) = dao.removeRoot(uri)
+    override suspend fun applyAddedDates(dates: Map<String, Long>) = if (dates.isEmpty()) 0 else dao.applyAddedDates(dates)
     override suspend fun updateMetadata(track: Track) = updateMetadataBatch(listOf(track))
     override suspend fun updateMetadataBatch(tracks: List<Track>) = dao.updateMetadataBatch(tracks.map { track ->
         TrackRecord(track.id, track.title, track.artist, track.album, track.durationMs, track.fileName, track.albumArtist,
