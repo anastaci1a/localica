@@ -25,7 +25,7 @@ internal fun toastButtonProjection(toast: Rect, original: Rect, downwardTravelPx
     key: Any,
     initialBodyWidthPx: Float,
     initialRestingLeftPx: Float,
-    private val shadowClearancePx: Float,
+    private var shadowClearancePx: Float,
     private val endpoint: (ToastMotionEndpoint) -> Unit,
 ) {
     private var bodyWidthPx by mutableFloatStateOf(initialBodyWidthPx)
@@ -47,11 +47,13 @@ internal fun toastButtonProjection(toast: Rect, original: Rect, downwardTravelPx
     }
 
     /** Root geometry changes keep the physical x and velocity; only the existing destination moves. */
-    fun place(widthPx: Float, restingLeftPx: Float) {
+    fun place(widthPx: Float, restingLeftPx: Float, shadowClearancePx: Float = this.shadowClearancePx) {
         require(widthPx.isFinite() && widthPx > 0 && restingLeftPx.isFinite())
-        if (bodyWidthPx == widthPx && this.restingLeftPx == restingLeftPx) return
+        require(shadowClearancePx.isFinite() && shadowClearancePx >= 0)
+        if (bodyWidthPx == widthPx && this.restingLeftPx == restingLeftPx && this.shadowClearancePx == shadowClearancePx) return
         bodyWidthPx = widthPx
         this.restingLeftPx = restingLeftPx
+        this.shadowClearancePx = shadowClearancePx
         if (!contacting) position.retarget(if (exiting) hiddenLeftPx else restingLeftPx, profile)
     }
 
@@ -86,6 +88,12 @@ internal fun toastButtonProjection(toast: Rect, original: Rect, downwardTravelPx
         if (!contacting || exiting) return
         contacting = false
         exiting = dismiss
+        // Root Reduced policy can settle a driven coordinate while contact remains held.
+        // Rejoin direct input on that same owner before accepting the release velocity.
+        if (position.settled) {
+            val stamp = clock.stampNow
+            position.drive(position.sampleAt(stamp).value, stamp)
+        }
         position.release(if (dismiss) hiddenLeftPx else restingLeftPx, profile, velocityPxPerSecond)
     }
 
@@ -105,7 +113,7 @@ internal fun toastButtonProjection(toast: Rect, original: Rect, downwardTravelPx
     val motion = remember(clock, key) {
         ToastMotion(clock, key, widthPx, restingLeftPx, shadowClearancePx) { callback.value(it) }
     }
-    SideEffect { motion.place(widthPx, restingLeftPx) }
+    SideEffect { motion.place(widthPx, restingLeftPx, shadowClearancePx) }
     DisposableEffect(motion) { onDispose { motion.dispose() } }
     return motion
 }

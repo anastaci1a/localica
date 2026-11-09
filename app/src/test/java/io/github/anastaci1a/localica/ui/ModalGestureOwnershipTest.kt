@@ -19,6 +19,44 @@ class ModalGestureOwnershipTest {
             }
     }
 
+    @Test fun presentedModalCountRetainsClosingWindowsWithoutChangingInputAvailability() = runTest {
+        val windows = Windows(backgroundScope)
+        assertEquals(0, windows.coordinator.presentedModalCount)
+        val parent = windows.modal()
+        parent.activate()
+        val child = windows.modal(parent)
+        child.activate()
+        assertEquals(2, windows.coordinator.presentedModalCount)
+        child.deactivate(); parent.deactivate()
+        assertFalse(windows.root.blocked)
+        assertEquals(2, windows.coordinator.presentedModalCount)
+        windows.coordinator.detach(parent)
+        windows.coordinator.detach(parent)
+        assertEquals(1, windows.coordinator.presentedModalCount)
+        windows.coordinator.detach(child)
+        assertEquals(0, windows.coordinator.presentedModalCount)
+    }
+
+    @Test fun nativeWindowAttachAndDetachInvalidateThePassivePresenceRead() = runTest {
+        val windows = Windows(backgroundScope)
+        val popup = windows.modal(attached = false)
+        val observer = androidx.compose.runtime.snapshots.SnapshotStateObserver { it() }
+        var changes = 0
+        val token = Any()
+        val changed: (Any) -> Unit = { changes++ }
+        observer.start()
+        try {
+            observer.observeReads(token, changed) { assertEquals(0, windows.coordinator.presentedModalCount) }
+            windows.coordinator.attach(popup)
+            androidx.compose.runtime.snapshots.Snapshot.sendApplyNotifications()
+            assertEquals(1, changes)
+            observer.observeReads(token, changed) { assertEquals(1, windows.coordinator.presentedModalCount) }
+            windows.coordinator.detach(popup)
+            androidx.compose.runtime.snapshots.Snapshot.sendApplyNotifications()
+            assertEquals(2, changes)
+        } finally { observer.stop(); observer.clear() }
+    }
+
     @Test fun rootAloneReceivesInputWhileRetainedDismissedWindowsStayBlocked() = runTest {
         val windows = Windows(backgroundScope)
         val popup = windows.modal()

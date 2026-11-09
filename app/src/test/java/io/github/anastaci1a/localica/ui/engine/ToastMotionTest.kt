@@ -139,6 +139,30 @@ class ToastMotionTest {
         }
     }
 
+    @Test fun liveShadowClearanceRetargetsSameOwnerAndKeepsCurrentCoordinate() {
+        harness().use { h ->
+            val evidence = BoundedEvidence(100)
+            EngineObservation(h.clock, evidence).use { observer ->
+                val motion = ToastMotion(h.clock, "toast", 376f, 12f, 24f) {}
+                motion.enter(); h.advance(.08)
+                val before = motion.leftPx
+                motion.place(376f, 12f, 64f)
+                assertEquals(before, motion.leftPx, 0f)
+                assertEquals(1, observer.continuity.registeredCount)
+                h.advance(1.0); motion.exit(); h.advance(.08)
+                val leaving = motion.leftPx
+                motion.place(300f, 20f, 96f)
+                assertEquals(leaving, motion.leftPx, 0f)
+                h.advance(1.0)
+                assertEquals(-396f, motion.leftPx, 0f)
+                motion.dispose()
+                assertEquals(0, observer.continuity.registeredCount)
+                assertFalse(evidence.incomplete)
+                assertEquals(emptyList<Violation>(), evidence.violations)
+            }
+        }
+    }
+
     @Test fun buttonsDepartOnlyAsCurrentExtentReachesEachOriginalRectangle() {
         val buttons = listOf(Rect(20f, 0f, 70f, 50f), Rect(175f, 0f, 225f, 50f), Rect(330f, 0f, 380f, 50f))
         fun frame(right: Float) = buttons.map { toastButtonProjection(Rect(right - 376f, 0f, right, 50f), it, 20f) }

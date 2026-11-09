@@ -27,7 +27,9 @@ import kotlinx.coroutines.launch
 
 /** A modal owns input when requested, not when its entrance/exit animation finishes. */
 internal class ModalGestureCoordinator {
-    private val windows = mutableSetOf<ModalGestureScope>()
+    private var windows by mutableStateOf<Set<ModalGestureScope>>(emptySet())
+    /** Existing native-window registrations include retained closing windows after input yields. */
+    val presentedModalCount: Int get() = windows.count { !it.root }
     private val active = mutableListOf<ModalGestureScope>()
 
     fun attach(window: ModalGestureScope) {
