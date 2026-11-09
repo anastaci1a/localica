@@ -34,8 +34,8 @@ class FlatNoneMaterialTest {
         lateinit var source: FrostedBackdrop
         compose.runOnUiThread { GlassWork.observer = { events.add(it) } }
         try {
-            compose.setContent { LocalicaTheme {
-                CompositionLocalProvider(LocalGlassRendererRuntime provides runtime, LocalDensity provides Density(1f)) {
+            compose.setContent { CompositionLocalProvider(LocalGlassRendererRuntime provides runtime, LocalDensity provides Density(1f)) {
+                LocalicaTheme {
                     GlassPanelTheme(dark) {
                         source = rememberFrostedBackdrop(Unit)
                         Box(Modifier.size(160.dp)) {
