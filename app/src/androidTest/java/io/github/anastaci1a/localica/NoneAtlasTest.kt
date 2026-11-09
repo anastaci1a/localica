@@ -351,6 +351,7 @@ class NoneAtlasTest {
         lateinit var source: FrostedBackdrop
         var registry: io.github.anastaci1a.localica.ui.engine.NoneReductionAtlases? = null
         var generation by mutableIntStateOf(0)
+        var present by mutableStateOf(true)
         compose.setContent { CompositionLocalProvider(
             LocalDensity provides Density(1f),
             LocalGlassRendererRuntime provides remember { GlassRendererRuntime(GlassRendererMode.None) },
@@ -359,7 +360,7 @@ class NoneAtlasTest {
             source = rememberFrostedBackdrop(Unit, dark = false)
             Box(Modifier.size(128.dp)) {
                 Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(source)) { drawRect(Color.Green) }
-                key(generation) {
+                if (present) key(generation) {
                     LiquidGlassSurface(Modifier.size(96.dp).testTag("remounted"), source,
                         noneAtlasInput = rememberNoneAtlasInput(source),
                         cornerRadius = 0.dp, pressFeedback = false, shadow = false)
@@ -377,6 +378,8 @@ class NoneAtlasTest {
                     pixels[pixels.width / 2, pixels.height / 2], Rect(0f, 0f, 96f, 96f))
             }
         }
+        compose.runOnIdle { present = false }
+        eventually { assertEquals("Final consumer disposal removes its source owner", 0, registry?.sourceCount) }
     }
 
     @SdkSuppress(minSdkVersion = 33)
