@@ -54,11 +54,16 @@ class BrowsePlayerCompositionTest {
         compose.runOnIdle { assertSame(retained,callback);retained();assertEquals("ui:1",observed) }
     }
 
-    @Test fun playerGesturesDoNotRecomposeRowsOrChangeTheirPixels() {
-        val tracks = (0..6).map { Track("quiet:$it", "Quiet song $it", fileName="$it.mp3", relativePath="$it.mp3") }
+    @Test fun playerGesturesDoNotRecomposeRowsOrChangeTheirPixels() = compare(false)
+    @Test fun playerGesturesDoNotRecomposeAlbumRowsOrChangeTheirPixels() = compare(true)
+
+    private fun compare(album: Boolean) {
+        val tracks = (0..6).map { Track("quiet:$it", "Quiet song $it", album="Quiet album", fileName="$it.mp3", relativePath="$it.mp3") }
         val library = LibraryUiState(LibrarySnapshot(folders=listOf(FolderSelection("root","Music")),tracks=tracks),loading=false)
         val playlists = PlaylistState(loading=false)
-        val route = BrowseRoute(MainTab.Songs)
+        val route = if (album) BrowseRoute(MainTab.Albums,
+            BrowseQueries.evaluate(library.snapshot, emptyList(), BrowseRoute(MainTab.Albums)).items.single().ref)
+            else BrowseRoute(MainTab.Songs)
         val work = mutableListOf<String>()
         val observer: (String,Any) -> Unit = { kind,_ -> work += kind }
         var open by mutableStateOf(false)
@@ -88,6 +93,7 @@ class BrowsePlayerCompositionTest {
             assertArrayEquals("Retained browse pixels at playerOpen=$value",original,pixels())
         }
         compose.runOnIdle {
+            android.util.Log.i("PERF2_P1", "album=$album screens=${work.count { it=="screen" }} rows=${work.count { it=="row" }}")
             assertEquals("Browser observes exactly four gesture ownership changes",4,work.count { it=="screen" })
             assertEquals("Player state must not recompose a browse row",0,work.count { it=="row" })
         }

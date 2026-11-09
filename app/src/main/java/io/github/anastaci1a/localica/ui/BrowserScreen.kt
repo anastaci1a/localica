@@ -953,8 +953,12 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     }
     val currentCollectionLookup = rememberUpdatedState(collectionLookup)
     val pageColors = MaterialTheme.colorScheme
-    MaterialTheme(colorScheme = if (artDetail) pageColors.copy(onSurface = collectionInk, onSurfaceVariant = collectionInk.copy(alpha = .65f),
-        primary = collectionInk, surface = if (lightCollection) androidx.compose.ui.graphics.Color(0xFFE5E5E5) else hero.palette.bottom) else pageColors) {
+    val collectionColors = remember(pageColors, artDetail, collectionInk, lightCollection, hero.palette.bottom) {
+        if (artDetail) pageColors.copy(onSurface = collectionInk, onSurfaceVariant = collectionInk.copy(alpha = .65f),
+            primary = collectionInk, surface = if (lightCollection) androidx.compose.ui.graphics.Color(0xFFE5E5E5) else hero.palette.bottom)
+        else pageColors
+    }
+    MaterialTheme(colorScheme = collectionColors) {
     CompositionLocalProvider(LocalArtworkTransit provides artworkTransit, LocalContentColor provides MaterialTheme.colorScheme.onSurface,
         // Artwork pages shade loading material toward their ink like Library (#705: 4%, #F0F0F3
         // on #F9F9FB), so it keeps Library's contrast over any backdrop. Queue/search keep 50%.
