@@ -1,5 +1,6 @@
 package io.github.anastaci1a.localica.ui
 
+import io.github.anastaci1a.localica.ui.components.NoneReductionAtlasHost
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
@@ -593,7 +594,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
         if (countsAsPanel) parentPanels?.let { it.intValue++ }
         onDispose { if (countsAsPanel) parentPanels?.let { it.intValue-- } }
     }
-    Dialog(onDismissRequest = { if (continuousOrigin == null || originAdmitted) dismissNow() }, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) { ModalGestureWindow(gestures) { TextEditingFocusHost {
+    Dialog(onDismissRequest = { if (continuousOrigin == null || originAdmitted) dismissNow() }, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) { ModalGestureWindow(gestures) { TextEditingFocusHost { NoneReductionAtlasHost(GlassColorShader) {
         val view = LocalView.current
         val window = (view.parent as? DialogWindowProvider)?.window
         val workObserver = LocalGlassMorphWorkObserver.current
@@ -1043,6 +1044,6 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
             }
             SliderCancelLayer(sliderCancel, WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 24.dp)
         }
-    } } }
+    } } } }
 }
 

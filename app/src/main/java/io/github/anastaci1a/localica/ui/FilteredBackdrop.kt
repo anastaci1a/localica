@@ -2,6 +2,9 @@ package io.github.anastaci1a.localica.ui
 
 import io.github.anastaci1a.localica.ui.components.MaterialAreaReduction
 import io.github.anastaci1a.localica.ui.components.rememberMaterialAreaReduction
+import io.github.anastaci1a.localica.ui.components.NoneReductionAtlas
+import io.github.anastaci1a.localica.ui.components.rememberNoneReductionAtlas
+import io.github.anastaci1a.localica.ui.components.NoneAtlasStyle
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Box
 import androidx.compose.animation.core.animateFloatAsState
@@ -92,6 +95,13 @@ private fun OpticalBackdrop(modifier: Modifier, source: FrostedBackdrop, locatio
         if (forceAverage && android.os.Build.VERSION.SDK_INT >= 33 && MaterialAreaReduction.legacyHalvings)
             MaterialAverageRenderer(true) to MaterialAverageRenderer(true) else null
     }
+    // The window's shared None reduction (#691 E4); members without a mix draw their block of it.
+    val atlas = if (forceAverage && android.os.Build.VERSION.SDK_INT >= 33) rememberNoneReductionAtlas() else null
+    val atlasEntry = remember(atlas) { if (android.os.Build.VERSION.SDK_INT >= 33 && atlas != null) NoneReductionAtlas.Entry() else null }
+    if (android.os.Build.VERSION.SDK_INT >= 33 && atlas != null && atlasEntry != null) DisposableEffect(atlas, atlasEntry) {
+        atlas.add(atlasEntry)
+        onDispose { atlas.remove(atlasEntry) }
+    }
     layer.clip = true
     // Keep sibling motion isolated, but explicitly invalidate consumers in another
     // window when their source records new content.
@@ -143,6 +153,19 @@ private fun OpticalBackdrop(modifier: Modifier, source: FrostedBackdrop, locatio
         }
         drawObserver?.let { observeBackdropSampling(it, location, localToSource, viewportBounds) }
         if (forceAverage && average != null && areaSource != null && averageSource != null && areaSourceRenderer != null) {
+            if (!MaterialAreaReduction.legacyHalvings && blend <= 0f && atlas != null && atlasEntry != null && android.os.Build.VERSION.SDK_INT >= 33) {
+                val toLocal: (FrostedBackdrop) -> BackdropRegistration? = { scene -> scene.location.registrationTo(location) }
+                val region = sampledSceneBounds(source, sourceToLocal, toLocal)?.let { Rect(Offset.Zero, size).intersect(it) }
+                // An unreadable region keeps the member's previous block, as the own chain keeps its last level.
+                val hosted = if (region == null || region.isEmpty || !region.width.isFinite() || !region.height.isFinite()) atlasEntry.placed
+                    else with(atlas) { place(atlasEntry, source, sourceToLocal, region, average.forBacking(source).let { NoneAtlasStyle(it.whiteTint, it.tone.trim, it.tone.weight, it.tone.lightMix, it.opaque) }) {
+                        translate(-region.left, -region.top) { drawSampledScene(source, sourceToLocal, toLocal) }
+                    } }
+                if (hosted) {
+                    with(atlas) { drawMember(atlasEntry) }
+                    return@Canvas
+                }
+            }
             if (legacyRenderers != null) {
                 // The frozen pre-#691 path (diagnostics only): bilinear chain to 1×1, one-tap style into a 1×1 copy,
                 // then the 1×1 mix layer drawn scaled. Kept verbatim so drift is measured against the real old output.
