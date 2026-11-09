@@ -85,7 +85,7 @@ internal fun SettingsDescription(text: String, modifier: Modifier = Modifier,
 @Composable
 internal fun SettingsHeading(title: String) {
     Text(title, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary,
-        modifier = Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 4.dp)
+        modifier = Modifier.fillMaxWidth().padding(io.github.anastaci1a.localica.ui.layout.SettingsHeadingPadding)
             .settingsRowPart(SettingsRowPart.Heading))
 }
 

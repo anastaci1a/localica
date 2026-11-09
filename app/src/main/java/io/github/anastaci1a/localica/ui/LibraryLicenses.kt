@@ -22,7 +22,7 @@ internal fun LibraryLicenses() {
             }
         } }
         GlassAlertDialog(onDismissRequest = { open = false }, title = { Text("Open-source licenses") },
-            text = { SettingsDescription(text, Modifier.heightIn(max = 400.dp).controlVerticalScroll(rememberScrollState()), style = MaterialTheme.typography.bodySmall) },
+            text = { SettingsDescription(text, Modifier.heightIn(max = io.github.anastaci1a.localica.ui.spec.SettingsLicenseBodyMaxHeight).controlVerticalScroll(rememberScrollState()), style = MaterialTheme.typography.bodySmall) },
             confirmButton = { ActionTextButton(onClick = { open = false }) { Text("Close") } })
     }
 }
