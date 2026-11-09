@@ -11,14 +11,12 @@ This optimized build is not debuggable and is minified with R8. It updates the e
 - Player header shadows retain their full bounds while the player fades and minimizes.
 - Showing quick search at the top of a browse list reveals its header on the first presented frame.
 - Settings search appears only on the root settings page. Search results still open and highlight controls on their destination pages.
-- Last.fm gains a sync dashboard, searchable match groups, a shared match chooser and durable background sync with progress and cancellation.
 
 ## Resolved issues
 
 - https://github.com/anastaci1a/localica/issues/709 - Player header shadow clipping during minimize.
 - https://github.com/anastaci1a/localica/issues/695 - Quick-search header reveal at the visual list top.
 - https://github.com/anastaci1a/localica/issues/696 - Root-only settings search with preserved deep navigation.
-- https://github.com/anastaci1a/localica/issues/684 - New Last.fm settings screens (Parts B–D). Matching follow-up remains open.
 
 ## Known issues
 
