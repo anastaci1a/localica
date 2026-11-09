@@ -81,7 +81,7 @@ class ArtistPhotoChooserTest {
                             PlayerArtwork(hero, Modifier.size(96.dp).testTag("photo-header"), androidx.compose.ui.graphics.RectangleShape,
                                 androidx.compose.ui.layout.ContentScale.Crop, 240)
                         }
-                        Box(Modifier.height(230.dp)) {
+                        Box(Modifier.height(480.dp)) {
                             PinnedHome(LibraryUiState(snapshot, loading = false), PlaylistState(loading = false), listOf(item.ref),
                                 {}, {}, { _, _ -> }, {}, { _, _ -> }, queryDispatcher = Dispatchers.Unconfined)
                         }
@@ -93,6 +93,8 @@ class ArtistPhotoChooserTest {
             compose.waitUntil(10000) {
                 compose.onAllNodesWithTag(pinTag).fetchSemanticsNodes().isNotEmpty() && tags.all { android.graphics.Color.green(pixel(it)) > 240 }
             }
+            val pinned = compose.onNodeWithTag(pinTag).captureToImage()
+            assertTrue("The complete pinned artwork must be visible in the native strip", pinned.height >= pinned.width)
             save("before")
             compose.onNodeWithText("Open photo chooser").performClick()
             val choice = ArtistPhotoChoice(ArtistPhotoProvider.DEEZER, "9")
