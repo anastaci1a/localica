@@ -128,6 +128,8 @@ internal object SettingsCatalog {
         SettingSpec("Exclude short files", "Scanner", "minimum duration skip clips"),
         SettingSpec("Quick Scan on launch", "Scanner", "startup new files"),
         SettingSpec("Full scan on launch", "Scanner", "startup refresh"),
+        SettingSpec("Export library data", "Library and tags", "backup save json date added songs external tools file"),
+        SettingSpec("Import library data", "Library and tags", "restore json gzip date added songs match file summary"),
         SettingSpec("Tag editing jobs", "Tag jobs and recovery", "metadata background outcomes"),
         SettingSpec("Recover tag edit", "Tag jobs and recovery", "interrupted restore original", revealedBy = "Tag editing jobs"),
         SettingSpec("Export diagnostics", "About and licenses", "logs debug share"),
