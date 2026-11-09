@@ -31,7 +31,8 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
                       private val sortSnapshot: suspend () -> io.github.anastaci1a.localica.library.LibrarySnapshot = { library.sortSnapshots.first() },
                       private val mediaItemFactory: (String, Track, String?) -> MediaItem = ::queueMediaItem,
                       diagnoseOrders: Boolean = false,
-                      private val listening: io.github.anastaci1a.localica.statistics.ListeningEditLifecycle? = null) {
+                      private val listening: io.github.anastaci1a.localica.statistics.ListeningEditLifecycle? = null,
+                      private val toasts: io.github.anastaci1a.localica.toast.ToastQueue? = null) {
     /** Debug diagnostics only; the sink runs off the actor after its terminal callback. */
     internal var orderTimingObserver: ((String, QueueOrderTiming.Report) -> Unit)? = if (diagnoseOrders) {
         { operation, report -> android.util.Log.i("QueueOrderTiming", "operation=$operation $report"); Unit }
@@ -380,7 +381,7 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         if (action == SongTap.NewQueue || current == null) {
             if (reuse(tracks, selectedIndex, expand, sourceName, playlistOrigins)) return true
             if (!QueueEdits.canCreate(state.value.library, state.value.settings.maximum, emptySet())) {
-                mutable.update { it.copy(pending = PendingQueue(tracks.toList(), selectedIndex, QueueEdits.oldestInactive(it.library), expand, sourceName, playlistOrigins)) }
+                mutable.update { it.copy(pending = PendingQueue(tracks.toList(), selectedIndex, QueueEdits.oldestInactive(it.library), expand, sourceName, playlistOrigins, action.takeIf { it == SongTap.Append || it == SongTap.PlayNext })) }
                 return false
             } else create(tracks, selectedIndex, emptySet(), expand, sourceName, playlistOrigins)
         } else {
@@ -443,6 +444,13 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
     }
 
     private fun requestPlayer() { mutable.update { it.copy(playerRequest = it.playerRequest + 1) } }
+
+    /** Navigation to an outcome never applies the playback-switching preference. */
+    fun browse(id: String, complete: (Boolean) -> Unit = {}) = submit(revision = intents.currentRevision(), reject = { complete(false) }) {
+        val exists = state.value.library.queues.any { it.id == id }
+        if (exists) mutable.update { it.copy(browsedId = id) }
+        complete(exists)
+    }
 
     fun switchTo(id: String) = submit {
         if (state.value.library.queues.none { it.id == id }) return@submit
