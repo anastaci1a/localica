@@ -86,7 +86,9 @@ internal fun ImageVector.inkMetrics(samples: Int = INK_SAMPLES): InkMetrics? {
         val width = path.strokeLineWidth * sqrt(abs(matrix[0] * matrix[3] - matrix[1] * matrix[2]))
         if (stroke > 0f && width > 0f) grid.stroke(subpaths, width / 2f, path.strokeLineCap, stroke)
     }
-    return grid.metrics()
+    val sampled = grid.metrics() ?: return null
+    val bounds = geometricInkBounds() ?: return sampled
+    return InkMetrics(bounds.first, bounds.second, sampled.centroidY)
 }
 
 private fun Brush?.alpha(): Float = when (this) {

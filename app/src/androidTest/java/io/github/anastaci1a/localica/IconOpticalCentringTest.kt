@@ -3,6 +3,7 @@ package io.github.anastaci1a.localica
 import android.graphics.Bitmap
 import android.os.Build
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.background
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Size
@@ -179,6 +180,47 @@ class IconOpticalCentringTest {
                 before.recycle(); after.recycle()
             }
         }
+    }
+
+    @Test fun firstPublishedFrameUsesTheCentredPackAndResetWithoutALateJump() {
+        fun prepared(name: String, path: String): PreparedIconPack {
+            val source = ByteArrayOutputStream().also { out -> ZipOutputStream(out).use { zip ->
+                zip.putNextEntry(ZipEntry("pack.json")); zip.write("""{"name":"$name","version":"1"}""".toByteArray()); zip.closeEntry()
+                zip.putNextEntry(ZipEntry("icons/action.save.svg"))
+                zip.write("""<svg viewBox="0 0 24 24"><path d="$path"/></svg>""".toByteArray()); zip.closeEntry()
+            } }.toByteArray()
+            return IconPacks.prepare(source.inputStream())
+        }
+        val first = prepared("First frame lower ink", "M12 4L20 20H4Z")
+        val second = prepared("First frame upper ink", "M4 4H20L12 20Z")
+        var expected by mutableStateOf<androidx.compose.ui.graphics.vector.ImageVector?>(null)
+        IconPacks.reset(context)
+        compose.setContent { LocalicaTheme {
+            Row(Modifier.background(Color.White)) {
+                for (actual in listOf(true, false)) Box(Modifier.size(96.dp).testTag(if (actual) "switch-actual" else "switch-expected"),
+                    contentAlignment = androidx.compose.ui.Alignment.Center) {
+                    val painter = if (actual) appIconPainter(AppIcon.ActionSave) else packIconPainter(AppIcon.ActionSave, null, expected)
+                    androidx.compose.material3.Icon(painter, null, Modifier.size(48.dp), tint = Color.Black)
+                }
+            }
+        } }
+        compose.waitForIdle()
+        compose.mainClock.autoAdvance = false
+        for ((index, pack) in listOf(first, second, null).withIndex()) {
+            compose.runOnIdle { expected = pack?.vectors?.getValue("action.save") }
+            if (pack == null) IconPacks.reset(context) else IconPacks.install(context, pack)
+            compose.mainClock.advanceTimeByFrame()
+            val frameTime = compose.mainClock.currentTime
+            val actual = compose.onNodeWithTag("switch-actual").captureNativeFrame().asAndroidBitmap()
+            val reference = compose.onNodeWithTag("switch-expected").captureNativeFrame().asAndroidBitmap()
+            assertEquals("Native capture cannot hide a later Compose frame", frameTime, compose.mainClock.currentTime)
+            save("switch-$index-first", actual); save("switch-$index-reference", reference)
+            assertArrayEquals("First published frame matches the prepared centred vector", pixels(reference), pixels(actual))
+            compose.mainClock.advanceTimeByFrame()
+            val next = compose.onNodeWithTag("switch-actual").captureNativeFrame().asAndroidBitmap()
+            assertArrayEquals("No delayed centring jump on the next frame", pixels(actual), pixels(next))
+        }
+        compose.mainClock.autoAdvance = true
     }
 
     /** The #701 shared menu and round controls; an optional local pack stays outside Git and CI. */

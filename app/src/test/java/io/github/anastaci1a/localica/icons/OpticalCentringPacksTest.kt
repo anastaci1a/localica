@@ -177,8 +177,29 @@ class OpticalCentringPacksTest {
         })
     }
 
+    @Test fun seekBackAndForwardNeverCrossTheirAnalyticRoundCapBounds() {
+        for (id in listOf("action.seek_back", "action.seek_forward")) {
+            val original = SvgIconParser.parse(builtinSvg(File(resources, drawableNames.getValue(id) + ".xml")).toByteArray()).toImageVector(shiftY = 0f)
+            val bounds = requireNotNull(original.geometricInkBounds())
+            assertEquals("$id exact cap clearance", .172f, bounds.first, .000002f)
+            val move = original.opticalShiftY()
+            assertTrue("$id crosses the top edge: top=" + bounds.first + ", move=" + move, bounds.first + move >= 0f)
+            assertTrue("$id crosses the bottom edge", bounds.second + move <= 24f)
+        }
+    }
+
+    @Test fun everyBuiltinStaysInsideItsCellAfterTheGeometricClamp() {
+        for ((id, drawable) in drawableNames) {
+            val original = SvgIconParser.parse(builtinSvg(File(resources, "$drawable.xml")).toByteArray()).toImageVector(shiftY = 0f)
+            val bounds = requireNotNull(original.geometricInkBounds())
+            val move = original.opticalShiftY()
+            assertTrue("$id crosses the top edge: " + (bounds.first + move), bounds.first + move >= 0f)
+            assertTrue("$id crosses the bottom edge: " + (bounds.second + move), bounds.second + move <= 24f)
+        }
+    }
+
     private val sourceRoot = resources.parentFile.parentFile
-    private val ruleFiles = listOf("OpticalCentring.kt", "VectorGeometry.kt", "SvgIconVector.kt")
+    private val ruleFiles = listOf("OpticalCentring.kt", "VectorGeometry.kt", "SvgIconVector.kt", "VectorInkBounds.kt")
 
     private fun builtinSourceHash(): String {
         val digest = MessageDigest.getInstance("SHA-256")
