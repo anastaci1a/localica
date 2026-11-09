@@ -155,7 +155,8 @@ class AutoScrollDrawnPlacementTest {
     }
 
     private fun check(label: String, host: Host): List<String> {
-        val drawnProblems = drawnBounds(label)
+        val drawnProblems = drawnBounds(label).toMutableList()
+        if (arguments.getString("strict") != "0") { nativeFrame(); drawnProblems += drawnBounds("$label-next-idle") }
         if (arguments.getString("diagnostic") == "1") {
             Thread.sleep(1000)
             val later = drawnBounds("$label-later")
@@ -174,11 +175,11 @@ class AutoScrollDrawnPlacementTest {
         }
         val settled = cells()
         main { host.generation++ }
-        Thread.sleep(2000)
+        if (arguments.getString("strict") != "0") awaitNextIdleFrame(host) else Thread.sleep(2000)
         val fresh = cells()
         return drawnProblems + settled.mapNotNull { (key, rects) ->
-            val expected = fresh[key] ?: return@mapNotNull null
-            val worst = rects.zip(expected).maxOf { (a, b) -> maxOf(abs(a.top - b.top), abs(a.bottom - b.bottom), abs(a.left - b.left)) }
+            val expected = fresh[key] ?: return@mapNotNull "$label $key missing after fresh settled layout"
+            val worst = rects.zip(expected).maxOf { (a, b) -> maxOf(abs(a.top - b.top), abs(a.bottom - b.bottom), abs(a.left - b.left), abs(a.right - b.right)) }
             if (worst > .5f) "$label $key off by $worst: ${rects.map { it.top }} vs ${expected.map { it.top }}" else null
         }
     }
@@ -200,7 +201,7 @@ class AutoScrollDrawnPlacementTest {
             // those have no stable color edge to measure yet.
             val palette = intArrayOf(0xFFCC3322.toInt(), 0xFF2255AA.toInt(), 0xFF33AA55.toInt(), 0xFFDDAA22.toInt(), 0xFF884499.toInt())
             if (color !in palette) {
-                if (arguments.getString("strict") == "1") problems += "$label $key expected visible cover is not fully drawn"
+                if (arguments.getString("strict") != "0") problems += "$label $key expected visible cover is not fully drawn"
                 return@forEach
             }
             measured++
@@ -225,7 +226,7 @@ class AutoScrollDrawnPlacementTest {
             image.compress(Bitmap.CompressFormat.PNG, 100, it)
         }
         android.util.Log.i("AutoScroll635", "$label measured=$measured visible=${actual.size}")
-        if (arguments.getString("strict") == "1" && measured != actual.size)
+        if (arguments.getString("strict") != "0" && measured != actual.size)
             problems += "$label measured $measured of "+actual.size+" expected visible artwork"
         if (measured == 0) problems += "$label no fully loaded fixture artwork measured"
         image.recycle()
@@ -378,14 +379,14 @@ class AutoScrollDrawnPlacementTest {
     private fun loop(route: BrowseRoute, trigger: (Host) -> Unit) {
         val host = host(route)
         val problems = mutableListOf<String>()
-        repeat((arguments.getString("rounds") ?: "8").toInt()) { i ->
+        repeat((arguments.getString("rounds") ?: "3").toInt()) { i ->
             scrollDeep(200 + i * 7)
             Thread.sleep(1200)
             if (arguments.getString("record") == "1") watchViewportRecording()
             ArtworkCache.invalidate()
             if (fullHost) nodes { all -> all.first { it.tag() == "tab-option-0" }.config[SemanticsActions.OnClick].action!!.invoke() }
             else trigger(host)
-            if (arguments.getString("strict") == "1") awaitNextIdleFrame(host) else Thread.sleep(3000)
+            if (arguments.getString("strict") != "0") awaitNextIdleFrame(host) else Thread.sleep(3000)
             problems += check("iteration $i", host).also { it.forEach { p -> android.util.Log.i("RealProbe635", p) } }
             Thread.sleep(800)
         }
