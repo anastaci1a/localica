@@ -7,7 +7,6 @@ import androidx.test.core.app.ActivityScenario
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.By
 import androidx.test.uiautomator.UiDevice
-import androidx.test.uiautomator.Until
 import io.github.anastaci1a.localica.library.*
 import io.github.anastaci1a.localica.navigation.*
 import io.github.anastaci1a.localica.playback.PlaybackConnection
@@ -42,7 +41,7 @@ class NoneRealAppWalkTest {
             artist = "Localica", fileName = file.name, relativePath = file.name, id = root)
         var playback: PlaybackConnection? = null
         fun visible(selector: androidx.test.uiautomator.BySelector): androidx.test.uiautomator.UiObject2 =
-            requireNotNull(device.wait(Until.findObject(selector), 15000)) { "Missing $selector" }
+            requireNotNull(device.findFresh(selector, 15000)) { "Missing $selector" }
         fun checkpoint(name: String) {
             android.util.Log.i("NoneRealAppWalk", "checkpoint=$name")
             SystemClock.sleep(700)
