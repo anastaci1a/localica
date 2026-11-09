@@ -36,6 +36,8 @@ class PlayerLoadingThemeEqualityTest {
         var override by mutableStateOf<Color?>(null)
         var ready by mutableStateOf(false)
         var epoch by mutableIntStateOf(0)
+        var run by mutableIntStateOf(0)
+        var arm by mutableStateOf("reference")
         val shimmer = mutableFloatStateOf(-1f)
         val image = ImageBitmap(32, 32).also {
             Canvas(it).drawRect(0f, 0f, 32f, 32f, Paint().apply { color = Color(0xFFA963B1) })
@@ -52,9 +54,8 @@ class PlayerLoadingThemeEqualityTest {
                 theme.present(applied)
                 CompositionLocalProvider(LocalLoadingMaterialColor provides override,
                     LocalLoadingShimmer provides shimmer, LocalReducedMotion provides false) {
-                    Column {
-                        listOf("reference", "candidate", "broken-r3").forEach { arm ->
-                            key(epoch, arm) {
+                    Box {
+                            key(epoch, run) {
                                 Box(Modifier.size(96.dp).background(Color(0xFF8293A4)).testTag(arm)) {
                                     val visual = PlayerVisual(artwork = image.takeIf { ready }, loading = !ready, loadingUri = uri)
                                     when (arm) {
@@ -67,28 +68,25 @@ class PlayerLoadingThemeEqualityTest {
                                     }
                                 }
                             }
-                        }
                     }
                 }
             }
         } }
-        fun pixels(tag: String): IntArray {
-            val p = compose.onNodeWithTag(tag).captureToImage().toPixelMap()
-            return IntArray(p.width * p.height) { i -> p[i % p.width, i / p.width].toArgb() }
-        }
-        fun sample(label: String) {
-            compose.mainClock.advanceTimeByFrame()
-            compose.waitForIdle()
-            assertArrayEquals(label, pixels("reference"), pixels("candidate"))
-        }
-        fun change(label: String, body: () -> Unit) { compose.runOnIdle(body); sample(label) }
-        try {
-            sample("first cold admission")
-            if (!known) {
-                val original = pixels("reference")
-                assertTrue("R3 negative control must differ", !original.contentEquals(pixels("broken-r3")))
-                assertEquals("Reviewed cold palette base", 0xFF343C47.toInt(), original[original.size / 2])
+        data class Frame(val label: String, val pixels: IntArray)
+        fun captureArm(name: String): List<Frame> {
+            compose.runOnIdle {
+                mix = 1f; override = null; ready = false; epoch = 0; shimmer.floatValue = -1f
+                arm = name; run++
             }
+            val frames = mutableListOf<Frame>()
+            fun sample(label: String) {
+                compose.mainClock.advanceTimeByFrame()
+                compose.waitForIdle()
+                val p = compose.onNodeWithTag(name).captureToImage().toPixelMap()
+                frames += Frame(label, IntArray(p.width * p.height) { i -> p[i % p.width, i / p.width].toArgb() })
+            }
+            fun change(label: String, body: () -> Unit) { compose.runOnIdle(body); sample(label) }
+            sample("first cold admission")
             change("partial expansion first frame") { mix = .42f; shimmer.floatValue = .15f }
             change("known material override first frame") { override = Color(0xFF98512B); mix = .8f; shimmer.floatValue = .55f }
             change("cold to ready first frame") { ready = true }
@@ -98,6 +96,18 @@ class PlayerLoadingThemeEqualityTest {
             change("incoming cover new owner") { epoch++; mix = .6f }
             change("reverse incoming cover") { mix = .25f; shimmer.floatValue = .75f }
             change("final ready frame") { ready = true }
+            return frames
+        }
+        try {
+            val original = captureArm("reference")
+            val candidate = captureArm("candidate")
+            original.zip(candidate).forEach { (a, b) -> assertArrayEquals(a.label, a.pixels, b.pixels) }
+            if (!known) {
+                val broken = captureArm("broken-r3").first().pixels
+                val first = original.first().pixels
+                assertTrue("R3 negative control must differ", !first.contentEquals(broken))
+                assertEquals("Reviewed cold palette base", 0xFF343C47.toInt(), first[first.size / 2])
+            }
         } finally { compose.mainClock.autoAdvance = true }
     }
 

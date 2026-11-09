@@ -69,14 +69,14 @@ class PlayerThemeFrameEqualityTest {
         data class Step(val p: Float, val loaded: Boolean = false, val tint: Color? = null)
         val samples = listOf(Step(1f), Step(.42f), Step(.8f, tint = Color(0xFF98512B)),
             Step(.8f, true), Step(.3f, true), Step(.7f), Step(1f), Step(.2f), Step(1f, true))
-        data class Frame(val pixels: IntArray, val width: Int, val height: Int, val bounds: Map<String, androidx.compose.ui.geometry.Rect>)
+        data class Frame(val pixels: IntArray, val width: Int, val height: Int, val bounds: Map<String, List<androidx.compose.ui.geometry.Rect>>)
         fun captureArm(old: Boolean): List<Frame> {
             compose.runOnIdle { scope.launch(start = CoroutineStart.UNDISPATCHED) { phase.stop(); phase.snapTo(1f) }; visual = PlayerVisual(loading = true); material = null; reference = old }
             return samples.map { p ->
                 compose.runOnIdle { scope.launch(start = CoroutineStart.UNDISPATCHED) { phase.stop(); phase.snapTo(p.p) }; visual = if (p.loaded) ready else PlayerVisual(loading = true); material = p.tint }
                 compose.mainClock.advanceTimeByFrame(); compose.waitForIdle()
                 val tags = listOf("player-surface", "player-artwork", "player-title", "player-artist", "player-transport-row")
-                val bounds = tags.associateWith { compose.onNodeWithTag(it, true).fetchSemanticsNode().boundsInRoot }
+                val bounds = tags.associateWith { compose.onAllNodesWithTag(it, true).fetchSemanticsNodes().map { node -> node.boundsInRoot } }
                 val pixels = compose.onNodeWithTag("frame-root").captureToImage().toPixelMap()
                 Frame(IntArray(pixels.width * pixels.height) { i -> pixels[i % pixels.width, i / pixels.width].toArgb() }, pixels.width, pixels.height, bounds)
             }
