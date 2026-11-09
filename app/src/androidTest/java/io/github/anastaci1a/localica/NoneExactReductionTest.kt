@@ -328,7 +328,7 @@ class NoneExactReductionTest {
             Scene(bitmap, appearance, source) {
                 key(legacy) {
                     LiquidGlassSurface(Modifier.offset(origin.x.dp, origin.y.dp).size(footprint.width.dp, footprint.height.dp).testTag("glass"),
-                        source, cornerRadius = 0.dp, pressFeedback = false, shadow = false)
+                        source, noneAtlasInput = rememberNoneAtlasInput(source), cornerRadius = 0.dp, pressFeedback = false, shadow = false)
                 }
             }
         }
@@ -389,7 +389,7 @@ class NoneExactReductionTest {
             source = rememberFrostedBackdrop(Unit, dark = false)
             Scene(raster(vertical), plain, source) {
                 // Footprint exactly 512x128 at the origin: a 512-column level 0 with no stretch.
-                LiquidGlassSurface(Modifier.size(512.dp, 128.dp).testTag("glass"), source, cornerRadius = 0.dp, pressFeedback = false, shadow = false)
+                LiquidGlassSurface(Modifier.size(512.dp, 128.dp).testTag("glass"), source, noneAtlasInput = rememberNoneAtlasInput(source), cornerRadius = 0.dp, pressFeedback = false, shadow = false)
             }
         }
         compose.waitUntil(15_000) { source.recorded && (modern || source.snapshot != null) }
@@ -419,7 +419,7 @@ class NoneExactReductionTest {
                 Box(Modifier.offset(origin.x.dp, origin.y.dp).graphicsLayer { scaleX = 1.25f; scaleY = 1.25f; transformOrigin = TransformOrigin(0f, 0f) }) {
                     key(legacy) {
                         LiquidGlassSurface(Modifier.size(257.dp, 129.dp).testTag("glass"), source,
-                            cornerRadius = 0.dp, pressFeedback = false, shadow = false)
+                            noneAtlasInput = rememberNoneAtlasInput(source), cornerRadius = 0.dp, pressFeedback = false, shadow = false)
                     }
                 }
             }
@@ -469,7 +469,7 @@ class NoneExactReductionTest {
                 Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(home)) { drawImage(homeRaster.asImageBitmap(), filterQuality = FilterQuality.None) }
                 key(legacy, useUnreadyHome) {
                     LiquidGlassSurface(Modifier.offset(origin.x.dp, origin.y.dp).size(footprint.width.dp, footprint.height.dp).testTag("glass"),
-                        source, cornerRadius = 0.dp, pressFeedback = false, shadow = false,
+                        source, noneAtlasInput = rememberNoneAtlasInput(source), cornerRadius = 0.dp, pressFeedback = false, shadow = false,
                         homeSource = if (useUnreadyHome) unready else home, homeWeight = { weight })
                 }
             }

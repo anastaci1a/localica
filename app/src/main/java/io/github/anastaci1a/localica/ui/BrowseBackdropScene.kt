@@ -135,7 +135,7 @@ internal fun BoxScope.BrowseBackdropRecording(scene: BrowseBackdropScene, backin
         for (layer in scene.layers) {
             val producer = layer.source
             if (!producer.recorded || producer.layer.isReleased || producer.size.width <= 0 || producer.size.height <= 0) continue
-            BackdropRecordingAncestry.reference(producer)
+            if (io.github.anastaci1a.localica.BuildConfig.DEBUG) BackdropRecordingAncestry.reference(producer)
             val offset = producer.origin - source.origin
             translate(offset.x, offset.y) { drawLayer(producer.layer) }
             included?.set(layer, BackdropProducerDraws(layer.outer, layer.mask))

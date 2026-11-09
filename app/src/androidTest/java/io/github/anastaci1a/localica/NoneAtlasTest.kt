@@ -111,7 +111,7 @@ class NoneAtlasTest {
                 }
                 for (member in members) key(member.tag) {
                     LiquidGlassSurface(Modifier.offset(member.at.x.dp, member.at.y.dp).size(member.size.width.dp, member.size.height.dp).testTag(member.tag),
-                        source, cornerRadius = 0.dp, pressFeedback = false, shadow = false)
+                        source, cornerRadius = 0.dp, pressFeedback = false, shadow = false, noneAtlasInput = rememberNoneAtlasInput(source))
                 }
             }
         } } } }
@@ -177,7 +177,7 @@ class NoneAtlasTest {
                 }
                 Canvas(Modifier.size(primaryWidth.dp, 32.dp).recordFrostedBackdrop(primary)) { drawRect(Color.Blue) }
                 LiquidGlassSurface(Modifier.size(128.dp).testTag(tag), primary,
-                    cornerRadius = 0.dp, pressFeedback = false, shadow = false)
+                    noneAtlasInput = if (tag == "atlas-structure") rememberNoneAtlasInput(primary) else null, cornerRadius = 0.dp, pressFeedback = false, shadow = false)
             }
         }
         compose.setContent { CompositionLocalProvider(
@@ -229,7 +229,7 @@ class NoneAtlasTest {
                 Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(source)) { drawRect(Color(.25f, .5f, .75f)) }
                 repeat(33) { index ->
                     LiquidGlassSurface(Modifier.size((64 + index).dp, 64.dp).testTag("capacity-$index"), source,
-                        cornerRadius = 0.dp, pressFeedback = false, shadow = false)
+                        noneAtlasInput = rememberNoneAtlasInput(source), cornerRadius = 0.dp, pressFeedback = false, shadow = false)
                 }
             }
         } } } }
@@ -264,11 +264,11 @@ class NoneAtlasTest {
                 Box(Modifier.fillMaxSize().recordFrostedBackdrop(outer).background(Color(shade, shade, shade))) {
                     Box(Modifier.size(64.dp).graphicsLayer().recordFrostedBackdrop(inner)) {
                         LiquidGlassSurface(Modifier.fillMaxSize().testTag("nested-source"), backdrop,
-                            cornerRadius = 0.dp, pressFeedback = false, shadow = false)
+                            noneAtlasInput = rememberNoneAtlasInput(backdrop), cornerRadius = 0.dp, pressFeedback = false, shadow = false)
                     }
                 }
                 LiquidGlassSurface(Modifier.offset(100.dp, 0.dp).size(64.dp).testTag("outer-source"), outer,
-                    cornerRadius = 0.dp, pressFeedback = false, shadow = false)
+                    noneAtlasInput = rememberNoneAtlasInput(outer), cornerRadius = 0.dp, pressFeedback = false, shadow = false)
             }
         } } } }
         fun check() = eventually {
@@ -286,6 +286,63 @@ class NoneAtlasTest {
         check()
         compose.runOnIdle { shade = .5f }
         check()
+    }
+
+    @SdkSuppress(minSdkVersion = 33)
+    @Test fun undeclaredContentUsesItsOwnChainEvenWithAnAtlasHost() {
+        var registry: io.github.anastaci1a.localica.ui.engine.NoneReductionAtlases? = null
+        compose.setContent { CompositionLocalProvider(
+            LocalDensity provides Density(1f),
+            LocalGlassRendererRuntime provides remember { GlassRendererRuntime(GlassRendererMode.None) },
+            LocalGlassAppearance provides appearance) { LocalicaTheme { NoneReductionAtlasHost(GlassColorShader) {
+            registry = LocalNoneReductionAtlas.current
+            val source = rememberFrostedBackdrop(Unit, dark = false)
+            Box(Modifier.size(160.dp)) {
+                Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(source)) { drawRect(Color.Green) }
+                LiquidGlassSurface(Modifier.size(96.dp).testTag("undeclared-content"), source,
+                    cornerRadius = 0.dp, pressFeedback = false, shadow = false)
+            }
+        } } } }
+        eventually {
+            assertEquals("No capability means no atlas input or member", 0, registry?.sourceCount)
+            val pixels = compose.onNodeWithTag("undeclared-content").captureToImage().toPixelMap()
+            assertMean("Default-off content", Color.Green, pixels[pixels.width / 2, pixels.height / 2], Rect(0f, 0f, 96f, 96f))
+        }
+    }
+
+    /** Exercise both debug checkpoints without submitting a cyclic native display list. */
+    @SdkSuppress(minSdkVersion = 33)
+    @Test fun debugAssertionsRejectRetainedReferenceAndAttachmentChanges() {
+        lateinit var source: FrostedBackdrop
+        lateinit var child: FrostedBackdrop
+        lateinit var input: NoneAtlasInput
+        compose.setContent { LocalicaTheme {
+            source = rememberFrostedBackdrop("input", dark = false)
+            child = rememberFrostedBackdrop("retained-child", dark = false)
+            input = rememberNoneAtlasInput(source)
+            Canvas(Modifier.size(64.dp).recordFrostedBackdrop(source)) { drawRect(Color.Green) }
+        } }
+        compose.runOnIdle {
+            val reader = Any()
+            val childScope = BackdropRecordingScope(child)
+            input.readers[reader] = { listOf(child) }
+            try {
+                input.assertInput()
+                assertThrows(IllegalStateException::class.java) { childScope.attach(BackdropRecordingScope(source)) }
+            } finally {
+                input.readers.remove(reader)
+                childScope.attach(null)
+            }
+            input.readers[reader] = { listOf(child) }
+            BackdropRecordingAncestry.begin(source)
+            try {
+                assertThrows(IllegalStateException::class.java) { BackdropRecordingAncestry.reference(child) }
+            } finally {
+                input.readers.remove(reader)
+                source.recordedChildren.clear()
+                BackdropRecordingAncestry.end(source)
+            }
+        }
     }
 
 }

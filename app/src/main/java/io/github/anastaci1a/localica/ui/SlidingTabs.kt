@@ -40,7 +40,7 @@ import kotlin.math.roundToInt
 internal fun magneticTabPosition(raw: Float): Float = magneticChoicePosition(raw)
 
 @Composable
-internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, pagePosition: () -> Float, source: FrostedBackdrop? = LocalFrostedBackdrop.current, pageDragging: Boolean = false, shadowOpacity: () -> Float = { 1f }, onReselect: (MainTab) -> Unit = {}, activity: SelectorTrackActivity? = null, onSelect: (MainTab) -> Unit) {
+internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, pagePosition: () -> Float, source: FrostedBackdrop? = LocalFrostedBackdrop.current, pageDragging: Boolean = false, shadowOpacity: () -> Float = { 1f }, onReselect: (MainTab) -> Unit = {}, activity: SelectorTrackActivity? = null, noneAtlasInput: NoneAtlasInput? = null, onSelect: (MainTab) -> Unit) {
     val renderer = currentGlassRendererGeneration()
     val trackActivity = activity ?: rememberSelectorTrackActivity()
     DisposableEffect(trackActivity) { onDispose { trackActivity.clear() } }
@@ -151,7 +151,7 @@ internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, pagePosition: () 
             LiquidGlassSurface(Modifier.selectorTrackPlacement(track.translate(-recording.topLeft))
                 .testTag("tab-track-shell").bottomGlassShadow(opacity = shadowOpacity), source,
                 pressFeedback = false, shadow = false, cornerRadius = with(density) { radius.toDp() },
-                body = { shell.value }, inkOverride = Color.Black, depthScale = BottomPillDepthScale)
+                body = { shell.value }, inkOverride = Color.Black, depthScale = BottomPillDepthScale, noneAtlasInput = noneAtlasInput)
         }
         val contentOffset = selectorContentScrollOffset(scroll.value, scroll.maxValue, rtl)
         val viewportBounds = androidx.compose.ui.geometry.Rect(0f, 0f, viewport, baseHeight)
