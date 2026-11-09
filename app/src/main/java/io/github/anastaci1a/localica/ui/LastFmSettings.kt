@@ -7,7 +7,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.unit.dp
+import io.github.anastaci1a.localica.ui.components.SettingsReviewItem
 import io.github.anastaci1a.localica.lastfm.LastFmController
 import java.text.DateFormat
 import java.util.Date
@@ -58,9 +58,10 @@ internal fun LastFmSettings(controller: LastFmController) {
     SettingsEntry("Review matches") { SettingsHeading("Review matches") }
     SettingsEntry("Listening statistics") { Text("${matches.matched} matched · ${matches.review.size} to review", Modifier.testTag("lastfm-review-summary")) }
     matches.review.take(shown).forEach { review ->
-        Column(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text("${review.remote.artist} — ${review.remote.title}", style = MaterialTheme.typography.titleSmall)
-            Text("${review.remote.plays} plays · " + if (review.candidates.isEmpty()) "Not found in the local library" else "Several local matches")
+        SettingsReviewItem(
+            title = "${review.remote.artist} — ${review.remote.title}",
+            summary = "${review.remote.plays} plays · " + if (review.candidates.isEmpty()) "Not found in the local library" else "Several local matches",
+        ) {
             review.candidates.take(10).forEach { candidate ->
                 ActionTextButton(onClick = { controller.map(review.remote.key, candidate.id) }) {
                     Text("Use ${candidate.album ?: "Unknown album"} · ${candidate.fileName}")

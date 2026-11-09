@@ -10,6 +10,8 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.unit.dp
+import io.github.anastaci1a.localica.ui.components.SettingsActionLayout
+import io.github.anastaci1a.localica.ui.components.SettingsOrderCard
 import io.github.anastaci1a.localica.navigation.*
 
 @Composable
@@ -61,20 +63,21 @@ internal fun InterfaceSettingsControls(value: InterfaceSettings, section: String
             SettingsHeading("Main tabs")
             SettingsEntry("Main tabs") { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             value.tabs.forEachIndexed { index, tab ->
-                Surface(shape = Corners.card, color = MaterialTheme.colorScheme.surfaceContainerLow) {
-                    Column(Modifier.fillMaxWidth().padding(12.dp)) {
-                        Text(tab.label, style = MaterialTheme.typography.titleMedium)
-                        Row {
-                            ActionTextButton(enabled = index > 0, onClick = {
-                                val tabs = io.github.anastaci1a.localica.library.OccurrenceMoves.byOffset(value.tabs, index, -1); onChange(value.copy(tabs = tabs))
-                            }) { Text("Move up") }
-                            ActionTextButton(enabled = index < value.tabs.lastIndex, onClick = {
-                                val tabs = io.github.anastaci1a.localica.library.OccurrenceMoves.byOffset(value.tabs, index, 1); onChange(value.copy(tabs = tabs))
-                            }) { Text("Move down") }
-                            ActionTextButton(enabled = value.tabs.size > 1, onClick = { onChange(value.copy(tabs = value.tabs - tab)) }) { Text("Remove") }
-                        }
-                    }
-                }
+                SettingsOrderCard(tab.label, SettingsActionLayout.Inline,
+                    moveUp = {
+                        ActionTextButton(enabled = index > 0, onClick = {
+                            val tabs = io.github.anastaci1a.localica.library.OccurrenceMoves.byOffset(value.tabs, index, -1); onChange(value.copy(tabs = tabs))
+                        }) { Text("Move up") }
+                    },
+                    moveDown = {
+                        ActionTextButton(enabled = index < value.tabs.lastIndex, onClick = {
+                            val tabs = io.github.anastaci1a.localica.library.OccurrenceMoves.byOffset(value.tabs, index, 1); onChange(value.copy(tabs = tabs))
+                        }) { Text("Move down") }
+                    },
+                    remove = {
+                        ActionTextButton(enabled = value.tabs.size > 1, onClick = { onChange(value.copy(tabs = value.tabs - tab)) }) { Text("Remove") }
+                    },
+                )
             }
             } }
             var adding by remember { mutableStateOf(false) }
