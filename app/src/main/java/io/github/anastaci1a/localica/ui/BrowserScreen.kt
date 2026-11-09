@@ -64,11 +64,17 @@ import kotlin.math.roundToInt
 
 /** Optional screen and per-cell work evidence (kind, route or item key); no behavior depends on it. */
 internal data class BrowseScrollFrame(val index: Int, val offset: Int, val headerHeight: Int?, val rowHeight: Int?,
-    val viewportWidth: Int = 0, val noticeWidth: Int? = null, val noticeLookahead: Boolean? = null, val noticeContent: Int? = null)
+    val viewportWidth: Int = 0, val noticeWidth: Int? = null, val noticeLookahead: Boolean? = null, val noticeContent: Int? = null,
+    val headerTop: Int? = null, val searchPill: Boolean = false, val serial: Int = 0, val frameTime: Long = 0)
 internal class BrowseScrollFrameProbe {
     var request by mutableIntStateOf(0)
     @Volatile var serial = 0
+    /** Test draw invalidation: the last composed quick-search pill mode, read in the grid draw hook so
+     *  the retained grid draws once in the frame the mode flips and its actual placement is sampled. */
+    var searchPill by mutableStateOf(false)
     @Volatile var frame: BrowseScrollFrame? = null
+    /** Test fixtures record every actual draw through this; production never sets it. */
+    @Volatile var onFrame: ((BrowseScrollFrame) -> Unit)? = null
 }
 internal val LocalBrowseScrollFrameProbe = staticCompositionLocalOf<BrowseScrollFrameProbe?> { null }
 
@@ -147,6 +153,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     val pillSlotHeight = listPillSlotHeight()
     val pillMaterialTopInset = ListPillVerticalInset + (listPillTargetHeight() - listPillHeight()) / 2
     val showSearchPill = !route.search && route.collection?.kind != MediaKind.Album && style.quickSearch && (route.collection != null || route.tab != MainTab.Library)
+    if (scrollFrameProbe != null) SideEffect { scrollFrameProbe.searchPill = showSearchPill }
     val routeFocus = remember(route.key) { androidx.compose.ui.focus.FocusRequester() }
     val focus = scopedEditor?.focus ?: routeFocus
     val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
@@ -675,6 +682,18 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
         gridState.canScrollBackward && !(measuresNotice && height == 0 &&
             gridState.firstVisibleItemIndex == 1 && gridState.firstVisibleItemScrollOffset == 0)
     } }
+    // A quick-search pill grows the header above the grid's retained item 1 / offset 0 anchor.
+    // Shown at the visual top it must be revealed; a scrolled list keeps its place. The grid is
+    // read without observation: scroll position must not recompose this screen.
+    val hadSearchPill = remember(route.key) { booleanArrayOf(showSearchPill) }
+    val revealSearchHeader = showSearchPill && !hadSearchPill[0] && androidx.compose.runtime.snapshots.Snapshot.withoutReadObservation {
+        gridState.firstVisibleItemIndex == 1 && gridState.firstVisibleItemScrollOffset == 0 &&
+            noticeMeasurement.height(noticeContent, gridState.layoutInfo.viewportSize.width, density, noticeDirection) == 0
+    }
+    SideEffect {
+        hadSearchPill[0] = showSearchPill
+        if (revealSearchHeader) gridState.requestScrollToItem(0)
+    }
     val clearableFilter = (route.tab == MainTab.Library && route.collection == null && route.filter != null) ||
         (artistDetail && validAlbums.isNotEmpty())
     // Recompose only when the offered action changes, not at every scroll start/stop.
@@ -1032,13 +1051,17 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                 .longScrollFade(gridState)
                 .then(if (scrollFrameProbe == null) Modifier else Modifier.drawWithContent {
                     scrollFrameProbe.request // Explicit test readback also redraws settled cached layers.
+                    val pillMode = scrollFrameProbe.searchPill // Test draw invalidation on the mode flip.
                     drawContent()
                     val layout = gridState.layoutInfo
                     scrollFrameProbe.frame = BrowseScrollFrame(gridState.firstVisibleItemIndex, gridState.firstVisibleItemScrollOffset,
                         layout.visibleItemsInfo.firstOrNull { it.index == 0 }?.size?.height,
                         layout.visibleItemsInfo.firstOrNull { it.index > 0 }?.size?.height,
-                        layout.viewportSize.width, noticeMeasurement.width, noticeMeasurement.lookahead, noticeMeasurement.contentIdentity)
+                        layout.viewportSize.width, noticeMeasurement.width, noticeMeasurement.lookahead, noticeMeasurement.contentIdentity,
+                        layout.visibleItemsInfo.firstOrNull { it.index == 0 }?.offset?.y, pillMode, scrollFrameProbe.serial + 1,
+                        android.view.animation.AnimationUtils.currentAnimationTimeMillis())
                     scrollFrameProbe.serial++
+                    scrollFrameProbe.onFrame?.invoke(scrollFrameProbe.frame!!)
                 })
                 .controlScrollParent(gridState, ControlScrollAxis.Vertical)
                 .nestedScroll(userScrollConnection)
