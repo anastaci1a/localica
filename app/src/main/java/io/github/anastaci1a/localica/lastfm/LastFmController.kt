@@ -16,6 +16,8 @@ class LastFmController(private val store: LastFmStore, private val syncer: LastF
     private val localStatistics: Flow<ListeningStatistics> = flowOf(ListeningStatistics())) : PlayCountSource {
     private val mutable = MutableStateFlow(LastFmState())
     val state = mutable.asStateFlow()
+    private val summaryState = MutableStateFlow<LastFmSettingsSummary?>(null)
+    val summary = summaryState.asStateFlow()
     private val local = MutableStateFlow<Map<String, Long>>(emptyMap())
     private val localReady = CompletableDeferred<Unit>()
     private val requestedActive = MutableStateFlow<Boolean?>(null)
@@ -48,6 +50,32 @@ class LastFmController(private val store: LastFmStore, private val syncer: LastF
     private var syncJob: Job? = null
     private var workerJob: Job? = null
     init {
+        scope.launch {
+            ready.await()
+            var statsSnapshot: LastFmSnapshot? = null
+            var stats: LastFmAccountStats? = null
+            combine(state.map { it.saved.snapshot }.distinctUntilChanged(), matches) { snapshot, matched -> snapshot to matched }
+                .collect { (snapshot, matched) ->
+                    if (snapshot == null) {
+                        summaryState.value = null
+                        try { store.writeSummary(null) } catch (_: Exception) { }
+                    } else {
+                        if (statsSnapshot !== snapshot) {
+                            stats = withContext(Dispatchers.Default) { snapshot.accountStats() }
+                            statsSnapshot = snapshot
+                        }
+                        val cached = summaryState.value?.takeIf { it.username == snapshot.username && it.syncedAt == snapshot.syncedAt }
+                        val counts = if (matched.sourceSnapshot === snapshot) LastFmDashboardCounts.from(matched) else cached?.counts
+                        val prepared = LastFmSettingsSummary(snapshot.username, snapshot.syncedAt, requireNotNull(stats), counts)
+                        if (state.value.saved.snapshot === snapshot && prepared != summaryState.value) {
+                            summaryState.value = prepared
+                            try { store.writeSummary(prepared) }
+                            catch (cancelled: CancellationException) { throw cancelled }
+                            catch (_: Exception) { /* A disposable cache must never fail an archive operation. */ }
+                        }
+                    }
+                }
+        }
         scope.launch { ready.await(); for (edit in edits) {
             try { edit() }
             catch (cancelled: CancellationException) { throw cancelled }
@@ -76,6 +104,7 @@ class LastFmController(private val store: LastFmStore, private val syncer: LastF
         }
         scope.launch {
             try {
+                summaryState.value = store.readSummary()
                 localReady.await()
                 var saved = store.read()
                 // Old archives have no safe counter boundary. Adopt today's committed local counts once, without a network request.

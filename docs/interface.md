@@ -219,6 +219,8 @@ The [motion rules](#motion-and-access) own pickup, haptics and reduced motion. P
 
 Settings → Online features → Last.fm starts with a sync ring, percent and live song, artist and album counts. Its archive card shows scrobbles, songs, artists, albums and matched share. Overview, Matches and Data use shared glass tabs.
 
+The overview opens with cached statistics and refreshes them in the background. Uncached numbers use shared text placeholders with the final line height. Heavy sections use the shared centered spinner, quick exit fade and staggered row reveal. Reduced motion presents their final state immediately.
+
 Overview’s Review matches link opens Matches before the first sync and remains reachable through settings search.
 
 Matching shows an exact-proportion colour strip with tappable labelled legend rows. Matched, Judgment calls, Needs review, Auto-matched editions and Not in your library are searchable. Every row opens the shared decision popup and can match any library song. Judgment rows show the reason and Undo.

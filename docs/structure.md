@@ -82,6 +82,8 @@ A provider interface keeps local and external counts separate. Typed settings se
 
 The Last.fm provider stores its snapshot, account selection, mappings and local counter baseline in a dedicated atomic file. Completed refreshes replace the remote base and local baseline together. Temporary qualified-play additions are derived from local counters; the provider never writes to local history.
 
+Last.fm statistics and match-group projections are prepared off Main. A separate, versioned atomic summary cache supplies the last completed numbers before the archive loads. Cache failure never changes the archive or match choices. Album counts retain their availability separately.
+
 Appears On and Similar Artists currently return empty through an enrichment interface.
 
 ### Settings/selection

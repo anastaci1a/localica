@@ -14,19 +14,27 @@ import kotlinx.coroutines.launch
 
 @Composable
 internal fun LastFmReviewList(matches: LastFmMatches, group: LastFmGroup, library: List<Track>,
-    onMap: suspend (String, String) -> Boolean, onUndo: (String) -> Unit, mappings: Map<String, String> = emptyMap()) {
+    onMap: suspend (String, String) -> Boolean, onUndo: (String) -> Unit, mappings: Map<String, String> = emptyMap(),
+    header: @Composable () -> Unit = {}) {
     var query by rememberSaveable(group) { mutableStateOf("") }
     var page by rememberSaveable(group, query) { mutableIntStateOf(0) }
     var skipped by rememberSaveable { mutableStateOf(emptyList<String>()) }
-    val rows = remember(matches, group, query, skipped, mappings) {
+    val prepared by rememberAsyncValue(matches, group, query, skipped, mappings) {
         matches.rows(group, mappings).filter { it.contains(query) }.sortedBy { it.remote.key in skipped }
     }
-    val currentPage = page.coerceAtMost((rows.size - 1).coerceAtLeast(0) / 20)
-    SettingsHeading("${group.label} (${rows.size})")
+    var hasLoaded by remember { mutableStateOf(false) }
+    if (prepared != null) hasLoaded = true
+    if (hasLoaded) {
+    header()
+    SettingsHeading("${group.label} (${prepared?.size ?: "…"})")
     GlassTextField(query, { query = it }, label = { Text("Search ${group.label.lowercase()}") },
         modifier = Modifier.fillMaxWidth().testTag("lastfm-list-search"), singleLine = true)
+    }
+    AsyncSection(prepared) { rows ->
+    val currentPage = page.coerceAtMost((rows.size - 1).coerceAtLeast(0) / 20)
     if (rows.isEmpty()) Text(if (query.isBlank()) "No songs in this group." else "No matching songs.")
-    rows.drop(currentPage * 20).take(20).forEach { row -> key(row.remote.key) {
+    rows.subList(currentPage * 20, minOf(rows.size, (currentPage + 1) * 20)).forEachIndexed { index, row -> key(row.remote.key) {
+        AsyncSectionRow(index) {
         var open by remember { mutableStateOf(false) }
         val anchor = rememberGlassAnchor()
         SettingsLink("${row.remote.artist} — ${row.remote.title}",
@@ -40,9 +48,10 @@ internal fun LastFmReviewList(matches: LastFmMatches, group: LastFmGroup, librar
                 skipped = skipped.filterNot { it == row.remote.key } + row.remote.key; open = false
             })
         }
-    } }
+    } } }
     if (currentPage > 0) GlassActionButton(AppIcon.ActionChevronLeft, "Previous matches") { page = currentPage - 1 }
     if ((currentPage + 1) * 20 < rows.size) GlassActionButton(AppIcon.ActionArrowRight, "Show more matches") { page = currentPage + 1 }
+    }
 }
 
 private sealed interface LastFmPickerChoice {
@@ -62,13 +71,18 @@ internal fun LastFmDecision(row: LastFmMatchRow, library: List<Track>, onDismiss
     var query by rememberSaveable(row.remote.key) { mutableStateOf("") }
     var page by rememberSaveable(query) { mutableIntStateOf(0) }
     var selected by rememberSaveable(row.remote.key) { mutableStateOf(row.selectedId) }
-    val filtered = remember(library, query) { libraryMatches(library, query) }
+    val prepared by rememberAsyncValue(library, query, picking, row) {
+        val available = library.associateBy { it.id }
+        Triple(if (picking) libraryMatches(library, query) else emptyList(), available, row.candidates.filter { it.id in available })
+    }
+    val filtered = prepared?.first.orEmpty()
+    val available = prepared?.second.orEmpty()
+    val suggested = prepared?.third.orEmpty()
     val currentPage = page.coerceAtMost((filtered.size - 1).coerceAtLeast(0) / 20)
-    val available = remember(library) { library.associateBy { it.id } }
-    val candidates = if (picking) filtered.drop(currentPage * 20).take(20) else row.candidates.filter { it.id in available }
+    val candidates = if (picking) filtered.subList(currentPage * 20, minOf(filtered.size, (currentPage + 1) * 20)) else suggested
     val choices = candidates.map { LastFmPickerChoice.Song(it.id) } + listOf(LastFmPickerChoice.Search, LastFmPickerChoice.Absent)
     val draft: LastFmPickerChoice? = selected?.let { if (it == LastFmMatcher.NONE) LastFmPickerChoice.Absent else LastFmPickerChoice.Song(it) }
-    ChoiceDialog(ChoiceDialogActions("Use selection", "Skip", enabled = !saving), "Choose a match", choices, draft,
+    ChoiceDialog(ChoiceDialogActions("Use selection", "Skip", enabled = !saving && prepared != null), "Choose a match", choices, draft,
         label = { choice -> when (choice) {
             is LastFmPickerChoice.Song -> available[choice.id]?.let { "${it.title} · ${it.artist ?: "Unknown artist"} · ${it.album ?: "Unknown album"}" }.orEmpty()
             LastFmPickerChoice.Search -> "Choose another song…"
@@ -97,6 +111,7 @@ internal fun LastFmDecision(row: LastFmMatchRow, library: List<Track>, onDismiss
             Text("${row.remote.artist} — ${row.remote.title}", style = MaterialTheme.typography.titleSmall)
             problem?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             Text("${row.remote.plays} scrobbles · ${row.reason}", style = MaterialTheme.typography.bodyMedium)
+            if (prepared == null) AsyncSection(prepared) { }
             if (picking) {
                 GlassTextField(query, { query = it; selected = null }, label = { Text("Search your entire library") },
                     modifier = Modifier.fillMaxWidth().testTag("lastfm-library-search"), singleLine = true)

@@ -6,7 +6,7 @@ import java.util.Locale
 
 /** The remote snapshot is never a replacement for local listening events. */
 data class LastFmTrack(val artist: String, val title: String, val plays: Long, val album: String? = null, val mbid: String? = null, val durationMs: Long? = null) {
-    val key: String get() = listOf(normalize(artist), normalize(title), normalize(album), normalize(mbid))
+    val key: String = listOf(normalize(artist), normalize(title), normalize(album), normalize(mbid))
         .joinToString("") { "${it.length}:$it" }
 }
 data class LastFmSnapshot(val username: String, val syncedAt: Long, val tracks: List<LastFmTrack>,
@@ -24,8 +24,8 @@ data class LastFmResolution(val remote: LastFmTrack, val tracks: List<Track>, va
 data class LastFmMatches(val counts: Map<String, Long>, val review: List<LastFmReview>,
     val notInLibrary: Int = 0, val editions: List<LastFmReview> = emptyList(), val matched: Int = 0, val dismissed: Int = 0,
     val resolutions: List<LastFmResolution> = emptyList(), val unmatched: List<LastFmTrack> = emptyList(), val recordingGroups: Map<String, String> = emptyMap(), val sourceSnapshot: LastFmSnapshot? = null) {
-    val judgments: List<LastFmResolution> get() = resolutions.filter { it.tier == LastFmMatchTier.PROBABLE }
-    val clearCount: Int get() = resolutions.count { it.tier == LastFmMatchTier.CLEAR }
+    val judgments: List<LastFmResolution> = resolutions.filter { it.tier == LastFmMatchTier.PROBABLE }
+    val clearCount: Int = resolutions.count { it.tier == LastFmMatchTier.CLEAR }
 }
 
 internal fun normalize(value: String?): String = Normalizer.normalize(value.orEmpty(), Normalizer.Form.NFKC)

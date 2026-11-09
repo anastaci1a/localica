@@ -28,11 +28,14 @@ internal fun LastFmSettings(controller: LastFmController) {
     var group by rememberSaveable { mutableStateOf(LastFmGroup.REVIEW) }
     var deleting by remember { mutableStateOf(false) }
     val canSync = controller.enabled && onlineAllowed && active && username.isNotBlank() && !state.loading && !state.syncing
-    val stats = remember(saved.snapshot) { saved.snapshot?.accountStats() }
+    val summary by controller.summary.collectAsState()
+    val stats = summary?.stats
+    val counts = summary?.counts ?: LastFmDashboardCounts.from(matches)
+    val countsReady = summary?.counts != null || matches.sourceSnapshot != null
     val progress = state.progress ?: LastFmProgress(songs = stats?.songs ?: 0, artists = stats?.artists ?: 0,
-        albums = stats?.albums ?: 0, reportedPercent = if (saved.snapshot == null) 0 else 100)
+        albums = stats?.albums ?: 0, reportedPercent = if (summary == null && saved.snapshot == null) 0 else 100)
     val context = LocalContext.current
-    val lastSync = saved.snapshot?.let { lastFmSyncTime(context, it.syncedAt) }
+    val lastSync = (saved.snapshot?.syncedAt ?: summary?.syncedAt)?.let { lastFmSyncTime(context, it) }
     val focus = LocalSettingsSearchFocus.current
     val highlight = focus?.highlighted
     LaunchedEffect(highlight) {
@@ -46,7 +49,7 @@ internal fun LastFmSettings(controller: LastFmController) {
             LiquidGlassSurface(Modifier.fillMaxWidth().testTag("lastfm-dashboard-card"), cornerRadius = settingsReviewRadius(), pressFeedback = false) {
                 SettingsStack {
                     LastFmDashboardHeader(progress, state.syncing) {
-                        Text(progress.countSummary(context.resources),
+                        AsyncValueText(if (summary == null && state.loading) null else progress.countSummary(context.resources), "88888 songs · 8888 artists · 8888 albums",
                             Modifier.testTag(if (state.syncing) "lastfm-progress" else "lastfm-archive-summary"), style = MaterialTheme.typography.bodySmall)
                         Text(if (lastSync == null) "Last sync: never" else "Last sync: $lastSync",
                             Modifier.testTag("lastfm-dashboard-last-sync"), style = MaterialTheme.typography.bodySmall)
@@ -62,9 +65,9 @@ internal fun LastFmSettings(controller: LastFmController) {
                 }
             }
             LiquidGlassSurface(Modifier.fillMaxWidth().testTag("lastfm-stats-card"), cornerRadius = settingsReviewRadius(), pressFeedback = false) {
-                val share = if (saved.snapshot?.tracks.isNullOrEmpty()) "—" else "${100L * matches.matched / saved.snapshot!!.tracks.size}%"
-                LastFmStatsGrid(listOf("Scrobbles" to (stats?.scrobbles?.toString() ?: "—"), "Songs" to (stats?.songs?.toString() ?: "—"),
-                    "Artists" to (stats?.artists?.toString() ?: "—"), "Albums" to (stats?.albums?.toString() ?: "—"), "Matched share" to share))
+                val share = if (stats == null || !countsReady) null else if (stats.entries == 0) "—" else "${100L * counts.matched / stats.entries}%"
+                LastFmStatsGrid(listOf("Scrobbles" to stats?.scrobbles?.toString(), "Songs" to stats?.songs?.toString(),
+                    "Artists" to stats?.artists?.toString(), "Albums" to (stats?.takeIf { it.entriesWithAlbums > 0 }?.albums?.toString() ?: "—"), "Matched share" to share))
             }
         }
     }
@@ -77,33 +80,35 @@ internal fun LastFmSettings(controller: LastFmController) {
     state.problem?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.testTag("lastfm-problem")) }
     when (tab) {
         0 -> {
-            if (saved.snapshot != null) {
+            if (saved.snapshot != null || summary != null) {
                 SettingsHeading("Matching")
                 SettingsTextLine(LocalSettingsRowMetrics.current.textStart) { modifier ->
-                    Text("${matches.matched} matched · ${matches.review.size} to review", modifier.testTag("lastfm-review-summary"))
+                    AsyncValueText(if (countsReady) "${counts.matched} matched · ${counts.review} to review" else null,
+                        "88888 matched · 88888 to review", modifier.testTag("lastfm-review-summary"))
                 }
                 val segments = listOf(
-                    LastFmMatchSegment(LastFmGroup.MATCHED.name, "Matched", matches.clearCount, Color(0xFF71C9A2)),
-                    LastFmMatchSegment(LastFmGroup.JUDGMENTS.name, "Judgment calls", matches.judgments.size, Color(0xFFE6BC64)),
-                    LastFmMatchSegment(LastFmGroup.REVIEW.name, "Needs review", matches.review.size, Color(0xFFFF7B70)),
-                    LastFmMatchSegment(LastFmGroup.ABSENT.name, "Not in your library", matches.notInLibrary, Color(0xFF8E91A7)))
+                    LastFmMatchSegment(LastFmGroup.MATCHED.name, "Matched", counts.clear, Color(0xFF71C9A2)),
+                    LastFmMatchSegment(LastFmGroup.JUDGMENTS.name, "Judgment calls", counts.judgments, Color(0xFFE6BC64)),
+                    LastFmMatchSegment(LastFmGroup.REVIEW.name, "Needs review", counts.review, Color(0xFFFF7B70)),
+                    LastFmMatchSegment(LastFmGroup.ABSENT.name, "Not in your library", counts.absent, Color(0xFF8E91A7)))
                 LastFmMatchingBar(segments)
                 segments.forEach { segment -> key(segment.id) {
                     val anchor = rememberGlassAnchor()
                     SettingsLink(markerColor = segment.color, title = segment.label,
-                        summary = context.resources.getQuantityString(R.plurals.lastfm_song_count, segment.count, segment.count), anchor = anchor,
+                        summary = if (countsReady) context.resources.getQuantityString(R.plurals.lastfm_song_count, segment.count, segment.count) else "… songs", anchor = anchor,
                         modifier = Modifier.testTag("lastfm-legend-${segment.id}")) { group = LastFmGroup.valueOf(segment.id); tab = 1 }
                 } }
-                SettingsLink("Auto-matched editions (${matches.editions.size})", "Same recording on several albums · count on every copy") { group = LastFmGroup.EDITIONS; tab = 1 }
+                SettingsLink("Auto-matched editions (${if (countsReady) counts.editions else "…"})", "Same recording on several albums · count on every copy") { group = LastFmGroup.EDITIONS; tab = 1 }
             }
             SettingsLink("Review matches", "Needs review, judgment calls and matched recordings") { tab = 1 }
             LastFmConnection(controller, state, onlineAllowed, active, username, { username = it }, canSync)
         }
         1 -> {
-            ChoicePreference("Match group", group, LastFmGroup.entries, { it.label }, popup = true) { group = it }
             LastFmReviewList(matches, group, library.tracks, controller::mapAndAwait, { key ->
                 if (group == LastFmGroup.ABSENT) controller.resetMapping(key) else controller.undoJudgment(key)
-            }, saved.mappings)
+            }, saved.mappings, header = {
+                ChoicePreference("Match group", group, LastFmGroup.entries, { it.label }, popup = true) { group = it }
+            })
         }
         2 -> {
             SettingsHeading("Account and data")

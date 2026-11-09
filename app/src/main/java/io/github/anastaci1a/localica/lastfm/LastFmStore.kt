@@ -10,11 +10,26 @@ import java.io.File
 interface LastFmStore {
     suspend fun read(): SavedLastFm
     suspend fun write(value: SavedLastFm)
+    suspend fun readSummary(): LastFmSettingsSummary? = null
+    suspend fun writeSummary(value: LastFmSettingsSummary?) {}
 }
 
 /** A dedicated atomic snapshot; it never opens the local qualified-play database. */
 class FileLastFmStore(file: File) : LastFmStore {
     private val atomic = AtomicFile(file)
+    private val summary = AtomicFile(File(file.parentFile, "${file.nameWithoutExtension}-summary.json"))
+    override suspend fun readSummary(): LastFmSettingsSummary? = withContext(Dispatchers.IO) {
+        try { summary.openRead().bufferedReader().use { LastFmSummaryCodec.decode(it.readText()) } }
+        catch (_: Exception) { null } // A missing or obsolete cache never damages the archive.
+    }
+    override suspend fun writeSummary(value: LastFmSettingsSummary?) = withContext(Dispatchers.IO) {
+        if (value == null) summary.delete()
+        else {
+            val output = summary.startWrite()
+            try { output.write(LastFmSummaryCodec.encode(value).toByteArray(Charsets.UTF_8)); summary.finishWrite(output) }
+            catch (failure: Throwable) { summary.failWrite(output); throw failure }
+        }
+    }
     override suspend fun read(): SavedLastFm = withContext(Dispatchers.IO) {
         try { atomic.openRead().bufferedReader().use { LastFmSnapshotCodec.decode(it.readText()) } }
         catch (_: java.io.FileNotFoundException) { SavedLastFm() }
