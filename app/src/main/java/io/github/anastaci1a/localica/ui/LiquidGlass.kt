@@ -53,6 +53,7 @@ internal data class GlassSurfaceSourceDraw(
     val publishedReadback: Int, val publishedDrawRequest: Int?, val publishedComposite: Int?,
     val snapshotIdentity: Int?, val frostIdentity: Int?, val lensIdentity: Int?,
     val sourceToConsumer: List<Float>?, val consumerCornersInSource: List<Float>?,
+    val consumers: Int = 0, val retainedRaster: Boolean = false,
 )
 internal data class GlassSurfaceDrawObservation(
     val uptime: Long, val surfaceIdentity: Int, val viewIdentity: Int, val windowIdentity: Int?, val tokenIdentity: Int?,
@@ -86,7 +87,9 @@ private fun FrostedBackdrop?.surfaceDrawSource(location: BackdropLocation, exten
         source.snapshotReadbackRequest, source.snapshotDraws?.request, source.snapshotDraws?.composite,
         surfaceDrawIdentity(source.snapshot), surfaceDrawIdentity(source.fallback), null,
         registration?.let { listOf(it.xx, it.xy, it.yx, it.yy, it.tx, it.ty) },
-        registration?.inverse()?.corners(androidx.compose.ui.geometry.Rect(Offset.Zero, extent))?.surfaceDrawScalars())
+        registration?.inverse()?.corners(androidx.compose.ui.geometry.Rect(Offset.Zero, extent))?.surfaceDrawScalars(),
+        consumers = source.consumers,
+        retainedRaster = source.layer.compositingStrategy == androidx.compose.ui.graphics.layer.CompositingStrategy.Offscreen)
 }
 
 @Stable

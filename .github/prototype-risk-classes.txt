@@ -438,3 +438,4 @@ io.github.anastaci1a.localica.NoneRealAppWalkTest
 io.github.anastaci1a.localica.PlayerCoverEqualityTest
 io.github.anastaci1a.localica.NoneAtlasRasterExtentTest
 io.github.anastaci1a.localica.BackdropPerfCoverFixtureTest
+io.github.anastaci1a.localica.PlayerHeaderMotionTest

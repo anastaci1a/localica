@@ -37,6 +37,7 @@ class NoneAtlasRasterExtentTest {
 
     @Test fun shrinkRegrowReaddAndCapacityPreserveEveryRetainedOutputPixel() {
         var mode by mutableIntStateOf(0)
+        var paintRevision by mutableIntStateOf(0)
         var owner: NoneReductionAtlas? = null
         var admitted = 0
         val receipt = JSONArray()
@@ -59,9 +60,9 @@ class NoneAtlasRasterExtentTest {
                         for (entry in active) {
                             val tall = entry === entries[1] && current != 3
                             val extent = if (tall) 2048f else 64f
-                            if (place(entry, Unit, current, Unit, Rect(0f, 0f, extent, extent), NoneAtlasStyle()) {
-                                drawRect(Color(0xFF1964C8), size = Size(extent, extent))
-                                drawRect(Color(0xFFC83264), size = Size(extent / 2f, extent))
+                            if (place(entry, Unit, current to paintRevision, Unit, Rect(0f, 0f, extent, extent), NoneAtlasStyle()) {
+                                drawRect(if (paintRevision == 0) Color(0xFF1964C8) else Color(0xFF0EC9AA), size = Size(extent, extent))
+                                drawRect(if (paintRevision == 0) Color(0xFFC83264) else Color(0xFFEDB929), size = Size(extent / 2f, extent))
                             }) admitted++
                         }
                         drawMember(entries[0])
@@ -84,6 +85,15 @@ class NoneAtlasRasterExtentTest {
             compose.runOnIdle { mode = next }
             assertArrayEquals("Owner step=$step mode=$next", reference, capture("owner"))
             assertArrayEquals("Retained consumer step=$step mode=$next", reference, capture("retained"))
+            // A retained consumer must receive changed pixels, not merely keep a stale
+            // image which happens to match the structural before/after reference.
+            compose.runOnIdle { paintRevision = 1 }
+            val changed = capture("owner")
+            assertFalse("Live source pixels change after step=$step", reference.contentEquals(changed))
+            assertArrayEquals("Retained consumer updates after step=$step", changed, capture("retained"))
+            compose.runOnIdle { paintRevision = 0 }
+            assertArrayEquals("Owner restores after step=$step", reference, capture("owner"))
+            assertArrayEquals("Retained consumer restores after step=$step", reference, capture("retained"))
             compose.runOnIdle {
                 val extent = requireNotNull(owner).rasterSize
                 assertEquals("Atlas width", 2048, extent.width)
