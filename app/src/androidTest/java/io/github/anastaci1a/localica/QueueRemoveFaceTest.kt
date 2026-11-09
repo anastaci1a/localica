@@ -159,6 +159,8 @@ class QueueRemoveFaceTest {
         lateinit var host: GlassDialogs
         var failure: Throwable? = null
         var crop = Rect.Zero
+        var referenceBounds = Rect.Zero
+        var homeBounds = Rect.Zero
         try {
             compose.setContent { LocalicaTheme {
                 val owner = requireNotNull(LocalGlassDialogs.current)
@@ -168,17 +170,31 @@ class QueueRemoveFaceTest {
             compose.onNodeWithContentDescription("Select queue").performClick()
             val source = compose.onNodeWithText("Remove all other queues")
             source.assertIsDisplayed()
+            // The source popup can still be opening after semantics become visible.
+            // Finish that setup flight before deriving pixels/coordinates for the
+            // return oracle; keep the measured return itself fully frame-stepped.
+            compose.mainClock.autoAdvance = false
+            compose.mainClock.advanceTimeBy(1600)
+            compose.waitForIdle()
+            referenceBounds = screenBounds(source.fetchSemanticsNode())
+            repeat(2) {
+                compose.mainClock.advanceTimeByFrame(); compose.waitForIdle()
+                assertEquals("Source reference geometry is settled before capture", referenceBounds,
+                    screenBounds(source.fetchSemanticsNode()))
+            }
             val sourceView = view(source.fetchSemanticsNode())
             val sourceWindow = compose.runOnUiThread { window(sourceView) }
             val sourceToken = compose.runOnUiThread { sourceView.windowToken }
             marker(sourceView)
             val referenceFile = File(output, "00-queue-source.png").also { files += it }
             screenshot().let { image -> try { save(image, referenceFile) } finally { image.recycle() } }
+            compose.mainClock.autoAdvance = true
             source.performClick()
             compose.onNodeWithText("Delete queues?").assertIsDisplayed()
             val entry = compose.runOnIdle { host.entries.single { it.mounted } }
             val anchor = entry.anchor
             val home = compose.runOnIdle { anchor.presentedBounds }
+            homeBounds = home
             val childView = view(compose.onNodeWithText("Delete queues?").fetchSemanticsNode())
             val childWindow = compose.runOnUiThread { window(childView) }
             assertNotSame("Confirmation uses its ordinary separate native window", sourceWindow, childWindow)
@@ -252,6 +268,9 @@ class QueueRemoveFaceTest {
             File(output, "receipt.json").writeText(JSONObject().put("route", "QueueScreen > Queues > Remove all other queues > Delete queues? > $mode")
                 .put("api", Build.VERSION.SDK_INT).put("status", if (failure == null) "passed" else "failed")
                 .put("failure", failure?.stackTraceToString()).put("capture", "Compositor screenshots gated only by unrelated native draw markers; paused Compose frames, not a wall-time/performance claim")
+                .put("referenceSetup", "Opening advanced 1600ms on Compose clock; source bounds invariant across two more frames; clock paused during reference compositor capture")
+                .put("referenceBounds", JSONArray(listOf(referenceBounds.left, referenceBounds.top, referenceBounds.right, referenceBounds.bottom)))
+                .put("homeBounds", JSONArray(listOf(homeBounds.left, homeBounds.top, homeBounds.right, homeBounds.bottom)))
                 .put("frames", frames).toString(2))
             if (files.isNotEmpty() && crop != Rect.Zero) contactSheet(files, crop, File(output, "contact.png"))
         }
