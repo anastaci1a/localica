@@ -22,6 +22,8 @@ import org.junit.Rule
 import org.junit.Test
 import java.io.File
 import java.util.concurrent.LinkedBlockingQueue
+import kotlin.math.roundToInt
+import kotlin.math.hypot
 import kotlin.coroutines.CoroutineContext
 
 /** Real BrowserScreen cold-load stages, including collection header distance. No loading substitute. */
@@ -48,7 +50,7 @@ class CollectionLoadingRevealTest {
         context.getSharedPreferences("library-query", 0).edit().clear().commit()
         ArtworkCache.invalidate()
     }
-    @After fun restore() { compose.mainClock.autoAdvance = true; clean() }
+    @After fun restore() { compose.mainClock.autoAdvance = true; ArtworkColors.publish(emptyMap()); clean() }
 
     private fun route(kind: MediaKind?, search: Boolean = false): BrowseRoute {
         val base = when (kind) {
@@ -80,29 +82,52 @@ class CollectionLoadingRevealTest {
     @Test fun albumArtistSearchColdLoad() = cold(MediaKind.AlbumArtist, search = true)
     @Test fun folderSearchColdLoad() = cold(MediaKind.Folder, search = true)
     @Test fun reducedMotionPlaylist() = cold(MediaKind.Playlist, reduced = true)
+    @Test fun queryRefreshAndCachedReturnDoNotReplayColdLoading() = cold(MediaKind.Playlist, lifecycle = true)
 
-    private fun cold(kind: MediaKind?, search: Boolean = false, reduced: Boolean = false) {
+    private fun cold(kind: MediaKind?, search: Boolean = false, reduced: Boolean = false, lifecycle: Boolean = false) {
         val route = route(kind, search)
-        val name = "${kind?.name ?: "Library"}${if (search) "-search" else ""}${if (reduced) "-reduced" else ""}"
+        val name = "${kind?.name ?: "Library"}${if (search) "-search" else ""}${if (reduced) "-reduced" else ""}${if (lifecycle) "-lifecycle" else ""}"
+        val cache = BrowsePresentationCache()
+        var mounted by mutableStateOf(true)
+        var currentRoute by mutableStateOf(route)
         val queries = HeldQueries()
         var ready by mutableStateOf(false)
         BrowsePreferences(context).write(route, BrowseStyle(listSize = ListSize.Compact, extraInfo = ExtraInfo.None,
             quickSearch = false), false)
+        ArtworkColors.publish(tracks.associate { it.uri to ArtworkColors.MISSING })
         compose.setContent { LocalicaTheme {
+            CompositionLocalProvider(LocalBrowsePresentationCache provides cache) {
+            if (mounted) {
             // A fixed narrow viewport leaves several songs visible below the real collection header.
             Box(Modifier.width(200.dp).fillMaxHeight()) {
-                BrowserScreen(LibraryUiState(snapshot, loading = !ready), PlaylistState(playlists, loading = !ready), route,
+                BrowserScreen(LibraryUiState(snapshot, loading = !ready), PlaylistState(playlists, loading = !ready), currentRoute,
                     {}, {}, {}, { _, _, _ -> }, null, null, true, false,
                     reducedMotion = reduced, queryDispatcher = queries)
+            }
+            }
             }
         } }
         compose.mainClock.autoAdvance = false
         val log = StringBuilder("variant=$name api=${android.os.Build.VERSION.SDK_INT} density=${context.resources.displayMetrics.density}\n")
+        val samples = mutableMapOf<String, MutableList<Pair<Long, Bitmap>>>()
+        var publishedAt = 0L
         fun frame(stage: String) {
             val catalog = compose.onAllNodesWithTag("browse-loading").fetchSemanticsNodes().isNotEmpty()
             val skeleton = compose.onAllNodesWithTag("browse-skeleton-item", true).fetchSemanticsNodes().size
             log.append("stage=$stage t=${compose.mainClock.currentTime} catalogViewport=$catalog skeletonItems=$skeleton\n")
             val image = compose.onRoot().captureNativeFrame().asAndroidBitmap()
+            if (stage == "publication" || stage.startsWith("reveal-")) {
+                BrowseQueries.evaluate(snapshot, playlists, route).items.take(12).forEach { item ->
+                    val bounds = compose.onAllNodesWithTag("browse-text-${item.key}", true).fetchSemanticsNodes().singleOrNull()?.boundsInRoot
+                    if (bounds != null && bounds.width > 0 && bounds.height > 0 && bounds.top >= 0 && bounds.bottom < image.height) {
+                        val left = bounds.left.roundToInt(); val top = bounds.top.roundToInt()
+                        val width = bounds.width.roundToInt().coerceAtMost(image.width - left)
+                        val height = bounds.height.roundToInt().coerceAtMost(image.height - top)
+                        samples.getOrPut(item.key) { mutableListOf() }.add((compose.mainClock.currentTime - publishedAt) to
+                            Bitmap.createBitmap(image, left, top, width, height))
+                    }
+                }
+            }
             File(output, "$name-$stage.png").outputStream().use { image.compress(Bitmap.CompressFormat.PNG, 100, it) }
             File(output, "$name-metrics.txt").writeText(log.toString())
         }
@@ -123,15 +148,22 @@ class CollectionLoadingRevealTest {
             compose.onAllNodesWithTag("browser-list").fetchSemanticsNodes().isNotEmpty()
         }
         val published = compose.mainClock.currentTime
+        publishedAt = published
         frame("publication")
         compose.onNodeWithTag("browse-loading").assertDoesNotExist()
         val visible = items.filter { compose.onAllNodesWithTag("browse-text-${it.key}", true).fetchSemanticsNodes()
             .any { node -> node.boundsInRoot.height > 0 && node.boundsInRoot.top < compose.onRoot().fetchSemanticsNode().boundsInRoot.bottom } }
         assertTrue("Rows below the actual header must be visible for $name", visible.size >= 2)
+        val delays = mutableMapOf<String, Float>()
         if (!reduced) {
             visible.forEach { compose.onNodeWithTag("browse-loading-title-${it.key}", true).assertExists() }
             val positions = visible.map { item -> compose.onNodeWithTag("media-${item.key}").fetchSemanticsNode().boundsInRoot }
             assertTrue("Top-left reveal uses laid-out row order", positions.zipWithNext().all { (a, b) -> b.top > a.top })
+            val viewport = compose.onNodeWithTag("browser-list").fetchSemanticsNode().boundsInRoot
+            visible.zip(positions).forEach { (item, bounds) ->
+                delays[item.key] = hypot((bounds.left - viewport.left) / context.resources.displayMetrics.density,
+                    (bounds.top - viewport.top) / context.resources.displayMetrics.density) / 1.8f
+            }
             log.append("published=$published rows=${visible.map { it.key }} positions=$positions\n")
         } else visible.forEach { compose.onNodeWithTag("browse-loading-title-${it.key}", true).assertDoesNotExist() }
         for (offset in listOf(80L, 160L, 240L, 320L, 480L, 640L, 960L, 1280L)) {
@@ -139,6 +171,59 @@ class CollectionLoadingRevealTest {
             frame("reveal-$offset")
         }
         visible.forEach { compose.onNodeWithTag("browse-loading-title-${it.key}", true).assertDoesNotExist() }
+        if (!reduced) {
+            // Pixel-derived text opacity must follow the same physical-distance wave as Library.
+            // Use the first and final native glyph pixels as endpoints, excluding the low-contrast background.
+            for (item in visible.take(3)) {
+                val row = requireNotNull(samples[item.key])
+                val first = row.first().second; val last = row.last().second
+                val width = minOf(first.width, last.width); val height = minOf(first.height, last.height)
+                fun luma(pixel: Int) = .2126f * android.graphics.Color.red(pixel) + .7152f * android.graphics.Color.green(pixel) + .0722f * android.graphics.Color.blue(pixel)
+                val mask = (0 until height).flatMap { y -> (0 until width).map { x -> x to y } }
+                    .filter { (x, y) -> kotlin.math.abs(luma(last.getPixel(x, y)) - luma(first.getPixel(x, y))) > 60f }
+                assertTrue("Native glyph pixels must be measurable for $name/${item.key}", mask.size > 8)
+                val delay = requireNotNull(delays[item.key])
+                row.drop(1).dropLast(1).forEach { (time, image) ->
+                    if (image.width >= width && image.height >= height) {
+                        var numerator = 0.0; var denominator = 0.0
+                        mask.forEach { (x, y) ->
+                            val from = luma(first.getPixel(x, y)); val delta = luma(last.getPixel(x, y)) - from
+                            numerator += (luma(image.getPixel(x, y)) - from) * delta
+                            denominator += delta * delta
+                        }
+                        val measured = (numerator / denominator).toFloat()
+                        // Publication precedes the shared animation's first advancing frame by at most 4 vsyncs.
+                        val low = BrowseLoadingMotion.fade(time - 64f, delay) - .12f
+                        val high = BrowseLoadingMotion.fade(time + 16f, delay) + .12f
+                        log.append("wave row=${item.key} t=$time delay=$delay measured=$measured expected=$low..$high\n")
+                        File(output, "$name-metrics.txt").writeText(log.toString())
+                        assertTrue("$name/${item.key} at $time ms: native opacity $measured outside $low..$high (header-distance delay $delay)", measured in low..high)
+                    }
+                }
+            }
+        }
+        if (lifecycle) {
+            compose.runOnIdle { currentRoute = currentRoute.copy(text = "Song 01") }
+            compose.waitUntil(5000) { compose.mainClock.advanceTimeByFrame(); queries.tasks.isNotEmpty() }
+            compose.onNodeWithTag("browser-list").assertExists()
+            compose.onNodeWithTag("browse-loading").assertDoesNotExist()
+            visible.forEach { compose.onNodeWithTag("browse-loading-title-${it.key}", true).assertDoesNotExist() }
+            queries.drain()
+            repeat(24) { compose.mainClock.advanceTimeByFrame() }
+            val refreshed = BrowseQueries.evaluate(snapshot, playlists, currentRoute).items.single()
+            compose.onNodeWithTag("media-${refreshed.key}").assertExists()
+            compose.onNodeWithTag("browse-loading-title-${refreshed.key}", true).assertDoesNotExist()
+            frame("query-refresh")
+            compose.runOnIdle { mounted = false }
+            compose.mainClock.advanceTimeByFrame()
+            compose.runOnIdle { mounted = true }
+            repeat(3) { compose.mainClock.advanceTimeByFrame() }
+            compose.onNodeWithTag("browse-loading").assertDoesNotExist()
+            compose.onNodeWithTag("media-${refreshed.key}").assertExists()
+            compose.onNodeWithTag("browse-loading-title-${refreshed.key}", true).assertDoesNotExist()
+            assertTrue("Cached return must not dispatch another query", queries.tasks.isEmpty())
+            frame("cached-return")
+        }
         File(output, "$name-metrics.txt").writeText(log.toString())
     }
 }
