@@ -23,6 +23,13 @@ class LastFmMatchingReportTest {
         val candidates = row.getJSONArray("candidates")
         val ids = (0 until candidates.length()).map { candidates.getJSONObject(it).getString("id") }
         assertEquals(2, ids.distinct().size); assertTrue(ids.all { it.matches(Regex("[0-9a-f]{64}")) })
+        // Document URIs embed folder and file names; an unsalted digest could be confirmed by guessing a path.
+        val plain = library.map { track -> java.security.MessageDigest.getInstance("SHA-256")
+            .digest(track.id.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) } }
+        assertTrue(ids.none { it in plain })
+        val again = JSONObject(LastFmMatchingReport.json(snapshot, library, emptyMap())).getJSONArray("review")
+            .getJSONObject(0).getJSONArray("candidates")
+        assertTrue((0 until again.length()).map { again.getJSONObject(it).getString("id") }.none { it in ids })
         for (index in 0 until candidates.length()) {
             val candidate = candidates.getJSONObject(index)
             assertEquals(75, candidate.getInt("score")); assertEquals("CLEAR", candidate.getString("tier"))

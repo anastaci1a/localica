@@ -145,7 +145,7 @@ Clear matches resolve silently. Probable matches expose their tier and reason fo
 
 Entries without plausible candidates stay outside review and are reconsidered after library changes. Manual choices survive refreshes; resetting them leaves the archive intact. Migration preserves explicit undo and absence across newly separated albums. A positive choice follows its selected album when the correspondence is unambiguous.
 
-The Data tab offers Export matching report. It opens the share sheet with JSON containing review candidates, scores and reasons. The report includes song metadata and hashed local identities, but excludes usernames, API keys and file paths. Nothing is sent until a destination is chosen.
+The Data tab offers Export matching report. It opens the share sheet with JSON containing review candidates, scores and reasons. It includes song metadata and salted local identities that cannot be traced to a file or another report. It excludes usernames, API keys and file paths. Nothing is sent until a destination is chosen.
 
 Turning Last.fm or Online features off cancels syncing and stops using external counts while retaining the archive and choices. Re-enabling restores them without a request. Disconnect forgets the active connection and keeps its archive. Only confirmed Delete synced Last.fm data removes the archive and choices. Local history, playlists and audio tags are never deleted by these actions.
 
