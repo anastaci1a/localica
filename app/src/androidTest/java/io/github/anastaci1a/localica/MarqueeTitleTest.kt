@@ -8,6 +8,9 @@ import androidx.compose.ui.AbsoluteAlignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import android.graphics.Bitmap
+import android.graphics.drawable.ColorDrawable
+import androidx.compose.ui.platform.ViewRootForTest
+import kotlin.math.roundToInt
 import androidx.test.platform.app.InstrumentationRegistry
 import java.io.File
 import androidx.compose.ui.graphics.asAndroidBitmap
@@ -255,6 +258,118 @@ class MarqueeTitleTest {
                 difference(actual, reference) < 2f)
         }
         compose.mainClock.autoAdvance = true
+    }
+
+    @Test fun nativeBackwardFlipAndWidthChangeReleaseStrips() = nativeTaperStrip("backward-width", false, true)
+    @Test fun nativeForwardTailAndLandingStrips() = nativeTaperStrip("forward", true, false)
+    @Test fun nativeNaturalCycleFirstPixelTailAndWrapStrips() = nativeTaperStrip("natural", false, false, true)
+
+    private fun nativeTaperStrip(scene: String, forward: Boolean, resize: Boolean, natural: Boolean = false) {
+        val title = "MMMMMMMMMMMMMMMMMMMMMMMM"
+        val style = TextStyle(fontSize = 24.sp, fontFamily = FontFamily.Monospace, color = Color.Black)
+        var paused by mutableStateOf(false)
+        var width by mutableStateOf(120.dp)
+        var textWidthDp = 0f
+        compose.mainClock.autoAdvance = false
+        compose.setContent { LocalicaTheme {
+            val density = androidx.compose.ui.platform.LocalDensity.current
+            val measured = rememberTextMeasurer().measure(AnnotatedString(title), style, maxLines = 1, softWrap = false)
+            SideEffect { textWidthDp = with(density) { measured.size.width.toDp().value } }
+            Column(Modifier.background(Color.White)) {
+                MarqueeTitle(title, false, Modifier.width(width).testTag("native-taper"), style, motionPaused = paused)
+            }
+        } }
+        val directory = nativeEvidenceDirectory("marquee-716/$scene-api${android.os.Build.VERSION.SDK_INT}",
+            InstrumentationRegistry.getInstrumentation().targetContext.getExternalFilesDir(null))
+        val rows = mutableListOf<Bitmap>()
+        val receipt = StringBuilder("label,composeTimeMillis,widthDp\n")
+        fun capture(label: String) {
+            rows += nativeTaperShot(directory, label)
+            receipt.appendLine("$label,${compose.mainClock.currentTime},${width.value}")
+        }
+        compose.mainClock.advanceTimeBy(64)
+        capture("rest")
+        compose.mainClock.advanceTimeBy(1968)
+        capture("pre-outgoing")
+        compose.mainClock.advanceTimeByFrame()
+        capture("first-outgoing-frame")
+        if (natural) {
+            val cycleMillis = ((textWidthDp + 40f) / 30f * 1000f).toLong()
+            val start = compose.mainClock.currentTime
+            for (index in 1..24) {
+                val target = start + cycleMillis * index / 24
+                compose.mainClock.advanceTimeBy(target - compose.mainClock.currentTime)
+                capture("cycle-$index")
+            }
+            compose.mainClock.advanceTimeBy(600)
+            capture("wrap-rest")
+        } else {
+            val travel = if (forward) textWidthDp * .78f else 10f
+            compose.mainClock.advanceTimeBy((travel / 30f * 1000f).toLong())
+            capture("before-flip")
+            compose.runOnIdle { paused = true }
+            compose.mainClock.advanceTimeByFrame()
+            capture("flip")
+            if (resize) compose.runOnIdle { width = 200.dp }
+            compose.mainClock.advanceTimeBy(75, ignoreFrameDuration = true)
+            capture("release-75ms")
+            compose.mainClock.advanceTimeBy(75, ignoreFrameDuration = true)
+            capture("release-150ms")
+            compose.mainClock.advanceTimeBy(400)
+            capture("landed")
+            val actual = compose.onNodeWithTag("native-taper").captureToImage().toPixelMap()
+            compose.mainClock.advanceTimeBy(1000)
+            val held = compose.onNodeWithTag("native-taper").captureToImage().toPixelMap()
+            assertTrue("Landing stays still after cancellation", difference(actual, held) < 2f)
+        }
+        val strip = Bitmap.createBitmap(rows.maxOf { it.width }, rows.sumOf { it.height }, Bitmap.Config.ARGB_8888)
+        val canvas = android.graphics.Canvas(strip)
+        canvas.drawColor(android.graphics.Color.WHITE)
+        var y = 0f
+        rows.forEach { canvas.drawBitmap(it, 0f, y, null); y += it.height }
+        File(directory, "strip.png").outputStream().use { check(strip.compress(Bitmap.CompressFormat.PNG, 100, it)) }
+        File(directory, "frames.csv").writeText(receipt.toString())
+        rows.forEach { it.recycle() }; strip.recycle()
+        compose.mainClock.autoAdvance = true
+    }
+
+    private var nativeCaptureNumber = 0
+    private fun nativeTaperShot(directory: File, label: String): Bitmap {
+        compose.waitForIdle()
+        val node = compose.onNodeWithTag("native-taper").fetchSemanticsNode()
+        val view = (node.root as ViewRootForTest).view
+        val root = view.rootView
+        val origin = IntArray(2)
+        val rootOrigin = IntArray(2)
+        val token = ++nativeCaptureNumber * 5
+        val marker = ColorDrawable(android.graphics.Color.rgb(token, 255, 0))
+        var x = 0; var y = 0
+        compose.runOnUiThread {
+            view.getLocationOnScreen(origin); root.getLocationOnScreen(rootOrigin)
+            x = rootOrigin[0] + root.width - 12; y = rootOrigin[1] + root.height - 12
+            marker.setBounds(root.width - 16, root.height - 16, root.width - 8, root.height - 8)
+            root.overlay.add(marker)
+            root.invalidate()
+        }
+        var screenshot: Bitmap? = null
+        try {
+            compose.waitUntil(5000) {
+                screenshot?.recycle()
+                screenshot = requireNotNull(InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot())
+                val pixel = screenshot!!.getPixel(x, y)
+                android.graphics.Color.green(pixel) >= 250 && android.graphics.Color.blue(pixel) <= 4 &&
+                    kotlin.math.abs(android.graphics.Color.red(pixel) - token) <= 4
+            }
+            val crop = Bitmap.createBitmap(screenshot!!, origin[0] + node.boundsInRoot.left.roundToInt(),
+                origin[1] + node.boundsInRoot.top.roundToInt(), node.boundsInRoot.width.roundToInt(), node.boundsInRoot.height.roundToInt())
+            val result = crop.copy(Bitmap.Config.ARGB_8888, false)
+            if (crop !== screenshot) crop.recycle()
+            File(directory, "$label.png").outputStream().use { check(result.compress(Bitmap.CompressFormat.PNG, 100, it)) }
+            return result
+        } finally {
+            compose.runOnUiThread { root.overlay.remove(marker) }
+            screenshot?.recycle()
+        }
     }
 
     @Composable private fun RecordMeasuredLayout(label: String, text: AnnotatedString, style: TextStyle) {
