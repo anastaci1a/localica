@@ -44,6 +44,74 @@ class PlayerArtistRasterEqualityTest {
         assertPlayerPixelsWithAlbumBound("admit-interior-one-code", before, allowed, width, height, mask)
     }
 
+    @Test fun splitParagraphPreservesArtistPixelsAndActualLineGeometryUnderOverflow() {
+        var candidate by mutableStateOf(false)
+        var phase by mutableFloatStateOf(.08f)
+        var width by mutableIntStateOf(340)
+        var reduced by mutableStateOf(false)
+        var direction by mutableStateOf(androidx.compose.ui.unit.LayoutDirection.Ltr)
+        var artist by mutableStateOf("Artist")
+        val ink = Color.Black.copy(alpha=.72f)
+        val producer = ColorProducer { ink }
+        val geometryFailures = mutableListOf<String>()
+        var geometryWitnesses = 0
+        val observer: (androidx.compose.ui.text.TextLayoutResult,androidx.compose.ui.text.TextLayoutResult)->Unit = { a,b ->
+            geometryWitnesses++
+            if (a.size!=b.size || a.lineCount!=b.lineCount || a.firstBaseline!=b.firstBaseline || a.lastBaseline!=b.lastBaseline)
+                geometryFailures += "paragraph size/baseline differs"
+            for (i in 0 until a.layoutInput.text.length) if (a.getBoundingBox(i)!=b.getBoundingBox(i))
+                geometryFailures += "character $i differs"
+            for (i in 0 until a.lineCount) if (a.getLineLeft(i)!=b.getLineLeft(i) || a.getLineRight(i)!=b.getLineRight(i) ||
+                a.isLineEllipsized(i)!=b.isLineEllipsized(i)) geometryFailures += "line $i differs"
+        }
+        compose.mainClock.autoAdvance=false
+        compose.setContent { LocalicaTheme {
+            CompositionLocalProvider(androidx.compose.ui.platform.LocalLayoutDirection provides direction,
+                LocalAlbumSuffixLayoutObserver provides observer) {
+                key(candidate,phase,width,reduced,direction,artist) {
+                    val reveal=((phase-.65f)/.35f).coerceIn(0f,1f)
+                    val legacy=buildAnnotatedString { append(artist);withStyle(SpanStyle(color=ink.copy(alpha=ink.alpha*reveal))) { append(" · Album") } }
+                    val plain=buildAnnotatedString { append(artist);withStyle(SpanStyle(color=Color.Transparent)) { append(" · Album") } }
+                    val brush=remember(reveal) { DrawInkSpanBrush(ColorProducer { ink.copy(alpha=ink.alpha*reveal) }) }
+                    val shader=remember(artist,brush) { buildAnnotatedString { append(artist);withStyle(SpanStyle(brush=brush,alpha=1f)) { append(" · Album") } } }
+                    val scale=11f/MaterialTheme.typography.bodyLarge.fontSize.value
+                    val value=scale+(1f-scale)*phase
+                    Box(Modifier.size(width.dp,90.dp).background(Color(0xFFE1E2E3)).testTag("frame-root")) {
+                        MarqueeTitle(if(candidate) shader else legacy,reduced,
+                            Modifier.fillMaxWidth().scalePlayerText { value },
+                            style=MaterialTheme.typography.bodyLarge.copy(color=if(candidate) Color.Unspecified else ink),
+                            motionPaused=true,visiblePrefixLength=artist.length,suffixVisibility=reveal,
+                            ink=producer.takeIf { candidate },plainPrefixParagraph=plain.takeIf { candidate })
+                    }
+                }
+            }
+        } }
+        data class Frame(val pixels:IntArray,val width:Int,val height:Int,val mask:PlayerAlbumPixels)
+        fun capture(arm:Boolean):Frame {
+            compose.runOnIdle { candidate=arm }
+            repeat(8) { compose.mainClock.advanceTimeByFrame();compose.waitForIdle() }
+            val image=compose.onNodeWithTag("frame-root").captureToImage().toPixelMap()
+            val mask=measuredPlayerAlbumSuffix(compose,"$artist · Album",artist.length)
+            val label="split-$artist-$width-$direction-reduced$reduced-p$phase-arm$arm"
+            savePlayerAlbumMask(label,image.width,image.height,mask)
+            return Frame(IntArray(image.width*image.height) { i -> image[i%image.width,i/image.width].toArgb() },image.width,image.height,mask)
+        }
+        try {
+            for (name in listOf("Artist","فنّان")) for (rtl in listOf(false,true)) for (motion in listOf(false,true))
+                for (size in listOf(14,40,340)) for (p in listOf(.08f,.7f,1f)) {
+                    compose.runOnIdle { artist=name;direction=if(rtl) androidx.compose.ui.unit.LayoutDirection.Rtl else androidx.compose.ui.unit.LayoutDirection.Ltr;reduced=motion;width=size;phase=p }
+                    val a=capture(false);val b=capture(true)
+                    val label="split-$name-$size-$rtl-$motion-$p"
+                    assertEquals("same character geometry $label",a.mask,b.mask)
+                    if (!a.pixels.contentEquals(b.pixels)) savePlayerEqualityEvidence(label,a.pixels,b.pixels,a.width,a.height)
+                    if (p<=.65f) assertArrayEquals("fully hidden suffix $label",a.pixels,b.pixels)
+                    else assertPlayerPixelsWithAlbumBound(label,a.pixels,b.pixels,a.width,a.height,a.mask)
+                }
+            assertTrue("Both real paragraphs must publish line evidence",geometryWitnesses>0)
+            assertTrue(geometryFailures.take(20).joinToString("\n"),geometryFailures.isEmpty())
+        } finally { compose.mainClock.autoAdvance=true }
+    }
+
     @Test fun scaledArtistRasterPathsAreIndependentlyComparedToTheOriginal() {
         var variant by mutableStateOf("reference")
         var phase by mutableFloatStateOf(.08f)
@@ -71,11 +139,12 @@ class PlayerArtistRasterEqualityTest {
                 Box(Modifier.size(340.dp,90.dp).background(Color(0xFFE1E2E3)).testTag("artist-raster")) {
                     val modifier=if(variant=="reference") Modifier.fillMaxWidth().scalePlayerText(value)
                         else Modifier.fillMaxWidth().scalePlayerText { value }
-                    MarqueeTitle(if(variant=="unprotected-shader") unprotected else if(variant=="producer-and-shader"||variant=="shader-only") shader else legacy,
+                    MarqueeTitle(if(variant=="unprotected-shader"||variant=="split-layout") unprotected else if(variant=="producer-and-shader"||variant=="shader-only") shader else legacy,
                         false,modifier,style=MaterialTheme.typography.bodyLarge.copy(
-                            color=if(variant=="producer-and-shader"||variant=="producer-only") Color.Unspecified else ink),
+                            color=if(variant=="producer-and-shader"||variant=="producer-only"||variant=="split-layout") Color.Unspecified else ink),
                         visiblePrefixLength=6,suffixVisibility=0f,
-                        ink=producer.takeIf { variant=="producer-and-shader"||variant=="producer-only" })
+                        ink=producer.takeIf { variant=="producer-and-shader"||variant=="producer-only"||variant=="split-layout" },
+                        plainPrefixParagraph=legacy.takeIf { variant=="split-layout" })
                 }
             }
         } }
@@ -95,7 +164,7 @@ class PlayerArtistRasterEqualityTest {
                     if (changed>0) savePlayerEqualityEvidence("artist-negative-control-p$p",old,control,size.first,size.second)
                     if (android.os.Build.VERSION.SDK_INT == 26) assertTrue("API 26 witness must detect the original shader perturbation",changed>0)
                 }
-                for(name in listOf("reader-only","producer-only","shader-only","producer-and-shader")) {
+                for(name in listOf("reader-only","producer-only","split-layout")) {
                     val (current,currentSize)=capture(name,p)
                     assertEquals(size,currentSize)
                     val changed=old.indices.count { old[it]!=current[it] }

@@ -65,8 +65,9 @@ internal data class PlayerAlbumPixels(
 }
 
 /** The fixture uses only axis-aligned scale/translation. Fail closed for other transforms. */
-internal fun measuredPlayerAlbumSuffix(compose: androidx.compose.ui.test.junit4.ComposeContentTestRule): PlayerAlbumPixels {
-    val text = compose.onNodeWithText("Artist · Album", useUnmergedTree = true)
+internal fun measuredPlayerAlbumSuffix(compose: androidx.compose.ui.test.junit4.ComposeContentTestRule,
+    textValue: String = "Artist · Album", prefixLength: Int = "Artist".length): PlayerAlbumPixels {
+    val text = compose.onNodeWithText(textValue, useUnmergedTree = true)
     val artist = text.fetchSemanticsNode()
     val rootCoordinates = compose.onNodeWithTag("frame-root").fetchSemanticsNode().layoutInfo.coordinates
     val suffix = mutableListOf<androidx.compose.ui.geometry.Rect>()
@@ -90,14 +91,15 @@ internal fun measuredPlayerAlbumSuffix(compose: androidx.compose.ui.test.junit4.
                         "Album oracle requires axis-aligned character geometry"
                     }
                     val transformed = androidx.compose.ui.geometry.Rect(minOf(a.x,b.x), minOf(a.y,b.y), maxOf(a.x,b.x), maxOf(a.y,b.y))
-                    if (node.id == artist.id && i >= "Artist".length) suffix += transformed
+                    if (node.id == artist.id && i >= prefixLength) suffix += transformed
                     else protected += transformed
                 }
             }
         }
     }
-    // Protect non-text content adjacent to the artist as well as every other text character.
-    listOf("player-artwork", "player-title", "player-transport-row").forEach { tag ->
+    // Protect foreground controls as well as every other text character. FullBackground artwork
+    // is behind the entire label; treating its rectangle as foreground would exclude every suffix.
+    listOf("player-title", "player-transport-row").forEach { tag ->
         compose.onAllNodesWithTag(tag, useUnmergedTree = true).fetchSemanticsNodes().forEach { node ->
             compose.runOnIdle { protected += rootCoordinates.localBoundingBoxOf(node.layoutInfo.coordinates, clipBounds = false) }
         }

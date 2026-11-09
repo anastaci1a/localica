@@ -674,12 +674,12 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
                 val color = drawTheme.secondary()
                 color.copy(alpha = color.alpha * suffixVisibility.floatValue)
             }) }
-            PlayerFrameScope {
-            // An explicit color span preserves Android's original prefix paint when a shader
-            // span is present in the same paragraph. Keep this read in its own restart scope.
-            val artistColor = drawTheme.secondary()
-            val artistText = remember(artist, sampled.album, albumBrush, artistColor) { buildAnnotatedString {
-                withStyle(SpanStyle(color = artistColor)) { append(artist) }
+            val plainArtist = remember(artist, sampled.album) { buildAnnotatedString {
+                append(artist)
+                sampled.album?.let { album -> withStyle(SpanStyle(color = Color.Transparent)) { append(" · "); append(album) } }
+            } }
+            val artistText = remember(artist, sampled.album, albumBrush) { buildAnnotatedString {
+                append(artist)
                 sampled.album?.let { album -> withStyle(SpanStyle(brush = albumBrush, alpha = 1f)) {
                     append(" · "); append(album)
                 } }
@@ -687,8 +687,8 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
             MarqueeTitle(artistText, settings.reducedMotion,
                 Modifier.playerTextBounds(::textX, ::subtitleY, ::textWidth).zIndex(if (moving) -.5f else 0f).scalePlayerText { subtitleScale + (1f - subtitleScale) * p() }.testTag("player-artist").onGloballyPositioned { polarity.measure("artist", it) },
                 style = MaterialTheme.typography.bodyLarge, motionPaused = textMotionPaused,
-                visiblePrefixLength = artist.length, suffixVisibilityReader = { suffixVisibility.floatValue }, ink = drawTheme.secondary)
-            }
+                visiblePrefixLength = artist.length, suffixVisibilityReader = { suffixVisibility.floatValue }, ink = drawTheme.secondary,
+                plainPrefixParagraph = plainArtist)
             PlayerFrameScope { if (seekVisible) Column(Modifier.liveControlOffset({ contentInset }, ::seekY).width(contentWidth)
                 .testTag("player-seek-row").onGloballyPositioned { polarity.measure("seek", it) }.graphicsLayer { alpha = rowMotion().seekAlpha }) {
                 PlayerSeekControls(sampled, onSeek, artworkVisit, onSeekRequest = onSeekRequest, position = seekPosition,
