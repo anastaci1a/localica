@@ -77,8 +77,8 @@ internal fun LastFmSettings(controller: LastFmController) {
     state.problem?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.testTag("lastfm-problem")) }
     when (tab) {
         0 -> {
-            SettingsLink("Review matches", "Needs review, judgment calls and matched recordings") { tab = 1 }
             if (saved.snapshot != null) {
+                SettingsHeading("Matching")
                 SettingsTextLine(LocalSettingsRowMetrics.current.textStart) { modifier ->
                     Text("${matches.matched} matched · ${matches.review.size} to review", modifier.testTag("lastfm-review-summary"))
                 }
@@ -96,6 +96,7 @@ internal fun LastFmSettings(controller: LastFmController) {
                 } }
                 SettingsLink("Auto-matched editions (${matches.editions.size})", "Same recording on several albums · count on every copy") { group = LastFmGroup.EDITIONS; tab = 1 }
             }
+            SettingsLink("Review matches", "Needs review, judgment calls and matched recordings") { tab = 1 }
             LastFmConnection(controller, state, onlineAllowed, active, username, { username = it }, canSync)
         }
         1 -> {
