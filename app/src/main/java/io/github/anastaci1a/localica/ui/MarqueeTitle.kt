@@ -88,7 +88,8 @@ internal fun MarqueeTitle(title: AnnotatedString, reducedMotion: Boolean, modifi
                         }
                     }
                 }
-                val leading = frame.leadingFade
+                val leading = if (rtl) frame.leadingFade else marqueeLeftFade(textWidth, fadeWidth, frame)
+                if (!rtl) motion.recordRenderedLeftFade(leading)
                 val trailing = marqueeTrailingFade(textWidth, size.width, fadeWidth, frame)
                 fun edge(start: Float, end: Float, amount: Float, reversed: Boolean) {
                     if (amount <= 0f) return
