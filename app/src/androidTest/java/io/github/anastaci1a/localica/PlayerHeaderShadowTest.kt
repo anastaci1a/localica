@@ -53,6 +53,7 @@ class PlayerHeaderShadowTest {
     private val failures = mutableListOf<String>()
     private var fullInkContrast = 0f
     private var captureNumber = 0
+    private var statusBarBottom = 0f
     private val output by lazy {
         nativeEvidenceDirectory("player-header-shadow-709", InstrumentationRegistry.getInstrumentation().targetContext.getExternalFilesDir(null))
     }
@@ -66,6 +67,7 @@ class PlayerHeaderShadowTest {
             CompositionLocalProvider(LocalGlassAppearance provides appearance) {
                 BoxWithConstraints(Modifier.fillMaxSize().background(Color.White)) {
                     density = LocalDensity.current
+                    statusBarBottom = with(density) { WindowInsets.statusBars.asPaddingValues().calculateTopPadding().toPx() }
                     scope = rememberCoroutineScope()
                     val corners = rememberDeviceCorners()
                     frame = playerSurfaceFrame(maxWidth, maxHeight,
@@ -103,7 +105,7 @@ class PlayerHeaderShadowTest {
         coordinates.findRootCoordinates().localBoundingBoxOf(coordinates, clipBounds = false)
     }
     private fun control(label: String): SemanticsNode = generateSequence(
-        compose.onNodeWithContentDescription(label, true).fetchSemanticsNode()) { it.parent }
+        compose.onNodeWithContentDescription(label, useUnmergedTree = true).fetchSemanticsNode()) { it.parent }
         .first { it.config.contains(SemanticsActions.OnClick) }
     private fun shot(name: String): Bitmap {
         compose.waitForIdle()
@@ -170,7 +172,7 @@ class PlayerHeaderShadowTest {
         assertEquals(with(density) { 48.dp.toPx() }, collapse.height, 1f)
         assertEquals(collapse.top, pill.top, 1f)
         val actual = shot("$name-actual")
-        val icon = bounds(compose.onNodeWithContentDescription("Collapse player", true).fetchSemanticsNode())
+        val icon = bounds(compose.onNodeWithContentDescription("Collapse player", useUnmergedTree = true).fetchSemanticsNode())
         val ink = buildList {
             for (y in icon.top.roundToInt() until icon.bottom.roundToInt())
                 for (x in icon.left.roundToInt() until icon.right.roundToInt()) add(luma(actual, x, y))
@@ -198,6 +200,8 @@ class PlayerHeaderShadowTest {
                 ((if (side < 0) body.top - 4 * dp else body.bottom + 12 * dp).roundToInt())) {
                 for (x in (body.center.x - body.width / 4).roundToInt() until (body.center.x + body.width / 4).roundToInt()) {
                     if (!insidePlayer.contains(x, y) || !insidePlayer.contains(x - 1, y - 1) || !insidePlayer.contains(x + 1, y + 1)) continue
+                    // System-bar glyphs are a separate native layer, not header shadow pixels.
+                    if (y <= statusBarBottom) continue
                     if (x !in 0 until actual.width || y !in 0 until actual.height) continue
                     // Uniform-white artwork has the same stationary wash/grain across this row.
                     // Its central lane lies beyond both controls'32dp field reach.
@@ -207,6 +211,10 @@ class PlayerHeaderShadowTest {
                     target += luma(white, x, y) - luma(expected, x, y)
                     count++
                 }
+            }
+            if (count == 0 && side < 0 && body.top <= statusBarBottom + 1f) {
+                observations.put(JSONObject().put("body", index).put("side", side).put("excluded", "native status bar"))
+                continue
             }
             check(count > 10) { "No inside-player probes for $name/$index/$side: player=$player body=$body" }
             val mean = measured / count; val wanted = target / count
@@ -241,7 +249,7 @@ class PlayerHeaderShadowTest {
         sample("minimize")
         compose.mainClock.advanceTimeBy(600)
         assertEquals(0f, progress.value, .0001f)
-        compose.onNodeWithContentDescription("Collapse player", true).assertDoesNotExist()
+        compose.onNodeWithContentDescription("Collapse player", useUnmergedTree = true).assertDoesNotExist()
         val hidden = shot("fully-hidden")
         var ghost = 0f
         for (y in open.top.roundToInt() until (open.bottom + 16 * density.density).roundToInt())
