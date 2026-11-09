@@ -43,7 +43,6 @@ class NoneControlPolicyTest {
             } }
         }
         val slider = compose.onNodeWithTag("policy-slider")
-        val thumb = compose.onNodeWithTag("settings-slider-thumb", useUnmergedTree = true)
         // Two sliders deliberately share the production thumb tag.
         fun activeThumb() = compose.onAllNodesWithTag("settings-slider-thumb", useUnmergedTree = true)[0]
         fun whiteAndResting() {
