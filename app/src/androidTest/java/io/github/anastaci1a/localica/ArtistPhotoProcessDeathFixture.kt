@@ -20,7 +20,7 @@ class ArtistPhotoProcessDeathFixture {
         assumeTrue("Requires the separate disposable-emulator process-death driver", phase != null)
         require(phase in listOf("seed", "verify"))
         val app = InstrumentationRegistry.getInstrumentation().targetContext.applicationContext as LocalicaApplication
-        require(android.os.Build.FINGERPRINT.contains("generic") || android.os.Build.MODEL.contains("sdk"))
+        require(android.os.Build.HARDWARE in setOf("ranchu", "goldfish"))
         val request = ArtistPhotoRequest("Artist:process-death-712", "Process Death Fixture", setOf("Fixture Album"))
         val choice = ArtistPhotoChoice(ArtistPhotoProvider.DEEZER, "712")
         val root = File(app.filesDir, "artist-photo-matches")

@@ -72,7 +72,7 @@ internal fun ArtistPhotoChooser(actions: ArtistPhotoActions) {
                             val isFailed = failed == choice || selection.pending == choice &&
                                 (selection.failed || work?.failed?.contains(actions.request.artistKey) == true)
                             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                ActionTextButton({ draft = choice }, Modifier.fillMaxWidth(), enabled = allowed) {
+                                ActionTextButton({ draft = choice }, Modifier.fillMaxWidth(), enabled = allowed, shape = Corners.artwork) {
                                     Column(Modifier.fillMaxWidth()) {
                                         ArtistPhotoPreview(environment, candidate, allowed)
                                         Text("${candidate.name} · ${choice.provider.name.lowercase()}", style = MaterialTheme.typography.labelLarge)
