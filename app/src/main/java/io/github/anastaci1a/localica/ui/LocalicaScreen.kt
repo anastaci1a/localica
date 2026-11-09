@@ -304,7 +304,8 @@ fun LocalicaScreen(
             // The opaque full player covers this entire scene. Keep its composition,
             // scroll state and cached recording, but do not submit hidden pixels.
             .drawWithContent { if (!hasPlayer || progress.value < 1f) drawContent() }
-            .recordFrostedBackdrop(browseBackdrop).background(pageBackground)
+            .recordFrostedBackdrop(browseBackdrop, samplingScale = if (android.os.Build.VERSION.SDK_INT >= 33)
+                if (currentGlassRendererGeneration().backend == GlassBackend.None) .5f else 1f else null).background(pageBackground)
             .then(if (hasPlayer && playerCoversBrowse) Modifier.clearAndSetSemantics {} else Modifier)) {
             TabPager(pager, tabs, Modifier.weight(1f), userScrollEnabled = !expanded) { page ->
             val tab = settings.tabs[page]

@@ -1,5 +1,7 @@
 package io.github.anastaci1a.localica.ui
 
+import io.github.anastaci1a.localica.ui.engine.rememberScaledBackdropRecording
+
 import io.github.anastaci1a.localica.ui.components.MaterialAreaReduction
 import io.github.anastaci1a.localica.ui.components.rememberMaterialAreaReduction
 import io.github.anastaci1a.localica.ui.components.materialReductionExtent
@@ -338,8 +340,12 @@ internal fun androidx.compose.ui.layout.LayoutCoordinates.backdropPosition(view:
 internal fun Modifier.recordFrostedBackdrop(source: FrostedBackdrop, backing: FrostedBackdrop? = null,
     enabled: Boolean = true, displayCutout: (DrawScope.() -> Path?)? = null,
     readbackRequest: (() -> Int)? = null, onRecorded: ((Int) -> Unit)? = null,
-    displayBacking: Boolean = true): Modifier {
+    displayBacking: Boolean = true, samplingScale: Float? = null): Modifier {
     val renderer = currentGlassRendererGeneration()
+    val scaledRecording = samplingScale?.let {
+        require(backing == null && displayCutout == null && displayBacking)
+        rememberScaledBackdropRecording(source.layer, it)
+    }
     // Modifier ancestry remains available when HWUI reuses an independently retained child.
     // It describes recording containment, never the scene's sampling parent.
     val scope = if (io.github.anastaci1a.localica.BuildConfig.DEBUG) remember(source, enabled) { BackdropRecordingScope(source) } else null
@@ -370,7 +376,7 @@ internal fun Modifier.recordFrostedBackdrop(source: FrostedBackdrop, backing: Fr
             if (io.github.anastaci1a.localica.BuildConfig.DEBUG) BackdropRecordingAncestry.reference(source)
             if (io.github.anastaci1a.localica.BuildConfig.DEBUG) BackdropRecordingAncestry.begin(source)
             try {
-            source.layer.record(size = if (Build.VERSION.SDK_INT >= 33) glassLayerExtent(extent) else extent) {
+            val recordScene: DrawScope.() -> Unit = {
                 clipRect(right = viewport.width, bottom = viewport.height) {
                     if (backing != null && backing.recorded && !backing.layer.isReleased) {
                         if (io.github.anastaci1a.localica.BuildConfig.DEBUG) BackdropRecordingAncestry.reference(backing)
@@ -381,12 +387,19 @@ internal fun Modifier.recordFrostedBackdrop(source: FrostedBackdrop, backing: Fr
                     this@drawWithContent.drawContent()
                 }
             }
+            val recordedExtent = if (Build.VERSION.SDK_INT >= 33) glassLayerExtent(extent) else extent
+            if (scaledRecording?.active == true) with(scaledRecording) { recordSource(recordedExtent, recordScene) }
+            else source.layer.record(size = recordedExtent) { recordScene() }
             } finally { if (io.github.anastaci1a.localica.BuildConfig.DEBUG) BackdropRecordingAncestry.end(source) }
             source.recordedSize = extent
             androidx.compose.runtime.snapshots.Snapshot.withoutReadObservation { source.recordings++ }
             source.recordedFrames.trySend(Unit)
             source.recordedGeneration = renderer.takeIf { backing == null || backing.recorded }
             if (request != null) onRecorded?.invoke(request)
+            if (scaledRecording?.active == true) {
+                with(scaledRecording) { drawDisplay() }
+                return@drawWithContent
+            }
             // A transparent optical overlay replaces the source beneath its body;
             // retain the complete source for sampling, omit only its direct display.
             if (!displayBacking) {
