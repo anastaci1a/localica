@@ -5,6 +5,7 @@ import sys
 import tempfile
 from pathlib import Path
 import unittest
+import xml.etree.ElementTree as ET
 
 spec = importlib.util.spec_from_file_location('prototype_health', Path(__file__).parents[1] / 'prototype-health.py')
 health = importlib.util.module_from_spec(spec)
@@ -71,6 +72,46 @@ class HealthClassification(unittest.TestCase):
         (self.root / 'result.xml').write_text('<testsuite><testcase><failure /></testcase></testsuite>')
         (self.evidence / 'live/observed/command.log').write_text('java.lang.AssertionError: earlier failure')
         self.assertIsNone(self.classify(1, self.samples, self.root))
+
+    def test_junit_diagnostic_families_block_every_stream_and_earlier_iteration(self):
+        observed_log = self.evidence / 'live/observed/command.log'
+        for diagnostic in ('org.junit.ComparisonFailure: product mismatch',
+                           'junit.framework.AssertionFailedError: product mismatch',
+                           'org.opentest4j.AssertionFailedError: product mismatch',
+                           'org.opentest4j.MultipleFailuresError: product mismatch',
+                           'java.lang.NoClassDefFoundError: product mismatch',
+                           'org.junit.runners.model.TestTimedOutException: product mismatch'):
+            for stream in ('system-out', 'system-err', 'console', 'logcat', 'earlier-xml', 'earlier-console'):
+                with self.subTest(diagnostic=diagnostic, stream=stream):
+                    root = ET.Element('testsuite')
+                    ET.SubElement(ET.SubElement(root, 'testcase'), 'failure')
+                    observed_log.write_text('device emulator-5554 not found')
+                    logcat = self.root / 'logcat-diagnostic.txt'
+                    if logcat.exists():
+                        logcat.unlink()
+                    iterations = self.root / 'iterations'
+                    if iterations.exists():
+                        import shutil
+                        shutil.rmtree(iterations)
+                    if stream in ('system-out', 'system-err'):
+                        ET.SubElement(root, stream).text = diagnostic
+                    elif stream == 'console':
+                        observed_log.write_text(diagnostic)
+                    elif stream == 'logcat':
+                        logcat.write_text(diagnostic)
+                    elif stream == 'earlier-xml':
+                        iterations.mkdir()
+                        old = ET.Element('testsuite')
+                        ET.SubElement(old, 'system-out').text = diagnostic
+                        ET.ElementTree(old).write(iterations / 'earlier.xml')
+                    else:
+                        earlier = iterations / 'iteration-01/prototype-evidence/live/observed'
+                        earlier.mkdir(parents=True)
+                        (earlier / 'command.log').write_text(diagnostic)
+                        (earlier / 'manifest.json').write_bytes((observed_log.parent / 'manifest.json').read_bytes())
+                        (earlier.parent / 'supervision.json').write_bytes((observed_log.parent.parent / 'supervision.json').read_bytes())
+                    ET.ElementTree(root).write(self.root / 'result.xml')
+                    self.assertIsNone(self.classify(1, self.samples, self.root, iterations))
 
     def test_missing_or_degraded_observer_evidence_blocks_recovery(self):
         (self.root / 'result.xml').write_text('<testsuite><testcase><failure /></testcase></testsuite>')

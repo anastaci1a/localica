@@ -12,6 +12,16 @@ import time
 import xml.etree.ElementTree as ET
 
 
+PRODUCT_DIAGNOSTIC = re.compile(
+    r'\b[A-Za-z_$][A-Za-z0-9_.$]*(?:Error|Failure)\b|FATAL EXCEPTION|'
+    r'TestRunner: (?:failed|failure):|java\.lang\.(?:\w*Exception|\w*Error)|'
+    r'org\.junit\.runners\.model\.(?:TestTimedOutException|MultipleFailureException)')
+
+
+def product_diagnostic(text):
+    return PRODUCT_DIAGNOSTIC.search(text) is not None
+
+
 def command(args, timeout=4):
     try:
         result = subprocess.run(args, capture_output=True, text=True, timeout=timeout)
@@ -86,7 +96,7 @@ def classify(result, samples, results, iterations=None, evidence=None):
                     or observed.get('status') not in ('completed', 'failed')
                     or observed.get('oversize_lines_not_parsed') != 0):
                 return None
-            if re.search(r'AssertionError|FATAL EXCEPTION|TestRunner: (?:failed|failure):|java\.lang\.(?:\w*Exception|\w*Error)', text):
+            if product_diagnostic(text):
                 return None
             failed_observer |= observed['status'] == 'failed'
         except (OSError, ValueError, KeyError):
@@ -102,8 +112,7 @@ def classify(result, samples, results, iterations=None, evidence=None):
             tree = ET.parse(path)
             for node in tree.iter():
                 text = ''.join(node.itertext()).strip() if node.tag in ('system-err', 'system-out') else ''
-                if (node.tag == 'system-err' and text and not infrastructure_diagnostic(text, context['serial'])) or re.search(
-                        r'AssertionError|FATAL EXCEPTION|TestRunner: (?:failed|failure):|java\.lang\.(?:\w*Exception|\w*Error)', text):
+                if (node.tag == 'system-err' and text and not infrastructure_diagnostic(text, context['serial'])) or product_diagnostic(text):
                     return None
                 if node.tag in ('failure', 'error'):
                     if (node.text or '').strip() or any(str(v).strip() for v in node.attrib.values()) or len(node):
@@ -122,7 +131,7 @@ def classify(result, samples, results, iterations=None, evidence=None):
                 text = log.read_text(errors='replace')
             except OSError:
                 return None
-            if re.search(r'TestRunner: (?:failed|failure):|AssertionError|FATAL EXCEPTION', text):
+            if product_diagnostic(text):
                 return None
     # Only the original observed guest may lead into an ordered, terminal loss.
     # An earlier loss followed by recovery cannot authorize retry of a later failure.
