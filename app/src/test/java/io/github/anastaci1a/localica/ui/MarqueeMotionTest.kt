@@ -184,6 +184,91 @@ class MarqueeMotionTest {
         assertEquals(1f, marqueeTrailingFade(300f, 120f, 24f, wrap), 0f)
     }
 
+    @Test fun outgoingLeftMaskRampsAtFirstPixelAndTailAndStaysOffDuringWrapLanding() {
+        fun mask(offset: Float) = marqueeLeftFade(500f, 20f,
+            MarqueeFrame(offset = offset, repeatDistance = 566.6667f, phase = MarqueePhase.Scrolling))
+        assertEquals(0f, mask(0f), 0f)
+        assertTrue(mask(.01f) in 0f.. .00001f)
+        assertEquals(.5f, mask(10f), .00001f)
+        assertEquals(1f, mask(20f), 0f)
+        assertEquals(1f, mask(480f), 0f)
+        assertEquals(.5f, mask(490f), .00001f)
+        assertEquals(0f, mask(500f), 0f)
+        assertEquals(0f, mask(550f), 0f)
+        for (phase in listOf(MarqueePhase.Rest, MarqueePhase.LeadingIn, MarqueePhase.LeadingOut)) {
+            assertEquals(0f, marqueeLeftFade(500f, 20f,
+                MarqueeFrame(offset = 10f, leadingFade = 1f, phase = phase)), 0f)
+        }
+    }
+
+    @Test fun recordedDrawAmountSurvivesFlipGeometryAndReleaseGeometryChanges() {
+        val (motion, now) = scrollingAt(10f)
+        // The same helper/result handoff used by the production LTR draw callback.
+        val drawn = marqueeLeftFade(300f, 20f, motion.frame)
+        assertEquals(.5f, drawn, .00001f)
+        motion.recordRenderedLeftFade(drawn)
+        val flip = motion.at(now, allowed = false, width = 200f)
+        assertEquals(.5f, marqueeLeftFade(5f, 40f, flip), .00001f)
+        assertEquals(.25f, marqueeLeftFade(5f, 80f,
+            motion.at(now + 75, allowed = false, width = 260f)), .00001f)
+        assertEquals(0f, marqueeLeftFade(500f, 20f,
+            motion.at(now + 150, allowed = false)), 0f)
+        assertEquals(0f, marqueeLeftFade(500f, 20f,
+            motion.at(now + 200, allowed = false)), 0f)
+    }
+
+    @Test fun forwardReturnKeepsOutgoingTailThenUnmasksIncomingLanding() {
+        val (motion, now) = scrollingAt(250f)
+        motion.recordRenderedLeftFade(1f)
+        val flip = motion.at(now, allowed = false)
+        assertEquals(1f, marqueeLeftFade(300f, 20f, flip), 0f)
+        var sawTailRamp = false
+        for (elapsed in 1L..260L) {
+            val frame = motion.at(now + elapsed, allowed = false)
+            val amount = marqueeLeftFade(300f, 20f, frame)
+            if (frame.offset in 280.001f..299.999f) {
+                assertTrue(amount > 0f && amount < 1f)
+                sawTailRamp = true
+            }
+            if (frame.offset >= 300f || frame.phase != MarqueePhase.Returning)
+                assertEquals(0f, amount, 0f)
+        }
+        assertTrue("Forward return must traverse the outgoing tail ramp", sawTailRamp)
+    }
+
+    @Test fun absentDrawMaskCannotAppearDuringBackwardCancellation() {
+        val (motion, now) = scrollingAt(10f)
+        motion.recordRenderedLeftFade(0f)
+        for (elapsed in listOf(0L, 75L, 150L, 260L)) {
+            assertEquals(0f, marqueeLeftFade(300f, 20f,
+                motion.at(now + elapsed, allowed = false)), 0f)
+        }
+    }
+
+    @Test fun laterCancellationCapturesFreshDrawAndNaturalCycleNeverMasksLanding() {
+        val motion = MarqueeMotion()
+        var sawOutgoing = false
+        var sawLanding = false
+        for (time in 0L..6000L step 10L) {
+            val frame = motion.at(time)
+            val amount = marqueeLeftFade(300f, 20f, frame)
+            motion.recordRenderedLeftFade(amount)
+            if (amount > 0f) sawOutgoing = true
+            if (frame.phase == MarqueePhase.Scrolling && frame.offset >= 300f) {
+                assertEquals(0f, amount, 0f)
+                sawLanding = true
+            }
+            if (frame.phase != MarqueePhase.Scrolling) assertEquals(0f, amount, 0f)
+        }
+        assertTrue(sawOutgoing)
+        assertTrue(sawLanding)
+        val (cancel, now) = scrollingAt(10f)
+        cancel.recordRenderedLeftFade(.5f)
+        cancel.recordRenderedLeftFade(.15625f)
+        assertEquals(.15625f, marqueeLeftFade(300f, 20f,
+            cancel.at(now, allowed = false)), 0f)
+    }
+
     @Test fun pauseCoversBothDirectionsHeldEndpointsAndUnstartedSettles() {
         assertFalse(playerMarqueePaused(0f, false, false, false))
         assertFalse(playerMarqueePaused(1f, true, false, false))
