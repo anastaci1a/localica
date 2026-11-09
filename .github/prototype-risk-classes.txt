@@ -411,3 +411,4 @@ io.github.anastaci1a.localica.IconPackAliasTest
 io.github.anastaci1a.localica.IconRegistryVisualTest
 io.github.anastaci1a.localica.LyricsLineInkEaseTest
 io.github.anastaci1a.localica.LyricsLineAnchorTest
+io.github.anastaci1a.localica.PlayerLyricsMountTest
