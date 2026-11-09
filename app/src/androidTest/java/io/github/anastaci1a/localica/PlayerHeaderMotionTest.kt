@@ -47,21 +47,24 @@ class PlayerHeaderMotionTest {
         lateinit var scope: CoroutineScope
         val observations = ArrayList<GlassSurfaceDrawObservation>()
         val receipt = JSONArray()
+        val inkFrames = ArrayList<PlayerInkComposition>()
         compose.setContent { LocalicaTheme { CompositionLocalProvider(
             LocalGlassRendererRuntime provides remember { GlassRendererRuntime(GlassRendererMode.None) },
-            LocalGlassSurfaceDrawObserver provides { observations += it }) {
+            LocalGlassSurfaceDrawObserver provides { observations += it },
+            LocalPlayerInkCompositionObserver provides { inkFrames += it }) {
             key(selected) {
                 progress = remember { Animatable(0f) }
                 scope = rememberCoroutineScope()
+                val polarity = remember { PlayerBackgroundPolarityState().apply { pin(!prepared[selected].second.palette.isLight()) } }
                 BoxWithConstraints(Modifier.fillMaxSize()) {
                     PlayerSurface(PlaybackState(connected = true, title = "Fixture ${covers[selected].name}",
                         artist = "Generated performance fixture", durationMs = 180000), expanded, { expanded = it },
-                        InterfaceSettings(reducedMotion = true, glass = GlassAppearance(contrast = 0f)), progress,
-                        {}, {}, {}, {}, {}, {}, lyricsOpen = lyrics, onLyrics = { lyrics = it }, visual = prepared[selected].second)
+                        InterfaceSettings(reducedMotion = false, glass = GlassAppearance(contrast = 0f)), progress,
+                        {}, {}, {}, {}, {}, {}, lyricsOpen = lyrics, onLyrics = { lyrics = it }, visual = prepared[selected].second, backgroundPolarity = polarity)
                 }
             }
         } } }
-        val phases = listOf(Phase("first-open-071", .71f), Phase("open-075", .75f), Phase("open-080", .8f),
+        val phases = listOf(Phase("first-open-073", .73f), Phase("open-075", .75f), Phase("open-080", .8f),
             Phase("open-090", .9f), Phase("open-099", .99f), Phase("open-0995", .995f),
             Phase("first-settled", 1f, exact = true), Phase("reverse-0995", .995f), Phase("reverse-085", .85f),
             Phase("reverse-075", .75f), Phase("reopen-090", .9f), Phase("reopen-0995", .995f),
@@ -77,14 +80,20 @@ class PlayerHeaderMotionTest {
                 compose.mainClock.autoAdvance = false
                 for (phase in phases) {
                     observations.clear()
+                    inkFrames.clear()
                     compose.runOnIdle {
                         lyrics = phase.lyrics
                         if (phase.name == "first-settled") expanded = true
                         scope.launch(start = CoroutineStart.UNDISPATCHED) { progress.stop(); progress.snapTo(phase.progress) }
                     }
                     compose.mainClock.advanceTimeByFrame()
+                    compose.runOnIdle { assertEquals("Presented progress for ${phase.name}", phase.progress, progress.value, 0f) }
                     val player = compose.onNodeWithTag("player-surface")
                     val image = player.captureToImage()
+                    if (phase.name == "lyrics-intent") {
+                        assertEquals("Lyrics intent is sampled before any presented lyric layout", 0f,
+                            requireNotNull(inkFrames.lastOrNull()).lyricsProgress, 0f)
+                    }
                     val bounds = player.fetchSemanticsNode().boundsInRoot
                     val name = "${entry.first.name}-${phase.name}.png"
                     File(directory, name).outputStream().use { image.asAndroidBitmap().compress(Bitmap.CompressFormat.PNG, 100, it) }
@@ -105,7 +114,8 @@ class PlayerHeaderMotionTest {
                     assertTrue("Frame must include source draw receipts: ${entry.first.name}/${phase.name}", draws.length() > 0)
                     receipt.put(JSONObject().put("fixture", entry.first.name).put("classification", entry.first.classification)
                         .put("phase", phase.name).put("progress", phase.progress).put("lyricsOpen", phase.lyrics)
-                        .put("requiresExact", phase.exact).put("file", name).put("width", image.width).put("height", image.height)
+                        .put("requiresExact", phase.exact).put("observedLyricProgress", inkFrames.lastOrNull()?.lyricsProgress)
+                        .put("fixtureLightInk", !entry.second.palette.isLight()).put("file", name).put("width", image.width).put("height", image.height)
                         .put("playerBounds", JSONArray(listOf(bounds.left, bounds.top, bounds.right, bounds.bottom)))
                         .put("leftHeader", rect(left)).put("rightHeader", rect(right)).put("draws", draws))
                 }
