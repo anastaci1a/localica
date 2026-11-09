@@ -173,7 +173,9 @@ Adaptive contrast also applies to player color continuations, Queue frost and ne
 
 A choice is current only after matching tone preparation completes. Unmeasured, frozen, native-blurred, moving-cover and partial-player backgrounds retain the last verified decision (white ink before any verification), explicitly without claiming current coverage. Tone preparation, sampling, composition and native presentation are asynchronous, so this does not guarantee atomic ink and background presentation.
 
-The player prepares the normal and lyrics ink endpoints from their destination layouts. Foreground, materials and backdrop grading interpolate between those endpoints using the lyrics layout progress, including during reversal. A delayed measurement of the moving background does not change the theme at the end.
+The player prepares the normal and lyrics ink endpoints from their destination layouts. Foreground, materials and backdrop grading interpolate between those endpoints using the lyrics layout progress, including during reversal.
+
+Lyric lines take that interpolated ink uniformly, including lines composed during the ease. Only each line's emphasis animates on its own 350 ms clock. A delayed measurement of the moving background does not change the theme at the end.
 
 One fraction drives the foreground (text and icons) and the materials: glass control ink and tone, panel frost and coating, the backdrops that follow the player's ink and the panel theme.
 
@@ -620,7 +622,11 @@ Default artwork tap toggles lyrics. Hold opens View artwork / Change artwork / C
 
 Change artwork opens image selection directly, then the shared artwork-only review/write flow for the current song in the [shared single-song editor](product.md#metadata-and-artwork-editing).
 
-Follow real playback/seeks/queue changes with active-line emphasis, fluid movement and fading viewport edges, inspired by [Better Lyrics](https://github.com/better-lyrics/better-lyrics). Manual scrolling suspends following. A Liquid Glass directional bubble returns to the current line. Touch exploration starts with following off. Plain lyrics scroll normally. Keep source selection without loading text/progress or tap ripples.
+Follow real playback/seeks/queue changes with active-line emphasis, fluid movement and fading viewport edges, inspired by [Better Lyrics](https://github.com/better-lyrics/better-lyrics).
+
+Lyrics open already at the current line, centred in the lyrics container, with no opening scroll. Following keeps the current line on that same centre anchor. The first and last single-line lyrics rest centred at the list bounds. Manual scrolling suspends following.
+
+A Liquid Glass directional bubble returns to the current line. Touch exploration starts with following off. Plain lyrics scroll normally. Keep source selection without loading text/progress or tap ripples.
 
 Presented lyrics receive taps and swipes throughout the artwork cross-fade, including reversal. Disabled artwork gestures leave no hit-test node over the lyrics. Artwork input resumes when the lyric document is no longer presented. Keep cover drawing order independent of input ownership.
 
