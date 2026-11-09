@@ -405,7 +405,9 @@ Compact/Normal/Large/Gallery show ordinary covers without track numbers. Existin
 
 Artist and Album Artist headers follow the first displayed song, including the active album filter. No artwork scraping. Sort/View sits at top right and collection actions at bottom right. Below the header, a horizontal album multiselect filters contiguous album groups in the same order as the carousel.
 
-Artist/Album Artist contents default to Year Ascending. The retired Album/disc/track choice migrates to it while other explicit choices remain. Sort direction changes album order only. Inner disc/track stays ascending. Year/Added use earliest known values, Modified latest, Duration/Most played/Longest listened distinct-track sums, and Folder the earliest case-folded nonblank relative path.
+Artist/Album Artist contents default to Year Ascending. The retired Album/disc/track choice migrates to it while other explicit choices remain. Album aggregates: Year/Added use earliest known values, Modified latest, Duration/Most played/Longest listened distinct-track sums, and Folder the earliest case-folded nonblank relative path.
+
+**Group by album** sits below the sort controls. It is one shared artist-view preference, on by default and independent of per-list overrides. On, the sort and its direction order albums only, and inner disc/track stays ascending. Off, the ordinary song sort orders individual songs across all albums, while the carousel keeps the album order.
 
 Missing aggregates stay last. Ties use album title then canonical album ID ascending. Short tap focuses only that album. Long press toggles only that album with one recognition haptic and no trailing tap. All mode highlights both All albums and every cover.
 
