@@ -8,6 +8,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.R
 import io.github.anastaci1a.localica.navigation.MainTab
@@ -32,9 +34,12 @@ internal fun ActionIcon(resource: AppIcon, label: String, enabled: Boolean = tru
         val input = if (quietInputEnabled) Modifier.ownButtonDrag(enabled).combinedClickable(enabled = enabled,
             role = androidx.compose.ui.semantics.Role.Button, interactionSource = interaction, indication = null,
             onLongClickLabel = onLongClickLabel, onLongClick = onLongClick, onClick = controlActivation(enabled, onClick))
+            // The label lives on the button node itself: the merged accessibility node is identical,
+            // and the unmerged tree (walked by every accessibility pass) has one node less per control.
+            .semantics { contentDescription = label }
         else Modifier.clearAndSetSemantics { }
         Box(modifier.alpha(opacity).then(input), contentAlignment = androidx.compose.ui.Alignment.Center) {
-            Icon(appIconPainter(resource), label, Modifier.size(iconSize))
+            Icon(appIconPainter(resource), null, Modifier.size(iconSize))
         }
     } else if (glass) LiquidGlassSurface(modifier, pressFeedback = enabled) {
         anchor?.captureInk()

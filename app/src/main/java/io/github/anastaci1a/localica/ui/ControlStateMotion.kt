@@ -28,7 +28,8 @@ private fun <T> controlStateAnimationSpec(active: Boolean, reducedMotion: Boolea
 @Composable
 internal fun animateControlStateFloat(target: Float, active: Boolean, label: String,
     reducedMotion: Boolean = LocalReducedMotion.current): State<Float> {
-    val animated = animateFloatAsState(target, controlStateAnimationSpec(active, reducedMotion), label = label)
+    // Settled controls (every list row's action, every idle button) own no animation coroutine.
+    val animated = animateSettledFloat(target, controlStateAnimationSpec(active, reducedMotion), label = label)
     val immediate = rememberUpdatedState(target)
     return if (reducedMotion) immediate else animated
 }

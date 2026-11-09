@@ -27,7 +27,7 @@ internal fun TransportButton(glyph: TransportGlyph, playing: Boolean, label: Str
     val reduced = rememberEffectiveReducedMotion(reducedMotion || LocalReducedMotion.current)
     val speed = LocalMotionSpeed.current
     val shapes = LocalTransportShapes.current
-    val images by IconPacks.images.collectAsState()
+    val images = currentIconPackImages()
     val icon = when (glyph) {
         TransportGlyph.Previous -> AppIcon.TransportPrevious
         TransportGlyph.Next -> AppIcon.TransportNext

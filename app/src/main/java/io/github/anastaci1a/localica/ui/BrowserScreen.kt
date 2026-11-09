@@ -934,6 +934,11 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
         }
     }
     var contextMenu by remember { mutableStateOf<String?>(null) }
+    // Rows whose action menu opened once keep it mounted (return morph, dialogs, saveable
+    // workflow): one saveable set for the list rather than one registry entry per row.
+    val mountedActions = androidx.compose.runtime.saveable.rememberSaveable(
+        saver = androidx.compose.runtime.saveable.listSaver<androidx.compose.runtime.snapshots.SnapshotStateList<String>, String>(
+            { it.toList() }, { it.toMutableStateList() })) { mutableStateListOf<String>() }
     var addingSong by remember { mutableStateOf<Track?>(null) }
     var info by remember { mutableStateOf<SongInformationRequest?>(null) }
     val informationLookupOwner = orderOwner
@@ -1207,11 +1212,11 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                         val cellWork = LocalBrowseCellWorkObserver.current
                         // A closed menu is not composed until its first opening. It then stays
                         // mounted with this row for its return morph, dialogs and saveable workflow.
-                        var actionsMounted by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
+                        val actionsMounted = item.key in mountedActions
                         // Gallery artwork publishes its menu origin only when the menu opens.
                         val menuAnchor = rememberGlassAnchor(deferContextPlacement = true)
                         SideEffect { menuAnchor.contextual = true; menuAnchor.bottomClearance = with(density) { obscuredInset.toPx() } }
-                        val mutableSong = item.row != null && route.collection?.kind in setOf(MediaKind.Playlist, MediaKind.Queue)
+                        val mutableSong = item.row != null && (route.collection?.kind == MediaKind.Playlist || route.collection?.kind == MediaKind.Queue)
                         val holdLabel = if (mutableSong) "Select song" else if (item.row != null) "Song actions" else "Collection actions"
                         val onHold = {
                             if (mutableSong) session.select(route.collection, listOf(requireNotNull(item.row)))
@@ -1224,7 +1229,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                                     onLongClick = onHold.takeIf { !queryPending && (item.row == null || enabled) }) { menuAnchor.prepareContextPlacement(); contextMenu = item.key }
                                 val menuOpen = contextMenu == item.key
                                 if (menuOpen || actionsMounted) {
-                                    if (!actionsMounted) SideEffect { actionsMounted = true }
+                                    if (!actionsMounted) SideEffect { if (item.key !in mountedActions) mountedActions.add(item.key) }
                                     if (cellWork != null) SideEffect { cellWork("actions", item.key) }
                                     CollectionActions(menuOpen, menuAnchor, item, playlists, playlistController, queues, pins, onPin, { contextMenu = null },
                                         onInformationPresented = { song, presentation -> collectionLookup.cancel(); info = SongInformationRequest(song, presentation) }, containingSource = route.collection, selection = session,

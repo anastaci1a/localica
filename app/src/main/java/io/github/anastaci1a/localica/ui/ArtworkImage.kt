@@ -30,7 +30,12 @@ internal fun ArtworkImage(artwork: ImageBitmap?, loading: Boolean, modifier: Mod
     // The reveal is read only while drawing; the cell never recomposes per animation frame.
     val reveal = remember { Animatable(if (artwork == null) 0f else 1f) }
     val present = artwork != null
-    LaunchedEffect(present, reducedMotion) {
+    // A cell whose reveal already rests at its target (cached art, or no art yet) launches no
+    // coroutine; hold()/holdMenu() below release the gates synchronously in that case.
+    val settled = androidx.compose.runtime.snapshots.Snapshot.withoutReadObservation {
+        reveal.value == (if (present) 1f else 0f) && !reveal.isRunning
+    }
+    if (!settled) LaunchedEffect(present, reducedMotion) {
         reveal.animateTo(if (present) 1f else 0f, tween(if (reducedMotion) 0 else 300, easing = FastOutSlowInEasing))
         // The item's text and action finish with the art (#526, #588).
         if (present) currentTextReveal?.let { it.release(); it.releaseMenu() }

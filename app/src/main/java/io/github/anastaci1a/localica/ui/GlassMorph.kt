@@ -184,8 +184,8 @@ internal fun Modifier.glassAnchor(anchor: GlassAnchor): Modifier {
     val home = LocalGlassPopupHome.current
     SideEffect { anchor.popupHome = home }
     DisposableEffect(anchor) { anchor.triggerMounted = true; onDispose { anchor.triggerMounted = false } }
-    return then(GlassDepthMarker(anchor)).backdropLocation(anchor.samplingLocation).onGloballyPositioned {
-        anchor.bounds = Rect(it.backdropPosition(view), Size(it.size.width.toFloat(), it.size.height.toFloat()))
+    fun publish(coordinates: LayoutCoordinates) {
+        anchor.bounds = Rect(coordinates.backdropPosition(view), Size(coordinates.size.width.toFloat(), coordinates.size.height.toFloat()))
         anchor.lastSamplingFootprint = anchor.samplingFootprint()
         if (anchor.contextual) {
             val location = IntArray(2)
@@ -193,6 +193,34 @@ internal fun Modifier.glassAnchor(anchor: GlassAnchor): Modifier {
             anchor.bottomLimit = location[1] + view.height - anchor.bottomClearance
         }
     }
+    // A deferred context trigger (every list row's action) keeps only its coordinates until it opens,
+    // exactly as contextMenuAnchor does for gallery artwork: a scrolling list otherwise publishes
+    // window geometry, a sampling transform and a bounds state write for every row on every frame.
+    val positioning = if (!anchor.contextPlacementTracked) {
+        val placed = remember(anchor) { arrayOfNulls<LayoutCoordinates>(1) }
+        SideEffect {
+            anchor.contextPlacement = {
+                placed[0]?.takeIf { it.isAttached }?.let { coordinates ->
+                    val location = anchor.samplingLocation
+                    val screen = IntArray(2)
+                    view.getLocationOnScreen(screen)
+                    location.windowOffset = Offset(screen[0].toFloat(), screen[1].toFloat())
+                    location.fallback = coordinates.positionInRoot() + location.windowOffset
+                    androidx.compose.runtime.snapshots.Snapshot.withoutReadObservation { location.transformRevision++ }
+                    publish(coordinates)
+                }
+            }
+        }
+        Modifier.onPlaced {
+            placed[0] = it
+            anchor.samplingLocation.coordinates = it
+            androidx.compose.runtime.snapshots.Snapshot.withoutReadObservation { anchor.samplingLocation.placement++ }
+        }
+    } else {
+        SideEffect { anchor.contextPlacement = null }
+        Modifier.backdropLocation(anchor.samplingLocation).onGloballyPositioned { publish(it) }
+    }
+    return then(GlassDepthMarker(anchor)).then(positioning)
         // Read visibility in drawing, not only in a child RenderNode's alpha. Recorded
         // backdrop parents must re-record the restored trigger even while stationary.
         .drawWithContent {
