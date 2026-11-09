@@ -438,7 +438,8 @@ class NoneExactReductionTest {
 
     /** None source/home mixes at 0, .25, .5 and 1, plus an unready home. The Auto command layer
      * replays SrcOver primary then Plus home onto the existing destination; it is not an isolated
-     * mixing buffer. With opaque fixtures the presented RGB is clamp((1-w)S + wH + wB). */
+     * mixing buffer. With opaque fixtures the presented RGB is clamp((1-w)S + wH + wB).
+     * Below API33 software AverageBackdrop mixes the colors first, so no destination term remains. */
     @Test fun sourceAndHomeMixesFollowTheirWeightedMeans() {
         lateinit var source: FrostedBackdrop
         lateinit var home: FrostedBackdrop
@@ -475,7 +476,7 @@ class NoneExactReductionTest {
         val drift = Drift()
         for ((lookName, look) in looks) for (w in listOf(0f, .25f, .5f, 1f)) {
             val label = "mix weight $w $lookName"
-            fun presented(s: Float, h: Float, b: Float) = (s * (1 - w) + h * w + b * w).coerceIn(0f, 1f)
+            fun presented(s: Float, h: Float, b: Float) = (s * (1 - w) + h * w + if (modern) b * w else 0f).coerceIn(0f, 1f)
             val expected = Color(presented(sourceMean.red, homeMean.red, behind.red),
                 presented(sourceMean.green, homeMean.green, behind.green), presented(sourceMean.blue, homeMean.blue, behind.blue))
             compose.runOnIdle { MaterialAreaReduction.legacyOverride = false; legacy = false; appearance = look; weight = w }
