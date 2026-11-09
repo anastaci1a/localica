@@ -101,11 +101,16 @@ class IconOpticalCentringTest {
     @Test fun nativeBuiltinStripsFollowTheRuleAndSymmetricPixelsStayIdentical() {
         val path = InstrumentationRegistry.getArguments().getString("icon_pack_path")
         val originals = if (path == null) emptyMap() else ZipFile(path).use { zip ->
-            zip.entries().toList().filter { it.name.startsWith("icons/") && it.name.endsWith(".svg") }
+            val raw = zip.entries().toList().filter { it.name.startsWith("icons/") && it.name.endsWith(".svg") }
                 .associate { it.name.removePrefix("icons/").removeSuffix(".svg") to
                     SvgIconParser.parse(zip.getInputStream(it).readBytes()).toImageVector(shiftY = 0f) }
+            AppIcon.entries.mapNotNull { icon -> AppIcon.packIds(icon).firstNotNullOfOrNull { raw[it] }?.let { icon.id to it } }.toMap()
         }
-        if (path != null) IconPacks.import(context, File(path).inputStream())
+        if (path != null) {
+            val report = IconPacks.import(context, File(path).inputStream())
+            assertTrue(report.rejected.isEmpty())
+            assertEquals("Every imported SVG has a raw/processed comparison", report.applied.toSet(), originals.keys)
+        }
         val icons = AppIcon.entries.filter { path == null || it.id in originals }
         val prefix = if (path == null) "builtin" else "local-pack"
         val pairs = linkedMapOf<AppIcon, Pair<Painter, Painter>>()
@@ -132,8 +137,8 @@ class IconOpticalCentringTest {
                 val observed = (n.centroidY - m.centroidY) * 24f / px
                 val expected = opticalShift(m, px.toFloat()) * 24f / px
                 if (abs(expected - observed) > .08f) failures += "${icon.id}: expected $expected, observed $observed"
-                if (icon in listOf(AppIcon.ActionClose, AppIcon.ActionPlus, AppIcon.TransportPlay, AppIcon.TransportPause))
-                    assertArrayEquals("${icon.id} symmetric pixels stay", pixels(before), pixels(after))
+                val unchanged = if (path == null) BuiltinIconOffsets.vertical.getValue(icon.id) == 0f else originals.getValue(icon.id).opticalShiftY() == 0f
+                if (unchanged) assertArrayEquals("${icon.id} zero-shift pixels stay exact", pixels(before), pixels(after))
                 val y = index * (px + 28)
                 canvas.drawText(icon.id + " before / after", 8f, y + 22f, paint)
                 canvas.drawBitmap(before, 0f, (y + 28).toFloat(), null)
@@ -235,6 +240,7 @@ class IconOpticalCentringTest {
                 ActionMenuItem("Edit tags", icon = AppIcon.ActionEdit) {}
                 ActionMenuItem("Remove from queue", icon = AppIcon.ActionClose) {}
                 ActionMenuItem("Select all", icon = AppIcon.TabQueues) {}
+                ActionMenuItem("Select range", icon = AppIcon.TabQueues) {}
                 Row { ActionIcon(AppIcon.ActionClose, "Close artwork") {}; ActionIcon(AppIcon.ActionSave, "Save artwork") {} }
             }
         } } }

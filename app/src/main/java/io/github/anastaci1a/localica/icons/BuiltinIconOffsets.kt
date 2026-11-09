@@ -2,7 +2,7 @@ package io.github.anastaci1a.localica.icons
 
 /** Generated from built-in vector resources by OpticalCentringPacksTest; runtime never measures these glyphs. */
 internal object BuiltinIconOffsets {
-    const val SOURCE_SHA256 = "1e443087469d1f6fe6b28e2c33c139b2452a65b86355c35911358659140c1a30"
+    const val SOURCE_SHA256 = "eff4a414d05077ca13736601ebfa2d6314acacb0709696e0fc7afcef5853bc48"
     val vertical: Map<String, Float> = mapOf(
         "tab.home" to -0.91600037f,
         "tab.library" to -0.63683367f,

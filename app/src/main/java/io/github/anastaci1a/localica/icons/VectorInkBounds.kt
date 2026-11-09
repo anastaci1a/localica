@@ -1,5 +1,6 @@
 package io.github.anastaci1a.localica.icons
 
+import androidx.compose.ui.graphics.PathFillType
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
@@ -7,6 +8,9 @@ import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.PathNode
 import kotlin.math.*
+import java.math.BigDecimal
+import java.math.BigInteger
+import java.math.MathContext
 
 /** Analytic vertical support of fills and stroked outlines, independent of the centroid sampling grid. */
 internal fun ImageVector.geometricInkBounds(): Pair<Float, Float>? {
@@ -18,13 +22,10 @@ internal fun ImageVector.geometricInkBounds(): Pair<Float, Float>? {
         val stroke = path.stroke.visible() && path.strokeAlpha > 0f && path.strokeLineWidth > 0f
         if (fill || stroke) {
             val bounds = VerticalSupport(matrix[1].toDouble(), matrix[3].toDouble(), matrix[5].toDouble())
-            for (part in boundSubpaths(path.pathData)) {
-                if (fill && part.segments.any { !it.isPoint() }) part.segments.forEach { segment ->
-                    segment.extrema(bounds.x, bounds.y).forEach { bounds.add(segment.point(it)) }
-                }
-                if (stroke) bounds.stroke(part, path.strokeLineWidth / 2.0, path.strokeLineCap,
-                    path.strokeLineJoin, path.strokeLineMiter.toDouble())
-            }
+            val parts = boundSubpaths(path.pathData)
+            if (fill) bounds.fill(parts, path.pathFillType == PathFillType.EvenOdd)
+            if (stroke) for (part in parts) bounds.stroke(part, path.strokeLineWidth / 2.0, path.strokeLineCap,
+                path.strokeLineJoin, path.strokeLineMiter.toDouble())
             low = min(low, bounds.low); high = max(high, bounds.high)
         }
     }
@@ -81,7 +82,7 @@ private class Bezier(val x: DoubleArray, val y: DoubleArray) : BoundSegment {
 }
 
 private class EllipseArc(val centre: Point, val rx: Double, val ry: Double, val phi: Double,
-    val start: Double, val sweep: Double) : BoundSegment {
+    val start: Double, val sweep: Double, val endAngle: Double = start + sweep) : BoundSegment {
     override fun isPoint() = false
     private fun local(angle: Double) = Point(rx * cos(angle) * cos(phi) - ry * sin(angle) * sin(phi),
         rx * cos(angle) * sin(phi) + ry * sin(angle) * cos(phi))
@@ -220,10 +221,14 @@ private fun boundSubpaths(nodes: List<PathNode>): List<BoundSubpath> {
     fun arc(rx0: Float, ry0: Float, degrees: Float, large: Boolean, positive: Boolean, p: Point) {
         if (point == p) return
         if (rx0 == 0f || ry0 == 0f) { line(p); return }
-        val phi = Math.toRadians(degrees.toDouble()); val c = cos(phi); val s = sin(phi)
+        var radiusX = abs(rx0.toDouble()); var radiusY = abs(ry0.toDouble())
+        var rotation = degrees.toDouble()
+        if (radiusX < radiusY) { val old = radiusX; radiusX = radiusY; radiusY = old; rotation += 90.0 }
+        if (radiusX == radiusY) rotation = 0.0
+        val phi = Math.toRadians(((rotation % 180.0) + 180.0) % 180.0); val c = cos(phi); val s = sin(phi)
         val dx = (point.x - p.x) / 2; val dy = (point.y - p.y) / 2
         val u = c * dx + s * dy; val v = -s * dx + c * dy
-        var rx = abs(rx0.toDouble()); var ry = abs(ry0.toDouble())
+        var rx = radiusX; var ry = radiusY
         val correction = u * u / (rx * rx) + v * v / (ry * ry)
         if (correction > 1) { val scale = sqrt(correction); rx *= scale; ry *= scale }
         val factor = (if (large != positive) 1 else -1) * sqrt(max(0.0,
@@ -235,7 +240,7 @@ private fun boundSubpaths(nodes: List<PathNode>): List<BoundSubpath> {
         var sweep = atan2(from.cross(to), from.dot(to))
         if (!positive && sweep > 0) sweep -= 2 * PI
         if (positive && sweep < 0) sweep += 2 * PI
-        segments += EllipseArc(centre, rx, ry, phi, begin, sweep); point = p
+        segments += EllipseArc(centre, rx, ry, phi, begin, sweep, atan2(to.y, to.x)); point = p
     }
     for (node in nodes) {
         val reflectedCubic = cubic?.let { point * 2.0 - it } ?: point
@@ -266,4 +271,174 @@ private fun boundSubpaths(nodes: List<PathNode>): List<BoundSubpath> {
     }
     emit(false)
     return result
+}
+
+private class FillRun(val low: Fraction, val high: Fraction, val winding: Int)
+private class FillGroup(val base: BoundSegment, val origin: Point? = null, val direction: Point? = null) {
+    val runs = mutableListOf<FillRun>()
+    fun add(from: Double, to: Double) = add(Fraction.of(from), Fraction.of(to))
+    fun add(from: Fraction, to: Fraction) {
+        if (from != to) runs += FillRun(minOf(from, to), maxOf(from, to), if (to > from) 1 else -1)
+    }
+}
+
+/**
+ * A noncancelled edge has painted fill on at least one side. Cancel coincident oriented edges before taking
+ * support; do not use signed contour area, which would incorrectly discard self-crossing filled glyphs.
+ * Line spans split at all endpoints, polynomial curves share exact affine parameterisations, and ellipse
+ * arcs split on their common angular domain. Strokes deliberately bypass this fill-only cancellation.
+ */
+private fun VerticalSupport.fill(parts: List<BoundSubpath>, evenOdd: Boolean) {
+    val lines = mutableListOf<FillGroup>()
+    val curves = mutableListOf<FillGroup>()
+    val ellipses = mutableListOf<FillGroup>()
+    fun edge(segment: BoundSegment) {
+        if (segment.isPoint()) return
+        when (segment) {
+            is Bezier -> {
+                val origin = segment.point(0.0)
+                val terms = (1 until max(segment.x.size, segment.y.size)).map {
+                    Point(segment.x.getOrElse(it) { 0.0 }, segment.y.getOrElse(it) { 0.0 })
+                }
+                val direction = terms.first { it.x != 0.0 || it.y != 0.0 }
+                if (terms.all { it.cross(direction) == 0.0 }) {
+                    val group = lines.firstOrNull { (origin - it.origin!!).cross(it.direction!!) == 0.0 && direction.cross(it.direction) == 0.0 }
+                        ?: FillGroup(Bezier(doubleArrayOf(origin.x, direction.x), doubleArrayOf(origin.y, direction.y)), origin, direction).also { lines += it }
+                    val d = group.direction!!; val p = group.origin!!
+                    val xAxis = abs(d.x) >= abs(d.y)
+                    fun parameter(value: Point): Fraction = if (xAxis)
+                        (Fraction.of(value.x) - Fraction.of(p.x)) / Fraction.of(d.x) else
+                        (Fraction.of(value.y) - Fraction.of(p.y)) / Fraction.of(d.y)
+                    // A collinear curve's retracing cancels: its oriented fill edge is its endpoint span.
+                    group.add(parameter(segment.point(0.0)), parameter(segment.point(1.0)))
+                } else {
+                    val found = curves.firstNotNullOfOrNull { group ->
+                        (group.base as Bezier).domainOf(segment)?.let { group to it }
+                    }
+                    if (found == null) FillGroup(segment).also { it.add(0.0, 1.0); curves += it }
+                    else found.first.add(found.second.first, found.second.first + found.second.second)
+                }
+            }
+            is EllipseArc -> {
+                val group = ellipses.firstOrNull { val base = it.base as EllipseArc
+                    base.centre == segment.centre && base.rx == segment.rx && base.ry == segment.ry && base.phi == segment.phi }
+                    ?: FillGroup(EllipseArc(segment.centre, segment.rx, segment.ry, segment.phi, 0.0, 2.0 * PI)).also { ellipses += it }
+                fun parameter(angle: Double): Double = (((angle % (2.0 * PI)) + 2.0 * PI) % (2.0 * PI)) / (2.0 * PI)
+                val a = parameter(segment.start); val b = parameter(segment.endAngle)
+                if (segment.sweep > 0.0) {
+                    if (b >= a) group.add(a, b) else { group.add(a, 1.0); group.add(0.0, b) }
+                } else {
+                    if (a >= b) group.add(a, b) else { group.add(a, 0.0); group.add(1.0, b) }
+                }
+            }
+        }
+    }
+    for (part in parts) {
+        part.segments.forEach(::edge)
+        // SVG fills implicitly close open subpaths; their return edge cancels zero-area open contours.
+        val from = part.segments.lastOrNull()?.point(1.0) ?: continue
+        val to = part.segments.first().point(0.0)
+        if (from != to) edge(Bezier(doubleArrayOf(from.x, to.x - from.x), doubleArrayOf(from.y, to.y - from.y)))
+    }
+    for (group in lines + curves + ellipses) {
+        val stops = group.runs.flatMap { listOf(it.low, it.high) }.distinct().sorted()
+        for ((low, high) in stops.zipWithNext()) {
+            val middle = (low + high) / Fraction.of(2.0)
+            val winding = group.runs.filter { middle > it.low && middle < it.high }.sumOf { it.winding }
+            if (if (evenOdd) winding % 2 == 0 else winding == 0) continue
+            val a = low.toDouble(); val b = high.toDouble()
+            if (group.base is Bezier) {
+                val piece = group.base.section(a, b)
+                piece.extrema(x, y).forEach { add(piece.point(it)) }
+            } else {
+                val candidates = listOf(a, b) + group.base.extrema(x, y).filter { it > a && it < b }
+                candidates.forEach { add(group.base.point(it)) }
+            }
+        }
+    }
+}
+
+private fun binomial(n: Int, k: Int): Int = when (n) {
+    3 -> if (k == 1 || k == 2) 3 else 1
+    2 -> if (k == 1) 2 else 1
+    else -> 1
+}
+
+/** Rebase a retained polynomial interval before solving its extrema, including intervals outside 0..1. */
+private fun Bezier.section(from: Double, to: Double): Bezier {
+    fun coefficients(source: DoubleArray) = DoubleArray(source.size) { i ->
+        (i until source.size).sumOf { j -> source[j] * binomial(j, i) * from.pow(j - i) * (to - from).pow(i) }
+    }
+    return Bezier(coefficients(x), coefficients(y))
+}
+
+/** Other(u) = this(a + b*u). Rational identity avoids approximate cancellation of genuinely different ink. */
+private fun Bezier.domainOf(other: Bezier): Pair<Fraction, Fraction>? {
+    fun degree(values: DoubleArray) = values.indexOfLast { it != 0.0 }.coerceAtLeast(0)
+    val n = max(degree(x), degree(y))
+    if (n != max(degree(other.x), degree(other.y))) return null
+    val axis = if (x.getOrElse(n) { 0.0 } != 0.0) x else y
+    val target = if (axis === x) other.x else other.y
+    fun DoubleArray.f(i: Int) = Fraction.of(getOrElse(i) { 0.0 })
+    val ratio = target.f(n) / axis.f(n)
+    val root = ratio.root(n) ?: return null
+    if (root == Fraction.ZERO) return null
+    for (b in if (n == 2) listOf(root, -root) else listOf(root)) {
+        val a = (target.f(n - 1) / b.pow(n - 1) - axis.f(n - 1)) / (Fraction.of(n.toDouble()) * axis.f(n))
+        fun same(source: DoubleArray, target: DoubleArray): Boolean {
+            for (i in 0..n) {
+                var value = Fraction.ZERO
+                for (j in i..n) value += source.f(j) * Fraction.of(binomial(j, i).toDouble()) * a.pow(j - i) * b.pow(i)
+                if (value != target.f(i)) return false
+            }
+            return true
+        }
+        if (same(x, other.x) && same(y, other.y)) return a to b
+    }
+    return null
+}
+
+/** Exact parameter arithmetic is used only to cancel fill edges; it never runs while drawing. */
+private class Fraction private constructor(val numerator: BigInteger, val denominator: BigInteger) : Comparable<Fraction> {
+    operator fun unaryMinus() = make(-numerator, denominator)
+    operator fun plus(b: Fraction) = make(numerator * b.denominator + b.numerator * denominator, denominator * b.denominator)
+    operator fun minus(b: Fraction) = this + -b
+    operator fun times(b: Fraction) = make(numerator * b.numerator, denominator * b.denominator)
+    operator fun div(b: Fraction) = make(numerator * b.denominator, denominator * b.numerator)
+    fun pow(n: Int) = make(numerator.pow(n), denominator.pow(n))
+    override fun compareTo(other: Fraction) = (numerator * other.denominator).compareTo(other.numerator * denominator)
+    override fun equals(other: Any?) = other is Fraction && numerator == other.numerator && denominator == other.denominator
+    override fun hashCode() = 31 * numerator.hashCode() + denominator.hashCode()
+    fun toDouble() = BigDecimal(numerator).divide(BigDecimal(denominator), MathContext.DECIMAL128).toDouble()
+    fun root(n: Int): Fraction? {
+        if (numerator.signum() < 0 && n % 2 == 0) return null
+        fun exact(value: BigInteger): BigInteger? {
+            if (value == BigInteger.ZERO) return value
+            var low = BigInteger.ZERO
+            var high = BigInteger.ONE.shiftLeft((value.bitLength() + n - 1) / n)
+            while (low + BigInteger.ONE < high) {
+                val mid = (low + high).shiftRight(1)
+                if (mid.pow(n) <= value) low = mid else high = mid
+            }
+            return if (low.pow(n) == value) low else if (high.pow(n) == value) high else null
+        }
+        val top = exact(numerator.abs()) ?: return null
+        val bottom = exact(denominator) ?: return null
+        return make(if (numerator.signum() < 0) -top else top, bottom)
+    }
+    companion object {
+        val ZERO = Fraction(BigInteger.ZERO, BigInteger.ONE)
+        fun of(value: Double): Fraction {
+            val decimal = BigDecimal(value)
+            return if (decimal.scale() >= 0) make(decimal.unscaledValue(), BigInteger.TEN.pow(decimal.scale()))
+                else make(decimal.unscaledValue() * BigInteger.TEN.pow(-decimal.scale()), BigInteger.ONE)
+        }
+        private fun make(n: BigInteger, d: BigInteger): Fraction {
+            require(d != BigInteger.ZERO)
+            if (n == BigInteger.ZERO) return ZERO
+            val sign = if (d.signum() < 0) -BigInteger.ONE else BigInteger.ONE
+            val gcd = n.abs().gcd(d.abs())
+            return Fraction(n / gcd * sign, d / gcd * sign)
+        }
+    }
 }
