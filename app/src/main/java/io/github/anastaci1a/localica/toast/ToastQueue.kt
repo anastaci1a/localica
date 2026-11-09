@@ -133,6 +133,16 @@ class ToastQueue(private val capacity: Int = 32,
         if (!value.marqueeComplete) publish(value.copy(marqueeComplete = true))
     }
 
+    /** A reflow can expose unread text after an earlier gate completed. Preserve the unspent dwell;
+     * old timer tickets cannot race the replacement text owner's measurement. */
+    @Synchronized fun marqueePending(id: Long, generation: Long): Boolean {
+        val value = matching(id, generation) ?: return false
+        if (value.phase == ToastPhase.Exiting || !value.marqueeComplete) return false
+        value.deadline?.let { remaining = (it.atMillis - clockMillis()).coerceAtLeast(0) }
+        publish(value.copy(marqueeComplete = false, deadline = null))
+        return true
+    }
+
     /** Modal/background/accessibility pauses preserve remaining time. Contact resets on return. */
     @Synchronized fun pause(reason: ToastPause, paused: Boolean) {
         val value = mutable.value

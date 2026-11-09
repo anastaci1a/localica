@@ -37,6 +37,10 @@ internal fun toastButtonProjection(toast: Rect, original: Rect, downwardTravelPx
     private var exiting = false
     private var contacting = false
     val settled: Boolean get() = position.settled
+    val visibleAtRest: Boolean get() {
+        val shown = position.value()
+        return !exiting && !contacting && position.settled && position.target == restingLeftPx && shown == restingLeftPx
+    }
     val leftPx: Float get() = position.value()
     val widthPx: Float get() = bodyWidthPx
 

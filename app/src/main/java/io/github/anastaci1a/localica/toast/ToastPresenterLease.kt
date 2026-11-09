@@ -10,6 +10,8 @@ class ToastPresenterLease internal constructor(private val queue: ToastQueue, va
         queue.fromPresenter(token, false) { queue.presented(id, generation, recommendedDwellMillis) }
     fun marqueeCompleted(id: Long, generation: Long) =
         queue.fromPresenter(token, Unit) { queue.marqueeCompleted(id, generation) }
+    fun marqueePending(id: Long, generation: Long) =
+        queue.fromPresenter(token, false) { queue.marqueePending(id, generation) }
     fun retainedAfterContact(id: Long, generation: Long) =
         queue.fromPresenter(token, false) { queue.retainedAfterContact(id, generation) }
     fun timeout(ticket: ToastDeadline) = queue.fromPresenter(token, false) { queue.timeout(ticket) }
