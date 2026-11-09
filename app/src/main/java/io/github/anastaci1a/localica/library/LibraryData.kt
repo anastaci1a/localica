@@ -101,7 +101,7 @@ object LibraryDataCodec {
     }
 
     fun decode(text: String): LibraryDataDocument {
-        val root = runCatching { JSONObject(text.removePrefix("﻿")) }.getOrNull()
+        val root = runCatching { JSONObject(text.removePrefix(Char(0xFEFF).toString())) }.getOrNull()
             ?: throw LibraryDataFormatException("This file isn’t a Localica library data file.")
         if (root.optString("format") != LibraryDataFormat.NAME) throw LibraryDataFormatException("This file isn’t a Localica library data file.")
         val version = root.opt("version")?.toString().orEmpty()
