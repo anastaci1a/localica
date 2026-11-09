@@ -111,7 +111,7 @@ class ArtistPhotoFirstFrameTest {
         var currentItems = emptyList<BrowserItem>()
         var route = BrowseRoute(MainTab.Artists)
         val preferences = BrowsePreferences(context)
-        val savedPreferences = mutableListOf<Pair<BrowseRoute, BrowseStyle>>()
+        val savedPreferences = mutableListOf<Triple<BrowseRoute, BrowseStyle, Boolean>>()
         val output = File(context.getExternalFilesDir(null), "artist-first-frame-742").apply { mkdirs() }
         try {
             compose.setContent { LocalicaTheme {
@@ -135,28 +135,33 @@ class ArtistPhotoFirstFrameTest {
             } }
             compose.waitForIdle()
             compose.mainClock.autoAdvance = false
-            for (type in if (unknown) listOf(MediaKind.Artist) else listOf(MediaKind.Artist, MediaKind.AlbumArtist)) {
+            val kinds = if (unknown) listOf(MediaKind.Artist) else listOf(MediaKind.Artist, MediaKind.AlbumArtist)
+            // loadIndex is idempotent: all disk fixtures must exist before its first call.
+            runBlocking(Dispatchers.IO) {
+                for (type in kinds) {
+                    val cached = refs(type).first { it.title == "Cached Artist" }
+                    val bytes = ByteArrayOutputStream().also { bitmap(android.graphics.Color.RED).compress(Bitmap.CompressFormat.PNG, 100, it) }.toByteArray()
+                    disk.savePhoto("${type}:${cached.ref.id}", RemoteArtist(ArtistPhotoChoice(ArtistPhotoProvider.DEEZER, "8"), cached.title, listOf("Fixture Album")), bytes, System.currentTimeMillis())
+                    if (!cold) {
+                        val request = requireNotNull(artistPhotoRequest(cached.ref, cached.title, cached.songs.map { it.track }, cached.coverUris.first()))
+                        val photo = requireNotNull(photos.ready(request).photo)
+                        // A remount must reuse measured-size pixels before its first measurement.
+                        ArtistPhotoPixels.read(photo, thumbnail = true, edge = 384)
+                        ArtistPhotoPixels.read(photo, edge = 768)
+                    }
+                }
+                if (!unknown) photos.loadIndex()
+            }
+            for (type in kinds) {
                 val items = refs(type).sortedBy { it.title }
                 val cached = items.first { it.title == "Cached Artist" }
-                val bytes = ByteArrayOutputStream().also { bitmap(android.graphics.Color.RED).compress(Bitmap.CompressFormat.PNG, 100, it) }.toByteArray()
-                runBlocking(Dispatchers.IO) {
-                    disk.savePhoto("${type}:${cached.ref.id}", RemoteArtist(ArtistPhotoChoice(ArtistPhotoProvider.DEEZER, "8"), cached.title, listOf("Fixture Album")), bytes, System.currentTimeMillis())
-                    val request = requireNotNull(artistPhotoRequest(cached.ref, cached.title, cached.songs.map { it.track }, cached.coverUris.first()))
-                    // Warm through the same disk/pixel APIs as a previous visit, never a UI override.
-                    if (!cold) {
-                        val photo = requireNotNull(photos.ready(request).photo)
-                        ArtistPhotoPixels.read(photo, thumbnail = true)
-                        ArtistPhotoPixels.read(photo)
-                    }
-                    if (!unknown) photos.loadIndex()
-                }
                 val tab = if (type == MediaKind.Artist) MainTab.Artists else MainTab.AlbumArtists
                 val nextRoute = when (surface) {
                     "subview" -> BrowseRoute(MainTab.Library, filter = type)
                     "search" -> BrowseRoute(MainTab.Library, search = true, globalSearch = true, text = "Artist", filter = type, queryCommitted = true)
                     else -> BrowseRoute(tab)
                 }
-                savedPreferences += nextRoute to preferences.read(nextRoute)
+                savedPreferences += Triple(nextRoute, preferences.read(nextRoute), preferences.overridden(nextRoute))
                 val style = BrowseStyle(presentation = if (surface == "gallery") Presentation.Compact else Presentation.List,
                     extraInfo = ExtraInfo.None, itemsPerRow = 2)
                 preferences.write(nextRoute, style, override = true)
@@ -210,7 +215,7 @@ class ArtistPhotoFirstFrameTest {
         } finally {
             compose.mainClock.autoAdvance = true
             consent.allowed.value = false
-            savedPreferences.forEach { (route, style) -> preferences.write(route, style, override = true) }
+            savedPreferences.asReversed().forEach { (route, style, overridden) -> preferences.write(route, style, override = overridden) }
             root.deleteRecursively()
         }
     }
