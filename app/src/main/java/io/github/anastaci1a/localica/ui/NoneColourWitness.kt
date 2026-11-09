@@ -29,7 +29,40 @@ import org.json.JSONObject
     val context = LocalContext.current
     val outputs = remember { mutableMapOf<Pair<Int, Boolean>, GraphicsLayer>() }
     val drawn = remember { mutableMapOf<Pair<Int, Boolean>, Int>() }
+    val bounds = Size(257.25f, 129.5f)
+    val producer = rememberGraphicsLayer().apply {
+        compositingStrategy = androidx.compose.ui.graphics.layer.CompositingStrategy.Offscreen
+        clip = true
+    }
+    fun DrawScope.paintSource() {
+        when (pattern) {
+            0 -> drawRect(Color(.2f + phase, .4f, .7f), size = bounds)
+            1 -> drawRect(Brush.horizontalGradient(listOf(Color.Red, Color.Blue),
+                startX = phase * bounds.width, endX = bounds.width), size = bounds)
+            2 -> {
+                drawRect(Color.Black, size = bounds)
+                for (y in 0..130 step 2) for (x in 0..258 step 2)
+                    if ((x / 2 + y / 2) % 2 == 0) drawRect(Color.White,
+                        Offset(x + phase, y.toFloat()), Size(2f, 2f))
+            }
+            3 -> {
+                drawRect(Color.Blue, size = bounds)
+                for (x in 0..257 step 7) drawRect(Color.White,
+                    Offset(x + phase, 0f), Size(1f, bounds.height))
+            }
+            else -> {
+                drawRect(Color.Red.copy(alpha = .25f), size = bounds)
+                drawRect(Color.Green.copy(alpha = .75f), Offset(phase, 0f),
+                    Size(bounds.width / 2, bounds.height))
+            }
+        }
+    }
     Column(Modifier.fillMaxSize().systemBarsPadding()) {
+        Canvas(Modifier.size(1.dp)) {
+            producer.record(size = IntSize(258, 130)) {
+                clipRect(right = bounds.width, bottom = bounds.height) { paintSource() }
+            }
+        }
         Row {
             for (side in listOf(0, 8, 16, 64)) Column {
                 for (styled in listOf(false, true)) {
@@ -38,30 +71,7 @@ import org.json.JSONObject
                     val renderer = remember { MaterialAverageRenderer(reduced = side != 64, uniformOpaque = true) }
                     SideEffect { outputs[side to styled] = output }
                     Canvas(Modifier.size(80.dp)) {
-                        val bounds = Size(257.25f, 129.5f)
-                        val paint: DrawScope.() -> Unit = {
-                            when (pattern) {
-                                0 -> drawRect(Color(.2f + phase, .4f, .7f), size = bounds)
-                                1 -> drawRect(Brush.horizontalGradient(listOf(Color.Red, Color.Blue),
-                                    startX = phase * bounds.width, endX = bounds.width), size = bounds)
-                                2 -> {
-                                    drawRect(Color.Black, size = bounds)
-                                    for (y in 0..130 step 2) for (x in 0..258 step 2)
-                                        if ((x / 2 + y / 2) % 2 == 0) drawRect(Color.White,
-                                            Offset(x + phase, y.toFloat()), Size(2f, 2f))
-                                }
-                                3 -> {
-                                    drawRect(Color.Blue, size = bounds)
-                                    for (x in 0..257 step 7) drawRect(Color.White,
-                                        Offset(x + phase, 0f), Size(1f, bounds.height))
-                                }
-                                else -> {
-                                    drawRect(Color.Red.copy(alpha = .25f), size = bounds)
-                                    drawRect(Color.Green.copy(alpha = .75f), Offset(phase, 0f),
-                                        Size(bounds.width / 2, bounds.height))
-                                }
-                            }
-                        }
+                        val paint: DrawScope.() -> Unit = { drawLayer(producer) }
                         val tile = if (side == 64) 8 else side
                         val result = with(reduction) {
                             if (side == 0) recordFullBounds(bounds, draw = paint)
