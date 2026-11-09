@@ -188,10 +188,13 @@ class LyricsLineAnchorTest {
         val deltas = samples.map { it.delta }
         try {
             assertCentred("after following to the next line", samples.last())
-            assertTrue("The next line starts below the centre: ${deltas.first()}", deltas.first() > Tolerance * 2)
-            val intermediates = deltas.count { it > Tolerance && it < deltas.first() - Tolerance }
+            // The recomposition that selects the new line lands one frame after the position change.
+            val start = deltas.indexOfFirst { it > Tolerance * 2 }
+            assertTrue("The next line starts below the centre within two frames: $deltas", start in 0..1)
+            val glide = deltas.drop(start)
+            val intermediates = glide.count { it > Tolerance && it < glide.first() - Tolerance }
             assertTrue("The follow eases through 3+ intermediate frames, saw $intermediates: $deltas", intermediates >= 3)
-            deltas.zipWithNext().forEach { (a, b) -> assertTrue("The follow moves monotonically: $deltas", b <= a + .5f) }
+            glide.zipWithNext().forEach { (a, b) -> assertTrue("The follow moves monotonically: $deltas", b <= a + .5f) }
             samples.clear()
             compose.runOnIdle { positionMs = Wrapped * 2_000L }
             capture("wrapped", 45)

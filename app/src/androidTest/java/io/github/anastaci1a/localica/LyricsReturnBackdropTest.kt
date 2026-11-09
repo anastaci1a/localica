@@ -208,6 +208,9 @@ class LyricsReturnBackdropTest {
         mount(state)
         alignCurrentLine(state.document)
         compose.runOnIdle { state.incoming = document('|', dense = true); state.optics = false }
+        alignIncomingLine(requireNotNull(state.incoming))
+        val button = returnBounds()
+        val direct = capture("overlap-direct")|', dense = true); state.optics = false }
         val button = returnBounds()
         val direct = capture("overlap-direct")
         assertTrue("Outgoing green glyph pixels must intersect the sampled interior", green(direct, button) > .008f)
@@ -437,6 +440,16 @@ class LyricsReturnBackdropTest {
             view.getLocationOnScreen(origin)
             sampleOrigin = bounds.topLeft + Offset(origin[0].toFloat(), origin[1].toFloat())
         }
+    }
+
+    /** The incoming document rests with its current line centred (#717): align its line 30 with the return control as
+     *  well, so both documents' glyphs genuinely overlap under the sampled interior. */
+    private fun alignIncomingLine(incoming: ParsedLyrics) {
+        val delta = compose.onNodeWithText(incoming.lines[30].text).fetchSemanticsNode().boundsInRoot.center.y -
+            compose.onNodeWithContentDescription(ReturnLabel).fetchSemanticsNode().boundsInRoot.center.y
+        compose.onNode(hasTestTag("lyric-lines") and hasAnyDescendant(hasText(incoming.lines[30].text)))
+            .performSemanticsAction(SemanticsActions.ScrollBy) { it(0f, delta) }
+        compose.waitForIdle()
     }
 
     private fun scrollBy(amount: Float) {
