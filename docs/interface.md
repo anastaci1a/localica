@@ -249,6 +249,8 @@ A different tab preserves its route/position. Reselecting the settled current ta
 
 ### Dragging
 
+One fit or overflow decision sizes the bar and bounds its lens drag, which always follows the current tab set. A fitting bar's lens reaches every tab, whatever scroll an earlier overflowing set left.
+
 Fitting navigation uses the shared selector pickup above. Overflowing navigation permits lens dragging only from its visible moving lens. Other origins scroll hidden tabs, while taps still select. Clip scrolling contents to the capsule. Shared overdrag fixes the opposite wall. Overflow keeps its undeformed viewport.
 
 Contact, keyboard focus and settling raise the complete tab pill above neighboring utility controls without changing hit bounds.

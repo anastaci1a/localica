@@ -58,6 +58,15 @@ private fun Modifier.markTabFingerRelease(release: TabFingerRelease): Modifier =
     }
 }
 
+/** Logical lens travel. A fitting strip spans every tab whatever offset its unused
+ * scroll state kept from an earlier overflow; an overflowing one, its visible cells. */
+internal fun tabSlideBounds(fits: Boolean, scroll: Float, viewport: Float, cell: Float,
+    lastIndex: Int): ClosedFloatingPointRange<Float> {
+    if (fits) return 0f..lastIndex.toFloat()
+    val low = (scroll / cell).coerceAtMost(lastIndex.toFloat())
+    return low..((scroll + viewport) / cell - 1f).coerceIn(low, lastIndex.toFloat())
+}
+
 @Composable
 internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, pagePosition: () -> Float, source: FrostedBackdrop? = LocalFrostedBackdrop.current, pageDragging: Boolean = false, shadowOpacity: () -> Float = { 1f }, onReselect: (MainTab) -> Unit = {}, activity: SelectorTrackActivity? = null, noneAtlasInput: NoneAtlasInput? = null, onSelect: (MainTab) -> Unit) {
     val renderer = currentGlassRendererGeneration()
@@ -126,6 +135,7 @@ internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, pagePosition: () 
     BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = AbsoluteAlignment.TopLeft) {
         // Four destinations fit the normal phone shelf. Preserve larger font targets
         // by allowing the strip to overflow rather than shrinking accessible text.
+        // #728: this is the one fit/overflow decision; tabSlideBounds follows it.
         val fits = maxWidth >= minimumWidth * tabs.size ||
             (tabs.size <= 4 && density.fontScale <= 1.15f && maxWidth / tabs.size >= 48.dp)
         val width = if (fits) maxWidth / tabs.size else minimumWidth
@@ -181,8 +191,8 @@ internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, pagePosition: () 
             // Travel, not the finger-down commit, retires an unfinished tap request.
             if (delta != 0f && !travelled) { travelled = true; requested = null }
             raw += direction * delta / pixels
-            val low = (scroll.value / pixels).coerceAtMost(tabs.lastIndex.toFloat())
-            val high = ((scroll.value + viewport) / pixels - 1f).coerceIn(low, tabs.lastIndex.toFloat())
+            val travel = tabSlideBounds(fits, scroll.value.toFloat(), viewport, pixels, tabs.lastIndex)
+            val low = travel.start; val high = travel.endInclusive
             val bounded = raw.coerceIn(low, high)
             val excess = raw - bounded
             if (excess != 0f) logicalWall = if (excess < 0f) -1f else 1f
@@ -213,7 +223,9 @@ internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, pagePosition: () 
                     }
                 },
                 onStart = { dragging = true },
-                onDelta = ::move, option = { chosen },
+                // #728: a lambda, not `::move`. A memoized reference to a local function keeps
+                // its first composition's tabs and geometry after the tab count changes.
+                onDelta = { move(it) }, option = { chosen },
                 // #664: no scroll can claim a fitting bar or the lens (#366 keeps other
                 // overflow origins ineligible), so finger-down commits and pulses at once.
                 immediate = { true },
