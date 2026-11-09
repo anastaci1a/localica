@@ -1,5 +1,8 @@
 package io.github.anastaci1a.localica.ui
 
+import io.github.anastaci1a.localica.ui.layout.rememberPopupEditorFocus
+import io.github.anastaci1a.localica.ui.layout.PopupEditorBodySlot
+
 import io.github.anastaci1a.localica.ui.spec.GlassDialogHeight
 
 import android.content.Intent
@@ -112,6 +115,10 @@ internal fun TagEditorDialog(state: TagEditorState, controller: TagEditingContro
     if (!state.artworkOnly || !choosing) GlassDialog({ if (!state.busy) controller.close() }, GlassPlacement.Sheet,
         heightSizing = GlassDialogHeight.ViewportFraction(.94f)) {
         val chrome = DialogChrome.Regular
+        val nativeBodyScroll = rememberScrollState()
+        val nativeModal = LocalModalGestures.current
+        val nativeFocus = rememberPopupEditorFocus(nativeBodyScroll) { nativeModal?.blocked != true }
+        OnModalGestureCancellation { nativeFocus.modalCancellation() }
         Surface(Modifier.fillMaxWidth().fillMaxHeight().testTag("tag-editor-sheet"), color = androidx.compose.ui.graphics.Color.Transparent) {
             Column(Modifier.fillMaxSize().imePadding().testTag("tag-editor-frame").padding(chrome.perimeterDp.dp),
                 verticalArrangement = Arrangement.spacedBy(chrome.gapDp.dp)) {
@@ -120,7 +127,8 @@ internal fun TagEditorDialog(state: TagEditorState, controller: TagEditingContro
                     ActionTextButton(enabled = !state.busy, onClick = controller::close,
                         modifier = Modifier.heightIn(min = 48.dp)) { Text("Close editor") }
                 }
-                Column(Modifier.fillMaxWidth().weight(1f).testTag("tag-editor-body").controlVerticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                PopupEditorBodySlot(nativeFocus, Modifier.controlVerticalScroll(nativeBodyScroll),
+                    Modifier.fillMaxWidth().weight(1f).testTag("tag-editor-body")) {
                     if (!state.artworkOnly) Text("Only checked fields change. A checked blank field removes that tag.", style = MaterialTheme.typography.bodySmall)
                     state.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                     val artworkBackdrop = rememberFrostedBackdrop(cover to removeImage, dark = LocalFrostedBackdrop.current?.dark == true)
