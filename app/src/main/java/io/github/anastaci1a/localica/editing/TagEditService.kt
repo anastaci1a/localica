@@ -24,7 +24,7 @@ class TagEditService : Service() {
             NotificationChannel("tag-edits", "Tag editing", NotificationManager.IMPORTANCE_LOW))
     }
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (intent?.action == "stop") { controller.stopAfterCurrent(); if (work?.isActive != true) stopSelf(); return START_NOT_STICKY }
+        if (intent?.action == "stop") { if (controller.state.value.undo) controller.cancelBatch() else controller.stopAfterCurrent(); if (work?.isActive != true) stopSelf(); return START_NOT_STICKY }
         if (work?.isActive == true) return START_NOT_STICKY
         try {
             ServiceCompat.startForeground(this, 9010, notification(controller.state.value),
@@ -49,9 +49,9 @@ class TagEditService : Service() {
         val stop = PendingIntent.getService(this, 9011, Intent(this, TagEditService::class.java).setAction("stop"),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         return NotificationCompat.Builder(this, "tag-edits").setSmallIcon(R.drawable.ic_edit)
-            .setContentTitle("Editing song tags").setContentText("${state.results.size} of ${state.tracks.size} files checked")
+            .setContentTitle("Editing song tags").setContentText(if (state.phase == "Restoring" || state.phase == "CancelRequested") "Restoring ${state.restored} of ${state.touched}" else "Saved ${state.saved} of ${state.tracks.size}")
             .setContentIntent(open).setOngoing(true).setOnlyAlertOnce(true)
-            .setProgress(state.tracks.size, state.results.size, false).addAction(0, "Stop after current", stop).build()
+            .setProgress(state.tracks.size, state.saved, false).addAction(0, if (state.undo) "Cancel" else "Stop after current", stop).build()
     }
     override fun onTimeout(startId: Int, fgsType: Int) {
         controller.interrupted()
