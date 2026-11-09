@@ -308,6 +308,58 @@ class AutoScrollDrawnPlacementTest {
         assertTrue(problems.joinToString("\n"), problems.isEmpty())
     }
 
+    /** Count the existing main viewport recorder, with no production hook or source edit. */
+    @Test fun viewportDrawCounts() {
+        host(BrowseRoute(MainTab.Albums))
+        scrollDeep(100)
+        Thread.sleep(5000)
+        val drawNode = overlay().second
+        val draws = java.util.concurrent.atomic.AtomicInteger()
+        main {
+            val f = drawNode.javaClass.declaredFields.single { it.name == "onDraw" }
+            f.isAccessible = true
+            @Suppress("UNCHECKED_CAST")
+            val original = f.get(drawNode) as (androidx.compose.ui.graphics.drawscope.ContentDrawScope) -> Unit
+            val counted: (androidx.compose.ui.graphics.drawscope.ContentDrawScope) -> Unit = { scope ->
+                draws.incrementAndGet()
+                original(scope)
+            }
+            f.set(drawNode, counted)
+            drawNode.invalidateDraw()
+        }
+        Thread.sleep(500)
+        val idleStart = draws.get()
+        Thread.sleep(1000)
+        android.util.Log.i("AutoScroll635Counts", "idleDraws=" + (draws.get() - idleStart))
+        val scroll = nodes { all -> all.first { it.tag() == "browser-list" }.config[SemanticsActions.ScrollBy].action!! }
+        var last = draws.get()
+        var scrollFrames = 0
+        var recordedFrames = 0
+        val done = java.util.concurrent.CountDownLatch(1)
+        main {
+            val choreographer = android.view.Choreographer.getInstance()
+            choreographer.postFrameCallback(object : android.view.Choreographer.FrameCallback {
+                var step = 0
+                override fun doFrame(time: Long) {
+                    val now = draws.get()
+                    if (step > 0) {
+                        scrollFrames++
+                        if (now > last) recordedFrames++
+                        android.util.Log.i("AutoScroll635Counts", "scrollFrame=" + step + " draws=" + (now - last))
+                    }
+                    last = now
+                    if (step++ < 90) {
+                        scroll(0f, 3f)
+                        choreographer.postFrameCallback(this)
+                    } else done.countDown()
+                }
+            })
+        }
+        check(done.await(30, java.util.concurrent.TimeUnit.SECONDS))
+        android.util.Log.i("AutoScroll635Counts", "scrollFrames=" + scrollFrames + " recordedFrames=" + recordedFrames + " totalDraws=" + draws.get())
+        assertTrue("Every steady scroll frame must already record the main viewport", recordedFrames >= scrollFrames - 2)
+    }
+
     @Test fun albumsTopRequest() = loop(BrowseRoute(MainTab.Albums)) { h -> main { h.topRequest++ } }
     @Test fun mixedTopRequest() = loop(BrowseRoute(MainTab.Library)) { h -> main { h.topRequest++ } }
     @Test fun mixedFilterToggle() = loop(BrowseRoute(MainTab.Library)) { h ->
