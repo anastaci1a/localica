@@ -14,6 +14,7 @@ io.github.anastaci1a.localica.ArtistAlbumFilterRangeTest
 io.github.anastaci1a.localica.ArtistAlbumSelectionTest
 io.github.anastaci1a.localica.ArtistAlbumSortOrderTest
 io.github.anastaci1a.localica.ArtistCollectionActionsTest
+io.github.anastaci1a.localica.ArtistPhotoFirstFrameTest
 io.github.anastaci1a.localica.ArtistSelectionPlacementTest
 io.github.anastaci1a.localica.ArtworkBlendLoadingTest
 io.github.anastaci1a.localica.ArtworkCacheTest
