@@ -435,3 +435,5 @@ io.github.anastaci1a.localica.LoadingSweepContrastTest
 io.github.anastaci1a.localica.GlassMorphZeroConstraintsTest
 io.github.anastaci1a.localica.PopupViewportSlotTest
 io.github.anastaci1a.localica.PopupEditorFocusOwnershipTest
+io.github.anastaci1a.localica.ArtworkWashEdgeWeightingTest
+io.github.anastaci1a.localica.BackdropEdgeStripTest
