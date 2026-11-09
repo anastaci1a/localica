@@ -12,6 +12,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.composed
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.navigation.InterfaceSettings
@@ -44,7 +45,7 @@ internal class ArtworkSwipe {
 @Composable
 internal fun rememberArtworkSwipe(visit: String?, visual: PlayerVisual, previous: ArtworkNeighbor?, next: ArtworkNeighbor?,
     width: Float, enabled: Boolean, settings: InterfaceSettings,
-    navigate: ((String, (Boolean) -> Unit) -> Unit)?): Pair<ArtworkSwipe, Modifier> {
+    navigate: ((String, (Boolean) -> Unit) -> Unit)?, widthProvider: (() -> Float)? = null): Pair<ArtworkSwipe, Modifier> {
     val swipe = remember { ArtworkSwipe() }
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
@@ -54,10 +55,11 @@ internal fun rememberArtworkSwipe(visit: String?, visual: PlayerVisual, previous
     val currentNext by rememberUpdatedState(next)
     val currentNavigate by rememberUpdatedState(navigate)
     val motion by rememberUpdatedState(settings)
-    val stride = width
+    val currentWidth by rememberUpdatedState(widthProvider ?: { width })
     var displayed by remember { mutableStateOf(visual) }
     var priorVisit by remember { mutableStateOf(previous?.visit) }
     LaunchedEffect(visit, visual.loading, visual.artwork) {
+        val stride = currentWidth()
         if (!visual.loading) {
             val arrivedBySwipe = swipe.pending == visit && visit != null
             val changed = displayed.artwork != visual.artwork &&
@@ -101,7 +103,8 @@ internal fun rememberArtworkSwipe(visit: String?, visual: PlayerVisual, previous
             swipe.clear()
         }
     }
-    fun finish(velocity: Float) {
+    fun finish(velocity: Float, width: Float) {
+        val stride = width
         swipe.dragging = false
         swipe.animation = scope.launch(start = CoroutineStart.UNDISPATCHED) {
             // Playback may have changed before its cancellation effect gets a frame.
@@ -143,7 +146,12 @@ internal fun rememberArtworkSwipe(visit: String?, visual: PlayerVisual, previous
             }
     } }
     val gestureEnabled = enabled && settings.artworkSwipe
-    val modifier = Modifier.pointerInput(width, gestureEnabled, navigate != null) {
+    // Keep the existing pointerInput width key and its composition/apply cancellation
+    // boundary. The read belongs only to this mounted recognizer, not the player root.
+    val modifier = Modifier.composed {
+        val width = currentWidth()
+        val stride = width
+        Modifier.pointerInput(width, gestureEnabled, navigate != null) {
         if (gestureEnabled && currentNavigate != null) {
             awaitEachGesture {
                 val down = awaitFirstDown(requireUnconsumed = false)
@@ -209,7 +217,7 @@ internal fun rememberArtworkSwipe(visit: String?, visual: PlayerVisual, previous
                             currentEvent.changes.firstOrNull { it.id == start.id }?.let {
                                 velocity.addPosition(it.uptimeMillis, it.position)
                             }
-                            finish(velocity.calculateVelocity().x)
+                            finish(velocity.calculateVelocity().x, width)
                         }
                     } finally {
                         swipe.dragging = false
@@ -221,6 +229,7 @@ internal fun rememberArtworkSwipe(visit: String?, visual: PlayerVisual, previous
                 }
             }
         }
+    }
     }
     // An idle pointerInput node still wins hit testing over lower drawing layers.
     // Remove it entirely when disabled so the visible lyrics receive real input.

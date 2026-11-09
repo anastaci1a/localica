@@ -346,8 +346,8 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     fun artPixels() = with(density) { artWidth().toPx() }
     val lyricsTouchable by remember(lyricVisibility, progress) { derivedStateOf { playerLyricsMotion(progress.value, lyricVisibility).contentAlpha > 0f } }
     val (artSwipe, artworkDrag) = rememberArtworkSwipe(artworkVisit, artwork, previousArtwork, nextArtwork,
-        artPixels(), expanded && fullyOpen && !lyricsTouchable && (queueProgress?.value ?: 0f) == 0f,
-        settings, onArtworkVisit)
+        0f, expanded && fullyOpen && !lyricsTouchable && (queueProgress?.value ?: 0f) == 0f,
+        settings, onArtworkVisit, widthProvider = ::artPixels)
     fun swipeOffset() = artSwipe.offset.value
     fun swipeFraction() = (kotlin.math.abs(swipeOffset()) / (artPixels())).coerceIn(0f, 1f)
     fun swipeFeather() = if (settings.artworkLayout == ArtworkLayout.FullBackground)

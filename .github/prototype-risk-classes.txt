@@ -1,3 +1,4 @@
+
 # Exact top-level instrumentation classes available at the candidate baseline.
 # Selection remains explicit; this inventory does not claim affected coverage.
 io.github.anastaci1a.localica.IconPackVectorTest
@@ -359,15 +360,21 @@ io.github.anastaci1a.localica.QueueHeaderMaterialBoundaryTest
 io.github.anastaci1a.localica.NonePreimageTest
 io.github.anastaci1a.localica.NoneShadowParityTest
 io.github.anastaci1a.localica.NoneShadowScreenshotTest
+
+
 io.github.anastaci1a.localica.PinchRecognitionContinuityTest
+
 io.github.anastaci1a.localica.PopupHostNavigationTest
+
 io.github.anastaci1a.localica.GlassRendererPreferenceTest
 io.github.anastaci1a.localica.GlassRendererSettingsTest
 io.github.anastaci1a.localica.GlassRenderModesTest
 io.github.anastaci1a.localica.GlassModeFrameTimingTest
+
 io.github.anastaci1a.localica.PresentationMarkerTest
 io.github.anastaci1a.localica.FrameStatsTest
 io.github.anastaci1a.localica.FrameStatsSettingsTest
+
 io.github.anastaci1a.localica.SelectionMergeGeometryTest
 io.github.anastaci1a.localica.SelectionMergeSequenceTest
 io.github.anastaci1a.localica.PopupViewChangeTransitionTest
@@ -377,12 +384,15 @@ io.github.anastaci1a.localica.LastFmSettingsTest
 io.github.anastaci1a.localica.LastFmMetadataStorageTest
 io.github.anastaci1a.localica.LastFmEntryContractTest
 io.github.anastaci1a.localica.CrossViewSelectionTest
+
 io.github.anastaci1a.localica.ListForegroundClearanceTest
 io.github.anastaci1a.localica.ListEndContextsTest
 io.github.anastaci1a.localica.ScrollbarRowInputTest
 io.github.anastaci1a.localica.ShellChromeClearanceTest
+
 io.github.anastaci1a.localica.OnlineFeaturesSettingsTest
 io.github.anastaci1a.localica.ArtistPhotoStorageTest
+
 io.github.anastaci1a.localica.ArtworkChooserShortViewportTest
 io.github.anastaci1a.localica.MotionFollowupTest
 io.github.anastaci1a.localica.BackdropInvalidationTest
@@ -410,6 +420,7 @@ io.github.anastaci1a.localica.LastFmWorkerTest
 io.github.anastaci1a.localica.LastFmMatchingBarTest
 io.github.anastaci1a.localica.LastFmGroupListTest
 io.github.anastaci1a.localica.LastFmSharedControlsTest
+
 io.github.anastaci1a.localica.GlassActionCentreTest
 io.github.anastaci1a.localica.LyricsLineInkEaseTest
 io.github.anastaci1a.localica.LyricsLineAnchorTest
@@ -421,3 +432,5 @@ io.github.anastaci1a.localica.NestedGlassRegistrationTest
 io.github.anastaci1a.localica.SublistLoadingPlaceholderCaptureTest
 io.github.anastaci1a.localica.LoadingSweepContrastTest
 io.github.anastaci1a.localica.PlayerDeferredFrameEqualityTest
+io.github.anastaci1a.localica.ArtworkSwipeWidthBoundaryTest
+io.github.anastaci1a.localica.MarqueeDeferredLayoutEqualityTest
