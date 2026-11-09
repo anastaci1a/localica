@@ -83,13 +83,11 @@ internal fun glassPanelColors(ambient: androidx.compose.material3.ColorScheme, l
     }
 }
 
-internal fun glassPanelColor(ambient: androidx.compose.material3.ColorScheme, lightMix: Float, field: (androidx.compose.material3.ColorScheme) -> Color): Color {
+/** Historical lerpScheme leaves errors at the light scheme until the full dark endpoint. */
+internal fun glassPanelErrorColor(ambient: androidx.compose.material3.ColorScheme, lightMix: Float, onError: Boolean): Color {
     val light = ambient.takeIf { it.onSurface.red < .5f } ?: LightColors
-    return when {
-        lightMix >= 1f -> field(GlassDarkColors)
-        lightMix <= 0f -> field(light)
-        else -> androidx.compose.ui.graphics.lerp(field(light), field(GlassDarkColors), lightMix)
-    }
+    val colors = if (lightMix >= 1f) GlassDarkColors else light
+    return if (onError) colors.onError else colors.error
 }
 
 /** Popup controls and explicit secondary labels must agree with the material's ink. */
