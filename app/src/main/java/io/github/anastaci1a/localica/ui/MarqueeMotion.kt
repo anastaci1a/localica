@@ -5,6 +5,7 @@ import kotlin.math.abs
 internal const val MarqueePauseMillis = 1800L
 internal const val MarqueeFadeMillis = 220L
 internal const val MarqueeReturnMillis = 260L
+internal const val MarqueeCancelFadeMillis = 150L
 
 internal enum class MarqueePhase { Rest, LeadingIn, Scrolling, Returning, LeadingOut }
 
@@ -13,6 +14,8 @@ internal data class MarqueeFrame(
     val repeatDistance: Float = 0f,
     val leadingFade: Float = 0f,
     val phase: MarqueePhase = MarqueePhase.Rest,
+    val backwardFadeStart: Float? = null,
+    val backwardFadeRemaining: Float = 0f,
 )
 
 /** One retained clock per line. Viewport changes never recreate the text or its motion. */
@@ -25,6 +28,11 @@ internal class MarqueeMotion {
     private var returnForward = false
     private var returnTravel = 0f
     private var fadeStart = 0f
+    private var renderedLeftFade = 0f
+
+    fun recordRenderedLeftFade(amount: Float) {
+        renderedLeftFade = amount
+    }
 
     fun advance(timeMillis: Long, textWidth: Float, viewportWidth: Float, speed: Float,
         allowed: Boolean): MarqueeFrame {
@@ -34,7 +42,9 @@ internal class MarqueeMotion {
             MarqueePhase.Scrolling -> {
                 returnForward = frame.offset > frame.repeatDistance / 2f
                 returnTravel = if (returnForward) frame.repeatDistance - frame.offset else frame.offset
-                frame = frame.copy(phase = MarqueePhase.Returning, leadingFade = 1f)
+                frame = frame.copy(phase = MarqueePhase.Returning, leadingFade = 1f,
+                    backwardFadeStart = if (returnForward) null else renderedLeftFade,
+                    backwardFadeRemaining = if (returnForward) 0f else 1f)
                 phaseStarted = timeMillis
             }
             MarqueePhase.LeadingIn -> beginFadeOut(timeMillis)
@@ -76,7 +86,8 @@ internal class MarqueeMotion {
             MarqueePhase.Returning -> {
                 val remaining = returnTravel * (1f - marqueeEase(elapsed.toFloat() / MarqueeReturnMillis))
                 frame = frame.copy(offset = if (returnForward) frame.repeatDistance - remaining else remaining,
-                    leadingFade = 1f)
+                    leadingFade = 1f,
+                    backwardFadeRemaining = 1f - marqueeEase(elapsed.toFloat() / MarqueeCancelFadeMillis))
                 if (elapsed >= MarqueeReturnMillis || abs(returnTravel) < .001f) {
                     // The next copy is pixel-identical at the origin. Normalize only
                     // after arrival; the leading edge remains fully present on this frame.
@@ -106,6 +117,19 @@ internal class MarqueeMotion {
 }
 
 internal fun marqueeEase(fraction: Float): Float = fraction.coerceIn(0f, 1f).let { it * it * (3f - 2f * it) }
+
+/** Follow exiting LTR text; a backward cancellation only releases the existing mask. */
+internal fun marqueeLeftFade(textWidth: Float, fadeWidth: Float, frame: MarqueeFrame): Float {
+    fun spatial(offset: Float): Float = if (fadeWidth <= 0f) 0f else
+        marqueeEase(minOf(offset, textWidth - offset) / fadeWidth)
+    return when (frame.phase) {
+        MarqueePhase.Scrolling -> spatial(frame.offset)
+        MarqueePhase.Returning -> frame.backwardFadeStart?.let {
+            it * frame.backwardFadeRemaining
+        } ?: spatial(frame.offset)
+        else -> 0f
+    }
+}
 
 /** The trailing mask follows actual clipped ink, including the incoming wrap copy. */
 internal fun marqueeTrailingFade(textWidth: Float, viewportWidth: Float, fadeWidth: Float,
