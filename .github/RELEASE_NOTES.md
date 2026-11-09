@@ -10,7 +10,7 @@ This optimized build is not debuggable and is minified with R8. It updates the e
 
 - Restore Last.fm settings screens and improve artist photo previews, storage and retries.
 - Refine glass action alignment, marquee taper, lyric transitions and loading placeholders.
-- Add artist song grouping controls and reduce live None renderer work.
+- Add artist song grouping controls and smooth artist row reordering.
 
 ## Resolved issues
 
@@ -21,10 +21,13 @@ This optimized build is not debuggable and is minified with R8. It updates the e
 - https://github.com/anastaci1a/localica/issues/564 - Lyric line ink follows the shared theme transition.
 - https://github.com/anastaci1a/localica/issues/717 - Current lyric line rests at the viewport center.
 - https://github.com/anastaci1a/localica/issues/674 - Stable search return frame sampling.
-- https://github.com/anastaci1a/localica/issues/691 - Cheaper live sampling with the None renderer.
 - https://github.com/anastaci1a/localica/issues/705 - Sublist loading placeholder contrast.
 - https://github.com/anastaci1a/localica/issues/694 - Artist Group by album option and reorder motion.
 - https://github.com/anastaci1a/localica/issues/684 - Last.fm settings screens restored (Parts B-D); matching follow-up remains open.
+
+## Deferred
+
+- None renderer performance changes move to v0.33.17 pending updated coverage for the approved control design: https://github.com/anastaci1a/localica/issues/691.
 
 ## Known issues
 
