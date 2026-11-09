@@ -17,6 +17,7 @@ import io.github.anastaci1a.localica.library.RoomLibraryStore
 import io.github.anastaci1a.localica.library.TreeScanner
 
 class LocalicaApplication : Application() {
+    val toasts = io.github.anastaci1a.localica.toast.ToastQueue()
     private companion object {
         val STARTUP_PREFERENCES = listOf("interface", "queue-settings", "scanner", "scan-progress", "browse-style",
             "library-query", "library-filters", "pins", "player-actions", "tag-jobs", "cover-images", "listening-identity")
@@ -92,7 +93,7 @@ class LocalicaApplication : Application() {
     val playlists by lazy {
         PlaylistController(Room.databaseBuilder(this, PlaylistDatabase::class.java, "playlists.db").addMigrations(PlaylistDatabase.MIGRATION_1_2, PlaylistDatabase.MIGRATION_2_3, PlaylistDatabase.MIGRATION_3_4).build().playlists(),
             coverDirectory = java.io.File(filesDir, "playlist-covers"),
-            sortSnapshot = ::liveSortSnapshot)
+            sortSnapshot = ::liveSortSnapshot, toasts = toasts)
     }
     val nativeReaders = io.github.anastaci1a.localica.playback.NativeReaders(
         io.github.anastaci1a.localica.playback.RecoveryAdmission.Checking)
@@ -104,7 +105,7 @@ class LocalicaApplication : Application() {
         QueueController(Room.databaseBuilder(this, QueueDatabase::class.java, "queues.db").addMigrations(QueueDatabase.MIGRATION_1_2, QueueDatabase.MIGRATION_2_3, QueueDatabase.MIGRATION_3_4, QueueDatabase.MIGRATION_4_5, QueueDatabase.MIGRATION_5_6, QueueDatabase.MIGRATION_6_7).build().queues(),
             QueuePreferences(this), library, readers = nativeReaders, sortSnapshot = ::liveSortSnapshot,
             diagnoseOrders = applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0,
-            listening = listening)
+            listening = listening, toasts = toasts)
     }
     private suspend fun liveSortSnapshot() =
         library.sortSnapshots.withListeningStatistics(effectiveStatistics).first()

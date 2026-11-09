@@ -77,6 +77,7 @@ class MainActivity : ComponentActivity() {
                 uri?.let { model.addFolder(it.toString()) }
             }
             androidx.compose.runtime.CompositionLocalProvider(
+                io.github.anastaci1a.localica.ui.LocalToastQueue provides (application as LocalicaApplication).toasts,
                 io.github.anastaci1a.localica.ui.LocalGlassRendererRuntime provides glassRenderer,
                 io.github.anastaci1a.localica.ui.LocalGlassMorphWorkObserver provides
                     (if (io.github.anastaci1a.localica.diagnostics.FrameStats.recording.value)
