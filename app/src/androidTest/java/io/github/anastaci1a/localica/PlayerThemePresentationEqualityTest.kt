@@ -1,5 +1,12 @@
 package io.github.anastaci1a.localica
 
+import androidx.compose.animation.core.Animatable
+import io.github.anastaci1a.localica.navigation.ArtworkAction
+import io.github.anastaci1a.localica.navigation.InterfaceSettings
+import io.github.anastaci1a.localica.playback.PlaybackState
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.ui.Modifier
@@ -166,6 +173,38 @@ class PlayerThemePresentationEqualityTest {
             assertEquals("actual outer dialog $p",Color.White,popup)
             assertNotEquals("counterexample requires distinct full-player ink",panel,full)
         }
+    }
+
+    @Test fun nullUriViewDoesNotPublishAnEmptyPanelDuringExpansion() {
+        val progress=Animatable(1f)
+        var state by mutableStateOf(PlaybackState(connected=true,title="No URI"))
+        var panels=0
+        lateinit var scope: CoroutineScope
+        compose.mainClock.autoAdvance=false
+        compose.setContent { LocalicaTheme {
+            scope=rememberCoroutineScope()
+            CompositionLocalProvider(LocalPlayerWorkObserver provides { kind,_ -> if(kind=="panel-material") panels++ }) {
+                BoxWithConstraints(Modifier.fillMaxSize()) {
+                    PlayerSurface(state,true,{},InterfaceSettings(artworkTap=ArtworkAction.View),progress,
+                        {},{},{},{},{},{},visual=PlayerVisual())
+                }
+            }
+        } }
+        try {
+            compose.mainClock.advanceTimeByFrame();compose.waitForIdle()
+            compose.onNodeWithTag("artwork-gesture").performClick()
+            for(p in listOf(.8f,.5f,.1f,.7f,1f)) {
+                compose.runOnIdle { scope.launch(start=CoroutineStart.UNDISPATCHED) { progress.snapTo(p) } }
+                compose.mainClock.advanceTimeByFrame();compose.waitForIdle()
+                assertEquals("No panel publication after null URI View at $p",0,panels)
+                compose.onNode(isDialog()).assertDoesNotExist()
+            }
+            // Keep the historical retained View intent: a later valid URI can mount the viewer.
+            compose.runOnIdle { state=state.copy(trackUri="content://test.perf2/later-artwork") }
+            compose.mainClock.advanceTimeByFrame();compose.waitForIdle()
+            assertTrue("A later URI admits the retained viewer",panels>0)
+            compose.onNode(isDialog()).assertExists()
+        } finally { compose.mainClock.autoAdvance=true }
     }
 
     private fun fields(c: ColorScheme) = listOf(c.primary, c.onPrimary, c.primaryContainer, c.onPrimaryContainer,
