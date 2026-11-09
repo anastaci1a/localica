@@ -65,7 +65,13 @@ class BrowsePlayerCompositionTest {
             BrowseQueries.evaluate(library.snapshot, emptyList(), BrowseRoute(MainTab.Albums)).items.single().ref)
             else BrowseRoute(MainTab.Songs)
         val work = mutableListOf<String>()
-        val observer: (String,Any) -> Unit = { kind,_ -> work += kind }
+        val rowOwners = mutableListOf<Any>()
+        val schemeOwners = mutableListOf<Any>()
+        val backdropOwners = mutableListOf<Any>()
+        val observer: (String,Any) -> Unit = { kind,owner ->
+            work += kind
+            when(kind) { "row-content-owner" -> rowOwners+=owner; "row-scheme-owner" -> schemeOwners+=owner; "row-backdrop-owner" -> backdropOwners+=owner }
+        }
         var open by mutableStateOf(false)
         var reference by mutableStateOf(false)
         compose.setContent { LocalicaTheme {
@@ -93,9 +99,9 @@ class BrowsePlayerCompositionTest {
             assertArrayEquals("Retained browse pixels at playerOpen=$value",original,pixels())
         }
         compose.runOnIdle {
-            android.util.Log.i("PERF2_P1", "album=$album screens=${work.count { it=="screen" }} rows=${work.count { it=="row" }}")
+            android.util.Log.i("PERF2_P1", "album=$album screens=${work.count { it=="screen" }} rows=${work.count { it=="row" }} ownerIdentities=${rowOwners.map { System.identityHashCode(it) }.distinct().size} changedKeys=${work.filter { it.startsWith("row-key:") }}")
             assertEquals("Browser observes exactly four gesture ownership changes",4,work.count { it=="screen" })
-            assertEquals("Player state must not recompose a browse row",0,work.count { it=="row" })
+            assertEquals("Player state must not recompose a browse row; changed keys=${work.filter { it.startsWith("row-key:") }}; owner identities=${rowOwners.map { System.identityHashCode(it) }.distinct().size}; scheme identities=${schemeOwners.map { System.identityHashCode(it) }.distinct().size}; backdrop identities=${backdropOwners.map { System.identityHashCode(it) }.distinct().size}",0,work.count { it=="row" })
         }
         compose.runOnIdle { reference=true }
         compose.onNodeWithText("Quiet song 0").assertIsDisplayed()
