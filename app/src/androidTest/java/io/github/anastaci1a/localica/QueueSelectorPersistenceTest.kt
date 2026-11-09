@@ -1,6 +1,7 @@
 package io.github.anastaci1a.localica
 
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Color as NativeColor
 import android.graphics.Canvas
 import android.graphics.ColorFilter
@@ -58,6 +59,16 @@ class QueueSelectorOffscreenNameTest {
         QueueSelectorCallerFixture(compose, browsedAwayFromPlayback = true).verify(false)
 }
 
+/** A repeated-bar name has a distinct native glyph signature, including inside the real popup.
+ * Semantics can stay alive while its recording disappears; this witness inspects original pixels. */
+class QueueSelectorGlyphContinuityTest {
+    @get:Rule val compose = localicaComposeRule()
+    @Test fun selectedGlyphsStayVisibleThroughOpenAndRestoredReturn() =
+        QueueSelectorCallerFixture(compose, glyph = true).verify(false)
+    @Test fun selectedGlyphsStayVisibleThroughCancelledOpenAndReversal() =
+        QueueSelectorCallerFixture(compose, glyph = true).verify(true)
+}
+
 /** Actual native return after the source is restored: the origin receiver is no longer active.
  * This scoped oracle does not claim support for the earlier native receiver/exclusion phase. */
 class QueueSelectorFieldReturnTest {
@@ -67,8 +78,9 @@ class QueueSelectorFieldReturnTest {
 }
 
 private class QueueSelectorCallerFixture(private val compose: androidx.compose.ui.test.junit4.ComposeContentTestRule,
-    private val browsedAwayFromPlayback: Boolean = false) {
-    private val label = "${if (browsedAwayFromPlayback) 80 else 1}. Persistent queue"
+    private val browsedAwayFromPlayback: Boolean = false, private val glyph: Boolean = false) {
+    private val queueName = if (glyph) "|".repeat(24) else "Persistent queue"
+    private val label = "${if (browsedAwayFromPlayback) 80 else 1}. $queueName"
     private var window: Window? = null
     private lateinit var sourceView: View
     private val markers = linkedMapOf<View, Marker>()
@@ -77,11 +89,11 @@ private class QueueSelectorCallerFixture(private val compose: androidx.compose.u
 
     fun verify(interrupted: Boolean, field: Boolean = false) {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
-        val output = nativeEvidenceDirectory("queue-selector-${if (field) "field-return" else "persistence"}-${if (interrupted) "interrupted" else "complete"}${if (browsedAwayFromPlayback) "-browsed-away" else ""}",
+        val output = nativeEvidenceDirectory("queue-selector-${if (field) "field-return" else if (glyph) "glyph" else "persistence"}-${if (interrupted) "interrupted" else "complete"}${if (browsedAwayFromPlayback) "-browsed-away" else ""}",
             instrumentation.targetContext.cacheDir)
         val queues = if (browsedAwayFromPlayback) List(80) { index ->
-            ListeningQueue(id = "queue-$index", name = if (index == 79) "Persistent queue" else "Queue ${index + 1}", entries = emptyList())
-        } else listOf(ListeningQueue(id = "selected", name = "Persistent queue", entries = emptyList()))
+            ListeningQueue(id = "queue-$index", name = if (index == 79) queueName else "Queue ${index + 1}", entries = emptyList())
+        } else listOf(ListeningQueue(id = "selected", name = queueName, entries = emptyList()))
         val state = QueueUiState(QueueLibrary(queues, queues.first().id), loading = false, browsedId = queues.last().id)
         compose.setContent { LocalicaTheme {
             val view = LocalView.current
@@ -114,6 +126,8 @@ private class QueueSelectorCallerFixture(private val compose: androidx.compose.u
         var frame = 0
         val fieldInputs = mutableListOf<FieldInput>()
         val fieldFailures = mutableListOf<String>()
+        val glyphFailures = mutableListOf<String>()
+        val glyphInputs = mutableListOf<GlyphInput>()
         fun sample(stage: String) {
             compose.mainClock.advanceTimeByFrame()
             compose.waitForIdle()
@@ -123,14 +137,16 @@ private class QueueSelectorCallerFixture(private val compose: androidx.compose.u
             val native = window?.takeIf { it.decorView.isAttachedToWindow }
             val phase = anchor.contact.expansion.value
             log.append("$frame $stage phase=$phase hidden=${anchor.hidden} modal=${anchor.modalPresent} inModal=${anchor.shadowInModal} native=${native != null} labels=${names.map { System.identityHashCode(it.layoutInfo) }}\n")
-            val input = if (field && phase <= .002f && !anchor.hidden)
+            val input = if (field && stage == "return" && phase <= .002f && !anchor.hidden)
                 captureHomeField(anchor, native, frame) else null
             val bitmap = input?.capture?.image?.asAndroidBitmap() ?: screenshot(native)
+            val glyphRect = if (glyph) currentBodyRect(anchor, native) else null
             val actualFile = File(output, "${(frame++).toString().padStart(3, '0')}-$stage.png")
             try { actualFile.outputStream().use {
                 check(bitmap.compress(Bitmap.CompressFormat.PNG, 100, it))
             }
                 if (input != null) fieldInputs += input.copy(actual = actualFile)
+                if (glyphRect != null) glyphInputs += GlyphInput(frame - 1, stage, actualFile, glyphRect)
             } finally { if (input == null) bitmap.recycle() }
         }
         fun close() { UiDevice.getInstance(instrumentation).pressBack() }
@@ -147,6 +163,7 @@ private class QueueSelectorCallerFixture(private val compose: androidx.compose.u
                 if (!interrupted && anchor.contact.expansion.value >= .999f && anchor.hidden) break
             }
             assertTrue("Must exercise the actual admitted native caller\n$log", admitted)
+            if (glyph && !interrupted) repeat(4) { sample("expanded-rest") }
             close()
             if (interrupted) {
                 repeat(3) { sample("reverse-close") }
@@ -164,6 +181,12 @@ private class QueueSelectorCallerFixture(private val compose: androidx.compose.u
                 if (settled == 4) break
             }
             assertEquals("Native return and four source frames are mandatory\n$log", 4, settled)
+            for (input in glyphInputs) {
+                val bitmap = requireNotNull(BitmapFactory.decodeFile(input.actual.absolutePath))
+                val strokes = try { repeatedGlyphStrokes(bitmap, input.region) } finally { bitmap.recycle() }
+                log.append("glyph frame=${input.frame} roi=${input.region} strokes=$strokes\n")
+                if (strokes < 20) glyphFailures += "${input.frame} ${input.stage} strokes=$strokes"
+            }
             if (field) {
                 // Native reference work runs only after capturing the complete actual transition.
                 // It cannot consume unobserved native frames in the middle of the handoff.
@@ -177,6 +200,8 @@ private class QueueSelectorCallerFixture(private val compose: androidx.compose.u
                     fieldInputs.any { it.sourceOwned && it.capture.windowIds.size == 1 })
                 assertTrue("Actual Queue return differs from its independent current-geometry field: $fieldFailures\n$log", fieldFailures.isEmpty())
             } else {
+                if (glyph) assertTrue("Original native pixels must retain the selected name's repeated-stroke signature: $glyphFailures\n$log",
+                    glyphFailures.isEmpty())
                 assertTrue("One name remains present through every sampled caller frame: $missing\n$log", missing.isEmpty())
                 assertEquals("The name must be one persistent layout instance across both native roots\n$log", 1, instances.size)
             }
@@ -186,6 +211,63 @@ private class QueueSelectorCallerFixture(private val compose: androidx.compose.u
             compose.runOnUiThread { markers.keys.toList().forEach(::detach) }
             fieldInputs.forEach { it.capture.image.asAndroidBitmap().recycle() }
         }
+    }
+
+    private data class GlyphInput(val frame: Int, val stage: String, val actual: File, val region: Rect)
+
+    private fun currentBodyRect(anchor: GlassAnchor, native: Window?): Rect {
+        val node = if (native != null) compose.onAllNodesWithTag("glass-morph-surface").fetchSemanticsNodes().singleOrNull() else null
+        val rect = if (node == null) anchor.bounds else {
+            val view = (node.root as ViewRootForTest).view
+            val origin = IntArray(2).also { compose.runOnUiThread { view.getLocationOnScreen(it) } }
+            node.boundsInRoot.translate(Offset(origin[0].toFloat(), origin[1].toFloat()))
+        }
+        val shape = anchor.contact.body.value
+        val sx = shape.scaleX(anchor.contact.vertical)
+        val sy = shape.scaleY(anchor.contact.vertical)
+        return Rect(rect.center - Offset(rect.width * sx / 2f, rect.height * sy / 2f),
+            rect.center + Offset(rect.width * sx / 2f, rect.height * sy / 2f))
+    }
+
+    /** Independent spatial signature: at least twenty equally spaced dark, tall strokes.
+     * The ROI is the actual current material body, so the background search hint cannot supply it.
+     * This is a presence/contrast gate, not a complete subpixel glyph or trajectory reference. */
+    private fun repeatedGlyphStrokes(bitmap: Bitmap, region: Rect): Int {
+        val left = ceil(region.left).toInt().coerceAtLeast(0)
+        val right = region.right.toInt().coerceAtMost(bitmap.width)
+        val top = ceil(region.top).toInt().coerceAtLeast(0)
+        val bottom = region.bottom.toInt().coerceAtMost(bitmap.height)
+        val height = (10f * compose.density.density).roundToInt().coerceAtLeast(1)
+        val maxStroke = (4f * compose.density.density).roundToInt().coerceAtLeast(1)
+        val minGap = (2f * compose.density.density).roundToInt().coerceAtLeast(2)
+        val maxGap = (8f * compose.density.density).roundToInt().coerceAtLeast(minGap)
+        val runs = IntArray((right - left).coerceAtLeast(0))
+        var maximum = 0
+        for (y in top until bottom) {
+            val starts = mutableListOf<Int>()
+            var start = -1
+            for (x in left until right) {
+                val color = bitmap.getPixel(x, y)
+                runs[x - left] = if (NativeColor.red(color) + NativeColor.green(color) + NativeColor.blue(color) <= 80 * 3)
+                    runs[x - left] + 1 else 0
+                val dark = runs[x - left] >= height
+                if (dark && start < 0) start = x
+                if ((!dark || x == right - 1) && start >= 0) {
+                    val end = if (dark) x + 1 else x
+                    if (end - start <= maxStroke) starts += start
+                    start = -1
+                }
+            }
+            var streak = 1
+            var previousGap = -1
+            for ((a, b) in starts.zipWithNext()) {
+                val gap = b - a
+                streak = if (gap in minGap..maxGap && (previousGap < 0 || abs(gap - previousGap) <= 2)) streak + 1 else 1
+                maximum = maxOf(maximum, streak)
+                previousGap = gap
+            }
+        }
+        return maximum
     }
 
     private data class FieldInput(val frame: Int, val actual: File?, val rect: Rect, val body: RoundRect,
@@ -211,7 +293,7 @@ private class QueueSelectorCallerFixture(private val compose: androidx.compose.u
         val shape = anchor.contact.body.value
         val sx = shape.scaleX(anchor.contact.vertical)
         val sy = shape.scaleY(anchor.contact.vertical)
-        val sequence = clock.stampNow.sequence
+        val sequence = compose.runOnUiThread { clock.stampNow.sequence }
         val epoch = requireNotNull(home).host.routeEpoch
         val state = ShadowDrawState(sequence, epoch, listOf(body to 1f), Color.White,
             scaleX = sx, scaleY = sy, strength = .8f, spread = .6f)
