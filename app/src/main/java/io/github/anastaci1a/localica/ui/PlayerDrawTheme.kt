@@ -56,6 +56,8 @@ internal fun PlayerMaterialTheme(theme: PlayerDrawTheme, content: @Composable ()
 @Composable
 internal fun PlayerPanelMaterialTheme(theme: PlayerDrawTheme, content: @Composable () -> Unit) {
     val colors = theme.panelColors
+    val observer = LocalPlayerWorkObserver.current
+    if (observer != null) SideEffect { observer("panel-material", null) }
     MaterialTheme(colorScheme = colors) {
         CompositionLocalProvider(LocalPlayerDrawTheme provides null,
             androidx.compose.material3.LocalContentColor provides colors.onSurface,

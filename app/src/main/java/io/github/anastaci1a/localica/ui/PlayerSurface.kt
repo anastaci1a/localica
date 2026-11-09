@@ -724,7 +724,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
             navigationInset + CollapsedQueueHeight + 20.dp, settings.reducedMotion)
     }
     }
-    PlayerFrameScope { if (viewing || configureTap) PlayerPanelMaterialTheme(drawTheme) {
+    PlayerFrameScope { if ((viewing && sampled.trackUri != null) || configureTap) PlayerPanelMaterialTheme(drawTheme) {
     if (viewing && sampled.trackUri != null) ArtworkViewer(sampled.trackUri) { viewing = false }
     if (configureTap) GlassAlertDialog(onDismissRequest = { configureTap = false }, title = { Text("Artwork tap") },
         text = { Column { ArtworkAction.entries.forEach { value -> ActionTextButton(onClick = {
