@@ -1,5 +1,7 @@
 package io.github.anastaci1a.localica.ui
 
+import io.github.anastaci1a.localica.ui.spec.GlassDialogHeight
+
 import android.content.Intent
 import android.graphics.BitmapFactory
 import android.net.Uri
