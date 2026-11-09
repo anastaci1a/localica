@@ -14,17 +14,21 @@ internal const val PHOTO_MAX_BYTES = 4 * 1024 * 1024
 internal data class SavedPhotoChoice(val mode: String = "auto", val choice: ArtistPhotoChoice? = null,
     val attemptedAt: Long? = null, val pendingChoice: ArtistPhotoChoice? = null)
 
+/** Prepared once per request identity, never from a drawing callback. */
+internal fun artistPhotoCacheKey(artist: String) = MessageDigest.getInstance("SHA-256").digest(artist.toByteArray(Charsets.UTF_8))
+    .joinToString("") { "%02x".format(it) }
+
 /** Repository-serialized disk operations; display leases are thread safe and never perform IO. */
 internal class ArtistPhotoDisk(private val cache: File, private val choices: File, private val maxBytes: Long,
     private val evictable: Boolean = true) {
     init { require(maxBytes >= PHOTO_MAX_BYTES + 32768) }
     private val visible = ConcurrentHashMap<String, AtomicInteger>()
     private val lastDisplay = ConcurrentHashMap<String, Long>()
+    private val changedKeys = mutableSetOf<String>()
     private val previews by lazy { ArtistPhotoDisk(File(cache, "previews"), choices,
         maxOf(PHOTO_MAX_BYTES + 32768L, minOf(64L * 1024 * 1024, maxBytes / 4))) }
     private val chosen by lazy { ArtistPhotoDisk(File(choices, "photos"), choices, Long.MAX_VALUE, evictable = false) }
-    private fun key(artist: String) = MessageDigest.getInstance("SHA-256").digest(artist.toByteArray(Charsets.UTF_8))
-        .joinToString("") { "%02x".format(it) }
+    private fun key(artist: String) = artistPhotoCacheKey(artist)
     private fun entry(artist: String) = File(cache, key(artist) + ".json")
     private fun selection(artist: String) = File(choices, key(artist) + ".json")
     private fun safeImage(name: String?) = name?.takeIf { it.matches(Regex("[0-9a-f]{64}\\.(image|thumb)")) }?.let { File(cache, it) }
@@ -58,6 +62,7 @@ internal class ArtistPhotoDisk(private val cache: File, private val choices: Fil
         safeImage(metadata?.optString("image"))?.delete()
         safeImage(metadata?.optString("thumbnail"))?.delete()
         entry(artist).delete()
+        changedKeys += key(artist)
     }
     fun cached(artist: String, now: Long): CachedArtistPhoto? {
         recoverTransactions()
@@ -65,8 +70,9 @@ internal class ArtistPhotoDisk(private val cache: File, private val choices: Fil
         return (if (File(choices, "photos").exists()) chosen.cachedLocal(artist) else null) ?: cachedLocal(artist)
     }
 
-    private fun cachedLocal(artist: String): CachedArtistPhoto? = runCatching {
-        val metadata = read(entry(artist)) ?: return@runCatching null
+    private fun cachedLocal(artist: String): CachedArtistPhoto? = cachedLocalKey(key(artist))
+    private fun cachedLocalKey(hash: String): CachedArtistPhoto? = runCatching {
+        val metadata = read(File(cache, "$hash.json")) ?: return@runCatching null
         val file = safeImage(metadata.getString("image")) ?: return@runCatching null
         if (!file.isFile || file.length() !in 1..PHOTO_MAX_BYTES.toLong()) return@runCatching null
         val credit = metadata.optJSONObject("attribution")?.run { PhotoAttribution(getString("artist"), getString("credit"),
@@ -76,6 +82,25 @@ internal class ArtistPhotoDisk(private val cache: File, private val choices: Fil
         val thumbnail = safeImage(metadata.optString("thumbnail"))?.takeIf { it.isFile && it.length() in 1..PHOTO_MAX_BYTES.toLong() }
         CachedArtistPhoto(file, provider, credit, metadata.getLong("fetchedAt"), thumbnail)
     }.getOrNull()
+
+    /** Startup inventory includes legacy hashed metadata and durable manual photos. IO only. */
+    fun photoIndex(): Map<String, CachedArtistPhoto> {
+        recoverTransactions()
+        if (File(choices, "photos").exists()) chosen.recoverTransactions()
+        val hashes = (cache.listFiles().orEmpty().toList() + File(choices, "photos").listFiles().orEmpty().toList())
+            .filter { it.extension == "json" && it.nameWithoutExtension.matches(Regex("[0-9a-f]{64}")) }
+            .map { it.nameWithoutExtension }.toSet()
+        return hashes.mapNotNull { hash -> indexedPhoto(hash)?.let { hash to it } }.toMap()
+    }
+
+    fun indexedPhoto(hash: String): CachedArtistPhoto? {
+        val selection = File(choices, "$hash.json")
+        if (selection.exists() && read(selection)?.optString("mode") !in setOf("auto", "manual")) return null
+        return (if (File(choices, "photos").exists()) chosen.cachedLocalKey(hash) else null) ?: cachedLocalKey(hash)
+    }
+
+    /** Only entries touched by trimming/migration need their in-memory metadata refreshed. */
+    fun takeChangedKeys(): Set<String> = changedKeys.toSet().also { changedKeys.clear() }
 
     fun savePhoto(artist: String, remote: RemoteArtist, bytes: ByteArray, now: Long, thumbnail: ByteArray? = null,
         commitChoice: () -> Unit = {}): CachedArtistPhoto {
@@ -120,6 +145,7 @@ internal class ArtistPhotoDisk(private val cache: File, private val choices: Fil
         journal.delete()
         File(cache, image).setLastModified(now); entry(artist).setLastModified(now)
         trim(protect = key(artist))
+        changedKeys += key(artist)
         return requireNotNull(cachedLocal(artist))
     }
 
@@ -136,7 +162,10 @@ internal class ArtistPhotoDisk(private val cache: File, private val choices: Fil
         val protected = cache.listFiles().orEmpty().filter { it.extension == "json" &&
             (isVisible(it.nameWithoutExtension) || read(File(choices, it.name))?.optString("mode") == "manual") }
         val keep = protected.flatMap { listOfNotNull(it.name, read(it)?.optString("image"), read(it)?.optString("thumbnail")) }.toSet()
-        cache.listFiles().orEmpty().filter { it.isFile && it.name !in keep }.forEach { it.delete() }
+        cache.listFiles().orEmpty().filter { it.isFile && it.name !in keep }.forEach {
+            if (it.extension == "json") changedKeys += it.nameWithoutExtension
+            it.delete()
+        }
         if (File(cache, "previews").exists()) previews.clearCache()
     }
     fun budget(): Long = File(choices, "cache-budget").takeIf { it.length() in 1..16 }?.readText()?.trim()?.toLongOrNull()
@@ -198,6 +227,7 @@ internal class ArtistPhotoDisk(private val cache: File, private val choices: Fil
                     write(File(chosen.cache, metadata.name), metadata.readBytes())
                 }
                 files.forEach { it.delete() }; metadata.delete()
+                changedKeys += metadata.nameWithoutExtension
             }
         }
         val entries = cache.listFiles().orEmpty().filter { it.extension == "json" }
@@ -216,6 +246,7 @@ internal class ArtistPhotoDisk(private val cache: File, private val choices: Fil
             val files = listOfNotNull(safeImage(info?.optString("image")), safeImage(info?.optString("thumbnail")))
             size -= metadata.length() + files.sumOf { it.length() }
             files.forEach { it.delete() }; metadata.delete()
+            changedKeys += metadata.nameWithoutExtension
         }
     }
     private fun write(file: File, bytes: ByteArray) {
