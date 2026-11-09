@@ -243,7 +243,16 @@ internal fun LyricsLines(document: ParsedLyrics, positionMs: Long, reducedMotion
                 }
             }
         }
-        androidx.compose.animation.AnimatedVisibility(!following && document.synced && active >= 0,
+        // #715: the arrow shows only while a return would move the list. A manual scroll resting at the list's measured
+        // first/last bound that is where the return lands anyway (the bound centres the current line, or clamps the
+        // return) hides it exactly as if the user had returned; it shows again as soon as a real return would move it.
+        val tolerance = with(density) { 1.dp.roundToPx() }
+        val returnMoves by remember(list, anchors, active, tolerance) { derivedStateOf {
+            val current = list.layoutInfo.visibleItemsInfo.firstOrNull { it.index == active }
+            lyricReturnMoves(current?.let { it.offset + anchors.offset(it.size) },
+                list.canScrollBackward, list.canScrollForward, tolerance)
+        } }
+        androidx.compose.animation.AnimatedVisibility(!following && returnMoves && document.synced && active >= 0,
             Modifier.align(Alignment.BottomCenter).padding(bottom = 8.dp),
             enter = androidx.compose.animation.fadeIn(tween(if (reducedMotion) 0 else 300)),
             exit = androidx.compose.animation.fadeOut(tween(if (reducedMotion) 0 else 300)) +
@@ -252,10 +261,19 @@ internal fun LyricsLines(document: ParsedLyrics, positionMs: Long, reducedMotion
             CompositionLocalProvider(LocalFrostedBackdrop provides scene.source) {
                 // Up when the current line sits above its anchor, so the return glides in the direction of the same geometry.
                 ReturnToPositionButton(up = current?.let { it.offset < -anchors.offset(it.size) } ?: (active < list.firstVisibleItemIndex),
-                    label = "Return to current line", visible = !following) { following = true }
+                    label = "Return to current line", visible = !following && returnMoves) { following = true }
             }
         }
     }
+}
+
+/** #715: whether returning to the current line would move the list. [delta] is the scroll in px (positive toward later
+ *  lines) that centres the current line, or null when that line is not laid out. Away from both measured bounds the
+ *  arrow keeps its behaviour; at a bound, a return the bound clamps, or one of at most [tolerance] px, would not move it. */
+internal fun lyricReturnMoves(delta: Int?, canScrollBackward: Boolean, canScrollForward: Boolean, tolerance: Int): Boolean {
+    if (delta == null || (canScrollBackward && canScrollForward)) return true
+    val clamped = (delta > 0 && !canScrollForward) || (delta < 0 && !canScrollBackward)
+    return !clamped && kotlin.math.abs(delta) > tolerance
 }
 
 private const val LyricPlaceholder = "♪"
