@@ -15,10 +15,10 @@ import androidx.compose.ui.test.*
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.test.platform.app.InstrumentationRegistry
+import io.github.anastaci1a.localica.library.ArtworkCache
 import io.github.anastaci1a.localica.library.ContainerTags
 import io.github.anastaci1a.localica.library.Track
 import io.github.anastaci1a.localica.localicaComposeRule as createComposeRule
-import io.github.anastaci1a.localica.lyrics.LyricsRepository
 import io.github.anastaci1a.localica.navigation.*
 import io.github.anastaci1a.localica.playback.PlaybackState
 import io.github.anastaci1a.localica.ui.*
@@ -63,7 +63,10 @@ class LyricsLineInkEaseTest {
         }
         AudioFileIO.read(target).apply { tag = ID3v24Tag().apply { setField(FieldKey.LYRICS, document) }; commit() }
         val track = Track(android.net.Uri.fromFile(target).toString(), "Line ink", fileName = target.name, relativePath = target.name)
-        val parsed = kotlinx.coroutines.runBlocking { LyricsRepository(instrumentation.targetContext).load(track, 0) }
+        // Parse through the application's repository (the one rememberLyrics uses) so the opening composition's
+        // produceState is a cache hit and the lyric lines exist from the first frames of the ease.
+        val repository = (instrumentation.targetContext.applicationContext as LocalicaApplication).lyrics
+        val parsed = kotlinx.coroutines.runBlocking { repository.load(track, ArtworkCache.revision.value) }
         val lines = parsed.sources.first().document
         assertTrue("The fixture is synced: $parsed", lines.synced)
         assertEquals(40, lines.lines.size)
@@ -80,7 +83,8 @@ class LyricsLineInkEaseTest {
             CompositionLocalProvider(LocalDensity provides Density(1f),
                 LocalPlayerInkCompositionObserver provides { inkComposition = it }) {
                 BoxWithConstraints(Modifier.fillMaxSize()) {
-                    BoxWithConstraints(Modifier.width(300.dp).height(minOf(560.dp, maxHeight))) {
+                    // The phone geometry (720x1280 at 280 dpi) in density-1 pixels, so the band holds several lines of each emphasis.
+                    BoxWithConstraints(Modifier.width(411.dp).height(minOf(731.dp, maxHeight))) {
                         PlayerSurface(state, true, {}, settings,
                             remember { Animatable(1f) }, {}, {}, {}, {}, {}, {},
                             visual = visual, backgroundPolarity = owner, lyricsOpen = lyrics, track = track)
@@ -92,6 +96,21 @@ class LyricsLineInkEaseTest {
     }
 
     private fun frame() { compose.mainClock.advanceTimeByFrame(); compose.waitForIdle() }
+    private fun viewportComposed() =
+        compose.onAllNodesWithTag("lyric-lines", useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty()
+
+    /** The lyrics document arrives through produceState on the IO dispatcher (a cache hit): advance frames until the
+     *  lyric-lines viewport is composed, polling real time between frames, and return the frames spent. */
+    private fun awaitViewport(): Int {
+        var frames = 0
+        while (!viewportComposed()) {
+            assertTrue("the lyric-lines viewport was not composed within $frames frames of opening", frames < 4)
+            frame(); frames++
+            val deadline = System.currentTimeMillis() + 1_000
+            while (!viewportComposed() && System.currentTimeMillis() < deadline) { Thread.sleep(10); compose.waitForIdle() }
+        }
+        return frames
+    }
     private fun lum(c: Color) = .3f * c.red + .59f * c.green + .11f * c.blue
 
     /** One visible line: its index, emphasis and glyph ink relative to the backdrop (positive = lighter). */
@@ -99,8 +118,10 @@ class LyricsLineInkEaseTest {
     private class Sample(val leg: String, val frame: Int, val foreground: Float, val progress: Float, val backdrop: Float,
         val lines: List<Line>)
 
-    /** Native crop of the lyric-lines viewport; each fully visible, unfaded line's extreme glyph luminance. */
-    private fun sample(leg: String, index: Int, strip: MutableList<android.graphics.Bitmap>): Sample {
+    /** Native crop of the lyric-lines viewport; each fully visible, unfaded line's extreme glyph luminance.
+     *  Null once the viewport has left the composition (after a completed close). */
+    private fun sample(leg: String, index: Int, strip: MutableList<android.graphics.Bitmap>): Sample? {
+        if (!viewportComposed()) return null
         val viewport = compose.onNodeWithTag("lyric-lines", useUnmergedTree = true)
         val image = viewport.captureNativeFrame()
         strip += image.asAndroidBitmap()
@@ -132,7 +153,7 @@ class LyricsLineInkEaseTest {
 
     private val strip = mutableListOf<android.graphics.Bitmap>()
     private val samples = mutableListOf<Sample>()
-    private fun capture(leg: String, count: Int) = repeat(count) { frame(); samples += sample(leg, it, strip) }
+    private fun capture(leg: String, count: Int) = repeat(count) { frame(); sample(leg, it, strip)?.let { s -> samples += s } }
 
     /** The theme flips to dark part-way through the opening animation; every visible line must follow it together. */
     private fun run(case: String, position: Long) {
@@ -141,11 +162,15 @@ class LyricsLineInkEaseTest {
         owner.pin(true); mount(track)
         compose.mainClock.autoAdvance = false
         compose.runOnIdle { lyrics = true }
-        capture("open-light", 6)
+        val lead = awaitViewport()        // frames before the lines exist (expected 1-2); the flip lands after them
+        capture("open-light", 6 - lead)
         owner.pin(false)      // the lyrics theme differs: it arrives part-way through the animation
         capture("open-dark", 40)
         val last = samples.last()
         val failures = mutableListOf<String>()
+        val first = samples.first()
+        if (first.leg != "open-light" || first.lines.size < 3) failures += "too few lines before the theme flip (lead $lead frames): ${first.lines.size}"
+        if (first.progress >= .5f) failures += "the lines were composed too late for the flip to land mid-ease: progress ${first.progress}"
         if (last.progress != 1f) failures += "opening did not reach the lyrics endpoint (${last.progress})"
         if (last.lines.none { it.selected } || last.lines.size < 3) failures += "too few measured lines at the end: ${last.lines.size}"
         analyse(case, failures)
@@ -208,7 +233,7 @@ class LyricsLineInkEaseTest {
         owner.pin(false); lyrics = true; mount(track)
         compose.mainClock.autoAdvance = false
         capture("settle", 40); samples.clear(); strip.clear()
-        val before = sample("before", 0, strip)
+        val before = requireNotNull(sample("before", 0, strip))
         val selectedBefore = requireNotNull(before.lines.singleOrNull { it.selected }) { "one current line: ${before.lines.size}" }
         compose.runOnIdle { positionMs = 2_000L }   // the second line becomes current
         capture("emphasis", 30)
@@ -237,9 +262,10 @@ class LyricsLineInkEaseTest {
         owner.pin(true); mount(track)
         compose.mainClock.autoAdvance = false
         compose.runOnIdle { lyrics = true }
-        capture("open-light", 6)
+        val lead = awaitViewport()
+        capture("open-light", 6 - lead)
         owner.pin(false); capture("open-dark", 6)
-        compose.runOnIdle { lyrics = false }     // reversed part-way through the ease
+        compose.runOnIdle { lyrics = false }     // reversed part-way through the ease; sampling stops when the viewport leaves
         capture("close", 40)
         analyse("reverse", mutableListOf())
     }
@@ -252,7 +278,8 @@ class LyricsLineInkEaseTest {
         owner.pin(true); mount(track)
         compose.mainClock.autoAdvance = false
         compose.runOnIdle { lyrics = true }
-        capture("open-light", 3)
+        val lead = awaitViewport()
+        capture("open-light", 3 - lead)
         owner.pin(false); capture("open-dark", 10)
         val failures = mutableListOf<String>()
         val inks = samples.flatMap { s -> s.lines.filter { !it.selected }.map { it.ink } }
