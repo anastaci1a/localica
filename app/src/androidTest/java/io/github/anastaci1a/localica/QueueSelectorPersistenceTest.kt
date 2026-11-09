@@ -27,6 +27,7 @@ import org.junit.Rule
 import org.junit.Test
 import java.io.File
 import kotlin.math.abs
+import kotlin.math.roundToInt
 
 /** Actual QueueScreen caller, rather than the generic popup used by the field oracle. */
 class QueueSelectorPersistenceTest {
@@ -103,12 +104,10 @@ class QueueSelectorPersistenceTest {
             close()
             if (interrupted) {
                 repeat(3) { sample("reverse-close") }
-                // Reopening is dispatched through the actual restored selector as soon as it is available.
-                for (i in 0 until 90) {
-                    sample("return-for-reopen")
-                    if (!anchor.hidden) break
-                }
-                compose.onNodeWithContentDescription("Select queue").performClick()
+                // The closing window yields native input immediately. Re-enter through the
+                // real trigger's screen position even while its semantics are still hidden.
+                val center = compose.runOnUiThread { anchor.bounds.center }
+                UiDevice.getInstance(instrumentation).click(center.x.roundToInt(), center.y.roundToInt())
                 repeat(5) { sample("reopening") }
                 close()
             }
@@ -141,9 +140,10 @@ class QueueSelectorPersistenceTest {
         token = token % 30 + 1
         val color = NativeColor.rgb(token * 8, 255, 0)
         val targets = listOfNotNull(sourceView.rootView, popup?.decorView).distinct()
-        val origins = targets.map { target -> IntArray(2).also { origin -> compose.runOnUiThread {
-            target.getLocationOnScreen(origin)
-            markers.getValue(target).apply { this.color = color; setBounds(96, 96, 112, 112); invalidateSelf() }
+        val origins = targets.mapIndexed { index, target -> IntArray(3).also { origin -> compose.runOnUiThread {
+            val point = IntArray(2).also(target::getLocationOnScreen)
+            origin[0] = point[0]; origin[1] = point[1]; origin[2] = 96 + index * 40
+            markers.getValue(target).apply { this.color = color; setBounds(96, origin[2], 112, origin[2] + 16); invalidateSelf() }
         } } }
         var latest: Bitmap? = null
         try {
@@ -152,7 +152,7 @@ class QueueSelectorPersistenceTest {
                 val next = requireNotNull(InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot())
                 latest = next
                 origins.all { origin ->
-                    val pixel = next.getPixel(origin[0] + 104, origin[1] + 104)
+                    val pixel = next.getPixel(origin[0] + 104, origin[1] + origin[2] + 8)
                     val green = NativeColor.green(pixel)
                     green >= 100 && abs(NativeColor.red(pixel) * 255f / green - token * 8) <= 4f
                 }
