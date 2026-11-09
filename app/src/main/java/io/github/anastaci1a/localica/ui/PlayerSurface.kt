@@ -125,16 +125,20 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     val lightMix = if (lyricsInk != null) (if (lyricsInk.ordinary) 1f else 0f) * (1f - lyricVisibility) +
         (if (lyricsInk.lyrics) 1f else 0f) * lyricVisibility else inkStep.light
     SideEffect { inkTransition.commit(inkStep.copy(shown = playerInk, light = lightMix)); polarity.presentLightMix(lightMix) }
-    // Header controls already sample this scene before lyrics open. Older
-    // adapters need its prepared pixels whenever that header is visible too.
-    val lyricBackdrop = rememberFrostedBackdrop(listOf(artwork, settings.artworkLayout, settings.glass), p > .7f, dark = lightInk, lightMix = lightMix)
-    // Only the complete scene needs prepared pixels. The wash is a GPU backing
-    // for the cover's sampling source, not a second full-window CPU snapshot.
-    val artworkWash = rememberFrostedBackdrop(Unit, enabled = false, dark = lightInk, lightMix = lightMix, retainRaster = false)
     // Mode selection survives minimization. The finger drives its layout and reveal
     // immediately, including the fully expanded endpoint before onExpanded changes.
     val lyricMotion = playerLyricsMotion(p, lyricVisibility)
     val lyricProgress = lyricMotion.layout
+    val noneHeaderPolicy = android.os.Build.VERSION.SDK_INT >= 33 &&
+        currentGlassRendererGeneration().backend == GlassBackend.None
+    val washHeader = noneHeaderPolicy && p > .7f && p < 1f && !lyricsOpen && lyricProgress <= 0f
+    // Header controls already sample this scene before lyrics open. Older
+    // adapters need its prepared pixels whenever that header is visible too.
+    val lyricBackdrop = rememberFrostedBackdrop(listOf(artwork, settings.artworkLayout, settings.glass), p > .7f, dark = lightInk, lightMix = lightMix,
+        rasterRequired = noneHeaderPolicy && p == 1f)
+    // Only the complete scene needs prepared pixels. The wash is a GPU backing
+    // for the cover's sampling source, not a second full-window CPU snapshot.
+    val artworkWash = rememberFrostedBackdrop(Unit, enabled = false, dark = lightInk, lightMix = lightMix, retainRaster = false)
     // Match the panel's placement, including the outgoing half of a cross-fade.
     // Drawing order must not let the invisible cover shield presented lyrics.
     val lyricsInteractive = lyricMotion.contentAlpha > 0f
@@ -555,7 +559,9 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
                     Box(Modifier.align(Alignment.TopCenter).padding(top = 10.dp).size(72.dp, 4.dp).testTag("player-handle")
                         .background(playerHandleColor(foreground), RoundedCornerShape(2.dp)))
                 }
-                CompositionLocalProvider(LocalFrostedBackdrop provides lyricBackdrop) {
+                // The moving None header uses the current wash; rest prepares the full source
+                // explicitly before the header leases return on the first settled draw.
+                CompositionLocalProvider(LocalFrostedBackdrop provides if (washHeader) artworkWash else lyricBackdrop) {
                     Box(Modifier.align(Alignment.TopStart).padding(start = 16.dp)) {
                         ActionIcon(AppIcon.ActionChevronDown, "Collapse player") { settle(false) }
                     }

@@ -211,7 +211,7 @@ internal fun DrawScope.withBackdropRegistration(registration: BackdropRegistrati
 
 @Composable
 internal fun rememberFrostedBackdrop(key: Any?, enabled: Boolean = true, dark: Boolean = true, lightMix: Float? = null,
-    retainRaster: Boolean = true): FrostedBackdrop {
+    retainRaster: Boolean = true, rasterRequired: Boolean = false): FrostedBackdrop {
     val layer = rememberGraphicsLayer()
     val runtime = LocalGlassRendererRuntime.current
     val source = remember(layer, runtime) { FrostedBackdrop(layer, dark, runtime) }
@@ -220,7 +220,8 @@ internal fun rememberFrostedBackdrop(key: Any?, enabled: Boolean = true, dark: B
     val currentDirection by rememberUpdatedState(LocalLayoutDirection.current)
     // An unreferenced scene needs a display list, not another full-window raster.
     // Sampled scenes retain pixels so sibling lenses never replay all their children.
-    val sampled = source.consumers > 0
+    // A consumer handoff may require pixels before its new lease is applied.
+    val sampled = source.consumers > 0 || rasterRequired
     SideEffect {
         if (!source.layer.isReleased) source.layer.compositingStrategy = if (retainRaster && sampled) androidx.compose.ui.graphics.layer.CompositingStrategy.Offscreen
             else androidx.compose.ui.graphics.layer.CompositingStrategy.Auto
