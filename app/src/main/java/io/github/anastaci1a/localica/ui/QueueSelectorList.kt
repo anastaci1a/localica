@@ -152,7 +152,8 @@ internal fun QueueSelectorList(queues: List<ListeningQueue>, browsedId: String?,
     }
 }
 
-/** [chosen] lifts the row (browsing selection or a held drag source); [browsing] is the radio choice. */
+/** [chosen] is the lifted choice: the browsing selection, or a held drag source while held. [browsing]
+ * alone marks the browsing selection's title. */
 @Composable
 private fun QueueSelectorRow(queue: ListeningQueue, number: Int, chosen: Boolean, playing: Boolean,
     isPlaying: Boolean, reducedMotion: Boolean, enabled: Boolean, browsing: Boolean, liftAlpha: () -> Float = { 1f },
@@ -165,7 +166,7 @@ private fun QueueSelectorRow(queue: ListeningQueue, number: Int, chosen: Boolean
             .then(selectionPlacement).testTag("queue-row-${queue.id}")) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             ReorderHandle("Reorder ${queue.name}", onOffset, Modifier.testTag("queue-handle-${queue.id}"), enabled)
-            Row(Modifier.weight(1f).testTag("queue-select-${queue.id}").selectable(browsing, enabled = enabled, role = Role.RadioButton, onClick = onSelect)
+            Row(Modifier.weight(1f).testTag("queue-select-${queue.id}").selectable(chosen, enabled = enabled, role = Role.RadioButton, onClick = onSelect)
                 .heightIn(min = 56.dp), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f).padding(start = 4.dp)) {
                     if (browsing) MarqueeTitle("$number. ${queue.name}", reducedMotion, style = MaterialTheme.typography.bodyLarge, motionPaused = motionPaused)
