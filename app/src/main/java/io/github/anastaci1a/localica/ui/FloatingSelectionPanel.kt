@@ -1,6 +1,8 @@
 package io.github.anastaci1a.localica.ui
 
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -40,7 +42,7 @@ internal fun rememberFloatingSelectionPanel(visible: Boolean, reducedMotion: Boo
     val speed = LocalMotionSpeed.current
     // Start only after measurement, so the first reveal cannot lift controls a frame late.
     val progress = animateFloatAsState(if (visible && height.value > 0.dp) 1f else 0f,
-        if (reduced) androidx.compose.animation.core.snap() else glassMorphSpring(speed), label = "Selection panel occupancy")
+        if (reduced) androidx.compose.animation.core.snap() else tween((220f / speed).roundToInt().coerceAtLeast(1), easing = FastOutSlowInEasing), label = "Selection panel occupancy")
     return remember { FloatingSelectionPanelState(height, progress, visibility) }
 }
 
