@@ -446,6 +446,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                         window.glassInput(true); gestures.activate()
                     }
                 } else if (motion.expansion.nativeOpening == false) {
+                    fun closingGateCurrent() = motion.expansion.nativeGeneration == generation && motion.expansion.nativeOpening == false
                     modalWindow?.glassInput(false)
                     gestures.deactivate()
                     continuousOrigin?.beginOriginProof(generation)
@@ -457,12 +458,15 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                     continuousOrigin?.awaitDrawn { anchor.triggerMounted }
                     val node=leasedNode
                     if (node!=null) while (anchor.triggerMounted) {
+                        if (!closingGateCurrent()) return@LaunchedEffect
                         val home=node.returnPlane() ?: break
                         node.transferWindow(home)
                         home.view?.invalidate()
                         snapshotFlow { !anchor.triggerMounted || node.ownsWindow(home) || node.returnPlane()!==home }.first { it }
+                        if (!closingGateCurrent()) return@LaunchedEffect
                         if (node.ownsWindow(home) && node.awaitWindowField(home)) break
                     }
+                    if (!closingGateCurrent()) return@LaunchedEffect
                     originAdmitted = false
                     sharedContent?.releaseNative()
                     anchor.modalPresent = false; anchor.contact.modal = false
