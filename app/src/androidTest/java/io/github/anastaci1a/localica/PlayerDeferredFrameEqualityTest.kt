@@ -51,10 +51,12 @@ class PlayerDeferredFrameEqualityTest {
         var epoch by mutableIntStateOf(0)
         lateinit var scope: CoroutineScope
         val work = mutableListOf<String>()
+        val shadowPin = LiveShadowBranchPin()
+        compose.mainClock.autoAdvance = false
         compose.setContent {
             val shadowTables = remember { mutableSetOf<androidx.compose.runtime.tooling.CompositionData>() }
             CompositionLocalProvider(androidx.compose.runtime.tooling.LocalInspectionTables provides shadowTables) {
-            androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.pinLiveShadowBranch()) { LocalicaTheme {
+            androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.pinLiveShadowBranch(shadowPin)) { LocalicaTheme {
             CompositionLocalProvider(LocalLayoutDirection provides direction, LocalGlassAppearance provides appearance,
                 LocalPlayerWorkObserver provides { kind, _ -> work += kind }) {
                 scope = rememberCoroutineScope()
@@ -72,13 +74,13 @@ class PlayerDeferredFrameEqualityTest {
         val samples = listOf(0f, .08f, .38f, .3801f, .7f, .7001f, .8f, .8301f, .99f, 1f, .6f, .25f, .75f, 0f)
         data class Frame(val pixels: IntArray, val width: Int, val height: Int, val bounds: Map<String, androidx.compose.ui.geometry.Rect>)
         fun captureArm(old: Boolean): List<Frame> {
-            compose.mainClock.autoAdvance = true
             compose.runOnIdle { scope.launch(start = CoroutineStart.UNDISPATCHED) { phase.stop(); phase.snapTo(0f) }; reference = old; epoch++ }
-            compose.waitForIdle()
-            compose.mainClock.autoAdvance = false
+            // Identical bounded warmup in both settled-frame arms. Pin after every apply,
+            // including lazy children, before any48ms preparation delay becomes eligible.
+            repeat(64) { advanceLiveShadowFrame(compose, shadowPin) }
             return samples.map { p ->
                 compose.runOnIdle { scope.launch(start = CoroutineStart.UNDISPATCHED) { phase.stop(); phase.snapTo(p) } }
-                repeat(8) { compose.mainClock.advanceTimeByFrame(); compose.waitForIdle() }
+                repeat(8) { advanceLiveShadowFrame(compose, shadowPin) }
                 if (ellipsis) {
                     val layouts = mutableListOf<androidx.compose.ui.text.TextLayoutResult>()
                     compose.onNodeWithText("${state.artist} · Album", useUnmergedTree = true)

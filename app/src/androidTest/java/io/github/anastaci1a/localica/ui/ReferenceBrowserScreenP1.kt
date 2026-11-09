@@ -62,7 +62,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlin.math.roundToInt
 
-/** Frozen edcead93 BrowserScreen, renamed; only a test-only row SideEffect probe is added. */
+/** Frozen origin/main aad90026 BrowserScreen. Only rename/recursion and row execution probe differ.
+ * Shared UI primitives remain the checked-out arm; they are not independently frozen here. */
 @OptIn(ExperimentalSharedTransitionApi::class, ExperimentalLayoutApi::class)
 @Composable
 internal fun ReferenceBrowserScreenP1(library: LibraryUiState, playlists: PlaylistState, route: BrowseRoute,
@@ -208,15 +209,6 @@ internal fun ReferenceBrowserScreenP1(library: LibraryUiState, playlists: Playli
     val playlistDetail = artDetail && route.collection?.kind == MediaKind.Playlist
     val detailPlaylist = if (playlistDetail) playlists.playlists.firstOrNull { it.id == route.collection?.id } else null
     val seededCollection = LocalBrowseArtwork.current?.collection?.takeIf { it.ref == route.collection }
-    val entrySweep = remember(route.key, route.filter, route.search && route.text.isNotBlank()) {
-        androidx.compose.animation.core.Animatable(if (browse.cached && !route.search) 1f else 0f)
-    }
-    LaunchedEffect(entrySweep, loadedResult != null, queryPending, reducedMotion) {
-        if (loadedResult != null && !queryPending && entrySweep.value < 1f) {
-            if (reducedMotion) entrySweep.snapTo(1f)
-            else entrySweep.animateTo(1f, androidx.compose.animation.core.tween(600, easing = androidx.compose.animation.core.LinearEasing))
-        }
-    }
     val artistDetail = artDetail && route.collection?.kind in setOf(MediaKind.Artist, MediaKind.AlbumArtist)
     var selectedAlbums by androidx.compose.runtime.saveable.rememberSaveable(route.key) { mutableStateOf(emptyList<String>()) }
     // The completed query owns both orders. Per-album view overrides must not
@@ -916,14 +908,7 @@ internal fun ReferenceBrowserScreenP1(library: LibraryUiState, playlists: Playli
             else -> done(false)
         }
     }
-    val endpointMeasurer = androidx.compose.ui.text.rememberTextMeasurer()
-    val actionPainter = appIconPainter(AppIcon.ActionEllipsis)
     var contextMenu by remember { mutableStateOf<String?>(null) }
-    // Rows whose action menu opened once keep it mounted (return morph, dialogs, saveable
-    // workflow): one saveable set for the list rather than one registry entry per row.
-    val mountedActions = androidx.compose.runtime.saveable.rememberSaveable(
-        saver = androidx.compose.runtime.saveable.listSaver<androidx.compose.runtime.snapshots.SnapshotStateList<String>, String>(
-            { it.toList() }, { it.toMutableStateList() })) { mutableStateListOf<String>() }
     var addingSong by remember { mutableStateOf<Track?>(null) }
     var info by remember { mutableStateOf<SongInformationRequest?>(null) }
     val informationLookupOwner = orderOwner
@@ -988,7 +973,7 @@ internal fun ReferenceBrowserScreenP1(library: LibraryUiState, playlists: Playli
             val dragInk = LocalContentColor.current
             SideEffect { reorder.style = displayedStyle; reorder.cellGeometry = cellGeometry; reorder.colors = dragColors; reorder.ink = dragInk; reorder.mutablePositions = mutablePositions }
             val loadingReducedMotion = reducedMotion || LocalReducedMotion.current
-            val skeletonReveal = !artDetail && !route.search
+            val skeletonReveal = true
             val displayedRoute = presentation?.route ?: route
             val artistOnlyLoading = displayedRoute.collection == null && (displayedRoute.filter in setOf(MediaKind.Artist, MediaKind.AlbumArtist) ||
                 (displayedRoute.filter == null && displayedRoute.tab in setOf(MainTab.Artists, MainTab.AlbumArtists)))
@@ -1003,7 +988,7 @@ internal fun ReferenceBrowserScreenP1(library: LibraryUiState, playlists: Playli
                 rememberGalleryLoadingTextMetrics(displayedStyle, columns) else null
             CompositionLocalProvider(LocalLoadingShimmer provides shimmer, LocalLoadingShimmerActivity provides loadingActivity,
                 LocalReducedMotion provides loadingReducedMotion, LocalGalleryLoadingTextMetrics provides galleryLoadingText) {
-            if (loadedResult == null && !artDetail) BrowseLoadingViewport(displayedStyle, cellGeometry,
+            if (loadedResult == null) BrowseLoadingViewport(displayedStyle, cellGeometry,
                 viewportWidth, constraints.maxHeight, if (showFilters || showSearchPill) pillSlotHeight else 0.dp,
                 popupDismiss == null && displayedStyle.extraInfo != ExtraInfo.None, artistOnlyLoading)
             else SelectionViewport((if (popupDismiss != null) Modifier.fillMaxWidth() else Modifier.fillMaxSize())
@@ -1171,8 +1156,7 @@ internal fun ReferenceBrowserScreenP1(library: LibraryUiState, playlists: Playli
                         reorder.drag?.let { it.dropping && item.key in it.keys } == true
                     ) null else androidx.compose.animation.core.tween(if (reducedMotion) 0 else 350), fadeInSpec = null, fadeOutSpec = null) else Modifier)
                         .graphicsLayer {
-                            val sweep = if (!artDetail && !route.search) 1f else ((entrySweep.value * 600f - itemIndex.coerceAtMost(10) * 30f) / 300f)
-                                .coerceIn(0f, 1f).let { it * it * (3f - 2f * it) }
+                            val sweep = 1f
                             alpha = sweep * (reorder.drag?.takeIf { it.dropping && item.key in it.keys }?.handoff?.value ?: 1f)
                             // Write only a change: an identical boxed value still replaces the
                             // map and would invalidate the retained overlay on every layer update.
@@ -1195,15 +1179,15 @@ internal fun ReferenceBrowserScreenP1(library: LibraryUiState, playlists: Playli
                             onDispose { reorder.itemCoordinates.remove(item.key) }
                         }
                         val cellWork = LocalBrowseCellWorkObserver.current
-                        // Test-only baseline execution probe; no pixels or behavior depend on it.
+                        // Test-only execution probe; all application behavior is frozen current main.
                         if (cellWork != null) SideEffect { cellWork("row", item.key) }
                         // A closed menu is not composed until its first opening. It then stays
                         // mounted with this row for its return morph, dialogs and saveable workflow.
-                        val actionsMounted = item.key in mountedActions
+                        var actionsMounted by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
                         // Gallery artwork publishes its menu origin only when the menu opens.
                         val menuAnchor = rememberGlassAnchor(deferContextPlacement = true)
                         SideEffect { menuAnchor.contextual = true; menuAnchor.bottomClearance = with(density) { obscuredInset.toPx() } }
-                        val mutableSong = item.row != null && (route.collection?.kind == MediaKind.Playlist || route.collection?.kind == MediaKind.Queue)
+                        val mutableSong = item.row != null && route.collection?.kind in setOf(MediaKind.Playlist, MediaKind.Queue)
                         val holdLabel = if (mutableSong) "Select song" else if (item.row != null) "Song actions" else "Collection actions"
                         val onHold = {
                             if (mutableSong) session.select(route.collection, listOf(requireNotNull(item.row)))
@@ -1212,11 +1196,11 @@ internal fun ReferenceBrowserScreenP1(library: LibraryUiState, playlists: Playli
                         val itemMenu: @Composable (Boolean) -> Unit = { showButton ->
                             Box {
                                 if (showButton) ActionIcon(AppIcon.ActionEllipsis, "Actions for " + item.title, anchor = menuAnchor,
-                                    quietInputEnabled = displayedStyle.presentation == Presentation.List, quiet = true, painter = actionPainter, onLongClickLabel = holdLabel,
+                                    quietInputEnabled = displayedStyle.presentation == Presentation.List, quiet = true, onLongClickLabel = holdLabel,
                                     onLongClick = onHold.takeIf { !queryPending && (item.row == null || enabled) }) { menuAnchor.prepareContextPlacement(); contextMenu = item.key }
                                 val menuOpen = contextMenu == item.key
                                 if (menuOpen || actionsMounted) {
-                                    if (!actionsMounted) SideEffect { if (item.key !in mountedActions) mountedActions.add(item.key) }
+                                    if (!actionsMounted) SideEffect { actionsMounted = true }
                                     if (cellWork != null) SideEffect { cellWork("actions", item.key) }
                                     CollectionActions(menuOpen, menuAnchor, item, playlists, playlistController, queues, pins, onPin, { contextMenu = null },
                                         onInformationPresented = { song, presentation -> collectionLookup.cancel(); info = SongInformationRequest(song, presentation) }, containingSource = route.collection, selection = session,
@@ -1277,7 +1261,7 @@ internal fun ReferenceBrowserScreenP1(library: LibraryUiState, playlists: Playli
                                 showInformation = popupDismiss == null, inheritedInformation = inheritedInformation, itemIndex = itemIndex,
                                 loadingReveal = loadingCell, artistOnlyLoading = artistOnlyLoading, mutablePosition = mutablePositions[item.key],
                                 trackNumber = if (route.collection?.kind == MediaKind.Album) item.row?.track?.trackNumber?.toString() ?: (itemIndex + 1).toString() else null, pinch = pinchMotion, artworkAnchor = menuAnchor,
-                                outline = itemOutline, endpointMeasurer = endpointMeasurer)
+                                outline = itemOutline)
                         }
 
                     }
@@ -1444,3 +1428,4 @@ internal fun ReferenceBrowserScreenP1(library: LibraryUiState, playlists: Playli
     } } }
     if (sorting) CompositionLocalProvider(LocalGlassOrigin provides sortOrigin) { sortingPanel(initialView = presentationOnly) }
 }
+

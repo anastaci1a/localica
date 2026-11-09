@@ -464,3 +464,5 @@ io.github.anastaci1a.localica.BrowseRowInputEqualityTest
 io.github.anastaci1a.localica.HeaderFirstApplyOracleTest
 
 io.github.anastaci1a.localica.CollectionHeaderDensityContractTest
+
+io.github.anastaci1a.localica.ShadowSchedulingOracleTest
