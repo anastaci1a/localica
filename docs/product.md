@@ -77,7 +77,13 @@ Read/edit Title, Album, Artist, Album Artist, Year, Disc number, Track number, C
 
 Individual and bulk edits change only checked fields. Blank checked values remove user values while retaining track/disc totals and technical comments. Read and verify positive track/disc numerators and user-only comments. Preserve unchecked/mixed values and deduplicate physical songs for writes.
 
-Request write grants explicitly, preview/review changes, verify writes, retain recovery, and report per-file outcomes. A batch can stop after its current transaction. Unsupported formats/fields/providers remain playable and read-only with an explanation. Never silently substitute app-only tags.
+Request write grants explicitly, preview/review changes, verify writes, retain recovery, and report per-file outcomes. Unsupported formats/fields/providers remain playable and read-only with an explanation. Never silently substitute app-only tags.
+
+Reversible batches retain full original files until Done or verified cancellation. Cancel waits for the acquired file transaction, restores every touched original, and verifies complete file hashes. Failed restoration retains recovery and never reports cancellation complete.
+
+Check document sizes and app-files free space before promising undo. Insufficient space offers Save without undo or Back. Explicit no-undo saves retain current-file recovery and offer Stop after current; previous successful files cannot be reverted together.
+
+Interrupted batches require an explicit Resume or Restore choice. A recorded cancellation remains restore-only. If cancellation cannot be recorded, refuse further writes in that session and explain that restarting cannot recover the unwritten choice. Retain the patch, copied replacement artwork, and editor draft for recovery.
 
 A song awaiting byte recovery stays unavailable to playback, including startup and preload. Keep its occurrences/history. Stop at its boundary without silently skipping or wrapping. Unrelated songs remain playable when the affected source is known. Keep the applicable recovery notice through unrelated metadata/settings changes until dismissed, recovered, or playback moves elsewhere.
 

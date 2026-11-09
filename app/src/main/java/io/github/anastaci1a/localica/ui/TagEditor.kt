@@ -1,5 +1,9 @@
 package io.github.anastaci1a.localica.ui
 
+import io.github.anastaci1a.localica.ui.layout.SaveProgressBodySlot
+import io.github.anastaci1a.localica.ui.components.ControlProgress
+
+
 import android.content.Intent
 import android.graphics.BitmapFactory
 import android.net.Uri
@@ -61,16 +65,18 @@ internal fun TagRecoverySettings(controller: TagEditingController) {
 
 @Composable
 internal fun TagEditorDialog(state: TagEditorState, controller: TagEditingController,
-    readCover: (suspend (String) -> CoverImage)? = null, onSave: (TagPatch) -> Unit = controller::save) {
+    readCover: (suspend (String) -> CoverImage)? = null, onSave: ((TagPatch) -> Unit)? = null) {
     val context = LocalContext.current
     val identity = state.tracks.joinToString { it.id }
-    var values by rememberSaveable(identity) { mutableStateOf(JSONObject().apply {
+    val retainedDraft = remember(state.draft) { state.draft?.let { runCatching { JSONObject(it) }.getOrNull() } }
+    var values by rememberSaveable(identity) { mutableStateOf(retainedDraft?.optJSONObject("values")?.toString() ?: JSONObject().apply {
         EditField.entries.forEach { field -> put(field.name, state.tracks.map(field::value).distinct().singleOrNull().orEmpty()) }
     }.toString()) }
-    var changed by rememberSaveable(identity) { mutableStateOf(emptyList<String>()) }
+    var changed by rememberSaveable(identity) { mutableStateOf(retainedDraft?.optJSONArray("checked")?.let { array ->
+        (0 until array.length()).map(array::getString) } ?: emptyList<String>()) }
     val artwork = rememberArtworkWorkflow(state.sessionId, startChoosing = state.artworkOnly)
     val imageUri = artwork.imageUri
-    var removeImage by rememberSaveable(identity) { mutableStateOf(false) }
+    var removeImage by rememberSaveable(identity) { mutableStateOf(retainedDraft?.optBoolean("removeArtwork") == true) }
     val choosing = artwork.choosing
     var viewing by remember { mutableStateOf(false) }
     var confirming by rememberSaveable { mutableStateOf(false) }
@@ -78,12 +84,13 @@ internal fun TagEditorDialog(state: TagEditorState, controller: TagEditingContro
     var grantMessage by remember { mutableStateOf<String?>(null) }
     // The encoded cover and its decoded preview publish together: a full-size decode
     // never runs in composition, and readiness still follows the encoded cover.
-    val loadedCover by key(imageUri) {
-        produceState<Pair<CoverImage, androidx.compose.ui.graphics.ImageBitmap?>?>(null, imageUri) {
+    val loadedCover by key(imageUri, state.draft) {
+        produceState<Pair<CoverImage, androidx.compose.ui.graphics.ImageBitmap?>?>(null, imageUri, state.draft) {
             imageError = null
-            imageUri?.let { uri ->
+            if (imageUri != null || state.draft != null) {
                 try {
-                    val image = readCover?.invoke(uri) ?: CoverImages(context).read(uri)
+                    val image = imageUri?.let { uri -> readCover?.invoke(uri) ?: CoverImages(context).read(uri) }
+                        ?: (controller.retainedPatch()?.artwork as? ArtworkChange.Replace)?.image ?: return@produceState
                     value = image to kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
                         BitmapFactory.decodeByteArray(image.bytes, 0, image.bytes.size)?.asImageBitmap()
                     }
@@ -144,12 +151,12 @@ internal fun TagEditorDialog(state: TagEditorState, controller: TagEditingContro
                     if (!state.artworkOnly) EditField.entries.forEach { field ->
                         val common = state.tracks.map(field::value).distinct().size == 1
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            InterfaceCheckbox(field.name in changed, { checked -> changed = if (checked) changed + field.name else changed - field.name }, enabled = !state.busy)
+                            InterfaceCheckbox(field.name in changed, { checked -> changed = if (checked) changed + field.name else changed - field.name })
                             ClearableTextField(JSONObject(values).getString(field.name), { text ->
                                 values = JSONObject(values).put(field.name, text).toString()
                                 if (field.name !in changed) changed = changed + field.name
-                            }, enabled = !state.busy, label = { Text(field.label) }, placeholder = { if (!common) Text("Mixed values — unchanged") },
-                                modifier = Modifier.weight(1f).clearTextFocusOnBack(), singleLine = field != EditField.Comment,
+                            }, label = { Text(field.label) }, placeholder = { if (!common) Text("Mixed values — unchanged") },
+                                modifier = Modifier.weight(1f), singleLine = field != EditField.Comment,
                                 colors = TextFieldDefaults.colors(focusedContainerColor = androidx.compose.ui.graphics.Color.Transparent,
                                     unfocusedContainerColor = androidx.compose.ui.graphics.Color.Transparent))
                         }
@@ -161,18 +168,11 @@ internal fun TagEditorDialog(state: TagEditorState, controller: TagEditingContro
                     }
                     grantMessage?.let { Text(it) }
                     Text("MP3, M4A, FLAC, Ogg Vorbis, and WAV are checked before writing. Unsupported files/providers remain read-only.", style = MaterialTheme.typography.bodySmall)
-                    if (state.busy) LinearProgressIndicator(Modifier.fillMaxWidth())
                     state.results.forEach { result -> Text("${result.track.fileName}: ${result.message}",
                         color = if (result.saved) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.error) }
                     if (state.recovery != null) ActionTextButton(enabled = !state.busy, onClick = { controller.close() }) { Text("Close editor to recover interrupted edit") }
                 }
                 FlowRow(Modifier.fillMaxWidth().testTag("tag-editor-footer"), horizontalArrangement = Arrangement.End) {
-                    if (state.busy) {
-                        ActionTextButton(onClick = controller::continueInBackground,
-                            modifier = Modifier.heightIn(min = 48.dp)) { Text("Continue in background") }
-                        ActionTextButton(onClick = controller::stopAfterCurrent,
-                            modifier = Modifier.heightIn(min = 48.dp)) { Text("Stop after current file") }
-                    }
                     ActionButton(enabled = canReview, onClick = { confirming = true },
                         modifier = Modifier.heightIn(min = 48.dp)) { Text("Review changes") }
                 }
@@ -186,8 +186,14 @@ internal fun TagEditorDialog(state: TagEditorState, controller: TagEditingContro
             if (removeImage) Text("Remove artwork") else if (imageUri != null) Text("Replace artwork")
             imageError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             Text("Changes are written to the audio files. Playback pauses while editing a file in the active queue, then resumes after verification.") } },
-        confirmButton = { ActionTextButton(enabled = canReview, onClick = { confirming = false; onSave(patch()) }) { Text("Save changes") } },
+        confirmButton = { ActionTextButton(enabled = canReview, onClick = {
+            confirming = false
+            val patch = patch()
+            if (onSave != null) onSave(patch) else controller.saveDraft(patch, JSONObject()
+                .put("values", JSONObject(values)).put("checked", org.json.JSONArray(changed)).put("removeArtwork", removeImage).toString())
+        }) { Text("Save changes") } },
         dismissButton = { ActionTextButton(onClick = { confirming = false }) { Text("Cancel") } })
+    if (state.progressVisible) TagSaveProgressDialog(state, controller)
 }
 
 @Composable
@@ -210,4 +216,47 @@ private fun TagJobsDialog(state: TagEditorState, controller: TagEditingControlle
             ActionTextButton(onClick = controller::hideJobs, modifier = Modifier.align(Alignment.End)) { Text("Close") }
         }
     }
+}
+
+@Composable
+private fun TagSaveProgressDialog(state: TagEditorState, controller: TagEditingController) {
+    val restoring = state.cancelPending || state.phase == "CancelRequested" || state.phase == "Restoring"
+    GlassAlertDialog(onDismissRequest = {}, title = {
+        Text(when {
+            state.interruptedBatch -> "Interrupted tag edit"
+            restoring -> "Restoring originals"
+            else -> "Saving tags"
+        })
+    }, text = { SaveProgressBodySlot(DialogChrome.Regular.gapDp.dp) {
+        Text(if (restoring) "Restoring ${state.restored} of ${state.touched}" else "Saved ${state.saved} of ${state.tracks.size}")
+        ControlProgress(progress = {
+            if (restoring) state.restored.toFloat() / state.touched.coerceAtLeast(1)
+            else state.saved.toFloat() / state.tracks.size.coerceAtLeast(1)
+        }, modifier = Modifier.fillMaxWidth())
+        if (state.phase == "Preparing") Text("Checking files and free space…")
+        state.spaceProblem?.let { Text(it) }
+        state.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+        if (state.interruptedBatch) Text(if (state.undo) "Resume saving or restore the original files." else "Resume saving. Previous saved files cannot be undone.")
+        state.results.filter { !it.saved }.forEach { Text("${it.track.fileName}: ${it.message}") }
+    } }, confirmButton = {
+        when {
+            state.spaceProblem != null -> ActionTextButton(enabled = !state.busy, onClick = controller::saveWithoutUndo) { Text("Save without undo") }
+            (state.interruptedBatch && !restoring) || (!state.busy && state.batchId != null && state.phase != "AwaitingDecision" && !restoring) ->
+                ActionTextButton(enabled = !state.busy, onClick = controller::resumeBatch) { Text("Resume") }
+            !state.busy && state.phase == "AwaitingDecision" && !restoring -> {
+                if (state.saved < state.tracks.size) ActionTextButton(onClick = controller::resumeBatch) { Text("Retry failed files") }
+                ActionTextButton(onClick = controller::finishBatch) { Text("Done") }
+            }
+            state.batchId != null && !restoring -> ActionTextButton(onClick = controller::continueInBackground) { Text("Continue in background") }
+            state.busy && state.phase == "Preparing" -> ActionTextButton(enabled = false, onClick = {}) { Text("Continue in background") }
+        }
+    }, dismissButton = {
+        when {
+            state.batchId == null && !state.busy -> ActionTextButton(onClick = controller::dismissPreparation) { Text("Back") }
+            state.undo -> ActionTextButton(enabled = !restoring || !state.busy, onClick = controller::cancelBatch) {
+                Text(if (state.interruptedBatch || restoring) "Restore" else "Cancel")
+            }
+            else -> ActionTextButton(enabled = state.busy, onClick = controller::stopAfterCurrent) { Text("Stop after current") }
+        }
+    })
 }
