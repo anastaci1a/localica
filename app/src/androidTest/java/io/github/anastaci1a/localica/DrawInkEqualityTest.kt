@@ -21,11 +21,11 @@ import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
 
-/** Exact native paint equality; provider changes must not execute candidate content. */
+/** Icons and whole text stay exact; only album spans use the explicitly approved raster bound. */
 class DrawInkEqualityTest {
     @get:Rule val compose = localicaComposeRule()
 
-    @Test fun liveWholeTextAndAlbumSpanMatchMaterialWithoutComposition() = compare(false, true)
+    @Test fun liveAlbumSpanStaysWithinApprovedNativeBoundsWithoutComposition() = compare(false, true)
     @Test fun liveWholeTextWithoutSpanMatchesMaterialWithoutComposition() = compare(false, false)
     @Test fun liveIconTintAndAlphaMatchMaterialWithoutComposition() = compare(true)
 
@@ -75,17 +75,25 @@ class DrawInkEqualityTest {
                 val current = pixels("candidate")
                 var maximum = 0
                 var sum = 0L
+                var rgbSum = 0L
                 var changed = 0
                 old.indices.forEach { i ->
                     if (old[i] != current[i]) changed++
                     for (shift in listOf(0, 8, 16, 24)) {
                         val d = kotlin.math.abs((old[i] ushr shift and 255) - (current[i] ushr shift and 255))
                         maximum = maxOf(maximum, d); sum += d
+                        if (shift < 24) rgbSum += d
                     }
                 }
                 val label = "phase=$next dark=$background icon=$icon suffix=$suffixEnabled"
-                android.util.Log.i("PERF2_INK", "$label pixels=${old.size} changed=$changed maxCode=$maximum sumCode=$sum meanCode=${sum.toDouble() / (old.size * 4)} compositions=${counters.compositions - admitted} measures=${counters.measures - measured}")
-                if (changed != 0) errors += "$label changed=$changed maxCode=$maximum"
+                android.util.Log.i("PERF2_INK", "$label pixels=${old.size} changed=$changed maxCode=$maximum sumCode=$sum meanCode=${sum.toDouble() / (old.size * 4)} compositions=${counters.compositions - admitted} measures=${counters.measures - measured} sumRGB=$rgbSum meanRGB=${rgbSum.toDouble() / (old.size * 3)}")
+                if (suffixEnabled && !icon) {
+                    // Lead judgment, 2026-11-09: album shader only. Every phase/backing must pass.
+                    val changedFraction = changed.toDouble() / old.size
+                    val meanRgbCode = rgbSum.toDouble() / (old.size * 3)
+                    if (maximum > 1 || changedFraction > .015 || meanRgbCode > .01)
+                        errors += "$label outside album bound: changed=$changed maxCode=$maximum meanRGB=$meanRgbCode"
+                } else if (changed != 0) errors += "$label exact changed=$changed maxCode=$maximum"
                 if (counters.compositions != admitted) errors += "$label composed ${counters.compositions - admitted}"
                 if (counters.measures != measured) errors += "$label measured ${counters.measures - measured}"
             }
