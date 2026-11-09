@@ -152,8 +152,8 @@ class RecoverableTagWriter(private val directory: File, private val documents: E
         directory.listFiles()?.forEach { it.delete() }
         val original = File(directory, "original.$extension")
         val candidate = File(directory, "edited.$extension")
-        copyOriginal(uri, original)
-        val originalHash = hash(original.inputStream())
+        // A short first read is caught by the post-edit source hash check before any replacement.
+        val originalHash = copyOriginal(uri, original, verifySource = false)
         val expected = admitted?.originalHash ?: expectedOriginalHash
         check(expected == null || expected == originalHash) {
             "The song changed after its undo copy was captured. Reload or restore before retrying."
@@ -219,9 +219,7 @@ class RecoverableTagWriter(private val directory: File, private val documents: E
         val uri = writableSource(track)
         val original = batches.original(batchId, index)
         check(!original.exists()) { "An unpublished undo copy is retained. Restore this batch before retrying." }
-        copyOriginal(uri, original)
-        val digest = hash(original.inputStream())
-        check(hash(documents.open(uri)) == digest) { "The song changed while its undo copy was captured." }
+        val digest = copyOriginal(uri, original, verifySource = true)
         Recovery(track, uri, original, digest)
     } }
 
@@ -269,15 +267,41 @@ class RecoverableTagWriter(private val directory: File, private val documents: E
         return uri
     }
 
-    private fun copyOriginal(uri: String, original: File) {
-        val declared = documents.size(uri)
-        check(declared == null || declared >= 0) { "The provider reported an invalid file size." }
-        documents.open(uri).use { input -> FileOutputStream(original).use { output ->
-            input.copyTo(output); output.fd.sync()
-        } }
-        check(declared == null || original.length() == declared) {
-            "The provider returned an incomplete file. No replacement was admitted; keep the retained copies and retry when storage is available."
+    /**
+     * Copies the source and returns the SHA-256 of the bytes actually read. The provider's
+     * reported size is only a hint (#700): providers can report stale sizes, so a mismatch is
+     * logged, never fatal on its own. A failed read, a copy that differs from the bytes read,
+     * or (with [verifySource]) a second source read that differs from the first is incomplete.
+     */
+    private fun copyOriginal(uri: String, original: File, verifySource: Boolean): String {
+        val read = try {
+            documents.open(uri).use { input -> FileOutputStream(original).use { output ->
+                digestCopy(input, output).also { output.fd.sync() }
+            } }
+        } catch (failure: IOException) { throw IOException(INCOMPLETE_FILE, failure) }
+        check(original.inputStream().use { digestCopy(it, null) } == read) { INCOMPLETE_FILE }
+        if (verifySource) {
+            val again = try { documents.open(uri).use { digestCopy(it, null) } }
+                catch (failure: IOException) { throw IOException(INCOMPLETE_FILE, failure) }
+            check(again == read) { INCOMPLETE_FILE }
         }
+        val declared = runCatching { documents.size(uri) }.getOrNull()
+        if (declared != null && declared != read.length)
+            android.util.Log.w("RecoverableTagWriter", "Provider reported $declared bytes; read ${read.length}")
+        return read.hash
+    }
+
+    private data class ReadBytes(val length: Long, val hash: String)
+    private fun digestCopy(input: InputStream, output: java.io.OutputStream?): ReadBytes {
+        val digest = MessageDigest.getInstance("SHA-256")
+        val buffer = ByteArray(64 * 1024)
+        var length = 0L
+        while (true) {
+            val size = input.read(buffer); if (size < 0) break
+            digest.update(buffer, 0, size); output?.write(buffer, 0, size)
+            length = Math.addExact(length, size.toLong())
+        }
+        return ReadBytes(length, digest.digest().joinToString("") { byte -> "%02x".format(byte) })
     }
 
     private fun admittedBatch(track: Track, id: String?): TagBatchEntry? {
@@ -329,6 +353,10 @@ class RecoverableTagWriter(private val directory: File, private val documents: E
         catch (failure: Exception) { journal.failWrite(output); throw failure }
     }
     private fun clear() { journal.delete(); directory.listFiles()?.forEach { it.delete() } }
+    private companion object {
+        const val INCOMPLETE_FILE = "The provider returned an incomplete file. No replacement was admitted; " +
+            "keep the retained copies and retry when storage is available."
+    }
     private fun hash(input: InputStream): String = input.use {
         val digest = MessageDigest.getInstance("SHA-256")
         val buffer = ByteArray(64 * 1024)

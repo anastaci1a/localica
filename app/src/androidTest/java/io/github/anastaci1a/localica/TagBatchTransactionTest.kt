@@ -81,17 +81,57 @@ class TagBatchTransactionTest {
         transaction.restore(batch.id); assertOriginals()
     } }
 
-    @Test fun declaredLengthShortSnapshotCannotBecomeAnUndoOriginal() = fixture { runBlocking {
-        val batch = begin()
-        val short = object : EditableDocuments by access {
-            override fun open(uri: String) = access.open(uri).use { input -> input.readBytes().dropLast(1).toByteArray() }.inputStream()
+    @Test fun wrongReportedSizeWithACompleteStreamStillSavesAndRestoresExactly() = fixture { runBlocking {
+        // Deliberately wrong provider sizes (#700): the bytes actually read own verification.
+        val wrong = object : EditableDocuments by access {
+            override fun size(uri: String): Long? = when (uri) {
+                tracks[0].uri -> access.size(uri) + 4096
+                else -> 1024L
+            }
         }
-        val bounded = RecoverableTagWriter(File(directory, "tag-recovery"), short, readers, store)
-        val result = runCatching { bounded.snapshot(tracks[0], batch.id, 0) }
-        assertTrue("A provider-declared full length must reject its short undo copy", result.isFailure)
-        assertOriginals()
-        assertTrue(access.replacements.isEmpty())
-        assertEquals(0, store.read()!!.entryCount)
+        reopen(store, wrong)
+        val batch = begin()
+        for (index in 0..1) assertTrue(transaction.writeOne(batch.id, index)!!.saved)
+        for (index in 0..1) assertFalse(files[index].name, originals[index].contentEquals(files[index].readBytes()))
+        assertEquals(2, store.read()!!.saved)
+        transaction.restore(batch.id)
+        assertOriginals(); assertNull(store.read()); assertNull(writer.pending())
+    } }
+
+    @Test fun truncatedSourceStreamFailsTheSaveAsIncomplete() = fixture { runBlocking {
+        // Correct reported size; only the first read of the file ends early.
+        var truncate = true
+        val truncated = object : EditableDocuments by access {
+            override fun open(uri: String): java.io.InputStream {
+                if (!truncate) return access.open(uri)
+                truncate = false
+                val bytes = access.open(uri).use { it.readBytes() }
+                return bytes.copyOf(bytes.size / 2).inputStream()
+            }
+        }
+        reopen(store, truncated)
+        val batch = begin()
+        val failure = runCatching { transaction.writeOne(batch.id, 0) }.exceptionOrNull()
+        assertTrue("$failure", failure?.message?.startsWith("The provider returned an incomplete file") == true)
+        assertOriginals(); assertTrue(access.replacements.isEmpty()); assertEquals(0, store.read()!!.entryCount)
+    } }
+
+    @Test fun failedSourceReadFailsTheSaveAsIncomplete() = fixture { runBlocking {
+        val failing = object : EditableDocuments by access {
+            override fun open(uri: String): java.io.InputStream = object : java.io.FilterInputStream(access.open(uri)) {
+                var first = true
+                override fun read(bytes: ByteArray, offset: Int, length: Int): Int {
+                    if (!first) throw IOException("Provider disconnected after a short read")
+                    first = false
+                    return super.read(bytes, offset, minOf(length, 16))
+                }
+            }
+        }
+        reopen(store, failing)
+        val batch = begin()
+        val failure = runCatching { transaction.writeOne(batch.id, 0) }.exceptionOrNull()
+        assertTrue("$failure", failure?.message?.startsWith("The provider returned an incomplete file") == true)
+        assertOriginals(); assertTrue(access.replacements.isEmpty()); assertEquals(0, store.read()!!.entryCount)
     } }
 
     @Test fun deletedEntryCannotAuthorizeCancellationOrCommitCleanup() = fixture { runBlocking {
@@ -347,10 +387,10 @@ class TagBatchTransactionTest {
             reopen(store)
         }
         fun begin() = store.begin(tracks, patch, "{\"values\":\"retained draft\"}", undo = true)
-        fun reopen(next: TagBatchStore) {
+        fun reopen(next: TagBatchStore, documents: EditableDocuments = access) {
             store = next
             readers = NativeReaders(RecoveryAdmission.Checking)
-            writer = RecoverableTagWriter(File(directory, "tag-recovery"), access, readers, store)
+            writer = RecoverableTagWriter(File(directory, "tag-recovery"), documents, readers, store)
             val editing: TagFileScope = { track, action ->
                 val lease = readers.block(documentIdentity(track.id))
                 try { lease.awaitClosed(); action() } finally { lease.release() }
