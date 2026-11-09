@@ -92,6 +92,8 @@ Artist photo requests run off Main and use fixed HTTPS hosts, disabled redirects
 
 Artist photo storage re-encodes decoded images as WebP at the display dimension, capped at 1080 pixels, plus a 256-pixel thumbnail. Chosen photos live with persisted choices outside the evictable cache. Display leases protect visible images, and background reads do not advance LRU order. A promotion journal recovers interrupted choice commits without retiring the previous ready image.
 
+Startup loads artist photo metadata into a shared memory index off Main. Composition uses constant-time metadata and decoded-pixel lookups without filesystem access. Visible and lazily prefetched cells decode off Main at their measured size. Unknown metadata and pending photo decodes retain the neutral placeholder; only confirmed misses admit album artwork.
+
 Artist photo acquisition uses one unique WorkManager chain with connected-network constraints and a persistent per-artist queue. Completed artists checkpoint independently. A new pick supersedes an older generation without cancelling unrelated artists. Provider pacing and consent checks remain in the repository transport. Chooser candidates stream progressively and cache by artist request; decoded images retain the existing artwork fade owners.
 
 Photo entries and consent use atomic file replacement. Match choices live separately from evictable images. A persisted attempt time throttles failed requests across process death. The default-off consent stays closed until its asynchronous load completes. Commons credits are bounded plain text; licence and source links remain structured metadata.
@@ -300,7 +302,11 @@ What None samples inside a finished panel material (frosted panels, the Queue dr
 
 The region stops where the recorded scene ends, so material bounds reaching past a screen or window edge never make a fill translucent. Opaque panels also ignore transparent pixels inside their source.
 
-On Android 13+, None maps the exact footprint onto the full power-of-two reduction texture. This avoids transparent padding that amplifies channel rounding differently for different material sizes. Each reduction step is then one exact block mean of up to 8×8 texels in a single shader pass, drawn unscaled so no texture is sampled below half scale, and the tint/contrast shader takes the exact mean of the last level (at most 8×8 texels) directly: four GPU passes for a 512 px side instead of twelve, with the same coverage-weighted result.
+On Android 13+, None maps the exact footprint onto the full power-of-two reduction texture. This avoids transparent padding that amplifies channel rounding differently for different material sizes.
+
+Each reduction step is then one exact block mean of up to 8×8 texels in a single shader pass, drawn unscaled so no texture is sampled below half scale.
+
+The tint/contrast shader takes the exact mean of the last level (at most 8×8 texels) directly: four GPU passes for a 512 px side instead of twelve, with the same coverage-weighted result.
 
 None replaces only the optical fill. Floating, panel, lift and selection shadows use the same appearance settings and drawing path in both renderers, so a renderer switch never changes a shadow.
 
