@@ -35,12 +35,13 @@ import io.github.anastaci1a.localica.playlist.PlaylistState
 import io.github.anastaci1a.localica.queue.QueueUiState
 import io.github.anastaci1a.localica.ui.*
 import org.junit.After
+import org.junit.Before
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
 import kotlin.math.abs
 
-/** Probe only: real Choreographer frames. */
+/** Native artwork placement and recording regressions on real Choreographer frames. */
 class AutoScrollDrawnPlacementTest {
     private val context = InstrumentationRegistry.getInstrumentation().targetContext
     private val covers = File(context.filesDir, "playlist-covers")
@@ -54,6 +55,24 @@ class AutoScrollDrawnPlacementTest {
     private var scenario: ActivityScenario<ComponentActivity>? = null
     private var activity: ComponentActivity? = null
     private val drawObservers = mutableListOf<Pair<View, android.view.ViewTreeObserver.OnPreDrawListener>>()
+    private var originalAnimatorScale: String? = null
+    private var animatorScaleCaptured = false
+
+    private fun shell(command: String) {
+        val descriptor = InstrumentationRegistry.getInstrumentation().uiAutomation.executeShellCommand(command)
+        android.os.ParcelFileDescriptor.AutoCloseInputStream(descriptor).use { it.readBytes() }
+    }
+
+    @Before fun enableNativeMotion() {
+        originalAnimatorScale = android.provider.Settings.Global.getString(context.contentResolver,
+            android.provider.Settings.Global.ANIMATOR_DURATION_SCALE)
+        check(originalAnimatorScale == null || originalAnimatorScale?.toFloatOrNull()?.let { it.isFinite() && it >= 0f } == true)
+        animatorScaleCaptured = true
+        // Hosted emulators disable this globally. The regression needs the real animated return.
+        shell("settings put global animator_duration_scale 1")
+        check(android.provider.Settings.Global.getFloat(context.contentResolver,
+            android.provider.Settings.Global.ANIMATOR_DURATION_SCALE) == 1f)
+    }
 
     private val tracks by lazy {
         covers.mkdirs()
@@ -73,6 +92,7 @@ class AutoScrollDrawnPlacementTest {
     }
 
     @After fun cleanup() {
+        try {
         if (activity != null) main { drawObservers.forEach { (view, observer) -> view.viewTreeObserver.removeOnPreDrawListener(observer) }; drawObservers.clear() }
         scenario?.close()
         files.forEach { it.delete() }
@@ -80,6 +100,11 @@ class AutoScrollDrawnPlacementTest {
         ArtworkCache.invalidate()
         ArtworkColors.publish(emptyMap())
         context.getSharedPreferences("interface", 0).edit().also { if (originalTabs == null) it.remove("tabs") else it.putString("tabs", originalTabs) }.commit()
+        } finally {
+            if (animatorScaleCaptured) shell(originalAnimatorScale?.let {
+                "settings put global animator_duration_scale $it"
+            } ?: "settings delete global animator_duration_scale")
+        }
     }
 
     private class Host(route: BrowseRoute) {
