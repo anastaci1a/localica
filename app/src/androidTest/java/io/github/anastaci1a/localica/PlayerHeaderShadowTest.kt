@@ -118,7 +118,7 @@ class PlayerHeaderShadowTest {
         compose.runOnUiThread {
             view.getLocationOnScreen(origin); root.getLocationOnScreen(rootOrigin)
             x = origin[0] + node.boundsInRoot.center.x.roundToInt()
-            y = origin[1] + node.boundsInRoot.bottom.roundToInt() - 12
+            y = origin[1] + node.boundsInRoot.center.y.roundToInt()
             marker.setBounds(x - rootOrigin[0] - 3, y - rootOrigin[1] - 3, x - rootOrigin[0] + 3, y - rootOrigin[1] + 3)
             root.overlay.add(marker)
             androidx.compose.runtime.snapshots.Snapshot.sendApplyNotifications()
