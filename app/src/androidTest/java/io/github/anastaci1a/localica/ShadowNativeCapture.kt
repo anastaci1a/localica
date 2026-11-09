@@ -135,6 +135,7 @@ internal data class ShadowWindowReceipt(val windowId: String, val generation: Na
 @OptIn(ExperimentalTestApi::class)
 internal class ShadowNativeCapture(private val rule: ComposeContentTestRule,
     node: SemanticsNodeInteraction, additionalWindows: List<ShadowNativeWindow> = emptyList(),
+    private val invalidateWindow: Boolean = true,
     private val clockSequence: () -> Long) : AutoCloseable {
     private val root = node.fetchSemanticsNode()
     private val view = (root.root as ViewRootForTest).view
@@ -213,11 +214,13 @@ internal class ShadowNativeCapture(private val rule: ComposeContentTestRule,
                         // This is submission readiness, never screenshot polling or presentation evidence.
                         if (!submitted[index] && ledgers[index].size < 32) source.view.postOnAnimation {
                             if (!submitted[index] && !overflow) {
-                                source.marker.invalidateSelf(); source.view.invalidate()
+                                source.marker.invalidateSelf()
+                                if (invalidateWindow) source.view.invalidate()
                             }
                         }
                     }
-                    source.marker.invalidateSelf(); source.view.invalidate()
+                    source.marker.invalidateSelf()
+                    if (invalidateWindow) source.view.invalidate()
                 }
             }
             check(drawn.await(5, TimeUnit.SECONDS)) {
