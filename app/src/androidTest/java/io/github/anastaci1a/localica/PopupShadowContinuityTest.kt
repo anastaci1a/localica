@@ -17,10 +17,14 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalView
 import io.github.anastaci1a.localica.localicaComposeRule as createComposeRule
@@ -53,6 +57,130 @@ class PopupShadowContinuityTest {
     private lateinit var output: File
     private var neighboringBody = Rect.Zero
     private var sweptBounds = Rect.Zero
+    // Diagnostic receipts only: no mutation, extra frame, or native-gate hold.
+    private val drawReceipts = ArrayList<String>()
+    private var sourceReferenceEnabled = false
+    private var sourceReferenceSequence = 0
+    private val sourceReferences = ArrayList<org.json.JSONObject>()
+    private val referenceSamples = StringBuilder()
+
+    /** Independent native path reference inside the existing retained backdrop layer.
+     * The hook runs after the source field; native marker freshness must still be
+     * falsified before claiming correlation with its current submitted pixels.
+     * A popup-owned field is NOT certified by this source-space reference. */
+    private fun drawSourceReference(canvas: AndroidCanvas, plane: ShadowPlane, width: Float, density: Float) =
+        Snapshot.withoutReadObservation {
+            if (!sourceReferenceEnabled || neighboringBody == Rect.Zero || sourceReferences.size >= 4096) return@withoutReadObservation
+            val trigger = (anchor.surfaceNode ?: anchor.returningNode) as? SurfaceNode ?: return@withoutReadObservation
+            val coordinates = plane.layout?.takeIf { it.isAttached } ?: return@withoutReadObservation
+            val origin = coordinates.backdropPosition(pageView)
+            val triggerBodies = trigger.frameOn(plane).bodies.toList()
+            val neighbors = plane.casters.filter { it !== trigger && it.owns(plane) && it.role != ShadowRole.None }
+                .flatMap { it.frameOn(plane).bodies }.toList()
+            val bodies = neighbors + triggerBodies
+            if (bodies.isEmpty()) return@withoutReadObservation
+            val d = density
+            val reach = (4f + .6f * 28f) * d
+            val shift = 2f * d
+            val count = kotlin.math.ceil(reach).toInt().coerceIn(16, 128)
+            val center = anchor.bounds.center.y - origin.y
+            val lanes = listOf(300f, 400f, 500f).map { it + center - kotlin.math.floor(center) }
+            val sequence = ++sourceReferenceSequence
+            fun json(body: RoundRect) = org.json.JSONArray(listOf(body.left, body.top, body.right, body.bottom,
+                body.topLeftCornerRadius.x, body.topLeftCornerRadius.y, body.topRightCornerRadius.x,
+                body.topRightCornerRadius.y, body.bottomRightCornerRadius.x, body.bottomRightCornerRadius.y,
+                body.bottomLeftCornerRadius.x, body.bottomLeftCornerRadius.y))
+            sourceReferences += org.json.JSONObject().put("sequence", sequence)
+                .put("ns", android.os.SystemClock.elapsedRealtimeNanos()).put("homeOwner", trigger.owns(plane))
+                .put("phase", anchor.contact.expansion.value).put("originX", origin.x).put("originY", origin.y)
+                .put("density", d).put("gapX", ((neighboringBody.right + anchor.bounds.left) / 2f).roundToInt() - origin.x)
+                .put("backgroundX", (anchor.bounds.right + 40f * d).roundToInt() - origin.x)
+                .put("actualCenterY", center).put("lanes", org.json.JSONArray(lanes))
+                .put("neighbors", org.json.JSONArray(neighbors.map(::json)))
+                .put("trigger", org.json.JSONArray(triggerBodies.map(::json)))
+            val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+            fun coverage(step: Int) = ((1f - kotlin.math.exp(-.34594453f * .8f *
+                (step.toFloat() / count).let { it * it * it })) * 255f).roundToInt().coerceIn(0, 255)
+            fun path(outlines: List<RoundRect>, expansion: Float, lane: Float) = android.graphics.Path().apply {
+                outlines.forEach { b ->
+                    val radii = floatArrayOf(b.topLeftCornerRadius.x, b.topLeftCornerRadius.y,
+                        b.topRightCornerRadius.x, b.topRightCornerRadius.y, b.bottomRightCornerRadius.x,
+                        b.bottomRightCornerRadius.y, b.bottomLeftCornerRadius.x, b.bottomLeftCornerRadius.y)
+                    for (i in radii.indices) radii[i] += expansion
+                    addRoundRect(android.graphics.RectF(b.left - expansion, b.top - expansion + shift + lane - center,
+                        b.right + expansion, b.bottom + expansion + shift + lane - center), radii, android.graphics.Path.Direction.CW)
+                }
+            }
+            for ((index, lane) in lanes.withIndex()) {
+                val saved = canvas.save()
+                canvas.clipRect(0f, lane - 40f, width, lane + 40f)
+                paint.color = AndroidColor.WHITE; canvas.drawRect(0f, lane - 40f, width, lane + 40f, paint)
+                val layer = canvas.saveLayer(0f, lane - 40f, width, lane + 40f, null)
+                repeat(count) { ring ->
+                    val before = coverage(ring); val after = coverage(ring + 1)
+                    val alpha = if (before == 255) 0 else (255f * (after - before) / (255 - before)).roundToInt()
+                    if (alpha > 0) {
+                        paint.color = AndroidColor.argb(alpha, 0, 0, 0)
+                        val expansion = reach * (1f - (ring + .5f) / count)
+                        if (index == 1) bodies.forEach { canvas.drawPath(path(listOf(it), expansion, lane), paint) }
+                        else canvas.drawPath(path(if (index == 2) neighbors else bodies, expansion, lane), paint)
+                    }
+                }
+                canvas.restoreToCount(layer); canvas.restoreToCount(saved)
+            }
+            paint.color = AndroidColor.rgb(sequence and 255, (sequence shr 8) and 255, 101)
+            canvas.drawRect(24f, 208f, 32f, 216f, paint)
+        }
+
+    private fun sampleSourceReference(label: String, bitmap: Bitmap) {
+        if (!sourceReferenceEnabled) return
+        val origin = IntArray(2)
+        compose.runOnIdle { pageView.getLocationOnScreen(origin) }
+        val pixel = bitmap.getPixel(origin[0] + 28, origin[1] + 212)
+        // The popup scrim may dim the source sequence. Only an undimmed exact
+        // sequence is admitted here; absent correlation is evidence, never a pass.
+        if (AndroidColor.blue(pixel) != 101) {
+            referenceSamples.append("$label unavailable dimmed-or-unmatched-source-marker pixel=$pixel\n"); return
+        }
+        val sequence = AndroidColor.red(pixel) + (AndroidColor.green(pixel) shl 8)
+        val receipt = sourceReferences.firstOrNull { it.getInt("sequence") == sequence }
+        if (receipt == null) { referenceSamples.append("$label unavailable sequence=$sequence\n"); return }
+        val x = (receipt.getDouble("gapX") + receipt.getDouble("originX")).roundToInt()
+        val background = (receipt.getDouble("backgroundX") + receipt.getDouble("originX")).roundToInt()
+        val top = receipt.getDouble("originY").toFloat()
+        val d = receipt.getDouble("density").toFloat()
+        fun gap(center: Float): Float {
+            var total = 0f
+            for (dy in -6..6) for (dx in -1..1) {
+                val y = (top + center + dy * d).roundToInt()
+                total += AndroidColor.red(bitmap.getPixel(background, y)) - AndroidColor.red(bitmap.getPixel(x + dx, y))
+            }
+            return total / 39f
+        }
+        referenceSamples.append("$label sequence=$sequence homeOwner=${receipt.getBoolean("homeOwner")} " +
+            "phase=${receipt.getDouble("phase")} actual=${gap(receipt.getDouble("actualCenterY").toFloat())} " +
+            "union=${gap(receipt.getJSONArray("lanes").getDouble(0).toFloat())} " +
+            "stacked=${gap(receipt.getJSONArray("lanes").getDouble(1).toFloat())} " +
+            "missingTrigger=${gap(receipt.getJSONArray("lanes").getDouble(2).toFloat())}\n")
+    }
+    private fun recordDraw(label: String) = Snapshot.withoutReadObservation {
+        if (::anchor.isInitialized && drawReceipts.size < 4096) {
+            val node = (anchor.surfaceNode ?: anchor.returningNode) as? SurfaceNode
+            val home = node?.sourcePlane
+            drawReceipts += "$label ns=${android.os.SystemClock.elapsedRealtimeNanos()} " +
+                "hidden=${anchor.hidden} restored=${anchor.restoredDrawn} modal=${anchor.modalPresent} " +
+                "inModal=${anchor.shadowInModal} window=${popupWindow != null} " +
+                "request=${anchor.restoredDrawRequest} receipt=${anchor.restoredDrawReceipt} " +
+                "posted=${anchor.restoredPresentedReceipt} homeOwner=${home != null && node?.owns(home) == true} " +
+                "body=${anchor.contact.body.value} bounds=${anchor.bounds} " +
+                "homeBodies=${home?.let { node?.frameOn(it)?.bodies }}"
+        }
+    }
+    private fun writeDrawReceipts() {
+        compose.runOnIdle { File(output, "draw-receipts.txt").writeText(drawReceipts.joinToString("\n", postfix = "\n"));
+            File(output, "source-reference-frames.json").writeText(org.json.JSONArray(sourceReferences).toString(2));
+            File(output, "source-reference-samples.txt").writeText(referenceSamples.toString()) }
+    }
 
     @Test fun utilityShadowHasOneUnclippedFieldThroughoutRepeatedReversals() = verify(nested = false)
     @Test fun nestedShadowHasOneUnclippedFieldThroughoutRepeatedReversals() = verify(nested = true)
@@ -66,6 +194,7 @@ class PopupShadowContinuityTest {
             ?: requireNotNull(instrumentation.targetContext.getExternalFilesDir(null))
         output = File(root, "popup-shadow-continuity/shared-gap-api${Build.VERSION.SDK_INT}")
         assertTrue(output.isDirectory || output.mkdirs())
+        sourceReferenceEnabled = true
         compose.setContent { Fixture(false) }
         compose.waitForIdle()
         compose.mainClock.autoAdvance = false
@@ -75,7 +204,7 @@ class PopupShadowContinuityTest {
         fun frame(label: String) {
             compose.mainClock.advanceTimeByFrame(); compose.waitForIdle()
             val p = anchor.contact.expansion.value
-            val gap = sharedGapDarkness()
+            val gap = sharedGapDarkness(label)
             if (p <= .002f) homeContinuity.observeLuminance(1f - gap / 255f) else homeContinuity.beginSegment()
             frames += p to gap
             log.append("$label p=$p hidden=${anchor.hidden} inModal=${anchor.shadowInModal} window=${popupWindow != null} gap=$gap\n")
@@ -92,7 +221,7 @@ class PopupShadowContinuityTest {
             }
         }
         try {
-            val rest = sharedGapDarkness()
+            val rest = sharedGapDarkness("rest")
             log.append("rest gap=$rest\n")
             assertTrue("The neighbor union must be visible in the gap: $rest", rest > 8f)
             repeat(2) { cycle ->
@@ -124,15 +253,19 @@ class PopupShadowContinuityTest {
                 "worst=$worst jump=$jump rest=$rest\n$log", worst < 4f && jump < 3f)
         } finally {
             File(output, "frames.txt").writeText(log.toString())
+            writeDrawReceipts()
             compose.runOnIdle { open = false }
             compose.mainClock.autoAdvance = true
         }
     }
 
     /** Mean shadow levels (red channel, 0-255) in the gap between the neighbor and trigger. */
-    private fun sharedGapDarkness(): Float {
+    private fun sharedGapDarkness(label: String): Float {
         val on = syncedScreenshot()
         try {
+            File(output, "$label.png").outputStream().use { on.compress(Bitmap.CompressFormat.PNG, 100, it) }
+            sampleSourceReference(label, on)
+            compose.runOnIdle { recordDraw("gap-$label") }
             val d = compose.density.density
             val gx = ((neighboringBody.right + anchor.bounds.left) / 2f).roundToInt()
             // The flat white page at the same rows, beyond the trigger's shadow reach.
@@ -278,6 +411,7 @@ class PopupShadowContinuityTest {
             assertNotSame(window, popupWindow)
             verifyField("replacement-window")
         } finally {
+            writeDrawReceipts()
             compose.runOnIdle { open = false; strength = .8f }
             compose.mainClock.autoAdvance = true
         }
@@ -299,7 +433,9 @@ class PopupShadowContinuityTest {
                 val group = rememberShadowPlane()
                 CompositionLocalProvider(LocalFrostedBackdrop provides source, LocalModalBackdrop provides modal,
                     LocalPageShadows provides group) {
-                    Box(Modifier.fillMaxSize().recordFrostedBackdrop(modal).pageShadowHost(group)) {
+                    Box(Modifier.fillMaxSize().recordFrostedBackdrop(modal)
+                        .drawWithContent { drawContent(); recordDraw("page-after-field"); drawSourceReference(drawContext.canvas.nativeCanvas, group, size.width, density) }
+                        .pageShadowHost(group)) {
                         Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(source)) { drawRect(androidx.compose.ui.graphics.Color.White) }
                         if (nested) {
                             GlassMorphPopup(true, rememberGlassAnchor(), {}, GlassPlacement.Center, fitContent = false) {
@@ -340,7 +476,10 @@ class PopupShadowContinuityTest {
                 val next = FrameMarker()
                 popupView = view; popupWindow = window; marker = next
                 window.decorView.overlay.add(next)
+                val observer = android.view.ViewTreeObserver.OnDrawListener { recordDraw("popup-before-draw") }
+                window.decorView.viewTreeObserver.addOnDrawListener(observer)
                 onDispose {
+                    window.decorView.viewTreeObserver.removeOnDrawListener(observer)
                     window.decorView.overlay.remove(next)
                     if (popupWindow === window) { popupView = null; popupWindow = null; marker = null }
                 }
