@@ -114,6 +114,14 @@ class TagBatchStore(private val directory: File,
     @Synchronized internal fun changePhase(id: String, phase: TagBatchPhase): TagBatch {
         val current = current(id)
         check(!current.terminal) { "The batch decision has already committed." }
+        if (phase == TagBatchPhase.Committed || phase == TagBatchPhase.Restored) {
+            val originals = child(root(id), "originals")
+            if (originals.exists()) checkNotNull(originals.list()).forEach { name ->
+                check(current.entries.values.any { it.original == name }) {
+                    "An undo copy lost its entry record. Keep the retained files; batch completion is blocked."
+                }
+            }
+        }
         if (current.phase in listOf(TagBatchPhase.CancelRequested, TagBatchPhase.Restoring)) {
             check(phase in listOf(TagBatchPhase.CancelRequested, TagBatchPhase.Restoring, TagBatchPhase.Restored)) {
                 "A cancelled batch cannot resume or commit."
