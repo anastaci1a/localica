@@ -23,6 +23,19 @@ import org.json.JSONObject
 
 /** Real media/AtomicFile and native reader admission; queue/playback-intent proofs remain separate. */
 class TagBatchTransactionTest {
+    @Test fun declaredLengthShortSnapshotCannotBecomeAnUndoOriginal() = fixture { runBlocking {
+        val batch = begin()
+        val short = object : EditableDocuments by access {
+            override fun open(uri: String) = access.open(uri).use { input -> input.readBytes().dropLast(1).toByteArray() }.inputStream()
+        }
+        val bounded = RecoverableTagWriter(File(directory, "tag-recovery"), short, readers, store)
+        val result = runCatching { bounded.snapshot(tracks[0], batch.id, 0) }
+        assertTrue("A provider-declared full length must reject its short undo copy", result.isFailure)
+        assertOriginals()
+        assertTrue(access.replacements.isEmpty())
+        assertEquals(0, store.read()!!.entryCount)
+    } }
+
     @Test fun deletedEntryCannotAuthorizeCancellationOrCommitCleanup() = fixture { runBlocking {
         val batch = begin(); transaction.writeOne(batch.id, 0)
         val written = files[0].readBytes()
