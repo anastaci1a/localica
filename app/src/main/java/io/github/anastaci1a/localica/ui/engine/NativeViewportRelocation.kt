@@ -24,6 +24,7 @@ internal class NativeViewportRelocation(private val state: ScrollState, private 
     private var ordinaryRequests = 0
     private var ordinaryFocusObserved = false
     private var requestSequence = 0L
+    private var rejectedRequest = 0L
     private var pending: CompletableDeferred<Unit>? = null
     private val drags = mutableSetOf<Any>()
     private val flings = mutableMapOf<Job, DisposableHandle?>()
@@ -109,7 +110,6 @@ internal class NativeViewportRelocation(private val state: ScrollState, private 
                             if (abs(consumed) > .5f) result = NativeRelocationResult.AwaitingPlacement
                             else if (receipt.frame.settled) { unreachable = true; reconciled = true; break }
                         } else if (receipt.frame.settled) {
-                            pending?.complete(Unit)
                             unreachable = target.top < -.5f || target.bottom > extent + .5f
                             reconciled = true
                             break
@@ -121,10 +121,16 @@ internal class NativeViewportRelocation(private val state: ScrollState, private 
                 throw cancelled
             } finally {
                 if (!disposed && ticket == generation && reconciled && mode == Mode.Ime) {
-                    pending = null
+                    val terminal = pending
                     mode = Mode.Ordinary
                     ordinaryFocusObserved = false
                     result = if (unreachable) NativeRelocationResult.Unreachable else NativeRelocationResult.Ordinary
+                    if (unreachable) {
+                        rejectedRequest = requestSequence
+                        terminal?.cancel(CancellationException("Target unreachable within scroll limits"))
+                    } else terminal?.complete(Unit)
+                    // A resumed requester may already have published a newer request.
+                    if (pending === terminal) pending = null
                 }
             }
         }
@@ -147,7 +153,7 @@ internal class NativeViewportRelocation(private val state: ScrollState, private 
         }
     }
     fun currentRequest(sequence: Long, focusIdentity: Long) = allowed() && (focused || mode == Mode.Ordinary) &&
-        sequence == requestSequence && focusIdentity == focus && mode != Mode.Superseded
+        sequence == requestSequence && sequence != rejectedRequest && focusIdentity == focus && mode != Mode.Superseded
 
     fun drag(identity: Any, began: Boolean) {
         if (disposed) return

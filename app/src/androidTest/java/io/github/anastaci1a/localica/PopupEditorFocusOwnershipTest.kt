@@ -21,6 +21,8 @@ import androidx.compose.ui.unit.*
 import io.github.anastaci1a.localica.ui.*
 import io.github.anastaci1a.localica.ui.layout.*
 import io.github.anastaci1a.localica.ui.components.rememberNativeViewportRelocation
+import io.github.anastaci1a.localica.ui.engine.NativeViewportRelocation
+import io.github.anastaci1a.localica.ui.spec.*
 import kotlinx.coroutines.*
 import org.junit.Assert.*
 import org.junit.Rule
@@ -203,6 +205,51 @@ class PopupEditorFocusOwnershipTest {
         compose.runOnIdle { dragged = state.value; current = 200; source = 200 }
         compose.waitForIdle()
         compose.runOnIdle { assertEquals("A cancelled adjustment cannot replay after input", dragged, state.value) }
+    }
+
+    @Test fun saturatedSettledCaretTerminatesPendingRequestWithoutStaleForwarding() {
+        val window = NativeRelocationWindow()
+        lateinit var relocation: NativeViewportRelocation
+        compose.setContent { LocalicaTheme {
+            state = rememberScrollState()
+            scope = rememberCoroutineScope()
+            relocation = remember { NativeViewportRelocation(state, scope, window, inherited) { true } }
+            DisposableEffect(relocation) { onDispose { relocation.close() } }
+            Column(Modifier.fillMaxWidth().height(200.dp).controlVerticalScroll(state)) {
+                Spacer(Modifier.height(1200.dp))
+            }
+        } }
+        lateinit var request: Job
+        var forwarded = 0
+        var restoredAtTermination = false
+        var saturated = -1
+        compose.runOnIdle {
+            scope.launch(start = CoroutineStart.UNDISPATCHED) { state.scrollTo(state.maxValue) }
+            saturated = state.value
+            assertEquals(state.maxValue, saturated)
+            relocation.focusChanged(1, true)
+            relocation.native(NativeRelocationFrame(window, 1, 0, 1, true, 0, 0, 0))
+            relocation.native(NativeRelocationFrame(window, 2, 1, 1, true, 100, 0, 200))
+            request = scope.launch(start = CoroutineStart.UNDISPATCHED) {
+                try { relocation.request(1, 1) { forwarded++ } }
+                finally { restoredAtTermination = relocation.bodyPolicy.calculateScrollDistance(250f, 40f, 200f) == 90f }
+            }
+            assertTrue("The request must really be pending before terminal placement", request.isActive)
+            val final = NativeRelocationFrame(window, 3, 2, 1, true, 200, 200, 200)
+            val caret = NativeRelocationTarget(state.viewportSize + 20f, state.viewportSize + 62f)
+            println("Saturated pending request: scroll=$saturated max=${state.maxValue} viewport=${state.viewportSize} caret=$caret")
+            relocation.native(final)
+            relocation.placed(NativeRelocationPlacement(final, saturated, state.viewportSize, caret))
+        }
+        compose.waitUntil(timeoutMillis = 2000) { request.isCompleted }
+        compose.runOnIdle {
+            assertTrue("Unreachable requests terminate by cancellation", request.isCancelled)
+            assertEquals(NativeRelocationResult.Unreachable, relocation.result)
+            assertTrue("Ordinary policy must be restored before the waiter terminates", restoredAtTermination)
+            assertEquals(0, forwarded)
+            assertFalse("The terminal request cannot later forward stale bounds", relocation.currentRequest(1, 1))
+            assertEquals("No saturated correction may write or rewind", saturated, state.value)
+        }
     }
 
     private fun bottomInsets(bottom: () -> Int) = object : WindowInsets {
