@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.dp
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.anastaci1a.localica.navigation.*
 import io.github.anastaci1a.localica.ui.*
+import io.github.anastaci1a.localica.ui.engine.NoneReductionAtlasHost
 import io.github.anastaci1a.localica.ui.engine.MaterialAreaReduction
 import io.github.anastaci1a.localica.ui.engine.materialReductionExtent
 import org.json.JSONArray
@@ -52,6 +53,11 @@ import java.io.File
  * the rasterizer drew. Every case's channel deltas and the per-channel statistics are written to
  * additionalTestOutputDir as a receipt. */
 class NoneExactReductionTest {
+    // E4 must qualify its shared reduction against the same ideal and legacy drift fixtures.
+    private fun setContent(content: @Composable () -> Unit) {
+        compose.setContent { NoneReductionAtlasHost(GlassColorShader, content) }
+    }
+
     @get:Rule val compose = localicaComposeRule()
     private val plain = GlassAppearance(whiteTint = 0f, contrast = 0f, shadowStrength = 0f)
     private val styled = GlassAppearance(whiteTint = .35f, contrast = .3f, shadowStrength = 0f)
@@ -296,7 +302,7 @@ class NoneExactReductionTest {
         var bitmap by mutableStateOf(rasterize(fixtures().first(), 0f))
         var appearance by mutableStateOf(plain)
         var legacy by mutableStateOf(false)
-        compose.setContent {
+        setContent {
             source = rememberFrostedBackdrop(Unit, dark = false)
             Scene(bitmap, appearance, source) {
                 key(legacy) {
@@ -358,7 +364,7 @@ class NoneExactReductionTest {
             if (v) canvas.drawRect(256f, 0f, sourceWidth.toFloat(), sourceHeight.toFloat(), white)
             else canvas.drawRect(0f, 64f, sourceWidth.toFloat(), sourceHeight.toFloat(), white)
         } }
-        compose.setContent {
+        setContent {
             source = rememberFrostedBackdrop(Unit, dark = false)
             Scene(raster(vertical), plain, source) {
                 // Footprint exactly 512x128 at the origin: a 512-column level 0 with no stretch.
@@ -386,7 +392,7 @@ class NoneExactReductionTest {
         var bitmap by mutableStateOf(rasterize(fixture, 0f))
         var appearance by mutableStateOf(plain)
         var legacy by mutableStateOf(false)
-        compose.setContent {
+        setContent {
             source = rememberFrostedBackdrop(Unit, dark = false)
             Scene(bitmap, appearance, source) {
                 Box(Modifier.offset(origin.x.dp, origin.y.dp).graphicsLayer { scaleX = 1.25f; scaleY = 1.25f; transformOrigin = TransformOrigin(0f, 0f) }) {
@@ -432,7 +438,7 @@ class NoneExactReductionTest {
         val sourceRaster = rasterize(sourceFixture, 0f)
         val homeRaster = rasterize(homeFixture, .375f)
         val footprint = IntSize(257, 129)
-        compose.setContent { Fixture(appearance) {
+        setContent { Fixture(appearance) {
             source = rememberFrostedBackdrop("source", dark = false)
             home = rememberFrostedBackdrop("home", dark = false)
             // Never recorded: a requested home whose first record has not happened yet.
