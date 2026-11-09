@@ -682,6 +682,18 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
         gridState.canScrollBackward && !(measuresNotice && height == 0 &&
             gridState.firstVisibleItemIndex == 1 && gridState.firstVisibleItemScrollOffset == 0)
     } }
+    // A quick-search pill grows the header above the grid's retained item 1 / offset 0 anchor.
+    // Shown at the visual top it must be revealed; a scrolled list keeps its place. The grid is
+    // read without observation: scroll position must not recompose this screen.
+    val hadSearchPill = remember(route.key) { booleanArrayOf(showSearchPill) }
+    val revealSearchHeader = showSearchPill && !hadSearchPill[0] && androidx.compose.runtime.snapshots.Snapshot.withoutReadObservation {
+        gridState.firstVisibleItemIndex == 1 && gridState.firstVisibleItemScrollOffset == 0 &&
+            noticeMeasurement.height(noticeContent, gridState.layoutInfo.viewportSize.width, density, noticeDirection) == 0
+    }
+    SideEffect {
+        hadSearchPill[0] = showSearchPill
+        if (revealSearchHeader) gridState.requestScrollToItem(0)
+    }
     val clearableFilter = (route.tab == MainTab.Library && route.collection == null && route.filter != null) ||
         (artistDetail && validAlbums.isNotEmpty())
     // Recompose only when the offered action changes, not at every scroll start/stop.
