@@ -67,6 +67,7 @@ internal fun GlassControlScene(modifier: Modifier, horizontalPadding: Dp = 20.dp
             if (backing != null) {
                 val delta = backing.origin - location.position() - origin
                 if (modern && backing.recorded && !backing.layer.isReleased) {
+                    BackdropRecordingAncestry.reference(backing)
                     translate(delta.x, delta.y) { drawLayer(backing.layer) }
                 } else backing.snapshot?.let { image -> translate(delta.x, delta.y) {
                     // The shared reduction retains transparent power-of-two padding.

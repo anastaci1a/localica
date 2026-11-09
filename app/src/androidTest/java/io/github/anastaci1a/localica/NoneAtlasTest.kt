@@ -14,6 +14,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.asImageBitmap
@@ -32,7 +33,7 @@ import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
 
-/** #691 E4: several None materials of different sizes share one reduction atlas per window and each still
+/** #691 E4: several None materials of different sizes share one reduction atlas per source layer and each still
  * shows the coverage-weighted mean of the prerasterized scene over ITS OWN bounds (.015 per channel on
  * Android 13+), while members join, leave, move and resize. A single scene with distinct content under
  * every member makes any slot or block mix-up visible. */
@@ -95,13 +96,15 @@ class NoneAtlasTest {
             Member("stripes", IntOffset(380, 260), IntSize(320, 180)),  // 1 px stripes
             Member("gradient", IntOffset(410, 30), IntSize(290, 190)),  // gradient (512x256 cell)
             Member("tiny", IntOffset(30, 30), IntSize(31, 31))))        // below the cell minimum: own chain
+        var atlases: io.github.anastaci1a.localica.ui.engine.NoneReductionAtlases? = null
         var atlas: NoneReductionAtlas? = null
         compose.setContent { CompositionLocalProvider(
             LocalDensity provides Density(1f),
             LocalGlassRendererRuntime provides remember { GlassRendererRuntime(GlassRendererMode.None) },
             LocalGlassAppearance provides appearance) { LocalicaTheme { NoneReductionAtlasHost(GlassColorShader) {
-            atlas = LocalNoneReductionAtlas.current
+            atlases = LocalNoneReductionAtlas.current
             source = rememberFrostedBackdrop(Unit, dark = false)
+            if (Build.VERSION.SDK_INT >= 33) atlas = atlases?.forSource(source.layer)
             Box(Modifier.size(width.dp, height.dp).background(Color.Black)) {
                 Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(source)) {
                     drawImage(bitmap.asImageBitmap(), filterQuality = FilterQuality.None)
@@ -213,13 +216,15 @@ class NoneAtlasTest {
 
     @SdkSuppress(minSdkVersion = 33)
     @Test fun memberCapacityOverflowUsesThePerSurfaceFallback() {
+        var atlases: io.github.anastaci1a.localica.ui.engine.NoneReductionAtlases? = null
         var atlas: NoneReductionAtlas? = null
         compose.setContent { CompositionLocalProvider(
             LocalDensity provides Density(1f),
             LocalGlassRendererRuntime provides remember { GlassRendererRuntime(GlassRendererMode.None) },
             LocalGlassAppearance provides appearance) { LocalicaTheme { NoneReductionAtlasHost(GlassColorShader) {
-            atlas = LocalNoneReductionAtlas.current
+            atlases = LocalNoneReductionAtlas.current
             val source = rememberFrostedBackdrop(Unit, dark = false)
+            atlas = atlases?.forSource(source.layer)
             Box(Modifier.size(200.dp, 128.dp)) {
                 Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(source)) { drawRect(Color(.25f, .5f, .75f)) }
                 repeat(33) { index ->
@@ -235,6 +240,52 @@ class NoneAtlasTest {
             assertMean("The final 96x64 member renders through its own chain", Color(.25f, .5f, .75f),
                 image[image.width / 2, image.height / 2], Rect(0f, 0f, 96f, 64f))
         }
+    }
+
+    /** The browser pattern: an outer sampled recording contains a control sampling another source.
+     * Retained nested recordings must still contribute to containment when only the outer redraws. */
+    @SdkSuppress(minSdkVersion = 33)
+    @Test fun distinctSourceAtlasesKeepRetainedRecordingContainmentAcyclic() {
+        lateinit var backdrop: FrostedBackdrop
+        lateinit var outer: FrostedBackdrop
+        lateinit var inner: FrostedBackdrop
+        var registry: io.github.anastaci1a.localica.ui.engine.NoneReductionAtlases? = null
+        var shade by mutableFloatStateOf(1f)
+        compose.setContent { CompositionLocalProvider(
+            LocalDensity provides Density(1f),
+            LocalGlassRendererRuntime provides remember { GlassRendererRuntime(GlassRendererMode.None) },
+            LocalGlassAppearance provides appearance) { LocalicaTheme { NoneReductionAtlasHost(GlassColorShader) {
+            registry = LocalNoneReductionAtlas.current
+            backdrop = rememberFrostedBackdrop("content", dark = false)
+            outer = rememberFrostedBackdrop("outer", dark = false)
+            inner = rememberFrostedBackdrop("inner", dark = false)
+            Box(Modifier.size(200.dp, 160.dp)) {
+                Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(backdrop)) { drawRect(Color.Green) }
+                Box(Modifier.fillMaxSize().recordFrostedBackdrop(outer).background(Color(shade, shade, shade))) {
+                    Box(Modifier.size(64.dp).graphicsLayer().recordFrostedBackdrop(inner)) {
+                        LiquidGlassSurface(Modifier.fillMaxSize().testTag("nested-source"), backdrop,
+                            cornerRadius = 0.dp, pressFeedback = false, shadow = false)
+                    }
+                }
+                LiquidGlassSurface(Modifier.offset(100.dp, 0.dp).size(64.dp).testTag("outer-source"), outer,
+                    cornerRadius = 0.dp, pressFeedback = false, shadow = false)
+            }
+        } } } }
+        fun check() = eventually {
+            assertEquals("Each sampled source owns a separate atlas", 2, registry?.sourceCount)
+            assertTrue("Actual transitive recording containment survives retained drawing",
+                BackdropRecordingAncestry.contains(outer, listOf(inner)))
+            assertFalse("Independent content is outside that containment",
+                BackdropRecordingAncestry.contains(backdrop, listOf(inner)))
+            assertNull("Sampling parent is not used as recording ancestry", inner.parent)
+            for ((tag, expected) in listOf("nested-source" to Color.Green, "outer-source" to Color(shade, shade, shade))) {
+                val pixels = compose.onNodeWithTag(tag).captureToImage().toPixelMap()
+                assertMean(tag, expected, pixels[pixels.width / 2, pixels.height / 2], Rect(0f, 0f, 64f, 64f))
+            }
+        }
+        check()
+        compose.runOnIdle { shade = .5f }
+        check()
     }
 
 }

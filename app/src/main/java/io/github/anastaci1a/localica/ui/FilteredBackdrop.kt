@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.runtime.*
+import androidx.compose.ui.modifier.modifierLocalConsumer
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -95,19 +96,23 @@ private fun OpticalBackdrop(modifier: Modifier, source: FrostedBackdrop, locatio
         if (forceAverage && android.os.Build.VERSION.SDK_INT >= 33 && MaterialAreaReduction.legacyHalvings)
             MaterialAverageRenderer(true) to MaterialAverageRenderer(true) else null
     }
-    // The window's shared None reduction (#691 E4); members without a mix draw their block of it.
-    // Finished panels can already reference this window's atlas. Reading them back into it would form a layer cycle.
-    val atlas = if (forceAverage && android.os.Build.VERSION.SDK_INT >= 33 && !source.withinFinishedMaterial())
-        rememberNoneReductionAtlas() else null
+    // Each atlas samples exactly one source layer. Eligibility is checked against actual recording
+    // containment in draw, including retained child recordings; material provenance is unrelated.
+    val atlas = if (forceAverage && android.os.Build.VERSION.SDK_INT >= 33)
+        rememberNoneReductionAtlas(source.layer) else null
     val atlasEntry = remember(atlas) { if (android.os.Build.VERSION.SDK_INT >= 33 && atlas != null) NoneReductionAtlas.Entry() else null }
     if (android.os.Build.VERSION.SDK_INT >= 33 && atlas != null && atlasEntry != null) DisposableEffect(atlas, atlasEntry) {
         atlas.add(atlasEntry)
         onDispose { atlas.remove(atlasEntry) }
     }
+    val recordingScope = remember { arrayOfNulls<BackdropRecordingScope>(1) }
+    val recordedInside = remember { arrayOf(emptyList<FrostedBackdrop>()) }
     layer.clip = true
     // Keep sibling motion isolated, but explicitly invalidate consumers in another
     // window when their source records new content.
-    Canvas(modifier.graphicsLayer()) {
+    Canvas(modifier.modifierLocalConsumer { recordingScope[0] = ModifierLocalBackdropRecording.current }.graphicsLayer()) {
+        val containers = recordingScope[0]?.sources() ?: BackdropRecordingAncestry.containers()
+        if (containers.isNotEmpty()) recordedInside[0] = containers
         location.observeRecordingAcrossWindows(source)
         homeSource?.let { location.observeRecordingAcrossWindows(it) }
         // A list may load after this floating control's first draw. Observe the
@@ -155,16 +160,21 @@ private fun OpticalBackdrop(modifier: Modifier, source: FrostedBackdrop, locatio
         }
         drawObserver?.let { observeBackdropSampling(it, location, localToSource, viewportBounds) }
         if (forceAverage && average != null && areaSource != null && averageSource != null && areaSourceRenderer != null) {
-            if (!source.withinFinishedMaterial() && !MaterialAreaReduction.legacyHalvings && blend <= 0f && atlas != null && atlasEntry != null && android.os.Build.VERSION.SDK_INT >= 33) {
+            if (!MaterialAreaReduction.legacyHalvings && blend <= 0f && atlas != null && atlasEntry != null && android.os.Build.VERSION.SDK_INT >= 33) {
                 val toLocal: (FrostedBackdrop) -> BackdropRegistration? = { scene -> scene.location.registrationTo(location) }
                 val structure = mutableListOf<SampledSceneDependency>()
                 val region = sampledSceneBounds(source, sourceToLocal, toLocal, structure)?.let { Rect(Offset.Zero, size).intersect(it) }
                 // An unreadable region keeps the member's previous block, as the own chain keeps its last level.
-                val hosted = if (region == null || region.isEmpty || !region.width.isFinite() || !region.height.isFinite()) atlasEntry.placed
+                val cyclic = structure.any { BackdropRecordingAncestry.contains(it.scene, recordedInside[0]) }
+                if (cyclic) atlas.remove(atlasEntry) else atlas.add(atlasEntry)
+                val hosted = if (cyclic) false else if (region == null || region.isEmpty || !region.width.isFinite() || !region.height.isFinite()) atlasEntry.placed
                     else with(atlas) { place(atlasEntry, source, sourceToLocal, structure, region, average.forBacking(source).let { NoneAtlasStyle(it.whiteTint, it.tone.trim, it.tone.weight, it.tone.lightMix, it.opaque) }) {
                         translate(-region.left, -region.top) { drawSampledScene(source, sourceToLocal, toLocal, structure) }
                     } }
                 if (hosted) {
+                    if (io.github.anastaci1a.localica.BuildConfig.DEBUG) check(structure.none {
+                        BackdropRecordingAncestry.contains(it.scene, recordedInside[0])
+                    }) { "None atlas consumer is recorded inside its own input layer" }
                     with(atlas) { drawMember(atlasEntry) }
                     return@Canvas
                 }
@@ -260,6 +270,7 @@ private fun OpticalBackdrop(modifier: Modifier, source: FrostedBackdrop, locatio
             val footprint = if (isHome) homeExtent else viewport
             clipRect(right = 8f, bottom = 8f) {
                 scale(8f / footprint.width, 8f / footprint.height, Offset.Zero) {
+                    BackdropRecordingAncestry.reference(backing)
                     withBackdropRegistration(registration) { drawLayer(backing.layer) }
                 }
             }
@@ -350,6 +361,7 @@ internal fun androidx.compose.ui.graphics.drawscope.DrawScope.drawSampledScene(b
     chain.asReversed().forEach { scene ->
         val dependency = structure?.firstOrNull { it.scene === scene }
         if ((dependency?.recorded ?: scene.recorded) && !scene.layer.isReleased) {
+            BackdropRecordingAncestry.reference(scene)
             val registration = if (structure != null) dependency?.registration
                 else if (scene === backing) backingToLocal else parentToLocal(scene)
             if (registration != null) {

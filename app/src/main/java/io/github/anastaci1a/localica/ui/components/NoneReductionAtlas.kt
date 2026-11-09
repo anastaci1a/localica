@@ -2,8 +2,10 @@ package io.github.anastaci1a.localica.ui.components
 
 import android.os.Build
 import androidx.annotation.RequiresApi
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.ui.graphics.layer.GraphicsLayer
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import io.github.anastaci1a.localica.ui.engine.NoneReductionAtlas as AtlasOwner
@@ -31,9 +33,14 @@ internal class NoneReductionAtlas(private val owner: AtlasOwner) {
     fun DrawScope.drawMember(entry: Entry) = with(owner) { drawMember(entry.owned) }
 }
 
-@Composable internal fun rememberNoneReductionAtlas(): NoneReductionAtlas? {
+@Composable internal fun rememberNoneReductionAtlas(source: GraphicsLayer): NoneReductionAtlas? {
     if (Build.VERSION.SDK_INT < 33) return null
-    val owner = LocalNoneReductionAtlas.current
+    val registry = LocalNoneReductionAtlas.current
+    val owner = remember(registry, source) { registry?.forSource(source) }
+    DisposableEffect(registry, source) {
+        registry?.retain(source)
+        onDispose { registry?.forget(source) }
+    }
     return remember(owner) { owner?.let(::NoneReductionAtlas) }
 }
 

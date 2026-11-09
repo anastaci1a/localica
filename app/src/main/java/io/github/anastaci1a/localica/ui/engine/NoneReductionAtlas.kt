@@ -27,28 +27,48 @@ import androidx.compose.ui.unit.LayoutDirection
 internal data class NoneAtlasStyle(val whiteTint: Float = 0f, val trim: Float = 0f, val weight: Float = 0f,
     val lightMix: Float = 0f, val opaque: Boolean = false)
 
-/** The window's shared None reduction, or null where every surface reduces on its own. */
-internal val LocalNoneReductionAtlas = staticCompositionLocalOf<NoneReductionAtlas?> { null }
+/** The window's source-specific None reductions, or null where every surface reduces on its own. */
+internal val LocalNoneReductionAtlas = staticCompositionLocalOf<NoneReductionAtlases?> { null }
 
-/** Provide one shared None reduction to every material in this window (#691). Below Android 13
+/** Provide independent None reductions for the source layers in this window (#691). Below Android 13
  * materials keep their own software average, so the content is composed unchanged. */
 @Composable
 internal fun NoneReductionAtlasHost(colorShader: String, content: @Composable () -> Unit) {
     if (Build.VERSION.SDK_INT < 33) { content(); return }
     val graphics = LocalGraphicsContext.current
-    val atlas = remember(graphics, colorShader) { NoneReductionAtlas(graphics, colorShader) }
+    val atlas = remember(graphics, colorShader) { NoneReductionAtlases(graphics, colorShader) }
     DisposableEffect(atlas) { onDispose { atlas.release() } }
     CompositionLocalProvider(LocalNoneReductionAtlas provides atlas, content = content)
 }
 
-/** One reduction per window per frame for every requested-None material instead of one chain each.
+/** Window owner of independent atlases. Source identity is the actual sampled GraphicsLayer. */
+@RequiresApi(33)
+internal class NoneReductionAtlases(private val graphics: GraphicsContext, private val colorShader: String) {
+    private val sources = java.util.IdentityHashMap<GraphicsLayer, NoneReductionAtlas>()
+    private val leases = java.util.IdentityHashMap<GraphicsLayer, Int>()
+    val sourceCount get() = sources.size
+    fun retain(source: GraphicsLayer) { leases[source] = (leases[source] ?: 0) + 1 }
+    fun forget(source: GraphicsLayer) {
+        val count = (leases[source] ?: return) - 1
+        if (count > 0) leases[source] = count else {
+            leases.remove(source)
+            sources.remove(source)?.release()
+        }
+    }
+    fun forSource(source: GraphicsLayer): NoneReductionAtlas = sources.getOrPut(source) {
+        NoneReductionAtlas(graphics, colorShader)
+    }
+    fun release() { sources.values.forEach { it.release() }; sources.clear(); leases.clear() }
+}
+
+/** One reduction per source layer per frame instead of one chain for each consumer.
  *
  * Every member owns a cell of its power-of-two extent (exactly the extent its own `recordFullBounds`
  * would use) in a 2048 px wide level-0 texture, aligned to 64 px so no 8×8 block of the two shared
  * block-mean steps straddles two cells. A third step takes each cell's remaining texels to at most 8×8
  * and a fourth styles every member's mean into its own 4×4 block of the output; members draw the
  * central 2×2 texels of their block scaled to their size, so bilinear upscaling stays exact. The
- * arithmetic is the per-surface chain's; only the texture is shared. Five offscreen passes per window
+ * arithmetic is the per-surface chain's; only the texture is shared. Five offscreen passes per source
  * per frame, whatever the number of members.
  *
  * Members record the atlas themselves whenever their own registration changes (synchronously, in
