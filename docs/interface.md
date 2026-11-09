@@ -68,6 +68,30 @@ Popup rim highlights follow curved corners instead of stretching across flat edg
 
 Keep the shell and fixed title/footer outside the body mask. Oversized chrome may scroll when necessary to keep actions reachable.
 
+### Glass toasts
+
+One app-scoped `ToastQueue` presents one glass toast at a time in the floating controls row. It follows that row above multi-selection. Full player uses the same logical row at the navigation-safe bottom with the stock 8 dp gap and no eligible browsing controls.
+
+Features enqueue immutable `ToastMessage` values through `LocalicaApplication.toasts.showToast`; composition uses `LocalToastQueue`. Background callers use the same queue. Commands contain durable target identities. The queue retains no Activity or composition callbacks.
+
+| Message input | Contract |
+| --- | --- |
+| Kind and duration | Info and Success default to 3 seconds; Error defaults to 6 seconds. Accessibility recommendations can extend dwell. |
+| Artwork | Up to three covers reuse shared artwork loading and placeholders; multiple covers form a fan. |
+| Coalescing key | Explicit operation, target, kind and action identity; repeated translated text alone does not coalesce. |
+| Tap or trailing action | Supported navigation commands claim once and revalidate their target. Operation commands remain passive until their feature owner supplies dispatch. |
+| Admission receipt | `Accepted` reports identity, coalescing and any evicted pending status. `Full` leaves durable outcome handling with the producer. |
+
+The FIFO holds up to 32 entries including the visible toast. Overflow may replace a pending status without an action. It retains the visible entry and actionable entries. Committed queue/list mutations report admission failures without changing successful persistence into failed edits.
+
+Entry comes from physical left, including in RTL. Each control's original rectangle and the toast's live extent determine its fade and downward displacement. Reversal, fling and automatic exit use that same projection. Covered controls accept no input. The toast adds no list inset.
+
+Every toast auto-dismisses. Overflowing text scrolls until its right edge reaches the text area's right edge, then normal dwell starts. Reduced motion preserves reading completion and final placement. Holding suspends dismissal; a cancelled swipe resets full dwell after settling.
+
+Background, modal and accessibility-focus pauses retain remaining dwell. Modal ownership suppresses toast interaction and announcements through retained closing frames. Available toast content uses a polite live region and exposes accessible dismissal.
+
+Queue/list producer toasts open the exact destination. Lists target the first added occurrence. Queue actions use existing player, drawer and current-song scroll endpoints without starting playback. Play-next opens the normal current-song anchor. Navigation dismisses the toast as it starts.
+
 ### Motion and access
 
 Gestures track slow drags, reversals and interruptions, settling by distance/velocity. Controls show contact immediately but defer movement ownership under one rule for every control, the Queue drawer and the player.
