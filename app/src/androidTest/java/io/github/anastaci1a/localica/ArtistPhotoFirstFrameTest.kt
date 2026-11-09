@@ -63,6 +63,10 @@ class ArtistPhotoFirstFrameTest {
                 fileName = "$index.mp3", relativePath = "$index.mp3")
         }
         val snapshot = LibrarySnapshot(tracks = tracks)
+        val playlists = PlaylistState(loading = false)
+        val queueState = io.github.anastaci1a.localica.queue.QueueUiState()
+        val filters = LibraryFilters()
+        val presentations = BrowsePresentationCache()
         var kind by mutableStateOf<MediaKind?>(null)
         var show by mutableStateOf(false)
         val retention = BrowseArtworkScope()
@@ -80,7 +84,8 @@ class ArtistPhotoFirstFrameTest {
         val output = File(context.getExternalFilesDir(null), "artist-first-frame-742").apply { mkdirs() }
         try {
             compose.setContent { LocalicaTheme {
-                CompositionLocalProvider(LocalArtistPhotoEnvironment provides environment, LocalBrowseArtwork provides retention) {
+                CompositionLocalProvider(LocalArtistPhotoEnvironment provides environment, LocalBrowseArtwork provides retention,
+                    LocalBrowsePresentationCache provides presentations) {
                     if (show) key(kind) {
                         if (surface == "header") Row {
                             currentItems.forEach { item ->
@@ -90,10 +95,10 @@ class ArtistPhotoFirstFrameTest {
                                 PlayerArtwork(visual, Modifier.size(120.dp).testTag("header-${item.key}"), RectangleShape, ContentScale.Crop, 240)
                             }
                         } else if (surface == "carousel") {
-                            PinnedHome(LibraryUiState(snapshot, loading = false), PlaylistState(loading = false), currentItems.map { it.ref },
+                            PinnedHome(LibraryUiState(snapshot, loading = false), playlists, currentItems.map { it.ref },
                                 {}, {}, { _, _ -> }, {}, { _, _ -> }, queryDispatcher = Dispatchers.Unconfined)
-                        } else BrowserScreen(LibraryUiState(snapshot, loading = false), PlaylistState(loading = false), route,
-                            {}, {}, {}, { _, _, _ -> }, null, null, true, false, queryDispatcher = Dispatchers.Unconfined)
+                        } else BrowserScreen(LibraryUiState(snapshot, loading = false), playlists, route,
+                            {}, {}, {}, { _, _, _ -> }, null, null, true, false, queueState = queueState, queryDispatcher = Dispatchers.Unconfined)
                     }
                 }
             } }
@@ -121,8 +126,17 @@ class ArtistPhotoFirstFrameTest {
                     else -> BrowseRoute(tab)
                 }
                 savedPreferences += nextRoute to preferences.read(nextRoute)
-                preferences.write(nextRoute, BrowseStyle(presentation = if (surface == "gallery") Presentation.Compact else Presentation.List,
-                    extraInfo = ExtraInfo.None, itemsPerRow = 2), override = true)
+                val style = BrowseStyle(presentation = if (surface == "gallery") Presentation.Compact else Presentation.List,
+                    extraInfo = ExtraInfo.None, itemsPerRow = 2)
+                preferences.write(nextRoute, style, override = true)
+                val sorts = preferences.sortSnapshot()
+                // Warm only query rows, so the artwork witness is independent of the catalog's arrival wave.
+                val source = BrowseSourceRevision(snapshot, playlists.playlists, queueState.library.queues, filters)
+                val result = BrowseQueries.evaluate(snapshot, playlists.playlists, nextRoute, style.query(), queueState.library.queues,
+                    filters.allCollections, sorts).prepared()
+                presentations.put(snapshot, playlists.playlists, queueState.library.queues, filters,
+                    PresentedBrowse(nextRoute, style, result, source, sorts))
+                presentations.putHome(snapshot, playlists.playlists, items.map { it.ref }, items, sorts)
                 compose.runOnUiThread { currentItems = items; route = nextRoute; kind = type; show = true }
                 fun tag(item: BrowserItem) = when (surface) {
                     "header" -> "header-${item.key}"
