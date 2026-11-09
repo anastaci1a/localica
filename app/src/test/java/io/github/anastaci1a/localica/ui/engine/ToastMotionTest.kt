@@ -121,7 +121,8 @@ class ToastMotionTest {
                 motion.contact(); h.now += 10_000_000; motion.dragBy(-40f)
                 motion.place(300f, 16f)
                 h.now += 10_000_000; motion.dragBy(20f)
-                motion.release(false, 100f); h.advance(1.0)
+                // The final drive moves 20px in 10ms; supply its actual release velocity.
+                motion.release(false, 2000f); h.advance(1.0)
                 assertEquals(16f, motion.leftPx, 0f)
                 motion.exit(); h.advance(.08); motion.leftPx
                 motion.place(320f, 20f); h.advance(1.0)
