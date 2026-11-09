@@ -111,9 +111,6 @@ def expected_for(root, api):
             ('overlappingDocumentsShareTheReturnSourceAndFadeAfterCompositing', 33),
             ('interruptedPanelSourcesAndSongsReopenWithFreshSamplingAndWorkingReturn', 33),
         ],
-        'NoneReductionWitnessTest': [
-            ('rawAndStyledFullFootprintWitnessesCompareCurrentEightAndSixteenLive', 33),
-        ],
         'NestedGlassRegistrationTest': [
             ('transformedGlassSamplesItsSceneThroughForwardReverseFitAndScrolling', 33),
         ],
