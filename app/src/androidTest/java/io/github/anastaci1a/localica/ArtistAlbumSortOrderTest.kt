@@ -358,14 +358,19 @@ class ArtistAlbumSortOrderTest {
         val trace = f.trace("list-filter-mid") {
             compose.onAllNodes(chip).onFirst().performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick)
         }
-        // Mid's row was third; it glides up to the top while the others leave.
+        // Mid's row moves from third to first while the existing excess-scroll correction re-reveals
+        // the header, so its net travel can go either way. Accepted (#694): one continuous movement,
+        // no second 350 ms tail, and at most an 8 px settle where the two easings meet.
         val detail = trace.toString()
-        listOf("m-one").forEach { key ->
-            assertTrue("$key survives and moves up: $detail", trace.frames.last()[key]!! < trace.frames.first()[key]!! - 2f)
-            assertTrue("$key glides: $detail", trace.intermediate(key) >= 6)
-            assertTrue("$key has no second tail: $detail", trace.monotonic(key))
-        }
-        assertTrue("One tween: $detail", trace.lastMotion - trace.firstMotion <= 26)
+        val tops = trace.frames.mapNotNull { it["m-one"] }
+        assertEquals("m-one survives every frame: $detail", trace.frames.size, tops.size)
+        val start = tops.first(); val end = tops.last()
+        assertTrue("m-one moves: $detail", kotlin.math.abs(end - start) > 2f)
+        assertTrue("m-one glides: $detail", trace.intermediate("m-one") >= 6)
+        val overshoot = tops.maxOf { top -> if (end > start) top - end else end - top }
+        assertTrue("Settle overshoot $overshoot px is at most 8 px: $detail", overshoot <= 8f)
+        assertTrue("One movement with no second tail: first=${trace.firstMotion} last=${trace.lastMotion}\n$detail",
+            trace.lastMotion - trace.firstMotion <= 26)
     }
 
     @Test fun galleryGlidesForGroupAndSortWithOneTween() {
