@@ -35,7 +35,12 @@ internal fun LastFmSettings(controller: LastFmController) {
     val lastSync = saved.snapshot?.let { lastFmSyncTime(context, it.syncedAt) }
     val focus = LocalSettingsSearchFocus.current
     val highlight = focus?.highlighted
-    LaunchedEffect(highlight) { if (highlight == "Data") tab = 2 }
+    LaunchedEffect(highlight) {
+        when (highlight) {
+            "Listening statistics" -> tab = 0
+            "Data" -> tab = 2
+        }
+    }
     SettingsEntry("Listening statistics") {
         SettingsStack(gap = Space.Base) {
             LiquidGlassSurface(Modifier.fillMaxWidth().testTag("lastfm-dashboard-card"), cornerRadius = settingsReviewRadius(), pressFeedback = false) {

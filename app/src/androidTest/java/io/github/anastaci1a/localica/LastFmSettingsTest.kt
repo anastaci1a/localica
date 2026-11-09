@@ -45,15 +45,20 @@ class LastFmSettingsTest {
         try {
             compose.setContent { LocalicaTheme {
                 FolderSettings(LibraryUiState(library, loading = false), {}, {}, {},
-                    lastFmContent = { LastFmSettings(controller) })
+                    initialCategory = if (hasArchive) "Last.fm" else null, lastFmContent = { LastFmSettings(controller) })
             } }
             compose.waitUntil(5000) { !controller.state.value.loading &&
                 (!hasArchive || controller.matches.value.review.size == 1) }
+            if (hasArchive) {
+                compose.onNodeWithText("Data").performScrollTo().performClick()
+                compose.onNodeWithContentDescription("Back from settings").performClick()
+                compose.onNodeWithContentDescription("Back from settings").performClick()
+            }
             compose.onNodeWithContentDescription("Search settings input").performTextReplacement(query)
             compose.onNodeWithTag("search-result:$query").performClick()
-            compose.onNodeWithTag("setting:Review matches").assertIsDisplayed()
-            compose.onNodeWithTag("setting-highlight:Review matches", useUnmergedTree = true).assertExists()
-            compose.onNodeWithText("Review matches").performClick()
+            val highlighted = if (hasArchive) "Listening statistics" else "Review matches"
+            compose.onNodeWithTag("setting-highlight:$highlighted", useUnmergedTree = true).assertExists()
+            compose.onNodeWithText("Review matches").performScrollTo().performClick()
             compose.onNodeWithTag("setting:Match group").performScrollTo().assertIsDisplayed()
             compose.onNodeWithTag("lastfm-list-search").assertExists()
             if (hasArchive) compose.onNodeWithText("Artist — Ambiguous").performScrollTo().assertIsDisplayed()
