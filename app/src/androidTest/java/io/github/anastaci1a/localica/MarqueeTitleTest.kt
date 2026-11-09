@@ -285,6 +285,47 @@ class MarqueeTitleTest {
         compose.mainClock.autoAdvance = true
     }
 
+    @Test fun nativeDrawHandsItsActualMaskAmountToOwnerBeforeFlipAndGeometryChanges() {
+        val motion = MarqueeMotion()
+        fun advance(time: Long, allowed: Boolean) = motion.advance(time, 500f, 200f, 100f, allowed)
+        advance(0, true); advance(1800, true); advance(2020, true)
+        var frame by mutableStateOf(advance(2120, true))
+        var textWidth by mutableStateOf(500f)
+        var fadeWidth by mutableStateOf(20f)
+        compose.mainClock.autoAdvance = false
+        compose.setContent {
+            androidx.compose.foundation.Canvas(Modifier.size(32.dp).background(Color.White).testTag("draw-owner")) {
+                val amount = marqueeLeftFade(textWidth, fadeWidth, frame)
+                motion.recordRenderedLeftFade(amount)
+                drawRect(Color.Black.copy(alpha = amount))
+            }
+        }
+        compose.mainClock.advanceTimeByFrame()
+        fun assertDrawn(expected: Float) {
+            val pixels = compose.onNodeWithTag("draw-owner").captureToImage().toPixelMap()
+            assertEquals("Native mask swatch", 1f - expected, pixels[pixels.width / 2, pixels.height / 2].red, .02f)
+        }
+        assertDrawn(.5f)
+        compose.runOnIdle {
+            fadeWidth = 40f
+            frame = advance(2120, false)
+        }
+        compose.mainClock.advanceTimeByFrame()
+        assertEquals(.5f, requireNotNull(frame.backwardFadeStart), 0f)
+        assertDrawn(.5f)
+        compose.runOnIdle {
+            textWidth = 5f
+            fadeWidth = 80f
+            frame = advance(2195, false)
+        }
+        compose.mainClock.advanceTimeByFrame()
+        assertDrawn(.25f)
+        compose.runOnIdle { frame = advance(2270, false) }
+        compose.mainClock.advanceTimeByFrame()
+        assertDrawn(0f)
+        compose.mainClock.autoAdvance = true
+    }
+
     @Test fun nativeBackwardFlipAndWidthChangeReleaseStrips() = nativeTaperStrip("backward-width", false, true)
     @Test fun nativeForwardTailAndLandingStrips() = nativeTaperStrip("forward", true, false)
     @Test fun nativeNaturalCycleFirstPixelTailAndWrapStrips() = nativeTaperStrip("natural", false, false, true)
