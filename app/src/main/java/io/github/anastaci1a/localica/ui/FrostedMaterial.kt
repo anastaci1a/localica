@@ -1,5 +1,8 @@
 package io.github.anastaci1a.localica.ui
 
+import io.github.anastaci1a.localica.ui.components.MaterialAreaReduction
+import io.github.anastaci1a.localica.ui.components.rememberMaterialAreaReduction
+import io.github.anastaci1a.localica.ui.components.materialReductionExtent
 import android.os.Build
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.border
@@ -7,6 +10,9 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.*
+import androidx.compose.ui.modifier.modifierLocalOf
+import androidx.compose.ui.modifier.modifierLocalConsumer
+import androidx.compose.ui.modifier.modifierLocalProvider
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
@@ -49,6 +55,10 @@ internal data class GlassBackdropCapture(val renderer: GlassRendererGeneration,
 internal class FrostedBackdrop(val layer: GraphicsLayer, dark: Boolean,
     private val renderer: GlassRendererRuntime? = null) {
     val readback = RetainedLayerReadback()
+    // Actual recorded-layer containment, independent of the sampling parent chain.
+    private val recordingDebug = if (io.github.anastaci1a.localica.BuildConfig.DEBUG) BackdropRecordingDebug() else null
+    val recordedLayoutChildren get() = requireNotNull(recordingDebug).layoutChildren
+    val recordedChildren get() = requireNotNull(recordingDebug).children
     private val defaultRenderer = defaultGlassRendererGeneration()
     val rendererGeneration get() = renderer?.generation ?: defaultRenderer
     private val captureLock = Mutex()
@@ -263,6 +273,51 @@ internal fun rememberFrostedBackdrop(key: Any?, enabled: Boolean = true, dark: B
     return source
 }
 
+/** Main-thread recording stack plus retained edges between independently recorded backdrop layers.
+ * A retained child may draw without recording again, so its containment edges survive that draw. */
+internal class BackdropRecordingDebug {
+    val layoutChildren = java.util.Collections.newSetFromMap(java.util.IdentityHashMap<FrostedBackdrop, Boolean>())
+    val children = java.util.Collections.newSetFromMap(java.util.IdentityHashMap<FrostedBackdrop, Boolean>())
+}
+
+internal class BackdropRecordingScope(val source: FrostedBackdrop) {
+    var parent: BackdropRecordingScope? = null
+    fun sources(): List<FrostedBackdrop> {
+        val result = ArrayList<FrostedBackdrop>()
+        var scope: BackdropRecordingScope? = this
+        while (scope != null && scope.source !in result) { result += scope.source; scope = scope.parent }
+        return result
+    }
+    fun attach(value: BackdropRecordingScope?) {
+        if (parent === value) return
+        parent?.source?.recordedLayoutChildren?.remove(source)
+        parent = value
+        value?.source?.recordedLayoutChildren?.add(source)
+        BackdropRecordingAncestry.assertInputs()
+    }
+}
+internal val ModifierLocalBackdropRecording = modifierLocalOf<BackdropRecordingScope?> { null }
+
+internal object BackdropRecordingAncestry {
+    val inputs = java.util.Collections.newSetFromMap(java.util.IdentityHashMap<NoneAtlasInput, Boolean>())
+    fun assertInputs() { if (io.github.anastaci1a.localica.BuildConfig.DEBUG) inputs.forEach { it.assertInput() } }
+    private val active = ArrayList<FrostedBackdrop>()
+    fun containers(): List<FrostedBackdrop> = active.toList()
+    fun reference(source: FrostedBackdrop) {
+        if (!io.github.anastaci1a.localica.BuildConfig.DEBUG) return
+        active.lastOrNull()?.takeUnless { it === source }?.recordedChildren?.add(source)
+        assertInputs()
+    }
+    fun begin(source: FrostedBackdrop) { source.recordedChildren.clear(); active.add(source) }
+    fun end(source: FrostedBackdrop) { check(active.removeAt(active.lastIndex) === source); assertInputs() }
+    fun contains(source: FrostedBackdrop, containers: List<FrostedBackdrop>): Boolean {
+        val seen = java.util.Collections.newSetFromMap(java.util.IdentityHashMap<FrostedBackdrop, Boolean>())
+        fun visit(node: FrostedBackdrop): Boolean = seen.add(node) &&
+            (containers.any { it === node } || node.recordedChildren.any(::visit) || node.recordedLayoutChildren.any(::visit))
+        return visit(source)
+    }
+}
+
 /** Lifetime of a sampling edge in the backdrop graph; no per-frame registration. */
 @Composable
 internal fun BackdropLease(source: FrostedBackdrop?) {
@@ -285,8 +340,16 @@ internal fun Modifier.recordFrostedBackdrop(source: FrostedBackdrop, backing: Fr
     readbackRequest: (() -> Int)? = null, onRecorded: ((Int) -> Unit)? = null,
     displayBacking: Boolean = true): Modifier {
     val renderer = currentGlassRendererGeneration()
+    // Modifier ancestry remains available when HWUI reuses an independently retained child.
+    // It describes recording containment, never the scene's sampling parent.
+    val scope = if (io.github.anastaci1a.localica.BuildConfig.DEBUG) remember(source, enabled) { BackdropRecordingScope(source) } else null
+    if (io.github.anastaci1a.localica.BuildConfig.DEBUG && scope != null) DisposableEffect(scope) { onDispose { scope.attach(null) } }
     BackdropLease(backing.takeIf { enabled })
-    return backdropLocation(source.location)
+    return this.then(if (io.github.anastaci1a.localica.BuildConfig.DEBUG && scope != null) Modifier.modifierLocalConsumer {
+            if (enabled) scope.attach(ModifierLocalBackdropRecording.current)
+            else scope.parent = ModifierLocalBackdropRecording.current
+        }.modifierLocalProvider(ModifierLocalBackdropRecording) { if (enabled) scope else scope.parent } else Modifier)
+        .backdropLocation(source.location)
         .onSizeChanged { source.size = it }
         .graphicsLayer()
         .drawWithContent {
@@ -304,9 +367,13 @@ internal fun Modifier.recordFrostedBackdrop(source: FrostedBackdrop, backing: Fr
             val request = readbackRequest?.invoke()
             val viewport = size
             val extent = IntSize(size.width.toInt(), size.height.toInt())
+            if (io.github.anastaci1a.localica.BuildConfig.DEBUG) BackdropRecordingAncestry.reference(source)
+            if (io.github.anastaci1a.localica.BuildConfig.DEBUG) BackdropRecordingAncestry.begin(source)
+            try {
             source.layer.record(size = if (Build.VERSION.SDK_INT >= 33) glassLayerExtent(extent) else extent) {
                 clipRect(right = viewport.width, bottom = viewport.height) {
                     if (backing != null && backing.recorded && !backing.layer.isReleased) {
+                        if (io.github.anastaci1a.localica.BuildConfig.DEBUG) BackdropRecordingAncestry.reference(backing)
                         backing.location.registrationTo(source.location)?.let { registration ->
                             clipRect { withBackdropRegistration(registration) { drawLayer(backing.layer) } }
                         }
@@ -314,6 +381,7 @@ internal fun Modifier.recordFrostedBackdrop(source: FrostedBackdrop, backing: Fr
                     this@drawWithContent.drawContent()
                 }
             }
+            } finally { if (io.github.anastaci1a.localica.BuildConfig.DEBUG) BackdropRecordingAncestry.end(source) }
             source.recordedSize = extent
             androidx.compose.runtime.snapshots.Snapshot.withoutReadObservation { source.recordings++ }
             source.recordedFrames.trySend(Unit)

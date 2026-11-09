@@ -436,3 +436,7 @@ io.github.anastaci1a.localica.BackdropEdgeStripTest
 
 io.github.anastaci1a.localica.CollectionLoadingRevealTest
 io.github.anastaci1a.localica.LibraryDataExchangeTest
+io.github.anastaci1a.localica.NoneExactReductionTest
+io.github.anastaci1a.localica.NoneAtlasTest
+
+io.github.anastaci1a.localica.NoneRealAppWalkTest

@@ -1,10 +1,16 @@
 package io.github.anastaci1a.localica.ui
 
+import io.github.anastaci1a.localica.ui.components.MaterialAreaReduction
+import io.github.anastaci1a.localica.ui.components.rememberMaterialAreaReduction
+import io.github.anastaci1a.localica.ui.components.NoneReductionAtlas
+import io.github.anastaci1a.localica.ui.components.rememberNoneReductionAtlas
+import io.github.anastaci1a.localica.ui.components.NoneAtlasStyle
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Box
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.runtime.*
+import androidx.compose.ui.modifier.modifierLocalConsumer
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -27,6 +33,35 @@ internal data class HomeBackdropSamplingFrame(val footprint: HomeBackdropFootpri
     val cornersInSource: List<Offset>?, val averaged: Boolean, val weight: Float)
 internal val LocalHomeBackdropSamplingObserver = staticCompositionLocalOf<((HomeBackdropSamplingFrame) -> Unit)?> { null }
 
+/** Explicit capability issued by the shell for a source whose recording excludes shell chrome.
+ * It is passed to individual surfaces, never inherited by content, dialogs or projected flights. */
+@Stable
+internal class NoneAtlasInput(val source: FrostedBackdrop) {
+    private val debugReaders = if (io.github.anastaci1a.localica.BuildConfig.DEBUG)
+        java.util.IdentityHashMap<Any, () -> List<FrostedBackdrop>>() else null
+    internal val readers get() = requireNotNull(debugReaders)
+    fun assertConsumer(containers: List<FrostedBackdrop>) {
+        check(!BackdropRecordingAncestry.contains(source, containers)) {
+            "None atlas input node " + source.layer.layerId + " contains an opted-in consumer in nodes " +
+                containers.map { it.layer.layerId }
+        }
+    }
+    fun assertInput() {
+        // Every registered reader includes the retained recordings which can replay its atlas draw.
+        // A source recording may never acquire any such recording, even when the reader is retained.
+        readers.values.forEach { assertConsumer(it()) }
+    }
+}
+
+@Composable internal fun rememberNoneAtlasInput(source: FrostedBackdrop): NoneAtlasInput {
+    val input = remember(source) { NoneAtlasInput(source) }
+    if (io.github.anastaci1a.localica.BuildConfig.DEBUG) DisposableEffect(input) {
+        BackdropRecordingAncestry.inputs.add(input)
+        onDispose { BackdropRecordingAncestry.inputs.remove(input) }
+    }
+    return input
+}
+
 /** Allocation dimensions only. Optical bounds and clipping retain their exact size. */
 internal fun glassLayerExtent(size: IntSize): IntSize {
     fun capacity(value: Int) = if (value <= 0) 0 else ((value + 63) / 64) * 64
@@ -39,6 +74,7 @@ internal fun FilteredBackdrop(modifier: Modifier, source: FrostedBackdrop, locat
     homeWeight: () -> Float = { 0f }, average: MaterialAverageStyle? = null,
     homeBounds: (() -> androidx.compose.ui.geometry.Rect)? = null,
     homeFootprint: (() -> HomeBackdropFootprint?)? = null,
+    noneAtlasInput: NoneAtlasInput? = null,
     effect: (Size, Float, Float) -> RenderEffect?) {
     val renderer = currentGlassRendererGeneration()
     val none by animateFloatAsState(if (renderer.backend == GlassBackend.None) 1f else 0f,
@@ -47,14 +83,14 @@ internal fun FilteredBackdrop(modifier: Modifier, source: FrostedBackdrop, locat
     Box(modifier.graphicsLayer { compositingStrategy = if (blending)
         androidx.compose.ui.graphics.CompositingStrategy.Offscreen else androidx.compose.ui.graphics.CompositingStrategy.Auto }) {
         if (none < 1f) OpticalBackdrop(Modifier.matchParentSize().graphicsLayer { alpha = 1f - none }, source, location, resolution,
-            padding, homeSource, homeWeight, average, homeBounds, homeFootprint, false, effect)
+            padding, homeSource, homeWeight, average, homeBounds, homeFootprint, noneAtlasInput, false, effect)
         // None reads the same sources and scene composition as the lens above, over its full bounds.
         if (none > 0f) OpticalBackdrop(Modifier.matchParentSize().graphicsLayer {
             alpha = none
             blendMode = if (blending) androidx.compose.ui.graphics.BlendMode.Plus else androidx.compose.ui.graphics.BlendMode.SrcOver
         },
             source, location, resolution, padding, homeSource, homeWeight,
-            average ?: MaterialAverageStyle(0f, GlassTone()), homeBounds, homeFootprint, true, effect)
+            average ?: MaterialAverageStyle(0f, GlassTone()), homeBounds, homeFootprint, noneAtlasInput, true, effect)
     }
 }
 
@@ -65,6 +101,7 @@ private fun OpticalBackdrop(modifier: Modifier, source: FrostedBackdrop, locatio
     homeWeight: () -> Float = { 0f }, average: MaterialAverageStyle? = null,
     homeBounds: (() -> androidx.compose.ui.geometry.Rect)? = null,
     homeFootprint: (() -> HomeBackdropFootprint?)? = null,
+    noneAtlasInput: NoneAtlasInput? = null,
     forceAverage: Boolean, effect: (Size, Float, Float) -> RenderEffect?) {
     val opticalWork = LocalGlassOpticalWork.current
     val samplingObserver by rememberUpdatedState(LocalHomeBackdropSamplingObserver.current)
@@ -79,14 +116,39 @@ private fun OpticalBackdrop(modifier: Modifier, source: FrostedBackdrop, locatio
     val rawAverageRenderer = remember(canUseAverage) { if (android.os.Build.VERSION.SDK_INT >= 33 && canUseAverage) MaterialAverageRenderer() else null }
     val areaSource = if (forceAverage) rememberMaterialAreaReduction() else null
     val areaHome = if (forceAverage && homeSource != null) rememberMaterialAreaReduction() else null
-    val areaSourceRenderer = remember(forceAverage) { if (forceAverage && android.os.Build.VERSION.SDK_INT >= 33) MaterialAverageRenderer(true) else null }
-    val areaHomeRenderer = remember(forceAverage) { if (forceAverage && android.os.Build.VERSION.SDK_INT >= 33) MaterialAverageRenderer(true) else null }
+    // The style shader takes the exact mean of the reduction's last level (at most 8×8 texels) itself.
+    val areaSourceRenderer = remember(forceAverage) { if (forceAverage && android.os.Build.VERSION.SDK_INT >= 33) MaterialAverageRenderer(uniformOpaque = true, variableTaps = true) else null }
+    val areaHomeRenderer = remember(forceAverage) { if (forceAverage && android.os.Build.VERSION.SDK_INT >= 33) MaterialAverageRenderer(uniformOpaque = true, variableTaps = true) else null }
     val averageSource = if (average != null && (forceAverage || source.materialOnly)) rememberGraphicsLayer() else null
     val averageHome = if (average != null && (forceAverage || homeSource?.materialOnly == true)) rememberGraphicsLayer() else null
+    // Diagnostics only (debug builds, see MaterialAreaReduction.legacyHalvings): the frozen pre-#691 one-tap style
+    // renderers, so a test can measure final-output drift between the old and the current None path.
+    val legacyRenderers = remember(forceAverage) {
+        if (forceAverage && android.os.Build.VERSION.SDK_INT >= 33 && MaterialAreaReduction.legacyHalvings)
+            MaterialAverageRenderer(true) to MaterialAverageRenderer(true) else null
+    }
+    // Only shell-declared consumers can share a source. No runtime graph inference admits a member.
+    val declaredInput = noneAtlasInput?.takeIf { it.source === source }
+    val atlas = if (forceAverage && declaredInput != null && android.os.Build.VERSION.SDK_INT >= 33)
+        rememberNoneReductionAtlas(source.layer) else null
+    val atlasEntry = remember(atlas) { if (android.os.Build.VERSION.SDK_INT >= 33 && atlas != null) NoneReductionAtlas.Entry() else null }
+    if (android.os.Build.VERSION.SDK_INT >= 33 && atlas != null && atlasEntry != null) DisposableEffect(atlas, atlasEntry) {
+        atlas.add(atlasEntry)
+        onDispose { atlas.remove(atlasEntry) }
+    }
+    val recordingScope = if (io.github.anastaci1a.localica.BuildConfig.DEBUG) remember { arrayOfNulls<BackdropRecordingScope>(1) } else null
+    val reader = if (io.github.anastaci1a.localica.BuildConfig.DEBUG) remember { Any() } else null
+    if (io.github.anastaci1a.localica.BuildConfig.DEBUG && forceAverage && declaredInput != null && reader != null) DisposableEffect(declaredInput, reader) {
+        declaredInput.readers[reader] = { recordingScope?.get(0)?.sources() ?: emptyList() }
+        onDispose { declaredInput.readers.remove(reader) }
+    }
     layer.clip = true
     // Keep sibling motion isolated, but explicitly invalidate consumers in another
     // window when their source records new content.
-    Canvas(modifier.graphicsLayer()) {
+    Canvas(modifier.then(if (io.github.anastaci1a.localica.BuildConfig.DEBUG) Modifier.modifierLocalConsumer {
+        recordingScope?.set(0, ModifierLocalBackdropRecording.current)
+        BackdropRecordingAncestry.assertInputs()
+    } else Modifier).graphicsLayer()) {
         location.observeRecordingAcrossWindows(source)
         homeSource?.let { location.observeRecordingAcrossWindows(it) }
         // A list may load after this floating control's first draw. Observe the
@@ -134,35 +196,95 @@ private fun OpticalBackdrop(modifier: Modifier, source: FrostedBackdrop, locatio
         }
         drawObserver?.let { observeBackdropSampling(it, location, localToSource, viewportBounds) }
         if (forceAverage && average != null && areaSource != null && averageSource != null && areaSourceRenderer != null) {
-            fun androidx.compose.ui.graphics.drawscope.DrawScope.reduce(backing: FrostedBackdrop,
-                reduction: MaterialAreaReduction, output: androidx.compose.ui.graphics.layer.GraphicsLayer,
-                renderer: MaterialAverageRenderer, home: Boolean = false) {
-                val registration = (if (home) homeToFootprint else sourceToLocal) ?: return
-                val footprint = if (home) homeExtent else size
-                // Uniformly average the full material bounds over the actual scene.
-                val screenToHome = if (home) homeToScreen?.inverse() else null
-                val toLocal: (FrostedBackdrop) -> BackdropRegistration? = { scene ->
-                    if (!home) scene.location.registrationTo(location)
-                    else screenToHome?.let { toHome ->
-                        scene.location.registrationToScreen()?.followedBy(toHome)?.followedBy(registration)
-                    }
+            if (!MaterialAreaReduction.legacyHalvings && blend <= 0f && atlas != null && atlasEntry != null && android.os.Build.VERSION.SDK_INT >= 33) {
+                val toLocal: (FrostedBackdrop) -> BackdropRegistration? = { scene -> scene.location.registrationTo(location) }
+                val structure = mutableListOf<SampledSceneDependency>()
+                val region = sampledSceneBounds(source, sourceToLocal, toLocal, structure)?.let { Rect(Offset.Zero, size).intersect(it) }
+                // An unreadable region keeps the member's previous block, as the own chain keeps its last level.
+                if (io.github.anastaci1a.localica.BuildConfig.DEBUG) declaredInput?.assertConsumer(
+                    recordingScope?.get(0)?.sources() ?: BackdropRecordingAncestry.containers())
+                val hosted = if (region == null || region.isEmpty || !region.width.isFinite() || !region.height.isFinite()) atlasEntry.placed
+                    else with(atlas) { place(atlasEntry, source, sourceToLocal, structure, region, average.forBacking(source).let { NoneAtlasStyle(it.whiteTint, it.tone.trim, it.tone.weight, it.tone.lightMix, it.opaque) }) {
+                        translate(-region.left, -region.top) { drawSampledScene(source, sourceToLocal, toLocal, structure) }
+                    } }
+                if (hosted) {
+                    if (io.github.anastaci1a.localica.BuildConfig.DEBUG) declaredInput?.assertInput()
+                    with(atlas) { drawMember(atlasEntry) }
+                    return@Canvas
                 }
-                // Nothing outside the recorded scene exists to read: one uniform fill must not
-                // turn translucent because its bounds extend past a screen or window edge.
-                val region = Rect(Offset.Zero, footprint)
-                    .intersect(sampledSceneBounds(backing, registration, toLocal) ?: return)
-                if (region.isEmpty || !region.width.isFinite() || !region.height.isFinite()) return
-                val result = with(reduction) { recordFullBounds(region.size) {
-                    translate(-region.left, -region.top) {
-                        drawSampledScene(backing, registration, toLocal)
-                    }
-                } }
-                output.renderEffect = if (android.os.Build.VERSION.SDK_INT >= 33) renderer.effect(average.forBacking(backing)) else null
-                output.record(size = IntSize(1, 1)) { drawLayer(result) }
             }
-            if (blend < 1f) reduce(source, areaSource, averageSource, areaSourceRenderer)
-            if (blend > 0f && homeSource != null && areaHome != null && averageHome != null && areaHomeRenderer != null)
-                reduce(homeSource, areaHome, averageHome, areaHomeRenderer, true)
+            if (legacyRenderers != null) {
+                // The frozen pre-#691 path (diagnostics only): bilinear chain to 1×1, one-tap style into a 1×1 copy,
+                // then the 1×1 mix layer drawn scaled. Kept verbatim so drift is measured against the real old output.
+                fun androidx.compose.ui.graphics.drawscope.DrawScope.legacyReduce(backing: FrostedBackdrop,
+                    reduction: MaterialAreaReduction, output: androidx.compose.ui.graphics.layer.GraphicsLayer,
+                    renderer: MaterialAverageRenderer, home: Boolean = false) {
+                    val registration = (if (home) homeToFootprint else sourceToLocal) ?: return
+                    val footprint = if (home) homeExtent else size
+                    val screenToHome = if (home) homeToScreen?.inverse() else null
+                    val toLocal: (FrostedBackdrop) -> BackdropRegistration? = { scene ->
+                        if (!home) scene.location.registrationTo(location)
+                        else screenToHome?.let { toHome ->
+                            scene.location.registrationToScreen()?.followedBy(toHome)?.followedBy(registration)
+                        }
+                    }
+                    val region = Rect(Offset.Zero, footprint)
+                        .intersect(sampledSceneBounds(backing, registration, toLocal) ?: return)
+                    if (region.isEmpty || !region.width.isFinite() || !region.height.isFinite()) return
+                    val result = with(reduction) { recordFullBounds(region.size) {
+                        translate(-region.left, -region.top) {
+                            drawSampledScene(backing, registration, toLocal)
+                        }
+                    } }
+                    output.renderEffect = if (android.os.Build.VERSION.SDK_INT >= 33) renderer.effect(average.forBacking(backing)) else null
+                    output.record(size = IntSize(1, 1)) { drawLayer(result) }
+                }
+                if (blend < 1f) legacyReduce(source, areaSource, averageSource, legacyRenderers.first)
+                if (blend > 0f && homeSource != null && areaHome != null && averageHome != null)
+                    legacyReduce(homeSource, areaHome, averageHome, legacyRenderers.second, true)
+            } else {
+                // Returns the reduction's last level (at most 8×8 texels) carrying the style shader, which draws
+                // the exact styled mean over any extent. Without a mix it is drawn directly: no 1×1 copies.
+                fun androidx.compose.ui.graphics.drawscope.DrawScope.reduce(backing: FrostedBackdrop,
+                    reduction: MaterialAreaReduction, renderer: MaterialAverageRenderer,
+                    home: Boolean = false): androidx.compose.ui.graphics.layer.GraphicsLayer? {
+                    val registration = (if (home) homeToFootprint else sourceToLocal) ?: return reduction.current
+                    val footprint = if (home) homeExtent else size
+                    // Uniformly average the full material bounds over the actual scene.
+                    val screenToHome = if (home) homeToScreen?.inverse() else null
+                    val toLocal: (FrostedBackdrop) -> BackdropRegistration? = { scene ->
+                        if (!home) scene.location.registrationTo(location)
+                        else screenToHome?.let { toHome ->
+                            scene.location.registrationToScreen()?.followedBy(toHome)?.followedBy(registration)
+                        }
+                    }
+                    // Nothing outside the recorded scene exists to read: one uniform fill must not
+                    // turn translucent because its bounds extend past a screen or window edge.
+                    val region = Rect(Offset.Zero, footprint)
+                        .intersect(sampledSceneBounds(backing, registration, toLocal) ?: return reduction.current)
+                    if (region.isEmpty || !region.width.isFinite() || !region.height.isFinite()) return reduction.current
+                    val result = with(reduction) { recordFullBounds(region.size, minimum = 8) {
+                        translate(-region.left, -region.top) {
+                            drawSampledScene(backing, registration, toLocal)
+                        }
+                    } }
+                    result.renderEffect = if (android.os.Build.VERSION.SDK_INT >= 33)
+                        renderer.effect(average.forBacking(backing), taps = result.size) else null
+                    return result
+                }
+                val styledSource = if (blend < 1f) reduce(source, areaSource, areaSourceRenderer) else null
+                val styledHome = if (blend > 0f && homeSource != null && areaHome != null && areaHomeRenderer != null)
+                    reduce(homeSource, areaHome, areaHomeRenderer, true) else null
+                if (blend <= 0f) {
+                    styledSource?.let { with(areaSource) { drawCurrent(size) } }
+                    return@Canvas
+                }
+                // A morph mixes two means: each styled level becomes one texel, added as before.
+                averageSource.renderEffect = null
+                averageSource.record(size = IntSize(1, 1)) { styledSource?.let { with(areaSource) { drawCurrent(Size(1f, 1f)) } } }
+                averageHome?.renderEffect = null
+                averageHome?.record(size = IntSize(1, 1)) { styledHome?.let { with(requireNotNull(areaHome)) { drawCurrent(Size(1f, 1f)) } } }
+            }
             layer.renderEffect = null
             averageSource.alpha = 1f - blend
             averageHome?.alpha = blend
@@ -182,6 +304,7 @@ private fun OpticalBackdrop(modifier: Modifier, source: FrostedBackdrop, locatio
             val footprint = if (isHome) homeExtent else viewport
             clipRect(right = 8f, bottom = 8f) {
                 scale(8f / footprint.width, 8f / footprint.height, Offset.Zero) {
+                    if (io.github.anastaci1a.localica.BuildConfig.DEBUG) BackdropRecordingAncestry.reference(backing)
                     withBackdropRegistration(registration) { drawLayer(backing.layer) }
                 }
             }
@@ -229,7 +352,7 @@ private fun OpticalBackdrop(modifier: Modifier, source: FrostedBackdrop, locatio
             clipRect { scale(r, r, Offset.Zero) {
                 val backingToLocal = (if (isHome) homeToLocal else sourceToLocal) ?: return@scale
                 translate(padding, padding) {
-                    drawSampledScene(backing, backingToLocal) { scene -> scene.location.registrationTo(location) }
+                    drawSampledScene(backing, backingToLocal, parentToLocal = { scene -> scene.location.registrationTo(location) })
                 }
             } }
         }
@@ -248,23 +371,33 @@ private fun OpticalBackdrop(modifier: Modifier, source: FrostedBackdrop, locatio
     }
 }
 
+/** Structural commands retained by an atlas member. Layer pixel updates deliberately do not enter this key. */
+internal data class SampledSceneDependency(val scene: FrostedBackdrop, val recorded: Boolean,
+    val released: Boolean, val size: IntSize, val registration: BackdropRegistration?)
+
 /** The scene a lens samples: the backing inside its recorded box and, because refraction
  * and blur reach beyond a nested panel's box, its real parent chain outside it instead of
  * transparent edge bands. Modern's lens and None's full-bounds mean draw exactly this. */
 internal fun androidx.compose.ui.graphics.drawscope.DrawScope.drawSampledScene(backing: FrostedBackdrop,
-    backingToLocal: BackdropRegistration, parentToLocal: (FrostedBackdrop) -> BackdropRegistration?) {
-    val chain = mutableListOf<FrostedBackdrop>()
-    var item: FrostedBackdrop? = backing
-    while (item != null && item !in chain && chain.size < 8) { chain += item; item = item.parent }
-    val boundary = backingToLocal.corners(Rect(0f, 0f, backing.size.width.toFloat(), backing.size.height.toFloat()))
+    backingToLocal: BackdropRegistration, parentToLocal: (FrostedBackdrop) -> BackdropRegistration?,
+    structure: List<SampledSceneDependency>? = null) {
+    val chain = structure?.map { it.scene } ?: mutableListOf<FrostedBackdrop>().also { chain ->
+        var item: FrostedBackdrop? = backing
+        while (item != null && item !in chain && chain.size < 8) { chain += item; item = item.parent }
+    }
+    val extent = structure?.firstOrNull()?.size ?: backing.size
+    val boundary = backingToLocal.corners(Rect(0f, 0f, extent.width.toFloat(), extent.height.toFloat()))
     val inside = Path().apply {
         moveTo(boundary[0].x, boundary[0].y)
         boundary.drop(1).forEach { lineTo(it.x, it.y) }
         close()
     }
     chain.asReversed().forEach { scene ->
-        if (scene.recorded && !scene.layer.isReleased) {
-            val registration = if (scene === backing) backingToLocal else parentToLocal(scene)
+        val dependency = structure?.firstOrNull { it.scene === scene }
+        if ((dependency?.recorded ?: scene.recorded) && !scene.layer.isReleased) {
+            if (io.github.anastaci1a.localica.BuildConfig.DEBUG) BackdropRecordingAncestry.reference(scene)
+            val registration = if (structure != null) dependency?.registration
+                else if (scene === backing) backingToLocal else parentToLocal(scene)
             if (registration != null) {
                 if (scene === backing) withBackdropRegistration(registration) { drawLayer(scene.layer) }
                 else clipPath(inside, ClipOp.Difference) {
@@ -277,15 +410,20 @@ internal fun androidx.compose.ui.graphics.drawscope.DrawScope.drawSampledScene(b
 
 /** Bounds, in consumer coordinates, of everything [drawSampledScene] can draw. */
 internal fun sampledSceneBounds(backing: FrostedBackdrop, backingToLocal: BackdropRegistration,
-    parentToLocal: (FrostedBackdrop) -> BackdropRegistration?): Rect? {
+    parentToLocal: (FrostedBackdrop) -> BackdropRegistration?,
+    structure: MutableList<SampledSceneDependency>? = null): Rect? {
     var bounds: Rect? = null
     val visited = mutableListOf<FrostedBackdrop>()
     var item: FrostedBackdrop? = backing
     while (item != null && item !in visited && visited.size < 8) {
         visited += item
         val registration = if (item === backing) backingToLocal else parentToLocal(item)
-        if (item.recorded && !item.layer.isReleased && registration != null) {
-            val corners = registration.corners(Rect(0f, 0f, item.size.width.toFloat(), item.size.height.toFloat()))
+        val recorded = item.recorded
+        val released = item.layer.isReleased
+        val extent = item.size
+        structure?.add(SampledSceneDependency(item, recorded, released, extent, registration))
+        if (recorded && !released && registration != null) {
+            val corners = registration.corners(Rect(0f, 0f, extent.width.toFloat(), extent.height.toFloat()))
             val box = Rect(corners.minOf { it.x }, corners.minOf { it.y }, corners.maxOf { it.x }, corners.maxOf { it.y })
             bounds = bounds?.let { Rect(minOf(it.left, box.left), minOf(it.top, box.top), maxOf(it.right, box.right), maxOf(it.bottom, box.bottom)) } ?: box
         }
