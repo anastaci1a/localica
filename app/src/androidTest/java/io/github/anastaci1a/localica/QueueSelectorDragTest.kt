@@ -43,6 +43,7 @@ class QueueSelectorDragTest {
     private var deletions = 0
     private val results = mutableListOf<Boolean>()
     private val moves = mutableListOf<Pair<String, String?>>()
+    private var drawSource: QueueSelectionDrawSource? = null
 
     @Composable
     private fun ObserveOverscroll(observe: Boolean, content: @Composable () -> Unit) {
@@ -128,7 +129,9 @@ class QueueSelectorDragTest {
                 CompositionLocalProvider(LocalDensity provides Density(density.density * densityScale, fontScale),
                     LocalGlassPanelReady provides panelReady, LocalLayoutDirection provides if (rtl) LayoutDirection.Rtl else LayoutDirection.Ltr) {
                     ObserveOverscroll(observeOverscroll) {
-                        if (fullPopup) QueueScreen(state, controller, reducedMotion = reducedMotion)
+                        if (fullPopup) CompositionLocalProvider(LocalQueueSelectionDrawObserver provides { drawSource = it }) {
+                            QueueScreen(state, controller, reducedMotion = reducedMotion)
+                        }
                         else Box(Modifier.width(width.dp).height(height.dp).graphicsLayer { scaleX = scale; scaleY = scale }) {
                             if (present) QueueSelectorList(state.library.queues, "q2", state.library.activeId, false,
                                 reducedMotion, enabled, Modifier.fillMaxSize(),
@@ -725,4 +728,64 @@ class QueueSelectorDragTest {
         compose.onNodeWithText("Playback queue").assertIsDisplayed()
         assertEquals(before, order(controller))
     }
+
+    /** A real display frame: only invalidated layers redraw (an image capture would redraw them all). */
+    private fun displayFrame() {
+        compose.mainClock.advanceTimeByFrame()
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        instrumentation.waitForIdleSync(); Thread.sleep(34); instrumentation.waitForIdleSync()
+    }
+
+    /** #735 recording 2: in the real popup, a queue dragged past the playing (chosen, lifted) queue
+     * must displace it; its lifted drawing is at its live slot in every frame. */
+    private fun playingFollowsItsSlot(moving: String, to: String, below: Boolean, expected: List<String>) =
+        fixture(count = 14, fullPopup = true) { controller, _ ->
+        val moved = CompletableDeferred<Boolean>()
+        controller.moveQueueBefore("q0", "q11") { moved.complete(it) }
+        assertTrue(runBlocking { withTimeout(5000) { moved.await() } })
+        compose.onNodeWithContentDescription("Select queue").performClick()
+        compose.awaitExpectedWindowFocus(list())
+        compose.onNodeWithText("Playback queue").assertIsDisplayed()
+        compose.waitUntil(5000) { drawSource != null }
+        val start = localBody(moving)
+        list().performTouchInput { down(start); advanceEventTime(650); moveTo(start + Offset(0f, if (below) 30f else -30f)); advanceEventTime(32) }
+        compose.onNodeWithTag("drag-stack").assertExists()
+        val target = compose.onNodeWithTag("queue-row-$to").fetchSemanticsNode().boundsInRoot
+            .let { if (below) it.bottom - 6f else it.top + 6f } - list().fetchSemanticsNode().boundsInRoot.top
+        compose.mainClock.autoAdvance = false
+        var frames = 0
+        fun check(label: String) {
+            val (drawn, row) = compose.runOnUiThread {
+                val probe = requireNotNull(drawSource)
+                val rowCoordinates = requireNotNull(probe.rows["q0"]) { "Playing row coordinates" }
+                probe.scene.lastDrawnRegions.map { it.bounds } to probe.viewport.localBoundingBoxOf(rowCoordinates, clipBounds = false)
+            }
+            val lifted = drawn.minByOrNull { kotlin.math.abs(it.center.y - row.center.y) }
+            assertNotNull("$label: the playing row is painted lifted", lifted)
+            assertEquals("$label: the playing row is painted at its live slot (drawn=$drawn row=$row)", row.center.y, lifted!!.center.y, 12f)
+            frames++
+        }
+        try {
+            var y = start.y + if (below) 30f else -30f
+            val step = if (below) 10f else -10f
+            while (if (below) y < target else y > target) {
+                y += step
+                list().performTouchInput { moveTo(Offset(start.x, y)); advanceEventTime(16) }
+                displayFrame(); check("drag y=$y")
+            }
+            repeat(30) { displayFrame(); check("settle $it") }
+            list().performTouchInput { up() }
+            var landing = 0
+            while (compose.onAllNodesWithTag("drag-stack").fetchSemanticsNodes().isNotEmpty() && landing++ < 200) {
+                displayFrame(); check("landing $landing")
+            }
+        } finally { compose.mainClock.autoAdvance = true }
+        assertTrue("Sampled every frame", frames > 40)
+        compose.waitUntil(5000) { order(controller) == expected }
+    }
+
+    @Test fun popupDragDownPastThePlayingQueueDisplacesItEveryFrame() = playingFollowsItsSlot("q9", "q12", below = true,
+        expected = listOf("q1", "q2", "q3", "q4", "q5", "q6", "q7", "q8", "q10", "q0", "q11", "q12", "q9", "q13"))
+    @Test fun popupDragUpPastThePlayingQueueDisplacesItEveryFrame() = playingFollowsItsSlot("q12", "q9", below = false,
+        expected = listOf("q1", "q2", "q3", "q4", "q5", "q6", "q7", "q8", "q12", "q9", "q10", "q0", "q11", "q13"))
 }
