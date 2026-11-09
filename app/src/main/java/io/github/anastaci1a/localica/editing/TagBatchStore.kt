@@ -19,7 +19,7 @@ internal data class TagBatchEntry(val index: Int, val uri: String, val original:
     val writtenHash: String? = null, val message: String? = null)
 internal data class TagBatch(val id: String, val tracks: List<Track>, val patch: TagPatch?, val draft: String?,
     val undo: Boolean, val background: Boolean, val phase: TagBatchPhase, val entries: Map<Int, TagBatchEntry>,
-    val payloadHash: String) {
+    val payloadHash: String, val entryCount: Int = 0) {
     val saved get() = entries.values.count { it.phase == TagBatchEntryPhase.Saved }
     val restored get() = entries.values.count { it.attempted && it.phase == TagBatchEntryPhase.Restored }
     val touched get() = entries.values.count { it.attempted }
@@ -44,7 +44,7 @@ class TagBatchStore(private val directory: File,
             }
             return null
         }
-        check(active.getInt("version") == 1)
+        check(active.getInt("version") == 2)
         val id = active.getString("id"); check(idPattern.matches(id)) { "Invalid undo batch identity." }
         val phase = TagBatchPhase.valueOf(active.getString("phase"))
         val undo = active.getBoolean("undo"); val background = active.getBoolean("background")
@@ -58,6 +58,7 @@ class TagBatchStore(private val directory: File,
         check(payload.getInt("version") == 1 && payload.getString("id") == id)
         val array = payload.getJSONArray("tracks")
         val tracks = (0 until array.length()).map { TrackSnapshot.decode(array.getString(it)) }
+        val entryCount = active.getInt("entryCount"); check(entryCount in 0..tracks.size)
         check(tracks.isNotEmpty() && tracks.map { documentIdentity(it.id) }.distinct().size == tracks.size) {
             "Undo batch contains duplicate document identities."
         }
@@ -91,7 +92,10 @@ class TagBatchStore(private val directory: File,
             entries[index] = TagBatchEntry(index, uri, original, originalHash, size, entryPhase, attempted, writtenHash, value.optional("message"))
         }
         val draft = payload.optional("draft")?.also { JSONObject(it) }
-        return TagBatch(id, tracks, patch, draft, undo, background, phase, entries, payloadHash)
+        check((0 until entryCount).all { entries.containsKey(it) }) {
+            "An admitted file lost its undo entry. Keep the retained files; batch decisions are blocked."
+        }
+        return TagBatch(id, tracks, patch, draft, undo, background, phase, entries, payloadHash, entryCount)
     }
 
     @Synchronized internal fun begin(tracks: List<Track>, patch: TagPatch, draft: String?, undo: Boolean): TagBatch {
@@ -145,6 +149,7 @@ class TagBatchStore(private val directory: File,
 
     @Synchronized internal fun put(id: String, entry: TagBatchEntry): TagBatch {
         val current = current(id); check(!current.terminal && entry.index in current.tracks.indices)
+        check(entry.index <= current.entryCount) { "Prepare batch entries in their original order." }
         check(documentIdentity(entry.uri) == documentIdentity(current.tracks[entry.index].id))
         val old = current.entries[entry.index]
         check(old == null || (old.original == entry.original && (old.originalHash == entry.originalHash || (!current.undo && old.originalHash == null)) && old.uri == entry.uri)) {
@@ -157,6 +162,9 @@ class TagBatchStore(private val directory: File,
             .put("uri", entry.uri).put("original", entry.original).put("originalHash", entry.originalHash).put("size", entry.size)
             .put("phase", entry.phase.name).put("attempted", entry.attempted).put("writtenHash", entry.writtenHash).put("message", entry.message)
         commit(AtomicFile(child(root, "${entry.index}.json")), value.toString().toByteArray(Charsets.UTF_8))
+        // A fixed-size header watermark precedes audio admission. Losing a record can
+        // never make a previously touched file look new, including in no-undo mode.
+        if (entry.index == current.entryCount) writeHeader(current.copy(entryCount = current.entryCount + 1))
         return requireNotNull(read())
     }
 
@@ -187,8 +195,9 @@ class TagBatchStore(private val directory: File,
     private fun current(id: String): TagBatch = requireNotNull(read()).also { check(it.id == id) { "Undo batch ownership changed." } }
     private fun writeHeader(value: TagBatch) {
         check(directory.isDirectory || directory.mkdirs())
-        val bytes = JSONObject().put("version", 1).put("id", value.id).put("phase", value.phase.name)
+        val bytes = JSONObject().put("version", 2).put("id", value.id).put("phase", value.phase.name)
             .put("undo", value.undo).put("background", value.background).put("payloadHash", value.payloadHash)
+            .put("entryCount", value.entryCount)
             .toString().toByteArray(Charsets.UTF_8)
         commit(header, bytes)
     }

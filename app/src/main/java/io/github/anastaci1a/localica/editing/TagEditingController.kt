@@ -62,7 +62,8 @@ class TagEditingController(private val context: Context, private val library: Li
     fun open(tracks: List<Track>, complete: (Boolean) -> Unit = {}) {
         if (state.value.busy || state.value.batchId != null) { showJobs(); return }
         completion?.invoke(false); completion = complete
-        mutable.update { it.copy(sessionId = java.util.UUID.randomUUID().toString(), tracks = tracks.distinctBy(Track::id), results = emptyList(), error = null, background = false, artworkOnly = false) }
+        mutable.update { it.copy(sessionId = java.util.UUID.randomUUID().toString(), tracks = tracks.distinctBy { track -> documentIdentity(track.id) },
+            results = emptyList(), error = null, background = false, artworkOnly = false, draft = null, progressVisible = false) }
     }
     fun openArtwork(track: Track) {
         if (state.value.busy) { showJobs(); return }
@@ -158,6 +159,10 @@ class TagEditingController(private val context: Context, private val library: Li
     internal suspend fun retainedPatch(): TagPatch? = withContext(Dispatchers.IO) { writer.batches.read()?.patch }
 
     private suspend fun publish(batch: TagBatch) = withContext(Dispatchers.Main.immediate) {
+        if (batch.terminal) {
+            mutable.update { it.copy(phase = batch.phase.name) }
+            return@withContext
+        }
         mutable.update { current -> current.copy(batchId = batch.id, phase = batch.phase.name, undo = batch.undo,
             saved = batch.saved, restored = batch.restored, touched = batch.touched,
             results = batch.entries.values.sortedBy { it.index }.mapNotNull { entry ->
@@ -277,6 +282,7 @@ class TagEditingController(private val context: Context, private val library: Li
             try { library.withExclusiveFiles {
                 val pending = withContext(Dispatchers.IO) { writer.pending() } ?: return@withExclusiveFiles
                 queues.withFileRecovery(pending.track.id, request) {
+                    withContext(Dispatchers.IO) { refreshJournal.include(pending.track.copy(uri = pending.uri)) }
                     val restored = writer.recover()
                     withContext(Dispatchers.IO) { refreshJournal.include(restored) }
                     flushMetadata()
