@@ -440,3 +440,8 @@ io.github.anastaci1a.localica.LibraryDataExchangeTest
 io.github.anastaci1a.localica.GlassMorphZeroConstraintsTest
 io.github.anastaci1a.localica.PopupViewportSlotTest
 io.github.anastaci1a.localica.PopupEditorFocusOwnershipTest
+io.github.anastaci1a.localica.PopupImeGeometryTest
+io.github.anastaci1a.localica.PopupImeLiveSceneSetupTest
+io.github.anastaci1a.localica.TagBatchControllerTest
+io.github.anastaci1a.localica.TagBatchTransactionTest
+io.github.anastaci1a.localica.TagSaveProgressPopupTest
