@@ -20,22 +20,78 @@ def command(args, timeout=4):
         return {'exit_code': None, 'error': type(error).__name__}
 
 
-def emulator_processes():
+def emulator_processes(serial, proc_root=Path('/proc')):
     found = []
-    for proc in Path('/proc').glob('[0-9]*'):
+    for proc in proc_root.glob('[0-9]*'):
         try:
             argv = (proc / 'cmdline').read_bytes().split(b'\0')
             executable = Path(os.fsdecode(argv[0])).name
-            if executable.startswith('qemu-system-') or executable in ('emulator', 'emulator64-x86'):
-                found.append({'pid': int(proc.name), 'argv': [os.fsdecode(arg) for arg in argv if arg]})
+            port = os.fsencode(serial.removeprefix('emulator-'))
+            selected = any(argv[i] == b'-port' and i + 1 < len(argv) and argv[i + 1] == port
+                           for i in range(len(argv)))
+            if selected and (executable.startswith('qemu-system-') or executable in ('emulator', 'emulator64-x86')):
+                start_ticks = (proc / 'stat').read_text().rpartition(') ')[2].split()[19]
+                found.append({'pid': int(proc.name), 'start_ticks': start_ticks,
+                              'argv': [os.fsdecode(arg) for arg in argv if arg]})
         except (OSError, IndexError):
             pass
     return found
 
 
-def classify(result, samples, results, iterations=None):
+def infrastructure_diagnostic(text, serial='emulator-5554'):
+    """The original UTP device-loss diagnostic; unknown stderr remains fatal."""
+    missing = "device '" + re.escape(serial) + "' not found"
+    allowed = [r'Exception thrown during onAfterAll invocation of plugin AndroidTestApkInstallerPlugin: ' + missing,
+               missing, r'com\.android\.ddmlib\.AdbCommandRejectedException: ' + missing,
+               r'at (?:com\.android\.ddmlib\.|com\.android\.tools\.utp\.plugins\.deviceprovider\.ddmlib\.|'
+               r'kotlin\.coroutines\.|kotlinx\.coroutines\.)[^\r\n]+',
+               r'Test run failed to complete\. Expected [0-9]+ tests, received [0-9]+']
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    return (bool(lines) and any('com.android.ddmlib.AdbCommandRejectedException:' in line for line in lines)
+            and all(any(re.fullmatch(pattern, line) for pattern in allowed) for line in lines))
+
+
+def classify(result, samples, results, iterations=None, evidence=None):
     """Any substantive assertion/error overrides host loss. Unknown/malformed evidence fails closed."""
     if result == 0:
+        return None
+    if evidence is None or not samples:
+        return None
+    try:
+        context = dict(line.split('=', 1) for line in (evidence / 'context.txt').read_text().splitlines() if line)
+        if (context['boot_id'] != samples[0].get('boot_id', {}).get('stdout', '').strip()
+                or context['api'] != context['actual_api'] or context['api'] not in ('26', '36')
+                or not re.fullmatch(r'emulator-[0-9]+', context['serial'])
+                or not re.fullmatch(r'[0-9a-f]{40}', context['candidate_sha'])):
+            return None
+    except (OSError, ValueError, KeyError):
+        return None
+    log_roots = [evidence] + ([iterations] if iterations else [])
+    observed_logs = [p for root in log_roots if root.exists() for p in root.rglob('live/observed/command.log')]
+    if not observed_logs:
+        return None
+    failed_observer = False
+    for log in observed_logs:
+        try:
+            observed = json.loads((log.parent / 'manifest.json').read_text())
+            supervision = json.loads((log.parent.parent / 'supervision.json').read_text())
+            text = log.read_text(errors='replace')
+            required = {'sha', 'api', 'observer_error', 'cancel_signal', 'status', 'oversize_lines_not_parsed'}
+            if (not required.issubset(observed) or not {'monitoring_complete', 'supervisor_error', 'sha', 'api'}.issubset(supervision)
+                    or observed['sha'] != context['candidate_sha'] or str(observed['api']) != context['api']
+                    or supervision['sha'] != context['candidate_sha'] or str(supervision['api']) != context['api']
+                    or not text.strip() or supervision.get('monitoring_complete') is not True
+                    or supervision.get('supervisor_error') is not None
+                    or observed.get('observer_error') is not None or observed.get('cancel_signal') is not None
+                    or observed.get('status') not in ('completed', 'failed')
+                    or observed.get('oversize_lines_not_parsed') != 0):
+                return None
+            if re.search(r'AssertionError|FATAL EXCEPTION|TestRunner: (?:failed|failure):|java\.lang\.(?:\w*Exception|\w*Error)', text):
+                return None
+            failed_observer |= observed['status'] == 'failed'
+        except (OSError, ValueError, KeyError):
+            return None
+    if not failed_observer:
         return None
     failures = []
     files = list(results.rglob('*.xml')) if results.exists() else []
@@ -45,6 +101,10 @@ def classify(result, samples, results, iterations=None):
         try:
             tree = ET.parse(path)
             for node in tree.iter():
+                text = ''.join(node.itertext()).strip() if node.tag in ('system-err', 'system-out') else ''
+                if (node.tag == 'system-err' and text and not infrastructure_diagnostic(text, context['serial'])) or re.search(
+                        r'AssertionError|FATAL EXCEPTION|TestRunner: (?:failed|failure):|java\.lang\.(?:\w*Exception|\w*Error)', text):
+                    return None
                 if node.tag in ('failure', 'error'):
                     if (node.text or '').strip() or any(str(v).strip() for v in node.attrib.values()) or len(node):
                         return None
@@ -64,14 +124,41 @@ def classify(result, samples, results, iterations=None):
                 return None
             if re.search(r'TestRunner: (?:failed|failure):|AssertionError|FATAL EXCEPTION', text):
                 return None
-    # Require two independent samples of a vanished process AND absent adb transport.
-    # A shell timeout on a busy emulator is never sufficient.
-    lost = [s for s in samples if not s['processes'] and s['adb']['exit_code'] not in (None, 0)]
-    if len(lost) < 2 or not any(s['processes'] and s['adb']['exit_code'] == 0 for s in samples):
+    # Only the original observed guest may lead into an ordered, terminal loss.
+    # An earlier loss followed by recovery cannot authorize retry of a later failure.
+    if len(samples) < 3:
+        return None
+    origin = samples[0]
+    boot = origin.get('boot_id', {}).get('stdout', '').strip()
+    if (origin['adb']['exit_code'] != 0 or not origin['processes']
+            or not re.fullmatch(r'[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}', boot)
+            or origin.get('boot_id', {}).get('exit_code') != 0):
+        return None
+    def identities(sample):
+        return {(p['pid'], p.get('start_ticks')) for p in sample['processes']}
+    original = identities(origin)
+    if any(ticks is None for _, ticks in original):
+        return None
+    lost = []
+    previous = -1
+    for sample in samples:
+        if sample['elapsed_seconds'] <= previous:
+            return None
+        previous = sample['elapsed_seconds']
+        absent = not sample['processes'] and sample['adb']['exit_code'] not in (None, 0)
+        if absent:
+            lost.append(sample)
+        elif lost or identities(sample) != original:
+            return None
+        elif (sample.get('boot_id', {}).get('exit_code') != 0
+              or sample.get('boot_id', {}).get('stdout', '').strip() != boot):
+            return None
+    if len(lost) < 2:
         return None
     return {'schema_version': 1, 'classification': 'infrastructure', 'reason': 'emulator-process-lost',
             'issue': 738, 'exit_code': result, 'empty_utp_failures': failures,
-            'first_loss_seconds': lost[0]['elapsed_seconds'], 'lost_samples': len(lost)}
+            'first_loss_seconds': lost[0]['elapsed_seconds'], 'lost_samples': len(lost),
+            'original_boot_id': boot, 'original_processes': origin['processes']}
 
 
 def main():
@@ -102,7 +189,7 @@ def main():
     started = time.monotonic()
     def sample():
         item = {'elapsed_seconds': round(time.monotonic() - started, 3),
-                'processes': emulator_processes(),
+                'processes': emulator_processes(serial),
                 'adb': command(['adb', '-s', serial, 'get-state']),
                 'boot_id': command(['adb', '-s', serial, 'shell', 'cat', '/proc/sys/kernel/random/boot_id']),
                 'meminfo': Path('/proc/meminfo').read_text()}
@@ -130,7 +217,7 @@ def main():
         thread.join()
     sample()
     if not cancelled:
-        receipt = classify(result, samples, Path('app/build/outputs/androidTest-results'), Path('prototype-iterations'))
+        receipt = classify(result, samples, Path('app/build/outputs/androidTest-results'), Path('prototype-iterations'), Path('prototype-evidence'))
         if receipt:
             receipt.update({name.lower().removeprefix('github_'): os.environ.get(name, '')
                             for name in ('GITHUB_SHA', 'GITHUB_RUN_ID', 'GITHUB_RUN_ATTEMPT', 'GITHUB_JOB')})
