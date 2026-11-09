@@ -307,7 +307,7 @@ private fun OpticalBackdrop(modifier: Modifier, source: FrostedBackdrop, locatio
             clipRect { scale(r, r, Offset.Zero) {
                 val backingToLocal = (if (isHome) homeToLocal else sourceToLocal) ?: return@scale
                 translate(padding, padding) {
-                    drawSampledScene(backing, backingToLocal) { scene -> scene.location.registrationTo(location) }
+                    drawSampledScene(backing, backingToLocal, parentToLocal = { scene -> scene.location.registrationTo(location) })
                 }
             } }
         }
