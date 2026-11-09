@@ -23,6 +23,7 @@ import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.platform.ViewRootForTest
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.IntOffset
+import io.github.anastaci1a.localica.ui.engine.fieldScalesWithBody
 import io.github.anastaci1a.localica.ui.engine.ownsWindow
 import io.github.anastaci1a.localica.ui.engine.UiClock
 import io.github.anastaci1a.localica.ui.engine.LocalUiClock
@@ -271,12 +272,13 @@ private class QueueSelectorCallerFixture(private val compose: androidx.compose.u
     }
 
     private data class FieldInput(val frame: Int, val actual: File?, val rect: Rect, val body: RoundRect,
-        val sourceOwned: Boolean, val capture: PresentedCapture)
+        val sourceOwned: Boolean, val fieldScalesWithBody: Boolean, val capture: PresentedCapture)
 
     private fun captureHomeField(anchor: GlassAnchor, native: Window?, frame: Int): FieldInput {
         check(!anchor.hidden) { "Unsupported: active native origin receiver requires its own independent model" }
         val node = anchor.surfaceNode
         val home = anchor.shadowPlane
+        val fieldScalesWithBody = requireNotNull(node).fieldScalesWithBody()
         val sourceOwned = node != null && home != null && node.ownsWindow(home)
         val nativeSurface = if (native != null && !sourceOwned)
             compose.onAllNodesWithTag("glass-morph-surface").fetchSemanticsNodes().singleOrNull() else null
@@ -299,7 +301,8 @@ private class QueueSelectorCallerFixture(private val compose: androidx.compose.u
             scaleX = sx, scaleY = sy, strength = .8f, spread = .6f)
         fun receipt(): ShadowDrawState {
             check(clock.stampNow.sequence == sequence && anchor.contact.expansion.value.coerceIn(0f, 1f) == phase &&
-                anchor.contact.body.value == shape && !anchor.hidden) { "Incomplete: Queue geometry changed during native capture" }
+                anchor.contact.body.value == shape && !anchor.hidden &&
+                node.fieldScalesWithBody() == fieldScalesWithBody) { "Incomplete: Queue geometry changed during native capture" }
             return state
         }
         val extras = listOfNotNull(native?.let { popup ->
@@ -311,18 +314,18 @@ private class QueueSelectorCallerFixture(private val compose: androidx.compose.u
             invalidateWindow = false) { clock.stampNow.sequence }.use { owner ->
             owner.capture(epoch, popup = native?.let { popup -> { PopupShadowComposition(higherWindows = listOf(popup)) } }) { receipt() }
         }
-        return FieldInput(frame, null, rect, body, sourceOwned, capture)
+        return FieldInput(frame, null, rect, body, sourceOwned, fieldScalesWithBody, capture)
     }
 
     private fun inspectHomeField(actual: Bitmap, input: FieldInput, output: File, log: StringBuilder): String? {
         val (frame, _, rect, body, sourceOwned) = input
         val density = compose.density.density
         val state = input.capture.nativeWindows.first().state
-        log.append("field-receipts frame=$frame state=$state native=${input.capture.nativeWindows}\n")
-        check(state.scaleX == 1f && state.scaleY == 1f) {
-            "Incomplete: independent Queue private-field reference must model anisotropic rebound, not substitute a fixed-pixel kernel: $state"
-        }
-        val reference = shadowUnionReference(compose, actual.width, actual.height, state).asAndroidBitmap()
+        log.append("field-receipts frame=$frame fieldScalesWithBody=${input.fieldScalesWithBody} state=$state native=${input.capture.nativeWindows}\n")
+        // Bodies are already physical/deformed. Private fields inherit their draw transform;
+        // shared source fields retain physical ring widths. Keep the actual receipt unchanged.
+        val referenceState = if (input.fieldScalesWithBody) state else state.copy(scaleX = 1f, scaleY = 1f)
+        val reference = shadowUnionReference(compose, actual.width, actual.height, referenceState).asAndroidBitmap()
         try {
             val left = (((body.left + body.right) / 2f) - 6 * density).roundToInt().coerceAtLeast(0)
             val right = ((body.left + body.right) / 2f + 6 * density).roundToInt().coerceAtMost(actual.width - 1)
