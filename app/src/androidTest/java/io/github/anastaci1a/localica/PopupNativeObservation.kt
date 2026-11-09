@@ -17,6 +17,8 @@ import org.json.JSONObject
  * a token match does not certify field freshness or physical presentation ownership. */
 internal class PopupNativeObservation {
     private val receipts = ArrayList<JSONObject>() // UI thread only, frozen before finish.
+    private val beforeDrawCallbacks = ArrayList<JSONObject>()
+    private val beforeDrawCaptures = ArrayList<JSONObject>()
     private val captures = ArrayList<JSONObject>() // Single worker; read after finish.
     private val worker = Executors.newSingleThreadExecutor { work ->
         Thread(work, "popup-native-observation").apply { isDaemon = true }
@@ -67,11 +69,41 @@ internal class PopupNativeObservation {
         }
     }
 
+
+    /** ViewRoot callback observes intervals the separately retained overlay may not redraw.
+     * State is sampled BEFORE native drawing; neither it nor an old overlay token certifies presentation. */
+    @Synchronized
+    fun beforeDraw(state: JSONObject, restored: Boolean, output: File) {
+        if (closed || beforeDrawCallbacks.size >= 4096) return
+        val callback = beforeDrawCallbacks.size + 1
+        val requestedNs = SystemClock.elapsedRealtimeNanos()
+        beforeDrawCallbacks += state.put("callback", callback).put("beforeDrawNs", requestedNs)
+        if (!armed || !restored || attempts >= 40 || !busy.compareAndSet(false, true)) return
+        val attempt = attempts++
+        val priorOverlaySequence = sequence
+        worker.execute {
+            val record = JSONObject().put("attempt", attempt).put("callback", callback)
+                .put("beforeDrawNs", requestedNs).put("priorOverlaySequence", priorOverlaySequence)
+                .put("captureStartNs", SystemClock.elapsedRealtimeNanos())
+            var bitmap: Bitmap? = null
+            try {
+                val captured = requireNotNull(InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot())
+                bitmap = captured
+                record.put("captureEndNs", SystemClock.elapsedRealtimeNanos())
+                val file = File(output, "before-draw-native-$attempt.png")
+                file.outputStream().use { check(captured.compress(Bitmap.CompressFormat.PNG, 100, it)) }
+                record.put("png", file.name)
+            } catch (failure: Throwable) { record.put("error", failure.toString()) }
+            finally { bitmap?.recycle(); beforeDrawCaptures += record; busy.set(false) }
+        }
+    }
+
     fun finish(output: File) {
         synchronized(this) { closed = true; armed = false; worker.shutdown() }
         check(worker.awaitTermination(20, TimeUnit.SECONDS)) { "Native observation worker did not finish" }
         File(output, "native-observation.json").writeText(JSONObject()
             .put("scope", "Overlay draw observation and asynchronous native screenshots only. Cached physical field geometry is not a field-recording token; no optical assertion is waived.")
-            .put("receipts", JSONArray(receipts)).put("captures", JSONArray(captures)).toString(2))
+            .put("receipts", JSONArray(receipts)).put("captures", JSONArray(captures))
+            .put("beforeDrawCallbacks", JSONArray(beforeDrawCallbacks)).put("beforeDrawCaptures", JSONArray(beforeDrawCaptures)).toString(2))
     }
 }

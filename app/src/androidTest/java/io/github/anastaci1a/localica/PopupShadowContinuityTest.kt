@@ -93,6 +93,31 @@ class PopupShadowContinuityTest {
                 !anchor.hidden && anchor.restoredDrawn && anchor.modalPresent, output)
         }
 
+    private fun observeBeforeDraw(plane: ShadowPlane, view: View) = Snapshot.withoutReadObservation {
+        if (!::anchor.isInitialized || !::output.isInitialized) return@withoutReadObservation
+            val node = (anchor.surfaceNode ?: anchor.returningNode) as? SurfaceNode
+            val coordinates = plane.layout?.takeIf { it.isAttached }
+            val origin = coordinates?.backdropPosition(view)
+            val screen = IntArray(2).also { view.rootView.getLocationOnScreen(it) }
+            fun bodies(value: List<RoundRect>) = org.json.JSONArray(value.map { b -> org.json.JSONArray(listOf(
+                b.left, b.top, b.right, b.bottom, b.topLeftCornerRadius.x, b.topLeftCornerRadius.y,
+                b.topRightCornerRadius.x, b.topRightCornerRadius.y, b.bottomRightCornerRadius.x,
+                b.bottomRightCornerRadius.y, b.bottomLeftCornerRadius.x, b.bottomLeftCornerRadius.y)) })
+            val home = node?.sourcePlane
+            val state = org.json.JSONObject().put("hidden", anchor.hidden).put("restored", anchor.restoredDrawn)
+                .put("modal", anchor.modalPresent).put("inModal", anchor.shadowInModal)
+                .put("phase", anchor.contact.expansion.value).put("request", anchor.restoredDrawRequest)
+                .put("receipt", anchor.restoredDrawReceipt).put("posted", anchor.restoredPresentedReceipt)
+                .put("windowOwner", node?.owns(plane) == true).put("homeOwner", home != null && node?.owns(home) == true)
+                .put("fieldInheritsBodyScale", node?.fieldInheritsBodyScale)
+                .put("windowBodies", bodies(node?.frameOn(plane)?.bodies.orEmpty()))
+                .put("homeBodies", bodies(home?.let { node?.frameOn(it)?.bodies }.orEmpty()))
+                .put("planeAttached", coordinates != null).put("planeOriginX", origin?.x).put("planeOriginY", origin?.y)
+                .put("viewScreenX", screen[0]).put("viewScreenY", screen[1])
+
+        nativeObservation.beforeDraw(state, !anchor.hidden && anchor.restoredDrawn && anchor.modalPresent, output)
+    }
+
     /** Independent native path reference inside the existing retained backdrop layer.
      * The hook runs after the source field; native marker freshness must still be
      * falsified before claiming correlation with its current submitted pixels.
@@ -507,7 +532,10 @@ class PopupShadowContinuityTest {
                 val next = FrameMarker { canvas, bounds -> observeNative(canvas, bounds, plane, view) }
                 popupView = view; popupWindow = window; marker = next
                 window.decorView.overlay.add(next)
-                val observer = android.view.ViewTreeObserver.OnDrawListener { recordDraw("popup-before-draw") }
+                val observer = android.view.ViewTreeObserver.OnDrawListener {
+                    recordDraw("popup-before-draw")
+                    observeBeforeDraw(plane, view)
+                }
                 window.decorView.viewTreeObserver.addOnDrawListener(observer)
                 onDispose {
                     window.decorView.viewTreeObserver.removeOnDrawListener(observer)
