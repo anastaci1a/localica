@@ -275,7 +275,7 @@ class AutoScrollDrawnPlacementTest {
         while (layout != null && depth++ < 20 && found == null) {
             var node = field(requireNotNull(field(layout, "nodes")), "head")
             while (node != null && found == null) {
-                val onDraw = field(node, "onDraw")
+                val onDraw = (field(node, "onDraw") ?: field(node, "block"))
                 if (onDraw != null && node is DrawModifierNode) {
                     val motion = onDraw.javaClass.declaredFields.mapNotNull { f ->
                         f.isAccessible = true; f.get(onDraw) as? BrowsePinchMotion
@@ -342,7 +342,7 @@ class AutoScrollDrawnPlacementTest {
 
     private fun observeViewportDraw(drawNode: DrawModifierNode, after: () -> Unit) {
         main { a ->
-            val f = drawNode.javaClass.declaredFields.single { it.name == "onDraw" }
+            val f = drawNode.javaClass.declaredFields.single { it.name == "onDraw" || it.name == "block" }
             f.isAccessible = true
             var wrapped: Any? = null
             val observer = android.view.ViewTreeObserver.OnPreDrawListener {
@@ -398,7 +398,7 @@ class AutoScrollDrawnPlacementTest {
         scrollDeep(100)
         Thread.sleep(5000)
         val drawNode = overlay().second
-        val mainDraw = requireNotNull(field(drawNode, "onDraw"))
+        val mainDraw = requireNotNull((field(drawNode, "onDraw") ?: field(drawNode, "block")))
         val draws = java.util.concurrent.atomic.AtomicInteger()
         // Recomposition replaces draw lambdas. Re-wrap the latest lambda before each native draw.
         observeViewportDraw(drawNode) { draws.incrementAndGet() }
@@ -422,6 +422,7 @@ class AutoScrollDrawnPlacementTest {
         var last = draws.get()
         var scrollFrames = 0
         var recordedFrames = 0
+        val badFrames = mutableListOf<String>()
         val done = java.util.concurrent.CountDownLatch(1)
         main {
             val choreographer = android.view.Choreographer.getInstance()
@@ -432,6 +433,7 @@ class AutoScrollDrawnPlacementTest {
                     if (step > 0) {
                         scrollFrames++
                         if (now > last) recordedFrames++
+                        if (step > 1 && now - last != 1) badFrames += "frame=$step draws="+(now-last)
                         android.util.Log.i("AutoScroll635Counts", "scrollFrame=" + step + " draws=" + (now - last))
                     }
                     last = now
@@ -444,7 +446,7 @@ class AutoScrollDrawnPlacementTest {
         }
         check(done.await(30, java.util.concurrent.TimeUnit.SECONDS))
         android.util.Log.i("AutoScroll635Counts", "scrollFrames=" + scrollFrames + " recordedFrames=" + recordedFrames + " totalDraws=" + draws.get())
-        assertTrue("Every steady scroll frame must already record the main viewport", recordedFrames >= scrollFrames - 2)
+        assertTrue("Every steady scroll frame must record exactly once: $badFrames", badFrames.isEmpty() && recordedFrames == scrollFrames - 1)
     }
 
     /** One placement-only contraction after scroll stops must publish one new recording. */
