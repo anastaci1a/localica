@@ -440,3 +440,4 @@ io.github.anastaci1a.localica.QueueSelectorGlyphContinuityTest
 io.github.anastaci1a.localica.QueueSelectorNameVariantsTest
 io.github.anastaci1a.localica.PopupMaterialControlTest
 io.github.anastaci1a.localica.PopupRetainedLayerDiagnosticTest
+io.github.anastaci1a.localica.PopupOutgoingCodeProposalTest
