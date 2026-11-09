@@ -53,7 +53,7 @@ internal fun savePlayerEqualityEvidence(label: String, before: IntArray, after: 
 }
 
 /** Character geometry defines the only allowed region; pixel differences never choose its bounds. */
-internal fun measuredPlayerAlbumSuffix(compose: androidx.compose.ui.test.ComposeContentTestRule): androidx.compose.ui.geometry.Rect {
+internal fun measuredPlayerAlbumSuffix(compose: androidx.compose.ui.test.junit4.ComposeContentTestRule): androidx.compose.ui.geometry.Rect {
     val text = compose.onNodeWithText("Artist · Album", useUnmergedTree = true)
     val results = mutableListOf<androidx.compose.ui.text.TextLayoutResult>()
     text.performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.GetTextLayoutResult) { it(results) }
