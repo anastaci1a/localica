@@ -14,7 +14,7 @@ internal object ArtworkWash {
     const val TOP = -0.25f
 
     fun create(cover: Bitmap): Bitmap {
-        fun sample(width: Int): IntArray {
+        fun scaledSource(width: Int): IntArray {
             // Normalized cover coordinates are stretched back to its actual aspect
             // by the drawing matrix; square preparation bounds extreme aspect ratios.
             val sampled = Bitmap.createScaledBitmap(cover, width, width, true)
@@ -23,7 +23,7 @@ internal object ArtworkWash {
             if (sampled !== cover) sampled.recycle()
             return source
         }
-        val sharpSource = sample(WIDTH)
+        val sharpSource = scaledSource(WIDTH)
         // A frame (#711) is found once, at preparation; borderless covers find none and keep the previous wash exactly.
         val topBand = edgeBand(sharpSource, WIDTH, bottom = false)
         val bottomBand = edgeBand(sharpSource, WIDTH, bottom = true)
@@ -50,7 +50,7 @@ internal object ArtworkWash {
         val pixels = continuation(WIDTH, sharpSource)
         // Only the sharp reveal band needs higher density. Keep all twelve blur
         // passes at the original bounded resolution instead of quadrupling work.
-        val coarse = continuation(BLUR_WIDTH, sample(BLUR_WIDTH))
+        val coarse = continuation(BLUR_WIDTH, scaledSource(BLUR_WIDTH))
         val levels = listOf(2, 5, 12, 24).map { radius ->
             var blurred = coarse
             repeat(3) { blurred = boxBlur(blurred, BLUR_WIDTH, BLUR_WIDTH * 5 / 2, radius) }
