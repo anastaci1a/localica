@@ -378,10 +378,10 @@ fun LocalicaScreen(
             .then(if (insideCollection || hasPlayer && playerCoversBrowse) Modifier.clearAndSetSemantics {} else Modifier),
             horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.weight(1f).fillMaxHeight().selectorTrackStacking(tabActivity).testTag("tab-pill")) {
-                SlidingTabs(settings.tabs, settings.tabs[pager.targetPage.coerceIn(settings.tabs.indices)], { pager.currentPage + pager.currentPageOffsetFraction }, source = browseBackdrop, noneAtlasInput = shellNoneAtlas, pageDragging = pager.interactionSource.collectIsDraggedAsState().value, activity = tabActivity, shadowOpacity = { chromeVisibility * (1f - progress.value) }, onReselect = { tab ->
+                SlidingTabs(settings.tabs, settings.tabs[pager.targetPage.coerceIn(settings.tabs.indices)], { pager.currentPage + pager.currentPageOffsetFraction }, source = browseBackdrop, pageDragging = pager.interactionSource.collectIsDraggedAsState().value, activity = tabActivity, shadowOpacity = { chromeVisibility * (1f - progress.value) }, onReselect = { tab ->
                     navigation = navigation.resetTab(tab, clearLibraryFilter = false)
                     scrollRequests = scrollRequests + (tab to ((scrollRequests[tab] ?: 0) + 1))
-                }) { tab ->
+                }, noneAtlasInput = shellNoneAtlas) { tab ->
                     keyboard?.hide(); focusManager.clearFocus()
                     requestedTab = tab
                     navigationScope.launch {
@@ -396,9 +396,10 @@ fun LocalicaScreen(
 
             }
             val utilityAnchor = rememberGlassAnchor()
-            NavigationUtilityPill(utilityAnchor, browseBackdrop, noneAtlasInput = shellNoneAtlas,
-                modifier = Modifier.width(104.dp).fillMaxHeight(),
+            NavigationUtilityPill(utilityAnchor, browseBackdrop,
+                Modifier.width(104.dp).fillMaxHeight(),
                 shadowOpacity = { chromeVisibility * (1f - progress.value) },
+                noneAtlasInput = shellNoneAtlas,
                 onSearch = { navigation = navigation.commitSearch().open(BrowseRoute(navigation.active, search = true, globalSearch = true)) },
                 onMore = { moreOpen = true })
             GlassMenu(moreOpen, utilityAnchor, { moreOpen = false }) {
