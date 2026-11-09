@@ -72,12 +72,13 @@ private fun ease(a: IntSize, b: IntSize, p: Float) = IntSize((a.width + (b.width
         val slot = slots.getOrPut(key) { Slot() }
         val layer = rememberGraphicsLayer()
         val view = androidx.compose.ui.platform.LocalView.current
-        SideEffect { slot.ink[face] = ink; slot.views[face] = view }
+        val coordinates = remember(slot, face) { arrayOfNulls<LayoutCoordinates>(1) }
+        SideEffect { slot.ink[face] = ink }
         DisposableEffect(slot, face, view, layer) { onDispose {
-            if (slot.views[face] === view) { slot.frames[face] = null; slot.views[face] = null }
+            if (slot.frames[face] === coordinates[0]) { slot.frames[face] = null; slot.views[face] = null }
             if (slot.layer === layer) slot.layer = null
         } }
-        Layout(modifier = modifier.onPlaced { slot.frames[face] = it }.drawWithContent {
+        Layout(modifier = modifier.onPlaced { coordinates[0] = it; slot.frames[face] = it; slot.views[face] = view }.drawWithContent {
             if (destination) { layer.record(slot.drawn) { this@drawWithContent.drawContent() }; slot.layer = layer }
         }, content = {
             Box(Modifier.clearAndSetSemantics { }) { copy() }

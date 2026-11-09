@@ -31,8 +31,10 @@ import io.github.anastaci1a.localica.ui.engine.*
         }
     }
     @Composable fun Expanded(modifier: Modifier = Modifier) = host.Slot(key, 1, modifier)
-    @Composable fun CompactCopy(modifier: Modifier = Modifier) {
-        Layout({ host.Copy(key, 0) }, modifier.clearAndSetSemantics { }) { children, constraints ->
+    @Composable fun CompactCopy(modifier: Modifier = Modifier) = MeasureCopy(0, modifier)
+    @Composable fun ExpandedCopy(modifier: Modifier = Modifier) = MeasureCopy(1, modifier)
+    @Composable private fun MeasureCopy(face: Int, modifier: Modifier) {
+        Layout({ host.Copy(key, face) }, modifier.clearAndSetSemantics { }) { children, constraints ->
             val copy = children.single().measure(constraints)
             layout(copy.width, copy.height) { }
         }

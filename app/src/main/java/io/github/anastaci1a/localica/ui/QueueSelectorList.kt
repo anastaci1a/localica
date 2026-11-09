@@ -128,6 +128,7 @@ internal fun QueueSelectorList(queues: List<ListeningQueue>, browsedId: String?,
                                 queue.id == playingId, isPlaying, reducedMotion, interactive,
                                 actionsModifier = Modifier.onGloballyPositioned { actions[queue.id] = it },
                                 selectionPlacement = if (observer == null) Modifier else Modifier.onPlaced { probe.rows[queue.id] = it },
+                                sharedNameLive = drag?.keys?.contains(queue.id) != true,
                                 onSelect = { onSelect(queue.id) }, onRename = { onRename(queue.id) }, onDelete = { onDelete(queue.id) },
                                 onOffset = { onOffset(queue.id, it) })
                         }
@@ -147,7 +148,7 @@ internal fun QueueSelectorList(queues: List<ListeningQueue>, browsedId: String?,
 @Composable
 private fun QueueSelectorRow(queue: ListeningQueue, number: Int, chosen: Boolean, playing: Boolean,
     isPlaying: Boolean, reducedMotion: Boolean, enabled: Boolean, actionsModifier: Modifier = Modifier,
-    selectionPlacement: Modifier = Modifier,
+    selectionPlacement: Modifier = Modifier, sharedNameLive: Boolean = true,
     onSelect: () -> Unit, onRename: () -> Unit, onDelete: () -> Unit, onOffset: (Int) -> Unit) {
     val sharedName = LocalQueueSelectorSharedName.current
     Surface(shape = Corners.card, color = androidx.compose.ui.graphics.Color.Transparent,
@@ -159,7 +160,10 @@ private fun QueueSelectorRow(queue: ListeningQueue, number: Int, chosen: Boolean
             Row(Modifier.weight(1f).testTag("queue-select-${queue.id}").selectable(chosen, enabled = enabled, role = Role.RadioButton, onClick = onSelect)
                 .heightIn(min = 56.dp), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f).padding(start = 4.dp)) {
-                    if (chosen && sharedName != null) sharedName.Expanded(Modifier.fillMaxWidth())
+                    if (chosen && sharedName != null) {
+                        if (sharedNameLive) sharedName.Expanded(Modifier.fillMaxWidth())
+                        else sharedName.ExpandedCopy(Modifier.fillMaxWidth())
+                    }
                     else if (chosen) MarqueeTitle("$number. ${queue.name}", reducedMotion, style = MaterialTheme.typography.bodyLarge)
                     else Text("$number. ${queue.name}", maxLines = 1, overflow = TextOverflow.Ellipsis)
                     if (playing) Text(if (isPlaying) "Playing" else "Playback queue", style = MaterialTheme.typography.labelSmall)
