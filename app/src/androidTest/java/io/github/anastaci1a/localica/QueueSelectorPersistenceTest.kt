@@ -45,7 +45,7 @@ class QueueSelectorPersistenceTest {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val output = nativeEvidenceDirectory("queue-selector-persistence-${if (interrupted) "interrupted" else "complete"}",
             instrumentation.targetContext.cacheDir)
-        val state = QueueUiState(QueueLibrary(listOf(ListeningQueue(id = "selected", name = "Persistent queue")), "selected"), loading = false)
+        val state = QueueUiState(QueueLibrary(listOf(ListeningQueue(id = "selected", name = "Persistent queue", entries = emptyList())), "selected"), loading = false)
         compose.setContent { LocalicaTheme {
             val view = LocalView.current
             DisposableEffect(view) {
