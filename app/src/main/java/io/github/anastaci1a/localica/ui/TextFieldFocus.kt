@@ -124,7 +124,25 @@ private fun ObserveTextEditingInput(content: @Composable () -> Unit) {
 /** Back dismisses editing before dismissing its page/dialog, including IME-owned Back. */
 @OptIn(ExperimentalLayoutApi::class, androidx.compose.ui.ExperimentalComposeUiApi::class)
 @Composable internal fun Modifier.clearTextFocusOnBack(): Modifier {
-    var focused by remember { mutableStateOf(false) }
+    val state = remember { TextEditingFocusState() }
+    ObserveTextFocusOnBack(state)
+    return onFocusChanged { state.focused = it.isFocused }.onPreInterceptKeyBeforeSoftKeyboard { event ->
+        if (state.focused && event.key == Key.Back) {
+            if (event.type == KeyEventType.KeyUp) state.endEditing("backKey")
+            true
+        } else false
+    }
+}
+
+private class TextEditingFocusState {
+    var focused by mutableStateOf(false)
+    var endEditing: (String) -> Unit = {}
+}
+
+/** Keep IME invalidation in this restartable observer rather than the field caller. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable private fun ObserveTextFocusOnBack(state: TextEditingFocusState) {
+    val focused = state.focused
     val view = androidx.compose.ui.platform.LocalView.current
     val imeSession = remember(view) { TextEditingImeSession() }
     val keyboardVisible = WindowInsets.isImeVisible
@@ -153,6 +171,7 @@ private fun ObserveTextEditingInput(content: @Composable () -> Unit) {
         if (emptySearchBack != null) beginSearchReturn?.invoke()
         restingFocus.requestFocus(); keyboard?.hide(); emptySearchBack?.invoke()
     }
+    SideEffect { state.endEditing = { reason -> endEditing(reason) } }
     BackHandler(focused) { endEditing("backDispatcher") }
     LaunchedEffect(view, focused, windowFocused, keyboardVisible, keyboardHeight, keyboardSource,
         keyboardTarget, nativeHost, nativeRevision, nativeReader) {
@@ -167,11 +186,5 @@ private fun ObserveTextEditingInput(content: @Composable () -> Unit) {
             // frame. Empty search returns home immediately, independently of it.
             endEditing("imeObservation")
         }
-    }
-    return onFocusChanged { focused = it.isFocused }.onPreInterceptKeyBeforeSoftKeyboard { event ->
-        if (focused && event.key == Key.Back) {
-            if (event.type == KeyEventType.KeyUp) endEditing("backKey")
-            true
-        } else false
     }
 }
