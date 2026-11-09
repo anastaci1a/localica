@@ -82,7 +82,6 @@ dependencies {
     implementation(libs.media3.session)
     implementation(libs.media3.inspector)
     implementation(libs.coroutines.android)
-    implementation(libs.work.runtime)
     testImplementation(libs.junit)
     testImplementation("org.json:json:20240303")
     testImplementation(libs.coroutines.test)
