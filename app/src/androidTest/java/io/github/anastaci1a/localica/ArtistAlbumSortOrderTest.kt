@@ -352,14 +352,15 @@ class ArtistAlbumSortOrderTest {
     @Test fun albumFilterGlidesSurvivingRowsWithOneTween() {
         val f = MotionFixture(Presentation.List)
         f.scrollSongsIntoView()
-        val chip = hasText("Zeta") and hasClickAction()
+        // After scrolling, only the leading covers (Alpha, Mid, Nameless) are composed; Mid is third.
+        val chip = hasText("Mid") and hasClickAction()
         compose.waitUntil(5_000) { compose.onAllNodes(chip).fetchSemanticsNodes().isNotEmpty() }
-        val trace = f.trace("list-filter-zeta") {
+        val trace = f.trace("list-filter-mid") {
             compose.onAllNodes(chip).onFirst().performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick)
         }
-        // Zeta's rows were last; they glide up to the top while the others leave.
+        // Mid's row was third; it glides up to the top while the others leave.
         val detail = trace.toString()
-        listOf("z-first", "a-second").forEach { key ->
+        listOf("m-one").forEach { key ->
             assertTrue("$key survives and moves up: $detail", trace.frames.last()[key]!! < trace.frames.first()[key]!! - 2f)
             assertTrue("$key glides: $detail", trace.intermediate(key) >= 6)
             assertTrue("$key has no second tail: $detail", trace.monotonic(key))
