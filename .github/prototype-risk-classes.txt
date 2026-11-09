@@ -462,3 +462,5 @@ io.github.anastaci1a.localica.TagSaveProgressPopupTest
 io.github.anastaci1a.localica.QueueLibraryHeapTest
 io.github.anastaci1a.localica.QueueRestoreEquivalenceTest
 io.github.anastaci1a.localica.SettingsTextInsetsTest
+# Mounted collection-header density regression (#600).
+io.github.anastaci1a.localica.CollectionHeaderDensityContractTest
