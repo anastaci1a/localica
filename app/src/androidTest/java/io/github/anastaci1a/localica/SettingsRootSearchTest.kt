@@ -9,6 +9,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.ViewRootForTest
 import androidx.compose.ui.test.*
+import androidx.compose.ui.semantics.SemanticsNode
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.core.view.ViewCompat
@@ -32,8 +33,14 @@ class SettingsRootSearchTest {
     private lateinit var density: Density
     private val receipts = JSONArray()
     private var stage = 0
-    private fun header(page: String) = hasContentDescription("Back from settings") and hasAnySibling(hasText(page))
-    private fun back(page: String) = compose.onNode(header(page))
+    private fun back(page: String): SemanticsNodeInteraction {
+        val title = compose.onNode(hasText(page) and !hasClickAction()).fetchSemanticsNode()
+        val candidates = compose.onAllNodesWithContentDescription("Back from settings").fetchSemanticsNodes()
+        fun ancestors(node: SemanticsNode) = generateSequence(node.parent) { it.parent }
+        val scope = ancestors(title).first { parent -> candidates.any { back -> ancestors(back).any { it.id == parent.id } } }
+        val id = candidates.single { back -> ancestors(back).any { it.id == scope.id } }.id
+        return compose.onNode(SemanticsMatcher("Back in the $page page scope") { it.id == id })
+    }
     private fun view(page: String): View = (back(page).fetchSemanticsNode().root as ViewRootForTest).view
     private fun windowToken(page: String): android.os.IBinder? {
         val nativeView = view(page)
