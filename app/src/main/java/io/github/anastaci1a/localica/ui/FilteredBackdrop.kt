@@ -164,7 +164,7 @@ private fun OpticalBackdrop(modifier: Modifier, source: FrostedBackdrop, locatio
                             drawSampledScene(backing, registration, toLocal)
                         }
                     } }
-                    output.renderEffect = renderer.effect(average.forBacking(backing))
+                    output.renderEffect = if (android.os.Build.VERSION.SDK_INT >= 33) renderer.effect(average.forBacking(backing)) else null
                     output.record(size = IntSize(1, 1)) { drawLayer(result) }
                 }
                 if (blend < 1f) legacyReduce(source, areaSource, averageSource, legacyRenderers.first)
