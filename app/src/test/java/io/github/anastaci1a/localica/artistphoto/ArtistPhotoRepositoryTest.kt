@@ -272,4 +272,23 @@ class ArtistPhotoRepositoryTest {
             assertTrue(collection.isActive)
         } finally { collection.cancelAndJoin() }
     }
+
+    @Test fun failedSelectionPersistenceDoesNotReplaceOrDeleteTheReadyImage() = runBlocking {
+        val server = Server()
+        val photos = repo(server)
+        val previous = requireNotNull(photos.observe(request).last().photo)
+        val previousBytes = previous.file.readBytes()
+        val replacement = ArtistPhotoChoice(ArtistPhotoProvider.DEEZER, "8")
+        photos.pick(request.artistKey, replacement)
+        // Fail precisely the atomic choice write after image download, without damaging the saved record.
+        val selection = File(temporary.root, "choices").listFiles()!!.single()
+        assertTrue(File(selection.parentFile, selection.name + ".pending").mkdir())
+        val transport = PhotoTransport { url, max -> server.get(url, max).let { bytes ->
+            if (url.contains("cdn-images")) bytes.copyOf().also { it[it.lastIndex] = 1 } else bytes
+        } }
+        ArtistPhotos(Consent(true), disk(), transport, now = { 100_001L }).observe(request).toList()
+        assertTrue("A failed selection commit must not retire the previous ready file", previous.file.isFile)
+        assertArrayEquals(previousBytes, requireNotNull(disk().cached(request.artistKey, 100_002L)).file.readBytes())
+        assertEquals(replacement, disk().choice(request.artistKey).pendingChoice)
+    }
 }
