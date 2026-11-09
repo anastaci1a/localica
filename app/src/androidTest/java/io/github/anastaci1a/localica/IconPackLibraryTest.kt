@@ -59,15 +59,15 @@ class IconPackLibraryTest {
         bitmap.eraseColor(android.graphics.Color.BLACK)
         bitmap.compress(Bitmap.CompressFormat.PNG, 100, out); bitmap.recycle()
     }.toByteArray()
-    private fun pack(name: String = "First", id: String = "menu.pin", extra: Boolean = false) = ByteArrayOutputStream().also { out ->
+    private fun pack(name: String = "First", id: String = "action.pin", extra: Boolean = false) = ByteArrayOutputStream().also { out ->
         ZipOutputStream(out).use { zip ->
             fun entry(name: String, bytes: ByteArray) { zip.putNextEntry(ZipEntry(name)); zip.write(bytes); zip.closeEntry() }
             entry("pack.json", """{"name":"$name","version":"1","author":"Tester"}""".toByteArray())
             entry("icons/$id.png", png())
-            if (extra) { entry("icons/future.icon.png", png()); entry("icons/menu.trash.png", byteArrayOf(1, 2, 3)) }
+            if (extra) { entry("icons/future.icon.png", png()); entry("icons/action.remove.png", byteArrayOf(1, 2, 3)) }
         }
     }.toByteArray()
-    private fun import(name: String = "First", id: String = "menu.pin", extra: Boolean = false): String {
+    private fun import(name: String = "First", id: String = "action.pin", extra: Boolean = false): String {
         IconPacks.import(context, pack(name, id, extra).inputStream())
         return requireNotNull(IconPacks.activeId.value)
     }
@@ -75,17 +75,17 @@ class IconPackLibraryTest {
     @Test fun largeSourceImagesStayStoredWhileDecodedLibraryMasksAreBounded() {
         val source = ByteArrayOutputStream().also { out -> ZipOutputStream(out).use { zip ->
             zip.putNextEntry(ZipEntry("pack.json")); zip.write("""{"name":"Large","version":"1"}""".toByteArray()); zip.closeEntry()
-            zip.putNextEntry(ZipEntry("icons/menu.pin.png")); zip.write(png(1024)); zip.closeEntry()
+            zip.putNextEntry(ZipEntry("icons/action.pin.png")); zip.write(png(1024)); zip.closeEntry()
         } }.toByteArray()
         IconPacks.import(context, source.inputStream())
         val id = requireNotNull(IconPacks.activeId.value)
-        assertEquals(192, IconPacks.masks.value.getValue("menu.pin").width)
+        assertEquals(192, IconPacks.masks.value.getValue("action.pin").width)
         val bounds = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        android.graphics.BitmapFactory.decodeFile(File(root, "icon-packs/$id/icons/menu.pin.png").path, bounds)
+        android.graphics.BitmapFactory.decodeFile(File(root, "icon-packs/$id/icons/action.pin.png").path, bounds)
         assertEquals(1024, bounds.outWidth)
         IconPacks.load(context)
-        assertEquals(192, IconPacks.masks.value.getValue("menu.pin").width)
-        assertEquals(android.graphics.Color.BLACK, IconPacks.masks.value.getValue("menu.pin").getPixel(96, 96))
+        assertEquals(192, IconPacks.masks.value.getValue("action.pin").width)
+        assertEquals(android.graphics.Color.BLACK, IconPacks.masks.value.getValue("action.pin").getPixel(96, 96))
     }
 
     @Test fun switchUsesCachedImagesAfterBothSourceUrisAreRemoved() {
@@ -132,12 +132,12 @@ class IconPackLibraryTest {
         val legacy = File(root, "icon-pack")
         File(legacy, "icons").mkdirs()
         File(legacy, "pack.json").writeText("""{"name":"Legacy","version":"2","author":"Earlier"}""")
-        File(legacy, "icons/menu.pin.png").writeBytes(png())
+        File(legacy, "icons/action.pin.png").writeBytes(png())
         IconPacks.load(context)
         val migrated = IconPacks.library.value.single()
         assertEquals("Legacy", migrated.report.info.name)
         assertEquals(migrated.id, IconPacks.activeId.value)
-        assertNotNull(IconPacks.masks.value["menu.pin"])
+        assertNotNull(IconPacks.masks.value["action.pin"])
         assertFalse(legacy.exists())
         IconPacks.load(context)
         assertEquals(listOf(migrated.id), IconPacks.library.value.map { it.id })
@@ -148,17 +148,17 @@ class IconPackLibraryTest {
         val first = import()
         val prepared = IconPacks.prepare(pack(id = "transport.play", extra = true).inputStream())
         assertEquals(first, IconPacks.matching(context, prepared)?.id)
-        assertNotNull(IconPacks.masks.value["menu.pin"])
+        assertNotNull(IconPacks.masks.value["action.pin"])
         IconPacks.install(context, prepared)
         assertEquals(first, IconPacks.activeId.value)
         assertEquals(1, IconPacks.library.value.size)
-        assertNull(IconPacks.masks.value["menu.pin"])
+        assertNull(IconPacks.masks.value["action.pin"])
         assertNotNull(IconPacks.masks.value["transport.play"])
         IconPacks.load(context)
         val stored = IconPacks.library.value.single()
         assertEquals(first, stored.id)
         assertEquals(listOf("future.icon"), stored.report.unknown)
-        assertEquals("icons/menu.trash.png", stored.report.rejected.single().first)
+        assertEquals("icons/action.remove.png", stored.report.rejected.single().first)
         assertTrue(stored.importedAt > 0)
     }
 
@@ -168,10 +168,10 @@ class IconPackLibraryTest {
         compose.setContent { LocalicaTheme { Column(Modifier.verticalScroll(rememberScrollState())) { IconPackViewer(first) } } }
         AppIcon.entries.forEach { compose.onNodeWithTag("pack-icon-${it.id}").assertExists() }
         compose.onAllNodesWithText("Reassigned").assertCountEquals(1)
-        compose.onAllNodesWithText("Built-in (fallback)").assertCountEquals(AppIcon.entries.size - 1)
+        compose.onAllNodesWithText("Built-in (fallback)").assertCountEquals(IconPacks.builtinImageRows().count { row -> row.ids.any { it != "action.pin" } })
         compose.onNodeWithText("future.icon").assertExists()
-        compose.onNodeWithText("icons/menu.trash.png: not a decodable image").assertExists()
-        listOf("Tabs", "Transport", "Song menu", "Actions").forEach { compose.onNodeWithText(it).assertExists() }
+        compose.onNodeWithText("icons/action.remove.png: not a decodable image").assertExists()
+        listOf("Navigation", "Transport", "Selection", "Actions").forEach { compose.onNodeWithText(it).assertExists() }
     }
 
     @Test fun listSelectsLiveAndDeleteRequiresConfirmation() {

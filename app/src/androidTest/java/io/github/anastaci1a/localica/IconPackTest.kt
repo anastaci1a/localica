@@ -29,32 +29,32 @@ class IconPackTest {
     private val manifest = """{"name":"Test","version":"1","author":"Me"}"""
 
     @Test fun aSingleIconPackIsValidAndOthersFallBack() {
-        val report = IconPacks.import(context, ByteArrayInputStream(zip(manifest, "icons/menu.pin.png" to png(96))))
-        assertEquals(listOf("menu.pin"), report.applied)
+        val report = IconPacks.import(context, ByteArrayInputStream(zip(manifest, "icons/action.pin.png" to png(96))))
+        assertEquals(listOf("action.pin"), report.applied)
         assertTrue(report.unknown.isEmpty() && report.rejected.isEmpty())
-        assertNotNull(IconPacks.masks.value["menu.pin"])
-        assertNull(IconPacks.masks.value["menu.trash"])
+        assertNotNull(IconPacks.masks.value["action.pin"])
+        assertNull(IconPacks.masks.value["action.remove"])
         assertEquals("Test", IconPacks.info.value?.name)
     }
     @Test fun unknownAndBadImagesAreReportedNotFatal() {
-        val report = IconPacks.import(context, ByteArrayInputStream(zip(manifest, "icons/menu.pin.png" to png(96),
-            "icons/nope.png" to png(96), "icons/menu.trash.png" to png(64), "icons/tab.home.png" to png(96, 96, 128),
-            "icons/tab.songs.png" to byteArrayOf(1, 2, 3))))
-        assertEquals(listOf("menu.pin"), report.applied)
+        val report = IconPacks.import(context, ByteArrayInputStream(zip(manifest, "icons/action.pin.png" to png(96),
+            "icons/nope.png" to png(96), "icons/action.remove.png" to png(64), "icons/nav.home.png" to png(96, 96, 128),
+            "icons/nav.songs.png" to byteArrayOf(1, 2, 3))))
+        assertEquals(listOf("action.pin"), report.applied)
         assertEquals(listOf("nope"), report.unknown)
-        assertEquals(setOf("icons/menu.trash.png", "icons/tab.home.png", "icons/tab.songs.png"), report.rejected.map { it.first }.toSet())
+        assertEquals(setOf("icons/action.remove.png", "icons/nav.home.png", "icons/nav.songs.png"), report.rejected.map { it.first }.toSet())
     }
     @Test fun unusablePacksAreRefusedAndKeepTheCurrentPack() {
-        IconPacks.import(context, ByteArrayInputStream(zip(manifest, "icons/menu.pin.png" to png(96))))
-        assertThrows(IconPackException::class.java) { IconPacks.import(context, ByteArrayInputStream(zip(null, "icons/menu.pin.png" to png(96)))) }
+        IconPacks.import(context, ByteArrayInputStream(zip(manifest, "icons/action.pin.png" to png(96))))
+        assertThrows(IconPackException::class.java) { IconPacks.import(context, ByteArrayInputStream(zip(null, "icons/action.pin.png" to png(96)))) }
         assertThrows(IconPackException::class.java) { IconPacks.import(context, ByteArrayInputStream(zip(manifest))) }
-        assertThrows(IconPackException::class.java) { IconPacks.import(context, ByteArrayInputStream(zip("""{"name":"x"}""", "icons/menu.pin.png" to png(96)))) }
-        assertNotNull(IconPacks.masks.value["menu.pin"])
+        assertThrows(IconPackException::class.java) { IconPacks.import(context, ByteArrayInputStream(zip("""{"name":"x"}""", "icons/action.pin.png" to png(96)))) }
+        assertNotNull(IconPacks.masks.value["action.pin"])
     }
     @Test fun packPersistsAcrossReloadAndResetClearsIt() {
-        IconPacks.import(context, ByteArrayInputStream(zip(manifest, "icons/menu.pin.png" to png(96))))
+        IconPacks.import(context, ByteArrayInputStream(zip(manifest, "icons/action.pin.png" to png(96))))
         IconPacks.load(context)
-        assertNotNull(IconPacks.masks.value["menu.pin"])
+        assertNotNull(IconPacks.masks.value["action.pin"])
         IconPacks.reset(context)
         IconPacks.load(context)
         assertTrue(IconPacks.masks.value.isEmpty())

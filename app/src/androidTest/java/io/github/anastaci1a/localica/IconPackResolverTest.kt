@@ -40,7 +40,7 @@ class IconPackResolverTest {
             .apply { eraseColor(android.graphics.Color.BLACK) }.compress(Bitmap.CompressFormat.PNG, 100, it) }.toByteArray()
         val zip = ByteArrayOutputStream().also { out -> ZipOutputStream(out).use { z ->
             z.putNextEntry(ZipEntry("pack.json")); z.write("""{"name":"One","version":"1"}""".toByteArray()); z.closeEntry()
-            z.putNextEntry(ZipEntry("icons/menu.pin.png")); z.write(png); z.closeEntry() } }.toByteArray()
+            z.putNextEntry(ZipEntry("icons/action.pin.png")); z.write(png); z.closeEntry() } }.toByteArray()
         IconPacks.import(context, ByteArrayInputStream(zip))
         compose.waitForIdle()
         val packed = compose.onNodeWithTag("icon").captureToImage().toPixelMap()

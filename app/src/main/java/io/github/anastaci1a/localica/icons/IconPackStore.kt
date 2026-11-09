@@ -23,14 +23,17 @@ data class IconPackInfo(val name: String, val version: String, val author: Strin
 
 /** What an import found. Unknown ids and bad images never fail the whole pack. */
 data class IconPackReport(val info: IconPackInfo, val applied: List<String>, val unknown: List<String>,
-    val rejected: List<Pair<String, String>>)
+    val rejected: List<Pair<String, String>>, val suggestions: Map<String, String> = emptyMap())
 
 class IconPackException(message: String) : Exception(message)
 
 /** An imported pack owns decoded images; selecting it never opens its source again. */
 data class StoredIconPack(val id: String, val report: IconPackReport, val importedAt: Long,
-    val masks: Map<String, Bitmap>, val vectors: Map<String, ImageVector> = emptyMap()) {
+    val masks: Map<String, Bitmap>, val vectors: Map<String, ImageVector> = emptyMap(),
+    val imageMappings: Map<String, String> = emptyMap()) {
     val iconIds: Set<String> get() = masks.keys + vectors.keys
+    val uniqueImages: List<IconPackImage> get() = imageMappings.entries.groupBy({ it.value }, { it.key })
+        .map { (file, ids) -> IconPackImage(file, ids) }
 }
 
 data class IconPackImages(val masks: Map<String, Bitmap> = emptyMap(),
@@ -38,7 +41,7 @@ data class IconPackImages(val masks: Map<String, Bitmap> = emptyMap(),
 
 class PreparedIconPack internal constructor(val report: IconPackReport,
     internal val masks: Map<String, Bitmap>, internal val vectors: Map<String, ImageVector>,
-    internal val files: Map<String, ByteArray>)
+    internal val files: Map<String, ByteArray>, internal val manifest: IconPackManifest)
 
 /** Process-wide library and live resolver. Disk operations run off Main. */
 object IconPacks {
@@ -69,7 +72,7 @@ object IconPacks {
             if (!target.exists()) {
                 val old = runCatching { readDirectory(legacy) }.getOrNull()
                 if (old != null) {
-                    writeMetadata(legacy, IconPackReport(old.second, (old.first.keys + old.third.keys).toList(), emptyList(), emptyList()), legacy.lastModified())
+                    writeMetadata(legacy, old.report, legacy.lastModified())
                     check(preferences(context).edit().putString("active", "legacy").commit())
                     check(legacy.renameTo(target)) { "Could not migrate the icon pack" }
                 }
@@ -85,8 +88,9 @@ object IconPacks {
                 val rejected = metadata?.optJSONArray("rejected")?.let { array ->
                     (0 until array.length()).map { index -> array.getJSONArray(index).let { it.getString(0) to it.getString(1) } }
                 }.orEmpty()
-                StoredIconPack(folder.name, IconPackReport(stored.second, (stored.first.keys + stored.third.keys).toList(), strings("unknown"), rejected),
-                    metadata?.optLong("importedAt") ?: folder.lastModified(), stored.first, stored.third)
+                StoredIconPack(folder.name, stored.report.copy(unknown = (stored.report.unknown + strings("unknown")).distinct(), rejected = (stored.report.rejected + rejected).distinct(),
+                    suggestions = (stored.report.unknown + strings("unknown")).distinct().associateWith(::closestIconId)),
+                    metadata?.optLong("importedAt") ?: folder.lastModified(), stored.masks, stored.vectors, stored.manifest.icons)
             }.getOrNull() }.sortedBy { it.importedAt }
         loadedRoot = root.absolutePath
         publish(preferences(context).getString("active", null))
@@ -96,7 +100,7 @@ object IconPacks {
         if (loadedRoot != directory(context).absolutePath) load(context)
     }
 
-    fun prepare(input: InputStream): PreparedIconPack = parse(input).let { PreparedIconPack(it.report, it.masks, it.vectors, it.files) }
+    fun prepare(input: InputStream): PreparedIconPack = parse(input).let { PreparedIconPack(it.report, it.masks, it.vectors, it.files, it.manifest) }
 
     @Synchronized fun matching(context: Context, prepared: PreparedIconPack): StoredIconPack? {
         ensureLoaded(context)
@@ -113,9 +117,7 @@ object IconPacks {
         val target = File(root, id)
         val staging = File(root, "$id.new").also { it.deleteRecursively(); check(File(it, "icons").mkdirs()) }
         val now = System.currentTimeMillis()
-        val info = prepared.report.info
-        File(staging, IconPackNames.MANIFEST).writeText(JSONObject().put("name", info.name)
-            .put("version", info.version).apply { info.author?.let { put("author", it) } }.toString())
+        File(staging, IconPackNames.MANIFEST).writeText(prepared.manifest.json().toString())
         prepared.files.forEach { (key, bytes) -> File(staging, "icons/$key").writeBytes(bytes) }
         writeMetadata(staging, prepared.report, now)
         val backup = File(root, "$id.old")
@@ -125,7 +127,7 @@ object IconPacks {
             error("Could not store the icon pack")
         }
         backup.deleteRecursively()
-        val stored = StoredIconPack(id, prepared.report, now, prepared.masks, prepared.vectors)
+        val stored = StoredIconPack(id, prepared.report, now, prepared.masks, prepared.vectors, prepared.manifest.icons)
         libraryState.value = if (existing == null) libraryState.value + stored else libraryState.value.map { if (it.id == id) stored else it }
         select(context, id)
         return prepared.report
@@ -169,30 +171,34 @@ object IconPacks {
     /** Restores built-ins without removing imported packs. */
     fun reset(context: Context) = select(context, null)
 
-    /** Writes every built-in icon as a ready-to-edit template pack. */
+    /** Writes one source SVG per distinct built-in image and a v2 ID manifest. */
     fun exportTemplate(context: Context, output: OutputStream) {
+        val files = linkedMapOf<String, ByteArray>()
+        val hashes = linkedMapOf<String, String>()
+        val mappings = AppIcon.entries.associate { icon ->
+            val bytes = builtinSvg(context, icon)
+            val filename = hashes.getOrPut(imageHash(bytes)) { icon.id + ".svg" }
+            files[filename] = bytes
+            icon.id to filename
+        }
+        val manifest = IconPackManifest(IconPackInfo("Built-in icons", "1", null), 2, mappings)
         ZipOutputStream(output).use { zip ->
             zip.putNextEntry(ZipEntry(IconPackNames.MANIFEST))
-            zip.write(JSONObject().put("name", "Built-in icons").put("version", "1").toString().toByteArray())
-            zip.closeEntry()
-            AppIcon.entries.forEach { icon ->
-                zip.putNextEntry(ZipEntry("icons/${icon.id}.svg"))
-                zip.write(builtinSvg(context, icon))
-                zip.closeEntry()
+            zip.write(manifest.json().toString().toByteArray()); zip.closeEntry()
+            files.forEach { (file, bytes) ->
+                zip.putNextEntry(ZipEntry("icons/$file")); zip.write(bytes); zip.closeEntry()
             }
         }
     }
 
+    internal fun builtinImageRows(): List<IconPackImage> = AppIcon.entries.groupBy { it.builtin }.values
+        .map { icons -> IconPackImage(icons.first().id + ".svg", icons.map { it.id }) }
+
     private class Parsed(val report: IconPackReport, val masks: Map<String, Bitmap>,
-        val vectors: Map<String, ImageVector>, val files: Map<String, ByteArray>)
+        val vectors: Map<String, ImageVector>, val files: Map<String, ByteArray>, val manifest: IconPackManifest)
 
     private fun parse(input: InputStream): Parsed {
-        val decoder = IconVectorDecoder()
-        var manifest: IconPackInfo? = null
-        val masks = linkedMapOf<String, Bitmap>()
-        val vectors = linkedMapOf<String, ImageVector>()
         val files = linkedMapOf<String, ByteArray>()
-        val unknown = mutableListOf<String>()
         val rejected = mutableListOf<Pair<String, String>>()
         var entries = 0
         ZipInputStream(input).use { zip ->
@@ -200,41 +206,82 @@ object IconPacks {
                 val entry = zip.nextEntry ?: break
                 if (entry.isDirectory) continue
                 if (++entries > IconPackNames.MAX_ENTRIES) throw IconPackException("The pack has too many files")
+                if (entry.name != IconPackNames.MANIFEST && IconPackNames.iconId(entry.name) == null) continue
+                if (entry.name in files) throw IconPackException("Duplicate archive entry: ${entry.name}")
                 val bytes = readCapped(zip) ?: run { rejected += entry.name to "larger than 2 MB"; null } ?: continue
-                if (entry.name == IconPackNames.MANIFEST) { manifest = manifest(bytes); continue }
-                val id = IconPackNames.iconId(entry.name) ?: continue
-                if (AppIcon.byId(id) == null) { unknown += id; continue }
-                if (entry.name.endsWith(".svg", ignoreCase = true)) {
-                    val vector = runCatching { decoder.decode(bytes) }.getOrElse {
-                        rejected += entry.name to ("Invalid SVG: " + (it.message ?: "malformed vector").take(300))
-                        null
-                    }
-                    if (vector != null) {
-                        vectors[id] = vector
-                        masks.remove(id)?.recycle()
-                        files.remove("$id.png")
-                        files["$id.svg"] = bytes
-                    }
-                    continue
-                }
-                if (id in vectors) continue
-                val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-                BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
-                if (bounds.outWidth <= 0 || bounds.outHeight <= 0) { rejected += entry.name to "not a decodable image"; continue }
-                val problem = IconPackNames.sizeProblem(bounds.outWidth, bounds.outHeight)
-                if (problem != null) { rejected += entry.name to problem; continue }
-                val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-                if (bitmap == null) { rejected += entry.name to "not a decodable image"; continue }
-                files["$id.png"] = if (entry.name.endsWith(".png", ignoreCase = true)) bytes else
-                    ByteArrayOutputStream().also { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }.toByteArray()
-                masks[id] = displayMask(bitmap)
+                files[entry.name] = bytes
             }
         }
-        val info = manifest ?: throw IconPackException("pack.json is missing")
-        canonicalize(masks, vectors, files)
-        if (masks.isEmpty() && vectors.isEmpty()) throw IconPackException("The pack has no usable icons" +
+        return decode(files, rejected)
+    }
+
+    /** Decode each physical image once; canonical IDs win only after their image has been accepted. */
+    private fun decode(entries: Map<String, ByteArray>, rejected: MutableList<Pair<String, String>> = mutableListOf()): Parsed {
+        val manifest = IconPackManifest.parse(entries[IconPackNames.MANIFEST] ?: throw IconPackException("pack.json is missing"))
+        val mappings = if (manifest.schemaVersion == 2) manifest.icons.mapValues { listOf(it.value) } else
+            entries.keys.mapNotNull { path -> IconPackNames.iconId(path)?.let { it to path.removePrefix("icons/") } }
+                .groupBy({ it.first }, { it.second }).mapValues { (_, files) -> files.sortedWith(compareBy<String> { if (it.endsWith(".svg", true)) 0 else 1 }.thenBy { it }) }
+        val unknown = mappings.keys.filter { AppIcon.byId(it) == null }
+        val decoder = IconVectorDecoder()
+        val decodedMasks = linkedMapOf<String, Bitmap>()
+        val decodedVectors = linkedMapOf<String, ImageVector>()
+        val accepted = linkedMapOf<String, ByteArray>()
+        val checked = mutableSetOf<String>()
+        fun accept(file: String): Boolean {
+            if (!checked.add(file)) return file in accepted
+            val path = "icons/$file"
+            val bytes = entries[path]
+            if (bytes == null) { rejected += path to "missing image"; return false }
+            if (file.endsWith(".svg", true)) {
+                val vector = runCatching { decoder.decode(bytes) }.getOrElse {
+                    rejected += path to ("Invalid SVG: " + (it.message ?: "malformed vector").take(300)); null
+                } ?: return false
+                decodedVectors[file] = vector
+            } else {
+                val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+                val problem = if (bounds.outWidth < 0 || bounds.outHeight < 0) "not a decodable image"
+                    else IconPackNames.sizeProblem(bounds.outWidth, bounds.outHeight)
+                if (problem != null) { rejected += path to problem; return false }
+                val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                if (bitmap == null) { rejected += path to "not a decodable image"; return false }
+                decodedMasks[file] = displayMask(bitmap)
+            }
+            accepted[file] = bytes
+            return true
+        }
+        val selected = linkedMapOf<String, String>()
+        for (icon in AppIcon.entries) {
+            val file = AppIcon.packIds(icon).flatMap { mappings[it].orEmpty() }.firstOrNull(::accept)
+            if (file != null) selected[icon.id] = file
+        }
+        if (selected.isEmpty()) throw IconPackException("The pack has no usable icons" +
             rejected.firstOrNull()?.let { ": ${it.first}: ${it.second}" }.orEmpty())
-        return Parsed(IconPackReport(info, (masks.keys + vectors.keys).toList(), unknown, rejected), masks, vectors, files)
+        val files = linkedMapOf<String, ByteArray>()
+        val hashes = linkedMapOf<String, String>()
+        val images = linkedMapOf<String, JSONObject>()
+        val deduplicated = selected.mapValues { (_, file) ->
+            val bytes = accepted.getValue(file)
+            val hash = imageHash(bytes)
+            val unique = hashes.getOrPut(hash) { file }
+            files[unique] = bytes
+            manifest.images[file]?.let { metadata ->
+                val previous = images[unique]
+                if (previous != null && previous.toString() != metadata.toString()) throw IconPackException("Conflicting metadata for identical images")
+                images[unique] = metadata
+            }
+            unique
+        }
+        val masks = linkedMapOf<String, Bitmap>()
+        val vectors = linkedMapOf<String, ImageVector>()
+        // Share the decoded instance as well as the stored file after hash deduplication.
+        deduplicated.forEach { (id, file) ->
+            decodedMasks[file]?.let { masks[id] = it }
+            decodedVectors[file]?.let { vectors[id] = it }
+        }
+        decodedMasks.values.filterNot { it in masks.values }.forEach { it.recycle() }
+        return Parsed(IconPackReport(manifest.info, selected.keys.toList(), unknown, rejected.distinct(), unknown.associateWith(::closestIconId)),
+            masks, vectors, files, IconPackManifest(manifest.info, 2, deduplicated, images))
     }
 
     private fun readCapped(zip: ZipInputStream): ByteArray? {
@@ -249,47 +296,13 @@ object IconPacks {
         return out.toByteArray()
     }
 
-    private fun manifest(bytes: ByteArray): IconPackInfo {
-        val json = try { JSONObject(String(bytes, Charsets.UTF_8)) } catch (_: Exception) { throw IconPackException("pack.json is not valid JSON") }
-        val name = json.optString("name").trim()
-        val version = json.opt("version")?.toString()?.trim().orEmpty()
-        if (name.isEmpty()) throw IconPackException("pack.json needs a name")
-        if (version.isEmpty()) throw IconPackException("pack.json needs a version")
-        return IconPackInfo(name, version, json.optString("author").trim().takeIf { it.isNotEmpty() })
-    }
-
-    private fun readDirectory(directory: File): Triple<Map<String, Bitmap>, IconPackInfo, Map<String, ImageVector>>? {
+    private fun readDirectory(directory: File): Parsed? {
         val manifest = File(directory, IconPackNames.MANIFEST).takeIf { it.isFile } ?: return null
-        val info = manifest(manifest.readBytes())
-        val decoder = IconVectorDecoder()
-        val masks = linkedMapOf<String, Bitmap>()
-        val vectors = linkedMapOf<String, ImageVector>()
-        (AppIcon.ids + AppIcon.legacyIds.keys).forEach { id ->
-            val vector = File(directory, "icons/${id}.svg").takeIf { it.isFile && it.length() <= SvgIconParser.MAX_BYTES }
-                ?.let { runCatching { decoder.decode(it.readBytes()) }.getOrNull() }
-            if (vector != null) vectors[id] = vector
-            else File(directory, "icons/${id}.png").takeIf { it.isFile }?.let { BitmapFactory.decodeFile(it.path) }
-                ?.let { masks[id] = displayMask(it) }
-        }
-        canonicalize(masks, vectors, linkedMapOf())
-        return if (masks.isEmpty() && vectors.isEmpty()) null else Triple(masks, info, vectors)
-    }
-
-    /** Normalize only accepted private images; aliases never override a usable canonical mapping. */
-    private fun canonicalize(masks: MutableMap<String, Bitmap>, vectors: MutableMap<String, ImageVector>,
-        files: MutableMap<String, ByteArray>) {
-        val oldMasks = masks.toMap()
-        val oldVectors = vectors.toMap()
-        val oldFiles = files.toMap()
-        masks.clear(); vectors.clear(); files.clear()
-        (oldMasks.keys + oldVectors.keys).mapNotNull { AppIcon.byId(it) }.distinct().forEach { icon ->
-            val source = AppIcon.packIds(icon).first { it in oldMasks || it in oldVectors }
-            oldMasks[source]?.let { masks[icon.id] = it }
-            oldVectors[source]?.let { vectors[icon.id] = it }
-            val extension = if (source in oldVectors) "svg" else "png"
-            oldFiles["$source.$extension"]?.let { files["${icon.id}.$extension"] = it }
-        }
-        oldMasks.values.filterNot { it in masks.values }.forEach { it.recycle() }
+        if (manifest.length() > IconPackNames.MAX_ENTRY_BYTES) return null
+        val entries = linkedMapOf(IconPackNames.MANIFEST to manifest.readBytes())
+        File(directory, "icons").listFiles().orEmpty().filter { it.isFile && IconPackManifest.imageFilename(it.name) && it.length() <= IconPackNames.MAX_ENTRY_BYTES }
+            .forEach { entries["icons/${it.name}"] = it.readBytes() }
+        return decode(entries)
     }
 
     // Keep library memory proportional to icon display size, not the author's source resolution.

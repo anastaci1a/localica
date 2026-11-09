@@ -2,11 +2,11 @@
 
 Import a pack in **Settings → Interface → Icon packs**. Each pack stays in internal storage after import; its original ZIP is no longer needed. Tap a pack to apply it throughout the app immediately. The built-in set is always available.
 
-The list shows each pack's name, version, author, replacement count and preview icons. **View icons** compares every registered id with its built-in image, grouped by area. Missing images are labeled **Built-in (fallback)**. Unknown ids and rejected images appear separately.
+The list shows each pack's name, version, author, replacement count and preview icons. **View icons** lists each unique image with its mapped ids, grouped by area. Missing images are labeled **Built-in (fallback)**. Unknown ids and rejected images appear separately.
 
 Importing the same name and version offers to update the existing entry. Cancel leaves it unchanged. Deleting a pack requires confirmation; deleting the active pack restores built-in icons. Selecting built-in icons keeps the library. An existing single pack migrates into the library and remains active.
 
-**Export built-in icons as a template** writes every built-in icon as SVG paths, ready to edit.
+**Export built-in icons as a template** writes unique built-in SVG paths and a v2 manifest, ready to edit.
 
 ## Storage
 
@@ -16,11 +16,7 @@ Vectors retain their paths at every density. Legacy raster masks use at most 192
 
 ## Format
 
-A pack is a `.zip` with:
-
-- `pack.json`: `{ "name": "My pack", "version": "1", "author": "Optional" }`. `name` and `version` are required.
-- `icons/<id>.svg` for each icon you want to replace. Vectors are the standard format.
-- Legacy `icons/<id>.png` and `icons/<id>.webp` images remain supported. For the same id, an accepted SVG wins over either raster format, regardless of ZIP order.
+The [interface contract](interface.md#icon-pack-format) defines the versioned manifest, ID groups, shared image mappings and migration policy.
 
 Rules:
 
@@ -28,7 +24,7 @@ Rules:
 - Raster images are square, 96–1024 px per side, at most 2 MB each.
 - Icons are tintable masks: only transparency matters. Draw in any single color on a transparent background.
 - The app tints them with its theme colors, so packs follow light and dark appearance, the accent and the page ink.
-- Unknown ids are ignored and listed in the import report.
+- Unknown ids are ignored and reported with the closest current id suggested.
 - Raster images that are not square, too small or large, or not decodable are rejected individually and listed; the rest of the pack still applies.
 - A pack without a valid `pack.json`, or with no usable icon, is refused and the current icons stay.
 - Notification small icons are system-rendered and cannot be replaced.
@@ -65,62 +61,62 @@ Limits keep import and drawing bounded: 256 KB per SVG, 256 paths, 1,024 element
 
 | Id | Used for |
 | --- | --- |
-| `tab.home` | Home tab |
-| `tab.library` | Library tab |
-| `tab.songs` | Songs tab and missing-artwork placeholder |
-| `tab.albums` | Albums tab |
-| `tab.artists` | Artists and Album Artists tabs |
-| `tab.folders` | Folders tab |
-| `tab.playlists` | Playlists tab |
-| `tab.queues` | Queues tab and queue actions |
+| `nav.home` | Home tab |
+| `nav.library` | Library tab |
+| `nav.songs` | Songs tab and missing-artwork placeholder |
+| `nav.albums` | Albums tab |
+| `nav.artists` | Artists and Album Artists tabs |
+| `nav.folders` | Folders tab |
+| `nav.playlists` | Playlists tab |
+| `nav.queues` | Queues tab and queue actions |
 | `transport.play` | Play |
 | `transport.pause` | Pause |
 | `transport.previous` | Previous |
 | `transport.next` | Next |
-| `menu.pin` | Pin to Home |
-| `menu.trash` | Remove, Delete |
-| `menu.list_create` | Create a list |
-| `menu.list_add_next` | Insert next in a list |
-| `menu.list_add_last` | Append to a list |
-| `menu.info` | Information |
-| `menu.download` | Download and downloading state (tray with a down arrow) |
-| `menu.share` | Share (reserved) |
-| `menu.station` | Station (reserved) |
-| `menu.favorite` | Favorite (reserved) |
-| `menu.suggest_less` | Suggest less (reserved) |
+| `action.pin` | Pin to Home |
+| `action.remove` | Remove, Delete |
+| `action.create_list` | Create a list |
+| `action.add_next` | Insert next in a list |
+| `action.add_to_queue` | Append to a list |
+| `action.show_info` | Information |
+| `action.download` | Download and downloading state (tray with a down arrow) |
+| `action.share` | Share (reserved) |
+| `action.start_station` | Station (reserved) |
+| `action.favorite` | Favorite (reserved) |
+| `action.suggest_less` | Suggest less (reserved) |
 | `action.edit` | Edit |
 | `action.close` | Close and clear |
-| `action.check` | Confirm a selection |
+| `selection.confirm` | Confirm a selection |
 | `action.refresh` | Sync now and quick refresh |
 | `action.rescan` | Full rescan |
-| `action.chevron_left` | Back |
-| `action.chevron_right` | Right chevron |
-| `action.chevron_up` | Up chevron |
-| `action.arrow_right` | Forward |
-| `action.arrow_left` | Left arrow |
-| `action.arrow_up` | Up arrow |
-| `action.chevron_down` | Collapse and select |
-| `action.arrow_down` | Return to position |
+| `nav.chevron_left` | Back |
+| `nav.chevron_right` | Right chevron |
+| `nav.chevron_up` | Up chevron |
+| `nav.arrow_right` | Forward |
+| `nav.arrow_left` | Left arrow |
+| `nav.arrow_up` | Up arrow |
+| `nav.chevron_down` | Collapse and select |
+| `nav.arrow_down` | Return to position |
 | `action.search` | Search |
-| `action.ellipsis` | More and item actions (horizontal ellipsis) |
-| `action.plus` | Add |
-| `action.sort` | Sort |
-| `action.eye` | Show |
-| `action.eye_off` | Hide |
-| `action.drag` | Reorder handle |
-| `action.revert` | Revert order |
-| `action.reverse` | Reverse order |
+| `action.more` | More and item actions (horizontal ellipsis) |
+| `action.add` | Add |
+| `sort.choose` | Sort |
+| `view.show` | Show |
+| `view.hide` | Hide |
+| `action.reorder` | Reorder handle |
+| `sort.revert` | Revert order |
+| `sort.reverse` | Reverse order |
 | `action.save` | Save, including artwork to Downloads |
-| `action.settings` | Settings |
-| `action.shuffle` | Shuffle |
-| `action.repeat` | Repeat |
-| `action.repeat_one` | Repeat one; missing replacements use the built-in dedicated glyph |
-| `action.seek_back` | Back 10 seconds |
-| `action.seek_forward` | Forward 10 seconds |
-| `action.lyrics` | Lyrics |
-| `action.info` | Information (player and dialogs) |
-| `action.trash` | Delete (other places) |
-| `action.list_add_last` | Append to a playlist |
+| `nav.settings` | Settings |
+| `transport.shuffle` | Shuffle |
+| `transport.repeat` | Repeat |
+| `transport.repeat_one` | Repeat one; missing replacements use the built-in dedicated glyph |
+| `transport.seek_back` | Back 10 seconds |
+| `transport.seek_forward` | Forward 10 seconds |
+| `view.lyrics` | Lyrics |
+| `view.info` | Information (player and dialogs) |
+| `action.delete` | Delete (other places) |
+| `action.add_to_playlist` | Append to a playlist |
 | `settings.interface` | Settings: Interface |
 | `settings.appearance` | Settings: Appearance |
 | `settings.icon_packs` | Settings: Icon packs |
@@ -136,20 +132,65 @@ The `transport.*` ids are the rest-state glyphs; Play and Pause also provide the
 
 Imported transport contours share the existing timing, interruption handling, tint and availability fades. Arbitrary play/pause contours crossfade; skip icons travel through clipped cycles. Missing endpoints use their built-in icons.
 
-Repeat One uses its own vector, never a text overlay on a pack's Repeat icon. Missing `action.repeat_one` entries use the dedicated built-in glyph. Repeat state changes crossfade with the shared control motion.
+Repeat One uses its own vector, never a text overlay on a pack's Repeat icon. Missing `transport.repeat_one` entries use the dedicated built-in glyph. Repeat state changes crossfade with the shared control motion.
 
 ## Legacy ids
 
-Older packs and installed files may use these aliases. Settings and template exports show only the canonical ids. A valid canonical mapping wins over its alias, across image formats and ZIP order. An invalid canonical image may fall back to a valid alias. Existing stored files are read without rewriting them.
+Aliases keep old packs usable under the [manifest resolution policy](interface.md#icon-pack-format). Existing installed files are read without rewriting them.
 
 | Legacy id | Canonical id |
 | --- | --- |
-| `action.back` | `action.chevron_left` |
-| `action.forward` | `action.arrow_right` |
-| `action.down` | `action.chevron_down` |
+| `tab.home` | `nav.home` |
+| `tab.library` | `nav.library` |
+| `tab.songs` | `nav.songs` |
+| `tab.albums` | `nav.albums` |
+| `tab.artists` | `nav.artists` |
+| `tab.folders` | `nav.folders` |
+| `tab.playlists` | `nav.playlists` |
+| `tab.queues` | `nav.queues` |
+| `menu.pin` | `action.pin` |
+| `menu.trash` | `action.remove` |
+| `menu.list_create` | `action.create_list` |
+| `menu.list_add_next` | `action.add_next` |
+| `menu.list_add_last` | `action.add_to_queue` |
+| `menu.info` | `action.show_info` |
+| `menu.download` | `action.download` |
+| `menu.share` | `action.share` |
+| `menu.station` | `action.start_station` |
+| `menu.favorite` | `action.favorite` |
+| `menu.suggest_less` | `action.suggest_less` |
+| `action.check` | `selection.confirm` |
+| `action.chevron_up` | `nav.chevron_up` |
+| `action.chevron_down` | `nav.chevron_down` |
+| `action.chevron_left` | `nav.chevron_left` |
+| `action.chevron_right` | `nav.chevron_right` |
+| `action.arrow_up` | `nav.arrow_up` |
+| `action.arrow_down` | `nav.arrow_down` |
+| `action.arrow_left` | `nav.arrow_left` |
+| `action.arrow_right` | `nav.arrow_right` |
+| `action.ellipsis` | `action.more` |
+| `action.plus` | `action.add` |
+| `action.sort` | `sort.choose` |
+| `action.eye` | `view.show` |
+| `action.eye_off` | `view.hide` |
+| `action.drag` | `action.reorder` |
+| `action.revert` | `sort.revert` |
+| `action.reverse` | `sort.reverse` |
+| `action.settings` | `nav.settings` |
+| `action.shuffle` | `transport.shuffle` |
+| `action.repeat` | `transport.repeat` |
+| `action.repeat_one` | `transport.repeat_one` |
+| `action.seek_back` | `transport.seek_back` |
+| `action.seek_forward` | `transport.seek_forward` |
+| `action.lyrics` | `view.lyrics` |
+| `action.info` | `view.info` |
+| `action.trash` | `action.delete` |
+| `action.list_add_last` | `action.add_to_playlist` |
+| `action.back` | `nav.chevron_left` |
+| `action.forward` | `nav.arrow_right` |
+| `action.down` | `nav.chevron_down` |
 | `action.save_artwork` | `action.save` |
-| `action.more` | `action.ellipsis` |
-| `menu.playlist_add` | `menu.list_create` |
-| `menu.play_next` | `menu.list_add_next` |
-| `menu.queue_add` | `menu.list_add_last` |
-| `action.playlist_add` | `action.list_add_last` |
+| `menu.playlist_add` | `action.create_list` |
+| `menu.play_next` | `action.add_next` |
+| `menu.queue_add` | `action.add_to_queue` |
+| `action.playlist_add` | `action.add_to_playlist` |

@@ -47,36 +47,36 @@ class IconPackVectorTest {
     @After fun reset() { IconPacks.reset(context) }
 
     @Test fun vectorsWinInBothZipOrdersPersistAndShowInTheLibraryViewer() {
-        val entries = listOf("icons/menu.pin.svg" to svg, "icons/menu.pin.png" to png())
+        val entries = listOf("icons/action.pin.svg" to svg, "icons/action.pin.png" to png())
         for (ordered in listOf(entries, entries.reversed())) {
             val report = IconPacks.import(context, pack(ordered).inputStream())
-            assertEquals(listOf("menu.pin"), report.applied)
+            assertEquals(listOf("action.pin"), report.applied)
             assertTrue(report.rejected.isEmpty())
-            assertNotNull(IconPacks.images.value.vectors["menu.pin"])
-            assertNull(IconPacks.masks.value["menu.pin"])
+            assertNotNull(IconPacks.images.value.vectors["action.pin"])
+            assertNull(IconPacks.masks.value["action.pin"])
             IconPacks.load(context)
-            assertNotNull(IconPacks.images.value.vectors["menu.pin"])
+            assertNotNull(IconPacks.images.value.vectors["action.pin"])
             val id = requireNotNull(IconPacks.activeId.value)
-            assertTrue(File(context.filesDir, "icon-packs/$id/icons/menu.pin.svg").isFile)
-            assertFalse(File(context.filesDir, "icon-packs/$id/icons/menu.pin.png").exists())
+            assertTrue(File(context.filesDir, "icon-packs/$id/icons/action.pin.svg").isFile)
+            assertFalse(File(context.filesDir, "icon-packs/$id/icons/action.pin.png").exists())
         }
         val id = requireNotNull(IconPacks.activeId.value)
         compose.setContent { LocalicaTheme {
             Column(Modifier.verticalScroll(rememberScrollState())) { IconPackViewer(id) }
         } }
         compose.onNodeWithText("Reassigned · Vector").assertExists()
-        compose.onNodeWithTag("pack-icon-menu.pin").assertExists()
+        compose.onNodeWithTag("pack-icon-action.pin").assertExists()
     }
 
     @Test fun badVectorsRejectIndividuallyAndAllowRasterFallback() {
         val bad = "<svg><script/></svg>".toByteArray()
-        val report = IconPacks.import(context, pack(listOf("icons/menu.pin.svg" to bad,
-            "icons/menu.pin.png" to png(), "icons/menu.trash.svg" to svg)).inputStream())
-        assertEquals(setOf("menu.pin", "menu.trash"), report.applied.toSet())
-        assertEquals("icons/menu.pin.svg", report.rejected.single().first)
+        val report = IconPacks.import(context, pack(listOf("icons/action.pin.svg" to bad,
+            "icons/action.pin.png" to png(), "icons/action.remove.svg" to svg)).inputStream())
+        assertEquals(setOf("action.pin", "action.remove"), report.applied.toSet())
+        assertEquals("icons/action.pin.svg", report.rejected.single().first)
         assertTrue(report.rejected.single().second.startsWith("Invalid SVG:"))
-        assertNotNull(IconPacks.masks.value["menu.pin"])
-        assertNotNull(IconPacks.images.value.vectors["menu.trash"])
+        assertNotNull(IconPacks.masks.value["action.pin"])
+        assertNotNull(IconPacks.images.value.vectors["action.remove"])
     }
 
     private fun render(painter: Painter, pixels: Int, tint: Color): Bitmap {

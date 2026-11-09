@@ -41,10 +41,10 @@ class IconRegistryVisualTest {
             "action.arrow_up" to "M12,21V4 M19,11L12,4L5,11",
             "action.arrow_left" to "M21,12H4 M11,5L4,12L11,19",
             "action.arrow_right" to "M3,12H20 M13,19L20,12L13,5",
-            "action.chevron_left" to "M15,5L8,12L15,19",
-            "action.chevron_right" to "M9,19L16,12L9,5",
-            "action.chevron_up" to "M19,15L12,8L5,15",
-            "action.chevron_down" to "M5,9L12,16L19,9",
+            "nav.chevron_left" to "M15,5L8,12L15,19",
+            "nav.chevron_right" to "M9,19L16,12L9,5",
+            "nav.chevron_up" to "M19,15L12,8L5,15",
+            "nav.chevron_down" to "M5,9L12,16L19,9",
         )
         val painters = linkedMapOf<String, List<Painter>>()
         compose.setContent {

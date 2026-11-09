@@ -152,7 +152,7 @@ class OpticalCentringPacksTest {
         val rows = drawableNames.map { (id, drawable) -> measure(id, builtinSvg(File(resources, "$drawable.xml")).toByteArray()) }
         assertEquals(AppIcon.entries.size, rows.size)
         val byId = rows.associateBy { it.id }
-        for (id in listOf("action.close", "action.plus", "action.ellipsis", "action.drag", "transport.play", "transport.pause"))
+        for (id in listOf("action.close", "action.add", "action.more", "action.reorder", "transport.play", "transport.pause"))
             assertEquals("$id is symmetric and stays", 0f, byId.getValue(id).shift, 0f)
         // The tray with a down arrow is measured natively (#701, 64 px/dp alpha) 2.895 dp low; this geometry agrees.
         val save = byId.getValue("action.save")
@@ -178,7 +178,7 @@ class OpticalCentringPacksTest {
     }
 
     @Test fun seekBackAndForwardNeverCrossTheirAnalyticRoundCapBounds() {
-        for (id in listOf("action.seek_back", "action.seek_forward")) {
+        for (id in listOf("transport.seek_back", "transport.seek_forward")) {
             val original = SvgIconParser.parse(builtinSvg(File(resources, drawableNames.getValue(id) + ".xml")).toByteArray()).toImageVector(shiftY = 0f)
             val bounds = requireNotNull(original.geometricInkBounds())
             assertEquals("$id exact cap clearance", .172f, bounds.first, .000002f)

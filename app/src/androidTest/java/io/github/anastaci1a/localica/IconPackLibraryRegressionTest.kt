@@ -31,9 +31,9 @@ class IconPackLibraryRegressionTest {
                 } }.toByteArray()
             }
             IconPacks.load(context)
-            IconPacks.import(context, pack("First", "menu.pin").inputStream())
+            IconPacks.import(context, pack("First", "action.pin").inputStream())
             IconPacks.import(context, pack("Second", "transport.play").inputStream())
-            assertEquals("Both imports must remain available without their source documents", setOf("menu.pin.png", "transport.play.png"),
+            assertEquals("Both imports must remain available without their source documents", setOf("action.pin.png", "transport.play.png"),
                 root.walkTopDown().filter { it.extension == "png" }.map { it.name }.toSet())
         } finally {
             IconPacks.reset(context)

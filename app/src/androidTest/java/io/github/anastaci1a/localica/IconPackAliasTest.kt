@@ -20,11 +20,11 @@ import java.util.zip.ZipOutputStream
 class IconPackAliasTest {
     private val context = InstrumentationRegistry.getInstrumentation().targetContext
     private val aliases = linkedMapOf(
-        "action.back" to "action.chevron_left", "action.forward" to "action.arrow_right",
-        "action.down" to "action.chevron_down", "action.save_artwork" to "action.save",
-        "action.more" to "action.ellipsis", "menu.playlist_add" to "menu.list_create",
-        "menu.play_next" to "menu.list_add_next", "menu.queue_add" to "menu.list_add_last",
-        "action.playlist_add" to "action.list_add_last",
+        "action.back" to "nav.chevron_left", "action.forward" to "nav.arrow_right",
+        "action.down" to "nav.chevron_down", "action.save_artwork" to "action.save",
+        "action.ellipsis" to "action.more", "menu.playlist_add" to "action.create_list",
+        "menu.play_next" to "action.add_next", "menu.queue_add" to "action.add_to_queue",
+        "action.playlist_add" to "action.add_to_playlist",
     )
     private val horizontal = """<svg viewBox="0 0 24 24"><path fill="none" stroke="black" stroke-width="2" d="M3 6 H21"/></svg>""".toByteArray()
     private val vertical = """<svg viewBox="0 0 24 24"><path fill="none" stroke="black" stroke-width="2" d="M18 3 V21"/></svg>""".toByteArray()
@@ -63,14 +63,15 @@ class IconPackAliasTest {
         for (family in listOf("arrow", "chevron")) for (direction in listOf("up", "down", "left", "right"))
             assertNotNull(AppIcon.byId("action.${family}_$direction"))
         val output = ByteArrayOutputStream().also { IconPacks.exportTemplate(context, it) }
-        val exported = mutableListOf<String>()
+        var exported: org.json.JSONObject? = null
         ZipInputStream(output.toByteArray().inputStream()).use { zip ->
             while (true) {
                 val entry = zip.nextEntry ?: break
-                if (entry.name.startsWith("icons/")) exported += entry.name.removePrefix("icons/").removeSuffix(".svg")
+                if (entry.name == "pack.json") exported = org.json.JSONObject(zip.readBytes().toString(Charsets.UTF_8))
             }
         }
-        assertEquals(ids.toSet(), exported.toSet()); assertEquals(ids.size, exported.size)
+        assertEquals(2, requireNotNull(exported).getInt("schemaVersion"))
+        assertEquals(ids.toSet(), requireNotNull(exported).getJSONObject("icons").keys().asSequence().toSet())
     }
 
     @Test fun aliasOnlyImportsPersistCanonicallyAndReloadTheSameArtwork() {
@@ -78,7 +79,10 @@ class IconPackAliasTest {
         assertTrue(report.unknown.isEmpty()); assertTrue(report.rejected.isEmpty())
         assertEquals(aliases.values.toSet(), report.applied.toSet())
         val folder = File(context.filesDir, "icon-packs/${IconPacks.activeId.value}/icons")
-        assertEquals(aliases.values.map { "$it.svg" }.toSet(), folder.list()!!.toSet())
+        assertEquals(1, folder.list()!!.size)
+        val manifest = org.json.JSONObject(File(folder.parentFile, "pack.json").readText())
+        assertEquals(2, manifest.getInt("schemaVersion"))
+        assertEquals(aliases.values.toSet(), manifest.getJSONObject("icons").keys().asSequence().toSet())
         IconPacks.load(context)
         assertEquals(aliases.values.toSet(), IconPacks.images.value.vectors.keys)
         IconPacks.images.value.vectors.values.forEach { assertEquals(SvgIconParser.parse(vertical).toImageVector(), it) }
@@ -119,8 +123,8 @@ class IconPackAliasTest {
     }
 
     @Test fun canonicalMixedFormatWinnersSurviveInstallAndReloadWithOriginalBytes() {
-        val canonical = "action.ellipsis"
-        val old = "action.more"
+        val canonical = "action.more"
+        val old = "action.ellipsis"
         for (canonicalFormat in listOf("png", "svg")) for (reverse in listOf(false, true)) {
             val winner = if (canonicalFormat == "png") png(true) else horizontal
             val aliasFormat = if (canonicalFormat == "png") "svg" else "png"

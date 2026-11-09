@@ -121,25 +121,37 @@ internal fun IconPackViewer(id: String?) {
     if (id != null && pack == null) { Text("This pack is no longer in your library."); return }
     Text(pack?.report?.info?.let { listOfNotNull(it.name, "Version ${it.version}", it.author).joinToString(" · ") } ?: "Built-in icons")
     pack?.let { Text("Imported ${DateFormat.getDateTimeInstance().format(Date(it.importedAt))}", style = MaterialTheme.typography.bodySmall) }
-    Text("Pack icon · Built-in icon", style = MaterialTheme.typography.bodySmall)
-    AppIcon.entries.groupBy { it.id.substringBefore('.') }.forEach { (area, icons) ->
-        SettingsHeading(when (area) { "tab" -> "Tabs"; "transport" -> "Transport"; "menu" -> "Song menu"; "settings" -> "Settings"; else -> "Actions" })
-        icons.forEach { icon ->
-            val mask = pack?.masks?.get(icon.id)
-            val vector = pack?.vectors?.get(icon.id)
-            Row(Modifier.fillMaxWidth().padding(vertical = 8.dp).testTag("pack-icon-${icon.id}"),
+    val rows = if (pack == null) IconPacks.builtinImageRows() else pack.uniqueImages
+    val fallback = if (pack == null) emptyList() else IconPacks.builtinImageRows().mapNotNull { row ->
+        row.copy(ids = row.ids.filterNot { it in pack.iconIds }).takeIf { it.ids.isNotEmpty() }
+    }
+    fun heading(area: String) = when (area) {
+        "nav" -> "Navigation"; "transport" -> "Transport"; "settings" -> "Settings"
+        "selection" -> "Selection"; "sort" -> "Sort"; "view" -> "View"; "status" -> "Status"; else -> "Actions"
+    }
+    Text("${rows.size} images · ${rows.sumOf { it.ids.size }} mapped ids", style = MaterialTheme.typography.bodySmall)
+    (rows.map { it to false } + fallback.map { it to true }).groupBy { it.first.ids.first().substringBefore('.') }.forEach { (area, images) ->
+        SettingsHeading(heading(area))
+        images.forEach { (image, isFallback) ->
+            val icon = requireNotNull(AppIcon.byId(image.ids.first()))
+            val mask = if (isFallback) null else pack?.masks?.get(icon.id)
+            val vector = if (isFallback) null else pack?.vectors?.get(icon.id)
+            Row(Modifier.fillMaxWidth().padding(vertical = 8.dp).testTag("pack-image-${image.filename}"),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Icon(packIconPainter(icon, mask, vector), "Pack: ${icon.id}", Modifier.size(24.dp))
-                Icon(packIconPainter(icon, null), "Built-in: ${icon.id}", Modifier.size(24.dp))
+                Icon(packIconPainter(icon, mask, vector), "Image: ${image.filename}", Modifier.size(24.dp))
                 Column(Modifier.weight(1f)) {
-                    Text(icon.id)
-                    Text(if (vector != null) "Reassigned · Vector" else if (mask != null) "Reassigned" else if (pack == null) "Built-in" else "Built-in (fallback)", style = MaterialTheme.typography.bodySmall)
+                    Text(image.filename, style = MaterialTheme.typography.bodySmall)
+                    image.ids.forEach { mappedId -> Text(mappedId, Modifier.testTag("pack-icon-$mappedId")) }
+                    Text(if (isFallback) "Built-in (fallback)" else if (pack == null) "Built-in" else if (vector != null) "Reassigned · Vector" else "Reassigned",
+                        style = MaterialTheme.typography.bodySmall)
                 }
             }
         }
     }
     pack?.report?.let { report ->
-        if (report.unknown.isNotEmpty()) { SettingsHeading("Unknown ids"); report.unknown.forEach { Text(it) } }
+        if (report.unknown.isNotEmpty()) { SettingsHeading("Unknown ids"); report.unknown.forEach { id ->
+            Text(id); report.suggestions[id]?.let { Text("Closest current id: $it", style = MaterialTheme.typography.bodySmall) }
+        } }
         if (report.rejected.isNotEmpty()) { SettingsHeading("Rejected entries"); report.rejected.forEach { Text("${it.first}: ${it.second}") } }
     }
 }

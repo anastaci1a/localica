@@ -20,6 +20,38 @@ The song-menu icon set is the reference for future icons: 24 dp vectors, 1.8 str
 | Favorite (unused) | `ic_star` |
 | Suggest less (unused) | `ic_thumb_down` |
 
+### Icon pack format
+
+A v2 pack is a ZIP containing `pack.json` and unique images under `icons/`. Store each image once; several IDs may share it. The author's `version` is independent of `schemaVersion`.
+
+```json
+{
+  "schemaVersion": 2,
+  "name": "My pack",
+  "version": "1",
+  "author": "Optional",
+  "icons": {
+    "action.add_to_queue": "queue_add.svg",
+    "action.add_next": "queue_add.svg"
+  },
+  "images": {
+    "queue_add.svg": {
+      "opticalOffset": { "x": 0, "y": -0.5 },
+      "opticalBounds": { "left": 2, "top": 2, "right": 22, "bottom": 22 },
+      "designedWeight": 1.8
+    }
+  }
+}
+```
+
+`name`, `version` and the v2 `icons` object are required. Image filenames contain no directories. SVG paths are preferred; square PNG/WebP masks remain supported. Optional `images` metadata belongs to the image, shared by its IDs. Metadata survives import and storage; automatic optical centring remains the drawing rule.
+
+IDs use `group.lower_snake_case`. Groups describe purpose: `nav`, `transport`, `action`, `settings`, `status`, `selection`, `sort` and `view`. Existing IDs remain direct aliases. An accepted canonical mapping wins; a rejected canonical image may fall back to an alias. Templates and the viewer show canonical IDs.
+
+V1 packs omit `schemaVersion` or specify `1`; their image filenames identify IDs. Import migrates accepted mappings to v2 and hash-deduplicates identical source bytes. Template export always writes v2. Unknown IDs appear in the import report and viewer with the closest current ID suggested. Missing IDs retain their built-in image.
+
+The viewer lists each unique image once with all mapped IDs, followed by grouped fallback images. [Icon packs](icon-packs.md) documents SVG limits, storage, IDs and aliases.
+
 ### Materials and controls
 
 Floating pills, mini-player, filter/search bars and circular controls share Liquid Glass: curved refraction, illuminated edges and crisp foregrounds. The Queue uses one continuous denser textured neutral-frost surface behind its header and list. Popups use the same material and inherited adaptive contrast.
