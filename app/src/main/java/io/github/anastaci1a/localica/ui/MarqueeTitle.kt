@@ -30,19 +30,21 @@ internal fun marqueeTextStyle(style: TextStyle): TextStyle =
 
 @Composable
 internal fun MarqueeTitle(title: String, reducedMotion: Boolean, modifier: Modifier = Modifier,
-    style: TextStyle = MaterialTheme.typography.titleSmall, motionPaused: Boolean = false) {
-    MarqueeTitle(AnnotatedString(title), reducedMotion, modifier, style, motionPaused)
+    style: TextStyle = MaterialTheme.typography.titleSmall, motionPaused: Boolean = false, ink: ColorProducer? = null) {
+    MarqueeTitle(AnnotatedString(title), reducedMotion, modifier, style, motionPaused, ink = ink)
 }
 
 @Composable
 internal fun MarqueeTitle(title: AnnotatedString, reducedMotion: Boolean, modifier: Modifier = Modifier,
     style: TextStyle = MaterialTheme.typography.titleSmall, motionPaused: Boolean = false,
-    visiblePrefixLength: Int = title.length, suffixVisibility: Float = 1f) {
+    visiblePrefixLength: Int = title.length, suffixVisibility: Float = 1f,
+    suffixVisibilityReader: (() -> Float)? = null, ink: ColorProducer? = null) {
     // Unspecified forces the UI direction in Compose, even for an opposite-script
     // title. Measurement and drawing must share content direction (or the caller's override).
     val textStyle = marqueeTextStyle(style)
     if (reducedMotion || LocalReducedMotion.current) {
-        Text(title, modifier, maxLines = 1, style = textStyle, overflow = TextOverflow.Ellipsis)
+        if (ink == null) Text(title, modifier, maxLines = 1, style = textStyle, overflow = TextOverflow.Ellipsis)
+        else DrawInkText(title, ink, modifier, maxLines = 1, style = textStyle, overflow = TextOverflow.Ellipsis)
         return
     }
     val measurer = rememberTextMeasurer()
@@ -60,15 +62,15 @@ internal fun MarqueeTitle(title: AnnotatedString, reducedMotion: Boolean, modifi
         val prefixWidth = if (visiblePrefixLength >= title.length) fullTextWidth else
             measurer.measure(title.subSequence(0, visiblePrefixLength.coerceAtLeast(0)), textStyle,
                 maxLines = 1, softWrap = false).size.width.toFloat()
-        val textWidth = prefixWidth + (fullTextWidth - prefixWidth) * suffixVisibility.coerceIn(0f, 1f)
-        val allowed by remember(motionPaused, textWidth) { derivedStateOf { !motionPaused && textWidth > viewportWidth.floatValue } }
-        val currentTextWidth by rememberUpdatedState(textWidth)
+        fun textWidth() = prefixWidth + (fullTextWidth - prefixWidth) * (suffixVisibilityReader?.invoke() ?: suffixVisibility).coerceIn(0f, 1f)
+        val allowed by remember(motionPaused, prefixWidth, fullTextWidth, suffixVisibilityReader, suffixVisibility) { derivedStateOf { !motionPaused && textWidth() > viewportWidth.floatValue } }
+        val currentTextWidth by rememberUpdatedState(::textWidth)
         val currentWidth: () -> Float = { viewportWidth.floatValue }
         val speed = with(density) { 30.dp.toPx() }
         LaunchedEffect(motion, allowed, speed) {
             do {
                 val now = withFrameMillis { time ->
-                    frame = motion.advance(time, currentTextWidth, currentWidth(), speed, allowed)
+                    frame = motion.advance(time, currentTextWidth(), currentWidth(), speed, allowed)
                     time
                 }
                 // A stationary pause must release the frame clock (and Compose idleness).
@@ -78,7 +80,8 @@ internal fun MarqueeTitle(title: AnnotatedString, reducedMotion: Boolean, modifi
         }
         val fadeLimit = with(density) { 24.dp.toPx() }
         Layout(content = {
-            Text(title, maxLines = 1, softWrap = false, style = textStyle, overflow = TextOverflow.Clip)
+            if (ink == null) Text(title, maxLines = 1, softWrap = false, style = textStyle, overflow = TextOverflow.Clip)
+            else DrawInkText(title, ink, maxLines = 1, softWrap = false, style = textStyle, overflow = TextOverflow.Clip)
         }, modifier = Modifier
             .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
             .drawWithContent {
@@ -91,9 +94,9 @@ internal fun MarqueeTitle(title: AnnotatedString, reducedMotion: Boolean, modifi
                         }
                     }
                 }
-                val leading = if (rtl) frame.leadingFade else marqueeLeftFade(textWidth, fadeWidth, frame)
+                val leading = if (rtl) frame.leadingFade else marqueeLeftFade(textWidth(), fadeWidth, frame)
                 if (!rtl) motion.recordRenderedLeftFade(leading)
-                val trailing = marqueeTrailingFade(textWidth, size.width, fadeWidth, frame)
+                val trailing = marqueeTrailingFade(textWidth(), size.width, fadeWidth, frame)
                 fun edge(start: Float, end: Float, amount: Float, reversed: Boolean) {
                     if (amount <= 0f) return
                     val stops = arrayOf(0f to 0f, .2f to .104f, .5f to .5f, .8f to .896f, 1f to 1f)

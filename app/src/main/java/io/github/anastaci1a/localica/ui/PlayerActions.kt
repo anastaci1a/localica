@@ -32,24 +32,27 @@ internal enum class PlayerAction(val label: String, val icon: AppIcon) {
 
 @Composable
 internal fun PlayerActionGlyph(action: PlayerAction, description: String?,
-    repeat: QueueRepeat = QueueRepeat.Off, count: String = "1 / 12", advancedRepeat: AdvancedRepeat? = null) {
+    repeat: QueueRepeat = QueueRepeat.Off, count: String = "1 / 12", advancedRepeat: AdvancedRepeat? = null,
+    ink: androidx.compose.ui.graphics.ColorProducer? = null) {
+    val fallback = LocalContentColor.current
+    val glyphInk = ink ?: androidx.compose.ui.graphics.ColorProducer { fallback }
     Box(contentAlignment = Alignment.Center) {
-        if (action == PlayerAction.Count) Text(count.replace(" / ", "/"), style = MaterialTheme.typography.labelSmall,
-            maxLines = 1, textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+        if (action == PlayerAction.Count) DrawInkText(count.replace(" / ", "/"), glyphInk,
+            style = MaterialTheme.typography.labelSmall.copy(textAlign = androidx.compose.ui.text.style.TextAlign.Center), maxLines = 1,
             modifier = Modifier.semantics { if (description != null) contentDescription = description })
         else {
             if (action == PlayerAction.Repeat) {
                 val one = repeat == QueueRepeat.One
                 val oneAlpha by animateControlStateFloat(if (one) 1f else 0f, one, "Repeat one glyph")
                 Box(Modifier.size(24.dp).semantics { if (description != null) contentDescription = description }) {
-                    Icon(appIconPainter(AppIcon.ActionRepeat), null,
+                    DrawInkIcon(appIconPainter(AppIcon.ActionRepeat), null, glyphInk,
                         Modifier.size(24.dp).graphicsLayer { alpha = 1f - oneAlpha }.testTag("repeat-all-glyph"))
-                    Icon(appIconPainter(AppIcon.ActionRepeatOne), null,
+                    DrawInkIcon(appIconPainter(AppIcon.ActionRepeatOne), null, glyphInk,
                         Modifier.size(24.dp).graphicsLayer { alpha = oneAlpha }.testTag("repeat-one-glyph"))
                 }
-            } else Icon(appIconPainter(action.icon), description, Modifier.size(24.dp))
-            if (action == PlayerAction.BackTen || action == PlayerAction.ForwardTen) Text("10", fontSize = 8.sp,
-                modifier = Modifier.clearAndSetSemantics {}, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+            } else DrawInkIcon(appIconPainter(action.icon), description, glyphInk, Modifier.size(24.dp))
+            if (action == PlayerAction.BackTen || action == PlayerAction.ForwardTen) DrawInkText("10", glyphInk,
+                modifier = Modifier.clearAndSetSemantics {}, style = LocalTextStyle.current.copy(fontSize = 8.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold))
             if (action == PlayerAction.Repeat) {
                 val badge = when {
                     repeat == QueueRepeat.One -> null
@@ -63,8 +66,8 @@ internal fun PlayerActionGlyph(action: PlayerAction, description: String?,
                 Box(Modifier.size(24.dp).clearAndSetSemantics {}, contentAlignment = Alignment.Center) {
                     listOf("■", "Ⅱ", "Q").forEach { variant ->
                         val opacity by animateControlStateFloat(if (badge == variant) 1f else 0f, badge == variant, "Repeat badge $variant")
-                        if (opacity > 0f) Text(variant, fontSize = 10.sp,
-                            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                        if (opacity > 0f) DrawInkText(variant, glyphInk, style = LocalTextStyle.current.copy(fontSize = 10.sp,
+                            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold),
                             modifier = Modifier.graphicsLayer { alpha = opacity })
                     }
                 }
@@ -105,8 +108,14 @@ internal fun PlayerActionStrip(value: PlayerActionSettings, label: (PlayerAction
                             onLongClickLabel = if (action == PlayerAction.Repeat && onRepeatOptions != null) "Repeat options" else "Customize player actions",
                             onLongClick = if (action == PlayerAction.Repeat && onRepeatOptions != null) onRepeatOptions else onCustomize),
                         contentAlignment = Alignment.Center) {
-                        if (action != null) CompositionLocalProvider(LocalContentColor provides LocalContentColor.current.copy(alpha = LocalContentColor.current.alpha * opacity)) {
-                            PlayerActionGlyph(action, label(action), repeat, count, advancedRepeat)
+                        if (action != null) {
+                            val drawTheme = LocalPlayerDrawTheme.current
+                            val fallback = LocalContentColor.current
+                            val ink = androidx.compose.ui.graphics.ColorProducer {
+                                val color = drawTheme?.foreground?.invoke() ?: fallback
+                                color.copy(alpha = color.alpha * opacity)
+                            }
+                            PlayerActionGlyph(action, label(action), repeat, count, advancedRepeat, ink)
                         }
                     }
                 }
