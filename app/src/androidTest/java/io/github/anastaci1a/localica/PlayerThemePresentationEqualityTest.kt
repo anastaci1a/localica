@@ -201,8 +201,13 @@ class PlayerThemePresentationEqualityTest {
             }
             // Keep the historical retained View intent: a later valid URI can mount the viewer.
             compose.runOnIdle { state=state.copy(trackUri="content://test.perf2/later-artwork") }
-            // The declaration publishes the host entry, then the host mounts its window next frame.
-            repeat(2) { compose.mainClock.advanceTimeByFrame();compose.waitForIdle() }
+            // Declaration -> host entry -> popup effect -> zero-origin frame -> native window.
+            // Admission is asynchronous; advance a bounded number of real host frames, not sleeps.
+            var admissionFrames = 0
+            while (compose.onAllNodes(isDialog()).fetchSemanticsNodes().isEmpty() && admissionFrames < 8) {
+                compose.mainClock.advanceTimeByFrame();compose.waitForIdle();admissionFrames++
+            }
+            android.util.Log.i("PERF2_DIALOG", "laterUriAdmissionFrames=$admissionFrames")
             assertTrue("A later URI admits the retained viewer",panels>0)
             compose.onNode(isDialog()).assertExists()
         } finally { compose.mainClock.autoAdvance=true }
