@@ -644,7 +644,7 @@ Follow real playback/seeks/queue changes with active-line emphasis, fluid moveme
 
 Lyrics open already at the current line, centred in the lyrics container, with no opening scroll. Following keeps the current line on that same centre anchor. The first and last single-line lyrics rest centred at the list bounds. Manual scrolling suspends following.
 
-A Liquid Glass directional bubble returns to the current line. It shows only while a return would move the list, so resting at the measured first or last bound where the return lands hides it. Touch exploration starts with following off. Plain lyrics scroll normally. Keep source selection without loading text/progress or tap ripples.
+A Liquid Glass directional bubble returns to the current line. It hides while the list rests at its first or last bound with that lyric current. Touch exploration starts with following off. Plain lyrics scroll normally. Keep source selection without loading text/progress or tap ripples.
 
 Presented lyrics receive taps and swipes throughout the artwork cross-fade, including reversal. Disabled artwork gestures leave no hit-test node over the lyrics. Artwork input resumes when the lyric document is no longer presented. Keep cover drawing order independent of input ownership.
 

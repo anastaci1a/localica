@@ -37,6 +37,17 @@ class LyricReturnBoundsTest {
         assertTrue(lyricReturnMoves(-60, canScrollBackward = true, canScrollForward = false, tolerance))
     }
 
+    @Test fun wrappedFirstAndLastLinesHideWithinTheirRestOffset() {
+        // A wrapped line centres rest = (row - single) / 2 px from the bound; the caller passes rest + 1 as the tolerance.
+        val rest = 37
+        assertFalse(lyricReturnMoves(rest, canScrollBackward = false, canScrollForward = true, rest + 1))
+        assertFalse(lyricReturnMoves(-rest, canScrollBackward = true, canScrollForward = false, rest + 1))
+        // A later line at the top bound is at least a whole first row further: still shown.
+        assertTrue(lyricReturnMoves(98 + rest, canScrollBackward = false, canScrollForward = true, rest + 1))
+        // Mid-list is unchanged whatever the tolerance.
+        assertTrue(lyricReturnMoves(rest, canScrollBackward = true, canScrollForward = true, rest + 1))
+    }
+
     @Test fun listShorterThanItsViewportNeverMoves() {
         assertFalse(lyricReturnMoves(30, canScrollBackward = false, canScrollForward = false, tolerance))
         assertFalse(lyricReturnMoves(-30, canScrollBackward = false, canScrollForward = false, tolerance))

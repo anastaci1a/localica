@@ -247,10 +247,14 @@ internal fun LyricsLines(document: ParsedLyrics, positionMs: Long, reducedMotion
         // #715: the arrow shows only while a return would move the list. A manual scroll resting at the list's measured
         // first/last bound that is where the return lands anyway (the bound centres the current line, or clamps the
         // return) hides it exactly as if the user had returned; it shows again as soon as a real return would move it.
+        // At a bound the tolerance is the line's own rest offset (+1 px rounding): a wrapped first/last line centres that
+        // far from the bound, and resting at the bound with it current is still "at the first/last lyric". Any other
+        // line is at least a whole row further away.
         val returnMoves by remember(list, anchors, active) { derivedStateOf {
             val current = list.layoutInfo.visibleItemsInfo.firstOrNull { it.index == active }
-            lyricReturnMoves(current?.let { it.offset + anchors.offset(it.size) },
-                list.canScrollBackward, list.canScrollForward, tolerance = 1)
+            val rest = current?.let { anchors.offset(it.size) } ?: 0
+            lyricReturnMoves(current?.let { it.offset + rest }, list.canScrollBackward, list.canScrollForward,
+                tolerance = rest + 1)
         } }
         LyricsReturnArrow(following || !returnMoves, document, active, reducedMotion, list, anchors, scene) { following = true }
     }
@@ -276,7 +280,8 @@ private fun BoxScope.LyricsReturnArrow(following: Boolean, document: ParsedLyric
 
 /** #715: whether returning to the current line would move the list. [delta] is the scroll in px (positive toward later
  *  lines) that centres the current line, or null when that line is not laid out. Away from both measured bounds the
- *  arrow keeps its behaviour; at a bound, a return the bound clamps, or one of at most [tolerance] px, would not move it. */
+ *  arrow keeps its behaviour; at a bound, a return the bound clamps, or one of at most [tolerance] px (the current
+ *  line's rest offset from the bound), would not move it. */
 internal fun lyricReturnMoves(delta: Int?, canScrollBackward: Boolean, canScrollForward: Boolean, tolerance: Int): Boolean {
     if (delta == null || (canScrollBackward && canScrollForward)) return true
     val clamped = (delta > 0 && !canScrollForward) || (delta < 0 && !canScrollBackward)
