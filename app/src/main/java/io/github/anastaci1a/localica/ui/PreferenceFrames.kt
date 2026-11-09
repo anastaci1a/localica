@@ -42,7 +42,7 @@ internal fun SettingsLinkFace(title: String, summary: String?, icon: AppIcon?, m
     colors: ListItemColors = ListItemDefaults.colors(containerColor = Color.Transparent)) {
     Row(modifier.heightIn(min = 64.dp).settingsRowPart(SettingsRowPart.Row)
         .padding(horizontal = SettingsRowInset, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-        if (icon != null) Box(Modifier.width(SettingsIconSlotWidth), contentAlignment = Alignment.CenterStart) {
+        if (icon != null) io.github.anastaci1a.localica.ui.layout.SettingsLeadingIconSlot(SettingsIconSlotWidth) {
             icon?.let { Icon(appIconPainter(it), null, Modifier.size(SettingsIconSize).settingsRowPart(SettingsRowPart.Icon),
                 tint = colors.leadingIconColor) }
         }
@@ -79,9 +79,9 @@ internal fun SliderPreferenceFrame(label: String, low: String?, high: String?, d
 internal fun BooleanPreferenceFrame(label: String, modifier: Modifier = Modifier, control: @Composable () -> Unit) {
     val compact = LocalCompactPreferenceFrames.current
     SettingsEntry(label) { Row(modifier.fillMaxWidth().heightIn(min = if (compact) 48.dp else 56.dp)
-        .padding(vertical = if (compact) 0.dp else 4.dp).settingsRowPart(SettingsRowPart.Row),
+        .padding(io.github.anastaci1a.localica.ui.layout.settingsPreferencePadding(compact)).settingsRowPart(SettingsRowPart.Row),
         verticalAlignment = Alignment.CenterVertically) {
-        Text(label, Modifier.weight(1f).padding(end = 12.dp).settingsRowPart(SettingsRowPart.Text))
+        Text(label, Modifier.weight(1f).padding(end = io.github.anastaci1a.localica.ui.layout.SettingsLabelGap).settingsRowPart(SettingsRowPart.Text))
         Box(Modifier.settingsRowPart(SettingsRowPart.Trailing)) { control() }
     }
 } }

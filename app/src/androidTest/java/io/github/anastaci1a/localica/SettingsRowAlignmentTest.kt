@@ -8,6 +8,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.*
 import androidx.compose.ui.text.TextLayoutResult
@@ -49,7 +50,7 @@ class SettingsRowAlignmentTest {
             density = device
             CompositionLocalProvider(LocalDensity provides Density(device.density, scale),
                 LocalInlineGlassDialog provides true, LocalReducedMotion provides true) {
-                Box(Modifier.width(360.dp).fillMaxHeight()) { key(category, scale) {
+                Box(Modifier.width(360.dp).fillMaxHeight().testTag("settings-page-origin")) { key(category, scale) {
                     FolderSettings(state, {}, {}, {}, initialCategory = category, interfaceContent = { section ->
                         if (section == "Player") SettingsLink("Customize player actions", "Choose controls and their order") {}
                         var settings by remember { mutableStateOf(InterfaceSettings()) }
@@ -83,16 +84,16 @@ class SettingsRowAlignmentTest {
         }
         val starts = parts.filter { it.first == SettingsRowPart.Text || it.first == SettingsRowPart.Heading }.map { it.second.left }
         if (requireRows) assertTrue("$label exposes no shared settings rows", starts.isNotEmpty())
-        val pageEdge = rows.minOfOrNull { it.left } ?: starts.minOrNull() ?: return
+        val origin = compose.onNodeWithTag("settings-page-origin", useUnmergedTree = true).fetchSemanticsNode().positionInRoot.x
+        val pageEdge = origin + with(density) { 24.dp.roundToPx() }
+        val cards = compose.onAllNodes(SemanticsMatcher.expectValue(SettingsRowPartKey, SettingsRowPart.Row) and hasClickAction(),
+            useUnmergedTree = true).fetchSemanticsNodes().map { Rect(it.positionInRoot, it.size.toSize()) }
         parts.filter { it.first == SettingsRowPart.Text || it.first == SettingsRowPart.Heading }.forEach { (part, bounds) ->
             val row = rows.filter { it.contains(bounds.center) }.minByOrNull { it.height }
             val icon = row?.let { r -> parts.any { it.first == SettingsRowPart.Icon && r.contains(it.second.center) } } == true
-            val card = row?.let { r -> parts.any {
-                it.first == SettingsRowPart.Trailing && r.contains(it.second.center) &&
-                    it.second.width <= with(density) { 20.dp.toPx() }
-            } } == true
-            val expected = if (part == SettingsRowPart.Heading || !card) pageEdge else row!!.left +
-                with(density) { (if (icon) 56.dp else 16.dp).toPx() }
+            val card = row != null && cards.contains(row)
+            val expected = if (part == SettingsRowPart.Heading || !card) pageEdge else pageEdge +
+                with(density) { (if (icon) 56.dp else 16.dp).roundToPx() }
             assertEquals("$label: historical x for $part (icon=$icon, card=$card)", expected, bounds.left, 0f)
         }
     }

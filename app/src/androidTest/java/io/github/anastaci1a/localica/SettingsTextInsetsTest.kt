@@ -36,14 +36,13 @@ class SettingsTextInsetsTest {
         ?.takeIf { it.isNotBlank() }?.let(::File) ?: requireNotNull(context.getExternalFilesDir(null)),
         "settings-insets-741/api${Build.VERSION.SDK_INT}").apply { mkdirs() }
 
-    private fun textGeometry(label: String): JSONObject {
-        val node = compose.onNodeWithText(label, useUnmergedTree = true)
+    private fun textGeometry(label: String, node: SemanticsNodeInteraction = compose.onNodeWithText(label, useUnmergedTree = true)): JSONObject {
         val layouts = mutableListOf<TextLayoutResult>()
         node.performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
         val semantics = node.fetchSemanticsNode()
         val layout = layouts.single()
         return JSONObject().put("text", label).put("x", semantics.positionInRoot.x)
-            .put("width", layout.size.width).put("right", semantics.positionInRoot.x + layout.size.width)
+            .put("y", semantics.positionInRoot.y).put("width", layout.size.width).put("right", semantics.positionInRoot.x + layout.size.width)
             .put("lineLeft", JSONArray((0 until layout.lineCount).map { layout.getLineLeft(it) }))
             .put("lineRight", JSONArray((0 until layout.lineCount).map { layout.getLineRight(it) }))
     }
@@ -53,7 +52,7 @@ class SettingsTextInsetsTest {
         var scale by mutableFloatStateOf(1f)
         compose.setContent { LocalicaTheme {
             val device = LocalDensity.current
-            edge = with(device) { 24.dp.toPx().toInt().toFloat() }
+            edge = with(device) { 24.dp.roundToPx().toFloat() }
             CompositionLocalProvider(LocalDensity provides androidx.compose.ui.unit.Density(device.density, scale),
                 LocalInlineGlassDialog provides true, LocalReducedMotion provides true) {
                 SettingsPage("Text roles", {}) {
@@ -70,8 +69,11 @@ class SettingsTextInsetsTest {
             compose.runOnIdle { scale = fontScale }
             compose.waitForIdle()
             val body = compose.onNodeWithTag("role-body", useUnmergedTree = true).fetchSemanticsNode()
-            val role = JSONObject().put("fontScale", fontScale).put("expectedLeft", body.positionInRoot.x)
-                .put("expectedRight", body.positionInRoot.x + body.size.width)
+            val root = compose.onRoot(useUnmergedTree = true).fetchSemanticsNode()
+            val expectedLeft = root.positionInRoot.x + edge
+            val expectedRight = root.positionInRoot.x + root.size.width - edge
+            val role = JSONObject().put("fontScale", fontScale).put("expectedLeft", expectedLeft)
+                .put("expectedRight", expectedRight)
             val positions = JSONArray()
             for (label in listOf("Header role", "Description role", "Slider title role", "Low role", "Helper role", "High role")) {
                 positions.put(textGeometry(label))
@@ -81,12 +83,12 @@ class SettingsTextInsetsTest {
             // Save the full native window before assertions so a red base retains its geometry witness.
             val bitmap = compose.onRoot(useUnmergedTree = true).captureNativeFrame().asAndroidBitmap()
             File(output, "roles-$fontScale.png").outputStream().use { bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
-            assertEquals("Page body is the historical 24dp edge", edge, body.positionInRoot.x, 0f)
+            assertEquals("Page body is the historical 24dp edge", expectedLeft, body.positionInRoot.x, 0f)
             for (index in 0 until positions.length()) {
                 val item = positions.getJSONObject(index)
                 if (item.getString("text") == "High role")
-                    assertEquals("High endpoint stays at page end", body.positionInRoot.x + body.size.width, item.getDouble("right").toFloat(), 0f)
-                else assertEquals("${item.getString("text")} keeps historical x", body.positionInRoot.x, item.getDouble("x").toFloat(), 0f)
+                    assertEquals("High endpoint stays at page end", expectedRight, item.getDouble("right").toFloat(), 0f)
+                else assertEquals("${item.getString("text")} keeps historical x", expectedLeft, item.getDouble("x").toFloat(), 0f)
             }
         }
     }
@@ -105,9 +107,9 @@ class SettingsTextInsetsTest {
             }
         } }
         val pages = linkedMapOf(
-            "Glass advanced" to listOf("Adaptive contrast", "Higher weighting focuses", "Shape and motion", "Sliders and switches"),
+            "Glass advanced" to listOf("Adaptive contrast", "Higher weighting focuses", "Shape and motion", "Sliders and switches", "Control expansion ·"),
             "Glass appearance" to listOf("Blur ·", "White tint ·", "Shadow strength ·"),
-            "Library and tags" to listOf("Library filters", "Tag jobs and recovery"),
+            "Library and tags" to listOf("Library filters", "Tag jobs and recovery", "Tools outside Localica"),
             "Interface" to listOf("Appearance", "Navigation", "Motion"),
             "Scanner" to listOf("Include subfolders", "Both are off by default."),
             "Motion" to listOf("Reduce motion", "How Return to top"),
@@ -120,13 +122,18 @@ class SettingsTextInsetsTest {
                 val node = compose.onAllNodes(hasText(anchor, substring = true), useUnmergedTree = true).onFirst()
                 node.performScrollTo()
                 compose.waitForIdle()
+                // Scrollable Columns lay out every child. Export their native text origins even when clipped,
+                // and keep ownership for repeated endpoint captions on the older combined Glass page.
                 val texts = compose.onAllNodes(SemanticsMatcher.keyIsDefined(SemanticsProperties.Text), useUnmergedTree = true)
-                    .fetchSemanticsNodes().filter { it.boundsInRoot.width > 0 && it.boundsInRoot.height > 0 }
-                    .flatMap { it.config[SemanticsProperties.Text] }.map { it.text }.distinct()
+                    .fetchSemanticsNodes().filter { it.size.width > 0 && it.size.height > 0 }
+                val titles = texts.filter { it.config.contains(SettingsRowPartKey) && it.config[SettingsRowPartKey] == SettingsRowPart.Text }
                 val geometry = JSONArray()
-                for (text in texts) {
-                    if (compose.onAllNodesWithText(text, useUnmergedTree = true).fetchSemanticsNodes().size == 1)
-                        geometry.put(textGeometry(text))
+                for (textNode in texts) {
+                    val text = textNode.config[SemanticsProperties.Text].joinToString("") { it.text }
+                    val owner = titles.filter { it.positionInRoot.y < textNode.positionInRoot.y }
+                        .maxByOrNull { it.positionInRoot.y }?.config?.get(SemanticsProperties.Text)?.joinToString("") { it.text }.orEmpty()
+                    val target = compose.onNode(SemanticsMatcher("native text id "+textNode.id) { it.id == textNode.id }, useUnmergedTree = true)
+                    geometry.put(textGeometry(text, target).put("owner", owner))
                 }
                 records.put(JSONObject().put("page", name).put("anchor", anchor).put("positions", geometry))
                 val slug = name.lowercase().replace(' ', '-') + "-$index"

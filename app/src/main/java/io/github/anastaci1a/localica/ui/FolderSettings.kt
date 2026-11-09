@@ -139,7 +139,7 @@ fun FolderSettings(state: LibraryUiState, onDismiss: () -> Unit, onChooseFolder:
             }
             if (page == "Metadata read failures" && search.isBlank()) MetadataReadFailures(state, Modifier.weight(1f))
             else CompositionLocalProvider(LocalSettingsSearchFocus provides focus.takeIf { search.isBlank() },
-                LocalSettingsNavigate provides { destination -> path = settingsPath(destination) }) { Column(Modifier.fillMaxWidth().weight(1f).onGloballyPositioned { focus.viewportTop = it.positionInWindow().y; focus.viewportHeight = it.size.height }
+                LocalSettingsNavigate provides { destination -> path = settingsPath(destination) }) { io.github.anastaci1a.localica.ui.layout.SettingsPageBody(Modifier.fillMaxWidth().weight(1f).onGloballyPositioned { focus.viewportTop = it.positionInWindow().y; focus.viewportHeight = it.size.height }
                 .controlVerticalScroll(scroll).padding(24.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (search.isNotBlank()) {
