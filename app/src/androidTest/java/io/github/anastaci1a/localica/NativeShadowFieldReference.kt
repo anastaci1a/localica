@@ -17,9 +17,11 @@ import kotlin.math.roundToInt
 /** Independent receipt kernel. No production field, shadow, geometry cache or renderer is called. */
 @RequiresApi(29)
 internal fun nativeShadowFieldReference(width: Int, height: Int, bodies: List<Pair<RoundRect, Float>>,
-    density: Float, strength: Float, spread: Float, background: Int, outsideMask: Bitmap? = null): ImageBitmap {
+    density: Float, strength: Float, spread: Float, background: Int, outsideMask: Bitmap? = null,
+    scaleX: Float = 1f, scaleY: Float = 1f): ImageBitmap {
     require(bodies.isNotEmpty() && density.isFinite() && density > 0f && strength.isFinite() && spread.isFinite())
     require(Color.alpha(background) == 255)
+    require(scaleX.isFinite() && scaleY.isFinite() && scaleX > 0f && scaleY > 0f)
     require(outsideMask == null || outsideMask.width == width && outsideMask.height == height)
     val reach = (4f + spread * 28f) * density
     val shift = 2f * density
@@ -39,7 +41,7 @@ internal fun nativeShadowFieldReference(width: Int, height: Int, bodies: List<Pa
     }
     val bounds = RectF(bodies.minOf { it.first.left }, bodies.minOf { it.first.top },
         bodies.maxOf { it.first.right }, bodies.maxOf { it.first.bottom }).apply {
-        inset(-(reach + shift + 1f), -(reach + shift + 1f))
+        inset(-(reach * scaleX + 1f), -((reach + shift) * scaleY + 1f))
     }
     return renderNativeReferenceImage(width, height, "independent-uncut-field-reference") { canvas ->
         canvas.drawColor(background)
@@ -52,19 +54,22 @@ internal fun nativeShadowFieldReference(width: Int, height: Int, bodies: List<Pa
             if (alpha > 0) {
                 paint.alpha = alpha
                 val expansion = reach * (1f - (index + .5f) / count)
+                val ex = expansion * scaleX
+                val ey = expansion * scaleY
+                val dy = shift * scaleY
                 if (uniform != null) {
-                    canvas.drawRoundRect(uniform.left - expansion, uniform.top - expansion + shift,
-                        uniform.right + expansion, uniform.bottom + expansion + shift,
-                        uniform.topLeftCornerRadius.x + expansion, uniform.topLeftCornerRadius.y + expansion, paint)
+                    canvas.drawRoundRect(uniform.left - ex, uniform.top - ey + dy,
+                        uniform.right + ex, uniform.bottom + ey + dy,
+                        uniform.topLeftCornerRadius.x + ex, uniform.topLeftCornerRadius.y + ey, paint)
                 } else {
                     val ring = Path().apply {
                         bodies.forEach { (r, _) ->
-                            addRoundRect(r.left - expansion, r.top - expansion + shift,
-                                r.right + expansion, r.bottom + expansion + shift,
-                                floatArrayOf(r.topLeftCornerRadius.x + expansion, r.topLeftCornerRadius.y + expansion,
-                                    r.topRightCornerRadius.x + expansion, r.topRightCornerRadius.y + expansion,
-                                    r.bottomRightCornerRadius.x + expansion, r.bottomRightCornerRadius.y + expansion,
-                                    r.bottomLeftCornerRadius.x + expansion, r.bottomLeftCornerRadius.y + expansion), Path.Direction.CW)
+                            addRoundRect(r.left - ex, r.top - ey + dy,
+                                r.right + ex, r.bottom + ey + dy,
+                                floatArrayOf(r.topLeftCornerRadius.x + ex, r.topLeftCornerRadius.y + ey,
+                                    r.topRightCornerRadius.x + ex, r.topRightCornerRadius.y + ey,
+                                    r.bottomRightCornerRadius.x + ex, r.bottomRightCornerRadius.y + ey,
+                                    r.bottomLeftCornerRadius.x + ex, r.bottomLeftCornerRadius.y + ey), Path.Direction.CW)
                         }
                     }
                     canvas.drawPath(ring, paint)
