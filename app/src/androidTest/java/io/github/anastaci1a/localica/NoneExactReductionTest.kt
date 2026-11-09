@@ -18,6 +18,7 @@ import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
@@ -212,38 +213,43 @@ class NoneExactReductionTest {
 
     /** Final-output drift between the frozen legacy path and the block-mean path, per channel, in 8-bit codes. */
     private class Drift {
-        private val channels = listOf("red", "green", "blue")
-        val samples = IntArray(3); val sum = DoubleArray(3); val max = FloatArray(3); val worst = arrayOf("", "", "")
+        private val channels = listOf("red", "green", "blue", "alpha")
+        val samples = IntArray(4); val sum = LongArray(4); val max = IntArray(4); val worst = Array(4) { "" }
         val cases = JSONArray()
+        private fun codes(color: Color): List<Int> {
+            val argb = color.toArgb()
+            return listOf(argb ushr 16 and 255, argb ushr 8 and 255, argb and 255, argb ushr 24 and 255)
+        }
         fun add(label: String, fresh: Color, legacy: Color, ideal: Color? = null) {
-            val deltas = floatArrayOf((fresh.red - legacy.red) * 255f, (fresh.green - legacy.green) * 255f, (fresh.blue - legacy.blue) * 255f)
-            for (i in 0..2) {
+            // Captures are RGBA8: quantize each channel before subtraction. Subtracting normalized
+            // Float channels first invents fractions such as 1.000000174 for an exact one-code delta.
+            val current = codes(fresh)
+            val old = codes(legacy)
+            val deltas = current.indices.map { current[it] - old[it] }
+            for (i in channels.indices) {
                 val d = kotlin.math.abs(deltas[i])
-                samples[i]++; sum[i] += d
+                samples[i]++; sum[i] += d.toLong()
                 if (d > max[i]) { max[i] = d; worst[i] = label }
             }
-            cases.put(JSONObject(mapOf("case" to label, "deltaCodes" to JSONArray(deltas.map { it.toDouble() }),
-                "fresh" to JSONArray(listOf(fresh.red, fresh.green, fresh.blue).map { (it * 255f).toDouble() }),
-                "legacy" to JSONArray(listOf(legacy.red, legacy.green, legacy.blue).map { (it * 255f).toDouble() }))))
+            cases.put(JSONObject(mapOf("case" to label, "deltaCodes" to JSONArray(deltas),
+                "fresh" to JSONArray(current), "legacy" to JSONArray(old))))
             if (ideal != null) {
-                val expected = listOf(ideal.red, ideal.green, ideal.blue)
-                val old = listOf(legacy.red, legacy.green, legacy.blue)
-                val current = listOf(fresh.red, fresh.green, fresh.blue)
+                val expected = listOf(ideal.red, ideal.green, ideal.blue, ideal.alpha).map { it.toDouble() * 255.0 }
                 val row = cases.getJSONObject(cases.length() - 1)
-                row.put("idealCodes", JSONArray(expected.map { (it * 255f).toDouble() }))
+                row.put("idealCodes", JSONArray(expected))
                 row.put("legacyIdealErrorCodes", JSONObject(channels.withIndex().associate { (i, name) ->
-                    name to (kotlin.math.abs(old[i] - expected[i]) * 255f).toDouble() }))
+                    name to kotlin.math.abs(old[i] - expected[i]) }))
                 row.put("candidateIdealErrorCodes", JSONObject(channels.withIndex().associate { (i, name) ->
-                    name to (kotlin.math.abs(current[i] - expected[i]) * 255f).toDouble() }))
+                    name to kotlin.math.abs(current[i] - expected[i]) }))
             }
         }
-        fun mean(i: Int) = if (samples[i] == 0) 0.0 else sum[i] / samples[i]
+        fun mean(i: Int) = if (samples[i] == 0) 0.0 else sum[i].toDouble() / samples[i]
         fun json(maxBudget: Float, meanBudget: Float) = JSONObject(mapOf(
             "perChannel" to JSONObject(channels.withIndex().associate { (i, name) -> name to JSONObject(mapOf(
                 "samples" to samples[i], "maxCodes" to max[i], "meanCodes" to mean(i), "worst" to worst[i])) }),
-            "budgetMaxCodes" to maxBudget, "budgetMeanCodes" to meanBudget, "cases" to cases))
+            "encoding" to "integer RGBA8", "budgetMaxCodes" to maxBudget, "budgetMeanCodes" to meanBudget, "cases" to cases))
         fun assertWithin(maxBudget: Float, meanBudget: Float) {
-            for (i in 0..2) {
+            for (i in channels.indices) {
                 assertTrue("Legacy vs block-mean ${channels[i]} drift max ${max[i]} codes at ${worst[i]} exceeds $maxBudget", max[i] <= maxBudget)
                 assertTrue("Legacy vs block-mean ${channels[i]} drift mean ${mean(i)} codes exceeds $meanBudget", mean(i) <= meanBudget)
             }
