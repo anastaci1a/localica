@@ -150,11 +150,11 @@ class PlayerLyricsMountTest {
             val samples = anchorsWhileMinimizing(state, lyric, "lyric-active", "lyric-lines")
             // Rest: the current line is centred in the lyric-lines container (#717).
             val panel = rect("lyrics-panel")
-            val line = compose.onNode(SemanticsMatcher.expectValue(SemanticsProperties.Selected, true) and
+            val current = compose.onNode(SemanticsMatcher.expectValue(SemanticsProperties.Selected, true) and
                 hasAnyAncestor(hasTestTag("lyric-lines")), useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
             val container = compose.onNodeWithTag("lyric-lines", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
             val rest = compose.onNodeWithTag("lyrics-viewport", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
-            assertEquals("The current line rests centred in the container", container.center.y, line.center.y, 2f)
+            assertEquals("The current line rests centred in the container", container.center.y, current.center.y, 2f)
             assertEquals("The viewport is the clip", panel, rest)
             assertTracksMidpoint(samples)
         } finally { file.delete() }
