@@ -63,6 +63,35 @@ class PopupShadowContinuityTest {
     private var sourceReferenceSequence = 0
     private val sourceReferences = ArrayList<org.json.JSONObject>()
     private val referenceSamples = StringBuilder()
+    private val nativeObservation = PopupNativeObservation()
+
+    /** The window projection is the renderer's cached physical frame, not a source
+     * projection. This overlay receipt still does not certify field presentation. */
+    private fun observeNative(canvas: AndroidCanvas, bounds: android.graphics.Rect, plane: ShadowPlane, view: View) =
+        Snapshot.withoutReadObservation {
+            if (!::anchor.isInitialized || !::output.isInitialized || bounds.isEmpty) return@withoutReadObservation
+            val node = (anchor.surfaceNode ?: anchor.returningNode) as? SurfaceNode
+            val coordinates = plane.layout?.takeIf { it.isAttached }
+            val origin = coordinates?.backdropPosition(view)
+            val screen = IntArray(2).also { view.rootView.getLocationOnScreen(it) }
+            fun bodies(value: List<RoundRect>) = org.json.JSONArray(value.map { b -> org.json.JSONArray(listOf(
+                b.left, b.top, b.right, b.bottom, b.topLeftCornerRadius.x, b.topLeftCornerRadius.y,
+                b.topRightCornerRadius.x, b.topRightCornerRadius.y, b.bottomRightCornerRadius.x,
+                b.bottomRightCornerRadius.y, b.bottomLeftCornerRadius.x, b.bottomLeftCornerRadius.y)) })
+            val home = node?.sourcePlane
+            val state = org.json.JSONObject().put("hidden", anchor.hidden).put("restored", anchor.restoredDrawn)
+                .put("modal", anchor.modalPresent).put("inModal", anchor.shadowInModal)
+                .put("phase", anchor.contact.expansion.value).put("request", anchor.restoredDrawRequest)
+                .put("receipt", anchor.restoredDrawReceipt).put("posted", anchor.restoredPresentedReceipt)
+                .put("windowOwner", node?.owns(plane) == true).put("homeOwner", home != null && node?.owns(home) == true)
+                .put("fieldInheritsBodyScale", node?.fieldInheritsBodyScale)
+                .put("windowBodies", bodies(node?.frameOn(plane)?.bodies.orEmpty()))
+                .put("homeBodies", bodies(home?.let { node?.frameOn(it)?.bodies }.orEmpty()))
+                .put("planeAttached", coordinates != null).put("planeOriginX", origin?.x).put("planeOriginY", origin?.y)
+                .put("viewScreenX", screen[0]).put("viewScreenY", screen[1])
+            nativeObservation.draw(canvas, screen[0], screen[1], bounds.left + 2, bounds.top + 2, state,
+                !anchor.hidden && anchor.restoredDrawn && anchor.modalPresent, output)
+        }
 
     /** Independent native path reference inside the existing retained backdrop layer.
      * The hook runs after the source field; native marker freshness must still be
@@ -177,6 +206,7 @@ class PopupShadowContinuityTest {
         }
     }
     private fun writeDrawReceipts() {
+        nativeObservation.finish(output)
         compose.runOnIdle { File(output, "draw-receipts.txt").writeText(drawReceipts.joinToString("\n", postfix = "\n"));
             File(output, "source-reference-frames.json").writeText(org.json.JSONArray(sourceReferences).toString(2));
             File(output, "source-reference-samples.txt").writeText(referenceSamples.toString()) }
@@ -386,7 +416,7 @@ class PopupShadowContinuityTest {
                 assertSame(window, popupWindow)
                 verifyField("reopening-$cycle")
             }
-            compose.runOnIdle { open = false }
+            compose.runOnIdle { nativeObservation.armed = true; open = false }
             var returned = false
             repeat(180) {
                 if (!returned) {
@@ -471,9 +501,10 @@ class PopupShadowContinuityTest {
     @Composable private fun Menu() {
         GlassMenu(open, anchor, { open = false }) {
             val view = LocalView.current
+            val plane = requireNotNull(LocalShadowPlane.current)
             val window = (view.parent as DialogWindowProvider).window
             DisposableEffect(window) {
-                val next = FrameMarker()
+                val next = FrameMarker { canvas, bounds -> observeNative(canvas, bounds, plane, view) }
                 popupView = view; popupWindow = window; marker = next
                 window.decorView.overlay.add(next)
                 val observer = android.view.ViewTreeObserver.OnDrawListener { recordDraw("popup-before-draw") }
@@ -623,10 +654,10 @@ class PopupShadowContinuityTest {
         }
     }
 
-    private class FrameMarker : Drawable() {
+    private class FrameMarker(private val observation: ((AndroidCanvas, android.graphics.Rect) -> Unit)? = null) : Drawable() {
         var color = AndroidColor.GREEN
         private val paint = Paint()
-        override fun draw(canvas: AndroidCanvas) { paint.color = color; canvas.drawRect(bounds, paint) }
+        override fun draw(canvas: AndroidCanvas) { paint.color = color; canvas.drawRect(bounds, paint); observation?.invoke(canvas, bounds) }
         override fun setAlpha(alpha: Int) { paint.alpha = alpha }
         override fun setColorFilter(colorFilter: ColorFilter?) { paint.colorFilter = colorFilter }
         @Deprecated("Deprecated in Android") override fun getOpacity() = PixelFormat.OPAQUE
