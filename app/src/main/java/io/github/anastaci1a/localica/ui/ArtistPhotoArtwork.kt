@@ -22,14 +22,14 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-internal data class ArtistPhotoEnvironment(val photos: ArtistPhotos, val consent: NetworkConsent)
+internal data class ArtistPhotoEnvironment(val photos: ArtistPhotos, val consent: NetworkConsent, val work: ArtistPhotoWork? = null)
 internal val LocalArtistPhotoEnvironment = staticCompositionLocalOf<ArtistPhotoEnvironment?> { null }
 
 @Composable
 internal fun artistPhotoEnvironment(): ArtistPhotoEnvironment? {
     LocalArtistPhotoEnvironment.current?.let { return it }
     val app = LocalContext.current.applicationContext as? LocalicaApplication
-    return remember(app) { app?.let { ArtistPhotoEnvironment(it.artistPhotos, it.onlineMetadataConsent) } }
+    return remember(app) { app?.let { ArtistPhotoEnvironment(it.artistPhotos, it.onlineMetadataConsent, it.artistPhotoWork) } }
 }
 
 internal fun artistPhotoRequest(ref: MediaRef, name: String, tracks: List<Track>, fallback: String?): ArtistPhotoRequest? {
@@ -49,49 +49,65 @@ internal fun libraryArtistPhotoRequests(snapshot: LibrarySnapshot): List<ArtistP
 internal data class ArtistPhotoVisual(val image: ImageBitmap, val visual: PlayerVisual, val photo: CachedArtistPhoto)
 
 /** Shared decoded images are bounded; disk revision and file identity invalidate stale pixels. */
-private object ArtistPhotoPixels {
+internal object ArtistPhotoPixels {
     private val cache = object : LruCache<String, ArtistPhotoVisual>(16 * 1024 * 1024) {
         override fun sizeOf(key: String, value: ArtistPhotoVisual) = value.image.asAndroidBitmap().allocationByteCount +
             listOfNotNull(value.visual.palette.wash, value.visual.palette.softWash, value.visual.palette.collectionWash)
                 .distinct().sumOf { it.allocationByteCount }
     }
-    suspend fun read(photo: CachedArtistPhoto): ArtistPhotoVisual? {
-        val file = photo.file
-        val key = "${file.absolutePath}:${file.length()}:${photo.fetchedAt}"
+    suspend fun read(photo: CachedArtistPhoto, thumbnail: Boolean = false): ArtistPhotoVisual? {
+        val file = if (thumbnail) photo.thumbnailFile ?: photo.file else photo.file
+        val key = "${file.absolutePath}:${file.length()}:${photo.fetchedAt}:$thumbnail"
         cache.get(key)?.let { return it }
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeFile(file.absolutePath, bounds)
         if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
         val options = BitmapFactory.Options()
-        while (maxOf(bounds.outWidth, bounds.outHeight) / options.inSampleSize.coerceAtLeast(1) > 768) {
+        while (maxOf(bounds.outWidth, bounds.outHeight) / options.inSampleSize.coerceAtLeast(1) > if (thumbnail) 256 else 1080) {
             options.inSampleSize = options.inSampleSize.coerceAtLeast(1) * 2
         }
         val bitmap = BitmapFactory.decodeFile(file.absolutePath, options) ?: return null
         val image = bitmap.asImageBitmap()
-        val visual = PlayerVisual(image, playerPalette(bitmap), contentKey = "artist-photo:$key")
+        val visual = if (thumbnail) PlayerVisual(image, contentKey = "artist-photo:$key")
+            else PlayerVisual(image, playerPalette(bitmap), contentKey = "artist-photo:$key")
         return ArtistPhotoVisual(image, visual, photo).also { cache.put(key, it) }
     }
 }
 
 /** Consent gates even cached display. Request identity prevents a reused row showing its former artist. */
 @Composable
-internal fun rememberArtistPhoto(request: ArtistPhotoRequest?, environment: ArtistPhotoEnvironment? = artistPhotoEnvironment()): ArtistPhotoVisual? {
+internal fun rememberArtistPhoto(request: ArtistPhotoRequest?, environment: ArtistPhotoEnvironment? = artistPhotoEnvironment(),
+    thumbnail: Boolean = false): ArtistPhotoVisual? {
     val allowed = environment?.consent?.allowed?.collectAsState()?.value == true
     val revision = environment?.photos?.changes?.collectAsState()?.value
     val deferred = LocalArtworkTransit.current?.active == true
-    val identity = listOf(environment, request?.copy(latestAlbumArt = null), allowed, revision)
-    val loaded by produceState<Pair<List<Any?>, ArtistPhotoVisual?>?>(null, identity, deferred) {
+    val identity = listOf(environment, request?.copy(latestAlbumArt = null), thumbnail)
+    DisposableEffect(environment, request?.artistKey, allowed) {
+        val lease = if (allowed && request != null) environment?.photos?.retainDisplay(request.artistKey) else null
+        onDispose { lease?.close() }
+    }
+    LaunchedEffect(identity, allowed, deferred) {
+        if (request != null && allowed && !deferred) environment?.work?.enqueue(request)
+    }
+    val loaded by produceState<Pair<List<Any?>, ArtistPhotoVisual?>?>(null, identity, allowed, revision, deferred) {
         if (request != null && environment != null && allowed && !deferred) {
             try {
-                environment.photos.observe(request).collect { state ->
-                    state.photo?.let { photo ->
-                        val decoded = withContext(Dispatchers.IO) { ArtistPhotoPixels.read(photo) }
-                        value = identity to decoded
+                suspend fun accept(state: ArtistPhotoState) {
+                    val photo = state.photo
+                    if (photo == null) value = identity to null
+                    else {
+                        val decoded = withContext(Dispatchers.IO) { ArtistPhotoPixels.read(photo, thumbnail) }
+                        if (decoded != null) {
+                            value = identity to decoded
+                            environment.photos.displayed(request.artistKey)
+                        }
                     }
                 }
+                accept(environment.photos.ready(request))
+                if (environment.work == null) environment.photos.observe(request).collect { if (it.photo != null) accept(it) }
             } catch (cancelled: CancellationException) { throw cancelled }
-            catch (_: Exception) { value = identity to null }
-        }
+            catch (_: Exception) { /* A failed replacement keeps matching ready pixels. */ }
+        } else if (!allowed) value = null
     }
     return if (allowed && request != null && loaded?.first == identity) loaded?.second else null
 }
@@ -108,7 +124,7 @@ internal fun ArtistMediaArtwork(item: BrowserItem, modifier: Modifier,
     val environment = artistPhotoEnvironment()
     val allowed = environment?.consent?.allowed?.collectAsState()?.value == true
     val request = remember(item) { artistPhotoRequest(item.ref, item.title, item.songs.map { it.track }, item.coverUris.firstOrNull()) }
-    val photo = rememberArtistPhoto(request, environment)
+    val photo = rememberArtistPhoto(request, environment, thumbnail = true)
     // The existing ArtworkImage owns reveal/resolution blending. Revocation drops its outgoing photo immediately.
     key(item.ref, allowed) {
         MediaArtwork(item.coverUris, modifier, shape = shape, contentScale = contentScale,

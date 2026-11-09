@@ -90,6 +90,10 @@ Typed preference boundaries retain explicit inheritance. Shared enum decoding pr
 
 Artist photo requests run off Main and use fixed HTTPS hosts, disabled redirects, bounded responses and shared request pacing. Provider errors become fixed failures without URLs or transport messages. Metadata responses are limited to 512 KiB and pictures to 4 MiB. Searches inspect five artists and 25 releases per candidate; incomplete coverage falls back conservatively.
 
+Artist photo storage re-encodes decoded images as WebP at the display dimension, capped at 1080 pixels, plus a 256-pixel thumbnail. Chosen photos live with persisted choices outside the evictable cache. Display leases protect visible images, and background reads do not advance LRU order. A promotion journal recovers interrupted choice commits without retiring the previous ready image.
+
+Artist photo acquisition uses one unique WorkManager chain with connected-network constraints and a persistent per-artist queue. Completed artists checkpoint independently. A new pick supersedes an older generation without cancelling unrelated artists. Provider pacing and consent checks remain in the repository transport. Chooser candidates stream progressively and cache by artist request; decoded images retain the existing artwork fade owners.
+
 Photo entries and consent use atomic file replacement. Match choices live separately from evictable images. A persisted attempt time throttles failed requests across process death. The default-off consent stays closed until its asynchronous load completes. Commons credits are bounded plain text; licence and source links remain structured metadata.
 
 ## Legacy MP3 transitions

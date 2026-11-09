@@ -14,7 +14,8 @@ internal class ArtistPhotoProviders(private val http: PhotoTransport) {
     private fun JSONArray.objects(limit: Int) = (0 until minOf(length(), limit)).mapNotNull { optJSONObject(it) }
     private fun JSONObject.text(key: String): String? = if (isNull(key)) null else optString(key).takeIf { it.isNotBlank() && it.length <= 2048 }
 
-    suspend fun search(provider: ArtistPhotoProvider, local: ArtistPhotoRequest): List<RemoteArtist> {
+    suspend fun search(provider: ArtistPhotoProvider, local: ArtistPhotoRequest,
+        onCandidate: suspend (RemoteArtist) -> Unit = {}): List<RemoteArtist> {
         if (local.name.isBlank() || local.name.length > 256) return emptyList()
         return when (provider) {
             ArtistPhotoProvider.DEEZER -> {
@@ -23,7 +24,7 @@ internal class ArtistPhotoProviders(private val http: PhotoTransport) {
                     val id = entry.optLong("id", -1).takeIf { it > 0 } ?: return@mapNotNull null
                     val name = entry.text("name") ?: return@mapNotNull null
                     if (ArtistPhotoMatching.normalize(name) != ArtistPhotoMatching.normalize(local.name)) return@mapNotNull null
-                    safely { deezer(entry, id.toString(), name) }
+                    safely { deezer(entry, id.toString(), name).also { onCandidate(it) } }
                 }
             }
             ArtistPhotoProvider.WIKIMEDIA -> {
@@ -35,7 +36,7 @@ internal class ArtistPhotoProviders(private val http: PhotoTransport) {
                     val id = entry.text("id")?.takeIf(mbid::matches) ?: return@mapNotNull null
                     val name = entry.text("name") ?: return@mapNotNull null
                     if (ArtistPhotoMatching.normalize(name) != ArtistPhotoMatching.normalize(local.name)) return@mapNotNull null
-                    safely { musicbrainz(id, name) }
+                    safely { musicbrainz(id, name).also { onCandidate(it) } }
                 }
             }
         }
