@@ -126,6 +126,30 @@ class CompositorRegistryTest {
         node.dispose(); popup.dispose()
     }
 
+    @Test fun nativeOnlyCasterHasNoSourceFieldToAcknowledge() = EngineHarness(spec=geometry).use { h ->
+        val native=plane(h); val node=SurfaceNode(h.clock,"native-only",shape(h),shown,native)
+        val release=node.retainWindow()
+        // A plain geometry anchor has no glassCaster attachment. Its fallback
+        // window node owns a field, but that native host is not a source return.
+        assertTrue(node.owns(native))
+        assertNull("A native-only caster cannot supply an owned source-field receipt",node.returnPlane())
+        node.dispose(); release()
+    }
+
+    @Test fun releasedSourceCannotPromiseAFieldWhileItsNativeLeaseKeepsTheNodeAlive() = EngineHarness(spec=geometry).use { h ->
+        val home=plane(h); val replacement=plane(h); val node=SurfaceNode(h.clock,"released-home",shape(h),shown,home)
+        val generation=node.attachSource(home); val release=node.retainWindow()
+        assertSame(home,node.returnPlane())
+        node.releaseSource(generation)
+        assertTrue("The native lease retains the field node",node.owns(home))
+        assertNull("A released physical source cannot draw its return field",node.returnPlane())
+        node.attachSource(replacement)
+        assertSame("A real remount supplies its new source generation",replacement,node.returnPlane())
+        node.releaseSource(generation)
+        assertSame("A stale release cannot revoke the remounted source",replacement,node.returnPlane())
+        release(); node.dispose()
+    }
+
     @Test fun oneKeyOneNodeOnePlaneBinding() = EngineHarness(spec=geometry).use { h ->
         val a=plane(h); val b=plane(h); val s=shape(h)
         val node=SurfaceNode(h.clock,"pill",s,shown,a)
