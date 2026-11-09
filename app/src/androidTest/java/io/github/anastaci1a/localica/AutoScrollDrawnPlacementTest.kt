@@ -214,7 +214,7 @@ class AutoScrollDrawnPlacementTest {
             // those have no stable color edge to measure yet.
             val palette = intArrayOf(0xFFCC3322.toInt(), 0xFF2255AA.toInt(), 0xFF33AA55.toInt(), 0xFFDDAA22.toInt(), 0xFF884499.toInt())
             if (color !in palette) {
-                if (arguments.getString("strict") != "0") problems += "$label $key expected visible cover is not fully drawn"
+                if (arguments.getString("strict") != "0") problems += "$label $key expected visible cover is not fully drawn: center=" + Integer.toHexString(color)
                 return@forEach
             }
             measured++
@@ -332,6 +332,32 @@ class AutoScrollDrawnPlacementTest {
         check(done.await(10, java.util.concurrent.TimeUnit.SECONDS)) { "No native frame" }
     }
 
+    private var artworkIdleWitness = "not sampled"
+    private fun visibleArtworkRevealsIdle(keys: Set<String>): Boolean = nodes { all ->
+        var found = 0
+        var pending = 0
+        all.filter { node -> node.tag()?.removePrefix("browse-text-") in keys && node.tag()?.startsWith("browse-text-") == true }.forEach { node ->
+            val layout = requireNotNull(field(node, "layoutNode"))
+            var modifier = field(requireNotNull(field(layout, "nodes")), "head")
+            var reveal: ArtworkTextReveal? = null
+            while (modifier != null && reveal == null) {
+                val block = field(modifier, "layerBlock")
+                if (block != null) reveal = block.javaClass.declaredFields.firstNotNullOfOrNull { f ->
+                    f.isAccessible = true
+                    f.get(block) as? ArtworkTextReveal
+                }
+                modifier = field(modifier, "child")
+            }
+            reveal?.let { state ->
+                found++
+                val animation = state.reveal
+                if (animation == null || animation.isRunning || animation.value != 1f || state.waiting) pending++
+            }
+        }
+        artworkIdleWitness = "found=$found expected=" + keys.size + " pending=$pending"
+        found == keys.size && pending == 0
+    }
+
     private fun awaitNextIdleFrame(host: Host) {
         val until = SystemClock.uptimeMillis() + 20_000
         while (true) {
@@ -359,13 +385,14 @@ class AutoScrollDrawnPlacementTest {
                     }
                 }
             }
-            if (idle && loaded && loadingLayoutComplete) {
+            val artworkIdle = visible.isNotEmpty() && visibleArtworkRevealsIdle(visible.keys)
+            if (idle && loaded && loadingLayoutComplete && artworkIdle) {
                 // Assert the first completed native frame after composition/layout/decode idle.
                 nativeFrame()
-                android.util.Log.i("AutoScroll635Idle", "idle visible=" + visible.size + " everyCoverCached=" + loaded)
+                android.util.Log.i("AutoScroll635Idle", "idle visible=" + visible.size + " everyCoverCached=" + loaded + " artwork=" + artworkIdleWitness)
                 return
             }
-            check(SystemClock.uptimeMillis() < until) { "Native composition/layout/artwork did not become idle; covers=" + loaded }
+            check(SystemClock.uptimeMillis() < until) { "Native composition/layout/artwork did not become idle; covers=" + loaded + " artwork=" + artworkIdleWitness }
         }
     }
 
