@@ -17,6 +17,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
@@ -53,6 +55,24 @@ class PopupShadowContinuityTest {
     private lateinit var output: File
     private var neighboringBody = Rect.Zero
     private var sweptBounds = Rect.Zero
+    // Diagnostic receipts only: no mutation, extra frame, or native-gate hold.
+    private val drawReceipts = ArrayList<String>()
+    private fun recordDraw(label: String) = Snapshot.withoutReadObservation {
+        if (::anchor.isInitialized && drawReceipts.size < 4096) {
+            val node = (anchor.surfaceNode ?: anchor.returningNode) as? SurfaceNode
+            val home = node?.sourcePlane
+            drawReceipts += "$label ns=${android.os.SystemClock.elapsedRealtimeNanos()} " +
+                "hidden=${anchor.hidden} restored=${anchor.restoredDrawn} modal=${anchor.modalPresent} " +
+                "inModal=${anchor.shadowInModal} window=${popupWindow != null} " +
+                "request=${anchor.restoredDrawRequest} receipt=${anchor.restoredDrawReceipt} " +
+                "posted=${anchor.restoredPresentedReceipt} homeOwner=${home != null && node?.owns(home) == true} " +
+                "body=${anchor.contact.body.value} bounds=${anchor.bounds} " +
+                "homeBodies=${home?.let { node?.frameOn(it)?.bodies }}"
+        }
+    }
+    private fun writeDrawReceipts() {
+        compose.runOnIdle { File(output, "draw-receipts.txt").writeText(drawReceipts.joinToString("\n", postfix = "\n")) }
+    }
 
     @Test fun utilityShadowHasOneUnclippedFieldThroughoutRepeatedReversals() = verify(nested = false)
     @Test fun nestedShadowHasOneUnclippedFieldThroughoutRepeatedReversals() = verify(nested = true)
@@ -75,7 +95,7 @@ class PopupShadowContinuityTest {
         fun frame(label: String) {
             compose.mainClock.advanceTimeByFrame(); compose.waitForIdle()
             val p = anchor.contact.expansion.value
-            val gap = sharedGapDarkness()
+            val gap = sharedGapDarkness(label)
             if (p <= .002f) homeContinuity.observeLuminance(1f - gap / 255f) else homeContinuity.beginSegment()
             frames += p to gap
             log.append("$label p=$p hidden=${anchor.hidden} inModal=${anchor.shadowInModal} window=${popupWindow != null} gap=$gap\n")
@@ -92,7 +112,7 @@ class PopupShadowContinuityTest {
             }
         }
         try {
-            val rest = sharedGapDarkness()
+            val rest = sharedGapDarkness("rest")
             log.append("rest gap=$rest\n")
             assertTrue("The neighbor union must be visible in the gap: $rest", rest > 8f)
             repeat(2) { cycle ->
@@ -124,15 +144,18 @@ class PopupShadowContinuityTest {
                 "worst=$worst jump=$jump rest=$rest\n$log", worst < 4f && jump < 3f)
         } finally {
             File(output, "frames.txt").writeText(log.toString())
+            writeDrawReceipts()
             compose.runOnIdle { open = false }
             compose.mainClock.autoAdvance = true
         }
     }
 
     /** Mean shadow levels (red channel, 0-255) in the gap between the neighbor and trigger. */
-    private fun sharedGapDarkness(): Float {
+    private fun sharedGapDarkness(label: String): Float {
         val on = syncedScreenshot()
         try {
+            File(output, "$label.png").outputStream().use { on.compress(Bitmap.CompressFormat.PNG, 100, it) }
+            compose.runOnIdle { recordDraw("gap-$label") }
             val d = compose.density.density
             val gx = ((neighboringBody.right + anchor.bounds.left) / 2f).roundToInt()
             // The flat white page at the same rows, beyond the trigger's shadow reach.
@@ -278,6 +301,7 @@ class PopupShadowContinuityTest {
             assertNotSame(window, popupWindow)
             verifyField("replacement-window")
         } finally {
+            writeDrawReceipts()
             compose.runOnIdle { open = false; strength = .8f }
             compose.mainClock.autoAdvance = true
         }
@@ -299,7 +323,8 @@ class PopupShadowContinuityTest {
                 val group = rememberShadowPlane()
                 CompositionLocalProvider(LocalFrostedBackdrop provides source, LocalModalBackdrop provides modal,
                     LocalPageShadows provides group) {
-                    Box(Modifier.fillMaxSize().recordFrostedBackdrop(modal).pageShadowHost(group)) {
+                    Box(Modifier.fillMaxSize().drawWithContent { drawContent(); recordDraw("page-after-field") }
+                        .recordFrostedBackdrop(modal).pageShadowHost(group)) {
                         Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(source)) { drawRect(androidx.compose.ui.graphics.Color.White) }
                         if (nested) {
                             GlassMorphPopup(true, rememberGlassAnchor(), {}, GlassPlacement.Center, fitContent = false) {
@@ -340,7 +365,10 @@ class PopupShadowContinuityTest {
                 val next = FrameMarker()
                 popupView = view; popupWindow = window; marker = next
                 window.decorView.overlay.add(next)
+                val observer = android.view.ViewTreeObserver.OnDrawListener { recordDraw("popup-before-draw") }
+                window.decorView.viewTreeObserver.addOnDrawListener(observer)
                 onDispose {
+                    window.decorView.viewTreeObserver.removeOnDrawListener(observer)
                     window.decorView.overlay.remove(next)
                     if (popupWindow === window) { popupView = null; popupWindow = null; marker = null }
                 }
