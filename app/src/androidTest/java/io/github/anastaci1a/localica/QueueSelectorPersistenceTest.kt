@@ -1,6 +1,7 @@
 package io.github.anastaci1a.localica
 
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Color as NativeColor
 import android.graphics.Canvas
 import android.graphics.ColorFilter
@@ -14,6 +15,14 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.RoundRect
+import androidx.compose.ui.platform.ViewRootForTest
+import androidx.compose.ui.unit.dp
+import io.github.anastaci1a.localica.ui.engine.ownsWindow
+import kotlin.math.ceil
 import androidx.compose.ui.layout.LayoutInfo
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.SemanticsProperties
@@ -34,18 +43,28 @@ import kotlin.math.roundToInt
 /** Actual QueueScreen caller, rather than the generic popup used by the field oracle. */
 class QueueSelectorPersistenceTest {
     @get:Rule val compose = localicaComposeRule()
+    @Test fun selectedNameKeepsOneLayoutInstanceAcrossNativeOpenAndReturn() = QueueSelectorCallerFixture(compose).verify(false)
+    @Test fun selectedNameKeepsOneLayoutInstanceAcrossCancelledOpenAndReversal() = QueueSelectorCallerFixture(compose).verify(true)
+}
+
+/** Actual native return after the source is restored: the origin receiver is no longer active.
+ * This scoped oracle does not claim support for the earlier native receiver/exclusion phase. */
+class QueueSelectorFieldReturnTest {
+    @get:Rule val compose = localicaComposeRule()
+    @Test fun restoredQueueSelectorKeepsOneFieldThroughNativeReturn() = QueueSelectorCallerFixture(compose).verify(false, field = true)
+    @Test fun cancelledQueueSelectorKeepsOneFieldThroughNativeReturn() = QueueSelectorCallerFixture(compose).verify(true, field = true)
+}
+
+private class QueueSelectorCallerFixture(private val compose: androidx.compose.ui.test.junit4.ComposeContentTestRule) {
     private val label = "1. Persistent queue"
     private var window: Window? = null
     private lateinit var sourceView: View
     private val markers = linkedMapOf<View, Marker>()
     private var token = 0
 
-    @Test fun selectedNameKeepsOneLayoutInstanceAcrossNativeOpenAndReturn() = verify(false)
-    @Test fun selectedNameKeepsOneLayoutInstanceAcrossCancelledOpenAndReversal() = verify(true)
-
-    private fun verify(interrupted: Boolean) {
+    fun verify(interrupted: Boolean, field: Boolean = false) {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
-        val output = nativeEvidenceDirectory("queue-selector-persistence-${if (interrupted) "interrupted" else "complete"}",
+        val output = nativeEvidenceDirectory("queue-selector-${if (field) "field-return" else "persistence"}-${if (interrupted) "interrupted" else "complete"}",
             instrumentation.targetContext.cacheDir)
         val state = QueueUiState(QueueLibrary(listOf(ListeningQueue(id = "selected", name = "Persistent queue", entries = emptyList())), "selected"), loading = false)
         compose.setContent { LocalicaTheme {
@@ -75,6 +94,8 @@ class QueueSelectorPersistenceTest {
         val instances = linkedSetOf<LayoutInfo>(home)
         val missing = mutableListOf<String>()
         var frame = 0
+        val fieldInputs = mutableListOf<FieldInput>()
+        val fieldFailures = mutableListOf<String>()
         fun sample(stage: String) {
             compose.mainClock.advanceTimeByFrame()
             compose.waitForIdle()
@@ -85,9 +106,14 @@ class QueueSelectorPersistenceTest {
             val phase = anchor.contact.expansion.value
             log.append("$frame $stage phase=$phase hidden=${anchor.hidden} modal=${anchor.modalPresent} inModal=${anchor.shadowInModal} native=${native != null} labels=${names.map { System.identityHashCode(it.layoutInfo) }}\n")
             val bitmap = screenshot(native)
-            try { File(output, "${(frame++).toString().padStart(3, '0')}-$stage.png").outputStream().use {
+            val actualFile = File(output, "${(frame++).toString().padStart(3, '0')}-$stage.png")
+            try { actualFile.outputStream().use {
                 check(bitmap.compress(Bitmap.CompressFormat.PNG, 100, it))
-            } } finally { bitmap.recycle() }
+            }
+                if (field && phase <= .002f && !anchor.hidden) {
+                    fieldInputs += captureHomeField(anchor, native, frame - 1, actualFile)
+                }
+            } finally { bitmap.recycle() }
         }
         fun close() { UiDevice.getInstance(instrumentation).pressBack() }
         compose.mainClock.autoAdvance = false
@@ -120,13 +146,76 @@ class QueueSelectorPersistenceTest {
                 if (settled == 4) break
             }
             assertEquals("Native return and four source frames are mandatory\n$log", 4, settled)
-            assertTrue("One name remains present through every sampled caller frame: $missing\n$log", missing.isEmpty())
-            assertEquals("The name must be one persistent layout instance across both native roots\n$log", 1, instances.size)
+            if (field) {
+                // Native reference work runs only after capturing the complete actual transition.
+                // It cannot consume unobserved native frames in the middle of the handoff.
+                for (input in fieldInputs) {
+                    val actual = requireNotNull(BitmapFactory.decodeFile(input.actual.absolutePath))
+                    try { inspectHomeField(actual, input, output, log)?.let(fieldFailures::add) }
+                    finally { actual.recycle() }
+                }
+                assertTrue("The first restored frame and settled source frames must be included\n$log", fieldInputs.size >= 4)
+                assertTrue("Actual Queue return differs from its independent current-geometry field: $fieldFailures\n$log", fieldFailures.isEmpty())
+            } else {
+                assertTrue("One name remains present through every sampled caller frame: $missing\n$log", missing.isEmpty())
+                assertEquals("The name must be one persistent layout instance across both native roots\n$log", 1, instances.size)
+            }
         } finally {
             File(output, "frames.txt").writeText(log.toString())
             compose.mainClock.autoAdvance = true
             compose.runOnUiThread { markers.keys.toList().forEach(::detach) }
         }
+    }
+
+    private data class FieldInput(val frame: Int, val actual: File, val rect: Rect, val body: RoundRect, val sourceOwned: Boolean)
+
+    private fun captureHomeField(anchor: GlassAnchor, native: Window?, frame: Int, actual: File): FieldInput {
+        check(!anchor.hidden) { "Unsupported: active native origin receiver requires its own independent model" }
+        val node = anchor.surfaceNode
+        val home = anchor.shadowPlane
+        val sourceOwned = node != null && home != null && node.ownsWindow(home)
+        val nativeSurface = if (native != null && !sourceOwned)
+            compose.onAllNodesWithTag("glass-morph-surface").fetchSemanticsNodes().singleOrNull() else null
+        val rect = if (nativeSurface != null) {
+            val view = (nativeSurface.root as ViewRootForTest).view
+            val origin = IntArray(2).also { compose.runOnUiThread { view.getLocationOnScreen(it) } }
+            nativeSurface.boundsInRoot.translate(Offset(origin[0].toFloat(), origin[1].toFloat()))
+        } else anchor.bounds
+        val phase = anchor.contact.expansion.value.coerceIn(0f, 1f)
+        val density = compose.density.density
+        val radius = (anchor.bounds.height / 2 * (1f - phase) + 28f * density * phase)
+            .coerceAtMost(minOf(rect.width, rect.height) / 2)
+        val body = requireNotNull(glassCasterBody(rect, compose.density, (radius / density).dp, anchor))
+        return FieldInput(frame, actual, rect, body, sourceOwned)
+    }
+
+    private fun inspectHomeField(actual: Bitmap, input: FieldInput, output: File, log: StringBuilder): String? {
+        val (frame, _, rect, body, sourceOwned) = input
+        val density = compose.density.density
+        val state = ShadowDrawState(0, 0, listOf(body to 1f), Color.White, strength = .8f, spread = .6f)
+        val reference = shadowUnionReference(compose, actual.width, actual.height, state).asAndroidBitmap()
+        try {
+            val left = (((body.left + body.right) / 2f) - 6 * density).roundToInt().coerceAtLeast(0)
+            val right = (body.center.x + 6 * density).roundToInt().coerceAtMost(actual.width - 1)
+            val top = ceil(body.bottom + 2 * density).toInt()
+            val bottom = ceil(body.bottom + 8 * density).toInt()
+            check(top > body.bottom && bottom < actual.height) { "Field ROI must stay outside the current body" }
+            var actualDark = 0f
+            var expectedDark = 0f
+            var pixels = 0
+            for (y in top..bottom) for (x in left..right) {
+                actualDark += 255 - NativeColor.red(actual.getPixel(x, y))
+                expectedDark += 255 - NativeColor.red(reference.getPixel(x, y))
+                pixels++
+            }
+            actualDark /= pixels; expectedDark /= pixels
+            check(expectedDark > 8f) { "Independent current-geometry field must be visible: $expectedDark" }
+            log.append("field frame=$frame sourceOwned=$sourceOwned rect=$rect body=$body roi=$left,$top,$right,$bottom actual=$actualDark expected=$expectedDark\n")
+            File(output, "reference-${frame.toString().padStart(3, '0')}.png").outputStream().use {
+                check(reference.compress(Bitmap.CompressFormat.PNG, 100, it))
+            }
+            return if (abs(actualDark - expectedDark) > 3f) "frame=$frame actual=$actualDark expected=$expectedDark" else null
+        } finally { reference.recycle() }
     }
 
     /** Endpoint measurement copies are deliberately unplaced. A shared semantic container
