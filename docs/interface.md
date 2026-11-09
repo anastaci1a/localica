@@ -413,6 +413,8 @@ Missing aggregates stay last. Ties use album title then canonical album ID ascen
 
 Completing the available multi-album set or removing the final member restores All. a short-tapped single album remains explicitly focused, even for a one-album artist. Reconcile membership after library changes. Play, Shuffle and collection menu actions share the displayed ordered song scope.
 
+Sort, Group by album, album-filter and library changes glide surviving rows with the shared keyed reorder tween, as in queues and playlists. Reduced motion and nonblank search text reorder without it.
+
 When filtering shortens the list, ease only the excess scroll to the measured new range. Retain valid offsets and user gesture ownership. Release scroll ownership between correction frames so a new contact can activate an album choice.
 
 A combined glass Play/Shuffle pill acts on that displayed list. Shuffle randomizes the new queue’s saved order without enabling global traversal shuffle.
