@@ -52,7 +52,7 @@ fun QueueScreen(state: QueueUiState, controller: QueueController?, library: Libr
         Row(Modifier.fillMaxSize().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(selectorLabel, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium,
                 maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Icon(appIconPainter(AppIcon.ActionDown), "Select queue", Modifier.size(24.dp))
+            Icon(appIconPainter(AppIcon.ActionChevronDown), "Select queue", Modifier.size(24.dp))
         }
     }
     SideEffect { selectorAnchor.face = { SelectorFace() } }
@@ -88,14 +88,14 @@ fun QueueScreen(state: QueueUiState, controller: QueueController?, library: Libr
                 val content: @Composable () -> Unit = {
                 Column(Modifier.padding(horizontal = 12.dp, vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        onMinimize?.let { ActionIcon(AppIcon.ActionDown, "Minimize queue", onClick = it) }
+                        onMinimize?.let { ActionIcon(AppIcon.ActionChevronDown, "Minimize queue", onClick = it) }
                         LiquidGlassSurface(Modifier.weight(1f).glassAnchor(selectorAnchor)) {
                             Box(Modifier.fillMaxWidth().height(CompactControlSize).ownButtonDrag(state.library.queues.isNotEmpty())
                                 .clickable(enabled = state.library.queues.isNotEmpty()) { selector = true }) { selectorAnchor.captureInk(); SelectorFace() }
 
                         }
                         Box {
-                            ActionIcon(AppIcon.ActionMore, "Queue actions", anchor = menuAnchor) { menu = true }
+                            ActionIcon(AppIcon.ActionEllipsis, "Queue actions", anchor = menuAnchor) { menu = true }
                             GlassMenu(menu, menuAnchor, { menu = false }) {
                                 ActionMenuItem("Rename", icon = AppIcon.ActionEdit, enabled = active != null, onClick = { menu = false; renameId = active?.id })
                                 ActionMenuItem("Delete", icon = AppIcon.ActionTrash, enabled = active != null, onClick = { menu = false; deleting = setOfNotNull(active?.id) })
@@ -110,7 +110,7 @@ fun QueueScreen(state: QueueUiState, controller: QueueController?, library: Libr
                             Text(position ?: "0 / 0", style = MaterialTheme.typography.titleSmall)
                             Text(duration ?: "0:00", style = MaterialTheme.typography.bodySmall)
                         }
-                        ActionIcon(AppIcon.ActionPlaylistAdd, "Save queue to playlist", enabled = active?.entries?.isNotEmpty() == true,
+                        ActionIcon(AppIcon.ActionListAddLast, "Save queue to playlist", enabled = active?.entries?.isNotEmpty() == true,
                             anchor = saveAnchor) { saving = true }
 
                     }

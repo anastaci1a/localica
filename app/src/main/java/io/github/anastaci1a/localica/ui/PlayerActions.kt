@@ -23,11 +23,11 @@ import io.github.anastaci1a.localica.queue.QueueEnd
 
 internal enum class PlayerAction(val label: String, val icon: AppIcon) {
     Info("Information", AppIcon.ActionInfo), Edit("Edit tags", AppIcon.ActionEdit), Artwork("Artwork", AppIcon.TabAlbums),
-    Lyrics("Lyrics", AppIcon.ActionLyrics), Playlist("Add to playlist", AppIcon.ActionPlaylistAdd), Pin("Pin to Home", AppIcon.TabHome),
+    Lyrics("Lyrics", AppIcon.ActionLyrics), Playlist("Add to playlist", AppIcon.ActionListAddLast), Pin("Pin to Home", AppIcon.TabHome),
     Album("Go to album", AppIcon.TabAlbums), Artist("Go to artist", AppIcon.TabArtists),
     AlbumArtist("Go to Album Artist", AppIcon.TabArtists), Folder("Go to folder", AppIcon.TabFolders),
     Shuffle("Shuffle", AppIcon.ActionShuffle), Repeat("Repeat", AppIcon.ActionRepeat), Count("Track count", AppIcon.TabQueues),
-    BackTen("Back 10 seconds", AppIcon.ActionSeekBack), ForwardTen("Forward 10 seconds", AppIcon.ActionSeekForward), More("More actions", AppIcon.ActionMore)
+    BackTen("Back 10 seconds", AppIcon.ActionSeekBack), ForwardTen("Forward 10 seconds", AppIcon.ActionSeekForward), More("More actions", AppIcon.ActionEllipsis)
 }
 
 @Composable

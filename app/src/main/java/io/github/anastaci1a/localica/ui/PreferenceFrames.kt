@@ -62,7 +62,7 @@ internal fun SettingsLinkFace(title: String, summary: String?, icon: AppIcon?, m
             summary?.let { Text(it, style = summaryStyle, color = colors.supportingTextColor) }
         }
         // The test handle sits outside the rotation so its bounds are the drawn bounds.
-        Icon(appIconPainter(AppIcon.ActionBack), null, Modifier.padding(start = 16.dp).size(20.dp)
+        Icon(appIconPainter(AppIcon.ActionChevronLeft), null, Modifier.padding(start = 16.dp).size(20.dp)
             .settingsRowPart(SettingsRowPart.Trailing).rotate(180f), tint = colors.trailingIconColor)
     }
 }

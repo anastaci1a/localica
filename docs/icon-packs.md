@@ -20,7 +20,7 @@ A pack is a `.zip` with:
 
 - `pack.json`: `{ "name": "My pack", "version": "1", "author": "Optional" }`. `name` and `version` are required.
 - `icons/<id>.svg` for each icon you want to replace. Vectors are the standard format.
-- Legacy `icons/<id>.png` and `icons/<id>.webp` images remain supported. An accepted SVG wins over either raster format, regardless of ZIP order.
+- Legacy `icons/<id>.png` and `icons/<id>.webp` images remain supported. For the same id, an accepted SVG wins over either raster format, regardless of ZIP order.
 
 Rules:
 
@@ -70,9 +70,9 @@ Limits keep import and drawing bounded: 256 KB per SVG, 256 paths, 1,024 element
 | `transport.next` | Next |
 | `menu.pin` | Pin to Home |
 | `menu.trash` | Remove, Delete |
-| `menu.playlist_add` | Add to playlist (song menu) |
-| `menu.play_next` | Play next |
-| `menu.queue_add` | Add to queue |
+| `menu.list_create` | Create a list |
+| `menu.list_add_next` | Insert next in a list |
+| `menu.list_add_last` | Append to a list |
 | `menu.info` | Information |
 | `menu.download` | Download and downloading state (tray with a down arrow) |
 | `menu.share` | Share (reserved) |
@@ -81,13 +81,16 @@ Limits keep import and drawing bounded: 256 KB per SVG, 256 paths, 1,024 element
 | `menu.suggest_less` | Suggest less (reserved) |
 | `action.edit` | Edit |
 | `action.close` | Close and clear |
-| `action.back` | Back |
-| `action.forward` | Forward (reserved) |
-| `action.down` | Collapse and select |
+| `action.chevron_left` | Back |
+| `action.chevron_right` | Right chevron |
+| `action.chevron_up` | Up chevron |
+| `action.arrow_right` | Forward |
+| `action.arrow_left` | Left arrow |
+| `action.arrow_up` | Up arrow |
+| `action.chevron_down` | Collapse and select |
 | `action.arrow_down` | Return to position |
 | `action.search` | Search |
-| `action.more` | More |
-| `action.ellipsis` | Item actions |
+| `action.ellipsis` | More and item actions (horizontal ellipsis) |
 | `action.plus` | Add |
 | `action.sort` | Sort |
 | `action.eye` | Show |
@@ -95,8 +98,7 @@ Limits keep import and drawing bounded: 256 KB per SVG, 256 paths, 1,024 element
 | `action.drag` | Reorder handle |
 | `action.revert` | Revert order |
 | `action.reverse` | Reverse order |
-| `action.save` | Save |
-| `action.save_artwork` | Save artwork to Downloads (artwork viewer) |
+| `action.save` | Save, including artwork to Downloads |
 | `action.settings` | Settings |
 | `action.shuffle` | Shuffle |
 | `action.repeat` | Repeat |
@@ -106,7 +108,7 @@ Limits keep import and drawing bounded: 256 KB per SVG, 256 paths, 1,024 element
 | `action.lyrics` | Lyrics |
 | `action.info` | Information (player and dialogs) |
 | `action.trash` | Delete (other places) |
-| `action.playlist_add` | Add to playlist (player) |
+| `action.list_add_last` | Append to a playlist |
 | `settings.interface` | Settings: Interface |
 | `settings.appearance` | Settings: Appearance |
 | `settings.icon_packs` | Settings: Icon packs |
@@ -123,3 +125,19 @@ The `transport.*` ids are the rest-state glyphs; Play and Pause also provide the
 Imported transport contours share the existing timing, interruption handling, tint and availability fades. Arbitrary play/pause contours crossfade; skip icons travel through clipped cycles. Missing endpoints use their built-in icons.
 
 Repeat One uses its own vector, never a text overlay on a pack's Repeat icon. Missing `action.repeat_one` entries use the dedicated built-in glyph. Repeat state changes crossfade with the shared control motion.
+
+## Legacy ids
+
+Older packs and installed files may use these aliases. Settings and template exports show only the canonical ids. A valid canonical mapping wins over its alias, across image formats and ZIP order. An invalid canonical image may fall back to a valid alias. Existing stored files are read without rewriting them.
+
+| Legacy id | Canonical id |
+| --- | --- |
+| `action.back` | `action.chevron_left` |
+| `action.forward` | `action.arrow_right` |
+| `action.down` | `action.chevron_down` |
+| `action.save_artwork` | `action.save` |
+| `action.more` | `action.ellipsis` |
+| `menu.playlist_add` | `menu.list_create` |
+| `menu.play_next` | `menu.list_add_next` |
+| `menu.queue_add` | `menu.list_add_last` |
+| `action.playlist_add` | `action.list_add_last` |
