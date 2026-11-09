@@ -132,7 +132,7 @@ internal fun ArtworkBlend(visual: PlayerVisual, modifier: Modifier, duration: In
             }
         }
     }
-    Box(modifier.structuralTrace("artwork-blend").drawWithContent {
+    Box(modifier.drawWithContent {
         // Only an interruptible crossfade needs a snapshot source. Settled artwork
         // draws directly, and animation phases invalidate layers rather than content.
         if (transitioning) {

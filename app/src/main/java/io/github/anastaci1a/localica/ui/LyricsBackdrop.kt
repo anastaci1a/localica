@@ -160,7 +160,7 @@ internal fun LyricsBackdrop(key: Any?, modifier: Modifier = Modifier, contentAlp
 internal fun Modifier.recordLyricsLayer(scene: LyricsBackdropScene, alpha: () -> Float,
     contentKey: () -> Any?): Modifier {
     if (flatGlass()) return clipToBounds()
-        .structuralTrace("lyrics-mask")
+
         .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
         .drawWithContent {
             drawContent()

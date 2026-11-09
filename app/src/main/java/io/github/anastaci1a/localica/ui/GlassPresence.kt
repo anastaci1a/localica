@@ -29,7 +29,7 @@ internal fun GlassPresence(visible: Boolean, modifier: Modifier = Modifier, cont
     // The retained layer owns the whole material, including its shadow. Hoisting
     // that shadow outside this lifetime would leave a dark silhouette on exit.
     CompositionLocalProvider(LocalSurfaceShadows provides null, LocalBottomShadows provides null) {
-        Layout(modifier = modifier.structuralTrace("glass-presence-motion").then(if (visible) Modifier else Modifier.clearAndSetSemantics { })
+        Layout(modifier = modifier.then(if (visible) Modifier else Modifier.clearAndSetSemantics { })
             .drawWithContent {
                 val pad = inset.roundToPx()
                 if (visible) layer.record(size = IntSize(size.width.toInt() + pad * 2, size.height.toInt() + pad * 2)) {

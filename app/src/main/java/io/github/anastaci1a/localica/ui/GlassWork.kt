@@ -7,7 +7,7 @@ import androidx.compose.ui.graphics.rememberGraphicsLayer
 /** Test observer only: no state, frame requests, or retained source references. */
 internal object GlassWork {
     var observer: ((String) -> Unit)? = null
-    fun event(kind: String) { observer?.invoke(kind) }
+    fun event(kind: String) { if (io.github.anastaci1a.localica.BuildConfig.DEBUG) observer?.invoke(kind) }
 }
 
 @Composable
