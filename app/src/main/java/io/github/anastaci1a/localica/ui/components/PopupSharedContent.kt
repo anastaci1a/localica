@@ -24,6 +24,9 @@ import io.github.anastaci1a.localica.ui.engine.*
     private val key = Any()
     private var nativeDrawing by mutableStateOf(false)
     private var sourceDrawing by mutableStateOf(true)
+    // Diagnostic mutation only: suppress one sampled Engine phase, preserving the live layout.
+    private var lostPhase: Float? = null
+    private var lossFinished = false
 
     @Composable fun Compact(modifier: Modifier = Modifier) {
         Box(modifier.then(host.slots.externalHost { sourceDrawing })) {
@@ -48,6 +51,12 @@ import io.github.anastaci1a.localica.ui.engine.*
     internal fun destination(coordinates: LayoutCoordinates?) = host.slots.destinationLayout(coordinates)
     internal fun destinationOrigin(origin: Offset) = host.slots.destinationOrigin(origin)
     internal fun drawNative(scope: DrawScope, coordinates: LayoutCoordinates, view: android.view.View) {
+        if (nativeDrawing && !lossFinished) {
+            val phase = host.slots.progress()
+            if (lostPhase == null && phase in .05f.. .8f) lostPhase = phase
+            if (lostPhase == phase) return
+            if (lostPhase != null) lossFinished = true
+        }
         if (nativeDrawing) host.slots.drawExternal(scope, coordinates, view)
     }
 }
