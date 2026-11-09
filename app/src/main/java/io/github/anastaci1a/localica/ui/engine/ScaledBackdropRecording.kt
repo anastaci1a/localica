@@ -35,9 +35,9 @@ internal class ScaledBackdropRecording(private val source: GraphicsLayer, privat
     val active get() = factor < 1f
 
     fun DrawScope.recordSource(extent: IntSize, content: DrawScope.() -> Unit) {
-        display.record(this, layoutDirection, extent, content)
+        display.record(size = extent) { content() }
         val physical = IntSize(ceil(extent.width * factor).toInt(), ceil(extent.height * factor).toInt())
-        source.record(this, layoutDirection, physical) {
+        source.record(size = physical) {
             scale(factor, factor, Offset.Zero) { drawLayer(display) }
         }
     }
