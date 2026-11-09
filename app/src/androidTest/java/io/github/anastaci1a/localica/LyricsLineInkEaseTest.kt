@@ -83,8 +83,9 @@ class LyricsLineInkEaseTest {
             CompositionLocalProvider(LocalDensity provides Density(1f),
                 LocalPlayerInkCompositionObserver provides { inkComposition = it }) {
                 BoxWithConstraints(Modifier.fillMaxSize()) {
-                    // The phone geometry (720x1280 at 280 dpi) in density-1 pixels, so the band holds several lines of each emphasis.
-                    BoxWithConstraints(Modifier.width(411.dp).height(minOf(731.dp, maxHeight))) {
+                    // A tall phone column in density-1 pixels (the full emulator height), so the solid 12-88 % band of the
+                    // lyrics container holds several lines of each emphasis in every frame.
+                    BoxWithConstraints(Modifier.width(411.dp).fillMaxHeight()) {
                         PlayerSurface(state, true, {}, settings,
                             remember { Animatable(1f) }, {}, {}, {}, {}, {}, {},
                             visual = visual, backgroundPolarity = owner, lyricsOpen = lyrics, track = track)
@@ -155,8 +156,10 @@ class LyricsLineInkEaseTest {
     private val samples = mutableListOf<Sample>()
     private fun capture(leg: String, count: Int) = repeat(count) { frame(); sample(leg, it, strip)?.let { s -> samples += s } }
 
-    /** The theme flips to dark part-way through the opening animation; every visible line must follow it together. */
-    private fun run(case: String, position: Long) {
+    /** The theme flips to dark part-way through the opening animation; every visible line must follow it together.
+     *  With [composeMidEase] the list is scrolled (semantics, following stays on) to a far region and back after the flip, so
+     *  lines are composed mid-ease exactly as the autoscroll of a moving song composes them. */
+    private fun run(case: String, position: Long, composeMidEase: Boolean = false) {
         positionMs = position
         val track = fixture()
         owner.pin(true); mount(track)
@@ -165,7 +168,12 @@ class LyricsLineInkEaseTest {
         val lead = awaitViewport()        // frames before the lines exist (expected 1-2); the flip lands after them
         capture("open-light", 6 - lead)
         owner.pin(false)      // the lyrics theme differs: it arrives part-way through the animation
-        capture("open-dark", 40)
+        if (composeMidEase) {
+            capture("open-dark", 4)
+            val list = compose.onNodeWithTag("lyric-lines", useUnmergedTree = true)
+            list.performScrollToIndex(30); capture("open-dark-far", 10)
+            list.performScrollToIndex(LrcParserCurrentLine); capture("open-dark-back", 26)
+        } else capture("open-dark", 40)
         val last = samples.last()
         val failures = mutableListOf<String>()
         val first = samples.first()
@@ -178,14 +186,15 @@ class LyricsLineInkEaseTest {
 
     /** Checks (a) uniform ink across lines of equal emphasis, (b) no line keeps the old polarity once the shared theme
      *  has crossed, (c) no single-frame step; then exports the CSV and the contact sheet before asserting. */
-    private fun analyse(case: String, failures: MutableList<String>, polarity: Boolean = true) {
+    private fun analyse(case: String, failures: MutableList<String>, polarity: Boolean = true, exclude: Set<Int> = emptySet()) {
         val rows = mutableListOf("case,leg,frame,foreground,progress,backdrop,lines")
         var previous: Map<Int, Float> = emptyMap()
         samples.forEach { s ->
             rows += listOf(case, s.leg, s.frame, s.foreground, s.progress, s.backdrop,
                 s.lines.joinToString(" ") { "${it.index}${if (it.selected) "*" else ""}=${"%.3f".format(it.ink)}" }).joinToString(",")
-            val inactive = s.lines.filter { !it.selected }
-            // (a) Every line of the same emphasis is the same colour in the same frame.
+            // (a) Every line of the same emphasis is the same colour in the same frame (a line whose emphasis is still
+            // fading is excluded by the emphasis case).
+            val inactive = s.lines.filter { !it.selected && it.index !in exclude }
             if (inactive.size >= 2) {
                 val spread = inactive.maxOf { it.ink } - inactive.minOf { it.ink }
                 if (spread > .08f) failures += "${s.leg} ${s.frame}: inactive lines differ by $spread: ${rows.last()}"
@@ -220,8 +229,8 @@ class LyricsLineInkEaseTest {
         File(root, "lyrics-line-ink-$case-strip.png").outputStream().use { sheet.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
     }
 
-    /** The current line is far down: the autoscroll composes new lines while the theme eases. */
-    @Test fun linesComposedDuringTheAutoscrollShareTheEasedInkOfTheirNeighbours() = run("autoscroll", 60_000L)
+    /** Lines composed while the theme eases (a scroll to a far region and back) are the colour of their neighbours. */
+    @Test fun linesComposedDuringAScrollMidEaseShareTheEasedInkOfTheirNeighbours() = run("composed", LrcParserCurrentLine * 2_000L, composeMidEase = true)
 
     /** The current line is the first: nothing scrolls, and the lines must still ease with the theme. */
     @Test fun linesEaseWithTheThemeWithoutAnyAutoscroll() = run("no-scroll", 0L)
@@ -252,7 +261,7 @@ class LyricsLineInkEaseTest {
         // Lines outside the transition keep their ink exactly while the theme is fixed.
         val others = samples.map { s -> s.lines.filter { !it.selected && it.index != selectedBefore.index }.map { it.ink } }
         others.forEach { inks -> if (inks.size >= 2 && inks.max() - inks.min() > .08f) failures += "untouched lines differ: $inks" }
-        analyse("emphasis", failures, polarity = false)
+        analyse("emphasis", failures, polarity = false, exclude = setOf(selectedBefore.index))
     }
 
     /** Closing part-way through the theme ease: no line steps and none returns to the old polarity on its own. */
@@ -291,5 +300,9 @@ class LyricsLineInkEaseTest {
             if (inactive.size >= 2 && inactive.maxOf { it.ink } - inactive.minOf { it.ink } > .08f) failures += "${s.leg} ${s.frame}: lines differ under Reduced Motion" }
         export("reduced")
         assertTrue("Every lyric line snaps with the layout under Reduced Motion:\n" + failures.joinToString("\n"), failures.isEmpty())
+    }
+    private companion object {
+        /** The current line of the composed case: line 11 at 20 s, so the far scroll (index 30) composes fresh lines both ways. */
+        const val LrcParserCurrentLine = 10
     }
 }
