@@ -444,8 +444,9 @@ class NoneExactReductionTest {
         drift.assertWithin(driftMaxCodes)
     }
 
-    /** None source/home mixes (a morph's home weight) at 0, .25, .5 and 1, plus an unready home: the fill is
-     * the weight-mixed pair of means, both chains within the budgets. */
+    /** None source/home mixes at 0, .25, .5 and 1, plus an unready home. The Auto command layer
+     * replays SrcOver primary then Plus home onto the existing destination; it is not an isolated
+     * mixing buffer. With opaque fixtures the presented RGB is clamp((1-w)S + wH + wB). */
     @Test fun sourceAndHomeMixesFollowTheirWeightedMeans() {
         lateinit var source: FrostedBackdrop
         lateinit var home: FrostedBackdrop
@@ -478,10 +479,13 @@ class NoneExactReductionTest {
         val region = Rect(origin, Size(footprint.width.toFloat(), footprint.height.toFloat()))
         val sourceMean = expectedPixel(expectedMean(sourceRaster, region), Color.Black)
         val homeMean = expectedPixel(expectedMean(homeRaster, region), Color.Black)
+        val behind = premultiplied(homeRaster, origin.x.toInt() + footprint.width / 2, origin.y.toInt() + footprint.height / 2)
         val drift = Drift()
         for ((lookName, look) in looks) for (w in listOf(0f, .25f, .5f, 1f)) {
             val label = "mix weight $w $lookName"
-            val expected = Color(sourceMean.red * (1 - w) + homeMean.red * w, sourceMean.green * (1 - w) + homeMean.green * w, sourceMean.blue * (1 - w) + homeMean.blue * w)
+            fun presented(s: Float, h: Float, b: Float) = (s * (1 - w) + h * w + b * w).coerceIn(0f, 1f)
+            val expected = Color(presented(sourceMean.red, homeMean.red, behind.red),
+                presented(sourceMean.green, homeMean.green, behind.green), presented(sourceMean.blue, homeMean.blue, behind.blue))
             compose.runOnIdle { MaterialAreaReduction.legacyOverride = false; legacy = false; appearance = look; weight = w }
             val fresh = eventually { centre("glass").also { if (look === plain) assertFill(label, expected, it, region) } }
             if (!modern) continue
@@ -491,7 +495,6 @@ class NoneExactReductionTest {
         }
         // Readiness: a requested home that is not recorded draws no fill in either chain (the home scene,
         // drawn above the source, shows through).
-        val behind = premultiplied(homeRaster, origin.x.toInt() + footprint.width / 2, origin.y.toInt() + footprint.height / 2)
         for (useLegacy in listOf(false, true)) {
             if (useLegacy && !modern) break
             compose.runOnIdle { MaterialAreaReduction.legacyOverride = useLegacy; legacy = useLegacy; appearance = plain; weight = .5f; useUnreadyHome = true }
@@ -500,7 +503,9 @@ class NoneExactReductionTest {
         }
         compose.runOnIdle { MaterialAreaReduction.legacyOverride = false }
         if (!modern) return
-        receipt("source-home-mix", drift, mapOf("footprint" to "$footprint"))
+        receipt("source-home-mix", drift, mapOf("footprint" to "$footprint",
+            "compositing" to "Auto command replay: SrcOver primary, then Plus home; RGB clamp((1-w)S+wH+wB)",
+            "backgroundCodes" to JSONArray(listOf(behind.red, behind.green, behind.blue).map { kotlin.math.round(it * 255f).toInt() })))
         drift.assertWithin(driftMaxCodes)
     }
 }
