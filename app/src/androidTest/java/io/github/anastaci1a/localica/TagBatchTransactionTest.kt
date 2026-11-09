@@ -30,8 +30,21 @@ class TagBatchTransactionTest {
         reopen(TagBatchStore(batchDirectory))
         assertTrue(runCatching { transaction.restore(batch.id) }.isFailure)
         assertArrayEquals(written, files[0].readBytes())
-        assertTrue(store.original(batch.id, 0).isFile)
-        assertNotNull(store.read())
+        assertTrue(File(batchDirectory, "${batch.id}/originals/0.original").isFile)
+        assertTrue(runCatching { store.read() }.isFailure)
+    } }
+
+    @Test fun deletedNoUndoEntryCannotBecomeANewFirstTouchAfterRestart() = fixture { runBlocking {
+        val batch = store.begin(tracks, patch, null, undo = false)
+        transaction.writeOne(batch.id, 0)
+        val written = files[0].readBytes()
+        assertTrue(File(batchDirectory, "${batch.id}/entries/0.json").delete())
+        reopen(TagBatchStore(batchDirectory))
+        assertTrue(runCatching { writer.initialize() }.isFailure)
+        assertTrue(readers.recovery() is RecoveryAdmission.Unknown)
+        assertTrue(runCatching { transaction.writeOne(batch.id, 0) }.isFailure)
+        assertArrayEquals(written, files[0].readBytes())
+        assertTrue(File(batchDirectory, "active.json").isFile)
     } }
 
     @Test fun unpublishedSnapshotCannotBeAdoptedOrSilentlyCleanedAfterRestart() = fixture { runBlocking {
