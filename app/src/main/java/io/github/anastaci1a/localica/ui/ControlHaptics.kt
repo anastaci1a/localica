@@ -24,7 +24,7 @@ internal fun rememberControlHaptics(): ControlHaptics {
         ControlHaptics { feedback ->
             // No override flags or vibrator fallback: retain the platform's system-setting gate.
             view.performHapticFeedback(when (feedback) {
-                ControlHaptic.Weak -> HapticFeedbackConstants.CLOCK_TICK
+                ControlHaptic.Weak -> HapticFeedbackConstants.VIRTUAL_KEY
                 ControlHaptic.Strong -> HapticFeedbackConstants.LONG_PRESS
             })
         }
