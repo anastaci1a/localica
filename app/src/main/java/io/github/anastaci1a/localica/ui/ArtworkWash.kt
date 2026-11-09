@@ -127,6 +127,7 @@ internal object ArtworkWash {
 
     /** Find a solid frame along the top or bottom edge of a square [width] sample: consecutive near-uniform rows
      * from the edge, thin enough to be a border (not a sky or plain background) and distinct from the art inside it.
+     * Its strength grows with thickness up to 4% of the cover, so thin borders tint rather than flood the field.
      * Returns null for borderless covers, which then keep the previous continuation exactly. */
     internal fun edgeBand(source: IntArray, width: Int, bottom: Boolean): EdgeBand? {
         val height = source.size / width
@@ -155,7 +156,8 @@ internal object ArtworkWash {
         if (thickness < maxOf(2, (height * MIN_FRAME).toInt()) || thickness > maxThickness) return null
         val color = mean(0, thickness)
         val inner = mean(thickness, minOf(height, thickness + (height * .12f).toInt().coerceAtLeast(1)))
-        val strength = smooth((distance(color, inner) - 24f) / 56f)
+        // Frames of 4% or more lead fully; hairline borders tint the field at a share proportional to their thickness.
+        val strength = smooth((distance(color, inner) - 24f) / 56f) * (thickness / (height * FULL_FRAME)).coerceIn(MIN_THIN_SHARE, 1f)
         return if (strength > 0f) EdgeBand(color, thickness, strength) else null
     }
 
@@ -177,6 +179,8 @@ internal object ArtworkWash {
 
     private const val MIN_FRAME = .008f
     private const val MAX_FRAME = .16f
+    private const val FULL_FRAME = .04f
+    private const val MIN_THIN_SHARE = .2f
     private const val FRAME_TOLERANCE = 28
     private const val FRAME_COVERAGE = .9f
 }

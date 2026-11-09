@@ -28,9 +28,19 @@ class ArtworkWashEdgeBandTest {
                 assertNotNull("A $thickness px frame is a border", band)
                 assertEquals(frame, band!!.color)
                 assertEquals(thickness, band.thickness)
-                assertEquals(1f, band.strength, 1e-6f)
+                // Full contrast; frames of 4% or more lead fully, thinner ones in proportion (never below 0.2).
+                assertEquals((thickness / (size * .04f)).coerceIn(.2f, 1f), band.strength, 1e-6f)
             }
         }
+    }
+
+    @Test fun strengthGrowsWithThicknessUpToFourPercent() {
+        fun strength(thickness: Int) = ArtworkWash.edgeBand(framed(rgb(0, 0, 0), thickness) { rgb(250, 250, 250) }, size, bottom = false)!!.strength
+        assertEquals(.2f, strength(2), 1e-6f)                  // 0.8% hairline: floor
+        assertEquals(4f / (size * .04f), strength(4), 1e-6f)   // 1.6%: about 0.39
+        assertEquals(5f / (size * .04f), strength(5), 1e-6f)   // 2%: about 0.49
+        assertEquals(1f, strength(11), 1e-6f)                  // 4.3%: full
+        assertEquals(1f, strength(26), 1e-6f)                  // 10%: full
     }
 
     @Test fun borderlessCoversFindNoFrame() {
