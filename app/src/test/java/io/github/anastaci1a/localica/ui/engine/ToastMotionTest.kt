@@ -3,6 +3,7 @@ package io.github.anastaci1a.localica.ui.engine
 import androidx.compose.ui.geometry.Rect
 import io.github.anastaci1a.localica.navigation.InterfaceSettings
 import io.github.anastaci1a.localica.ui.spec.*
+import io.github.anastaci1a.localica.ui.engine.diagnostics.*
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -83,6 +84,57 @@ class ToastMotionTest {
             assertEquals(-400f, motion.leftPx, 0f)
             assertEquals(ToastMotionEndpoint.Exited, endpoints.last())
             motion.dispose()
+        }
+    }
+
+    @Test fun reducedMotionEnabledDuringContactStillCompletesEitherRelease() {
+        for (dismiss in listOf(false, true)) harness().use { h ->
+            val evidence = BoundedEvidence(100)
+            EngineObservation(h.clock, evidence).use { observer ->
+                val endpoints = mutableListOf<ToastMotionEndpoint>()
+                val motion = ToastMotion(h.clock, "toast", 376f, 12f, 24f, endpoints::add)
+                try {
+                    motion.enter(); h.advance(.08)
+                    assertTrue(motion.contact())
+                    h.now += 10_000_000; motion.dragBy(-40f)
+                    h.clock.configure(requireNotNull(h.clock.context).copy(access = MotionAccess.Reduced), h.clock.spec)
+                    assertTrue(endpoints.isEmpty())
+                    motion.release(dismiss, -300f)
+                    assertEquals(if (dismiss) -400f else 12f, motion.leftPx, 0f)
+                    assertEquals(listOf(if (dismiss) ToastMotionEndpoint.Exited else ToastMotionEndpoint.Visible), endpoints)
+                    assertEquals(0, h.clock.activeCount)
+                } finally { motion.dispose() }
+                assertEquals(0, observer.continuity.registeredCount)
+                assertFalse(evidence.incomplete)
+                assertEquals(emptyList<Violation>(), evidence.violations)
+            }
+        }
+    }
+
+    @Test fun realObserverSeesEntryDragGeometryRetargetExitAndDisposal() {
+        harness().use { h ->
+            val evidence = BoundedEvidence(100)
+            EngineObservation(h.clock, evidence).use { observer ->
+                val endpoints = mutableListOf<ToastMotionEndpoint>()
+                val motion = ToastMotion(h.clock, "toast", 376f, 12f, 24f, endpoints::add)
+                motion.enter(); h.advance(.08); motion.leftPx
+                motion.contact(); h.now += 10_000_000; motion.dragBy(-40f)
+                motion.place(300f, 16f)
+                h.now += 10_000_000; motion.dragBy(20f)
+                motion.release(false, 100f); h.advance(1.0)
+                assertEquals(16f, motion.leftPx, 0f)
+                motion.exit(); h.advance(.08); motion.leftPx
+                motion.place(320f, 20f); h.advance(1.0)
+                assertEquals(-344f, motion.leftPx, 0f)
+                val calls = endpoints.toList()
+                motion.dispose()
+                assertEquals(0, h.clock.activeCount)
+                assertEquals(0, observer.continuity.registeredCount)
+                h.advance(.5)
+                assertEquals(calls, endpoints)
+                assertFalse(evidence.incomplete)
+                assertEquals(emptyList<Violation>(), evidence.violations)
+            }
         }
     }
 
