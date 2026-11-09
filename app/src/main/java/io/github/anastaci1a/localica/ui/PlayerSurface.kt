@@ -660,7 +660,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
 /** Record the complete glass scene while displaying only its already-recorded cover.
  * Replaying drawContent for display would mutate nested blend owners during readback. */
 @Composable
-private fun Modifier.recordPlayerCoverBackdrop(source: FrostedBackdrop, wash: FrostedBackdrop,
+internal fun Modifier.recordPlayerCoverBackdrop(source: FrostedBackdrop, wash: FrostedBackdrop,
     enabled: Boolean): Modifier {
     val cover = rememberGraphicsLayer()
     val cutout = remember { Path() }
@@ -672,8 +672,10 @@ private fun Modifier.recordPlayerCoverBackdrop(source: FrostedBackdrop, wash: Fr
         cutout.addRect(Rect(0f, 0f, size.width, size.height))
         cutout
     }).drawWithContent {
-        cover.record { this@drawWithContent.drawContent() }
-        drawLayer(cover)
+        if (enabled) {
+            cover.record { this@drawWithContent.drawContent() }
+            drawLayer(cover)
+        } else drawContent()
     }
 }
 
