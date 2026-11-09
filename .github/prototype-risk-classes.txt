@@ -462,3 +462,5 @@ io.github.anastaci1a.localica.BrowsePlayerCompositionTest
 io.github.anastaci1a.localica.BrowseRowInputEqualityTest
 
 io.github.anastaci1a.localica.HeaderFirstApplyOracleTest
+
+io.github.anastaci1a.localica.CollectionHeaderDensityContractTest
