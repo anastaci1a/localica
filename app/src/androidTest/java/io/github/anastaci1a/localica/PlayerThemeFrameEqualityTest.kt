@@ -54,8 +54,11 @@ class PlayerThemeFrameEqualityTest {
         val glassDraws = mutableListOf<GlassSurfaceDrawObservation>()
         val glassObserver: (GlassSurfaceDrawObservation)->Unit = { if(glassDraws.size<1024) glassDraws+=it }
         compose.mainClock.autoAdvance = false
+        lateinit var compositionData: androidx.compose.runtime.tooling.CompositionData
+        lateinit var shadowTables: MutableSet<androidx.compose.runtime.tooling.CompositionData>
         compose.setContent {
-            val shadowTables = remember { mutableSetOf<androidx.compose.runtime.tooling.CompositionData>() }
+            compositionData = currentComposer.compositionData
+            shadowTables = remember { mutableSetOf<androidx.compose.runtime.tooling.CompositionData>() }
             CompositionLocalProvider(androidx.compose.runtime.tooling.LocalInspectionTables provides shadowTables) {
             androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.pinLiveShadowBranch()) { LocalicaTheme {
             CompositionLocalProvider(LocalLayoutDirection provides direction, LocalGlassAppearance provides appearance,
@@ -77,17 +80,56 @@ class PlayerThemeFrameEqualityTest {
         data class Step(val p: Float, val loaded: Boolean = false, val tint: Color? = null)
         val samples = listOf(Step(1f), Step(.42f), Step(.8f, tint = Color(0xFF98512B)),
             Step(.8f, true), Step(.3f, true), Step(.7f), Step(1f), Step(.2f), Step(1f, true))
-        data class Frame(val pixels: IntArray, val width: Int, val height: Int, val bounds: Map<String, List<androidx.compose.ui.geometry.Rect>>)
+        data class Frame(val header: HeaderFirstApplyReceipt, val pixels: IntArray, val width: Int, val height: Int, val bounds: Map<String, List<androidx.compose.ui.geometry.Rect>>)
+        val referenceHeaders = mutableListOf<HeaderFirstApplyReceipt>()
         fun captureArm(old: Boolean): List<Frame> {
             compose.runOnIdle { scope.launch(start = CoroutineStart.UNDISPATCHED) { phase.stop(); phase.snapTo(1f) }; visual = PlayerVisual(loading = true); material = null; reference = old; epoch++ }
-            return samples.map { p ->
+            return samples.mapIndexed { index, p ->
                 compose.runOnIdle { glassDraws.clear(); scope.launch(start = CoroutineStart.UNDISPATCHED) { phase.stop(); phase.snapTo(p.p) }; visual = if (p.loaded) ready else PlayerVisual(loading = true); material = p.tint }
                 compose.mainClock.advanceTimeByFrame(); compose.waitForIdle()
+                val firstClock = compose.mainClock.currentTime
+                // Frozen ReferencePlayerSurface: smoothReveal((p - .72f) / .28f) > 0f.
+                // Expected presence comes from its source contract, never from an empty query.
+                val headerExpected = p.p > .72f
+                val semanticOwners = if (headerExpected) mapOf(
+                    "collapse" to compose.onNodeWithContentDescription("Collapse player").fetchSemanticsNode().boundsInRoot,
+                    "lyrics" to compose.onNodeWithTag("player-lyrics-pill", true).fetchSemanticsNode().boundsInRoot,
+                ) else {
+                    compose.onNodeWithContentDescription("Collapse player").assertDoesNotExist()
+                    compose.onNodeWithTag("player-lyrics-pill", true).assertDoesNotExist()
+                    emptyMap()
+                }
+                // Immutable first draw per actual semantic header control, before image readback.
+                // There is deliberately NO readiness wait: asynchronous publication cannot repair
+                // a different first-frame contract and be called first-frame equality.
+                val header = if (headerExpected) compose.runOnIdle { freezeHeaderFirstApply(glassDraws.toList(), semanticOwners) }
+                    else HeaderFirstApplyReceipt(emptyMap(), emptySet())
+                savePlayerGlassEvidence("cold-first-receipt-$layout-$direction-arm$old-$p", compose.runOnIdle { glassDraws.toList() })
+                if (old) referenceHeaders += header else assertHeaderFirstApplyEqual(referenceHeaders[index], header)
+                val sources = compose.runOnIdle {
+                    val found = java.util.Collections.newSetFromMap(java.util.IdentityHashMap<FrostedBackdrop, Boolean>())
+                    fun inspect(data: androidx.compose.runtime.tooling.CompositionData) {
+                        for (group in data.compositionGroups) {
+                            group.data.filterIsInstance<FrostedBackdrop>().filterTo(found) { source ->
+                                header.roles.values.any { it.sourceIdentity == System.identityHashCode(source) }
+                            }
+                            inspect(group)
+                        }
+                    }
+                    inspect(compositionData)
+                    shadowTables.toList().filter { it !== compositionData }.forEach(::inspect)
+                    val expected = header.roles.values.map { it.sourceIdentity }.toSet()
+                    check(found.size == expected.size) { "Missing or ambiguous frozen header source objects" }
+                    found.associateBy(System::identityHashCode).also { check(it.keys == expected) }
+                }
+                compose.runOnIdle { assertHeaderRequestSetUnchanged(header, sources) }
                 val tags = listOf("player-surface", "player-artwork", "player-title", "player-artist", "player-transport-row")
                 val bounds = tags.associateWith { compose.onAllNodesWithTag(it, true).fetchSemanticsNodes().map { node -> node.boundsInRoot } }
                 val pixels = compose.onNodeWithTag("frame-root").captureToImage().toPixelMap()
+                compose.runOnIdle { assertHeaderRequestSetUnchanged(header, sources) }
+                assertEquals("First-frame image readback must not advance virtual time", firstClock, compose.mainClock.currentTime)
                 savePlayerGlassEvidence("cold-$layout-$direction-arm$old-$p",compose.runOnIdle { glassDraws.toList() })
-                Frame(IntArray(pixels.width * pixels.height) { i -> pixels[i % pixels.width, i / pixels.width].toArgb() }, pixels.width, pixels.height, bounds)
+                Frame(header, IntArray(pixels.width * pixels.height) { i -> pixels[i % pixels.width, i / pixels.width].toArgb() }, pixels.width, pixels.height, bounds)
             }
         }
         try {

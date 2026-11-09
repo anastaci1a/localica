@@ -460,3 +460,5 @@ io.github.anastaci1a.localica.PlayerThemePresentationEqualityTest
 
 io.github.anastaci1a.localica.BrowsePlayerCompositionTest
 io.github.anastaci1a.localica.BrowseRowInputEqualityTest
+
+io.github.anastaci1a.localica.HeaderFirstApplyOracleTest
