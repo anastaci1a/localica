@@ -81,7 +81,7 @@ trap 'stop_child TERM 143' TERM
 trap 'stop_child INT 130' INT
 run_gate() {
   local status
-  python3 .github/test-evidence/supervise.py --output prototype-evidence/live --run-id "$GITHUB_RUN_ID" --attempt "$GITHUB_RUN_ATTEMPT" --sha "$GITHUB_SHA" --api "$TEST_API" --lane prototype -- ./gradlew connectedDebugAndroidTest -I .github/prebuilt-device-tests.gradle "${aot_args[@]}" --no-daemon --max-workers=2 "-Pandroid.testInstrumentationRunnerArguments.class=$instrument_selector" &
+  python3 .github/test-evidence/supervise.py --output prototype-evidence/live --run-id "$GITHUB_RUN_ID" --attempt "$GITHUB_RUN_ATTEMPT" --sha "$GITHUB_SHA" --api "$TEST_API" --lane prototype -- ./gradlew connectedDebugAndroidTest --offline -I .github/prebuilt-device-tests.gradle "${aot_args[@]}" --no-daemon --max-workers=2 "-Pandroid.testInstrumentationRunnerArguments.class=$instrument_selector" &
   child=$!
   wait "$child"
   status=$?

@@ -8,14 +8,16 @@ attempts=${GRADLE_TRANSIENT_ATTEMPTS:-3}
 read -r -a waits <<< "${GRADLE_TRANSIENT_WAITS:-30 60}"
 log=${RUNNER_TEMP:-${TMPDIR:-/tmp}}/gradle-transient-retry.log
 identity=${DEPENDENCY_CACHE_AUDIT_IDENTITY:-prototype-runner-environment.txt}
-transient='Received status code 5[0-9][0-9] from server|Read timed out|Connection reset|Connection timed out|Premature end of Content-Length|Remote host terminated the handshake'
+transient='Received status code 5[0-9][0-9] from server|Read timed out|Connection reset|Connection timed out|Premature end of Content-Length|Remote host terminated the handshake|Network is unreachable|No route to host|Temporary failure in name resolution'
 download='Could not (GET|HEAD|download|get resource|resolve all)'
 never='There were failing tests|tests completed, [0-9]+ failed|Compilation error|^e: |Lint found|Execution failed for task .*:(test|lint)[A-Za-z]*'
 
+mkdir -p "${RUNNER_TEMP:-${TMPDIR:-/tmp}}/dependency-attempts"
 retries=0
 for ((attempt = 1; attempt <= attempts; attempt++)); do
   "$@" 2>&1 | tee "$log"
   status=${PIPESTATUS[0]}
+  cp "$log" "${RUNNER_TEMP:-${TMPDIR:-/tmp}}/dependency-attempts/attempt-$attempt.log"
   if (( status == 0 )); then
     break
   fi
@@ -30,5 +32,10 @@ for ((attempt = 1; attempt <= attempts; attempt++)); do
 done
 if [[ -f "$identity" ]]; then
   printf 'gradle-transient-retries=%s\n' "$retries" >> "$identity"
+fi
+if (( status != 0 )) && grep -Eq "$transient" "$log" && grep -Eq "$download" "$log" && ! grep -Eq "$never" "$log"; then
+  mkdir -p ci-infrastructure
+  printf '{"schema_version":1,"classification":"infrastructure","reason":"dependency-network","issue":752,"attempts":%s,"exit_code":%s}\n' "$attempt" "$status" > ci-infrastructure/dependencies.json
+  echo '::error title=Infrastructure failure (#752)::Dependency downloads exhausted bounded retries; no product verdict.'
 fi
 exit "$status"

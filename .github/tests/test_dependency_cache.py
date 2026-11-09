@@ -361,6 +361,18 @@ class TransientRetryContract(unittest.TestCase):
                 self.assertEqual(1, self.calls(), name)
                 self.assertNotIn('::warning', result.stdout)
 
+    def test_unreachable_network_retries_and_exhaustion_is_infrastructure(self):
+        network = ["> Could not GET 'https://repo.maven.apache.org/maven2/gson.jar'.",
+                   '> Network is unreachable']
+        self.gradlew([network, 'ok'])
+        self.assertEqual(0, self.run_wrapper().returncode)
+        self.assertEqual(2, self.calls())
+        self.gradlew([network, network, network])
+        self.assertEqual(1, self.run_wrapper().returncode)
+        receipt = (self.root / 'ci-infrastructure/dependencies.json').read_text()
+        self.assertIn('"classification":"infrastructure"', receipt)
+        self.assertEqual(3, self.calls())
+
     def test_successful_build_runs_once_and_records_zero_retries(self):
         (self.root / 'prototype-runner-environment.txt').write_text('')
         self.gradlew(['ok'])

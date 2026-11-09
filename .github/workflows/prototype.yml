@@ -146,6 +146,8 @@ jobs:
         path: |-
           app/build/reports/
           prototype-runner-environment.txt
+          ci-infrastructure/
+          ${{ runner.temp }}/dependency-attempts/
     name: Prototype build, unit tests and lint
   focused_26:
     # runner=self-hosted (#592): the owner's locked-down single-job JIT runner, labelled with this
@@ -202,7 +204,7 @@ jobs:
     - name: Compile instrumentation APKs before starting emulator
       env:
         LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
-      run: bash .github/gradle-transient-retry.sh ./gradlew assembleDebug assembleDebugAndroidTest --no-daemon --max-workers=2
+      run: bash .github/gradle-transient-retry.sh ./gradlew assembleDebug assembleDebugAndroidTest :app:warmDeviceDependencies -I .github/warm-device-dependencies.gradle --no-daemon --max-workers=2
     - name: Record downloaded dependency files
       if: ${{ !cancelled() && inputs.runner != 'self-hosted' }}
       run: bash .github/dependency-cache-audit.sh report
@@ -283,6 +285,8 @@ jobs:
           prototype-evidence/
           prototype-iterations/
           prototype-runner-environment.txt
+          ci-infrastructure/
+          ${{ runner.temp }}/dependency-attempts/
         if-no-files-found: error
     name: Prototype focused API 26
   compatibility_26:
@@ -431,7 +435,7 @@ jobs:
     - name: Compile instrumentation APKs before starting emulator
       env:
         LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
-      run: bash .github/gradle-transient-retry.sh ./gradlew assembleDebug assembleDebugAndroidTest --no-daemon --max-workers=2
+      run: bash .github/gradle-transient-retry.sh ./gradlew assembleDebug assembleDebugAndroidTest :app:warmDeviceDependencies -I .github/warm-device-dependencies.gradle --no-daemon --max-workers=2
     - name: Record downloaded dependency files
       if: ${{ !cancelled() && inputs.runner != 'self-hosted' }}
       run: bash .github/dependency-cache-audit.sh report
@@ -512,6 +516,8 @@ jobs:
           prototype-evidence/
           prototype-iterations/
           prototype-runner-environment.txt
+          ci-infrastructure/
+          ${{ runner.temp }}/dependency-attempts/
         if-no-files-found: error
     name: Prototype focused API 36
   compatibility_36:
@@ -796,6 +802,14 @@ jobs:
                         'source_sha': data['source_sha'], 'private_variants_not_distributed': True}
                 except (AssertionError, KeyError, ValueError, OSError) as error:
                     errors.append(f'Compatibility API {api} provenance validation failed: ' + type(error).__name__ + ': ' + str(error))
+        manifest['infrastructure_failures'] = []
+        for receipt in sorted(root.rglob('ci-infrastructure/*.json')):
+            record = json.loads(receipt.read_text())
+            if record.get('classification') == 'infrastructure':
+                manifest['infrastructure_failures'].append({'evidence': str(receipt), **record})
+        # Job failure remains fatal for delivery; consumers can exclude infra from product statistics.
+        manifest['failure_classification'] = ('infrastructure' if manifest['infrastructure_failures']
+                                              else 'unclassified' if 'failed' in results.values() else None)
         all_checks_passed = all(value == 'passed' for value in results.values())
         complete = canonical_valid and len(manifest['focused_evidence']) == 2 and len(manifest['compatibility_evidence']) == 2
         if all_checks_passed and not complete:
