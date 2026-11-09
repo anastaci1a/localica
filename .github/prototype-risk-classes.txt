@@ -438,3 +438,4 @@ io.github.anastaci1a.localica.PopupEditorFocusOwnershipTest
 io.github.anastaci1a.localica.ArtworkWashEdgeWeightingTest
 io.github.anastaci1a.localica.BackdropEdgeStripTest
 io.github.anastaci1a.localica.CollectionLoadingRevealTest
+io.github.anastaci1a.localica.LibraryDataExchangeTest
