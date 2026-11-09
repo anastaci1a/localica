@@ -54,11 +54,16 @@ class PopupImeGeometryTest {
         compose.runOnIdle { if (!controller.state.value.busy) controller.close() }
     }
 
-    @Test fun tagEditorNativeImeTrace() = trace(true)
-    @Test fun addToPlaylistsNativeImeTrace() = trace(false)
-    @Test fun playerAddToPlaylistsNativeImeTrace() = trace(false, playerScene = true)
-    @Test fun playerTagEditorNativeImeTrace() = trace(true, playerScene = true)
-    @Test fun mixedContentDuringNativeImeTrace() = trace(false, mixedContent = true)
+    @Test @androidx.test.filters.SdkSuppress(minSdkVersion = 30)
+    fun tagEditorNativeImeTrace() = trace(true)
+    @Test @androidx.test.filters.SdkSuppress(minSdkVersion = 30)
+    fun addToPlaylistsNativeImeTrace() = trace(false)
+    @Test @androidx.test.filters.SdkSuppress(minSdkVersion = 30)
+    fun playerAddToPlaylistsNativeImeTrace() = trace(false, playerScene = true)
+    @Test @androidx.test.filters.SdkSuppress(minSdkVersion = 30)
+    fun playerTagEditorNativeImeTrace() = trace(true, playerScene = true)
+    @Test @androidx.test.filters.SdkSuppress(minSdkVersion = 30)
+    fun mixedContentDuringNativeImeTrace() = trace(false, mixedContent = true)
 
     private fun trace(editor: Boolean, playerScene: Boolean = false, mixedContent: Boolean = false) {
         val opticalOnly = InstrumentationRegistry.getArguments().getString("popupImeOpticalOnly") == "true"
