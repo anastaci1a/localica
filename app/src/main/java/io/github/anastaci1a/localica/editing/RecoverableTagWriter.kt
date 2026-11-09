@@ -24,6 +24,7 @@ import java.security.MessageDigest
 
 interface EditableDocuments {
     fun writable(track: Track): String?
+    fun size(uri: String): Long? = null
     fun open(uri: String): InputStream
     fun replace(uri: String, source: File)
 }
@@ -36,6 +37,9 @@ class AndroidEditableDocuments(context: Context) : EditableDocuments {
                 it.moveToFirst() && it.getInt(0) and DocumentsContract.Document.FLAG_SUPPORTS_WRITE != 0
             } == true }.getOrDefault(false)
     }?.uri
+    override fun size(uri: String): Long? = resolver.query(Uri.parse(uri), arrayOf(android.provider.OpenableColumns.SIZE), null, null, null)?.use {
+        if (it.moveToFirst() && !it.isNull(0)) it.getLong(0).takeIf { size -> size >= 0 } else null
+    }
     override fun open(uri: String): InputStream = resolver.openInputStream(Uri.parse(uri)) ?: error("File is unavailable.")
     override fun replace(uri: String, source: File) {
         // Require a seekable descriptor; a streaming provider cannot safely truncate/verify an overwrite.
@@ -54,7 +58,8 @@ class AndroidEditableDocuments(context: Context) : EditableDocuments {
 
 /** The existing single journal owns restart recovery; native admission also tracks verified bytes. */
 class RecoverableTagWriter(private val directory: File, private val documents: EditableDocuments,
-    private val readers: NativeReaders = NativeReaders()) {
+    private val readers: NativeReaders = NativeReaders(),
+    internal val batches: TagBatchStore = TagBatchStore(File(requireNotNull(directory.absoluteFile.parentFile), "tag-batches"))) {
     private val gate = Mutex()
     private val journal get() = AtomicFile(File(directory, "pending.json"))
     private var unsafe: Recovery? = null
@@ -65,7 +70,19 @@ class RecoverableTagWriter(private val directory: File, private val documents: E
     suspend fun initialize() = withContext(Dispatchers.IO) { gate.withLock { inspect() }; Unit }
     suspend fun pending(): Recovery? = withContext(Dispatchers.IO) { gate.withLock { inspect() } }
 
-    private fun inspect(): Recovery? = try {
+    private fun inspect(): Recovery? {
+        checkBatchHealth()
+        return inspectSingle()
+    }
+
+    private fun checkBatchHealth() {
+        try { batches.read() } catch (failure: Exception) {
+            readers.publishRecovery(RecoveryAdmission.Unknown("Batch recovery needs verification. Keep the retained undo files. ${failure.message.orEmpty()}"))
+            throw failure
+        }
+    }
+
+    private fun inspectSingle(): Recovery? = try {
         val pending = readPending()
         check(pending != null || unsafe == null) { "The tag recovery record disappeared before byte verification." }
         check(unsafe == null || (pending != null && sameRecord(pending, unsafe))) {
@@ -115,13 +132,21 @@ class RecoverableTagWriter(private val directory: File, private val documents: E
 
     fun canWrite(track: Track) = documents.writable(track) != null
 
-    suspend fun edit(track: Track, patch: TagPatch): Track = withContext(Dispatchers.IO) { gate.withLock {
+    data class Receipt(val track: Track, val originalHash: String, val writtenHash: String)
+    data class Source(val uri: String, val size: Long)
+
+    suspend fun edit(track: Track, patch: TagPatch): Track = editChecked(track, patch).track
+
+    suspend fun editChecked(track: Track, patch: TagPatch, expectedOriginalHash: String? = null,
+        batchId: String? = null): Receipt = withContext(Dispatchers.IO) { gate.withLock {
         check(inspect() == null) { "Recover the interrupted tag edit before making another change." }
+        val admitted = admittedBatch(track, batchId)
         patch.validate()
         val extension = track.fileName.substringAfterLast('.', "").lowercase()
         require(extension in TagCodec.extensions) { "${extension.ifEmpty { "This format" }} is read-only for tag editing." }
         val uri = documents.writable(track) ?: error("Grant write access to this song’s folder first.")
         check(documentIdentity(uri) == documentIdentity(track.id)) { "The writable document does not match this song’s playback source." }
+        check(admitted == null || admitted.uri == uri) { "The writable grant changed after preparation. Restore or reload this batch." }
         directory.mkdirs()
         // Unjournaled files are preparation leftovers; no document has been touched yet.
         directory.listFiles()?.forEach { it.delete() }
@@ -131,10 +156,16 @@ class RecoverableTagWriter(private val directory: File, private val documents: E
             input.copyTo(output); output.fd.sync()
         } }
         val originalHash = hash(original.inputStream())
+        val expected = admitted?.originalHash ?: expectedOriginalHash
+        check(expected == null || expected == originalHash) {
+            "The song changed after its undo copy was captured. Reload or restore before retrying."
+        }
         original.copyTo(candidate, overwrite = true)
         TagCodec.edit(candidate, patch)
         currentCoroutineContext().ensureActive()
         check(hash(documents.open(uri)) == originalHash) { "The song changed during editing. Reload it and try again." }
+        admittedBatch(track, batchId)
+        val candidateHash = hash(candidate.inputStream())
         val recovery = Recovery(track, uri, original, originalHash)
         unsafe = recovery
         verified = null
@@ -150,7 +181,7 @@ class RecoverableTagWriter(private val directory: File, private val documents: E
         withContext(NonCancellable) {
             try {
                 documents.replace(uri, candidate)
-                check(hash(documents.open(uri)) == hash(candidate.inputStream())) { "Saved file did not verify." }
+                check(hash(documents.open(uri)) == candidateHash) { "Saved file did not verify." }
                 markVerified(recovery)
             } catch (failure: Exception) {
                 try { restore(recovery) }
@@ -161,8 +192,97 @@ class RecoverableTagWriter(private val directory: File, private val documents: E
                 throw IOException("Write failed; the original was restored. ${failure.message.orEmpty()}", failure)
             }
         }
-        track.copy(uri = uri)
+        Receipt(track.copy(uri = uri), originalHash, candidateHash)
     } }
+
+    /** Caller owns the library lock and drained queue file scope, including for reads. */
+    suspend fun source(track: Track): Source = withContext(Dispatchers.IO) { gate.withLock {
+        check(inspect() == null) { "Recover the interrupted file before preparing a batch." }
+        val uri = writableSource(track)
+        val declared = documents.size(uri)
+        val size = declared ?: documents.open(uri).use { input ->
+            val bytes = ByteArray(64 * 1024); var total = 0L
+            while (true) {
+                currentCoroutineContext().ensureActive()
+                val count = input.read(bytes); if (count < 0) break
+                total = Math.addExact(total, count.toLong())
+            }
+            total
+        }
+        check(size >= 0)
+        Source(uri, size)
+    } }
+
+    suspend fun snapshot(track: Track, batchId: String, index: Int): Recovery = withContext(Dispatchers.IO) { gate.withLock {
+        check(inspect() == null)
+        val batch = requireNotNull(batches.read())
+        check(batch.id == batchId && batch.undo && batch.phase == TagBatchPhase.Saving)
+        check(batch.tracks[index].id == track.id && batch.entries[index] == null)
+        val uri = writableSource(track)
+        val original = batches.original(batchId, index)
+        check(!original.exists()) { "An unpublished undo copy is retained. Restore this batch before retrying." }
+        documents.open(uri).use { input -> FileOutputStream(original).use { output ->
+            input.copyTo(output); output.fd.sync()
+        } }
+        val digest = hash(original.inputStream())
+        check(hash(documents.open(uri)) == digest) { "The song changed while its undo copy was captured." }
+        Recovery(track, uri, original, digest)
+    } }
+
+    /** A batch undo uses the same write-ahead safety journal and verified-byte publisher. */
+    suspend fun restoreSnapshot(snapshot: Recovery, expectedCurrentHashes: Set<String>, batchId: String): Track =
+        withContext(Dispatchers.IO + NonCancellable) { gate.withLock {
+            check(inspect() == null) { "Recover the current file before continuing all-file restore." }
+            val batch = requireNotNull(batches.read())
+            check(batch.id == batchId && batch.undo && batch.phase == TagBatchPhase.Restoring)
+            val index = batch.tracks.indexOfFirst { documentIdentity(it.id) == documentIdentity(snapshot.track.id) }
+            val entry = requireNotNull(batch.entries[index])
+            val owned = batches.checkedOriginal(batch, entry)
+            check(owned == snapshot)
+            val currentHash = hash(documents.open(snapshot.uri))
+            check(currentHash == snapshot.hash || currentHash in expectedCurrentHashes) {
+                "The song changed outside this batch. Undo copies are retained; the newer bytes were not overwritten."
+            }
+            if (currentHash == snapshot.hash) return@withLock snapshot.track.copy(uri = snapshot.uri)
+            check(directory.isDirectory || directory.mkdirs())
+            directory.listFiles()?.forEach { check(it.delete()) }
+            val original = File(directory, "original." + snapshot.track.fileName.substringAfterLast('.', "bin"))
+            snapshot.original.inputStream().use { input -> FileOutputStream(original).use { output ->
+                input.copyTo(output); output.fd.sync()
+            } }
+            check(hash(original.inputStream()) == snapshot.hash)
+            val recovery = snapshot.copy(original = original)
+            unsafe = recovery; verified = null
+            readers.publishRecovery(RecoveryAdmission.Pending(documentIdentity(recovery.uri)))
+            try { writeJournal(recovery) }
+            catch (failure: Exception) { markVerified(recovery); throw failure }
+            restore(recovery)
+            snapshot.track.copy(uri = snapshot.uri)
+        } }
+
+    suspend fun currentHash(track: Track, uri: String): String = withContext(Dispatchers.IO) { gate.withLock {
+        inspect()
+        check(documentIdentity(uri) == documentIdentity(track.id))
+        hash(documents.open(uri))
+    } }
+
+    private fun writableSource(track: Track): String {
+        require(track.fileName.substringAfterLast('.', "").lowercase() in TagCodec.extensions) { "This format is read-only for tag editing." }
+        val uri = documents.writable(track) ?: error("Grant write access to this song’s folder first.")
+        check(documentIdentity(uri) == documentIdentity(track.id)) { "The writable source does not match this song." }
+        return uri
+    }
+
+    private fun admittedBatch(track: Track, id: String?): TagBatchEntry? {
+        val batch = batches.read()
+        if (batch == null) { check(id == null); return null }
+        check(batch.id == id && batch.phase == TagBatchPhase.Saving) { "The batch is no longer accepting writes." }
+        val index = batch.tracks.indexOfFirst { documentIdentity(it.id) == documentIdentity(track.id) }
+        val entry = batch.entries[index]
+        check(entry?.phase == TagBatchEntryPhase.Writing) { "Publish the batch write intent before replacement." }
+        if (batch.undo) batches.checkedOriginal(batch, requireNotNull(entry))
+        return entry
+    }
 
     suspend fun complete() = withContext(Dispatchers.IO) { gate.withLock {
         val pending = inspect()
@@ -180,6 +300,7 @@ class RecoverableTagWriter(private val directory: File, private val documents: E
     private fun markVerified(recovery: Recovery) {
         verified = recovery
         unsafe = null
+        checkBatchHealth()
         readers.publishRecovery(RecoveryAdmission.Clear)
     }
     private fun restore(recovery: Recovery) {
