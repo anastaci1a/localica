@@ -3,7 +3,6 @@ package io.github.anastaci1a.localica
 import android.content.Intent
 import android.net.Uri
 import android.os.SystemClock
-import androidx.room.Room
 import androidx.test.core.app.ActivityScenario
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.By
@@ -25,9 +24,11 @@ class NoneRealAppWalkTest {
         val device = UiDevice.getInstance(instrumentation)
         val preferences = InterfacePreferences(context)
         val original = preferences.read()
-        val database = Room.databaseBuilder(context, LibraryDatabase::class.java, "library.db")
-            .addMigrations(*LibraryDatabase.MIGRATIONS).enableMultiInstanceInvalidation().build()
-        val store = RoomLibraryStore(database.libraryDao())
+        // Seed the application's existing Room store so its live invalidation tracker sees the write.
+        // A second Room instance would race the application's already collected library snapshot.
+        val app = context.applicationContext as LocalicaApplication
+        val store = LibraryRepository::class.java.getDeclaredField("store").apply { isAccessible = true }
+            .get(app.library) as LibraryStore
         val root = "none-walk-691"
         val file = File(context.cacheDir, "none-walk-691.mp3")
         instrumentation.context.assets.open("queue-tone.mp3").use { input -> file.outputStream().use(input::copyTo) }
@@ -37,6 +38,7 @@ class NoneRealAppWalkTest {
         fun visible(selector: androidx.test.uiautomator.BySelector): androidx.test.uiautomator.UiObject2 =
             requireNotNull(device.wait(Until.findObject(selector), 15000)) { "Missing $selector" }
         fun checkpoint(name: String) {
+            android.util.Log.i("NoneRealAppWalk", "checkpoint=$name")
             SystemClock.sleep(700)
             assertNotNull("Activity disappeared at $name", device.findObject(By.pkg(context.packageName)))
             assertNull("Crash dialog at $name", device.findObject(By.textContains("keeps stopping")))
@@ -71,7 +73,7 @@ class NoneRealAppWalkTest {
                 instrumentation.runOnMainSync { connection.playFromList(listOf(track), track.id) }
                 visible(By.desc("Collapse player"))
                 checkpoint("player")
-                visible(By.desc("More")).click()
+                visible(By.desc("More actions")).click()
                 checkpoint("player-popup")
                 device.pressBack()
                 visible(By.desc("Collapse player")).click()
@@ -81,7 +83,6 @@ class NoneRealAppWalkTest {
             playback?.let { connection -> instrumentation.runOnMainSync { connection.clear(); connection.close() } }
             preferences.write(original)
             runBlocking { store.removeRoot(root) }
-            database.close()
             file.delete()
         }
     }
