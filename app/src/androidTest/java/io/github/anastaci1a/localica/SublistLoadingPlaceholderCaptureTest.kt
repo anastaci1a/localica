@@ -153,11 +153,20 @@ class SublistLoadingPlaceholderCaptureTest {
         frame("catalog")
         // Publish the catalog; rows enter while their artwork stays held.
         var guard = 0
-        while (compose.onAllNodesWithTag("browse-text-${items[1].key}", true).fetchSemanticsNodes().isEmpty() && guard++ < 300) {
+        while (compose.onAllNodesWithTag("browse-text-${items[0].key}", true).fetchSemanticsNodes().isEmpty() && guard++ < 300) {
             while (queries.tasks.isNotEmpty()) queries.tasks.poll()?.run()
             compose.mainClock.advanceTimeByFrame()
         }
         val published = compose.mainClock.currentTime - start
+        // A collection's header fills the first viewport: jump (no fling) so held rows are on screen.
+        if (kind != null) {
+            val grid = compose.onAllNodes(hasScrollToIndexAction()).onFirst()
+            runCatching { grid.performScrollToKey(items[1].key) }.onFailure {
+                log.append("scrollToKey failed: ${it.message}; using index 1\n")
+                runCatching { grid.performScrollToIndex(1) }
+            }
+            repeat(3) { while (queries.tasks.isNotEmpty()) queries.tasks.poll()?.run(); compose.mainClock.advanceTimeByFrame() }
+        }
         log.append("catalog-published t=$published\n")
         for (offset in listOf(0L, 16L, 80L, 160L, 300L, 550L, 1100L)) {
             val target = start + published + offset
@@ -199,6 +208,7 @@ class SublistLoadingPlaceholderCaptureTest {
             val line = layouts.firstOrNull()
             val lineRight = line?.getLineRight(0) ?: (bounds.width / 2f)
             val y = (bounds.top + (line?.let { (it.getLineTop(0) + it.getLineBottom(0)) / 2f } ?: bounds.height / 2f)).roundToInt()
+            if (y < 3 || y > image.height - 4) continue
             val bg = mean(((art.boundsInRoot.right + bounds.left) / 2f).roundToInt(), y)
             val bar = mean((bounds.left + 6f).roundToInt(), y)
             val profile = (0 until 24).map { step ->
