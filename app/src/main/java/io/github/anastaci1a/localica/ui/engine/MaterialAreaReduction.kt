@@ -1,4 +1,4 @@
-package io.github.anastaci1a.localica.ui
+package io.github.anastaci1a.localica.ui.engine
 
 import android.os.Build
 import androidx.compose.runtime.*
@@ -88,6 +88,12 @@ internal class MaterialAreaReduction(private val graphics: GraphicsContext) {
                 clipRect(right = bounds.width, bottom = bounds.height, block = draw)
             }
         }
+    }
+    /** Draw the retained styled mean without transferring layer ownership to a component. */
+    fun DrawScope.drawCurrent(extent: Size) {
+        val styled = current ?: return
+        scale(extent.width / styled.size.width.coerceAtLeast(1), extent.height / styled.size.height.coerceAtLeast(1),
+            Offset.Zero) { drawLayer(styled) }
     }
     fun release() { levels.forEach(graphics::releaseGraphicsLayer); levels.clear(); current = null }
 
