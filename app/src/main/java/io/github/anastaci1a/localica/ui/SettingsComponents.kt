@@ -1,5 +1,6 @@
 package io.github.anastaci1a.localica.ui
 
+import io.github.anastaci1a.localica.ui.layout.settingsHeadingPadding
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -85,7 +86,7 @@ internal fun SettingsDescription(text: String, modifier: Modifier = Modifier,
 @Composable
 internal fun SettingsHeading(title: String) {
     Text(title, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary,
-        modifier = Modifier.fillMaxWidth().padding(io.github.anastaci1a.localica.ui.layout.SettingsHeadingPadding)
+        modifier = Modifier.settingsHeadingPadding()
             .settingsRowPart(SettingsRowPart.Heading))
 }
 
