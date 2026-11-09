@@ -213,6 +213,8 @@ class ArtistPhotoRepositoryTest {
         val transport = PhotoTransport { _, _ -> throw CancellationException("cancelled") }
         try { ArtistPhotos(Consent(true), disk(), transport).observe(request).toList(); fail("cancel swallowed") }
         catch (_: CancellationException) { }
+        // Cancellation no longer writes a retry record. Seed the independent damaged-correction witness.
+        disk().saveChoice(request.artistKey, SavedPhotoChoice("manual", ArtistPhotoChoice(ArtistPhotoProvider.DEEZER, "8")))
         val directory = File(temporary.root, "choices")
         directory.listFiles()!!.single().writeText("invalid JSON")
         val server = Server()
