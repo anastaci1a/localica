@@ -131,15 +131,19 @@ Settings → Online features → Last.fm accepts a username and explicitly start
 
 Background continuation defaults on and uses unique scheduled work with a progress notification.
 
-A refresh publishes one complete snapshot only after every request succeeds. Existing accounts use recent scrobbles and authoritative per-song user counts; large change sets fall back to full paging. Full rescan is also available explicitly. Requests are paced with retry backoff and a one-minute attempt limit. Failure preserves the archive; another account cannot use its counts.
+A full scan pages the complete scrobble history and keeps album-specific counts. Quick sync adds later scrobbles to their albums. Old archives remain available until their first history scan completes. Full rescan rereads earlier history, including edits or deletions.
+
+Pages share pacing, retry backoff and a one-minute new-attempt limit. Durable staging resumes an interrupted scan with its original cutoff. Only complete results replace the published archive. Failure preserves the archive; another account cannot use its counts.
 
 Local qualified events remain separate. Use Last.fm counts defaults off. When enabled, the archive supplies per-song sorting and all-time rankings, including authoritative zeroes. Songs without a remote match and recent time ranges use local counts. Playlist origin counts always remain local.
 
-Qualified local plays after a successful sync temporarily add to the archived base. Each recording's addition appears on its matching edition copies. The next successful refresh replaces the base and clears temporary additions; failure preserves both. Sync never changes local play history. Legacy archives adopt the current local counter boundary once, without a network request.
+Qualified local plays after the archive's cutoff temporarily add to its base, including plays made during a long sync. Each recording's addition appears on its matching copies. A successful refresh replaces the base and its counter boundary together; failure preserves both. Sync never changes local play history. Legacy archives adopt a local counter boundary without a network request.
 
-Matching combines artist, album, ordered title tokens, available duration and recording MusicBrainz IDs. It recognizes artist/title credits inside uploader titles and removes descriptive upload decorations. Conflicting IDs, musical versions and substantial duration differences prevent automatic text matches. Copies of the same recording across editions show that version's plays; aggregate totals count each remote recording once.
+Matching combines artist, album, ordered title tokens, available duration and recording MusicBrainz IDs. It recognizes artist/title credits inside uploader titles and removes descriptive upload decorations. Conflicting IDs, musical versions and substantial duration differences prevent automatic text matches. An unmarked title prefers a plain studio recording. Identical artist/title/album/duration copies form one candidate; album-specific plays stay on that edition's copies.
 
-Clear matches resolve silently. Probable matches expose their tier and reason for judgment-call review. Uncertain candidates need a decision, ordered by plays. Entries without plausible candidates stay outside the review count and are reconsidered when the library changes. Manual choices survive refreshes; resetting them leaves the archive intact.
+Clear matches resolve silently. Probable matches expose their tier and reason for judgment-call review. Untouched rows need at least two distinct candidates to require a decision. A single compatible candidate resolves clearly or as a judgment call. Explicitly undone rows remain manual decisions, even with one suggestion.
+
+Entries without plausible candidates stay outside review and are reconsidered after library changes. Manual choices survive refreshes; resetting them leaves the archive intact. Migration preserves explicit undo and absence across newly separated albums. A positive choice follows its selected album when the correspondence is unambiguous.
 
 The Data tab offers Export matching report. It opens the share sheet with JSON containing review candidates, scores and reasons. The report includes song metadata and hashed local identities, but excludes usernames, API keys and file paths. Nothing is sent until a destination is chosen.
 

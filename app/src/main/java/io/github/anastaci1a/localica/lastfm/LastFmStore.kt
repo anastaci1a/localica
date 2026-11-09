@@ -34,6 +34,7 @@ object LastFmSnapshotCodec {
         value.snapshot?.let { snapshot -> put("snapshot", JSONObject().apply {
             put("username", snapshot.username); put("syncedAt", snapshot.syncedAt)
             put("localBaseline", snapshot.localBaseline?.let(::JSONObject)); put("refreshBoundarySeconds", snapshot.refreshBoundarySeconds)
+            put("historyComplete", snapshot.historyComplete)
             put("tracks", JSONArray().apply { snapshot.tracks.forEach { track -> put(JSONObject().apply {
                 put("artist", track.artist); put("title", track.title); put("plays", track.plays)
                 put("album", track.album); put("mbid", track.mbid); put("durationMs", track.durationMs)
@@ -55,7 +56,7 @@ object LastFmSnapshotCodec {
                 }
             }, optJSONObject("localBaseline")?.let { baseline ->
                 baseline.keys().asSequence().associateWith { baseline.getLong(it).also { count -> require(count >= 0) } }
-            }, if (isNull("refreshBoundarySeconds")) null else getLong("refreshBoundarySeconds"))
+            }, if (isNull("refreshBoundarySeconds")) null else getLong("refreshBoundarySeconds"), optBoolean("historyComplete", false))
         }
         val mappings = optJSONObject("mappings") ?: JSONObject()
         SavedLastFm(username, optBoolean("useCounts", false), snapshot,

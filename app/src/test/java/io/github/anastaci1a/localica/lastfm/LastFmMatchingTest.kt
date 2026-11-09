@@ -77,9 +77,10 @@ class LastFmMatchingTest {
         println("REVIEW sample=" + result.review.take(3).map { it.remote.title to it.reason })
         expected.forEach { (id, plays) -> assertEquals("Count for $id", plays, result.counts[id]) }
         assertTrue("Unexpected assignments: ${result.counts.keys.minus(expected.keys).take(10)}", result.counts.keys.minus(expected.keys).isEmpty())
-        assertEquals(5, result.review.size)
-        assertEquals(6302, result.clearCount); assertEquals(201, result.judgments.size); assertEquals(8943, result.notInLibrary)
-        assertEquals(listOf(1500L, 900L, 250L, 80L, 7L), result.review.map { it.remote.plays })
+        assertEquals(3, result.review.size)
+        assertEquals(6302, result.clearCount); assertEquals(201, result.judgments.size); assertEquals(8945, result.notInLibrary)
+        assertEquals(listOf(900L, 80L, 7L), result.review.map { it.remote.plays })
+        assertTrue(result.review.all { it.candidates.size >= 2 })
     }
 
     @Test fun distinctRecordingsArtistsAndSmallTitlesNeverCollapse() {
