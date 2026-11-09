@@ -9,7 +9,8 @@ import java.security.MessageDigest
 internal const val PHOTO_REFRESH_MS = 30L * 24 * 60 * 60 * 1000
 internal const val PHOTO_RETRY_MS = 24L * 60 * 60 * 1000
 internal const val PHOTO_MAX_BYTES = 4 * 1024 * 1024
-internal data class SavedPhotoChoice(val mode: String = "auto", val choice: ArtistPhotoChoice? = null, val attemptedAt: Long? = null)
+internal data class SavedPhotoChoice(val mode: String = "auto", val choice: ArtistPhotoChoice? = null,
+    val attemptedAt: Long? = null, val pendingChoice: ArtistPhotoChoice? = null)
 
 /** Called under the repository mutex on IO. Choices live in filesDir; evictable pictures in cacheDir. */
 internal class ArtistPhotoDisk(private val cache: File, private val choices: File, private val maxBytes: Long) {
@@ -22,21 +23,23 @@ internal class ArtistPhotoDisk(private val cache: File, private val choices: Fil
         if (file.length() !in 1..32768) return@runCatching null
         JSONObject(file.readText())
     }.getOrNull()
-    private fun JSONObject.choice(): ArtistPhotoChoice? = optJSONObject("choice")?.run {
+    private fun JSONObject.choice(field: String = "choice"): ArtistPhotoChoice? = optJSONObject(field)?.run {
         ArtistPhotoChoice(ArtistPhotoProvider.valueOf(getString("provider")), getString("id"))
     }
-    private fun JSONObject.putChoice(choice: ArtistPhotoChoice?) = put("choice", choice?.let {
+    private fun JSONObject.putChoice(choice: ArtistPhotoChoice?, field: String = "choice") = put(field, choice?.let {
         JSONObject().put("provider", it.provider.name).put("id", it.id)
     })
     fun choice(artist: String): SavedPhotoChoice = runCatching {
-        read(selection(artist))?.run { SavedPhotoChoice(getString("mode"), choice(), if (isNull("attemptedAt")) null else getLong("attemptedAt")) }
+        read(selection(artist))?.run { SavedPhotoChoice(getString("mode"), choice(),
+            if (isNull("attemptedAt")) null else getLong("attemptedAt"), choice("pendingChoice")) }
             ?: if (selection(artist).exists()) SavedPhotoChoice("cleared") else SavedPhotoChoice()
     }.getOrDefault(SavedPhotoChoice("cleared")) // Damaged persisted corrections must not trigger an automatic rematch.
 
     fun saveChoice(artist: String, value: SavedPhotoChoice) {
         choices.mkdirs()
         check(selection(artist).exists() || choices.listFiles().orEmpty().size < 10000)
-        write(selection(artist), JSONObject().put("mode", value.mode).putChoice(value.choice).put("attemptedAt", value.attemptedAt).toString().toByteArray())
+        write(selection(artist), JSONObject().put("mode", value.mode).putChoice(value.choice)
+            .putChoice(value.pendingChoice, "pendingChoice").put("attemptedAt", value.attemptedAt).toString().toByteArray())
     }
     fun reset(artist: String) { selection(artist).delete(); removePhoto(artist) }
     fun removePhoto(artist: String) {
