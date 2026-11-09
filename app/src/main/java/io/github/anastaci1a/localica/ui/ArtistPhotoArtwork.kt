@@ -66,6 +66,7 @@ internal object ArtistPhotoPixels {
     fun peek(photo: CachedArtistPhoto, thumbnail: Boolean = false, edge: Int = if (thumbnail) 256 else 1080): ArtistPhotoVisual? =
         cache.get(key(photo, thumbnail, edge))
     suspend fun read(photo: CachedArtistPhoto, thumbnail: Boolean = false, edge: Int = if (thumbnail) 256 else 1080): ArtistPhotoVisual? {
+        require(edge > 0)
         val key = key(photo, thumbnail, edge)
         val file = key.file
         cache.get(key)?.let { return it }
@@ -134,7 +135,7 @@ internal fun rememberArtistPhotoDisplay(request: ArtistPhotoRequest?, environmen
                         }
                     }
                 }
-                accept(environment.photos.ready(request))
+                accept(environment.photos.peekKey(requireNotNull(cacheKey)) ?: ArtistPhotoState(null))
                 if (environment.work == null && fetchAllowed) environment.photos.observe(request).collect { if (it.photo != null) accept(it) }
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (_: Exception) { /* A failed replacement keeps matching ready pixels. */ }
