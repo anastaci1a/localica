@@ -185,6 +185,17 @@ class AutoScrollDrawnPlacementTest {
         }
     }
 
+    // Reconstruct raster coverage; an antialiased edge need not equal the solid palette byte-for-byte.
+    // The measured geometry tolerance stays 0.5 px.
+    private fun coverPixel(pixel: Int, foreground: Int, background: Int): Boolean {
+        fun channel(value: Int, shift: Int) = (value shr shift) and 255
+        val br = channel(background, 16).toFloat(); val bg = channel(background, 8).toFloat(); val bb = channel(background, 0).toFloat()
+        val dr = channel(foreground, 16) - br; val dg = channel(foreground, 8) - bg; val db = channel(foreground, 0) - bb
+        val pr = channel(pixel, 16).toFloat(); val pg = channel(pixel, 8).toFloat(); val pb = channel(pixel, 0).toFloat()
+        val alpha = ((pr - br) * dr + (pg - bg) * dg + (pb - bb) * db) / (dr * dr + dg * dg + db * db)
+        return alpha >= .5f && maxOf(abs(pr - (br + alpha * dr)), abs(pg - (bg + alpha * dg)), abs(pb - (bb + alpha * db))) <= 2f
+    }
+
     private fun drawnBounds(label: String): List<String> {
         if (arguments.getString("record") == "1") lastRecorded.forEach { (key, rect) -> android.util.Log.i("AutoScroll635Record", "$label $key recorded=$rect") }
         dumpBounds(label)
@@ -192,6 +203,7 @@ class AutoScrollDrawnPlacementTest {
         val actual = cells()
         val image = InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot()
         val problems = mutableListOf<String>()
+        val background = image.getPixel(0, image.height / 2)
         var measured = 0
         actual.forEach { (key, rects) ->
             val art = rects[1]
@@ -210,10 +222,10 @@ class AutoScrollDrawnPlacementTest {
             var bottom = y + 1
             var left = x
             var right = x + 1
-            while (left > 0 && image.getPixel(left - 1, y) == color) left--
-            while (right < image.width && image.getPixel(right, y) == color) right++
-            while (top > 0 && image.getPixel(x, top - 1) == color) top--
-            while (bottom < image.height && image.getPixel(x, bottom) == color) bottom++
+            while (left > 0 && coverPixel(image.getPixel(left - 1, y), color, background)) left--
+            while (right < image.width && coverPixel(image.getPixel(right, y), color, background)) right++
+            while (top > 0 && coverPixel(image.getPixel(x, top - 1), color, background)) top--
+            while (bottom < image.height && coverPixel(image.getPixel(x, bottom), color, background)) bottom++
             android.util.Log.i("AutoScroll635", "$label $key layout=$art drawn=$top..$bottom")
             // Pixel coverage gives integer edges; tolerate half a pixel rounding.
             val firstRow = art.top == actual.values.minOf { it[1].top }
