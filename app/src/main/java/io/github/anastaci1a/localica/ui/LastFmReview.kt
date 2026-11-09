@@ -25,7 +25,7 @@ internal fun LastFmReviewList(matches: LastFmMatches, group: LastFmGroup, librar
     SettingsHeading("${group.label} (${rows.size})")
     GlassTextField(query, { query = it }, label = { Text("Search ${group.label.lowercase()}") },
         modifier = Modifier.fillMaxWidth().testTag("lastfm-list-search"), singleLine = true)
-    if (rows.isEmpty()) Text(if (query.isBlank()) "No songs in this group." else "No matching songs.")
+    if (rows.isEmpty()) SettingsDescription(if (query.isBlank()) "No songs in this group." else "No matching songs.")
     rows.drop(currentPage * 20).take(20).forEach { row -> key(row.remote.key) {
         var open by remember { mutableStateOf(false) }
         val anchor = rememberGlassAnchor()
@@ -95,13 +95,13 @@ internal fun LastFmDecision(row: LastFmMatchRow, library: List<Track>, onDismiss
             LastFmPickerChoice.Search -> { picking = true; selected = null }
         } }, header = {
             Text("${row.remote.artist} — ${row.remote.title}", style = MaterialTheme.typography.titleSmall)
-            problem?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-            Text("${row.remote.plays} scrobbles · ${row.reason}", style = MaterialTheme.typography.bodyMedium)
+            problem?.let { SettingsDescription(it, color = MaterialTheme.colorScheme.error) }
+            SettingsDescription("${row.remote.plays} scrobbles · ${row.reason}", style = MaterialTheme.typography.bodyMedium)
             if (picking) {
                 GlassTextField(query, { query = it; selected = null }, label = { Text("Search your entire library") },
                     modifier = Modifier.fillMaxWidth().testTag("lastfm-library-search"), singleLine = true)
-                Text("${filtered.size} library songs", style = MaterialTheme.typography.bodySmall)
-                if (filtered.isEmpty()) Text("No matching library songs. Try another search.")
+                SettingsDescription("${filtered.size} library songs", style = MaterialTheme.typography.bodySmall)
+                if (filtered.isEmpty()) SettingsDescription("No matching library songs. Try another search.")
             }
         }, footer = {
             if (picking && currentPage > 0) GlassActionButton(AppIcon.ActionChevronLeft, "Previous library songs") { page = currentPage - 1; selected = null }

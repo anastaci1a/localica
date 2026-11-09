@@ -134,7 +134,7 @@ The root Settings page has global search. Sub-pages omit its field and spacing. 
 
 Every settings row (links, switches, sliders, choices and headings) uses the shared row in `ui/PreferenceFrames.kt`. The leading icon sits in a fixed 40 dp slot and is centred vertically on the row, as is the trailing chevron or control, at any line count, font scale or density.
 
-All rows on a page start their text at the same x: flat rows take the glass links' 16 dp inner inset, and pages whose rows carry icons keep the empty slot on rows without one.
+Flat headings, descriptions, slider titles, endpoint labels and helper text use the page's 24 dp horizontal inset. Shared settings descriptions preserve caller typography and semantics. Glass link text keeps a 16 dp inner inset, plus the 40 dp slot only when its row has an icon. Icons and chevrons remain vertically centred.
 
 No two settings rows share an icon, and each says what its row is; the dedicated glyphs have `settings.*` [icon pack ids](icon-packs.md#icon-ids).
 

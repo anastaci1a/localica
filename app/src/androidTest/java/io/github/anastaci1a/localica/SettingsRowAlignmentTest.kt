@@ -25,7 +25,7 @@ import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
 
-/** #655: one row alignment on every settings page, at any line count and font scale. */
+/** #655 vertical centering and #741 historical horizontal positions at default and large font scales. */
 class SettingsRowAlignmentTest {
     @get:Rule val compose = createComposeRule()
 
@@ -83,8 +83,18 @@ class SettingsRowAlignmentTest {
         }
         val starts = parts.filter { it.first == SettingsRowPart.Text || it.first == SettingsRowPart.Heading }.map { it.second.left }
         if (requireRows) assertTrue("$label exposes no shared settings rows", starts.isNotEmpty())
-        if (starts.isNotEmpty()) assertEquals("$label: every row's text starts at the same x, got $starts",
-            0f, starts.max() - starts.min(), tolerance)
+        val pageEdge = rows.minOfOrNull { it.left } ?: starts.minOrNull() ?: return
+        parts.filter { it.first == SettingsRowPart.Text || it.first == SettingsRowPart.Heading }.forEach { (part, bounds) ->
+            val row = rows.filter { it.contains(bounds.center) }.minByOrNull { it.height }
+            val icon = row?.let { r -> parts.any { it.first == SettingsRowPart.Icon && r.contains(it.second.center) } } == true
+            val card = row?.let { r -> parts.any {
+                it.first == SettingsRowPart.Trailing && r.contains(it.second.center) &&
+                    it.second.width <= with(density) { 20.dp.toPx() }
+            } } == true
+            val expected = if (part == SettingsRowPart.Heading || !card) pageEdge else row!!.left +
+                with(density) { (if (icon) 56.dp else 16.dp).toPx() }
+            assertEquals("$label: historical x for $part (icon=$icon, card=$card)", expected, bounds.left, 0f)
+        }
     }
 
     private fun summaryLines(): Int {
@@ -94,7 +104,7 @@ class SettingsRowAlignmentTest {
         return layouts.single().lineCount
     }
 
-    @Test fun everySettingsPageSharesOneRowAlignmentAtDefaultAndLargeFontScale() {
+    @Test fun everySettingsPageKeepsHistoricalTextOffsetsAtDefaultAndLargeFontScale() {
         show()
         for (fontScale in listOf(1f, 2f)) for (page in pages) {
             compose.runOnIdle { scale = fontScale; category = page }

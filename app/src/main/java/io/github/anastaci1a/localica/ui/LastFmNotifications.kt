@@ -22,7 +22,7 @@ internal fun LastFmNotificationPreference() {
     }
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { allowed = NotificationManagerCompat.from(context).areNotificationsEnabled() }
     if (!allowed) SettingsEntry("Sync notifications") {
-        Text("Allow notifications to see sync progress and Stop after leaving Localica.")
+        SettingsDescription("Allow notifications to see sync progress and Stop after leaving Localica.")
         GlassActionButton(AppIcon.ActionInfo, "Enable sync notifications") {
             if (Build.VERSION.SDK_INT >= 33 && !asked && context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED)
                 permission.launch(Manifest.permission.POST_NOTIFICATIONS)

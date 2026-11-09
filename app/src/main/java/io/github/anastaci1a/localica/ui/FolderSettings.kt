@@ -48,9 +48,6 @@ private val settingsDestinations = listOf(
 /** Destination title to row icon; the #655 audit keeps every settings row icon distinct. */
 internal val settingsDestinationIcons: Map<String, AppIcon> get() = settingsDestinations.associate { it.title to it.icon }
 private fun destinationIcon(title: String): AppIcon = settingsDestinations.first { it.title == title }.icon
-/** Pages that link to child destinations (or list folders) show row icons, so every row there keeps the icon slot. */
-private fun reservesIconSlot(page: String?): Boolean =
-    page == null || page == "Folders to scan" || settingsDestinations.any { it.parent == page }
 
 private fun settingsTitle(title: String): String = when (title) {
     "Interface and gestures" -> "Interface"
@@ -142,8 +139,7 @@ fun FolderSettings(state: LibraryUiState, onDismiss: () -> Unit, onChooseFolder:
             }
             if (page == "Metadata read failures" && search.isBlank()) MetadataReadFailures(state, Modifier.weight(1f))
             else CompositionLocalProvider(LocalSettingsSearchFocus provides focus.takeIf { search.isBlank() },
-                LocalSettingsNavigate provides { destination -> path = settingsPath(destination) }, LocalSettingsRowMetrics provides
-                LocalSettingsRowMetrics.current.copy(iconSlot = reservesIconSlot(page))) { Column(Modifier.fillMaxWidth().weight(1f).onGloballyPositioned { focus.viewportTop = it.positionInWindow().y; focus.viewportHeight = it.size.height }
+                LocalSettingsNavigate provides { destination -> path = settingsPath(destination) }) { Column(Modifier.fillMaxWidth().weight(1f).onGloballyPositioned { focus.viewportTop = it.positionInWindow().y; focus.viewportHeight = it.size.height }
                 .controlVerticalScroll(scroll).padding(24.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (search.isNotBlank()) {
@@ -199,9 +195,9 @@ fun FolderSettings(state: LibraryUiState, onDismiss: () -> Unit, onChooseFolder:
                     }
                     "Last.fm" -> lastFmContent()
                     "Artist photos" -> artistPhotosContent()
-                    "Tag jobs and recovery" -> { Text("Interrupted edits keep a recovery copy until you resolve them."); extraContent() }
+                    "Tag jobs and recovery" -> { SettingsDescription("Interrupted edits keep a recovery copy until you resolve them."); extraContent() }
                     "Folders to scan" -> {
-                        Text("Your files stay where they are. Start scanning from More → Scan music.", style = MaterialTheme.typography.bodyMedium)
+                        SettingsDescription("Your files stay where they are. Start scanning from More → Scan music.", style = MaterialTheme.typography.bodyMedium)
                         LibraryNotice(state)
                         SettingsEntry("Music folders") { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         state.snapshot.folders.forEach { folder ->
@@ -216,8 +212,8 @@ fun FolderSettings(state: LibraryUiState, onDismiss: () -> Unit, onChooseFolder:
                         } }
                     }
                     "Folder options" -> state.snapshot.folders.firstOrNull { it.uri == shown.folderUri }?.let { folder ->
-                        Text(folderLabels.getValue(folder.uri), style = MaterialTheme.typography.titleMedium)
-                        Text("Removing a folder only removes it from Localica. Audio files are kept.")
+                        SettingsDescription(folderLabels.getValue(folder.uri), style = MaterialTheme.typography.titleMedium)
+                        SettingsDescription("Removing a folder only removes it from Localica. Audio files are kept.")
                         ExcludedFoldersPreference(folder, preferences, !state.scanning && !state.updatingFolders)
                         SettingsLink("Remove folder", anchor = removeOrigin, enabled = !state.scanning && !state.updatingFolders) { removing = folder }
                     }
@@ -227,7 +223,7 @@ fun FolderSettings(state: LibraryUiState, onDismiss: () -> Unit, onChooseFolder:
         } }
     }
     removing?.let { folder -> CompositionLocalProvider(LocalGlassOrigin provides removeOrigin) { GlassAlertDialog(onDismissRequest = { removing = null }, title = { Text("Remove ${folderLabels[folder.uri] ?: folder.name}?") },
-        text = { Text("Audio files are kept. Queues and playlists keep their references to these songs.") },
+        text = { SettingsDescription("Audio files are kept. Queues and playlists keep their references to these songs.") },
         confirmButton = { ActionTextButton(onClick = { onRemove(folder.uri); removing = null; back() }) { Text("Remove") } },
         dismissButton = { ActionTextButton(onClick = { removing = null }) { Text("Cancel") } }) } }
 }
@@ -245,13 +241,13 @@ private fun ScannerConfiguration(preferences: ScanPreferences, state: LibraryUiS
         destinationIcon("Metadata read failures"), onClick = failures)
     SettingsHeading("Music library")
     BooleanPreference("Include subfolders", options.includeSubfolders) { options = options.copy(includeSubfolders = it); preferences.write(options) }
-    Text("Off scans only each chosen folder; on includes nested folders. Both scans skip excluded paths. Set exclusions in Library and tags → Folders to scan → choose a folder → Excluded subfolders.", style = MaterialTheme.typography.bodySmall)
+    SettingsDescription("Off scans only each chosen folder; on includes nested folders. Both scans skip excluded paths. Set exclusions in Library and tags → Folders to scan → choose a folder → Excluded subfolders.", style = MaterialTheme.typography.bodySmall)
     SettingsLink("Exclude short files", if (options.minimumDurationSeconds == 0) "Off" else "Shorter than ${options.minimumDurationSeconds} seconds", anchor = durationOrigin) { durationOpen = true }
-    Text("Unknown durations are kept. Quick Scan keeps indexed songs. Run Full scan to apply changed rules to them.", style = MaterialTheme.typography.bodySmall)
+    SettingsDescription("Unknown durations are kept. Quick Scan keeps indexed songs. Run Full scan to apply changed rules to them.", style = MaterialTheme.typography.bodySmall)
     SettingsHeading("On launch")
     SettingsEntry("Quick Scan on launch") { BooleanPreference("Quick Scan", onLaunch) { onLaunch = it; preferences.scanOnLaunch = it } }
     SettingsEntry("Full scan on launch") { BooleanPreference("Full scan", fullOnLaunch) { fullOnLaunch = it; preferences.fullScanOnLaunch = it } }
-    Text("Both are off by default. Quick Scan finds new songs; Full scan also refreshes tags and removes missing files. Enable both to run Quick Scan first, then Full scan.", style = MaterialTheme.typography.bodySmall)
+    SettingsDescription("Both are off by default. Quick Scan finds new songs; Full scan also refreshes tags and removes missing files. Enable both to run Quick Scan first, then Full scan.", style = MaterialTheme.typography.bodySmall)
     if (durationOpen) CompositionLocalProvider(LocalGlassOrigin provides durationOrigin) {
         var input by remember { mutableStateOf(options.minimumDurationSeconds.toString()) }
         val seconds = input.toIntOrNull()
@@ -277,7 +273,7 @@ private fun ExcludedFoldersPreference(folder: FolderSelection, preferences: Scan
         val valid = lines.all { !it.startsWith('/') && it.split('/').none { part -> part in setOf("", ".", "..") } }
         GlassAlertDialog(onDismissRequest = { open = false }, title = { Text("Excluded subfolders") }, text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text("One path per line, relative to ${folder.name}. For example: Podcasts or Albums/Demos. No wildcards. Both scans skip these paths when Include subfolders is on. Run Full scan to remove indexed songs from excluded paths.")
+                SettingsDescription("One path per line, relative to ${folder.name}. For example: Podcasts or Albums/Demos. No wildcards. Both scans skip these paths when Include subfolders is on. Run Full scan to remove indexed songs from excluded paths.")
                 GlassTextField(input, { input = it }, label = { Text("Subfolder paths") }, minLines = 3, maxLines = 6, isError = !valid)
             }
         }, confirmButton = { ActionTextButton(enabled = valid, onClick = { paths = lines; preferences.excluded(folder.uri, paths); open = false }) { Text("Save") } },
