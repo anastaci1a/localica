@@ -28,13 +28,13 @@ import io.github.anastaci1a.localica.browse.*
 @Composable
 internal fun BrowseItemLayout(item: BrowserItem, style: BrowseStyle, geometry: BrowseCellGeometry,
     lookahead: LookaheadScope, reducedMotion: Boolean, menu: @Composable (Boolean) -> Unit, trackNumber: String? = null, pinch: BrowsePinchMotion? = null, artworkAnchor: GlassAnchor? = null, showInformation: Boolean = true, inheritedInformation: Map<io.github.anastaci1a.localica.navigation.MediaKind, BrowseStyle> = emptyMap(), itemIndex: Int = 0, loadingReveal: BrowseLoadingCell? = null, artistOnlyLoading: Boolean = false, mutablePosition: Int? = null,
-    outline: MediaItemOutlineHolder? = null) {
+    outline: MediaItemOutlineHolder? = null, endpointMeasurer: androidx.compose.ui.text.TextMeasurer? = null) {
     val gallery = style.presentation != Presentation.List
     val from = pinch?.visualSource
     val geometryClock = pinch?.progress.takeIf { from != null }
     val geometryProgress = remember(geometryClock) { { geometryClock?.value ?: 1f } }
     val progress = geometryProgress()
-    val measureItem = rememberBrowseItemMeasure(item, trackNumber, showInformation, inheritedInformation, itemIndex, mutablePosition)
+    val measureItem = rememberBrowseItemMeasure(item, trackNumber, showInformation, inheritedInformation, itemIndex, mutablePosition, endpointMeasurer)
     val foreground = androidx.compose.material3.LocalContentColor.current
     val secondary = MaterialTheme.colorScheme.onSurfaceVariant
     if (pinch != null) {

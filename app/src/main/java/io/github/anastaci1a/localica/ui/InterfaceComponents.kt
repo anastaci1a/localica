@@ -18,7 +18,7 @@ import io.github.anastaci1a.localica.navigation.MainTab
 internal fun ActionIcon(resource: AppIcon, label: String, enabled: Boolean = true, anchor: GlassAnchor? = null,
     glass: Boolean = true, quiet: Boolean = false, iconSize: androidx.compose.ui.unit.Dp = 24.dp,
     onLongClickLabel: String? = null, onLongClick: (() -> Unit)? = null, quietInputEnabled: Boolean = true,
-    onClick: () -> Unit) {
+    painter: androidx.compose.ui.graphics.painter.Painter? = null, onClick: () -> Unit) {
     val source = LocalFrostedBackdrop.current
     SideEffect { anchor?.quiet = quiet || !glass; if (!glass) anchor?.cornerRadius = null; anchor?.source = source; anchor?.face = { Icon(appIconPainter(resource), null, Modifier.size(iconSize)) } }
     val modifier = Modifier.size(if (glass) CompactControlSize else 48.dp).then(if (anchor != null) Modifier.glassAnchor(anchor) else Modifier)
@@ -39,14 +39,14 @@ internal fun ActionIcon(resource: AppIcon, label: String, enabled: Boolean = tru
             .semantics { contentDescription = label }
         else Modifier.clearAndSetSemantics { }
         Box(modifier.alpha(opacity).then(input), contentAlignment = androidx.compose.ui.Alignment.Center) {
-            Icon(appIconPainter(resource), null, Modifier.size(iconSize))
+            Icon(painter ?: appIconPainter(resource), null, Modifier.size(iconSize))
         }
     } else if (glass) LiquidGlassSurface(modifier, pressFeedback = enabled) {
         anchor?.captureInk()
-        ActionIconButton(onClick, Modifier.fillMaxSize(), enabled = enabled) { Icon(appIconPainter(resource), label, Modifier.size(iconSize)) }
+        ActionIconButton(onClick, Modifier.fillMaxSize(), enabled = enabled) { Icon(painter ?: appIconPainter(resource), label, Modifier.size(iconSize)) }
     } else ActionIconButton(onClick, modifier, enabled = enabled) {
         anchor?.captureInk()
-        Icon(appIconPainter(resource), label, Modifier.size(iconSize))
+        Icon(painter ?: appIconPainter(resource), label, Modifier.size(iconSize))
     }
 }
 internal fun MainTab.icon(): AppIcon = when (this) {

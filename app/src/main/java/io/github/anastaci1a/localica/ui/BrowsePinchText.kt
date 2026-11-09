@@ -38,9 +38,10 @@ internal data class BrowsePinchEndpoint(
 /** One endpoint measurer serves live cells and source cells virtualized by reflow. */
 @Composable
 internal fun rememberBrowseItemMeasure(item: BrowserItem, trackNumber: String?,
-    showInformation: Boolean, inherited: Map<MediaKind, BrowseStyle>, index: Int = 0, mutablePosition: Int? = null): (BrowseStyle, Int, Int) -> BrowsePinchEndpoint {
+    showInformation: Boolean, inherited: Map<MediaKind, BrowseStyle>, index: Int = 0, mutablePosition: Int? = null,
+    endpointMeasurer: androidx.compose.ui.text.TextMeasurer? = null): (BrowseStyle, Int, Int) -> BrowsePinchEndpoint {
     val density = LocalDensity.current
-    val measurer = rememberTextMeasurer()
+    val measurer = endpointMeasurer ?: rememberTextMeasurer()
     val titleStyle = MaterialTheme.typography.titleMedium
     val infoStyle = MaterialTheme.typography.bodySmall
     val numberStyle = MaterialTheme.typography.bodyMedium

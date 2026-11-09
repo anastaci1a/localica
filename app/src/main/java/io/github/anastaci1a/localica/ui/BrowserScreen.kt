@@ -933,6 +933,8 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
             else -> done(false)
         }
     }
+    val endpointMeasurer = androidx.compose.ui.text.rememberTextMeasurer()
+    val actionPainter = appIconPainter(AppIcon.ActionEllipsis)
     var contextMenu by remember { mutableStateOf<String?>(null) }
     // Rows whose action menu opened once keep it mounted (return morph, dialogs, saveable
     // workflow): one saveable set for the list rather than one registry entry per row.
@@ -1225,7 +1227,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                         val itemMenu: @Composable (Boolean) -> Unit = { showButton ->
                             Box {
                                 if (showButton) ActionIcon(AppIcon.ActionEllipsis, "Actions for " + item.title, anchor = menuAnchor,
-                                    quietInputEnabled = displayedStyle.presentation == Presentation.List, quiet = true, onLongClickLabel = holdLabel,
+                                    quietInputEnabled = displayedStyle.presentation == Presentation.List, quiet = true, painter = actionPainter, onLongClickLabel = holdLabel,
                                     onLongClick = onHold.takeIf { !queryPending && (item.row == null || enabled) }) { menuAnchor.prepareContextPlacement(); contextMenu = item.key }
                                 val menuOpen = contextMenu == item.key
                                 if (menuOpen || actionsMounted) {
@@ -1290,7 +1292,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                                 showInformation = popupDismiss == null, inheritedInformation = inheritedInformation, itemIndex = itemIndex,
                                 loadingReveal = loadingCell, artistOnlyLoading = artistOnlyLoading, mutablePosition = mutablePositions[item.key],
                                 trackNumber = if (route.collection?.kind == MediaKind.Album) item.row?.track?.trackNumber?.toString() ?: (itemIndex + 1).toString() else null, pinch = pinchMotion, artworkAnchor = menuAnchor,
-                                outline = itemOutline)
+                                outline = itemOutline, endpointMeasurer = endpointMeasurer)
                         }
 
                     }
