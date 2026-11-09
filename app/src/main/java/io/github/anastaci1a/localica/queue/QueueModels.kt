@@ -51,7 +51,7 @@ data class QueueLibrary(val queues: List<ListeningQueue> = emptyList(), val acti
     val active: ListeningQueue? get() = queues.firstOrNull { it.id == activeId }
     fun update(queue: ListeningQueue) = copy(queues = queues.map { if (it.id == queue.id) queue else it })
 }
-data class PendingQueue(val tracks: List<Track>, val selectedIndex: Int, val suggestedRemoval: String?, val expandPlayer: Boolean = true, val sourceName: String = "All Songs", val playlistOrigins: List<String?> = emptyList())
+data class PendingQueue(val tracks: List<Track>, val selectedIndex: Int, val suggestedRemoval: String?, val expandPlayer: Boolean = true, val sourceName: String = "All Songs", val playlistOrigins: List<String?> = emptyList(), val toastAction: SongTap? = null)
 data class QueueUiState(val library: QueueLibrary = QueueLibrary(), val loading: Boolean = true,
     val settings: QueueSettings = QueueSettings(), val pending: PendingQueue? = null, val problem: String? = null, val playerRequest: Long = 0, val browsedId: String? = null)
 

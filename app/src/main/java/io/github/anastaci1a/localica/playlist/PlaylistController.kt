@@ -10,7 +10,8 @@ import kotlinx.coroutines.flow.*
 class PlaylistController(private val dao: PlaylistDao,
     scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
     private val coverDirectory: java.io.File? = null,
-    private val sortSnapshot: (suspend () -> io.github.anastaci1a.localica.library.LibrarySnapshot)? = null) {
+    private val sortSnapshot: (suspend () -> io.github.anastaci1a.localica.library.LibrarySnapshot)? = null,
+    private val toasts: io.github.anastaci1a.localica.toast.ToastQueue? = null) {
     private data class Edit(val change: suspend (List<ManualPlaylist>) -> List<ManualPlaylist>, val complete: (Boolean) -> Unit)
     private val mutable = MutableStateFlow(PlaylistState())
     val state = mutable.asStateFlow()
