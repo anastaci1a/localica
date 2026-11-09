@@ -8,6 +8,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
 import io.github.anastaci1a.localica.localicaComposeRule as createComposeRule
@@ -27,6 +28,7 @@ class NavbarHapticsTest {
     private var pageDragging by mutableStateOf(false)
     private var reduced by mutableStateOf(false)
     private var selections = 0
+    private var reselections = 0
 
     private fun fixture(overflow: Boolean = false, rtl: Boolean = false, deferSelection: Boolean = false) {
         val choices = if (overflow) MainTab.entries.take(8) else tabs
@@ -35,18 +37,26 @@ class NavbarHapticsTest {
                 LocalLayoutDirection provides if (rtl) LayoutDirection.Rtl else LayoutDirection.Ltr) {
                 Box(Modifier.size(if (overflow) 260.dp else 300.dp, 64.dp).testTag("haptic-tabs")) {
                     SlidingTabs(choices, choices[page.toInt().coerceIn(choices.indices)], { page },
-                        pageDragging = pageDragging) { selections++; if (!deferSelection) page = choices.indexOf(it).toFloat() }
+                        pageDragging = pageDragging, onReselect = { reselections++ }) { selections++; if (!deferSelection) page = choices.indexOf(it).toFloat() }
                 }
             }
         } }
     }
 
-    @Test fun tapReselectAndSemanticActivationEachEmitExactlyOneWeakPulse() {
+    @Test fun tapAndReselectEachReleaseOneCommitWhileSemanticActivationStaysWeak() {
         fixture()
         compose.onNodeWithTag("tab-option-1").performTouchInput { click() }
         compose.onNodeWithTag("tab-option-1").performTouchInput { click() }
-        compose.onNodeWithTag("tab-option-0").performClick()
-        compose.runOnIdle { assertEquals(List(3) { ControlHaptic.Weak }, pulses) }
+        // #664: every committing finger release, reselection included, drops exactly once.
+        compose.runOnIdle {
+            assertEquals(List(2) { listOf(ControlHaptic.Weak, ControlHaptic.Strong) }.flatten(), pulses)
+            assertEquals(1, reselections)
+        }
+        // performClick injects a touch; the semantics action is the accessible activation path.
+        compose.onNodeWithTag("tab-option-0").performSemanticsAction(SemanticsActions.OnClick)
+        compose.runOnIdle {
+            assertEquals(List(2) { listOf(ControlHaptic.Weak, ControlHaptic.Strong) }.flatten() + ControlHaptic.Weak, pulses)
+        }
     }
 
     @Test fun pageSwipeTrackingProgrammaticChangeSettlingAndRecompositionStaySilent() {
@@ -89,7 +99,9 @@ class NavbarHapticsTest {
         }
         compose.runOnIdle { assertEquals(listOf(ControlHaptic.Weak), pulses) }
         compose.onNodeWithTag("tab-option-0").performTouchInput { click() }
-        compose.runOnIdle { assertEquals(List(2) { ControlHaptic.Weak }, pulses) }
+        compose.runOnIdle {
+            assertEquals(List(2) { ControlHaptic.Weak } + ControlHaptic.Strong, pulses)
+        }
     }
 
     @Test fun secondPointerAfterFingerDownCommitAddsNoCommitOrPulse() {
@@ -117,8 +129,8 @@ class NavbarHapticsTest {
             assertEquals(listOf(ControlHaptic.Weak), pulses)
             option.performTouchInput { up() }
             compose.mainClock.advanceTimeByFrame()
-            assertEquals("A tap release adds no second commit or pulse", 1, selections)
-            assertEquals(listOf(ControlHaptic.Weak), pulses)
+            assertEquals("A tap release adds no second commit", 1, selections)
+            assertEquals("A tap release drops exactly once", listOf(ControlHaptic.Weak, ControlHaptic.Strong), pulses)
         } finally { compose.mainClock.autoAdvance = true }
     }
 
@@ -158,8 +170,9 @@ class NavbarHapticsTest {
             assertEquals(0, selections)
             lens.performTouchInput { up() }
             compose.mainClock.advanceTimeByFrame()
-            assertEquals(listOf(ControlHaptic.Weak), pulses)
-            assertEquals(0f, page)
+            assertEquals("Releasing the selected tab reselects it and drops once",
+                listOf(ControlHaptic.Weak, ControlHaptic.Strong), pulses)
+            assertEquals(0f, page); assertEquals(0, selections); assertEquals(1, reselections)
         } finally { compose.mainClock.autoAdvance = true }
     }
 
@@ -175,7 +188,8 @@ class NavbarHapticsTest {
             assertEquals(0f, page); assertTrue(pulses.isEmpty())
             option.performTouchInput { up() }
             compose.mainClock.advanceTimeByFrame()
-            assertEquals(2f, page); assertEquals(listOf(ControlHaptic.Weak), pulses)
+            // The press stayed silent, so the committing release owns the only pulse.
+            assertEquals(2f, page); assertEquals(listOf(ControlHaptic.Strong), pulses)
         } finally { compose.mainClock.autoAdvance = true }
     }
 
@@ -233,8 +247,11 @@ class NavbarHapticsTest {
         val target = compose.onNodeWithTag("tab-option-1").getUnclippedBoundsInRoot()
         assertEquals((target.left.value + target.right.value) / 2f,
             (lens.left.value + lens.right.value) / 2f, 1f)
-        // Tap, finger-down commit, then the cancel restores Library without a pulse.
-        compose.runOnIdle { assertEquals(3, selections); assertEquals(List(2) { ControlHaptic.Weak }, pulses) }
+        // Tap (press and drop), finger-down commit, then the cancel restores Library without a drop.
+        compose.runOnIdle {
+            assertEquals(3, selections)
+            assertEquals(listOf(ControlHaptic.Weak, ControlHaptic.Strong, ControlHaptic.Weak), pulses)
+        }
     }
 
     @Test fun overflowVisibleLensOriginDragsWithoutScrollingStrip() = overflowLensDrag(false)
@@ -274,7 +291,7 @@ class NavbarHapticsTest {
         assertTrue(scrollValue() > before)
         compose.runOnIdle { assertEquals(0f, page); assertTrue(pulses.isEmpty()) }
         compose.onNodeWithTag("tab-option-2").performTouchInput { click() }
-        compose.runOnIdle { assertEquals(2f, page); assertEquals(listOf(ControlHaptic.Weak), pulses) }
+        compose.runOnIdle { assertEquals(2f, page); assertEquals(listOf(ControlHaptic.Strong), pulses) }
     }
 
     @Test fun verticalMotionAddsNoOptionTicksAfterTheLensPress() {
@@ -286,5 +303,86 @@ class NavbarHapticsTest {
             assertEquals(0f, page)
             assertEquals(listOf(ControlHaptic.Weak, ControlHaptic.Strong), pulses)
         }
+    }
+
+    // #664 reopen: one commit buzz on every committing release, none on a real cancel.
+
+    @Test fun shortDragInsideSlopReleaseCommitsOnce() {
+        reduced = true
+        fixture()
+        compose.onNodeWithTag("tab-option-2").performTouchInput {
+            down(center); moveBy(Offset(3f, 1f)); moveBy(Offset(-1f, 2f)); up()
+        }
+        compose.runOnIdle {
+            assertEquals(2f, page); assertEquals(1, selections)
+            assertEquals(listOf(ControlHaptic.Weak, ControlHaptic.Strong), pulses)
+        }
+    }
+
+    @Test fun shortAxialDragJustPastSlopReleaseCommitsOnce() {
+        reduced = true
+        fixture()
+        compose.onNodeWithTag("tab-option-1").performTouchInput {
+            down(center); moveBy(Offset(viewConfiguration.touchSlop + 4f, 0f)); up()
+        }
+        compose.runOnIdle {
+            assertEquals(1f, page)
+            assertEquals(listOf(ControlHaptic.Weak, ControlHaptic.Strong), pulses)
+        }
+    }
+
+    @Test fun holdAndReleaseOnOtherAndSelectedTabsEachCommitOnce() {
+        reduced = true
+        fixture()
+        compose.onNodeWithTag("tab-option-1").performTouchInput { down(center); advanceEventTime(600); up() }
+        compose.runOnIdle { assertEquals(1f, page); assertEquals(listOf(ControlHaptic.Weak, ControlHaptic.Strong), pulses) }
+        compose.onNodeWithTag("tab-option-1").performTouchInput { down(center); advanceEventTime(600); up() }
+        compose.runOnIdle {
+            assertEquals(1f, page)
+            assertEquals(List(2) { listOf(ControlHaptic.Weak, ControlHaptic.Strong) }.flatten(), pulses)
+        }
+    }
+
+    @Test fun tapsReleasedWhileTheLensIsStillSettlingEachCommitOnce() {
+        fixture(deferSelection = true)
+        compose.mainClock.autoAdvance = false
+        try {
+            fun tapNow(index: Int) {
+                compose.onNodeWithTag("tab-option-$index").performTouchInput { down(center) }
+                compose.mainClock.advanceTimeByFrame()
+                compose.onNodeWithTag("tab-option-$index").performTouchInput { up() }
+                compose.mainClock.advanceTimeByFrame()
+            }
+            // The page never settles (deferred selection), so each lens spring is mid-flight.
+            tapNow(2); tapNow(1); tapNow(1); tapNow(0)
+            assertEquals(List(4) { listOf(ControlHaptic.Weak, ControlHaptic.Strong) }.flatten(), pulses)
+        } finally { compose.mainClock.autoAdvance = true }
+    }
+
+    @Test fun overflowOtherOriginHoldAndReleaseCommitsOnce() {
+        reduced = true
+        fixture(overflow = true)
+        compose.onNodeWithTag("tab-option-2").performTouchInput { down(center); advanceEventTime(600); up() }
+        compose.runOnIdle { assertEquals(2f, page); assertEquals(listOf(ControlHaptic.Strong), pulses) }
+    }
+
+    @Test fun systemCancelOfTapHoldOrOverflowPressNeverDrops() {
+        reduced = true
+        fixture()
+        compose.onNodeWithTag("tab-option-2").performTouchInput { down(center); cancel() }
+        compose.onNodeWithTag("tab-option-1").performTouchInput { down(center); advanceEventTime(600); cancel() }
+        compose.onNodeWithTag("tab-option-0").performTouchInput { down(center); moveBy(Offset(2f, 0f)); cancel() }
+        compose.runOnIdle {
+            assertEquals(0f, page)
+            assertEquals(List(3) { ControlHaptic.Weak }, pulses)
+            assertEquals(0, reselections)
+        }
+    }
+
+    @Test fun systemCancelOfOverflowOtherOriginPressStaysSilent() {
+        reduced = true
+        fixture(overflow = true)
+        compose.onNodeWithTag("tab-option-2").performTouchInput { down(center); cancel() }
+        compose.runOnIdle { assertEquals(0f, page); assertTrue(pulses.isEmpty()) }
     }
 }
