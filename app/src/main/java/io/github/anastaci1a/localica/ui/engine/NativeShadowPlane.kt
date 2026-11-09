@@ -75,7 +75,7 @@ internal fun SurfaceView.retainNativeWindow()=(this as SurfaceNode).retainWindow
 internal fun SurfaceView.followWindow(motion: PopupWindowMotion)=(this as SurfaceNode).follow(motion.expansion,Curve.constant(1f),requireNotNull(motion.bounds),motion.popupCurve)
 internal fun SurfaceView.transferWindow(plane: ShadowPlane)=(this as SurfaceNode).transfer(plane,motionProfileId(io.github.anastaci1a.localica.ui.spec.MotionProfile.Control))
 internal fun SurfaceView.ownsWindow(plane: ShadowPlane)=(this as SurfaceNode).owns(plane)
-internal fun SurfaceView.returnPlane()=(this as SurfaceNode).sourcePlane
+internal fun SurfaceView.returnPlane()=(this as SurfaceNode).sourceReturnPlane
 /** The destination must submit its owned field after transfer, before the native host is released. */
 internal suspend fun SurfaceView.awaitWindowField(plane: ShadowPlane): Boolean {
     val node=this as SurfaceNode
