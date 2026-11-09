@@ -62,7 +62,9 @@ class LastFmController(private val store: LastFmStore, private val syncer: LastF
                         }
                     } else {
                         if (statsSnapshot !== snapshot) {
-                            stats = withContext(Dispatchers.Default) { snapshot.accountStats() }
+                            val cached = summaryState.value?.takeIf { it.username == snapshot.username &&
+                                it.syncedAt == snapshot.syncedAt && it.stats.entries == snapshot.tracks.size }
+                            stats = cached?.stats ?: withContext(Dispatchers.Default) { snapshot.accountStats() }
                             statsSnapshot = snapshot
                         }
                         val cached = summaryState.value?.takeIf { it.username == snapshot.username && it.syncedAt == snapshot.syncedAt }

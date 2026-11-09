@@ -12,6 +12,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import io.github.anastaci1a.localica.BuildConfig
 import io.github.anastaci1a.localica.ui.spec.*
@@ -33,7 +34,10 @@ internal fun <T : Any> rememberAsyncValue(vararg inputs: Any?, compute: () -> T)
         result.value = withContext(Dispatchers.Default) {
             if (BuildConfig.DEBUG) Trace.beginSection("Localica.AsyncSection.prepare")
             try {
-                if (BuildConfig.DEBUG) StrictMode.noteSlowCall("Async section preparation must stay off main")
+                if (BuildConfig.DEBUG && android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) {
+                    StrictMode.noteSlowCall("Async section preparation on main")
+                    error("Async section preparation must stay off main")
+                }
                 compute()
             } finally { if (BuildConfig.DEBUG) Trace.endSection() }
         }
@@ -45,7 +49,7 @@ internal fun <T : Any> rememberAsyncValue(vararg inputs: Any?, compute: () -> T)
 @Composable
 internal fun <T : Any> AsyncSection(value: T?, modifier: Modifier = Modifier, rowCount: Int = 0, content: @Composable (T) -> Unit) {
     val reduced = LocalReducedMotion.current
-    val spec = LocalUiSpec.current.spec
+    val spec = StockUiSpec
     val fade = (spec.motion.getValue(MotionProfile.ControlOff) as MotionProfileSpec).durationMs
     val spinner = remember { Animatable(if (value == null) 1f else 0f) }
     var presented by remember { mutableStateOf(value != null) }
@@ -80,13 +84,13 @@ private val LocalAsyncSectionClock = staticCompositionLocalOf<Animatable<Float, 
 @Composable
 internal fun AsyncSectionRow(index: Int, content: @Composable () -> Unit) {
     val clock = LocalAsyncSectionClock.current
-    val rowHeight = LocalUiSpec.current.spec.control.getValue(ControlSize.PreferenceRow).value
+    val rowHeight = StockUiSpec.control.getValue(ControlSize.PreferenceRow).value
     val reduced = LocalReducedMotion.current
     val delay = BrowseLoadingMotion.delayMillis(0f, index * rowHeight)
     val opacity = remember(clock, delay, reduced) { derivedStateOf {
         if (reduced || clock == null) 1f else BrowseLoadingMotion.fade(clock.value, delay)
     } }
-    Column(Modifier.graphicsLayer { alpha = opacity.value }, verticalArrangement = Arrangement.spacedBy(LocalUiSpec.current.spec.space.getValue(Space.Base))) { content() }
+    Column(Modifier.graphicsLayer { alpha = opacity.value }, verticalArrangement = Arrangement.spacedBy(StockUiSpec.space.getValue(Space.Base))) { content() }
 }
 
 /** The final text line and loading material reserve the same height in every host. */
@@ -95,7 +99,7 @@ internal fun AsyncValueText(value: String?, placeholder: String, modifier: Modif
     style: androidx.compose.ui.text.TextStyle = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
     maxLines: Int = Int.MAX_VALUE, minLines: Int = 1, softWrap: Boolean = true,
     overflow: androidx.compose.ui.text.style.TextOverflow = androidx.compose.ui.text.style.TextOverflow.Clip) {
-    val corner = LocalUiSpec.current.px(Space.Tight)
+    val corner = with(LocalDensity.current) { StockUiSpec.space.getValue(Space.Tight).toPx() }
     Box(modifier) {
         val textSemantics = if (value == null) Modifier.clearAndSetSemantics { } else Modifier
         androidx.compose.material3.Text(value ?: placeholder, textSemantics.graphicsLayer { alpha = if (value == null) 0f else 1f },

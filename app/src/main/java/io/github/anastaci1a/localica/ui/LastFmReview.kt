@@ -19,39 +19,45 @@ internal fun LastFmReviewList(matches: LastFmMatches, group: LastFmGroup, librar
     var query by rememberSaveable(group) { mutableStateOf("") }
     var page by rememberSaveable(group, query) { mutableIntStateOf(0) }
     var skipped by rememberSaveable { mutableStateOf(emptyList<String>()) }
-    val prepared by rememberAsyncValue(matches, group, query, skipped, mappings) {
-        val rows = matches.rows(group, mappings).let { rows -> if (query.isBlank()) rows else rows.filter { it.contains(query) } }
-        if (skipped.isEmpty()) rows else skipped.toHashSet().let { deferred -> rows.sortedBy { it.remote.key in deferred } }
+    val groupRows by rememberAsyncValue(matches, group, mappings) { matches.rows(group, mappings) }
+    val prepared = groupRows?.let { base ->
+        val filtered by rememberAsyncValue(base, query, skipped) {
+            val tokens = LastFmNames.text(query).split(' ').filter(String::isNotBlank)
+            val rows = if (tokens.isEmpty()) base else base.filter { it.containsTokens(tokens) }
+            if (skipped.isEmpty()) rows else skipped.toHashSet().let { deferred -> rows.sortedBy { it.remote.key in deferred } }
+        }
+        filtered
     }
     var hasLoaded by remember { mutableStateOf(false) }
     if (prepared != null) hasLoaded = true
     if (hasLoaded) {
-    header()
-    SettingsHeading("${group.label} (${prepared?.size ?: "…"})")
-    GlassTextField(query, { query = it }, label = { Text("Search ${group.label.lowercase()}") },
-        modifier = Modifier.fillMaxWidth().testTag("lastfm-list-search"), singleLine = true)
+        header()
+        SettingsHeading("${group.label} (${prepared?.size ?: "…"})")
+        GlassTextField(query, { query = it }, label = { Text("Search ${group.label.lowercase()}") },
+            modifier = Modifier.fillMaxWidth().testTag("lastfm-list-search"), singleLine = true)
     }
     AsyncSection(prepared, rowCount = minOf(20, prepared?.size ?: 0)) { rows ->
-    val currentPage = page.coerceAtMost((rows.size - 1).coerceAtLeast(0) / 20)
-    if (rows.isEmpty()) Text(if (query.isBlank()) "No songs in this group." else "No matching songs.")
-    rows.subList(currentPage * 20, minOf(rows.size, (currentPage + 1) * 20)).forEachIndexed { index, row -> key(row.remote.key) {
-        AsyncSectionRow(index) {
-        var open by remember { mutableStateOf(false) }
-        val anchor = rememberGlassAnchor()
-        SettingsLink("${row.remote.artist} — ${row.remote.title}",
-            "${row.remote.plays} scrobbles · ${row.reason}" + if (row.remote.key in skipped) " · Skipped for now" else "",
-            anchor = anchor, modifier = Modifier.testTag("lastfm-match:${row.remote.key}")) { open = true }
-        if (row.canUndo) GlassActionButton(AppIcon.ActionChevronLeft, "Undo match for ${row.remote.title}") { onUndo(row.remote.key) }
-        if (open) CompositionLocalProvider(LocalGlassOrigin provides anchor) {
-            LastFmDecision(row, library, onDismiss = { open = false }, onChoose = {
-                val saved = onMap(row.remote.key, it); if (saved) open = false; saved
-            }, onSkip = {
-                skipped = skipped.filterNot { it == row.remote.key } + row.remote.key; open = false
-            })
-        }
-    } } }
-    if (currentPage > 0) GlassActionButton(AppIcon.ActionChevronLeft, "Previous matches") { page = currentPage - 1 }
-    if ((currentPage + 1) * 20 < rows.size) GlassActionButton(AppIcon.ActionArrowRight, "Show more matches") { page = currentPage + 1 }
+        val currentPage = page.coerceAtMost((rows.size - 1).coerceAtLeast(0) / 20)
+        if (rows.isEmpty()) Text(if (query.isBlank()) "No songs in this group." else "No matching songs.")
+        rows.subList(currentPage * 20, minOf(rows.size, (currentPage + 1) * 20)).forEachIndexed { index, row -> key(row.remote.key) {
+            AsyncSectionRow(index) {
+                var open by remember { mutableStateOf(false) }
+                val anchor = rememberGlassAnchor()
+                SettingsLink("${row.remote.artist} — ${row.remote.title}",
+                    "${row.remote.plays} scrobbles · ${row.reason}" + if (row.remote.key in skipped) " · Skipped for now" else "",
+                    anchor = anchor, modifier = Modifier.testTag("lastfm-match:${row.remote.key}")) { open = true }
+                if (row.canUndo) GlassActionButton(AppIcon.ActionChevronLeft, "Undo match for ${row.remote.title}") { onUndo(row.remote.key) }
+                if (open) CompositionLocalProvider(LocalGlassOrigin provides anchor) {
+                    LastFmDecision(row, library, onDismiss = { open = false }, onChoose = {
+                        val saved = onMap(row.remote.key, it); if (saved) open = false; saved
+                    }, onSkip = {
+                        skipped = skipped.filterNot { it == row.remote.key } + row.remote.key; open = false
+                    })
+                }
+            }
+        } }
+        if (currentPage > 0) GlassActionButton(AppIcon.ActionChevronLeft, "Previous matches") { page = currentPage - 1 }
+        if ((currentPage + 1) * 20 < rows.size) GlassActionButton(AppIcon.ActionArrowRight, "Show more matches") { page = currentPage + 1 }
     }
 }
 
@@ -72,9 +78,12 @@ internal fun LastFmDecision(row: LastFmMatchRow, library: List<Track>, onDismiss
     var query by rememberSaveable(row.remote.key) { mutableStateOf("") }
     var page by rememberSaveable(query) { mutableIntStateOf(0) }
     var selected by rememberSaveable(row.remote.key) { mutableStateOf(row.selectedId) }
-    val prepared by rememberAsyncValue(library, query, picking, row) {
-        val available = library.associateBy { it.id }
-        Triple(if (picking) libraryMatches(library, query) else emptyList(), available, row.candidates.filter { it.id in available })
+    val catalog by rememberAsyncValue(library) { library.associateBy { it.id } }
+    val prepared = catalog?.let { available ->
+        val result by rememberAsyncValue(available, query, picking, row) {
+            Triple(if (picking) libraryMatches(library, query) else emptyList(), available, row.candidates.filter { it.id in available })
+        }
+        result
     }
     val filtered = prepared?.first.orEmpty()
     val available = prepared?.second.orEmpty()
