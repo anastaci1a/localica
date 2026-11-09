@@ -135,7 +135,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     // Header controls already sample this scene before lyrics open. Older
     // adapters need its prepared pixels whenever that header is visible too.
     val lyricBackdrop = rememberFrostedBackdrop(listOf(artwork, settings.artworkLayout, settings.glass), p > .7f, dark = lightInk, lightMix = lightMix,
-        rasterRequired = noneHeaderPolicy && p == 1f)
+        rasterRequired = noneHeaderPolicy && p > .7f && !washHeader)
     // Only the complete scene needs prepared pixels. The wash is a GPU backing
     // for the cover's sampling source, not a second full-window CPU snapshot.
     val artworkWash = rememberFrostedBackdrop(Unit, enabled = false, dark = lightInk, lightMix = lightMix, retainRaster = false)
