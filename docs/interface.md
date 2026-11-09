@@ -130,7 +130,7 @@ Browsing/settings stay light, with a pink selected-tab accent, shared neutral gr
 
 Settings categories stay in this order: Interface, Playback and queues, Library and tags, About/licenses. Player stays inside Interface. Category rows have icons, summaries and chevrons. Both Back controls reverse the page entrance direction.
 
-Every settings page has global search. Results cover controls, choice values and synonyms without typo correction. Selecting a result scrolls to its row and briefly highlights it. Hidden options lead to the control that reveals them. Reduce motion uses an immediate scroll and a static highlight.
+The root Settings page has global search. Sub-pages omit its field and spacing. Results cover controls, choice values and synonyms across all pages, without typo correction. Selecting a result scrolls to its row and briefly highlights it. Hidden options lead to the control that reveals them. Reduce motion uses an immediate scroll and a static highlight.
 
 Every settings row (links, switches, sliders, choices and headings) uses the shared row in `ui/PreferenceFrames.kt`. The leading icon sits in a fixed 40 dp slot and is centred vertically on the row, as is the trailing chevron or control, at any line count, font scale or density.
 

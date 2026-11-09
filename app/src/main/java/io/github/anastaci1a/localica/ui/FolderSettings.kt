@@ -114,8 +114,10 @@ fun FolderSettings(state: LibraryUiState, onDismiss: () -> Unit, onChooseFolder:
         }) { shown ->
         val page = shown.title.takeUnless { it == "Settings" }
         val pageKey = (page ?: "root") + shown.folderUri.orEmpty() + shown.iconPackId.orEmpty()
-        GlassSearchField(search, { search = it }, "Search settings",
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp))
+        if (page == null) {
+            GlassSearchField(search, { search = it }, "Search settings",
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp))
+        }
         key(pageKey) { holder.SaveableStateProvider(pageKey) {
             val scroll = rememberScrollState()
             val focus = remember(pageKey, scroll) { SettingsSearchFocus(page.orEmpty(), scroll) }
