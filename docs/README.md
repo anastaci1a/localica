@@ -7,6 +7,7 @@ Each topic has one authoritative home. Product, Interface and Structure describe
 | [Product](product.md) | Scope, library and queue semantics, file safety, lyrics sources and statistics. |
 | [Interface](interface.md) | Layout, gestures, navigation, selection and UI defaults. |
 | [Structure](structure.md) | Code boundaries, persistence, concurrency, rendering and technical constraints. |
+| [Library data](library-data.md) | Export/import file format, fields, versions and matching rules. |
 | [Roadmap](roadmap.md) | Proposed outcomes and deferred capabilities. |
 | [Build](build.md) | Verification, compatibility, signing, release preparation, previews and documentation publishing. |
 | [Documentation standard](../DOCUMENTATION.md) | Public prose, ownership of facts, status labels and review criteria. |

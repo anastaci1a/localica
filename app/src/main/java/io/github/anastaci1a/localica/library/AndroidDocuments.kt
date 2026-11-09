@@ -138,3 +138,10 @@ class PersistedFolderPermissions(private val resolver: ContentResolver) : Folder
 }
 
 private fun String?.tagNumber(): Int? = SemanticTagFields.number(this)
+
+/** File size for library data export (#720); null when the provider or grant can't answer. */
+internal fun documentSize(context: Context, uri: String): Long? = runCatching {
+    context.contentResolver.query(Uri.parse(uri), arrayOf(DocumentsContract.Document.COLUMN_SIZE), null, null, null)?.use {
+        if (it.moveToFirst() && !it.isNull(0)) it.getLong(0).takeIf { size -> size >= 0 } else null
+    }
+}.getOrNull()

@@ -674,4 +674,6 @@ Include subfolders applies to every chosen folder. Off scans only that folder; o
 
 Folders to scan also owns removal and Add folder. Duplicate basenames use stable fractions such as Media (1/2). Unique names stay plain.
 
+The Library and tags page ends with a **Library data** heading: **Export library data** and **Import library data** use the system file picker. Import confirms per-field counts in a glass dialog before applying, then shows the applied counts. Format and matching: [Library data](library-data.md).
+
 Adding a folder only grants access. Metadata failures are never a persistent queue warning. From a shortcut’s initial settings page, Android Back returns to the caller. The header Back still visits the settings parent. Safety/lifecycle guarantees: [Structure](structure.md#file-operations).
