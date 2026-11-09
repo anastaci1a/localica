@@ -10,6 +10,7 @@ import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.AnnotatedString
@@ -75,22 +76,28 @@ internal fun MarqueeTitle(title: AnnotatedString, reducedMotion: Boolean, modifi
             } while (allowed || frame.phase != MarqueePhase.Rest)
         }
         val fadeWidth = minOf(width * .12f, with(density) { 24.dp.toPx() })
+        // Keep glyph display lists stable while their RenderNode translations move.
+        // The viewport/mask remains small; only an actual fade change re-records it.
+        val leading by remember(motion, textWidth, fadeWidth, rtl) { derivedStateOf {
+            if (rtl) frame.leadingFade else marqueeLeftFade(textWidth, fadeWidth, frame)
+        } }
+        val trailing by remember(motion, textWidth, width, fadeWidth) { derivedStateOf {
+            marqueeTrailingFade(textWidth, width, fadeWidth, frame)
+        } }
         Layout(content = {
-            Text(title, maxLines = 1, softWrap = false, style = textStyle, overflow = TextOverflow.Clip)
+            Text(title, Modifier.graphicsLayer {
+                translationX = if (rtl) frame.offset + width - fullTextWidth else -frame.offset
+            }, maxLines = 1, softWrap = false, style = textStyle, overflow = TextOverflow.Clip)
+            Text(title, Modifier.clearAndSetSemantics {}.graphicsLayer {
+                translationX = (if (rtl) frame.offset + width - fullTextWidth else -frame.offset) +
+                    if (rtl) -frame.repeatDistance else frame.repeatDistance
+                alpha = if (frame.offset > 0f) 1f else 0f
+            }, maxLines = 1, softWrap = false, style = textStyle, overflow = TextOverflow.Clip)
         }, modifier = Modifier
             .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
             .drawWithContent {
-                clipRect {
-                    translate(if (rtl) frame.offset + size.width - fullTextWidth else -frame.offset) {
-                        this@drawWithContent.drawContent()
-                        if (frame.offset > 0f) translate(if (rtl) -frame.repeatDistance else frame.repeatDistance) {
-                            this@drawWithContent.drawContent()
-                        }
-                    }
-                }
-                val leading = if (rtl) frame.leadingFade else marqueeLeftFade(textWidth, fadeWidth, frame)
+                clipRect { this@drawWithContent.drawContent() }
                 if (!rtl) motion.recordRenderedLeftFade(leading)
-                val trailing = marqueeTrailingFade(textWidth, size.width, fadeWidth, frame)
                 fun edge(start: Float, end: Float, amount: Float, reversed: Boolean) {
                     if (amount <= 0f) return
                     val stops = arrayOf(0f to 0f, .2f to .104f, .5f to .5f, .8f to .896f, 1f to 1f)
@@ -101,8 +108,12 @@ internal fun MarqueeTitle(title: AnnotatedString, reducedMotion: Boolean, modifi
                 edge(0f, fadeWidth, if (rtl) trailing else leading, reversed = false)
                 edge(size.width - fadeWidth, size.width, if (rtl) leading else trailing, reversed = true)
             }) { items, limits ->
-            val text = items.single().measure(Constraints(maxHeight = limits.maxHeight))
-            layout(if (limits.hasBoundedWidth) limits.maxWidth else text.width, text.height) { text.place(0, 0) }
+            val text = items[0].measure(Constraints(maxHeight = limits.maxHeight))
+            val repeated = items[1].measure(Constraints(maxHeight = limits.maxHeight))
+            layout(if (limits.hasBoundedWidth) limits.maxWidth else text.width, text.height) {
+                text.place(0, 0)
+                repeated.place(0, 0)
+            }
         }
     }
 }
