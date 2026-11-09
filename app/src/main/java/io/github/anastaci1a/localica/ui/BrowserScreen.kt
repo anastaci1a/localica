@@ -776,6 +776,9 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     } } }
     val editableOrder = route.text.isBlank() &&
         route.collection?.kind in setOf(MediaKind.Queue, MediaKind.Playlist)
+    // #694: artist sort and Group by album changes reorder the same keyed rows; reuse the
+    // queue/playlist placement tween instead of jumping.
+    val orderMotion = editableOrder || artistDetail && route.text.isBlank()
     SideEffect { reorder.reconcile(result.items); reorder.obscuredBottom = with(density) { obscuredInset.toPx() } }
     val edge = with(androidx.compose.ui.platform.LocalDensity.current) { 64.dp.toPx() }
     LaunchedEffect(reorder.drag) { if (reorder.drag != null) reorder.autoScroll(edge) }
@@ -1170,7 +1173,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                     // Search already owns the spacer and row displacement. A second
                     // reorder tween would trail that measured placement every frame.
                     Column(Modifier.then(if (artDetail && itemIndex == 0) Modifier.testTag("browser-song-list-start") else Modifier)
-                        .then(if (editableOrder && pinchMotion.visualSource == null) Modifier.animateItem(placementSpec = if (
+                        .then(if (orderMotion && pinchMotion.visualSource == null) Modifier.animateItem(placementSpec = if (
                         searchOriginalOffset >= 0 && searchVacancy > 0f ||
                         reorder.drag?.let { it.dropping && item.key in it.keys } == true
                     ) null else androidx.compose.animation.core.tween(if (reducedMotion) 0 else 350), fadeInSpec = null, fadeOutSpec = null) else Modifier)
