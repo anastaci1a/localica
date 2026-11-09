@@ -23,7 +23,8 @@ import org.junit.Test
 import org.junit.rules.RuleChain
 
 /** Main A/A control: both arms use unmodified origin/main BrowserScreen and shared production code.
- * Input sequence, remounts, waits, captures, strict pixels and row assertions match the perf2 witness. */
+ * Input sequence, remounts, waits, captures and strict pixels match the perf2 witness.
+ * Main has no row probe; row execution assertions belong to the perf2 branch only. */
 class BrowseMainInputEqualityTest {
     private val compose = localicaComposeRule()
     @get:Rule val rules: RuleChain = RuleChain.outerRule(BrowsePreferenceIsolation()).around(compose)
@@ -95,7 +96,7 @@ class BrowseMainInputEqualityTest {
                 }
                 frames+=capture()
                 compose.runOnIdle {
-                    assertTrue("Real $name update must reach retained rows, reference=$old album=$album",work.any { it=="row" })
+                    // Main has no row SideEffect probe. Pixel equality remains strict.
                     android.util.Log.i("PERF2_ROW_INPUT","album=$album reference=$old input=$name rows=${work.count { it=="row" }}")
                 }
             }

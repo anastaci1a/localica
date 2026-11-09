@@ -94,7 +94,7 @@ class BrowseMainFrozenInputEqualityTest {
                 }
                 frames+=capture()
                 compose.runOnIdle {
-                    assertTrue("Real $name update must reach retained rows, reference=$old album=$album",work.any { it=="row" })
+                    if (old) assertTrue("Frozen probe must receive $name, album=$album", work.any { it == "row" })
                     android.util.Log.i("PERF2_ROW_INPUT","album=$album reference=$old input=$name rows=${work.count { it=="row" }}")
                 }
             }
