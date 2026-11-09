@@ -595,8 +595,7 @@ fun LocalicaScreen(
                 toast = rowPresentation::body, downwardPx = rowDownward, fieldOutset = rowOutset,
                 sourceOpacity = { queuePlayerOpacity(phase.value()) }, interactive = rowInput && rowSeat.queueInteractive)
         }
-        // The live toast presenter is installed at this same root seam in its separate packet.
-        // Its body/field use rowRoot and remain outside PlayerClippedOverlay.
+        ToastGlassPresenter(rowRoot, if (playerVisible) playerBackdrop else browseBackdrop, modal = !rowInput)
     }
     androidx.activity.compose.BackHandler(expanded) { if (lyricsOpen) lyricsOpen = false else requestPlayer(false) }
     androidx.activity.compose.BackHandler(queueOpen || queueVisible) { requestQueue(false); navigationScope.launch { queuePopupHome.awaitHandoff(); queueSheet.collapse() } }

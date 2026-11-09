@@ -14,6 +14,7 @@ class ToastPresenterLease internal constructor(private val queue: ToastQueue, va
         queue.fromPresenter(token, false) { queue.marqueePending(id, generation) }
     fun retainedAfterContact(id: Long, generation: Long) =
         queue.fromPresenter(token, false) { queue.retainedAfterContact(id, generation) }
+    fun delayUntil(ticket: ToastDeadline): Long? = queue.fromPresenter<Long?>(token, null) { queue.delayUntil(ticket) }
     fun timeout(ticket: ToastDeadline) = queue.fromPresenter(token, false) { queue.timeout(ticket) }
     fun dismiss(id: Long, generation: Long) = queue.fromPresenter(token, false) { queue.dismiss(id, generation) }
     fun claimAction(id: Long, generation: Long, body: Boolean = false): ToastCommand? =

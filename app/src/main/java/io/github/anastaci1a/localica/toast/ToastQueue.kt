@@ -138,7 +138,7 @@ class ToastQueue(private val capacity: Int = 32,
     @Synchronized fun marqueePending(id: Long, generation: Long): Boolean {
         val value = matching(id, generation) ?: return false
         if (value.phase == ToastPhase.Exiting || !value.marqueeComplete) return false
-        value.deadline?.let { remaining = (it.atMillis - clockMillis()).coerceAtLeast(0) }
+        value.deadline?.let { remaining = remainingUntil(it.atMillis) }
         publish(value.copy(marqueeComplete = false, deadline = null))
         return true
     }
@@ -147,7 +147,7 @@ class ToastQueue(private val capacity: Int = 32,
     @Synchronized fun pause(reason: ToastPause, paused: Boolean) {
         val value = mutable.value
         if ((reason in value.pauses) == paused) return
-        value.deadline?.let { remaining = (it.atMillis - clockMillis()).coerceAtLeast(0) }
+        value.deadline?.let { remaining = remainingUntil(it.atMillis) }
         publish(value.copy(pauses = if (paused) value.pauses + reason else value.pauses - reason, deadline = null))
     }
 
@@ -159,6 +159,10 @@ class ToastQueue(private val capacity: Int = 32,
         publish(value.copy(pauses = value.pauses - ToastPause.Contact - ToastPause.Settling, deadline = null))
         return true
     }
+
+    /** The existing queue clock owns dwell timing; stale tickets have no remaining delay. */
+    @Synchronized fun delayUntil(ticket: ToastDeadline): Long? =
+        if (mutable.value.deadline == ticket) remainingUntil(ticket.atMillis) else null
 
     @Synchronized fun timeout(ticket: ToastDeadline): Boolean {
         val value = mutable.value
@@ -176,7 +180,7 @@ class ToastQueue(private val capacity: Int = 32,
     /** Transition to Exiting is the atomic claim, shared by tap and accessible/action activation. */
     @Synchronized fun claimAction(id: Long, generation: Long, body: Boolean = false): ToastCommand? {
         val value = matching(id, generation) ?: return null
-        if (value.phase == ToastPhase.Exiting || value.pauses.any { it != ToastPause.Contact }) return null
+        if (value.phase == ToastPhase.Exiting || value.pauses.any { it != ToastPause.Contact && it != ToastPause.Accessibility }) return null
         val command = if (body) value.current!!.content.tap else value.current!!.content.action?.command
         if (command != null) dismiss(id, generation)
         return command
@@ -195,13 +199,24 @@ class ToastQueue(private val capacity: Int = 32,
         return true
     }
 
+    private fun deadlineAfter(duration: Long): Long {
+        val now = clockMillis()
+        return if (now > Long.MAX_VALUE - duration) Long.MAX_VALUE else now + duration
+    }
+    private fun remainingUntil(atMillis: Long): Long {
+        val now = clockMillis()
+        if (atMillis <= now) return 0
+        val difference = atMillis - now
+        return if (difference < 0) Long.MAX_VALUE else difference
+    }
+
     private fun matching(id: Long, generation: Long): ToastQueueState? = mutable.value.takeIf {
         it.current?.id == id && it.current.generation == generation
     }
     private fun publish(value: ToastQueueState) {
         val eligible = value.current != null && value.phase == ToastPhase.Visible && value.pauses.isEmpty() && value.marqueeComplete
         mutable.value = if (eligible && value.deadline == null) value.copy(deadline = ToastDeadline(
-            value.current!!.id, value.current.generation, ++epoch, clockMillis() + remaining))
+            value.current!!.id, value.current.generation, ++epoch, deadlineAfter(remaining)))
         else if (!eligible) value.copy(deadline = null) else value
     }
 }

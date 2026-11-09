@@ -75,5 +75,11 @@
             android:noHistory="true" android:excludeFromRecents="true"
             android:theme="@android:style/Theme.Translucent.NoTitleBar"
             android:process=":navigation_random" />
+        <service android:name="io.github.anastaci1a.localica.ToastFocusFixtureService"
+            android:exported="true" android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
+            android:process=":toast_focus_fixture">
+            <intent-filter><action android:name="android.accessibilityservice.AccessibilityService" /></intent-filter>
+            <meta-data android:name="android.accessibilityservice" android:resource="@xml/toast_focus_fixture_service" />
+        </service>
     </application>
 </manifest>

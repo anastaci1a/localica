@@ -25,7 +25,10 @@ import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.R
 import android.Manifest
 import android.content.pm.PackageManager
-import android.widget.Toast
+import io.github.anastaci1a.localica.LocalicaApplication
+import io.github.anastaci1a.localica.toast.ToastMessage
+import io.github.anastaci1a.localica.toast.ToastKind
+import io.github.anastaci1a.localica.toast.ToastEnqueue
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
@@ -38,20 +41,25 @@ import kotlin.math.roundToInt
 @Composable
 internal fun ArtworkViewer(uri: String, artist: String? = null, album: String? = null, onDismiss: () -> Unit) {
     val context = LocalContext.current
+    val toasts = LocalToastQueue.current ?: (context.applicationContext as LocalicaApplication).toasts
+    fun report(message: String, kind: ToastKind) {
+        if (toasts.showToast(ToastMessage(message, kind = kind, artworkUris = listOf(uri))) == ToastEnqueue.Full)
+            android.util.Log.w("LocalicaToast", "Artwork outcome admission refused: $message")
+    }
     val saveScope = rememberCoroutineScope()
     val save = {
         saveScope.launch {
-            val message = when (val r = ArtworkSaver.save(context.applicationContext, uri, artist, album)) {
-                is ArtworkSaveResult.Saved -> "Saved to Downloads: ${r.name}"
-                ArtworkSaveResult.NoArtwork -> "No artwork to save"
-                is ArtworkSaveResult.Failed -> "Could not save artwork"
+            val (message, kind) = when (val r = ArtworkSaver.save(context.applicationContext, uri, artist, album)) {
+                is ArtworkSaveResult.Saved -> "Saved to Downloads: ${r.name}" to ToastKind.Success
+                ArtworkSaveResult.NoArtwork -> "No artwork to save" to ToastKind.Error
+                is ArtworkSaveResult.Failed -> "Could not save artwork" to ToastKind.Error
             }
-            Toast.makeText(context.applicationContext, message, Toast.LENGTH_SHORT).show()
+            report(message, kind)
         }
         Unit
     }
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (granted) save() else Toast.makeText(context.applicationContext, "Storage permission is needed to save artwork", Toast.LENGTH_SHORT).show()
+        if (granted) save() else report("Storage permission is needed to save artwork", ToastKind.Error)
     }
     val onSave = {
         if (ArtworkSaver.needsLegacyPermission && ContextCompat.checkSelfPermission(context, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED)

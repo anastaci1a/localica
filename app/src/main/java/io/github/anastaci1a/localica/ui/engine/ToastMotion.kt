@@ -43,6 +43,7 @@ internal fun toastButtonProjection(toast: Rect, original: Rect, downwardTravelPx
     }
     val leftPx: Float get() = position.value()
     val widthPx: Float get() = bodyWidthPx
+    val displacementFromRestPx: Float get() = position.value() - restingLeftPx
 
     init {
         require(initialBodyWidthPx.isFinite() && initialBodyWidthPx > 0)
