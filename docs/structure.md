@@ -11,7 +11,8 @@ Paths below are under `app/src/main/java/io/github/anastaci1a/localica/`.
 | `library`, `browse` | Document access, indexing/Room, shared queries, grouping, filters and view preferences. |
 | `scanner`, `editing`, `lyrics` | Background scans, recoverable writes/image selection, local lyric discovery/parsing. |
 | `queue`, `playlist` | Durable occurrence-based collections and serialized commands/imports. |
-| `playback`, `statistics` | Media3 service/controller, elapsed listening, durable qualified events. |
+| `playback`, `statistics` | Media3 service/controller, elapsed listening, durable qualified events and provider-independent ranking counts. |
+| `artist`, `artistphoto`, `lastfm`, `network` | Artist projections, photo providers/cache, read-only statistics sync and shared online consent. |
 | `navigation`, `home` | Restorable typed routes/preferences; typed pins and manual order. |
 | `ui` | Compose views, lifecycle-aware state, gestures and reusable materials. |
 
@@ -71,11 +72,25 @@ QueuePreferences owns modes. Import legacy active-queue modes once, then leave c
 
 ### Statistics
 
-Measure monotonic playing time in the service. Serialized writes retry stable event IDs without double counting. a separate database survives collection deletion. [Counting rules](product.md#dates-and-listening-statistics).
+Measure monotonic playing time in the service. Serialized writes retry stable event IDs without double counting. A separate database survives collection deletion. [Counting rules](product.md#dates-and-listening-statistics).
+
+The artist data source prepares release groups, five ranked songs, current-year latest releases and playlist membership off Main. Release-type and compilation tags survive library storage and saved collection snapshots. Classification reports tagged, heuristic or uncertain confidence. Existing libraries acquire tags on full rescan.
+
+Ranking windows use the caller's time zone and inclusive event boundaries. The caller refreshes the window when time advances. Duration-weighted totals use selected counts and distinct songs, treating missing duration as zero and saturating overflow. Albums and artists expose the same measure for future sort integration.
+
+A provider interface keeps local and external counts separate. Typed settings select external counts with per-song local fallback; unsupported windows also fall back locally. Artist hub UI and additional sort controls remain separate work.
+
+The Last.fm provider stores its snapshot, account selection, mappings and local counter baseline in a dedicated atomic file. Completed refreshes replace the remote base and local baseline together. Temporary qualified-play additions are derived from local counters; the provider never writes to local history.
+
+Appears On and Similar Artists currently return empty through an enrichment interface.
 
 ### Settings/selection
 
 Typed preference boundaries retain explicit inheritance. Shared enum decoding preserves unknown-value fallbacks. Pure ordering/move helpers are shared across collection types. Selection retains source occurrence IDs and clears only after command completion. Pins retain typed identity/manual order independently of tabs.
+
+Artist photo requests run off Main and use fixed HTTPS hosts, disabled redirects, bounded responses and shared request pacing. Provider errors become fixed failures without URLs or transport messages. Metadata responses are limited to 512 KiB and pictures to 4 MiB. Searches inspect five artists and 25 releases per candidate; incomplete coverage falls back conservatively.
+
+Photo entries and consent use atomic file replacement. Match choices live separately from evictable images. A persisted attempt time throttles failed requests across process death. The default-off consent stays closed until its asynchronous load completes. Commons credits are bounded plain text; licence and source links remain structured metadata.
 
 ## Legacy MP3 transitions
 
@@ -271,9 +286,21 @@ Active sliders and switches render one procedural scene, unchanged outside the l
 
 In Normal mode on Android 13+, controls entirely over explicitly recorded panel material use an 8×8 local GPU average, then the shared tint/contrast mapping and outline. Morphs retain that averaged home source while admitting the destination. Never infer eligibility from color similarity or average a foreground-containing recording.
 
-None panels resolve one opaque mean weighted by source coverage. Transparent pixels outside the source do not dilute panel opacity. Descendant controls reuse the finished parent material without repeating tint, tone or averaging. Odd edges retain their coverage through progressive reduction.
+None uniformly averages the backdrop over each material's own full bounds: controls, pills, switch thumbs and panels. Refraction and blur do not change that region.
 
-Below Android 13, footprint boundaries inside thumbnail cells retain those cells' mean colours. Excluding raster quantization, mean error is bounded by boundary-cell area fraction multiplied by their maximum channel contrast. Shared readback remains 32×32 pixels; no full-resolution CPU capture is required.
+The mean is coverage-weighted over the scene the lens samples: the element's own source, with its parent chain beyond that source's box. Floating controls therefore follow the text and artwork passing behind them. No element chooses a different source or region.
+
+What None samples inside a finished panel material (frosted panels, the Queue drawer, popup bodies) already carries that panel's tint and tone, so None does not apply them again there.
+
+The region stops where the recorded scene ends, so material bounds reaching past a screen or window edge never make a fill translucent. Opaque panels also ignore transparent pixels inside their source.
+
+On Android 13+, None maps the exact footprint onto the full power-of-two reduction texture. This avoids transparent padding that amplifies channel rounding differently for different material sizes.
+
+None replaces only the optical fill. Floating, panel, lift and selection shadows use the same appearance settings and drawing path in both renderers, so a renderer switch never changes a shadow.
+
+Below Android 13, material boundaries inside thumbnail cells retain those cells' mean colours. Excluding raster quantization, mean error is bounded by boundary-cell area fraction multiplied by their maximum channel contrast. Shared readback remains 32×32 pixels; no full-resolution CPU capture is required.
+
+Only the nearest parent supplies the region beyond a source's box below Android 13. Until that parent has a snapshot, None averages the available part.
 
 Floating list controls sample the finished viewport after its fade and scrolling transforms, with the parent backing beneath transparent pixels. Keep those controls outside their own source recording.
 

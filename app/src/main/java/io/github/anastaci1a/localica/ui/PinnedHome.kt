@@ -17,6 +17,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.browse.*
@@ -65,6 +66,9 @@ internal fun PinnedHome(library: LibraryUiState, playlists: PlaylistState, pins:
         onOpen(item, item.songs)
     }
     var menu by remember { mutableStateOf<MediaRef?>(null) }
+    val density = LocalDensity.current
+    val obscuredInset = LocalBrowseObscuredInset.current
+    var returnControlHeight by remember { mutableIntStateOf(0) }
     val scroll = androidx.compose.foundation.lazy.rememberLazyListState()
     val artworkTransit = remember { ArtworkTransit() }
     val carousel = androidx.compose.foundation.lazy.rememberLazyListState()
@@ -96,7 +100,7 @@ internal fun PinnedHome(library: LibraryUiState, playlists: PlaylistState, pins:
                 returnToList.cancel()
             }
         }
-        .recordFrostedBackdrop(listBackdrop, surroundingBackdrop).testTag("home-list"), state = scroll, contentPadding = PaddingValues(top = 16.dp, bottom = LocalBrowseObscuredInset.current + 16.dp)) {
+        .recordFrostedBackdrop(listBackdrop, surroundingBackdrop).testTag("home-list"), state = scroll, contentPadding = PaddingValues(top = 16.dp, bottom = obscuredInset + with(density) { returnControlHeight.toDp() } + 16.dp)) {
         item { Column(Modifier.padding(horizontal = 24.dp)) {
             Text("Your music", style = MaterialTheme.typography.headlineMedium)
             Text("${library.snapshot.tracks.size} songs in your library")
@@ -123,7 +127,7 @@ internal fun PinnedHome(library: LibraryUiState, playlists: PlaylistState, pins:
                         else onOpen(item, songs)
                     },
                     onLongClickLabel = "Pinned item actions", onLongClick = { menu = item.ref }).padding(horizontal = inset)) {
-                    MediaArtwork(item.coverUris, Modifier.fillMaxWidth().aspectRatio(1f).contextMenuAnchor(anchor, item.ref.kind in setOf(MediaKind.Artist, MediaKind.AlbumArtist)), shape = artworkShape(item.ref.kind))
+                    ArtistMediaArtwork(item, Modifier.fillMaxWidth().aspectRatio(1f).contextMenuAnchor(anchor, item.ref.kind in setOf(MediaKind.Artist, MediaKind.AlbumArtist)), shape = artworkShape(item.ref.kind))
                     Text(item.title, style = MaterialTheme.typography.titleMedium, maxLines = 2)
                     Text(item.ref.kind.label, style = MaterialTheme.typography.bodySmall)
                 }
@@ -137,12 +141,14 @@ internal fun PinnedHome(library: LibraryUiState, playlists: PlaylistState, pins:
             } }
         } } }
     }
+    BrowseScrollbar(scroll, Modifier.align(Alignment.CenterEnd).padding(bottom = obscuredInset), onUserScroll = returnToList::cancel)
     CompositionLocalProvider(LocalFrostedBackdrop provides listBackdrop) {
         FloatingReturnToPositionButton(up = true, label = "Return to top",
             visible = selectionVisible && !playerOpen && currentOrder && songs.isNotEmpty() && !session.active && scroll.canScrollBackward && !returnToList.pending,
             reducedMotion = reducedMotion,
             returning = returnToList.pending,
-            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = LocalBrowseObscuredInset.current)) {
+            onHeightMeasured = { returnControlHeight = it },
+            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = obscuredInset)) {
             returnToList(ListReturnAction.ScrollTop)
         }
     }

@@ -43,9 +43,19 @@ class CarouselSelectionArtworkTest {
         return kotlin.math.abs(pixel.red - r) < .16f && kotlin.math.abs(pixel.green - g) < .16f && kotlin.math.abs(pixel.blue - b) < .16f
     }
 
+    // #678 instrumentation (log only): where counts() spends its time per method.
+    private var captureNs = 0L; private var loopNs = 0L; private var frames = 0
+    private fun logProfile(method: String, started: Long) {
+        android.util.Log.i("Trim678", "CarouselSelectionArtworkTest $method totalMs=${(System.nanoTime() - started) / 1_000_000} frames=$frames " +
+            "captureMs=${captureNs / 1_000_000} loopMs=${loopNs / 1_000_000}")
+    }
+
     /** Pixels of each cover's colour inside its (lift-inflated) cell bounds, from one window capture. */
     private fun counts(cells: List<Pair<Int, Rect>>): IntArray {
+        frames++
+        var t = System.nanoTime()
         val map = compose.onRoot().captureToImage().toPixelMap()
+        captureNs += System.nanoTime() - t; t = System.nanoTime()
         return IntArray(cells.size) { i ->
             val (colour, bounds) = cells[i]
             val grown = bounds.inflate(bounds.width * .12f)
@@ -54,7 +64,7 @@ class CarouselSelectionArtworkTest {
                 for (x in grown.left.toInt().coerceAtLeast(0) until grown.right.toInt().coerceAtMost(map.width) step 2)
                     if (near(map[x, y], colours[colour])) n++
             n
-        }
+        }.also { loopNs += System.nanoTime() - t }
     }
 
     private class Recorder { val failures = mutableListOf<String>() }
@@ -65,6 +75,7 @@ class CarouselSelectionArtworkTest {
         repeat(frames) { frame ->
             compose.mainClock.advanceTimeByFrame()
             val now = counts(cells)
+            android.util.Log.i("Trim678", "$label frame ${frame + 1} counts=${now.toList()}")
             now.indices.forEach { i ->
                 if (now[i] < baseline[i] * .6f) failures += "$label frame ${frame + 1}: cover ${cells[i].first} has ${now[i]} of ${baseline[i]} pixels"
             }
@@ -164,6 +175,7 @@ class CarouselSelectionArtworkTest {
         val first = ids.getValue(names[cells[0].first]); val second = ids.getValue(names[cells[1].first])
         compose.mainClock.autoAdvance = false
         val recorder = Recorder()
+        val started = System.nanoTime(); captureNs = 0; loopNs = 0; frames = 0
         try {
             repeat(3) { round ->
                 with(recorder) {
@@ -184,7 +196,7 @@ class CarouselSelectionArtworkTest {
                     settle("r$round rapid", cells, base)
                 }
             }
-        } finally { compose.mainClock.autoAdvance = true }
+        } finally { compose.mainClock.autoAdvance = true; logProfile("artistAlbum", started) }
         assertTrue(recorder.failures.take(40).joinToString("\n"), recorder.failures.isEmpty())
     }
 
@@ -206,6 +218,7 @@ class CarouselSelectionArtworkTest {
         val a = SongRow(tracks[cells[0].first].id, tracks[cells[0].first]); val b = SongRow(tracks[cells[1].first].id, tracks[cells[1].first])
         compose.mainClock.autoAdvance = false
         val recorder = Recorder()
+        val started = System.nanoTime(); captureNs = 0; loopNs = 0; frames = 0
         try {
             repeat(3) { round ->
                 with(recorder) {
@@ -225,7 +238,7 @@ class CarouselSelectionArtworkTest {
                     settle("r$round rapid", cells, base)
                 }
             }
-        } finally { compose.mainClock.autoAdvance = true; compose.runOnUiThread { session.clear() } }
+        } finally { compose.mainClock.autoAdvance = true; compose.runOnUiThread { session.clear() }; logProfile("home", started) }
         assertTrue(recorder.failures.take(40).joinToString("\n"), recorder.failures.isEmpty())
     }
 }

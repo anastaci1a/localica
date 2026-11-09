@@ -88,11 +88,11 @@ internal fun GlassActionRow(modifier: Modifier = Modifier, content: @Composable 
         Row(Modifier.fillMaxWidth().then(if (scroll.maxValue == 0) Modifier.clearAndSetSemantics { } else Modifier),
             horizontalArrangement = Arrangement.End) {
             ActionIconButton(onClick = { move(false) }, enabled = scroll.canScrollBackward) {
-                Icon(appIconPainter(AppIcon.ActionBack), "Previous actions",
+                Icon(appIconPainter(AppIcon.ActionChevronLeft), "Previous actions",
                     Modifier.graphicsLayer { scaleX = if (rtl) -1f else 1f })
             }
             ActionIconButton(onClick = { move(true) }, enabled = scroll.canScrollForward) {
-                Icon(appIconPainter(AppIcon.ActionBack), "More actions",
+                Icon(appIconPainter(AppIcon.ActionChevronLeft), "More actions",
                     Modifier.graphicsLayer { scaleX = if (rtl) 1f else -1f })
             }
         }

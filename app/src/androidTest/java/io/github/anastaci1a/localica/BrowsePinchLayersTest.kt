@@ -258,7 +258,6 @@ class BrowsePinchLayersTest {
         } }
         compose.waitForIdle()
         val rowHeight = grid.layoutInfo.visibleItemsInfo.first { it.key == "text" }.size.height
-        val cutoff = browsePinchFadeWindow(rowHeight.toFloat(), 200f)
         for (p in listOf(.025f, .05f, .1f, .15f, .2f, .3f, .45f, .6f, .8f, 1f, .8f, .3f, .15f, .1f, .05f)) {
             compose.runOnIdle { runBlocking { motion.progress.snapTo(p) } }
             compose.waitForIdle()
@@ -269,12 +268,11 @@ class BrowsePinchLayersTest {
             if (p >= 1f) {
                 assertTrue("A singleton departure is invisible at the transition end: $p", ink.isEmpty())
             } else {
-                assertTrue("Retained cover remains visible before its fade end: $p / $cutoff", ink.isNotEmpty())
+                assertTrue("Retained cover remains visible before its fade end: $p", ink.isNotEmpty())
                 val width = ink.maxOf { it.first } - ink.minOf { it.first } + 1
                 val top = ink.minOf { it.second }
-                assertEquals("Retained cover follows its ordinary artwork scale at $p", 50f + 50f * minOf(p, cutoff), width.toFloat(), 2f)
-                assertEquals("Retained cover follows the same progress in position at $p", 4f + rowHeight * minOf(p, cutoff), top.toFloat(), 2f)
-                assertTrue("No departure grows past its fade-end size", width <= 50f + 50f * cutoff + 2f)
+                assertEquals("Retained cover follows its ordinary artwork scale at $p", 50f + 50f * p, width.toFloat(), 2f)
+                assertEquals("Retained cover keeps moving with the transition at $p (#559)", 4f + rowHeight * p, top.toFloat(), 2f)
             }
         }
     }

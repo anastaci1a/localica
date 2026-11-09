@@ -11,6 +11,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.graphics.drawscope.scale
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.SemanticsActions
@@ -59,6 +61,55 @@ class TransportAnimationFrameTest {
         same(first, compose.onNodeWithTag("Next").captureNativeFrame())
         compose.runOnIdle { phase = .99999f }
         same(first, compose.onNodeWithTag("Next").captureNativeFrame(), .015f)
+    }
+
+    /** #654: departing and arriving wedges fade through feathered edges instead of a hard clip. */
+    @Test fun skipEdgesTaperSymmetricallyAndTheRestFrameIsTheStaticIcon() {
+        var phase by mutableFloatStateOf(0f)
+        var static by mutableStateOf(false)
+        compose.setContent {
+            Row {
+                for (glyph in listOf(TransportGlyph.Next, TransportGlyph.Previous)) {
+                    // The same slot draws both, since API 36's GPU anti-aliasing varies by 1/255 across window positions.
+                    Canvas(Modifier.size(100.dp).background(Color.White).testTag(glyph.name)) {
+                        if (!static) drawTransportGlyph(glyph, 0f, phase, Color.Black, TransportShapes())
+                        // The static icon: both rest wedges, drawn without any mask or clip.
+                        else scale(if (glyph == TransportGlyph.Previous) -1f else 1f, 1f) {
+                            for (x in listOf(.08f, .48f)) translate(left = x * size.width) {
+                                TransportShapes().skipTriangle(this, Color.Black)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        val rest = listOf(TransportGlyph.Next, TransportGlyph.Previous).associateWith {
+            compose.onNodeWithTag(it.name).captureNativeFrame()
+        }
+        compose.runOnIdle { static = true }
+        for ((glyph, frame) in rest) same(compose.onNodeWithTag(glyph.name).captureNativeFrame(), frame)
+        compose.runOnIdle { static = false }
+        // Mid-cycle both outer wedges cross the edges at alpha .5 along the centre row.
+        compose.runOnIdle { phase = .5f }
+        for (glyph in listOf(TransportGlyph.Next, TransportGlyph.Previous)) {
+            val frame = compose.onNodeWithTag(glyph.name).captureNativeFrame().toPixelMap()
+            val w = frame.width
+            val y = frame.height / 2
+            fun red(x: Int) = frame[x, y].red
+            val band = (w * .06f).toInt()
+            assertEquals("$glyph plateau before the band", .5f, red(w - 1 - band - 2), .04f)
+            assertTrue("$glyph right edge fades out: ${red(w - 1)}", red(w - 1) > .9f)
+            assertTrue("$glyph left edge fades out: ${red(0)}", red(0) > .9f)
+            var levels = 0
+            for (x in w - 1 - band until w - 1) {
+                assertTrue("$glyph ramp is monotonic at $x", red(x + 1) >= red(x) - .01f)
+                assertTrue("$glyph ramp has no step at $x", red(x + 1) - red(x) < .12f)
+                if (red(x + 1) - red(x) > .004f) levels++
+            }
+            assertTrue("$glyph ramp passes through intermediate alphas ($levels)", levels >= 3)
+            // Only the outer wedges reach the bands, so the edge profiles mirror about the centre.
+            for (x in 0..band + 4) assertEquals("$glyph mask symmetric at $x", red(x), red(w - 1 - x), .03f)
+        }
     }
 
     @Test fun repeatPressesKeepThePresentedFrameAndReducedMotionSnapsMidFlight() {

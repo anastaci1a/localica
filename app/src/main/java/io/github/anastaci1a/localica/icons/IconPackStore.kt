@@ -201,7 +201,7 @@ object IconPacks {
                 val bytes = readCapped(zip) ?: run { rejected += entry.name to "larger than 2 MB"; null } ?: continue
                 if (entry.name == IconPackNames.MANIFEST) { manifest = manifest(bytes); continue }
                 val id = IconPackNames.iconId(entry.name) ?: continue
-                if (id !in AppIcon.ids) { unknown += id; continue }
+                if (AppIcon.byId(id) == null) { unknown += id; continue }
                 if (entry.name.endsWith(".svg", ignoreCase = true)) {
                     val vector = runCatching { SvgIconParser.parse(bytes).toImageVector() }.getOrElse {
                         rejected += entry.name to ("Invalid SVG: " + (it.message ?: "malformed vector").take(300))
@@ -229,6 +229,7 @@ object IconPacks {
             }
         }
         val info = manifest ?: throw IconPackException("pack.json is missing")
+        canonicalize(masks, vectors, files)
         if (masks.isEmpty() && vectors.isEmpty()) throw IconPackException("The pack has no usable icons" +
             rejected.firstOrNull()?.let { ": ${it.first}: ${it.second}" }.orEmpty())
         return Parsed(IconPackReport(info, (masks.keys + vectors.keys).toList(), unknown, rejected), masks, vectors, files)
@@ -260,14 +261,32 @@ object IconPacks {
         val info = manifest(manifest.readBytes())
         val masks = linkedMapOf<String, Bitmap>()
         val vectors = linkedMapOf<String, ImageVector>()
-        AppIcon.entries.forEach { icon ->
-            val vector = File(directory, "icons/${icon.id}.svg").takeIf { it.isFile && it.length() <= SvgIconParser.MAX_BYTES }
+        (AppIcon.ids + AppIcon.legacyIds.keys).forEach { id ->
+            val vector = File(directory, "icons/${id}.svg").takeIf { it.isFile && it.length() <= SvgIconParser.MAX_BYTES }
                 ?.let { runCatching { SvgIconParser.parse(it.readBytes()).toImageVector() }.getOrNull() }
-            if (vector != null) vectors[icon.id] = vector
-            else File(directory, "icons/${icon.id}.png").takeIf { it.isFile }?.let { BitmapFactory.decodeFile(it.path) }
-                ?.let { masks[icon.id] = displayMask(it) }
+            if (vector != null) vectors[id] = vector
+            else File(directory, "icons/${id}.png").takeIf { it.isFile }?.let { BitmapFactory.decodeFile(it.path) }
+                ?.let { masks[id] = displayMask(it) }
         }
+        canonicalize(masks, vectors, linkedMapOf())
         return if (masks.isEmpty() && vectors.isEmpty()) null else Triple(masks, info, vectors)
+    }
+
+    /** Normalize only accepted private images; aliases never override a usable canonical mapping. */
+    private fun canonicalize(masks: MutableMap<String, Bitmap>, vectors: MutableMap<String, ImageVector>,
+        files: MutableMap<String, ByteArray>) {
+        val oldMasks = masks.toMap()
+        val oldVectors = vectors.toMap()
+        val oldFiles = files.toMap()
+        masks.clear(); vectors.clear(); files.clear()
+        (oldMasks.keys + oldVectors.keys).mapNotNull { AppIcon.byId(it) }.distinct().forEach { icon ->
+            val source = AppIcon.packIds(icon).first { it in oldMasks || it in oldVectors }
+            oldMasks[source]?.let { masks[icon.id] = it }
+            oldVectors[source]?.let { vectors[icon.id] = it }
+            val extension = if (source in oldVectors) "svg" else "png"
+            oldFiles["$source.$extension"]?.let { files["${icon.id}.$extension"] = it }
+        }
+        oldMasks.values.filterNot { it in masks.values }.forEach { it.recycle() }
     }
 
     // Keep library memory proportional to icon display size, not the author's source resolution.

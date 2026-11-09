@@ -11,6 +11,12 @@ class BrowseCollectionOrderTest {
     // Frozen pre-extraction comparator: retain its independent aggregate expressions.
     private fun original(items: List<BrowserItem>, query: LibraryQuery): List<BrowserItem> {
         fun <T : Comparable<T>> compare(a: T?, b: T?) = compareKnown(a, b, query.ascending)
+        fun listened(item: BrowserItem): Long = item.songs.map { it.track }.distinctBy { it.id }.fold(0L) { total, track ->
+            val plays = track.playCount.coerceAtLeast(0)
+            val length = track.durationMs?.coerceAtLeast(0) ?: 0
+            val weighted = if (length > 0 && plays > Long.MAX_VALUE / length) Long.MAX_VALUE else plays * length
+            if (total > Long.MAX_VALUE - weighted) Long.MAX_VALUE else total + weighted
+        }
         return items.sortedWith { a, b ->
             val primary = when (query.sort) {
                 TrackSort.Count -> compare(a.songs.size, b.songs.size)
@@ -19,6 +25,7 @@ class BrowseCollectionOrderTest {
                 TrackSort.Modified -> compare(a.modifiedAt, b.modifiedAt)
                 TrackSort.Added -> compare(a.addedAt, b.addedAt)
                 TrackSort.MostPlayed -> compare(a.playCount, b.playCount)
+                TrackSort.LongestListened -> compare(listened(a), listened(b))
                 TrackSort.Artist, TrackSort.AlbumArtist, TrackSort.Composer, TrackSort.Genre ->
                     compare(a.metadataText(query.sort)?.lowercase(Locale.ROOT), b.metadataText(query.sort)?.lowercase(Locale.ROOT))
                 else -> compare(a.title.lowercase(Locale.ROOT), b.title.lowercase(Locale.ROOT))

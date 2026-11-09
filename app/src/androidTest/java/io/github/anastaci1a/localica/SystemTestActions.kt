@@ -70,3 +70,24 @@ internal fun androidx.compose.ui.test.junit4.ComposeContentTestRule.awaitExpecte
         throw failure
     }
 }
+
+/**
+ * Find [selector] from the app's current accessibility tree, not UiAutomation's cached copy (#620).
+ *
+ * Compose sends semantics events only while an accessibility service is enabled, and UiAutomation
+ * is not one, so under test nothing invalidates the cache after an in-place Compose change. On
+ * API 34+ (seen on API 36) uiautomator then returns the old node for seconds, or until an unrelated
+ * system event. Use this for any uiautomator text/description lookup that follows a Compose change
+ * in the same window.
+ */
+internal fun UiDevice.findFresh(selector: androidx.test.uiautomator.BySelector, timeoutMs: Long): UiObject2? {
+    val automation = InstrumentationRegistry.getInstrumentation()
+        .getUiAutomation(androidx.test.uiautomator.Configurator.getInstance().uiAutomationFlags)
+    val deadline = android.os.SystemClock.uptimeMillis() + timeoutMs
+    while (true) {
+        if (android.os.Build.VERSION.SDK_INT >= 34) automation.clearCache()
+        findObject(selector)?.let { return it }
+        if (android.os.SystemClock.uptimeMillis() >= deadline) return null
+        android.os.SystemClock.sleep(100)
+    }
+}

@@ -53,6 +53,10 @@ if len(a)==6 and a[:2]==['shell','pm'] and a[3:]==['--user','0','com.google.andr
         if s['disableExit']:done(s['disableExit'])
     elif s['restoreExit']:done(s['restoreExit'])
     s['mutations']+=1;s['enabled']=states[command];done()
+if a[:2]==['shell','device_config']:
+    if a[2]=='set_sync_disabled_for_tests':s['configSync']=a[3];done()
+    if a[2]=='put':s.setdefault('deviceConfig',{})[a[3]+'/'+a[4]]=a[5];done()
+    if a[2]=='get':done(out=s.get('deviceConfig',{}).get(a[3]+'/'+a[4],'null')+'\n')
 if a[:2]==['shell','settings']:
     if a[2]=='put':s.setdefault('settings',{})[a[3]+'/'+a[4]]=a[5];done()
     if a[2]=='get':done(out=s.get('settings',{}).get(a[3]+'/'+a[4],'null')+'\n')
@@ -138,6 +142,10 @@ class PrepareDeviceTestsTest(unittest.TestCase):
         self.assertEqual({'global/hide_error_dialogs':'1','secure/anr_show_background':'0','global/show_first_crash_dialog':'0','global/show_first_crash_dialog_dev_option':'0'},self.state['settings'])
         self.assertIn('error-dialog setting global/hide_error_dialogs=1 (wanted 1)',r.stdout)
         self.assertIn('error-dialog check before full: none found',r.stdout)
+        # #673: System UI's jank tracker races WM Shell's leash release and aborts System UI.
+        self.assertEqual({'interaction_jank_monitor/enabled':'false'},self.state['deviceConfig'])
+        self.assertEqual('persistent',self.state['configSync'])
+        self.assertIn('system-ui jank monitor interaction_jank_monitor/enabled=false (wanted false)',r.stdout)
 
     def test_focused_error_dialog_is_dismissed_before_instrumentation(self):
         self.state['window']='  mCurrentFocus=Window{1 u0 Application Not Responding: com.android.launcher3}\n'
@@ -150,7 +158,8 @@ class PrepareDeviceTestsTest(unittest.TestCase):
 
     def test_full_suite_still_runs_without_any_selector(self):
         self.assert_exit(0,script='run-device-tests.sh');self.assertEqual(1,self.state['gradle'])
-        self.assertIn(['gradlew','connectedDebugAndroidTest','--no-daemon','--max-workers=2'],self.commands())
+        self.assertIn(['gradlew','connectedDebugAndroidTest','--no-daemon','--max-workers=2',
+                       '-I','.github/api26-aot.gradle'],self.commands())
         self.assertEqual(0,self.state['enabled']);self.assertEqual('',self.state['token'])
 
     def test_gradle_failure_is_preserved_after_restore(self):

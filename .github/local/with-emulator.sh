@@ -16,10 +16,10 @@ here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 umask 0002
 [[ ${GITHUB_ACTIONS:-} == true && ${RUNNER_ENVIRONMENT:-} == self-hosted && ${LOCALICA_JIT_RUNNER:-} == 1 && ${LOCALICA_EPHEMERAL_RUNNER:-} == localica-kvm ]] ||
   { echo 'refusing: not the locked-down self-hosted JIT runner' >&2; exit 2; }
-# Lead decision (#592): one focused pass per dispatch. Repeats keep the 7g runner near its memory
-# limit (iteration 5 of repeat=5 hung), so repeat and method-repeat proofs stay on hosted runners.
-[[ ${PROTOTYPE_REPEAT:-1} == 1 && -z ${PROTOTYPE_METHODS:-} ]] ||
-  { echo "refusing: self-hosted runs single focused passes only; dispatch repeats with runner=hosted" >&2; exit 2; }
+# Lead decision (#592, revised 2026-11-07): up to 5 repeats per dispatch, now that the job container
+# has 10g (iteration 5 of repeat=5 hung under the old 7g limit). Longer repeat proofs stay on hosted runners.
+[[ ${PROTOTYPE_REPEAT:-1} =~ ^[1-5]$ ]] ||
+  { echo "refusing: self-hosted runs at most 5 repeats; dispatch longer repeats with runner=hosted" >&2; exit 2; }
 api=${EMULATOR_API:?}; target=${EMULATOR_TARGET:?}; profile=${EMULATOR_PROFILE:?}
 options=${EMULATOR_OPTIONS:?}; animations=${EMULATOR_DISABLE_ANIMATIONS:?}; script=${EMULATOR_SCRIPT:?}
 [[ $api =~ ^[0-9]+$ && $target =~ ^[a-z_]+$ && $profile =~ ^[a-z0-9_]+$ ]] || { echo 'invalid emulator identity' >&2; exit 2; }

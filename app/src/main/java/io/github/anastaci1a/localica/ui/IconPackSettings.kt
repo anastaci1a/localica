@@ -63,12 +63,14 @@ internal fun IconPackSettings(onView: (String?) -> Unit) {
     }
     Text(if (active == null) "Using the built-in icons" else "Using “${library.firstOrNull { it.id == active }?.report?.info?.name.orEmpty()}”",
         modifier = Modifier.testTag("icon-pack-status"))
+    SettingsEntry("Active icon pack") { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
     IconPackRow(null, active == null, !busy, { IconPacks.reset(context) }, { onView(null) })
     library.forEach { pack ->
         IconPackRow(pack, pack.id == active, !busy, { IconPacks.select(context, pack.id) }, { onView(pack.id) }, { deleting = pack })
     }
-    ActionTextButton(enabled = !busy, onClick = { importer.launch(arrayOf("application/zip", "application/x-zip-compressed", "application/octet-stream")) }) { Text("Import icon pack") }
-    ActionTextButton(enabled = !busy, onClick = { exporter.launch("localica-icon-template.zip") }) { Text("Export built-in icons as a template") }
+    } }
+    SettingsEntry("Import icon pack") { ActionTextButton(enabled = !busy, onClick = { importer.launch(arrayOf("application/zip", "application/x-zip-compressed", "application/octet-stream")) }) { Text("Import icon pack") } }
+    SettingsEntry("Export built-in icons as a template") { ActionTextButton(enabled = !busy, onClick = { exporter.launch("localica-icon-template.zip") }) { Text("Export built-in icons as a template") } }
     updating?.let { prepared ->
         GlassAlertDialog({ updating = null }, title = { Text("Update ${prepared.report.info.name}?") },
             text = { Text("Version ${prepared.report.info.version} is already in your library. Replace its icons with this import?") },
@@ -121,7 +123,7 @@ internal fun IconPackViewer(id: String?) {
     pack?.let { Text("Imported ${DateFormat.getDateTimeInstance().format(Date(it.importedAt))}", style = MaterialTheme.typography.bodySmall) }
     Text("Pack icon · Built-in icon", style = MaterialTheme.typography.bodySmall)
     AppIcon.entries.groupBy { it.id.substringBefore('.') }.forEach { (area, icons) ->
-        SettingsHeading(when (area) { "tab" -> "Tabs"; "transport" -> "Transport"; "menu" -> "Song menu"; else -> "Actions" })
+        SettingsHeading(when (area) { "tab" -> "Tabs"; "transport" -> "Transport"; "menu" -> "Song menu"; "settings" -> "Settings"; else -> "Actions" })
         icons.forEach { icon ->
             val mask = pack?.masks?.get(icon.id)
             val vector = pack?.vectors?.get(icon.id)

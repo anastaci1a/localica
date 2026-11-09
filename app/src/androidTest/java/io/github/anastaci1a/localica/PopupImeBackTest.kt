@@ -162,7 +162,7 @@ class PopupImeBackTest {
                 Box(Modifier.fillMaxSize().testTag("ime-back-background")) {
                     Column(Modifier.fillMaxWidth().padding(24.dp)) {
                         ListSearchPill("Search before popup", { searchOpen = true }, anchor = searchAnchor)
-                        GlassActionButton(AppIcon.ActionMore, "Open IME Back popup",
+                        GlassActionButton(AppIcon.ActionEllipsis, "Open IME Back popup",
                             Modifier.glassAnchor(popupAnchor).testTag("ime-back-popup-trigger")) { popupOpen = true }
                     }
                 }

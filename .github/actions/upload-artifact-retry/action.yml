@@ -1,0 +1,72 @@
+name: Artifact upload with bounded retry
+description: >-
+  Upload an artifact, retrying twice when GitHub's artifact service drops the connection
+  (#670: 'Failed to FinalizeArtifact: ECONNRESET' after the content was uploaded). A final
+  failure is reported as infrastructure unless the path matched no files.
+inputs:
+  name:
+    description: Artifact name
+    required: true
+  path:
+    description: Files, directories or globs to upload, one per line
+    required: true
+  if-no-files-found:
+    description: warn, error or ignore, as in actions/upload-artifact
+    required: false
+    default: warn
+runs:
+  using: composite
+  steps:
+    # The caller's own condition decides whether this action runs at all; always() keeps
+    # failure()/always() callers from skipping the attempts inside it.
+    - id: first
+      if: always()
+      continue-on-error: true
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      with:
+        name: ${{ inputs.name }}
+        path: ${{ inputs.path }}
+        if-no-files-found: ${{ inputs.if-no-files-found }}
+    - if: always() && steps.first.outcome == 'failure'
+      shell: bash
+      run: sleep 15
+    - id: second
+      if: always() && steps.first.outcome == 'failure'
+      continue-on-error: true
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      with:
+        name: ${{ inputs.name }}
+        path: ${{ inputs.path }}
+        if-no-files-found: ${{ inputs.if-no-files-found }}
+        overwrite: true
+    - if: always() && steps.second.outcome == 'failure'
+      shell: bash
+      run: sleep 45
+    - id: third
+      if: always() && steps.second.outcome == 'failure'
+      continue-on-error: true
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      with:
+        name: ${{ inputs.name }}
+        path: ${{ inputs.path }}
+        if-no-files-found: ${{ inputs.if-no-files-found }}
+        overwrite: true
+    - if: always() && steps.third.outcome == 'failure'
+      shell: bash
+      env:
+        ARTIFACT: ${{ inputs.name }}
+        PATHS: ${{ inputs.path }}
+      run: |
+        shopt -s globstar nullglob
+        matched=0
+        while IFS= read -r pattern; do
+          pattern="${pattern#"${pattern%%[![:space:]]*}"}"
+          [[ -z "$pattern" || "$pattern" == '!'* ]] && continue
+          for match in $pattern; do [[ -e "$match" ]] && { matched=1; break; }; done
+        done <<< "$PATHS"
+        if (( matched == 0 )); then
+          echo "::error title=Missing artifact files::$ARTIFACT matched no files; this is not an upload outage."
+        else
+          echo "::error title=Infrastructure: artifact upload (#670)::$ARTIFACT failed on 3 attempts in GitHub's artifact service (see each attempt's error); not a test failure. Rerun the job."
+        fi
+        exit 1

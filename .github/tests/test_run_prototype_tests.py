@@ -38,6 +38,8 @@ class RunnerContract(unittest.TestCase):
         (self.root/'.github/test-evidence/observe.py').symlink_to(OBSERVER.resolve())
         (self.root/'.github/test-evidence/supervise.py').symlink_to((ROOT/'.github/test-evidence/supervise.py').resolve())
         (self.root/'.github/test-evidence/source_methods.py').symlink_to((ROOT/'.github/test-evidence/source_methods.py').resolve())
+        (self.root/'.github/test-evidence/teardown_offline.py').symlink_to((ROOT/'.github/test-evidence/teardown_offline.py').resolve())
+        (self.root/'.github/test-evidence/utp_results.py').symlink_to((ROOT/'.github/test-evidence/utp_results.py').resolve())
         self.executable('bin/node', '''#!/usr/bin/env python3
 import json,pathlib,sys,time
 a=sys.argv
@@ -58,6 +60,13 @@ trap 'exit 130' INT
 import json,os,pathlib,signal,sys,time,xml.etree.ElementTree as E
 pathlib.Path('argv.json').write_text(json.dumps(sys.argv))
 mode=os.environ.get('MODE','pass')
+# Model the first connected task rebuilding APKs when its BuildConfig input changes.
+if mode in ('repackage-unless-prebuilt', 'repackage-always'):
+    if mode == 'repackage-always' or '.github/prebuilt-device-tests.gradle' not in sys.argv:
+        for apk in ('app/build/outputs/apk/debug/app-debug.apk',
+                    'app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk'):
+            pathlib.Path(apk).write_bytes(b'repackaged-with-a-different-build-config')
+        pathlib.Path('repackaged').touch()
 classes=sys.argv[-1].split('=',1)[1].split(',')
 if mode=='cancel':
     def stop(sig,frame):
@@ -70,6 +79,11 @@ if mode=='cancel':
 if mode=='exit7': sys.exit(7)
 if mode=='silent': sys.exit(0)
 if mode=='observed': print(classes[0]+' > regression[emulator-5554 - 16] FAILED',flush=True)
+with pathlib.Path('gradle-invocations').open('a') as log: log.write('x'+chr(10))
+invocation=len(pathlib.Path('gradle-invocations').read_text().split())
+# #675: one invocation completes every test, then loses adb during UTP teardown.
+offline=mode.startswith('teardown-offline') and invocation==int(os.environ.get('OFFLINE_ON_INVOCATION','1'))
+if offline: pathlib.Path('offline-attempt').touch()
 root=pathlib.Path('app/build/outputs/androidTest-results/connected/debug');root.mkdir(parents=True,exist_ok=True)
 for i,selector in enumerate(os.environ['CASES'].split(',') if os.environ.get('CASES') else classes):
     cls, _, method = selector.partition('#')
@@ -77,7 +91,7 @@ for i,selector in enumerate(os.environ['CASES'].split(',') if os.environ.get('CA
     if mode=='missing-class' and i==1: continue
     suite=E.Element('testsuite',tests='1')
     case=E.SubElement(suite,'testcase',classname=cls,name=method)
-    if mode=='xml-failure' and i==0:E.SubElement(case,'failure')
+    if mode in ('xml-failure','teardown-offline-failure') and i==0:E.SubElement(case,'failure')
     if mode=='all-skipped' and i==0:E.SubElement(case,'skipped')
     if os.environ.get('SKIP_CLASS')==cls:
         method=os.environ['SKIP_METHOD']
@@ -93,12 +107,36 @@ for i,selector in enumerate(os.environ['CASES'].split(',') if os.environ.get('CA
             reason=os.environ.get('SKIP_REASON','')
             lines=['10-27 12:00:00.000 123 456 I TestRunner: started: '+marker,
                 '10-27 12:00:00.001 123 456 E TestRunner: assumption failed: '+marker]
-            if reason:lines.append('10-27 12:00:00.002 123 456 E TestRunner: org.junit.AssumptionViolatedException: '+reason)
-            if os.environ.get('SKIP_CALLSITE'):lines.append('10-27 12:00:00.002 123 456 E TestRunner: '+os.environ['SKIP_CALLSITE'])
+            logged=os.environ.get('SKIP_LOG_REASON',reason)
+            if logged and logged!='no':lines.append('10-27 12:00:00.002 123 456 E TestRunner: org.junit.AssumptionViolatedException: '+logged)
+            if os.environ.get('SKIP_CALLSITE') and os.environ.get('SKIP_LOG_CALLSITE','yes')=='yes':lines.append('10-27 12:00:00.002 123 456 E TestRunner: '+os.environ['SKIP_CALLSITE'])
+            if reason and os.environ.get('SKIP_UTP','yes')=='yes':
+                # UTP's TestSuiteResult.test_result: TestCase, status, assumption Error (#669).
+                def varint(v):
+                    out=bytearray()
+                    while True:
+                        out.append((v&0x7f)|(0x80 if v>0x7f else 0));v>>=7
+                        if not v:return bytes(out)
+                def field(n,p):
+                    p=p.encode() if isinstance(p,str) else p
+                    return varint(n<<3|2)+varint(len(p))+p
+                trace='org.junit.AssumptionViolatedException: '+reason+chr(10)+chr(9)+(os.environ.get('SKIP_CALLSITE') or 'at org.junit.Assume.assumeTrue(Assume.java:68)')
+                package,simple=cls.rsplit('.',1)
+                result=field(1,field(1,simple)+field(2,package)+field(3,method)+field(6,bytes([8,0xd2,0x99,0xff])))
+                result+=varint(2<<3)+varint(int(os.environ.get('SKIP_UTP_STATUS','4')))
+                result+=field(3,field(1,trace)+field(2,'org.junit.AssumptionViolatedException')+field(3,trace))
+                (folder/'test-result.pb').write_bytes(field(3,result))
             if os.environ.get('SKIP_FINISHED')=='yes':lines.append('10-27 12:00:00.003 123 456 I TestRunner: finished: '+marker)
             (folder/('logcat-'+cls+'-'+method+'.txt')).write_text(chr(10).join(lines)+chr(10))
     if mode=='bad-count':suite.set('tests','2')
     E.ElementTree(suite).write(root/('TEST-'+str(i)+'.xml'))
+if offline:
+    n=len(classes)
+    print('emulator-5554 - 16 Tests %d/%d completed. (0 skipped) (0 failed)'%(n,n))
+    print('Finished %d tests on emulator-5554 - 16'%n)
+    print('Exception thrown during onAfterAll invocation of plugin AndroidTestApkInstallerPlugin: device offline')
+    print('com.android.ddmlib.AdbCommandRejectedException: device offline',flush=True)
+    sys.exit(1)
 ''')
         self.env = dict(os.environ, PATH=str(self.root/'bin')+os.pathsep+os.environ['PATH'], AFFECTED_CLASSES=AFFECTED, TEST_API='36', GITHUB_SHA=SHA, GITHUB_RUN_ID='1', GITHUB_RUN_ATTEMPT='1', GITHUB_ACTIONS='true', RUNNER_ENVIRONMENT='github-hosted')
 
@@ -116,6 +154,30 @@ for i,selector in enumerate(os.environ['CASES'].split(',') if os.environ.get('CA
             self.assertEqual({AFFECTED+'#regression': 'passed'}, receipt['methods'])
             self.assertEqual([], receipt['required_selectors'])
         self.assertEqual(3, (self.root/'lifecycle').read_text().count('setup'))
+
+    def test_green_method_repetition_is_accepted_by_the_delivery_decision(self):
+        # #657: the decision must accept the runner's own green repeat_methods evidence on both APIs.
+        import yaml, hashlib
+        workflow=yaml.safe_load((ROOT/'.github/workflows/prototype.yml').read_text())
+        script=next(step['run'] for step in workflow['jobs']['evidence']['steps']
+                    if step.get('name') == 'Record passed, failed and not-run checks')
+        decision=self.root/'decision'; evidence=decision/'evidence'
+        for api in ('26','36'):
+            self.run_case(PROTOTYPE_REPEAT='2', PROTOTYPE_METHODS=AFFECTED+'#regression', TEST_API=api, _timeout=30)
+            shutil.move(str(self.root/'prototype-evidence'), evidence/f'prototype-focused-api-{api}'/'prototype-evidence')
+            (self.root/'lifecycle').unlink()
+            compatibility=evidence/f'prototype-compatibility-api-{api}'; compatibility.mkdir()
+            (compatibility/'provenance.json').write_text(json.dumps({'source_sha':SHA}))
+        canonical=evidence/'prototype-build-internal-unvalidated'; canonical.mkdir()
+        (canonical/'app-debug.apk').write_bytes(b'canonical')
+        (canonical/'provenance.json').write_text(json.dumps({'sha':SHA,'apk_sha256':hashlib.sha256(b'canonical').hexdigest(),'run_id':'1','run_attempt':'1','signing_certificate':'verified-test-certificate'}))
+        checks={k:{'result':'success'} for k in workflow['jobs']['evidence']['needs']}
+        env=dict(os.environ,PROTOTYPE_METHODS=AFFECTED+'#regression',PROTOTYPE_REPEAT='2',CHECKS=json.dumps(checks),KNOWN_ISSUES='Not a release',AFFECTED_CLASSES=AFFECTED,COVERAGE_REASON='Queue regression',GITHUB_SHA=SHA,GITHUB_REF='refs/heads/test',GITHUB_RUN_ID='1',GITHUB_RUN_ATTEMPT='1',GITHUB_STEP_SUMMARY=str(decision/'summary'))
+        result=subprocess.run(['bash','-c',script],cwd=decision,env=env,capture_output=True,text=True)
+        manifest=json.loads((decision/'prototype-delivery/manifest.json').read_text())
+        self.assertEqual([],manifest['validation_errors'],result.stdout+'\n'+result.stderr)
+        self.assertTrue(manifest['ready_for_prototype_delivery'])
+        self.assertEqual(0,result.returncode,result.stderr)
 
     def test_method_selection_rejects_unknown_source_method(self):
         self.run_case(1, PROTOTYPE_METHODS=AFFECTED+'#unknown')
@@ -136,6 +198,121 @@ for i,selector in enumerate(os.environ['CASES'].split(',') if os.environ.get('CA
         self.assertEqual('failed', summary['gate']['status'])
         self.assertTrue(all(item['status']=='not-run' for item in summary['iterations']))
 
+    def reconnecting_adb(self):
+        # The same guest answers again after the drop unless ADB_STATE or ADB_BOOT_ID_AFTER says otherwise.
+        self.executable('bin/adb', '''#!/bin/sh
+case "$*" in
+  *get-state*) echo "${ADB_STATE:-device}" ;;
+  *sys.boot_completed*) echo 1 ;;
+  *ro.build.version.sdk*) echo "${ACTUAL_API:-$TEST_API}" ;;
+  *boot_id*) if [ -e offline-attempt ]; then echo "${ADB_BOOT_ID_AFTER:-boot-1}"; else echo boot-1; fi ;;
+  *uninstall*) echo Success ;;
+  *"pm list packages"*) [ -z "${ADB_STUCK_PACKAGE:-}" ] || echo "package:$ADB_STUCK_PACKAGE" ;;
+  *) echo "${ACTUAL_API:-$TEST_API}" ;;
+esac
+''')
+
+    def gradle_invocations(self):
+        path=self.root/'gradle-invocations'
+        return len(path.read_text().splitlines()) if path.exists() else 0
+
+    def test_teardown_offline_after_a_complete_pass_accepts_the_first_attempt(self):
+        self.reconnecting_adb()
+        result=self.run_case(0, _timeout=30, MODE='teardown-offline')
+        # Never a second run: it would give every test another chance.
+        self.assertEqual(1, self.gradle_invocations())
+        self.assertIn('::warning title=#675 adb offline after a complete pass::', result.stdout)
+        offline=self.root/'prototype-evidence/teardown-offline'
+        observed=json.loads((self.root/'prototype-evidence/live/observed/manifest.json').read_text())
+        self.assertEqual(('failed', 1, 0), (observed['status'], observed['child_returncode'], observed['observed_failure_lines']))
+        self.assertTrue(json.loads((offline/'classification.json').read_text())['accepted'])
+        recovery=json.loads((offline/'recovery.json').read_text())
+        self.assertTrue(recovery['recovered'])
+        self.assertEqual('boot-1', recovery['observed_boot_id'])
+        uninstalled=json.loads((offline/'uninstall.json').read_text())
+        self.assertEqual(['io.github.anastaci1a.localica.debug', 'io.github.anastaci1a.localica.debug.test'], sorted(uninstalled))
+        self.assertTrue(all(entry['removed'] for entry in uninstalled.values()))
+        self.assertEqual('first_attempt_exit=1\n', (offline/'recovered.txt').read_text())
+        evidence=json.loads((self.root/'prototype-evidence/reconciled-tests.json').read_text())
+        self.assertEqual({REQUIRED,FOCUS,CONTRAST,AFFECTED}, set(evidence['counts']))
+        self.assertEqual('setup\nrestore\n', (self.root/'lifecycle').read_text())
+        self.assertIn('boot_id=boot-1', (self.root/'prototype-evidence/context.txt').read_text())
+
+    def test_teardown_offline_with_a_failed_test_keeps_the_failure(self):
+        self.reconnecting_adb()
+        self.run_case(1, _timeout=30, MODE='teardown-offline-failure')
+        self.assertEqual(1, self.gradle_invocations())
+        record=json.loads((self.root/'prototype-evidence/teardown-offline/classification.json').read_text())
+        self.assertFalse(record['accepted'])
+        self.assertTrue(any(reason.startswith('Failed test ') for reason in record['reasons']), record['reasons'])
+        self.assertFalse((self.root/'prototype-evidence/teardown-offline/recovery.json').exists())
+        self.assertFalse((self.root/'prototype-evidence/reconciled-tests.json').exists())
+        self.assertEqual('setup\nrestore\n', (self.root/'lifecycle').read_text())
+
+    def test_teardown_offline_with_a_rebooted_guest_keeps_the_failure(self):
+        self.reconnecting_adb()
+        self.run_case(1, _timeout=30, MODE='teardown-offline', ADB_BOOT_ID_AFTER='boot-2')
+        self.assertEqual(1, self.gradle_invocations())
+        recovery=json.loads((self.root/'prototype-evidence/teardown-offline/recovery.json').read_text())
+        self.assertFalse(recovery['recovered'])
+        self.assertIn('rebooted', recovery['reason'])
+        self.assertFalse((self.root/'prototype-evidence/teardown-offline/recovered.txt').exists())
+        self.assertFalse((self.root/'prototype-evidence/reconciled-tests.json').exists())
+
+    def test_teardown_offline_without_a_returning_device_keeps_the_failure(self):
+        self.reconnecting_adb()
+        self.run_case(1, _timeout=40, MODE='teardown-offline', ADB_STATE='offline', PROTOTYPE_OFFLINE_RECOVERY_SECONDS='1')
+        self.assertEqual(1, self.gradle_invocations())
+        recovery=json.loads((self.root/'prototype-evidence/teardown-offline/recovery.json').read_text())
+        self.assertFalse(recovery['recovered'])
+        self.assertIn('did not return', recovery['reason'])
+        self.assertTrue(all(state['state']=='offline' for state in recovery['states']))
+        self.assertFalse((self.root/'prototype-evidence/reconciled-tests.json').exists())
+
+    def test_teardown_offline_with_an_incomplete_uninstall_keeps_the_failure(self):
+        self.reconnecting_adb()
+        self.run_case(1, _timeout=30, MODE='teardown-offline', ADB_STUCK_PACKAGE='io.github.anastaci1a.localica.debug')
+        offline=self.root/'prototype-evidence/teardown-offline'
+        self.assertTrue(json.loads((offline/'recovery.json').read_text())['recovered'])
+        uninstalled=json.loads((offline/'uninstall.json').read_text())
+        self.assertFalse(uninstalled['io.github.anastaci1a.localica.debug']['removed'])
+        self.assertFalse((offline/'recovered.txt').exists())
+        self.assertFalse((self.root/'prototype-evidence/reconciled-tests.json').exists())
+
+    def test_teardown_offline_with_a_publisher_failure_keeps_the_failure(self):
+        self.reconnecting_adb()
+        self.executable('bin/node', '#!/bin/sh\nexit 17\n')
+        self.run_case(1, _timeout=30, MODE='teardown-offline')
+        offline=self.root/'prototype-evidence/teardown-offline'
+        self.assertTrue(json.loads((offline/'recovery.json').read_text())['recovered'])
+        self.assertFalse((offline/'recovered.txt').exists())
+        self.assertFalse((self.root/'prototype-evidence/reconciled-tests.json').exists())
+
+    def test_repeat_records_the_recovered_iteration(self):
+        self.reconnecting_adb()
+        result=self.run_case(0, _timeout=40, PROTOTYPE_REPEAT='2', MODE='teardown-offline')
+        self.assertEqual(2, self.gradle_invocations())
+        summary=json.loads((self.root/'prototype-evidence/iterations/summary.json').read_text())
+        first, second=summary['iterations']
+        self.assertEqual(('passed', 0, 'passed', 0), (first['status'], first['exit_code'], second['status'], second['exit_code']))
+        self.assertEqual({'issue': 675, 'signature': 'teardown-device-offline', 'first_attempt_exit': 'first_attempt_exit=1',
+                          'evidence': 'prototype-evidence/teardown-offline'},
+                         {k: v for k, v in first['infrastructure_recovered'].items() if k != 'recovered_after_seconds'})
+        self.assertNotIn('infrastructure_recovered', second)
+        self.assertIn('Prototype iteration 1/2: passed (recovered from a #675 teardown adb drop)', result.stdout)
+        self.assertIn('Prototype iteration 2/2: passed\n', result.stdout)
+        self.assertTrue((self.root/'prototype-evidence/iterations/iteration-01/prototype-evidence/teardown-offline/recovery.json').is_file())
+
+    def test_exact_method_iterations_are_not_recovered(self):
+        # The delivery decision requires a clean observer exit for every exact-method iteration.
+        self.reconnecting_adb()
+        self.run_case(1, _timeout=40, PROTOTYPE_REPEAT='2', PROTOTYPE_METHODS=AFFECTED+'#regression', MODE='teardown-offline', OFFLINE_ON_INVOCATION='2')
+        self.assertEqual(2, self.gradle_invocations())
+        summary=json.loads((self.root/'prototype-evidence/iterations/summary.json').read_text())
+        self.assertEqual('passed', summary['gate']['status'])
+        self.assertEqual(('failed', 1, 'not-run'), (summary['iterations'][0]['status'], summary['iterations'][0]['exit_code'], summary['iterations'][1]['status']))
+        self.assertFalse((self.root/'prototype-evidence/iterations/iteration-01/prototype-evidence/teardown-offline').exists())
+
     def executable(self,path,text):
         target=self.root/path;target.write_text(text);target.chmod(0o755)
 
@@ -143,6 +320,42 @@ for i,selector in enumerate(os.environ['CASES'].split(',') if os.environ.get('CA
         result=subprocess.run(['bash','runner.sh'],cwd=self.root,env=dict(self.env,**env),capture_output=True,text=True,timeout=_timeout)
         self.assertEqual(expected,result.returncode,result.stdout+'\n'+result.stderr)
         return result
+
+    def test_post_install_aot_is_requested_only_on_api26(self):
+        self.run_case(TEST_API='26')
+        args=json.loads((self.root/'argv.json').read_text())
+        self.assertEqual('-I', args[args.index('.github/api26-aot.gradle')-1])
+        self.rerun(TEST_API='36')
+        args=json.loads((self.root/'argv.json').read_text())
+        self.assertNotIn('.github/api26-aot.gradle', args)
+
+    def test_five_class_repeat_reuses_the_precompiled_pair_when_rebuild_inputs_change(self):
+        import hashlib
+        affected=[AFFECTED] + [self.gated_source('Affected'+str(i)+'Test',
+                    '@org.junit.Test fun regression() {}') for i in range(4)]
+        self.run_case(PROTOTYPE_REPEAT='3', MODE='repackage-unless-prebuilt',
+                      AFFECTED_CLASSES=','.join(affected), _timeout=40)
+        self.assertFalse((self.root/'repackaged').exists())
+        args=json.loads((self.root/'argv.json').read_text())
+        self.assertIn('.github/prebuilt-device-tests.gradle', args)
+        root=self.root/'prototype-evidence'
+        summary=json.loads((root/'iterations/summary.json').read_text())
+        self.assertEqual(3,len(summary['iterations']))
+        recorded=(root/'test-input-apks.sha256').read_text()
+        for path in ('app/build/outputs/apk/debug/app-debug.apk',
+                     'app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk'):
+            self.assertIn(hashlib.sha256((self.root/path).read_bytes()).hexdigest()+'  '+path,recorded)
+        for item in summary['iterations']:
+            self.assertEqual('passed', item['status'])
+            folder=root/f"iterations/iteration-{item['iteration']:02d}/prototype-evidence"
+            self.assertEqual(recorded,(folder/'test-input-apks.sha256').read_text())
+            receipt=json.loads((folder/'reconciled-tests.json').read_text())
+            self.assertEqual(set(affected+[REQUIRED,FOCUS,CONTRAST]),set(receipt['selectors']))
+
+    def test_forbidden_repackaging_cannot_produce_a_passing_receipt(self):
+        result=self.run_case(1, MODE='repackage-always')
+        self.assertIn('app-debug.apk: FAILED', result.stdout)
+        self.assertFalse((self.root/'prototype-evidence/reconciled-tests.json').exists())
 
     def test_duplicate_selectors_deduplicate(self):
         self.run_case(AFFECTED_CLASSES=AFFECTED+','+AFFECTED)
@@ -470,6 +683,26 @@ p=pathlib.Path(sys.argv[sys.argv.index('--state-dir')+1]);p.mkdir();(p/'complete
         self.rerun(1, AFFECTED_CLASSES=cls, TEST_API='36', CASES=self.cases())
         self.rerun(1, AFFECTED_CLASSES=cls, TEST_API='26', CASES=self.cases(cls+'#one'))
 
+    def test_max_sdk_absence_is_qualified_on_36_and_execution_required_on_26(self):
+        cls=self.gated_source('LegacyCaptureTest', '@org.junit.Test fun plain() {} '
+            '@org.junit.Test @androidx.test.filters.SdkSuppress(maxSdkVersion = 32) fun legacy() {}')
+        self.run_case(AFFECTED_CLASSES=cls, TEST_API='36', CASES=self.cases(cls+'#plain'))
+        evidence=json.loads((self.root/'prototype-evidence/reconciled-tests.json').read_text())
+        self.assertEqual({cls+'#legacy': 'SdkSuppress(maxSdkVersion=32) excludes API 36'},
+                         evidence['qualified_absences'])
+        self.rerun(AFFECTED_CLASSES=cls, TEST_API='26', CASES=self.cases(cls+'#plain',cls+'#legacy'))
+        self.rerun(1, AFFECTED_CLASSES=cls, TEST_API='26', CASES=self.cases(cls+'#plain'))
+        self.rerun(1, AFFECTED_CLASSES=cls, TEST_API='36', CASES=self.cases(cls+'#plain',cls+'#legacy'))
+        self.rerun(1, AFFECTED_CLASSES=cls, TEST_API='26', SKIP_CLASS=cls, SKIP_METHOD='legacy')
+        self.rerun(1, AFFECTED_CLASSES=cls, TEST_API='36', SKIP_CLASS=cls, SKIP_METHOD='legacy')
+
+    def test_max_sdk_class_gate_requires_absence_only_above_bound(self):
+        cls=self.gated_source('LegacyWholeTest', '@org.junit.Test fun one() {}',
+                              '@androidx.test.filters.SdkSuppress(maxSdkVersion = 32)')
+        self.run_case(AFFECTED_CLASSES=cls, TEST_API='36', CASES=self.cases())
+        self.rerun(AFFECTED_CLASSES=cls, TEST_API='26', CASES=self.cases(cls+'#one'))
+        self.rerun(1, AFFECTED_CLASSES=cls, TEST_API='26', CASES=self.cases())
+
     def assume_gated(self, name='AssumeGatedTest'):
         cls=self.gated_source(name, '@org.junit.Test fun regression() {} @org.junit.Test fun gatedByAssume() { '
             'org.junit.Assume.assumeTrue(android.os.Build.VERSION.SDK_INT >= 33)\n val x = 1 }')
@@ -532,8 +765,37 @@ p=pathlib.Path(sys.argv[sys.argv.index('--state-dir')+1]);p.mkdir();(p/'complete
     def test_selection_missing_sdk_callsite_rejected(self):
         self.run_case(1,**self.selection_sdk_skip('translatingASelectionReusesItsDistanceField',303,SKIP_CALLSITE=''))
 
-    def test_selection_missing_terminal_rejected(self):
-        self.run_case(1,**self.selection_sdk_skip('translatingASelectionReusesItsDistanceField',303,SKIP_FINISHED='no'))
+    def test_selection_non_assumption_terminal_rejected(self):
+        # The record's status replaces the log's 'finished' line; a failed terminal cannot qualify.
+        self.run_case(1,**self.selection_sdk_skip('translatingASelectionReusesItsDistanceField',303,SKIP_UTP_STATUS='2'))
+
+    def test_selection_guard_survives_dropped_log_entries(self):
+        # #669: logd dropped the reason, callsite and terminal; UTP's record still proves them.
+        self.run_case(**self.selection_sdk_skip('translatingASelectionReusesItsDistanceField',303,
+            SKIP_LOG_REASON='no',SKIP_LOG_CALLSITE='no',SKIP_FINISHED='no'))
+        result=json.loads((self.root/'prototype-evidence/reconciled-tests.json').read_text())
+        self.assertEqual('got: <false>, expected: is <true>',result['qualified_skips'][0]['reason'])
+
+    def test_selection_record_callsite_is_required(self):
+        self.run_case(1,**self.selection_sdk_skip('translatingASelectionReusesItsDistanceField',303,
+            SKIP_CALLSITE='at org.junit.Assume.assumeTrue(Assume.java:68)'))
+
+    def profile_skip(self, **overrides):
+        cls='io.github.anastaci1a.localica.DialogChromeLayoutTest'
+        method='native360x640Font2RetainsSharedChromeAndEveryRepeatControl'
+        return dict(self.skip_source(cls,method),SKIP_REASON='Requires sufficient display space and actual Android font scale 2',**overrides)
+
+    def test_profile_reason_survives_dropped_log_reason(self):
+        self.run_case(**self.profile_skip(SKIP_LOG_REASON='no'))
+        evidence=json.loads((self.root/'prototype-evidence/reconciled-tests.json').read_text())
+        self.assertEqual('Requires sufficient display space and actual Android font scale 2',evidence['qualified_skips'][0]['reason'])
+        self.assertTrue(evidence['qualified_skips'][0]['reason_records'][0]['file'].endswith('test-result.pb'))
+
+    def test_profile_reason_requires_the_utp_record(self):
+        self.run_case(1,**self.profile_skip(SKIP_UTP='no'))
+
+    def test_profile_log_cannot_contradict_the_utp_record(self):
+        self.run_case(1,**self.profile_skip(SKIP_LOG_REASON='Different assumption'))
 
     def test_selection_wrong_assumption_reason_rejected(self):
         self.run_case(1,**self.selection_sdk_skip('translatingASelectionReusesItsDistanceField',303,SKIP_REASON='Different assumption'))
@@ -599,10 +861,13 @@ p=pathlib.Path(sys.argv[sys.argv.index('--state-dir')+1]);p.mkdir();(p/'complete
 
 
 class WorkflowContract(unittest.TestCase):
-    def decision(self, failed=False, missing=False, wrong_sha=False, contradictory=False, malformed=False, partial_methods=False, skipped_required_method=False, build_attempt="1", decision_attempt="1", build_run="1", wrong_digest=False, repetitions=1, bad_iteration=False, missing_iteration=False, method_mode=False, missing_gate=False, bad_method=False, duplicate_command=False):
+    def decision(self, failed=False, missing=False, wrong_sha=False, contradictory=False, malformed=False, partial_methods=False, skipped_required_method=False, build_attempt="1", decision_attempt="1", build_run="1", wrong_digest=False, repetitions=1, bad_iteration=False, missing_iteration=False, method_mode=False, missing_gate=False, bad_method=False, duplicate_command=False, affected_classes=None, changed_iteration_apks=False):
         import yaml, hashlib
+        affected_classes=affected_classes or [AFFECTED]
+        selected=[REQUIRED,FOCUS,CONTRAST]+affected_classes
         workflow=yaml.safe_load((ROOT/'.github/workflows/prototype.yml').read_text())
-        script=workflow['jobs']['evidence']['steps'][1]['run']
+        script=next(step['run'] for step in workflow['jobs']['evidence']['steps']
+                    if step.get('name') == 'Record passed, failed and not-run checks')
         with tempfile.TemporaryDirectory() as folder:
             root=Path(folder); evidence=root/'evidence';evidence.mkdir()
             canonical=evidence/'prototype-build-internal-unvalidated';canonical.mkdir()
@@ -613,10 +878,10 @@ class WorkflowContract(unittest.TestCase):
             if not missing:
                 for api in (26,36):
                     focused=evidence/f'prototype-focused-api-{api}'/'prototype-evidence';focused.mkdir(parents=True)
-                    inventory={'selectors':[REQUIRED,FOCUS,CONTRAST,AFFECTED],'runtime_methods':[c+'#regression' for c in (REQUIRED,FOCUS,CONTRAST,AFFECTED)]}
+                    inventory={'selectors':selected,'runtime_methods':[c+'#regression' for c in selected]}
                     inventory_bytes=json.dumps(inventory).encode()
                     (focused/'expected-methods.json').write_bytes(inventory_bytes)
-                    (focused/'reconciled-tests.json').write_text(json.dumps({'source_inventory_sha256':hashlib.sha256(inventory_bytes).hexdigest(),'required_selectors':[REQUIRED,FOCUS,CONTRAST],'methods':{c+'#regression':'passed' for c in (REQUIRED,FOCUS,CONTRAST,AFFECTED)},'sha':SHA,'api':str(api),'selectors':[REQUIRED,FOCUS,CONTRAST,AFFECTED],'counts':{c:{'passed':1,'failed':0,'errors':0,'skipped':0} for c in (REQUIRED,FOCUS,CONTRAST,AFFECTED)}}))
+                    (focused/'reconciled-tests.json').write_text(json.dumps({'source_inventory_sha256':hashlib.sha256(inventory_bytes).hexdigest(),'required_selectors':[REQUIRED,FOCUS,CONTRAST],'methods':{c+'#regression':'passed' for c in selected},'sha':SHA,'api':str(api),'selectors':selected,'counts':{c:{'passed':1,'failed':0,'errors':0,'skipped':0} for c in selected}}))
                     if partial_methods:
                         data=json.loads((focused/'reconciled-tests.json').read_text())
                         data['methods'].pop(REQUIRED+'#regression')
@@ -642,6 +907,8 @@ class WorkflowContract(unittest.TestCase):
                         for index in range(1, repetitions + 1):
                             folder = iterations/f'iteration-{index:02d}'/'prototype-evidence'
                             shutil.copytree(focused, folder, ignore=shutil.ignore_patterns('iterations'))
+                            if changed_iteration_apks and index == 1:
+                                (folder/'test-input-apks.sha256').write_text('changed APK pair')
                             raw = (folder/'reconciled-tests.json').read_bytes()
                             item = {'iteration': index, 'status': 'passed', 'exit_code': 0,
                                     'receipt_sha256': hashlib.sha256(raw).hexdigest()}
@@ -675,11 +942,34 @@ class WorkflowContract(unittest.TestCase):
                         (iterations/'summary.json').write_text(json.dumps(summary))
                     compatibility=evidence/f'prototype-compatibility-api-{api}';compatibility.mkdir()
                     (compatibility/'provenance.json').write_text(json.dumps({'source_sha':SHA}))
-            env=dict(os.environ,PROTOTYPE_METHODS=AFFECTED+'#regression' if method_mode else '',PROTOTYPE_REPEAT=str(repetitions),CHECKS=json.dumps(checks),KNOWN_ISSUES='Not a release',AFFECTED_CLASSES=AFFECTED,COVERAGE_REASON='Queue regression',GITHUB_SHA=SHA,GITHUB_REF='refs/heads/test',GITHUB_RUN_ID='1',GITHUB_RUN_ATTEMPT=decision_attempt,GITHUB_STEP_SUMMARY=str(root/'summary'))
+            env=dict(os.environ,PROTOTYPE_METHODS=AFFECTED+'#regression' if method_mode else '',PROTOTYPE_REPEAT=str(repetitions),CHECKS=json.dumps(checks),KNOWN_ISSUES='Not a release',AFFECTED_CLASSES=','.join(affected_classes),COVERAGE_REASON='Queue regression',GITHUB_SHA=SHA,GITHUB_REF='refs/heads/test',GITHUB_RUN_ID='1',GITHUB_RUN_ATTEMPT=decision_attempt,GITHUB_STEP_SUMMARY=str(root/'summary'))
             result=subprocess.run(['bash','-c',script],cwd=root,env=env,capture_output=True,text=True)
             out=root/'prototype-delivery'
             manifest=json.loads((out/'manifest.json').read_text()) if (out/'manifest.json').exists() else None
             return result,manifest,list(out.glob('*.apk'))
+
+    def test_five_class_repeat_manifest_passes_and_names_changed_apks(self):
+        affected=[AFFECTED]+['io.github.anastaci1a.localica.Affected'+str(i)+'Test' for i in range(4)]
+        result,manifest,apks=self.decision(repetitions=3,affected_classes=affected)
+        self.assertEqual(0,result.returncode,result.stderr)
+        self.assertTrue(manifest['ready_for_prototype_delivery'])
+        self.assertEqual(5,len(manifest['requested_affected_classes']))
+        result,manifest,apks=self.decision(repetitions=3,affected_classes=affected,changed_iteration_apks=True)
+        self.assertNotEqual(0,result.returncode)
+        self.assertFalse(manifest['ready_for_prototype_delivery'])
+        self.assertEqual([],apks)
+        self.assertIn('Focused API 26 evidence is not passing: AssertionError: API 26 iteration 1: '
+                      'Iteration test APK digests differ from the focused receipt',manifest['validation_errors'])
+
+    def test_every_delivery_validator_assertion_has_a_diagnostic_message(self):
+        import ast, yaml
+        workflow=yaml.safe_load((ROOT/'.github/workflows/prototype.yml').read_text())
+        script=next(step['run'] for step in workflow['jobs']['evidence']['steps']
+                    if step.get('name') == 'Record passed, failed and not-run checks')
+        tree=ast.parse('\n'.join(script.splitlines()[1:-1]))
+        assertions=[node for node in ast.walk(tree) if isinstance(node,ast.Assert)]
+        self.assertEqual(51,len(assertions))
+        self.assertTrue(all(node.msg is not None for node in assertions))
 
     def test_method_delivery_requires_gate_and_exact_repeated_methods(self):
         result, manifest, apks = self.decision(repetitions=2, method_mode=True)
@@ -871,7 +1161,7 @@ class WorkflowContract(unittest.TestCase):
                         'reactivecircus/android-emulator-runner@'))
                     self.assertIn('-show-kernel', emulator['with']['emulator-options'])
                     uploads = [step for step in steps if step.get('uses', '').startswith(
-                        'actions/upload-artifact@') and step.get('with', {}).get('path') ==
+                        ('actions/upload-artifact@', './.github/actions/upload-artifact-retry')) and step.get('with', {}).get('path') ==
                         '/tmp/android-runner/emu-crash-*/']
                     self.assertEqual(1, len(uploads), 'Missing retained emulator crash database')
                     self.assertIn(uploads[0]['if'], ('failure()', 'always()'))
@@ -905,7 +1195,8 @@ class WorkflowContract(unittest.TestCase):
         workflow=yaml.safe_load((ROOT/'.github/workflows/prototype.yml').read_text())
         self.assertEqual({'workflow_dispatch','workflow_call'},set(workflow['on']))
         self.assertEqual({'affected_classes','coverage_reason','known_issues','repeat','repeat_methods','runner'},set(workflow['on']['workflow_call']['inputs']))
-        self.assertEqual({'ANDROID_DEBUG_KEYSTORE'},set(workflow['on']['workflow_call']['secrets']))
+        self.assertEqual({'ANDROID_DEBUG_KEYSTORE','LASTFM_API_KEY'},set(workflow['on']['workflow_call']['secrets']))
+        self.assertFalse(workflow['on']['workflow_call']['secrets']['LASTFM_API_KEY']['required'])
         self.assertEqual({'contents':'read'},workflow['permissions'])
         jobs=workflow['jobs']
         self.assertEqual({'build','focused_26','focused_36','compatibility_26','compatibility_36'},set(jobs['evidence']['needs']))

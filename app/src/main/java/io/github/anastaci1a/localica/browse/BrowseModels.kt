@@ -222,6 +222,8 @@ object BrowseQueries {
 }
 
 internal fun BrowserItem.duration(): Long? = songs.mapNotNull { it.track.durationMs }.takeIf { it.isNotEmpty() }?.sum()
+/** Every collection kind, playlists included, sums its current distinct songs (#666). */
+internal fun BrowserItem.longestListenedMs(): Long = longestListenedMs(songs.map { it.track })
 internal fun BrowserItem.metadataText(sort: TrackSort): String? = songs.mapNotNull {
     when (sort) {
         TrackSort.Artist -> it.track.artist; TrackSort.AlbumArtist -> it.track.albumArtist ?: it.track.artist
@@ -242,6 +244,8 @@ internal fun BrowserItem.information(style: BrowseStyle, inherited: Map<MediaKin
         ExtraInfo.Duration -> duration()?.let { "${it / 60000}:${(it / 1000 % 60).toString().padStart(2, '0')}${if (songs.any { row -> row.track.durationMs == null }) " (partial)" else ""}" }
         ExtraInfo.Year -> songs.mapNotNull { it.track.year }.minOrNull()?.toString()
         ExtraInfo.MostPlayed -> "$playCount ${if (playCount == 1L) "play" else "plays"}"
+        ExtraInfo.LongestListened -> listeningTimeLabel(longestListenedMs()) +
+            if (songs.any { row -> row.track.playCount > 0 && row.track.durationMs == null }) " (partial)" else ""
         ExtraInfo.Added -> addedAt?.let { java.text.DateFormat.getDateInstance().format(java.util.Date(it)) }
         ExtraInfo.Modified -> modifiedAt?.let { java.text.DateFormat.getDateInstance().format(java.util.Date(it)) }
         ExtraInfo.Artist, ExtraInfo.AlbumArtist, ExtraInfo.Composer, ExtraInfo.Genre -> metadataText(TrackSort.valueOf(info.name))
@@ -250,3 +254,11 @@ internal fun BrowserItem.information(style: BrowseStyle, inherited: Map<MediaKin
 }
 
 internal fun songCountLabel(count: Int) = "$count ${if (count == 1) "song" else "songs"}"
+
+/** Listening totals grow past an hour, so hours join the shared m:ss clock style. */
+internal fun listeningTimeLabel(ms: Long): String {
+    val seconds = (ms / 1000 % 60).toString().padStart(2, '0')
+    val minutes = ms / 60000 % 60
+    val hours = ms / 3_600_000
+    return if (hours > 0) "$hours:${minutes.toString().padStart(2, '0')}:$seconds" else "$minutes:$seconds"
+}

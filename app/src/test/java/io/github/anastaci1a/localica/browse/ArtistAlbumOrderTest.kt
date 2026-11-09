@@ -193,6 +193,18 @@ class ArtistAlbumOrderTest {
         }
     }
 
+    @Test fun longestListenedSumsDistinctTrackListeningTimeAndTreatsUnknownLengthAsZero() {
+        val repeated = track("a", "A").copy(durationMs = 100, playCount = 9)
+        val input = listOf(row(repeated, "a1"), row(repeated, "a2"),
+            row(track("b1", "B").copy(durationMs = 300, playCount = 2)),
+            row(track("b2", "B").copy(durationMs = null, playCount = 50)),
+            row(track("c", "C").copy(durationMs = 1000, playCount = 1)))
+        assertTrue(TrackSort.LongestListened in ArtistAlbumOrder.supportedSorts)
+        assertEquals(listOf("B", "A", "C"), ordered(input, TrackSort.LongestListened).titles())
+        assertEquals(listOf("C", "A", "B"), ordered(input, TrackSort.LongestListened, false).titles())
+        assertEquals(5, ordered(input, TrackSort.LongestListened).rows.size)
+    }
+
     @Test fun durationSumsKnownDistinctTracksAndKeepsAllUnknownLast() {
         val partial = track("p1", "Partial").copy(durationMs = 50)
         val input = listOf(row(track("missing", "Unknown")), row(partial, "p1-a"), row(partial, "p1-b"),

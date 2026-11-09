@@ -75,14 +75,14 @@ class GlassMenuViewportTouchTest {
                             drawRect(Color(0xFFEAEAEA))
                         }
                         CompositionLocalProvider(LocalModalBackdrop provides source, LocalFrostedBackdrop provides source) {
-                            GlassActionButton(AppIcon.ActionMore, "Open long menu",
+                            GlassActionButton(AppIcon.ActionEllipsis, "Open long menu",
                                 Modifier.padding(32.dp).glassAnchor(anchor).testTag("long-menu-trigger")) { open = true }
                             GlassMenu(open, anchor, { nativeDismissRequests++; open = false }) {
                                 val view = LocalView.current
                                 SideEffect { popupView = view }
                                 Box(Modifier.width(240.dp)) {
                                     Column {
-                                        repeat(24) { index -> ActionMenuItem("Action ${index + 1}", icon = AppIcon.ActionMore) {
+                                        repeat(24) { index -> ActionMenuItem("Action ${index + 1}", icon = AppIcon.ActionEllipsis) {
                                             activated += index; open = false
                                         } }
                                     }

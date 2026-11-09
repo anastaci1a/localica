@@ -35,6 +35,9 @@ data class TrackRecord(
     val lyricist: String? = null,
     val modifiedAt: Long? = null,
     val addedAt: Long? = null,
+    val releaseType: String? = null,
+    val compilation: Boolean? = null,
+    val musicBrainzId: String? = null,
 )
 
 @Entity(tableName = "folder_tracks", primaryKeys = ["folderUri", "trackId"], foreignKeys = [
@@ -171,11 +174,20 @@ abstract class LibraryDao {
     }
 }
 
-@Database(entities = [FolderRecord::class, TrackRecord::class, FolderTrackRecord::class, TrackArtworkRecord::class], version = 7, exportSchema = true)
+@Database(entities = [FolderRecord::class, TrackRecord::class, FolderTrackRecord::class, TrackArtworkRecord::class], version = 9, exportSchema = true)
 abstract class LibraryDatabase : RoomDatabase() {
     abstract fun libraryDao(): LibraryDao
 
     companion object {
+        val MIGRATION_8_9 = object : Migration(8, 9) {
+            override fun migrate(db: SupportSQLiteDatabase) { db.execSQL("ALTER TABLE tracks ADD COLUMN musicBrainzId TEXT") }
+        }
+        val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE tracks ADD COLUMN releaseType TEXT")
+                db.execSQL("ALTER TABLE tracks ADD COLUMN compilation INTEGER")
+            }
+        }
         val MIGRATION_6_7 = object : Migration(6, 7) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("CREATE TABLE IF NOT EXISTS `track_artwork` (`trackId` TEXT NOT NULL, `sourceModifiedAt` INTEGER, `color` INTEGER, " +
@@ -183,7 +195,7 @@ abstract class LibraryDatabase : RoomDatabase() {
             }
         }
         /** Every migration, in order; shared by the app and migration tests. */
-        val MIGRATIONS get() = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
+        val MIGRATIONS get() = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9)
         val MIGRATION_5_6 = object : Migration(5, 6) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE tracks ADD COLUMN addedAt INTEGER")
@@ -272,20 +284,23 @@ class RoomLibraryStore(private val dao: LibraryDao) : LibraryStore {
     override suspend fun replaceRoot(result: ScanResult) {
         dao.replaceRoot(FolderRecord(result.folder.uri, result.folder.name), result.tracks.map {
             TrackRecord(it.id, it.title, it.artist, it.album, it.durationMs, it.fileName,
-                it.albumArtist, it.trackNumber, it.discNumber, it.year, it.genre, it.comment, it.composer, it.lyricist, it.modifiedAt)
+                it.albumArtist, it.trackNumber, it.discNumber, it.year, it.genre, it.comment, it.composer, it.lyricist, it.modifiedAt,
+                releaseType = it.releaseType, compilation = it.compilation, musicBrainzId = it.musicBrainzId)
         }, result.tracks.map { FolderTrackRecord(result.folder.uri, it.id, it.uri, it.relativePath, it.id in result.failedMetadataIds) })
     }
     override suspend fun mergeRoot(result: ScanResult) {
         dao.mergeRoot(FolderRecord(result.folder.uri, result.folder.name), result.tracks.map {
             TrackRecord(it.id, it.title, it.artist, it.album, it.durationMs, it.fileName,
-                it.albumArtist, it.trackNumber, it.discNumber, it.year, it.genre, it.comment, it.composer, it.lyricist, it.modifiedAt)
+                it.albumArtist, it.trackNumber, it.discNumber, it.year, it.genre, it.comment, it.composer, it.lyricist, it.modifiedAt,
+                releaseType = it.releaseType, compilation = it.compilation, musicBrainzId = it.musicBrainzId)
         }, result.tracks.map { FolderTrackRecord(result.folder.uri, it.id, it.uri, it.relativePath, it.id in result.failedMetadataIds) })
     }
     override suspend fun removeRoot(uri: String) = dao.removeRoot(uri)
     override suspend fun updateMetadata(track: Track) = updateMetadataBatch(listOf(track))
     override suspend fun updateMetadataBatch(tracks: List<Track>) = dao.updateMetadataBatch(tracks.map { track ->
         TrackRecord(track.id, track.title, track.artist, track.album, track.durationMs, track.fileName, track.albumArtist,
-            track.trackNumber, track.discNumber, track.year, track.genre, track.comment, track.composer, track.lyricist, track.modifiedAt)
+            track.trackNumber, track.discNumber, track.year, track.genre, track.comment, track.composer, track.lyricist, track.modifiedAt,
+            releaseType = track.releaseType, compilation = track.compilation, musicBrainzId = track.musicBrainzId)
     })
 }
 
@@ -305,5 +320,6 @@ private fun List<TrackInFolder>.canonicalTracks(): List<Track> =
         val location = locations.first()
         Track(location.uri, record.title, record.artist, record.album, record.durationMs, record.fileName,
             location.relativePath, record.id, record.albumArtist, record.trackNumber, record.discNumber, record.year,
-            record.genre, record.comment, locations, record.composer, record.lyricist, record.modifiedAt, record.addedAt)
+            record.genre, record.comment, locations, record.composer, record.lyricist, record.modifiedAt, record.addedAt,
+            releaseType = record.releaseType, compilation = record.compilation, musicBrainzId = record.musicBrainzId)
     }.inCanonicalOrder()

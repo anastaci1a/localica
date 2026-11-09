@@ -60,6 +60,7 @@ fun LocalicaScreen(
     onRetryPlayback: () -> Unit = onToggle,
     onSeekRequest: ((Long, String?) -> Long)? = null,
     playbackSample: (() -> PlaybackState)? = null,
+    lastFmSettingsRequest: Int = 0,
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val session: SessionSelection = androidx.lifecycle.viewmodel.compose.viewModel()
@@ -134,6 +135,9 @@ fun LocalicaScreen(
     var scannerOpen by rememberSaveable { mutableStateOf(false) }
     var returnToScanner by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(scannerRequest) { if (scannerRequest > 0) scannerOpen = true }
+    LaunchedEffect(lastFmSettingsRequest) {
+        if (lastFmSettingsRequest > 0) { settingsCategory = "Last.fm"; settingsOpen = true }
+    }
     var sortingRoute by rememberSaveable { mutableStateOf<String?>(null) }
     var expanded by rememberSaveable { mutableStateOf(false) }
     var queueOpen by rememberSaveable { mutableStateOf(false) }
@@ -338,7 +342,7 @@ fun LocalicaScreen(
                     Modifier else Modifier.statusBarsPadding())) {
                 if (!collectionChrome) Row(Modifier.zIndex(2f).fillMaxWidth().heightIn(min = 56.dp).padding(horizontal = 12.dp),
                     horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                    if ((navigation.stacks[tab]?.size ?: 1) > 1) ActionIcon(AppIcon.ActionBack, "Back") { back() }
+                    if ((navigation.stacks[tab]?.size ?: 1) > 1) ActionIcon(AppIcon.ActionChevronLeft, "Back") { back() }
                     androidx.compose.animation.Crossfade(if (route.search) "Search" else route.title ?: route.tab.label,
                         modifier = Modifier.weight(1f), animationSpec = androidx.compose.animation.core.tween(settings.motionDuration(220)), label = "Page heading") { title ->
                         Text(title, style = MaterialTheme.typography.titleLarge, modifier = Modifier.testTag("page-heading"))
@@ -499,7 +503,19 @@ fun LocalicaScreen(
             Text("Offline music, organized your way.")
             DiagnosticsExportAction()
             LibraryLicenses()
-        }, initialCategory = settingsCategory, onFullScan = onScanAll, onQuickScan = onQuickScan, libraryFiltersContent = {
+        }, lastFmContent = {
+            (context.applicationContext as? io.github.anastaci1a.localica.LocalicaApplication)?.let {
+                LastFmSettings(it.lastfm)
+            }
+        }, onlineFeaturesContent = {
+            (context.applicationContext as? io.github.anastaci1a.localica.LocalicaApplication)?.let {
+                OnlineFeaturesSettings(it.onlineMetadataConsent)
+            }
+        }, artistPhotosContent = {
+            (context.applicationContext as? io.github.anastaci1a.localica.LocalicaApplication)?.let {
+                ArtistPhotosSettings(it.artistPhotos, it.onlineMetadataConsent, library.snapshot)
+            }
+        }, lastFmSettingsRequest = if (settingsCategory == "Last.fm") lastFmSettingsRequest else 0, searchValues = settingsSearchValues(settings, queues.settings, libraryFilters), initialCategory = settingsCategory, onFullScan = onScanAll, onQuickScan = onQuickScan, libraryFiltersContent = {
             LibraryFilterSettings(libraryFilters) { libraryFilters = it; libraryFilterPreferences.write(it) }
         })
     // The app-owned scanner is the live count source; LibraryUiState carries scan milestones only.

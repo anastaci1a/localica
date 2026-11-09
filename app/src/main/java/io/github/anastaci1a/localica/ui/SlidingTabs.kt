@@ -65,8 +65,12 @@ internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, pagePosition: () 
         chosen = index
         if (notify) selected(tabs[index])
     }
-    fun tap(index: Int) {
-        haptics.emit(ControlHaptic.Weak)
+    // One contact: its starting option, the option under the finger and whether it travelled.
+    var origin by remember { mutableIntStateOf(chosen) }
+    var pressIndex by remember { mutableIntStateOf(chosen) }
+    var travelled by remember { mutableStateOf(false) }
+    fun tap(index: Int, haptic: Boolean = true) {
+        if (haptic) haptics.emit(ControlHaptic.Weak)
         if (tabs[index] == active && abs(page - index) < .001f && !pageDragging) {
             onReselect(tabs[index]); return
         }
@@ -152,6 +156,8 @@ internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, pagePosition: () 
         val contentOffset = selectorContentScrollOffset(scroll.value, scroll.maxValue, rtl)
         val viewportBounds = androidx.compose.ui.geometry.Rect(0f, 0f, viewport, baseHeight)
         fun move(delta: Float) {
+            // Travel, not the finger-down commit, retires an unfinished tap request.
+            if (delta != 0f && !travelled) { travelled = true; requested = null }
             raw += direction * delta / pixels
             val low = (scroll.value / pixels).coerceAtMost(tabs.lastIndex.toFloat())
             val high = ((scroll.value + viewport) / pixels - 1f).coerceIn(low, tabs.lastIndex.toFloat())
@@ -160,7 +166,8 @@ internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, pagePosition: () 
             if (excess != 0f) logicalWall = if (excess < 0f) -1f else 1f
             pressure = glassEdgePressure(excess)
             val position = magneticTabPosition(bounded).coerceIn(low, high)
-            scope.launch(start = CoroutineStart.UNDISPATCHED) { lens.snapTo(position) }
+            // The finger-down commit keeps the preview spring already heading to this position.
+            if (delta != 0f) scope.launch(start = CoroutineStart.UNDISPATCHED) { lens.snapTo(position) }
             val candidate = position.roundToInt().coerceIn(tabs.indices)
             if (candidate != chosen && abs(position - chosen) > .52f) focus(candidate)
         }
@@ -173,20 +180,27 @@ internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, pagePosition: () 
                 contact = { pressed = it },
                 onPreview = { point ->
                     val content = point.copy(x = point.x + if (fits) 0f else contentOffset)
-                    raw = if (selectorFrame.bounds.contains(content)) lens.value else
-                        atlasGeometry.logicalPositionAt(content, tabs.size, 0f, vertical = false, rtl = rtl)
-                            .coerceIn(0f, tabs.lastIndex.toFloat())
+                    val under = atlasGeometry.logicalPositionAt(content, tabs.size, 0f, vertical = false, rtl = rtl)
+                        .coerceIn(0f, tabs.lastIndex.toFloat())
+                    raw = if (selectorFrame.bounds.contains(content)) lens.value else under
+                    origin = chosen; pressIndex = under.roundToInt().coerceIn(tabs.indices); travelled = false
                     scope.launch(start = CoroutineStart.UNDISPATCHED) {
                         if (!fits) scroll.stopScroll()
                         if (reduced) lens.snapTo(magneticTabPosition(raw))
                         else lens.animateTo(magneticTabPosition(raw), spring(1f, 650f))
                     }
                 },
-                onStart = { requested = null; dragging = true },
+                onStart = { dragging = true },
                 onDelta = ::move, option = { chosen },
-                onEnd = { owned, _ ->
+                // #664: no scroll can claim a fitting bar or the lens (#366 keeps other
+                // overflow origins ineligible), so finger-down commits and pulses at once.
+                immediate = { true },
+                onTap = { if (chosen == origin) tap(pressIndex, haptic = false) },
+                onEnd = { owned, cancelled ->
                     pressure = 0f; dragging = false
-                    if (owned) requested = chosen
+                    // A cancelled press that never travelled restores the option it replaced.
+                    if (owned && cancelled && !travelled) { if (chosen != origin) focus(origin) }
+                    else if (owned) requested = chosen
                     // Pending contact may interrupt an unfinished tap/page transition.
                     // Return to its existing destination without changing domain selection.
                     val target = requested?.toFloat() ?: magneticTabPosition(page.coerceIn(0f, tabs.lastIndex.toFloat()))

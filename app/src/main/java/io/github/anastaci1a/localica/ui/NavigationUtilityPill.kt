@@ -24,7 +24,7 @@ internal fun NavigationUtilityPill(anchor: GlassAnchor, source: FrostedBackdrop,
                 }
                 GlassPillDivider()
                 Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
-                    Icon(appIconPainter(AppIcon.ActionMore), null, Modifier.size(28.dp))
+                    Icon(appIconPainter(AppIcon.ActionEllipsis), null, Modifier.size(28.dp))
                 }
             }
         }
@@ -36,7 +36,7 @@ internal fun NavigationUtilityPill(anchor: GlassAnchor, source: FrostedBackdrop,
         Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
             ActionIcon(AppIcon.ActionSearch, "Search library", glass = false, iconSize = 28.dp, onClick = onSearch)
             GlassPillDivider()
-            ActionIcon(AppIcon.ActionMore, "More", glass = false, iconSize = 28.dp, onClick = onMore)
+            ActionIcon(AppIcon.ActionEllipsis, "More", glass = false, iconSize = 28.dp, onClick = onMore)
         }
     }
 }

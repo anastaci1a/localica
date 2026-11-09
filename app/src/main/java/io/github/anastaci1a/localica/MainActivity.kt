@@ -30,7 +30,11 @@ private const val STARTUP_SCAN_DELAY_MILLIS = 1_000L
 class MainActivity : ComponentActivity() {
     private lateinit var model: LibraryViewModel
     private var scannerRequest by mutableIntStateOf(0)
+    private var lastFmSettingsRequest by mutableIntStateOf(0)
     private fun consumeScannerIntent(intent: Intent?) {
+        if (intent?.getBooleanExtra("localica.openLastFmSettings", false) == true) {
+            lastFmSettingsRequest++; intent.removeExtra("localica.openLastFmSettings")
+        }
         if (intent?.getBooleanExtra("show-tag-jobs", false) == true) {
             (application as LocalicaApplication).tagEditing.showJobs(); intent.removeExtra("show-tag-jobs")
         }
@@ -43,7 +47,7 @@ class MainActivity : ComponentActivity() {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T =
                 LibraryViewModel((application as LocalicaApplication).library, PlaybackConnection(applicationContext),
-                    (application as LocalicaApplication).playlists, (application as LocalicaApplication).scanner, (application as LocalicaApplication).statistics.counts) as T
+                    (application as LocalicaApplication).playlists, (application as LocalicaApplication).scanner, (application as LocalicaApplication).effectiveStatistics) as T
         })[LibraryViewModel::class.java]
         consumeScannerIntent(intent)
         val scanPreferences = io.github.anastaci1a.localica.scanner.ScanPreferences(this)
@@ -87,7 +91,7 @@ class MainActivity : ComponentActivity() {
                     queues = queues, queueController = model.playback.queues,
                     onPrevious = model.playback::previous, onNext = model.playback::next,
                     playlist = playlist, playlistController = model.playlists,
-                    onScanAll = model::scanAll, onQuickScan = model::scanNewFiles, scannerRequest = scannerRequest, onRetryPlayback = model.playback::retry,
+                    onScanAll = model::scanAll, onQuickScan = model::scanNewFiles, scannerRequest = scannerRequest, lastFmSettingsRequest = lastFmSettingsRequest, onRetryPlayback = model.playback::retry,
                     onSeekRequest = model.playback::requestSeek, playbackSample = playbackObservation.sample)
                 }
             }
