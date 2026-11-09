@@ -44,6 +44,10 @@ internal class GlassPopupFlight {
     var wasProjected by mutableStateOf(false)
 }
 
+// Diagnostic readers observe the existing host alpha; they create no animation.
+internal val LocalGlassPopupHostAlphaObserver =
+    staticCompositionLocalOf<((GlassPopupHome, () -> Float) -> Unit)?> { null }
+
 internal val LocalGlassPopupHome = staticCompositionLocalOf<GlassPopupHome?> { null }
 
 @Composable
@@ -182,6 +186,17 @@ internal fun <T : Any> GlassPopupNavigation(target: T, modifier: Modifier = Modi
                 .togetherWith(fadeOut(tween(duration)) + slideOutHorizontally(tween(duration)) { (-direction * distance).toInt() })
         }) { shown ->
         val home = rememberGlassPopupHome(departing || shown !== page)
+        val alphaObserver = LocalGlassPopupHostAlphaObserver.current
+        val hostTransition = transition
+        if (alphaObserver != null) SideEffect {
+            alphaObserver(home) {
+                if (!home.mounted) 0f else {
+                    // Compose 1.10.6's existing DeferredAnimation drives setAlpha directly.
+                    val alpha = hostTransition.animations.single { it.label.endsWith(" alpha") }
+                    alpha.value as Float
+                }
+            }
+        }
         SideEffect { shown.home = home; if (shown === page) onHome?.invoke(home) }
         // Same-screen edits must reach controlled fields in this composition,
         // before a subsequent input event can observe the old value.

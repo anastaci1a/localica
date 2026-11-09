@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.rememberGraphicsLayer
+import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
@@ -33,7 +35,11 @@ class PopupOutgoingCodeProposalTest {
     private var frameViews: () -> List<View> = { emptyList() }
     private var frameState: () -> String = { "" }
     private var stage = 0
-    private enum class Mutation { None, Loss, FlatTint }
+    private enum class Mutation { None, Loss, FlatTint, Lingering, RetainedLayer }
+    private val hostAlphas = java.util.IdentityHashMap<GlassPopupHome, () -> Float>()
+    private var retainedLayerIdentity = 0
+    private var retainedRecordings = 0
+    private var injectAfterExit by mutableStateOf(false)
     private var mutation = Mutation.None
     private var removeCode by mutableStateOf(false)
 
@@ -60,6 +66,15 @@ class PopupOutgoingCodeProposalTest {
         navigate(settings = false, expanding = true, library = true)
     }
 
+    @Test fun lingeringForegroundMustFailContainment() {
+        mutation = Mutation.Lingering
+        navigate(settings = false, expanding = true, library = true)
+    }
+    @Test fun retainedGraphicsLayerMustFailContainment() {
+        mutation = Mutation.RetainedLayer
+        navigate(settings = false, expanding = true, library = true)
+    }
+
     private fun navigate(settings: Boolean, expanding: Boolean, library: Boolean = false, playlistEditor: Boolean = false) {
         var naming by mutableStateOf(playlistEditor)
         var page by mutableStateOf(true)
@@ -67,6 +82,7 @@ class PopupOutgoingCodeProposalTest {
         lateinit var anchor: GlassAnchor
         var popupView: View? = null
         var parentView: View? = null
+        var rootView: View? = null
         var parentProgress = 1f
         var parentHome: GlassPopupHome? = null
         var dialogs: GlassDialogs? = null
@@ -91,15 +107,25 @@ class PopupOutgoingCodeProposalTest {
             org.json.JSONObject().put("clock", compose.mainClock.currentTime).put("phase", evidencePhase)
                 .put("page", page).put("open", open).put("parentProgress", parentProgress)
                 .put("parentHome", homeState(parentHome))
+                .put("hostAlpha", parentHome?.let { hostAlphas[it]?.invoke() } ?: -1f)
+                .put("retainedLayerIdentity", retainedLayerIdentity).put("retainedRecordings", retainedRecordings)
+                .put("injectAfterExit", injectAfterExit)
                 .put("entries", org.json.JSONArray(dialogs?.entries?.map { entry -> org.json.JSONObject()
                     .put("mounted", entry.mounted).put("anchor", anchorState(entry.anchor))
                     .put("home", homeState(entry.popupHome)) }.orEmpty()))
         } }
-        frameViews = { listOfNotNull(parentView, popupView) }
+        frameViews = {
+            listOfNotNull(parentView, popupView).filter { it.isAttachedToWindow }.distinct()
+                .ifEmpty { listOfNotNull(rootView) }
+        }
         frameState = { "parent=$parentProgress open=$open parentAttached=${parentView?.isAttachedToWindow} popupAttached=${popupView?.isAttachedToWindow}" }
         compose.setContent { LocalicaTheme {
+            rootView = LocalView.current
+            val retainedLayer = rememberGraphicsLayer()
+            retainedLayerIdentity = System.identityHashCode(retainedLayer)
             dialogs = LocalGlassDialogs.current
-            CompositionLocalProvider(LocalGlassMorphWorkObserver provides { phase, window, progress ->
+            CompositionLocalProvider(LocalGlassPopupHostAlphaObserver provides { home, reader -> hostAlphas[home] = reader },
+                LocalGlassMorphWorkObserver provides { phase, window, progress ->
                 if (phase == "geometry" && progress != null && window ===
                     (parentView?.parent as? DialogWindowProvider)?.window) parentProgress = progress
                 if (workReceipts.length() < 4096) workReceipts.put(org.json.JSONObject()
@@ -124,8 +150,14 @@ class PopupOutgoingCodeProposalTest {
                             popupView = LocalView.current
                             Canvas(Modifier.size(240.dp)) {
                                 if (!removeCode) {
-                                    repeat(4) { band -> drawRect(if (band % 2 == 0) Color.Red else Color.Green,
-                                        Offset(size.width * band / 4f, 0f), Size(size.width / 4f, size.height)) }
+                                    if (retainedRecordings == 0) {
+                                        retainedLayer.record {
+                                            repeat(4) { band -> drawRect(if (band % 2 == 0) Color.Red else Color.Green,
+                                                Offset(size.width * band / 4f, 0f), Size(size.width / 4f, size.height)) }
+                                        }
+                                        retainedRecordings++
+                                    }
+                                    drawLayer(retainedLayer)
                                 } else if (mutation == Mutation.FlatTint) drawRect(Color.Red)
                             }
                         }
@@ -147,6 +179,13 @@ class PopupOutgoingCodeProposalTest {
                 }
             } else if (settings) FolderSettings(LibraryUiState(), { page = false }, {}, {}, interfaceContent = { Body() })
             else if (page) GlassDialog({ page = false }, GlassPlacement.Page) { Body() }
+            if (injectAfterExit) Box(Modifier.fillMaxSize(), contentAlignment = androidx.compose.ui.Alignment.Center) {
+                Canvas(Modifier.size(240.dp)) {
+                    if (mutation == Mutation.RetainedLayer) drawLayer(retainedLayer)
+                    else repeat(4) { band -> drawRect(if (band % 2 == 0) Color.Red else Color.Green,
+                        Offset(size.width * band / 4f, 0f), Size(size.width / 4f, size.height)) }
+                }
+            }
             if (naming) AddToPlaylistDialog(emptyList(), io.github.anastaci1a.localica.playlist.PlaylistState(loading = false), null, { naming = false }, { naming = false })
             }
         } }
@@ -193,17 +232,30 @@ class PopupOutgoingCodeProposalTest {
         evidencePhase = "before-navigation"
         val before = redFrame()
         assertTrue("Fixture presents popup foreground before navigation: $before", before.pixels > 100)
-        if (mutation != Mutation.None) {
+        if (mutation == Mutation.Loss || mutation == Mutation.FlatTint) {
             compose.runOnIdle { removeCode = true }
             compose.waitForIdle()
         }
+        // Same frozen clock/checkpoint for the control and both fixture mutations.
+        evidencePhase = "first-post-fixture-mutation"
+        val firstMutation = redFrame()
+        assertTrue("FIRST_POST_FIXTURE_MUTATION: identity must remain before host motion: $firstMutation",
+            firstMutation.pixels >= 100 && firstMutation.peak > 4)
+        assertEquals("Fixture checkpoint preserves the host clock", before.clock, firstMutation.clock)
+        fun upperBound(sample: RedFrame) {
+            assertTrue("Passive host alpha is present: $sample", sample.hostAlpha in 0f..1f)
+            val limit = before.peak * sample.hostAlpha + 4.0
+            assertTrue("HOST_ALPHA_UPPER_BOUND: $before -> $sample, limit=$limit", sample.peak <= limit)
+            if (sample.hostAlpha == 0f) assertTrue("ZERO_ALPHA_CONTAINMENT: $sample", sample.peak <= 4)
+        }
+        assertEquals("Initial native host is opaque", 1f, before.hostAlpha, 0f)
         back(parentView) { settings || !page }
         var transitionStarted = false
         for (frame in 0 until 20) {
             evidencePhase = "host-admission-$frame"
             compose.mainClock.advanceTimeByFrame()
             compose.waitForIdle()
-            assertTrue("Popup remains continuous while the host admits navigation", redFrame().pixels > 100)
+            upperBound(redFrame())
             transitionStarted = if (settings) compose.onAllNodesWithText("Interface").fetchSemanticsNodes().isNotEmpty()
                 else if (library) compose.onAllNodesWithTag("popup-home-destination").fetchSemanticsNodes().isNotEmpty()
                 else parentProgress < .995f
@@ -212,21 +264,28 @@ class PopupOutgoingCodeProposalTest {
         assertTrue("The host must begin its outgoing transition", transitionStarted)
         compose.mainClock.advanceTimeBy(16)
         evidencePhase = "first-outgoing"
-        assertTrue("Navigation preserves the popup in the first outgoing frame", redFrame().pixels > 100)
-        assertTrue("The same native popup keeps retracting", popupView?.isAttachedToWindow == true)
+        upperBound(redFrame())
         compose.mainClock.advanceTimeBy(32)
         evidencePhase = "during-outgoing"
         val during = redFrame()
-        assertTrue("Outgoing popup fades continuously with its host: $before -> $during",
-            during.peak in 1 until before.peak)
-        compose.mainClock.advanceTimeBy(208)
+        upperBound(during)
+        compose.mainClock.advanceTimeBy(1600)
+        evidencePhase = "after-outgoing-control"
+        val exited = redFrame()
+        assertEquals("The actual host alpha must reach zero", 0f, exited.hostAlpha, 0f)
+        upperBound(exited)
+        assertTrue("CONTROL_CONTAINMENT: no perceptible code after exit: $exited", exited.peak <= 4)
+        if (mutation == Mutation.Lingering || mutation == Mutation.RetainedLayer) {
+            assertEquals("Retained native recording is recorded exactly once", 1, retainedRecordings)
+            compose.runOnIdle { injectAfterExit = true }
+        }
         evidencePhase = "after-outgoing"
         val after = redFrame()
-        assertEquals("Popup cannot outlive its outgoing host layer over the destination", 0, after.pixels)
+        assertTrue("AFTER_EXIT_CONTAINMENT: popup cannot outlive its host: $after", after.peak <= 4)
         compose.mainClock.advanceTimeBy(1600)
     }
 
-    private data class RedFrame(val pixels: Int, val peak: Int)
+    private data class RedFrame(val pixels: Int, val peak: Double, val hostAlpha: Float, val clock: Long)
 
     private class FrameMarker(val x: Int) : android.graphics.drawable.Drawable() {
         var stage = 0
@@ -289,12 +348,12 @@ class PopupOutgoingCodeProposalTest {
                 peak = maxOf(peak, excess)
                 if (android.graphics.Color.red(c) > 80 && excess > 32) count++
             }
-            val code = OutgoingFixtureCode.measure(bitmap, if (evidencePhase == "after-outgoing") 4 else 32)
+            val code = RelativeOutgoingFixtureCode.measure(bitmap)
             evidence.save(bitmap, org.json.JSONObject().put("stage", requested).put("pixels", code.pixels).put("peak", code.peak)
                 .put("oldRedPixels", count).put("oldRedPeak", peak).put("mutation", mutation.name)
-                .put("codeRows", code.rows).put("codeBounds", code.bounds)
+                .put("codeRows", code.rows).put("strongestRow", code.strongest?.toString())
                 .put("requestedState", requestState).put("matchedState", matchedState))
-            RedFrame(code.pixels, code.peak)
+            RedFrame(code.pixels, code.peak, matchedState.getDouble("hostAlpha").toFloat(), matchedState.getLong("clock"))
         } finally { bitmap.recycle() }
     }
 }

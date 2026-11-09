@@ -531,6 +531,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
         val windowNode = anchor.surfaceNode ?: leasedNode ?: rememberWindowCaster(windowPlane,anchor)
         val nativeField=rememberNativeSurfaceField(windowPlane,windowNode,shadowSpread)
         SideEffect { nativePlane=windowPlane; nativeNode=windowNode }
+        val hostAlphaObserver = LocalGlassPopupHostAlphaObserver.current
         val workObserver = LocalGlassMorphWorkObserver.current
         if (workObserver != null) SideEffect { workObserver("dialog", window, null) }
         if (placement == GlassPlacement.Search) PreserveSearchImeState(window)
@@ -728,6 +729,9 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                 val physical = motion.bounds
                 fun surfaceOpacity() = if (!admittedDraw) 0f else if (detached) phase() else
                     if (present && window != null && readyWindow === window) 1f else 0f
+                if (hostAlphaObserver != null) SideEffect {
+                    hostAlphaObserver(childHome) { if (childHome.mounted) surfaceOpacity() else 0f }
+                }
                 Box(Modifier.fillMaxSize().onGloballyPositioned {
                     if (hasViewport) windowOrigin = it.backdropPosition(view)
                 }) {
