@@ -479,7 +479,9 @@ Playback checkpoints and unrelated refreshes retain an owned contact. Route or s
 
 While dragging and landing, the panel morphs into its minimized pill and cannot expand. Floating controls share its animated visible occupancy, with an 8 dp gap above the panel, and return above remaining bottom chrome as it leaves. A Liquid Glass foreground X circle remains above the stack in the shared bottom control row.
 
-Hover tints it red with one firm haptic. Leaving gives a lighter tick, honoring system settings. Release there cancels and morphs the panel back out. Other drops, including an unchanged insertion position, finish selection after successful landing, and the minimized pill eases away.
+Hover tints it red with one firm haptic. Leaving gives a lighter tick, honoring system settings.
+
+Every finger lift after a drag gives one strong pulse, including a release on X; a system interruption is silent. Release there cancels and morphs the panel back out. Other drops, including an unchanged insertion position, finish selection after successful landing, and the minimized pill eases away.
 
 System interruption or failed persistence restores order, selection and the panel. All landings crossfade into normal rows and preserve playback cursors. A completed move eases the landed rows out of hover.
 
@@ -548,7 +550,9 @@ Once either the list or drawer acquires a contact, it keeps that contact through
 
 ### Queue Selector
 
-Rounded popup opens already positioned at the playback queue. Numbered rows show browsing selection, a separate playback marker, plain rename/delete icons and shared whole-row long-press reordering, with accessible move actions on the handle. Dragging previews order until release; cancellation or a failed save restores it without changing browsing/playback.
+Rounded popup opens already positioned at the playback queue. Numbered rows show browsing selection, a separate playback marker, plain rename/delete icons and shared whole-row long-press reordering, with accessible move actions on the handle.
+
+Reordering is the [song-list drag](#selection-and-reordering): the held row lifts in place with one firm pulse, numbers follow the live insertion, and the lifted browsing row moves with its slot and lands as a single instance. Dragging previews order until release; cancellation or a failed save restores it without changing browsing/playback.
 
 Short popups omit the repeated heading to retain a usable list. When more than one queue exists, Remove all other queues morphs from a glass button into confirmation; each confirmation name uses a single-line ellipsis. Selected long title marquees with an unfaded leading edge during its pause; other rows, closed selector and search prompts use single-line ellipsis.
 
@@ -592,7 +596,7 @@ Lyrics remain open across songs and crossfade their documents. Missing local lyr
 
 ## Player actions
 
-Hold any slot/action to customize, except Repeat, which retains its dedicated menu. Settings also opens the editor. Drag from the reflowing available-action pool into slots, or return an assignment to the pool to remove it. Keep tap/accessible alternatives, haptics and animated landing without a disabled duplicate.
+Hold any slot/action to customize, except Repeat, which retains its dedicated menu. Settings also opens the editor. Drag from the reflowing available-action pool into slots, or return an assignment to the pool to remove it. Keep tap/accessible alternatives, haptics and animated landing without a disabled duplicate. Every drag release gives the shared strong pulse.
 
 Centered, 2 rows and Compact use independent Library-style filter bubbles: selected first, canonical order within both groups. Compact adds spaces without shrinking icons. Centered layout balances columns. Non-centered playback stops at the rightmost visible assignment. Preserve intentional gaps and hidden assignments.
 

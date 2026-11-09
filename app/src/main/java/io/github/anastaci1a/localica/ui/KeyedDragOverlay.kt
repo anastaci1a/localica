@@ -112,8 +112,10 @@ internal fun <T : Any, P> BoxScope.KeyedDragOverlay(state: KeyedDragState<T, P>,
     fun liftProgress(key: String): Float {
         val initial = drag.lifts[key]?.progress ?: 1f
         // A drag can acquire a selection that is still rising; continue from that contour.
+        // A card hands off to its resting row: it descends unless that row rests lifted (#735).
+        val descends = state.restsLifted?.let { drag.dropping && !it(key) } ?: drag.committed
         return (initial + (1f - initial) * flightProgress()) *
-            (if (drag.committed) 1f - drag.handoff.value.coerceIn(0f, 1f) else 1f)
+            (if (descends) 1f - drag.handoff.value.coerceIn(0f, 1f) else 1f)
     }
     HoverDragUnderlay({ drag.moving.mapNotNull { frames[state.keyOf(it)] } }, backing, liftStyle, Modifier.matchParentSize().zIndex(2f))
     val cards = remember(drag, lifted, drag.destinations) { drag.moving.withIndex().filter { (index, item) -> index < 3 ||

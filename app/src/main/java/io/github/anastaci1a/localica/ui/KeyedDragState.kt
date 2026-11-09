@@ -9,6 +9,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.layout.onPlaced
+import androidx.compose.ui.Modifier
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.first
 import kotlin.math.roundToInt
@@ -63,6 +65,22 @@ internal abstract class KeyedDragState<T : Any, P>(val grid: LazyGridState, priv
     }
     var drag by mutableStateOf<KeyedDrag<T, P>?>(null)
         private set
+    /** The item under a recognized hold until its finger lifts (#735). Owners lift it in place like a
+     * held song, and the drag cards continue from that lift through [hoverLift]. */
+    var held by mutableStateOf<String?>(null)
+    /** Whether an item rests lifted once dropped (a chosen marker), so its card keeps the lift through
+     * the handoff instead of easing out. Null keeps the default: only committed drops descend. */
+    var restsLifted: ((String) -> Boolean)? = null
+    // Recomputed only when the insertion slot (or the landing order) changes, never per pointer frame.
+    private val positions = derivedStateOf {
+        drag?.let { d -> (d.dropItems ?: d.ordered()).withIndex().associate { keyOf(it.value) to it.index + 1 } }
+    }
+    /** The 1-based position an item would take if dropped now (#735); null while no drag is live.
+     * Held items share the gap's slot, so numbering stays live through the drag and landing. */
+    fun livePosition(key: String): Int? = positions.value?.get(key)
+    /** The resting row's opacity, for both its layer and its selection lift: a dropped item stays
+     * under its card until the handoff, so there is one instance per frame (#735). Read while drawing. */
+    fun restAlpha(key: String): Float = drag?.takeIf { it.dropping && key in it.keys }?.handoff?.value ?: 1f
     var optimistic by mutableStateOf<List<T>?>(null)
         private set
     private var optimisticBase: List<String>? = null
@@ -217,3 +235,16 @@ internal abstract class KeyedDragState<T : Any, P>(val grid: LazyGridState, priv
     }
 }
 
+
+/**
+ * Registers a lazy item root with its drag owner. Lazy placement animations re-place this root
+ * without placing its descendants, so a lifted selection lens inside it (#533) is not notified and
+ * its host keeps painting the old slot (#735). The root's own placement callback, which drag hit
+ * testing already needs, also asks a lifted item's host to redraw. No callback is added.
+ */
+internal fun Modifier.keyedDragItem(state: KeyedDragState<*, *>, key: String, scene: SelectionScene?): Modifier = onPlaced { coordinates ->
+    state.itemCoordinates[key] = coordinates
+    if (scene != null) androidx.compose.runtime.snapshots.Snapshot.withoutReadObservation {
+        if (scene.regions.values.any { it.itemKey == key && (it.selected || it.visibility() > 0f) }) scene.placement++
+    }
+}
