@@ -419,7 +419,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
         aspect == artwork.palette.aspect && artCropRetention == (if (clearanceTarget > 0f) 1f else 0f))
         SideEffect { polarity.settledEndpoint = backgroundGeometry }
     }
-    ObserveGeometry()
+    PlayerFrameScope { ObserveGeometry() }
     val retainedEndpoint = polarity.settledEndpoint
     val artistStyle = MaterialTheme.typography.bodyLarge
     val seekLabelStyle = MaterialTheme.typography.labelSmall
@@ -451,7 +451,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
             drawTheme.present(colors)
         }
     }
-    PresentTheme()
+    PlayerFrameScope { PresentTheme() }
     @Composable fun ThemedContent() {
     CompositionLocalProvider(LocalGlassPopupHome provides popupHome) {
     GlassPanelTheme(lightMix) {
@@ -697,7 +697,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
 }
 }
 }
-    ThemedContent()
+    PlayerFrameScope { ThemedContent() }
 }
 
 /** Record the complete glass scene while displaying only its already-recorded cover.
@@ -726,3 +726,8 @@ private fun Modifier.recordPlayerCoverBackdrop(source: FrostedBackdrop, wash: Fr
  * falls back to the artwork-and-wash recording. */
 internal fun seekCancelBackdrop(scene: FrostedBackdrop?, artwork: FrostedBackdrop, progress: Float): FrostedBackdrop =
     scene?.takeIf { progress >= .99f } ?: artwork
+
+/** A non-inline restart owner for local player observers and frame presentation.
+ * Local composable functions compile as replace groups and otherwise subscribe the root. */
+@Composable
+private fun PlayerFrameScope(content: @Composable () -> Unit) { content() }
