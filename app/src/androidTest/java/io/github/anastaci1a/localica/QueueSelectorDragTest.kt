@@ -108,7 +108,7 @@ class QueueSelectorDragTest {
 
     private fun fixture(count: Int = 8, width: Int = 380, height: Int = 420, fontScale: Float = 1f,
         rtl: Boolean = false, scale: Float = 1f, densityScale: Float = 1f, reducedMotion: Boolean = false, fullPopup: Boolean = false,
-        observeOverscroll: Boolean = false, test: (QueueController, QueueDatabase) -> Unit) {
+        observeOverscroll: Boolean = false, browsedId: String = "q0", test: (QueueController, QueueDatabase) -> Unit) {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val db = Room.inMemoryDatabaseBuilder(context, QueueDatabase::class.java).build()
         val preferences = QueuePreferences(context)
@@ -130,7 +130,7 @@ class QueueSelectorDragTest {
                     ObserveOverscroll(observeOverscroll) {
                         if (fullPopup) QueueScreen(state, controller, reducedMotion = reducedMotion)
                         else Box(Modifier.width(width.dp).height(height.dp).graphicsLayer { scaleX = scale; scaleY = scale }) {
-                            if (present) QueueSelectorList(state.library.queues, "q2", state.library.activeId, false,
+                            if (present) QueueSelectorList(state.library.queues, browsedId, state.library.activeId, false,
                                 reducedMotion, enabled, Modifier.fillMaxSize(),
                                 onSelect = { selections++; controller.switchTo(it) }, onRename = { renames++ }, onDelete = { deletions++ },
                                 onOffset = { id, offset -> controller.moveQueue(id, offset) },
@@ -556,6 +556,17 @@ class QueueSelectorDragTest {
         compose.runOnIdle { enabled = false }
         compose.runOnIdle { enabled = true }
         compose.onNodeWithText("Playback queue").assertIsDisplayed()
+    }
+
+    @Test fun retainedListReopensAtBrowsedSourceAfterInterruptedDismissal() = fixture(count = 40,
+        browsedId = "q2") { controller, _ ->
+        compose.onNodeWithTag("queue-row-q2").assertIsDisplayed()
+        list().performTouchInput { swipe(Offset(center.x, height * .8f), Offset(center.x, height * .2f)) }
+        compose.onNodeWithTag("queue-row-q2").assertDoesNotExist()
+        compose.runOnIdle { enabled = false }
+        compose.runOnIdle { enabled = true }
+        compose.onNodeWithTag("queue-row-q2").assertIsDisplayed()
+        assertEquals("q0", controller.state.value.library.activeId)
     }
 
     @Test(timeout = 15000) fun openingGateRejectsHeldContactEvenWhenPanelBecomesReady() = fixture(observeOverscroll = true) { _, _ ->
