@@ -1,6 +1,9 @@
 package io.github.anastaci1a.localica.artistphoto
 
 import io.github.anastaci1a.localica.network.NetworkConsent
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
@@ -18,7 +21,23 @@ class ArtistPhotos internal constructor(private val consent: NetworkConsent, pri
     private val providers = ArtistPhotoProviders(http)
     private val lock = Mutex()
 
-    fun observe(request: ArtistPhotoRequest): Flow<ArtistPhotoState> = flow {
+    private val mutableChanges = MutableStateFlow(0L)
+    val changes = mutableChanges.asStateFlow()
+    suspend fun cacheBytes(): Long = withContext(Dispatchers.IO) { lock.withLock { disk.cacheBytes() } }
+    suspend fun clearCache() = withContext(Dispatchers.IO) { lock.withLock {
+        disk.clearCache(); mutableChanges.update { it + 1 }
+    } }
+    /** Refresh keeps manual matches and deliberate album-art-only choices. */
+    suspend fun refreshAll(requests: List<ArtistPhotoRequest>) {
+        try {
+            for (request in requests) {
+                if (!consent.allowed.value) break
+                observe(request, refresh = true).collect { }
+            }
+        } finally { mutableChanges.update { it + 1 } }
+    }
+
+    fun observe(request: ArtistPhotoRequest, refresh: Boolean = false): Flow<ArtistPhotoState> = flow {
         emit(ArtistPhotoState(request.latestAlbumArt))
         lock.withLock {
             disk.trim()
@@ -27,8 +46,8 @@ class ArtistPhotos internal constructor(private val consent: NetworkConsent, pri
             val time = now()
             val cached = disk.cached(request.artistKey, time)
             if (cached != null) emit(ArtistPhotoState(request.latestAlbumArt, cached))
-            if (!consent.allowed.value || (cached != null && time >= cached.fetchedAt && time - cached.fetchedAt < PHOTO_REFRESH_MS)) return@withLock
-            if (saved.attemptedAt?.let { time < it || time - it < PHOTO_RETRY_MS } == true) return@withLock
+            if (!consent.allowed.value || (!refresh && cached != null && time >= cached.fetchedAt && time - cached.fetchedAt < PHOTO_REFRESH_MS)) return@withLock
+            if (!refresh && saved.attemptedAt?.let { time < it || time - it < PHOTO_RETRY_MS } == true) return@withLock
             val refreshed = safely {
                 disk.saveChoice(request.artistKey, saved.copy(attemptedAt = time))
                 val selected = saved.choice?.let { choice -> providers.resolve(choice)?.takeIf {
@@ -80,11 +99,11 @@ class ArtistPhotos internal constructor(private val consent: NetworkConsent, pri
     suspend fun pick(artistKey: String, choice: ArtistPhotoChoice) = withContext(Dispatchers.IO) { lock.withLock {
         require(if (choice.provider == ArtistPhotoProvider.DEEZER) choice.id.matches(Regex("[1-9][0-9]{0,18}"))
             else choice.id.matches(Regex("[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}")))
-        disk.saveChoice(artistKey, SavedPhotoChoice("manual", choice)); disk.removePhoto(artistKey)
+        disk.saveChoice(artistKey, SavedPhotoChoice("manual", choice)); disk.removePhoto(artistKey); mutableChanges.update { it + 1 }
     } }
     /** Clear means album-art-only until reset or a deliberate re-pick, including after process death. */
     suspend fun clear(artistKey: String) = withContext(Dispatchers.IO) { lock.withLock {
-        disk.saveChoice(artistKey, SavedPhotoChoice("cleared")); disk.removePhoto(artistKey)
+        disk.saveChoice(artistKey, SavedPhotoChoice("cleared")); disk.removePhoto(artistKey); mutableChanges.update { it + 1 }
     } }
-    suspend fun reset(artistKey: String) = withContext(Dispatchers.IO) { lock.withLock { disk.reset(artistKey) } }
+    suspend fun reset(artistKey: String) = withContext(Dispatchers.IO) { lock.withLock { disk.reset(artistKey); mutableChanges.update { it + 1 } } }
 }

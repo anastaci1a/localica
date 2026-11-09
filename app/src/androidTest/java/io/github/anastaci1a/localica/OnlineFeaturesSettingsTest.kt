@@ -19,8 +19,8 @@ class OnlineFeaturesSettingsTest {
         try {
             runBlocking { consent.load() }
             compose.setContent { LocalicaTheme {
-                FolderSettings(LibraryUiState(loading = false), {}, {}, {}, initialCategory = "Last.fm",
-                    lastFmContent = { OnlineFeaturesSettings(consent) })
+                FolderSettings(LibraryUiState(loading = false), {}, {}, {}, initialCategory = "Online features",
+                    onlineFeaturesContent = { OnlineFeaturesSettings(consent) })
             } }
             val toggle = compose.onNode(isToggleable() and hasText("Online features"))
             toggle.performScrollTo().assertIsOff().performClick()

@@ -151,6 +151,9 @@ class SettingsSearchTest {
                     }, playbackContent = { section -> QueueSettingsControls(QueueSettings(), section) {} },
                     aboutContent = { DiagnosticsExportAction(); LibraryLicenses() },
                     libraryFiltersContent = { LibraryFilterSettings(LibraryFilters()) {} },
+                    onlineFeaturesContent = { (context.applicationContext as? LocalicaApplication)?.let { OnlineFeaturesSettings(it.onlineMetadataConsent) } },
+                    artistPhotosContent = { (context.applicationContext as? LocalicaApplication)?.let { ArtistPhotosSettings(it.artistPhotos, it.onlineMetadataConsent, io.github.anastaci1a.localica.library.LibrarySnapshot()) } },
+                    lastFmContent = { (context.applicationContext as? LocalicaApplication)?.let { LastFmSettings(it.lastfm) } },
                     extraContent = { (context.applicationContext as? LocalicaApplication)?.let { TagRecoverySettings(it.tagEditing) } })
             }
         } }

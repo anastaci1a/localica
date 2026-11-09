@@ -7,11 +7,14 @@ import io.github.anastaci1a.localica.ui.LocalicaTheme
 import org.junit.Rule
 import org.junit.Test
 
-/** Uses only the pre-#20 settings API, so the same witness can run against the parent. */
+/** Online services share one explicit privacy parent. */
 class LastFmEntryContractTest {
     @get:Rule val compose = localicaComposeRule()
     @Test fun settingsOfferTheExplicitReadOnlyLastFmEntry() {
         compose.setContent { LocalicaTheme { FolderSettings(LibraryUiState(loading = false), {}, {}, {}) } }
+        compose.onNodeWithText("Last.fm").assertDoesNotExist()
+        compose.onNodeWithText("Online features").performScrollTo().performClick()
         compose.onNodeWithText("Last.fm").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Artist photos").assertExists()
     }
 }
