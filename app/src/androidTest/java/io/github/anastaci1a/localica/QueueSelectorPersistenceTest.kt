@@ -52,7 +52,7 @@ class QueueSelectorPersistenceTest {
     @Test fun selectedNameKeepsOneLayoutInstanceAcrossCancelledOpenAndReversal() = QueueSelectorCallerFixture(compose).verify(true)
 }
 
-/** Playback still owns initial scroll when the browsed queue is outside the viewport. */
+/** The distinct browsed source stays one instance even when playback is eighty rows away. */
 class QueueSelectorOffscreenNameTest {
     @get:Rule val compose = localicaComposeRule()
     @Test fun browsedNameSurvivesWhenPlaybackStartsTheSelectorElsewhere() =
@@ -363,7 +363,8 @@ private class QueueSelectorCallerFixture(private val compose: androidx.compose.u
     }
     private fun detach(view: View) { markers.remove(view)?.let { view.overlay.remove(it) } }
 
-    /** Overlay-only native tokens do not invalidate the Queue's shadow or text recording. */
+    /** Overlay-only native tokens do not invalidate the Queue's shadow or text recording.
+     * Both markers use the side gutter: a tall selector can cover x96 while expanding. */
     private fun screenshot(popup: Window?): Bitmap {
         token = token % 30 + 1
         val color = NativeColor.rgb(token * 8, 255, 0)
@@ -371,7 +372,7 @@ private class QueueSelectorCallerFixture(private val compose: androidx.compose.u
         val origins = targets.mapIndexed { index, target -> IntArray(3).also { origin -> compose.runOnUiThread {
             val point = IntArray(2).also(target::getLocationOnScreen)
             origin[0] = point[0]; origin[1] = point[1]; origin[2] = 96 + index * 40
-            markers.getValue(target).apply { this.color = color; setBounds(96, origin[2], 112, origin[2] + 16); invalidateSelf() }
+            markers.getValue(target).apply { this.color = color; setBounds(2, origin[2], 18, origin[2] + 16); invalidateSelf() }
         } } }
         var latest: Bitmap? = null
         try {
@@ -380,7 +381,7 @@ private class QueueSelectorCallerFixture(private val compose: androidx.compose.u
                 val next = requireNotNull(InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot())
                 latest = next
                 origins.all { origin ->
-                    val pixel = next.getPixel(origin[0] + 104, origin[1] + origin[2] + 8)
+                    val pixel = next.getPixel(origin[0] + 10, origin[1] + origin[2] + 8)
                     val green = NativeColor.green(pixel)
                     green >= 100 && abs(NativeColor.red(pixel) * 255f / green - token * 8) <= 4f
                 }
