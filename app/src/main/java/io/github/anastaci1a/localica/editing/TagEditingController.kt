@@ -17,7 +17,8 @@ data class TagEditorState(val tracks: List<Track> = emptyList(), val busy: Boole
     val recoveryProblem: String? = null, val sessionId: String = "",
     val progressVisible: Boolean = false, val phase: String = "", val batchId: String? = null,
     val undo: Boolean = true, val saved: Int = 0, val restored: Int = 0, val touched: Int = 0,
-    val interruptedBatch: Boolean = false, val draft: String? = null, val spaceProblem: String? = null)
+    val interruptedBatch: Boolean = false, val draft: String? = null, val spaceProblem: String? = null,
+    val cancelPending: Boolean = false)
 
 class TagEditingController(private val context: Context, private val library: LibraryRepository,
     private val queues: QueueController, private val playlists: PlaylistController,
@@ -51,7 +52,8 @@ class TagEditingController(private val context: Context, private val library: Li
                         if (batch.phase == TagBatchPhase.Saving) writer.batches.changePhase(batch.id, TagBatchPhase.Interrupted) else batch
                     }
                     mutable.update { it.copy(tracks = retained.tracks, sessionId = retained.id, draft = retained.draft,
-                        progressVisible = true, interruptedBatch = true) }
+                        progressVisible = true, interruptedBatch = true,
+                        cancelPending = retained.phase in listOf(TagBatchPhase.CancelRequested, TagBatchPhase.Restoring)) }
                     publish(retained)
                 }
             }
@@ -76,6 +78,7 @@ class TagEditingController(private val context: Context, private val library: Li
         completion = null; mutable.update { it.copy(tracks = emptyList(), results = emptyList(), error = null) }
     }
     fun continueInBackground() { scope.launch {
+        if (state.value.cancelPending || state.value.interruptedBatch) return@launch
         try {
             val id = state.value.batchId ?: return@launch
             val batch = withContext(Dispatchers.IO) { writer.batches.background(id) }
@@ -83,7 +86,7 @@ class TagEditingController(private val context: Context, private val library: Li
             if (!state.value.busy && batch.phase == TagBatchPhase.AwaitingDecision && batch.saved == batch.tracks.size) finishBatch()
         } catch (failure: Exception) { mutable.update { it.copy(error = failure.message) } }
     } }
-    fun showJobs() { mutable.update { it.copy(jobsVisible = true, background = if (it.batchId != null) false else it.background,
+    fun showJobs() { mutable.update { it.copy(jobsVisible = it.batchId == null, background = if (it.batchId != null) false else it.background,
         progressVisible = it.batchId != null || it.progressVisible) } }
     fun hideJobs() { mutable.update { it.copy(jobsVisible = false) } }
     fun serviceFailed(message: String) {
@@ -94,12 +97,14 @@ class TagEditingController(private val context: Context, private val library: Li
     fun stopAfterCurrent() { stopped = true }
     fun cancelBatch() {
         stopped = true // Close the next-write admission synchronously on Main.
+        mutable.update { it.copy(cancelPending = true) }
         scope.launch {
             try {
                 val id = state.value.batchId
                 if (id != null) transaction.requestCancel(id)
                 if (!state.value.busy && id != null) startWorker()
-            } catch (failure: Exception) { mutable.update { it.copy(error = failure.message) } }
+            } catch (failure: Exception) { mutable.update { it.copy(error =
+                "Cancellation was not recorded or could not be verified. No more files will be written in this session. Retry Restore. After restarting, choose Restore for the interrupted work. ${failure.message.orEmpty()}") } }
         }
     }
     fun interrupted() {
@@ -136,16 +141,16 @@ class TagEditingController(private val context: Context, private val library: Li
     fun dismissPreparation() {
         if (state.value.busy || state.value.batchId != null) return
         pendingPatch = null; pendingDraft = null
-        mutable.update { it.copy(progressVisible = false, spaceProblem = null, error = null) }
+        mutable.update { it.copy(progressVisible = false, spaceProblem = null, error = null, cancelPending = false) }
     }
     fun resumeBatch() {
-        if (state.value.busy || state.value.batchId == null) return
+        if (state.value.busy || state.value.batchId == null || state.value.cancelPending) return
         stopped = false
         mutable.update { it.copy(interruptedBatch = false) }
         startWorker()
     }
     fun finishBatch() {
-        if (state.value.busy || state.value.interruptedBatch) return
+        if (state.value.busy || state.value.interruptedBatch || state.value.cancelPending) return
         scope.launch { worker.withLock {
             try {
                 val id = state.value.batchId ?: return@withLock
@@ -163,7 +168,8 @@ class TagEditingController(private val context: Context, private val library: Li
             mutable.update { it.copy(phase = batch.phase.name) }
             return@withContext
         }
-        mutable.update { current -> current.copy(batchId = batch.id, phase = batch.phase.name, undo = batch.undo,
+        mutable.update { current -> current.copy(batchId = batch.id, phase = batch.phase.name, undo = batch.undo, draft = batch.draft,
+            cancelPending = current.cancelPending || batch.phase in listOf(TagBatchPhase.CancelRequested, TagBatchPhase.Restoring),
             saved = batch.saved, restored = batch.restored, touched = batch.touched,
             results = batch.entries.values.sortedBy { it.index }.mapNotNull { entry ->
                 when (entry.phase) {
@@ -213,10 +219,10 @@ class TagEditingController(private val context: Context, private val library: Li
                 transaction.reconcile(batch.id)
                 batch = withContext(Dispatchers.IO) { requireNotNull(writer.batches.read()) }
             }
-            if (batch.phase in listOf(TagBatchPhase.CancelRequested, TagBatchPhase.Restoring) || (stopped && batch.undo)) {
+            if (batch.phase in listOf(TagBatchPhase.CancelRequested, TagBatchPhase.Restoring) || ((stopped || state.value.cancelPending) && batch.undo)) {
                 withContext(NonCancellable) { transaction.restore(batch.id) }
                 mutable.update { it.copy(batchId = null, saved = 0, results = emptyList(), progressVisible = false,
-                    interruptedBatch = false, phase = "", background = false, error = null) }
+                    interruptedBatch = false, phase = "", background = false, error = null, cancelPending = false) }
                 recordJob("Cancelled; originals restored")
                 return@withLock
             }
@@ -224,17 +230,17 @@ class TagEditingController(private val context: Context, private val library: Li
             publish(batch)
             recordJob("Editing")
             for (index in batch.tracks.indices) {
-                if (stopped) break
+                if (stopped || state.value.cancelPending) break
                 // A cancelled service still waits for the acquired file and its outcome record.
                 withContext(NonCancellable) { transaction.writeOne(batch.id, index) }
                 recordJob("Editing")
                 currentCoroutineContext().ensureActive()
             }
             val latest = withContext(Dispatchers.IO) { requireNotNull(writer.batches.read()) }
-            if (latest.phase in listOf(TagBatchPhase.CancelRequested, TagBatchPhase.Restoring) || (stopped && latest.undo)) {
+            if (latest.phase in listOf(TagBatchPhase.CancelRequested, TagBatchPhase.Restoring) || ((stopped || state.value.cancelPending) && latest.undo)) {
                 withContext(NonCancellable) { transaction.restore(batch.id) }
                 mutable.update { it.copy(batchId = null, saved = 0, results = emptyList(), progressVisible = false,
-                    interruptedBatch = false, phase = "", background = false, error = null) }
+                    interruptedBatch = false, phase = "", background = false, error = null, cancelPending = false) }
                 recordJob("Cancelled; originals restored")
             } else {
                 publish(withContext(Dispatchers.IO) { writer.batches.changePhase(batch.id, TagBatchPhase.AwaitingDecision) })
@@ -263,7 +269,8 @@ class TagEditingController(private val context: Context, private val library: Li
             checkRecovery()
             try { library.withExclusiveFiles { flushMetadata() } }
             catch (failure: Exception) { mutable.update { it.copy(error = "Saved tags need refreshing: "+failure.message) } }
-            mutable.update { it.copy(busy = false, progressVisible = if (it.batchId == null && stopped) false else it.progressVisible) }
+            mutable.update { it.copy(busy = false, progressVisible = if (it.batchId == null && stopped) false else it.progressVisible,
+                cancelPending = if (it.batchId == null && stopped) false else it.cancelPending) }
         } }
     }
     private suspend fun recordJob(status: String) {
