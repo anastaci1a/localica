@@ -68,6 +68,31 @@ class MarqueeTitleTest {
         compose.mainClock.autoAdvance = true
     }
 
+    @Test fun preparationKeepsLeadingGlyphsUnfadedBeforeAnyOutgoingPixel() {
+        val title = "MMMMMMMMMMMMMMMMMMMMMMMM"
+        val style = TextStyle(fontSize = 24.sp, fontFamily = FontFamily.Monospace, color = Color.Black)
+        compose.mainClock.autoAdvance = false
+        compose.setContent { LocalicaTheme {
+            Column(Modifier.background(Color.White)) {
+                MarqueeTitle(title, false, Modifier.width(120.dp).testTag("moving-title"), style)
+                Text(title, Modifier.width(120.dp).testTag("reference-title"), maxLines = 1, softWrap = false,
+                    overflow = TextOverflow.Clip, style = style)
+            }
+        } }
+        compose.mainClock.advanceTimeBy(1910)
+        val moving = compose.onNodeWithTag("moving-title").captureToImage().toPixelMap()
+        val reference = compose.onNodeWithTag("reference-title").captureToImage().toPixelMap()
+        var difference = 0f
+        var darkPixels = 0
+        for (x in 0 until minOf(16, moving.width)) for (y in 0 until minOf(moving.height, reference.height)) {
+            difference += kotlin.math.abs(moving[x, y].red - reference[x, y].red)
+            if (reference[x, y].red < .5f) darkPixels++
+        }
+        assertTrue("The comparison includes leading glyph ink", darkPixels > 10)
+        assertTrue("Preparation must not dim stationary leading glyphs: $difference", difference < 2f)
+        compose.mainClock.autoAdvance = true
+    }
+
     @Test fun normalOverflowPauseReleasesTheComposeIdleClock() {
         val title = "A long title that overflows the narrow viewport"
         val started = android.os.SystemClock.uptimeMillis()
