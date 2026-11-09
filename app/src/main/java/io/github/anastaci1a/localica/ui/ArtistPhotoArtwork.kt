@@ -109,8 +109,9 @@ internal fun rememberArtistPhotoDisplay(request: ArtistPhotoRequest?, environmen
     val indexReady = environment?.photos?.indexReady?.collectAsState()?.value
     val deferred = LocalArtworkTransit.current?.active == true
     val cacheKey = remember(request?.artistKey) { request?.artistKey?.let(::artistPhotoCacheKey) }
-    val identity = listOf(environment, request?.copy(latestAlbumArt = null), thumbnail, revision, edge)
-    val initial = remember(identity, allowed, indexReady) {
+    // Keep matching pixels while a revision or measured size decodes off-main.
+    val identity = listOf(environment, request?.copy(latestAlbumArt = null), thumbnail)
+    val initial = remember(identity, allowed, indexReady, revision, edge) {
         val state = if (allowed && cacheKey != null) environment?.photos?.peekKey(cacheKey) else null
         val cached = state?.photo?.let { photo ->
             ArtistPhotoPixels.peek(photo, thumbnail, edge.coerceAtLeast(256))
@@ -126,7 +127,7 @@ internal fun rememberArtistPhotoDisplay(request: ArtistPhotoRequest?, environmen
     LaunchedEffect(identity, allowed, deferred, fetchAllowed) {
         if (request != null && allowed && !deferred && fetchAllowed) environment?.work?.enqueue(request)
     }
-    val loaded by produceState<Pair<List<Any?>, ArtistPhotoDisplay>?>(null, identity, allowed, indexReady, deferred, fetchAllowed) {
+    val loaded by produceState<Pair<List<Any?>, ArtistPhotoDisplay>?>(null, identity, allowed, indexReady, revision, edge, deferred, fetchAllowed) {
         if (request != null && environment != null && allowed && !deferred) {
             try {
                 // Startup normally owns this. Injected/reopened environments share the same IO load.
