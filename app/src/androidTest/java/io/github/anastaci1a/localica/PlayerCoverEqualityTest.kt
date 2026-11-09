@@ -28,13 +28,14 @@ class PlayerCoverEqualityTest {
 
     @Test fun disabledCoverMatchesHistoricalRecordingThroughEnableAndDisable() {
         var enabled by mutableStateOf(false)
+        var showHistorical by mutableStateOf(true)
         var phase by mutableFloatStateOf(0f)
         compose.setContent { LocalicaTheme { CompositionLocalProvider(LocalDensity provides Density(1f)) {
-            Row(Modifier.background(Color(0xFF234567))) {
+            Box(Modifier.size(128.dp).background(Color(0xFF234567)).testTag("comparison")) {
                 for (historical in listOf(true, false)) {
                     val source = rememberFrostedBackdrop(Unit, enabled = false)
                     val wash = rememberFrostedBackdrop(Unit, enabled = false, retainRaster = false)
-                    Box(Modifier.size(128.dp).testTag(if (historical) "before" else "after")) {
+                    Box(Modifier.size(128.dp).graphicsLayer { alpha = if (historical == showHistorical) 1f else 0f }) {
                         Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(wash)) { drawRect(Color(0xFF123456)) }
                         val recording = if (historical) Modifier.historicalCover(source, wash, enabled)
                             else Modifier.recordPlayerCoverBackdrop(source, wash, enabled)
@@ -52,10 +53,12 @@ class PlayerCoverEqualityTest {
             }
         } } }
         for ((index, admitted) in listOf(false, true, false, true, false).withIndex()) {
-            compose.runOnIdle { enabled = admitted; phase = index * .375f }
+            compose.runOnIdle { enabled = admitted; phase = index * .375f; showHistorical = true }
             compose.waitForIdle()
-            val before = compose.onNodeWithTag("before").captureToImage().toPixelMap()
-            val after = compose.onNodeWithTag("after").captureToImage().toPixelMap()
+            val before = compose.onNodeWithTag("comparison").captureToImage().toPixelMap()
+            compose.runOnIdle { showHistorical = false }
+            compose.waitForIdle()
+            val after = compose.onNodeWithTag("comparison").captureToImage().toPixelMap()
             for (y in 0 until before.height) for (x in 0 until before.width)
                 assertEquals("transition=$index enabled=$admitted x=$x y=$y", before[x, y].toArgb(), after[x, y].toArgb())
         }
