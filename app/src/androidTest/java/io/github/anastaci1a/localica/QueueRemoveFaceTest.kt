@@ -161,6 +161,8 @@ class QueueRemoveFaceTest {
         var crop = Rect.Zero
         var referenceBounds = Rect.Zero
         var homeBounds = Rect.Zero
+        var sourceRoot: View? = null
+        var sourceWindowDetached = false
         try {
             compose.setContent { LocalicaTheme {
                 val owner = requireNotNull(LocalGlassDialogs.current)
@@ -183,6 +185,7 @@ class QueueRemoveFaceTest {
                     screenBounds(source.fetchSemanticsNode()))
             }
             val sourceView = view(source.fetchSemanticsNode())
+            sourceRoot = sourceView.rootView
             val sourceWindow = compose.runOnUiThread { window(sourceView) }
             val sourceToken = compose.runOnUiThread { sourceView.windowToken }
             marker(sourceView)
@@ -264,15 +267,36 @@ class QueueRemoveFaceTest {
         } catch (error: Throwable) { failure = error; throw error }
         finally {
             compose.mainClock.autoAdvance = true
+            var cleanupFailure: Throwable? = null
+            try {
+                // Each method leaves the outer Queues selector open. Retire its
+                // actual native window before ActivityScenario starts the next
+                // method; rule disposal alone does not acknowledge that boundary.
+                sourceRoot?.let { root ->
+                    if (compose.runOnUiThread { root.isAttachedToWindow }) {
+                        pressSystemBack()
+                        compose.mainClock.advanceTimeBy(1600)
+                        compose.waitForIdle()
+                        compose.waitUntil(5000) { !root.isAttachedToWindow }
+                    }
+                    sourceWindowDetached = !compose.runOnUiThread { root.isAttachedToWindow }
+                    assertTrue("Outer selector native window detaches between methods", sourceWindowDetached)
+                }
+            } catch (error: Throwable) {
+                if (failure != null) failure.addSuppressed(error)
+                else { failure = error; cleanupFailure = error }
+            }
             compose.runOnUiThread { markers.forEach { it.view.overlay.remove(it.drawable) }; markers.clear() }
             File(output, "receipt.json").writeText(JSONObject().put("route", "QueueScreen > Queues > Remove all other queues > Delete queues? > $mode")
                 .put("api", Build.VERSION.SDK_INT).put("status", if (failure == null) "passed" else "failed")
                 .put("failure", failure?.stackTraceToString()).put("capture", "Compositor screenshots gated only by unrelated native draw markers; paused Compose frames, not a wall-time/performance claim")
+                .put("sourceWindowDetached", sourceWindowDetached)
                 .put("referenceSetup", "Opening advanced 1600ms on Compose clock; source bounds invariant across two more frames; clock paused during reference compositor capture")
                 .put("referenceBounds", JSONArray(listOf(referenceBounds.left, referenceBounds.top, referenceBounds.right, referenceBounds.bottom)))
                 .put("homeBounds", JSONArray(listOf(homeBounds.left, homeBounds.top, homeBounds.right, homeBounds.bottom)))
                 .put("frames", frames).toString(2))
             if (files.isNotEmpty() && crop != Rect.Zero) contactSheet(files, crop, File(output, "contact.png"))
+            cleanupFailure?.let { throw it }
         }
     }
 }
