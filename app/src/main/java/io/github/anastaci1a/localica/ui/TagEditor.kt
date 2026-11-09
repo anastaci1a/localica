@@ -229,7 +229,7 @@ private fun TagJobsDialog(state: TagEditorState, controller: TagEditingControlle
 
 @Composable
 private fun TagSaveProgressDialog(state: TagEditorState, controller: TagEditingController) {
-    val restoring = state.phase == "CancelRequested" || state.phase == "Restoring"
+    val restoring = state.cancelPending || state.phase == "CancelRequested" || state.phase == "Restoring"
     GlassAlertDialog(onDismissRequest = {}, title = {
         Text(when {
             state.interruptedBatch -> "Interrupted tag edit"
@@ -250,9 +250,9 @@ private fun TagSaveProgressDialog(state: TagEditorState, controller: TagEditingC
     } }, confirmButton = {
         when {
             state.spaceProblem != null -> ActionTextButton(enabled = !state.busy, onClick = controller::saveWithoutUndo) { Text("Save without undo") }
-            state.interruptedBatch || (!state.busy && state.batchId != null && state.phase != "AwaitingDecision" && !restoring) ->
+            (state.interruptedBatch && !restoring) || (!state.busy && state.batchId != null && state.phase != "AwaitingDecision" && !restoring) ->
                 ActionTextButton(enabled = !state.busy, onClick = controller::resumeBatch) { Text("Resume") }
-            !state.busy && state.phase == "AwaitingDecision" -> {
+            !state.busy && state.phase == "AwaitingDecision" && !restoring -> {
                 if (state.saved < state.tracks.size) ActionTextButton(onClick = controller::resumeBatch) { Text("Retry failed files") }
                 ActionTextButton(onClick = controller::finishBatch) { Text("Done") }
             }
