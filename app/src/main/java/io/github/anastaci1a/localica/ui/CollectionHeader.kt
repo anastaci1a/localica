@@ -177,22 +177,15 @@ internal fun ArtistAlbumChoices(albums: List<LibraryGroup>, selectedIds: List<St
 internal fun CollectionBackground(visual: PlayerVisual, grid: LazyGridState, source: FrostedBackdrop,
     reducedMotion: Boolean, modifier: Modifier, pinchHeader: CollectionPinchHeader? = null, artworkResetKey: Any? = null) {
     val scroll = remember(grid) { CollectionScroll() }
-    // The scroll-derived coordinate is read in the draw and layer phases only. Reading the grid's
-    // layout in composition recomposed this scope, ArtworkBlend, CollectionBackdrop and
-    // PlayerBackdrop on every scroll frame. One CollectionScroll update per measured layout
-    // (identity-keyed), shared by every reader in a frame, keeps the stateful delta tracking in order.
+    // Read scroll geometry in draw/layer phases, without caching the stateful tracker.
+    // A presented pinch top must survive retirement even when layoutInfo is unchanged.
     val top = remember(grid, scroll, pinchHeader) {
-        var measured: Any? = null
-        var items = emptyList<CollectionScroll.Item>()
-        var ordinary = 0f
         fun read(): Float {
-            val layout = grid.layoutInfo
-            if (layout !== measured) {
-                measured = layout
-                items = layout.visibleItemsInfo.map { CollectionScroll.Item(it.key, it.index, it.offset.y, it.size.height) }
-                ordinary = scroll.update(items, grid.firstVisibleItemIndex == 0)
-                pinchHeader?.ordinaryTop = ordinary
+            val items = grid.layoutInfo.visibleItemsInfo.map {
+                CollectionScroll.Item(it.key, it.index, it.offset.y, it.size.height)
             }
+            val ordinary = scroll.update(items, grid.firstVisibleItemIndex == 0)
+            pinchHeader?.ordinaryTop = ordinary
             pinchHeader?.presentedTop()?.let { scroll.presented(it, items) }
             return pinchHeader?.heroTop() ?: ordinary
         }

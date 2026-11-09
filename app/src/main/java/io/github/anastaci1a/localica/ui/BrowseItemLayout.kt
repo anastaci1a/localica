@@ -2,6 +2,7 @@ package io.github.anastaci1a.localica.ui
 
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.animateBounds
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -60,8 +61,8 @@ internal fun BrowseItemLayout(item: BrowserItem, style: BrowseStyle, geometry: B
         clip = true
     }
     fun trailing(value: BrowseStyle) = value.presentation == Presentation.List && value.listSize.trailingInformation
-    val titleSize by animateSettledFloat(style.browseTitleSize(geometry.columns).toFloat(), tween(duration), label = "Browse title size")
-    val titleLine by animateSettledFloat(style.browseTitleLine(geometry.columns).toFloat(), tween(duration), label = "Browse title line")
+    val titleSize by animateFloatAsState(style.browseTitleSize(geometry.columns).toFloat(), tween(duration), label = "Browse title size")
+    val titleLine by animateFloatAsState(style.browseTitleLine(geometry.columns).toFloat(), tween(duration), label = "Browse title line")
     fun numbered(value: BrowseStyle) = value.trackNumberLabel(trackNumber, itemIndex, mutablePosition) != null
     val numberLabel = style.trackNumberLabel(trackNumber, itemIndex, mutablePosition) ?: from?.trackNumberLabel(trackNumber, itemIndex, mutablePosition)
     var retainedNumberLabel by remember(item.key) { mutableStateOf(numberLabel) }

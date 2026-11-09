@@ -429,8 +429,7 @@ internal fun Modifier.selectionLens(isSelected: Boolean, partial: Boolean,
     val entry = remember { SelectionEntry() }
     val layer = androidx.compose.ui.graphics.rememberGraphicsLayer()
     val view = androidx.compose.ui.platform.LocalView.current
-    // Rows at rest keep no animation coroutine; see animateSettledFloat.
-    val visibility = animateSettledFloat(if (isSelected && !partial) 1f else 0f,
+    val visibility = androidx.compose.animation.core.animateFloatAsState(if (isSelected && !partial) 1f else 0f,
         hoverMotionSpec(LocalReducedMotion.current), label = "Selection hover")
     SideEffect {
         entry.itemKey = itemKey
