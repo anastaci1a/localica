@@ -23,6 +23,57 @@ import org.json.JSONObject
 
 /** Real media/AtomicFile and native reader admission; queue/playback-intent proofs remain separate. */
 class TagBatchTransactionTest {
+    @Test fun deletedEntryCannotAuthorizeCancellationOrCommitCleanup() = fixture { runBlocking {
+        val batch = begin(); transaction.writeOne(batch.id, 0)
+        val written = files[0].readBytes()
+        assertTrue(File(batchDirectory, "${batch.id}/entries/0.json").delete())
+        reopen(TagBatchStore(batchDirectory))
+        assertTrue(runCatching { transaction.restore(batch.id) }.isFailure)
+        assertArrayEquals(written, files[0].readBytes())
+        assertTrue(store.original(batch.id, 0).isFile)
+        assertNotNull(store.read())
+    } }
+
+    @Test fun unpublishedSnapshotCannotBeAdoptedOrSilentlyCleanedAfterRestart() = fixture { runBlocking {
+        val batch = begin()
+        writer.snapshot(tracks[0], batch.id, 0)
+        reopen(TagBatchStore(batchDirectory))
+        assertTrue(runCatching { transaction.writeOne(batch.id, 0) }.isFailure)
+        assertTrue(runCatching { transaction.restore(batch.id) }.isFailure)
+        assertOriginals()
+        assertTrue(store.original(batch.id, 0).isFile)
+    } }
+
+    @Test fun missingOriginalRetainsWrittenBytesAndAllowsCheckedRecoveryRetry() = fixture { runBlocking {
+        val batch = begin(); transaction.writeOne(batch.id, 0)
+        val copy = store.original(batch.id, 0)
+        assertTrue(copy.delete())
+        val written = files[0].readBytes()
+        assertTrue(runCatching { transaction.restore(batch.id) }.isFailure)
+        assertArrayEquals(written, files[0].readBytes())
+        assertNotNull(store.read())
+        copy.writeBytes(originals[0])
+        transaction.restore(batch.id); assertOriginals()
+    } }
+
+    @Test fun restoreMetadataFailureRetainsOriginalUntilRetryRegistersRefresh() = fixture { runBlocking {
+        val batch = begin(); transaction.writeOne(batch.id, 0)
+        val written = files[0].readBytes()
+        val failed = TagBatchTransaction(writer, { _, action -> action() }, { _, action -> action() },
+            { throw IOException("Refresh journal unavailable") })
+        assertTrue(runCatching { failed.restore(batch.id) }.isFailure)
+        assertArrayEquals(written, files[0].readBytes())
+        assertTrue(store.original(batch.id, 0).isFile)
+        reopen(TagBatchStore(batchDirectory))
+        transaction.restore(batch.id); assertOriginals()
+    } }
+
+    @Test fun spaceCalculationIncludesUndoAndRejectsOverflow() {
+        assertEquals(100L, TagSaveSpace.required(100, 60, 10, true) - TagSaveSpace.required(100, 60, 10, false))
+        assertTrue(TagSaveSpace.required(100, 60, 10, false) > 64L * 1024 * 1024 + 120)
+        assertTrue(runCatching { TagSaveSpace.required(Long.MAX_VALUE, Long.MAX_VALUE, 0, true) }.isFailure)
+    }
+
     @Test fun cancelDuringSecondReplacementRestoresAllBytesAndArtwork() = fixture { runBlocking {
         val batch = begin()
         assertTrue(transaction.writeOne(batch.id, 0)!!.saved)
