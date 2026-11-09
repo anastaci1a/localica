@@ -56,6 +56,10 @@ class MainActivity : ComponentActivity() {
             else registerReceiver(receiver, filter)
         }
         enableEdgeToEdge()
+        if (android.os.Build.VERSION.SDK_INT >= 33 && intent.getBooleanExtra("none-colour-witness", false)) {
+            setContent { LocalicaTheme { io.github.anastaci1a.localica.ui.NoneColourWitness() } }
+            return
+        }
         if (intent.getBooleanExtra("none-controls", false)) {
             setContent {
                 val runtime = androidx.compose.runtime.remember {
