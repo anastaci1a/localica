@@ -81,9 +81,18 @@ class TagEditingController(private val context: Context, private val library: Li
         if (state.value.cancelPending || state.value.interruptedBatch) return@launch
         try {
             val id = state.value.batchId ?: return@launch
-            val batch = withContext(Dispatchers.IO) { writer.batches.background(id) }
+            withContext(Dispatchers.IO) { writer.batches.background(id) }
             mutable.update { it.copy(background = true, progressVisible = false) }
-            if (!state.value.busy && batch.phase == TagBatchPhase.AwaitingDecision && batch.saved == batch.tracks.size) finishBatch()
+            // The worker may have sampled background=false immediately before this
+            // acceptance. Recheck the committed outcome after it releases ownership.
+            worker.withLock {
+                val finished = withContext(Dispatchers.IO) { writer.batches.read() } ?: return@withLock
+                if (state.value.cancelPending || state.value.interruptedBatch ||
+                    finished.phase != TagBatchPhase.AwaitingDecision || finished.saved != finished.tracks.size) return@withLock
+                transaction.commit(id)
+                completion?.invoke(true); completion = null
+                mutable.update { it.copy(batchId = null, tracks = emptyList(), results = emptyList(), progressVisible = false, draft = null) }
+            }
         } catch (failure: Exception) { mutable.update { it.copy(error = failure.message) } }
     } }
     fun showJobs() { mutable.update { it.copy(jobsVisible = it.batchId == null, background = if (it.batchId != null) false else it.background,

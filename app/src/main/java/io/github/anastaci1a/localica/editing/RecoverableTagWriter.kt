@@ -152,9 +152,7 @@ class RecoverableTagWriter(private val directory: File, private val documents: E
         directory.listFiles()?.forEach { it.delete() }
         val original = File(directory, "original.$extension")
         val candidate = File(directory, "edited.$extension")
-        documents.open(uri).use { input -> FileOutputStream(original).use { output ->
-            input.copyTo(output); output.fd.sync()
-        } }
+        copyOriginal(uri, original)
         val originalHash = hash(original.inputStream())
         val expected = admitted?.originalHash ?: expectedOriginalHash
         check(expected == null || expected == originalHash) {
@@ -221,9 +219,7 @@ class RecoverableTagWriter(private val directory: File, private val documents: E
         val uri = writableSource(track)
         val original = batches.original(batchId, index)
         check(!original.exists()) { "An unpublished undo copy is retained. Restore this batch before retrying." }
-        documents.open(uri).use { input -> FileOutputStream(original).use { output ->
-            input.copyTo(output); output.fd.sync()
-        } }
+        copyOriginal(uri, original)
         val digest = hash(original.inputStream())
         check(hash(documents.open(uri)) == digest) { "The song changed while its undo copy was captured." }
         Recovery(track, uri, original, digest)
@@ -271,6 +267,17 @@ class RecoverableTagWriter(private val directory: File, private val documents: E
         val uri = documents.writable(track) ?: error("Grant write access to this song’s folder first.")
         check(documentIdentity(uri) == documentIdentity(track.id)) { "The writable source does not match this song." }
         return uri
+    }
+
+    private fun copyOriginal(uri: String, original: File) {
+        val declared = documents.size(uri)
+        check(declared == null || declared >= 0) { "The provider reported an invalid file size." }
+        documents.open(uri).use { input -> FileOutputStream(original).use { output ->
+            input.copyTo(output); output.fd.sync()
+        } }
+        check(declared == null || original.length() == declared) {
+            "The provider returned an incomplete file. No replacement was admitted; keep the retained copies and retry when storage is available."
+        }
     }
 
     private fun admittedBatch(track: Track, id: String?): TagBatchEntry? {

@@ -23,6 +23,64 @@ import org.json.JSONObject
 
 /** Real media/AtomicFile and native reader admission; queue/playback-intent proofs remain separate. */
 class TagBatchTransactionTest {
+    @Test fun unknownLengthCountsTheFullStreamAndReadFailureCannotAdmitAudio() = fixture { runBlocking {
+        var failing = false
+        val unknown = object : EditableDocuments by access {
+            override fun size(uri: String): Long? = null
+            override fun open(uri: String): java.io.InputStream {
+                val stream = access.open(uri)
+                if (!failing) return stream
+                return object : java.io.FilterInputStream(stream) {
+                    var first = true
+                    override fun read(bytes: ByteArray, offset: Int, length: Int): Int {
+                        if (!first) throw IOException("Provider disconnected after a short read")
+                        first = false
+                        return super.read(bytes, offset, minOf(length, 16))
+                    }
+                }
+            }
+        }
+        val bounded = RecoverableTagWriter(File(directory, "tag-recovery"), unknown, readers, store)
+        assertEquals(files[0].length(), bounded.source(tracks[0]).size)
+        failing = true
+        assertTrue(runCatching { bounded.source(tracks[0]) }.isFailure)
+        assertOriginals(); assertTrue(access.replacements.isEmpty()); assertNull(store.read())
+    } }
+
+    @Test fun restartAfterOneRestoredOutcomeContinuesOnlyTheRemainingFiles() = fixture { runBlocking {
+        var fail = true
+        reopen(TagBatchStore(batchDirectory) { atomic, bytes ->
+            commitRefreshRecord(atomic, bytes)
+            val record = JSONObject(bytes.toString(Charsets.UTF_8))
+            if (fail && record.optString("phase") == "Restored" && record.has("index")) {
+                fail = false; throw IOException("After the first restored outcome committed")
+            }
+        })
+        val batch = begin(); transaction.writeOne(batch.id, 0); transaction.writeOne(batch.id, 1)
+        assertTrue(runCatching { transaction.restore(batch.id) }.isFailure)
+        assertEquals(1, store.read()!!.restored)
+        assertArrayEquals(originals[0], files[0].readBytes())
+        val firstCount = access.replacements[tracks[0].uri]
+        reopen(TagBatchStore(batchDirectory)); writer.initialize()
+        transaction.restore(batch.id)
+        assertEquals(firstCount, access.replacements[tracks[0].uri])
+        assertOriginals(); assertNull(store.read())
+    } }
+
+    @Test fun retainedReplacementArtworkSurvivesSourceMutationAndWriterReconstruction() = fixture { runBlocking {
+        val bitmap = Bitmap.createBitmap(8, 8, Bitmap.Config.ARGB_8888).apply { eraseColor(android.graphics.Color.CYAN) }
+        val image = ByteArrayOutputStream().also { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }.toByteArray()
+        bitmap.recycle()
+        val retained = image.copyOf()
+        val batch = store.begin(tracks, TagPatch(mapOf(EditField.Title to "Retained artwork"),
+            ArtworkChange.Replace(CoverImage(image, "image/png", 8, 8))), "{}", true)
+        image.fill(0)
+        reopen(TagBatchStore(batchDirectory)); writer.initialize()
+        assertArrayEquals(retained, (store.read()!!.patch!!.artwork as ArtworkChange.Replace).image.bytes)
+        assertTrue(transaction.writeOne(batch.id, 0)!!.saved)
+        transaction.restore(batch.id); assertOriginals()
+    } }
+
     @Test fun declaredLengthShortSnapshotCannotBecomeAnUndoOriginal() = fixture { runBlocking {
         val batch = begin()
         val short = object : EditableDocuments by access {

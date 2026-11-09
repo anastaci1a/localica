@@ -21,6 +21,36 @@ import java.util.concurrent.TimeUnit
 
 /** Real controller, batch journals and queue/library scopes; only foreground dispatch is held. */
 class TagBatchControllerTest {
+    @Test fun backgroundAcceptanceDuringForegroundCompletionStillCommitsOnceWorkerReleases() = fixture {
+        val entered = CompletableDeferred<Unit>()
+        val finish = CountDownLatch(1)
+        context.beforeJobsCommit = { value ->
+            if (value?.contains("Complete; awaiting Done") == true) {
+                entered.complete(Unit)
+                check(finish.await(15, TimeUnit.SECONDS)) { "Completion history barrier timed out" }
+            }
+        }
+        val controller = controller()
+        var complete: Boolean? = null
+        onMain { controller.open(tracks) { complete = it }; controller.saveDraft(patch, draft) }
+        coroutineScope {
+            val work = async { onMain { controller.runPending() } }
+            try {
+                withTimeout(10000) { entered.await() }
+                assertEquals("AwaitingDecision", controller.state.value.phase)
+                assertTrue(controller.state.value.busy)
+                onMain { controller.continueInBackground() }
+                await { controller.state.value.background }
+                assertTrue(store.read()!!.background)
+            } finally { finish.countDown() }
+            work.await()
+        }
+        await { controller.state.value.batchId == null }
+        assertEquals(true, complete)
+        assertNull(store.read())
+        assertEquals(tracks.size, replacements)
+    }
+
     @Test fun cancelPersistenceFailureDuringWriteClosesTheNextFileAndRestoresAfterRestart() = fixture {
         val controller = controller()
         holdFirst = true
@@ -208,10 +238,29 @@ private class BatchServiceContext(base: Context) : ContextWrapper(base) {
     private val directory = File(base.filesDir, token).apply { check(mkdirs()) }
     private val preferences = mutableSetOf<String>()
     var starts = 0
+    var beforeJobsCommit: ((String?) -> Unit)? = null
     override fun getFilesDir(): File = directory
     override fun getSharedPreferences(name: String, mode: Int): SharedPreferences {
         val owned = "$token-$name"; preferences += owned
-        return baseContext.getSharedPreferences(owned, mode)
+        val preferences = baseContext.getSharedPreferences(owned, mode)
+        if (name != "tag-jobs") return preferences
+        return object : SharedPreferences by preferences {
+            override fun edit(): SharedPreferences.Editor {
+                val editor = preferences.edit()
+                return object : SharedPreferences.Editor by editor {
+                    var jobs: String? = null
+                    override fun putString(key: String, value: String?): SharedPreferences.Editor {
+                        if (key == "jobs") jobs = value
+                        editor.putString(key, value)
+                        return this
+                    }
+                    override fun commit(): Boolean {
+                        beforeJobsCommit?.invoke(jobs)
+                        return editor.commit()
+                    }
+                }
+            }
+        }
     }
     override fun startForegroundService(service: Intent): ComponentName {
         starts++; return requireNotNull(service.component)
