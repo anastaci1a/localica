@@ -60,16 +60,26 @@ internal class ArtistPhotoDisk(private val cache: File, private val choices: Fil
         CachedArtistPhoto(file, provider, credit, metadata.getLong("fetchedAt"))
     }.getOrNull()
 
-    fun savePhoto(artist: String, remote: RemoteArtist, bytes: ByteArray, now: Long): CachedArtistPhoto {
+    fun savePhoto(artist: String, remote: RemoteArtist, bytes: ByteArray, now: Long, commitChoice: () -> Unit = {}): CachedArtistPhoto {
         check(bytes.isNotEmpty() && bytes.size <= PHOTO_MAX_BYTES && photoHeader(bytes))
         cache.mkdirs()
         val image = key(artist + ":" + MessageDigest.getInstance("SHA-256").digest(bytes).joinToString { it.toString() }) + ".image"
         write(File(cache, image), bytes)
-        val old = read(entry(artist))?.optString("image")
+        val previous = read(entry(artist))
+        val old = previous?.optString("image")
         val metadata = JSONObject().put("image", image).put("provider", remote.choice.provider.name).put("fetchedAt", now)
         remote.attribution?.let { credit -> metadata.put("attribution", JSONObject().put("artist", credit.artist).put("credit", credit.credit)
             .put("licence", credit.licence).put("licenceUrl", credit.licenceUrl).put("sourcePage", credit.sourcePage)) }
-        write(entry(artist), metadata.toString().toByteArray())
+        try {
+            write(entry(artist), metadata.toString().toByteArray())
+            commitChoice()
+        } catch (failure: Exception) {
+            // Keep the previous ready image and pending intent when selection persistence fails.
+            if (previous == null) entry(artist).delete()
+            else write(entry(artist), previous.toString().toByteArray())
+            if (image != old) File(cache, image).delete()
+            throw failure
+        }
         if (old != null && old != image && old.matches(Regex("[0-9a-f]{64}\\.image"))) File(cache, old).delete()
         File(cache, image).setLastModified(now); entry(artist).setLastModified(now)
         trim()

@@ -72,9 +72,9 @@ class ArtistPhotos internal constructor(private val consent: NetworkConsent, pri
                     return@withLock null
                 }
                 val (remote, bytes) = fetched
-                val photo = disk.savePhoto(request.artistKey, remote, bytes, time)
-                disk.saveChoice(request.artistKey, SavedPhotoChoice(saved.mode, remote.choice, time))
-                photo
+                disk.savePhoto(request.artistKey, remote, bytes, time) {
+                    disk.saveChoice(request.artistKey, SavedPhotoChoice(saved.mode, remote.choice, time))
+                }
             } }
             if (refreshed != null) {
                 emit(ArtistPhotoState(request.latestAlbumArt, refreshed))
