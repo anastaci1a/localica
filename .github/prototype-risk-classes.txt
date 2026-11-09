@@ -444,3 +444,6 @@ io.github.anastaci1a.localica.NoneRealAppWalkTest
 io.github.anastaci1a.localica.LyricsReturnBoundsTest
 
 io.github.anastaci1a.localica.IconOpticalCentringTest
+
+# Mounted collection-header density regression (#600).
+io.github.anastaci1a.localica.CollectionHeaderDensityContractTest
