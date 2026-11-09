@@ -141,6 +141,8 @@ Matching combines artist, album, ordered title tokens, available duration and re
 
 Clear matches resolve silently. Probable matches expose their tier and reason for judgment-call review. Uncertain candidates need a decision, ordered by plays. Entries without plausible candidates stay outside the review count and are reconsidered when the library changes. Manual choices survive refreshes; resetting them leaves the archive intact.
 
+The Data tab offers Export matching report. It opens the share sheet with JSON containing review candidates, scores and reasons. The report includes song metadata and hashed local identities, but excludes usernames, API keys and file paths. Nothing is sent until a destination is chosen.
+
 Turning Last.fm or Online features off cancels syncing and stops using external counts while retaining the archive and choices. Re-enabling restores them without a request. Disconnect forgets the active connection and keeps its archive. Only confirmed Delete synced Last.fm data removes the archive and choices. Local history, playlists and audio tags are never deleted by these actions.
 
 Builds without an application API key disable syncing and external counts with an explanatory settings message. Build configuration is documented in [Build](build.md#lastfm-build-key).

@@ -41,9 +41,7 @@ internal class LastFmMatchingEngine(tracks: List<Track>) {
             } else if (strong.isNotEmpty() && mapping != LastFmMatcher.REVIEW) {
                 chosen = expand(strong); reason = "Recording MusicBrainz ID agrees"; score = 100
             } else {
-                val evidence = queries(remote).flatMap { query -> candidates(query).mapNotNull { score(remote, query, it) } }
-                    .groupBy { it.local.track.id }.values.map { rows -> rows.maxBy { it.score } }
-                    .sortedWith(compareByDescending<Evidence> { it.score }.thenBy { it.local.track.id })
+                val evidence = evidence(remote)
                 val top = evidence.firstOrNull()
                 if (mapping == LastFmMatcher.REVIEW) {
                     val candidates = (strong + evidence.map { it.local }).distinctBy { it.track.id }.map { it.track }
@@ -87,6 +85,19 @@ internal class LastFmMatchingEngine(tracks: List<Track>) {
         val versionCounts = groups.mapValues { (_, group) -> totals.getValue(group) }
         return LastFmMatches(versionCounts, review.sortedByDescending { it.remote.plays }, absent.size,
             editions.sortedByDescending { it.remote.plays }, resolved.size, dismissed, resolved, absent, groups, snapshot)
+    }
+
+    private fun evidence(remote: LastFmTrack): List<Evidence> =
+        queries(remote).flatMap { query -> candidates(query).mapNotNull { score(remote, query, it) } }
+            .groupBy { it.local.track.id }.values.map { rows -> rows.maxBy { it.score } }
+            .sortedWith(compareByDescending<Evidence> { it.score }.thenBy { it.local.track.id })
+
+    internal fun inspect(remote: LastFmTrack): List<LastFmCandidateScore> {
+        val recording = remote.mbid?.takeIf(String::isNotBlank)?.let { byMbid[normalize(it)] }.orEmpty()
+            .map { Evidence(it, 100, LastFmMatchTier.CLEAR, "Recording MusicBrainz ID agrees") }
+        return (recording + evidence(remote)).distinctBy { it.local.track.id }.map {
+            LastFmCandidateScore(it.local.track.id, it.score, it.tier, it.reason)
+        }
     }
 
     private fun queries(remote: LastFmTrack): List<Query> {
