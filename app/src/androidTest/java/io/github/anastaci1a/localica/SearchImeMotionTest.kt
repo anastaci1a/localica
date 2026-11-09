@@ -638,7 +638,7 @@ class SearchImeMotionTest {
             android.util.Log.i("SearchImeMotionTest", "Native dismissal requested outside=$outside uptime=${SystemClock.uptimeMillis()}")
             val returnGate = java.util.concurrent.CountDownLatch(1).takeIf { awaitFirstReturn }
             compose.runOnUiThread { nativeActionReturnGate = returnGate }
-            nativeDismissal {
+            nativeDismissal(reduced) {
                 if (outside) {
                     val device = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
                     assertTrue(raised.left > 2f)
@@ -663,15 +663,73 @@ class SearchImeMotionTest {
         }
     }
 
-    private fun nativeDismissal(action: () -> Unit) = runBlocking {
+    // On a device the dismissal event and the first moving return frame are consecutive
+    // Choreographer frames, ahead of the keyboard hide that the dismissal's window-focus
+    // release starts 30-45 ms later. The test clock only advances from this thread, and
+    // the idle-gated waits in advanceUntil pump it through Espresso idling (never idle
+    // while the legacy ADJUST_RESIZE hide relayouts both windows) or one frame at a time,
+    // so the first moving frame was placed 220-440 ms after the dismissal, after the native
+    // keyboard surface was gone (#674). Until that frame exists, pump frames inside one
+    // UI-thread message with no idle wait: the dismissal composition, the animation's
+    // start frame and the first moving frame then share one turn, before any hide can
+    // start. Reduced motion has no intermediate frame; the established loop keeps its
+    // behavior there.
+    private fun awaitFirstReturnFrame(wallTimeoutMillis: Long = 5000) {
+        val wallStart = SystemClock.uptimeMillis()
+        val virtualStart = compose.mainClock.currentTime
+        var turns = 0
+        var frames = 0
+        while (true) {
+            // One main-thread message, like the idle burst: dismissal composition, the
+            // animation's start frame and its first moving frame cannot be split by a
+            // real traversal (which would relayout the Dialog's released focus and let
+            // the hide start). Dismissal writes land in the global snapshot from the
+            // input event; the recomposer only learns of them once they are applied.
+            val (witnessed, retired) = compose.runOnUiThread {
+                androidx.compose.runtime.snapshots.Snapshot.sendApplyNotifications()
+                fun witnessed() = samples.any { !it.opening && it.progress in .01f.. .99f }
+                var pumped = 0
+                while (pumped < 6 && !witnessed() && anchor.modalPresent) {
+                    compose.mainClock.advanceTimeByFrame()
+                    pumped++
+                }
+                frames += pumped
+                witnessed() to !anchor.modalPresent
+            }
+            turns++
+            if (witnessed || retired) {
+                motionTimeline += "${SystemClock.uptimeMillis()} first-return-frame turns=$turns frames=$frames " +
+                    "witnessed=$witnessed retired=$retired wall=${SystemClock.uptimeMillis() - wallStart} " +
+                    "virtual=${compose.mainClock.currentTime - virtualStart}"
+                return
+            }
+            val now = SystemClock.uptimeMillis()
+            if (now - wallStart > wallTimeoutMillis) {
+                val state = compose.runOnUiThread {
+                    "visible=$visible modal=${anchor.modalPresent} progress=${anchor.contact.expansion.value} " +
+                        "running=${anchor.contact.expansion.isRunning} keyboardSettled=$keyboardSettled " +
+                        "placedFrames=${samples.size} last=${samples.lastOrNull()}"
+                }
+                throw AssertionError("No intermediate return frame after ${now - wallStart}ms wall, $turns turns " +
+                    "and ${compose.mainClock.currentTime - virtualStart}ms virtual: $state")
+            }
+            SystemClock.sleep(10)
+        }
+    }
+
+    private fun nativeDismissal(reduced: Boolean = false, action: () -> Unit) = runBlocking {
         // Android input/IME use wall time; our return spring uses the paused Compose clock.
         // Idle waits can span native frames, so let them advance the spring during this phase.
         val previousAutoAdvance = compose.mainClock.autoAdvance
-        compose.mainClock.autoAdvance = true
+        compose.mainClock.autoAdvance = false
         try { supervisorScope {
             val input = async(Dispatchers.IO) { action() }
             var failure: Throwable? = null
-            try { closed() } catch (caught: Throwable) { failure = caught }
+            try {
+                if (!reduced) awaitFirstReturnFrame()
+                compose.mainClock.autoAdvance = true
+                closed()
+            } catch (caught: Throwable) { failure = caught }
             finally {
                 compose.runOnUiThread { nativeActionReturnGate?.countDown() }
                 try { input.await() } catch (caught: Throwable) {
