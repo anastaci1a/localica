@@ -45,6 +45,16 @@ enum class Stratum { Page,Lifted,Floating,Drawer,Player,Modal,Overlay,Diagnostic
     private val ownOwnership=MotionFloat(clock,0f,1f,0.0..1.0,key to "ownership");
     private var windowLeases=0; private var sourceReleased=false
     internal var fieldInheritsBodyScale by mutableStateOf(true)
+    // INTENTIONAL NEVER-MERGE #693 sensitivity mutant: remove only the first returned
+    // source field's sampled Engine sequence. Body, layout and later fields are unchanged.
+    private var proofFieldLossSequence: Long? = null
+    internal fun proofDropsReturnedField(): Boolean {
+        val expansion = following?.expansion ?: return false
+        if (!windowRetained || owner !== low || expansion.expanded || expansion.phase.value() > .002f) return false
+        val sequence = clock.stamp.sequence
+        if (proofFieldLossSequence == null) proofFieldLossSequence = sequence
+        return proofFieldLossSequence == sequence
+    }
     internal val windowRetained get()=windowLeases>0
     internal val sourcePlane get()=low
     internal var sourceGeneration=0L; private set
@@ -120,7 +130,7 @@ enum class Stratum { Page,Lifted,Floating,Drawer,Player,Modal,Overlay,Diagnostic
 fun Modifier.surface(node: SurfaceView): Modifier { require(node is SurfaceNode) { "Surfaces come from rememberSurfaceNode" }; return layout { m,c -> val p=m.measure(c); layout(p.width,p.height) { p.place(0,0,zIndex=node.order) } } }
 /** D25/D28: the host draws its owned casters' field after its content, then publishes the draw receipt; queued transfers start on the next frame. */
 @Composable internal fun Modifier.shadowPlaneHost(plane: ShadowPlane,strength: Float,spread: Float): Modifier { val cache=rememberGlassShadow(); val view=LocalView.current; SideEffect { plane.view=view }
-    return onPlaced { plane.layout=it }.drawWithContent { drawContent(); plane.revision; with(cache) { draw(plane.casters.flatMap { n -> if(!n.owns(plane) || n.role==ShadowRole.None) emptyList() else { val opacity=n.opacity.value()*((n.shape as? LayoutShape)?.opacity?.invoke()?:1f); if(opacity>0f) n.frameOn(plane).bodies.map { it to opacity } else emptyList() } },strength,spread) }; if(plane.receipt()) view.postOnAnimation { plane.admit() } } }
+    return onPlaced { plane.layout=it }.drawWithContent { drawContent(); plane.revision; with(cache) { draw(plane.casters.flatMap { n -> if(!n.owns(plane) || n.role==ShadowRole.None || n.proofDropsReturnedField()) emptyList() else { val opacity=n.opacity.value()*((n.shape as? LayoutShape)?.opacity?.invoke()?:1f); if(opacity>0f) n.frameOn(plane).bodies.map { it to opacity } else emptyList() } },strength,spread) }; if(plane.receipt()) view.postOnAnimation { plane.admit() } } }
 /** The existing host layout provides its registry to descendant surface owners; the modifier also fits a page's existing layout. */
 @Composable internal fun ShadowPlaneHost(plane: ShadowPlane,strength: Float,spread: Float,modifier: Modifier,content: @Composable androidx.compose.foundation.layout.BoxScope.()->Unit) {
     CompositionLocalProvider(LocalShadowPlane provides plane) { androidx.compose.foundation.layout.Box(modifier.shadowPlaneHost(plane,strength,spread),content=content) } }
