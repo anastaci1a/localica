@@ -68,6 +68,7 @@ io.github.anastaci1a.localica.DeviceCornersTest
 io.github.anastaci1a.localica.DialogChromeLayoutTest
 io.github.anastaci1a.localica.DirectComposeDispatcherTest
 io.github.anastaci1a.localica.DragHandoffArtworkTest
+io.github.anastaci1a.localica.DragReleaseHapticsTest
 io.github.anastaci1a.localica.DragReorderTest
 io.github.anastaci1a.localica.DragShadowContinuityTest
 io.github.anastaci1a.localica.DragStackFrameTimeTest
@@ -272,6 +273,7 @@ io.github.anastaci1a.localica.QueueSaveOriginTest
 io.github.anastaci1a.localica.QueueScrollOwnershipTest
 io.github.anastaci1a.localica.QueueSelectionPlacementTest
 io.github.anastaci1a.localica.QueueSelectorDragTest
+io.github.anastaci1a.localica.QueueSelectorUnifiedDragTest
 io.github.anastaci1a.localica.QueueShadowContinuityTest
 io.github.anastaci1a.localica.QueueSongTransitionTest
 io.github.anastaci1a.localica.QueueSqlCountBenchmarkTest
