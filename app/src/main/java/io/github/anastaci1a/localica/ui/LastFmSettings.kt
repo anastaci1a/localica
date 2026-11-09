@@ -29,32 +29,34 @@ internal fun LastFmSettings(controller: LastFmController) {
         style = MaterialTheme.typography.bodyMedium)
     if (!controller.enabled) Text("Last.fm is disabled in this build: no bundled API key.")
     if (!onlineAllowed) Text("Online features are off. Enable them to sync.")
-    GlassTextField(username, { username = it }, label = { Text("Last.fm username") }, singleLine = true,
+    SettingsEntry("Last.fm username") { GlassTextField(username, { username = it }, label = { Text("Last.fm username") }, singleLine = true,
         enabled = controller.enabled && onlineAllowed && active && !state.loading && !state.syncing,
-        modifier = Modifier.fillMaxWidth().testTag("lastfm-username"))
+        modifier = Modifier.fillMaxWidth().testTag("lastfm-username")) }
     Text("Sync is manual and limited to once a minute. A different account replaces the archive only after its scan finishes.", style = MaterialTheme.typography.bodySmall)
-    ActionButton(onClick = { controller.sync(username) }, enabled = controller.enabled && onlineAllowed && active && username.isNotBlank() && !state.loading && !state.syncing,
-        modifier = Modifier.testTag("lastfm-sync")) { Text(if (state.syncing) "Syncing…" else "Sync now") }
+    SettingsEntry("Sync now") { ActionButton(onClick = { controller.sync(username) }, enabled = controller.enabled && onlineAllowed && active && username.isNotBlank() && !state.loading && !state.syncing,
+        modifier = Modifier.testTag("lastfm-sync")) { Text(if (state.syncing) "Syncing…" else "Sync now") } }
     if (state.syncing) Text(state.progress?.label ?: "Connecting to Last.fm…", Modifier.testTag("lastfm-progress"))
     if (saved.snapshot != null) ActionTextButton(onClick = { controller.sync(username, fullRescan = true) },
         enabled = controller.enabled && onlineAllowed && active && !state.loading && !state.syncing) { Text("Full rescan") }
     val lastSync = saved.snapshot?.let { DateFormat.getDateTimeInstance().format(Date(it.syncedAt)) }
-    Text(if (lastSync == null) "Last sync: never" else "Last sync: $lastSync · ${saved.snapshot?.username}", Modifier.testTag("lastfm-last-sync"))
+    SettingsEntry("Last sync") { Text(if (lastSync == null) "Last sync: never" else "Last sync: $lastSync · ${saved.snapshot?.username}", Modifier.testTag("lastfm-last-sync")) }
     state.problem?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.testTag("lastfm-problem")) }
-    if (controller.enabled && onlineAllowed && active && saved.snapshot != null) BooleanPreference("Use Last.fm counts", saved.useCounts, controller::useCounts)
-    else Text("Use Last.fm counts: off")
+    SettingsEntry("Use Last.fm counts") {
+        if (controller.enabled && onlineAllowed && active && saved.snapshot != null) BooleanPreference("Use Last.fm counts", saved.useCounts, controller::useCounts)
+        else Text("Use Last.fm counts: off")
+    }
     Text("Uses Last.fm totals for all-time rankings and play-based sorts. Local plays after a scan add temporarily to the archive. A refresh replaces that base and clears the additions. Songs absent from the archive use local counts. Recent ranges use local listening history.",
         style = MaterialTheme.typography.bodyMedium)
-    if (saved.username.isNotBlank()) ActionTextButton(onClick = controller::disconnect,
-        modifier = Modifier.testTag("lastfm-disconnect")) { Text("Disconnect Last.fm") }
+    if (saved.username.isNotBlank()) SettingsEntry("Disconnect Last.fm") { ActionTextButton(onClick = controller::disconnect,
+        modifier = Modifier.testTag("lastfm-disconnect")) { Text("Disconnect Last.fm") } }
     if (saved.snapshot != null || saved.mappings.isNotEmpty()) ActionTextButton(onClick = { deleting = true },
         modifier = Modifier.testTag("lastfm-delete")) { Text("Delete synced Last.fm data") }
     if (deleting) GlassAlertDialog(onDismissRequest = { deleting = false }, title = { Text("Delete synced Last.fm data?") },
         text = { Text("This deletes only the Last.fm archive, match choices and judgment calls. Your local listening history is kept.") },
         confirmButton = { ActionButton(onClick = { controller.deleteSyncedData(); deleting = false }) { Text("Delete synced data") } },
         dismissButton = { ActionTextButton(onClick = { deleting = false }) { Text("Cancel") } })
-    SettingsHeading("Review matches")
-    Text("${matches.matched} matched · ${matches.review.size} to review", Modifier.testTag("lastfm-review-summary"))
+    SettingsEntry("Review matches") { SettingsHeading("Review matches") }
+    SettingsEntry("Listening statistics") { Text("${matches.matched} matched · ${matches.review.size} to review", Modifier.testTag("lastfm-review-summary")) }
     matches.review.take(shown).forEach { review ->
         Column(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text("${review.remote.artist} — ${review.remote.title}", style = MaterialTheme.typography.titleSmall)
@@ -67,5 +69,5 @@ internal fun LastFmSettings(controller: LastFmController) {
         }
     }
     if (matches.review.size > shown) ActionTextButton(onClick = { shown += 20 }) { Text("Show more matches") }
-    if (saved.mappings.isNotEmpty()) ActionTextButton(onClick = controller::resetMappings) { Text("Reset Last.fm match choices") }
+    if (saved.mappings.isNotEmpty()) SettingsEntry("Reset Last.fm match choices") { ActionTextButton(onClick = controller::resetMappings) { Text("Reset Last.fm match choices") } }
 }

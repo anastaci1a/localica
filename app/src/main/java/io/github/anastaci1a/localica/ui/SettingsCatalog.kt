@@ -22,6 +22,9 @@ internal object SettingsCatalog {
         "Navigation" to "Interface",
         "Player" to "Interface",
         "Motion" to "Interface",
+        "Online features" to null,
+        "Last.fm" to "Online features",
+        "Artist photos" to "Online features",
         "Playback and queues" to null,
         "Song tap behavior" to "Playback and queues",
         "Per-list overrides" to "Song tap behavior",
@@ -34,6 +37,19 @@ internal object SettingsCatalog {
         "About and licenses" to null
     )
     val entries = listOf(
+        SettingSpec("Online features", "Online features", "network privacy consent internet", values = listOf("On", "Off")),
+        SettingSpec("Last.fm username", "Last.fm", "account"),
+        SettingSpec("Sync now", "Last.fm", "fetch play counts"),
+        SettingSpec("Use Last.fm counts", "Last.fm", "rankings all time"),
+        SettingSpec("Review matches", "Last.fm", "ambiguous unmatched tracks"),
+        SettingSpec("Listening statistics", "Last.fm", "plays artists tracks summary"),
+        SettingSpec("Last sync", "Last.fm", "status update"),
+        SettingSpec("Disconnect Last.fm", "Last.fm", "remove account", revealedBy = "Last.fm username"),
+        SettingSpec("Reset Last.fm match choices", "Last.fm", "mapping corrections", revealedBy = "Review matches"),
+        SettingSpec("Photo sources", "Artist photos", "Deezer MusicBrainz Wikimedia album art fallback"),
+        SettingSpec("Photo cache size", "Artist photos", "disk storage 64 MiB"),
+        SettingSpec("Clear photo cache", "Artist photos", "delete pictures"),
+        SettingSpec("Refresh all photos", "Artist photos", "refetch library artists"),
         SettingSpec("Interface gray", "Appearance", "grey contrast secondary text"),
         SettingSpec("Reset gray tone", "Appearance", "default"),
         SettingSpec("Glass renderer", "Glass", "render normal none disable effects", values = GlassRendererMode.entries.map { it.label }),
@@ -151,7 +167,7 @@ internal object SettingsCatalog {
             score(spec.title, spec.keywords + " " + spec.values.joinToString(" "), spec.page)
                 ?.let { Result(spec.title, spec.page, spec, it) }
         }
-        val pages = parents.keys.mapNotNull { page ->
+        val pages = parents.keys.filterNot { page -> entries.any { it.id == page && it.page == page } }.mapNotNull { page ->
             val summary = entries.filter { it.page == page }.joinToString(" ") { it.title + " " + it.keywords }
             score(page, summary, page)?.let { Result(page, page, null, it - 1) }
         }
