@@ -29,6 +29,8 @@ import kotlin.math.hypot
  */
 class PopupHomeShapeTest {
     @get:Rule val compose = createComposeRule()
+    @get:Rule val method = org.junit.rules.TestName()
+    private val evidence = HomeNativeEvidence { method.methodName }
 
     private enum class Trigger { ListMore, PillMore, Cover }
 
@@ -193,7 +195,16 @@ class PopupHomeShapeTest {
                 try {
                     val b = anchor.presentedBounds; val c = Offset(b.left + b.width * .15f, b.center.y) // beside the glyph
                     val centre = android.graphics.Color.red(shot.getPixel(c.x.toInt().coerceIn(0, shot.width - 1), c.y.toInt().coerceIn(0, shot.height - 1)))
-                    return abs(centre - android.graphics.Color.red(shot.getPixel(4, c.y.toInt().coerceIn(0, shot.height - 1))))
+                    val background = android.graphics.Color.red(shot.getPixel(4, c.y.toInt().coerceIn(0, shot.height - 1)))
+                    val contrast = abs(centre - background)
+                    evidence.save(shot, org.json.JSONObject().put("clock", compose.mainClock.currentTime)
+                        .put("trigger", trigger.name).put("sampleX", c.x).put("sampleY", c.y)
+                        .put("centre", centre).put("background", background).put("contrast", contrast)
+                        .put("bounds", anchor.bounds.toString()).put("presentedBounds", b.toString())
+                        .put("hidden", anchor.hidden).put("modal", anchor.modalPresent).put("inModal", anchor.shadowInModal)
+                        .put("restored", anchor.restoredDrawn).put("request", anchor.restoredDrawRequest)
+                        .put("receipt", anchor.restoredDrawReceipt).put("posted", anchor.restoredPresentedReceipt))
+                    return contrast
                 } finally { shot.recycle() }
             }
             compose.mainClock.autoAdvance = false

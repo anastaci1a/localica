@@ -21,6 +21,11 @@ import org.junit.Test
 
 class PopupHostNavigationTest {
     @get:Rule val compose = localicaComposeRule()
+    @get:Rule val method = org.junit.rules.TestName()
+    private val evidence = HomeNativeEvidence { method.methodName }
+    private var nativeState: () -> org.json.JSONObject = { org.json.JSONObject() }
+    private val workReceipts = org.json.JSONArray()
+    private var evidencePhase = "setup"
     private val markers = java.util.IdentityHashMap<View, FrameMarker>()
     private var frameViews: () -> List<View> = { emptyList() }
     private var frameState: () -> String = { "" }
@@ -48,16 +53,48 @@ class PopupHostNavigationTest {
         var popupView: View? = null
         var parentView: View? = null
         var parentProgress = 1f
+        var parentHome: GlassPopupHome? = null
+        var dialogs: GlassDialogs? = null
+        fun anchorState(value: GlassAnchor) = org.json.JSONObject()
+            .put("identity", System.identityHashCode(value)).put("hidden", value.hidden)
+            .put("modal", value.modalPresent).put("inModal", value.shadowInModal)
+            .put("restored", value.restoredDrawn).put("bounds", value.bounds.toString())
+            .put("presentedBounds", value.presentedBounds.toString())
+            .put("expansion", value.contact.expansion.value)
+        fun homeState(value: GlassPopupHome?) = value?.let { home -> org.json.JSONObject()
+            .put("identity", System.identityHashCode(home)).put("departing", home.departing)
+            .put("mounted", home.mounted).put("handedOff", home.handedOff)
+            .put("origin", home.origin.toString()).put("currentOrigin", home.currentOrigin.toString())
+            .put("backdropRecorded", home.backdrop?.recorded).put("fallback", home.backdrop?.fallback != null)
+            .put("flights", org.json.JSONArray(home.flights.map { flight -> org.json.JSONObject()
+                .put("identity", System.identityHashCode(flight)).put("revision", flight.revision)
+                .put("prepared", flight.prepared).put("handedOff", flight.handedOff)
+                .put("wasProjected", flight.wasProjected).put("layerPresent", flight.layer != null)
+                .put("layerReleased", flight.layer?.isReleased).put("origin", flight.origin.toString())
+                .put("homeOrigin", flight.homeOrigin.toString()) })) }
+        nativeState = { androidx.compose.runtime.snapshots.Snapshot.withoutReadObservation {
+            org.json.JSONObject().put("clock", compose.mainClock.currentTime).put("phase", evidencePhase)
+                .put("page", page).put("open", open).put("parentProgress", parentProgress)
+                .put("parentHome", homeState(parentHome))
+                .put("entries", org.json.JSONArray(dialogs?.entries?.map { entry -> org.json.JSONObject()
+                    .put("mounted", entry.mounted).put("anchor", anchorState(entry.anchor))
+                    .put("home", homeState(entry.popupHome)) }.orEmpty()))
+        } }
         frameViews = { listOfNotNull(parentView, popupView) }
         frameState = { "parent=$parentProgress open=$open parentAttached=${parentView?.isAttachedToWindow} popupAttached=${popupView?.isAttachedToWindow}" }
         compose.setContent { LocalicaTheme {
+            dialogs = LocalGlassDialogs.current
             CompositionLocalProvider(LocalGlassMorphWorkObserver provides { phase, window, progress ->
                 if (phase == "geometry" && progress != null && window ===
                     (parentView?.parent as? DialogWindowProvider)?.window) parentProgress = progress
+                if (workReceipts.length() < 4096) workReceipts.put(org.json.JSONObject()
+                    .put("ns", android.os.SystemClock.elapsedRealtimeNanos()).put("phase", phase)
+                    .put("window", window?.let { System.identityHashCode(it) }).put("progress", progress))
             }) {
             Box(Modifier.fillMaxSize().background(Color.Blue))
             @Composable fun Body() {
                 parentView = LocalView.current
+                parentHome = LocalGlassPopupHome.current
                 anchor = rememberGlassAnchor()
                 Column(Modifier.fillMaxSize().background(Color.Blue).padding(24.dp)) {
                     if (library) {
@@ -133,11 +170,13 @@ class PopupHostNavigationTest {
         else compose.runOnIdle { open = false }
         compose.mainClock.advanceTimeBy(32)
         assertTrue("Return is in flight before navigation", anchor.modalPresent && anchor.contact.expansion.value > 0f)
+        evidencePhase = "before-navigation"
         val before = redFrame()
         assertTrue("Fixture presents popup foreground before navigation: $before", before.pixels > 100)
         back(parentView) { settings || !page }
         var transitionStarted = false
         for (frame in 0 until 20) {
+            evidencePhase = "host-admission-$frame"
             compose.mainClock.advanceTimeByFrame()
             compose.waitForIdle()
             assertTrue("Popup remains continuous while the host admits navigation", redFrame().pixels > 100)
@@ -148,13 +187,16 @@ class PopupHostNavigationTest {
         }
         assertTrue("The host must begin its outgoing transition", transitionStarted)
         compose.mainClock.advanceTimeBy(16)
+        evidencePhase = "first-outgoing"
         assertTrue("Navigation preserves the popup in the first outgoing frame", redFrame().pixels > 100)
         assertTrue("The same native popup keeps retracting", popupView?.isAttachedToWindow == true)
         compose.mainClock.advanceTimeBy(32)
+        evidencePhase = "during-outgoing"
         val during = redFrame()
         assertTrue("Outgoing popup fades continuously with its host: $before -> $during",
             during.peak in 1 until before.peak)
         compose.mainClock.advanceTimeBy(208)
+        evidencePhase = "after-outgoing"
         val after = redFrame()
         assertEquals("Popup cannot outlive its outgoing host layer over the destination", 0, after.pixels)
         compose.mainClock.advanceTimeBy(1600)
@@ -181,7 +223,10 @@ class PopupHostNavigationTest {
         stage = stage % 24 + 1
         val requested = stage
         lateinit var views: List<View>
+        lateinit var requestState: org.json.JSONObject
+        lateinit var matchedState: org.json.JSONObject
         compose.runOnUiThread {
+            requestState = nativeState()
             views = frameViews().filter { it.isAttachedToWindow }
             views.forEachIndexed { index, view ->
                 val marker = markers.getOrPut(view) { FrameMarker(4 + index * 16).also { view.overlay.add(it) } }
@@ -205,6 +250,7 @@ class PopupHostNavigationTest {
                     // A covering native scrim scales all channels equally.
                     matches = matches && green > 80 && kotlin.math.abs(android.graphics.Color.red(c).toFloat() / green - requested * 8 / 255f) < .012f
                 }
+                if (matches) matchedState = nativeState().put("workReceipts", org.json.JSONArray(workReceipts.toString()))
             }
             if (matches) presented = next else next.recycle()
             matches
@@ -220,6 +266,8 @@ class PopupHostNavigationTest {
                 peak = maxOf(peak, excess)
                 if (android.graphics.Color.red(c) > 80 && excess > 32) count++
             }
+            evidence.save(bitmap, org.json.JSONObject().put("stage", requested).put("pixels", count).put("peak", peak)
+                .put("requestedState", requestState).put("matchedState", matchedState))
             RedFrame(count, peak)
         } finally { bitmap.recycle() }
     }
