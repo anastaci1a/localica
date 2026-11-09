@@ -15,7 +15,7 @@ import java.io.File
 
 /** Host-driven seed → real SIGKILL during commit → restart → verify on a disposable emulator. */
 class ArtistPhotoProcessDeathFixture {
-    @Test fun persistentWorkerSurvivesHostControlledProcessDeath() = runBlocking(Dispatchers.IO) {
+    @Test fun persistentWorkerSurvivesHostControlledProcessDeath(): Unit = runBlocking(Dispatchers.IO) {
         val phase = InstrumentationRegistry.getArguments().getString("artistPhotoProcessDeathPhase")
         assumeTrue("Requires the separate disposable-emulator process-death driver", phase != null)
         require(phase in listOf("seed", "verify"))

@@ -52,7 +52,7 @@ class ArtistPhotoChooserTest {
         val pinTag = "pin-${item.ref.kind}:${item.ref.id}"
         val tags = listOf("photo-row", "photo-gallery", "photo-header", pinTag)
         val retention = BrowseArtworkScope().apply { hold("album", listOf(track.uri), ArtworkCache.CachedArtwork(bitmap(android.graphics.Color.BLUE), 768)) }
-        fun pixel(tag: String) = compose.onNodeWithTag(tag).captureToImage().asAndroidBitmap().let { it.getPixel(it.width / 2, it.height / 2) }
+        fun pixel(tag: String) = compose.onNodeWithTag(tag, useUnmergedTree = true).captureToImage().asAndroidBitmap().let { it.getPixel(it.width / 2, it.height / 2) }
         fun save(stage: String) {
             for ((index, tag) in tags.withIndex()) File(evidence, "$stage-$index.png").outputStream().use {
                 compose.onNodeWithTag(tag).captureToImage().asAndroidBitmap().compress(Bitmap.CompressFormat.PNG, 100, it)
@@ -97,8 +97,13 @@ class ArtistPhotoChooserTest {
             compose.onNodeWithText("Open photo chooser").performClick()
             val choice = ArtistPhotoChoice(ArtistPhotoProvider.DEEZER, "9")
             val preview = "artist-photo-preview:$choice"
-            compose.waitUntil(10000) { compose.onAllNodesWithTag(preview).fetchSemanticsNodes().isNotEmpty() &&
-                android.graphics.Color.red(pixel(preview)) > 240 }
+            try {
+                compose.waitUntil(10000) { compose.onAllNodesWithTag(preview, useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty() &&
+                    android.graphics.Color.red(pixel(preview)) > 240 }
+            } catch (failure: Throwable) {
+                compose.onNodeWithTag(preview, useUnmergedTree = true).printToLog("ArtistPhotoPreview")
+                throw failure
+            }
             InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot().let { image ->
                 File(evidence, "chooser-previews.png").outputStream().use { image.compress(Bitmap.CompressFormat.PNG, 100, it) }
             }

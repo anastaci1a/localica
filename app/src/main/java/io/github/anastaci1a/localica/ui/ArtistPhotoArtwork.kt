@@ -57,7 +57,7 @@ internal object ArtistPhotoPixels {
     }
     suspend fun read(photo: CachedArtistPhoto, thumbnail: Boolean = false): ArtistPhotoVisual? {
         val file = if (thumbnail) photo.thumbnailFile ?: photo.file else photo.file
-        val key = "${file.absolutePath}:${file.length()}:${photo.fetchedAt}"
+        val key = "${file.absolutePath}:${file.length()}:${photo.fetchedAt}:$thumbnail"
         cache.get(key)?.let { return it }
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeFile(file.absolutePath, bounds)
@@ -68,7 +68,8 @@ internal object ArtistPhotoPixels {
         }
         val bitmap = BitmapFactory.decodeFile(file.absolutePath, options) ?: return null
         val image = bitmap.asImageBitmap()
-        val visual = PlayerVisual(image, playerPalette(bitmap), contentKey = "artist-photo:$key")
+        val visual = if (thumbnail) PlayerVisual(image, contentKey = "artist-photo:$key")
+            else PlayerVisual(image, playerPalette(bitmap), contentKey = "artist-photo:$key")
         return ArtistPhotoVisual(image, visual, photo).also { cache.put(key, it) }
     }
 }
