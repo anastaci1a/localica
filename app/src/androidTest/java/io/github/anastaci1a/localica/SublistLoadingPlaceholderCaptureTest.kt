@@ -37,7 +37,10 @@ import kotlin.math.roundToInt
  * Writes PNG frames and per-row bar/background pixel metrics to the additional test output.
  */
 class SublistLoadingPlaceholderCaptureTest {
-    @get:Rule val compose = localicaAndroidComposeRule<androidx.activity.ComponentActivity>()
+    // CI disables system animations; keep Compose motion at 1x so the shared shimmer actually advances.
+    @get:Rule val compose = localicaAndroidComposeRule<androidx.activity.ComponentActivity>(object : androidx.compose.ui.MotionDurationScale {
+        override val scaleFactor = 1f
+    })
     private val context get() = InstrumentationRegistry.getInstrumentation().targetContext
     private val covers get() = File(context.filesDir, "playlist-covers")
     private val files = mutableListOf<File>()
@@ -85,10 +88,9 @@ class SublistLoadingPlaceholderCaptureTest {
         return android.net.Uri.fromFile(file).toString()
     }
 
-    private val titles = listOf("Opening song with a long title", "Second song with a long title", "Third held song with a long title",
-        "Fourth held song with a long title", "Fifth held song with a long title", "Sixth held song with a long title",
-        "Seventh held song with a long title", "Eighth held song with a long title", "Ninth held song with a long title",
-        "Tenth held song with a long title", "Eleventh held song with a long title", "Twelfth held song with a long title")
+    // Letter prefixes keep the hero track first under title and track-number order alike.
+    private val titles = listOf("A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L")
+        .map { "$it held song with a long enough title" }
 
     /** First track is a real cover (the collection hero); the others are held. */
     private fun tracks(hero: String): List<Track> = titles.mapIndexed { index, title ->
