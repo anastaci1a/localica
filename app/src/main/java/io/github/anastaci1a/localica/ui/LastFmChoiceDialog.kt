@@ -34,7 +34,7 @@ internal fun <T> ChoiceDialog(actions: ChoiceDialogActions, title: String, choic
         GlassActionButton(true, AppIcon.ActionCheck, actions.confirm, enabled = actions.enabled && valid(draft)) {
             draft?.takeIf { actions.enabled && valid(it) }?.let(onSelect)
         }
-    }, dismissButton = { GlassActionButton(AppIcon.ActionForward, actions.dismiss, onClick = onCancel) })
+    }, dismissButton = { GlassActionButton(AppIcon.ActionArrowRight, actions.dismiss, onClick = onCancel) })
     if (choosing) CompositionLocalProvider(LocalGlassOrigin provides anchor) {
         ChoiceDialog<T?>("Select match", choices, draft, { it?.let(label).orEmpty() }, { choosing = false }) { next ->
             if (actions.enabled && next != null && next in choices) {

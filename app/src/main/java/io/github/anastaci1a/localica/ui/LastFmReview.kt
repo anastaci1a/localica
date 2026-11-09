@@ -32,7 +32,7 @@ internal fun LastFmReviewList(matches: LastFmMatches, group: LastFmGroup, librar
         SettingsLink("${row.remote.artist} — ${row.remote.title}",
             "${row.remote.plays} scrobbles · ${row.reason}" + if (row.remote.key in skipped) " · Skipped for now" else "",
             anchor = anchor, modifier = Modifier.testTag("lastfm-match:${row.remote.key}")) { open = true }
-        if (row.canUndo) GlassActionButton(AppIcon.ActionBack, "Undo match for ${row.remote.title}") { onUndo(row.remote.key) }
+        if (row.canUndo) GlassActionButton(AppIcon.ActionChevronLeft, "Undo match for ${row.remote.title}") { onUndo(row.remote.key) }
         if (open) CompositionLocalProvider(LocalGlassOrigin provides anchor) {
             LastFmDecision(row, library, onDismiss = { open = false }, onChoose = {
                 val saved = onMap(row.remote.key, it); if (saved) open = false; saved
@@ -41,8 +41,8 @@ internal fun LastFmReviewList(matches: LastFmMatches, group: LastFmGroup, librar
             })
         }
     } }
-    if (currentPage > 0) GlassActionButton(AppIcon.ActionBack, "Previous matches") { page = currentPage - 1 }
-    if ((currentPage + 1) * 20 < rows.size) GlassActionButton(AppIcon.ActionForward, "Show more matches") { page = currentPage + 1 }
+    if (currentPage > 0) GlassActionButton(AppIcon.ActionChevronLeft, "Previous matches") { page = currentPage - 1 }
+    if ((currentPage + 1) * 20 < rows.size) GlassActionButton(AppIcon.ActionArrowRight, "Show more matches") { page = currentPage + 1 }
 }
 
 private sealed interface LastFmPickerChoice {
@@ -104,8 +104,8 @@ internal fun LastFmDecision(row: LastFmMatchRow, library: List<Track>, onDismiss
                 if (filtered.isEmpty()) Text("No matching library songs. Try another search.")
             }
         }, footer = {
-            if (picking && currentPage > 0) GlassActionButton(AppIcon.ActionBack, "Previous library songs") { page = currentPage - 1; selected = null }
-            if (picking && (currentPage + 1) * 20 < filtered.size) GlassActionButton(AppIcon.ActionForward, "More library songs") { page = currentPage + 1; selected = null }
-            if (picking) GlassActionButton(AppIcon.ActionBack, "Suggested matches") { picking = false; selected = null }
+            if (picking && currentPage > 0) GlassActionButton(AppIcon.ActionChevronLeft, "Previous library songs") { page = currentPage - 1; selected = null }
+            if (picking && (currentPage + 1) * 20 < filtered.size) GlassActionButton(AppIcon.ActionArrowRight, "More library songs") { page = currentPage + 1; selected = null }
+            if (picking) GlassActionButton(AppIcon.ActionChevronLeft, "Suggested matches") { picking = false; selected = null }
         })
 }
