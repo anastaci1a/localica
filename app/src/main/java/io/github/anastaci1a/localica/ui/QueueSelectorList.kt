@@ -123,15 +123,14 @@ internal fun QueueSelectorList(queues: List<ListeningQueue>, browsedId: String?,
                         val interactive = enabled && drag == null
                         Box(Modifier.animateItem(placementSpec = if (drag?.let { it.dropping && queue.id in it.keys } == true) null
                             else tween(if (reducedMotion) 0 else 350), fadeInSpec = null, fadeOutSpec = null)
-                            .graphicsLayer { alpha = reorder.restAlpha(queue.id) }
+                            .graphicsLayer { alpha = reorder.drag?.takeIf { it.dropping && queue.id in it.keys }?.handoff?.value ?: 1f }
                             .keyedDragItem(reorder, queue.id, scene)) {
                             DisposableEffect(queue.id) { onDispose {
                                 reorder.itemCoordinates.remove(queue.id); actions.remove(queue.id); probe.rows.remove(queue.id)
                             } }
                             val live by remember(reorder, queue.id) { derivedStateOf { reorder.livePosition(queue.id) } }
-                            QueueSelectorRow(displayed, live ?: numbers[queue.id] ?: 0, queue.id == browsedId,
-                                queue.id == playingId, isPlaying, reducedMotion, interactive,
-                                lifted = queue.id == browsedId || reorder.held == queue.id,
+                            QueueSelectorRow(displayed, live ?: numbers[queue.id] ?: 0, queue.id == browsedId || reorder.held == queue.id,
+                                queue.id == playingId, isPlaying, reducedMotion, interactive, browsing = queue.id == browsedId,
                                 liftAlpha = { reorder.restAlpha(queue.id) }, motionPaused = drag != null,
                                 actionsModifier = Modifier.onGloballyPositioned { actions[queue.id] = it },
                                 selectionPlacement = if (observer == null) Modifier else Modifier.onPlaced { probe.rows[queue.id] = it },
@@ -145,28 +144,31 @@ internal fun QueueSelectorList(queues: List<ListeningQueue>, browsedId: String?,
         KeyedDragOverlay(reorder, reducedMotion, countDescription = { "Dragging $it queues" }) { queue, appearance ->
             val displayed = queues.firstOrNull { it.id == queue.id } ?: queue
             // The card is the lift: no second lens, and its title rests so it hands off pixel-for-pixel.
-            QueueSelectorRow(displayed, reorder.livePosition(queue.id) ?: numbers[queue.id] ?: 0, queue.id == appearance.browsedId,
-                queue.id == appearance.playingId, appearance.isPlaying, reducedMotion, false, lifted = false, motionPaused = true,
+            QueueSelectorRow(displayed, reorder.livePosition(queue.id) ?: numbers[queue.id] ?: 0, false,
+                queue.id == appearance.playingId, appearance.isPlaying, reducedMotion, false,
+                browsing = queue.id == appearance.browsedId, motionPaused = true,
                 onSelect = {}, onRename = {}, onDelete = {}, onOffset = {})
         }
     }
 }
 
+/** [chosen] lifts the row (browsing selection or a held drag source); [browsing] is the radio choice. */
 @Composable
 private fun QueueSelectorRow(queue: ListeningQueue, number: Int, chosen: Boolean, playing: Boolean,
-    isPlaying: Boolean, reducedMotion: Boolean, enabled: Boolean, lifted: Boolean, liftAlpha: () -> Float = { 1f },
+    isPlaying: Boolean, reducedMotion: Boolean, enabled: Boolean, browsing: Boolean, liftAlpha: () -> Float = { 1f },
     motionPaused: Boolean = false, actionsModifier: Modifier = Modifier, selectionPlacement: Modifier = Modifier,
     onSelect: () -> Unit, onRename: () -> Unit, onDelete: () -> Unit, onOffset: (Int) -> Unit) {
     Surface(shape = Corners.card, color = androidx.compose.ui.graphics.Color.Transparent,
-        modifier = Modifier.padding(vertical = 2.dp).selectionLens(lifted, false, itemKey = queue.id,
-            outline = rememberPaddedItemOutline(null, 0.dp, null, 0.dp, 0.dp), alpha = liftAlpha)
+        modifier = Modifier.padding(vertical = 2.dp).selectionLens(chosen, false, itemKey = queue.id,
+            alpha = liftAlpha,
+            outline = rememberPaddedItemOutline(null, 0.dp, null, 0.dp, 0.dp))
             .then(selectionPlacement).testTag("queue-row-${queue.id}")) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             ReorderHandle("Reorder ${queue.name}", onOffset, Modifier.testTag("queue-handle-${queue.id}"), enabled)
-            Row(Modifier.weight(1f).testTag("queue-select-${queue.id}").selectable(chosen, enabled = enabled, role = Role.RadioButton, onClick = onSelect)
+            Row(Modifier.weight(1f).testTag("queue-select-${queue.id}").selectable(browsing, enabled = enabled, role = Role.RadioButton, onClick = onSelect)
                 .heightIn(min = 56.dp), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f).padding(start = 4.dp)) {
-                    if (chosen) MarqueeTitle("$number. ${queue.name}", reducedMotion, style = MaterialTheme.typography.bodyLarge, motionPaused = motionPaused)
+                    if (browsing) MarqueeTitle("$number. ${queue.name}", reducedMotion, style = MaterialTheme.typography.bodyLarge, motionPaused = motionPaused)
                     else Text("$number. ${queue.name}", maxLines = 1, overflow = TextOverflow.Ellipsis)
                     if (playing) Text(if (isPlaying) "Playing" else "Playback queue", style = MaterialTheme.typography.labelSmall)
                 }
