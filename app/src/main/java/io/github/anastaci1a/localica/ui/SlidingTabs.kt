@@ -195,8 +195,8 @@ internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, pagePosition: () 
         }
         // The fixed viewport owns lens gestures before its scrolling child. Its context
         // includes ancestors, not the strip itself: only non-lens overflow origins scroll it.
-        Box(Modifier.fillMaxSize().testTag("tab-track-host").markTabFingerRelease(fingerRelease)
-            .selectorTrackDrag(horizontal = true,
+        Box(Modifier.fillMaxSize().testTag("tab-track-host")
+            .markTabFingerRelease(fingerRelease).selectorTrackDrag(horizontal = true,
                 eligible = { point -> if (fits) viewportBounds.contains(point) else
                     selectorVisibleLensContains(point, selectorFrame, contentOffset, viewportBounds) },
                 contact = { pressed = it },
