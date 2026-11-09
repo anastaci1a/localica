@@ -26,6 +26,10 @@ This optimized build is not debuggable and is minified with R8. It updates the e
 - https://github.com/anastaci1a/localica/issues/694 - Artist Group by album option and reorder motion.
 - https://github.com/anastaci1a/localica/issues/684 - Last.fm settings screens restored (Parts B-D); matching follow-up remains open.
 
+## CI
+
+- Test metadata only: move the None reduction witness SDK filter to its method and register its reviewed exclusion. The Android 13 SDK bound is unchanged.
+
 ## Known issues
 
 - Artwork restoration diagnostics remain under investigation: https://github.com/anastaci1a/localica/issues/530.

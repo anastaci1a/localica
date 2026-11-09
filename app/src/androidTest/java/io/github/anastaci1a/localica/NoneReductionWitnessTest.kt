@@ -1,7 +1,6 @@
 package io.github.anastaci1a.localica
 
 import android.os.Build
-import androidx.test.filters.SdkSuppress
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
@@ -26,10 +25,10 @@ import org.junit.Rule
 import org.junit.Test
 
 /** Native pixel witnesses, separate from timed app captures. Every original footprint is retained. */
-@SdkSuppress(minSdkVersion = 33)
 class NoneReductionWitnessTest {
     @get:Rule val compose = localicaComposeRule()
 
+    @androidx.test.filters.SdkSuppress(minSdkVersion = 33)
     @Test fun rawAndStyledFullFootprintWitnessesCompareCurrentEightAndSixteenLive() {
         var fixture by mutableIntStateOf(0)
         var phase by mutableFloatStateOf(0f)
