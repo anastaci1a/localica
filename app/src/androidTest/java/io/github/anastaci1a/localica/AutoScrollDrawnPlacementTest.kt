@@ -141,7 +141,8 @@ class AutoScrollDrawnPlacementTest {
     }
 
     private fun cells(): Map<String, List<Rect>> = nodes { all ->
-        val viewport = all.first { it.tag() == "browser-list" }.boundsInRoot.translate(rootScreenOffset)
+        val viewport = all.firstOrNull { it.tag() == "browser-list" }?.boundsInRoot?.translate(rootScreenOffset)
+            ?: return@nodes emptyMap()
         val byTag = all.mapNotNull { node -> node.tag()?.let { it to node.boundsInRoot.translate(rootScreenOffset) } }.toMap()
         byTag.filterKeys { it.startsWith("media-") }.mapNotNull { (tag, bounds) ->
             val key = tag.removePrefix("media-")
