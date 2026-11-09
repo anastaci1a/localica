@@ -157,11 +157,12 @@ private fun OpticalBackdrop(modifier: Modifier, source: FrostedBackdrop, locatio
         if (forceAverage && average != null && areaSource != null && averageSource != null && areaSourceRenderer != null) {
             if (!source.withinFinishedMaterial() && !MaterialAreaReduction.legacyHalvings && blend <= 0f && atlas != null && atlasEntry != null && android.os.Build.VERSION.SDK_INT >= 33) {
                 val toLocal: (FrostedBackdrop) -> BackdropRegistration? = { scene -> scene.location.registrationTo(location) }
-                val region = sampledSceneBounds(source, sourceToLocal, toLocal)?.let { Rect(Offset.Zero, size).intersect(it) }
+                val structure = mutableListOf<SampledSceneDependency>()
+                val region = sampledSceneBounds(source, sourceToLocal, toLocal, structure)?.let { Rect(Offset.Zero, size).intersect(it) }
                 // An unreadable region keeps the member's previous block, as the own chain keeps its last level.
                 val hosted = if (region == null || region.isEmpty || !region.width.isFinite() || !region.height.isFinite()) atlasEntry.placed
-                    else with(atlas) { place(atlasEntry, source, sourceToLocal, region, average.forBacking(source).let { NoneAtlasStyle(it.whiteTint, it.tone.trim, it.tone.weight, it.tone.lightMix, it.opaque) }) {
-                        translate(-region.left, -region.top) { drawSampledScene(source, sourceToLocal, toLocal) }
+                    else with(atlas) { place(atlasEntry, source, sourceToLocal, structure, region, average.forBacking(source).let { NoneAtlasStyle(it.whiteTint, it.tone.trim, it.tone.weight, it.tone.lightMix, it.opaque) }) {
+                        translate(-region.left, -region.top) { drawSampledScene(source, sourceToLocal, toLocal, structure) }
                     } }
                 if (hosted) {
                     with(atlas) { drawMember(atlasEntry) }
@@ -325,23 +326,32 @@ private fun OpticalBackdrop(modifier: Modifier, source: FrostedBackdrop, locatio
     }
 }
 
+/** Structural commands retained by an atlas member. Layer pixel updates deliberately do not enter this key. */
+internal data class SampledSceneDependency(val scene: FrostedBackdrop, val recorded: Boolean,
+    val released: Boolean, val size: IntSize, val registration: BackdropRegistration?)
+
 /** The scene a lens samples: the backing inside its recorded box and, because refraction
  * and blur reach beyond a nested panel's box, its real parent chain outside it instead of
  * transparent edge bands. Modern's lens and None's full-bounds mean draw exactly this. */
 internal fun androidx.compose.ui.graphics.drawscope.DrawScope.drawSampledScene(backing: FrostedBackdrop,
-    backingToLocal: BackdropRegistration, parentToLocal: (FrostedBackdrop) -> BackdropRegistration?) {
-    val chain = mutableListOf<FrostedBackdrop>()
-    var item: FrostedBackdrop? = backing
-    while (item != null && item !in chain && chain.size < 8) { chain += item; item = item.parent }
-    val boundary = backingToLocal.corners(Rect(0f, 0f, backing.size.width.toFloat(), backing.size.height.toFloat()))
+    backingToLocal: BackdropRegistration, parentToLocal: (FrostedBackdrop) -> BackdropRegistration?,
+    structure: List<SampledSceneDependency>? = null) {
+    val chain = structure?.map { it.scene } ?: mutableListOf<FrostedBackdrop>().also { chain ->
+        var item: FrostedBackdrop? = backing
+        while (item != null && item !in chain && chain.size < 8) { chain += item; item = item.parent }
+    }
+    val extent = structure?.firstOrNull()?.size ?: backing.size
+    val boundary = backingToLocal.corners(Rect(0f, 0f, extent.width.toFloat(), extent.height.toFloat()))
     val inside = Path().apply {
         moveTo(boundary[0].x, boundary[0].y)
         boundary.drop(1).forEach { lineTo(it.x, it.y) }
         close()
     }
     chain.asReversed().forEach { scene ->
-        if (scene.recorded && !scene.layer.isReleased) {
-            val registration = if (scene === backing) backingToLocal else parentToLocal(scene)
+        val dependency = structure?.firstOrNull { it.scene === scene }
+        if ((dependency?.recorded ?: scene.recorded) && !scene.layer.isReleased) {
+            val registration = if (structure != null) dependency?.registration
+                else if (scene === backing) backingToLocal else parentToLocal(scene)
             if (registration != null) {
                 if (scene === backing) withBackdropRegistration(registration) { drawLayer(scene.layer) }
                 else clipPath(inside, ClipOp.Difference) {
@@ -354,15 +364,20 @@ internal fun androidx.compose.ui.graphics.drawscope.DrawScope.drawSampledScene(b
 
 /** Bounds, in consumer coordinates, of everything [drawSampledScene] can draw. */
 internal fun sampledSceneBounds(backing: FrostedBackdrop, backingToLocal: BackdropRegistration,
-    parentToLocal: (FrostedBackdrop) -> BackdropRegistration?): Rect? {
+    parentToLocal: (FrostedBackdrop) -> BackdropRegistration?,
+    structure: MutableList<SampledSceneDependency>? = null): Rect? {
     var bounds: Rect? = null
     val visited = mutableListOf<FrostedBackdrop>()
     var item: FrostedBackdrop? = backing
     while (item != null && item !in visited && visited.size < 8) {
         visited += item
         val registration = if (item === backing) backingToLocal else parentToLocal(item)
-        if (item.recorded && !item.layer.isReleased && registration != null) {
-            val corners = registration.corners(Rect(0f, 0f, item.size.width.toFloat(), item.size.height.toFloat()))
+        val recorded = item.recorded
+        val released = item.layer.isReleased
+        val extent = item.size
+        structure?.add(SampledSceneDependency(item, recorded, released, extent, registration))
+        if (recorded && !released && registration != null) {
+            val corners = registration.corners(Rect(0f, 0f, extent.width.toFloat(), extent.height.toFloat()))
             val box = Rect(corners.minOf { it.x }, corners.minOf { it.y }, corners.maxOf { it.x }, corners.maxOf { it.y })
             bounds = bounds?.let { Rect(minOf(it.left, box.left), minOf(it.top, box.top), maxOf(it.right, box.right), maxOf(it.bottom, box.bottom)) } ?: box
         }

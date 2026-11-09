@@ -67,6 +67,7 @@ internal class NoneReductionAtlas(private val graphics: GraphicsContext, colorSh
         internal var registration: Any? = null
         internal var backing: Any? = null
         internal var style: NoneAtlasStyle? = null
+        internal var structure: Any? = null
         internal var record: (DrawScope.() -> Unit)? = null
         val placed get() = index >= 0 && cell.x >= 0
     }
@@ -87,6 +88,9 @@ internal class NoneReductionAtlas(private val graphics: GraphicsContext, colorSh
     private var passes = 0
     /** Diagnostics: how many times the shared chain has been re-recorded. */
     val recordings get() = passes
+    /** Test witness for hosted cells; rejected small/overflow members never acquire an extent here. */
+    val hostedExtents get() = members.filter { it.placed }.map { it.extent }
+    val hostedRegions get() = members.filter { it.placed }.map { it.region }
 
     private fun layer() = graphics.createGraphicsLayer().apply {
         compositingStrategy = CompositingStrategy.Offscreen
@@ -126,7 +130,7 @@ internal class NoneReductionAtlas(private val graphics: GraphicsContext, colorSh
 
     /** Register this frame's sampling for [entry]; false when the atlas cannot host it (the caller
      * keeps its own chain). Re-records the shared chain at once when anything changed. */
-    fun DrawScope.place(entry: Entry, backing: Any, registration: Any,
+    fun DrawScope.place(entry: Entry, backing: Any, registration: Any, structure: Any,
         region: Rect, style: NoneAtlasStyle, record: DrawScope.() -> Unit): Boolean {
         if (entry !in members) return false
         val extent = materialReductionExtent(IntSize(kotlin.math.ceil(region.width).toInt(), kotlin.math.ceil(region.height).toInt()))
@@ -146,8 +150,8 @@ internal class NoneReductionAtlas(private val graphics: GraphicsContext, colorSh
             }
             entry.cell = cell; entry.extent = extent; changed = true
         }
-        if (entry.backing !== backing || entry.registration != registration || entry.region != region || entry.style != style) {
-            entry.backing = backing; entry.registration = registration; entry.region = region; entry.style = style
+        if (entry.backing !== backing || entry.registration != registration || entry.region != region || entry.style != style || entry.structure != structure) {
+            entry.backing = backing; entry.registration = registration; entry.region = region; entry.style = style; entry.structure = structure
             entry.record = record; changed = true
         }
         recordDensity = Density(density, fontScale); recordDirection = layoutDirection

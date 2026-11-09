@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.navigation.*
 import io.github.anastaci1a.localica.ui.*
+import androidx.test.filters.SdkSuppress
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
@@ -93,7 +94,7 @@ class NoneAtlasTest {
             Member("rows", IntOffset(20, 250), IntSize(300, 200)),      // list rows (512x256 cell)
             Member("stripes", IntOffset(380, 260), IntSize(320, 180)),  // 1 px stripes
             Member("gradient", IntOffset(410, 30), IntSize(290, 190)),  // gradient (512x256 cell)
-            Member("tiny", IntOffset(30, 30), IntSize(60, 60))))        // below the cell minimum: own chain
+            Member("tiny", IntOffset(30, 30), IntSize(31, 31))))        // below the cell minimum: own chain
         var atlas: NoneReductionAtlas? = null
         compose.setContent { CompositionLocalProvider(
             LocalDensity provides Density(1f),
@@ -123,9 +124,15 @@ class NoneAtlasTest {
             }
         }
         check("initial")
+        if (Build.VERSION.SDK_INT >= 33) {
+            assertEquals("Four large members are hosted; the 31x31 member uses its own chain", 4, atlas?.hostedExtents?.size)
+            assertFalse("The 32x32 power-of-two extent must not enter the atlas", atlas?.hostedExtents?.contains(IntSize(32, 32)) == true)
+        }
+        val beforePixels = atlas?.recordings
         // Content changes under every member at once (HWUI re-renders the shared chain; nothing re-records).
         compose.runOnIdle { bitmap = scene(.5f) }
         check("phase .5")
+        if (Build.VERSION.SDK_INT >= 33) assertEquals("Same-layer pixel updates rerender without structural recording", beforePixels, atlas?.recordings)
         // A member leaves: the others keep their cells and blocks.
         compose.runOnIdle { members = members.filter { it.tag != "rows" } }
         check("after leaving")
@@ -141,4 +148,93 @@ class NoneAtlasTest {
         check("after joining")
         if (Build.VERSION.SDK_INT >= 33) assertTrue("The shared chain was recorded", (atlas?.recordings ?: 0) > 0)
     }
+
+    /** Two real layer trees: one shared atlas and one per-surface reduction. The white grandparent
+     * keeps union bounds constant while the selected parent and the primary inside clip change. */
+    @SdkSuppress(minSdkVersion = 33)
+    @Test fun structuralParentChangesMatchThePerSurfaceChainWithUnchangedUnionBounds() {
+        var green by mutableStateOf(false)
+        var ready by mutableStateOf(false)
+        var parentX by mutableIntStateOf(0)
+        var primaryWidth by mutableIntStateOf(32)
+        @Composable fun graph(tag: String) {
+            val base = rememberFrostedBackdrop("base", dark = false)
+            val red = rememberFrostedBackdrop("red", dark = false)
+            val alternate = rememberFrostedBackdrop("green", dark = false)
+            val primary = rememberFrostedBackdrop("primary", dark = false)
+            SideEffect {
+                primary.parent = if (green) alternate else red
+                red.parent = base; alternate.parent = base
+            }
+            Box(Modifier.size(256.dp)) {
+                Canvas(Modifier.size(256.dp).recordFrostedBackdrop(base)) { drawRect(Color.White) }
+                if (ready) {
+                    Canvas(Modifier.offset(parentX.dp, 0.dp).size(64.dp).recordFrostedBackdrop(red)) { drawRect(Color.Red) }
+                    Canvas(Modifier.offset(parentX.dp, 0.dp).size(64.dp).recordFrostedBackdrop(alternate)) { drawRect(Color.Green) }
+                }
+                Canvas(Modifier.size(primaryWidth.dp, 32.dp).recordFrostedBackdrop(primary)) { drawRect(Color.Blue) }
+                LiquidGlassSurface(Modifier.size(128.dp).testTag(tag), primary,
+                    cornerRadius = 0.dp, pressFeedback = false, shadow = false)
+            }
+        }
+        compose.setContent { CompositionLocalProvider(
+            LocalDensity provides Density(1f),
+            LocalGlassRendererRuntime provides remember { GlassRendererRuntime(GlassRendererMode.None) },
+            LocalGlassAppearance provides appearance) { LocalicaTheme {
+            Row { NoneReductionAtlasHost(GlassColorShader) { graph("atlas-structure") }; graph("owned-structure") }
+        } } }
+        fun check(label: String) = eventually {
+            val total = 128f * 128f
+            val primaryArea = primaryWidth * 32f
+            val overlapWidth = (minOf(primaryWidth, parentX + 64) - maxOf(0, parentX)).coerceAtLeast(0)
+            val parentArea = if (ready) 64f * 64f - overlapWidth * 32f else 0f
+            val whiteArea = total - primaryArea - parentArea
+            val expected = Color((whiteArea + if (!green) parentArea else 0f) / total,
+                (whiteArea + if (green) parentArea else 0f) / total, (whiteArea + primaryArea) / total)
+            val values = listOf("atlas-structure", "owned-structure").map { tag ->
+                val image = compose.onNodeWithTag(tag).captureToImage().toPixelMap()
+                image[image.width / 2, image.height / 2].also {
+                    assertMean("$label $tag", expected, it, Rect(0f, 0f, 128f, 128f))
+                }
+            }
+            for ((a, b) in listOf(values[0].red to values[1].red, values[0].green to values[1].green, values[0].blue to values[1].blue))
+                assertEquals("$label atlas matches owned chain", a, b, 4f / 255f)
+        }
+        check("parent unready, union fixed by grandparent")
+        compose.runOnIdle { ready = true }
+        check("parent first becomes ready with unchanged union")
+        compose.runOnIdle { green = true }
+        check("same-sized parent replacement")
+        compose.runOnIdle { parentX = 64 }
+        check("parent registration changes inside unchanged union")
+        compose.runOnIdle { primaryWidth = 48 }
+        check("primary inside clip changes inside unchanged union")
+    }
+
+    @SdkSuppress(minSdkVersion = 33)
+    @Test fun memberCapacityOverflowUsesThePerSurfaceFallback() {
+        var atlas: NoneReductionAtlas? = null
+        compose.setContent { CompositionLocalProvider(
+            LocalDensity provides Density(1f),
+            LocalGlassRendererRuntime provides remember { GlassRendererRuntime(GlassRendererMode.None) },
+            LocalGlassAppearance provides appearance) { LocalicaTheme { NoneReductionAtlasHost(GlassColorShader) {
+            atlas = LocalNoneReductionAtlas.current
+            val source = rememberFrostedBackdrop(Unit, dark = false)
+            Box(Modifier.size(200.dp, 128.dp)) {
+                Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(source)) { drawRect(Color(.25f, .5f, .75f)) }
+                repeat(33) { index ->
+                    LiquidGlassSurface(Modifier.size((64 + index).dp, 64.dp).testTag("capacity-$index"), source,
+                        cornerRadius = 0.dp, pressFeedback = false, shadow = false)
+                }
+            }
+        } } } }
+        eventually {
+            assertEquals("The 32 member slots are exhausted", 32, atlas?.hostedExtents?.size)
+            assertFalse("The final 96x64 member is not atlas-hosted", atlas?.hostedRegions?.any { it.width == 96f && it.height == 64f } == true)
+            val image = compose.onNodeWithTag("capacity-32").captureToImage().toPixelMap()
+            assertMean("The final 96x64 member renders through its own chain", Color(.25f, .5f, .75f),
+                image[image.width / 2, image.height / 2], Rect(0f, 0f, 96f, 64f))
+        }
+    }
+
 }

@@ -23,9 +23,9 @@ internal class NoneReductionAtlas(private val owner: AtlasOwner) {
     }
     fun add(entry: Entry) = owner.add(entry.owned)
     fun remove(entry: Entry) = owner.remove(entry.owned)
-    fun DrawScope.place(entry: Entry, backing: Any, registration: Any, region: Rect,
+    fun DrawScope.place(entry: Entry, backing: Any, registration: Any, structure: Any, region: Rect,
         style: NoneAtlasStyle, record: DrawScope.() -> Unit): Boolean = with(owner) {
-        place(entry.owned, backing, registration, region,
+        place(entry.owned, backing, registration, structure, region,
             OwnerStyle(style.whiteTint, style.trim, style.weight, style.lightMix, style.opaque), record)
     }
     fun DrawScope.drawMember(entry: Entry) = with(owner) { drawMember(entry.owned) }
