@@ -32,7 +32,7 @@ internal fun GlassActionButton(icon: AppIcon, label: String, modifier: Modifier 
     androidx.compose.runtime.CompositionLocalProvider(LocalGlassContactName provides label) {
     LiquidGlassSurface(modifier.glassShadowOpacity { opacity }.heightIn(min = CompactControlSize).ownButtonDrag(enabled)
         .clickable(enabled = enabled, role = Role.Button, interactionSource = null, indication = null, onClick = controlActivation(enabled, onClick)), pressFeedback = enabled) {
-        GlassActionButtonFace(icon, label)
+        GlassActionButtonFace(icon, label, Modifier.align(Alignment.CenterStart))
     }
     }
 }
