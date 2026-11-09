@@ -96,7 +96,9 @@ private fun OpticalBackdrop(modifier: Modifier, source: FrostedBackdrop, locatio
             MaterialAverageRenderer(true) to MaterialAverageRenderer(true) else null
     }
     // The window's shared None reduction (#691 E4); members without a mix draw their block of it.
-    val atlas = if (forceAverage && android.os.Build.VERSION.SDK_INT >= 33) rememberNoneReductionAtlas() else null
+    // Finished panels can already reference this window's atlas. Reading them back into it would form a layer cycle.
+    val atlas = if (forceAverage && android.os.Build.VERSION.SDK_INT >= 33 && !source.withinFinishedMaterial())
+        rememberNoneReductionAtlas() else null
     val atlasEntry = remember(atlas) { if (android.os.Build.VERSION.SDK_INT >= 33 && atlas != null) NoneReductionAtlas.Entry() else null }
     if (android.os.Build.VERSION.SDK_INT >= 33 && atlas != null && atlasEntry != null) DisposableEffect(atlas, atlasEntry) {
         atlas.add(atlasEntry)
@@ -153,7 +155,7 @@ private fun OpticalBackdrop(modifier: Modifier, source: FrostedBackdrop, locatio
         }
         drawObserver?.let { observeBackdropSampling(it, location, localToSource, viewportBounds) }
         if (forceAverage && average != null && areaSource != null && averageSource != null && areaSourceRenderer != null) {
-            if (!MaterialAreaReduction.legacyHalvings && blend <= 0f && atlas != null && atlasEntry != null && android.os.Build.VERSION.SDK_INT >= 33) {
+            if (!source.withinFinishedMaterial() && !MaterialAreaReduction.legacyHalvings && blend <= 0f && atlas != null && atlasEntry != null && android.os.Build.VERSION.SDK_INT >= 33) {
                 val toLocal: (FrostedBackdrop) -> BackdropRegistration? = { scene -> scene.location.registrationTo(location) }
                 val region = sampledSceneBounds(source, sourceToLocal, toLocal)?.let { Rect(Offset.Zero, size).intersect(it) }
                 // An unreadable region keeps the member's previous block, as the own chain keeps its last level.
