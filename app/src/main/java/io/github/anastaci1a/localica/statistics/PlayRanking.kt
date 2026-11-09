@@ -31,13 +31,13 @@ fun interface PlayCountSource {
     fun counts(window: ListeningWindow): Flow<Map<String, Long>>
 }
 
-data class RankingSettings(val useExternalCounts: Boolean = false)
+data class RankingSettings(val useExternalCounts: Boolean = false, val authoritativeZero: Boolean = false)
 enum class PlayCountOrigin { Local, External }
 
-/** Separate snapshots remain intact. Missing, zero or invalid external counts fall back per song. */
+/** Separate snapshots remain intact. Missing counts fall back; a provider may declare an explicit zero authoritative. */
 data class RankingCounts(val local: Map<String, Long>, val external: Map<String, Long> = emptyMap(),
     val settings: RankingSettings = RankingSettings()) {
-    fun origin(id: String): PlayCountOrigin = if (settings.useExternalCounts && (external[id] ?: 0) > 0)
+    fun origin(id: String): PlayCountOrigin = if (settings.useExternalCounts && ((external[id] ?: 0) > 0 || settings.authoritativeZero && external[id] == 0L))
         PlayCountOrigin.External else PlayCountOrigin.Local
     fun plays(id: String): Long = (if (origin(id) == PlayCountOrigin.External) external[id] else local[id])?.coerceAtLeast(0) ?: 0
     fun longestListenedMs(track: Track): Long = saturatedMultiply(plays(track.id), track.durationMs?.coerceAtLeast(0) ?: 0)
