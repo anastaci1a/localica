@@ -116,7 +116,7 @@ internal fun LastFmSettings(controller: LastFmController) {
             Text("Turning Last.fm off or disconnecting keeps the archive and match choices on this device.", style = MaterialTheme.typography.bodySmall)
             SettingsEntry("Delete synced Last.fm data") { GlassActionButton(AppIcon.ActionTrash, "Delete synced Last.fm data",
                 enabled = saved.snapshot != null || saved.mappings.isNotEmpty(), modifier = Modifier.testTag("lastfm-delete")) { deleting = true } }
-            SettingsEntry("Reset Last.fm match choices") { GlassActionButton(AppIcon.ActionBack, "Reset Last.fm match choices", enabled = saved.mappings.isNotEmpty(), onClick = controller::resetMappings) }
+            SettingsEntry("Reset Last.fm match choices") { GlassActionButton(AppIcon.ActionChevronLeft, "Reset Last.fm match choices", enabled = saved.mappings.isNotEmpty(), onClick = controller::resetMappings) }
         }
     }
     if (deleting) GlassAlertDialog(onDismissRequest = { deleting = false }, title = { Text("Delete synced Last.fm data?") },
