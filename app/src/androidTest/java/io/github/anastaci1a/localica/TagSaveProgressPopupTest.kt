@@ -94,8 +94,10 @@ class TagSaveProgressPopupTest {
     @Test fun preparationCancelReturnsToTheSameDraftSessionAndScrollOwner() {
         submit()
         val session = controller.state.value.sessionId
-        val scroll = compose.onNodeWithTag("tag-editor-body", useUnmergedTree = true).fetchSemanticsNode()
-            .config[SemanticsProperties.VerticalScrollAxisRange].value()
+        val retainedRange = compose.onNodeWithTag("tag-editor-body", useUnmergedTree = true).fetchSemanticsNode()
+            .config[SemanticsProperties.VerticalScrollAxisRange]
+        val scroll = retainedRange.value()
+        val beforeViewport = compose.onNodeWithTag("tag-editor-body", useUnmergedTree = true).getUnclippedBoundsInRoot()
         compose.onNodeWithText("Cancel", substring = false).performClick()
         runBlocking { withContext(Dispatchers.Main) { controller.runPending() } }
         compose.awaitExpectedWindowFocus(compose.onNodeWithTag("tag-editor-sheet", useUnmergedTree = true))
@@ -107,8 +109,13 @@ class TagSaveProgressPopupTest {
             assertEquals(tracks, controller.state.value.tracks)
             assertFalse(controller.state.value.busy)
         }
-        assertEquals(scroll, compose.onNodeWithTag("tag-editor-body", useUnmergedTree = true).fetchSemanticsNode()
-            .config[SemanticsProperties.VerticalScrollAxisRange].value(), .5f)
+        val field = compose.onNode(hasText("Draft name") and SemanticsMatcher.keyIsDefined(SemanticsProperties.EditableText), useUnmergedTree = true)
+        val currentRange = compose.onNodeWithTag("tag-editor-body", useUnmergedTree = true).fetchSemanticsNode()
+            .config[SemanticsProperties.VerticalScrollAxisRange]
+        val view = (field.fetchSemanticsNode().root as androidx.compose.ui.platform.ViewRootForTest).view
+        val ime = androidx.core.view.ViewCompat.getRootWindowInsets(view)?.getInsets(androidx.core.view.WindowInsetsCompat.Type.ime())?.bottom
+        android.util.Log.i("Tag700Scroll", "initial=$scroll retainedNow=${retainedRange.value()} current=${currentRange.value()} focused=${field.fetchSemanticsNode().config.getOrElse(SemanticsProperties.Focused) { false }} ime=$ime beforeViewport=$beforeViewport field=${field.getUnclippedBoundsInRoot()} viewport=${compose.onNodeWithTag("tag-editor-body", useUnmergedTree = true).getUnclippedBoundsInRoot()}")
+        assertEquals(scroll, currentRange.value(), .5f)
     }
 
     @After fun retire() {
