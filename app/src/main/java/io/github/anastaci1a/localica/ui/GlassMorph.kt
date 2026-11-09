@@ -568,8 +568,8 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
     // Ordinary popup input must not continuously capture the full-screen
     // backdrop: that readback can starve drag cleanup and fresh fling admission.
     BackdropLease(departingSource)
-    val homeSampleReady = departingSource?.recorded == true &&
-        (android.os.Build.VERSION.SDK_INT >= 33 || departingSource.fallback != null)
+    val homeSampleReady = flatGlass() || (departingSource?.recorded == true &&
+        (android.os.Build.VERSION.SDK_INT >= 33 || departingSource.fallback != null))
     val samplingSource = departingSource.takeIf { homeSampleReady } ?: source
     val flightLayer = rememberGraphicsLayer()
     DisposableEffect(popupHome, popupFlight, flightLayer) {
@@ -668,7 +668,8 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
             .drawWithContent {
                 if (popupHome == null || !returningInline && !popupFlight.wasProjected) drawContent()
                 else {
-                    flightLayer.record { this@drawWithContent.drawContent() }
+                    android.os.Trace.beginSection("structural:popup-flight-record")
+                    try { flightLayer.record { this@drawWithContent.drawContent() } } finally { android.os.Trace.endSection() }
                     androidx.compose.runtime.snapshots.Snapshot.withoutReadObservation {
                         popupFlight.revision++
                         popupFlight.prepared = returningInline && homeSampleReady && samplingSource === popupHome.backdrop
@@ -923,7 +924,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                         .clip(RoundedCornerShape(radius)).glassPopupHome(childHome)
                         .recordFrostedBackdrop(completePanel).testTag("glass-morph-surface")
                         .pointerInput(Unit) { detectTapGestures { } }, content = {
-                        Box(Modifier.graphicsLayer {
+                        Box(Modifier.structuralTrace("popup-motion-alpha").graphicsLayer {
                             if (anchor.quiet) { val t = (p / .25f).coerceIn(0f, 1f); alpha = t * t * (3f - 2f * t) }
                         }.recordFrostedBackdrop(material)) {
                             if (page) Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface))
@@ -953,7 +954,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                                     refraction = if (anchor.quiet) (p / .14f).coerceIn(0f, 1f) else 1f)
                             }
                         }
-                        Box(Modifier.graphicsLayer { alpha = if (page) 1f else ((p - .18f) / .65f).coerceIn(0f, 1f) }
+                        Box(Modifier.structuralTrace("popup-motion-alpha").graphicsLayer { alpha = if (page) 1f else ((p - .18f) / .65f).coerceIn(0f, 1f) }
                             .then(if (!visible || p < .85f) Modifier.clearAndSetSemantics { }.pointerInput(Unit) {
                                 awaitPointerEventScope { while (true) awaitPointerEvent(PointerEventPass.Initial).changes.forEach { it.consume() } }
                             } else Modifier)) {
@@ -970,7 +971,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                                 GlassPanelTheme(dark, content)
                             }
                         }
-                        Box(Modifier.graphicsLayer { alpha = (1f - p / .55f).coerceIn(0f, 1f) }
+                        Box(Modifier.structuralTrace("popup-motion-alpha").graphicsLayer { alpha = (1f - p / .55f).coerceIn(0f, 1f) }
                             .clearAndSetSemantics { }, contentAlignment = Alignment.Center) {
                             CompositionLocalProvider(LocalContentColor provides (anchor.ink.takeIf { it != Color.Unspecified }
                                 ?: if (dark) Color.White else Color(0xFF202124))) { anchor.face?.invoke() }

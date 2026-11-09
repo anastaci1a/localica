@@ -72,7 +72,7 @@ class GlassRendererSwitchingTest {
         compose.onNodeWithTag("renderer-draft").performTextInput("First draft")
         val initial = compose.runOnIdle { requireNotNull(observed.get()) }
         val entry = compose.runOnIdle { host.entries.single() }
-        for (mode in listOf(GlassRendererMode.None, GlassRendererMode.Normal, GlassRendererMode.None)) {
+        for (mode in listOf(GlassRendererMode.SingleToneBlur, GlassRendererMode.Normal, GlassRendererMode.SingleToneBlur)) {
             compose.runOnIdle { runtime.request(mode) }
             compose.waitForIdle()
             compose.runOnIdle {
@@ -159,7 +159,7 @@ class GlassRendererSwitchingTest {
         val firstChild = compose.runOnIdle { requireNotNull(child.get()) }
         assertNotSame(firstParent.view, firstChild.view)
         assertNotSame(firstParent.material, firstChild.material)
-        for (mode in listOf(GlassRendererMode.None, GlassRendererMode.Normal, GlassRendererMode.None, GlassRendererMode.Normal)) {
+        for (mode in listOf(GlassRendererMode.SingleToneBlur, GlassRendererMode.Normal, GlassRendererMode.SingleToneBlur, GlassRendererMode.Normal)) {
             compose.runOnIdle { runtime.request(mode) }
             compose.waitForIdle()
             compose.runOnIdle {

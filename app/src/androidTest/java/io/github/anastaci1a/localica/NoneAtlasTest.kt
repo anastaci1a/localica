@@ -100,7 +100,7 @@ class NoneAtlasTest {
         var atlas: NoneReductionAtlas? = null
         compose.setContent { CompositionLocalProvider(
             LocalDensity provides Density(1f),
-            LocalGlassRendererRuntime provides remember { GlassRendererRuntime(GlassRendererMode.None) },
+            LocalGlassRendererRuntime provides remember { GlassRendererRuntime(GlassRendererMode.SingleToneBlur) },
             LocalGlassAppearance provides appearance) { LocalicaTheme { NoneReductionAtlasHost(GlassColorShader) {
             atlases = LocalNoneReductionAtlas.current
             source = rememberFrostedBackdrop(Unit, dark = false)
@@ -183,7 +183,7 @@ class NoneAtlasTest {
         }
         compose.setContent { CompositionLocalProvider(
             LocalDensity provides Density(1f),
-            LocalGlassRendererRuntime provides remember { GlassRendererRuntime(GlassRendererMode.None) },
+            LocalGlassRendererRuntime provides remember { GlassRendererRuntime(GlassRendererMode.SingleToneBlur) },
             LocalGlassAppearance provides appearance) { LocalicaTheme {
             Row { NoneReductionAtlasHost(GlassColorShader) { graph("atlas-structure") }; graph("owned-structure") }
         } } }
@@ -221,7 +221,7 @@ class NoneAtlasTest {
         var atlas: NoneReductionAtlas? = null
         compose.setContent { CompositionLocalProvider(
             LocalDensity provides Density(1f),
-            LocalGlassRendererRuntime provides remember { GlassRendererRuntime(GlassRendererMode.None) },
+            LocalGlassRendererRuntime provides remember { GlassRendererRuntime(GlassRendererMode.SingleToneBlur) },
             LocalGlassAppearance provides appearance) { LocalicaTheme { NoneReductionAtlasHost(GlassColorShader) {
             atlases = LocalNoneReductionAtlas.current
             val source = rememberFrostedBackdrop(Unit, dark = false)
@@ -254,7 +254,7 @@ class NoneAtlasTest {
         var shade by mutableFloatStateOf(1f)
         compose.setContent { CompositionLocalProvider(
             LocalDensity provides Density(1f),
-            LocalGlassRendererRuntime provides remember { GlassRendererRuntime(GlassRendererMode.None) },
+            LocalGlassRendererRuntime provides remember { GlassRendererRuntime(GlassRendererMode.SingleToneBlur) },
             LocalGlassAppearance provides appearance) { LocalicaTheme { NoneReductionAtlasHost(GlassColorShader) {
             registry = LocalNoneReductionAtlas.current
             backdrop = rememberFrostedBackdrop("content", dark = false)
@@ -294,7 +294,7 @@ class NoneAtlasTest {
         var registry: io.github.anastaci1a.localica.ui.engine.NoneReductionAtlases? = null
         compose.setContent { CompositionLocalProvider(
             LocalDensity provides Density(1f),
-            LocalGlassRendererRuntime provides remember { GlassRendererRuntime(GlassRendererMode.None) },
+            LocalGlassRendererRuntime provides remember { GlassRendererRuntime(GlassRendererMode.SingleToneBlur) },
             LocalGlassAppearance provides appearance) { LocalicaTheme { NoneReductionAtlasHost(GlassColorShader) {
             registry = LocalNoneReductionAtlas.current
             val source = rememberFrostedBackdrop(Unit, dark = false)
@@ -354,7 +354,7 @@ class NoneAtlasTest {
         var present by mutableStateOf(true)
         compose.setContent { CompositionLocalProvider(
             LocalDensity provides Density(1f),
-            LocalGlassRendererRuntime provides remember { GlassRendererRuntime(GlassRendererMode.None) },
+            LocalGlassRendererRuntime provides remember { GlassRendererRuntime(GlassRendererMode.SingleToneBlur) },
             LocalGlassAppearance provides appearance) { LocalicaTheme { NoneReductionAtlasHost(GlassColorShader) {
             registry = LocalNoneReductionAtlas.current
             source = rememberFrostedBackdrop(Unit, dark = false)

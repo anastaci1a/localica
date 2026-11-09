@@ -27,13 +27,13 @@ class GlassRenderModesTest {
     @get:Rule val compose = localicaComposeRule()
 
     @Test fun noneAveragesMovingContentAndNeverInvokesTheOpticalFilter() {
-        val runtime = GlassRendererRuntime(GlassRendererMode.None)
+        val runtime = GlassRendererRuntime(GlassRendererMode.SingleToneBlur)
         val optical = AtomicInteger()
         var changed by mutableStateOf(false)
         lateinit var source: FrostedBackdrop
         compose.setContent { CompositionLocalProvider(LocalGlassRendererRuntime provides runtime) { LocalicaTheme {
             CompositionLocalProvider(LocalGlassAppearance provides GlassAppearance(blur = 1f, whiteTint = 0f,
-                contrast = 0f, shadowStrength = 0f, renderer = GlassRendererMode.None),
+                contrast = 0f, shadowStrength = 0f, renderer = GlassRendererMode.SingleToneBlur),
                 LocalGlassOpticalWork provides { optical.incrementAndGet() }) {
                 source = rememberFrostedBackdrop(Unit, dark = false)
                 Box(Modifier.size(240.dp, 420.dp)) {
@@ -75,7 +75,7 @@ class GlassRenderModesTest {
     }
 
     @Test fun noneSamplesTheTransformedFootprintWhileTheSourceStaysMounted() {
-        val runtime = GlassRendererRuntime(GlassRendererMode.None)
+        val runtime = GlassRendererRuntime(GlassRendererMode.SingleToneBlur)
         var shift by mutableFloatStateOf(0f)
         lateinit var source: FrostedBackdrop
         val colors = listOf(Color.Red, Color.Green, Color.Blue)
@@ -137,7 +137,7 @@ class GlassRenderModesTest {
         }
         try {
             val baseline = sample()
-            for (mode in listOf(GlassRendererMode.None, GlassRendererMode.Normal)) {
+            for (mode in listOf(GlassRendererMode.SingleToneBlur, GlassRendererMode.Normal)) {
                 compose.runOnIdle { runtime.request(mode) }
                 repeat(45) { frame ->
                     val actual = sample()
@@ -174,7 +174,7 @@ class GlassRenderModesTest {
         compose.waitUntil(15_000) { source.recorded && (Build.VERSION.SDK_INT >= 33 || source.snapshot != null) }
         compose.mainClock.autoAdvance = false
         try {
-            for (mode in listOf(GlassRendererMode.None, GlassRendererMode.Normal, GlassRendererMode.None)) {
+            for (mode in listOf(GlassRendererMode.SingleToneBlur, GlassRendererMode.Normal, GlassRendererMode.SingleToneBlur)) {
                 compose.runOnIdle { runtime.request(mode) }
                 repeat(12) {
                     val token = compose.runOnIdle { stage = stage % 30 + 1; stage }

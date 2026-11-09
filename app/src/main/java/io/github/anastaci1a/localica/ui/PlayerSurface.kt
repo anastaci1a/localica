@@ -455,7 +455,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
             .then(if (!expanded) Modifier.clickable(onClickLabel = "Expand player") { settle(true) } else Modifier)) {
         @Composable fun cover(frame: PlayerVisual, offset: Float, neighbor: Boolean = false) {
             Box(Modifier.motionBounds(artX, artY, artWidth, artHeight)
-                .then(if (!neighbor) Modifier.onGloballyPositioned { polarity.measure("cover", it) } else Modifier).graphicsLayer {
+                .then(if (!neighbor) Modifier.onGloballyPositioned { polarity.measure("cover", it) } else Modifier).structuralTrace("player-motion-alpha").graphicsLayer {
                 val remaining = if (neighbor) kotlin.math.abs(swipeOffset) else artPixels - kotlin.math.abs(swipeOffset)
                 alpha = lyricMotion.artworkAlpha * if (artSwipe.active) (remaining / (artPixels * .08f)).coerceIn(0f, 1f) else 1f
                 translationX = offset
@@ -466,7 +466,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
                 scaleY = 1f - .035f * depth
             }.then(if (neighbor) Modifier.clearAndSetSemantics {} else Modifier)) {
             if (edgeSoftness > 0f && frame.softArtwork != null) androidx.compose.foundation.Image(frame.softArtwork, null,
-                Modifier.fillMaxSize().graphicsLayer { alpha = edgeSoftness }.artworkEdgeFeather(1f, .13f),
+                Modifier.fillMaxSize().structuralTrace("player-motion-alpha").graphicsLayer { alpha = edgeSoftness }.artworkEdgeFeather(1f, .13f),
                 contentScale = artContentScale)
             PlayerArtworkFrame(frame, Modifier.fillMaxSize().testTag(if (neighbor) "player-neighbor-artwork" else "player-artwork")
                 .artworkEdgeFeather(maxOf(edgeSoftness, swipeFeather),
@@ -489,13 +489,13 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
                     lyricsInk?.shift(backgroundRole, lyricVisibility) ?: grade?.shift ?: 0f else 0f)
                 val destination = artSwipe.destination
                 val neighborOffset = swipeOffset - (if (swipeOffset < 0f) -1f else 1f) * artPixels
-                if (backgroundReveal > 0f) Box(Modifier.fillMaxSize().graphicsLayer { alpha = backgroundReveal }) {
+                if (backgroundReveal > 0f) Box(Modifier.fillMaxSize().structuralTrace("player-motion-alpha").graphicsLayer { alpha = backgroundReveal }) {
                     PlayerBackdrop(frame.palette, Modifier.fillMaxSize(), backgroundProgress * (1f - lyricProgress),
                         with(density) { artY.toPx() }, with(density) { artHeight.toPx() },
                         with(density) { artX.toPx() } + swipeOffset, artPixels, softness = maxOf(1f - coverBlend, swipeFeather / .9f), tone = roleTone, ready = gradeReady,
                         onBackgroundDescriptor = { descriptor -> backgroundRole?.let { polarity.backdrop(it, descriptor) } })
                     if (destination != null) PlayerBackdrop(destination.visual.palette,
-                        Modifier.fillMaxSize().graphicsLayer { alpha = swipeFraction }, backgroundProgress,
+                        Modifier.fillMaxSize().structuralTrace("player-motion-alpha").graphicsLayer { alpha = swipeFraction }, backgroundProgress,
                         with(density) { artY.toPx() }, with(density) { artHeight.toPx() },
                         with(density) { artX.toPx() } + neighborOffset, artPixels, softness = maxOf(1f - coverBlend, swipeFeather / .9f), tone = roleTone, ready = gradeReady)
                 }
@@ -516,7 +516,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
             if (lyricProgress > 0f) CompositionLocalProvider(LocalFrostedBackdrop provides lyricBackdrop) { LyricsPanel(track, sampled.positionMs, settings.reducedMotion, onSeek,
                 Modifier.offset(x = contentInset, y = lyricsViewport.top.dp).width(contentWidth)
                     .height(lyricsViewport.height.dp).zIndex(-1f).clipToBounds()
-                    .graphicsLayer { alpha = lyricMotion.contentAlpha }
+                    .structuralTrace("player-motion-alpha").graphicsLayer { alpha = lyricMotion.contentAlpha }
                     // Keep scroll/source identity through a cancelled collapse, but invisible
                     // lyrics must not intercept the next player gesture or accessibility.
                     .layout { measurable, constraints ->
@@ -614,13 +614,13 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
                 style = MaterialTheme.typography.bodyLarge.copy(color = subtitleColor), motionPaused = textMotionPaused,
                 visiblePrefixLength = artist.length, suffixVisibility = albumVisibility)
             if (rowMotion.seekAlpha > 0f) Column(Modifier.offset(x = contentInset, y = seekY).width(contentWidth)
-                .testTag("player-seek-row").onGloballyPositioned { polarity.measure("seek", it) }.graphicsLayer { alpha = rowMotion.seekAlpha }) {
+                .testTag("player-seek-row").onGloballyPositioned { polarity.measure("seek", it) }.structuralTrace("player-motion-alpha").graphicsLayer { alpha = rowMotion.seekAlpha }) {
                 PlayerSeekControls(sampled, onSeek, artworkVisit, onSeekRequest = onSeekRequest, position = seekPosition,
                     cancelTarget = { scrubCancel.bounds },
                     onDrag = { active, hovered -> scrubCancel.update(active, hovered); scrubOverCancel = active && hovered })
             }
             if (rowMotion.actionsAlpha > 0f) Box(Modifier.offset(x = contentInset, y = actionsY)
-                .width(contentWidth).height(48.dp * actionRows).testTag("player-actions-row").onGloballyPositioned { polarity.measure("actions", it) }.graphicsLayer { alpha = rowMotion.actionsAlpha }
+                .width(contentWidth).height(48.dp * actionRows).testTag("player-actions-row").onGloballyPositioned { polarity.measure("actions", it) }.structuralTrace("player-motion-alpha").graphicsLayer { alpha = rowMotion.actionsAlpha }
                 .then(if (lyricsOpen) Modifier.clearAndSetSemantics {} else Modifier)) { actions() }
             Row(Modifier.offset(x = (surfaceWidth - 148.dp) * (1 - transportMotion) + ((windowWidth - transportWidth) / 2) * transportMotion,
                 y = transportY).testTag("player-transport-row").onGloballyPositioned { polarity.measure("transport", it) },
@@ -662,7 +662,8 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
 @Composable
 private fun Modifier.recordPlayerCoverBackdrop(source: FrostedBackdrop, wash: FrostedBackdrop,
     enabled: Boolean): Modifier {
-    val cover = rememberGraphicsLayer()
+    if (flatGlass()) return this
+    val cover = rememberGlassLayer()
     val cutout = remember { Path() }
     return drawWithContent {
         drawContent()

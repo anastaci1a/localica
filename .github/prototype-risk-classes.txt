@@ -444,3 +444,7 @@ io.github.anastaci1a.localica.NoneRealAppWalkTest
 io.github.anastaci1a.localica.LyricsReturnBoundsTest
 
 io.github.anastaci1a.localica.IconOpticalCentringTest
+
+io.github.anastaci1a.localica.FlatNoneRealAppTest
+io.github.anastaci1a.localica.FlatNoneMaterialTest
+io.github.anastaci1a.localica.LegacyNonePixelReferenceTest

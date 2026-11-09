@@ -68,7 +68,7 @@ class NoneShadowParityTest {
             // The frame-by-frame reference is taken under the same paused clock as the switch frames.
             compose.mainClock.advanceTimeByFrame()
             val normal = compose.onNodeWithTag("stage").captureToImage().toPixelMap()
-            compose.runOnIdle { runtime.request(GlassRendererMode.None) }
+            compose.runOnIdle { runtime.request(GlassRendererMode.SingleToneBlur) }
             // Every frame of the blend: no shadow blip while the fill crossfades.
             repeat(24) { frame ->
                 compose.mainClock.advanceTimeByFrame()
@@ -88,14 +88,14 @@ class NoneShadowParityTest {
         var lift: LiftShadow? = null
         compose.setContent { CompositionLocalProvider(LocalGlassRendererRuntime provides runtime,
             LocalGlassAppearance provides appearance) { LocalicaTheme { lift = rememberLiftShadow() } } }
-        for (mode in listOf(GlassRendererMode.Normal, GlassRendererMode.None)) {
+        for (mode in listOf(GlassRendererMode.Normal, GlassRendererMode.SingleToneBlur)) {
             compose.runOnIdle { runtime.request(mode) }
             compose.waitForIdle()
             seen[mode] = requireNotNull(lift)
         }
-        assertEquals(seen[GlassRendererMode.Normal], seen[GlassRendererMode.None])
-        assertEquals(appearance.shadowStrength * appearance.liftShadowStrength, seen.getValue(GlassRendererMode.None).strength, 1e-6f)
-        assertEquals(appearance.shadowSpread, seen.getValue(GlassRendererMode.None).spread, 1e-6f)
+        assertEquals(seen[GlassRendererMode.Normal], seen[GlassRendererMode.SingleToneBlur])
+        assertEquals(appearance.shadowStrength * appearance.liftShadowStrength, seen.getValue(GlassRendererMode.SingleToneBlur).strength, 1e-6f)
+        assertEquals(appearance.shadowSpread, seen.getValue(GlassRendererMode.SingleToneBlur).spread, 1e-6f)
     }
 
     @Test fun queueDrawerEdgeShadowMatchesInNoneAndNormal() {
@@ -120,7 +120,7 @@ class NoneShadowParityTest {
         val top = compose.onNodeWithTag("queue-surface").fetchSemanticsNode().boundsInRoot.top
         fun band(): PixelMap = compose.onNodeWithTag("screen").captureToImage().toPixelMap()
         val normal = band()
-        compose.runOnIdle { runtime.request(GlassRendererMode.None) }
+        compose.runOnIdle { runtime.request(GlassRendererMode.SingleToneBlur) }
         compose.waitForIdle(); Thread.sleep(300); compose.waitForIdle()
         val none = band()
         // The band above the drawer edge holds only its shadow over the static scene.

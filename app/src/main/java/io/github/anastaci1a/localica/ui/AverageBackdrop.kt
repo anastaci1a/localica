@@ -110,6 +110,7 @@ internal fun MaterialAverageStyle.color(mean: Color): Color {
 internal fun AverageBackdrop(modifier: Modifier, source: FrostedBackdrop, location: BackdropLocation,
     style: MaterialAverageStyle, home: FrostedBackdrop? = null, homeWeight: () -> Float = { 0f },
     homeBounds: (() -> Rect)? = null, homeFootprint: (() -> HomeBackdropFootprint?)? = null) {
+    if (flatGlass()) return
     val drawObserver = LocalBackdropSamplingObserver.current
     // The scene the lens would sample (and its parent outside its box), never a substitute.
     val backing = source

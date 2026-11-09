@@ -11,9 +11,9 @@ class InterfacePreferences(context: Context) {
     private val preferences = context.getSharedPreferences("interface", Context.MODE_PRIVATE)
     fun read(): InterfaceSettings {
         val savedRenderer = preferences.getString("glass-renderer", null)
-        if (savedRenderer in listOf("Automatic", "Modern", "Legacy") || preferences.contains("glass-live-scroll")) {
+        if (savedRenderer in listOf("None", "Automatic", "Modern", "Legacy") || preferences.contains("glass-live-scroll")) {
             preferences.edit().apply {
-                if (savedRenderer in listOf("Automatic", "Modern", "Legacy")) putString("glass-renderer", "Normal")
+                putString("glass-renderer", GlassRendererMode.fromStored(savedRenderer).name)
                 remove("glass-live-scroll")
             }.apply()
         }
@@ -37,7 +37,7 @@ class InterfacePreferences(context: Context) {
                 preferences.getFloat("glass-contrast-weight", GlassContrastWeightDefault), preferences.getFloat("tab-classic-opacity", .1f),
                 preferences.getFloat("glass-control-expansion", 1.75f), preferences.getFloat("tab-overlay-darkening", 0f),
                 preferences.getBoolean("tab-overlay-foreground", false),
-                preferences.enumValue<GlassRendererMode>("glass-renderer") ?: GlassRendererMode.Normal,
+                GlassRendererMode.fromStored(savedRenderer),
                 preferences.getFloat("glass-lift-shadow-strength", LiftShadowDefault)).normalized(),
             grayTone = preferences.getFloat("gray-tone", .4f).normalizedGrayTone(),
             lyricDelayMs = preferences.getInt("lyric-delay-ms", 0).coerceIn(-2000, 2000),

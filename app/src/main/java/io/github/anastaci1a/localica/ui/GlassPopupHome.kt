@@ -100,7 +100,8 @@ internal fun Modifier.glassPopupHome(home: GlassPopupHome): Modifier {
             if ((home.departing || flight.handedOff) && flight.prepared && layer != null && !layer.isReleased) {
                 if (!flight.handedOff) flight.homeOrigin = home.currentOrigin
                 val delta = flight.origin - flight.homeOrigin
-                translate(delta.x, delta.y) { drawLayer(layer) }
+                android.os.Trace.beginSection("structural:popup-flight-project")
+                try { translate(delta.x, delta.y) { drawLayer(layer) } } finally { android.os.Trace.endSection() }
                 flight.handedOff = true
                 flight.wasProjected = true
             }

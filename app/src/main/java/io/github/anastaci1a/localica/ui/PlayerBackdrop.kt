@@ -150,9 +150,11 @@ internal fun PlayerBackdrop(palette: PlayerPalette, modifier: Modifier = Modifie
         if (from != null && blend < 1f) {
             painter.draw(this, from, geometry)
             drawIntoCanvas { canvas ->
+                android.os.Trace.beginSection("structural:artwork-grade-blend")
                 canvas.saveLayer(androidx.compose.ui.geometry.Rect(Offset.Zero, size), Paint().apply { alpha = blend })
                 painter.draw(this, shown, geometry)
                 canvas.restore()
+                android.os.Trace.endSection()
             }
         } else painter.draw(this, shown, geometry)
     }

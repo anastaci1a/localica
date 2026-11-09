@@ -19,11 +19,14 @@ private suspend fun copyLayerBitmap(layer: GraphicsLayer, density: Density, dire
     else layer.legacyLayerSnapshot(density, direction, straightAlpha = true)
 
 /** A recorded parent retains its source's native content until the copy completes. */
-internal class RetainedLayerReadback(private val onStage: ((ReadbackStage) -> Unit)? = null) {
+internal class RetainedLayerReadback(private val onStage: ((ReadbackStage) -> Unit)? = null,
+    private val glassWork: Boolean = true) {
+    init { if (glassWork) GlassWork.event("readback") }
     private val completion = ReadbackCompletion()
 
     suspend fun capture(source: GraphicsLayer, graphicsContext: GraphicsContext, density: Density,
         layoutDirection: LayoutDirection, copy: (suspend (GraphicsLayer) -> ImageBitmap)? = null): ImageBitmap {
+        if (glassWork) GlassWork.event("capture")
         check(Looper.myLooper() == Looper.getMainLooper()) { "Layer readbacks belong to the owning UI thread" }
         val readLayer: suspend (GraphicsLayer) -> ImageBitmap = copy ?: { copyLayerBitmap(it, density, layoutDirection) }
         return completion.capture(

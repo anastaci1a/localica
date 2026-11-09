@@ -57,7 +57,7 @@ class NoneRealAppWalkTest {
             runBlocking { store.replaceRoot(ScanResult(FolderSelection(root, "None walk"), listOf(track), 0)) }
             actionPreferences.write(PlayerActionSettings(slots = mapOf(ActionSlot(0, 0) to PlayerAction.More)))
             preferences.write(InterfaceSettings(tabs = listOf(MainTab.Home, MainTab.Library, MainTab.Songs, MainTab.Albums),
-                expandOnPlay = true, glass = GlassAppearance(renderer = GlassRendererMode.None)))
+                expandOnPlay = true, glass = GlassAppearance(renderer = GlassRendererMode.SingleToneBlur)))
             ActivityScenario.launch<MainActivity>(Intent(context, MainActivity::class.java)).use {
                 visible(By.desc("Library")).click()
                 visible(By.text("Songs"))

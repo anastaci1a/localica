@@ -24,19 +24,21 @@ internal fun GlassControlScene(modifier: Modifier, horizontalPadding: Dp = 20.dp
     active: () -> Float = { 1f }, face: () -> Color = { Color.Transparent },
     prepare: () -> Boolean = { false },
     scene: DrawScope.() -> Unit) {
+    val flat = flatGlass()
+    val flatColor = flatGlassColor()
     if (requestedGlassNone()) {
         // No recording, source subscription, lens, reduction or exclusive lease in None.
         Canvas(modifier) {
             scene()
             val shape = geometry()
-            drawRoundRect(Color.White, shape.bounds.topLeft, shape.bounds.size, CornerRadius(shape.corner))
+            drawRoundRect(if (flat) flatColor else Color.White, shape.bounds.topLeft, shape.bounds.size, CornerRadius(shape.corner))
         }
         return
     }
     val renderer = currentGlassRendererGeneration()
     val modern = Build.VERSION.SDK_INT >= 33
     val none by androidx.compose.animation.core.animateFloatAsState(
-        if (renderer.backend == GlassBackend.None) 1f else 0f,
+        if (renderer.backend == GlassBackend.SingleToneBlur) 1f else 0f,
         androidx.compose.animation.core.spring(1f, 450f), label = "Control render mode")
     val currentActive by rememberUpdatedState(active)
     val optical by remember { derivedStateOf { currentActive() > 0f } }
@@ -46,10 +48,10 @@ internal fun GlassControlScene(modifier: Modifier, horizontalPadding: Dp = 20.dp
     val location = remember { BackdropLocation() }
     val lens = remember { lazy { if (Build.VERSION.SDK_INT >= 33) LensRenderer() else null } }
     val averageRenderer = remember { if (Build.VERSION.SDK_INT >= 33) MaterialAverageRenderer(true) else null }
-    val averageLayer = if (optical && modern) rememberGraphicsLayer() else null
+    val averageLayer = if (optical && modern) rememberGlassLayer() else null
     val areaReduction = if (optical && modern) rememberMaterialAreaReduction() else null
     val rim = remember { GlassRimCache() }
-    val layer = if (optical && modern) rememberGraphicsLayer() else null
+    val layer = if (optical && modern) rememberGlassLayer() else null
     val averageBitmap = if (optical && !modern) remember { arrayOfNulls<ImageBitmap>(1) } else null
     val onLensDraw = LocalControlLensDraw.current
     val opticalWork = LocalGlassOpticalWork.current

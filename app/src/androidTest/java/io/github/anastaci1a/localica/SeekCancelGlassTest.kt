@@ -28,7 +28,7 @@ class SeekCancelGlassTest {
 
     @Test fun cancelTargetRefractsTheUiBehindItAndOnlyTheSceneRecordingDoesSo() = verifyScene(GlassRendererMode.Normal)
 
-    @Test fun cancelTargetUsesUniformAverageWithMatchingDrawSource() = verifyScene(GlassRendererMode.None)
+    @Test fun cancelTargetUsesUniformAverageWithMatchingDrawSource() = verifyScene(GlassRendererMode.SingleToneBlur)
 
     private fun verifyScene(mode: GlassRendererMode) {
         val optical = mode == GlassRendererMode.Normal && android.os.Build.VERSION.SDK_INT >= 33

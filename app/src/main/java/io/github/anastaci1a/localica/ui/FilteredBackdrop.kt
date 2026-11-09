@@ -53,7 +53,8 @@ internal class NoneAtlasInput(val source: FrostedBackdrop) {
     }
 }
 
-@Composable internal fun rememberNoneAtlasInput(source: FrostedBackdrop): NoneAtlasInput {
+@Composable internal fun rememberNoneAtlasInput(source: FrostedBackdrop): NoneAtlasInput? {
+    if (flatGlass()) return null
     val input = remember(source) { NoneAtlasInput(source) }
     if (io.github.anastaci1a.localica.BuildConfig.DEBUG) DisposableEffect(input) {
         BackdropRecordingAncestry.inputs.add(input)
@@ -76,8 +77,9 @@ internal fun FilteredBackdrop(modifier: Modifier, source: FrostedBackdrop, locat
     homeFootprint: (() -> HomeBackdropFootprint?)? = null,
     noneAtlasInput: NoneAtlasInput? = null,
     effect: (Size, Float, Float) -> RenderEffect?) {
+    if (flatGlass()) return
     val renderer = currentGlassRendererGeneration()
-    val none by animateFloatAsState(if (renderer.backend == GlassBackend.None) 1f else 0f,
+    val none by animateFloatAsState(if (renderer.backend == GlassBackend.SingleToneBlur) 1f else 0f,
         spring(dampingRatio = 1f, stiffness = 450f), label = "Glass render mode")
     val blending = none > 0f && none < 1f
     Box(modifier.graphicsLayer { compositingStrategy = if (blending)
@@ -108,9 +110,9 @@ private fun OpticalBackdrop(modifier: Modifier, source: FrostedBackdrop, locatio
     val drawObserver = LocalBackdropSamplingObserver.current
     BackdropLease(source)
     BackdropLease(homeSource?.takeUnless { it === source })
-    val layer = rememberGraphicsLayer()
-    val primary = if (homeSource != null) rememberGraphicsLayer() else null
-    val home = if (primary != null) rememberGraphicsLayer() else null
+    val layer = rememberGlassLayer()
+    val primary = if (homeSource != null) rememberGlassLayer() else null
+    val home = if (primary != null) rememberGlassLayer() else null
     val canUseAverage = average != null && (forceAverage || source.materialOnly || homeSource?.materialOnly == true)
     val averageRenderer = remember(canUseAverage) { if (android.os.Build.VERSION.SDK_INT >= 33 && canUseAverage) MaterialAverageRenderer() else null }
     val rawAverageRenderer = remember(canUseAverage) { if (android.os.Build.VERSION.SDK_INT >= 33 && canUseAverage) MaterialAverageRenderer() else null }
@@ -119,8 +121,8 @@ private fun OpticalBackdrop(modifier: Modifier, source: FrostedBackdrop, locatio
     // The style shader takes the exact mean of the reduction's last level (at most 8×8 texels) itself.
     val areaSourceRenderer = remember(forceAverage) { if (forceAverage && android.os.Build.VERSION.SDK_INT >= 33) MaterialAverageRenderer(uniformOpaque = true, variableTaps = true) else null }
     val areaHomeRenderer = remember(forceAverage) { if (forceAverage && android.os.Build.VERSION.SDK_INT >= 33) MaterialAverageRenderer(uniformOpaque = true, variableTaps = true) else null }
-    val averageSource = if (average != null && (forceAverage || source.materialOnly)) rememberGraphicsLayer() else null
-    val averageHome = if (average != null && (forceAverage || homeSource?.materialOnly == true)) rememberGraphicsLayer() else null
+    val averageSource = if (average != null && (forceAverage || source.materialOnly)) rememberGlassLayer() else null
+    val averageHome = if (average != null && (forceAverage || homeSource?.materialOnly == true)) rememberGlassLayer() else null
     // Diagnostics only (debug builds, see MaterialAreaReduction.legacyHalvings): the frozen pre-#691 one-tap style
     // renderers, so a test can measure final-output drift between the old and the current None path.
     val legacyRenderers = remember(forceAverage) {

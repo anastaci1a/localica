@@ -260,7 +260,8 @@ internal fun DrawScope.glassShadows(bodies: List<Pair<RoundRect, Float>>, streng
                 outlines.maxOf { it.right }, outlines.maxOf { it.bottom }).inflate(reach + shift + 1f)
             canvas.saveLayer(bounds, cache.layerPaint)
         }
-        try { rings() } finally { if (!rasterizing) canvas.restore() }
+        android.os.Trace.beginSection("structural:shadow-rings")
+        try { rings() } finally { android.os.Trace.endSection(); if (!rasterizing) canvas.restore() }
     }
     // Resolve the cutout in destination coordinates, before the temporary layer.
     // Legacy clipping inside that layer rounds a few contour pixels differently

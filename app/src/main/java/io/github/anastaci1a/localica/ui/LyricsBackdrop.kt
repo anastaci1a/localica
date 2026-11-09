@@ -35,14 +35,14 @@ internal class LyricsBackdropScene(val source: FrostedBackdrop, alpha: () -> Flo
     schedule: (Long, () -> Unit) -> (() -> Unit)) {
     val layers = mutableStateListOf<LyricsBackdropLayer>()
     var compositeDraws: Map<Any, BackdropProducerDraws> = emptyMap()
-    val readback = BackdropReadback({ Snapshot.withoutReadObservation {
+    val readback by lazy { BackdropReadback({ Snapshot.withoutReadObservation {
         BackdropReadbackScene(listOf(alpha(), source.size, source.location.placement),
             layers.filter { it.alpha() > 0f }.associate { layer ->
                 layer to
                 BackdropReadbackProducer(listOf(layer.alpha(), layer.source.size,
                     layer.source.location.placement, layer.contentKey()), layer.hasMask)
             })
-    } }, schedule)
+    } }, schedule) }
 
     fun recorded(layer: LyricsBackdropLayer, request: Int) {
         layer.recordedReadbackRequest = request
@@ -94,6 +94,12 @@ internal fun LyricsBackdrop(key: Any?, modifier: Modifier = Modifier, contentAlp
         val cancel: () -> Unit = { handler.removeCallbacks(runnable) }
         cancel
     } }
+    if (flatGlass()) {
+        Box(modifier, propagateMinConstraints = true) {
+            CompositionLocalProvider(LocalLyricsBackdropScene provides scene, content = content)
+        }
+        return
+    }
     val observer by rememberUpdatedState(LocalLyricsBackdropObserver.current)
     SideEffect { source.parent = backing; source.readbackBarrier = scene.readback; observer?.invoke(scene, true) }
     DisposableEffect(scene) { onDispose {
@@ -153,6 +159,14 @@ internal fun LyricsBackdrop(key: Any?, modifier: Modifier = Modifier, contentAlp
 @Composable
 internal fun Modifier.recordLyricsLayer(scene: LyricsBackdropScene, alpha: () -> Float,
     contentKey: () -> Any?): Modifier {
+    if (flatGlass()) return clipToBounds()
+        .structuralTrace("lyrics-mask")
+        .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+        .drawWithContent {
+            drawContent()
+            drawRect(Brush.verticalGradient(0f to Color.Transparent, 0.10f to Color.Black,
+                0.88f to Color.Black, 1f to Color.Transparent), blendMode = BlendMode.DstIn)
+        }
     // This display list is replayed by the shared scene, never read back independently.
     val source = rememberFrostedBackdrop(Unit, enabled = false, retainRaster = false)
     val currentAlpha by rememberUpdatedState(alpha)

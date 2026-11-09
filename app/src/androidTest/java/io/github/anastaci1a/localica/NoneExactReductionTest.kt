@@ -290,7 +290,7 @@ class NoneExactReductionTest {
 
     @Composable private fun Fixture(appearance: GlassAppearance, content: @Composable () -> Unit) = CompositionLocalProvider(
         LocalDensity provides Density(1f),
-        LocalGlassRendererRuntime provides remember { GlassRendererRuntime(GlassRendererMode.None) },
+        LocalGlassRendererRuntime provides remember { GlassRendererRuntime(GlassRendererMode.SingleToneBlur) },
         LocalGlassAppearance provides appearance) { LocalicaTheme { content() } }
 
     @Composable private fun Scene(bitmap: Bitmap, appearance: GlassAppearance, source: FrostedBackdrop, surface: @Composable () -> Unit) =

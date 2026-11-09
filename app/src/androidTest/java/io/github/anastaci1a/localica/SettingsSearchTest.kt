@@ -117,7 +117,7 @@ class SettingsSearchTest {
     }
 
     @Test fun noneKeepsGlassSubmenusVisibleAndDisabled() {
-        show("Glass", GlassAppearance(renderer = GlassRendererMode.None))
+        show("Glass", GlassAppearance(renderer = GlassRendererMode.SingleToneBlur))
         compose.onNodeWithText("Glass appearance", substring = false).assertIsDisplayed().assertIsNotEnabled()
         compose.onNodeWithText("Glass advanced", substring = false).assertIsDisplayed().assertIsNotEnabled()
         compose.onNodeWithText("Navigation selector", substring = false).assertIsDisplayed().assertIsNotEnabled()

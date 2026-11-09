@@ -36,7 +36,7 @@ class NoneFullAreaTest {
 
     @Test fun normalSettingsRowsPixelReferenceAtLargeFontScale() = settingsRows(1.5f, GlassRendererMode.Normal)
 
-    private fun settingsRows(fontScale: Float, mode: GlassRendererMode = GlassRendererMode.None) {
+    private fun settingsRows(fontScale: Float, mode: GlassRendererMode = GlassRendererMode.SingleToneBlur) {
         lateinit var source: FrostedBackdrop
         compose.setContent { CompositionLocalProvider(
             LocalDensity provides Density(1f, fontScale),
@@ -94,7 +94,7 @@ class NoneFullAreaTest {
         var split by mutableFloatStateOf(48f)
         compose.setContent { CompositionLocalProvider(
             LocalDensity provides Density(1f),
-            LocalGlassRendererRuntime provides remember { GlassRendererRuntime(GlassRendererMode.None) }
+            LocalGlassRendererRuntime provides remember { GlassRendererRuntime(GlassRendererMode.SingleToneBlur) }
         ) { LocalicaTheme {
             GlassControlScene(Modifier.size(96.dp).testTag("control"), source = null,
                 geometry = { LensGeometry(Rect(16f, 16f, 80f, 80f), 32f) }, body = { GlassShape() }) {
@@ -129,7 +129,7 @@ class NoneFullAreaTest {
         var whiteWidth by mutableIntStateOf(8)
         compose.setContent { CompositionLocalProvider(
             LocalDensity provides Density(1f),
-            LocalGlassRendererRuntime provides remember { GlassRendererRuntime(GlassRendererMode.None) },
+            LocalGlassRendererRuntime provides remember { GlassRendererRuntime(GlassRendererMode.SingleToneBlur) },
             LocalGlassAppearance provides GlassAppearance(whiteTint = 0f, contrast = 0f, shadowStrength = 0f)
         ) { LocalicaTheme {
             source = rememberFrostedBackdrop(Unit, dark = false)
