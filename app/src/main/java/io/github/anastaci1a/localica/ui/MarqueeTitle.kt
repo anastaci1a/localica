@@ -38,15 +38,12 @@ internal fun MarqueeTitle(title: String, reducedMotion: Boolean, modifier: Modif
 internal fun MarqueeTitle(title: AnnotatedString, reducedMotion: Boolean, modifier: Modifier = Modifier,
     style: TextStyle = MaterialTheme.typography.titleSmall, motionPaused: Boolean = false,
     visiblePrefixLength: Int = title.length, suffixVisibility: Float = 1f,
-    suffixVisibilityReader: (() -> Float)? = null, ink: ColorProducer? = null,
-    plainPrefixParagraph: AnnotatedString? = null) {
+    suffixVisibilityReader: (() -> Float)? = null, ink: ColorProducer? = null) {
     // Unspecified forces the UI direction in Compose, even for an opposite-script
     // title. Measurement and drawing must share content direction (or the caller's override).
     val textStyle = marqueeTextStyle(style)
     if (reducedMotion || LocalReducedMotion.current) {
-        if (plainPrefixParagraph != null && ink != null) AlbumSuffixText(plainPrefixParagraph, title, visiblePrefixLength,
-            ink, modifier, style = textStyle, overflow = TextOverflow.Ellipsis, softWrap = true)
-        else if (ink == null) Text(title, modifier, maxLines = 1, style = textStyle, overflow = TextOverflow.Ellipsis)
+        if (ink == null) Text(title, modifier, maxLines = 1, style = textStyle, overflow = TextOverflow.Ellipsis)
         else DrawInkText(title, ink, modifier, maxLines = 1, style = textStyle, overflow = TextOverflow.Ellipsis)
         return
     }
@@ -83,9 +80,7 @@ internal fun MarqueeTitle(title: AnnotatedString, reducedMotion: Boolean, modifi
         }
         val fadeLimit = with(density) { 24.dp.toPx() }
         Layout(content = {
-            if (plainPrefixParagraph != null && ink != null) AlbumSuffixText(plainPrefixParagraph, title, visiblePrefixLength,
-                ink, style = textStyle)
-            else if (ink == null) Text(title, maxLines = 1, softWrap = false, style = textStyle, overflow = TextOverflow.Clip)
+            if (ink == null) Text(title, maxLines = 1, softWrap = false, style = textStyle, overflow = TextOverflow.Clip)
             else DrawInkText(title, ink, maxLines = 1, softWrap = false, style = textStyle, overflow = TextOverflow.Clip)
         }, modifier = Modifier
             .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }

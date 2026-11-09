@@ -53,14 +53,3 @@ internal fun DrawInkIcon(painter: Painter, description: String?, ink: ColorProdu
     } }
     Icon(tinted, description, modifier, tint = Color.Unspecified)
 }
-
-/** Android's ShaderBrushSpan observes createShader through derivedStateOf in its
- * draw-state callback. SpanStyle must use alpha=1f: the provider owns final alpha. */
-internal class DrawInkSpanBrush(private val ink: ColorProducer) : androidx.compose.ui.graphics.ShaderBrush() {
-    override fun createShader(size: Size): androidx.compose.ui.graphics.Shader {
-        val color = ink()
-        return androidx.compose.ui.graphics.LinearGradientShader(
-            androidx.compose.ui.geometry.Offset.Zero, androidx.compose.ui.geometry.Offset(1f, 0f),
-            listOf(color, color))
-    }
-}

@@ -664,31 +664,21 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
                     title.place(0, padding)
                 }
             }
+            PlayerFrameScope {
+            // Preserve the historical color-span paragraph, including Android's native glyph raster.
+            val subtitleColor = drawTheme.secondary()
             val artist = (if (settings.albumArtistFirst) sampled.albumArtist ?: sampled.artist else sampled.artist ?: sampled.albumArtist).orEmpty()
-            val suffixVisibility = remember { mutableFloatStateOf(0f) }
-            @Composable fun PublishSuffixVisibility() {
-                suffixVisibility.floatValue = smoothReveal((p() - .65f) / .35f)
-            }
-            PlayerFrameScope { PublishSuffixVisibility() }
-            val albumBrush = remember(drawTheme) { DrawInkSpanBrush(androidx.compose.ui.graphics.ColorProducer {
-                val color = drawTheme.secondary()
-                color.copy(alpha = color.alpha * suffixVisibility.floatValue)
-            }) }
-            val plainArtist = remember(artist, sampled.album) { buildAnnotatedString {
+            val albumVisibility = smoothReveal((p() - .65f) / .35f)
+            MarqueeTitle(buildAnnotatedString {
                 append(artist)
-                sampled.album?.let { album -> withStyle(SpanStyle(color = Color.Transparent)) { append(" · "); append(album) } }
-            } }
-            val artistText = remember(artist, sampled.album, albumBrush) { buildAnnotatedString {
-                append(artist)
-                sampled.album?.let { album -> withStyle(SpanStyle(brush = albumBrush, alpha = 1f)) {
+                sampled.album?.let { album -> withStyle(SpanStyle(color = subtitleColor.copy(alpha = subtitleColor.alpha * albumVisibility))) {
                     append(" · "); append(album)
                 } }
-            } }
-            MarqueeTitle(artistText, settings.reducedMotion,
+            }, settings.reducedMotion,
                 Modifier.playerTextBounds(::textX, ::subtitleY, ::textWidth).zIndex(if (moving) -.5f else 0f).scalePlayerText { subtitleScale + (1f - subtitleScale) * p() }.testTag("player-artist").onGloballyPositioned { polarity.measure("artist", it) },
-                style = MaterialTheme.typography.bodyLarge, motionPaused = textMotionPaused,
-                visiblePrefixLength = artist.length, suffixVisibilityReader = { suffixVisibility.floatValue }, ink = drawTheme.secondary,
-                plainPrefixParagraph = plainArtist)
+                style = MaterialTheme.typography.bodyLarge.copy(color = subtitleColor), motionPaused = textMotionPaused,
+                visiblePrefixLength = artist.length, suffixVisibility = albumVisibility)
+            }
             PlayerFrameScope { if (seekVisible) Column(Modifier.liveControlOffset({ contentInset }, ::seekY).width(contentWidth)
                 .testTag("player-seek-row").onGloballyPositioned { polarity.measure("seek", it) }.graphicsLayer { alpha = rowMotion().seekAlpha }) {
                 PlayerSeekControls(sampled, onSeek, artworkVisit, onSeekRequest = onSeekRequest, position = seekPosition,

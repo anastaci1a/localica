@@ -34,16 +34,18 @@ class PlayerDeferredFrameEqualityTest {
     @Test fun fullBackgroundFrameMatchesMainThroughThresholdsAndReversals() = compare(ArtworkLayout.FullBackground, false, LayoutDirection.Ltr)
     @Test fun minimizedSelectedLyricsMatchMain() = compare(ArtworkLayout.FullBackground, true, LayoutDirection.Ltr)
     @Test fun rightToLeftFrameMatchesMain() = compare(ArtworkLayout.Floating, false, LayoutDirection.Rtl)
+    @Test fun reducedMotionArtistEllipsisMatchesMain() = compare(ArtworkLayout.Floating, false, LayoutDirection.Ltr, true)
+    @Test fun rightToLeftArtistEllipsisMatchesMain() = compare(ArtworkLayout.Floating, false, LayoutDirection.Rtl, true)
 
-    private fun compare(layout: ArtworkLayout, lyrics: Boolean, direction: LayoutDirection) {
+    private fun compare(layout: ArtworkLayout, lyrics: Boolean, direction: LayoutDirection, ellipsis: Boolean = false) {
         val bitmap = Bitmap.createBitmap(64, 96, Bitmap.Config.ARGB_8888).apply {
             for (y in 0 until height) for (x in 0 until width)
                 setPixel(x, y, android.graphics.Color.rgb(40 + x * 3, 30 + y * 2, 210 - x * 2))
         }
         val visual = PlayerVisual(bitmap.asImageBitmap(), runBlocking { playerPalette(bitmap) })
         val appearance = GlassAppearance(renderer = GlassRendererMode.None, contrast = 0f)
-        val settings = InterfaceSettings(artworkLayout = layout, glass = appearance)
-        val state = PlaybackState(connected = true, title = "Same frame", artist = "Artist", album = "Album", durationMs = 120000)
+        val settings = InterfaceSettings(artworkLayout = layout, glass = appearance, reducedMotion = ellipsis)
+        val state = PlaybackState(connected = true, title = "Same frame", artist = if (ellipsis) "Long Artist ".repeat(40) else "Artist", album = "Album", durationMs = 120000)
         val phase = Animatable(0f)
         var reference by mutableStateOf(true)
         var epoch by mutableIntStateOf(0)
@@ -65,7 +67,7 @@ class PlayerDeferredFrameEqualityTest {
         } }
         // Each arm receives the same relative clock advances and the same immutable visual.
         val samples = listOf(0f, .08f, .38f, .3801f, .7f, .7001f, .8f, .8301f, .99f, 1f, .6f, .25f, .75f, 0f)
-        data class Frame(val pixels: IntArray, val width: Int, val height: Int, val bounds: Map<String, androidx.compose.ui.geometry.Rect>, val suffix: PlayerAlbumPixels?)
+        data class Frame(val pixels: IntArray, val width: Int, val height: Int, val bounds: Map<String, androidx.compose.ui.geometry.Rect>)
         fun captureArm(old: Boolean): List<Frame> {
             compose.mainClock.autoAdvance = true
             compose.runOnIdle { scope.launch(start = CoroutineStart.UNDISPATCHED) { phase.stop(); phase.snapTo(0f) }; reference = old; epoch++ }
@@ -74,12 +76,16 @@ class PlayerDeferredFrameEqualityTest {
             return samples.map { p ->
                 compose.runOnIdle { scope.launch(start = CoroutineStart.UNDISPATCHED) { phase.stop(); phase.snapTo(p) } }
                 repeat(8) { compose.mainClock.advanceTimeByFrame(); compose.waitForIdle() }
+                if (ellipsis) {
+                    val layouts = mutableListOf<androidx.compose.ui.text.TextLayoutResult>()
+                    compose.onNodeWithText("${state.artist} · Album", useUnmergedTree = true)
+                        .performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.GetTextLayoutResult) { it(layouts) }
+                    assertTrue("Fixture must exercise actual ellipsis at $p, reference=$old", layouts.single().isLineEllipsized(0))
+                }
                 val tags = listOf("player-surface", "player-artwork", "player-title", "player-artist", "player-transport-row")
                 val bounds = tags.associateWith { compose.onNodeWithTag(it, true).fetchSemanticsNode().boundsInRoot }
                 val pixels = compose.onNodeWithTag("frame-root").captureToImage().toPixelMap()
-                val mask = if (p > .65f) measuredPlayerAlbumSuffix(compose) else null
-                savePlayerAlbumMask("PlayerDeferredFrameEqualityTest-$layout-lyrics$lyrics-$direction-arm$old-p$p", pixels.width, pixels.height, mask)
-                Frame(IntArray(pixels.width * pixels.height) { i -> pixels[i % pixels.width, i / pixels.width].toArgb() }, pixels.width, pixels.height, bounds, mask)
+                Frame(IntArray(pixels.width * pixels.height) { i -> pixels[i % pixels.width, i / pixels.width].toArgb() }, pixels.width, pixels.height, bounds)
             }
         }
         try {
@@ -91,8 +97,7 @@ class PlayerDeferredFrameEqualityTest {
                 assertEquals("Geometry at ${samples[i]}", a.bounds, b.bounds)
                 val mismatches = a.pixels.indices.count { a.pixels[it] != b.pixels[it] }
                 if (mismatches > 0) savePlayerEqualityEvidence("PlayerDeferredFrameEqualityTest-$layout-lyrics$lyrics-$direction-${samples[i]}", a.pixels, b.pixels, a.width, a.height)
-                assertEquals("Album suffix geometry at ${samples[i]}", a.suffix, b.suffix)
-                assertPlayerPixelsWithAlbumBound("PlayerDeferredFrameEqualityTest-$layout-lyrics$lyrics-$direction-${samples[i]}", a.pixels, b.pixels, a.width, a.height, a.suffix)
+                assertEquals("Exact pixels at ${samples[i]} ($layout, lyrics=$lyrics, $direction)", 0, mismatches)
             }
         } finally { compose.mainClock.autoAdvance = true }
     }
