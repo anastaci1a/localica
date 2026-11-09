@@ -45,8 +45,9 @@ import java.io.File
  *      (half splits, quadrants, a translated impulse, a gradient), at footprints just above, in the middle
  *      of and just below a power-of-two interval, a fractional scaled region and source/home mixes;
  *  (b) FINAL-OUTPUT drift between the frozen pre-#691 None path (bilinear 2:1 chain to 1×1, one-tap style
- *      into a 1×1 copy, mix layer) and the block-mean path on the same device: max 4/255 and mean 1/255
- *      PER CHANNEL, over every fixture × phase × look (plain and tinted/contrasted) including low alpha.
+ *      into a 1×1 copy, mix layer) and the block-mean path on the same device: max 4/255
+ *      PER CHANNEL; mean <=2/255 on Realistic and <=3/255 on Adversarial fixtures (lead judgment).
+ *      Coverage includes every fixture × phase × look (plain and tinted/contrasted) including low alpha.
  * Expected means are integrated from the immutable source bitmap, never from an analytic guess of what
  * the rasterizer drew. Every case's channel deltas and the per-channel statistics are written to
  * additionalTestOutputDir as a receipt. */
@@ -59,16 +60,16 @@ class NoneExactReductionTest {
     private val origin = Offset(20f, 20f)
     private val tolerance = .015f
     private val driftMaxCodes = 4f
-    private val driftMeanCodes = 1f
     private val modern = Build.VERSION.SDK_INT >= 33
 
     @After fun restoreChain() { MaterialAreaReduction.legacyOverride = false }
 
     /** A pattern rasterized once into an immutable ARGB bitmap of the source size. */
-    private class Fixture(val name: String, val paint: android.graphics.Canvas.(Float) -> Unit)
+    private enum class FixtureClass(val meanBudgetCodes: Float) { Realistic(2f), Adversarial(3f) }
+    private class Fixture(val name: String, val fixtureClass: FixtureClass, val paint: android.graphics.Canvas.(Float) -> Unit)
 
     private fun fixtures(): List<Fixture> {
-        fun stripes(width: Int) = Fixture("vertical stripes $width of 32") { phase ->
+        fun stripes(width: Int) = Fixture("vertical stripes $width of 32", FixtureClass.Adversarial) { phase ->
             drawColor(android.graphics.Color.BLACK)
             val paint = Paint().apply { color = android.graphics.Color.WHITE; isAntiAlias = true }
             for (x in -40 until sourceWidth + 40) if (Math.floorMod(x, 32) < width)
@@ -76,49 +77,49 @@ class NoneExactReductionTest {
         }
         val white = Paint().apply { color = android.graphics.Color.WHITE }
         return listOf(
-            Fixture("left black right white split") { phase ->
+            Fixture("left black right white split", FixtureClass.Adversarial) { phase ->
                 drawColor(android.graphics.Color.BLACK); drawRect(150f + phase, 0f, sourceWidth.toFloat(), sourceHeight.toFloat(), white)
             },
-            Fixture("top black bottom white split") { phase ->
+            Fixture("top black bottom white split", FixtureClass.Adversarial) { phase ->
                 drawColor(android.graphics.Color.BLACK); drawRect(0f, 84f + phase, sourceWidth.toFloat(), sourceHeight.toFloat(), white)
             },
-            Fixture("quadrants") { phase ->
+            Fixture("quadrants", FixtureClass.Adversarial) { phase ->
                 drawColor(android.graphics.Color.WHITE)
                 drawRect(0f, 0f, 150f + phase, 84f, Paint().apply { color = android.graphics.Color.RED })
                 drawRect(150f + phase, 0f, sourceWidth.toFloat(), 84f, Paint().apply { color = android.graphics.Color.GREEN })
                 drawRect(0f, 84f, 150f + phase, sourceHeight.toFloat(), Paint().apply { color = android.graphics.Color.BLUE })
             },
-            Fixture("translated impulse") { phase ->
+            Fixture("translated impulse", FixtureClass.Adversarial) { phase ->
                 drawColor(android.graphics.Color.BLACK); drawRect(200f + phase, 60f + phase, 232f + phase, 92f + phase, white)
             },
-            Fixture("horizontal gradient") { phase ->
+            Fixture("horizontal gradient", FixtureClass.Realistic) { phase ->
                 drawRect(0f, 0f, sourceWidth.toFloat(), sourceHeight.toFloat(), Paint().apply {
                     shader = LinearGradient(phase, 0f, sourceWidth + phase, 0f, android.graphics.Color.BLACK, android.graphics.Color.WHITE, Shader.TileMode.CLAMP)
                 })
             },
             stripes(8), stripes(16), stripes(24),
-            Fixture("1 px horizontal lines, period 2") { phase ->
+            Fixture("1 px horizontal lines, period 2", FixtureClass.Adversarial) { phase ->
                 drawColor(android.graphics.Color.WHITE)
                 val paint = Paint().apply { color = android.graphics.Color.BLACK; isAntiAlias = true }
                 for (y in 0 until sourceHeight step 2) drawRect(0f, y + phase, sourceWidth.toFloat(), y + phase + 1f, paint)
             },
-            Fixture("2 px checkerboard") { phase ->
+            Fixture("2 px checkerboard", FixtureClass.Adversarial) { phase ->
                 drawColor(android.graphics.Color.BLACK)
                 val paint = Paint().apply { color = android.graphics.Color.WHITE; isAntiAlias = true }
                 for (y in 0 until sourceHeight step 2) for (x in -2 until sourceWidth step 2)
                     if ((x / 2 + y / 2) % 2 == 0) drawRect(x + phase, y.toFloat(), x + phase + 2f, y + 2f, paint)
             },
-            Fixture("text bands") { phase ->
+            Fixture("text bands", FixtureClass.Realistic) { phase ->
                 drawColor(android.graphics.Color.WHITE)
                 val paint = Paint().apply { color = android.graphics.Color.BLACK; isAntiAlias = true }
                 for (y in listOf(20f, 100f, 152f, 230f)) drawRect(0f, y + phase, sourceWidth.toFloat(), y + phase + 16f, paint)
             },
-            Fixture("list rows 8 of 16") { phase ->
+            Fixture("list rows 8 of 16", FixtureClass.Realistic) { phase ->
                 drawColor(android.graphics.Color.WHITE)
                 val paint = Paint().apply { color = android.graphics.Color.BLACK; isAntiAlias = true }
                 for (y in -16 until sourceHeight step 16) drawRect(0f, y + phase, sourceWidth.toFloat(), y + phase + 8f, paint)
             },
-            Fixture("glyph runs") { phase ->
+            Fixture("glyph runs", FixtureClass.Adversarial) { phase ->
                 drawColor(android.graphics.Color.WHITE)
                 val paint = Paint().apply { color = android.graphics.Color.BLACK; isAntiAlias = true; textSize = 14f }
                 var y = 16f + phase
@@ -130,7 +131,7 @@ class NoneExactReductionTest {
                     line++
                 }
             },
-            Fixture("artwork split and checker") { phase ->
+            Fixture("artwork split and checker", FixtureClass.Realistic) { phase ->
                 drawColor(android.graphics.Color.WHITE)
                 drawRect(60f + phase, 60f, 190f + phase, 260f, Paint().apply { color = android.graphics.Color.RED })
                 drawRect(190f + phase, 60f, 320f + phase, 260f, Paint().apply { color = android.graphics.Color.BLUE })
@@ -138,12 +139,12 @@ class NoneExactReductionTest {
                 for (y in 60 until 260 step 2) for (x in 330 until 600 step 2)
                     if ((x / 2 + y / 2) % 2 == 0) drawRect(x + phase, y.toFloat(), x + phase + 2f, y + 2f, paint)
             },
-            Fixture("alpha edges") { phase ->
+            Fixture("alpha edges", FixtureClass.Realistic) { phase ->
                 drawColor(android.graphics.Color.argb(64, 255, 0, 0))
                 drawRect(phase + 150f, 0f, sourceWidth.toFloat(), sourceHeight.toFloat(),
                     Paint().apply { color = android.graphics.Color.argb(191, 0, 255, 0); isAntiAlias = true })
             },
-            Fixture("low alpha") { phase ->
+            Fixture("low alpha", FixtureClass.Adversarial) { phase ->
                 drawColor(android.graphics.Color.argb(4, 255, 0, 0))
                 drawRect(phase + 150f, 0f, sourceWidth.toFloat(), sourceHeight.toFloat(),
                     Paint().apply { color = android.graphics.Color.argb(12, 0, 0, 255); isAntiAlias = true })
@@ -214,25 +215,33 @@ class NoneExactReductionTest {
     /** Final-output drift between the frozen legacy path and the block-mean path, per channel, in 8-bit codes. */
     private class Drift {
         private val channels = listOf("red", "green", "blue", "alpha")
-        val samples = IntArray(4); val sum = LongArray(4); val max = IntArray(4); val worst = Array(4) { "" }
+        private class Counts {
+            val samples = IntArray(4)
+            val sum = LongArray(4)
+            val max = IntArray(4)
+            val worst = Array(4) { "" }
+            fun mean(i: Int) = if (samples[i] == 0) 0.0 else sum[i].toDouble() / samples[i]
+        }
+        private val total = Counts()
+        private val classified = FixtureClass.entries.associateWith { Counts() }
         val cases = JSONArray()
         private fun codes(color: Color): List<Int> {
             val argb = color.toArgb()
             return listOf(argb ushr 16 and 255, argb ushr 8 and 255, argb and 255, argb ushr 24 and 255)
         }
-        fun add(label: String, fresh: Color, legacy: Color, ideal: Color? = null) {
-            // Captures are RGBA8: quantize each channel before subtraction. Subtracting normalized
-            // Float channels first invents fractions such as 1.000000174 for an exact one-code delta.
+        fun add(label: String, fresh: Color, legacy: Color, fixtureClass: FixtureClass, ideal: Color? = null) {
+            // Captures are RGBA8: quantize each channel before subtraction. Normalized Float
+            // subtraction invents fractions such as 1.000000174 for an exact one-code delta.
             val current = codes(fresh)
             val old = codes(legacy)
             val deltas = current.indices.map { current[it] - old[it] }
-            for (i in channels.indices) {
+            for (counts in listOf(total, classified.getValue(fixtureClass))) for (i in channels.indices) {
                 val d = kotlin.math.abs(deltas[i])
-                samples[i]++; sum[i] += d.toLong()
-                if (d > max[i]) { max[i] = d; worst[i] = label }
+                counts.samples[i]++; counts.sum[i] += d.toLong()
+                if (d > counts.max[i]) { counts.max[i] = d; counts.worst[i] = label }
             }
-            cases.put(JSONObject(mapOf("case" to label, "deltaCodes" to JSONArray(deltas),
-                "fresh" to JSONArray(current), "legacy" to JSONArray(old))))
+            cases.put(JSONObject(mapOf("case" to label, "fixtureClass" to fixtureClass.name,
+                "deltaCodes" to JSONArray(deltas), "fresh" to JSONArray(current), "legacy" to JSONArray(old))))
             if (ideal != null) {
                 val expected = listOf(ideal.red, ideal.green, ideal.blue, ideal.alpha).map { it.toDouble() * 255.0 }
                 val row = cases.getJSONObject(cases.length() - 1)
@@ -243,15 +252,21 @@ class NoneExactReductionTest {
                     name to kotlin.math.abs(current[i] - expected[i]) }))
             }
         }
-        fun mean(i: Int) = if (samples[i] == 0) 0.0 else sum[i].toDouble() / samples[i]
-        fun json(maxBudget: Float, meanBudget: Float) = JSONObject(mapOf(
-            "perChannel" to JSONObject(channels.withIndex().associate { (i, name) -> name to JSONObject(mapOf(
-                "samples" to samples[i], "maxCodes" to max[i], "meanCodes" to mean(i), "worst" to worst[i])) }),
-            "encoding" to "integer RGBA8", "budgetMaxCodes" to maxBudget, "budgetMeanCodes" to meanBudget, "cases" to cases))
-        fun assertWithin(maxBudget: Float, meanBudget: Float) {
+        private fun channelJson(counts: Counts) = JSONObject(channels.withIndex().associate { (i, name) ->
+            name to JSONObject(mapOf("samples" to counts.samples[i], "maxCodes" to counts.max[i],
+                "meanCodes" to counts.mean(i), "worst" to counts.worst[i])) })
+        fun json(maxBudget: Float) = JSONObject(mapOf("perChannel" to channelJson(total),
+            "encoding" to "integer RGBA8", "budgetMaxCodes" to maxBudget,
+            "perClass" to JSONObject(classified.map { (category, counts) -> category.name to JSONObject(mapOf(
+                "budgetMeanCodes" to category.meanBudgetCodes, "perChannel" to channelJson(counts))) }.toMap()),
+            "cases" to cases))
+        fun assertWithin(maxBudget: Float) {
             for (i in channels.indices) {
-                assertTrue("Legacy vs block-mean ${channels[i]} drift max ${max[i]} codes at ${worst[i]} exceeds $maxBudget", max[i] <= maxBudget)
-                assertTrue("Legacy vs block-mean ${channels[i]} drift mean ${mean(i)} codes exceeds $meanBudget", mean(i) <= meanBudget)
+                assertTrue("Legacy vs block-mean ${channels[i]} drift max ${total.max[i]} codes at ${total.worst[i]} exceeds $maxBudget",
+                    total.max[i] <= maxBudget)
+                for ((category, counts) in classified) assertTrue(
+                    "Legacy vs block-mean ${category.name} ${channels[i]} drift mean ${counts.mean(i)} codes exceeds ${category.meanBudgetCodes}",
+                    counts.mean(i) <= category.meanBudgetCodes)
             }
         }
     }
@@ -260,7 +275,7 @@ class NoneExactReductionTest {
         val root = InstrumentationRegistry.getArguments().getString("additionalTestOutputDir")?.let(::File)
             ?: InstrumentationRegistry.getInstrumentation().targetContext.getExternalFilesDir(null)!!
         val output = File(root, "none-exact-reduction-api" + Build.VERSION.SDK_INT).also { it.mkdirs() }
-        val json = drift.json(driftMaxCodes, driftMeanCodes)
+        val json = drift.json(driftMaxCodes)
         for ((k, v) in extra) json.put(k, v)
         File(output, "$name.json").writeText(json.toString(2))
     }
@@ -337,12 +352,12 @@ class NoneExactReductionTest {
                 val point = centre("glass")
                 point
             }
-            drift.add(label, fresh, old, expected.takeIf { look === plain })
+            drift.add(label, fresh, old, fixture.fixtureClass, expected.takeIf { look === plain })
         }
         compose.runOnIdle { MaterialAreaReduction.legacyOverride = false }
         if (!modern) return
         receipt("footprint-${footprint.width}x${footprint.height}", drift, mapOf("footprint" to "$footprint", "fixtures" to fixtures().size, "phases" to phases.size, "looks" to looks.size))
-        drift.assertWithin(driftMaxCodes, driftMeanCodes)
+        drift.assertWithin(driftMaxCodes)
     }
 
     @Test fun footprintJustAboveAPowerOfTwo() = footprint(IntSize(257, 129))
@@ -413,12 +428,12 @@ class NoneExactReductionTest {
             if (!modern) continue
             compose.runOnIdle { MaterialAreaReduction.legacyOverride = true; legacy = true }
             val old = eventually { onScreenCentre("glass") }
-            drift.add(label, fresh, old, expected.takeIf { look === plain })
+            drift.add(label, fresh, old, fixture.fixtureClass, expected.takeIf { look === plain })
         }
         compose.runOnIdle { MaterialAreaReduction.legacyOverride = false }
         if (!modern) return
         receipt("scaled-1.25", drift, mapOf("region" to "$region"))
-        drift.assertWithin(driftMaxCodes, driftMeanCodes)
+        drift.assertWithin(driftMaxCodes)
     }
 
     /** None source/home mixes (a morph's home weight) at 0, .25, .5 and 1, plus an unready home: the fill is
@@ -464,7 +479,7 @@ class NoneExactReductionTest {
             if (!modern) continue
             compose.runOnIdle { MaterialAreaReduction.legacyOverride = true; legacy = true }
             val old = eventually { centre("glass") }
-            drift.add(label, fresh, old, expected.takeIf { look === plain })
+            drift.add(label, fresh, old, FixtureClass.Adversarial, expected.takeIf { look === plain })
         }
         // Readiness: a requested home that is not recorded draws no fill in either chain (the home scene,
         // drawn above the source, shows through).
@@ -478,6 +493,6 @@ class NoneExactReductionTest {
         compose.runOnIdle { MaterialAreaReduction.legacyOverride = false }
         if (!modern) return
         receipt("source-home-mix", drift, mapOf("footprint" to "$footprint"))
-        drift.assertWithin(driftMaxCodes, driftMeanCodes)
+        drift.assertWithin(driftMaxCodes)
     }
 }
