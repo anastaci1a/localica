@@ -436,3 +436,7 @@ io.github.anastaci1a.localica.BackdropEdgeStripTest
 
 io.github.anastaci1a.localica.CollectionLoadingRevealTest
 io.github.anastaci1a.localica.LibraryDataExchangeTest
+
+io.github.anastaci1a.localica.GlassMorphZeroConstraintsTest
+io.github.anastaci1a.localica.PopupViewportSlotTest
+io.github.anastaci1a.localica.PopupEditorFocusOwnershipTest
