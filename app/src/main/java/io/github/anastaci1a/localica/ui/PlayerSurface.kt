@@ -543,7 +543,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
                 cover(frame, swipeOffset)
                 if (destination != null) cover(destination.visual, swipeOffset - (if (swipeOffset < 0f) -1f else 1f) * artPixels, neighbor = true)
             }
-            if (handleReveal > 0f) Box(Modifier.offset(y = statusInset).fillMaxWidth().height(48.dp).graphicsLayer { alpha = handleReveal }) {
+            if (handleReveal > 0f) Box(Modifier.offset(y = statusInset).fillMaxWidth().height(48.dp).glassShadowOpacity { handleReveal }) {
                 Box(Modifier.align(Alignment.TopCenter).size(96.dp, 48.dp)
                     .clickable(interactionSource = null, indication = null, onClickLabel = "Collapse player") { onExpanded(false) }
                     .semantics { contentDescription = "Player handle" }) {
