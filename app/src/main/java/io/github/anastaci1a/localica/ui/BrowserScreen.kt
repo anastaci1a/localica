@@ -607,6 +607,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
         orderScroll.request?.let { if (!sourceStillCommitted(it)) orderScroll.finish(it) }
     }
     // Cursor captures replace outer queue snapshots, not the committed entries generation.
+    BrowseEffectScope {
     LaunchedEffect(orderScroll.revision, orderScroll.request, orderOwner) {
         val request = orderScroll.request ?: return@LaunchedEffect
         if (!selectionVisible || playerOpen || !orderScroll.isCurrent(request, currentOrderOwner, currentRoute) ||
@@ -646,6 +647,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
             if (followingOrder === request) followingOrder = null
             orderScroll.finish(request)
         }
+    }
     }
     // Accessibility/programmatic user scrolling can supersede a request still awaiting rows.
     LaunchedEffect(gridState) {
@@ -1472,3 +1474,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     if (sorting) CompositionLocalProvider(LocalGlassOrigin provides sortOrigin) { sortingPanel(initialView = presentationOnly) }
 }
 
+
+/** Effect-only state changes must not recreate the browse screen or grid callbacks. */
+@Composable
+private fun BrowseEffectScope(content: @Composable () -> Unit) { content() }
