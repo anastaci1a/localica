@@ -434,3 +434,5 @@ io.github.anastaci1a.localica.LoadingSweepContrastTest
 io.github.anastaci1a.localica.PlayerDeferredFrameEqualityTest
 io.github.anastaci1a.localica.ArtworkSwipeWidthBoundaryTest
 io.github.anastaci1a.localica.MarqueeDeferredLayoutEqualityTest
+
+io.github.anastaci1a.localica.DrawInkEqualityTest
