@@ -243,7 +243,9 @@ class PlayerHeaderShadowTest {
         compose.mainClock.advanceTimeBy(500)
         compose.runOnIdle { assertTrue(lyrics) }
         assertEquals("Lyrics input keeps the original header geometry", open, bounds(control("Collapse player")))
-        compose.onNodeWithContentDescription("Collapse player").performClick()
+        // Invoke the original action without a transient press deformation in the geometry oracle.
+        // Physical Hide/Show taps above separately exercise the unchanged real input targets.
+        compose.onNodeWithContentDescription("Collapse player").performSemanticsAction(SemanticsActions.OnClick) { it() }
         repeat(32) { if (progress.value > .92f) compose.mainClock.advanceTimeByFrame() }
         check(progress.value in .73f.. .995f) { "Not fractional: ${progress.value}" }
         sample("minimize")
