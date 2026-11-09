@@ -1,5 +1,7 @@
 package io.github.anastaci1a.localica.ui
 
+import io.github.anastaci1a.localica.ui.spec.GlassDialogHeight
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
@@ -36,7 +38,8 @@ internal class GlassDialogs {
 }
 
 internal class GlassDialogEntry(val anchor: GlassAnchor, locals: CompositionLocalContext,
-    dismiss: () -> Unit, dark: Boolean, val placement: GlassPlacement, content: @Composable () -> Unit) {
+    dismiss: () -> Unit, dark: Boolean, val placement: GlassPlacement,
+    val heightSizing: GlassDialogHeight, content: @Composable () -> Unit) {
     var mounted by mutableStateOf(true)
     var locals by mutableStateOf(locals)
     var dismiss by mutableStateOf(dismiss)
@@ -66,7 +69,8 @@ internal fun GlassDialogHost(content: @Composable () -> Unit) {
                     (entry.appearance?.backdrop ?: LocalModalBackdrop.current),
                     LocalGlassPopupHome provides entry.popupHome) {
                     GlassMorphPopup(entry.mounted, entry.anchor, { if (entry.mounted) entry.dismiss() },
-                        entry.placement, darkOverride = entry.dark, fitContent = entry.fitContent, content = entry.content)
+                        entry.placement, darkOverride = entry.dark, fitContent = entry.fitContent,
+                        heightSizing = entry.heightSizing, content = entry.content)
                 }
             }
             LaunchedEffect(entry.mounted, entry.anchor.modalPresent) {
@@ -78,7 +82,9 @@ internal fun GlassDialogHost(content: @Composable () -> Unit) {
 
 @Composable
 internal fun GlassDialog(onDismiss: () -> Unit, placement: GlassPlacement = GlassPlacement.Center,
-    fitContent: Boolean = placement == GlassPlacement.Menu, content: @Composable () -> Unit) {
+    fitContent: Boolean = placement == GlassPlacement.Menu,
+    heightSizing: GlassDialogHeight = GlassDialogHeight.Content, content: @Composable () -> Unit) {
+    require(heightSizing == GlassDialogHeight.Content || placement == GlassPlacement.Sheet)
     if (LocalInlineGlassDialog.current) {
         CompositionLocalProvider(LocalInlineGlassDialog provides false, content = content)
         return
@@ -102,9 +108,13 @@ internal fun GlassDialog(onDismiss: () -> Unit, placement: GlassPlacement = Glas
         // Conditional callers are disposed at dismissal, while their host entry keeps
         // returning. Reclaim that same animation/window instead of creating a second
         // writer for the trigger's hidden, shadow and expansion state.
-        host.entries.lastOrNull { !it.mounted && it.anchor === origin && it.placement == placement }
-            ?: GlassDialogEntry(origin, locals, onDismiss, dark, placement, resolvedContent)
+        val returning = host.entries.lastOrNull { !it.mounted && it.anchor === origin && it.placement == placement }
+        require(returning == null || returning.heightSizing == heightSizing) {
+            "Height sizing is fixed while a dialog presentation returns"
+        }
+        returning ?: GlassDialogEntry(origin, locals, onDismiss, dark, placement, heightSizing, resolvedContent)
     }
+    require(entry.heightSizing == heightSizing) { "Height sizing is fixed for a dialog presentation" }
     SideEffect {
         if (trigger == null) origin.ink = ink
         if (origin.source == null) origin.source = source
