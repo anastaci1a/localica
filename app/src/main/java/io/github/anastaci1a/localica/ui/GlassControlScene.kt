@@ -23,7 +23,7 @@ internal fun GlassControlScene(modifier: Modifier, horizontalPadding: Dp = 20.dp
     active: () -> Float = { 1f }, face: () -> Color = { Color.Transparent },
     prepare: () -> Boolean = { false },
     scene: DrawScope.() -> Unit) {
-    if (requestedGlassNone()) {
+    if ((requestedGlassNone() && NoneSamplingDiagnostic.restingControls)) {
         // No recording, source subscription, lens, reduction or exclusive lease in None.
         Canvas(modifier) {
             scene()

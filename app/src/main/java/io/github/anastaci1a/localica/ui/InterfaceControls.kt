@@ -78,7 +78,7 @@ internal fun sliderValue(position: Float, range: ClosedFloatingPointRange<Float>
 @Composable
 internal fun InterfaceSlider(value: Float, onValueChange: (Float) -> Unit, modifier: Modifier = Modifier,
     valueRange: ClosedFloatingPointRange<Float> = 0f..1f, steps: Int = 0, enabled: Boolean = true, curve: Float = 1f) {
-    val restingOnly = requestedGlassNone()
+    val restingOnly = (requestedGlassNone() && NoneSamplingDiagnostic.restingControls)
     val enabledProgress by animateControlStateFloat(if (enabled) 1f else 0f, enabled, "Slider availability")
     val actualSteps = if (steps == 0 && valueRange.start == 0f && valueRange.endInclusive == 1f) 19 else steps
     val rtl = androidx.compose.ui.platform.LocalLayoutDirection.current == androidx.compose.ui.unit.LayoutDirection.Rtl
@@ -303,7 +303,7 @@ internal fun androidx.compose.ui.graphics.drawscope.DrawScope.drawSliderTrack(fr
 /** The containing preference row owns the toggle's semantics and full-width tap target. */
 @Composable
 internal fun InterfaceSwitch(checked: Boolean, onChange: ((Boolean) -> Unit)? = null) {
-    val restingOnly = requestedGlassNone()
+    val restingOnly = (requestedGlassNone() && NoneSamplingDiagnostic.restingControls)
     val speed = LocalMotionSpeed.current
     val reduced = LocalReducedMotion.current
     val position = remember { androidx.compose.animation.core.Animatable(if (checked) 1f else 0f) }

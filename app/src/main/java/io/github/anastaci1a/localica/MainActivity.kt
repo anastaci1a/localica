@@ -42,7 +42,19 @@ class MainActivity : ComponentActivity() {
     }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        io.github.anastaci1a.localica.ui.NoneSamplingDiagnostic.configure(intent)
         enableEdgeToEdge()
+        if (intent.getBooleanExtra("none-controls", false)) {
+            setContent {
+                val runtime = androidx.compose.runtime.remember {
+                    io.github.anastaci1a.localica.ui.GlassRendererRuntime(io.github.anastaci1a.localica.navigation.GlassRendererMode.None)
+                }
+                androidx.compose.runtime.CompositionLocalProvider(io.github.anastaci1a.localica.ui.LocalGlassRendererRuntime provides runtime) {
+                    LocalicaTheme { io.github.anastaci1a.localica.ui.NoneMaterialControls(intent.getBooleanExtra("none-dark", false)) }
+                }
+            }
+            return
+        }
         model = ViewModelProvider(this, object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T =

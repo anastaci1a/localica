@@ -26,6 +26,25 @@ class ArtworkReader(private val context: Context) {
     /** The full-resolution cover exactly as stored (embedded picture or playlist cover file); null when absent. */
     suspend fun originalBytes(uri: String): ByteArray? = withContext(Dispatchers.IO) {
         try {
+            if (io.github.anastaci1a.localica.ui.NoneSamplingDiagnostic.artwork) {
+            // Agent80 synthetic artwork fixture, identical across all visual arms.
+            val fixtureName = Uri.decode(uri)
+            if (fixtureName.contains("A35_Runner_")) {
+                val number = Regex("A35_Runner_(\\d+)").find(fixtureName)?.groupValues?.get(1)?.toIntOrNull() ?: 1
+                val bright = number % 2 == 1
+                val bitmap = Bitmap.createBitmap(256, 256, Bitmap.Config.ARGB_8888)
+                val pixels = IntArray(256 * 256) { i ->
+                    val x = i % 256; val y = i / 256
+                    if ((x / 32 + y / 32) % 2 == 0) {
+                        if (bright) 0xFFFF2D55.toInt() else 0xFF071D3F.toInt()
+                    } else { if (bright) 0xFFFFF2D8.toInt() else 0xFF266B88.toInt() }
+                }
+                bitmap.setPixels(pixels, 0, 256, 0, 0, 256, 256)
+                val bytes = java.io.ByteArrayOutputStream().also { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }.toByteArray()
+                bitmap.recycle()
+                return@withContext bytes
+            }
+            }
             val parsed = Uri.parse(uri)
             if (parsed.scheme == "file") {
                 val file = java.io.File(parsed.path.orEmpty())
