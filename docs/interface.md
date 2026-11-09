@@ -596,7 +596,7 @@ Keep the parent’s mode tabs and actions fixed when they fit. Playback semantic
 
 Default full-background cover: scale uniformly to screen width without side cropping, retain its vertical center, keep roughly the upper two thirds clear. Feather the lower third into broad curved color regions preserving left/right cover colors, extending above/below with gentle control shading. Avoid a straight fade to one average color.
 
-A solid frame or border sets the continuation's tone beyond that edge: the frame's color right outside the artwork, easing toward interior colors further out, never a thin seam. Frames of 4% or more lead fully; thinner borders tint in proportion. Borderless covers keep their continuation unchanged. Frames are detected when it is prepared, never per frame.
+A solid frame or border sets the continuation's tone beyond that edge: the frame's color right outside the artwork, easing toward interior colors further out, never a thin seam. Borderless covers keep their continuation unchanged. Frames are detected when it is prepared, never per frame.
 
 Alternative: floating cover over an artwork-colored matte/acrylic gradient with subtle non-tiled texture.
 
