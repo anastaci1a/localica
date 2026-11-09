@@ -35,6 +35,7 @@ import io.github.anastaci1a.localica.navigation.GlassRendererMode
 import io.github.anastaci1a.localica.ui.*
 import io.github.anastaci1a.localica.ui.engine.*
 import org.junit.Assert.assertSame
+import org.junit.Assert.assertTrue
 
 internal fun shadowScreenBodies(bodies: List<Pair<RoundRect, Float>>, offset: androidx.compose.ui.geometry.Offset) = bodies.map { (r, alpha) ->
     RoundRect(r.left + offset.x, r.top + offset.y, r.right + offset.x, r.bottom + offset.y,
@@ -57,16 +58,23 @@ private fun nativeShadowUnionReference(rule: ComposeContentTestRule, width: Int,
     }
     val outside = Bitmap.createBitmap(pixels, width, height, Bitmap.Config.ARGB_8888)
     return nativeShadowFieldReference(width, height, state.bodies, rule.density.density,
-        state.strength, state.spread, state.background.toArgb(), outside)
+        state.strength, state.spread, state.background.toArgb(), outside, state.scaleX, state.scaleY)
 }
 
 /** Immutable receipt inputs only: normalized field, destination filtering, independently proven cutout. */
-private fun shadowUnionReference(rule: ComposeContentTestRule, width: Int, height: Int,
+internal fun shadowUnionReference(rule: ComposeContentTestRule, width: Int, height: Int,
     state: ShadowDrawState): ImageBitmap {
-    check(state.scaleX == 1f && state.scaleY == 1f && state.bodies.isNotEmpty())
+    check(state.scaleX.isFinite() && state.scaleX > 0f && state.scaleY.isFinite() && state.scaleY > 0f && state.bodies.isNotEmpty())
+    check(state.scaleX == 1f && state.scaleY == 1f || state.receiver == null && state.exclusion == null) {
+        "Incomplete: projected reference requires an independent receiver/exclusion model"
+    }
     if (Build.VERSION.SDK_INT >= 29) return nativeShadowUnionReference(rule, width, height, state)
     val origin = Offset(state.bodies.minOf { it.first.left }, state.bodies.minOf { it.first.top })
-    val local = shadowScreenBodies(state.bodies, -origin)
+    val local = shadowScreenBodies(state.bodies, -origin).map { (r, alpha) ->
+        fun corner(c: CornerRadius) = CornerRadius(c.x / state.scaleX, c.y / state.scaleY)
+        RoundRect(r.left / state.scaleX, r.top / state.scaleY, r.right / state.scaleX, r.bottom / state.scaleY,
+            corner(r.topLeftCornerRadius), corner(r.topRightCornerRadius), corner(r.bottomRightCornerRadius), corner(r.bottomLeftCornerRadius)) to alpha
+    }
     val density = rule.density.density
     val padding = (4f + state.spread * 28f) * density + 2f * density + 2f
     val inset = Offset(kotlin.math.floor(-padding), kotlin.math.floor(-padding))
@@ -84,8 +92,10 @@ private fun shadowUnionReference(rule: ComposeContentTestRule, width: Int, heigh
     val extent = Size(width.toFloat(), height.toFloat())
     val filtered = ImageBitmap(width, height)
     CanvasDrawScope().draw(rule.density, LayoutDirection.Ltr, Canvas(filtered), extent) {
-        translate(origin.x + inset.x, origin.y + inset.y) {
-            drawImage(field, dstSize = IntSize(field.width, field.height), filterQuality = FilterQuality.Low)
+        translate(origin.x + inset.x * state.scaleX, origin.y + inset.y * state.scaleY) {
+            scale(state.scaleX, state.scaleY, pivot = Offset.Zero) {
+                drawImage(field, dstSize = IntSize(field.width, field.height), filterQuality = FilterQuality.Low)
+            }
         }
     }
     // White is the interior left by the bare cutout control; black is full outside coverage.
@@ -152,7 +162,9 @@ internal fun verifyShadowUnion(rule: ComposeContentTestRule, actual: PresentedCa
 }
 
 /** Existing controls and their existing root fixture; no alternate shadow presenter or motion owner. */
-internal fun verifyNativeShadowCallers(rule: ComposeContentTestRule, mode: GlassRendererMode) {
+internal fun verifyNativeShadowCallers(rule: ComposeContentTestRule, mode: GlassRendererMode,
+    projectedReference: Boolean = false) {
+    var projectedSamples = 0
     var kind by mutableStateOf("button")
     var available by mutableStateOf(true)
     lateinit var clock: UiClock
@@ -192,7 +204,7 @@ internal fun verifyNativeShadowCallers(rule: ComposeContentTestRule, mode: Glass
                 val opacity = if (enabled) 1f else if (caller == "settings") .45f else .38f
                 val actual = capture.capture { scene -> ShadowDrawState(clock.stampNow.sequence, 0,
                     shadowScreenBodies(listOf(RoundRect(body, CornerRadius(radius)) to opacity), scene.topLeft)) }
-                assertShadowField(rule, actual, "$mode-$caller-$sample-$enabled")
+                assertShadowField(rule, actual, "$mode-$caller-$sample-$enabled", projectedReference)
             }
             if (caller == "button") {
                 val node = rule.runOnIdle { checkNotNull(anchor.surfaceNode) }
@@ -213,27 +225,39 @@ internal fun verifyNativeShadowCallers(rule: ComposeContentTestRule, mode: Glass
                                     shadowScreenBodies(listOf(RoundRect(body, CornerRadius(radius)) to 1f), scene.topLeft),
                                     scaleX = strain.scaleX(anchor.contact.vertical), scaleY = strain.scaleY(anchor.contact.vertical))
                             }
-                            assertShadowField(rule, actual, "$mode-press-$pressed-$frame")
+                            if (actual.nativeWindows.single().state.let { it.scaleX != 1f || it.scaleY != 1f }) projectedSamples++
+                            assertShadowField(rule, actual, "$mode-press-$pressed-$frame", projectedReference)
                         }
                     }
                 } finally { rule.mainClock.autoAdvance = true }
             }
         }
     }
+    if (projectedReference && mode == GlassRendererMode.Normal)
+        assertTrue("The actual native control must exercise non-unit press/rebound transforms", projectedSamples > 0)
 }
 
-private fun assertShadowField(rule: ComposeContentTestRule, actual: PresentedCapture, label: String) {
-    val expected = ImageBitmap(actual.image.width, actual.image.height)
+private fun assertShadowField(rule: ComposeContentTestRule, actual: PresentedCapture, label: String,
+    projectedReference: Boolean = false) {
     val background = ImageBitmap(actual.image.width, actual.image.height)
-    val extent = Size(expected.width.toFloat(), expected.height.toFloat())
+    val extent = Size(actual.image.width.toFloat(), actual.image.height.toFloat())
     val scene = checkNotNull(actual.sceneBounds)
     val receipt = actual.nativeWindows.single().state
     val (caster, opacity) = receipt.bodies.single()
     val screenBody = Rect(caster.left, caster.top, caster.right, caster.bottom)
     val sx = receipt.scaleX; val sy = receipt.scaleY
+    val expected = if (projectedReference && opacity == 1f) {
+        val half = Offset(screenBody.width * sx / 2f, screenBody.height * sy / 2f)
+        fun corner(c: CornerRadius) = CornerRadius(c.x * sx, c.y * sy)
+        val body = Rect(screenBody.center - half, screenBody.center + half)
+        val physical = RoundRect(body.left, body.top, body.right, body.bottom,
+            corner(caster.topLeftCornerRadius), corner(caster.topRightCornerRadius),
+            corner(caster.bottomRightCornerRadius), corner(caster.bottomLeftCornerRadius))
+        shadowUnionReference(rule, actual.image.width, actual.image.height, receipt.copy(bodies = listOf(physical to 1f)))
+    } else ImageBitmap(actual.image.width, actual.image.height)
     CanvasDrawScope().draw(rule.density, LayoutDirection.Ltr, Canvas(background), extent) { drawRect(Color.White) }
     // Independent same-geometry field, with the existing moving-reference compositing allowance.
-    CanvasDrawScope().draw(rule.density, LayoutDirection.Ltr, Canvas(expected), extent) {
+    if (!projectedReference || opacity != 1f) CanvasDrawScope().draw(rule.density, LayoutDirection.Ltr, Canvas(expected), extent) {
         drawRect(Color.White)
         drawContext.canvas.saveLayer(Rect(0f, 0f, size.width, size.height), Paint().apply { alpha = opacity })
         scale(sx, sy, screenBody.center) {

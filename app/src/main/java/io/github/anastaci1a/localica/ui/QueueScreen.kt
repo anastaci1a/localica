@@ -22,6 +22,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
+import io.github.anastaci1a.localica.ui.components.MorphPersistentTitle
+import io.github.anastaci1a.localica.ui.components.rememberPopupSharedContent
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.queue.*
 import io.github.anastaci1a.localica.library.SongListView
@@ -48,14 +50,19 @@ fun QueueScreen(state: QueueUiState, controller: QueueController?, library: Libr
     val active = state.library.queues.firstOrNull { it.id == state.browsedId } ?: state.library.active
     val queueNumber = state.library.queues.indexOfFirst { it.id == active?.id } + 1
     val selectorLabel = active?.let { "$queueNumber. ${it.name}" } ?: "Queues"
-    @Composable fun SelectorFace() {
+    val nameMorph = rememberPopupSharedContent(selectorAnchor) {
+        MorphPersistentTitle(selectorLabel, MaterialTheme.typography.titleMedium, MaterialTheme.typography.bodyLarge) {
+            MarqueeTitle(selectorLabel, reducedMotion, style = MaterialTheme.typography.bodyLarge)
+        }
+    }
+    @Composable fun SelectorFace(copy: Boolean = false) {
         Row(Modifier.fillMaxSize().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(selectorLabel, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium,
-                maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (copy) nameMorph.CompactCopy(Modifier.weight(1f))
+            else nameMorph.Compact(Modifier.weight(1f))
             Icon(appIconPainter(AppIcon.ActionChevronDown), "Select queue", Modifier.size(24.dp))
         }
     }
-    SideEffect { selectorAnchor.face = { SelectorFace() } }
+    SideEffect { selectorAnchor.face = { SelectorFace(copy = true) } }
     val position = remember(active?.entries, active?.currentEntryId) {
         active?.let { "${it.entries.indexOfFirst { entry -> entry.id == it.currentEntryId } + 1} / ${it.entries.size}" }
     }
@@ -128,7 +135,8 @@ fun QueueScreen(state: QueueUiState, controller: QueueController?, library: Libr
     if (saving && active != null) CompositionLocalProvider(LocalGlassOrigin provides saveAnchor) {
         AddToPlaylistDialog(active.entries.map { it.track }, playlists, playlistController, { saving = false }, { saving = false })
     }
-    GlassMorphPopup(selector, selectorAnchor, { selector = false }, GlassPlacement.Center) {
+    GlassMorphPopup(selector, selectorAnchor, { selector = false }, GlassPlacement.Center, sharedContent = nameMorph) {
+        CompositionLocalProvider(LocalQueueSelectorSharedName provides nameMorph) {
         BoxWithConstraints(Modifier.fillMaxWidth().heightIn(max = 560.dp)) {
             val showHeading = maxHeight >= 240.dp
             Column(Modifier.padding(vertical = 12.dp)) {
@@ -151,6 +159,7 @@ fun QueueScreen(state: QueueUiState, controller: QueueController?, library: Libr
                 })
             }
         }
+    }
     }
     state.library.queues.firstOrNull { it.id == renameId }?.let { queue ->
         var name by remember(queue.id) { mutableStateOf(queue.name) }

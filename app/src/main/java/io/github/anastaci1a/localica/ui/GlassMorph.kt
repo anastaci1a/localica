@@ -1,5 +1,7 @@
 package io.github.anastaci1a.localica.ui
 
+import io.github.anastaci1a.localica.ui.components.PopupSharedContent
+
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -270,6 +272,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
     placement: GlassPlacement = GlassPlacement.Menu, darkOverride: Boolean? = null,
     fitContent: Boolean = placement == GlassPlacement.Menu,
     originPreparation: GlassOriginPreparation? = null, searchDismissOnImeBack: Boolean = false,
+    sharedContent: PopupSharedContent? = null,
     content: @Composable () -> Unit) {
     val popupHome = LocalGlassPopupHome.current
     val popupFlight = remember { GlassPopupFlight() }
@@ -293,7 +296,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
     val speed = LocalMotionSpeed.current
     val progress = anchor.contact.expansion
     val continuousOrigin = originPreparation.takeUnless { placement == GlassPlacement.Search }
-    val motion = rememberPopupWindowMotion(anchor, continuousOrigin != null, anchor.quiet)
+    val motion = sharedContent?.motion ?: rememberPopupWindowMotion(anchor, continuousOrigin != null, anchor.quiet)
     DisposableEffect(motion, continuousOrigin) {
         progress.bind(motion.expansion, motion.popupCurve)
         continuousOrigin?.bind(motion.expansion.phase, motion.preparationCurve)
@@ -370,6 +373,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
         // remount the retained entry. Stop the old return at that admission point,
         // otherwise its restored-draw acknowledgment can dispose this same window.
         if (continuousOrigin == null && !anchor.hidden && anchor.modalPresent && modalWindow != null && modalWindow === readyWindow) {
+            sharedContent?.admitNative()
             transitionJob[0]?.cancel()
             transitionJob[0] = null
             present = true
@@ -434,6 +438,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                     readyWindow = window
                     originAdmitted = true
                     anchor.modalPresent = true; anchor.contact.modal = true
+                    sharedContent?.admitNative()
                     anchor.hidden = true; anchor.shadowInModal = true
                     // A closing gate can finish after visibility reversed; its
                     // input release must not outlive the new native admission.
@@ -441,23 +446,29 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                         window.glassInput(true); gestures.activate()
                     }
                 } else if (motion.expansion.nativeOpening == false) {
+                    fun closingGateCurrent() = motion.expansion.nativeGeneration == generation && motion.expansion.nativeOpening == false
                     modalWindow?.glassInput(false)
                     gestures.deactivate()
                     continuousOrigin?.beginOriginProof(generation)
                     anchor.restoredDrawn = false
                     val receipt = ++anchor.restoredDrawRequest
+                    sharedContent?.restoreInstance()
                     anchor.hidden = false
                     snapshotFlow { !anchor.triggerMounted || anchor.restoredPresentedReceipt == receipt }.first { it }
                     continuousOrigin?.awaitDrawn { anchor.triggerMounted }
                     val node=leasedNode
                     if (node!=null) while (anchor.triggerMounted) {
+                        if (!closingGateCurrent()) return@LaunchedEffect
                         val home=node.returnPlane() ?: break
                         node.transferWindow(home)
                         home.view?.invalidate()
                         snapshotFlow { !anchor.triggerMounted || node.ownsWindow(home) || node.returnPlane()!==home }.first { it }
-                        if (node.ownsWindow(home)) break
+                        if (!closingGateCurrent()) return@LaunchedEffect
+                        if (node.ownsWindow(home) && node.awaitWindowField(home)) break
                     }
+                    if (!closingGateCurrent()) return@LaunchedEffect
                     originAdmitted = false
+                    sharedContent?.releaseNative()
                     anchor.modalPresent = false; anchor.contact.modal = false
                     anchor.shadowInModal = false
                 }
@@ -466,6 +477,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                 if (!visible) {
                     if (placement == GlassPlacement.Search) anchor.searchSlot.settle(searchSlotToken, 0f)
                     nativeLease[0]?.invoke(); nativeLease[0]=null; leasedNode=null
+                    sharedContent?.restoreInstance(); sharedContent?.releaseNative()
                     present = false; originAdmitted = false
                     anchor.hidden = false; anchor.modalPresent = false
                     anchor.shadowInModal = false; anchor.contact.modal = false
@@ -537,6 +549,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                     // A replacement window cannot borrow the old window's admission.
                     // Its old frozen surface is gone; restore the trigger and close.
                     originAdmitted = false
+                    sharedContent?.restoreInstance(); sharedContent?.releaseNative()
                     anchor.hidden = false; anchor.shadowInModal = false
                     anchor.modalPresent = false; anchor.contact.modal = false
                     dismissNow()
@@ -551,7 +564,10 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
             onDispose {
                 if (measuredOriginWindow === window) measuredOriginWindow = null
                 if (readyWindow === window) readyWindow = null
-                if (nativePlane === windowPlane) { nativePlane=null; nativeNode=null }
+                if (nativePlane === windowPlane) {
+                    sharedContent?.destination(null)
+                    nativePlane=null; nativeNode=null
+                }
                 if (modalWindow === window) {
                     if (placement == GlassPlacement.Search) searchSlotToken = anchor.searchSlot.renew()
                     modalWindow = null
@@ -793,7 +809,10 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                             radius().toPx(),shape.scaleX(vertical),shape.scaleY(vertical),pose?.horizontalShift ?: 0f,
                             shadowReceiver[0],shadowExclusion[0]) {
                             translate(left = pose?.horizontalShift ?: 0f) {
-                                scale(shape.scaleX(vertical), shape.scaleY(vertical)) { this@drawWithContent.drawContent() }
+                                scale(shape.scaleX(vertical), shape.scaleY(vertical)) {
+                                    this@drawWithContent.drawContent()
+                                    wellCoordinates[0]?.let { sharedContent?.drawNative(this, it, view) }
+                                }
                             }
                         }
                     }
@@ -833,6 +852,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                             }
                         }
                         Box(Modifier.graphicsLayer { alpha = if (page) 1f else motion.foreground.at(phase()) }
+                            .onPlaced { sharedContent?.destination(it) }
                             .then(if (!visible || !foregroundReady) Modifier.clearAndSetSemantics { }.pointerInput(Unit) {
                                 awaitPointerEventScope { while (true) awaitPointerEvent(PointerEventPass.Initial).changes.forEach { it.consume() } }
                             } else Modifier)) {
@@ -890,6 +910,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                             availableWidth.toFloat(), availableHeight.toFloat(), widthLimit.toFloat(), foreground.height.toFloat(),
                             margin, imeHeight, imeTarget, safeBottom, opening = openingSearchTarget)
                             else Rect(windowOrigin + Offset(x, y), Size(targetWidth, foreground.height.toFloat()))
+                        sharedContent?.destinationOrigin(envelope.topLeft)
                         val home = if (detached) Rect(envelope.topLeft + Offset(if (page) with(density) { 28.dp.toPx() } else 0f,
                             if (page) 0f else margin * 2), envelope.size) else start().translate(windowOrigin)
                         if (!holdImeBack && (placement != GlassPlacement.Search || childPanels.intValue == 0 &&

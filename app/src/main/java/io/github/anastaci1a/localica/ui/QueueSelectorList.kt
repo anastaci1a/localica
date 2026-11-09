@@ -23,6 +23,9 @@ import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.layout.onPlaced
 import io.github.anastaci1a.localica.R
 import io.github.anastaci1a.localica.queue.ListeningQueue
+import io.github.anastaci1a.localica.ui.components.PopupSharedContent
+
+internal val LocalQueueSelectorSharedName = staticCompositionLocalOf<PopupSharedContent?> { null }
 
 /** Same in-host witness as the playlist adapter; no screenshot or redraw request. */
 internal data class QueueSelectionDrawSource(val scene: SelectionScene, val state: LazyGridState,
@@ -49,12 +52,13 @@ internal fun QueueSelectorList(queues: List<ListeningQueue>, browsedId: String?,
     onOffset: (String, Int) -> Unit, onMove: (String, String?, (Boolean) -> Unit) -> Unit) {
     val panelReady = LocalGlassPanelReady.current
     val playingIndex = queues.indexOfFirst { it.id == playingId }.coerceAtLeast(0)
-    val grid = rememberLazyGridState(initialFirstVisibleItemIndex = playingIndex)
+    val initialIndex = queues.indexOfFirst { it.id == browsedId }.takeIf { it >= 0 } ?: playingIndex
+    val grid = rememberLazyGridState(initialFirstVisibleItemIndex = initialIndex)
     val probe = remember { QueueSelectionProbe() }
     val observer = LocalQueueSelectionDrawObserver.current
     val observe by rememberUpdatedState(observer)
     val selectionView = androidx.compose.ui.platform.LocalView.current
-    LaunchedEffect(enabled) { if (enabled) grid.requestScrollToItem(playingIndex) }
+    LaunchedEffect(enabled) { if (enabled) grid.requestScrollToItem(initialIndex) }
     val scope = rememberCoroutineScope()
     val presentation by rememberUpdatedState(QueueDragPresentation(browsedId, playingId, isPlaying,
         queues.mapIndexed { index, queue -> queue.id to index + 1 }.toMap()))
@@ -125,6 +129,7 @@ internal fun QueueSelectorList(queues: List<ListeningQueue>, browsedId: String?,
                                 queue.id == playingId, isPlaying, reducedMotion, interactive,
                                 actionsModifier = Modifier.onGloballyPositioned { actions[queue.id] = it },
                                 selectionPlacement = if (observer == null) Modifier else Modifier.onPlaced { probe.rows[queue.id] = it },
+                                sharedNameLive = drag?.keys?.contains(queue.id) != true,
                                 onSelect = { onSelect(queue.id) }, onRename = { onRename(queue.id) }, onDelete = { onDelete(queue.id) },
                                 onOffset = { onOffset(queue.id, it) })
                         }
@@ -144,8 +149,9 @@ internal fun QueueSelectorList(queues: List<ListeningQueue>, browsedId: String?,
 @Composable
 private fun QueueSelectorRow(queue: ListeningQueue, number: Int, chosen: Boolean, playing: Boolean,
     isPlaying: Boolean, reducedMotion: Boolean, enabled: Boolean, actionsModifier: Modifier = Modifier,
-    selectionPlacement: Modifier = Modifier,
+    selectionPlacement: Modifier = Modifier, sharedNameLive: Boolean = true,
     onSelect: () -> Unit, onRename: () -> Unit, onDelete: () -> Unit, onOffset: (Int) -> Unit) {
+    val sharedName = LocalQueueSelectorSharedName.current
     Surface(shape = Corners.card, color = androidx.compose.ui.graphics.Color.Transparent,
         modifier = Modifier.padding(vertical = 2.dp).selectionLens(chosen, false, itemKey = queue.id,
             outline = rememberPaddedItemOutline(null, 0.dp, null, 0.dp, 0.dp))
@@ -155,7 +161,11 @@ private fun QueueSelectorRow(queue: ListeningQueue, number: Int, chosen: Boolean
             Row(Modifier.weight(1f).testTag("queue-select-${queue.id}").selectable(chosen, enabled = enabled, role = Role.RadioButton, onClick = onSelect)
                 .heightIn(min = 56.dp), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f).padding(start = 4.dp)) {
-                    if (chosen) MarqueeTitle("$number. ${queue.name}", reducedMotion, style = MaterialTheme.typography.bodyLarge)
+                    if (chosen && sharedName != null) {
+                        if (sharedNameLive) sharedName.Expanded(Modifier.fillMaxWidth())
+                        else sharedName.ExpandedCopy(Modifier.fillMaxWidth())
+                    }
+                    else if (chosen) MarqueeTitle("$number. ${queue.name}", reducedMotion, style = MaterialTheme.typography.bodyLarge)
                     else Text("$number. ${queue.name}", maxLines = 1, overflow = TextOverflow.Ellipsis)
                     if (playing) Text(if (isPlaying) "Playing" else "Playback queue", style = MaterialTheme.typography.labelSmall)
                 }

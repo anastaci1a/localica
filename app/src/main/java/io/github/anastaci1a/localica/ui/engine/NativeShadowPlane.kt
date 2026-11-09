@@ -9,6 +9,7 @@ import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalView
+import kotlinx.coroutines.flow.first
 
 /** The canonical field is projected into physical host coordinates. Shared source
  * fields deform the body and keep ring widths in device pixels; private fields
@@ -75,6 +76,13 @@ internal fun SurfaceView.followWindow(motion: PopupWindowMotion)=(this as Surfac
 internal fun SurfaceView.transferWindow(plane: ShadowPlane)=(this as SurfaceNode).transfer(plane,motionProfileId(io.github.anastaci1a.localica.ui.spec.MotionProfile.Control))
 internal fun SurfaceView.ownsWindow(plane: ShadowPlane)=(this as SurfaceNode).owns(plane)
 internal fun SurfaceView.returnPlane()=(this as SurfaceNode).sourcePlane
+/** The destination must submit its owned field after transfer, before the native host is released. */
+internal suspend fun SurfaceView.awaitWindowField(plane: ShadowPlane): Boolean {
+    val node=this as SurfaceNode
+    val request=node.requestOwnedField(plane)
+    snapshotFlow { !node.currentFieldRequest(request) || request.submitted }.first { it }
+    return node.currentFieldRequest(request) && request.submitted
+}
 
 internal fun popupContentScale(width: Int,height: Int,contentWidth: Int,contentHeight: Int,fixed: Boolean)=
     if(fixed) 1f else minOf(width.toFloat()/contentWidth.coerceAtLeast(1),height.toFloat()/contentHeight.coerceAtLeast(1)).coerceAtMost(1f)
