@@ -218,4 +218,56 @@ class ArtistPhotoRepositoryTest {
         val server = Server()
         assertNull(repo(server).observe(request).last().photo); assertTrue(server.calls.isEmpty())
     }
+
+    @Test fun failedExplicitReplacementKeepsThePreviouslyReadyPhoto() = runBlocking {
+        val server = Server()
+        val photos = repo(server)
+        val previous = requireNotNull(photos.observe(request).last().photo)
+        val previousBytes = previous.file.readBytes()
+        server.offline = true
+        photos.pick(request.artistKey, ArtistPhotoChoice(ArtistPhotoProvider.DEEZER, "8"))
+        val after = photos.observe(request).last().photo
+        assertNotNull("A failed deliberate pick must keep the previous ready photo", after)
+        assertTrue("Do not delete the previous image before its replacement commits", previous.file.isFile)
+        assertArrayEquals(previousBytes, requireNotNull(after).file.readBytes())
+    }
+
+    @Test fun interruptedImageReadDoesNotConsumeTheNextDayOfRetries() = runBlocking {
+        val server = Server()
+        val imageStarted = CompletableDeferred<Unit>()
+        val transport = PhotoTransport { url, max ->
+            if (url.contains("cdn-images")) {
+                imageStarted.complete(Unit)
+                awaitCancellation()
+            } else server.get(url, max)
+        }
+        val interrupted = ArtistPhotos(Consent(true), disk(), transport, now = { 100_000L })
+        interrupted.pick(request.artistKey, ArtistPhotoChoice(ArtistPhotoProvider.DEEZER, "8"))
+        val collection = launch { interrupted.observe(request).toList() }
+        withTimeout(2000) { imageStarted.await() }
+        collection.cancelAndJoin()
+        val restored = repo(Server(), now = { 100_001L })
+        assertNotNull("Cancellation before image completion must not suppress resume for24hours",
+            restored.observe(request).last().photo)
+    }
+
+    @Test fun chooserLookupDoesNotQueueBehindAnUnrelatedArtistImageRead() = runBlocking {
+        val server = Server()
+        val imageStarted = CompletableDeferred<Unit>()
+        val transport = PhotoTransport { url, max ->
+            if (url.contains("cdn-images")) {
+                imageStarted.complete(Unit)
+                awaitCancellation()
+            } else server.get(url, max)
+        }
+        val photos = ArtistPhotos(Consent(true), disk(), transport)
+        val collection = launch { photos.observe(request).toList() }
+        try {
+            withTimeout(2000) { imageStarted.await() }
+            val other = request.copy(artistKey = "artist:unrelated")
+            val candidates = withTimeout(1000) { photos.candidates(other) }
+            assertTrue("Independent chooser metadata must arrive while the other download remains held", candidates.isNotEmpty())
+            assertTrue(collection.isActive)
+        } finally { collection.cancelAndJoin() }
+    }
 }
