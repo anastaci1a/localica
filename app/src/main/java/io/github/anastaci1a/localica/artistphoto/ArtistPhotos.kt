@@ -16,7 +16,7 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 
-/** Lazy data API for #661. Collection emits album art before disk/network work; all work runs on IO. */
+/** Disk and network work runs on IO; already resolved photos are also available synchronously. */
 class ArtistPhotos internal constructor(private val consent: NetworkConsent, private val disk: ArtistPhotoDisk,
     private val http: PhotoTransport, private val now: () -> Long = System::currentTimeMillis,
     private val prepare: (ByteArray) -> PreparedArtistPhoto = { PreparedArtistPhoto(it) }) {
@@ -29,17 +29,41 @@ class ArtistPhotos internal constructor(private val consent: NetworkConsent, pri
     private val candidateCache = ConcurrentHashMap<ArtistPhotoRequest, Pair<Long, ArtistPhotoCandidates>>()
     private val remoteCandidates = ConcurrentHashMap<ArtistPhotoChoice, RemoteArtist>()
     private val previewFetches = ConcurrentHashMap<ArtistPhotoChoice, Mutex>()
+    private val readyPhotos = ConcurrentHashMap<String, ArtistPhotoState>()
+    private val mutableIndexReady = MutableStateFlow(false)
+    val indexReady = mutableIndexReady.asStateFlow()
     private data class Snapshot(val saved: SavedPhotoChoice, val cached: CachedArtistPhoto?, val time: Long)
 
     private val mutableChanges = MutableStateFlow(0L)
     val changes = mutableChanges.asStateFlow()
+    /** Memory only. Callers must still enforce display consent. */
+    internal fun peekKey(cacheKey: String): ArtistPhotoState? = readyPhotos[cacheKey]
+        ?: if (indexReady.value) ArtistPhotoState(null) else null
+    /** Load metadata, never pixels, before publishing startup readiness. */
+    suspend fun loadIndex() = withContext(Dispatchers.IO) { lock.withLock {
+        if (!mutableIndexReady.value) {
+            readyPhotos.clear()
+            disk.photoIndex().forEach { (key, photo) -> readyPhotos[key] = ArtistPhotoState(null, photo) }
+            disk.takeChangedKeys()
+            mutableIndexReady.value = true
+            mutableChanges.update { it + 1 }
+        }
+    } }
+    private fun rememberReady(artistKey: String, photo: CachedArtistPhoto?): CachedArtistPhoto? {
+        readyPhotos[artistPhotoCacheKey(artistKey)] = ArtistPhotoState(null, photo)
+        return photo
+    }
+    private fun readReady(artistKey: String): CachedArtistPhoto? = rememberReady(artistKey,
+        if (disk.choice(artistKey).mode == "cleared") null else disk.cached(artistKey, now()))
+    private fun refreshReady() {
+        for (key in disk.takeChangedKeys()) readyPhotos[key] = ArtistPhotoState(null, disk.indexedPhoto(key))
+    }
     suspend fun selection(artistKey: String): ArtistPhotoSelection = withContext(Dispatchers.IO) { lock.withLock {
         val saved = disk.choice(artistKey)
         ArtistPhotoSelection(saved.choice, saved.pendingChoice, saved.pendingChoice != null && saved.attemptedAt != null)
     } }
     suspend fun ready(request: ArtistPhotoRequest): ArtistPhotoState = withContext(Dispatchers.IO) { lock.withLock {
-        ArtistPhotoState(request.latestAlbumArt, if (disk.choice(request.artistKey).mode == "cleared") null
-            else disk.cached(request.artistKey, now()))
+        ArtistPhotoState(request.latestAlbumArt, readReady(request.artistKey))
     } }
     suspend fun needsFetch(request: ArtistPhotoRequest): Boolean = withContext(Dispatchers.IO) { lock.withLock {
         val saved = disk.choice(request.artistKey)
@@ -53,13 +77,13 @@ class ArtistPhotos internal constructor(private val consent: NetworkConsent, pri
     suspend fun chosenBytes(): Long = withContext(Dispatchers.IO) { lock.withLock { disk.chosenBytes() } }
     suspend fun cacheBudget(): Long = withContext(Dispatchers.IO) { lock.withLock { disk.budget() } }
     suspend fun setCacheBudget(bytes: Long) = withContext(Dispatchers.IO) { lock.withLock {
-        disk.setBudget(bytes); mutableChanges.update { it + 1 }
+        disk.setBudget(bytes); refreshReady(); mutableChanges.update { it + 1 }
     } }
     fun retainDisplay(artistKey: String): AutoCloseable = disk.retainDisplay(artistKey)
     fun retainPreview(choice: ArtistPhotoChoice): AutoCloseable = disk.retainPreview(choice)
     suspend fun displayed(artistKey: String) = withContext(Dispatchers.IO) { lock.withLock { disk.displayed(artistKey, now()) } }
     suspend fun clearCache() = withContext(Dispatchers.IO) { lock.withLock {
-        disk.clearCache(); mutableChanges.update { it + 1 }
+        disk.clearCache(); refreshReady(); mutableChanges.update { it + 1 }
     } }
     /** Refresh keeps manual matches and deliberate album-art-only choices. */
     suspend fun refreshAll(requests: List<ArtistPhotoRequest>) {
@@ -72,12 +96,13 @@ class ArtistPhotos internal constructor(private val consent: NetworkConsent, pri
     }
 
     fun observe(request: ArtistPhotoRequest, refresh: Boolean = false): Flow<ArtistPhotoState> = flow {
-        emit(ArtistPhotoState(request.latestAlbumArt))
+        emit(ArtistPhotoState(request.latestAlbumArt, peekKey(artistPhotoCacheKey(request.artistKey))?.photo))
         fetches.computeIfAbsent(request.artistKey) { Mutex() }.withLock fetch@{
             val snapshot = lock.withLock {
                 disk.trim()
+                refreshReady()
                 val time = now()
-                Snapshot(disk.choice(request.artistKey), disk.cached(request.artistKey, time), time)
+                Snapshot(disk.choice(request.artistKey), readReady(request.artistKey), time)
             }
             val (saved, cached, time) = snapshot
             if (saved.mode == "cleared") return@fetch
@@ -109,9 +134,11 @@ class ArtistPhotos internal constructor(private val consent: NetworkConsent, pri
                     return@withLock null
                 }
                 val (remote, bytes) = fetched
-                disk.savePhoto(request.artistKey, remote, encoded.full, time, encoded.thumbnail) {
+                val photo = disk.savePhoto(request.artistKey, remote, encoded.full, time, encoded.thumbnail) {
                     disk.saveChoice(request.artistKey, SavedPhotoChoice(saved.mode, remote.choice, time))
                 }
+                rememberReady(request.artistKey, photo)
+                refreshReady()
             } }
             if (superseded) return@fetch
             if (refreshed != null) emit(ArtistPhotoState(request.latestAlbumArt, refreshed))
@@ -199,7 +226,9 @@ class ArtistPhotos internal constructor(private val consent: NetworkConsent, pri
     } }
     /** Clear means album-art-only until reset or a deliberate re-pick, including after process death. */
     suspend fun clear(artistKey: String) = withContext(Dispatchers.IO) { lock.withLock {
-        disk.saveChoice(artistKey, SavedPhotoChoice("cleared")); disk.removePhoto(artistKey); mutableChanges.update { it + 1 }
+        disk.saveChoice(artistKey, SavedPhotoChoice("cleared")); disk.removePhoto(artistKey); rememberReady(artistKey, null); mutableChanges.update { it + 1 }
     } }
-    suspend fun reset(artistKey: String) = withContext(Dispatchers.IO) { lock.withLock { disk.reset(artistKey); mutableChanges.update { it + 1 } } }
+    suspend fun reset(artistKey: String) = withContext(Dispatchers.IO) { lock.withLock {
+        disk.reset(artistKey); rememberReady(artistKey, null); mutableChanges.update { it + 1 }
+    } }
 }
