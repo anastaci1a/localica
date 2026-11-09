@@ -113,7 +113,10 @@ internal fun InterfaceSlider(value: Float, onValueChange: (Float) -> Unit, modif
     val shown by animateFloatAsState(if (touchPreview.active) hoverShown else resting,
         if (touchPreview.active || reduced) androidx.compose.animation.core.snap() else spring(1f, 650f), label = "Slider position")
     val body = key(restingOnly) {
-        rememberGlassBody({ shown }, { pressure }, { if (contact && !hovered) 1f else 0f }, active = { !restingOnly })
+        if (restingOnly) remember { mutableStateOf(GlassShape()) } else {
+            val body = rememberGlassBody({ shown }, { pressure }, { if (contact && !hovered) 1f else 0f })
+            body
+        }
     }
     // Down-time state for one contact.
     val contactState = remember { floatArrayOf(0f) } // [grab offset]
@@ -249,17 +252,11 @@ internal fun InterfaceSlider(value: Float, onValueChange: (Float) -> Unit, modif
             }
         }.focusable(enabled)) {
     fun Density.thumbBounds(controlWidth: Float): Rect {
-        val fraction = if (rtl) 1f - shown else shown
-        if (restingOnly) {
-            val diameter = 28.dp.toPx()
-            val x = diameter / 2 + (controlWidth - diameter) * fraction
-            return Rect(x - diameter / 2, (48.dp.toPx() - diameter) / 2,
-                x + diameter / 2, (48.dp.toPx() + diameter) / 2)
-        }
-        val scale = 1f + (expansion - 1f) * active
+        val scale = if (restingOnly) 1f else 1f + (expansion - 1f) * active
         val baseWidth = 28.dp.toPx() * scale
         val width = baseWidth * body.value.scaleX()
         val height = 28.dp.toPx() * (1f + (scale - 1f) * 2f / 9f) * body.value.scaleY()
+        val fraction = if (rtl) 1f - shown else shown
         val x = 14.dp.toPx() + (controlWidth - 28.dp.toPx()) * fraction +
             glassWallTranslation(baseWidth, body.value.scaleX(), glassWallAffinity(fraction, 1f))
         return Rect(x - width / 2, (48.dp.toPx() - height) / 2,
@@ -340,7 +337,10 @@ internal fun InterfaceSwitch(checked: Boolean, onChange: ((Boolean) -> Unit)? = 
     // A replaced/unready source cannot become a track-only lens during exit.
     val availableActive by remember(ready) { derivedStateOf { if (ready) active else 0f } }
     val body = key(restingOnly) {
-        rememberGlassBody({ position.value }, { pressure }, { if (engaged) 1f else active }, active = { !restingOnly })
+        if (restingOnly) remember { mutableStateOf(GlassShape()) } else {
+            val body = rememberGlassBody({ position.value }, { pressure }, { if (engaged) 1f else active })
+            body
+        }
     }
     val expansion = LocalGlassAppearance.current.controlExpansion
     val change by rememberUpdatedState(onChange)
@@ -399,14 +399,8 @@ internal fun InterfaceSwitch(checked: Boolean, onChange: ((Boolean) -> Unit)? = 
     })) {
         GlassControlScene(Modifier.matchParentSize(), horizontalPadding = 24.dp, source = source, prepare = { engaged }, geometry = {
             val fraction = position.value.coerceIn(0f, 1f)
-            if (restingOnly) {
-                val diameter = 28.dp.toPx()
-                val x = (16.dp + 28.dp * (if (rtl) 1f - fraction else fraction)).toPx()
-                return@GlassControlScene LensGeometry(Rect(x - diameter / 2, center.y - diameter / 2,
-                    x + diameter / 2, center.y + diameter / 2), diameter / 2)
-            }
             val shape = body.value
-            val scale = 1f + (expansion - 1f) * availableActive
+            val scale = if (restingOnly) 1f else 1f + (expansion - 1f) * availableActive
             val width = 28.dp.toPx() * scale * shape.scaleX()
             val height = 28.dp.toPx() * scale * shape.scaleY()
             val wall = direction * glassWallAffinity(fraction, 1f)

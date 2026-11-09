@@ -1,7 +1,6 @@
 package io.github.anastaci1a.localica
 
 import android.os.Build
-import androidx.annotation.RequiresApi
 import androidx.test.filters.SdkSuppress
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.*
@@ -31,7 +30,6 @@ import org.junit.Test
 class NoneReductionWitnessTest {
     @get:Rule val compose = localicaComposeRule()
 
-    @RequiresApi(33)
     @Test fun rawAndStyledFullFootprintWitnessesCompareCurrentEightAndSixteenLive() {
         var fixture by mutableIntStateOf(0)
         var phase by mutableFloatStateOf(0f)
