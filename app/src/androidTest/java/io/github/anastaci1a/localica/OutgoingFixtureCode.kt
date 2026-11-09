@@ -4,7 +4,7 @@ import android.graphics.Bitmap
 import android.graphics.Color
 import org.json.JSONArray
 
-/** Fixture identity, independent of blue/neutral backing and flat material tint. */
+/** Four-band fixture identity; preserves chroma edges against tinted material backing. */
 internal object OutgoingFixtureCode {
     data class Frame(val pixels: Int, val peak: Int, val rows: Int, val bounds: JSONArray)
     private data class Run(val start: Int, val end: Int, val sign: Int, val mean: Float) {
@@ -15,7 +15,7 @@ internal object OutgoingFixtureCode {
         var left = bitmap.width; var top = bitmap.height; var right = 0; var bottom = 0
         for (y in 0 until bitmap.height step 2) {
             val runs = mutableListOf<Run>()
-            var start = 0; var sign = 0; var sum = 0; var samples = 0
+            var start = 0; var sign = 0; var sum = 0; var samples = 0; var previous = 0
             fun finish(end: Int) {
                 if (sign != 0 && end - start >= 8 && samples > 0)
                     runs += Run(start, end, sign, sum.toFloat() / samples)
@@ -24,8 +24,12 @@ internal object OutgoingFixtureCode {
                 val c = if (x < bitmap.width) bitmap.getPixel(x, y) else 0
                 val d = if (x < bitmap.width) Color.red(c) - Color.green(c) else 0
                 val next = if (d > 2) 1 else if (d < -2) -1 else 0
-                if (next != sign) { finish(x); start = x; sign = next; sum = 0; samples = 0 }
-                sum += d; samples++
+                // A green band and green-tinted glass can have the same sign.
+                // Their chroma edge still separates the fixture from its backing.
+                if (next != sign || kotlin.math.abs(d - previous) > minimumContrast) {
+                    finish(x); start = x; sign = next; sum = 0; samples = 0
+                }
+                sum += d; samples++; previous = d
             }
             for (i in 0..runs.size - 4) {
                 val code = runs.subList(i, i + 4)
