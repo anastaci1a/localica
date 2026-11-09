@@ -91,6 +91,26 @@ class TagSaveProgressPopupTest {
             useUnmergedTree = true).assertIsEnabled()
     }
 
+    @Test fun preparationCancelReturnsToTheSameDraftSessionAndScrollOwner() {
+        submit()
+        val session = controller.state.value.sessionId
+        val scroll = compose.onNodeWithTag("tag-editor-body", useUnmergedTree = true).fetchSemanticsNode()
+            .config[SemanticsProperties.VerticalScrollAxisRange].value()
+        compose.onNodeWithText("Cancel", substring = false).performClick()
+        runBlocking { withContext(Dispatchers.Main) { controller.runPending() } }
+        compose.awaitExpectedWindowFocus(compose.onNodeWithTag("tag-editor-sheet", useUnmergedTree = true))
+        compose.onNodeWithText("Saved 0 of 2").assertDoesNotExist()
+        compose.onNode(hasText("Draft name") and SemanticsMatcher.keyIsDefined(SemanticsProperties.EditableText),
+            useUnmergedTree = true).assertIsEnabled()
+        compose.runOnIdle {
+            assertEquals(session, controller.state.value.sessionId)
+            assertEquals(tracks, controller.state.value.tracks)
+            assertFalse(controller.state.value.busy)
+        }
+        assertEquals(scroll, compose.onNodeWithTag("tag-editor-body", useUnmergedTree = true).fetchSemanticsNode()
+            .config[SemanticsProperties.VerticalScrollAxisRange].value(), .5f)
+    }
+
     @After fun retire() {
         if (::controller.isInitialized) {
             // Release the accepted pending work through its ordinary path; every document is
