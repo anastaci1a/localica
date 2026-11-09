@@ -48,3 +48,29 @@ internal fun savePlayerEqualityEvidence(label: String, before: IntArray, after: 
         .put("changedBounds",JSONArray(listOf(left,top,right,bottom))).put("samples",samples)
     File(folder,"$name.json").writeText(metrics.toString(2))
 }
+
+/** First-apply glass values and source readiness, independently of pixel acceptance. */
+internal fun savePlayerGlassEvidence(label: String, observations: List<io.github.anastaci1a.localica.ui.GlassSurfaceDrawObservation>) {
+    fun source(s: io.github.anastaci1a.localica.ui.GlassSurfaceSourceDraw?): JSONObject? = s?.let {
+        JSONObject().put("identity",it.identity).put("parent",it.parentIdentity)
+            .put("recorded",it.recorded).put("released",it.released).put("materialOnly",it.materialOnly).put("dark",it.dark)
+            .put("size",JSONArray(listOf(it.width,it.height,it.layerWidth,it.layerHeight)))
+            .put("revision",it.revision).put("readbackRequest",it.requestedReadback).put("publishedReadback",it.publishedReadback)
+            .put("publishedDrawRequest",it.publishedDrawRequest).put("publishedComposite",it.publishedComposite)
+            .put("snapshotPresent",it.snapshotIdentity!=null).put("snapshotIdentity",it.snapshotIdentity)
+            .put("mapping",JSONArray(it.sourceToConsumer ?: emptyList<Float>()))
+            .put("corners",JSONArray(it.consumerCornersInSource ?: emptyList<Float>()))
+    }
+    val values=observations.map { o -> JSONObject().put("uptime",o.uptime).put("identity",o.surfaceIdentity)
+        .put("size",JSONArray(listOf(o.width,o.height))).put("rootCorners",JSONArray(o.rootCorners ?: emptyList<Float>()))
+        .put("ink",o.inkArgb).put("tint",o.tintArgb).put("lightMix",o.toneLightMix).put("coatingMix",o.coatingLightMix)
+        .put("toneTrim",o.toneTrim).put("toneWeight",o.toneWeight).put("panel",o.panel).put("frost",o.frost)
+        .put("blur",o.blur).put("whiteTint",o.whiteTint).put("depth",o.depth).put("depthScale",o.depthScale)
+        .put("refraction",o.refraction).put("source",source(o.source)).put("home",source(o.home)) }
+    val instrumentation=InstrumentationRegistry.getInstrumentation()
+    val root=InstrumentationRegistry.getArguments().getString("additionalTestOutputDir")?.let(::File)
+        ?: requireNotNull(instrumentation.targetContext.getExternalFilesDir(null))
+    val folder=File(root,"player-equality").apply { mkdirs() }
+    File(folder,label.replace(Regex("[^a-zA-Z0-9_.-]"),"-")+"-glass.json")
+        .writeText(JSONObject().put("label",label).put("observations",JSONArray(values)).toString(2))
+}

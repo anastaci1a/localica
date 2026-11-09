@@ -51,11 +51,14 @@ class PlayerThemeFrameEqualityTest {
         var epoch by mutableIntStateOf(0)
         lateinit var scope: CoroutineScope
         val work = mutableListOf<String>()
+        val glassDraws = mutableListOf<GlassSurfaceDrawObservation>()
+        val glassObserver: (GlassSurfaceDrawObservation)->Unit = { if(glassDraws.size<1024) glassDraws+=it }
         compose.mainClock.autoAdvance = false
         compose.setContent { LocalicaTheme {
             CompositionLocalProvider(LocalLayoutDirection provides direction, LocalGlassAppearance provides appearance,
                 LocalPlayerWorkObserver provides { kind, _ -> work += kind },
-                LocalLoadingShimmer provides shimmer, LocalLoadingMaterialColor provides material) {
+                LocalLoadingShimmer provides shimmer, LocalLoadingMaterialColor provides material,
+                LocalGlassSurfaceDrawObserver provides glassObserver) {
                 scope = rememberCoroutineScope()
                 BoxWithConstraints(Modifier.fillMaxSize().background(Color(0xFFE1E2E3)).testTag("frame-root")) {
                     key(reference, epoch) {
@@ -75,11 +78,12 @@ class PlayerThemeFrameEqualityTest {
         fun captureArm(old: Boolean): List<Frame> {
             compose.runOnIdle { scope.launch(start = CoroutineStart.UNDISPATCHED) { phase.stop(); phase.snapTo(1f) }; visual = PlayerVisual(loading = true); material = null; reference = old; epoch++ }
             return samples.map { p ->
-                compose.runOnIdle { scope.launch(start = CoroutineStart.UNDISPATCHED) { phase.stop(); phase.snapTo(p.p) }; visual = if (p.loaded) ready else PlayerVisual(loading = true); material = p.tint }
+                compose.runOnIdle { glassDraws.clear(); scope.launch(start = CoroutineStart.UNDISPATCHED) { phase.stop(); phase.snapTo(p.p) }; visual = if (p.loaded) ready else PlayerVisual(loading = true); material = p.tint }
                 compose.mainClock.advanceTimeByFrame(); compose.waitForIdle()
                 val tags = listOf("player-surface", "player-artwork", "player-title", "player-artist", "player-transport-row")
                 val bounds = tags.associateWith { compose.onAllNodesWithTag(it, true).fetchSemanticsNodes().map { node -> node.boundsInRoot } }
                 val pixels = compose.onNodeWithTag("frame-root").captureToImage().toPixelMap()
+                savePlayerGlassEvidence("cold-$layout-$direction-arm$old-$p",compose.runOnIdle { glassDraws.toList() })
                 Frame(IntArray(pixels.width * pixels.height) { i -> pixels[i % pixels.width, i / pixels.width].toArgb() }, pixels.width, pixels.height, bounds)
             }
         }
