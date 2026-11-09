@@ -56,7 +56,7 @@ internal fun CollectionBackdrop(visual: PlayerVisual, artTop: Float, modifier: M
             middle = lerp(palette.middle, Color.Black, .4f), bottom = lerp(palette.bottom, Color.Black, .4f),
             wash = palette.collectionWash ?: palette.wash), Modifier.fillMaxSize(), fullArtBlend = 1f,
             artHeight = with(density) { imageHeight.toPx() }, artTop = inset + artTop * parallax,
-            softness = 1f, artTopReader = ::pictureTop)
+            softness = 1f, artTopReader = { pictureTop() })
         Box(Modifier.matchParentSize().background(if (light) Color.White.copy(alpha = .58f) else Color.Black.copy(alpha = .16f)))
         visual.artwork?.let { image ->
             Image(image, null, Modifier.fillMaxWidth().height(imageHeight)
