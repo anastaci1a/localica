@@ -57,7 +57,7 @@ import java.io.File
 class NoneExactReductionTest {
     // E4 must qualify its shared reduction against the same ideal and legacy drift fixtures.
     private fun setContent(content: @Composable () -> Unit) {
-        compose.setContent { NoneReductionAtlasHost(GlassColorShader, content) }
+        compose.setContent { NoneReductionAtlasHost(GlassColorShader, content = content) }
     }
 
     @get:Rule val compose = localicaComposeRule()
