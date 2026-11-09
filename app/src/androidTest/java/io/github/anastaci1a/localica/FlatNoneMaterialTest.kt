@@ -27,6 +27,26 @@ import java.io.File
 class FlatNoneMaterialTest {
     @get:Rule val compose = localicaComposeRule()
 
+    @Test fun disablingTheWindowAtlasKeepsUnsavedContentMounted() {
+        val runtime = GlassRendererRuntime(GlassRendererMode.Normal)
+        var mounts = 0
+        compose.setContent { CompositionLocalProvider(LocalGlassRendererRuntime provides runtime) {
+            io.github.anastaci1a.localica.ui.components.NoneReductionAtlasHost(GlassColorShader) {
+                LocalicaTheme {
+                    remember { mounts++; Any() }
+                    var draft by remember { mutableStateOf("") }
+                    androidx.compose.material3.OutlinedTextField(draft, { draft = it }, Modifier.testTag("atlas-draft"))
+                }
+            }
+        } }
+        compose.onNodeWithTag("atlas-draft").performTextInput("Unsaved mode change")
+        for (mode in listOf(GlassRendererMode.FlatNone, GlassRendererMode.SingleToneBlur, GlassRendererMode.FlatNone, GlassRendererMode.Normal)) {
+            compose.runOnIdle { runtime.request(mode) }
+            compose.onNodeWithTag("atlas-draft").assertTextContains("Unsaved mode change")
+            compose.runOnIdle { assertEquals("Mode changes cannot recreate window content", 1, mounts) }
+        }
+    }
+
     @Test fun opaqueThemePixelsAndModeTransitionsDoNoGlassWork() {
         var dark by mutableStateOf(false)
         val runtime = GlassRendererRuntime(GlassRendererMode.FlatNone)

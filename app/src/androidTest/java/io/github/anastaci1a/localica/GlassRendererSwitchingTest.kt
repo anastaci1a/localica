@@ -72,7 +72,7 @@ class GlassRendererSwitchingTest {
         compose.onNodeWithTag("renderer-draft").performTextInput("First draft")
         val initial = compose.runOnIdle { requireNotNull(observed.get()) }
         val entry = compose.runOnIdle { host.entries.single() }
-        for (mode in listOf(GlassRendererMode.SingleToneBlur, GlassRendererMode.Normal, GlassRendererMode.SingleToneBlur)) {
+        for (mode in listOf(GlassRendererMode.SingleToneBlur, GlassRendererMode.FlatNone, GlassRendererMode.Normal, GlassRendererMode.FlatNone, GlassRendererMode.SingleToneBlur)) {
             compose.runOnIdle { runtime.request(mode) }
             compose.waitForIdle()
             compose.runOnIdle {
