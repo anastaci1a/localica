@@ -29,6 +29,8 @@ import io.github.anastaci1a.localica.ui.engine.UiClock
 import io.github.anastaci1a.localica.ui.engine.LocalUiClock
 import kotlin.math.ceil
 import androidx.compose.ui.layout.LayoutInfo
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.SemanticsProperties
@@ -70,6 +72,17 @@ class QueueSelectorGlyphContinuityTest {
         QueueSelectorCallerFixture(compose, glyph = true).verify(true)
 }
 
+/** Actual caller variants retain native pixels and identity through the existing endpoint. */
+class QueueSelectorNameVariantsTest {
+    @get:Rule val compose = localicaComposeRule()
+    @Test fun longTitleKeepsOneInstanceAndMarqueesAtExpandedRest() =
+        QueueSelectorCallerFixture(compose, longName = true).verify(false)
+    @Test fun reducedLongTitleKeepsOneInstanceAndStaysStillAtExpandedRest() =
+        QueueSelectorCallerFixture(compose, longName = true, reducedMotion = true).verify(false)
+    @Test fun rtlGlyphsSurviveCancelledOpenAndReversal() =
+        QueueSelectorCallerFixture(compose, glyph = true, rtl = true).verify(true)
+}
+
 /** Actual native return after the source is restored: the origin receiver is no longer active.
  * This scoped oracle does not claim support for the earlier native receiver/exclusion phase. */
 class QueueSelectorFieldReturnTest {
@@ -79,8 +92,10 @@ class QueueSelectorFieldReturnTest {
 }
 
 private class QueueSelectorCallerFixture(private val compose: androidx.compose.ui.test.junit4.ComposeContentTestRule,
-    private val browsedAwayFromPlayback: Boolean = false, private val glyph: Boolean = false) {
-    private val queueName = if (glyph) "|".repeat(24) else "Persistent queue"
+    private val browsedAwayFromPlayback: Boolean = false, private val glyph: Boolean = false,
+    private val longName: Boolean = false, private val reducedMotion: Boolean = false, private val rtl: Boolean = false) {
+    private val queueName = if (glyph) "|".repeat(24) else if (longName)
+        "Persistent queue with a long selected occurrence title for native marquee ".repeat(5) else "Persistent queue"
     private val label = "${if (browsedAwayFromPlayback) 80 else 1}. $queueName"
     private var window: Window? = null
     private lateinit var sourceView: View
@@ -90,7 +105,7 @@ private class QueueSelectorCallerFixture(private val compose: androidx.compose.u
 
     fun verify(interrupted: Boolean, field: Boolean = false) {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
-        val output = nativeEvidenceDirectory("queue-selector-${if (field) "field-return" else if (glyph) "glyph" else "persistence"}-${if (interrupted) "interrupted" else "complete"}${if (browsedAwayFromPlayback) "-browsed-away" else ""}",
+        val output = nativeEvidenceDirectory("queue-selector-${if (field) "field-return" else if (glyph) "glyph" else "persistence"}-${if (interrupted) "interrupted" else "complete"}${if (browsedAwayFromPlayback) "-browsed-away" else ""}${if (longName) "-long" else ""}${if (reducedMotion) "-reduced" else ""}${if (rtl) "-rtl" else ""}",
             instrumentation.targetContext.cacheDir)
         val queues = if (browsedAwayFromPlayback) List(80) { index ->
             ListeningQueue(id = "queue-$index", name = if (index == 79) queueName else "Queue ${index + 1}", entries = emptyList())
@@ -105,11 +120,13 @@ private class QueueSelectorCallerFixture(private val compose: androidx.compose.u
                 attach(view.rootView)
                 onDispose { detach(view.rootView) }
             }
-            CompositionLocalProvider(LocalGlassAppearance provides GlassAppearance(shadowStrength = .8f, shadowSpread = .6f),
+            CompositionLocalProvider(LocalReducedMotion provides reducedMotion,
+                LocalLayoutDirection provides if (rtl) LayoutDirection.Rtl else LayoutDirection.Ltr,
+                LocalGlassAppearance provides GlassAppearance(shadowStrength = .8f, shadowSpread = .6f),
                 LocalGlassMorphWorkObserver provides { kind, native, _ ->
                     if (kind == "dialog" && native != null) { window = native; attach(native.decorView) }
                 }) {
-                Box(Modifier.fillMaxSize().background(Color.White).testTag("queue-selector-caller")) { QueueScreen(state, null, onMinimize = {}) }
+                Box(Modifier.fillMaxSize().background(Color.White).testTag("queue-selector-caller")) { QueueScreen(state, null, reducedMotion = reducedMotion, onMinimize = {}) }
             }
         } }
         compose.waitForIdle()
@@ -164,7 +181,22 @@ private class QueueSelectorCallerFixture(private val compose: androidx.compose.u
                 if (!interrupted && anchor.contact.expansion.value >= .999f && anchor.hidden) break
             }
             assertTrue("Must exercise the actual admitted native caller\n$log", admitted)
-            if (glyph && !interrupted) repeat(4) { sample("expanded-rest") }
+            if ((glyph || longName) && !interrupted) repeat(4) { sample("expanded-rest") }
+            if (longName) {
+                val restingFrame = frame - 1
+                val region = currentBodyRect(anchor, window?.takeIf { it.decorView.isAttachedToWindow })
+                compose.mainClock.advanceTimeBy(2500)
+                sample("marquee-rest")
+                val before = requireNotNull(BitmapFactory.decodeFile(File(output,
+                    restingFrame.toString().padStart(3, '0') + "-expanded-rest.png").absolutePath))
+                val after = requireNotNull(BitmapFactory.decodeFile(File(output,
+                    (frame - 1).toString().padStart(3, '0') + "-marquee-rest.png").absolutePath))
+                val changed = try { changedDarkInk(before, after, region) }
+                    finally { before.recycle(); after.recycle() }
+                log.append("expanded-rest dark-ink-changes=$changed reduced=$reducedMotion\n")
+                if (reducedMotion) assertEquals("Reduced motion must leave the expanded long name still", 0, changed)
+                else assertTrue("The actual expanded long name must retain its stock marquee: $changed", changed > 20)
+            }
             close()
             if (interrupted) {
                 repeat(3) { sample("reverse-close") }
@@ -212,6 +244,19 @@ private class QueueSelectorCallerFixture(private val compose: androidx.compose.u
             compose.runOnUiThread { markers.keys.toList().forEach(::detach) }
             fieldInputs.forEach { it.capture.image.asAndroidBitmap().recycle() }
         }
+    }
+
+    private fun changedDarkInk(before: Bitmap, after: Bitmap, region: Rect): Int {
+        val inset = 8f * compose.density.density
+        val left = ceil(region.left + inset).toInt().coerceAtLeast(0)
+        val right = (region.right - inset).toInt().coerceAtMost(minOf(before.width, after.width))
+        val top = ceil(region.top + inset).toInt().coerceAtLeast(0)
+        val bottom = (region.bottom - inset).toInt().coerceAtMost(minOf(before.height, after.height))
+        fun dark(color: Int) = NativeColor.red(color) + NativeColor.green(color) + NativeColor.blue(color) < 96 * 3
+        var changed = 0
+        for (y in top until bottom) for (x in left until right)
+            if (dark(before.getPixel(x, y)) != dark(after.getPixel(x, y))) changed++
+        return changed
     }
 
     private data class GlyphInput(val frame: Int, val stage: String, val actual: File, val region: Rect)
