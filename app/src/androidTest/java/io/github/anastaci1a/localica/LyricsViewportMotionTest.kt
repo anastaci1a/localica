@@ -43,8 +43,11 @@ class LyricsViewportMotionTest {
         for (reduce in listOf(false, true)) for (empty in listOf(false, true)) {
             compose.runOnIdle { reduced = reduce; missing = empty; offset = 0.dp; height = 192.dp }
             compose.waitForIdle()
+            // The list rests with its first line centred (#717): half the container less half a row of padding above it,
+            // so the lyrics are translated far enough up (to -176 dp) for their ink to cross the top fade, and back down
+            // far enough (to -96 dp) for it to cross the bottom fade.
             val samples = if (empty) listOf(-160, -144, -128, 16, 32, 48, 32, 16, -128, -144, -160)
-                else listOf(-144, -136, -128, -120, -112, -104, -96, -104, -112, -120, -128, -136, -144)
+                else (-176..-96 step 8) + (-104 downTo -176 step 8)
             var topInk = false
             var bottomInk = false
             val snapshots = mutableMapOf<Int, List<Float>>()
