@@ -90,7 +90,7 @@ Jump, then glide jumps once near the target, then glides. Fade dims the list for
 
 Every long scroll style ends exactly on the target, stops early once the target is visible, and Reduce motion overrides the choice by jumping straight there. A scrollbar drag defers artwork like a far journey.
 
-Horizontal/vertical choices and fitting navigation preview the lens at any touched option without committing or pulsing. A deliberate hold or owned axial drag continues from that contact. Selectors, settings sliders and switch thumbs give weak owned engagement, one weak tick per distinct discrete step/Boolean transition, and a strong genuine release. Cancellation has no release pulse.
+Horizontal/vertical choices preview the lens at any touched option without committing or pulsing. Navigation follows its own [selector](#selector) rule. A deliberate hold or owned axial drag continues from that contact. Selectors, settings sliders and switch thumbs give weak owned engagement, one weak tick per distinct discrete step/Boolean transition, and a strong genuine release. Cancellation has no release pulse.
 
 Ordinary tap, keyboard and accessible activation give one weak pulse at the input owner, including the full-width switch row. Continuous sliders have no step ticks. Pending contact, parent scrolling and external/animated state changes stay silent. Parent scrolling cancels preview/activation and retains ownership through direction changes.
 
@@ -225,7 +225,11 @@ Fitted cells accommodate the widest measured label with capsule padding.
 
 ### Selector
 
-One lens responds immediately to taps and magnetically follows manual page swipes. Large icons/readable labels share an accent mask under the lens. Direct taps, including reselection, and owned drags use the shared selector haptics. Cancellation is silent. Page swipes, programmatic/settling tracking and overflow scrolling produce no haptics.
+One lens responds immediately to taps and magnetically follows manual page swipes. Large icons/readable labels share an accent mask under the lens.
+
+Finger-down on a fitting bar or on the lens commits with one weak pulse. Each tab crossing ticks once. Every committing finger release (tap, hold or drag, including reselection) gives exactly one strong pulse. An overflow origin away from the lens stays silent until its tap release.
+
+Keyboard and accessible activation give one weak pulse. Cancellation is silent. Page swipes, programmatic/settling tracking and overflow scrolling produce no haptics.
 
 A different tab preserves its route/position. Reselecting the settled current tab returns to its root and eases to the top, without history. Library reselection first scrolls to the top while retaining its filter. a separate tap while already at the top clears the filter.
 
