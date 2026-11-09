@@ -39,6 +39,7 @@ internal fun FilteredBackdrop(modifier: Modifier, source: FrostedBackdrop, locat
     homeWeight: () -> Float = { 0f }, average: MaterialAverageStyle? = null,
     homeBounds: (() -> androidx.compose.ui.geometry.Rect)? = null,
     homeFootprint: (() -> HomeBackdropFootprint?)? = null,
+    resolutionReader: (() -> Float)? = null,
     effect: (Size, Float, Float) -> RenderEffect?) {
     val renderer = currentGlassRendererGeneration()
     val none by animateFloatAsState(if (renderer.backend == GlassBackend.None) 1f else 0f,
@@ -47,14 +48,14 @@ internal fun FilteredBackdrop(modifier: Modifier, source: FrostedBackdrop, locat
     Box(modifier.graphicsLayer { compositingStrategy = if (blending)
         androidx.compose.ui.graphics.CompositingStrategy.Offscreen else androidx.compose.ui.graphics.CompositingStrategy.Auto }) {
         if (none < 1f) OpticalBackdrop(Modifier.matchParentSize().graphicsLayer { alpha = 1f - none }, source, location, resolution,
-            padding, homeSource, homeWeight, average, homeBounds, homeFootprint, false, effect)
+            padding, homeSource, homeWeight, average, homeBounds, homeFootprint, false, resolutionReader, effect)
         // None reads the same sources and scene composition as the lens above, over its full bounds.
         if (none > 0f) OpticalBackdrop(Modifier.matchParentSize().graphicsLayer {
             alpha = none
             blendMode = if (blending) androidx.compose.ui.graphics.BlendMode.Plus else androidx.compose.ui.graphics.BlendMode.SrcOver
         },
             source, location, resolution, padding, homeSource, homeWeight,
-            average ?: MaterialAverageStyle(0f, GlassTone()), homeBounds, homeFootprint, true, effect)
+            average ?: MaterialAverageStyle(0f, GlassTone()), homeBounds, homeFootprint, true, resolutionReader, effect)
     }
 }
 
@@ -65,7 +66,7 @@ private fun OpticalBackdrop(modifier: Modifier, source: FrostedBackdrop, locatio
     homeWeight: () -> Float = { 0f }, average: MaterialAverageStyle? = null,
     homeBounds: (() -> androidx.compose.ui.geometry.Rect)? = null,
     homeFootprint: (() -> HomeBackdropFootprint?)? = null,
-    forceAverage: Boolean, effect: (Size, Float, Float) -> RenderEffect?) {
+    forceAverage: Boolean, resolutionReader: (() -> Float)?, effect: (Size, Float, Float) -> RenderEffect?) {
     val opticalWork = LocalGlassOpticalWork.current
     val samplingObserver by rememberUpdatedState(LocalHomeBackdropSamplingObserver.current)
     val drawObserver = LocalBackdropSamplingObserver.current
@@ -202,7 +203,7 @@ private fun OpticalBackdrop(modifier: Modifier, source: FrostedBackdrop, locatio
             scale(viewport.width / 8f, viewport.height / 8f, Offset.Zero) { drawLayer(layer) }
             return@Canvas
         }
-        val r = resolution.coerceIn(.25f, 1f)
+        val r = (resolutionReader?.invoke() ?: resolution).coerceIn(.25f, 1f)
         val extent = IntSize(ceil((size.width + 2 * padding) * r).toInt().coerceAtLeast(1),
             ceil((size.height + 2 * padding) * r).toInt().coerceAtLeast(1))
         val allocation = glassLayerExtent(extent)

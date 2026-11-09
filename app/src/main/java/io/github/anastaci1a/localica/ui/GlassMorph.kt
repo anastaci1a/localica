@@ -97,8 +97,16 @@ internal class GlassAnchor {
     var shadowGroup: GlassShadowGroup? = null
     var source: FrostedBackdrop? = null
     var face by mutableStateOf<(@Composable () -> Unit)?>(null)
-    var depthScale = RaisedGlassDepthScale
-    var cornerRadius: androidx.compose.ui.unit.Dp? = null
+    private var storedDepthScale = RaisedGlassDepthScale
+    var depthScaleReader: (() -> Float)? = null
+    var depthScale: Float
+        get() = depthScaleReader?.invoke() ?: storedDepthScale
+        set(value) { storedDepthScale = value; depthScaleReader = null }
+    private var storedCornerRadius: androidx.compose.ui.unit.Dp? = null
+    var cornerRadiusReader: (() -> androidx.compose.ui.unit.Dp?)? = null
+    var cornerRadius: androidx.compose.ui.unit.Dp?
+        get() = cornerRadiusReader?.invoke() ?: storedCornerRadius
+        set(value) { storedCornerRadius = value; cornerRadiusReader = null }
     var quiet = false
     var contextual = false
     var bottomClearance = 0f

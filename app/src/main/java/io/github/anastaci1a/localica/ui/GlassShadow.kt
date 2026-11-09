@@ -49,6 +49,7 @@ internal fun Modifier.shadowViewportOutset(inset: Dp, horizontal: Boolean = fals
 internal class GlassShadowEntry {
     var coordinates: LayoutCoordinates? = null
     var radius: Dp? = null
+    var radiusReader: (() -> Dp?)? = null
     var opacity: () -> Float = { 1f }
     var anchor: GlassAnchor? = null
     var view: android.view.View? = null
@@ -56,7 +57,7 @@ internal class GlassShadowEntry {
     /** The drawn, shape-deformed body in [rect]'s space, or null when it casts nothing. */
     fun body(rect: Rect, density: Density): RoundRect? {
         if (opacity() <= .001f || anchor?.shadowInModal == true) return null
-        val corner = (radius?.let { with(density) { it.toPx() } } ?: minOf(rect.width, rect.height) / 2)
+        val corner = ((radiusReader?.invoke() ?: radius)?.let { with(density) { it.toPx() } } ?: minOf(rect.width, rect.height) / 2)
             .coerceIn(0f, minOf(rect.width, rect.height) / 2)
         // Anchored controls deform in draw space. Their coordinates alone
         // do not include the rebound which persists after a modal returns.
@@ -121,11 +122,11 @@ internal val LocalSurfaceShadows = staticCompositionLocalOf<GlassShadowGroup?> {
     }
 }
 
-@Composable internal fun Modifier.surfaceGlassShadow(radius: Dp?, anchor: GlassAnchor?): Modifier {
+@Composable internal fun Modifier.surfaceGlassShadow(radius: Dp?, anchor: GlassAnchor?, radiusReader: (() -> Dp?)? = null): Modifier {
     val group = LocalSurfaceShadows.current
     val appearance = LocalGlassAppearance.current
-    return if (group == null) clearGlassShadow(appearance.shadowStrength, appearance.shadowSpread, radius) { anchor?.shadowInModal != true }
-        else bottomGlassShadow(radius, group = group, anchorOverride = anchor)
+    return if (group == null) clearGlassShadowImpl(appearance.shadowStrength, appearance.shadowSpread, radius, null, null, { anchor?.shadowInModal != true }, radiusReader)
+        else bottomGlassShadow(radius, group = group, anchorOverride = anchor, radiusReader = radiusReader)
 }
 
 internal class GlassShadowGeometry {
@@ -420,14 +421,14 @@ internal class RetainedGlassShadow(private val scope: CoroutineScope) {
 /** Receiver-aware adapter; original positional/trailing-lambda API stays unchanged. */
 @Composable internal fun Modifier.clearGlassReceiverShadow(strength: Float, spread: Float, radius: Dp?,
     exclusion: () -> GlassShadowExclusion? = { null },
-    receiver: () -> GlassShadowReceiver?): Modifier = clearGlassShadowImpl(strength,spread,radius,receiver,exclusion) { true }
+    receiver: () -> GlassShadowReceiver?): Modifier = clearGlassShadowImpl(strength,spread,radius,receiver,exclusion, { true })
 
 @Composable private fun Modifier.clearGlassShadowImpl(strength: Float, spread: Float, radius: Dp?,
-    receiver: (() -> GlassShadowReceiver?)?, exclusion: (() -> GlassShadowExclusion?)?, visible: () -> Boolean): Modifier {
+    receiver: (() -> GlassShadowReceiver?)?, exclusion: (() -> GlassShadowExclusion?)?, visible: () -> Boolean, radiusReader: (() -> Dp?)? = null): Modifier {
     val cache = rememberGlassShadow()
     return drawBehind {
     if (!visible()) return@drawBehind
-    val corner = (radius?.toPx() ?: size.minDimension / 2).coerceIn(0f, size.minDimension / 2)
+    val corner = ((radiusReader?.invoke() ?: radius)?.toPx() ?: size.minDimension / 2).coerceIn(0f, size.minDimension / 2)
     with(cache) { draw(listOf(RoundRect(0f, 0f, size.width, size.height, CornerRadius(corner)) to 1f), strength, spread,
         receiver?.invoke(), exclusion?.invoke()) }
     }
@@ -442,15 +443,15 @@ internal class RetainedGlassShadow(private val scope: CoroutineScope) {
 }
 
 @Composable internal fun Modifier.bottomGlassShadow(radius: Dp? = null, opacity: () -> Float = { 1f }, group: GlassShadowGroup? = LocalBottomShadows.current,
-    anchorOverride: GlassAnchor? = null): Modifier {
+    anchorOverride: GlassAnchor? = null, radiusReader: (() -> Dp?)? = null): Modifier {
     val appearance = LocalGlassAppearance.current
-    if (group == null) return clearGlassShadow(appearance.shadowStrength, appearance.shadowSpread, radius)
+    if (group == null) return clearGlassShadowImpl(appearance.shadowStrength, appearance.shadowSpread, radius, null, null, { true }, radiusReader)
     val entry = remember { GlassShadowEntry() }
     val anchor = anchorOverride ?: glassSurfaceAnchor()
     val latest by rememberUpdatedState(opacity)
     val view = androidx.compose.ui.platform.LocalView.current
     SideEffect {
-        entry.radius = radius; entry.anchor = anchor; entry.opacity = { latest() }; entry.view = view
+        entry.radius = radius; entry.radiusReader = radiusReader; entry.anchor = anchor; entry.opacity = { latest() }; entry.view = view
         group.entries[entry] = entry
         // A popup owning this trigger's shadow must not stack over its neighbors.
         anchor?.shadowGroup = group
