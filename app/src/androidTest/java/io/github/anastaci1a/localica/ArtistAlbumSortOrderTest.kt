@@ -360,7 +360,7 @@ class ArtistAlbumSortOrderTest {
         }
         // Mid's row moves from third to first while the existing excess-scroll correction re-reveals
         // the header, so its net travel can go either way. Accepted (#694): one continuous movement,
-        // no second 350 ms tail, and at most an 8 px settle where the two easings meet.
+        // no second 350 ms tail, and at most a 4 dp settle where the two easings meet.
         val detail = trace.toString()
         val tops = trace.frames.mapNotNull { it["m-one"] }
         assertEquals("m-one survives every frame: $detail", trace.frames.size, tops.size)
@@ -368,7 +368,9 @@ class ArtistAlbumSortOrderTest {
         assertTrue("m-one moves: $detail", kotlin.math.abs(end - start) > 2f)
         assertTrue("m-one glides: $detail", trace.intermediate("m-one") >= 6)
         val overshoot = tops.maxOf { top -> if (end > start) top - end else end - top }
-        assertTrue("Settle overshoot $overshoot px is at most 8 px: $detail", overshoot <= 8f)
+        val density = context.resources.displayMetrics.density
+        assertTrue("Settle overshoot $overshoot px (${overshoot / density} dp at density $density) is at most 4 dp: $detail",
+            overshoot <= 4f * density)
         assertTrue("One movement with no second tail: first=${trace.firstMotion} last=${trace.lastMotion}\n$detail",
             trace.lastMotion - trace.firstMotion <= 26)
     }
