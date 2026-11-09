@@ -55,13 +55,16 @@ internal class OwnedFieldRequest(val plane: ShadowPlane,val sourceGeneration: Lo
     internal var sourceGeneration=0L; private set
     private var fieldRequest by mutableStateOf<OwnedFieldRequest?>(null)
     internal fun requestOwnedField(plane: ShadowPlane): OwnedFieldRequest {
-        clock.checkMutation(); check(owns(plane) && plane===low && !sourceReleased && following?.expansion?.expanded!=true)
+        clock.checkMutation()
         val expansion=following?.expansion
+        // A reopened logical target can still be waiting on the held closing native gate.
+        check(owns(plane) && plane===low && !sourceReleased && (expansion==null || expansion.nativeOpening==false))
         return OwnedFieldRequest(plane,sourceGeneration,expansion,expansion?.nativeGeneration).also { fieldRequest=it; plane.requestDraw() }
     }
     internal fun currentFieldRequest(request: OwnedFieldRequest): Boolean = fieldRequest===request && !sourceReleased &&
         sourceGeneration==request.sourceGeneration && low===request.plane && owns(request.plane) &&
-        following?.expansion===request.expansion && request.expansion?.nativeGeneration==request.nativeGeneration && request.expansion?.expanded!=true
+        following?.expansion===request.expansion && request.expansion?.nativeGeneration==request.nativeGeneration &&
+        (request.expansion==null || request.expansion.nativeOpening==false)
     /** Called only after this host actually draws the nonempty owned field. No snapshot writes in draw. */
     internal fun fieldSubmission(plane: ShadowPlane): (()->Unit)? {
         val request=fieldRequest?.takeIf { it.plane===plane && currentFieldRequest(it) && !it.submitted } ?: return null

@@ -97,6 +97,35 @@ class CompositorRegistryTest {
         node.dispose(); popup.dispose()
     }
 
+    @Test fun reopenedLogicalTargetCanSubmitTheStillHeldClosingGateField() = EngineHarness(spec=geometry).use { h ->
+        val home=plane(h); val native=plane(h); val node=SurfaceNode(h.clock,"held-return",shape(h),shown,home)
+        node.attachSource(home)
+        val popup=PopupWindowMotion(h.clock,geometry.expansion,"held-return",false,false)
+        popup.show(true); popup.place(Rect(0f,0f,200f,64f),Rect(20f,30f,400f,600f),1f)
+        node.follow(popup.expansion,Curve.constant(1f),requireNotNull(popup.bounds))
+        node.transfer(native,profile); native.acknowledge()
+        assertTrue(popup.expansion.acknowledgeNativeGate(popup.expansion.nativeGeneration)); h.advance(2.0)
+        popup.show(false); h.advance(2.0)
+        val closingGeneration=popup.expansion.nativeGeneration
+        assertEquals(false,popup.expansion.nativeOpening)
+        node.transfer(home,profile); home.acknowledge()
+        val stale=node.requestOwnedField(home); val staleSubmit=requireNotNull(node.fieldSubmission(home))
+        popup.show(true)
+        assertTrue(popup.expansion.expanded)
+        assertEquals(closingGeneration,popup.expansion.nativeGeneration)
+        assertEquals(false,popup.expansion.nativeOpening)
+        assertTrue(popup.expansion.awaitingNativeGate)
+        staleSubmit(); assertFalse(stale.submitted); assertFalse(node.currentFieldRequest(stale))
+        val returned=node.requestOwnedField(home)
+        assertFalse(returned.submitted)
+        requireNotNull(node.fieldSubmission(home))()
+        assertTrue(returned.submitted); assertTrue(node.currentFieldRequest(returned))
+        assertTrue(popup.expansion.acknowledgeNativeGate(closingGeneration))
+        assertFalse(node.currentFieldRequest(returned))
+        assertEquals(true,popup.expansion.nativeOpening)
+        node.dispose(); popup.dispose()
+    }
+
     @Test fun oneKeyOneNodeOnePlaneBinding() = EngineHarness(spec=geometry).use { h ->
         val a=plane(h); val b=plane(h); val s=shape(h)
         val node=SurfaceNode(h.clock,"pill",s,shown,a)
