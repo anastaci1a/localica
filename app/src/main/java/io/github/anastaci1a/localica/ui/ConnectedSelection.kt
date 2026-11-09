@@ -202,7 +202,7 @@ internal class HoverSurfaceRenderer(private val graphics: GraphicsContext,scope:
     private var averageLayer: GraphicsLayer? = null
     val output get() = opticalLayer ?: graphics.createGraphicsLayer().also { GlassWork.event("layer"); opticalLayer = it }
     val flatOutput get() = averageLayer ?: graphics.createGraphicsLayer().also { GlassWork.event("layer"); averageLayer = it }
-    val average = if (Build.VERSION.SDK_INT >= 33) MaterialAverageRenderer() else null
+    val average by lazy { if (Build.VERSION.SDK_INT >= 33) MaterialAverageRenderer() else null }
     private val lifetime=kotlinx.coroutines.Job(scope.coroutineContext[kotlinx.coroutines.Job])
     val shadow=RetainedGlassShadow(kotlinx.coroutines.CoroutineScope(scope.coroutineContext+lifetime))
     fun release() { lifetime.cancel();opticalLayer?.let(graphics::releaseGraphicsLayer);averageLayer?.let(graphics::releaseGraphicsLayer) }
@@ -263,7 +263,7 @@ private fun DrawScope.drawHoverSurface(surface: HoverSurfaceRenderer,parts: List
     if(shadow)with(surface.shadow) {
         draw(outline.localPath,outline.origin,lift.strength*progress,lift.spread,color=lift.color)
     }
-    if (flatColor != null) { drawPath(path, flatColor); return }
+    if (flatColor != null) { drawPath(path, flatColor, alpha = progress); return }
     val source = backing?.takeIf { it.recorded && !it.layer.isReleased } ?: return
     if (blurEffects) location.observeRecordingAcrossWindows(source)
     val registration = source.location.registrationTo(location) ?: return
