@@ -90,6 +90,7 @@ class PlayerThemeFrameEqualityTest {
                 assertEquals("Height at ${samples[i]}", a.height, b.height)
                 assertEquals("Geometry at ${samples[i]}", a.bounds, b.bounds)
                 val mismatches = a.pixels.indices.count { a.pixels[it] != b.pixels[it] }
+                if (mismatches > 0) savePlayerEqualityEvidence("PlayerThemeFrameEqualityTest-$layout-lyrics$lyrics-$direction-${samples[i]}", a.pixels, b.pixels, a.width, a.height)
                 assertEquals("Exact pixels at ${samples[i]} ($layout, lyrics=$lyrics, $direction)", 0, mismatches)
             }
         } finally { compose.mainClock.autoAdvance = true }

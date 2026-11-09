@@ -8,7 +8,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.Layout
-import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -60,6 +61,9 @@ class ControlLayoutReaderEqualityTest {
             }
         }
     }
+    // A clipped zero-width Rect becomes root-zero; subtracting different arm origins then invents an offset.
+    private fun LayoutCoordinates.unclippedBoundsInRoot() = Rect(positionInRoot(), size.toSize())
+
     @Composable
     private fun ReaderArm(arm: Int, fraction: State<Float>, mode: Int, bounds: Array<Array<Rect?>>,
         origins: Array<Rect?>, compositions: IntArray) {
@@ -73,20 +77,20 @@ class ControlLayoutReaderEqualityTest {
                             }
                         } else Arrangement.spacedBy(60.dp * fraction.value)
                         Layout(content = {
-                            Row(Modifier.onGloballyPositioned { origins[arm] = it.boundsInRoot() },
+                            Row(Modifier.onGloballyPositioned { origins[arm] = it.unclippedBoundsInRoot() },
                                 horizontalArrangement = arrangement, verticalAlignment = Alignment.CenterVertically) {
                                 repeat(3) { index ->
                                     val button: () -> Dp = { if (index == 1) 48.dp + 16.dp * fraction.value else 48.dp }
                                     val icon: () -> Dp = { 24.dp + (if (index == 1) 16.dp else 10.dp) * fraction.value }
                                     Box((if (live) Modifier.liveControlSize(button) else Modifier.size(button()))
-                                        .onGloballyPositioned { bounds[arm][index] = it.boundsInRoot() }, contentAlignment = Alignment.Center) {
+                                        .onGloballyPositioned { bounds[arm][index] = it.unclippedBoundsInRoot() }, contentAlignment = Alignment.Center) {
                                         Box((if (live) Modifier.liveControlSize(icon) else Modifier.size(icon()))
-                                            .onGloballyPositioned { bounds[arm][index + 3] = it.boundsInRoot() }.background(Color.Blue))
+                                            .onGloballyPositioned { bounds[arm][index + 3] = it.unclippedBoundsInRoot() }.background(Color.Blue))
                                     }
                                 }
                                 Box((if (live) Modifier.liveControlWidth { 48.dp * (1f + fraction.value) }
                                     else Modifier.width(48.dp * (1f + fraction.value))).height(10.dp)
-                                    .onGloballyPositioned { bounds[arm][6] = it.boundsInRoot() })
+                                    .onGloballyPositioned { bounds[arm][6] = it.unclippedBoundsInRoot() })
                             }
                             SideEffect { compositions[arm]++ }
                         }) { children, _ ->

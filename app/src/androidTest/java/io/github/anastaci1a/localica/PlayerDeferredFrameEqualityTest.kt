@@ -46,6 +46,7 @@ class PlayerDeferredFrameEqualityTest {
         val state = PlaybackState(connected = true, title = "Same frame", artist = "Artist", album = "Album", durationMs = 120000)
         val phase = Animatable(0f)
         var reference by mutableStateOf(true)
+        var epoch by mutableIntStateOf(0)
         lateinit var scope: CoroutineScope
         val work = mutableListOf<String>()
         compose.setContent { LocalicaTheme {
@@ -53,7 +54,7 @@ class PlayerDeferredFrameEqualityTest {
                 LocalPlayerWorkObserver provides { kind, _ -> work += kind }) {
                 scope = rememberCoroutineScope()
                 BoxWithConstraints(Modifier.fillMaxSize().background(Color(0xFFE1E2E3)).testTag("frame-root")) {
-                    key(reference) {
+                    key(reference, epoch) {
                         if (reference) ReferencePlayerSurface(state, false, {}, settings, phase, {}, {}, {}, {}, {}, {},
                             lyricsOpen = lyrics, visual = visual) { Text("Album actions") }
                         else PlayerSurface(state, false, {}, settings, phase, {}, {}, {}, {}, {}, {},
@@ -67,7 +68,7 @@ class PlayerDeferredFrameEqualityTest {
         data class Frame(val pixels: IntArray, val width: Int, val height: Int, val bounds: Map<String, androidx.compose.ui.geometry.Rect>)
         fun captureArm(old: Boolean): List<Frame> {
             compose.mainClock.autoAdvance = true
-            compose.runOnIdle { scope.launch(start = CoroutineStart.UNDISPATCHED) { phase.stop(); phase.snapTo(0f) }; reference = old }
+            compose.runOnIdle { scope.launch(start = CoroutineStart.UNDISPATCHED) { phase.stop(); phase.snapTo(0f) }; reference = old; epoch++ }
             compose.waitForIdle()
             compose.mainClock.autoAdvance = false
             return samples.map { p ->
@@ -87,6 +88,7 @@ class PlayerDeferredFrameEqualityTest {
                 assertEquals("Height at ${samples[i]}", a.height, b.height)
                 assertEquals("Geometry at ${samples[i]}", a.bounds, b.bounds)
                 val mismatches = a.pixels.indices.count { a.pixels[it] != b.pixels[it] }
+                if (mismatches > 0) savePlayerEqualityEvidence("PlayerDeferredFrameEqualityTest-$layout-lyrics$lyrics-$direction-${samples[i]}", a.pixels, b.pixels, a.width, a.height)
                 assertEquals("Exact pixels at ${samples[i]} ($layout, lyrics=$lyrics, $direction)", 0, mismatches)
             }
         } finally { compose.mainClock.autoAdvance = true }
