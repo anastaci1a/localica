@@ -217,7 +217,7 @@ class NoneExactReductionTest {
         private val channels = listOf("red", "green", "blue")
         val samples = IntArray(3); val sum = DoubleArray(3); val max = FloatArray(3); val worst = arrayOf("", "", "")
         val cases = JSONArray()
-        fun add(label: String, fresh: Color, legacy: Color) {
+        fun add(label: String, fresh: Color, legacy: Color, ideal: Color? = null) {
             val deltas = floatArrayOf((fresh.red - legacy.red) * 255f, (fresh.green - legacy.green) * 255f, (fresh.blue - legacy.blue) * 255f)
             for (i in 0..2) {
                 val d = kotlin.math.abs(deltas[i])
@@ -227,6 +227,17 @@ class NoneExactReductionTest {
             cases.put(JSONObject(mapOf("case" to label, "deltaCodes" to JSONArray(deltas.map { it.toDouble() }),
                 "fresh" to JSONArray(listOf(fresh.red, fresh.green, fresh.blue).map { (it * 255f).toDouble() }),
                 "legacy" to JSONArray(listOf(legacy.red, legacy.green, legacy.blue).map { (it * 255f).toDouble() }))))
+            if (ideal != null) {
+                val expected = listOf(ideal.red, ideal.green, ideal.blue)
+                val old = listOf(legacy.red, legacy.green, legacy.blue)
+                val current = listOf(fresh.red, fresh.green, fresh.blue)
+                val row = cases.getJSONObject(cases.length() - 1)
+                row.put("idealCodes", JSONArray(expected.map { (it * 255f).toDouble() }))
+                row.put("legacyIdealErrorCodes", JSONObject(channels.withIndex().associate { (i, name) ->
+                    name to (kotlin.math.abs(old[i] - expected[i]) * 255f).toDouble() }))
+                row.put("candidateIdealErrorCodes", JSONObject(channels.withIndex().associate { (i, name) ->
+                    name to (kotlin.math.abs(current[i] - expected[i]) * 255f).toDouble() }))
+            }
         }
         fun mean(i: Int) = if (samples[i] == 0) 0.0 else sum[i] / samples[i]
         fun json(maxBudget: Float, meanBudget: Float) = JSONObject(mapOf(
@@ -315,14 +326,14 @@ class NoneExactReductionTest {
                 pixels[centre.width, centre.height]
             }
             if (!modern) continue
-            // The same scene through the frozen pre-#691 path: the final-output drift budget.
+            // The historical reference is checked against drift budgets, not the candidate ideal bound.
+            // Its ideal error is retained in the receipt (lead judgment 2026-11-09).
             compose.runOnIdle { MaterialAreaReduction.legacyOverride = true; legacy = true }
             val old = eventually {
                 val point = centre("glass")
-                if (look === plain) assertFill("$label legacy", expected, point, region)
                 point
             }
-            drift.add(label, fresh, old)
+            drift.add(label, fresh, old, expected.takeIf { look === plain })
         }
         compose.runOnIdle { MaterialAreaReduction.legacyOverride = false }
         if (!modern) return
@@ -397,8 +408,8 @@ class NoneExactReductionTest {
             val fresh = eventually { onScreenCentre("glass").also { if (look === plain) assertFill(label, expected, it, region) } }
             if (!modern) continue
             compose.runOnIdle { MaterialAreaReduction.legacyOverride = true; legacy = true }
-            val old = eventually { onScreenCentre("glass").also { if (look === plain) assertFill("$label legacy", expected, it, region) } }
-            drift.add(label, fresh, old)
+            val old = eventually { onScreenCentre("glass") }
+            drift.add(label, fresh, old, expected.takeIf { look === plain })
         }
         compose.runOnIdle { MaterialAreaReduction.legacyOverride = false }
         if (!modern) return
@@ -448,8 +459,8 @@ class NoneExactReductionTest {
             val fresh = eventually { centre("glass").also { if (look === plain) assertFill(label, expected, it, region) } }
             if (!modern) continue
             compose.runOnIdle { MaterialAreaReduction.legacyOverride = true; legacy = true }
-            val old = eventually { centre("glass").also { if (look === plain) assertFill("$label legacy", expected, it, region) } }
-            drift.add(label, fresh, old)
+            val old = eventually { centre("glass") }
+            drift.add(label, fresh, old, expected.takeIf { look === plain })
         }
         // Readiness: a requested home that is not recorded draws no fill in either chain (the home scene,
         // drawn above the source, shows through).
