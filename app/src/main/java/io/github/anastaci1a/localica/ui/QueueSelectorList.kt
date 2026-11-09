@@ -23,6 +23,9 @@ import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.layout.onPlaced
 import io.github.anastaci1a.localica.R
 import io.github.anastaci1a.localica.queue.ListeningQueue
+import io.github.anastaci1a.localica.ui.components.PopupSharedContent
+
+internal val LocalQueueSelectorSharedName = staticCompositionLocalOf<PopupSharedContent?> { null }
 
 /** Same in-host witness as the playlist adapter; no screenshot or redraw request. */
 internal data class QueueSelectionDrawSource(val scene: SelectionScene, val state: LazyGridState,
@@ -146,6 +149,7 @@ private fun QueueSelectorRow(queue: ListeningQueue, number: Int, chosen: Boolean
     isPlaying: Boolean, reducedMotion: Boolean, enabled: Boolean, actionsModifier: Modifier = Modifier,
     selectionPlacement: Modifier = Modifier,
     onSelect: () -> Unit, onRename: () -> Unit, onDelete: () -> Unit, onOffset: (Int) -> Unit) {
+    val sharedName = LocalQueueSelectorSharedName.current
     Surface(shape = Corners.card, color = androidx.compose.ui.graphics.Color.Transparent,
         modifier = Modifier.padding(vertical = 2.dp).selectionLens(chosen, false, itemKey = queue.id,
             outline = rememberPaddedItemOutline(null, 0.dp, null, 0.dp, 0.dp))
@@ -155,7 +159,8 @@ private fun QueueSelectorRow(queue: ListeningQueue, number: Int, chosen: Boolean
             Row(Modifier.weight(1f).testTag("queue-select-${queue.id}").selectable(chosen, enabled = enabled, role = Role.RadioButton, onClick = onSelect)
                 .heightIn(min = 56.dp), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f).padding(start = 4.dp)) {
-                    if (chosen) MarqueeTitle("$number. ${queue.name}", reducedMotion, style = MaterialTheme.typography.bodyLarge)
+                    if (chosen && sharedName != null) sharedName.Expanded(Modifier.fillMaxWidth())
+                    else if (chosen) MarqueeTitle("$number. ${queue.name}", reducedMotion, style = MaterialTheme.typography.bodyLarge)
                     else Text("$number. ${queue.name}", maxLines = 1, overflow = TextOverflow.Ellipsis)
                     if (playing) Text(if (isPlaying) "Playing" else "Playback queue", style = MaterialTheme.typography.labelSmall)
                 }

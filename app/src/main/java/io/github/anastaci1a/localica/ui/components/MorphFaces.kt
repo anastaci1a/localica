@@ -32,7 +32,13 @@ import io.github.anastaci1a.localica.ui.engine.*
 }
 
 /** D09/B4: a shared element sees the morph as [progress], 0 (compact) to 1 (expanded), sampled only in its own layout or draw. */
-@Stable interface SharedScope { val progress: () -> Float }
+@Stable interface SharedScope {
+    val progress: () -> Float
+    /** Non-null only in an unplaced endpoint measurement copy. */
+    val endpoint: Int? get() = null
+    /** Discrete lifecycle state; the live marquee starts only at expanded rest. */
+    val restingExpanded: Boolean get() = false
+}
 /** One face of [MorphFaces]. Content outside [Shared] belongs to this face alone and fades with it. */
 @Stable class MorphScope internal constructor(private val host: MorphHost, private val face: Int) {
     /** Where shared [key] sits in this face; [modifier] sizes the slot, which takes the element's size at this face's end. */
@@ -41,10 +47,15 @@ import io.github.anastaci1a.localica.ui.engine.*
 internal class MorphHost(val slots: MorphSlots) {
     // Slots may skip composition with the same key/face. Observe the target so the live instance leaves the outgoing, semantics-cleared face.
     var expanded by mutableStateOf(false)
+    var expandedRest by mutableStateOf(false)
     var shared: @Composable SharedScope.(Any) -> Unit by mutableStateOf({})
-    private val live = object : SharedScope { override val progress = slots.progress }
-    private val ends = listOf(0f, 1f).map { end -> object : SharedScope { override val progress = { end } } }
+    private val live = object : SharedScope {
+        override val progress = slots.progress
+        override val restingExpanded get() = expandedRest
+    }
+    private val ends = listOf(0f, 1f).map { end -> object : SharedScope { override val progress = { end }; override val endpoint = end.toInt() } }
     private val instances = mutableMapOf<Any, @Composable (@Composable SharedScope.(Any) -> Unit) -> Unit>()
+    @Composable fun Copy(key: Any, face: Int) = shared(ends[face], key)
     @Composable fun Slot(key: Any, face: Int, modifier: Modifier) {
         val content = shared
         val instance = instances.getOrPut(key) { movableContentOf { c: @Composable SharedScope.(Any) -> Unit -> c(live, key) } }

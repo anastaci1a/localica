@@ -29,10 +29,17 @@ private fun ease(a: IntSize, b: IntSize, p: Float) = IntSize((a.width + (b.width
  * instance's recording. Slots write only plain fields in layout and draw, so nothing here invalidates. */
 @Stable class MorphSlots internal constructor(private val expansion: ExpansionView,private val bounds: ()->MotionRectView?) {
     private val phase get()=expansion.phase
-    internal class Slot { val frames = arrayOfNulls<LayoutCoordinates>(2); val sizes = arrayOf(IntSize.Zero, IntSize.Zero)
+    internal class Slot { val frames = arrayOfNulls<LayoutCoordinates>(2); val views = arrayOfNulls<android.view.View>(2); val screenFrames = arrayOfNulls<Rect>(2); val sizes = arrayOf(IntSize.Zero, IntSize.Zero)
         val ink = arrayOf(Color.Unspecified, Color.Unspecified); var layer: GraphicsLayer? = null; var drawn = IntSize.Zero }
     internal val slots = mutableMapOf<Any, Slot>()
     private var root: LayoutCoordinates? = null
+    private var destination: LayoutCoordinates? = null
+    private var destinationOrigin = Offset.Zero
+    internal fun destinationLayout(coordinates: LayoutCoordinates?) {
+        destination = coordinates
+        if (coordinates == null) slots.values.forEach { it.screenFrames[1] = null }
+    }
+    internal fun destinationOrigin(origin: Offset) { destinationOrigin = origin }
     /** 0 (compact) … 1 (expanded) on the morph's one clock; sample it only in layout or draw. */
     val progress: () -> Float = { phase.value().coerceIn(0f, 1f) }
 
@@ -61,7 +68,12 @@ private fun ease(a: IntSize, b: IntSize, p: Float) = IntSize((a.width + (b.width
         instance: @Composable () -> Unit) {
         val slot = slots.getOrPut(key) { Slot() }
         val layer = rememberGraphicsLayer()
-        SideEffect { slot.ink[face] = ink }
+        val view = androidx.compose.ui.platform.LocalView.current
+        SideEffect { slot.ink[face] = ink; slot.views[face] = view }
+        DisposableEffect(slot, face, view, layer) { onDispose {
+            if (slot.views[face] === view) { slot.frames[face] = null; slot.views[face] = null }
+            if (slot.layer === layer) slot.layer = null
+        } }
         Layout(modifier = modifier.onPlaced { slot.frames[face] = it }.drawWithContent {
             if (destination) { layer.record(slot.drawn) { this@drawWithContent.drawContent() }; slot.layer = layer }
         }, content = {
@@ -76,10 +88,48 @@ private fun ease(a: IntSize, b: IntSize, p: Float) = IntSize((a.width + (b.width
     }
 
     private fun DrawScope.drawShared() {
-        val root = root?.takeIf { it.isAttached } ?: return; val p = progress()
+        val root = root?.takeIf { it.isAttached } ?: return
+        drawShared { slot, face -> slot.frames[face]?.takeIf { it.isAttached }?.let { c ->
+            Rect(root.localPositionOf(c, Offset.Zero), c.size.toSize())
+        } }
+    }
+
+    /** Native adapters supply actual fixed foreground layout plus its measured final envelope.
+     * Never interpolate toward the already-scaled current popup rectangle. */
+    internal fun drawExternal(scope: DrawScope, coordinates: LayoutCoordinates, view: android.view.View) = with(scope) {
+        if (!coordinates.isAttached) return@with
+        val origin = screenPosition(coordinates, view)
+        drawShared { slot, face ->
+            val child = slot.frames[face]?.takeIf { it.isAttached }
+            val frame = if (child == null) null else if (face == 1) {
+                destination?.takeIf { it.isAttached && it.findRootCoordinates() === child.findRootCoordinates() }?.let { foreground ->
+                    Rect(destinationOrigin + foreground.localPositionOf(child, Offset.Zero), child.size.toSize())
+                }
+            } else slot.views[face]?.let { sourceView -> Rect(screenPosition(child, sourceView), child.size.toSize()) }
+            if (frame != null) slot.screenFrames[face] = frame
+            (frame ?: slot.screenFrames[face])?.translate(-origin)
+        }
+    }
+
+    @Composable internal fun externalHost(visible: () -> Boolean): Modifier {
+        val view = androidx.compose.ui.platform.LocalView.current
+        val coordinates = remember { arrayOfNulls<LayoutCoordinates>(1) }
+        return Modifier.onPlaced { coordinates[0] = it }.drawWithContent {
+            drawContent()
+            if (visible()) coordinates[0]?.let { drawExternal(this, it, view) }
+        }
+    }
+
+    private fun screenPosition(coordinates: LayoutCoordinates, view: android.view.View): Offset {
+        val origin = IntArray(2).also(view::getLocationOnScreen)
+        return coordinates.positionInRoot() + Offset(origin[0].toFloat(), origin[1].toFloat())
+    }
+
+    private fun DrawScope.drawShared(frameOf: (Slot, Int) -> Rect?) {
+        val p = progress()
         for (slot in slots.values) {
             val layer = slot.layer ?: continue
-            val frames = slot.frames.map { it?.takeIf { c -> c.isAttached }?.let { c -> Rect(root.localPositionOf(c, Offset.Zero), c.size.toSize()) } }
+            val frames = (0..1).map { frameOf(slot, it) }
             val from = frames[0] ?: frames[1] ?: continue; val to = frames[1] ?: from
             val ink = slot.ink.takeIf { it[0] != it[1] && it.all { c -> c.isSpecified } }?.let { lerp(it[0], it[1], p) }
             layer.colorFilter = ink?.let { ColorFilter.tint(it) }
