@@ -16,6 +16,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.LayoutInfo
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.*
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.UiDevice
@@ -61,7 +63,7 @@ class QueueSelectorPersistenceTest {
             }
         } }
         compose.waitForIdle()
-        val home = compose.onNodeWithText(label, useUnmergedTree = true).fetchSemanticsNode().layoutInfo
+        val home = logicalNames().single().layoutInfo
         // Read the actual source descriptor from the real modifier chain; no new production hook.
         val icon = compose.onNodeWithContentDescription("Select queue").fetchSemanticsNode()
         val anchor = compose.runOnUiThread {
@@ -76,7 +78,7 @@ class QueueSelectorPersistenceTest {
         fun sample(stage: String) {
             compose.mainClock.advanceTimeByFrame()
             compose.waitForIdle()
-            val names = compose.onAllNodesWithText(label, useUnmergedTree = true).fetchSemanticsNodes()
+            val names = logicalNames()
             names.forEach { instances += it.layoutInfo }
             if (names.size != 1) missing += "$stage:${names.size}"
             val native = window?.takeIf { it.decorView.isAttachedToWindow }
@@ -126,6 +128,16 @@ class QueueSelectorPersistenceTest {
             compose.runOnUiThread { markers.keys.toList().forEach(::detach) }
         }
     }
+
+    /** Endpoint measurement copies are deliberately unplaced. A shared semantic container
+     * and its internal text renderer describe one instance, rather than two independent names. */
+    private fun logicalNames() = compose.onAllNodesWithText(label, useUnmergedTree = true).fetchSemanticsNodes()
+        .filter { node ->
+            generateSequence(node.layoutInfo) { it.parentInfo }.all { it.isPlaced } &&
+                generateSequence(node.parent) { it.parent }.none { parent ->
+                    parent.config.getOrNull(SemanticsProperties.Text)?.any { it.text == label } == true
+                }
+        }
 
     private fun attach(view: View) {
         if (markers.containsKey(view)) return
