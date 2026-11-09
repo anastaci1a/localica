@@ -92,10 +92,13 @@ internal class MaterialAreaReduction(private val graphics: GraphicsContext) {
     fun release() { levels.forEach(graphics::releaseGraphicsLayer); levels.clear(); current = null }
 
     companion object {
-        /** Diagnostics only: the pre-#691 bilinear 2:1 chain on every API, so a test can measure the
-         * drift between the old and the block-mean reductions on one device. Never set in production. */
+        /** Diagnostics only: in DEBUG builds a test may restore the whole pre-#691 None path (bilinear 2:1
+         * chain to 1×1, one-tap style into a 1×1 copy) to measure final-output drift against the block-mean
+         * path on one device. Only androidTest sets it. Release builds constant-fold [legacyHalvings] to
+         * false, so R8 removes every legacy branch from shipped code. */
         @androidx.annotation.VisibleForTesting
-        @Volatile var legacyHalvings = false
+        @Volatile var legacyOverride = false
+        val legacyHalvings: Boolean get() = io.github.anastaci1a.localica.BuildConfig.DEBUG && legacyOverride
     }
 }
 

@@ -84,6 +84,12 @@ private fun OpticalBackdrop(modifier: Modifier, source: FrostedBackdrop, locatio
     val areaHomeRenderer = remember(forceAverage) { if (forceAverage && android.os.Build.VERSION.SDK_INT >= 33) MaterialAverageRenderer(uniformOpaque = true, variableTaps = true) else null }
     val averageSource = if (average != null && (forceAverage || source.materialOnly)) rememberGraphicsLayer() else null
     val averageHome = if (average != null && (forceAverage || homeSource?.materialOnly == true)) rememberGraphicsLayer() else null
+    // Diagnostics only (debug builds, see MaterialAreaReduction.legacyHalvings): the frozen pre-#691 one-tap style
+    // renderers, so a test can measure final-output drift between the old and the current None path.
+    val legacyRenderers = remember(forceAverage) {
+        if (forceAverage && android.os.Build.VERSION.SDK_INT >= 33 && MaterialAreaReduction.legacyHalvings)
+            MaterialAverageRenderer(true) to MaterialAverageRenderer(true) else null
+    }
     layer.clip = true
     // Keep sibling motion isolated, but explicitly invalidate consumers in another
     // window when their source records new content.
@@ -135,6 +141,46 @@ private fun OpticalBackdrop(modifier: Modifier, source: FrostedBackdrop, locatio
         }
         drawObserver?.let { observeBackdropSampling(it, location, localToSource, viewportBounds) }
         if (forceAverage && average != null && areaSource != null && averageSource != null && areaSourceRenderer != null) {
+            if (legacyRenderers != null) {
+                // The frozen pre-#691 path (diagnostics only): bilinear chain to 1×1, one-tap style into a 1×1 copy,
+                // then the 1×1 mix layer drawn scaled. Kept verbatim so drift is measured against the real old output.
+                fun androidx.compose.ui.graphics.drawscope.DrawScope.legacyReduce(backing: FrostedBackdrop,
+                    reduction: MaterialAreaReduction, output: androidx.compose.ui.graphics.layer.GraphicsLayer,
+                    renderer: MaterialAverageRenderer, home: Boolean = false) {
+                    val registration = (if (home) homeToFootprint else sourceToLocal) ?: return
+                    val footprint = if (home) homeExtent else size
+                    val screenToHome = if (home) homeToScreen?.inverse() else null
+                    val toLocal: (FrostedBackdrop) -> BackdropRegistration? = { scene ->
+                        if (!home) scene.location.registrationTo(location)
+                        else screenToHome?.let { toHome ->
+                            scene.location.registrationToScreen()?.followedBy(toHome)?.followedBy(registration)
+                        }
+                    }
+                    val region = Rect(Offset.Zero, footprint)
+                        .intersect(sampledSceneBounds(backing, registration, toLocal) ?: return)
+                    if (region.isEmpty || !region.width.isFinite() || !region.height.isFinite()) return
+                    val result = with(reduction) { recordFullBounds(region.size) {
+                        translate(-region.left, -region.top) {
+                            drawSampledScene(backing, registration, toLocal)
+                        }
+                    } }
+                    output.renderEffect = renderer.effect(average.forBacking(backing))
+                    output.record(size = IntSize(1, 1)) { drawLayer(result) }
+                }
+                if (blend < 1f) legacyReduce(source, areaSource, averageSource, legacyRenderers.first)
+                if (blend > 0f && homeSource != null && areaHome != null && averageHome != null)
+                    legacyReduce(homeSource, areaHome, averageHome, legacyRenderers.second, true)
+                layer.renderEffect = null
+                averageSource.alpha = 1f - blend
+                averageHome?.alpha = blend
+                averageHome?.blendMode = androidx.compose.ui.graphics.BlendMode.Plus
+                layer.record(size = IntSize(1, 1)) {
+                    if (blend < 1f) drawLayer(averageSource)
+                    if (blend > 0f && averageHome != null) drawLayer(averageHome)
+                }
+                scale(size.width, size.height, Offset.Zero) { drawLayer(layer) }
+                return@Canvas
+            }
             // Returns the reduction's last level (at most 8×8 texels) carrying the style shader, which draws
             // the exact styled mean over any extent. Without a mix it is drawn directly: no 1×1 copies.
             fun androidx.compose.ui.graphics.drawscope.DrawScope.reduce(backing: FrostedBackdrop,
@@ -155,8 +201,7 @@ private fun OpticalBackdrop(modifier: Modifier, source: FrostedBackdrop, locatio
                 val region = Rect(Offset.Zero, footprint)
                     .intersect(sampledSceneBounds(backing, registration, toLocal) ?: return reduction.current)
                 if (region.isEmpty || !region.width.isFinite() || !region.height.isFinite()) return reduction.current
-                // The legacy switch reproduces the old 1×1 chain (one tap) for drift measurements only.
-                val result = with(reduction) { recordFullBounds(region.size, minimum = if (MaterialAreaReduction.legacyHalvings) 1 else 8) {
+                val result = with(reduction) { recordFullBounds(region.size, minimum = 8) {
                     translate(-region.left, -region.top) {
                         drawSampledScene(backing, registration, toLocal)
                     }

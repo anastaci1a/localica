@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.dp
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.anastaci1a.localica.navigation.*
 import io.github.anastaci1a.localica.ui.*
+import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.After
 import org.junit.Assert.*
@@ -41,11 +42,13 @@ import java.io.File
  *      point sampling fails (1 px stripes at several widths and phases, 2 px checkerboards, text bands,
  *      list rows, glyph runs, artwork split, alpha edges) and fixtures that expose a wrong block mapping
  *      (half splits, quadrants, a translated impulse, a gradient), at footprints just above, in the middle
- *      of and just below a power-of-two interval;
- *  (b) drift between the pre-#691 bilinear 2:1 chain and the block-mean chain on the same device: max
- *      4/255 and mean 1/255 per channel, including low alpha and the styled (tinted, contrasted) output.
+ *      of and just below a power-of-two interval, a fractional scaled region and source/home mixes;
+ *  (b) FINAL-OUTPUT drift between the frozen pre-#691 None path (bilinear 2:1 chain to 1×1, one-tap style
+ *      into a 1×1 copy, mix layer) and the block-mean path on the same device: max 4/255 and mean 1/255
+ *      PER CHANNEL, over every fixture × phase × look (plain and tinted/contrasted) including low alpha.
  * Expected means are integrated from the immutable source bitmap, never from an analytic guess of what
- * the rasterizer drew. Measured drift is written to additionalTestOutputDir as a receipt. */
+ * the rasterizer drew. Every case's channel deltas and the per-channel statistics are written to
+ * additionalTestOutputDir as a receipt. */
 class NoneExactReductionTest {
     @get:Rule val compose = localicaComposeRule()
     private val plain = GlassAppearance(whiteTint = 0f, contrast = 0f, shadowStrength = 0f)
@@ -56,8 +59,9 @@ class NoneExactReductionTest {
     private val tolerance = .015f
     private val driftMaxCodes = 4f
     private val driftMeanCodes = 1f
+    private val modern = Build.VERSION.SDK_INT >= 33
 
-    @After fun restoreChain() { MaterialAreaReduction.legacyHalvings = false }
+    @After fun restoreChain() { MaterialAreaReduction.legacyOverride = false }
 
     /** A pattern rasterized once into an immutable ARGB bitmap of the source size. */
     private class Fixture(val name: String, val paint: android.graphics.Canvas.(Float) -> Unit)
@@ -184,10 +188,12 @@ class NoneExactReductionTest {
         return Color(c[0] * alpha + behind.red * (1f - alpha), c[1] * alpha + behind.green * (1f - alpha), c[2] * alpha + behind.blue * (1f - alpha))
     }
 
+    private fun premultiplied(bitmap: Bitmap, x: Int, y: Int): Color = Color(bitmap.getPixel(x, y)).let { Color(it.red * it.alpha, it.green * it.alpha, it.blue * it.alpha) }
+
     private fun assertFill(label: String, expected: Color, actual: Color, region: Rect) {
         for ((channel, e, a) in listOf(Triple("red", expected.red, actual.red), Triple("green", expected.green, actual.green),
                 Triple("blue", expected.blue, actual.blue))) {
-            if (Build.VERSION.SDK_INT >= 33) assertEquals("$label $channel over $region", e, a, tolerance)
+            if (modern) assertEquals("$label $channel over $region", e, a, tolerance)
             else assertLegacyAreaBound(a, e, region, materialReductionExtent(IntSize(sourceWidth, sourceHeight)).width,
                 materialReductionExtent(IntSize(sourceWidth, sourceHeight)).height)
         }
@@ -204,32 +210,51 @@ class NoneExactReductionTest {
         }
     }
 
-    /** Drift statistics between the legacy and block-mean chains, in 8-bit codes. */
+    /** Final-output drift between the frozen legacy path and the block-mean path, per channel, in 8-bit codes. */
     private class Drift {
-        var samples = 0; var sum = 0.0; var max = 0f; var worst = ""
-        fun add(label: String, a: Color, b: Color) {
-            for ((x, y) in listOf(a.red to b.red, a.green to b.green, a.blue to b.blue)) {
-                val d = kotlin.math.abs(x - y) * 255f
-                samples++; sum += d
-                if (d > max) { max = d; worst = label }
+        private val channels = listOf("red", "green", "blue")
+        val samples = IntArray(3); val sum = DoubleArray(3); val max = FloatArray(3); val worst = arrayOf("", "", "")
+        val cases = JSONArray()
+        fun add(label: String, fresh: Color, legacy: Color) {
+            val deltas = floatArrayOf((fresh.red - legacy.red) * 255f, (fresh.green - legacy.green) * 255f, (fresh.blue - legacy.blue) * 255f)
+            for (i in 0..2) {
+                val d = kotlin.math.abs(deltas[i])
+                samples[i]++; sum[i] += d
+                if (d > max[i]) { max[i] = d; worst[i] = label }
+            }
+            cases.put(JSONObject(mapOf("case" to label, "deltaCodes" to JSONArray(deltas.map { it.toDouble() }),
+                "fresh" to JSONArray(listOf(fresh.red, fresh.green, fresh.blue).map { (it * 255f).toDouble() }),
+                "legacy" to JSONArray(listOf(legacy.red, legacy.green, legacy.blue).map { (it * 255f).toDouble() }))))
+        }
+        fun mean(i: Int) = if (samples[i] == 0) 0.0 else sum[i] / samples[i]
+        fun json(maxBudget: Float, meanBudget: Float) = JSONObject(mapOf(
+            "perChannel" to JSONObject(channels.withIndex().associate { (i, name) -> name to JSONObject(mapOf(
+                "samples" to samples[i], "maxCodes" to max[i], "meanCodes" to mean(i), "worst" to worst[i])) }),
+            "budgetMaxCodes" to maxBudget, "budgetMeanCodes" to meanBudget, "cases" to cases))
+        fun assertWithin(maxBudget: Float, meanBudget: Float) {
+            for (i in 0..2) {
+                assertTrue("Legacy vs block-mean ${channels[i]} drift max ${max[i]} codes at ${worst[i]} exceeds $maxBudget", max[i] <= maxBudget)
+                assertTrue("Legacy vs block-mean ${channels[i]} drift mean ${mean(i)} codes exceeds $meanBudget", mean(i) <= meanBudget)
             }
         }
-        val mean get() = if (samples == 0) 0.0 else sum / samples
     }
 
     private fun receipt(name: String, drift: Drift, extra: Map<String, Any>) {
         val root = InstrumentationRegistry.getArguments().getString("additionalTestOutputDir")?.let(::File)
             ?: InstrumentationRegistry.getInstrumentation().targetContext.getExternalFilesDir(null)!!
         val output = File(root, "none-exact-reduction-api" + Build.VERSION.SDK_INT).also { it.mkdirs() }
-        File(output, "$name.json").writeText(JSONObject(mapOf("samples" to drift.samples, "maxCodes" to drift.max,
-            "meanCodes" to drift.mean, "worst" to drift.worst, "budgetMaxCodes" to driftMaxCodes, "budgetMeanCodes" to driftMeanCodes) + extra).toString(2))
+        val json = drift.json(driftMaxCodes, driftMeanCodes)
+        for ((k, v) in extra) json.put(k, v)
+        File(output, "$name.json").writeText(json.toString(2))
     }
 
+    @Composable private fun Fixture(appearance: GlassAppearance, content: @Composable () -> Unit) = CompositionLocalProvider(
+        LocalDensity provides Density(1f),
+        LocalGlassRendererRuntime provides remember { GlassRendererRuntime(GlassRendererMode.None) },
+        LocalGlassAppearance provides appearance) { LocalicaTheme { content() } }
+
     @Composable private fun Scene(bitmap: Bitmap, appearance: GlassAppearance, source: FrostedBackdrop, surface: @Composable () -> Unit) =
-        CompositionLocalProvider(
-            LocalDensity provides Density(1f),
-            LocalGlassRendererRuntime provides remember { GlassRendererRuntime(GlassRendererMode.None) },
-            LocalGlassAppearance provides appearance) { LocalicaTheme {
+        Fixture(appearance) {
             // Black behind the source: what shows through translucent fixtures is known exactly.
             Box(Modifier.size(sourceWidth.dp, sourceHeight.dp).background(Color.Black)) {
                 Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(source)) {
@@ -237,11 +262,22 @@ class NoneExactReductionTest {
                 }
                 surface()
             }
-        } }
+        }
 
     private fun centre(tag: String): Color = compose.onNodeWithTag(tag).captureToImage().toPixelMap().let { it[it.width / 2, it.height / 2] }
 
-    /** One surface of [footprint] px at [origin], remounted per chain; every fixture and phase passes behind it. */
+    private fun onScreenCentre(tag: String): Color {
+        val node = compose.onNodeWithTag(tag).fetchSemanticsNode()
+        val location = IntArray(2).also { (node.root as androidx.compose.ui.platform.ViewRootForTest).view.getLocationOnScreen(it) }
+        val centre = node.boundsInRoot.center
+        val screen = InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot()
+        try { return Color(screen.getPixel((centre.x + location[0]).toInt(), (centre.y + location[1]).toInt())) } finally { screen.recycle() }
+    }
+
+    private val looks get() = listOf("plain" to plain, "styled" to styled)
+    private val phases = listOf(0f, .375f)
+
+    /** One surface of [footprint] px at [origin], remounted per chain; every fixture, phase and look passes behind it. */
     private fun footprint(footprint: IntSize) {
         lateinit var source: FrostedBackdrop
         var bitmap by mutableStateOf(rasterize(fixtures().first(), 0f))
@@ -256,19 +292,15 @@ class NoneExactReductionTest {
                 }
             }
         }
-        compose.waitUntil(15_000) { source.recorded && (Build.VERSION.SDK_INT >= 33 || source.snapshot != null) }
+        compose.waitUntil(15_000) { source.recorded && (modern || source.snapshot != null) }
         val region = Rect(origin, Size(footprint.width.toFloat(), footprint.height.toFloat()))
         val centre = IntSize(footprint.width / 2, footprint.height / 2)
         val drift = Drift()
-        val modern = Build.VERSION.SDK_INT >= 33
-        for (fixture in fixtures()) for ((look, phases) in listOf(plain to listOf(0f, .375f), styled to listOf(0f))) for (phase in phases) {
+        for (fixture in fixtures()) for ((lookName, look) in looks) for (phase in phases) {
             val raster = rasterize(fixture, phase)
-            val label = "${fixture.name} phase $phase ${if (look === plain) "plain" else "styled"}, footprint $footprint"
-            compose.runOnIdle { MaterialAreaReduction.legacyHalvings = false; legacy = false; appearance = look; bitmap = raster }
-            val behind = Color(raster.getPixel(origin.x.toInt() + centre.width, origin.y.toInt() + centre.height)).let {
-                Color(it.red * it.alpha, it.green * it.alpha, it.blue * it.alpha)
-            }
-            val expected = expectedPixel(expectedMean(raster, region), behind)
+            val label = "${fixture.name} phase $phase $lookName, footprint $footprint"
+            compose.runOnIdle { MaterialAreaReduction.legacyOverride = false; legacy = false; appearance = look; bitmap = raster }
+            val expected = expectedPixel(expectedMean(raster, region), premultiplied(raster, origin.x.toInt() + centre.width, origin.y.toInt() + centre.height))
             val fresh = eventually {
                 val pixels = compose.onNodeWithTag("glass").captureToImage().toPixelMap()
                 // Uniform fill: three points agree with the integrated mean (the plain look is the ideal-mean budget).
@@ -281,8 +313,8 @@ class NoneExactReductionTest {
                 pixels[centre.width, centre.height]
             }
             if (!modern) continue
-            // The same scene through the pre-#691 bilinear chain: the drift budget.
-            compose.runOnIdle { MaterialAreaReduction.legacyHalvings = true; legacy = true }
+            // The same scene through the frozen pre-#691 path: the final-output drift budget.
+            compose.runOnIdle { MaterialAreaReduction.legacyOverride = true; legacy = true }
             val old = eventually {
                 val point = centre("glass")
                 if (look === plain) assertFill("$label legacy", expected, point, region)
@@ -290,11 +322,10 @@ class NoneExactReductionTest {
             }
             drift.add(label, fresh, old)
         }
-        compose.runOnIdle { MaterialAreaReduction.legacyHalvings = false }
+        compose.runOnIdle { MaterialAreaReduction.legacyOverride = false }
         if (!modern) return
-        receipt("footprint-${footprint.width}x${footprint.height}", drift, mapOf("footprint" to "$footprint", "fixtures" to fixtures().size))
-        assertTrue("Legacy vs block-mean drift max ${drift.max} codes at ${drift.worst} exceeds $driftMaxCodes", drift.max <= driftMaxCodes)
-        assertTrue("Legacy vs block-mean drift mean ${drift.mean} codes exceeds $driftMeanCodes", drift.mean <= driftMeanCodes)
+        receipt("footprint-${footprint.width}x${footprint.height}", drift, mapOf("footprint" to "$footprint", "fixtures" to fixtures().size, "phases" to phases.size, "looks" to looks.size))
+        drift.assertWithin(driftMaxCodes, driftMeanCodes)
     }
 
     @Test fun footprintJustAboveAPowerOfTwo() = footprint(IntSize(257, 129))
@@ -321,7 +352,7 @@ class NoneExactReductionTest {
                 LiquidGlassSurface(Modifier.size(512.dp, 128.dp).testTag("glass"), source, cornerRadius = 0.dp, pressFeedback = false, shadow = false)
             }
         }
-        compose.waitUntil(15_000) { source.recorded && (Build.VERSION.SDK_INT >= 33 || source.snapshot != null) }
+        compose.waitUntil(15_000) { source.recorded && (modern || source.snapshot != null) }
         val region = Rect(0f, 0f, 512f, 128f)
         for (v in listOf(true, false)) {
             compose.runOnIdle { vertical = v }
@@ -335,34 +366,101 @@ class NoneExactReductionTest {
         }
     }
 
-    /** A scaled consumer maps to a fractional source region (321.25×161.25); the fill is read from the screen. */
+    /** A scaled consumer maps to a fractional source region (321.25×161.25); both looks, both phases, both chains. */
     @Test fun scaledSurfaceAveragesItsFractionalSourceRegion() {
         lateinit var source: FrostedBackdrop
         val fixture = fixtures()[4]
         var bitmap by mutableStateOf(rasterize(fixture, 0f))
+        var appearance by mutableStateOf(plain)
+        var legacy by mutableStateOf(false)
         compose.setContent {
             source = rememberFrostedBackdrop(Unit, dark = false)
-            Scene(bitmap, plain, source) {
+            Scene(bitmap, appearance, source) {
                 Box(Modifier.offset(origin.x.dp, origin.y.dp).graphicsLayer { scaleX = 1.25f; scaleY = 1.25f; transformOrigin = TransformOrigin(0f, 0f) }) {
-                    LiquidGlassSurface(Modifier.size(257.dp, 129.dp).testTag("glass"), source,
-                        cornerRadius = 0.dp, pressFeedback = false, shadow = false)
+                    key(legacy) {
+                        LiquidGlassSurface(Modifier.size(257.dp, 129.dp).testTag("glass"), source,
+                            cornerRadius = 0.dp, pressFeedback = false, shadow = false)
+                    }
                 }
             }
         }
-        compose.waitUntil(15_000) { source.recorded && (Build.VERSION.SDK_INT >= 33 || source.snapshot != null) }
+        compose.waitUntil(15_000) { source.recorded && (modern || source.snapshot != null) }
         val region = Rect(origin, Size(257f * 1.25f, 129f * 1.25f))
-        for (phase in listOf(0f, .375f)) {
+        val drift = Drift()
+        for ((lookName, look) in looks) for (phase in phases) {
             val raster = rasterize(fixture, phase)
-            compose.runOnIdle { bitmap = raster }
+            val label = "${fixture.name} phase $phase $lookName scaled 1.25"
+            compose.runOnIdle { MaterialAreaReduction.legacyOverride = false; legacy = false; appearance = look; bitmap = raster }
             val expected = expectedPixel(expectedMean(raster, region), Color.Black)
-            eventually {
-                val node = compose.onNodeWithTag("glass").fetchSemanticsNode()
-                val location = IntArray(2).also { (node.root as androidx.compose.ui.platform.ViewRootForTest).view.getLocationOnScreen(it) }
-                val centre = node.boundsInRoot.center
-                val screen = InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot()
-                val actual = try { Color(screen.getPixel((centre.x + location[0]).toInt(), (centre.y + location[1]).toInt())) } finally { screen.recycle() }
-                assertFill("${fixture.name} phase $phase scaled 1.25", expected, actual, region)
-            }
+            val fresh = eventually { onScreenCentre("glass").also { if (look === plain) assertFill(label, expected, it, region) } }
+            if (!modern) continue
+            compose.runOnIdle { MaterialAreaReduction.legacyOverride = true; legacy = true }
+            val old = eventually { onScreenCentre("glass").also { if (look === plain) assertFill("$label legacy", expected, it, region) } }
+            drift.add(label, fresh, old)
         }
+        compose.runOnIdle { MaterialAreaReduction.legacyOverride = false }
+        if (!modern) return
+        receipt("scaled-1.25", drift, mapOf("region" to "$region"))
+        drift.assertWithin(driftMaxCodes, driftMeanCodes)
+    }
+
+    /** None source/home mixes (a morph's home weight) at 0, .25, .5 and 1, plus an unready home: the fill is
+     * the weight-mixed pair of means, both chains within the budgets. */
+    @Test fun sourceAndHomeMixesFollowTheirWeightedMeans() {
+        lateinit var source: FrostedBackdrop
+        lateinit var home: FrostedBackdrop
+        val sourceFixture = fixtures()[2]   // quadrants
+        val homeFixture = fixtures()[13]    // artwork split and checker
+        lateinit var unready: FrostedBackdrop
+        var weight by mutableFloatStateOf(0f)
+        var useUnreadyHome by mutableStateOf(false)
+        var appearance by mutableStateOf(plain)
+        var legacy by mutableStateOf(false)
+        val sourceRaster = rasterize(sourceFixture, 0f)
+        val homeRaster = rasterize(homeFixture, .375f)
+        val footprint = IntSize(257, 129)
+        compose.setContent { Fixture(appearance) {
+            source = rememberFrostedBackdrop("source", dark = false)
+            home = rememberFrostedBackdrop("home", dark = false)
+            // Never recorded: a requested home whose first record has not happened yet.
+            unready = rememberFrostedBackdrop("unready", dark = false)
+            Box(Modifier.size(sourceWidth.dp, sourceHeight.dp).background(Color.Black)) {
+                Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(source)) { drawImage(sourceRaster.asImageBitmap(), filterQuality = FilterQuality.None) }
+                Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(home)) { drawImage(homeRaster.asImageBitmap(), filterQuality = FilterQuality.None) }
+                key(legacy, useUnreadyHome) {
+                    LiquidGlassSurface(Modifier.offset(origin.x.dp, origin.y.dp).size(footprint.width.dp, footprint.height.dp).testTag("glass"),
+                        source, cornerRadius = 0.dp, pressFeedback = false, shadow = false,
+                        homeSource = if (useUnreadyHome) unready else home, homeWeight = { weight })
+                }
+            }
+        } }
+        compose.waitUntil(15_000) { source.recorded && home.recorded && (modern || (source.snapshot != null && home.snapshot != null)) }
+        val region = Rect(origin, Size(footprint.width.toFloat(), footprint.height.toFloat()))
+        val sourceMean = expectedPixel(expectedMean(sourceRaster, region), Color.Black)
+        val homeMean = expectedPixel(expectedMean(homeRaster, region), Color.Black)
+        val drift = Drift()
+        for ((lookName, look) in looks) for (w in listOf(0f, .25f, .5f, 1f)) {
+            val label = "mix weight $w $lookName"
+            val expected = Color(sourceMean.red * (1 - w) + homeMean.red * w, sourceMean.green * (1 - w) + homeMean.green * w, sourceMean.blue * (1 - w) + homeMean.blue * w)
+            compose.runOnIdle { MaterialAreaReduction.legacyOverride = false; legacy = false; appearance = look; weight = w }
+            val fresh = eventually { centre("glass").also { if (look === plain) assertFill(label, expected, it, region) } }
+            if (!modern) continue
+            compose.runOnIdle { MaterialAreaReduction.legacyOverride = true; legacy = true }
+            val old = eventually { centre("glass").also { if (look === plain) assertFill("$label legacy", expected, it, region) } }
+            drift.add(label, fresh, old)
+        }
+        // Readiness: a requested home that is not recorded draws no fill in either chain (the home scene,
+        // drawn above the source, shows through).
+        val behind = premultiplied(homeRaster, origin.x.toInt() + footprint.width / 2, origin.y.toInt() + footprint.height / 2)
+        for (useLegacy in listOf(false, true)) {
+            if (useLegacy && !modern) break
+            compose.runOnIdle { MaterialAreaReduction.legacyOverride = useLegacy; legacy = useLegacy; appearance = plain; weight = .5f; useUnreadyHome = true }
+            eventually { assertFill("unready home ${if (useLegacy) "legacy" else "fresh"}", behind, centre("glass"), region) }
+            compose.runOnIdle { useUnreadyHome = false }
+        }
+        compose.runOnIdle { MaterialAreaReduction.legacyOverride = false }
+        if (!modern) return
+        receipt("source-home-mix", drift, mapOf("footprint" to "$footprint"))
+        drift.assertWithin(driftMaxCodes, driftMeanCodes)
     }
 }
