@@ -661,26 +661,38 @@ class SearchImeMotionTest {
     // the idle-gated waits in advanceUntil pump it through Espresso idling (never idle
     // while the legacy ADJUST_RESIZE hide relayouts both windows) or one frame at a time,
     // so the first moving frame was placed 220-440 ms after the dismissal, after the native
-    // keyboard surface was gone (#674). Until that frame exists, advance two frames per
-    // UI-thread turn with no idle wait: the dismissal composition and the first moving
-    // frame then share one turn, before any hide can start. Reduced motion has no
-    // intermediate frame; the established loop keeps its behavior there.
+    // keyboard surface was gone (#674). Until that frame exists, pump frames inside one
+    // UI-thread message with no idle wait: the dismissal composition, the animation's
+    // start frame and the first moving frame then share one turn, before any hide can
+    // start. Reduced motion has no intermediate frame; the established loop keeps its
+    // behavior there.
     private fun awaitFirstReturnFrame(wallTimeoutMillis: Long = 5000) {
         val wallStart = SystemClock.uptimeMillis()
         val virtualStart = compose.mainClock.currentTime
         var turns = 0
+        var frames = 0
         while (true) {
-            // Dismissal writes land in the global snapshot from the input event; the
-            // recomposer only learns of them once they are applied.
-            compose.runOnUiThread { androidx.compose.runtime.snapshots.Snapshot.sendApplyNotifications() }
-            compose.mainClock.advanceTimeBy(32)
-            turns++
+            // One main-thread message, like the idle burst: dismissal composition, the
+            // animation's start frame and its first moving frame cannot be split by a
+            // real traversal (which would relayout the Dialog's released focus and let
+            // the hide start). Dismissal writes land in the global snapshot from the
+            // input event; the recomposer only learns of them once they are applied.
             val (witnessed, retired) = compose.runOnUiThread {
-                samples.any { !it.opening && it.progress in .01f.. .99f } to !anchor.modalPresent
+                androidx.compose.runtime.snapshots.Snapshot.sendApplyNotifications()
+                fun witnessed() = samples.any { !it.opening && it.progress in .01f.. .99f }
+                var pumped = 0
+                while (pumped < 6 && !witnessed() && anchor.modalPresent) {
+                    compose.mainClock.advanceTimeByFrame()
+                    pumped++
+                }
+                frames += pumped
+                witnessed() to !anchor.modalPresent
             }
+            turns++
             if (witnessed || retired) {
-                motionTimeline += "${SystemClock.uptimeMillis()} first-return-frame turns=$turns witnessed=$witnessed " +
-                    "retired=$retired wall=${SystemClock.uptimeMillis() - wallStart} virtual=${compose.mainClock.currentTime - virtualStart}"
+                motionTimeline += "${SystemClock.uptimeMillis()} first-return-frame turns=$turns frames=$frames " +
+                    "witnessed=$witnessed retired=$retired wall=${SystemClock.uptimeMillis() - wallStart} " +
+                    "virtual=${compose.mainClock.currentTime - virtualStart}"
                 return
             }
             val now = SystemClock.uptimeMillis()
