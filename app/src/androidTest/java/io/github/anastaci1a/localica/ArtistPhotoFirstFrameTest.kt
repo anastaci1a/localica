@@ -48,8 +48,39 @@ class ArtistPhotoFirstFrameTest {
     @Test fun coldSearchResults() = checkContext("search", cold = true)
     @Test fun coldCollectionHeader() = checkContext("header", cold = true)
     @Test fun unknownIndexNeverPresentsAlbumArt() = checkContext("header", cold = true, unknown = true)
+    @Test fun headerUsesIndexedPhotoBeforeLibraryRowsArrive() = checkContext("header", emptyHeader = true)
 
-    private fun checkContext(surface: String, cold: Boolean = false, unknown: Boolean = false) {
+    @Test fun warmLookupsDoNotReadDiskOnMain() {
+        val root = File(context.cacheDir, "artist-memory-${UUID.randomUUID()}")
+        val consent = object : NetworkConsent {
+            override val allowed = MutableStateFlow(true)
+            override suspend fun setAllowed(value: Boolean) { allowed.value = value }
+        }
+        val disk = ArtistPhotoDisk(File(root, "photos"), File(root, "choices"), 8L * 1024 * 1024)
+        val photos = ArtistPhotos(consent, disk, PhotoTransport { _, _ -> error("No network") })
+        val key = artistPhotoCacheKey("Artist:memory")
+        try {
+            val decoded = runBlocking(Dispatchers.IO) {
+                val bytes = ByteArrayOutputStream().also { bitmap(android.graphics.Color.RED).compress(Bitmap.CompressFormat.PNG, 100, it) }.toByteArray()
+                val photo = disk.savePhoto("Artist:memory", RemoteArtist(ArtistPhotoChoice(ArtistPhotoProvider.DEEZER, "8"), "Artist", emptyList()), bytes, 1)
+                photos.loadIndex()
+                requireNotNull(ArtistPhotoPixels.read(photo, thumbnail = true))
+            }
+            compose.runOnUiThread {
+                val previous = android.os.StrictMode.getThreadPolicy()
+                try {
+                    android.os.StrictMode.setThreadPolicy(android.os.StrictMode.ThreadPolicy.Builder()
+                        .detectDiskReads().detectDiskWrites().penaltyDeath().build())
+                    repeat(100) {
+                        val photo = requireNotNull(photos.peekKey(key)?.photo)
+                        assertSame(decoded, ArtistPhotoPixels.peek(photo, thumbnail = true))
+                    }
+                } finally { android.os.StrictMode.setThreadPolicy(previous) }
+            }
+        } finally { root.deleteRecursively() }
+    }
+
+    private fun checkContext(surface: String, cold: Boolean = false, unknown: Boolean = false, emptyHeader: Boolean = false) {
         val root = File(context.cacheDir, "artist-first-frame-${UUID.randomUUID()}")
         val consent = object : NetworkConsent {
             override val allowed = MutableStateFlow(true)
@@ -89,7 +120,7 @@ class ArtistPhotoFirstFrameTest {
                     if (show) key(kind) {
                         if (surface == "header") Row {
                             currentItems.forEach { item ->
-                                val result = BrowseResult(item.songs.map { row -> BrowserItem(MediaRef(MediaKind.Song, row.track.id), row.track.title, null, listOf(row), row = row) })
+                                val result = if (emptyHeader) BrowseResult() else BrowseResult(item.songs.map { row -> BrowserItem(MediaRef(MediaKind.Song, row.track.id), row.track.title, null, listOf(row), row = row) })
                                 val album = PlayerVisual(bitmap(android.graphics.Color.BLUE).asImageBitmap(), contentKey = "album")
                                 val visual = rememberArtistCollectionVisual(item.ref, item.title, result, item.coverUris.first(), album)
                                 PlayerArtwork(visual, Modifier.size(120.dp).testTag("header-${item.key}"), RectangleShape, ContentScale.Crop, 240)
