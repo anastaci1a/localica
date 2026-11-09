@@ -9,14 +9,20 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.PathParser
 import androidx.compose.ui.unit.dp
 
-/** Imported paths use the same Compose vector tree and painter as resource vectors. */
+/** Imported paths use the same Compose vector tree and painter as resource vectors, optically centred (#724). */
 internal fun SvgIcon.toImageVector(): ImageVector {
+    val drawn = toImageVector(shiftY = 0f)
+    val shift = drawn.opticalShiftY()
+    return if (shift == 0f) drawn else toImageVector(shift)
+}
+
+private fun SvgIcon.toImageVector(shiftY: Float): ImageVector {
     val builder = ImageVector.Builder(defaultWidth = 24.dp, defaultHeight = 24.dp,
         viewportWidth = 24f, viewportHeight = 24f)
     val scale = 24f / maxOf(viewBox[2], viewBox[3])
     builder.addGroup(scaleX = scale, scaleY = scale,
         translationX = (24f - viewBox[2] * scale) / 2f - viewBox[0] * scale,
-        translationY = (24f - viewBox[3] * scale) / 2f - viewBox[1] * scale)
+        translationY = (24f - viewBox[3] * scale) / 2f - viewBox[1] * scale + shiftY)
     fun append(nodes: List<SvgNode>) {
         nodes.forEach { node -> when (node) {
             is SvgNode.Path -> with(node.style) {

@@ -33,6 +33,13 @@ Rules:
 - A pack without a valid `pack.json`, or with no usable icon, is refused and the current icons stay.
 - Notification small icons are system-rendered and cannot be replaced.
 - Fit the glyph inside the image with a small margin; the built-in icons use about 10 percent.
+- Centre the glyph by its bounds; the app applies optical centring.
+
+## Optical centring
+
+Every glyph, built-in or imported, moves vertically half-way from its bounding-box centre toward its ink-weighted centre. Bottom-heavy glyphs such as Save rise, top-heavy glyphs drop, and symmetric glyphs keep their exact position. Moves below 0.05 dp are ignored and never push ink past the icon edge. Raster masks move by whole pixels.
+
+Vectors are measured from their paths during import and stay paths. Template exports contain the uncorrected geometry, so a re-imported template matches the built-in icons.
 
 ## SVG subset
 
