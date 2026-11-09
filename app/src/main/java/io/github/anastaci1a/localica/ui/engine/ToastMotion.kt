@@ -26,13 +26,14 @@ internal fun toastButtonProjection(toast: Rect, original: Rect, downwardTravelPx
     initialBodyWidthPx: Float,
     initialRestingLeftPx: Float,
     private var shadowClearancePx: Float,
+    initiallyVisible: Boolean = false,
     private val endpoint: (ToastMotionEndpoint) -> Unit,
 ) {
     private var bodyWidthPx by mutableFloatStateOf(initialBodyWidthPx)
     private var restingLeftPx by mutableFloatStateOf(initialRestingLeftPx)
     private val hiddenLeftPx get() = -bodyWidthPx - shadowClearancePx
     private val profile = motionProfileId(MotionProfile.Floating)
-    private val position = MotionFloat(clock, hiddenLeftPx,
+    private val position = MotionFloat(clock, if (initiallyVisible) initialRestingLeftPx else hiddenLeftPx,
         requireNotNull(clock.spec.geometry).maxViewportDiagonalPx, key = key to "toast-left")
     private var exiting = false
     private var contacting = false
@@ -114,11 +115,11 @@ internal fun toastButtonProjection(toast: Rect, original: Rect, downwardTravelPx
 
 /** Components borrow the owner; construction, root clock lookup and disposal stay in Engine. */
 @Composable internal fun rememberToastMotion(key: Any, widthPx: Float, restingLeftPx: Float,
-    shadowClearancePx: Float, endpoint: (ToastMotionEndpoint) -> Unit): ToastMotion {
+    shadowClearancePx: Float, initiallyVisible: Boolean, endpoint: (ToastMotionEndpoint) -> Unit): ToastMotion {
     val clock = ownerClock()
     val callback = rememberUpdatedState(endpoint)
     val motion = remember(clock, key) {
-        ToastMotion(clock, key, widthPx, restingLeftPx, shadowClearancePx) { callback.value(it) }
+        ToastMotion(clock, key, widthPx, restingLeftPx, shadowClearancePx, initiallyVisible) { callback.value(it) }
     }
     SideEffect { motion.place(widthPx, restingLeftPx, shadowClearancePx) }
     DisposableEffect(motion) { onDispose { motion.dispose() } }

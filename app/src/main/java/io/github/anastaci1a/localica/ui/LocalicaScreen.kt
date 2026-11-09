@@ -386,17 +386,18 @@ fun LocalicaScreen(
     val browseRow = rowScene(navigation.route.key)
     val queueRow = remember { FloatingRowScene(ToastRowOwner("player-queue"), queue = true) }
     val rowViewport = remember { FloatingRowViewport() }
+    val rowLimit = rememberFloatingRowLimit(rowViewport, with(density) { StockUiSpec.clearance.getValue(Clearance.FloatingGap).toPx() })
     val rowPresentation = remember { ToastRowPresentation() }
     val currentBrowseRow by rememberUpdatedState(browseRow)
     val browseBottomFallback by rememberUpdatedState(with(density) { (browseBottomChrome + selectionPanel.clearance).toPx() })
     val playerBottomInset by rememberUpdatedState(with(density) { (navigationInset + StockUiSpec.clearance.getValue(Clearance.FloatingGap)).toPx() })
     val rowSeat = rememberFloatingRowSeat(
         browse = { rowFaces.originals(currentBrowseRow).maxOfOrNull { requireNotNull(it.original).bottom }
-            ?: ((rowViewport.bounds?.bottom ?: window.height.toFloat()) - browseBottomFallback) },
-        player = { (rowViewport.bounds?.bottom ?: window.height.toFloat()) - playerBottomInset },
+            ?: (window.height.toFloat() - browseBottomFallback) },
+        player = { window.height.toFloat() - playerBottomInset },
         progress = { phase.value() },
         queue = { rowFaces.originals(queueRow).maxOfOrNull { requireNotNull(it.original).bottom } },
-        queueShown = { hasPlayer && playerVisible && queueVisible })
+        queueShown = { hasPlayer && playerVisible && queueVisible }, limit = rowLimit)
     val rowRoot = remember(rowViewport, rowSeat, rowPresentation) { ToastRowRoot(rowViewport, rowSeat, rowPresentation) }
     val bottomShadows = rememberShadowPlane()
     SideEffect { LongScroll.style = settings.longScroll }
@@ -587,12 +588,12 @@ fun LocalicaScreen(
         val rowInput = rootModal?.blocked != true && (rootModal?.coordinator?.presentedModalCount ?: 0) == 0
         screenScope.PlayerOccludedOverlay({ phase.value() }, bottomChrome, occluding = { hasPlayer }) {
         RootFloatingFaces(rowFaces, queue = false, scene = browseRow.takeUnless { hasPlayer && playerFullyOpen },
-            toast = rowPresentation::body, downwardPx = rowDownward, fieldOutset = rowOutset,
+            toast = rowPresentation::body, downwardPx = rowDownward, fieldOutset = rowOutset, limit = rowLimit,
             interactive = rowInput && !playerCoversBrowse, modifier = Modifier.floatingRowViewport(rowViewport))
         }
         screenScope.PlayerClippedOverlay({ phase.value() }, bottomChrome) {
             RootFloatingFaces(rowFaces, queue = true, scene = queueRow, admitted = { rowSeat.queueAdmitted },
-                toast = rowPresentation::body, downwardPx = rowDownward, fieldOutset = rowOutset,
+                toast = rowPresentation::body, downwardPx = rowDownward, fieldOutset = rowOutset, limit = rowLimit,
                 sourceOpacity = { queuePlayerOpacity(phase.value()) }, interactive = rowInput && rowSeat.queueInteractive)
         }
         ToastGlassPresenter(rowRoot, if (playerVisible) playerBackdrop else browseBackdrop, modal = !rowInput)

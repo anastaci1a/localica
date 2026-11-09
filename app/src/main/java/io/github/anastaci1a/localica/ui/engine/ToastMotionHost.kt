@@ -22,7 +22,7 @@ import kotlin.math.roundToInt
  * Components receive lifecycle events and a modifier, never a sampled motion coordinate. */
 @Composable internal fun ToastMotionHost(key: Any, viewport: FloatingRowViewport,
     seat: FloatingRowSeatProjection, edgePx: Float, shadowClearancePx: Float, exiting: Boolean,
-    enabled: Boolean, readingReady: Boolean,
+    enabled: Boolean, readingReady: Boolean, initiallyVisible: Boolean,
     bind: (Any, () -> Rect?) -> (() -> Unit), exited: () -> Unit, ready: (Boolean) -> Unit,
     contactStarted: () -> Boolean, contactRejected: () -> Unit, releasing: (Boolean) -> Unit,
     content: @Composable (Modifier) -> Unit) {
@@ -34,7 +34,7 @@ import kotlin.math.roundToInt
     val left = (bounds?.left ?: 0f) + edgePx
     val onExited = rememberUpdatedState(exited)
     val motion = if (size.width > 0 && size.height > 0)
-        rememberToastMotion(key, size.width.toFloat(), left, shadowClearancePx) {
+        rememberToastMotion(key, size.width.toFloat(), left, shadowClearancePx, initiallyVisible) {
             if (it == ToastMotionEndpoint.Exited) onExited.value()
         } else null
     val onReady = rememberUpdatedState(ready)

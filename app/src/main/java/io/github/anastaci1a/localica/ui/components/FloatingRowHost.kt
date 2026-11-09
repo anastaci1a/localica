@@ -42,17 +42,22 @@ import io.github.anastaci1a.localica.ui.engine.*
  * it never recomposes a second copy for collision measurement or cached scene retention. */
 @Composable internal fun RootFloatingFaces(host: FloatingRowFaces, queue: Boolean,
     scene: FloatingRowScene?, toast: () -> Rect?, downwardPx: Float, fieldOutset: Float,
-    sourceOpacity: () -> Float = { 1f }, admitted: () -> Boolean = { true }, interactive: Boolean, modifier: Modifier = Modifier) {
+    sourceOpacity: () -> Float = { 1f }, limit: () -> Float? = { null }, admitted: () -> Boolean = { true }, interactive: Boolean, modifier: Modifier = Modifier) {
     val faces = host.faces.filter { it.scene.queue == queue }
+    fun original(face: FloatingRowFaces.Face): Rect? {
+        val bounds = face.original ?: return null
+        val basis = host.originals(face.scene).maxOfOrNull { requireNotNull(it.original).bottom } ?: bounds.bottom
+        return floatingRowOriginal(bounds, basis, limit())
+    }
     val placements = faces.map { face -> FloatingRowPlacement(face,
-        original = { face.original }, drawn = { face.visible && face.scene === scene && admitted() },
+        original = { original(face) }, drawn = { face.visible && face.scene === scene && admitted() },
         projection = { original -> toast()?.let { toastButtonProjection(it, original, downwardPx) }
             ?: ToastButtonProjection(1f, 0f, true) }, sourceOpacity = sourceOpacity) }
     FloatingRowPlane(placements, fieldOutset, modifier, measured = { index, size -> host.measured(faces[index], size) }) { index ->
         val face = faces[index]
         val drawn = face.visible && face.scene === scene
-        val uncovered by remember(face, toast, downwardPx) { derivedStateOf {
-            val original = face.original
+        val uncovered by remember(face, toast, downwardPx, limit) { derivedStateOf {
+            val original = original(face)
             val body = toast()
             original == null || body == null || toastButtonProjection(body, original, downwardPx).uncovered
         } }

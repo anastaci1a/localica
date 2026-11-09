@@ -1,6 +1,12 @@
 package io.github.anastaci1a.localica.ui.engine
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.union
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.graphics.addOutline
 import androidx.compose.ui.graphics.drawscope.clipPath
@@ -77,7 +83,7 @@ internal fun floatingRowSeat(browseBottom: Float, playerBottom: Float, playerPro
 /** Geometry is read by layout/draw; only the binary scene admission invalidates composition. */
 internal class FloatingRowSeatProjection(private val browse: () -> Float, private val player: () -> Float,
     private val progress: () -> Float, private val queue: () -> Float?, private val queueShown: () -> Boolean,
-    private val tick: () -> Unit = {}) {
+    private val tick: () -> Unit = {}, private val limit: () -> Float? = { null }) {
     private val admitted = androidx.compose.runtime.derivedStateOf {
         tick()
         queueShown() && queue()?.let { it <= floatingRowSeat(browse(), player(), progress(), null) } == true
@@ -85,24 +91,39 @@ internal class FloatingRowSeatProjection(private val browse: () -> Float, privat
     private val acceptsInput = derivedStateOf { progress() >= .99f }
     val queueInteractive: Boolean get() = acceptsInput.value
     val queueAdmitted: Boolean get() = admitted.value
-    val bottom: Float get() { tick(); return floatingRowSeat(browse(), player(), progress(), queue().takeIf { queueShown() }) }
+    val bottom: Float get() { tick(); return floatingRowLimitedBottom(floatingRowSeat(browse(), player(), progress(), queue().takeIf { queueShown() }), limit()) }
 }
 
 @Composable internal fun rememberFloatingRowSeat(browse: () -> Float, player: () -> Float,
-    progress: () -> Float, queue: () -> Float?, queueShown: () -> Boolean): FloatingRowSeatProjection {
+    progress: () -> Float, queue: () -> Float?, queueShown: () -> Boolean, limit: () -> Float? = { null }): FloatingRowSeatProjection {
     val clock = ownerClock()
     val b = rememberUpdatedState(browse); val p = rememberUpdatedState(player)
     val progressNow = rememberUpdatedState(progress); val q = rememberUpdatedState(queue)
     val shown = rememberUpdatedState(queueShown)
+    val limitNow = rememberUpdatedState(limit)
     return remember { FloatingRowSeatProjection({ b.value() }, { p.value() }, { progressNow.value() },
-        { q.value() }, { shown.value() }, { clock.stamp; Unit }) }
+        { q.value() }, { shown.value() }, { clock.stamp; Unit }, { limitNow.value() }) }
+}
+
+/** Clamp the shared row after admission; a keyboard must not admit an offscreen Queue. */
+internal fun floatingRowLimitedBottom(bottom: Float, limit: Float?): Float = if (limit == null) bottom else minOf(bottom, limit)
+
+/** Every original rectangle receives the same scene displacement before coverage and hit testing. */
+internal fun floatingRowOriginal(original: Rect, sceneBottom: Float, limit: Float?): Rect =
+    original.translate(0f, floatingRowLimitedBottom(sceneBottom, limit) - sceneBottom)
+
+@Composable internal fun rememberFloatingRowLimit(viewport: FloatingRowViewport, gapPx: Float): () -> Float? {
+    val gap = rememberUpdatedState(gapPx)
+    return remember(viewport) { { viewport.bounds?.bottom?.minus(gap.value) } }
 }
 
 internal class FloatingRowViewport {
     var bounds by mutableStateOf<Rect?>(null)
         internal set
 }
-internal fun Modifier.floatingRowViewport(viewport: FloatingRowViewport): Modifier = onGloballyPositioned {
+@OptIn(ExperimentalLayoutApi::class)
+@Composable internal fun Modifier.floatingRowViewport(viewport: FloatingRowViewport): Modifier =
+    windowInsetsPadding(WindowInsets.navigationBars.union(WindowInsets.ime)).onGloballyPositioned {
     val origin = it.positionInRoot()
     viewport.bounds = Rect(origin.x, origin.y, origin.x + it.size.width, origin.y + it.size.height)
 }

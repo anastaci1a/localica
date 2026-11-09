@@ -69,6 +69,8 @@ internal data class ToastContent(val entry: ToastEntry, val enabled: Boolean, va
         containsControls = true) ?: entry.content.durationMillis
     val dwell = toastRecommendedDwell(entry.content.durationMillis, recommendation)
     val currentDwell = rememberUpdatedState(dwell)
+    // A retained visible entry rejoins its seat when this Activity lease is recreated.
+    val initiallyVisible = remember { state.phase == ToastPhase.Visible }
     var atRest by remember { mutableStateOf(false) }
     var readingReady by remember(entry.generation) { mutableStateOf(false) }
     fun visible() {
@@ -115,6 +117,7 @@ internal data class ToastContent(val entry: ToastEntry, val enabled: Boolean, va
     val readingPaused = blocked || state.phase != ToastPhase.Visible || state.pauses.isNotEmpty()
     ToastMotionHost(entry.id, root.viewport, root.seat, edge, shadowClearancePx,
         exiting = state.phase == ToastPhase.Exiting, enabled = enabled, readingReady = readingReady,
+        initiallyVisible = initiallyVisible,
         bind = { owner, body ->
             root.presentation.bind(owner, body)
             val release: () -> Unit = { root.presentation.unbind(owner) }

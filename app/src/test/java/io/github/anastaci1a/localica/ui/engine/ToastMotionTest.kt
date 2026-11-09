@@ -14,12 +14,42 @@ class ToastMotionTest {
         return EngineHarness(access, spec)
     }
 
+    @Test fun retainedVisibleOwnerStartsSettledWithoutReplayingEntrance() {
+        for (access in listOf(MotionAccess.Standard, MotionAccess.Reduced)) harness(access).use { h ->
+            val evidence = BoundedEvidence(100)
+            EngineObservation(h.clock, evidence).use { observer ->
+                val endpoints = mutableListOf<ToastMotionEndpoint>()
+                val motion = ToastMotion(h.clock, "retained-toast", 376f, 12f, 24f, true, endpoints::add)
+                try {
+                    assertEquals(12f, motion.leftPx, 0f)
+                    assertTrue(motion.visibleAtRest)
+                    assertEquals(0, h.clock.activeCount)
+                    motion.enter()
+                    h.advance(.1)
+                    assertEquals(12f, motion.leftPx, 0f)
+                    assertTrue(motion.visibleAtRest)
+                    assertEquals(0, h.clock.activeCount)
+                    motion.place(700f, 12f)
+                    assertEquals(12f, motion.leftPx, 0f)
+                    assertTrue(motion.visibleAtRest)
+                    motion.exit()
+                    h.advance(2.0)
+                    assertEquals(-724f, motion.leftPx, 0f)
+                    assertEquals(ToastMotionEndpoint.Exited, endpoints.last())
+                } finally { motion.dispose() }
+                assertEquals(0, observer.continuity.registeredCount)
+                assertFalse(evidence.incomplete)
+                assertEquals(emptyList<Violation>(), evidence.violations)
+            }
+        }
+    }
+
     @Test fun exitBeforeFirstEntryRetiresExactlyOnceWithoutStartingFrames() {
         for (access in listOf(MotionAccess.Standard, MotionAccess.Reduced)) harness(access).use { h ->
             val evidence = BoundedEvidence(100)
             EngineObservation(h.clock, evidence).use { observer ->
                 val endpoints = mutableListOf<ToastMotionEndpoint>()
-                val motion = ToastMotion(h.clock, "toast", 376f, 12f, 24f, endpoints::add)
+                val motion = ToastMotion(h.clock, "toast", 376f, 12f, 24f, endpoint = endpoints::add)
                 try {
                     motion.exit()
                     assertEquals(listOf(ToastMotionEndpoint.Exited), endpoints)
@@ -39,7 +69,7 @@ class ToastMotionTest {
     @Test fun oneCoordinateSurvivesHoldReversalReleaseAndFiniteExit() {
         harness().use { h ->
             val endpoints = mutableListOf<ToastMotionEndpoint>()
-            val motion = ToastMotion(h.clock, "toast", 376f, 12f, 24f, endpoints::add)
+            val motion = ToastMotion(h.clock, "toast", 376f, 12f, 24f, endpoint = endpoints::add)
             assertEquals(-400f, motion.leftPx, 0f)
             motion.enter(); h.advance(1.0)
             assertEquals(12f, motion.leftPx, 0f)
@@ -71,7 +101,7 @@ class ToastMotionTest {
     @Test fun committedReleaseKeepsItsJoinAndCannotBeGrabbedAgain() {
         harness().use { h ->
             val endpoints = mutableListOf<ToastMotionEndpoint>()
-            val motion = ToastMotion(h.clock, "toast", 376f, 12f, 24f, endpoints::add)
+            val motion = ToastMotion(h.clock, "toast", 376f, 12f, 24f, endpoint = endpoints::add)
             motion.enter(); h.advance(1.0)
             motion.contact(); h.now += 10_000_000; motion.dragBy(-120f)
             val left = motion.leftPx
@@ -98,7 +128,7 @@ class ToastMotionTest {
         }
         harness(MotionAccess.Reduced).use { h ->
             val endpoints = mutableListOf<ToastMotionEndpoint>()
-            val motion = ToastMotion(h.clock, "toast", 376f, 12f, 24f, endpoints::add)
+            val motion = ToastMotion(h.clock, "toast", 376f, 12f, 24f, endpoint = endpoints::add)
             motion.enter()
             assertEquals(12f, motion.leftPx, 0f)
             assertEquals(listOf(ToastMotionEndpoint.Visible), endpoints)
@@ -114,7 +144,7 @@ class ToastMotionTest {
             val evidence = BoundedEvidence(100)
             EngineObservation(h.clock, evidence).use { observer ->
                 val endpoints = mutableListOf<ToastMotionEndpoint>()
-                val motion = ToastMotion(h.clock, "toast", 376f, 12f, 24f, endpoints::add)
+                val motion = ToastMotion(h.clock, "toast", 376f, 12f, 24f, endpoint = endpoints::add)
                 try {
                     motion.enter(); h.advance(.08)
                     assertTrue(motion.contact())
@@ -138,7 +168,7 @@ class ToastMotionTest {
             val evidence = BoundedEvidence(100)
             EngineObservation(h.clock, evidence).use { observer ->
                 val endpoints = mutableListOf<ToastMotionEndpoint>()
-                val motion = ToastMotion(h.clock, "toast", 376f, 12f, 24f, endpoints::add)
+                val motion = ToastMotion(h.clock, "toast", 376f, 12f, 24f, endpoint = endpoints::add)
                 motion.enter(); h.advance(.08); motion.leftPx
                 motion.contact(); h.now += 10_000_000; motion.dragBy(-40f)
                 motion.place(300f, 16f)
