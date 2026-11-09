@@ -136,6 +136,20 @@ class SettingsStockGeometryTest {
         return bitmap
     }
 
+    private fun activateOrderActions(available: Boolean, accessible: Boolean): List<String> {
+        clicks.clear()
+        listOf("Move up", "Move down", "Remove").forEach { label ->
+            val button = compose.onNodeWithText(label)
+            if (!available) button.assertIsNotEnabled() else {
+                button.assertIsEnabled()
+                if (accessible) button.performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick) { it() }
+                else button.performClick()
+            }
+        }
+        compose.waitForIdle()
+        return clicks.toList()
+    }
+
     private fun compare(kind: Int) {
         show()
         for (rtl in listOf(false, true)) for (scale in listOf(1f, 2f)) for (available in if (kind <= 1) listOf(true, false) else listOf(true)) {
@@ -145,6 +159,8 @@ class SettingsStockGeometryTest {
             compose.waitForIdle()
             val beforeNodes = nodes()
             val before = pixels("$cell-base-4ec747a8")
+            val baselineTouch = if (kind <= 1) activateOrderActions(available, accessible = false) else emptyList()
+            val baselineAccessible = if (kind <= 1) activateOrderActions(available, accessible = true) else emptyList()
             compose.runOnIdle { adopted = true }
             compose.waitForIdle()
             assertEquals("Semantic bounds and actions $cell", beforeNodes, nodes())
@@ -155,12 +171,15 @@ class SettingsStockGeometryTest {
             assertEquals("Image height $cell", before.height, after.height)
             assertTrue("Pixel-identical stock geometry $cell", before.sameAs(after))
             if (kind <= 1) {
-                clicks.clear()
-                listOf("Move up", "Move down", "Remove").forEach { label ->
-                    val button = compose.onNodeWithText(label)
-                    if (available) button.assertIsEnabled().performClick() else button.assertIsNotEnabled()
-                }
-                assertEquals("Action order $cell", if (available) listOf("up", "down", "remove") else emptyList<String>(), clicks)
+                val adoptedTouch = activateOrderActions(available, accessible = false)
+                val adoptedAccessible = activateOrderActions(available, accessible = true)
+                File(output(), "$cell-actions.txt").writeText("source=" + BuildConfig.SOURCE_SHA +
+                    "\nbaselineTouch=" + baselineTouch + "\nadoptedTouch=" + adoptedTouch +
+                    "\nbaselineAccessible=" + baselineAccessible + "\nadoptedAccessible=" + adoptedAccessible + "\n")
+                assertEquals("Pinned touch activation order $cell", baselineTouch, adoptedTouch)
+                assertEquals("Original accessible action order $cell",
+                    if (available) listOf("up", "down", "remove") else emptyList<String>(), baselineAccessible)
+                assertEquals("Accessible action order $cell", baselineAccessible, adoptedAccessible)
             }
         }
     }
