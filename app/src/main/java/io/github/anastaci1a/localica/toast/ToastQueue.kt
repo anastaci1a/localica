@@ -42,10 +42,13 @@ sealed interface ToastEnqueue {
 /** One serialized reducer, safe for background callers. Its presenter owns one cancellable deadline.
  * Capacity includes the current entry. Overflow can evict only pending, non-actionable status;
  * actionable entries and the visible surface are never silently removed. */
-class ToastQueue(private val capacity: Int = 32, private val clockMillis: () -> Long = { System.nanoTime() / 1_000_000 }) {
+class ToastQueue(private val capacity: Int = 32,
+    onUndeliveredCommittedToast: (CommittedToastReceipt) -> Unit = {},
+    private val clockMillis: () -> Long = { System.nanoTime() / 1_000_000 }) {
     init { require(capacity > 0) }
     private val mutable = MutableStateFlow(ToastQueueState())
     val state = mutable.asStateFlow()
+    val committedOutcomes = ToastOutcomeReporter(::showToast, onUndeliveredCommittedToast)
     private var nextId = 0L
     private var epoch = 0L
     private var remaining = 0L

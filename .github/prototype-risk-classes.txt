@@ -434,3 +434,5 @@ io.github.anastaci1a.localica.QueueRemoveFaceTest
 io.github.anastaci1a.localica.IconPackAliasTest
 io.github.anastaci1a.localica.IconRegistryVisualTest
 io.github.anastaci1a.localica.ToastQueueControllerTest
+io.github.anastaci1a.localica.ToastQueueProducerTest
+io.github.anastaci1a.localica.ToastPlaylistProducerTest
