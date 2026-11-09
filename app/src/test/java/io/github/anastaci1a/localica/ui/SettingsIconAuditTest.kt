@@ -31,7 +31,7 @@ class SettingsIconAuditTest {
         val subpaths = pathData(xml).count { it == 'M' || it == 'm' }
         assertTrue("ic_download needs a shaft, an arrowhead and a tray, found $subpaths subpaths", subpaths >= 3)
         assertTrue("android:strokeWidth=\"1.8\"" in xml)
-        assertEquals("action.save_artwork", AppIcon.ActionSaveArtwork.id)
-        assertEquals(AppIcon.MenuDownload.builtin, AppIcon.ActionSaveArtwork.builtin)
+        assertEquals("action.save", AppIcon.ActionSave.id)
+        assertEquals(AppIcon.MenuDownload.builtin, AppIcon.ActionSave.builtin)
     }
 }

@@ -322,7 +322,7 @@ fun LocalicaScreen(
                     Modifier else Modifier.statusBarsPadding())) {
                 if (!collectionChrome) Row(Modifier.zIndex(2f).fillMaxWidth().heightIn(min = 56.dp).padding(horizontal = 12.dp),
                     horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                    if ((navigation.stacks[tab]?.size ?: 1) > 1) ActionIcon(AppIcon.ActionBack, "Back") { back() }
+                    if ((navigation.stacks[tab]?.size ?: 1) > 1) ActionIcon(AppIcon.ActionChevronLeft, "Back") { back() }
                     androidx.compose.animation.Crossfade(if (route.search) "Search" else route.title ?: route.tab.label,
                         modifier = Modifier.weight(1f), animationSpec = androidx.compose.animation.core.tween(settings.motionDuration(220)), label = "Page heading") { title ->
                         Text(title, style = MaterialTheme.typography.titleLarge, modifier = Modifier.testTag("page-heading"))

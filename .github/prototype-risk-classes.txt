@@ -407,3 +407,5 @@ io.github.anastaci1a.localica.ArtistPhotoActionsTest
 io.github.anastaci1a.localica.SearchReturnTopTest
 io.github.anastaci1a.localica.BrowseNoticeMeasurementTest
 io.github.anastaci1a.localica.QueueRemoveFaceTest
+io.github.anastaci1a.localica.IconPackAliasTest
+io.github.anastaci1a.localica.IconRegistryVisualTest

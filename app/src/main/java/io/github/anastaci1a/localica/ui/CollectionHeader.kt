@@ -218,7 +218,7 @@ internal fun BoxScope.CollectionToolbar(grid: LazyGridState, width: Int, title: 
     Row(Modifier.align(Alignment.TopCenter).fillMaxWidth().statusBarsPadding().padding(12.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         Box(Modifier.onGloballyPositioned { onBackBottom(it.positionInRoot().y + it.size.height) }) {
-            ActionIcon(AppIcon.ActionBack, "Back", onClick = onBack)
+            ActionIcon(AppIcon.ActionChevronLeft, "Back", onClick = onBack)
         }
         Text(title, Modifier.weight(1f).graphicsLayer { alpha = fade.value }
             .then(if (!titled) Modifier.clearAndSetSemantics {} else Modifier), maxLines = 1,

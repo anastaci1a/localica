@@ -117,7 +117,7 @@ internal fun ArtworkViewerContent(artwork: ImageBitmap?, loading: Boolean, onDis
                 ActionIcon(AppIcon.ActionClose, "Close artwork", onClick = onDismiss)
             }
             Box(Modifier.align(Alignment.BottomEnd)) {
-                ActionIcon(AppIcon.ActionSaveArtwork, "Save artwork", enabled = artwork != null, onClick = onSave)
+                ActionIcon(AppIcon.ActionSave, "Save artwork", enabled = artwork != null, onClick = onSave)
             }
         }
     }
