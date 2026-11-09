@@ -23,9 +23,10 @@ import io.github.anastaci1a.localica.ui.engine.*
 ) {
     private val key = Any()
     private var nativeDrawing by mutableStateOf(false)
+    private var sourceDrawing by mutableStateOf(true)
 
     @Composable fun Compact(modifier: Modifier = Modifier) {
-        Box(modifier.then(host.slots.externalHost { !nativeDrawing })) {
+        Box(modifier.then(host.slots.externalHost { sourceDrawing })) {
             host.Slot(key, 0, Modifier.fillMaxWidth())
         }
     }
@@ -37,8 +38,10 @@ import io.github.anastaci1a.localica.ui.engine.*
         }
     }
 
-    internal fun admitNative() { host.expanded = true; nativeDrawing = true }
-    internal fun restoreInstance() { host.expanded = false }
+    internal fun admitNative() { host.expanded = true; sourceDrawing = false; nativeDrawing = true }
+    // The source restoration receipt must include the shared recording. The existing native
+    // surface keeps replaying that same instance until the real source draw is acknowledged.
+    internal fun restoreInstance() { host.expanded = false; sourceDrawing = true }
     internal fun releaseNative() { nativeDrawing = false }
     internal fun destination(coordinates: LayoutCoordinates?) = host.slots.destinationLayout(coordinates)
     internal fun destinationOrigin(origin: Offset) = host.slots.destinationOrigin(origin)

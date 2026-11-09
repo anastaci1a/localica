@@ -847,8 +847,8 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                                     })
                             }
                         }
-                        Box(Modifier.onPlaced { sharedContent?.destination(it) }
-                            .graphicsLayer { alpha = if (page) 1f else motion.foreground.at(phase()) }
+                        Box(Modifier.graphicsLayer { alpha = if (page) 1f else motion.foreground.at(phase()) }
+                            .onPlaced { sharedContent?.destination(it) }
                             .then(if (!visible || !foregroundReady) Modifier.clearAndSetSemantics { }.pointerInput(Unit) {
                                 awaitPointerEventScope { while (true) awaitPointerEvent(PointerEventPass.Initial).changes.forEach { it.consume() } }
                             } else Modifier)) {
