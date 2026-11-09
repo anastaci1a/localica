@@ -52,17 +52,19 @@ internal class OwnedFieldRequest(val plane: ShadowPlane,val sourceGeneration: Lo
     internal var fieldInheritsBodyScale by mutableStateOf(true)
     internal val windowRetained get()=windowLeases>0
     internal val sourcePlane get()=low
+    // A native-only caster or a released source has no physical host to acknowledge its return.
+    internal val sourceReturnPlane get()=low.takeIf { sourceGeneration>0L && !sourceReleased }
     internal var sourceGeneration=0L; private set
     private var fieldRequest by mutableStateOf<OwnedFieldRequest?>(null)
     internal fun requestOwnedField(plane: ShadowPlane): OwnedFieldRequest {
         clock.checkMutation()
         val expansion=following?.expansion
         // A reopened logical target can still be waiting on the held closing native gate.
-        check(owns(plane) && plane===low && !sourceReleased && (expansion==null || expansion.nativeOpening==false))
+        check(owns(plane) && plane===sourceReturnPlane && (expansion==null || expansion.nativeOpening==false))
         return OwnedFieldRequest(plane,sourceGeneration,expansion,expansion?.nativeGeneration).also { fieldRequest=it; plane.requestDraw() }
     }
     internal fun currentFieldRequest(request: OwnedFieldRequest): Boolean = fieldRequest===request && !sourceReleased &&
-        sourceGeneration==request.sourceGeneration && low===request.plane && owns(request.plane) &&
+        sourceGeneration==request.sourceGeneration && sourceReturnPlane===request.plane && owns(request.plane) &&
         following?.expansion===request.expansion && request.expansion?.nativeGeneration==request.nativeGeneration &&
         (request.expansion==null || request.expansion.nativeOpening==false)
     /** Called only after this host actually draws the nonempty owned field. No snapshot writes in draw. */
