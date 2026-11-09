@@ -1,6 +1,6 @@
 package io.github.anastaci1a.localica
 
-import io.github.anastaci1a.localica.ui.engine.NoneReductionAtlasHost
+import io.github.anastaci1a.localica.ui.components.NoneReductionAtlasHost
 import io.github.anastaci1a.localica.ui.GlassColorShader
 import android.content.Context
 import android.content.Intent
