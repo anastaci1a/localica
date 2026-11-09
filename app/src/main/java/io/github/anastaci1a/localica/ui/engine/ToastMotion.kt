@@ -60,9 +60,11 @@ internal fun toastButtonProjection(toast: Rect, original: Rect, downwardTravelPx
     fun enter() { if (!exiting && !contacting) position.retarget(restingLeftPx, profile) }
     fun exit() {
         if (exiting) return
+        val alreadyExited = position.settled && position.target == hiddenLeftPx
         exiting = true
         contacting = false
-        position.retarget(hiddenLeftPx, profile)
+        if (alreadyExited) endpoint(ToastMotionEndpoint.Exited)
+        else position.retarget(hiddenLeftPx, profile)
     }
 
     /** Call after the queue invalidates its dwell ticket, before awaiting horizontal slop. */

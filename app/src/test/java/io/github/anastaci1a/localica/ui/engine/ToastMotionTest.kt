@@ -14,6 +14,28 @@ class ToastMotionTest {
         return EngineHarness(access, spec)
     }
 
+    @Test fun exitBeforeFirstEntryRetiresExactlyOnceWithoutStartingFrames() {
+        for (access in listOf(MotionAccess.Standard, MotionAccess.Reduced)) harness(access).use { h ->
+            val evidence = BoundedEvidence(100)
+            EngineObservation(h.clock, evidence).use { observer ->
+                val endpoints = mutableListOf<ToastMotionEndpoint>()
+                val motion = ToastMotion(h.clock, "toast", 376f, 12f, 24f, endpoints::add)
+                try {
+                    motion.exit()
+                    assertEquals(listOf(ToastMotionEndpoint.Exited), endpoints)
+                    assertEquals(-400f, motion.leftPx, 0f)
+                    assertEquals(0, h.clock.activeCount)
+                    assertEquals(0, h.awaits)
+                    motion.exit()
+                    assertEquals(1, endpoints.size)
+                } finally { motion.dispose() }
+                assertEquals(0, observer.continuity.registeredCount)
+                assertFalse(evidence.incomplete)
+                assertEquals(emptyList<Violation>(), evidence.violations)
+            }
+        }
+    }
+
     @Test fun oneCoordinateSurvivesHoldReversalReleaseAndFiniteExit() {
         harness().use { h ->
             val endpoints = mutableListOf<ToastMotionEndpoint>()

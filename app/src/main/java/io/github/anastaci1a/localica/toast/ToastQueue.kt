@@ -49,11 +49,36 @@ class ToastQueue(private val capacity: Int = 32,
     private val mutable = MutableStateFlow(ToastQueueState())
     val state = mutable.asStateFlow()
     val committedOutcomes = ToastOutcomeReporter(::showToast, onUndeliveredCommittedToast)
+    private val mutablePresenter = MutableStateFlow<Long?>(null)
+    val activePresenter = mutablePresenter.asStateFlow()
+    private var nextPresenter = 0L
     private var nextId = 0L
     private var epoch = 0L
     private var remaining = 0L
     private var dwell = 0L
     private var presentedGeneration: Pair<Long, Long>? = null
+
+    /** A lease carries only an app-local number; native views and callbacks remain with the UI. */
+    @Synchronized fun attachPresenter(): ToastPresenterLease {
+        pause(ToastPause.Background, true)
+        pause(ToastPause.Modal, false)
+        pause(ToastPause.Accessibility, false)
+        // A replacement text owner must prove its own measurement/scroll completion.
+        publish(mutable.value.copy(marqueeComplete = false, deadline = null))
+        val token = ++nextPresenter
+        mutablePresenter.value = token
+        return ToastPresenterLease(this, token)
+    }
+
+    @Synchronized internal fun <T> fromPresenter(token: Long, rejected: T, operation: () -> T): T =
+        if (mutablePresenter.value == token) operation() else rejected
+
+    @Synchronized internal fun releasePresenter(token: Long): Boolean {
+        if (mutablePresenter.value != token) return false
+        mutablePresenter.value = null
+        pause(ToastPause.Background, true)
+        return true
+    }
 
     @Synchronized fun showToast(content: ToastMessage): ToastEnqueue {
         // Defend the app queue against subsequent mutation of a producer's artwork collection.
