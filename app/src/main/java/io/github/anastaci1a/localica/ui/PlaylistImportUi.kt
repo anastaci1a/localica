@@ -70,19 +70,19 @@ internal fun PlaylistCreationButton(library: LibrarySnapshot, state: PlaylistSta
             finally { loading = false }
         }
     }
-    Box(modifier) {
+    HoistedFloatingFace("playlist-create", modifier) {
         LiquidGlassSurface(Modifier.size(CompactControlSize).glassAnchor(menuAnchor).clickable { menu = true }) {
             menuAnchor.captureInk()
             Box(Modifier.fillMaxSize(), contentAlignment = androidx.compose.ui.Alignment.Center) {
                 Icon(appIconPainter(AppIcon.ActionPlus), "Add playlist", Modifier.size(24.dp))
             }
         }
+    }
         GlassMenu(menu, menuAnchor, { menu = false }) {
             ActionMenuItem("Create playlist", icon = AppIcon.TabPlaylists, enabled = !state.loading && !loading, onClick = { menu = false; naming = true })
             ActionMenuItem("Import playlist from file", icon = AppIcon.TabPlaylists, enabled = !state.loading && !loading,
                 onClick = { menu = false; picker.launch(arrayOf("*/*")) })
         }
-    }
     if (loading) GlassAlertDialog(onDismissRequest = { loadJob?.cancel() }, title = { Text("Reading playlist") },
         text = { LinearProgressIndicator(Modifier.fillMaxWidth()) }, confirmButton = {
             ActionTextButton(onClick = { loadJob?.cancel() }) { Text("Cancel") }

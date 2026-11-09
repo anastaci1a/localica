@@ -7,6 +7,8 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
+import io.github.anastaci1a.localica.toast.ToastCommand
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -141,6 +143,31 @@ fun LocalicaScreen(
     var sortingRoute by rememberSaveable { mutableStateOf<String?>(null) }
     var expanded by rememberSaveable { mutableStateOf(false) }
     var queueOpen by rememberSaveable { mutableStateOf(false) }
+    val displayLease = rememberSaveable(saver = androidx.compose.runtime.saveable.Saver<QueueDisplayLease, String>(
+        save = { it.queueId.orEmpty() }, restore = { QueueDisplayLease(it.takeIf(String::isNotEmpty)) })) { QueueDisplayLease() }
+    var toastNavigationEpoch by remember { mutableLongStateOf(0L) }
+    var toastExpectedRoute by remember { mutableStateOf<String?>(null) }
+    var toastScroll by remember { mutableStateOf<ToastScrollRequest?>(null) }
+    val activityWindow = androidx.compose.ui.platform.LocalView.current.rootView
+    val rootModal = LocalModalGestures.current
+    val livePlaylists by rememberUpdatedState(playlist)
+    fun cancelToastNavigation() {
+        toastNavigationEpoch++
+        displayLease.invalidate()
+        toastScroll?.cancel(); toastScroll = null
+        toastExpectedRoute = null
+    }
+    fun requestPlayer(open: Boolean) {
+        cancelToastNavigation()
+        expanded = open
+        if (!open && displayLease.queueId != null) queueOpen = false
+    }
+    fun requestQueue(open: Boolean) { cancelToastNavigation(); queueOpen = open }
+    DisposableEffect(displayLease) { onDispose { displayLease.dispose(); toastNavigationEpoch++; toastScroll?.cancel() } }
+    OnModalGestureCancellation { cancelToastNavigation() }
+    LaunchedEffect(navigation.route.key) {
+        if (toastExpectedRoute != null && toastExpectedRoute != navigation.route.key) cancelToastNavigation()
+    }
     LaunchedEffect(expanded) { if (expanded) { focusManager.clearFocus(); keyboard?.hide() } }
     var lyricsOpen by rememberSaveable { mutableStateOf(false) }
     var exitPrompt by remember { mutableStateOf(false) }
@@ -180,6 +207,7 @@ fun LocalicaScreen(
     val playerCoversBrowse = expanded && playerVisible
     val playerFullyOpen = playerRest == ExpansionRest.Open
     val queueClosed by rememberExpansionClosed(queueSheet.expansion)
+    val queueRest by rememberExpansionRest(queueSheet.expansion)
     val queueVisible = !queueClosed
     var queueOpeningRequest by rememberSaveable { mutableLongStateOf(0) }
     // QueueSurface removes its body at the closed endpoint. Keep intent/viewport
@@ -202,6 +230,7 @@ fun LocalicaScreen(
         (owner as? android.app.Activity)?.finish()
     }
     fun back() {
+        cancelToastNavigation()
         val previous = navigation.back(settings.tabHistory)
         if (previous != null) navigation = previous
         else if (settings.confirmExit) exitPrompt = true else exit()
@@ -213,6 +242,7 @@ fun LocalicaScreen(
     // The lyrics page is available even without local sources and stays open
     // across song changes; source discovery belongs to the page itself.
     fun openCollection(item: io.github.anastaci1a.localica.browse.BrowserItem) {
+        cancelToastNavigation()
         val route = BrowseRoute(navigation.active, item.ref, item.title)
         artworkStore.seed(route.key, artworkStore.scope(navigation.route.key)?.peek(item.coverUris)
             ?: io.github.anastaci1a.localica.library.ArtworkCache.peek(item.coverUris), item)
@@ -255,8 +285,60 @@ fun LocalicaScreen(
     val playerSample = remember(playbackSample, currentTrack) {
         playbackSample?.let { sample -> { playerDisplayState(sample(), currentTrack) } }
     }
-    val hasPlayer = currentTrack != null || playback.trackUri != null
-    LaunchedEffect(hasPlayer) { if (!hasPlayer) { expanded = false; queueOpen = false } }
+    val playbackPresent = currentTrack != null || playback.trackUri != null
+    // UI display admission never changes activeId, decoder, queue persistence or play intent.
+    val hasPlayer = playbackPresent || displayLease.queueId != null &&
+        (expanded || queueOpen || playerRest != ExpansionRest.Closed || !queueClosed)
+    LaunchedEffect(playbackPresent, displayLease.queueId, expanded, queueOpen, playerRest, queueClosed) {
+        displayLease.reconcile(playbackPresent, expanded, queueOpen, playerRest == ExpansionRest.Closed, queueClosed)
+        if (!playbackPresent && displayLease.queueId == null) { expanded = false; queueOpen = false }
+    }
+    LaunchedEffect(queues.loading, queues.library.queues, displayLease.queueId) {
+        if (displayLease.destinationMissing(queues.loading, queues.library.queues.any { it.id == displayLease.queueId })) {
+            cancelToastNavigation(); expanded = false; queueOpen = false
+        }
+    }
+    val toastNavigation = ToastNavigation { command, presenterCurrent ->
+        cancelToastNavigation()
+        val epoch = toastNavigationEpoch
+        toastExpectedRoute = navigation.route.key
+        fun current() = epoch == toastNavigationEpoch && presenterCurrent() &&
+            toastExpectedRoute == navigation.route.key && rootModal?.blocked != true &&
+            (rootModal?.coordinator?.presentedModalCount ?: 0) == 0
+        when (command) {
+            is ToastCommand.OpenQueue -> {
+                val ticket = displayLease.request(command.queueId, navigation.route.key)
+                if (ticket != null) queueController?.browse(command.queueId) { success ->
+                    if (displayLease.admit(ticket, navigation.route.key,
+                            success && queueController.state.value.library.queues.any { it.id == command.queueId }, current())) {
+                        val target = ToastScrollRequest(MediaRef(MediaKind.Queue, command.queueId),
+                            command.firstAddedEntryId.takeUnless { command.playNext }, true, activityWindow, null, ::current)
+                        toastScroll = target
+                        expanded = true
+                        navigationScope.launch {
+                            snapshotFlow { playerRest == ExpansionRest.Open || !current() }.first { it }
+                            if (!current()) return@launch
+                            openQueue()
+                            snapshotFlow { queueRest == ExpansionRest.Open || !current() }.first { it }
+                            if (current()) target.ready = true
+                        }
+                    }
+                }
+            }
+            is ToastCommand.OpenList -> {
+                val list = (playlistController?.state?.value?.playlists ?: livePlaylists.playlists).firstOrNull { it.id == command.listId }
+                if (list != null && current()) {
+                    val route = BrowseRoute(navigation.active, MediaRef(MediaKind.Playlist, list.id), list.name)
+                    toastExpectedRoute = route.key
+                    navigation = navigation.open(route)
+                    queueOpen = false; expanded = false; songInfo = false
+                    toastScroll = ToastScrollRequest(requireNotNull(route.collection), command.firstAddedEntryId,
+                        false, activityWindow, route.key, ::current)
+                }
+            }
+            is ToastCommand.Operation -> Unit
+        }
+    }
     val dragHost = remember { SongDragHost() }
     val playerVisual = rememberPlayerVisual(player.trackUri)
     val artworkQueue = queues.library.active
@@ -298,17 +380,38 @@ fun LocalicaScreen(
     SideEffect { dialogs?.backdrop = modalBackdrop }
     LaunchedEffect(pager.settledPage) { browseBackdrop.refresh() }
     PlayerSystemBars(hasPlayer && playerFullyOpen && playerLightInk || !playerFullyOpen && insideCollection && browseInk == androidx.compose.ui.graphics.Color.White)
+    val rowFaces = remember(activityWindow) { FloatingRowFaces(activityWindow) }
+    val rowScenes = remember { mutableMapOf<String, FloatingRowScene>() }
+    fun rowScene(key: String) = rowScenes.getOrPut(key) { FloatingRowScene(ToastRowOwner(key)) }
+    val browseRow = rowScene(navigation.route.key)
+    val queueRow = remember { FloatingRowScene(ToastRowOwner("player-queue"), queue = true) }
+    val rowViewport = remember { FloatingRowViewport() }
+    val rowPresentation = remember { ToastRowPresentation() }
+    val currentBrowseRow by rememberUpdatedState(browseRow)
+    val browseBottomFallback by rememberUpdatedState(with(density) { (browseBottomChrome + selectionPanel.clearance).toPx() })
+    val playerBottomInset by rememberUpdatedState(with(density) { (navigationInset + StockUiSpec.clearance.getValue(Clearance.FloatingGap)).toPx() })
+    val rowSeat = rememberFloatingRowSeat(
+        browse = { rowFaces.originals(currentBrowseRow).maxOfOrNull { requireNotNull(it.original).bottom }
+            ?: ((rowViewport.bounds?.bottom ?: window.height.toFloat()) - browseBottomFallback) },
+        player = { (rowViewport.bounds?.bottom ?: window.height.toFloat()) - playerBottomInset },
+        progress = { phase.value() },
+        queue = { rowFaces.originals(queueRow).maxOfOrNull { requireNotNull(it.original).bottom } },
+        queueShown = { hasPlayer && playerVisible && queueVisible })
+    val rowRoot = remember(rowViewport, rowSeat, rowPresentation) { ToastRowRoot(rowViewport, rowSeat, rowPresentation) }
     val bottomShadows = rememberShadowPlane()
     SideEffect { LongScroll.style = settings.longScroll }
     LocalicaTheme(grayTone = settings.grayTone) {
     CompositionLocalProvider(LocalPageShadows provides bottomShadows, LocalGlassAppearance provides settings.glass, LocalArtworkTransition provides settings.artworkTransition, LocalReducedMotion provides rememberEffectiveReducedMotion(settings.reducedMotion), LocalSessionSelection provides session, LocalSongDragHost provides dragHost,
         LocalBrowsePresentationCache provides presentationCache, LocalBrowseSortSnapshot provides browseSorts,
+        LocalToastNavigation provides toastNavigation, LocalToastScroll provides toastScroll,
+        LocalFloatingRowFaces provides rowFaces, LocalToastRowRoot provides rowRoot,
         LocalMotionSpeed provides if (settings.fasterMotion) 2f else 4f / 3f,
         LocalModalBackdrop provides modalBackdrop,
         LocalBackdropRefresh provides browseBackdrop::refresh,
         LocalBrowseObscuredInset provides (browseBottomChrome + selectionPanel.clearance)) {
     ShadowPlaneViewport(bottomShadows, settings.glass.shadowStrength, settings.glass.shadowSpread,
-        Modifier.fillMaxSize().recordFrostedBackdrop(modalBackdrop).background(MaterialTheme.colorScheme.background),
+        Modifier.fillMaxSize().recordFrostedBackdrop(modalBackdrop).background(MaterialTheme.colorScheme.background)
+            .observeToastNavigationContact(::cancelToastNavigation),
         Modifier.testTag("browse-background"), WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal)) {
         val inset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
         val screenScope = this
@@ -354,7 +457,7 @@ fun LocalicaScreen(
                 Box(Modifier.weight(1f)) {
             // Routes retain saved state, but must not recycle live drawing/focus nodes from
             // a different grid or text field through SaveableStateProvider's ReusableContent.
-            key(route.key) { CompositionLocalProvider(LocalBrowseArtwork provides routeArtwork) { holder.SaveableStateProvider(route.key) {
+            key(route.key) { CompositionLocalProvider(LocalBrowseArtwork provides routeArtwork, LocalFloatingRowScene provides rowScene(route.key)) { holder.SaveableStateProvider(route.key) {
                 if (route.tab == MainTab.Queues && !route.search && (route.collection == null || route.collection.kind == MediaKind.Queue)) QueueScreen(queues, queueController, library,
                     playlist, playlistController, playback.connected, pins, ::pin, listBackEnabled = true, scrollToTopRequest = scrollRequests[tab] ?: 0, reducedMotion = settings.reducedMotion, selectionVisible = page == pager.settledPage && !queueVisible, isPlaying = playback.isPlaying,
                     onOpen = ::openCollection, playerOpen = expanded || playerVisible)
@@ -438,8 +541,8 @@ fun LocalicaScreen(
         }
         } }
         } }
-        Sheet(sheet) { if (hasPlayer) screenScope.PlayerSurface(player, expanded, { expanded = it }, settings, sheet,
-            onToggle, onSeek, onPrevious, onNext, ::openQueue, { expanded = false },
+        Sheet(sheet) { if (hasPlayer) screenScope.PlayerSurface(player, expanded, ::requestPlayer, settings, sheet,
+            onToggle, onSeek, onPrevious, onNext, { cancelToastNavigation(); openQueue() }, { requestPlayer(false) },
             lyricsOpen, { lyricsOpen = it }, playerTracks.lyrics,
             { settings = it; preferences.write(it) }, actionRows = if (playerActions.twoRows) 2 else 1, queue = queueSheet, frostedBackdrop = playerBackdrop, glassBackdrop = browseBackdrop, visual = playerVisual,
             onSeekRequest = onSeekRequest, sampleState = playerSample, backgroundPolarity = playerBackgroundPolarity, artworkVisit = journey?.current?.token, previousArtwork = previousArtwork, nextArtwork = nextArtwork,
@@ -462,13 +565,14 @@ fun LocalicaScreen(
         if (hasPlayer && playerVisible) CompositionLocalProvider(LocalFrostedBackdrop provides playerBackdrop) {
         GlassPanelTheme(playerLightMix) {
         screenScope.PlayerClippedOverlay({ phase.value() }, bottomChrome) {
-        screenScope.QueueSurface(queueSheet, { queueOpen = it }, playerProgress = { phase.value() },
-            onOpeningContact = { queueOpeningRequest++ }, providedPopupHome = queuePopupHome) {
+        screenScope.QueueSurface(queueSheet, ::requestQueue, playerProgress = { phase.value() },
+            onOpeningContact = { cancelToastNavigation(); queueOpeningRequest++ }, providedPopupHome = queuePopupHome) {
             Box(Modifier.weight(1f)) { CompositionLocalProvider(LocalBrowseObscuredInset provides queueSelectionPanel.clearance) {
+            CompositionLocalProvider(LocalFloatingRowScene provides queueRow) {
             queueDrawerState.SaveableStateProvider("player-queue") { QueueScreen(queues, queueController, library,
-                playlist, playlistController, playback.connected, pins, ::pin, reducedMotion = settings.reducedMotion, isPlaying = playback.isPlaying, onOpen = ::openCollection, onMinimize = { queueOpen = false },
+                playlist, playlistController, playback.connected, pins, ::pin, reducedMotion = settings.reducedMotion, isPlaying = playback.isPlaying, onOpen = ::openCollection, onMinimize = { requestQueue(false) },
                 selectionVisible = queueOpen && expanded, playerOpen = !queueOpen || !expanded,
-                openingRequest = queueOpeningRequest) } }
+                openingRequest = queueOpeningRequest) } } }
             // Floats over the list: it never shortens the viewport, so the items gain no new bottom clip edge.
             FloatingSelectionPanel(queueSelectionPanel, Modifier.align(Alignment.BottomCenter)) {
             Column(Modifier.heightIn(max = queueSelectionMaxHeight).controlVerticalScroll(rememberScrollState())) {
@@ -477,9 +581,25 @@ fun LocalicaScreen(
         }
         } } }
         }
+        // Siblings of SongDragScene: outside browse/player/Queue recordings and clips.
+        val rowOutset = with(density) { glassShadowInset().toPx() }
+        val rowDownward = with(density) { FloatingControlRise.toPx() }
+        val rowInput = rootModal?.blocked != true && (rootModal?.coordinator?.presentedModalCount ?: 0) == 0
+        screenScope.PlayerOccludedOverlay({ phase.value() }, bottomChrome, occluding = { hasPlayer }) {
+        RootFloatingFaces(rowFaces, queue = false, scene = browseRow.takeUnless { hasPlayer && playerFullyOpen },
+            toast = rowPresentation::body, downwardPx = rowDownward, fieldOutset = rowOutset,
+            interactive = rowInput && !playerCoversBrowse, modifier = Modifier.floatingRowViewport(rowViewport))
+        }
+        screenScope.PlayerClippedOverlay({ phase.value() }, bottomChrome) {
+            RootFloatingFaces(rowFaces, queue = true, scene = queueRow, admitted = { rowSeat.queueAdmitted },
+                toast = rowPresentation::body, downwardPx = rowDownward, fieldOutset = rowOutset,
+                sourceOpacity = { queuePlayerOpacity(phase.value()) }, interactive = rowInput && rowSeat.queueInteractive)
+        }
+        // The live toast presenter is installed at this same root seam in its separate packet.
+        // Its body/field use rowRoot and remain outside PlayerClippedOverlay.
     }
-    androidx.activity.compose.BackHandler(expanded) { if (lyricsOpen) lyricsOpen = false else expanded = false }
-    androidx.activity.compose.BackHandler(queueOpen || queueVisible) { queueOpen = false; navigationScope.launch { queuePopupHome.awaitHandoff(); queueSheet.collapse() } }
+    androidx.activity.compose.BackHandler(expanded) { if (lyricsOpen) lyricsOpen = false else requestPlayer(false) }
+    androidx.activity.compose.BackHandler(queueOpen || queueVisible) { requestQueue(false); navigationScope.launch { queuePopupHome.awaitHandoff(); queueSheet.collapse() } }
     androidx.activity.compose.BackHandler(session.active && (!expanded || queueOpen || queueVisible)) { session.clear() }
     GlassPanelTheme(if (playerVisible) playerLightMix else if (browseInk == androidx.compose.ui.graphics.Color.White) 1f else 0f) {
     if (settingsPresented) FolderSettings(library,

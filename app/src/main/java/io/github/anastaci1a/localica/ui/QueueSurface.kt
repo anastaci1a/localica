@@ -35,6 +35,7 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.R
+import io.github.anastaci1a.localica.ui.engine.queuePlayerVisibility
 import io.github.anastaci1a.localica.ui.components.SheetState
 import io.github.anastaci1a.localica.ui.components.DrawerScrim
 import io.github.anastaci1a.localica.ui.components.rememberExpansionClosed
@@ -137,7 +138,7 @@ internal fun BoxWithConstraintsScope.QueueSurface(sheet: SheetState,
     // The drawer is an app panel, not a replica of the display. Its one intrinsic
     // contour clips content/material and draws the rim; the window clips hardware edges.
     FrostedSurface(Modifier.width(maxWidth).height(maxHeight - status)
-        .graphicsLayer { alpha = ((playerProgress() - .4f) / .6f).coerceIn(0f, 1f) }
+        .queuePlayerVisibility(playerProgress)
         .then(if (!interactive) Modifier.clearAndSetSemantics {} else Modifier)
         // Touch-down on a moving drawer catches it (#608 contact); a stationary drawer keeps its taps.
         .playerVerticalDrag(onCatch = { !phase.settled && sheet.contact.onDragStart().also { directContact[1] = it

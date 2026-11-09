@@ -252,7 +252,7 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
         val shape = contactShape()
         scale(shape.scaleX(contact.vertical), shape.scaleY(contact.vertical)) { this@drawWithContent.drawContent() }
     } else Modifier)
-        .then(if (!shadow) Modifier else if (silhouette != null) Modifier.silhouetteGlassShadow(silhouette)
+        .then(if (!shadow || !visible) Modifier else if (silhouette != null) Modifier.silhouetteGlassShadow(silhouette)
             else Modifier.surfaceGlassShadow(cornerRadius, anchor))
         .then(if (presentation == null) Modifier.clip(surfaceClip) else Modifier.graphicsLayer {
             shape = if (silhouette != null) surfaceClip else presentation().radius?.let { RoundedCornerShape(it) } ?: CircleShape

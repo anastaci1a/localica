@@ -648,7 +648,8 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
         }
     }
     val session = LocalSessionSelection.current ?: remember { SessionSelection() }
-    OnModalGestureCancellation { playbackFollow.interrupt() }
+    val modalToastScroll = LocalToastScroll.current
+    OnModalGestureCancellation { playbackFollow.interrupt(); modalToastScroll?.cancel() }
     val readyToScroll by rememberUpdatedState(!queryPending && loadedResult != null)
     // Cursor checkpoints replace queue snapshots without changing this list. A return
     // owns its query/occurrence structure, not unrelated live playback bookkeeping.
@@ -797,7 +798,48 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
             followOwner, followEligible && !modalBlocked && modalOwner?.blocked != true, modalOwner?.generation,
             automatic = !route.search, openingRequest = queueOpeningRequest, initialEligible = initialEligible)
     }
+    val toastScroll = LocalToastScroll.current
+    val toastWindow = androidx.compose.ui.platform.LocalView.current.rootView
+    val toastScene = io.github.anastaci1a.localica.ui.components.LocalFloatingRowScene.current
+    val toastMatches = toastScroll != null && toastScroll.destination == route.collection && !route.search && toastScroll?.window === toastWindow &&
+        toastScroll.queue == (toastScene?.queue == true) && (toastScroll.routeKey == null || toastScroll.routeKey == route.key)
+    SideEffect {
+        if (toastMatches && toastScroll.valid && toastScroll.queue &&
+            !toastScroll.initialPositioned && loadedResult != null && !queryPending) {
+            // Active Queue initial positioning remains with the ordinary playback-follow owner.
+            // Inactive Queue starts at its own top before the drawer's first measured drawing.
+            if (playingEntryId == null) gridState.requestScrollToItem(0)
+            toastScroll.initialPositioned = true
+        }
+    }
+    LaunchedEffect(toastScroll, route.key, toastMatches) {
+        val request = toastScroll?.takeIf { toastMatches } ?: return@LaunchedEffect
+        fun targetIndex(): Int? {
+            if (!request.valid || currentRoute.collection != request.destination || currentRoute.search) return -1
+            if (!request.ready) return null
+            val published = latestBrowse.current
+            val items = published?.result?.items.orEmpty()
+            val layout = gridState.layoutInfo
+            return toastOccurrenceTarget(ToastOccurrenceFrame(currentRoute, published?.route, latestBrowse.pending,
+                items.size, layout.totalItemsCount, layout.visibleItemsInfo.map { it.index to it.key },
+                itemKey = { items.getOrNull(it)?.key }, occurrenceIndex = { id -> items.indexOfFirst { it.row?.id == id } }), request.entryId)
+        }
+        try {
+            val target = snapshotFlow { targetIndex() }.filterNotNull().first()
+            if (target >= 0 && request.valid) {
+                orderScroll.cancel(); returnToList.cancel(); playbackFollow.cancel()
+                scrollOwnership.during {
+                    gridState.easeToTarget({
+                        val index = targetIndex()
+                        if (index == null || index < 0) throw kotlinx.coroutines.CancellationException("Toast destination is no longer ready")
+                        ListScrollTarget.below(index, latestTopInset)
+                    }, latestReducedMotion)
+                }
+            }
+        } finally { request.complete() }
+    }
     fun userScroll() {
+        if (toastMatches) toastScroll?.cancel()
         manualQueueReturn = route.collection?.kind == MediaKind.Queue
         artistFilterRange.interrupt()
         orderScroll.cancel()
@@ -946,25 +988,17 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
             modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), fieldModifier = Modifier.focusRequester(focus))
 
         LookaheadScope {
-        if (popupDismiss == null || route.text.isNotBlank()) BoxWithConstraints(Modifier.weight(1f, fill = popupDismiss == null).pointerInput(orderScroll, playbackFollow) {
-            awaitEachGesture {
-                awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
-                // Retire automatic range motion before LazyGrid can acquire this
-                // contact as a stop-fling drag and swallow an album-chip click.
+        if (popupDismiss == null || route.text.isNotBlank()) io.github.anastaci1a.localica.ui.components.ListContactViewport(
+            Modifier.weight(1f, fill = popupDismiss == null)
+                .onGloballyPositioned { reorder.viewportOrigin = it.positionInRoot(); listViewportTop = it.positionInRoot().y }
+                .onSizeChanged { reorder.viewportHeight = it.height; reorder.viewportWidth = it.width },
+            onBegin = {
                 artistFilterRange.interrupt()
                 listContact = true
-                orderScroll.cancel()
-                returnToList.cancel()
+                orderScroll.cancel(); returnToList.cancel()
+                if (toastMatches) toastScroll?.cancel()
                 playbackFollow.pointerDown()
-                try {
-                    do {
-                        val event = awaitPointerEvent(PointerEventPass.Initial)
-                    } while (event.changes.any { it.pressed })
-                } finally { listContact = false }
-            }
-        }.onGloballyPositioned { reorder.viewportOrigin = it.positionInRoot(); listViewportTop = it.positionInRoot().y }.onSizeChanged {
-            reorder.viewportHeight = it.height; reorder.viewportWidth = it.width
-        }) {
+            }, onEnd = { listContact = false }) {
             val viewportWidth = constraints.maxWidth
             val columns = galleryColumns(displayedStyle.presentation, with(density) { viewportWidth.toDp().value }, displayedStyle.itemsPerRow)
             val cellGeometry = BrowseCellGeometry(columns)
@@ -1344,11 +1378,14 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                     bottom = obscuredInset), onUserScroll = ::userScroll)
             if (route.collection?.kind in setOf(MediaKind.Playlist, MediaKind.Album, MediaKind.Artist, MediaKind.AlbumArtist) && !route.search) {
                 val playlist = playlists.playlists.firstOrNull { it.id == route.collection?.id }
-                if (playlist != null || artDetail) Box(Modifier.align(Alignment.BottomEnd).padding(end = 12.dp, bottom = obscuredInset)
-                    .onSizeChanged { actionControlHeight = it.height }) {
+                if (playlist != null || artDetail) {
                     val anchor = rememberGlassAnchor()
                     var open by remember { mutableStateOf(false) }
+                    HoistedFloatingFace("collection-actions", Modifier.align(Alignment.BottomEnd).padding(
+                        end = io.github.anastaci1a.localica.ui.spec.LocalUiSpec.current.spec.space.getValue(io.github.anastaci1a.localica.ui.spec.Space.Base), bottom = obscuredInset)
+                        .onSizeChanged { actionControlHeight = it.height }) {
                     ActionIcon(AppIcon.ActionEllipsis, if (playlist != null) "Playlist actions" else if (artistDetail) "Artist actions" else "Album actions", anchor = anchor) { open = true }
+                    }
                     CollectionActions(open, anchor, collectionActionTarget(requireNotNull(route.collection), playlist?.name ?: route.title.orEmpty(), result, playlist?.coverUri),
                         playlists, playlistController, queues, pins, onPin, { open = false },
                         onDeleted = { onRoute(route.copy(collection = null, title = null)) },

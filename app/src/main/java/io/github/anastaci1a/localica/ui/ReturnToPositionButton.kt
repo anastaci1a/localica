@@ -42,27 +42,13 @@ internal fun ReturnToPositionButton(up: Boolean, label: String, visible: Boolean
 internal fun FloatingReturnToPositionButton(up: Boolean, label: String, visible: Boolean,
     reducedMotion: Boolean, modifier: Modifier = Modifier, returning: Boolean = false,
     onHeightMeasured: ((Int) -> Unit)? = null, onClick: () -> Unit) {
-    if (onHeightMeasured != null) {
-        // The list needs its end clearance before scrolling can reveal the arrow.
-        // Measure the actual control without placing a drawing or an input target.
-        Layout(content = {
-            Box(Modifier.onSizeChanged { onHeightMeasured(it.height) }) {
-                ReturnToPositionButton(up, label, visible = false, onClick = {})
-            }
-        }) { measurables, constraints ->
-            measurables.single().measure(constraints.copy(minWidth = 0, minHeight = 0))
-            layout(0, 0) {}
-        }
-    }
     val motion = rememberFloatingControlMotion(visible, reducedMotion)
     val rise = with(LocalDensity.current) { FloatingControlRise.toPx() }
-    if (motion.retained && !returning) Box(modifier.testTag("floating-return-control")
-        .offset { IntOffset(0, motion.offsetY(rise).roundToInt()) }
-        .graphicsLayer {
-            alpha = motion.alpha
-            val scale = .92f + .08f * motion.progress
-            scaleX = scale; scaleY = scale
-        }) {
-        ReturnToPositionButton(up, label, visible = motion.interactive, onClick = onClick)
+    HoistedFloatingFace("return", modifier, visible = motion.retained && !returning,
+        interactive = motion.interactive && !returning, onMeasured = { onHeightMeasured?.invoke(it.height) }) {
+        io.github.anastaci1a.localica.ui.components.FloatingRowAvailability("floating-return-control",
+            opacity = { motion.alpha }, progress = { motion.progress }, offset = { motion.offsetY(rise) }) {
+            ReturnToPositionButton(up, label, visible = motion.interactive && !returning, onClick = onClick)
+        }
     }
 }

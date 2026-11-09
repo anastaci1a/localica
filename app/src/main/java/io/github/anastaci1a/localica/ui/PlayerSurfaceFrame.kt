@@ -55,3 +55,16 @@ internal fun BoxWithConstraintsScope.PlayerClippedOverlay(progress: () -> Float,
         clip = true
     }) { content() }
 }
+
+/** Retain the browse row until its source stops drawing; the real player contour occludes it. */
+@Composable
+internal fun BoxWithConstraintsScope.PlayerOccludedOverlay(progress: () -> Float, bottomChrome: Dp,
+    occluding: () -> Boolean, content: @Composable () -> Unit) {
+    val width = maxWidth
+    val height = maxHeight
+    val inset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    val corners = rememberDeviceCorners()
+    io.github.anastaci1a.localica.ui.engine.OccludedFloatingPlane(
+        mask = { playerSurfaceFrame(width, height, inset, bottomChrome, progress(), corners).windowShape() },
+        occluding = occluding, content = content)
+}

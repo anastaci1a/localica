@@ -72,7 +72,21 @@ fun QueueScreen(state: QueueUiState, controller: QueueController?, library: Libr
     LaunchedEffect(scrollToTopRequest) {
         if (scrollToTopRequest > 0) browsing = browsing.resetTab(MainTab.Queues)
     }
-    val route = browsing.route
+    val toastDestination = LocalToastScroll.current
+    val requestedRoot = remember(toastDestination, active?.id) {
+        toastDestination?.takeIf { it.valid && it.queue &&
+            it.destination == MediaRef(MediaKind.Queue, active?.id.orEmpty()) }?.let {
+            BrowseRoute(MainTab.Queues, it.destination, active?.name ?: "Queue")
+        }
+    }
+    val resetForToast = toastDestination?.valid == true && requestedRoot != null &&
+        (browsing.route.collection != requestedRoot.collection || browsing.route.search ||
+            browsing.stacks.getValue(MainTab.Queues).size > 1)
+    // Select the actual route before its first measure; persist that same route after apply.
+    val route = if (resetForToast) requireNotNull(requestedRoot) else browsing.route
+    SideEffect {
+        if (resetForToast) browsing = NavigationState(MainTab.Queues, mapOf(MainTab.Queues to listOf(route)))
+    }
     BackHandler(browsing.stacks.getValue(MainTab.Queues).size > 1) { browsing.back(false)?.let { browsing = it } }
     val browseHolder = rememberSaveableStateHolder()
     // Saved scroll state may survive, but drawing nodes must belong to this route.
