@@ -7,6 +7,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.artistphoto.*
 import kotlinx.coroutines.CancellationException
@@ -70,7 +72,7 @@ internal fun ArtistPhotoChooser(actions: ArtistPhotoActions) {
                             val isFailed = failed == choice || selection.pending == choice &&
                                 (selection.failed || work?.failed?.contains(actions.request.artistKey) == true)
                             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                ActionButton({ draft = choice }, Modifier.fillMaxWidth(), enabled = allowed) {
+                                ActionTextButton({ draft = choice }, Modifier.fillMaxWidth(), enabled = allowed) {
                                     Column(Modifier.fillMaxWidth()) {
                                         ArtistPhotoPreview(environment, candidate, allowed)
                                         Text("${candidate.name} · ${choice.provider.name.lowercase()}", style = MaterialTheme.typography.labelLarge)
@@ -123,7 +125,13 @@ private fun ArtistPhotoPreview(environment: ArtistPhotoEnvironment, candidate: A
         }
     }
     ArtworkImage(if (allowed) preview?.image else null, allowed && loading,
-        Modifier.fillMaxWidth().aspectRatio(1f).testTag("artist-photo-preview:${candidate.choice}"))
+        Modifier.fillMaxWidth().aspectRatio(1f).testTag("artist-photo-preview:${candidate.choice}").semantics {
+            contentDescription = when {
+                loading -> "Loading photo preview for ${candidate.name}"
+                preview != null -> "Photo preview for ${candidate.name}"
+                else -> "Photo preview unavailable for ${candidate.name}"
+            }
+        })
     if (!loading && preview == null) Text("Preview unavailable")
     if (allowed) preview?.photo?.attribution?.let { Text("${it.artist} · ${it.licence}", style = MaterialTheme.typography.labelSmall) }
 }
