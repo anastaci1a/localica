@@ -150,6 +150,7 @@ internal class NoneReductionAtlas(private val graphics: GraphicsContext, colorSh
         if (entry.index >= 0) indices[entry.index] = false
         cells.firstOrNull { it.origin == entry.cell && it.size == entry.extent }?.free = true
         entry.index = -1; entry.cell = IntOffset(-1, -1); entry.record = null
+        entry.backing = null; entry.registration = null; entry.structure = null; entry.style = null
         dirty = true
     }
 

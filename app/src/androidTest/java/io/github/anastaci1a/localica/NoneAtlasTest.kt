@@ -379,4 +379,35 @@ class NoneAtlasTest {
         }
     }
 
+    @SdkSuppress(minSdkVersion = 33)
+    @Test fun readdingTheSameEntryRebuildsItsRetainedRecordPlan() {
+        var active by mutableStateOf(true)
+        compose.setContent { CompositionLocalProvider(LocalDensity provides Density(1f)) {
+            val graphics = androidx.compose.ui.platform.LocalGraphicsContext.current
+            val owner = remember(graphics) { NoneReductionAtlas(graphics, GlassColorShader) }
+            val entry = remember { NoneReductionAtlas.Entry() }
+            DisposableEffect(owner) { onDispose { owner.release() } }
+            val admitted = active
+            DisposableEffect(owner, admitted) {
+                if (admitted) owner.add(entry)
+                onDispose { if (admitted) owner.remove(entry) }
+            }
+            Canvas(Modifier.size(64.dp).testTag("reused-entry")) {
+                drawRect(Color.Red)
+                if (active) with(owner) {
+                    if (place(entry, Unit, Unit, Unit, Rect(0f, 0f, 64f, 64f),
+                            io.github.anastaci1a.localica.ui.engine.NoneAtlasStyle()) { drawRect(Color.Green) }) drawMember(entry)
+                }
+            }
+        } }
+        for (show in listOf(true, false, true)) {
+            compose.runOnIdle { active = show }
+            eventually {
+                val pixels = compose.onNodeWithTag("reused-entry").captureToImage().toPixelMap()
+                assertMean("Reused entry active=$show", if (show) Color.Green else Color.Red,
+                    pixels[pixels.width / 2, pixels.height / 2], Rect(0f, 0f, 64f, 64f))
+            }
+        }
+    }
+
 }
