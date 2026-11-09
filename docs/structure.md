@@ -282,11 +282,13 @@ Retain immutable current-song texture at its exact display resolution instead of
 
 Controls and panels use one [lens model](interface.md#materials-and-controls), in Normal mode on Android 13+. Share outline geometry across clipping, refraction, illumination and shadow. Page-owned ink polarity requires no GPU readback. Normal and None use the same ordered brightness mapping. Android versions below 13 use average-colour rendering without optical preparation.
 
-Active sliders and switches render one procedural scene, unchanged outside the lens, with refraction or average colour inside. Resting white thumbs release sampling leases and bypass optics. Active controls capture only the thumb neighborhood and replace pixels only within its silhouette. Track, touch mapping and expanded wall contact share geometry.
+When Normal is requested, active sliders and switches render one procedural scene, unchanged outside the lens, with refraction or fallback average colour inside. Resting white thumbs release sampling leases and bypass optics. Active controls capture only the thumb neighborhood and replace pixels only within its silhouette. Track, touch mapping and expanded wall contact share geometry.
+
+When None is requested, slider and switch knobs remain white 28 dp circles during contact, travel and cancellation. They draw without source leases, lens captures or reductions. Only their private elastic bodies restart across requested-mode changes; gesture and position owners remain mounted.
 
 In Normal mode on Android 13+, controls entirely over explicitly recorded panel material use an 8×8 local GPU average, then the shared tint/contrast mapping and outline. Morphs retain that averaged home source while admitting the destination. Never infer eligibility from color similarity or average a foreground-containing recording.
 
-None uniformly averages the backdrop over each material's own full bounds: controls, pills, switch thumbs and panels. Refraction and blur do not change that region.
+None uniformly averages the backdrop over each surface's own full bounds, including pills and panels. Slider and switch knobs use the separate white resting policy. Refraction and blur do not change that region.
 
 The mean is coverage-weighted over the scene the lens samples: the element's own source, with its parent chain beyond that source's box. Floating controls therefore follow the text and artwork passing behind them. No element chooses a different source or region.
 
