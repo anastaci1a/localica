@@ -28,6 +28,7 @@ internal fun GlassControlScene(modifier: Modifier, horizontalPadding: Dp = 20.dp
         Canvas(modifier) {
             scene()
             val shape = geometry()
+            if (NoneSamplingDiagnostic.witness) NoneSamplingReceipts.control(shape, source, false)
             drawRoundRect(Color.White, shape.bounds.topLeft, shape.bounds.size, CornerRadius(shape.corner))
         }
         return
@@ -54,6 +55,7 @@ internal fun GlassControlScene(modifier: Modifier, horizontalPadding: Dp = 20.dp
     val opticalWork = LocalGlassOpticalWork.current
     Canvas(modifier.backdropLocation(location)) {
         val shape = geometry()
+        if (NoneSamplingDiagnostic.witness) NoneSamplingReceipts.control(shape, source, optical)
         if (!optical) {
             scene()
             drawRoundRect(face(), shape.bounds.topLeft, shape.bounds.size, CornerRadius(shape.corner))

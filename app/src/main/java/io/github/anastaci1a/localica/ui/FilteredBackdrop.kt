@@ -153,6 +153,9 @@ private fun OpticalBackdrop(modifier: Modifier, source: FrostedBackdrop, locatio
                 val region = Rect(Offset.Zero, footprint)
                     .intersect(sampledSceneBounds(backing, registration, toLocal) ?: return)
                 if (region.isEmpty || !region.width.isFinite() || !region.height.isFinite()) return
+                if (NoneSamplingDiagnostic.witness) NoneSamplingReceipts.sample(backing, location, region,
+                    registration, if (home) blend else 1f - blend, home,
+                    if (boundedAverage) NoneSamplingDiagnostic.sampleSide else null)
                 val result = with(reduction) { recordFullBounds(region.size, sampleSide = if (boundedAverage) NoneSamplingDiagnostic.sampleSide else null) {
                     translate(-region.left, -region.top) {
                         drawSampledScene(backing, registration, toLocal)

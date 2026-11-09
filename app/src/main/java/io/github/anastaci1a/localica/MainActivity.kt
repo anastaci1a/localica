@@ -29,6 +29,7 @@ private const val STARTUP_SCAN_DELAY_MILLIS = 1_000L
 
 class MainActivity : ComponentActivity() {
     private lateinit var model: LibraryViewModel
+    private var noneWitnessReceiver: android.content.BroadcastReceiver? = null
     private var scannerRequest by mutableIntStateOf(0)
     private var lastFmSettingsRequest by mutableIntStateOf(0)
     private fun consumeScannerIntent(intent: Intent?) {
@@ -43,6 +44,17 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         io.github.anastaci1a.localica.ui.NoneSamplingDiagnostic.configure(intent)
+        if (io.github.anastaci1a.localica.ui.NoneSamplingDiagnostic.witness) {
+            val receiver = object : android.content.BroadcastReceiver() {
+                override fun onReceive(context: Context, intent: Intent) {
+                    io.github.anastaci1a.localica.ui.NoneSamplingReceipts.export(this@MainActivity)
+                }
+            }
+            noneWitnessReceiver = receiver
+            val filter = android.content.IntentFilter("io.github.anastaci1a.localica.NONE_SAMPLING_EXPORT")
+            if (android.os.Build.VERSION.SDK_INT >= 33) registerReceiver(receiver, filter, Context.RECEIVER_EXPORTED)
+            else registerReceiver(receiver, filter)
+        }
         enableEdgeToEdge()
         if (intent.getBooleanExtra("none-controls", false)) {
             setContent {
@@ -112,6 +124,7 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        noneWitnessReceiver?.let { unregisterReceiver(it) }
         io.github.anastaci1a.localica.diagnostics.FrameStats.stopFor(this)
         super.onDestroy()
     }

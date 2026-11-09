@@ -4,6 +4,8 @@ package io.github.anastaci1a.localica.ui
 internal object NoneSamplingDiagnostic {
     var mode = "grid8"
         private set
+    var witness = false
+        private set
     var artwork = false
         private set
     val sampleSide: Int? get() = when (mode) { "baseline" -> null; "grid16" -> 16; else -> 8 }
@@ -12,6 +14,8 @@ internal object NoneSamplingDiagnostic {
         mode = intent.getStringExtra("none-ablation") ?: "grid8"
         require(mode in setOf("baseline", "grid8", "grid16"))
         artwork = intent.getBooleanExtra("none-artwork", false)
+        witness = intent.getBooleanExtra("none-footprints", false)
+        if (witness) NoneSamplingReceipts.reset()
         android.util.Log.i("NoneAblation", "mode=$mode artwork=$artwork")
     }
 }
