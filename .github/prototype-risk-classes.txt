@@ -327,6 +327,7 @@ io.github.anastaci1a.localica.ShuffleModePlaybackTest
 io.github.anastaci1a.localica.SliderModelTest
 io.github.anastaci1a.localica.SliderSwitchHapticsTest
 io.github.anastaci1a.localica.SlidingTabsTest
+io.github.anastaci1a.localica.SlidingTabsFourTabSlideTest
 io.github.anastaci1a.localica.SmallestTitleGapTest
 io.github.anastaci1a.localica.SongDragViewportTest
 io.github.anastaci1a.localica.SongInformationTest
