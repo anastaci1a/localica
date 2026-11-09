@@ -655,15 +655,49 @@ class SearchImeMotionTest {
         }
     }
 
+    // Android input/IME use wall time; the return spring uses the Compose test clock. In
+    // production that clock is the Choreographer, so the return advances on every frame
+    // the native hide draws. Idle-gated waits (runOnIdle, waitUntil) only advance it from
+    // Espresso's idle polling plus one real frame per wait, which the legacy ADJUST_RESIZE
+    // hide starves: both windows relayout and redraw back to back, the looper is never
+    // idle, and the first moving return frame was placed 220-440 ms after the dismissal
+    // while the native keyboard surface was already destroyed (#674). Pump one virtual
+    // frame per real frame period straight to the UI thread instead, like the Choreographer.
+    private fun closedOnWallClock(wallTimeoutMillis: Long = 5000) {
+        val wallStart = SystemClock.uptimeMillis()
+        val virtualStart = compose.mainClock.currentTime
+        var frames = 0
+        var nextFrameAt = wallStart
+        while (true) {
+            compose.mainClock.advanceTimeByFrame()
+            frames++
+            if (compose.runOnUiThread { !anchor.modalPresent }) break
+            val now = SystemClock.uptimeMillis()
+            if (now - wallStart > wallTimeoutMillis) {
+                val state = compose.runOnUiThread {
+                    "visible=$visible modal=${anchor.modalPresent} progress=${anchor.contact.expansion.value} " +
+                        "running=${anchor.contact.expansion.isRunning} keyboardSettled=$keyboardSettled " +
+                        "placedFrames=${samples.size} last=${samples.lastOrNull()}"
+                }
+                throw AssertionError("Dismissal did not retire the modal after ${now - wallStart}ms wall, " +
+                    "$frames pumped frames and ${compose.mainClock.currentTime - virtualStart}ms virtual: $state")
+            }
+            nextFrameAt += 16L // the test clock's frame period, as advanceTimeByFrame() advances it
+            val wait = nextFrameAt - now
+            if (wait > 0) SystemClock.sleep(wait) else nextFrameAt = now
+        }
+        motionTimeline += "${SystemClock.uptimeMillis()} dismissal-clock frames=$frames " +
+            "wall=${SystemClock.uptimeMillis() - wallStart} virtual=${compose.mainClock.currentTime - virtualStart}"
+    }
+
     private fun nativeDismissal(action: () -> Unit) = runBlocking {
-        // Android input/IME use wall time; our return spring uses the paused Compose clock.
-        // Idle waits can span native frames, so let them advance the spring during this phase.
+        // This phase owns the clock: no idle wait may pump frames concurrently.
         val previousAutoAdvance = compose.mainClock.autoAdvance
-        compose.mainClock.autoAdvance = true
+        compose.mainClock.autoAdvance = false
         try { supervisorScope {
             val input = async(Dispatchers.IO) { action() }
             var failure: Throwable? = null
-            try { closed() } catch (caught: Throwable) { failure = caught }
+            try { closedOnWallClock() } catch (caught: Throwable) { failure = caught }
             finally {
                 compose.runOnUiThread { nativeActionReturnGate?.countDown() }
                 try { input.await() } catch (caught: Throwable) {
