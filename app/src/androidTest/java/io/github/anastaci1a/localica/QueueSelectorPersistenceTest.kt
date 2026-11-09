@@ -51,6 +51,13 @@ class QueueSelectorPersistenceTest {
     @Test fun selectedNameKeepsOneLayoutInstanceAcrossCancelledOpenAndReversal() = QueueSelectorCallerFixture(compose).verify(true)
 }
 
+/** Playback still owns initial scroll when the browsed queue is outside the viewport. */
+class QueueSelectorOffscreenNameTest {
+    @get:Rule val compose = localicaComposeRule()
+    @Test fun browsedNameSurvivesWhenPlaybackStartsTheSelectorElsewhere() =
+        QueueSelectorCallerFixture(compose, browsedAwayFromPlayback = true).verify(false)
+}
+
 /** Actual native return after the source is restored: the origin receiver is no longer active.
  * This scoped oracle does not claim support for the earlier native receiver/exclusion phase. */
 class QueueSelectorFieldReturnTest {
@@ -59,8 +66,9 @@ class QueueSelectorFieldReturnTest {
     @Test fun cancelledQueueSelectorKeepsOneFieldThroughNativeReturn() = QueueSelectorCallerFixture(compose).verify(true, field = true)
 }
 
-private class QueueSelectorCallerFixture(private val compose: androidx.compose.ui.test.junit4.ComposeContentTestRule) {
-    private val label = "1. Persistent queue"
+private class QueueSelectorCallerFixture(private val compose: androidx.compose.ui.test.junit4.ComposeContentTestRule,
+    private val browsedAwayFromPlayback: Boolean = false) {
+    private val label = "${if (browsedAwayFromPlayback) 80 else 1}. Persistent queue"
     private var window: Window? = null
     private lateinit var sourceView: View
     private val markers = linkedMapOf<View, Marker>()
@@ -69,9 +77,12 @@ private class QueueSelectorCallerFixture(private val compose: androidx.compose.u
 
     fun verify(interrupted: Boolean, field: Boolean = false) {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
-        val output = nativeEvidenceDirectory("queue-selector-${if (field) "field-return" else "persistence"}-${if (interrupted) "interrupted" else "complete"}",
+        val output = nativeEvidenceDirectory("queue-selector-${if (field) "field-return" else "persistence"}-${if (interrupted) "interrupted" else "complete"}${if (browsedAwayFromPlayback) "-browsed-away" else ""}",
             instrumentation.targetContext.cacheDir)
-        val state = QueueUiState(QueueLibrary(listOf(ListeningQueue(id = "selected", name = "Persistent queue", entries = emptyList())), "selected"), loading = false)
+        val queues = if (browsedAwayFromPlayback) List(80) { index ->
+            ListeningQueue(id = "queue-$index", name = if (index == 79) "Persistent queue" else "Queue ${index + 1}", entries = emptyList())
+        } else listOf(ListeningQueue(id = "selected", name = "Persistent queue", entries = emptyList()))
+        val state = QueueUiState(QueueLibrary(queues, queues.first().id), loading = false, browsedId = queues.last().id)
         compose.setContent { LocalicaTheme {
             val view = LocalView.current
             val ownerClock = LocalUiClock.current
