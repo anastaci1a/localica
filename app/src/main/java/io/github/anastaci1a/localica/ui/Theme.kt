@@ -91,6 +91,7 @@ internal fun GlassPanelTheme(lightMix: Float, content: @Composable () -> Unit) {
     }
     MaterialTheme(colorScheme = colors) {
         androidx.compose.runtime.CompositionLocalProvider(
+            LocalPlayerDrawTheme provides null,
             androidx.compose.material3.LocalContentColor provides colors.onSurface,
             androidx.compose.material3.LocalTextStyle provides androidx.compose.material3.LocalTextStyle.current.copy(color = Color.Unspecified),
             content = content)

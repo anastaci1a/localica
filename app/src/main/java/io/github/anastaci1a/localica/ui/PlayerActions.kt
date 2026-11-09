@@ -34,7 +34,7 @@ internal enum class PlayerAction(val label: String, val icon: AppIcon) {
 internal fun PlayerActionGlyph(action: PlayerAction, description: String?,
     repeat: QueueRepeat = QueueRepeat.Off, count: String = "1 / 12", advancedRepeat: AdvancedRepeat? = null,
     ink: androidx.compose.ui.graphics.ColorProducer? = null) {
-    val fallback = LocalContentColor.current
+    val fallback = if (ink == null) LocalContentColor.current else androidx.compose.ui.graphics.Color.Unspecified
     val glyphInk = ink ?: androidx.compose.ui.graphics.ColorProducer { fallback }
     Box(contentAlignment = Alignment.Center) {
         if (action == PlayerAction.Count) DrawInkText(count.replace(" / ", "/"), glyphInk,
@@ -110,7 +110,7 @@ internal fun PlayerActionStrip(value: PlayerActionSettings, label: (PlayerAction
                         contentAlignment = Alignment.Center) {
                         if (action != null) {
                             val drawTheme = LocalPlayerDrawTheme.current
-                            val fallback = LocalContentColor.current
+                            val fallback = if (drawTheme == null) LocalContentColor.current else androidx.compose.ui.graphics.Color.Unspecified
                             val ink = androidx.compose.ui.graphics.ColorProducer {
                                 val color = drawTheme?.foreground?.invoke() ?: fallback
                                 color.copy(alpha = color.alpha * opacity)
