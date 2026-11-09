@@ -227,7 +227,7 @@ private fun TagSaveProgressDialog(state: TagEditorState, controller: TagEditingC
             restoring -> "Restoring originals"
             else -> "Saving tags"
         })
-    }, text = { SaveProgressBodySlot {
+    }, text = { SaveProgressBodySlot(DialogChrome.Regular.gapDp.dp) {
         Text(if (restoring) "Restoring ${state.restored} of ${state.touched}" else "Saved ${state.saved} of ${state.tracks.size}")
         ControlProgress(progress = {
             if (restoring) state.restored.toFloat() / state.touched.coerceAtLeast(1)

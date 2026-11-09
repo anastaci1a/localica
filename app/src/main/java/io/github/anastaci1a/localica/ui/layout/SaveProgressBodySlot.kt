@@ -6,11 +6,10 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
-import io.github.anastaci1a.localica.ui.DialogChrome
+import androidx.compose.ui.unit.Dp
 
 @Composable
-internal fun SaveProgressBodySlot(content: @Composable ColumnScope.() -> Unit) {
-    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(DialogChrome.Regular.gapDp.dp),
+internal fun SaveProgressBodySlot(gap: Dp, content: @Composable ColumnScope.() -> Unit) {
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(gap),
         content = content)
 }
