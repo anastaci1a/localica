@@ -288,9 +288,9 @@ class LyricsReturnBackdropTest {
         compose.waitForIdle()
         compose.onNodeWithContentDescription(ReturnLabel).assertDoesNotExist()
         val selected = compose.onNodeWithText(state.document.lines[30].text).assertIsDisplayed().assertIsSelected()
-        assertTrue("Return still navigates to the current line after replacement and re-entry",
-            selected.fetchSemanticsNode().boundsInRoot.center.y <
-                compose.onNodeWithTag("lyric-lines").fetchSemanticsNode().boundsInRoot.center.y)
+        assertEquals("Return still centres the current line after replacement and re-entry (#717)",
+            compose.onNodeWithTag("lyric-lines").fetchSemanticsNode().boundsInRoot.center.y,
+            selected.fetchSemanticsNode().boundsInRoot.center.y, 2f)
     }
 
     @Test fun transparentArtworkAndLyricRevealHaveOnlyOneDisplayOwner() {

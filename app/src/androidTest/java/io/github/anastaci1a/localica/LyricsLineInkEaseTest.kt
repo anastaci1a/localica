@@ -157,7 +157,7 @@ class LyricsLineInkEaseTest {
     private fun capture(leg: String, count: Int) = repeat(count) { frame(); sample(leg, it, strip)?.let { s -> samples += s } }
 
     /** The theme flips to dark part-way through the opening animation; every visible line must follow it together.
-     *  With [composeMidEase] the list is scrolled (semantics, following stays on) to a far region and back after the flip, so
+     *  With [composeMidEase] the list is shifted (semantics, following stays on) by four rows and back after the flip, so
      *  lines are composed mid-ease exactly as the autoscroll of a moving song composes them. */
     private fun run(case: String, position: Long, composeMidEase: Boolean = false) {
         positionMs = position
@@ -171,7 +171,8 @@ class LyricsLineInkEaseTest {
         if (composeMidEase) {
             capture("open-dark", 4)
             val list = compose.onNodeWithTag("lyric-lines", useUnmergedTree = true)
-            list.performScrollToIndex(30); capture("open-dark-far", 10)
+            // A partial shift: about half the visible rows stay composed while fresh rows enter, both ways.
+            list.performScrollToIndex(LrcParserCurrentLine + 4); capture("open-dark-far", 10)
             list.performScrollToIndex(LrcParserCurrentLine); capture("open-dark-back", 26)
         } else capture("open-dark", 40)
         val last = samples.last()
@@ -302,7 +303,7 @@ class LyricsLineInkEaseTest {
         assertTrue("Every lyric line snaps with the layout under Reduced Motion:\n" + failures.joinToString("\n"), failures.isEmpty())
     }
     private companion object {
-        /** The current line of the composed case: line 11 at 20 s, so the far scroll (index 30) composes fresh lines both ways. */
+        /** The current line of the composed case: line 11 at 20 s, so the shift composes fresh rows both ways. */
         const val LrcParserCurrentLine = 10
     }
 }

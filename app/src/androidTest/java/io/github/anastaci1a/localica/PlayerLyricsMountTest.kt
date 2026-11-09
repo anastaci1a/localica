@@ -148,12 +148,13 @@ class PlayerLyricsMountTest {
             val state = PlaybackState(connected = true, trackId = lyric.id, trackUri = lyric.uri, title = lyric.title,
                 positionMs = line.timeMs!!, durationMs = 125000)
             val samples = anchorsWhileMinimizing(state, lyric, "lyric-active", "lyric-lines")
-            // Rest: the current line starts one third down the stable-height viewport.
+            // Rest: the current line is centred in the lyric-lines container (#717).
             val panel = rect("lyrics-panel")
-            val top = compose.onNode(SemanticsMatcher.expectValue(SemanticsProperties.Selected, true) and
-                hasAnyAncestor(hasTestTag("lyric-lines")), useUnmergedTree = true).fetchSemanticsNode().boundsInRoot.top
+            val line = compose.onNode(SemanticsMatcher.expectValue(SemanticsProperties.Selected, true) and
+                hasAnyAncestor(hasTestTag("lyric-lines")), useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+            val container = compose.onNodeWithTag("lyric-lines", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
             val rest = compose.onNodeWithTag("lyrics-viewport", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
-            assertEquals("The current line rests one third down", panel.top + panel.height / 3f, top, 2f)
+            assertEquals("The current line rests centred in the container", container.center.y, line.center.y, 2f)
             assertEquals("The viewport is the clip", panel, rest)
             assertTracksMidpoint(samples)
         } finally { file.delete() }
