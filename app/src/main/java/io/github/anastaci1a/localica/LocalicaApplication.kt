@@ -32,6 +32,7 @@ class LocalicaApplication : Application() {
             // here so those Main reads find them in memory. Values and write paths are unchanged.
             for (name in STARTUP_PREFERENCES) runCatching { getSharedPreferences(name, MODE_PRIVATE).contains("") }
         }
+        startup.launch { onlineMetadataConsent.load() }
         startup.launch { io.github.anastaci1a.localica.icons.IconPacks.load(this@LocalicaApplication) }
         startup.launch { startArtworkColors(this) }
         startup.launch {
@@ -57,12 +58,30 @@ class LocalicaApplication : Application() {
         scope.launch { dao.trackChanges().collect { backfill.request() } }
         scope.launch { backfill.run() }
     }
+    private val statisticsDatabase by lazy { Room.databaseBuilder(this,
+        io.github.anastaci1a.localica.statistics.StatisticsDatabase::class.java, "statistics.db").build() }
     val statistics by lazy {
-        io.github.anastaci1a.localica.statistics.StatisticsRepository(Room.databaseBuilder(this,
-            io.github.anastaci1a.localica.statistics.StatisticsDatabase::class.java, "statistics.db").build().statistics(),
+        io.github.anastaci1a.localica.statistics.StatisticsRepository(statisticsDatabase.statistics(),
             identities = io.github.anastaci1a.localica.statistics.ListeningIdentityStore(
                 getSharedPreferences("listening-identity", MODE_PRIVATE)))
     }
+    val onlineMetadataConsent by lazy {
+        io.github.anastaci1a.localica.network.OnlineMetadataConsent(java.io.File(filesDir, "online-metadata-consent"))
+    }
+    val artistPhotos by lazy {
+        io.github.anastaci1a.localica.artistphoto.ArtistPhotos(onlineMetadataConsent,
+            java.io.File(cacheDir, "artist-photos"), java.io.File(filesDir, "artist-photo-matches"))
+    }
+    val lastfm by lazy {
+        io.github.anastaci1a.localica.lastfm.LastFmController(
+            io.github.anastaci1a.localica.lastfm.FileLastFmStore(java.io.File(filesDir, "lastfm-snapshot.json")),
+            io.github.anastaci1a.localica.lastfm.LastFmSync(io.github.anastaci1a.localica.lastfm.HttpLastFmApi(BuildConfig.LASTFM_API_KEY, onlineMetadataConsent)),
+            library.snapshots, BuildConfig.LASTFM_API_KEY.isNotBlank(), onlineMetadataConsent,
+            localStatistics = statistics.counts)
+    }
+    val effectiveStatistics by lazy { lastfm.applyTo(statistics.counts) }
+    val playRankings by lazy { io.github.anastaci1a.localica.statistics.PlayRankingSource(
+        io.github.anastaci1a.localica.statistics.LocalPlayCountSource(statisticsDatabase.statistics()), lastfm) }
     val listening by lazy {
         io.github.anastaci1a.localica.statistics.ListeningSession(android.os.SystemClock::elapsedRealtime,
             statistics.restoredIdentity(), statistics::checkpoint, statistics::record)
@@ -88,7 +107,7 @@ class LocalicaApplication : Application() {
             listening = listening)
     }
     private suspend fun liveSortSnapshot() =
-        library.sortSnapshots.withListeningStatistics(statistics.counts).first()
+        library.sortSnapshots.withListeningStatistics(effectiveStatistics).first()
 
     private val libraryDatabase by lazy {
         Room.databaseBuilder(this, LibraryDatabase::class.java, "library.db").addMigrations(*LibraryDatabase.MIGRATIONS).build()

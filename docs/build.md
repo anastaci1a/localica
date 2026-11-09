@@ -4,6 +4,9 @@
 
 Use JDK 17, Android platform 36 and build tools 35.0.0. Set `ANDROID_HOME` or untracked `local.properties` with `sdk.dir=/path/to/sdk`. The pinned wrapper verifies its download checksum.
 
+Register the merge driver for `.github/prototype-risk-classes.txt` once per clone: `git config merge.union-dedupe.driver 'sh tools/git/merge-union-dedupe.sh %O %A %B'`. It merges both sides' classes and drops duplicate lines, which the risk inventory contract rejects.
+
+
 ### Development and final validation
 
 The Localica lead runs effective tests and test setup without separate user approval. Use focused local checks while implementing individual changes. Documentation-only changes need prose, structure, link and rendering checks. Run the complete suite only after all intended changes form a ready final candidate.
@@ -33,6 +36,8 @@ Final build and native commands, run only after candidate freeze:
 Use the [shared Compose test factories](../app/src/androidTest/java/io/github/anastaci1a/localica/TestComposeRules.kt) for instrumentation. They select `StandardTestDispatcher` by default and preserve explicit fixture contexts. Compose 1.10 drains due work on Main while idling, including with a paused frame clock. Keep clock advances and input assertions explicit; do not add a separate idle-drain backport.
 
 The system keyboard is device state that survives app resets between shard classes. Classes that show it through real text entry start with [`FreshSystemIme`](../app/src/androidTest/java/io/github/anastaci1a/localica/SystemImeIsolation.kt), which restarts the selected system IME process. After a long API 36 shard, LatinIME on the hardware-keyboard emulator can report its whole window as the IME inset while drawing nothing (#638).
+
+FloatingImeLifecycleTest swaps the default IME to its synthetic service and back, which was found to leave LatinIME in that state, so it restarts the system keyboard itself in cleanup (`restartSystemKeyboard`). Tests that change the default IME must do the same.
 
 The R8 rules preserve Compose 1.10's `AndroidLayoutApi34` helper as an optimization boundary, while allowing shrinking and renaming. This keeps its guarded text-range adapter out of paragraph classes loaded on API 26. Recheck the rule when upgrading Compose or R8; the distribution smoke linkage gate remains unchanged.
 
@@ -112,11 +117,17 @@ The opt-in `prototype.yml` lane builds an explicitly uncertified development APK
 
 Full native shards and focused prototype jobs time out after 35 minutes. A timed-out shard fails the summary even if its XML is complete; rerun failed jobs to retry it.
 
+The hosted emulator's adb transport can drop while UTP pulls outputs and uninstalls the APKs after a complete, failure-free run (#675). The prototype runner then waits for the same guest, finishes the interrupted uninstall and reconciles the first attempt's final XML as usual. It never runs the gate again, which would give every test a second chance.
+
+Recovery requires a final XML with every expected method and no failures, no observed failure line, a Gradle failure caused only by that teardown plugin error, complete monitoring, and the same guest (unchanged boot id) answering adb within three minutes. The repeat summary records it under `prototype-evidence/teardown-offline/`.
+
+Any other failure, a rebooted guest, a device that stays offline, a package that cannot be removed or an exact-method iteration keeps the original failure.
+
 Search IME, search-focus and contrast coverage is mandatory on API 26/36. Build/JVM/lint/signature and both preserved-data compatibility jobs also remain required. Known issues never waive failures.
 
 The `runner` input defaults to `hosted`. `runner=self-hosted` moves only the two focused emulator jobs to the owner’s locked-down single-job runner, for the owner’s manual dispatch on a branch (#592). A queued self-hosted job waits for the owner’s launcher and is never rerouted.
 
-Self-hosted is for single focused runs: `repeat` must be 1 and `repeat_methods` empty, so repeated proofs stay hosted. Build, compatibility and evidence jobs, `android.yml`, release gates and acceptance runs always stay hosted.
+Self-hosted runs focused jobs with `repeat` up to 5 (with or without `repeat_methods`); longer repeat proofs stay hosted. Build, compatibility and evidence jobs, `android.yml`, release gates and acceptance runs always stay hosted.
 
 The prototype build job compiles debug and release Kotlin concurrently in one Kotlin daemon, which inherits the Gradle heap. It therefore uses the Android static-checks sizing (`-Xmx6g`, four workers) on the 16 GB hosted runner; the 2 GB local default ran out of memory there (#636).
 
@@ -198,6 +209,12 @@ Full and focused native jobs stream guest kernel messages into workflow logs and
 
 Hosted emulator jobs cache the SDK archive by revision and checksum. Cached and downloaded archives must match the [official SDK repository](https://dl.google.com/android/repository/repository2-1.xml)'s size, SHA-1 and package revision before installation. A failed or corrupt download is retried once. Two failures stop setup before device tests.
 
+Emulator archives and system images are saved only from `main`. A branch-scoped entry is invisible to other branches: it only duplicates the shared copy and evicts it from the 10 GB repository cache (#681).
+
+Hosted compile jobs restore shared Gradle dependency entries instead of downloading: `localica-static-checks` (unit tests, lint, debug and release builds) and `localica-test-apks` (app and instrumentation APKs, also the compatibility builds). Only runs on `main` save them: the [dependency cache workflow](../.github/workflows/dependency-cache.yml) writes both on dispatch or when dependency files change; the Android workflow refreshes them each train.
+
+Each compile job records `dependency-downloads=N` in its runner identity file and annotates the run when `N > 0`. Gradle itself never retries a failed download, so compile steps run through `gradle-transient-retry.sh`: at most three attempts, only after an HTTP 5xx, timeout or reset on a download. Failing tests, compilation errors and lint findings are never retried.
+
 On disposable GitHub-hosted API 26 emulators, the native runner temporarily disables preinstalled Google Search before instrumentation. Its unrelated JobScheduler crash can obstruct Localica. Cleanup restores its prior enabled state after verifying device and package ownership. Google Search data is preserved. Physical devices are untouched. Localica crashes and all assertions remain fatal.
 
 `ANDROID_DEBUG_KEYSTORE` holds the base64 development key. CI restores it via `LOCALICA_DEBUG_KEYSTORE` and verifies the APK certificate. Back up the key outside Git. Local builds otherwise use the normal debug key. PRs use a disposable key.
@@ -276,3 +293,11 @@ Frame export schema 2 retains schema 1 keys and adds an allow-listed scenario ta
 The optimized distribution variant is profileable for explicit Perfetto capture. Export occurs after Stop through the existing diagnostics share sheet. No frame listener or trace capture starts before the user chooses Start.
 
 Builds record the checkout’s full Git SHA. For a source archive without Git metadata, pass `-PlocalicaSourceSha=FULL_SOURCE_SHA` from its verified provenance. The compatibility builder supplies the immutable archived candidate SHA.
+
+## Last.fm build key
+
+APK-producing Gradle steps receive the optional Actions secret LASTFM_API_KEY. Gradle also accepts the lastfmApiKey project property. Both inputs populate BuildConfig.LASTFM_API_KEY. Missing keys compile successfully with syncing disabled; fork pull requests need no secret.
+
+The Android workflow's distribution build produces the canonical APK used by tag releases. Its build step receives the same key. Reusable prototype callers forward the optional secret explicitly or inherit secrets. Diagnostics, evidence publishers and release upload steps never receive it.
+
+The application key is bundled into the client APK for read-only API calls. No Last.fm shared secret is used or bundled. Offline tooling contracts enforce secret scope and prevent workflow commands from printing its environment variable. JVM and device fixtures make no live API requests.

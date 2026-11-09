@@ -167,7 +167,7 @@ internal fun verifyNativeShadowCallers(rule: ComposeContentTestRule, mode: Glass
                     anchor = rememberGlassAnchor()
                     Box(Modifier.width(160.dp).testTag("oracle-control"), propagateMinConstraints = true) {
                         when (kind) {
-                            "button" -> GlassActionButton(AppIcon.ActionMore, "Actions", Modifier.glassAnchor(anchor), enabled = available) {}
+                            "button" -> GlassActionButton(AppIcon.ActionEllipsis, "Actions", Modifier.glassAnchor(anchor), enabled = available) {}
                             "filter" -> GlassFilterChoice(false, {}, "Filter", available)
                             "settings" -> SettingsLink("Settings", enabled = available, anchor = anchor) {}
                             "bubble" -> GlassDragBubble(Modifier.fillMaxWidth().height(48.dp), landing = { if (available) 0f else .62f }) {}

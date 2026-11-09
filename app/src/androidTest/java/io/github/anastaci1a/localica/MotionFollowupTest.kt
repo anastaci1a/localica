@@ -104,16 +104,22 @@ class MotionFollowupTest {
                 }
             }
         }
+        // #678 instrumentation (log only): where the method's time goes.
+        val methodStart = System.nanoTime()
+        var snapNs = 0L; var rectNs = 0L; var samples = 0
         fun rect(tag: String): Rect {
+            val t = System.nanoTime()
             val c = compose.onNodeWithTag(tag, true).fetchSemanticsNode().layoutInfo.coordinates
-            return compose.runOnUiThread { c.findRootCoordinates().localBoundingBoxOf(c, clipBounds = false) }
+            return compose.runOnUiThread { c.findRootCoordinates().localBoundingBoxOf(c, clipBounds = false) }.also { rectNs += System.nanoTime() - t }
         }
         fun sample(p: Float): Pair<Rect, Rect> {
+            val sampleStart = System.nanoTime(); samples++
             compose.runOnIdle {
                 val update = scope.launch(start = CoroutineStart.UNDISPATCHED) { progress.snapTo(p) }
                 assertTrue(update.isCompleted)
             }
             compose.mainClock.advanceTimeByFrame(); compose.waitForIdle()
+            snapNs += System.nanoTime() - sampleStart
             val observed = requireNotNull(growth)
             assertEquals(p, observed.expansion, 0f)
             val t = observed.trajectory[(p * 256).roundToInt()]
@@ -154,6 +160,8 @@ class MotionFollowupTest {
                     }
                 }
             }
+            android.util.Log.i("Trim678", "MotionFollowupTest.playerArtwork totalMs=${(System.nanoTime() - methodStart) / 1_000_000} samples=$samples " +
+                "snapMs=${snapNs / 1_000_000} rectMs=${rectNs / 1_000_000}")
         } finally { compose.mainClock.autoAdvance = originalClock }
         // The rendered image is still composition-owned; do not recycle it here.
     }

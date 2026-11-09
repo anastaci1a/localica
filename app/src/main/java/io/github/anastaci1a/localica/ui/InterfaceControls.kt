@@ -54,7 +54,7 @@ import kotlin.math.roundToInt
     modifier: Modifier = Modifier, valueRange: ClosedFloatingPointRange<Float> = 0f..1f, steps: Int = 0,
     low: String? = null, high: String? = null, description: String? = null, curve: Float = 1f) {
     SliderPreferenceFrame(label, low, high, description) {
-        InterfaceSlider(value, onValueChange, modifier, valueRange, steps, curve = curve)
+        InterfaceSlider(value, onValueChange, modifier, valueRange, steps, enabled = LocalSettingsEnabled.current, curve = curve)
     }
 }
 

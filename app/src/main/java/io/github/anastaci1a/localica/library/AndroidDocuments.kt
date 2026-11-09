@@ -93,6 +93,9 @@ class AndroidDocuments(private val context: Context) : DocumentSource {
                 year = wavText(org.jaudiotagger.tag.FieldKey.YEAR).tagNumber() ?: retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_YEAR).tagNumber() ?: extra?.metadata?.recordingYear ?: extra?.metadata?.releaseYear,
                 genre = wavText(org.jaudiotagger.tag.FieldKey.GENRE) ?: retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_GENRE) ?: extra?.metadata?.genre?.toString(),
                 comment = wavText(org.jaudiotagger.tag.FieldKey.COMMENT) ?: extra?.comment,
+                musicBrainzId = wavText(org.jaudiotagger.tag.FieldKey.MUSICBRAINZ_TRACK_ID) ?: extra?.musicBrainzId,
+                releaseType = wavText(org.jaudiotagger.tag.FieldKey.MUSICBRAINZ_RELEASE_TYPE) ?: extra?.releaseType,
+                compilation = compilationFlag(wavText(org.jaudiotagger.tag.FieldKey.IS_COMPILATION)) ?: extra?.compilation,
                 durationMs = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull(),
             )
         } finally {

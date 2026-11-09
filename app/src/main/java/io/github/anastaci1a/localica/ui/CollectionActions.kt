@@ -32,6 +32,7 @@ import kotlinx.coroutines.*
     var deleting by remember { mutableStateOf(false) }
     val artworkTarget = "${item.ref.kind}:${item.ref.id}"
     val artwork = rememberArtworkWorkflow(artworkTarget)
+    val artistPhotoActions = rememberArtistPhotoActions(item)
     var busy by remember { mutableStateOf(false) }
     var failure by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
@@ -56,10 +57,10 @@ import kotlinx.coroutines.*
             ActionMenuItem("New queue", icon = AppIcon.TabQueues, enabled = queues != null, onClick = { act(SongTap.NewQueue) })
             ActionMenuItem("Play now", icon = AppIcon.TransportPlay, enabled = queues != null, onClick = { act(SongTap.PlayNow) })
         }
-        ActionMenuItem("Play next", icon = AppIcon.MenuPlayNext, enabled = item.songs.isNotEmpty() && queues != null, onClick = { act(SongTap.PlayNext) })
-        ActionMenuItem("Add to current queue", icon = AppIcon.MenuQueueAdd, enabled = item.songs.isNotEmpty() && queues != null, onClick = { act(SongTap.Append) })
-        ActionMenuItem("Add to a queue", icon = AppIcon.MenuQueueAdd, enabled = item.songs.isNotEmpty() && queues != null, onClick = { onDismiss(); queuePicker = true })
-        ActionMenuItem("Add to playlist", icon = AppIcon.MenuPlaylistAdd, enabled = item.songs.isNotEmpty() && controller != null, onClick = { onDismiss(); adding = true })
+        ActionMenuItem("Play next", icon = AppIcon.MenuListAddNext, enabled = item.songs.isNotEmpty() && queues != null, onClick = { act(SongTap.PlayNext) })
+        ActionMenuItem("Add to current queue", icon = AppIcon.MenuListAddLast, enabled = item.songs.isNotEmpty() && queues != null, onClick = { act(SongTap.Append) })
+        ActionMenuItem("Add to a queue", icon = AppIcon.MenuListAddLast, enabled = item.songs.isNotEmpty() && queues != null, onClick = { onDismiss(); queuePicker = true })
+        ActionMenuItem("Add to playlist", icon = AppIcon.MenuListAddLast, enabled = item.songs.isNotEmpty() && controller != null, onClick = { onDismiss(); adding = true })
         if (item.ref.kind in io.github.anastaci1a.localica.home.PinEdits.supported) {
             HorizontalDivider(Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
             ActionMenuItem(if (item.ref in pins) "Unpin from Home" else "Pin to Home", icon = AppIcon.MenuPin, onClick = { onPin(item.ref); onDismiss() })
@@ -82,6 +83,7 @@ import kotlinx.coroutines.*
             ActionMenuItem("Rename playlist", icon = AppIcon.ActionEdit, enabled = controller != null, onClick = { onDismiss(); renaming = true })
             ActionMenuItem("Delete playlist", icon = AppIcon.MenuTrash, enabled = controller != null, onClick = { onDismiss(); deleting = true })
         }
+        ArtistPhotoMenu(artistPhotoActions, onDismiss)
         extra()
         if (onRemove != null) {
             HorizontalDivider(Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
@@ -89,6 +91,7 @@ import kotlinx.coroutines.*
                 onClick = { onDismiss(); onRemove() })
         }
     }
+    ArtistPhotoDialog(artistPhotoActions)
     if (adding) AddToPlaylistDialog(item.songs.map { it.track }, playlists, controller, { adding = false }, { adding = false })
     if (queuePicker && queues != null) {
         val state by queues.state.collectAsState()

@@ -1,8 +1,21 @@
 package io.github.anastaci1a.localica.library
 
+import io.github.anastaci1a.localica.statistics.saturatedAdd
+import io.github.anastaci1a.localica.statistics.saturatedMultiply
 import java.util.Locale
 
-enum class TrackSort { Manual, Title, Artist, Album, AlbumArtist, Folder, Year, Duration, Composer, Genre, Modified, Added, MostPlayed, Count }
+enum class TrackSort { Manual, Title, Artist, Album, AlbumArtist, Folder, Year, Duration, Composer, Genre, Modified, Added, MostPlayed, LongestListened, Count }
+
+/** Play-based orders read live statistics, so their results stay request-local (never shared plans). */
+val TrackSort.usesPlays: Boolean get() = this == TrackSort.MostPlayed || this == TrackSort.LongestListened
+
+/** #666 Longest listened: selected qualified plays weighted by length. Unknown or negative
+ * durations count as zero and totals saturate instead of overflowing. */
+val Track.longestListenedMs: Long get() = saturatedMultiply(playCount.coerceAtLeast(0), durationMs?.coerceAtLeast(0) ?: 0)
+
+/** Albums, artists and playlists count a library song once, even with several occurrences. */
+fun longestListenedMs(tracks: Iterable<Track>): Long = tracks.distinctBy { it.id }
+    .fold(0L) { total, track -> saturatedAdd(total, track.longestListenedMs) }
 
 data class LibraryQuery(
     val text: String = "",
@@ -74,6 +87,7 @@ object LibraryQueries {
                     TrackSort.Modified -> compare(left.modifiedAt, right.modifiedAt)
                     TrackSort.Added -> compare(left.addedAt, right.addedAt)
                     TrackSort.MostPlayed -> compare(left.playCount, right.playCount)
+                    TrackSort.LongestListened -> compare(left.longestListenedMs, right.longestListenedMs)
                 }
                 primary.takeIf { it != 0 } ?: a.title.compareTo(b.title).takeIf { it != 0 }
                     ?: left.id.compareTo(right.id)

@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import io.github.anastaci1a.localica.browse.BrowserItem
 import io.github.anastaci1a.localica.library.SongRow
 import io.github.anastaci1a.localica.navigation.MediaRef
+import io.github.anastaci1a.localica.navigation.MediaKind
 import java.util.UUID
 
 /** Collections own their occurrences; a song row inherits the list containing it. */
@@ -14,6 +15,12 @@ internal fun BrowserItem.selectionTarget(containingSource: MediaRef? = null) =
     if (row == null) SongSelectionTarget(ref, songs) else SongSelectionTarget(containingSource, listOf(row))
 
 internal data class SelectedSong(val id: String = UUID.randomUUID().toString(), val source: MediaRef?, val row: SongRow)
+
+/** Library rows use the same ID in every projection; mutable lists own persisted entry IDs.
+ * Keep cross-recognition here: library selections do not select playlist or queue entries.
+ */
+private fun selectionOccurrence(source: MediaRef?, rowId: String): Pair<MediaRef?, String> =
+    source?.takeIf { it.kind == MediaKind.Playlist || it.kind == MediaKind.Queue } to rowId
 
 /** Activity session only: configuration changes retain it; fresh sessions never restore it from disk. */
 internal class SessionSelection : ViewModel() {
@@ -32,24 +39,24 @@ internal class SessionSelection : ViewModel() {
         if (token != null && presentationHold === token) presentationHold = null
     }
     val entries = mutableStateListOf<SelectedSong>()
-    private val occurrences by derivedStateOf { entries.mapTo(hashSetOf()) { it.source to it.row.id } }
-    val trackIds by derivedStateOf { entries.mapTo(hashSetOf()) { it.row.track.id } }
+    private val occurrences by derivedStateOf { entries.mapTo(hashSetOf()) { selectionOccurrence(it.source, it.row.id) } }
     var visible: List<SongRow> = emptyList()
     var source: MediaRef? = null
-    fun contains(source: MediaRef?, id: String) = source to id in occurrences
+    fun contains(source: MediaRef?, id: String) = selectionOccurrence(source, id) in occurrences
     fun selectedCount(item: BrowserItem, containingSource: MediaRef? = null): Int =
         item.row?.let { if (contains(containingSource, it.id)) 1 else 0 }
-            ?: item.songs.count { it.track.id in trackIds }
+            ?: item.songs.count { contains(item.ref, it.id) }
     fun select(source: MediaRef?, rows: List<SongRow>) {
         if (!active) collapsed = false
         active = true
         val known = occurrences.toMutableSet()
         entries.addAll(rows.mapNotNull { row ->
-            if (known.add(source to row.id)) SelectedSong(source = source, row = row) else null
+            if (known.add(selectionOccurrence(source, row.id))) SelectedSong(source = source, row = row) else null
         })
     }
     fun toggle(source: MediaRef?, row: SongRow) {
-        if (contains(source, row.id)) entries.removeAll { it.source == source && it.row.id == row.id }
+        val occurrence = selectionOccurrence(source, row.id)
+        if (occurrence in occurrences) entries.removeAll { selectionOccurrence(it.source, it.row.id) == occurrence }
         else select(source, listOf(row))
     }
     fun range() {

@@ -76,6 +76,15 @@ def main():
             item.update(status='failed', exit_code=result, error='Missing reconciled receipt')
         if receipt.is_file():
             item['receipt_sha256'] = hashlib.sha256(receipt.read_bytes()).hexdigest()
+        recovered = folder / 'prototype-evidence/teardown-offline/recovered.txt'
+        if recovered.is_file():
+            # #675: Gradle lost adb during teardown after a complete pass; the first attempt's
+            # XML was reconciled once the same guest answered again. Keep that visible.
+            record = json.loads((recovered.parent / 'recovery.json').read_text())
+            item['infrastructure_recovered'] = {'issue': 675, 'signature': 'teardown-device-offline',
+                                                'recovered_after_seconds': record.get('recovered_after_seconds'),
+                                                'first_attempt_exit': recovered.read_text().strip(),
+                                                'evidence': str(recovered.parent.relative_to(folder))}
         save()
         return result
 
@@ -85,8 +94,10 @@ def main():
     gate = None
     if requested_methods:
         inventory_file = archive / 'requested-methods.json'
+        # The same API-gated inventory every iteration's runner records (#657).
         subprocess.run(['python3', '.github/test-evidence/source_methods.py', '--classes',
-                        ','.join(sorted(os.environ['AFFECTED_CLASSES'].split(','))), '--output', str(inventory_file)], check=True)
+                        ','.join(sorted(os.environ['AFFECTED_CLASSES'].split(','))), '--api', os.environ['TEST_API'],
+                        '--output', str(inventory_file)], check=True)
         complete = json.loads(inventory_file.read_text())
         # Preserve source identities while restricting runtime expectations to requested methods.
         subprocess.run(['python3', '.github/prototype-methods.py', str(inventory_file), requested_methods], check=True)
@@ -108,7 +119,8 @@ def main():
             result = execute(folder, item, {'PROTOTYPE_METHOD_ITERATION':
                              'true' if requested_methods else 'false'})
             last = folder
-            print(f"Prototype iteration {item['iteration']}/{count}: {item['status']}", flush=True)
+            recovered = ' (recovered from a #675 teardown adb drop)' if 'infrastructure_recovered' in item else ''
+            print(f"Prototype iteration {item['iteration']}/{count}: {item['status']}{recovered}", flush=True)
             if result:
                 break
     # Default proofs retain the final full selection. Method proofs retain their

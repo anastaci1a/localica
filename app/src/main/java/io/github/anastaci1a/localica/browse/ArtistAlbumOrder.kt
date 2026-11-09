@@ -17,7 +17,7 @@ internal object ArtistAlbumOrder {
 
     // Manual occurrence order has no album aggregate.
     val supportedSorts: Set<TrackSort> = setOf(TrackSort.Title, TrackSort.Album, TrackSort.Year,
-        TrackSort.Count, TrackSort.Duration, TrackSort.Added, TrackSort.Modified, TrackSort.MostPlayed,
+        TrackSort.Count, TrackSort.Duration, TrackSort.Added, TrackSort.Modified, TrackSort.MostPlayed, TrackSort.LongestListened,
         TrackSort.Artist, TrackSort.AlbumArtist, TrackSort.Composer, TrackSort.Genre, TrackSort.Folder)
 
     /** Groups use LibraryViews' length-prefixed album/Album Artist identity, not title alone.
@@ -25,7 +25,7 @@ internal object ArtistAlbumOrder {
      * occurrence ID and input ordinal. Reversing the outer sort never reverses those rows.
      *
      * Year/Added use the earliest known value, Modified the latest. Duration sums known values
-     * (all missing is unknown); Count and MostPlayed use distinct track IDs, as album catalogs do.
+     * (all missing is unknown); Count, MostPlayed and LongestListened use distinct track IDs, as album catalogs do.
      * Text aggregates retain the catalog's distinct/sorted joined values; blank-only is unknown.
      * Title/Album use the album title, with a missing tag distinct from a literal "Unknown album".
      * Folder uses the lexicographically earliest nonblank occurrence relativePath, lowercased with
@@ -98,6 +98,7 @@ internal object ArtistAlbumOrder {
             TrackSort.Duration -> Key(number = tracks.mapNotNull { it.durationMs }.takeIf { it.isNotEmpty() }?.sum())
             TrackSort.Count -> Key(number = tracks.size.toLong())
             TrackSort.MostPlayed -> Key(number = tracks.sumOf { it.playCount })
+            TrackSort.LongestListened -> Key(number = longestListenedMs(tracks))
             TrackSort.Artist, TrackSort.AlbumArtist, TrackSort.Composer, TrackSort.Genre -> text(tracks.mapNotNull {
                 when (sort) {
                     TrackSort.Artist -> it.artist

@@ -59,7 +59,14 @@ serial=${ANDROID_SERIAL:-emulator-5554}
 [[ "$serial" =~ ^emulator-[0-9]+$ ]] || { echo 'Require an explicit emulator serial' >&2; exit 2; }
 actual_api=$(adb -s "$serial" shell getprop ro.build.version.sdk | tr -d '\r')
 [[ "$actual_api" == "$TEST_API" ]] || { echo "Actual SDK $actual_api differs from requested $TEST_API" >&2; exit 2; }
-printf 'serial=%s\nactual_api=%s\n' "$serial" "$actual_api" >> prototype-evidence/context.txt
+# The pre-run boot id proves that a reconnected device is the same guest (#675).
+boot_id=$(adb -s "$serial" shell cat /proc/sys/kernel/random/boot_id | tr -d '\r')
+[[ -n "$boot_id" ]] || { echo 'Require the emulator boot id' >&2; exit 2; }
+printf 'serial=%s\nactual_api=%s\nboot_id=%s\n' "$serial" "$actual_api" "$boot_id" >> prototype-evidence/context.txt
+aot_args=()
+if [[ $TEST_API == 26 ]]; then
+  aot_args=(-I .github/api26-aot.gradle)
+fi
 source .github/prepare-device-tests.sh
 # Retain the setup's EXIT restoration trap; forward cancellation to the observer,
 # which owns its child process group, before restoration runs.
@@ -72,21 +79,65 @@ stop_child() {
 }
 trap 'stop_child TERM 143' TERM
 trap 'stop_child INT 130' INT
+run_gate() {
+  local status
+  python3 .github/test-evidence/supervise.py --output prototype-evidence/live --run-id "$GITHUB_RUN_ID" --attempt "$GITHUB_RUN_ATTEMPT" --sha "$GITHUB_SHA" --api "$TEST_API" --lane prototype -- ./gradlew connectedDebugAndroidTest -I .github/prebuilt-device-tests.gradle "${aot_args[@]}" --no-daemon --max-workers=2 "-Pandroid.testInstrumentationRunnerArguments.class=$instrument_selector" &
+  child=$!
+  wait "$child"
+  status=$?
+  child=''
+  return "$status"
+}
+# #675: the emulator's adb transport can drop in the second after a complete, all-pass
+# instrumentation run, while UTP pulls outputs and uninstalls the APKs. Gradle then fails
+# on a teardown-only plugin error although every test passed. Only that exact signature,
+# with the SAME guest answering again and the interrupted uninstall completed, lets the
+# reconciliation below judge the first attempt's complete XML. Never a second run: it
+# would give every test another chance. Any failed, missing or uncounted test, a rebooted
+# guest, a device that stays offline or a package that cannot be removed keeps the failure.
+# Exact-method iterations are excluded: the delivery decision requires their clean exit.
+offline=prototype-evidence/teardown-offline
+monitoring_completed() {
+  python3 - prototype-evidence/live/supervision.json <<'PYSUP'
+import json, sys
+receipt = json.loads(open(sys.argv[1]).read())
+raise SystemExit(0 if receipt['monitoring_complete'] is True and receipt['supervisor_error'] is None else 1)
+PYSUP
+}
 set +e
-python3 .github/test-evidence/supervise.py --output prototype-evidence/live --run-id "$GITHUB_RUN_ID" --attempt "$GITHUB_RUN_ATTEMPT" --sha "$GITHUB_SHA" --api "$TEST_API" --lane prototype -- ./gradlew connectedDebugAndroidTest --no-daemon --max-workers=2 "-Pandroid.testInstrumentationRunnerArguments.class=$instrument_selector" &
-child=$!
-wait "$child"
+run_gate
 result=$?
+if [[ "$result" != 0 && "$method_iteration" == false ]] \
+  && python3 .github/test-evidence/teardown_offline.py classify --live prototype-evidence/live --results app/build/outputs/androidTest-results --expected prototype-evidence/expected-methods.json --output "$offline/classification.json" \
+  && python3 .github/test-evidence/teardown_offline.py recover --serial "$serial" --api "$TEST_API" --boot-id "$boot_id" --timeout "${PROTOTYPE_OFFLINE_RECOVERY_SECONDS:-180}" --output "$offline" \
+  && python3 .github/test-evidence/teardown_offline.py uninstall --serial "$serial" --output "$offline/uninstall.json" \
+  && monitoring_completed; then
+  echo "::warning title=#675 adb offline after a complete pass::API $TEST_API emulator went offline during UTP teardown after a complete, failure-free run (Gradle exit $result); the same guest reconnected and the interrupted uninstall completed, so the first attempt's final XML is reconciled as usual. Evidence under $offline."
+  printf 'first_attempt_exit=%s\n' "$result" > "$offline/recovered.txt"
+  result=0
+fi
 set -e
 [[ "$result" == 0 ]] || exit "$result"
+# The connected task must install the precompiled pair without rebuilding either APK.
+sha256sum --check prototype-evidence/test-input-apks.sha256
 python3 - "$selector" "$required_selector" <<'PYXML'
 import hashlib, json, pathlib, re, sys, xml.etree.ElementTree as ET
 if not __debug__:
     raise SystemExit("Optimized Python cannot disable prototype reconciliation")
 root = pathlib.Path('prototype-evidence')
 observed = json.loads((root/'live/observed/manifest.json').read_text())
-assert observed['status'] == 'completed' and observed['child_returncode'] == 0
-assert observed['observer_exit_status'] == 0 and observed['observed_failure_lines'] == 0
+if (root/'teardown-offline/recovered.txt').is_file():
+    # #675: Gradle failed only on the teardown plugin error after a complete run; the same
+    # guest answered again and the uninstall completed. The final XML below still decides.
+    assert json.loads((root/'teardown-offline/classification.json').read_text())['accepted'] is True
+    assert json.loads((root/'teardown-offline/recovery.json').read_text())['recovered'] is True
+    assert observed['status'] == 'failed' and observed['child_returncode'] not in (None, 0)
+    assert observed['observer_exit_status'] == observed['child_returncode'], 'Observer degraded beyond the Gradle exit'
+    assert observed['cancel_signal'] is None and observed['observer_error'] is None
+else:
+    assert observed['status'] == 'completed' and observed['child_returncode'] == 0
+    assert observed['observer_exit_status'] == 0
+assert observed['observed_failure_lines'] == 0
 assert not (root/'live/observed/events.jsonl').read_text().strip(), 'Observed failure contradicts a successful exit'
 selected = set(sys.argv[1].split(','))
 counts = {c: {'passed': 0, 'failed': 0, 'errors': 0, 'skipped': 0} for c in selected}
@@ -97,15 +148,15 @@ methods = {}
 source_bytes = (root/'expected-methods.json').read_bytes()
 source_inventory = json.loads(source_bytes)
 assert set(source_inventory['selectors']) == selected
-# #464: runtime_methods already excludes methods gated above this API (SdkSuppress); a gated
-# method must be absent below its API and present at or above it, like any other method.
+# runtime_methods excludes methods outside their SdkSuppress interval. They must be
+# absent outside it and execute inside it; runtime assumption skips still need evidence.
 expected_methods = set(source_inventory['runtime_methods'])
 assert source_inventory.get('api') == int(observed['api']), 'Inventory API differs from the observed API'
 gates = source_inventory['gates']
 gated_classes = set(source_inventory['gated_absent_classes'])
 required = set(filter(None, sys.argv[2].split(',')))
-# AGP's observed XML serializes assumptions as <skipped />. Its EXISTING per-method
-# logcat carries the reason. Never infer that reason from a count or source predicate.
+# AGP's observed XML serializes assumptions as <skipped />. UTP's test-result.pb and the per-method
+# logcat carry the reason (#669). Never infer that reason from a count or source predicate.
 package = 'io.github.anastaci1a.localica.'
 profile_reasons = {
     'RepeatOptionsEnvelopeTest#native360x640Font2SectionsExposeEveryControlAndStageDrafts': 'Exact native window profile requires sufficient display space and actual Android font scale 2',
@@ -124,6 +175,19 @@ selection_sdk33_callsites = {
 }
 qualified_skips = []
 assume_gated_skips = {}
+sys.path.insert(0, '.github/test-evidence')
+import utp_results
+def observed_assumptions():
+    if not hasattr(observed_assumptions, 'errors'):
+        records = sorted(pathlib.Path('app/build/outputs/androidTest-results').rglob('test-result.pb'))
+        if not records:
+            raise ValueError('Missing UTP test-result.pb for an observed skip')
+        observed_assumptions.records = [{'file': str(r), 'sha256': hashlib.sha256(r.read_bytes()).hexdigest()} for r in records]
+        observed_assumptions.errors = {}
+        for record in records:
+            for identity, errors in utp_results.assumption_errors(record).items():
+                observed_assumptions.errors.setdefault(identity, []).extend(errors)
+    return observed_assumptions.errors
 def qualify_skip(name, method, skipped, xml_file):
     identity = name+'#'+method
     api = str(observed['api'])
@@ -147,25 +211,30 @@ def qualify_skip(name, method, skipped, xml_file):
         raise ValueError('Require one bounded original per-method assumption log: '+identity)
     text = logs[0].read_text(encoding='utf-8')
     marker = method+'('+name+')'
-    if text.count('TestRunner: started: '+marker) != 1 or text.count('TestRunner: assumption failed: '+marker) != 1:
-        raise ValueError('Assumption log lacks unique matching method boundaries: '+identity)
-    reasons = re.findall(r'TestRunner: org\.junit\.AssumptionViolatedException: ([^\r\n]*)', text)
-    if assume_gated and len(reasons) == 1:
-        expected = reasons[0]
-    if reasons != [expected]:
-        raise ValueError('Missing, ambiguous or wrong observed skip reason: '+identity)
+    # logd can drop this log's entries under load (#669). UTP's test-result.pb, built from the
+    # instrumentation status stream, is the observed record; the log may only confirm it.
+    boundaries = re.findall(r'TestRunner: (started|assumption failed|finished): ([^\r\n]*)', text)
+    terminal = [('started', marker), ('assumption failed', marker), ('finished', marker)]
+    if [b for b in terminal if b in boundaries] != boundaries:
+        raise ValueError('Assumption log has foreign, repeated or unordered method boundaries: '+identity)
+    errors = sorted(set(observed_assumptions().get(identity, [])), key=str)
+    if len(errors) != 1 or errors[0][0] is None:
+        raise ValueError('Missing or ambiguous observed skip reason: '+identity)
+    reason, trace, status = errors[0]
+    if assume_gated:
+        expected = reason
+    if reason != expected:
+        raise ValueError('Wrong observed skip reason: '+identity)
+    if re.findall(r'TestRunner: org\.junit\.AssumptionViolatedException: ([^\r\n]*)', text) not in ([], [expected]):
+        raise ValueError('Logged skip reason contradicts the observed record: '+identity)
     if sdk33_line is not None:
         callsite = 'at '+name+'.'+method+'(SelectionLensTest.kt:'+str(sdk33_line)+')'
-        boundaries = re.findall(r'TestRunner: (started|assumption failed|finished): ([^\r\n]*)', text)
-        callsites = re.findall(r'TestRunner:\s+(at '+re.escape(name+'.'+method)+r'\(SelectionLensTest\.kt:[0-9]+\))', text)
-        if boundaries != [('started', marker), ('assumption failed', marker), ('finished', marker)] or callsites != [callsite]:
+        pattern = r'(at '+re.escape(name+'.'+method)+r'\(SelectionLensTest\.kt:[0-9]+\))'
+        # The record's terminal status (4: ignored by an assumption) replaces the log's 'finished'.
+        if re.findall(pattern, trace) != [callsite] or status != 4:
             raise ValueError('Missing, mixed or ambiguous SDK assumption callsite/terminal: '+identity)
-        ordered = ['TestRunner: started: '+marker, 'TestRunner: assumption failed: '+marker,
-                   'TestRunner: org.junit.AssumptionViolatedException: '+expected, callsite,
-                   'TestRunner: finished: '+marker]
-        positions = [text.index(value) for value in ordered]
-        if positions != sorted(positions) or re.search(r'TestRunner: (?:failed|failure|error):', text):
-            raise ValueError('Unordered or contradictory SDK assumption evidence: '+identity)
+        if re.findall(r'TestRunner:\s+'+pattern, text) not in ([], [callsite]) or re.search(r'TestRunner: (?:failed|failure|error):', text):
+            raise ValueError('Contradictory SDK assumption evidence: '+identity)
     # If another adapter supplies XML reason text, it must not contradict the paired log.
     message = skipped.attrib.get('message', '')
     detail = (skipped.text or '').strip()
@@ -173,8 +242,9 @@ def qualify_skip(name, method, skipped, xml_file):
         raise ValueError('Contradictory XML assumption reason: '+identity)
     if assume_gated:
         assume_gated_skips[name] = assume_gated_skips.get(name, 0) + 1
-    qualified_skips.append({'id': identity, 'api': api, 'reason': reasons[0], 'evidence': str(logs[0]),
+    qualified_skips.append({'id': identity, 'api': api, 'reason': reason, 'evidence': str(logs[0]),
         'evidence_sha256': hashlib.sha256(logs[0].read_bytes()).hexdigest(), 'xml': str(xml_file),
+        'reason_records': observed_assumptions.records,
         'qualification': ('Source assumeTrue(SDK_INT >= '+str(assume_gate)+') above API'+api+'; skip is not a pass'
                           if assume_gated else 'Observed API26 SDK>=33 guard; shader path not exercised and API36 must execute'
                           if sdk33_line is not None else 'Observed assumption only; not a passed profile or optical proof')})
@@ -201,10 +271,10 @@ for file in files:
                 assert int(suite.attrib[attr]) == sum(c.find(tag) is not None for c in cases), 'Inconsistent XML '+attr
 assert set(methods) == expected_methods, 'Missing or extra source-declared methods'
 assert all(counts[c]['skipped'] == 0 for c in required), 'Required regression methods cannot skip'
-result = {'qualified_skips': qualified_skips, 'methods': methods, 'source_inventory_sha256': hashlib.sha256(source_bytes).hexdigest(), 'required_selectors': sorted(required), 'schema_version': 1, 'sha': observed['sha'], 'api': observed['api'], 'selectors': sorted(selected), 'counts': counts, 'xml_files': [str(p) for p in files], 'release_certified': False}
+result = {'qualified_absences': source_inventory['gated_absent_reasons'], 'qualified_skips': qualified_skips, 'methods': methods, 'source_inventory_sha256': hashlib.sha256(source_bytes).hexdigest(), 'required_selectors': sorted(required), 'schema_version': 1, 'sha': observed['sha'], 'api': observed['api'], 'selectors': sorted(selected), 'counts': counts, 'xml_files': [str(p) for p in files], 'release_certified': False}
 (root/'reconciled-tests.json').write_text(json.dumps(result, indent=2)+'\n')
 assert not (gated_classes & required), 'Required regression classes cannot be API-gated'
-# A class may run nothing when it is wholly SdkSuppress-gated above this API, or only skip methods whose own
+# A class may run nothing when it is wholly SdkSuppress-gated outside this API, or only skip methods whose own
 # source assumeTrue(SDK_INT >= N) is above this API; every other class needs a passing method.
 assert all(v['failed'] == 0 and v['errors'] == 0 and (v['passed'] > 0 or (c in gated_classes and not any(v.values()))
            or (v['skipped'] > 0 and v['skipped'] == assume_gated_skips.get(c, 0)))

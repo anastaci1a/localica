@@ -64,7 +64,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlin.math.roundToInt
 
 /** Optional screen and per-cell work evidence (kind, route or item key); no behavior depends on it. */
-internal data class BrowseScrollFrame(val index: Int, val offset: Int, val headerHeight: Int?, val rowHeight: Int?)
+internal data class BrowseScrollFrame(val index: Int, val offset: Int, val headerHeight: Int?, val rowHeight: Int?,
+    val viewportWidth: Int = 0, val noticeWidth: Int? = null, val noticeLookahead: Boolean? = null, val noticeContent: Int? = null)
 internal class BrowseScrollFrameProbe {
     var request by mutableIntStateOf(0)
     @Volatile var serial = 0
@@ -119,6 +120,8 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     val screenWork = LocalBrowseCellWorkObserver.current
     if (screenWork != null) SideEffect { screenWork("screen", route.key) }
     val obscuredInset = LocalBrowseObscuredInset.current
+    var returnControlHeight by remember { mutableIntStateOf(0) }
+    var actionControlHeight by remember { mutableIntStateOf(0) }
     val density = androidx.compose.ui.platform.LocalDensity.current
     val context = androidx.compose.ui.platform.LocalContext.current
     val sorts = rememberBrowseSortSnapshot()
@@ -256,7 +259,10 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
         playlistHeroUri(detailPlaylist, library.snapshot)
             ?: seededCollection?.coverUris?.firstOrNull().takeIf { detailPlaylist == null && playlists.loading }
     } else collectionHeroUri(loadedResult?.let { result }, seededCollection)
-    val hero = if (artDetail) rememberCollectionVisual(heroUri) else PlayerVisual()
+    val albumHero = if (artDetail) rememberCollectionVisual(heroUri) else PlayerVisual()
+    val photoEnvironment = artistPhotoEnvironment()
+    val artistPhotoConsentAllowed = if (artistDetail) photoEnvironment?.consent?.allowed?.collectAsState()?.value == true else false
+    val hero = rememberArtistCollectionVisual(route.collection, route.title, sourceResult, heroUri, albumHero)
     val lightCollection = collectionIsLight(hero)
     val collectionInk = if (lightCollection) androidx.compose.ui.graphics.Color(0xFF202124) else androidx.compose.ui.graphics.Color.White
     SideEffect { if (selectionVisible) onAppearance(if (artDetail) collectionInk else androidx.compose.ui.graphics.Color.Black,
@@ -321,6 +327,24 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
         mutableQueue?.entries?.map { it.id } ?: mutablePlaylist?.entries?.map { it.id }
     }
     val mutablePositions = remember(physicalOrder) { physicalOrder.orEmpty().withIndex().associate { it.value to it.index + 1 } }
+    val pinchMotion = remember(route.key) { BrowsePinchMotion() }
+    /** A saved geometry change (View popup) takes the pinch transaction, not a reflow (#627).
+     * Its geometry commits like a pinch; the saved style (sort, information and so on) is
+     * written once the transaction ends, so a rollback, failure or disposal still saves it. */
+    fun changeViewInPlace(value: BrowseStyle, persist: () -> Unit = {}): Boolean {
+        if (route.search) return false
+        val view = displayedStyle.copy(presentation = value.presentation, itemsPerRow = value.itemsPerRow, listSize = value.listSize)
+        val finished = pinchMotion.viewChange?.invoke(view) { style = it } ?: return false
+        orderScroll.cancel()
+        scrollScope.launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) {
+            try { finished.await() } finally {
+                persist()
+                style = value
+            }
+        }
+        dismissSorting()
+        return true
+    }
     fun commitStyle(value: BrowseStyle) {
         orderScroll.cancel()
         style = value
@@ -351,9 +375,19 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
             mutableQueue?.entries?.map { SongRow(it.id, it.track) } ?: mutablePlaylist?.entries
         }
         BrowseSortDialog(route, style, preferences.overridden(route), ::dismissSorting, { value, override ->
-        preferences.write(route, value, override)
-        commitStyle(value)
-    }, { preferences.reset(route); commitStyle(preferences.read(route)) }, initialView,
+        if (!changeViewInPlace(value) { preferences.write(route, value, override) }) {
+            preferences.write(route, value, override)
+            commitStyle(value)
+        }
+    }, {
+        val shown = style
+        preferences.reset(route)
+        val value = preferences.read(route)
+        // The observer reloads synchronously; restore the shown view before any frame so the
+        // defaults' geometry still enters the pinch transaction from the presented source.
+        style = shown
+        if (!changeViewInPlace(value)) commitStyle(value)
+    }, initialView,
         onRandomize = when {
             mutableQueue != null && queues != null -> ({ done -> orderAction(false, { done(it != null) }) { queues.randomizeOrder(mutableQueue.id, it) } })
             mutablePlaylist != null && playlistController != null -> ({ done -> orderAction(false, { done(it != null) }) { playlistController.randomizeOrder(mutablePlaylist.id, it) } })
@@ -424,7 +458,6 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
         val child = measurable.measure(constraints.copy(minHeight = height, maxHeight = height))
         layout(child.width, height) { child.placeRelative(0, 0) }
     }
-    val pinchMotion = remember(route.key) { BrowsePinchMotion() }
     val pinchHeader = if (artDetail) remember(pinchMotion, gridState) { CollectionPinchHeader(pinchMotion, gridState) } else null
     val headerFrameObserver = LocalCollectionHeaderFrameObserver.current
     SideEffect { pinchMotion.header = pinchHeader; pinchHeader?.observer = headerFrameObserver }
@@ -627,11 +660,27 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     // A cursor-only refresh need not blink a still-valid control. Genuine query or
     // occurrence changes hide it until the corresponding list has been presented.
     val returnListMatches = loadedResult != null && (!queryPending || presentedReturnOwner === returnOwner)
+    // A zero-height notice is canonicalized to item 1 at offset 0 by the grid.
+    // Its index alone cannot distinguish that visual home from a scrolled list.
+    val noticeMeasurement = remember { BrowseNoticeMeasurement() }
+    val noticeContent = remember(library.problem, library.unavailableFolders.isNotEmpty(),
+        playlists.problem, library.loading,
+        library.snapshot.folders.isEmpty() && route.collection?.kind != MediaKind.Queue,
+        result.items.isEmpty() && !library.loading && !queryPending) { Any() }
+    val measuresNotice = !artDetail && !showSearchPill && !showFilters
+    val noticeDirection = androidx.compose.ui.platform.LocalLayoutDirection.current
+    val scrolledFromTop by remember(gridState, noticeMeasurement, noticeContent, measuresNotice,
+        density, noticeDirection) { derivedStateOf {
+        val height = noticeMeasurement.height(noticeContent, gridState.layoutInfo.viewportSize.width,
+            density, noticeDirection)
+        gridState.canScrollBackward && !(measuresNotice && height == 0 &&
+            gridState.firstVisibleItemIndex == 1 && gridState.firstVisibleItemScrollOffset == 0)
+    } }
     val clearableFilter = (route.tab == MainTab.Library && route.collection == null && route.filter != null) ||
         (artistDetail && validAlbums.isNotEmpty())
     // Recompose only when the offered action changes, not at every scroll start/stop.
-    val returnAction by remember(gridState, clearableFilter) { derivedStateOf {
-        listReturnAction(gridState.canScrollBackward, gridState.isScrollInProgress, clearableFilter)
+    val returnAction by remember(gridState, clearableFilter, noticeContent, measuresNotice, density, noticeDirection) { derivedStateOf {
+        listReturnAction(scrolledFromTop, gridState.isScrollInProgress, clearableFilter)
     } }
     DisposableEffect(playbackFollow) { onDispose { playbackFollow.cancel() } }
     var movingReturn by remember { mutableStateOf<ListReturnAction?>(null) }
@@ -685,7 +734,11 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
         reorder.currentSongKey = playingEntryId.takeIf { route.collection?.kind == MediaKind.Queue }
     }
     val dragHost = LocalSongDragHost.current
-    val floatingControlClearance = if (route.collection?.kind == MediaKind.Queue) 12.dp else 0.dp
+    val floatingControlClearance = when {
+        route.collection?.kind == MediaKind.Queue -> 12.dp
+        popupDismiss != null -> FloatingSurfaceGap
+        else -> 0.dp
+    }
     SideEffect {
         reorder.onDragStarted = {
             dragHost?.cancelBottomMargin = floatingControlClearance
@@ -876,7 +929,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
         LocalEmptySearchBack provides popupDismiss?.takeIf { route.text.isBlank() }) {
     Box(Modifier.then(if (popupDismiss != null) Modifier.fillMaxWidth() else Modifier.fillMaxSize())) {
     if (artDetail) CollectionBackground(hero, gridState, collectionSource, reducedMotion,
-        Modifier.matchParentSize(), pinchHeader)
+        Modifier.matchParentSize(), pinchHeader, artworkResetKey = if (artistDetail) route.collection to artistPhotoConsentAllowed else null)
     Column(Modifier.then(if (popupDismiss != null) Modifier.fillMaxWidth() else Modifier.fillMaxSize())
         .then(if (route.search) Modifier.focusRequester(resultsFocus).focusable() else Modifier)
         .then(if (searchAnchor.hidden) Modifier.clearAndSetSemantics { } else Modifier)) {
@@ -982,7 +1035,8 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                     val layout = gridState.layoutInfo
                     scrollFrameProbe.frame = BrowseScrollFrame(gridState.firstVisibleItemIndex, gridState.firstVisibleItemScrollOffset,
                         layout.visibleItemsInfo.firstOrNull { it.index == 0 }?.size?.height,
-                        layout.visibleItemsInfo.firstOrNull { it.index > 0 }?.size?.height)
+                        layout.visibleItemsInfo.firstOrNull { it.index > 0 }?.size?.height,
+                        layout.viewportSize.width, noticeMeasurement.width, noticeMeasurement.lookahead, noticeMeasurement.contentIdentity)
                     scrollFrameProbe.serial++
                 })
                 .controlScrollParent(gridState, ControlScrollAxis.Vertical)
@@ -1023,10 +1077,20 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                     onPreview = { style = it }, onCommit = { style = it; preferences.write(route, it, preferences.overridden(route)) },
                     onAnchor = { zoomAnchor = it })
                 .testTag("browser-list"), contentPadding = PaddingValues(start = cellGeometry.gridInset.dp, end = cellGeometry.gridInset.dp,
-                    bottom = if (popupDismiss != null) 16.dp else maxOf(80.dp, obscuredInset + 16.dp))) {
+                    bottom = obscuredInset +
+                        maxOf(with(density) { returnControlHeight.toDp() } + floatingControlClearance,
+                            with(density) { actionControlHeight.toDp() }) + 16.dp)) {
                 item(key = "browser-notice", contentType = "notice", span = { GridItemSpan(maxLineSpan) }) {
+                    if (measuresNotice) {
+                        // The grid canonicalizes a zero-height notice to item 1 / offset 0 and then
+                        // deactivates item 0. Pinning keeps the actual notice composed and measured
+                        // there, so its content changes are observed instead of inferred.
+                        val pinnable = androidx.compose.ui.layout.LocalPinnableContainer.current
+                        DisposableEffect(pinnable) { val pin = pinnable?.pin(); onDispose { pin?.release() } }
+                    }
                     // Grid gutters belong to tiles; full-span headers keep their viewport alignment.
                     Column(Modifier.requiredWidth(with(density) { viewportWidth.toDp() }).testTag("browse-full-span")
+                        .then(if (measuresNotice) Modifier.measureBrowseNotice(noticeMeasurement, noticeContent) else Modifier)
                         .onSizeChanged { if (artDetail) collectionHeaderHeight = it.height }
                         .then(if (pinchHeader != null) Modifier.collectionPinchHeader(pinchHeader, displayedStyle) else Modifier)) {
                         if (artDetail) {
@@ -1097,6 +1161,8 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                                 pinchMotion.itemAlpha[item.key]
                             }
                             if (previous != alpha) pinchMotion.itemAlpha[item.key] = alpha
+                            // The row body, frost and selection share the overlay's departure/arrival fade (#559).
+                            alpha *= pinchMotion.pinchFadeAlpha(item.key, gridState, pinchIndices)
                         }) {
                         // Placement callbacks need not repeat for a re-keyed owner; register the
                         // last placed coordinates whenever this row's key or drag owner changes.
@@ -1170,7 +1236,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                                 pinchMotion.highlightSize(item.key, itemIndex, size)
                             }
                             .selectionLens(selectedCount > 0, partiallySelected, itemKey = item.key, anchor = menuAnchor, outline = { _, _ -> itemOutline.value },
-                                handle = hover, alpha = { pinchMotion.itemAlpha[item.key] ?: 1f }) { size ->
+                                handle = hover, alpha = { (pinchMotion.itemAlpha[item.key] ?: 1f) * pinchMotion.pinchFadeAlpha(item.key, gridState, pinchIndices) }) { size ->
                                 pinchMotion.highlightSize(item.key, itemIndex, size)
                             }
                             .currentSongHighlight(current, MaterialTheme.colorScheme.primary, { _, _ -> itemOutline.value },
@@ -1249,16 +1315,17 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                 collectionHome.displacement(gridState) < -1f
             } }
             val showReturn = selectionVisible && !playerOpen && !localSearchOpen && returnListMatches &&
-                !session.active && reorder.drag == null && !returning &&
+                !session.active && reorder.drag == null && !(playbackReturn && returning) &&
                 (if (playbackReturn) playingIndex != null && (if (route.search) currentOffscreen else !playbackFollow.attached)
-                    else hasSongItems && (if (artDetail) songsPastTop else gridState.canScrollBackward))
+                    else hasSongItems && (if (artDetail) songsPastTop else scrolledFromTop))
             // A drag owns this slot exclusively; retire a half-faded return drawing
             // instead of overlapping its replacement X during a quick hold-and-move.
             key(reorder.drag != null) { CompositionLocalProvider(LocalFrostedBackdrop provides listBackdrop) {
                 FloatingReturnToPositionButton(up = !playbackReturn || returnDirection < 0,
                     label = if (playbackReturn) "Current song" else "Return to top",
                     visible = showReturn, reducedMotion = reducedMotion,
-                    returning = returning,
+                    returning = playbackReturn && returning,
+                    onHeightMeasured = { returnControlHeight = it },
                     modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = obscuredInset + floatingControlClearance)) {
                     if (!playbackReturn) returnToList(if (artDetail) ListReturnAction.ScrollSongs else ListReturnAction.ScrollTop)
                     else {
@@ -1277,7 +1344,8 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                     bottom = obscuredInset), onUserScroll = ::userScroll)
             if (route.collection?.kind in setOf(MediaKind.Playlist, MediaKind.Album, MediaKind.Artist, MediaKind.AlbumArtist) && !route.search) {
                 val playlist = playlists.playlists.firstOrNull { it.id == route.collection?.id }
-                if (playlist != null || artDetail) Box(Modifier.align(Alignment.BottomEnd).padding(end = 12.dp, bottom = obscuredInset)) {
+                if (playlist != null || artDetail) Box(Modifier.align(Alignment.BottomEnd).padding(end = 12.dp, bottom = obscuredInset)
+                    .onSizeChanged { actionControlHeight = it.height }) {
                     val anchor = rememberGlassAnchor()
                     var open by remember { mutableStateOf(false) }
                     ActionIcon(AppIcon.ActionEllipsis, if (playlist != null) "Playlist actions" else if (artistDetail) "Artist actions" else "Album actions", anchor = anchor) { open = true }
@@ -1288,7 +1356,8 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                 }
             }
             if (route.tab in setOf(MainTab.Library, MainTab.Playlists) && route.collection == null && !route.search)
-                PlaylistCreationButton(library.snapshot, playlists, playlistController, Modifier.align(Alignment.BottomEnd).padding(end = 12.dp, bottom = obscuredInset).testTag("playlist-add-module"))
+                PlaylistCreationButton(library.snapshot, playlists, playlistController, Modifier.align(Alignment.BottomEnd).padding(end = 12.dp, bottom = obscuredInset).testTag("playlist-add-module")
+                    .onSizeChanged { actionControlHeight = it.height })
             }
         }
         }

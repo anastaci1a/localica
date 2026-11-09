@@ -14,7 +14,7 @@ The song-menu icon set is the reference for future icons: 24 dp vectors, 1.8 str
 | Play next | `ic_menu_play_next` |
 | Add to current queue, Add to a queue, Add to queue (selection) | `ic_menu_queue_add` |
 | Information | `ic_menu_info` |
-| Download (unused) | `ic_download` |
+| Download, downloading state and Save artwork: a tray with a down arrow, never a plain arrow | `ic_download` |
 | Share (unused) | `ic_share` |
 | Station (unused) | `ic_station` |
 | Favorite (unused) | `ic_star` |
@@ -128,7 +128,15 @@ Long titles pause, scroll and fade at their edges. Reduced motion uses ellipsis.
 
 Browsing/settings stay light, with a pink selected-tab accent, shared neutral gray for secondary text/inactive icons, and red for errors/destructive actions. Use Inter with compact tracking and bold mini-player titles. Do not bundle Apple's system font. **Interface → Appearance** persistently adjusts gray, with reset to the darker default. Broader themes remain [planned](roadmap.md).
 
-Settings categories are Interface, Playback and queues, Library and tags, About/licenses, with icons, summaries and chevrons. Search appears only at the root. Both Back controls reverse the page entrance direction.
+Settings categories stay in this order: Interface, Playback and queues, Library and tags, About/licenses. Player stays inside Interface. Category rows have icons, summaries and chevrons. Both Back controls reverse the page entrance direction.
+
+Every settings page has global search. Results cover controls, choice values and synonyms without typo correction. Selecting a result scrolls to its row and briefly highlights it. Hidden options lead to the control that reveals them. Reduce motion uses an immediate scroll and a static highlight.
+
+Every settings row (links, switches, sliders, choices and headings) uses the shared row in `ui/PreferenceFrames.kt`. The leading icon sits in a fixed 40 dp slot and is centred vertically on the row, as is the trailing chevron or control, at any line count, font scale or density.
+
+All rows on a page start their text at the same x: flat rows take the glass links' 16 dp inner inset, and pages whose rows carry icons keep the empty slot on rows without one.
+
+No two settings rows share an icon, and each says what its row is; the dedicated glyphs have `settings.*` [icon pack ids](icon-packs.md#icon-ids).
 
 **Settings → About and licenses → Export diagnostics** opens a glass dialog, then the Android share sheet with one text file: app version, device model, Android version, export time and the diagnostics trail. Nothing leaves the device unless the user picks a share target; there is no network path.
 
@@ -138,7 +146,9 @@ A healthy idle app records nothing. Debuggable builds also mirror each line to l
 
 Glass always follows the scrolling content. The retired scroll-freeze preference is removed during migration.
 
-**Interface → Glass** provides live persistent controls and reset, with a draggable preview that compresses at its edges and morphs between a pill and dialog:
+**Interface → Glass** keeps Renderer on its root. Glass appearance, Glass advanced and Navigation selector are internal submenus. With Renderer set to None, glass options and submenus remain visible and disabled. Saved values are preserved.
+
+Glass appearance includes a draggable preview that compresses at its edges and morphs between a pill and dialog. The submenus retain these persistent controls:
 
 | Control | Range / treatment |
 | --- | --- |
@@ -201,6 +211,10 @@ Track and thumb share one coordinate model for fill, travel and boundary contact
 
 The [appearance settings](#appearance-and-settings) own thumb finish and expansion. The [motion rules](#motion-and-access) own pickup, haptics and reduced motion. Playback retains its separate [scrub cancellation](#player-and-queue-drawer).
 
+### Last.fm settings
+
+The Last.fm settings page uses shared text fields, buttons and switches. It shows username, explicit Sync now, last successful sync, source selection, errors and unresolved matches. Candidate buttons resolve ambiguous recordings. Disconnect retains the archive; deleting synced data requires a separate confirmation. See the [statistics contract](product.md#optional-lastfm-statistics) for privacy, fallback and retention rules.
+
 ## Navigation and Back
 
 ### Destinations
@@ -241,7 +255,7 @@ Its lens and menu-opening controls are deeper than the tab shelf/selector (1.3×
 
 Three aligned floating pills follow the Apple Music reference: full-width mini-player above flexible tabs at left and a divided Search/More pill with 28 dp icons at right. Search is immediately left of More. More offers Scan music and Settings. About/licenses lives only in Settings.
 
-Lists draw behind these controls, with enough content padding to reveal final items. Inside album, artist, Album Artist, playlist and folder details, tabs and utility controls leave. The mini-player moves down and remains available.
+Lists draw behind these controls. Bottom content padding includes lower chrome and selection occupancy, plus the measured floating return and overflow/add controls and a 16 dp gap, so final rows clear foreground controls. Inside album, artist, Album Artist, playlist and folder details, tabs and utility controls leave. The mini-player moves down and remains available.
 
 Library/Playlists have an aligned circular + matching the mini-player's height. It morphs into its frosted creation menu and returns on dismissal, offering Create playlist and Import playlist from file ([import rules](product.md#library-and-playlists)).
 
@@ -269,11 +283,15 @@ In all lists, including queues and album details, pinch outward through Smallest
 
 Change one adjacent view per gesture, requiring all fingers to lift before another step. A 4% span change picks the direction. The first presented frame keeps the source, then geometry catches up to the full finger distance over 100 ms.
 
+A slow first frame advances that ease and the release settle by at most one 60 Hz frame, so neither finishes in a single step. Later frames advance at most a quarter of the ease, so a sustained slow frame rate still shows each ease over at least four frames instead of stretching it indefinitely.
+
 Shared pinch geometry carries the captured selection lift into both live and retained items. Reversing restores items virtualized out by the destination. All text draws below a separate artwork pass. Within each pass earlier items draw on top.
 
 Pinches during settlement retain the shown progress. Reversals reuse the frozen endpoints. Further adjacent steps preserve their input until the preceding handoff permits a fresh capture, including gestures already released. Modal interruption discards pending steps.
 
-Departing items retain their bounded movement and resizing. Whole-item fades span the eased geometry transition, with evenly spaced starts and equal widths overlapping by half. Items farthest from the pinch focus fade first; arrivals mirror departures. A single item fades over the full transition. Reversals retrace every alpha.
+Departing items keep moving and resizing along their whole path. Every item that leaves the viewport during the transition fades, including live items sliding past an edge; artwork, text, frost and selection fade together.
+
+Fades follow exit order: items leaving at the same moment (within 2% of the transition) share one fade, fade starts are evenly spaced, and each fade ends exactly as its item leaves. Items already at the edge fade until they leave. Arrivals mirror departures along the reversed path. Reversals retrace every alpha.
 
 View controls fade over 120 ms. Live items retain ordinary geometry progression.
 
@@ -317,7 +335,9 @@ Playlist detail repeats these actions in its floating overflow control.
 
 Scrolled song lists offer a bottom-center return-to-top control without clearing filters or changing the current list. Home returns its vertical list without resetting the pinned carousel. Active Queue uses its current-occurrence following control instead (below). Return and song-drag cancel controls use the collection utility row above bottom chrome/mini-player.
 
-Queue return and foreground song-drag cancel controls share 12 dp clearance below the circle. Activating Return removes its drawing and input immediately while that return command owns readiness or motion. Cancellation restores normal visibility from the current list state. Return and drag/seek-cancel controls otherwise fade in while rising, continuing through reversals.
+Ordinary return-to-top controls appear only away from the measured list start. They remain while traveling and hide with their normal animation on arrival or manual return. Scoped Search keeps the shared floating surface gap below its return control, inside the native keyboard viewport. List-end clearance includes the measured control and gap.
+
+Queue return and foreground song-drag cancel controls share 12 dp clearance below the circle. Activating Queue Return removes its drawing and input immediately while that command owns readiness or motion. Cancellation restores normal visibility from the current list state. Return and drag/seek-cancel controls otherwise fade in while rising, continuing through reversals.
 
 Seek and slider cancel targets reverse their rise on ordinary release. Release over X fades it in place. Both exits retain the release placement and continue through a new drag without disappearing between frames.
 
@@ -347,7 +367,7 @@ The entire divided Sort/View pill expands into one frosted panel, initially show
 
 Measure inert faces for the complete body, title and action-footer alternatives. Wrap their maximum natural width within the shared window cap. Reserve title/footer space before bounding body height. Do not use a separate screen-percentage cap. Both tabs share one draft: switching preserves edits. Save applies both and Cancel discards them.
 
-Choice controls follow the [shared staged/inline rules](#settings-controls). Defaults: catalogs/search title ascending. Album songs disc/track. Playlists/queues saved order. Recent newest. Frequent most played. Pins manual. Offer applicable title/count/duration/year/date/artist/Album Artist/composer/genre fields. Date added/modified start newest-first. Most played highest-first, all reversible. Rules for dates/counts: [Product](product.md#dates-and-listening-statistics).
+Choice controls follow the [shared staged/inline rules](#settings-controls). Defaults: catalogs/search title ascending. Album songs disc/track. Playlists/queues saved order. Recent newest. Frequent most played. Pins manual. Offer applicable title/count/duration/year/date/artist/Album Artist/composer/genre fields. Date added/modified start newest-first. Most played and Longest listened highest-first, all reversible. Rules for dates/counts: [Product](product.md#dates-and-listening-statistics).
 
 Extra information starts with None, then Follow sort order. Unfiltered Library and global search additionally offer Automatic between them and default to it when no choice is saved. Automatic inherits each row type’s catalog/filter extra information and, for Follow sort order, that type’s own sort.
 
@@ -361,7 +381,9 @@ Collection/search overrides use **Save only for this list** above Cancel/Save. M
 
 Revert uses shared glass emergence/disappearance in a reserved slot and disappears whenever the physical order matches the opening snapshot, including after two reversals. Manual restores the saved baseline. Sort by and Extra information use the same staged selector trigger and frosted dialog.
 
-View offers presentation, list Size or gallery Items per row, extra information and applicable scoped search. Overflowing lists of at least 40 items get a narrow edge scrollbar and accessible scroll action. Show letter/year previews only during dragging under title/year sort.
+View offers presentation, list Size or gallery Items per row, extra information and applicable scoped search.
+
+Every overflowing browse list, including Queue, details, search and Home, gets a narrow edge scrollbar and accessible scroll action. Its 48 dp touch strip keeps the thumb’s visual size. The thumb fades after 1.2 seconds without list or drag movement and reappears on movement. Show letter/year previews only during dragging under title/year sort.
 
 ## Collection details
 
@@ -383,7 +405,7 @@ Compact/Normal/Large/Gallery show ordinary covers without track numbers. Existin
 
 Artist and Album Artist headers follow the first displayed song, including the active album filter. No artwork scraping. Sort/View sits at top right and collection actions at bottom right. Below the header, a horizontal album multiselect filters contiguous album groups in the same order as the carousel.
 
-Artist/Album Artist contents default to Year Ascending. The retired Album/disc/track choice migrates to it while other explicit choices remain. Sort direction changes album order only. Inner disc/track stays ascending. Year/Added use earliest known values, Modified latest, Duration/Most played distinct-track sums, and Folder the earliest case-folded nonblank relative path.
+Artist/Album Artist contents default to Year Ascending. The retired Album/disc/track choice migrates to it while other explicit choices remain. Sort direction changes album order only. Inner disc/track stays ascending. Year/Added use earliest known values, Modified latest, Duration/Most played/Longest listened distinct-track sums, and Folder the earliest case-folded nonblank relative path.
 
 Missing aggregates stay last. Ties use album title then canonical album ID ascending. Short tap focuses only that album. Long press toggles only that album with one recognition haptic and no trailing tap. All mode highlights both All albums and every cover.
 
@@ -400,6 +422,8 @@ The Add to playlists panel combines covered existing-playlist rows with an iconl
 Holding a mutable playlist/queue song selects immediately. Its new action panel waits for release, so continued movement into dragging never flashes it. Floating utility controls never select obscured rows. Existing panels retain their state. Accessibility selection without a pointer shows the panel immediately.
 
 Other items use Select song / Select all songs in their shared menu. The bulk action panel appears and disappears above the mini-player with the shared glass morph, independently of immediate item selection, retaining tabs. Normal collection taps navigate. Song taps toggle membership while selection is active. Use the [shared selection treatment](#materials-and-controls).
+
+Library song membership is shared across albums, artists, folders, Songs, search and subviews. Playlist and queue entries use their container and persisted entry identity, so repeated songs remain independently selectable. Library membership does not select playlist or queue entries, or vice versa.
 
 Retain source occurrence identities and selection order across routes, tabs, queries, sorting, rotation and backgrounding. Select-all appends in collection order. Reselect appends last. Preserve distinct occurrences for playlists/queues and deduplicate files for editing. Fresh sessions start empty.
 
@@ -433,7 +457,11 @@ System interruption or failed persistence restores order, selection and the pane
 
 The mini-player appears whenever an active queue has a current song, including paused playback. Inset its artwork/title together inside the leading curve. Use black filled Previous/Play/Pause/Next icons. Pause appears only while playing or buffering with playback requested. Paused skips retain Play.
 
-The settled Play triangle uses a single filled contour. It morphs into Pause using configurable endpoint shapes. Skips scroll overlapping rounded triangles one step, crossfading departing and arriving elements symmetrically. Repeated presses preserve presented position and velocity. The 380 ms normal cycle has a longer settle; Faster shortens it and Reduce motion snaps.
+The settled Play triangle uses a single filled contour. It morphs into Pause using configurable endpoint shapes. Skips scroll overlapping rounded triangles one step, crossfading departing and arriving elements symmetrically. Symmetric opacity tapers just outside the rest bounds fade them at the edges instead of clipping.
+
+Repeated skip presses preserve presented position and velocity. The 380 ms normal cycle has a longer settle; Faster shortens it and Reduce motion snaps.
+
+Imported play and pause icons share that morph when play is one shape and pause is two separate shapes: the play shape splits vertically at the centre of its ink and each half morphs into its bar with the same timing, easing and Reduce motion behaviour. Other pack art cross-fades, and the log names the reason.
 
 Secondary metadata defaults to Album Artist with Artist fallback. Artist-first is configurable. The body is one rounded tap target. Transport remains independent.
 

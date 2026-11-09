@@ -239,6 +239,8 @@ internal fun rememberFrostedBackdrop(key: Any?, enabled: Boolean = true, dark: B
                 val extent = source.size
                 val generation = source.rendererGeneration
                 fun valid() = source.recorded && source.size == extent && !source.layer.isReleased && !thumbnail.isReleased
+                val capturedRecording = source.recordings
+                val capturedRevision = source.revision
                 val image = source.captureCurrent(graphicsContext, currentDensity, currentDirection, ::valid,
                     captureLayer = thumbnail, record = {
                         thumbnail.record(currentDensity, currentDirection, IntSize(32, 32)) {
@@ -253,8 +255,8 @@ internal fun rememberFrostedBackdrop(key: Any?, enabled: Boolean = true, dark: B
                 val padded = materialReductionExtent(extent)
                 if (valid()) source.publish(generation, pixels, pixels, request, draws,
                     IntSize(padded.width.coerceAtLeast(32), padded.height.coerceAtLeast(32)))
-                completedRecording = source.recordings
-                completedRevision = source.revision
+                completedRecording = capturedRecording
+                completedRevision = capturedRevision
                 } finally { ticket?.close() }
             }
         }
@@ -295,7 +297,10 @@ internal fun Modifier.recordFrostedBackdrop(source: FrostedBackdrop, backing: Fr
             }
             // Retained children and consumers in another window need explicit draw invalidation.
             val dependency = backing ?: source.parent
-            if (Build.VERSION.SDK_INT < 33) dependency?.snapshot
+            if (Build.VERSION.SDK_INT < 33) {
+                dependency?.snapshot
+                dependency?.recordings
+            }
             else dependency?.let { source.location.observeRecordingAcrossWindows(it) }
             val request = readbackRequest?.invoke()
             val viewport = size
@@ -334,7 +339,7 @@ internal fun FrostedSurface(modifier: Modifier = Modifier, shape: RoundedCornerS
     source: FrostedBackdrop? = LocalFrostedBackdrop.current, compact: Boolean = false,
     tint: Color = Color.Transparent, shadow: Boolean = true, content: @Composable BoxScope.() -> Unit) {
     val renderer = currentGlassRendererGeneration()
-    if (renderer.backend == GlassBackend.None) BackdropLease(source?.noneMaterialSource())
+    if (renderer.backend == GlassBackend.None) BackdropLease(source)
     val location = remember { BackdropLocation() }
     val lightMix = source?.lightMix ?: 0f
     val dark = lightMix >= .5f
@@ -354,8 +359,8 @@ internal fun FrostedSurface(modifier: Modifier = Modifier, shape: RoundedCornerS
             Color.White.copy(alpha = .06f), Color.White.copy(alpha = .17f))), shape)) {
         Box(Modifier.matchParentSize().recordFrostedBackdrop(material)) {
         if (source != null) {
+            val blur = with(LocalDensity.current) { 22.dp.toPx() }
             if (Build.VERSION.SDK_INT >= 33) {
-                val blur = with(LocalDensity.current) { 22.dp.toPx() }
                 FilteredBackdrop(Modifier.matchParentSize(), source, location, .5f, blur * 1.5f,
                     average = MaterialAverageStyle(0f, tone, opaque = true)) { _, resolution, _ ->
                     toneRenderer.value?.effect(tone, blur * resolution)
