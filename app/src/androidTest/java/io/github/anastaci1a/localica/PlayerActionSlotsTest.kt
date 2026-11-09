@@ -193,7 +193,7 @@ class PlayerActionSlotsTest {
         compose.waitUntil(5000) { compose.onAllNodesWithTag("drag-player-action").fetchSemanticsNodes().isEmpty() }
         compose.runOnIdle {
             assertEquals(PlayerAction.Lyrics, settings.slots[ActionSlot(0, 1)])
-            assertEquals(listOf("Strong", "Weak", "Weak", "change", "Weak"), events)
+            assertEquals("Every release is Strong (#736)", listOf("Strong", "Weak", "Weak", "change", "Strong"), events)
         }
     }
 
@@ -210,7 +210,7 @@ class PlayerActionSlotsTest {
         compose.runOnIdle {
             assertEquals(original, settings)
             assertEquals("Accepted same-slot placement is not a silent no-op",
-                listOf("Strong", "Weak", "change", "Weak"), events)
+                listOf("Strong", "Weak", "change", "Strong"), events)
             events.clear()
         }
         val pool = compose.onNodeWithTag("action-palette").fetchSemanticsNode().boundsInRoot.center
@@ -220,7 +220,7 @@ class PlayerActionSlotsTest {
         compose.waitUntil(5000) { compose.onAllNodesWithTag("drag-player-action").fetchSemanticsNodes().isEmpty() }
         compose.runOnIdle {
             assertEquals(original.remove(PlayerAction.Playlist), settings)
-            assertEquals(listOf("Strong", "Weak", "change", "Weak"), events)
+            assertEquals(listOf("Strong", "Weak", "change", "Strong"), events)
         }
     }
 
@@ -249,7 +249,7 @@ class PlayerActionSlotsTest {
         compose.waitUntil(5000) { compose.onAllNodesWithTag("drag-player-action").fetchSemanticsNodes().isEmpty() }
         compose.runOnIdle {
             assertEquals(original, settings)
-            assertEquals("No-target release does not become an accepted placement", listOf("Strong"), events)
+            assertEquals("No-target release is not a placement, but is still a Strong release", listOf("Strong", "Strong"), events)
         }
     }
 
