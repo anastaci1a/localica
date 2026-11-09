@@ -228,14 +228,14 @@ class PlayerHeaderShadowTest {
         show()
         val open = bounds(control("Collapse player"))
         sample("full-open")
-        compose.onNodeWithContentDescription("Hide lyrics", true).performClick()
+        compose.onNodeWithContentDescription("Hide lyrics").performClick()
         compose.mainClock.advanceTimeBy(500)
         compose.runOnIdle { assertFalse(lyrics) }
-        compose.onNodeWithContentDescription("Show lyrics", true).performClick()
+        compose.onNodeWithContentDescription("Show lyrics").performClick()
         compose.mainClock.advanceTimeBy(500)
         compose.runOnIdle { assertTrue(lyrics) }
         assertEquals("Lyrics input keeps the original header geometry", open, bounds(control("Collapse player")))
-        compose.onNodeWithContentDescription("Collapse player", true).performClick()
+        compose.onNodeWithContentDescription("Collapse player").performClick()
         repeat(32) { if (progress.value > .92f) compose.mainClock.advanceTimeByFrame() }
         check(progress.value in .73f.. .995f) { "Not fractional: ${progress.value}" }
         sample("minimize")
