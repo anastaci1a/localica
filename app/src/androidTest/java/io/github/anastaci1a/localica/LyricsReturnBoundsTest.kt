@@ -30,13 +30,18 @@ class LyricsReturnBoundsTest {
     private var position by mutableLongStateOf(0L)
     private val strip = mutableListOf<Pair<String, Bitmap>>()
 
-    /** 40 synced lines, two seconds apart: line i is current from i * 2 s. */
-    private val document = LrcParser.parse((0 until Lines).joinToString("\n") { index ->
+    /** 40 synced lines, two seconds apart: line i is current from i * 2 s. [wrapped] lines carry enough words to wrap
+     *  onto several rows, so their centred rest sits (row - single) / 2 px away from the list bound. */
+    private fun lyrics(wrapped: Set<Int> = emptySet()) = LrcParser.parse((0 until Lines).joinToString("\n") { index ->
         val seconds = index * 2
-        "[%02d:%02d.00]Bound line ${index + 1}".format(seconds / 60, seconds % 60)
+        val text = if (index in wrapped) "Bound line ${index + 1} carries many more words than its neighbours so that it wraps onto further rows"
+            else "Bound line ${index + 1}"
+        "[%02d:%02d.00]%s".format(seconds / 60, seconds % 60, text)
     })
+    private var document = lyrics()
 
-    private fun mount(line: Int) {
+    private fun mount(line: Int, wrapped: Set<Int> = emptySet()) {
+        document = lyrics(wrapped)
         assertTrue("The fixture is synced", document.synced)
         position = line * 2_000L + 500L
         compose.setContent { LocalicaTheme {
@@ -165,6 +170,45 @@ class LyricsReturnBoundsTest {
         compose.waitForIdle()
         arrowAbsent("after returning")
         export("mid")
+    }
+
+    /** #715 (lead decision): a wrapped first line rests (row - single) / 2 px below the top bound when centred, yet at
+     *  the first lyric there is no return arrow: the bound tolerance is that line's own rest offset. */
+    @Test fun wrappedFirstLineAtTheTopBoundHidesTheReturn() {
+        mount(0, wrapped = setOf(0))
+        shot("open: wrapped line 1 current")
+        dragAway(forward = true)
+        arrowShown("scrolled away from the wrapped first line")
+        shot("away: arrow shown")
+        dragToTop()
+        arrowAbsent("manually at the top bound with the wrapped first line current")
+        shot("top bound: arrow hidden")
+        dragAway(forward = true)
+        arrowShown("scrolled away from the top bound again")
+        export("wrapped-first")
+    }
+
+    /** The same at the bottom bound for a wrapped last line. */
+    @Test fun wrappedLastLineAtTheBottomBoundHidesTheReturn() {
+        mount(Lines - 1, wrapped = setOf(Lines - 1))
+        shot("open: wrapped last line current")
+        dragAway(forward = false)
+        arrowShown("scrolled away from the wrapped last line")
+        shot("away: arrow shown")
+        dragToBottom()
+        arrowAbsent("manually at the bottom bound with the wrapped last line current")
+        shot("bottom bound: arrow hidden")
+        dragAway(forward = false)
+        arrowShown("scrolled away from the bottom bound again")
+        export("wrapped-last")
+    }
+
+    /** A wrapped second line at the top bound: the return still moves the list by a whole first row and more. */
+    @Test fun wrappedSecondLineAtTheTopBoundKeepsTheReturn() {
+        mount(1, wrapped = setOf(1))
+        dragAway(forward = true)
+        dragToTop()
+        arrowShown("the wrapped second line is current and the list rests at the top bound")
     }
 
     /** The second line is current: the top bound centres line 1, so a return still moves the list. */
