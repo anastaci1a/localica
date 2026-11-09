@@ -438,16 +438,24 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     val visualLyrics by remember(lyricVisibility, progress) { derivedStateOf { playerLyricsMotion(progress.value, lyricVisibility).layout > 0f } }
     val backdropVisible by remember(progress) { derivedStateOf { progress.value > .38f } }
     val hasSoftEdge by remember(progress, backgroundProgress) { derivedStateOf { backgroundProgress * (progress.value / .18f).coerceIn(0f, 1f).let { it * it * (3f - 2f * it) } > 0f } }
+    val drawTheme = remember { PlayerDrawTheme(baseColors) }
+    @Composable fun PresentTheme() {
+        GlassPanelTheme(lightMix) {
+            val playerColors = MaterialTheme.colorScheme
+            val colors = playerColors.copy(onSurface = foreground(),
+                onSurfaceVariant = foreground().copy(alpha = 0.72f), primary = androidx.compose.ui.graphics.lerp(baseColors.primary, playerInk, p()),
+                surface = androidx.compose.ui.graphics.lerp(baseColors.surface, palette.bottom, p()),
+                surfaceContainer = androidx.compose.ui.graphics.lerp(baseColors.surfaceContainer, palette.middle, p()),
+                surfaceContainerHigh = androidx.compose.ui.graphics.lerp(baseColors.surfaceContainerHigh, palette.middle, p()),
+                surfaceContainerHighest = androidx.compose.ui.graphics.lerp(baseColors.surfaceContainerHighest, palette.top, p()))
+            drawTheme.present(colors)
+        }
+    }
+    PresentTheme()
     @Composable fun ThemedContent() {
     CompositionLocalProvider(LocalGlassPopupHome provides popupHome) {
     GlassPanelTheme(lightMix) {
-    val playerColors = MaterialTheme.colorScheme
-    MaterialTheme(colorScheme = playerColors.copy(onSurface = foreground(),
-        onSurfaceVariant = foreground().copy(alpha = 0.72f), primary = androidx.compose.ui.graphics.lerp(baseColors.primary, playerInk, p()),
-        surface = androidx.compose.ui.graphics.lerp(baseColors.surface, palette.bottom, p()),
-        surfaceContainer = androidx.compose.ui.graphics.lerp(baseColors.surfaceContainer, palette.middle, p()),
-        surfaceContainerHigh = androidx.compose.ui.graphics.lerp(baseColors.surfaceContainerHigh, palette.middle, p()),
-        surfaceContainerHighest = androidx.compose.ui.graphics.lerp(baseColors.surfaceContainerHighest, palette.top, p()))) {
+    CompositionLocalProvider(LocalPlayerDrawTheme provides drawTheme) {
     Surface(Modifier.motionBounds { with(density) { val frame = surfaceFrame(); Rect(frame.x.toPx(), frame.y.toPx(), (frame.x + frame.width).toPx(), (frame.y + frame.height).toPx()) } }
         .onGloballyPositioned { polarity.measure("viewport", it) }
         .bottomGlassShadow(surfaceCorner(), opacity = { 1f - progress.value })
@@ -456,15 +464,20 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
         // The Queue must never sample the light browsing glass. Delaying readback alone
         // is insufficient: an asynchronous capture can still see the previous recording.
         .then(if (frostedBackdrop != null) Modifier.recordFrostedBackdrop(frostedBackdrop, enabled = p() >= .99f) else Modifier),
-        shape = surfaceFrame().shape, color = Color.Transparent, contentColor = foreground()) {
+        shape = surfaceFrame().shape, color = Color.Transparent, contentColor = baseColors.onSurface) {
         Box(Modifier.fillMaxSize().glassPopupHome(popupHome)) {
         if (workObserver != null) SideEffect { workObserver("surface-content", null) }
         if (inkObserver != null) {
             // Read inside Surface's actual provider, including when the actions row is absent.
-            val observed = PlayerInkComposition(inkDecision, inkFrame, LocalContentColor.current, lyricVisibility)
+            val observed = PlayerInkComposition(inkDecision, inkFrame, drawTheme.colors.onSurface, lyricVisibility)
             SideEffect { inkObserver(observed) }
         }
-        val editArtwork = presentedArtworkEdit()
+        val artworkEdit = remember { mutableStateOf<((Track) -> Unit)?>(null) }
+        @Composable fun BindArtworkEdit() {
+            PlayerMaterialTheme(drawTheme) { artworkEdit.value = presentedArtworkEdit() }
+        }
+        BindArtworkEdit()
+        val editArtwork: (Track) -> Unit = remember(artworkEdit) { { value -> artworkEdit.value?.invoke(value) } }
         if (backgroundReveal() < 1f) LiquidGlassSurface(Modifier.fillMaxSize(), source = glassBackdrop,
             cornerRadius = surfaceCorner(), frostProgress = glassFrost(), pressFeedback = false, shadow = false,
             depthScale = RaisedGlassDepthScale + (1f - RaisedGlassDepthScale) * p())
@@ -532,7 +545,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
                     ActionMenuItem("Configure tap action", icon = AppIcon.ActionSettings, onClick = { artworkMenu = false; configureTap = true })
                 }
             }
-            if (lyricProgress() > 0f) CompositionLocalProvider(LocalFrostedBackdrop provides lyricBackdrop) { LyricsPanel(track, sampled.positionMs, settings.reducedMotion, onSeek,
+            if (lyricProgress() > 0f) PlayerMaterialTheme(drawTheme) { CompositionLocalProvider(LocalFrostedBackdrop provides lyricBackdrop) { LyricsPanel(track, sampled.positionMs, settings.reducedMotion, onSeek,
                 Modifier.offset(x = contentInset, y = lyricsViewport().top.dp).width(contentWidth)
                     .height(lyricsViewport().height.dp).zIndex(-1f).clipToBounds()
                     .graphicsLayer { alpha = lyricMotion().contentAlpha }
@@ -552,7 +565,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
                 result = lyricsResult, sourcesVisible = sourcesVisible, onSourcesDismiss = { sourcesVisible = false },
                 originPreparation = sourcesPreparation, contentAlpha = { lyricMotion().contentAlpha },
                 sampledAtMs = sampled.sampledAtMs, playing = sampled.isPlaying, speed = sampled.playbackSpeed,
-                delayMs = settings.lyricDelayMs, durationMs = sampled.durationMs) }
+                delayMs = settings.lyricDelayMs, durationMs = sampled.durationMs) } }
             // One blend owner survives both progress boundaries. Its displayed cover
             // stays above moving metadata/lyrics and below settled metadata. Header
             // glass samples wash + cover; lyrics retain their original wash-only source.
@@ -567,7 +580,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
                 cover(frame, ::swipeOffset)
                 if (destination != null) cover(destination.visual, { swipeOffset() - (if (swipeOffset() < 0f) -1f else 1f) * artPixels() }, neighbor = true)
             }
-            if (handleReveal() > 0f) Box(Modifier.offset(y = statusInset).fillMaxWidth().height(48.dp).glassShadowOpacity { handleReveal() }) {
+            if (handleReveal() > 0f) PlayerMaterialTheme(drawTheme) { Box(Modifier.offset(y = statusInset).fillMaxWidth().height(48.dp).glassShadowOpacity { handleReveal() }) {
                 Box(Modifier.align(Alignment.TopCenter).size(96.dp, 48.dp)
                     .clickable(interactionSource = null, indication = null, onClickLabel = "Collapse player") { settle(false) }
                     .semantics { contentDescription = "Player handle" }) {
@@ -586,6 +599,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
                     }
                 }
             }
+            }
             val titleScale = 13f / MaterialTheme.typography.headlineSmall.fontSize.value
             val subtitleScale = 11f / MaterialTheme.typography.bodyLarge.fontSize.value
             val textMotionPaused = playerMarqueePaused(p(), expanded, dragging, progress.isRunning)
@@ -600,7 +614,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
             Layout(modifier = Modifier.playerTextBounds(::textX, ::titleInputY, ::textWidth).zIndex(if (moving) -.5f else 0f), content = {
                 MarqueeTitle(sampled.title, settings.reducedMotion,
                     Modifier.fillMaxWidth().scalePlayerText { titleScale + (1f - titleScale) * p() }.testTag("player-title").onGloballyPositioned { polarity.measure("title", it) },
-                    style = titleStyle, motionPaused = textMotionPaused)
+                    style = titleStyle, motionPaused = textMotionPaused, ink = drawTheme.foreground)
                 if (titleOpensLyrics) Box(Modifier.testTag("player-lyrics-title-target")
                     .clickable(interactionSource = null, indication = null, role = Role.Button,
                         onClickLabel = "Show lyrics", onClick = controlActivation(true) { onLyrics(true) })
@@ -620,18 +634,26 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
                     title.place(0, padding)
                 }
             }
-            val subtitleColor = MaterialTheme.colorScheme.onSurfaceVariant
             val artist = (if (settings.albumArtistFirst) sampled.albumArtist ?: sampled.artist else sampled.artist ?: sampled.albumArtist).orEmpty()
-            val albumVisibility = smoothReveal((p() - .65f) / .35f)
-            MarqueeTitle(buildAnnotatedString {
+            val suffixVisibility = remember { mutableFloatStateOf(0f) }
+            @Composable fun PublishSuffixVisibility() {
+                suffixVisibility.floatValue = smoothReveal((p() - .65f) / .35f)
+            }
+            PublishSuffixVisibility()
+            val albumBrush = remember(drawTheme) { DrawInkSpanBrush(androidx.compose.ui.graphics.ColorProducer {
+                val color = drawTheme.secondary()
+                color.copy(alpha = color.alpha * suffixVisibility.floatValue)
+            }) }
+            val artistText = remember(artist, sampled.album, albumBrush) { buildAnnotatedString {
                 append(artist)
-                sampled.album?.let { album -> withStyle(SpanStyle(color = subtitleColor.copy(alpha = subtitleColor.alpha * albumVisibility))) {
+                sampled.album?.let { album -> withStyle(SpanStyle(brush = albumBrush, alpha = 1f)) {
                     append(" · "); append(album)
                 } }
-            }, settings.reducedMotion,
+            } }
+            MarqueeTitle(artistText, settings.reducedMotion,
                 Modifier.playerTextBounds(::textX, ::subtitleY, ::textWidth).zIndex(metadataLayer()).scalePlayerText { subtitleScale + (1f - subtitleScale) * p() }.testTag("player-artist").onGloballyPositioned { polarity.measure("artist", it) },
-                style = MaterialTheme.typography.bodyLarge.copy(color = subtitleColor), motionPaused = textMotionPaused,
-                visiblePrefixLength = artist.length, suffixVisibility = albumVisibility)
+                style = MaterialTheme.typography.bodyLarge, motionPaused = textMotionPaused,
+                visiblePrefixLength = artist.length, suffixVisibilityReader = { suffixVisibility.floatValue }, ink = drawTheme.secondary)
             if (rowMotion().seekAlpha > 0f) Column(Modifier.offset(x = contentInset, y = seekY()).width(contentWidth)
                 .testTag("player-seek-row").onGloballyPositioned { polarity.measure("seek", it) }.graphicsLayer { alpha = rowMotion().seekAlpha }) {
                 PlayerSeekControls(sampled, onSeek, artworkVisit, onSeekRequest = onSeekRequest, position = seekPosition,
@@ -640,18 +662,18 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
             }
             if (rowMotion().actionsAlpha > 0f) Box(Modifier.offset(x = contentInset, y = actionsY())
                 .width(contentWidth).height(48.dp * actionRows).testTag("player-actions-row").onGloballyPositioned { polarity.measure("actions", it) }.graphicsLayer { alpha = rowMotion().actionsAlpha }
-                .then(if (lyricsOpen) Modifier.clearAndSetSemantics {} else Modifier)) { actions() }
+                .then(if (lyricsOpen) Modifier.clearAndSetSemantics {} else Modifier)) { PlayerMaterialTheme(drawTheme) { actions() } }
             Row(Modifier.offset(x = (surfaceWidth() - 148.dp) * (1 - transportMotion()) + ((windowWidth - transportWidth) / 2) * transportMotion(),
                 y = transportY()).testTag("player-transport-row").onGloballyPositioned { polarity.measure("transport", it) },
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy((transportWidth - 160.dp) / 2 * transportMotion())) {
                 TransportButton(TransportGlyph.Previous, false, "Previous", onPrevious,
-                    Modifier.size(48.dp), 24.dp + 10.dp * transportMotion(), foreground(), sampled.connected, settings.reducedMotion)
+                    Modifier.size(48.dp), 24.dp + 10.dp * transportMotion(), baseColors.onSurface, sampled.connected, settings.reducedMotion, tintReader = drawTheme.foreground)
                 TransportButton(TransportGlyph.PlayPause, showPause,
                     if (showPause) "Pause" else "Play", onToggle,
                     Modifier.size(48.dp + 16.dp * transportMotion()), 24.dp + 16.dp * transportMotion(),
-                    foreground(), sampled.connected, settings.reducedMotion)
+                    baseColors.onSurface, sampled.connected, settings.reducedMotion, tintReader = drawTheme.foreground)
                 TransportButton(TransportGlyph.Next, false, "Next", onNext,
-                    Modifier.size(48.dp), 24.dp + 10.dp * transportMotion(), foreground(), sampled.connected, settings.reducedMotion)
+                    Modifier.size(48.dp), 24.dp + 10.dp * transportMotion(), baseColors.onSurface, sampled.connected, settings.reducedMotion, tintReader = drawTheme.foreground)
             }
 
         }
@@ -661,8 +683,8 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
     // The complete player composite (artwork, wash, controls, text) as recorded by the Surface above.
     // This target must stay outside that Surface's content: inside it, the Surface records the X into
     // the very layer the X's lens draws, a RenderNode cycle that overflows the API 33+ RenderThread (#583).
-    CompositionLocalProvider(LocalFrostedBackdrop provides seekCancelBackdrop(frostedBackdrop, lyricBackdrop, p()),
-        LocalContentColor provides foreground()) {
+    CompositionLocalProvider(LocalFrostedBackdrop provides
+        (if (fullyOpen) frostedBackdrop ?: lyricBackdrop else lyricBackdrop)) {
         SeekCancelTarget(scrubCancel, scrubOverCancel,
             navigationInset + CollapsedQueueHeight + 20.dp, settings.reducedMotion)
     }

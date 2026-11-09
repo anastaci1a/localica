@@ -130,9 +130,15 @@ internal fun PlayerSeekControls(playback: PlaybackState, onSeek: (Long) -> Unit,
             modifier = Modifier.fillMaxWidth().height(40.dp).semantics { contentDescription = "Seek" },
             cancelBounds = cancelBounds, cancelTarget = cancelTarget, onCancel = position::cancel,
             liveValue = playback.positionMs.toFloat() * range / duration, onDrag = onDrag)
+        val ink = LocalPlayerDrawTheme.current?.foreground
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text(formatTime(shown.toLong()), style = MaterialTheme.typography.labelSmall)
-            Text(formatTime(playback.durationMs), style = MaterialTheme.typography.labelSmall)
+            if (ink == null) {
+                Text(formatTime(shown.toLong()), style = MaterialTheme.typography.labelSmall)
+                Text(formatTime(playback.durationMs), style = MaterialTheme.typography.labelSmall)
+            } else {
+                DrawInkText(formatTime(shown.toLong()), ink, style = MaterialTheme.typography.labelSmall)
+                DrawInkText(formatTime(playback.durationMs), ink, style = MaterialTheme.typography.labelSmall)
+            }
         }
     }
 }

@@ -438,3 +438,6 @@ io.github.anastaci1a.localica.MarqueeDeferredLayoutEqualityTest
 io.github.anastaci1a.localica.DrawInkEqualityTest
 
 io.github.anastaci1a.localica.ArtworkRevealOwnerEqualityTest
+
+io.github.anastaci1a.localica.PlayerLoadingThemeEqualityTest
+io.github.anastaci1a.localica.PlayerThemeFrameEqualityTest

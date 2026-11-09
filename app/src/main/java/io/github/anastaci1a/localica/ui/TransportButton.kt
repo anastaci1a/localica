@@ -23,7 +23,7 @@ internal enum class TransportGlyph { Previous, PlayPause, Next }
 
 @Composable
 internal fun TransportButton(glyph: TransportGlyph, playing: Boolean, label: String, onClick: () -> Unit,
-    modifier: Modifier, iconSize: Dp, tint: Color, enabled: Boolean, reducedMotion: Boolean) {
+    modifier: Modifier, iconSize: Dp, tint: Color, enabled: Boolean, reducedMotion: Boolean, tintReader: androidx.compose.ui.graphics.ColorProducer? = null) {
     val reduced = rememberEffectiveReducedMotion(reducedMotion || LocalReducedMotion.current)
     val speed = LocalMotionSpeed.current
     val shapes = LocalTransportShapes.current
@@ -77,7 +77,8 @@ internal fun TransportButton(glyph: TransportGlyph, playing: Boolean, label: Str
         Canvas(Modifier.size(iconSize)) {
             val progress = if (reduced) { if (playing) 1f else 0f } else pause
             val cycle = if (reduced) 0f else travel.value
-            val color = tint.copy(alpha = tint.alpha * opacity)
+            val shownTint = tintReader?.invoke() ?: tint
+            val color = shownTint.copy(alpha = shownTint.alpha * opacity)
             if (morph != null) drawPackPlayPause(progress, color, morph, painter, pausePainter)
             else if (custom) drawTransportPainters(glyph, progress, cycle, color, painter, pausePainter)
             else drawTransportGlyph(glyph, progress, cycle, color, shapes)

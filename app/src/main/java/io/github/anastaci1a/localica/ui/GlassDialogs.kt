@@ -22,7 +22,9 @@ internal val LocalGlassDialogAppearance = compositionLocalOf<GlassDialogAppearan
 
 @Composable
 internal fun currentGlassDialogAppearance(): GlassDialogAppearance {
-    val ink = rememberUpdatedState(LocalContentColor.current)
+    val theme = LocalPlayerDrawTheme.current
+    val fallback = rememberUpdatedState(LocalContentColor.current)
+    val ink = remember(theme) { derivedStateOf { theme?.colors?.onSurface ?: fallback.value } }
     val backdrop = rememberUpdatedState(LocalModalBackdrop.current ?: LocalFrostedBackdrop.current)
     val home = LocalGlassPopupHome.current
     return remember(home) { GlassDialogAppearance(ink, backdrop, home) }
