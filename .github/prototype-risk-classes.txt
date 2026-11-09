@@ -437,3 +437,4 @@ io.github.anastaci1a.localica.IconRegistryVisualTest
 io.github.anastaci1a.localica.QueueSelectorPersistenceTest
 io.github.anastaci1a.localica.QueueSelectorFieldReturnTest
 io.github.anastaci1a.localica.QueueSelectorOffscreenNameTest
+io.github.anastaci1a.localica.QueueSelectorGlyphContinuityTest
