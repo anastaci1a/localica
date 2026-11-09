@@ -943,7 +943,10 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     MaterialTheme(colorScheme = if (artDetail) pageColors.copy(onSurface = collectionInk, onSurfaceVariant = collectionInk.copy(alpha = .65f),
         primary = collectionInk, surface = if (lightCollection) androidx.compose.ui.graphics.Color(0xFFE5E5E5) else hero.palette.bottom) else pageColors) {
     CompositionLocalProvider(LocalArtworkTransit provides artworkTransit, LocalContentColor provides MaterialTheme.colorScheme.onSurface,
-        LocalLoadingMaterialOpacity provides if (route.collection?.kind in setOf(MediaKind.Artist,
+        // Artwork pages shade loading material toward their ink like Library (#705: 4%, #F0F0F3
+        // on #F9F9FB), so it keeps Library's contrast over any backdrop. Queue/search keep 50%.
+        LocalLoadingMaterialColor provides collectionInk.copy(alpha = .04f).takeIf { artDetail },
+        LocalLoadingMaterialOpacity provides if (!artDetail && route.collection?.kind in setOf(MediaKind.Artist,
             MediaKind.AlbumArtist, MediaKind.Album, MediaKind.Playlist, MediaKind.Queue)) .5f else 1f,
         LocalFrostedBackdrop provides if (artDetail) collectionSource else surroundingBackdrop,
         LocalEmptySearchBack provides popupDismiss?.takeIf { route.text.isBlank() }) {
