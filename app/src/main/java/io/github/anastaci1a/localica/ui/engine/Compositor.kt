@@ -50,9 +50,12 @@ enum class Stratum { Page,Lifted,Floating,Drawer,Player,Modal,Overlay,Diagnostic
     private var proofFieldLossSequence: Long? = null
     internal fun proofDropsReturnedField(): Boolean {
         val expansion = following?.expansion ?: return false
-        if (!windowRetained || owner !== low || expansion.expanded || expansion.phase.value() > .002f) return false
+        if (owner !== low || expansion.expanded || expansion.phase.value() > .002f) return false
         val sequence = clock.stamp.sequence
-        if (proofFieldLossSequence == null) proofFieldLossSequence = sequence
+        if (proofFieldLossSequence == null) {
+            proofFieldLossSequence = sequence
+            android.util.Log.i("LocalicaFieldLossProof", "DROP sequence=$sequence key=$key retained=$windowRetained sourceGeneration=$sourceGeneration")
+        }
         return proofFieldLossSequence == sequence
     }
     internal val windowRetained get()=windowLeases>0
