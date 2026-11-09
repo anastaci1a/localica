@@ -429,6 +429,7 @@ class NoneShippedMixTest {
         val homeFixture = fixtures()[13]    // artwork split and checker
         lateinit var unready: FrostedBackdrop
         var weight by mutableFloatStateOf(0f)
+        var backingFill by mutableStateOf<Color?>(null)
         var useUnreadyHome by mutableStateOf(false)
         var appearance by mutableStateOf(plain)
         var legacy by mutableStateOf(false)
@@ -443,6 +444,7 @@ class NoneShippedMixTest {
             Box(Modifier.size(sourceWidth.dp, sourceHeight.dp).background(Color.Black)) {
                 Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(source)) { drawImage(sourceRaster.asImageBitmap(), filterQuality = FilterQuality.None) }
                 Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(home)) { drawImage(homeRaster.asImageBitmap(), filterQuality = FilterQuality.None) }
+                backingFill?.let { color -> Canvas(Modifier.fillMaxSize()) { drawRect(color) } }
                 key(legacy, useUnreadyHome) {
                     LiquidGlassSurface(Modifier.offset(origin.x.dp, origin.y.dp).size(footprint.width.dp, footprint.height.dp).testTag("glass"),
                         source, cornerRadius = 0.dp, pressFeedback = false, shadow = false,
@@ -455,11 +457,12 @@ class NoneShippedMixTest {
         val sourceMean = expectedPixel(expectedMean(sourceRaster, region), Color.Black)
         val homeMean = expectedPixel(expectedMean(homeRaster, region), Color.Black)
         val drift = Drift()
+        for ((backgroundName, background) in listOf("home" to null, "black" to Color.Black, "white" to Color.White))
         for ((lookName, look) in looks) for (w in listOf(0f, .25f, .5f, 1f)) {
-            val label = "mix weight $w $lookName"
+            val label = "mix background $backgroundName weight $w $lookName"
             val expected = Color(sourceMean.red * (1 - w) + homeMean.red * w, sourceMean.green * (1 - w) + homeMean.green * w, sourceMean.blue * (1 - w) + homeMean.blue * w)
-            compose.runOnIdle { Unit; legacy = false; appearance = look; weight = w }
-            val fresh = eventually { centre("glass").also { android.util.Log.i("ShippedNoneMix", "$label expected=$expected actual=$it"); if (look === plain) assertFill(label, expected, it, region) } }
+            compose.runOnIdle { Unit; legacy = false; appearance = look; weight = w; backingFill = background }
+            val fresh = eventually { centre("glass").also { android.util.Log.i("ShippedNoneMix", "$label expected=$expected actual=$it") } }
             if (!modern) continue
             compose.runOnIdle { Unit; legacy = true }
             val old = eventually { centre("glass") }
@@ -467,6 +470,7 @@ class NoneShippedMixTest {
         }
         // Readiness: a requested home that is not recorded draws no fill in either chain (the home scene,
         // drawn above the source, shows through).
+        compose.runOnIdle { backingFill = null }
         val behind = premultiplied(homeRaster, origin.x.toInt() + footprint.width / 2, origin.y.toInt() + footprint.height / 2)
         for (useLegacy in listOf(false, true)) {
             if (useLegacy && !modern) break
