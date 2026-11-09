@@ -1327,7 +1327,9 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                     }
                 }
                 items(reorder.rendered(result.items), key = { it?.key ?: DropGapKey },
-                    contentType = { if (it == null) "gap" else it.ref.kind.name }, itemContent = gridItemContent)
+                    contentType = { if (it == null) "gap" else it.ref.kind.name }) { entry ->
+                    BrowseGridItem(entry, gridItemContent)
+                }
                 artistFilterRange.request?.let { request ->
                     item(key = ArtistFilterRange.GuardKey, span = { GridItemSpan(maxLineSpan) }) {
                         Spacer(Modifier.height(with(density) { request.reservePx.toDp() })
@@ -1495,3 +1497,8 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
 /** Effect-only state changes must not recreate the browse screen or grid callbacks. */
 @Composable
 private fun BrowseEffectScope(content: @Composable () -> Unit) { content() }
+
+/** An item-provider refresh can re-enter its callback without changing a row's inputs. */
+@Composable
+private fun androidx.compose.foundation.lazy.grid.LazyGridItemScope.BrowseGridItem(item: BrowserItem?,
+    content: @Composable androidx.compose.foundation.lazy.grid.LazyGridItemScope.(BrowserItem?) -> Unit) { content(item) }
