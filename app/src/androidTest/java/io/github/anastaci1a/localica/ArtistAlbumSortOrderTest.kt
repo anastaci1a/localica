@@ -176,10 +176,15 @@ class ArtistAlbumSortOrderTest {
             }
         } }
         val selected = SongRow(tracks.single { it.title == "m-one" }.id, tracks.single { it.title == "m-one" })
-        compose.waitUntil(10_000) { compose.onAllNodesWithText("y-disc1").fetchSemanticsNodes().isNotEmpty() }
-        compose.runOnIdle { session.select(ref, listOf(selected)) }
         fun visible() = compose.runOnIdle { session.visible.map { it.track.title } }
-        compose.waitUntil(5_000) { visible() == grouped }
+        // The bound selection scope is the displayed row order, independent of what is on screen.
+        compose.waitUntil(10_000) { visible() == grouped }
+        compose.runOnIdle { session.select(ref, listOf(selected)) }
+        // Bring the songs beneath the artwork header into the viewport for the frame strip.
+        compose.onRoot().performTouchInput { swipeUp(startY = bottom * .85f, endY = top + bottom * .15f) }
+        compose.waitForIdle()
+        fun titleBounds(title: String) = (compose.onAllNodesWithText(title, useUnmergedTree = true).fetchSemanticsNodes() +
+            compose.onAllNodesWithText(title).fetchSemanticsNodes()).firstOrNull()?.boundsInRoot
         val albumNames = setOf("Zeta", "Mid", "Alpha", "Nameless")
         fun carousel() = compose.onAllNodes(SemanticsMatcher("album chip") { node ->
             node.config.getOrNull(androidx.compose.ui.semantics.SemanticsProperties.Text)?.any { it.text in albumNames } == true
@@ -202,9 +207,7 @@ class ArtistAlbumSortOrderTest {
             var settledFrames = 0
             for (frame in 0 until 90) {
                 compose.mainClock.advanceTimeByFrame()
-                val rows = ungrouped.mapNotNull { title ->
-                    compose.onAllNodesWithText(title).fetchSemanticsNodes().firstOrNull()?.boundsInRoot?.let { title to it }
-                }
+                val rows = ungrouped.mapNotNull { title -> titleBounds(title)?.let { title to it } }
                 positions.append(frame).append(' ').append(rows.joinToString(" ") { (title, bounds) ->
                     "$title@${bounds.left.toInt()},${bounds.top.toInt()}" }).append('\n')
                 if (frame % 3 == 0 && frames.size < 16) frames += compose.onRoot().captureToImage().asAndroidBitmap()
