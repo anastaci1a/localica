@@ -12,7 +12,6 @@ import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
-import androidx.compose.ui.test.junit4.*
 import androidx.compose.ui.unit.*
 import io.github.anastaci1a.localica.ui.*
 import org.junit.Assert.*
