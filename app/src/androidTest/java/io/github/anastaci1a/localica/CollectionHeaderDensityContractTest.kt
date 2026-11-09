@@ -7,6 +7,7 @@ import androidx.compose.runtime.tooling.CompositionData
 import androidx.compose.runtime.tooling.LocalInspectionTables
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.*
 import androidx.compose.ui.unit.Density
@@ -55,19 +56,25 @@ class CollectionHeaderDensityContractTest {
                 }
             }
         }
-        fun headerIdentity(): Any = compose.runOnIdle {
-            val found = mutableSetOf<Any>()
+        data class HeaderOwner(val state: MutableState<*>, val coordinates: LayoutCoordinates)
+        fun headerIdentity(): HeaderOwner = compose.runOnIdle {
+            // CollectionHeader alone remembers LayoutCoordinates in this controlled fixture.
+            // Identify that actual state/layout owner, without optional compiler source names.
+            val found = java.util.IdentityHashMap<MutableState<*>, LayoutCoordinates>()
             fun inspect(data: CompositionData) {
                 for (group in data.compositionGroups) {
-                    if (group.sourceInfo?.contains("C(CollectionHeader)") == true)
-                        found += checkNotNull(group.identity) { "Header group has no stable tooling identity" }
+                    for (state in group.data.filterIsInstance<MutableState<*>>()) {
+                        val coordinates = state.value as? LayoutCoordinates ?: continue
+                        if (coordinates.isAttached && coordinates.size == measured)
+                            found[state] = coordinates
+                    }
                     inspect(group)
                 }
             }
             inspect(root)
             tables.toList().filter { it !== root }.forEach(::inspect)
-            check(found.size == 1) { "Expected exactly one mounted CollectionHeader owner, got ${found.size}" }
-            found.single()
+            check(found.size == 1) { "Expected one remembered header coordinates state, got ${found.size}; measured=$measured" }
+            found.entries.single().let { HeaderOwner(it.key, it.value) }
         }
         compose.waitForIdle()
         val owner = headerIdentity()
@@ -75,10 +82,11 @@ class CollectionHeaderDensityContractTest {
             compose.waitForIdle()
             val identity = headerIdentity()
             val (size, density) = compose.runOnIdle { measured to suppliedDensity }
-            assertEquals("Header must stay mounted at $label", owner, identity)
+            assertSame("Header remember state must stay mounted at $label", owner.state, identity.state)
+            assertSame("Header layout owner must stay mounted at $label", owner.coordinates, identity.coordinates)
             assertEquals("Fixed pixel width at $label", 1080, size.width)
             val expected = 1080 + (112f * density.density).roundToInt()
-            android.util.Log.i("PERF2_HEADER_DENSITY", "$label owner=$identity density=${density.density} fontScale=${density.fontScale} width=${size.width} height=${size.height} expected=$expected")
+            android.util.Log.i("PERF2_HEADER_DENSITY", "$label state=${System.identityHashCode(identity.state)} layout=${System.identityHashCode(identity.coordinates)} density=${density.density} fontScale=${density.fontScale} width=${size.width} height=${size.height} expected=$expected")
             assertEquals("Square hero pixel height at $label", expected, size.height)
         }
         assertHeader("initial")
