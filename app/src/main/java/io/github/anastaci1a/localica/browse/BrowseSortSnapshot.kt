@@ -14,11 +14,14 @@ class BrowseSortSnapshot private constructor(
         val route = collectionRoute(MediaRef(kind, ""))
         query(route, inherited = true) to grouping(route, inherited = true)
     } }
+    /** #694: artist views group songs by album unless this one shared preference is off. */
+    val artistAlbumGrouping: Boolean = values[BrowsePreferenceKeys.ArtistAlbumGrouping] as? Boolean ?: true
     private val catalogGrouping = SongGrouping.entries.firstOrNull { it.name == values["catalog.Album.group"] } ?: SongGrouping.None
     /** Catalog/search ordering has its own query key. Explicit defaults equal inherited defaults,
      * so saving the first layout preference need not recompute every collection's cover. */
     fun sameCollections(other: BrowseSortSnapshot) = inheritedOrders == other.inheritedOrders &&
-        collectionOverrides == other.collectionOverrides && catalogGrouping == other.catalogGrouping && legacy == other.legacy
+        collectionOverrides == other.collectionOverrides && catalogGrouping == other.catalogGrouping &&
+        artistAlbumGrouping == other.artistAlbumGrouping && legacy == other.legacy
 
     fun query(route: BrowseRoute): LibraryQuery = query(route, inherited = false)
     private fun query(route: BrowseRoute, inherited: Boolean): LibraryQuery {
@@ -50,7 +53,7 @@ class BrowseSortSnapshot private constructor(
 
     fun rows(ref: MediaRef, rows: List<SongRow>, checkActive: () -> Unit = {}): List<SongRow> {
         if (ref.kind in setOf(MediaKind.Artist, MediaKind.AlbumArtist))
-            return orderedArtistAlbums(rows, collectionQuery(ref), checkActive).rows
+            return artistRows(rows, collectionQuery(ref), artistAlbumGrouping, checkActive).rows
         val ordered = LibraryQueries.rows(rows, collectionQuery(ref), checkActive)
         val grouping = if (ref.kind == MediaKind.Album) grouping(collectionRoute(ref)) else SongGrouping.None
         var visits = 0
@@ -89,6 +92,8 @@ class BrowseSortSnapshot private constructor(
 
 /** Preference identities are shared by style reads, snapshots and override writes. */
 internal object BrowsePreferenceKeys {
+    /** Shared by every artist view; the ".group" suffix keeps it in ordering snapshots and observers. */
+    const val ArtistAlbumGrouping = "artist-albums.group"
     fun type(route: BrowseRoute): String = when {
         route.search -> "search"
         route.collection != null -> "contents.${route.collection.kind}"

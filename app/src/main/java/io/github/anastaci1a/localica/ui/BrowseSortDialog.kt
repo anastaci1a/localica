@@ -135,6 +135,8 @@ internal fun BrowseSortDialog(route: BrowseRoute, value: BrowseStyle, overridden
                         edited = edited.copy(sort = field, ascending = if (field != edited.sort && field in setOf(TrackSort.Added, TrackSort.Modified, TrackSort.MostPlayed, TrackSort.LongestListened)) false else edited.ascending)
                     }
                     if (!declaration.topology(edited).manual) SortDirection(edited.ascending) { edited = edited.copy(ascending = it) }
+                    if (declaration.albumGrouping)
+                        BooleanPreference("Group by album", edited.albumGrouping) { edited = edited.copy(albumGrouping = it) }
                     if (failure) Text("Couldn’t save this order. Try again.", color = MaterialTheme.colorScheme.error)
                 }
             }
