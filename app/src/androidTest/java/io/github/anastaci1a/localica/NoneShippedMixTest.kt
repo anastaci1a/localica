@@ -470,7 +470,7 @@ class NoneShippedMixTest {
         val behind = premultiplied(homeRaster, origin.x.toInt() + footprint.width / 2, origin.y.toInt() + footprint.height / 2)
         for (useLegacy in listOf(false, true)) {
             if (useLegacy && !modern) break
-            compose.runOnIdle { MaterialAreaReduction.legacyOverride = useLegacy; legacy = useLegacy; appearance = plain; weight = .5f; useUnreadyHome = true }
+            compose.runOnIdle { Unit; legacy = useLegacy; appearance = plain; weight = .5f; useUnreadyHome = true }
             eventually { assertFill("unready home ${if (useLegacy) "legacy" else "fresh"}", behind, centre("glass"), region) }
             compose.runOnIdle { useUnreadyHome = false }
         }
