@@ -12,21 +12,22 @@ import io.github.anastaci1a.localica.ui.*
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.RuleChain
 
 /**
  * The browse end padding takes the lower chrome from the shell inset. These checks hold it to the real
  * mini player, navigation pill, floating controls and selection panel as they are actually placed.
  */
 class ShellChromeClearanceTest {
-    @get:Rule val compose = localicaComposeRule()
+    private val compose = localicaComposeRule()
+    // shell() persists a one-tab bar; restore it so later real-app tests keep their tabs (#722).
+    @get:Rule val rules: RuleChain = RuleChain.outerRule(
+        BrowsePreferenceIsolation(listOf("interface", "browse-style", "library-query"))).around(compose)
     private val tracks = List(40) { Track("shell:$it", "Song ${it.toString().padStart(2, '0')}",
         album = "Shell album", artist = "Artist", trackNumber = it + 1, fileName = "$it.mp3", relativePath = "$it.mp3") }
 
     private fun shell(tab: MainTab) {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
-        context.getSharedPreferences("interface", 0).edit().clear().commit()
-        context.getSharedPreferences("browse-style", 0).edit().clear().commit()
-        context.getSharedPreferences("library-query", 0).edit().clear().commit()
         InterfacePreferences(context).write(InterfaceSettings(tabs = listOf(tab), reducedMotion = true))
         val track = tracks.first()
         val playback = PlaybackState(connected = true, trackId = track.id, trackUri = track.uri, title = track.title,
