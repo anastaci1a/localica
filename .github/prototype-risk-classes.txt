@@ -444,3 +444,4 @@ io.github.anastaci1a.localica.PlayerThemeFrameEqualityTest
 
 io.github.anastaci1a.localica.ControlLayoutReaderEqualityTest
 io.github.anastaci1a.localica.PlayerThemePresentationEqualityTest
+io.github.anastaci1a.localica.PlayerArtistRasterEqualityTest

@@ -201,7 +201,8 @@ class PlayerThemePresentationEqualityTest {
             }
             // Keep the historical retained View intent: a later valid URI can mount the viewer.
             compose.runOnIdle { state=state.copy(trackUri="content://test.perf2/later-artwork") }
-            compose.mainClock.advanceTimeByFrame();compose.waitForIdle()
+            // The declaration publishes the host entry, then the host mounts its window next frame.
+            repeat(2) { compose.mainClock.advanceTimeByFrame();compose.waitForIdle() }
             assertTrue("A later URI admits the retained viewer",panels>0)
             compose.onNode(isDialog()).assertExists()
         } finally { compose.mainClock.autoAdvance=true }

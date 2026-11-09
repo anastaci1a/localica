@@ -70,7 +70,7 @@ class PlayerThemeFrameEqualityTest {
         data class Step(val p: Float, val loaded: Boolean = false, val tint: Color? = null)
         val samples = listOf(Step(1f), Step(.42f), Step(.8f, tint = Color(0xFF98512B)),
             Step(.8f, true), Step(.3f, true), Step(.7f), Step(1f), Step(.2f), Step(1f, true))
-        data class Frame(val pixels: IntArray, val width: Int, val height: Int, val bounds: Map<String, List<androidx.compose.ui.geometry.Rect>>)
+        data class Frame(val pixels: IntArray, val width: Int, val height: Int, val bounds: Map<String, List<androidx.compose.ui.geometry.Rect>>, val suffix: androidx.compose.ui.geometry.Rect?)
         fun captureArm(old: Boolean): List<Frame> {
             compose.runOnIdle { scope.launch(start = CoroutineStart.UNDISPATCHED) { phase.stop(); phase.snapTo(1f) }; visual = PlayerVisual(loading = true); material = null; reference = old; epoch++ }
             return samples.map { p ->
@@ -79,7 +79,7 @@ class PlayerThemeFrameEqualityTest {
                 val tags = listOf("player-surface", "player-artwork", "player-title", "player-artist", "player-transport-row")
                 val bounds = tags.associateWith { compose.onAllNodesWithTag(it, true).fetchSemanticsNodes().map { node -> node.boundsInRoot } }
                 val pixels = compose.onNodeWithTag("frame-root").captureToImage().toPixelMap()
-                Frame(IntArray(pixels.width * pixels.height) { i -> pixels[i % pixels.width, i / pixels.width].toArgb() }, pixels.width, pixels.height, bounds)
+                Frame(IntArray(pixels.width * pixels.height) { i -> pixels[i % pixels.width, i / pixels.width].toArgb() }, pixels.width, pixels.height, bounds, if (p.p > .65f) measuredPlayerAlbumSuffix(compose) else null)
             }
         }
         try {
@@ -91,7 +91,8 @@ class PlayerThemeFrameEqualityTest {
                 assertEquals("Geometry at ${samples[i]}", a.bounds, b.bounds)
                 val mismatches = a.pixels.indices.count { a.pixels[it] != b.pixels[it] }
                 if (mismatches > 0) savePlayerEqualityEvidence("PlayerThemeFrameEqualityTest-$layout-lyrics$lyrics-$direction-${samples[i]}", a.pixels, b.pixels, a.width, a.height)
-                assertEquals("Exact pixels at ${samples[i]} ($layout, lyrics=$lyrics, $direction)", 0, mismatches)
+                assertEquals("Album suffix geometry at ${samples[i]}", a.suffix, b.suffix)
+                assertPlayerPixelsWithAlbumBound("PlayerThemeFrameEqualityTest-$layout-lyrics$lyrics-$direction-${samples[i]}", a.pixels, b.pixels, a.width, a.height, a.suffix)
             }
         } finally { compose.mainClock.autoAdvance = true }
     }

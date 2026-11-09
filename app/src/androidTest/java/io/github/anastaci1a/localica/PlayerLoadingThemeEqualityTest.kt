@@ -54,7 +54,8 @@ class PlayerLoadingThemeEqualityTest {
                     surfaceContainer = lerp(Color(0xFFEEECE7), NeutralPalette.middle, mix),
                     onSurface = lerp(Color.Black, Color.White, mix))
                 val theme = remember { PlayerDrawTheme(applied) }
-                if (producers) theme.present(PlayerThemePresentation(base, mix, lerp(Color.Black, Color.White, mix),
+                if (producers) theme.present(PlayerThemePresentation(base.copy(
+                    surface = Color(0xFFFAF8F3), surfaceContainer = Color(0xFFEEECE7)), mix, lerp(Color.Black, Color.White, mix),
                     Color.White, mix, NeutralPalette.bottom, NeutralPalette.middle, NeutralPalette.top))
                 else theme.present(applied)
                 CompositionLocalProvider(LocalLoadingMaterialColor provides override,
@@ -106,7 +107,14 @@ class PlayerLoadingThemeEqualityTest {
         try {
             val original = captureArm("reference")
             val candidate = captureArm("candidate")
-            original.zip(candidate).forEach { (a, b) -> assertArrayEquals(a.label, a.pixels, b.pixels) }
+            original.zip(candidate).forEach { (a, b) ->
+                if (!a.pixels.contentEquals(b.pixels)) {
+                    val width = kotlin.math.sqrt(a.pixels.size.toDouble()).toInt()
+                    check(width * width == a.pixels.size)
+                    savePlayerEqualityEvidence("loading-known$known-producers$producers-${a.label}", a.pixels, b.pixels, width, width)
+                }
+                assertArrayEquals(a.label, a.pixels, b.pixels)
+            }
             if (!known) {
                 val broken = captureArm("broken-r3").first().pixels
                 val first = original.first().pixels
