@@ -55,6 +55,11 @@ internal data class ArtistPhotoVisual(val image: ImageBitmap, val visual: Player
 /** Shared decoded images are bounded; disk revision and file identity invalidate stale pixels. */
 internal object ArtistPhotoPixels {
     private data class Key(val file: java.io.File, val fetchedAt: Long, val edge: Int, val thumbnail: Boolean)
+    private data class Identity(val file: java.io.File, val fetchedAt: Long, val thumbnail: Boolean)
+    private fun identity(photo: CachedArtistPhoto, thumbnail: Boolean) = Identity(photo.file, photo.fetchedAt, thumbnail)
+    // A newly mounted cell has not measured yet. Reuse its last decoded size until it does.
+    // Aliases hold no pixels and cannot retain an image evicted by the byte-bounded cache.
+    private val latest = LruCache<Identity, Key>(512)
     private fun key(photo: CachedArtistPhoto, thumbnail: Boolean, edge: Int) =
         Key(if (thumbnail && edge <= 256) photo.thumbnailFile ?: photo.file else photo.file, photo.fetchedAt, edge, thumbnail)
     private val cache = object : LruCache<Key, ArtistPhotoVisual>(16 * 1024 * 1024) {
@@ -64,7 +69,7 @@ internal object ArtistPhotoPixels {
     }
     /** No stat, decode, palette work or disk access on a composition-time hit. */
     fun peek(photo: CachedArtistPhoto, thumbnail: Boolean = false, edge: Int = if (thumbnail) 256 else 1080): ArtistPhotoVisual? =
-        cache.get(key(photo, thumbnail, edge))
+        cache.get(key(photo, thumbnail, edge)) ?: latest.get(identity(photo, thumbnail))?.let { cache.get(it) }
     suspend fun read(photo: CachedArtistPhoto, thumbnail: Boolean = false, edge: Int = if (thumbnail) 256 else 1080): ArtistPhotoVisual? {
         require(edge > 0)
         val key = key(photo, thumbnail, edge)
@@ -82,7 +87,10 @@ internal object ArtistPhotoPixels {
         val image = bitmap.asImageBitmap()
         val visual = if (thumbnail) PlayerVisual(image, contentKey = "artist-photo:$key")
             else PlayerVisual(image, playerPalette(bitmap), contentKey = "artist-photo:$key")
-        return ArtistPhotoVisual(image, visual, photo).also { cache.put(key, it) }
+        return ArtistPhotoVisual(image, visual, photo).also {
+            cache.put(key, it)
+            latest.put(identity(photo, thumbnail), key)
+        }
     }
 }
 
