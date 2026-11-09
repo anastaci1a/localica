@@ -7,10 +7,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.*
 
-/** Shared long-press ownership for mutable songs and queue-selector rows. */
+/** Shared long-press ownership for every list drag owner (mutable songs, Queue, multi-select stacks,
+ * queue selector). The gesture owns the drag haptics (#736): [pickupHaptic] gives the Strong pickup
+ * for rows without their own long-press owner (song rows pulse through their long-click), every
+ * finger lift after a drag is Strong, and a system cancel is silent. A recognized hold publishes
+ * [KeyedDragState.held], so every owner lifts the held item in place before the drag (#735). */
 @Composable
 internal fun <T : Any, P> Modifier.sharedKeyedDrag(state: KeyedDragState<T, P>, enabled: Boolean,
-    reducedMotion: Boolean, ownerKey: Any? = null, acquisitionReady: Boolean = true, itemAt: (Offset) -> T?,
+    reducedMotion: Boolean, ownerKey: Any? = null, acquisitionReady: Boolean = true, pickupHaptic: Boolean = false,
+    itemAt: (Offset) -> T?,
     onHold: (T) -> Unit = {}, keysFor: (T) -> Set<String>? = { setOf(state.keyOf(it)) },
     onCommitted: () -> Unit = {}, commit: (Set<String>, String?, (Boolean) -> Unit) -> Unit): Modifier {
     val currentAcquisitionReady by rememberUpdatedState(acquisitionReady)
@@ -19,6 +24,8 @@ internal fun <T : Any, P> Modifier.sharedKeyedDrag(state: KeyedDragState<T, P>, 
     val currentKeysFor by rememberUpdatedState(keysFor)
     val currentOnCommitted by rememberUpdatedState(onCommitted)
     val currentCommit by rememberUpdatedState(commit)
+    val haptics by rememberUpdatedState(rememberControlHaptics())
+    val currentPickupHaptic by rememberUpdatedState(pickupHaptic)
     return pointerInput(state, ownerKey, reducedMotion, enabled) {
         // Keep this ancestor node installed: removing it cancels every descendant's
         // hit path, including a pinch that temporarily makes the browse query pending.
@@ -39,6 +46,9 @@ internal fun <T : Any, P> Modifier.sharedKeyedDrag(state: KeyedDragState<T, P>, 
                 @Suppress("UNREACHABLE_CODE") false
             }
             if (held != null || !currentAcquisitionReady) return@awaitEachGesture
+            val heldKey = state.keyOf(item)
+            state.held = heldKey
+            if (currentPickupHaptic) haptics.emit(ControlHaptic.Strong)
             currentOnHold(item)
             var moving = false
             var gestureCommit = currentCommit
@@ -52,7 +62,7 @@ internal fun <T : Any, P> Modifier.sharedKeyedDrag(state: KeyedDragState<T, P>, 
                         val canceled = change.isConsumed
                         change.consume()
                         if (moving) {
-                            if (!canceled) state.move(change.position)
+                            if (!canceled) { state.move(change.position); haptics.dragReleased() }
                             state.finish(canceled || state.drag?.overCancel == true, reducedMotion, currentOnCommitted, gestureCommit)
                         }
                         break
@@ -68,7 +78,10 @@ internal fun <T : Any, P> Modifier.sharedKeyedDrag(state: KeyedDragState<T, P>, 
                     }
                     if (moving) state.move(change.position)
                 }
-            } finally { if (moving && state.drag?.dropping == false) state.finish(true, reducedMotion, currentOnCommitted, gestureCommit) }
+            } finally {
+                if (state.held == heldKey) state.held = null
+                if (moving && state.drag?.dropping == false) state.finish(true, reducedMotion, currentOnCommitted, gestureCommit)
+            }
         }
     }
 }
