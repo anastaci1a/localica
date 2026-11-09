@@ -30,3 +30,36 @@ internal fun Modifier.artworkEdgeFeather(amount: Float, band: Float, coverBlend:
             continuation?.let { drawRect(it, blendMode = BlendMode.DstIn) }
         }
     }
+
+@androidx.compose.runtime.Composable
+internal fun Modifier.artworkEdgeFeather(amount: () -> Float, band: () -> Float, coverBlend: () -> Float): Modifier {
+    val enabled = androidx.compose.runtime.remember(amount, coverBlend) {
+        androidx.compose.runtime.derivedStateOf { amount() > 0f || coverBlend() > 0f }
+    }
+    return if (!enabled.value) this else
+    graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }.drawWithCache {
+        val amount = amount(); val band = band(); val coverBlend = coverBlend()
+        val stops = Array(33) { index ->
+            val position = index / 32f
+            val t = (minOf(position, 1f - position) / band).coerceIn(0f, 1f)
+            position to Color.Black.copy(alpha = 1f - amount.coerceIn(0f, 1f) * (1f - t * t * (3f - 2f * t)))
+        }
+        val horizontal = Brush.horizontalGradient(*stops)
+        val vertical = Brush.verticalGradient(*stops)
+        // The full-cover continuation and edge feather multiply the same alpha.
+        // Keep both in one offscreen layer instead of rendering a second cover texture.
+        val continuation = if (coverBlend > 0f) Brush.verticalGradient(*Array(33) { index ->
+            val y = index / 32f
+            val edge = if (y < .14f) (.14f - y) / .14f else (y - .68f) / .32f
+            val t = edge.coerceIn(0f, 1f)
+            y to Color.Black.copy(alpha = 1f - t * t * (3f - 2f * t) * coverBlend)
+        }) else null
+        onDrawWithContent {
+            drawContent()
+            drawRect(horizontal, blendMode = BlendMode.DstIn)
+            drawRect(vertical, blendMode = BlendMode.DstIn)
+            continuation?.let { drawRect(it, blendMode = BlendMode.DstIn) }
+        }
+    }
+
+}
