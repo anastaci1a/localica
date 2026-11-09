@@ -26,71 +26,83 @@ class ArtworkRevealOwnerEqualityTest {
         var reduced by mutableStateOf(false)
         var epoch by mutableIntStateOf(0)
         var mounted by mutableStateOf(true)
-        var original: ArtworkTextReveal? = null
-        var candidate: ArtworkTextReveal? = null
+        var reference by mutableStateOf(true)
+        var run by mutableIntStateOf(0)
+        var currentOwner: ArtworkTextReveal? = null
+        val shimmer = mutableFloatStateOf(.25f)
         compose.mainClock.autoAdvance = false
         compose.setContent { LocalicaTheme {
-            CompositionLocalProvider(LocalReducedMotion provides reduced) {
-                Column {
-                    listOf(true, false).forEach { reference ->
-                        Box(Modifier.requiredSize(80.dp).background(Color(0xFFCFD4D9))
-                            .testTag(if (reference) "original" else "candidate")) {
-                            if (mounted) {
-                                val owner = remember(epoch) { ArtworkTextReveal() }
-                                SideEffect { if (reference) original = owner else candidate = owner }
-                                if (reference) ReferenceArtworkImage(artwork, loading, Modifier.fillMaxSize(), textReveal = owner)
-                                else ArtworkImage(artwork, loading, Modifier.fillMaxSize(), textReveal = owner)
-                            }
+            CompositionLocalProvider(LocalReducedMotion provides reduced, LocalLoadingShimmer provides shimmer) {
+                // Both arms occupy exactly the same screen coordinates, including rounded edges.
+                Box(Modifier.requiredSize(80.dp).background(Color(0xFFCFD4D9)).testTag("frame")) {
+                    key(run, reference) {
+                        if (mounted) {
+                            val owner = remember(epoch) { ArtworkTextReveal() }
+                            SideEffect { currentOwner = owner }
+                            if (reference) ReferenceArtworkImage(artwork, loading, Modifier.fillMaxSize(), textReveal = owner)
+                            else ArtworkImage(artwork, loading, Modifier.fillMaxSize(), textReveal = owner)
                         }
                     }
                 }
             }
         } }
-        fun pixels(tag: String): IntArray {
-            val bitmap = compose.onNodeWithTag(tag).captureToImage().toPixelMap()
-            return IntArray(bitmap.width * bitmap.height) { i -> bitmap[i % bitmap.width, i / bitmap.width].toArgb() }
-        }
-        fun sample(label: String, advance: Long = 16) {
-            compose.mainClock.advanceTimeBy(advance)
-            compose.waitForIdle()
-            assertArrayEquals(label, pixels("original"), pixels("candidate"))
-            if (mounted) {
-                val old = requireNotNull(original)
-                val current = requireNotNull(candidate)
-                compose.runOnIdle {
-                    assertEquals("$label text gate", old.waiting, current.waiting)
-                    assertEquals("$label text opacity", old.textAlpha, current.textAlpha, 0f)
-                    assertEquals("$label menu opacity", old.menuAlpha(.63f), current.menuAlpha(.63f), 0f)
-                }
+        data class Frame(val label: String, val pixels: IntArray, val waiting: Boolean?, val text: Float?, val menu: Float?)
+        fun captureArm(old: Boolean): List<Frame> {
+            compose.runOnIdle {
+                artwork = a; loading = false; reduced = false; epoch = 0; mounted = true
+                currentOwner = null; reference = old; run++
             }
-        }
-        fun change(block: () -> Unit) { compose.runOnIdle(block); sample("first next frame") }
-        try {
+            val frames = mutableListOf<Frame>()
+            fun sample(label: String, advance: Long = 16) {
+                compose.mainClock.advanceTimeBy(advance)
+                compose.waitForIdle()
+                val bitmap = compose.onNodeWithTag("frame").captureToImage().toPixelMap()
+                val pixels = IntArray(bitmap.width * bitmap.height) { i -> bitmap[i % bitmap.width, i / bitmap.width].toArgb() }
+                var frame: Frame? = null
+                compose.runOnIdle {
+                    val owner = currentOwner.takeIf { mounted }
+                    frame = Frame(label, pixels, owner?.waiting, owner?.textAlpha, owner?.menuAlpha(.63f))
+                }
+                frames += requireNotNull(frame)
+            }
+            fun change(label: String, body: () -> Unit) { compose.runOnIdle(body); sample(label) }
             sample("cached initial")
-            change { artwork = null; loading = false; epoch++ }
+            change("missing first frame") { artwork = null; loading = false; epoch++ }
             sample("missing", 400)
-            change { loading = true; epoch++ }
-            change { artwork = a; loading = false }
+            change("loading admission") { loading = true; epoch++ }
+            change("art arrival") { artwork = a; loading = false }
             sample("arriving early", 32)
-            change { epoch++ }
+            change("replace text owner") { epoch++ }
             sample("replaced text/menu owner", 64)
-            change { artwork = null; loading = true }
-            sample("absent reversal", 32)
-            change { artwork = b; loading = false }
-            sample("reverse present", 64)
+            change("absent reversal") { artwork = null; loading = true }
+            sample("absent reversal moving", 32)
+            change("reverse present") { artwork = b; loading = false }
+            sample("reverse present moving", 64)
             sample("placeholder removing frame", 256)
             sample("placeholder removed", 16)
-            change { artwork = a }
-            sample("resolution replacement", 64)
-            change { artwork = b }
-            sample("interrupted resolution", 256)
-            change { reduced = true; artwork = null; loading = true; epoch++ }
-            change { artwork = a; loading = false }
+            change("resolution replacement") { artwork = a }
+            sample("resolution replacement moving", 64)
+            change("interrupted resolution") { artwork = b }
+            sample("interrupted resolution settled", 256)
+            change("reduced loading") { reduced = true; artwork = null; loading = true; epoch++ }
+            change("reduced arrival") { artwork = a; loading = false }
             sample("reduced settled", 16)
-            change { mounted = false }
-            change { mounted = true; reduced = false; artwork = null; loading = true }
-            change { artwork = b; loading = false }
+            change("disposed") { mounted = false }
+            change("reuse loading") { mounted = true; reduced = false; artwork = null; loading = true }
+            change("reuse arrival") { artwork = b; loading = false }
             sample("reused owner settled", 400)
+            return frames
+        }
+        try {
+            val original = captureArm(true)
+            val candidate = captureArm(false)
+            original.zip(candidate).forEach { (a, b) ->
+                assertEquals(a.label, b.label)
+                assertArrayEquals(a.label, a.pixels, b.pixels)
+                assertEquals("${a.label} text gate", a.waiting, b.waiting)
+                assertEquals("${a.label} text opacity", a.text, b.text)
+                assertEquals("${a.label} menu opacity", a.menu, b.menu)
+            }
         } finally { compose.mainClock.autoAdvance = true }
     }
 }
