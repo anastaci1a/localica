@@ -1,6 +1,7 @@
 package io.github.anastaci1a.localica.ui
 
 import androidx.compose.foundation.layout.*
+import io.github.anastaci1a.localica.ui.layout.settingsPreferencePadding
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -79,7 +80,7 @@ internal fun SliderPreferenceFrame(label: String, low: String?, high: String?, d
 internal fun BooleanPreferenceFrame(label: String, modifier: Modifier = Modifier, control: @Composable () -> Unit) {
     val compact = LocalCompactPreferenceFrames.current
     SettingsEntry(label) { Row(modifier.fillMaxWidth().heightIn(min = if (compact) 48.dp else 56.dp)
-        .padding(io.github.anastaci1a.localica.ui.layout.settingsPreferencePadding(compact)).settingsRowPart(SettingsRowPart.Row),
+        .settingsPreferencePadding(compact).settingsRowPart(SettingsRowPart.Row),
         verticalAlignment = Alignment.CenterVertically) {
         Text(label, Modifier.weight(1f).padding(end = io.github.anastaci1a.localica.ui.layout.SettingsLabelGap).settingsRowPart(SettingsRowPart.Text))
         Box(Modifier.settingsRowPart(SettingsRowPart.Trailing)) { control() }

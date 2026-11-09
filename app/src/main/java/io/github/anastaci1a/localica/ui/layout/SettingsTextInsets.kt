@@ -4,6 +4,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -17,7 +19,9 @@ internal val SettingsHeadingPadding = PaddingValues(top = StockUiSpec.space.getV
 internal val SettingsLabelGap = StockUiSpec.space.getValue(Space.Base)
 private val compactPreferencePadding = PaddingValues()
 private val regularPreferencePadding = PaddingValues(vertical = StockUiSpec.space.getValue(Space.Tight))
-internal fun settingsPreferencePadding(compact: Boolean) = if (compact) compactPreferencePadding else regularPreferencePadding
+internal fun Modifier.settingsPreferencePadding(compact: Boolean): Modifier =
+    padding(if (compact) compactPreferencePadding else regularPreferencePadding)
+internal fun Modifier.settingsHeadingPadding(): Modifier = fillMaxWidth().padding(SettingsHeadingPadding)
 
 /** The existing single icon Box keeps its width and vertical alignment; absent icons allocate no slot. */
 @Composable
