@@ -12,12 +12,12 @@ transient='Received status code 5[0-9][0-9] from server|Read timed out|Connectio
 download='Could not (GET|HEAD|download|get resource|resolve all)'
 never='There were failing tests|tests completed, [0-9]+ failed|Compilation error|^e: |Lint found|Execution failed for task .*:(test|lint)[A-Za-z]*'
 
-mkdir -p "${RUNNER_TEMP:-${TMPDIR:-/tmp}}/dependency-attempts"
+mkdir -p ci-infrastructure/dependency-attempts
 retries=0
 for ((attempt = 1; attempt <= attempts; attempt++)); do
   "$@" 2>&1 | tee "$log"
   status=${PIPESTATUS[0]}
-  cp "$log" "${RUNNER_TEMP:-${TMPDIR:-/tmp}}/dependency-attempts/attempt-$attempt.log"
+  cp "$log" "ci-infrastructure/dependency-attempts/attempt-$attempt.log"
   if (( status == 0 )); then
     break
   fi
@@ -35,7 +35,7 @@ if [[ -f "$identity" ]]; then
 fi
 if (( status != 0 )) && grep -Eq "$transient" "$log" && grep -Eq "$download" "$log" && ! grep -Eq "$never" "$log"; then
   mkdir -p ci-infrastructure
-  printf '{"schema_version":1,"classification":"infrastructure","reason":"dependency-network","issue":752,"attempts":%s,"exit_code":%s}\n' "$attempt" "$status" > ci-infrastructure/dependencies.json
+  printf '{"schema_version":1,"classification":"infrastructure","reason":"dependency-network","issue":752,"attempts":%s,"exit_code":%s,"sha":"%s","run_id":"%s","run_attempt":"%s","job":"%s"}\n' "$attempt" "$status" "${GITHUB_SHA:-}" "${GITHUB_RUN_ID:-}" "${GITHUB_RUN_ATTEMPT:-}" "${GITHUB_JOB:-}" > ci-infrastructure/dependencies.json
   echo '::error title=Infrastructure failure (#752)::Dependency downloads exhausted bounded retries; no product verdict.'
 fi
 exit "$status"

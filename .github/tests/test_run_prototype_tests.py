@@ -861,7 +861,7 @@ p=pathlib.Path(sys.argv[sys.argv.index('--state-dir')+1]);p.mkdir();(p/'complete
 
 
 class WorkflowContract(unittest.TestCase):
-    def decision(self, failed=False, missing=False, wrong_sha=False, contradictory=False, malformed=False, partial_methods=False, skipped_required_method=False, build_attempt="1", decision_attempt="1", build_run="1", wrong_digest=False, repetitions=1, bad_iteration=False, missing_iteration=False, method_mode=False, missing_gate=False, bad_method=False, duplicate_command=False, affected_classes=None, changed_iteration_apks=False):
+    def decision(self, failed=False, missing=False, wrong_sha=False, contradictory=False, malformed=False, partial_methods=False, skipped_required_method=False, build_attempt="1", decision_attempt="1", build_run="1", wrong_digest=False, repetitions=1, bad_iteration=False, missing_iteration=False, method_mode=False, missing_gate=False, bad_method=False, duplicate_command=False, affected_classes=None, changed_iteration_apks=False, infrastructure_jobs=(), failed_jobs=(), historical_infrastructure=False):
         import yaml, hashlib
         affected_classes=affected_classes or [AFFECTED]
         selected=[REQUIRED,FOCUS,CONTRAST]+affected_classes
@@ -875,6 +875,17 @@ class WorkflowContract(unittest.TestCase):
             (canonical/'provenance.json').write_text(json.dumps({'sha':'a'*40 if wrong_sha else SHA,'apk_sha256':hashlib.sha256(b'wrong' if wrong_digest else b'canonical').hexdigest(),'run_id':build_run,'run_attempt':build_attempt,'signing_certificate':'verified-test-certificate'}))
             checks={k:{'result':'success'} for k in workflow['jobs']['evidence']['needs']}
             if failed:checks['focused_36']['result']='failure'
+            for job in failed_jobs:
+                checks[job]['result'] = 'failure'
+            for job in infrastructure_jobs:
+                artifact = {'focused_26': 'prototype-focused-api-26', 'focused_36': 'prototype-focused-api-36'}[job]
+                path = evidence / artifact
+                if historical_infrastructure:
+                    path = path / 'prototype-infrastructure/attempt-1'
+                path = path / 'ci-infrastructure'
+                path.mkdir(parents=True, exist_ok=True)
+                (path / 'dependencies.json').write_text(json.dumps({'classification': 'infrastructure',
+                    'sha': SHA, 'run_id': '1', 'run_attempt': decision_attempt, 'job': job, 'issue': 752}))
             if not missing:
                 for api in (26,36):
                     focused=evidence/f'prototype-focused-api-{api}'/'prototype-evidence';focused.mkdir(parents=True)
@@ -1186,7 +1197,31 @@ class WorkflowContract(unittest.TestCase):
                             self.assertEqual('${{ matrix.api }}', api)
                             self.assertIn("${{ matrix.api == 26 && '-feature -GLDMA' || '' }}", options)
                         self.assertIn('-memory 3072', options)
-            self.assertEqual(3 if filename == 'android.yml' else 4, lanes)
+            self.assertEqual(3 if filename == 'android.yml' else 5, lanes)
+
+    def test_focused_artifact_paths_preserve_workspace_root(self):
+        import yaml
+        jobs = yaml.safe_load((ROOT / '.github/workflows/prototype.yml').read_text())['jobs']
+        for api in (26, 36):
+            step = next(s for s in jobs[f'focused_{api}']['steps']
+                        if s.get('with', {}).get('name') == f'prototype-focused-api-{api}')
+            paths = [ROOT / value.strip() for value in step['with']['path'].splitlines() if value.strip()]
+            self.assertEqual(str(ROOT), os.path.commonpath([str(p) for p in paths]))
+            self.assertIn(ROOT / 'prototype-evidence', paths)
+            self.assertFalse(any('${{' in str(p) for p in paths))
+
+    def test_infrastructure_classification_preserves_mixed_and_historical_failures(self):
+        for infra, failed, expected, historical in (
+            (('focused_26',), ('focused_26',), 'infrastructure', False),
+            ((), ('focused_36',), 'unclassified', False),
+            (('focused_26',), ('focused_26', 'focused_36'), 'mixed', False),
+            (('focused_26',), ('focused_36',), 'unclassified', True),
+        ):
+            with self.subTest(infra=infra, failed=failed, historical=historical):
+                result, manifest, _ = self.decision(infrastructure_jobs=infra, failed_jobs=failed,
+                                                    historical_infrastructure=historical)
+                self.assertEqual(expected, manifest['failure_classification'])
+                self.assertFalse(manifest['ready_for_prototype_delivery'])
 
     def test_opt_in_only_and_five_required_jobs(self):
         import yaml
@@ -1201,7 +1236,7 @@ class WorkflowContract(unittest.TestCase):
         self.assertEqual('${{ always() }}',jobs['evidence']['if'])
         for name in ('focused_26','focused_36'):
             script='\n'.join(s.get('with',{}).get('script','') for s in jobs[name]['steps'])
-            self.assertIn('bash .github/run-prototype-tests.sh',script)
+            self.assertIn('python3 .github/prototype-health.py' if name == 'focused_36' else 'bash .github/run-prototype-tests.sh',script)
             self.assertNotIn('run-device-tests.sh',script)
         for name in ('compatibility_26','compatibility_36'):
             self.assertTrue(any('bash .github/compatibility/run.sh' in s.get('with',{}).get('script','') for s in jobs[name]['steps']))

@@ -217,6 +217,8 @@ Each compile job records `dependency-downloads=N` in its runner identity file an
 
 Focused prototype builds also warm UTP host-plugin configurations before boot. APK assembly alone leaves those dependencies unresolved. Focused instrumentation uses offline dependency resolution. Exhausted network retries retain attempt logs and infrastructure receipts; the delivery manifest distinguishes infrastructure failures from unclassified failures. Neither permits delivery.
 
+Hosted prototype API 36 jobs sample emulator process identity, boot ID, adb state and host memory. Two samples proving process and transport loss permit one fresh boot only with empty UTP failure XML and no assertion or crash evidence. Interrupted outputs remain archived. Missing or malformed evidence blocks recovery. Recovered infrastructure attempts remain visible in the delivery manifest.
+
 On disposable GitHub-hosted API 26 emulators, the native runner temporarily disables preinstalled Google Search before instrumentation. Its unrelated JobScheduler crash can obstruct Localica. Cleanup restores its prior enabled state after verifying device and package ownership. Google Search data is preserved. Physical devices are untouched. Localica crashes and all assertions remain fatal.
 
 `ANDROID_DEBUG_KEYSTORE` holds the base64 development key. CI restores it via `LOCALICA_DEBUG_KEYSTORE` and verifies the APK certificate. Back up the key outside Git. Local builds otherwise use the normal debug key. PRs use a disposable key.

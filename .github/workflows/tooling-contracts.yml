@@ -12,6 +12,8 @@ name: Evidence tooling contracts
       - '.github/emulator-sdk.py'
       - '.github/shared-test-apks.py'
       - '.github/prebuilt-device-tests.gradle'
+      - '.github/warm-device-dependencies.gradle'
+      - '.github/prototype-health.py'
       - '.github/release-verification.py'
       - '.github/run-device-tests.sh'
       - '.github/prepare-device-tests.sh'
@@ -33,6 +35,8 @@ name: Evidence tooling contracts
       - '.github/emulator-sdk.py'
       - '.github/shared-test-apks.py'
       - '.github/prebuilt-device-tests.gradle'
+      - '.github/warm-device-dependencies.gradle'
+      - '.github/prototype-health.py'
       - '.github/release-verification.py'
       - '.github/run-device-tests.sh'
       - '.github/prepare-device-tests.sh'
@@ -99,7 +103,7 @@ jobs:
               'test_prepare_device_tests.py', 'test_full_live_evidence.py',
               'test_run_prototype_tests.py', 'test_observe_test_evidence.py',
               'test_upload_artifact_retry.py', 'test_failure_context.py', 'test_shared_test_apks.py', 'test_release_verification.py', 'test_refresh_durations.py', 'test_emulator_setup.py', 'test_self_hosted_runner.py',
-              'test_dependency_cache.py',
+              'test_dependency_cache.py', 'test_prototype_health.py',
           ]
           for name in names:
               if not pathlib.Path('.github/tests', name).is_file():
