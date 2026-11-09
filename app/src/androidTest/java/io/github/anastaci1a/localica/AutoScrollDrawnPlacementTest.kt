@@ -344,7 +344,22 @@ class AutoScrollDrawnPlacementTest {
             val loaded = visible.isNotEmpty() && visible.keys.all { key ->
                 expected[key]?.let { ArtworkCache.peek(it.coverUris)?.bitmap != null } == true
             }
-            if (idle && loaded) {
+            // Recomposer can be idle between animation frames. Loading reservation is a
+            // layout animation and must reach its actual endpoint before native idle.
+            var loadingLayoutComplete = false
+            if (visible.isNotEmpty()) {
+                val motion = overlay().first
+                main {
+                    loadingLayoutComplete = motion.itemContent.values.all { content ->
+                        content.textOpacity.javaClass.declaredFields.all { f ->
+                            f.isAccessible = true
+                            val cell = f.get(content.textOpacity) as? BrowseLoadingCell
+                            cell == null || (cell.reservation == 0f && cell.alpha == 1f)
+                        }
+                    }
+                }
+            }
+            if (idle && loaded && loadingLayoutComplete) {
                 // Assert the first completed native frame after composition/layout/decode idle.
                 nativeFrame()
                 android.util.Log.i("AutoScroll635Idle", "idle visible=" + visible.size + " everyCoverCached=" + loaded)
