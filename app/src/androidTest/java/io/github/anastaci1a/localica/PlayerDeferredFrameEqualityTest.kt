@@ -65,7 +65,7 @@ class PlayerDeferredFrameEqualityTest {
         } }
         // Each arm receives the same relative clock advances and the same immutable visual.
         val samples = listOf(0f, .08f, .38f, .3801f, .7f, .7001f, .8f, .8301f, .99f, 1f, .6f, .25f, .75f, 0f)
-        data class Frame(val pixels: IntArray, val width: Int, val height: Int, val bounds: Map<String, androidx.compose.ui.geometry.Rect>, val suffix: androidx.compose.ui.geometry.Rect?)
+        data class Frame(val pixels: IntArray, val width: Int, val height: Int, val bounds: Map<String, androidx.compose.ui.geometry.Rect>, val suffix: PlayerAlbumPixels?)
         fun captureArm(old: Boolean): List<Frame> {
             compose.mainClock.autoAdvance = true
             compose.runOnIdle { scope.launch(start = CoroutineStart.UNDISPATCHED) { phase.stop(); phase.snapTo(0f) }; reference = old; epoch++ }
@@ -77,7 +77,9 @@ class PlayerDeferredFrameEqualityTest {
                 val tags = listOf("player-surface", "player-artwork", "player-title", "player-artist", "player-transport-row")
                 val bounds = tags.associateWith { compose.onNodeWithTag(it, true).fetchSemanticsNode().boundsInRoot }
                 val pixels = compose.onNodeWithTag("frame-root").captureToImage().toPixelMap()
-                Frame(IntArray(pixels.width * pixels.height) { i -> pixels[i % pixels.width, i / pixels.width].toArgb() }, pixels.width, pixels.height, bounds, if (p > .65f) measuredPlayerAlbumSuffix(compose) else null)
+                val mask = if (p > .65f) measuredPlayerAlbumSuffix(compose) else null
+                savePlayerAlbumMask("PlayerDeferredFrameEqualityTest-$layout-lyrics$lyrics-$direction-arm$old-p$p", pixels.width, pixels.height, mask)
+                Frame(IntArray(pixels.width * pixels.height) { i -> pixels[i % pixels.width, i / pixels.width].toArgb() }, pixels.width, pixels.height, bounds, mask)
             }
         }
         try {

@@ -674,8 +674,12 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
                 val color = drawTheme.secondary()
                 color.copy(alpha = color.alpha * suffixVisibility.floatValue)
             }) }
-            val artistText = remember(artist, sampled.album, albumBrush) { buildAnnotatedString {
-                append(artist)
+            PlayerFrameScope {
+            // An explicit color span preserves Android's original prefix paint when a shader
+            // span is present in the same paragraph. Keep this read in its own restart scope.
+            val artistColor = drawTheme.secondary()
+            val artistText = remember(artist, sampled.album, albumBrush, artistColor) { buildAnnotatedString {
+                withStyle(SpanStyle(color = artistColor)) { append(artist) }
                 sampled.album?.let { album -> withStyle(SpanStyle(brush = albumBrush, alpha = 1f)) {
                     append(" · "); append(album)
                 } }
@@ -684,6 +688,7 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
                 Modifier.playerTextBounds(::textX, ::subtitleY, ::textWidth).zIndex(if (moving) -.5f else 0f).scalePlayerText { subtitleScale + (1f - subtitleScale) * p() }.testTag("player-artist").onGloballyPositioned { polarity.measure("artist", it) },
                 style = MaterialTheme.typography.bodyLarge, motionPaused = textMotionPaused,
                 visiblePrefixLength = artist.length, suffixVisibilityReader = { suffixVisibility.floatValue }, ink = drawTheme.secondary)
+            }
             PlayerFrameScope { if (seekVisible) Column(Modifier.liveControlOffset({ contentInset }, ::seekY).width(contentWidth)
                 .testTag("player-seek-row").onGloballyPositioned { polarity.measure("seek", it) }.graphicsLayer { alpha = rowMotion().seekAlpha }) {
                 PlayerSeekControls(sampled, onSeek, artworkVisit, onSeekRequest = onSeekRequest, position = seekPosition,

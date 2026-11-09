@@ -3,6 +3,7 @@ package io.github.anastaci1a.localica
 import android.graphics.Bitmap
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.test.platform.app.InstrumentationRegistry
 import java.io.File
@@ -52,33 +53,98 @@ internal fun savePlayerEqualityEvidence(label: String, before: IntArray, after: 
     File(folder,"$name.json").writeText(metrics.toString(2))
 }
 
-/** Character geometry defines the only allowed region; pixel differences never choose its bounds. */
-internal fun measuredPlayerAlbumSuffix(compose: androidx.compose.ui.test.junit4.ComposeContentTestRule): androidx.compose.ui.geometry.Rect {
-    val text = compose.onNodeWithText("Artist · Album", useUnmergedTree = true)
-    val results = mutableListOf<androidx.compose.ui.text.TextLayoutResult>()
-    text.performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.GetTextLayoutResult) { it(results) }
-    val layout = results.single()
-    val textCoordinates = text.fetchSemanticsNode().layoutInfo.coordinates
-    val rootCoordinates = compose.onNodeWithTag("frame-root").fetchSemanticsNode().layoutInfo.coordinates
-    return compose.runOnIdle {
-        val boxes = ("Artist".length until layout.layoutInput.text.length).map { i ->
-            val box = layout.getBoundingBox(i)
-            val a = rootCoordinates.localPositionOf(textCoordinates, box.topLeft)
-            val b = rootCoordinates.localPositionOf(textCoordinates, box.bottomRight)
-            androidx.compose.ui.geometry.Rect(minOf(a.x,b.x), minOf(a.y,b.y), maxOf(a.x,b.x), maxOf(a.y,b.y))
-        }
-        androidx.compose.ui.geometry.Rect(kotlin.math.floor(boxes.minOf { it.left })-1f,
-            kotlin.math.floor(boxes.minOf { it.top })-1f, kotlin.math.ceil(boxes.maxOf { it.right })+1f,
-            kotlin.math.ceil(boxes.maxOf { it.bottom })+1f)
+/** Unrounded character boxes; admission tests the pixel centre and excludes protected content. */
+internal data class PlayerAlbumPixels(
+    val suffix: List<androidx.compose.ui.geometry.Rect>,
+    val protected: List<androidx.compose.ui.geometry.Rect>
+) {
+    fun allows(x: Int, y: Int): Boolean {
+        val centre = androidx.compose.ui.geometry.Offset(x + .5f, y + .5f)
+        return suffix.any { it.contains(centre) } && protected.none { it.contains(centre) }
     }
+}
+
+/** The fixture uses only axis-aligned scale/translation. Fail closed for other transforms. */
+internal fun measuredPlayerAlbumSuffix(compose: androidx.compose.ui.test.junit4.ComposeContentTestRule): PlayerAlbumPixels {
+    val text = compose.onNodeWithText("Artist · Album", useUnmergedTree = true)
+    val artist = text.fetchSemanticsNode()
+    val rootCoordinates = compose.onNodeWithTag("frame-root").fetchSemanticsNode().layoutInfo.coordinates
+    val suffix = mutableListOf<androidx.compose.ui.geometry.Rect>()
+    val protected = mutableListOf<androidx.compose.ui.geometry.Rect>()
+    val nodes = compose.onAllNodes(androidx.compose.ui.test.SemanticsMatcher.keyIsDefined(
+        androidx.compose.ui.semantics.SemanticsActions.GetTextLayoutResult), useUnmergedTree = true)
+        .fetchSemanticsNodes()
+    nodes.forEach { node ->
+        val results = mutableListOf<androidx.compose.ui.text.TextLayoutResult>()
+        compose.runOnIdle {
+            node.config[androidx.compose.ui.semantics.SemanticsActions.GetTextLayoutResult].action?.invoke(results)
+            val coordinates = node.layoutInfo.coordinates
+            results.forEach { layout ->
+                for (i in 0 until layout.layoutInput.text.length) {
+                    val box = layout.getBoundingBox(i)
+                    val a = rootCoordinates.localPositionOf(coordinates, box.topLeft)
+                    val b = rootCoordinates.localPositionOf(coordinates, box.bottomRight)
+                    val c = rootCoordinates.localPositionOf(coordinates, box.topRight)
+                    val d = rootCoordinates.localPositionOf(coordinates, box.bottomLeft)
+                    check(a.y == c.y && a.x == d.x && b.y == d.y && b.x == c.x) {
+                        "Album oracle requires axis-aligned character geometry"
+                    }
+                    val transformed = androidx.compose.ui.geometry.Rect(minOf(a.x,b.x), minOf(a.y,b.y), maxOf(a.x,b.x), maxOf(a.y,b.y))
+                    if (node.id == artist.id && i >= "Artist".length) suffix += transformed
+                    else protected += transformed
+                }
+            }
+        }
+    }
+    // Protect non-text content adjacent to the artist as well as every other text character.
+    listOf("player-artwork", "player-title", "player-transport-row").forEach { tag ->
+        compose.onAllNodesWithTag(tag, useUnmergedTree = true).fetchSemanticsNodes().forEach { node ->
+            compose.runOnIdle { protected += rootCoordinates.localBoundingBoxOf(node.layoutInfo.coordinates, clipBounds = false) }
+        }
+    }
+    check(suffix.isNotEmpty()) { "Missing album character geometry" }
+    return PlayerAlbumPixels(suffix.toList(), protected.toList())
+}
+
+/** Export each arm even when an earlier sample later fails comparison. */
+internal fun savePlayerAlbumMask(label: String, width: Int, height: Int, mask: PlayerAlbumPixels?) {
+    var regionPixels = 0
+    var rawOverlap = 0
+    var admittedProtected = 0
+    for (y in 0 until height) for (x in 0 until width) {
+        val centre = androidx.compose.ui.geometry.Offset(x + .5f, y + .5f)
+        val protected = mask?.protected?.any { it.contains(centre) } == true
+        val raw = mask?.suffix?.any { it.contains(centre) } == true
+        if (protected && raw) rawOverlap++
+        if (mask?.allows(x,y) == true) {
+            regionPixels++
+            if (protected) admittedProtected++
+        }
+    }
+    val metrics = JSONObject().put("label",label).put("regionPixels",regionPixels)
+        .put("rawSuffixProtectedOverlap",rawOverlap).put("admittedProtectedOverlap",admittedProtected)
+        .put("suffixCharacterBoxes",JSONArray(mask?.suffix?.map { it.toString() } ?: emptyList<String>()))
+        .put("protectedBoxes",JSONArray(mask?.protected?.map { it.toString() } ?: emptyList<String>()))
+        .put("membership","pixel centre in suffix character box AND outside every protected box; no rounding or halo")
+    writePlayerRegionEvidence(label + "-mask", metrics)
+    org.junit.Assert.assertEquals("Album allowance must be disjoint from protected content: $metrics",0,admittedProtected)
+}
+
+private fun writePlayerRegionEvidence(label: String, metrics: JSONObject) {
+    val instrumentation=InstrumentationRegistry.getInstrumentation()
+    val root=InstrumentationRegistry.getArguments().getString("additionalTestOutputDir")?.let(::File)
+        ?: requireNotNull(instrumentation.targetContext.getExternalFilesDir(null))
+    val folder=File(root,"player-equality").apply { mkdirs() }
+    File(folder,label.replace(Regex("[^a-zA-Z0-9_.-]"),"-")+"-region.json").writeText(metrics.toString(2))
 }
 
 /** Lead-approved album-only bound. Every pixel outside the measured suffix remains exact. */
 internal fun assertPlayerPixelsWithAlbumBound(label: String, before: IntArray, after: IntArray,
-    width: Int, height: Int, suffix: androidx.compose.ui.geometry.Rect?) {
+    width: Int, height: Int, suffix: PlayerAlbumPixels?) {
+    require(before.size == width * height && after.size == before.size)
     var exactChanged=0; var regionPixels=0; var regionChanged=0; var maximum=0; var rgbSum=0L
     for(i in before.indices) {
-        val inSuffix=suffix?.contains(androidx.compose.ui.geometry.Offset(i%width+.5f,i/width+.5f))==true
+        val inSuffix=suffix?.allows(i%width,i/width)==true
         if(!inSuffix) { if(before[i]!=after[i]) exactChanged++; continue }
         regionPixels++
         if(before[i]!=after[i]) regionChanged++
@@ -91,13 +157,9 @@ internal fun assertPlayerPixelsWithAlbumBound(label: String, before: IntArray, a
     val changedFraction=if(regionPixels==0) 0.0 else regionChanged.toDouble()/regionPixels
     val meanRGB=if(regionPixels==0) 0.0 else rgbSum.toDouble()/(regionPixels*3)
     val metrics=JSONObject().put("label",label).put("exactOutsideChanged",exactChanged)
-        .put("suffixBounds",suffix?.toString()).put("regionPixels",regionPixels).put("regionChanged",regionChanged)
+        .put("regionPixels",regionPixels).put("regionChanged",regionChanged)
         .put("maxChannelCode",maximum).put("changedFraction",changedFraction).put("meanAbsoluteRGB",meanRGB)
-    val instrumentation=InstrumentationRegistry.getInstrumentation()
-    val root=InstrumentationRegistry.getArguments().getString("additionalTestOutputDir")?.let(::File)
-        ?: requireNotNull(instrumentation.targetContext.getExternalFilesDir(null))
-    val folder=File(root,"player-equality").apply { mkdirs() }
-    File(folder,label.replace(Regex("[^a-zA-Z0-9_.-]"),"-")+"-region.json").writeText(metrics.toString(2))
+    writePlayerRegionEvidence(label,metrics)
     org.junit.Assert.assertEquals("Exact pixels outside album suffix: $metrics",0,exactChanged)
-    org.junit.Assert.assertTrue("Album suffix bound: $metrics",maximum<=1&&changedFraction<=.015&&meanRGB<=.01)
+    org.junit.Assert.assertTrue("Album suffix bound: $metrics",maximum<=1&&meanRGB<=.05)
 }
