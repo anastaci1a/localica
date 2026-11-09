@@ -101,7 +101,7 @@ internal class MaterialAreaReduction(private val graphics: GraphicsContext) {
         /** Diagnostics only: in DEBUG builds a test may restore the whole pre-#691 None path (bilinear 2:1
          * chain to 1×1, one-tap style into a 1×1 copy) to measure final-output drift against the block-mean
          * path on one device. Only androidTest sets it. Release builds constant-fold [legacyHalvings] to
-         * false, so R8 removes every legacy branch from shipped code. */
+         * false; R8 removes the switch and its accessors. Compose cache reads may retain unreachable legacy helper code. */
         @androidx.annotation.VisibleForTesting
         @Volatile var legacyOverride = false
         val legacyHalvings: Boolean get() = io.github.anastaci1a.localica.BuildConfig.DEBUG && legacyOverride
