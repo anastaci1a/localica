@@ -72,8 +72,8 @@ internal fun LastFmSettings(controller: LastFmController) {
     state.problem?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.testTag("lastfm-problem")) }
     when (tab) {
         0 -> {
+            SettingsLink("Review matches", "Needs review, judgment calls and matched recordings") { tab = 1 }
             if (saved.snapshot != null) {
-                SettingsEntry("Review matches") { SettingsHeading("Matching") }
                 SettingsTextLine(LocalSettingsRowMetrics.current.textStart) { modifier ->
                     Text("${matches.matched} matched · ${matches.review.size} to review", modifier.testTag("lastfm-review-summary"))
                 }
