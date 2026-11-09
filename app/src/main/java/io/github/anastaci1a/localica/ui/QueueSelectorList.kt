@@ -156,8 +156,8 @@ internal fun QueueSelectorList(queues: List<ListeningQueue>, browsedId: String?,
  * alone marks the browsing selection's title. */
 @Composable
 private fun QueueSelectorRow(queue: ListeningQueue, number: Int, chosen: Boolean, playing: Boolean,
-    isPlaying: Boolean, reducedMotion: Boolean, enabled: Boolean, browsing: Boolean, liftAlpha: () -> Float = { 1f },
-    motionPaused: Boolean = false, actionsModifier: Modifier = Modifier, selectionPlacement: Modifier = Modifier,
+    isPlaying: Boolean, reducedMotion: Boolean, enabled: Boolean, browsing: Boolean, actionsModifier: Modifier = Modifier,
+    selectionPlacement: Modifier = Modifier, liftAlpha: () -> Float = { 1f }, motionPaused: Boolean = false,
     onSelect: () -> Unit, onRename: () -> Unit, onDelete: () -> Unit, onOffset: (Int) -> Unit) {
     Surface(shape = Corners.card, color = androidx.compose.ui.graphics.Color.Transparent,
         modifier = Modifier.padding(vertical = 2.dp).selectionLens(chosen, false, itemKey = queue.id,
