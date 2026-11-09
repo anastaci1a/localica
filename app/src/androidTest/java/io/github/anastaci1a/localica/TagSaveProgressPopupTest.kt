@@ -37,7 +37,7 @@ class TagSaveProgressPopupTest {
     private val app get() = target.applicationContext as LocalicaApplication
     private lateinit var owned: HeldTagServiceContext
     private lateinit var controller: TagEditingController
-    private val tracks = (1..2).map { Track("popup-proof:$it", "Before $it", fileName = "$it.mp3", relativePath = "$it.mp3") }
+    private val tracks = (1..2).map { Track("popup-proof:$it", "Before name", fileName = "$it.mp3", relativePath = "$it.mp3") }
 
     @Before fun prepare() {
         owned = HeldTagServiceContext(target)
@@ -67,7 +67,7 @@ class TagSaveProgressPopupTest {
     private fun submit() {
         compose.onNodeWithText("Open test editor").performClick()
         compose.awaitExpectedWindowFocus(compose.onNodeWithTag("tag-editor-sheet", useUnmergedTree = true))
-        compose.onNode(hasSetTextAction() and hasText("Before 1")).performScrollTo().performTextReplacement("Draft name")
+        compose.onNode(hasSetTextAction() and hasText("Before name")).performScrollTo().performTextReplacement("Draft name")
         compose.onNodeWithText("Review changes").performClick()
         compose.onNodeWithText("Save changes").performClick()
         compose.runOnIdle {
