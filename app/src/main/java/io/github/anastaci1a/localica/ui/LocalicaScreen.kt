@@ -159,6 +159,7 @@ fun LocalicaScreen(
     val playerVisible by remember { derivedStateOf { progress.value > 0f } }
     val playerCoversBrowse by remember { derivedStateOf { progress.value >= .5f } }
     val playerFullyOpen by remember { derivedStateOf { progress.value >= .99f } }
+    val browseDrawVisible by remember { derivedStateOf { progress.value < 1f } }
     val queueVisible by remember { derivedStateOf { queueProgress.value > 0f } }
     var queueOpeningRequest by rememberSaveable { mutableLongStateOf(0) }
     // QueueSurface removes its body at the closed endpoint. Keep intent/viewport
@@ -308,7 +309,7 @@ fun LocalicaScreen(
         BrowseSceneColumn({ hasPlayer && playerCoversBrowse }, Modifier.fillMaxSize()
             // The opaque full player covers this entire scene. Keep its composition,
             // scroll state and cached recording, but do not submit hidden pixels.
-            .drawWithContent { if (!hasPlayer || progress.value < 1f) drawContent() }
+            .drawWithContent { if (!hasPlayer || browseDrawVisible) drawContent() }
             .recordFrostedBackdrop(browseBackdrop).background(pageBackground)) {
             TabPager(pager, tabs, Modifier.weight(1f), userScrollEnabled = !expanded) { page ->
             val tab = settings.tabs[page]
