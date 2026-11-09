@@ -78,9 +78,12 @@ internal abstract class KeyedDragState<T : Any, P>(val grid: LazyGridState, priv
     /** The 1-based position an item would take if dropped now (#735); null while no drag is live.
      * Held items share the gap's slot, so numbering stays live through the drag and landing. */
     fun livePosition(key: String): Int? = positions.value?.get(key)
-    /** The resting row's opacity, for both its layer and its selection lift: a dropped item stays
-     * under its card until the handoff, so there is one instance per frame (#735). Read while drawing. */
-    fun restAlpha(key: String): Float = drag?.takeIf { it.dropping && key in it.keys }?.handoff?.value ?: 1f
+    /** Each shown card's drawn opacity, published by the overlay; null when the item has no card. */
+    var cardOpacity: (String) -> Float? = { null }
+    /** A landing row's selection-lift opacity: the complement of its card, so a lifted resting row and
+     * its card are one instance in every frame (#735). Read while drawing. */
+    fun restAlpha(key: String): Float =
+        drag?.takeIf { it.dropping && key in it.keys }?.let { 1f - (cardOpacity(key) ?: 0f).coerceIn(0f, 1f) } ?: 1f
     var optimistic by mutableStateOf<List<T>?>(null)
         private set
     private var optimisticBase: List<String>? = null
