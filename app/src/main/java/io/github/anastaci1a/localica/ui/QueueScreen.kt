@@ -141,7 +141,8 @@ fun QueueScreen(state: QueueUiState, controller: QueueController?, library: Libr
                     onSelect = { controller?.switchTo(it); selector = false }, onRename = { renameId = it },
                     onDelete = { deleting = setOf(it) }, onOffset = { id, offset -> controller?.moveQueue(id, offset) },
                     onMove = { id, before, complete -> controller?.moveQueueBefore(id, before, complete) ?: complete(false) })
-                SideEffect { removeOthersAnchor.face = { Text("Remove all other queues", maxLines = 1, overflow = TextOverflow.Ellipsis) } }
+                SideEffect { removeOthersAnchor.face = { GlassActionButtonFace(AppIcon.ActionTrash, "Remove all other queues",
+                    Modifier.fillMaxHeight().wrapContentHeight(Alignment.Top)) } }
                 if (state.library.queues.size > 1) GlassActionButton(AppIcon.ActionTrash, "Remove all other queues",
                     Modifier.padding(horizontal = 12.dp, vertical = 8.dp).glassAnchor(removeOthersAnchor),
                     enabled = state.library.queues.size > 1, onClick = {
