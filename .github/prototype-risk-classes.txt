@@ -450,3 +450,5 @@ io.github.anastaci1a.localica.BrowseMainInputEqualityTest
 io.github.anastaci1a.localica.BrowseMainFrozenInputEqualityTest
 
 io.github.anastaci1a.localica.CollectionHeaderDensityContractTest
+
+io.github.anastaci1a.localica.BrowseCurrentMainReferenceEqualityTest
