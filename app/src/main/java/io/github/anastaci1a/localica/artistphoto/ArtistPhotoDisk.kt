@@ -119,7 +119,7 @@ internal class ArtistPhotoDisk(private val cache: File, private val choices: Fil
         if (previous?.optString("thumbnail") != small) safeImage(previous?.optString("thumbnail"))?.delete()
         journal.delete()
         File(cache, image).setLastModified(now); entry(artist).setLastModified(now)
-        trim()
+        trim(protect = key(artist))
         return requireNotNull(cachedLocal(artist))
     }
 
@@ -179,7 +179,7 @@ internal class ArtistPhotoDisk(private val cache: File, private val choices: Fil
         }
     }
 
-    fun trim() {
+    fun trim(protect: String? = null) {
         if (!cache.exists()) return
         recoverTransactions()
         if (evictable && cache.name != "previews" && File(choices, "photos").exists()) chosen.trim()
@@ -192,8 +192,11 @@ internal class ArtistPhotoDisk(private val cache: File, private val choices: Fil
             val files = listOfNotNull(safeImage(info.optString("image")), safeImage(info.optString("thumbnail")))
             if (files.isNotEmpty() && files.all { it.isFile }) {
                 chosen.cache.mkdirs()
-                files.forEach { write(File(chosen.cache, it.name), it.readBytes()) }
-                write(File(chosen.cache, metadata.name), metadata.readBytes())
+                val committed = chosen.safeImage(chosen.read(File(chosen.cache, metadata.name))?.optString("image"))?.isFile == true
+                if (!committed) {
+                    files.forEach { write(File(chosen.cache, it.name), it.readBytes()) }
+                    write(File(chosen.cache, metadata.name), metadata.readBytes())
+                }
                 files.forEach { it.delete() }; metadata.delete()
             }
         }
@@ -207,6 +210,7 @@ internal class ArtistPhotoDisk(private val cache: File, private val choices: Fil
         for (metadata in entries.sortedBy { it.lastModified() }) {
             if (size <= budget()) break
             if (isVisible(metadata.nameWithoutExtension)) continue
+            if (metadata.nameWithoutExtension == protect) continue
             if (cache.name != "previews" && read(File(choices, metadata.name))?.optString("mode") == "manual") continue
             val info = read(metadata)
             val files = listOfNotNull(safeImage(info?.optString("image")), safeImage(info?.optString("thumbnail")))

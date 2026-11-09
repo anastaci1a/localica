@@ -121,9 +121,11 @@ Artist and Album Artist rows, gallery tiles, Home pins, and the artist page show
 
 Artist photo lookup sends artist and release names to Deezer, then MusicBrainz, Wikidata and Wikimedia Commons when needed. It never uses Last.fm images. Automatic matching requires a normalized artist name and a release title shared with the local library. Missing matches retain the caller's latest album artwork.
 
-Photos refresh after 30 days. Failed attempts wait 24 hours before retrying. A 64 MiB disk cache evicts old pictures while preserving artist match choices. Artist photos settings can clear the cache or refresh the library. No library audio or local listening history is uploaded.
+Photos refresh after 30 days. Failed automatic attempts wait 24 hours before retrying. Artist photos settings offers 128, 512, 1024 and 2048 MiB cache budgets; the default is 512 MiB. Usage and separately retained chosen photos are shown. Eviction follows last display and protects visible photos. Clear cache preserves chosen photos and match choices.
 
-The artist menu can review provider candidates, choose another match, or clear a photo. Clear suppresses automatic lookup until a deliberate re-pick or reset. Artist photo information shows saved Wikimedia attribution and licence information, which Commons pictures require. Photos never change audio files or embedded artwork.
+Acquisition continues through WorkManager after leaving the page or app. The persistent queue resumes interrupted artists after process death. Settings shows waiting artists, the current artist and retryable failures. Consent revocation cancels work; enabling it resumes pending artists. No library audio or local listening history is uploaded.
+
+The artist menu opens a progressive thumbnail grid with current and pending choices. A failed pick keeps the previous photo and offers Retry on its tile. Clear suppresses automatic lookup until a deliberate re-pick or reset. Artist photo information shows saved Wikimedia attribution and licence information, which Commons pictures require. Photos never change audio files or embedded artwork.
 
 ## Optional Last.fm statistics
 
