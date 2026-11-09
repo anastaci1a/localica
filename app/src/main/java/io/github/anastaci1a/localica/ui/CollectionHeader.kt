@@ -39,13 +39,14 @@ import io.github.anastaci1a.localica.library.LibraryGroup
 internal fun collectionIsLight(visual: PlayerVisual): Boolean = visual.palette.isLight()
 
 @Composable
-internal fun CollectionBackdrop(visual: PlayerVisual, artTop: Float, modifier: Modifier = Modifier,
+internal fun CollectionBackdrop(visual: PlayerVisual, artTop: () -> Float, modifier: Modifier = Modifier,
     pinchHeader: CollectionPinchHeader? = null) {
     val light = collectionIsLight(visual)
     val density = androidx.compose.ui.platform.LocalDensity.current
     val inset = WindowInsets.statusBars.getTop(density)
     val parallax = if (LocalReducedMotion.current) 1f else .65f
-    fun pictureTop() = inset + (pinchHeader?.heroTop() ?: artTop) * parallax
+    // Draw/layer-phase reader only: artTop() must not be read in this composition.
+    fun pictureTop() = inset + (pinchHeader?.heroTop() ?: artTop()) * parallax
     SideEffect { pinchHeader?.heroInset = inset.toFloat(); pinchHeader?.parallax = parallax }
     BoxWithConstraints(modifier.then(Modifier.clipToBounds())) {
         val imageHeight = maxWidth
@@ -55,7 +56,7 @@ internal fun CollectionBackdrop(visual: PlayerVisual, artTop: Float, modifier: M
         PlayerBackdrop(palette.copy(top = lerp(palette.top, Color.Black, .4f),
             middle = lerp(palette.middle, Color.Black, .4f), bottom = lerp(palette.bottom, Color.Black, .4f),
             wash = palette.collectionWash ?: palette.wash), Modifier.fillMaxSize(), fullArtBlend = 1f,
-            artHeight = with(density) { imageHeight.toPx() }, artTop = inset + artTop * parallax,
+            artHeight = with(density) { imageHeight.toPx() }, artTop = 0f, // artTopReader supplies the live value
             softness = 1f, artTopReader = ::pictureTop)
         Box(Modifier.matchParentSize().background(if (light) Color.White.copy(alpha = .58f) else Color.Black.copy(alpha = .16f)))
         visual.artwork?.let { image ->
@@ -176,17 +177,24 @@ internal fun ArtistAlbumChoices(albums: List<LibraryGroup>, selectedIds: List<St
 internal fun CollectionBackground(visual: PlayerVisual, grid: LazyGridState, source: FrostedBackdrop,
     reducedMotion: Boolean, modifier: Modifier, pinchHeader: CollectionPinchHeader? = null, artworkResetKey: Any? = null) {
     val scroll = remember(grid) { CollectionScroll() }
-    val items = grid.layoutInfo.visibleItemsInfo.map {
-        CollectionScroll.Item(it.key, it.index, it.offset.y, it.size.height)
+    // Read scroll geometry in draw/layer phases, without caching the stateful tracker.
+    // A presented pinch top must survive retirement even when layoutInfo is unchanged.
+    val top = remember(grid, scroll, pinchHeader) {
+        fun read(): Float {
+            val items = grid.layoutInfo.visibleItemsInfo.map {
+                CollectionScroll.Item(it.key, it.index, it.offset.y, it.size.height)
+            }
+            val ordinary = scroll.update(items, grid.firstVisibleItemIndex == 0)
+            pinchHeader?.ordinaryTop = ordinary
+            pinchHeader?.presentedTop()?.let { scroll.presented(it, items) }
+            return pinchHeader?.heroTop() ?: ordinary
+        }
+        ::read
     }
-    val ordinary = scroll.update(items, grid.firstVisibleItemIndex == 0)
-    pinchHeader?.ordinaryTop = ordinary
-    pinchHeader?.presentedTop()?.let { scroll.presented(it, items) }
-    val top = pinchHeader?.heroTop() ?: ordinary
     key(artworkResetKey) { ArtworkBlend(visual, modifier.onPlaced { pinchHeader?.background = it }.drawWithContent {
         // Read outside the cached scene recording: header progress also owns
         // background invalidation when the source image itself is unchanged.
-        val presentedTop = pinchHeader?.heroTop() ?: top
+        val presentedTop = top()
         val progress = pinchHeader?.motion?.progress?.value
         drawContent()
         if (pinchHeader != null && progress != null) pinchHeader.observeHero(presentedTop, progress)

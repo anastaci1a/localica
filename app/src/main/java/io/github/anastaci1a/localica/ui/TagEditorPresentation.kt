@@ -64,10 +64,10 @@ internal val LocalTagEditorLaunches = staticCompositionLocalOf<TagEditorLaunches
 internal fun presentedTagEdit(): ((List<Track>, (Boolean) -> Unit) -> Unit)? {
     val edit = LocalTagEdit.current ?: return null
     val launches = LocalTagEditorLaunches.current
-    val presentation = currentTagEditorPresentation()
+    val presentation = tagEditorPresentationReader()
     // Nested/custom legacy providers remain authoritative, including tests without a host.
     return if (launches != null && edit === launches.editTags) {
-        { tracks, complete -> launches.openTags(presentation, tracks, complete) }
+        { tracks, complete -> launches.openTags(presentation(), tracks, complete) }
     } else edit
 }
 
@@ -75,8 +75,18 @@ internal fun presentedTagEdit(): ((List<Track>, (Boolean) -> Unit) -> Unit)? {
 internal fun presentedArtworkEdit(): ((Track) -> Unit)? {
     val edit = LocalArtworkEdit.current ?: return null
     val launches = LocalTagEditorLaunches.current
-    val presentation = currentTagEditorPresentation()
+    val presentation = tagEditorPresentationReader()
     return if (launches != null && edit === launches.editArtwork) {
-        { track -> launches.openArtwork(presentation, track) }
+        { track -> launches.openArtwork(presentation(), track) }
     } else edit
+}
+
+/** Player events capture the last composition-applied presentation, even when the caller is quiet. */
+@Composable
+private fun tagEditorPresentationReader(): () -> TagEditorPresentation {
+    val player = LocalPlayerDrawTheme.current
+    val appearance = LocalGlassAppearance.current
+    if (player != null) return { val colors = player.colors; TagEditorPresentation(colors.onSurface, colors, appearance) }
+    val presentation = currentTagEditorPresentation()
+    return { presentation }
 }

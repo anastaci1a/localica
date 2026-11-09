@@ -23,11 +23,11 @@ internal enum class TransportGlyph { Previous, PlayPause, Next }
 
 @Composable
 internal fun TransportButton(glyph: TransportGlyph, playing: Boolean, label: String, onClick: () -> Unit,
-    modifier: Modifier, iconSize: Dp, tint: Color, enabled: Boolean, reducedMotion: Boolean) {
+    modifier: Modifier, iconSize: Dp, tint: Color, enabled: Boolean, reducedMotion: Boolean, tintReader: androidx.compose.ui.graphics.ColorProducer? = null, iconSizeReader: (() -> Dp)? = null) {
     val reduced = rememberEffectiveReducedMotion(reducedMotion || LocalReducedMotion.current)
     val speed = LocalMotionSpeed.current
     val shapes = LocalTransportShapes.current
-    val images by IconPacks.images.collectAsState()
+    val images = currentIconPackImages()
     val icon = when (glyph) {
         TransportGlyph.Previous -> AppIcon.TransportPrevious
         TransportGlyph.Next -> AppIcon.TransportNext
@@ -75,10 +75,11 @@ internal fun TransportButton(glyph: TransportGlyph, playing: Boolean, label: Str
                 }
             }
         }), contentAlignment = Alignment.Center) {
-        Canvas(Modifier.size(iconSize)) {
+        Canvas(if (iconSizeReader == null) Modifier.size(iconSize) else Modifier.liveControlSize(iconSizeReader)) {
             val progress = if (reduced) { if (playing) 1f else 0f } else pause
             val cycle = if (reduced) 0f else travel.value
-            val color = tint.copy(alpha = tint.alpha * opacity)
+            val shownTint = tintReader?.invoke() ?: tint
+            val color = shownTint.copy(alpha = shownTint.alpha * opacity)
             if (morph != null) drawPackPlayPause(progress, color, morph, painter, pausePainter)
             else if (custom) drawTransportPainters(glyph, progress, cycle, color, painter, pausePainter)
             else drawTransportGlyph(glyph, progress, cycle, color, shapes)

@@ -116,7 +116,10 @@ internal fun SeekCancelTarget(state: SeekCancelTargetState, hovered: Boolean, bo
         state.hostSize = it.size
         state.hostOrigin = it.positionInRoot()
     }) {
-        if (motion.alpha > 0f) DragCancelTarget(hovered || state.cancelled, action,
-            Modifier.glassShadowOffset { state.placement }.glassShadowOpacity { motion.alpha }.testTag(tag))
+        if (motion.alpha > 0f) {
+            @Composable fun Target() { DragCancelTarget(hovered || state.cancelled, action,
+                Modifier.glassShadowOffset { state.placement }.glassShadowOpacity { motion.alpha }.testTag(tag)) }
+            Target()
+        }
     }
 }

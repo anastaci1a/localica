@@ -74,6 +74,22 @@ private fun lerpScheme(a: androidx.compose.material3.ColorScheme, b: androidx.co
         outline = mix(a.outline, b.outline), outlineVariant = mix(a.outlineVariant, b.outlineVariant), surfaceTint = mix(a.surfaceTint, b.surfaceTint))
 }
 
+internal fun glassPanelColors(ambient: androidx.compose.material3.ColorScheme, lightMix: Float): androidx.compose.material3.ColorScheme {
+    val light = ambient.takeIf { it.onSurface.red < .5f } ?: LightColors
+    return when {
+        lightMix >= 1f -> GlassDarkColors
+        lightMix <= 0f -> light
+        else -> lerpScheme(light, GlassDarkColors, lightMix)
+    }
+}
+
+/** Historical lerpScheme leaves errors at the light scheme until the full dark endpoint. */
+internal fun glassPanelErrorColor(ambient: androidx.compose.material3.ColorScheme, lightMix: Float, onError: Boolean): Color {
+    val light = ambient.takeIf { it.onSurface.red < .5f } ?: LightColors
+    val colors = if (lightMix >= 1f) GlassDarkColors else light
+    return if (onError) colors.onError else colors.error
+}
+
 /** Popup controls and explicit secondary labels must agree with the material's ink. */
 @Composable
 internal fun GlassPanelTheme(dark: Boolean, content: @Composable () -> Unit) = GlassPanelTheme(if (dark) 1f else 0f, content)
@@ -83,14 +99,10 @@ internal fun GlassPanelTheme(dark: Boolean, content: @Composable () -> Unit) = G
 @Composable
 internal fun GlassPanelTheme(lightMix: Float, content: @Composable () -> Unit) {
     val ambient = MaterialTheme.colorScheme
-    val light = ambient.takeIf { it.onSurface.red < .5f } ?: LightColors
-    val colors = when {
-        lightMix >= 1f -> GlassDarkColors
-        lightMix <= 0f -> light
-        else -> lerpScheme(light, GlassDarkColors, lightMix)
-    }
+    val colors = glassPanelColors(ambient, lightMix)
     MaterialTheme(colorScheme = colors) {
         androidx.compose.runtime.CompositionLocalProvider(
+            LocalPlayerDrawTheme provides null,
             androidx.compose.material3.LocalContentColor provides colors.onSurface,
             androidx.compose.material3.LocalTextStyle provides androidx.compose.material3.LocalTextStyle.current.copy(color = Color.Unspecified),
             content = content)

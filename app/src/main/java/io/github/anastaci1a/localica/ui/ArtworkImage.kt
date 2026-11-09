@@ -1,6 +1,7 @@
 package io.github.anastaci1a.localica.ui
 
 import androidx.compose.animation.core.*
+import io.github.anastaci1a.localica.ui.components.rememberArtworkReveal
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
@@ -28,12 +29,9 @@ internal fun ArtworkImage(artwork: ImageBitmap?, loading: Boolean, modifier: Mod
     val reducedMotion = LocalReducedMotion.current
     val currentTextReveal by rememberUpdatedState(textReveal)
     // The reveal is read only while drawing; the cell never recomposes per animation frame.
-    val reveal = remember { Animatable(if (artwork == null) 0f else 1f) }
     val present = artwork != null
-    LaunchedEffect(present, reducedMotion) {
-        reveal.animateTo(if (present) 1f else 0f, tween(if (reducedMotion) 0 else 300, easing = FastOutSlowInEasing))
-        // The item's text and action finish with the art (#526, #588).
-        if (present) currentTextReveal?.let { it.release(); it.releaseMenu() }
+    val reveal = rememberArtworkReveal(present, reducedMotion) {
+        currentTextReveal?.let { it.release(); it.releaseMenu() }
     }
     // Art that replaces a loading shimmer fades in over that shimmer until the reveal completes (#524).
     // Only known-missing art shows the still placeholder and its icon.
@@ -56,7 +54,7 @@ internal fun ArtworkImage(artwork: ImageBitmap?, loading: Boolean, modifier: Mod
 
 /** Reads the reveal in its own composition, so only this host recomposes when the placeholder is removed. */
 @Composable
-private fun ArtworkPlaceholderHost(artwork: ImageBitmap?, reveal: Animatable<Float, AnimationVector1D>, loading: Boolean,
+private fun ArtworkPlaceholderHost(artwork: ImageBitmap?, reveal: State<Float>, loading: Boolean,
     emptyText: String?, tintUris: List<String>?, modifier: Modifier) {
     val revealed by remember(artwork) { derivedStateOf { artwork != null && reveal.value >= 1f } }
     if (!revealed) {
@@ -120,12 +118,17 @@ private fun ArtworkResolutionBlend(artwork: ImageBitmap, modifier: Modifier,
  * and the pre-catalog viewport omit it and keep the neutral base. */
 @Composable
 internal fun ArtworkPlaceholder(loading: Boolean, modifier: Modifier = Modifier, showIcon: Boolean = true,
-    tintUris: List<String>? = null) {
+    tintUris: List<String>? = null, baseInk: ColorProducer? = null, foregroundInk: ColorProducer? = null,
+    surfaceInk: ColorProducer? = null) {
     val loadingOpacity = LocalLoadingMaterialOpacity.current.coerceIn(0f, 1f)
     // The loading material never reaches the final missing-art fallback (#705).
-    val base = (if (loading) LocalLoadingMaterialColor.current else null) ?: MaterialTheme.colorScheme.surfaceContainer
-    val highlight = MaterialTheme.colorScheme.onSurface.copy(alpha = .065f)
-    val dark = MaterialTheme.colorScheme.surface.luminance() < .5f
+    val override = if (loading) LocalLoadingMaterialColor.current else null
+    val fallbackBase = if (baseInk == null) MaterialTheme.colorScheme.surfaceContainer else Color.Unspecified
+    val fallbackInk = if (foregroundInk == null) MaterialTheme.colorScheme.onSurface else Color.Unspecified
+    val fallbackSurface = if (surfaceInk == null) MaterialTheme.colorScheme.surface else Color.Unspecified
+    val dark by remember(surfaceInk, fallbackSurface) { derivedStateOf {
+        (surfaceInk?.invoke() ?: fallbackSurface).luminance() < .5f
+    } }
     val reducedMotion = LocalReducedMotion.current
     val sharedActivity = LocalLoadingShimmerActivity.current
     if (loading && !reducedMotion && sharedActivity != null) DisposableEffect(sharedActivity) {
@@ -170,12 +173,14 @@ internal fun ArtworkPlaceholder(loading: Boolean, modifier: Modifier = Modifier,
         androidx.compose.foundation.layout.Spacer(Modifier.matchParentSize()
             .then(if (tintUris != null) Modifier.onPlaced { placed[0] = it } else Modifier)
             .drawWithCache {
+            val highlight = (foregroundInk?.invoke() ?: fallbackInk).copy(alpha = .065f)
             val sweep = Brush.linearGradient(listOf(Color.Transparent, highlight, Color.Transparent),
                 start = Offset(-size.width * .6f, 0f), end = Offset(size.width * .6f, size.height))
             val wash = if (tint == null) null else Brush.linearGradient(listOf(Color.Transparent, TintedHighlight, Color.Transparent),
                 start = Offset(-size.width * .6f, 0f), end = Offset(size.width * .6f, size.height))
             onDrawBehind {
                 val phase = if (tint == null) 0f else tintPhase.value
+                val base = override ?: baseInk?.invoke() ?: fallbackBase
                 drawRect(if (tint == null || phase <= 0f) base else lerp(base, tint, phase))
                 progress?.let {
                     val x = size.width * it.value

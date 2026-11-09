@@ -213,7 +213,7 @@ class MotionSubpixelTest {
         compose.setContent { LocalicaTheme { BoxWithConstraints(Modifier.fillMaxSize().background(Color.Green).testTag("window")) {
             scope = rememberCoroutineScope()
             PlayerSurface(state, false, {}, InterfaceSettings(artworkLayout = ArtworkLayout.Floating), progress,
-                {}, {}, {}, {}, {}, {}, visual = visual) { Text("Album-only action") }
+                {}, {}, {}, {}, {}, {}, visual = visual) { ink -> DrawInkText("Album-only action", ink) }
         } } }
         // #678 instrumentation (log only).
         val methodStart = System.nanoTime()

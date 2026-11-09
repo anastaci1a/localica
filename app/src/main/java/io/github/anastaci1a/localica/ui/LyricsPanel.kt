@@ -17,6 +17,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.ColorProducer
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -68,7 +69,10 @@ internal fun LyricsPanel(track: Track?, positionMs: Long, reducedMotion: Boolean
     sampledAtMs: Long = 0, playing: Boolean = false, speed: Float = 1f, delayMs: Int = 0, durationMs: Long? = null,
     contentHeight: Dp? = null, contentOffset: Dp = 0.dp, result: LyricsResult? = rememberLyrics(track),
     sourcesVisible: Boolean? = null, onSourcesDismiss: (() -> Unit)? = null,
-    originPreparation: GlassOriginPreparation? = null, contentAlpha: () -> Float = { 1f }) {
+    originPreparation: GlassOriginPreparation? = null, contentAlpha: () -> Float = { 1f },
+    foreground: ColorProducer? = null, secondary: ColorProducer? = null) {
+    val fallback = if (foreground == null) LocalContentColor.current else androidx.compose.ui.graphics.Color.Unspecified
+    val ink = foreground ?: ColorProducer { fallback }
     val lyricClock by produceState(positionMs, positionMs, sampledAtMs, playing, speed, delayMs, durationMs) {
         do {
             value = lyricPosition(positionMs, sampledAtMs, android.os.SystemClock.elapsedRealtime(), playing, speed, delayMs, durationMs)
@@ -136,18 +140,17 @@ internal fun LyricsPanel(track: Track?, positionMs: Long, reducedMotion: Boolean
                 val sourceAlpha by transition.animateFloat(transitionSpec = { tween(if (reducedMotion) 0 else 300) },
                     label = "Lyric source alpha") { if (it == shown) 1f else 0f }
                 val scene = requireNotNull(LocalLyricsBackdropScene.current)
-                val ink = LocalContentColor.current
                 when (shown) {
                     LyricsPresentation.Loading, LyricsPresentation.Unavailable -> Box(Modifier.fillMaxSize())
                     LyricsPresentation.Missing -> BoxWithConstraints(Modifier.fillMaxSize()) {
                         val stableHeight = contentHeight ?: maxHeight
                         Box(Modifier.fillMaxSize().testTag("lyrics-viewport")
-                            .recordLyricsLayer(scene, { sourceAlpha }) { listOf(presentation, ink, stableHeight, contentOffset) }) {
+                            .recordLyricsLayer(scene, { sourceAlpha }) { listOf(presentation, ink(), stableHeight, contentOffset) }) {
                             Box(Modifier.fillMaxWidth().wrapContentHeight(Alignment.Top, unbounded = true)
                                 .height(stableHeight).offset(y = contentOffset), contentAlignment = Alignment.Center) {
                                 // A prior song's empty state is no longer authoritative once another read starts.
-                                if (presentation == LyricsPresentation.Missing) Icon(appIconPainter(AppIcon.ActionLyrics),
-                                    "No local lyrics", Modifier.size(56.dp).testTag("empty-lyrics"), tint = ink.copy(alpha = .22f))
+                                if (presentation == LyricsPresentation.Missing) DrawInkIcon(appIconPainter(AppIcon.ActionLyrics),
+                                    "No local lyrics", ColorProducer { ink().copy(alpha = .22f) }, Modifier.size(56.dp).testTag("empty-lyrics"))
                             }
                         }
                     }
@@ -159,7 +162,7 @@ internal fun LyricsPanel(track: Track?, positionMs: Long, reducedMotion: Boolean
                         SideEffect { if (shown == presentation) retainedPosition = lyricClock }
                         LyricsLines(shown.source.document, shownPosition, reducedMotion, onSeek,
                             Modifier.fillMaxSize(), sourceAlpha = { sourceAlpha },
-                            contentHeight = contentHeight, contentOffset = contentOffset)
+                            contentHeight = contentHeight, contentOffset = contentOffset, foreground = foreground, secondary = secondary)
                     }
                 }
             }
@@ -170,11 +173,12 @@ internal fun LyricsPanel(track: Track?, positionMs: Long, reducedMotion: Boolean
 @Composable
 internal fun LyricsLines(document: ParsedLyrics, positionMs: Long, reducedMotion: Boolean, onSeek: (Long) -> Unit,
     modifier: Modifier = Modifier, sourceAlpha: () -> Float = { 1f },
-    contentHeight: Dp? = null, contentOffset: Dp = 0.dp) {
+    contentHeight: Dp? = null, contentOffset: Dp = 0.dp,
+    foreground: ColorProducer? = null, secondary: ColorProducer? = null) {
     val scene = LocalLyricsBackdropScene.current
     if (scene == null) {
         LyricsBackdrop(document, modifier) {
-            LyricsLines(document, positionMs, reducedMotion, onSeek, Modifier.fillMaxSize(), sourceAlpha, contentHeight, contentOffset)
+            LyricsLines(document, positionMs, reducedMotion, onSeek, Modifier.fillMaxSize(), sourceAlpha, contentHeight, contentOffset, foreground, secondary)
         }
         return
     }
@@ -183,10 +187,13 @@ internal fun LyricsLines(document: ParsedLyrics, positionMs: Long, reducedMotion
         as android.view.accessibility.AccessibilityManager).isTouchExplorationEnabled }
     var following by rememberSaveable { mutableStateOf(!touchExploration) }
     val active = LrcParser.current(document.lines, positionMs)
-    val selectedInk = MaterialTheme.colorScheme.onSurface
-    val inactiveInk = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f)
+    val fallbackSelected = if (foreground == null) MaterialTheme.colorScheme.onSurface else androidx.compose.ui.graphics.Color.Unspecified
+    val fallbackInactive = if (secondary == null) MaterialTheme.colorScheme.onSurfaceVariant else androidx.compose.ui.graphics.Color.Unspecified
+    val selectedInk = foreground ?: ColorProducer { fallbackSelected }
+    val inactiveInk = ColorProducer { (secondary?.invoke() ?: fallbackInactive).copy(alpha = .55f) }
     val lyricStyle = MaterialTheme.typography.headlineSmall
-    val warningInk = LocalContentColor.current
+    val fallbackWarning = if (foreground == null) LocalContentColor.current else androidx.compose.ui.graphics.Color.Unspecified
+    val warningInk = foreground ?: ColorProducer { fallbackWarning }
     val warningStyle = MaterialTheme.typography.bodySmall
     BoxWithConstraints(modifier) {
         val stableHeight = contentHeight ?: maxHeight
@@ -212,13 +219,13 @@ internal fun LyricsLines(document: ParsedLyrics, positionMs: Long, reducedMotion
         }
         Box(Modifier.fillMaxSize().testTag("lyrics-viewport")
             .recordLyricsLayer(scene, sourceAlpha) {
-                listOf(document, active, selectedInk, inactiveInk, lyricStyle, warningInk, warningStyle,
+                listOf(document, active, selectedInk(), inactiveInk(), lyricStyle, warningInk(), warningStyle,
                     stableHeight, contentOffset, list.firstVisibleItemIndex, list.firstVisibleItemScrollOffset,
                     list.isScrollInProgress)
             }) {
             Column(Modifier.fillMaxWidth().wrapContentHeight(Alignment.Top, unbounded = true)
                 .height(stableHeight).offset(y = contentOffset)) {
-                document.warning?.let { Text(it, style = warningStyle) }
+                document.warning?.let { DrawInkText(it, warningInk, style = warningStyle) }
                 BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
                     // Half the container less half a single-line row above and below: the first and last single-line
                     // lyrics rest centred at the list bounds, and every row is centred when scrolled anchors.offset past it.
@@ -233,8 +240,8 @@ internal fun LyricsLines(document: ParsedLyrics, positionMs: Long, reducedMotion
                             // composed mid-ease is the same colour as its neighbours (#564).
                             val emphasis by animateFloatAsState(if (selected) 1f else 0f,
                                 tween(if (reducedMotion) 0 else 350), label = "Lyric emphasis")
-                            Text(line.text.ifEmpty { LyricPlaceholder }, color = androidx.compose.ui.graphics.lerp(inactiveInk, selectedInk, emphasis),
-                                style = lyricStyle, fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                            DrawInkText(line.text.ifEmpty { LyricPlaceholder }, ColorProducer { androidx.compose.ui.graphics.lerp(inactiveInk(), selectedInk(), emphasis) },
+                                style = lyricStyle.copy(fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium),
                                 modifier = Modifier.fillMaxWidth().semantics { this.selected = document.synced && index == active }
                                     .then(if (line.timeMs != null) Modifier.clickable(interactionSource = null, indication = null,
                                         onClickLabel = "Seek to lyric") { onSeek(line.timeMs); following = true } else Modifier)

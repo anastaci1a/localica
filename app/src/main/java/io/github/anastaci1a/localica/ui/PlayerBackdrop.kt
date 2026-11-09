@@ -99,7 +99,8 @@ internal suspend fun playerPalette(bitmap: android.graphics.Bitmap): PlayerPalet
 internal fun PlayerBackdrop(palette: PlayerPalette, modifier: Modifier = Modifier, fullArtBlend: Float = 0f,
     artTop: Float = 0f, artHeight: Float = 0f, artLeft: Float = 0f, artWidth: Float = 0f, softness: Float = 0f, tone: GlassTone = GlassTone(),
     artTopReader: (() -> Float)? = null,
-    onBackgroundDescriptor: ((PlayerBackdropDescriptor) -> Unit)? = null, ready: Boolean = true) {
+    onBackgroundDescriptor: ((PlayerBackdropDescriptor) -> Unit)? = null, ready: Boolean = true,
+    geometryReader: (() -> BackdropDrawGeometry)? = null) {
     var washProvenance: ToneSnapshotProvenance? = null
     var softWashProvenance: ToneSnapshotProvenance? = null
     var washReceipt: ToneSnapshotReceipt<android.graphics.Bitmap>? = null
@@ -122,9 +123,15 @@ internal fun PlayerBackdrop(palette: PlayerPalette, modifier: Modifier = Modifie
             washProvenance, softWashProvenance, washReceipt, softWashReceipt)
         SideEffect { onBackgroundDescriptor(descriptor) }
     }
-    val paintReady = fullArtBlend <= 0f || (
+    // Geometry affects paint admission as well as Canvas drawing. Observe only its
+    // readiness predicates, retaining the original transition decisions at their crossings.
+    val readiness = remember(geometryReader, fullArtBlend, softness) { derivedStateOf {
+        val geometry = geometryReader?.invoke()
+        ((geometry?.fullArtBlend ?: fullArtBlend) > 0f) to ((geometry?.softness ?: softness) > 0f)
+    } }.value
+    val paintReady = !readiness.first || (
         (palette.wash == null || paintedWashReceipt?.matches(palette.wash, wash, tone) == true) &&
-        (softness <= 0f || palette.softWash == null || paintedSoftReceipt?.matches(palette.softWash, softWash, tone) == true))
+        (!readiness.second || palette.softWash == null || paintedSoftReceipt?.matches(palette.softWash, softWash, tone) == true))
     // #634: what this backdrop draws now. A prepared paint draws exactly as before. Until its replacement is
     // prepared, a drawn paint stays (a grade or tone change never blanks the backdrop). A role whose grade is
     // not known yet (an expansion or first open that began before preparation finished) draws the same art
@@ -146,7 +153,7 @@ internal fun PlayerBackdrop(palette: PlayerPalette, modifier: Modifier = Modifie
         val shown = step.shown ?: return@Canvas
         val from = step.from
         val blend = if (from == null) 1f else ease.value
-        val geometry = BackdropDrawGeometry(fullArtBlend, artTopReader?.invoke() ?: artTop, artHeight, artLeft, artWidth, softness)
+        val geometry = geometryReader?.invoke() ?: BackdropDrawGeometry(fullArtBlend, artTopReader?.invoke() ?: artTop, artHeight, artLeft, artWidth, softness)
         if (from != null && blend < 1f) {
             painter.draw(this, from, geometry)
             drawIntoCanvas { canvas ->
@@ -161,7 +168,7 @@ internal fun PlayerBackdrop(palette: PlayerPalette, modifier: Modifier = Modifie
 /** One complete set of backdrop pixels: the palette, the tone it is drawn with and that tone's prepared washes. */
 private data class BackdropPaint(val palette: PlayerPalette, val tone: GlassTone, val wash: android.graphics.Bitmap?,
     val softWash: android.graphics.Bitmap?, val provisional: Boolean = false)
-private class BackdropDrawGeometry(val fullArtBlend: Float, val artTop: Float, val artHeight: Float, val artLeft: Float,
+internal class BackdropDrawGeometry(val fullArtBlend: Float, val artTop: Float, val artHeight: Float, val artLeft: Float,
     val artWidth: Float, val softness: Float)
 
 /** Pure retention: the shown paint, and the provisional paint it eases from once the graded one is prepared. */

@@ -106,9 +106,17 @@ internal enum class AppIcon(val id: String, @DrawableRes val builtin: Int) {
 /** The one resolver: the active pack's mask for this icon, otherwise the built-in vector. */
 @Composable
 internal fun appIconPainter(icon: AppIcon): Painter {
-    val images by IconPacks.images.collectAsState()
+    val images = currentIconPackImages()
     return packIconPainter(icon, images.masks[icon.id], images.vectors[icon.id])
 }
+
+/** The screen root collects the pack images once; every icon site then reads this local instead of
+ * starting its own flow collection (a lazy row's action icon used to pay for one on each entry). */
+internal val LocalIconPackImages = androidx.compose.runtime.compositionLocalOf<io.github.anastaci1a.localica.icons.IconPackImages?> { null }
+
+@Composable
+internal fun currentIconPackImages(): io.github.anastaci1a.localica.icons.IconPackImages =
+    LocalIconPackImages.current ?: IconPacks.images.collectAsState().value
 
 /** Explicit pack preview; never resolves through the currently selected pack. */
 @Composable

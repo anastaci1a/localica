@@ -18,7 +18,7 @@ import io.github.anastaci1a.localica.R
  * independent clocks. Rejoining follows the same geometry in reverse. */
 @Composable
 internal fun LyricsHeaderActions(lyricsOpen: Boolean, reveal: Float, anchor: GlassAnchor,
-    preparation: GlassOriginPreparation, onShow: () -> Unit, onSources: () -> Unit, onHide: () -> Unit) {
+    preparation: GlassOriginPreparation, onShow: () -> Unit, onSources: () -> Unit, onHide: () -> Unit, revealReader: (() -> Float)? = null) {
     val contacts = remember(anchor) { GlassSplitContact(anchor.contact) }
     fun horizontal(shape: GlassShape, contact: GlassContact) =
         if (contact.vertical) shape.copy(strain = -shape.strain) else shape
@@ -41,8 +41,8 @@ internal fun LyricsHeaderActions(lyricsOpen: Boolean, reveal: Float, anchor: Gla
     }
     // A fast source tap can finish the still-growing two-action header without
     // substituting a full-width pill at the beginning of preparation.
-    val expanded = maxOf(reveal, (progress * 2f).coerceIn(0f, 1f))
-    val width = CompactControlSize * (1f + expanded + gap / 6f)
+    fun expanded() = maxOf(revealReader?.invoke() ?: reveal, (progress * 2f).coerceIn(0f, 1f))
+    val rightVisible by remember(reveal, revealReader, progress) { derivedStateOf { expanded() > 0f } }
     val silhouette = rememberSplitPillSilhouette(progress = { preparation.progress })
     val shadow = rememberGlassSilhouette { size ->
         val p = preparation.progress
@@ -88,18 +88,18 @@ internal fun LyricsHeaderActions(lyricsOpen: Boolean, reveal: Float, anchor: Gla
             Icon(appIconPainter(AppIcon.ActionEyeOff), null, Modifier.size(24.dp), tint = foreground)
         }
     }
-    Box(Modifier.width(width).height(CompactControlSize).preparedOrigin(preparation, progress)
+    Box(Modifier.liveControlWidth { CompactControlSize * (1f + expanded() + gap / 6f) }.height(CompactControlSize).preparedOrigin(preparation, progress)
         .testTag("player-lyrics-pill").silhouetteGlassShadow(shadow)) {
         if (!separated) {
             LiquidGlassSurface(Modifier.fillMaxSize(), silhouette = silhouette, shadow = false,
                 sharedContact = contacts.joined, depthScale = RaisedGlassDepthScale) {
                 Box(Modifier.align(Alignment.CenterStart).size(CompactControlSize).glassAnchor(anchor)) { leftAction() }
-                if (expanded > 0f) {
+                if (rightVisible) {
                     GlassPillDivider(Modifier.align(Alignment.Center).graphicsLayer {
-                        alpha = ((expanded - .4f) / .6f).coerceIn(0f, 1f) * (1f - progress * 2f)
+                        alpha = ((expanded() - .4f) / .6f).coerceIn(0f, 1f) * (1f - progress * 2f)
                     })
                     Box(Modifier.align(Alignment.CenterEnd).size(CompactControlSize)
-                        .graphicsLayer { alpha = ((expanded - .25f) / .75f).coerceIn(0f, 1f) }
+                        .graphicsLayer { alpha = ((expanded() - .25f) / .75f).coerceIn(0f, 1f) }
                         .then(if (!lyricsOpen) Modifier.clearAndSetSemantics {} else Modifier)) { rightAction() }
                 }
             }

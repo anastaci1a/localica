@@ -19,3 +19,23 @@ internal fun Modifier.scalePlayerText(scale: Float): Modifier = layout { measura
         }
     }
 }
+
+/** Read scale with the same full-size font and width rounding during measurement. */
+internal fun Modifier.scalePlayerText(scale: () -> Float): Modifier = layout { measurable, constraints ->
+    val value = scale()
+    val width = (constraints.maxWidth / value).roundToInt()
+    val text = measurable.measure(constraints.copy(minWidth = width, maxWidth = width, minHeight = 0))
+    layout(constraints.maxWidth, constraints.constrainHeight((text.height * value).roundToInt())) {
+        text.placeWithLayer(0, 0) {
+            scaleX = value; scaleY = value; transformOrigin = TransformOrigin(0f, 0f)
+        }
+    }
+}
+
+/** Match offset(x,y).width(width), including RTL placement and independent rounding. */
+internal fun Modifier.playerTextBounds(x: () -> androidx.compose.ui.unit.Dp, y: () -> androidx.compose.ui.unit.Dp,
+    width: () -> androidx.compose.ui.unit.Dp): Modifier = layout { measurable, constraints ->
+    val w = width().roundToPx().coerceIn(constraints.minWidth, constraints.maxWidth)
+    val child = measurable.measure(constraints.copy(minWidth = w, maxWidth = w))
+    layout(child.width, child.height) { child.placeRelative(x().roundToPx(), y().roundToPx()) }
+}

@@ -211,7 +211,7 @@ internal fun DrawScope.withBackdropRegistration(registration: BackdropRegistrati
 
 @Composable
 internal fun rememberFrostedBackdrop(key: Any?, enabled: Boolean = true, dark: Boolean = true, lightMix: Float? = null,
-    retainRaster: Boolean = true): FrostedBackdrop {
+    retainRaster: Boolean = true, enabledReader: (() -> Boolean)? = null): FrostedBackdrop {
     val layer = rememberGraphicsLayer()
     val runtime = LocalGlassRendererRuntime.current
     val source = remember(layer, runtime) { FrostedBackdrop(layer, dark, runtime) }
@@ -230,8 +230,10 @@ internal fun rememberFrostedBackdrop(key: Any?, enabled: Boolean = true, dark: B
     // consumers average their own footprint without blur or mesh preparation.
     val thumbnail = if (Build.VERSION.SDK_INT < 33) rememberGraphicsLayer() else null
     val areaReduction = if (Build.VERSION.SDK_INT < 33) rememberMaterialAreaReduction() else null
-    LaunchedEffect(source, key, enabled, sampled, graphicsContext) {
-        if (thumbnail != null && enabled && sampled) {
+    FrostedReadbackScope {
+    val readbackEnabled = enabledReader?.invoke() ?: enabled
+    LaunchedEffect(source, key, readbackEnabled, sampled, graphicsContext) {
+        if (thumbnail != null && readbackEnabled && sampled) {
             source.recordedFrames.trySend(Unit)
             var completedRecording = -1
             var completedRevision = -1
@@ -269,6 +271,7 @@ internal fun rememberFrostedBackdrop(key: Any?, enabled: Boolean = true, dark: B
                 } finally { ticket?.close() }
             }
         }
+    }
     }
     return source
 }
@@ -468,3 +471,7 @@ private val frostGrain: ImageBitmap by lazy {
         }, 0, 384, 0, 0, 384, 768)
     }.asImageBitmap()
 }
+
+/** Read effect admission in a restart owner without subscribing the source-creating caller. */
+@Composable
+private fun FrostedReadbackScope(content: @Composable () -> Unit) { content() }

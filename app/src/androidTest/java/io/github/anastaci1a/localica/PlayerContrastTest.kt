@@ -93,8 +93,8 @@ class PlayerContrastTest {
             PlayerSurface(io.github.anastaci1a.localica.playback.PlaybackState(title = "Contrast"), true, {},
                 io.github.anastaci1a.localica.navigation.InterfaceSettings(reducedMotion = true),
                 remember { androidx.compose.animation.core.Animatable(1f) }, {}, {}, {}, {}, {}, {},
-                visual = visuals[if (lightArtwork) 1 else 0], backgroundPolarity = polarity) {
-                playerInk = MaterialTheme.colorScheme.onSurface
+                visual = visuals[if (lightArtwork) 1 else 0], backgroundPolarity = polarity) { ink ->
+                playerInk = ink()
                 if (popup) GlassDialog({ popup = false }) {
                     popupInk = LocalContentColor.current
                     popupSecondary = MaterialTheme.colorScheme.onSurfaceVariant

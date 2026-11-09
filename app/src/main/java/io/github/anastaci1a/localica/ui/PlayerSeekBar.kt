@@ -46,7 +46,8 @@ internal fun PlayerSeekBar(value: Float, onValueChange: (Float) -> Unit, valueRa
     onValueChangeFinished: () -> Unit, enabled: Boolean, modifier: Modifier = Modifier,
     cancelBounds: Rect? = null, onCancel: () -> Unit = {}, onDrag: (Boolean, Boolean) -> Unit = { _, _ -> },
     liveValue: Float = value, cancelTarget: (() -> Rect?)? = null) {
-    val ink = androidx.compose.material3.LocalContentColor.current
+    val fallbackInk = androidx.compose.material3.LocalContentColor.current
+    val playerTheme = LocalPlayerDrawTheme.current
     val sink by rememberUpdatedState(rememberControlHaptics())
     val feedback = remember { SeekControlHaptics(ControlHaptics { sink.emit(it) }) }
     val interaction = remember { SeekInteractionSource(MutableInteractionSource(), feedback) }
@@ -198,6 +199,7 @@ internal fun PlayerSeekBar(value: Float, onValueChange: (Float) -> Unit, valueRa
             true
         }.focusable(enabled)) {
         Canvas(Modifier.fillMaxWidth().height(40.dp).align(androidx.compose.ui.Alignment.Center)) {
+            val ink = playerTheme?.foreground?.invoke() ?: fallbackInk
             val h = thickness.toPx()
             val top = (size.height - h) / 2
             drawRoundRect(ink.copy(alpha = .2f), Offset(0f, top), Size(size.width, h), CornerRadius(h / 2))

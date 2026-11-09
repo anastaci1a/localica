@@ -28,13 +28,13 @@ import io.github.anastaci1a.localica.browse.*
 @Composable
 internal fun BrowseItemLayout(item: BrowserItem, style: BrowseStyle, geometry: BrowseCellGeometry,
     lookahead: LookaheadScope, reducedMotion: Boolean, menu: @Composable (Boolean) -> Unit, trackNumber: String? = null, pinch: BrowsePinchMotion? = null, artworkAnchor: GlassAnchor? = null, showInformation: Boolean = true, inheritedInformation: Map<io.github.anastaci1a.localica.navigation.MediaKind, BrowseStyle> = emptyMap(), itemIndex: Int = 0, loadingReveal: BrowseLoadingCell? = null, artistOnlyLoading: Boolean = false, mutablePosition: Int? = null,
-    outline: MediaItemOutlineHolder? = null) {
+    outline: MediaItemOutlineHolder? = null, endpointMeasurer: androidx.compose.ui.text.TextMeasurer? = null) {
     val gallery = style.presentation != Presentation.List
     val from = pinch?.visualSource
     val geometryClock = pinch?.progress.takeIf { from != null }
     val geometryProgress = remember(geometryClock) { { geometryClock?.value ?: 1f } }
     val progress = geometryProgress()
-    val measureItem = rememberBrowseItemMeasure(item, trackNumber, showInformation, inheritedInformation, itemIndex, mutablePosition)
+    val measureItem = rememberBrowseItemMeasure(item, trackNumber, showInformation, inheritedInformation, itemIndex, mutablePosition, endpointMeasurer)
     val foreground = androidx.compose.material3.LocalContentColor.current
     val secondary = MaterialTheme.colorScheme.onSurfaceVariant
     if (pinch != null) {
@@ -49,8 +49,8 @@ internal fun BrowseItemLayout(item: BrowserItem, style: BrowseStyle, geometry: B
     // radius in the same layout pass without recomposing or changing artwork identity.
     val artCorner = remember { mutableFloatStateOf(0f) }
     val duration = if (reducedMotion || from != null || loadingReveal != null) 0 else 350
-    val artist = item.ref.kind in setOf(io.github.anastaci1a.localica.navigation.MediaKind.Artist,
-        io.github.anastaci1a.localica.navigation.MediaKind.AlbumArtist)
+    val artist = item.ref.kind == io.github.anastaci1a.localica.navigation.MediaKind.Artist ||
+        item.ref.kind == io.github.anastaci1a.localica.navigation.MediaKind.AlbumArtist
     val loadingInformation = showInformation && style.extraInfo != ExtraInfo.None
     val infoLine = MaterialTheme.typography.bodySmall.lineHeight
     val galleryLoadingText = if (gallery && loadingReveal != null) rememberGalleryLoadingTextMetrics(style, geometry.columns) else null
@@ -69,7 +69,7 @@ internal fun BrowseItemLayout(item: BrowserItem, style: BrowseStyle, geometry: B
     SideEffect { if (numberLabel != null) retainedNumberLabel = numberLabel }
     val numberAlpha = browseViewAlpha(numbered(style), from?.let(::numbered), progress, reducedMotion)
     fun artwork(value: BrowseStyle) = !numbered(value) && (value.presentation != Presentation.List ||
-        value.listSize !in setOf(ListSize.Small, ListSize.Smallest))
+        value.listSize != ListSize.Small && value.listSize != ListSize.Smallest)
     val artworkAlpha = browseViewAlpha(artwork(style), from?.let(::artwork), progress, reducedMotion)
     val menuAlpha = browseViewAlpha(!gallery, from?.let { it.presentation == Presentation.List }, progress, reducedMotion)
     // The viewport applies distance-aware row visibility to both global passes.
@@ -88,7 +88,7 @@ internal fun BrowseItemLayout(item: BrowserItem, style: BrowseStyle, geometry: B
     Layout(modifier = Modifier.fillMaxWidth().then(if (pinch != null) Modifier.retainPinchText(item.key, pinch) else Modifier)
         .graphicsLayer { alpha = incomingAlpha }, content = {
         Box(Modifier.morph().then(if (gallery && artworkAnchor != null) Modifier.contextMenuAnchor(artworkAnchor,
-            item.ref.kind in setOf(io.github.anastaci1a.localica.navigation.MediaKind.Artist, io.github.anastaci1a.localica.navigation.MediaKind.AlbumArtist)) else Modifier).testTag("browse-art-${item.key}")) {
+            artist) else Modifier).probeTag("browse-art-${item.key}")) {
             if (numberAlpha > 0f) Text(numberLabel ?: retainedNumberLabel.orEmpty(), Modifier.fillMaxSize().graphicsLayer { alpha = numberAlpha * (loadingReveal?.alpha ?: 1f) }.wrapContentSize(),
                 color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
             if (artworkAlpha > 0f || artwork(style) || from?.let(::artwork) == true)
@@ -103,13 +103,13 @@ internal fun BrowseItemLayout(item: BrowserItem, style: BrowseStyle, geometry: B
         // Lazy reuse retains animateBounds' previous dimensions. Applying that tween to a
         // paragraph reveals/reflows it across successive widths when a new row enters.
         // Measure ordinary text at its final width; explicit pinch text owns its own motion.
-        Box(Modifier.reveal().artworkTextReveal(gatedText, { titleLayout }, { artCorner.floatValue }).testTag("browse-text-${item.key}")) {
+        Box(Modifier.reveal().artworkTextReveal(gatedText, { titleLayout }, { artCorner.floatValue }).probeTag("browse-text-${item.key}")) {
             if (measureEndpoints != null) BrowsePinchText(titleParagraph, item.title, geometryProgress)
             else Text(item.title, style = MaterialTheme.typography.titleMedium.copy(fontSize = titleSize.sp, lineHeight = titleLine.sp,
                 fontWeight = if (numbered(style)) androidx.compose.ui.text.font.FontWeight.Normal else MaterialTheme.typography.titleMedium.fontWeight),
                 maxLines = style.browseTitleLines(), overflow = TextOverflow.Ellipsis, onTextLayout = { titleLayout = it })
         }
-        Box(Modifier.reveal().artworkTextReveal(gatedText, { informationLayout }, { artCorner.floatValue }, loadingInformation).testTag("browse-info-${item.key}")) {
+        Box(Modifier.reveal().artworkTextReveal(gatedText, { informationLayout }, { artCorner.floatValue }, loadingInformation).probeTag("browse-info-${item.key}")) {
             if (measureEndpoints != null) BrowsePinchText(informationParagraph,
                 if (showInformation) item.information(style, inheritedInformation) else null, geometryProgress,
                 if (trailing(style)) MaterialTheme.colorScheme.onSurfaceVariant else androidx.compose.ui.graphics.Color.Unspecified)
@@ -128,7 +128,7 @@ internal fun BrowseItemLayout(item: BrowserItem, style: BrowseStyle, geometry: B
         Box(Modifier.morph().reveal().then(if (menuDrawn) Modifier.graphicsLayer { alpha = menuAlpha * textReveal.menuAlpha(artworkAlpha) } else Modifier).then(if (gallery)
             // Keep the layout witness inside the clear boundary; a later testTag
             // modifier would be cleared along with the outgoing action semantics.
-            Modifier.clearAndSetSemantics { testTag = menuTag } else Modifier.testTag(menuTag))) { menu(menuDrawn && menuAlpha > 0f && menuRevealed) }
+            Modifier.clearAndSetSemantics { testTag = menuTag } else Modifier.probeTag(menuTag))) { menu(menuDrawn && menuAlpha > 0f && menuRevealed) }
         if (loadingReveal != null) {
         Box(Modifier.artShape().testTag("browse-loading-art-${item.key}")) {
             BrowseLoadingShape(Modifier.fillMaxSize(), { 0f }) { 1f - (loadingReveal?.alpha ?: 1f) }

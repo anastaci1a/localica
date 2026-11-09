@@ -96,3 +96,10 @@ internal fun DrawScope.drawMotionImage(image: ImageBitmap, srcOffset: IntOffset,
         }
     }
 }
+
+/** The same whole-pixel edge rounding, with geometry read during measurement. */
+internal fun Modifier.motionBounds(rect: androidx.compose.ui.unit.Density.() -> Rect): Modifier = layout { measurable, constraints ->
+    val pixels = motionPixelRect(rect())
+    val placeable = measurable.measure(constraints.constrain(pixels.constraints()))
+    layout(placeable.width, placeable.height) { placeable.placeRelative(pixels.left, pixels.top) }
+}

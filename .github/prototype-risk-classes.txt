@@ -444,3 +444,18 @@ io.github.anastaci1a.localica.NoneRealAppWalkTest
 io.github.anastaci1a.localica.LyricsReturnBoundsTest
 
 io.github.anastaci1a.localica.IconOpticalCentringTest
+io.github.anastaci1a.localica.PlayerDeferredFrameEqualityTest
+io.github.anastaci1a.localica.ArtworkSwipeWidthBoundaryTest
+io.github.anastaci1a.localica.MarqueeDeferredLayoutEqualityTest
+
+io.github.anastaci1a.localica.DrawInkEqualityTest
+
+io.github.anastaci1a.localica.ArtworkRevealOwnerEqualityTest
+
+io.github.anastaci1a.localica.PlayerLoadingThemeEqualityTest
+io.github.anastaci1a.localica.PlayerThemeFrameEqualityTest
+
+io.github.anastaci1a.localica.ControlLayoutReaderEqualityTest
+io.github.anastaci1a.localica.PlayerThemePresentationEqualityTest
+
+io.github.anastaci1a.localica.BrowsePlayerCompositionTest

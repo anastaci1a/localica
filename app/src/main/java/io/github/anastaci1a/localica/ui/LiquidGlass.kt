@@ -192,6 +192,8 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
     silhouette: GlassSilhouette? = null, sharedContact: GlassContact? = null,
     contactPresentation: (() -> GlassShape)? = null,
     contactAdmission: () -> Boolean = { true },
+    cornerRadiusReader: (() -> Dp?)? = null, frostProgressReader: (() -> Float)? = null,
+    depthScaleReader: (() -> Float)? = null,
     content: (@Composable BoxScope.() -> Unit)? = null) {
     val renderer = currentGlassRendererGeneration()
     val drawObserver = LocalGlassSurfaceDrawObserver.current
@@ -211,7 +213,9 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
     // scrolls beneath it, and no GPU readback is needed to choose its foreground.
     val lightMix = inkOverride?.let { if (it.luminance() > .5f) 1f else 0f } ?: (source?.lightMix ?: 0f)
     val dark = lightMix >= .5f
-    val frost = frostProgress.coerceIn(0f, 1f)
+    fun frost() = (frostProgressReader?.invoke() ?: frostProgress).coerceIn(0f, 1f)
+    fun radius() = cornerRadiusReader?.invoke() ?: cornerRadius
+    fun depth() = depthScaleReader?.invoke() ?: depthScale
     val panel = panelProgress.coerceIn(0f, 1f)
     val tone = GlassTone.mixed(appearance.contrast, appearance.contrastWeight, lightMix)
     val coatingLightMix = panelDark?.let { if (it) 1f else 0f } ?: lightMix
@@ -220,13 +224,17 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
     val anchor = modifier.glassSurfaceAnchor()
     val contact = rememberGlassContact(anchor?.contact ?: sharedContact)
     val contactShape = contactPresentation ?: { contact.body.value }
-    val surfaceClip = remember(silhouette, cornerRadius) {
+    val surfaceClip = remember(silhouette, cornerRadius, cornerRadiusReader) {
         silhouette?.let { outline -> androidx.compose.foundation.shape.GenericShape { extent, _ ->
             addPath(outline.frame(extent).path)
-        } } ?: cornerRadius?.let { RoundedCornerShape(it) } ?: CircleShape
+        } } ?: if (cornerRadiusReader != null) object : androidx.compose.ui.graphics.Shape {
+            override fun createOutline(size: Size, layoutDirection: androidx.compose.ui.unit.LayoutDirection, density: androidx.compose.ui.unit.Density): androidx.compose.ui.graphics.Outline =
+                (radius()?.let { RoundedCornerShape(it) } ?: CircleShape).createOutline(size, layoutDirection, density)
+        } else cornerRadius?.let { RoundedCornerShape(it) } ?: CircleShape
     }
     SideEffect { if (anchor != null) {
         anchor.source = source; anchor.cornerRadius = cornerRadius; anchor.depthScale = depthScale
+        anchor.cornerRadiusReader = cornerRadiusReader; anchor.depthScaleReader = depthScaleReader
         anchor.contact.state.impulseScale = kotlin.math.sqrt(96f * view.resources.displayMetrics.density / surfaceSize.height.coerceAtLeast(1)).coerceIn(1f, 1.8f)
     } }
     val lens = remember { lazy { if (Build.VERSION.SDK_INT >= 33) LensRenderer() else null } }
@@ -240,36 +248,41 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
         scale(shape.scaleX(contact.vertical), shape.scaleY(contact.vertical)) { this@drawWithContent.drawContent() }
     } else Modifier)
         .then(if (!shadow) Modifier else if (silhouette != null) Modifier.silhouetteGlassShadow(silhouette)
-            else Modifier.surfaceGlassShadow(cornerRadius, anchor))
+            else Modifier.surfaceGlassShadow(cornerRadius, anchor, cornerRadiusReader))
         .clip(surfaceClip)
         .backdropLocation(location).onGloballyPositioned { surfaceSize = it.size }, propagateMinConstraints = true) {
         val density = androidx.compose.ui.platform.LocalDensity.current
-        val blur = with(density) { 22.dp.toPx() } * (appearance.blur + (1f - appearance.blur) * frost)
+        fun blur() = with(density) { 22.dp.toPx() } * (appearance.blur + (1f - appearance.blur) * frost())
         val padding = with(density) { 32.dp.toPx() }
         if (visible && source != null && Build.VERSION.SDK_INT >= 33) {
             // Crossing into panel scattering must not swap backing resolution in
             // one frame. Clear glass stays sharp; visible blur gradually permits
             // the cheaper half-resolution recording during the same morph.
-            val scattering = ((blur - 1f) / 5f).coerceIn(0f, 1f)
-            val resolution = 1f - .5f * scattering * scattering * (3f - 2f * scattering)
-            FilteredBackdrop(Modifier.matchParentSize(), source, location, resolution, padding,
-                homeSource, homeWeight, MaterialAverageStyle(appearance.whiteTint * (1f - panel), tone), homeBounds, homeFootprint, noneAtlasInput) { extent, resolution, flatWeight ->
+            fun resolution(): Float {
+                val scattering = ((blur() - 1f) / 5f).coerceIn(0f, 1f)
+                return 1f - .5f * scattering * scattering * (3f - 2f * scattering)
+            }
+            FilteredBackdrop(Modifier.matchParentSize(), source, location, 1f, padding,
+                homeSource = homeSource, homeWeight = homeWeight,
+                average = MaterialAverageStyle(appearance.whiteTint * (1f - panel), tone),
+                homeBounds = homeBounds, homeFootprint = homeFootprint,
+                noneAtlasInput = noneAtlasInput, resolutionReader = ::resolution) { extent, resolution, flatWeight ->
                 val pad = padding * resolution
-                val radius = (cornerRadius?.let { with(density) { it.toPx() } }?.times(resolution)
+                val radius = (radius()?.let { with(density) { it.toPx() } }?.times(resolution)
                     ?: ((extent.minDimension - 2 * pad) / 2)).coerceAtLeast(0f)
                 val thickness = body().thickness * (if (pressFeedback || anchor != null) contactShape().thickness else 1f)
                 val outline = silhouette?.frame(Size(extent.width - 2 * pad, extent.height - 2 * pad))
                 if (Build.VERSION.SDK_INT >= 33) lens.value?.effect(
                     outline?.geometry?.let { it.copy(bounds = it.bounds.translate(Offset(pad, pad))) }
                         ?: LensGeometry(androidx.compose.ui.geometry.Rect(pad, pad, extent.width - pad, extent.height - pad), radius),
-                    blur * resolution,
-                    appearance.depth * depthScale * thickness,
+                    blur() * resolution,
+                    appearance.depth * depth() * thickness,
                     power = refraction, whiteTint = appearance.whiteTint * (1f - panel), illumination = 1f - flatWeight,
                     flattening = ((1f - thickness) / .18f).coerceIn(0f, 1f), tone = tone,
                     map = outline?.field, origin = Offset(pad, pad), fieldWeight = outline?.description?.fieldWeight ?: 1f,
                     circles = outline?.description?.circles?.let { (a, b) -> a + Offset(pad, pad) to b + Offset(pad, pad) },
                     splitInner = outline?.description?.splitInner)
-                else if (blur > 0f) BlurEffect(blur * resolution, blur * resolution, TileMode.Clamp) else null
+                else if (blur() > 0f) BlurEffect(blur() * resolution, blur() * resolution, TileMode.Clamp) else null
             }
         }
 
@@ -283,7 +296,7 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
             val outline = silhouette?.frame(size)
             val splitRim = outline?.description?.rimSplit ?: 0f
             val bounds = androidx.compose.ui.geometry.Rect(Offset.Zero, size)
-            val radius = cornerRadius?.toPx() ?: size.minDimension / 2f
+            val radius = radius()?.toPx() ?: size.minDimension / 2f
             // Blend the control finish into the shared panel finish during the morph.
             // Flat panel walls have constant normals; diagonal glints stay on corners.
             val panelRimWeight = if (popupRim == null) 0f else panel
@@ -318,9 +331,9 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
                         outline?.geometry?.bounds?.surfaceDrawScalars(),
                         source.surfaceDrawSource(location, size), homeSource.surfaceDrawSource(location, size),
                         ink.toArgb(), inkOverride != null,
-                        dark, coatingDark, tone.trim, tone.weight, tint.toArgb(), panel, frost,
+                        dark, coatingDark, tone.trim, tone.weight, tint.toArgb(), panel, frost(),
                         // Supplied reader sampled here, NOT the private filter's admitted/clamped blend.
-                        homeWeight(), appearance.blur, appearance.whiteTint, appearance.depth, depthScale, refraction,
+                        homeWeight(), appearance.blur, appearance.whiteTint, appearance.depth, depth(), refraction,
                         shadow, shadows.shadowStrength, shadows.shadowSpread,
                         surfaceDrawIdentity(observedShadowGroup),
                         anchor?.shadowInModal, silhouette != null, lightMix, coatingLightMix))
