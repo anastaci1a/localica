@@ -29,6 +29,9 @@ private fun ease(a: IntSize, b: IntSize, p: Float) = IntSize((a.width + (b.width
  * instance's recording. Slots write only plain fields in layout and draw, so nothing here invalidates. */
 @Stable class MorphSlots internal constructor(private val expansion: ExpansionView,private val bounds: ()->MotionRectView?) {
     private val phase get()=expansion.phase
+    internal var expandedRest by mutableStateOf(false)
+        private set
+    internal fun settled(owner: ExpandCollapse?) { expandedRest = owner?.expanded == true && owner.retirementReady }
     internal class Slot { val frames = arrayOfNulls<LayoutCoordinates>(2); val views = arrayOfNulls<android.view.View>(2); val screenFrames = arrayOfNulls<Rect>(2); val sizes = arrayOf(IntSize.Zero, IntSize.Zero)
         val ink = arrayOf(Color.Unspecified, Color.Unspecified); var layer: GraphicsLayer? = null; var drawn = IntSize.Zero }
     internal val slots = mutableMapOf<Any, Slot>()
@@ -140,5 +143,13 @@ private fun ease(a: IntSize, b: IntSize, p: Float) = IntSize((a.width + (b.width
 
 @Composable fun rememberMorphSlots(expansion: ExpansionView,bounds: ()->MotionRectView?): MorphSlots {
     val latest by rememberUpdatedState(bounds)
-    return remember(expansion) { MorphSlots(expansion) { latest() } }
+    val slots = remember(expansion) { MorphSlots(expansion) { latest() } }
+    DisposableEffect(slots, expansion) {
+        val owner = expansion as? ExpandCollapse
+        val lifecycle: (Boolean) -> Unit = { slots.settled(owner) }
+        slots.settled(owner)
+        owner?.lifecycle?.add(lifecycle)
+        onDispose { owner?.lifecycle?.remove(lifecycle) }
+    }
+    return slots
 }

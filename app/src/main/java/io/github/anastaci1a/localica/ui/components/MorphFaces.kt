@@ -47,11 +47,10 @@ import io.github.anastaci1a.localica.ui.engine.*
 internal class MorphHost(val slots: MorphSlots) {
     // Slots may skip composition with the same key/face. Observe the target so the live instance leaves the outgoing, semantics-cleared face.
     var expanded by mutableStateOf(false)
-    var expandedRest by mutableStateOf(false)
     var shared: @Composable SharedScope.(Any) -> Unit by mutableStateOf({})
     private val live = object : SharedScope {
         override val progress = slots.progress
-        override val restingExpanded get() = expandedRest
+        override val restingExpanded get() = slots.expandedRest
     }
     private val ends = listOf(0f, 1f).map { end -> object : SharedScope { override val progress = { end }; override val endpoint = end.toInt() } }
     private val instances = mutableMapOf<Any, @Composable (@Composable SharedScope.(Any) -> Unit) -> Unit>()

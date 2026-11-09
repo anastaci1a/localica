@@ -56,13 +56,6 @@ import io.github.anastaci1a.localica.ui.engine.*
     val slots = rememberMorphSlots(motion.expansion) { motion.bounds }
     val host = remember(slots) { MorphHost(slots) }
     host.shared = { shared() }
-    DisposableEffect(host, motion) {
-        val lifecycle: (Boolean) -> Unit = {
-            host.expandedRest = motion.expansion.expanded && motion.expansion.retirementReady
-        }
-        motion.expansion.lifecycle.add(lifecycle)
-        onDispose { motion.expansion.lifecycle.remove(lifecycle) }
-    }
     return remember(motion, host) { PopupSharedContent(motion, host) }
 }
 
