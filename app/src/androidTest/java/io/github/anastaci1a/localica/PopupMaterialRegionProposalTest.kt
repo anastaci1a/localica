@@ -24,7 +24,8 @@ import kotlin.math.abs
 
 /**
  * Proposed #600 material-region oracle; original source assertions remain in their classes.
- * The control suppresses foreground drawing; two native overlay fault injections must fail. Window synchronization
+ * The control suppresses foreground drawing; native overlays falsify cliff, fade completion and late rest.
+ * An outside-region overlay deliberately passes and documents spatial sensitivity. Window synchronization
  * adds invalidation/readback work and does not certify retained-field recording identity.
  */
 class PopupMaterialRegionProposalTest {
@@ -36,10 +37,12 @@ class PopupMaterialRegionProposalTest {
 
     private lateinit var anchor: GlassAnchor
     private var materialOnly = false
-    private enum class Mutation { None, Cut, PersistentTint }
+    private enum class Mutation { None, Cut, PersistentTint, LateTint, OutsideRegion }
     private var mutation = Mutation.None
     private var sampleIndex = 0
     private var lastBackground = 128
+    private var lastOldContrast = 0
+    private var surfaceGone = false
     private val faults = java.util.IdentityHashMap<android.view.View, FaultPatch>()
     private var rootView: android.view.View? = null
     private var popupView: android.view.View? = null
@@ -113,6 +116,13 @@ class PopupMaterialRegionProposalTest {
     @Test fun abruptMaterialLossMutantMustFailCliff() { mutation = Mutation.Cut; fadeCheck(Trigger.PillMore) }
     @Test fun persistentTintMutantMustFailEndpoint() { mutation = Mutation.PersistentTint; fadeCheck(Trigger.PillMore) }
 
+    @Test fun lateTintMutantMustFailRestingEndpoint() { mutation = Mutation.LateTint; fadeCheck(Trigger.PillMore) }
+    @Test fun outsideRegionTintControlDocumentsBlindSpot() {
+        mutation = Mutation.OutsideRegion
+        fadeCheck(Trigger.PillMore)
+        assertTrue("Outside-region defect remains visible to the old point probe", lastOldContrast > 6)
+    }
+
     // Fixed before measuring fade amplitudes, from paired foreground-ablation originals.
     private fun region(b: Rect) = Rect(b.left + b.width * .40625f, b.top + b.height * .21875f,
         b.left + b.width * .78125f, b.top + b.height * .4375f)
@@ -126,13 +136,16 @@ class PopupMaterialRegionProposalTest {
         @Suppress("DEPRECATION") override fun getOpacity() = android.graphics.PixelFormat.OPAQUE
     }
     private fun updateFault() {
-        if (mutation == Mutation.None || sampleIndex < 3) return
+        if (mutation == Mutation.None || sampleIndex < 3 || (mutation == Mutation.LateTint && !surfaceGone)) return
         compose.runOnUiThread {
             val view = listOfNotNull(rootView, popupView).lastOrNull { it.isAttachedToWindow } ?: error("No fault target")
             faults.forEach { (old, patch) -> if (old !== view) old.overlay.remove(patch) }
             val patch = faults.getOrPut(view) { FaultPatch() }.also { view.overlay.remove(it); view.overlay.add(it) }
             val origin = IntArray(2); view.getLocationOnScreen(origin)
-            val r = region(anchor.presentedBounds)
+            val b = anchor.presentedBounds
+            // Deliberately outside the qualified rectangle; includes the old .15/.5 probe.
+            val r = if (mutation == Mutation.OutsideRegion) Rect(b.left + b.width * .10f, b.top + b.height * .46f,
+                b.left + b.width * .20f, b.top + b.height * .54f) else region(b)
             patch.setBounds(kotlin.math.floor(r.left).toInt() - origin[0] - 2,
                 kotlin.math.floor(r.top).toInt() - origin[1] - 2,
                 kotlin.math.ceil(r.right).toInt() - origin[0] + 2,
@@ -168,12 +181,14 @@ class PopupMaterialRegionProposalTest {
                     values.sort()
                     val contrast = values[values.size / 2]
                     lastBackground = background
+                    lastOldContrast = abs(centre - background)
                     sampleIndex++
                     evidence.save(shot, org.json.JSONObject().put("clock", compose.mainClock.currentTime)
                         .put("trigger", trigger.name).put("materialOnly", materialOnly).put("nativeStage", stage).put("sampleX", c.x).put("sampleY", c.y)
                         .put("centre", centre).put("background", background).put("contrast", contrast)
                         .put("oldContrast", abs(centre - background)).put("region", qualified.toString())
                         .put("regionPixels", values.size).put("mutation", mutation.name).put("sampleIndex", sampleIndex - 1)
+                        .put("surfaceGone", surfaceGone).put("faultActive", faults.isNotEmpty())
                         .put("bounds", anchor.bounds.toString()).put("presentedBounds", b.toString())
                         .put("hidden", anchor.hidden).put("modal", anchor.modalPresent).put("inModal", anchor.shadowInModal)
                         .put("restored", anchor.restoredDrawn).put("request", anchor.restoredDrawRequest)
@@ -190,6 +205,8 @@ class PopupMaterialRegionProposalTest {
                 val contrast = mutableListOf<Int>()
                 var guard = 0
                 while (guard++ < 600) { frame(); if (surface() == null) break; contrast += glass() }
+                assertTrue("Fault post-return gate observes an absent popup surface", surface() == null)
+                surfaceGone = true
                 android.util.Log.i("Trim678", "fade $trigger contrast n=${contrast.size} ${contrast.joinToString(" ")}")
                 assertTrue("The return is sampled frame by frame: $contrast", contrast.size >= 4)
                 val peak = contrast.max()
