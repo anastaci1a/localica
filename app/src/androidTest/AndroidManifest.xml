@@ -8,7 +8,7 @@
         android:targetPackage="io.github.anastaci1a.localica.debug" />
     <instrumentation android:name="io.github.anastaci1a.localica.StartupProcessDiagnostics"
         android:targetPackage="io.github.anastaci1a.localica.debug.test" />
-    <application>
+    <application android:name="io.github.anastaci1a.localica.TestPackageApplication">
         <activity android:name="io.github.anastaci1a.localica.TestDocumentsProvider$LyricsGrantActivity"
             android:exported="true" android:theme="@android:style/Theme.NoDisplay" />
         <provider android:name="io.github.anastaci1a.localica.TestDocumentsProvider"

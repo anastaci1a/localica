@@ -346,6 +346,7 @@ io.github.anastaci1a.localica.TagEditorFlowTest
 io.github.anastaci1a.localica.TagEditorThemeInheritanceTest
 io.github.anastaci1a.localica.TagWritingTest
 io.github.anastaci1a.localica.TestComposeDispatcherTest
+io.github.anastaci1a.localica.TestProcessAccessibilityLaunchTest
 io.github.anastaci1a.localica.TextEditingNativeImeTest
 io.github.anastaci1a.localica.ThemeTest
 io.github.anastaci1a.localica.ToneSnapshotContinuityTest
