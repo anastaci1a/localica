@@ -436,3 +436,5 @@ io.github.anastaci1a.localica.ArtworkSwipeWidthBoundaryTest
 io.github.anastaci1a.localica.MarqueeDeferredLayoutEqualityTest
 
 io.github.anastaci1a.localica.DrawInkEqualityTest
+
+io.github.anastaci1a.localica.ArtworkRevealOwnerEqualityTest

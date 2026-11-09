@@ -1,6 +1,7 @@
 package io.github.anastaci1a.localica.ui
 
 import androidx.compose.animation.core.*
+import io.github.anastaci1a.localica.ui.components.rememberArtworkReveal
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
@@ -28,17 +29,9 @@ internal fun ArtworkImage(artwork: ImageBitmap?, loading: Boolean, modifier: Mod
     val reducedMotion = LocalReducedMotion.current
     val currentTextReveal by rememberUpdatedState(textReveal)
     // The reveal is read only while drawing; the cell never recomposes per animation frame.
-    val reveal = remember { Animatable(if (artwork == null) 0f else 1f) }
     val present = artwork != null
-    // A cell whose reveal already rests at its target (cached art, or no art yet) launches no
-    // coroutine; hold()/holdMenu() below release the gates synchronously in that case.
-    val settled = androidx.compose.runtime.snapshots.Snapshot.withoutReadObservation {
-        reveal.value == (if (present) 1f else 0f) && !reveal.isRunning
-    }
-    if (!settled) LaunchedEffect(present, reducedMotion) {
-        reveal.animateTo(if (present) 1f else 0f, tween(if (reducedMotion) 0 else 300, easing = FastOutSlowInEasing))
-        // The item's text and action finish with the art (#526, #588).
-        if (present) currentTextReveal?.let { it.release(); it.releaseMenu() }
+    val reveal = rememberArtworkReveal(present, reducedMotion) {
+        currentTextReveal?.let { it.release(); it.releaseMenu() }
     }
     // Art that replaces a loading shimmer fades in over that shimmer until the reveal completes (#524).
     // Only known-missing art shows the still placeholder and its icon.
@@ -61,7 +54,7 @@ internal fun ArtworkImage(artwork: ImageBitmap?, loading: Boolean, modifier: Mod
 
 /** Reads the reveal in its own composition, so only this host recomposes when the placeholder is removed. */
 @Composable
-private fun ArtworkPlaceholderHost(artwork: ImageBitmap?, reveal: Animatable<Float, AnimationVector1D>, loading: Boolean,
+private fun ArtworkPlaceholderHost(artwork: ImageBitmap?, reveal: State<Float>, loading: Boolean,
     emptyText: String?, tintUris: List<String>?, modifier: Modifier) {
     val revealed by remember(artwork) { derivedStateOf { artwork != null && reveal.value >= 1f } }
     if (!revealed) {

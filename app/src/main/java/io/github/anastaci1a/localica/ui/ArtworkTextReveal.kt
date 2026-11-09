@@ -1,9 +1,8 @@
 package io.github.anastaci1a.localica.ui
 
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.AnimationVector1D
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.State
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
@@ -28,7 +27,7 @@ import androidx.compose.ui.unit.LayoutDirection
  */
 @Stable
 internal class ArtworkTextReveal {
-    internal var reveal: Animatable<Float, AnimationVector1D>? = null
+    internal var reveal: State<Float>? = null
     private val gate = mutableStateOf(false)
     private var released = false
     private val menuGate = mutableStateOf(false)
