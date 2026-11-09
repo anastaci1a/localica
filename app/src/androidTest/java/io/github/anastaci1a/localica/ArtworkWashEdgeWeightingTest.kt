@@ -72,6 +72,8 @@ class ArtworkWashEdgeWeightingTest {
                     crc.update(bytes.array())
                 }
                 Log.i(TAG, "crc api=${Build.VERSION.SDK_INT} ${cover.name}=${java.lang.Long.toHexString(crc.value)}")
+                assertEquals("${cover.name} wash and collection shade must stay byte-identical to the pre-#711 generator",
+                    BORDERLESS_CRC.getValue(cover.name), java.lang.Long.toHexString(crc.value))
             } finally { shade.recycle(); wash.recycle() }
         }
     }
@@ -80,5 +82,8 @@ class ArtworkWashEdgeWeightingTest {
         const val TAG = "Wash711"
         const val NEAR_LIMIT = .35f
         const val REBOUND_LIMIT = .15f
+        // Recorded from the unchanged generator (de999216 + tests, 4b66336c) on API 26 and API 36: identical on both.
+        val BORDERLESS_CRC = mapOf("borderless-photo" to "ff676ea2", "borderless-stripes" to "a5c2102c",
+            "borderless-sky" to "3a62009e", "borderless-vignette" to "1507a5ac")
     }
 }
