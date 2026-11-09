@@ -90,7 +90,7 @@ Jump, then glide jumps once near the target, then glides. Fade dims the list for
 
 Every long scroll style ends exactly on the target, stops early once the target is visible, and Reduce motion overrides the choice by jumping straight there. A scrollbar drag defers artwork like a far journey.
 
-Horizontal/vertical choices and fitting navigation preview the lens at any touched option without committing or pulsing. A deliberate hold or owned axial drag continues from that contact. Selectors, settings sliders and switch thumbs give weak owned engagement, one weak tick per distinct discrete step/Boolean transition, and a strong genuine release. Cancellation has no release pulse.
+Horizontal/vertical choices preview the lens at any touched option without committing or pulsing. Navigation follows its own [selector](#selector) rule. A deliberate hold or owned axial drag continues from that contact. Selectors, settings sliders and switch thumbs give weak owned engagement, one weak tick per distinct discrete step/Boolean transition, and a strong genuine release. Cancellation has no release pulse.
 
 Ordinary tap, keyboard and accessible activation give one weak pulse at the input owner, including the full-width switch row. Continuous sliders have no step ticks. Pending contact, parent scrolling and external/animated state changes stay silent. Parent scrolling cancels preview/activation and retains ownership through direction changes.
 
@@ -152,14 +152,14 @@ Glass appearance includes a draggable preview that compresses at its edges and m
 
 | Control | Range / treatment |
 | --- | --- |
-| Glass renderer | Normal (default) or None. None uses solid average colour without refraction or blur. Normal uses the same fallback below Android 13. Changes blend without restarting. Old Automatic, Modern and Legacy settings migrate to Normal. |
+| Glass renderer | Normal (default) or None. None uses solid live average colour without refraction or blur. Normal uses the same fallback below Android 13. Surface changes blend; requested None switches slider/switch knobs to their resting finish. Old Automatic, Modern and Legacy settings migrate to Normal. |
 | Blur / white tint | Clear through frosted; defaults use light scattering/tint. |
 | Shape damping / resting depth | Damping 2–40 (default 8); depth 0.6–2 (default 1.35). Footprint and lensing share the same response. |
 | Shadow strength / spread | Off through visible; tight through broad; default very subtle and broad. |
 | Lift shadow strength | 50–150% of Glass shadow strength in plain 5% steps (default 100%), for the lift shadow under selected and floating items. Its spread is exactly Glass shadow spread. |
 | Adaptive contrast | [Adaptive contrast rules](#adaptive-contrast). |
 | Navigation selector | Adjustable glass has independent blur/tint; Clear overlay has 0–50% darkening (default off) and optional icon/text refraction (default off). Classic gray pill has adjustable opacity (default 10%) and no glass deformation. |
-| Sliders and switches | White opaque resting thumbs morph into clear unblurred glass on contact; independent expansion 1–2× (default 1.75×). |
+| Sliders and switches | Normal: white resting thumbs morph into clear glass on contact; expansion 1–2× (default 1.75×). None: white resting size throughout contact, with no expansion. |
 
 #### Adaptive contrast
 
@@ -211,7 +211,9 @@ Switch rows expose one accessible Boolean control. A drag previews the destinati
 
 Track and thumb share one coordinate model for fill, travel and boundary contact. Render identity outside the active lens and refraction inside it. Foreground labels remain sharp.
 
-The [appearance settings](#appearance-and-settings) own thumb finish and expansion. The [motion rules](#motion-and-access) own pickup, haptics and reduced motion. Playback retains its separate [scrub cancellation](#player-and-queue-drawer).
+The [appearance settings](#appearance-and-settings) own thumb finish and expansion. None knobs retain a 28 dp circle in both themes throughout press, drag, release and cancellation. Value and state travel retain normal input behavior.
+
+The [motion rules](#motion-and-access) own pickup, haptics and reduced motion. Playback retains its separate [scrub cancellation](#player-and-queue-drawer).
 
 ### Last.fm settings
 
@@ -237,7 +239,11 @@ Fitted cells accommodate the widest measured label with capsule padding.
 
 ### Selector
 
-One lens responds immediately to taps and magnetically follows manual page swipes. Large icons/readable labels share an accent mask under the lens. Direct taps, including reselection, and owned drags use the shared selector haptics. Cancellation is silent. Page swipes, programmatic/settling tracking and overflow scrolling produce no haptics.
+One lens responds immediately to taps and magnetically follows manual page swipes. Large icons/readable labels share an accent mask under the lens.
+
+Finger-down on a fitting bar or on the lens commits with one weak pulse. Each tab crossing ticks once. Every committing finger release (tap, hold or drag, including reselection) gives exactly one strong pulse. An overflow origin away from the lens stays silent until its tap release.
+
+Keyboard and accessible activation give one weak pulse. Cancellation is silent. Page swipes, programmatic/settling tracking and overflow scrolling produce no haptics.
 
 A different tab preserves its route/position. Reselecting the settled current tab returns to its root and eases to the top, without history. Library reselection first scrolls to the top while retaining its filter. a separate tap while already at the top clears the filter.
 
@@ -317,7 +323,7 @@ With no filter selected, Library combines collections: default Albums, Album Art
 
 Labels use **Album Artist / Album Artists**.
 
-Initial browsing waits for every catalog source used by the current view, never for artwork bytes. Fill the viewport with geometry-matched neutral artwork/title/information skeletons using one shimmer phase. Omit unsupported artwork/information slots.
+Initial Library, collection and search browsing waits for every catalog source used by the current view, never for artwork bytes. Fill the viewport with geometry-matched neutral artwork/title/information skeletons using one shimmer phase. Omit unsupported artwork/information slots.
 
 On Artist/Album Artist/Album/Playlist artwork pages, loading artwork and text skeletons use the page ink at 4% opacity. This is Library's neutral shade, so they keep its contrast and sweep over any artwork background. Queue and in-collection search loading material uses 50% opacity.
 
@@ -373,7 +379,9 @@ Scoped search focuses its field as soon as layout is ready and expands while mov
 
 Do not borrow a cached hidden keyboard height. Keep the field at the top without scaling. Actual dismissal by empty Back or outside tap begins one direct return to the home pill while the keyboard hides independently. Nonempty Back first ends editing. The retained panel centers and adds 20% height within safe margins.
 
-Child menus freeze the parent’s position until return. Actual dismissal clears the scoped session. Temporary covering/result navigation preserves it. Scoped results omit subtitles. Initial search results and filter changes reveal visible rows sequentially. Typing edits one draft. Its editor session survives completed-query-to-draft transitions while result/history state remains route-owned.
+Child menus freeze the parent’s position until return. Actual dismissal clears the scoped session. Temporary covering/result navigation preserves it. Scoped results omit subtitles. Initial search results and filter changes use the shared catalog skeleton and radial reveal.
+
+Typing edits one draft. Its editor session survives completed-query-to-draft transitions while result/history state remains route-owned.
 
 Back or actual dismissal retires the editor and its callbacks. IME submission or opening a result commits the draft. Each completed search retains query, scope, filters, sort, results position and identity. After editing ends, Back retraces searches without reopening the keyboard. Opening results/player preserves the source and popup positions.
 
@@ -413,7 +421,7 @@ Choose black or white foregrounds from the artwork brightness. Sort and visibili
 
 Back and collection overflow are glass controls. The top color fade depends on scrolling past the artwork and is absent at the top.
 
-Detail entry immediately uses the cached cover and its colors, title and artist. Crossfade the higher-resolution artwork/color continuation together. Newly loaded tracks reveal in a bounded sequential fade sweep, disabled by reduced motion.
+The collection background immediately uses the cached cover and its colors. The detail header enters with the completed catalog. Crossfade the higher-resolution artwork/color continuation together. Tracks use the shared radial loading reveal, disabled by reduced motion.
 
 Album details default to Tracklist presentation and ascending disc/track order, with Sort/View and pinch alternatives. Their bottom-right overflow shares playlist collection actions, excluding playlist-only edits. Album headers show the album/artist and a large Play control using the configured song-tap behavior. Smallest/Small/Tracklist album rows use muted track numbers instead of covers.
 
@@ -616,6 +624,8 @@ Keep the parent’s mode tabs and actions fixed when they fit. Playback semantic
 
 Default full-background cover: scale uniformly to screen width without side cropping, retain its vertical center, keep roughly the upper two thirds clear. Feather the lower third into broad curved color regions preserving left/right cover colors, extending above/below with gentle control shading. Avoid a straight fade to one average color.
 
+A solid frame or border sets the continuation's tone beyond that edge: the frame's color right outside the artwork, easing toward interior colors further out, never a thin seam. Borderless covers keep their continuation unchanged. Frames are detected when it is prepared, never per frame.
+
 Alternative: floating cover over an artwork-colored matte/acrylic gradient with subtle non-tiled texture.
 
 During expansion and contraction, foreground artwork draws above overlapping title and artist text. At rest, artwork stays below them. Preserve feathering, text trajectories and gesture targets. Keep the active artwork blend through player movement. With lyrics closed, header glass samples the artwork as well as its color continuation.
@@ -663,5 +673,7 @@ Scanner owns subfolders, minimum duration, Metadata read failures, and independe
 Include subfolders applies to every chosen folder. Off scans only that folder; on includes nested folders except excluded paths. Both scans respect exclusions. Configure each folder’s paths in Library and tags → Folders to scan → choose a folder → Excluded subfolders. Run Full scan to apply changed rules to indexed songs; Quick Scan keeps them.
 
 Folders to scan also owns removal and Add folder. Duplicate basenames use stable fractions such as Media (1/2). Unique names stay plain.
+
+The Library and tags page ends with a **Library data** heading: **Export library data** and **Import library data** use the system file picker. Import confirms per-field counts in a glass dialog before applying, then shows the applied counts. Format and matching: [Library data](library-data.md).
 
 Adding a folder only grants access. Metadata failures are never a persistent queue warning. From a shortcut’s initial settings page, Android Back returns to the caller. The header Back still visits the settings parent. Safety/lifecycle guarantees: [Structure](structure.md#file-operations).

@@ -225,15 +225,6 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     val playlistDetail = artDetail && route.collection?.kind == MediaKind.Playlist
     val detailPlaylist = if (playlistDetail) playlists.playlists.firstOrNull { it.id == route.collection?.id } else null
     val seededCollection = LocalBrowseArtwork.current?.collection?.takeIf { it.ref == route.collection }
-    val entrySweep = remember(route.key, route.filter, route.search && route.text.isNotBlank()) {
-        androidx.compose.animation.core.Animatable(if (browse.cached && !route.search) 1f else 0f)
-    }
-    LaunchedEffect(entrySweep, loadedResult != null, queryPending, reducedMotion) {
-        if (loadedResult != null && !queryPending && entrySweep.value < 1f) {
-            if (reducedMotion) entrySweep.snapTo(1f)
-            else entrySweep.animateTo(1f, androidx.compose.animation.core.tween(600, easing = androidx.compose.animation.core.LinearEasing))
-        }
-    }
     val artistDetail = artDetail && route.collection?.kind in setOf(MediaKind.Artist, MediaKind.AlbumArtist)
     var selectedAlbums by androidx.compose.runtime.saveable.rememberSaveable(route.key) { mutableStateOf(emptyList<String>()) }
     // The completed query owns both orders. Per-album view overrides must not
@@ -998,7 +989,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
             val dragInk = LocalContentColor.current
             SideEffect { reorder.style = displayedStyle; reorder.cellGeometry = cellGeometry; reorder.colors = dragColors; reorder.ink = dragInk; reorder.mutablePositions = mutablePositions }
             val loadingReducedMotion = reducedMotion || LocalReducedMotion.current
-            val skeletonReveal = !artDetail && !route.search
+            val skeletonReveal = true
             val displayedRoute = presentation?.route ?: route
             val artistOnlyLoading = displayedRoute.collection == null && (displayedRoute.filter in setOf(MediaKind.Artist, MediaKind.AlbumArtist) ||
                 (displayedRoute.filter == null && displayedRoute.tab in setOf(MainTab.Artists, MainTab.AlbumArtists)))
@@ -1013,7 +1004,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                 rememberGalleryLoadingTextMetrics(displayedStyle, columns) else null
             CompositionLocalProvider(LocalLoadingShimmer provides shimmer, LocalLoadingShimmerActivity provides loadingActivity,
                 LocalReducedMotion provides loadingReducedMotion, LocalGalleryLoadingTextMetrics provides galleryLoadingText) {
-            if (loadedResult == null && !artDetail) BrowseLoadingViewport(displayedStyle, cellGeometry,
+            if (loadedResult == null) BrowseLoadingViewport(displayedStyle, cellGeometry,
                 viewportWidth, constraints.maxHeight, if (showFilters || showSearchPill) pillSlotHeight else 0.dp,
                 popupDismiss == null && displayedStyle.extraInfo != ExtraInfo.None, artistOnlyLoading)
             else SelectionViewport((if (popupDismiss != null) Modifier.fillMaxWidth() else Modifier.fillMaxSize())
@@ -1181,8 +1172,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                         reorder.drag?.let { it.dropping && item.key in it.keys } == true
                     ) null else androidx.compose.animation.core.tween(if (reducedMotion) 0 else 350), fadeInSpec = null, fadeOutSpec = null) else Modifier)
                         .graphicsLayer {
-                            val sweep = if (!artDetail && !route.search) 1f else ((entrySweep.value * 600f - itemIndex.coerceAtMost(10) * 30f) / 300f)
-                                .coerceIn(0f, 1f).let { it * it * (3f - 2f * it) }
+                            val sweep = 1f
                             alpha = sweep * (reorder.drag?.takeIf { it.dropping && item.key in it.keys }?.handoff?.value ?: 1f)
                             // Write only a change: an identical boxed value still replaces the
                             // map and would invalidate the retained overlay on every layer update.

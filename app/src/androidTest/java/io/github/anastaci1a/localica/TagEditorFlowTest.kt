@@ -11,10 +11,15 @@ import kotlinx.coroutines.flow.first
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.RuleChain
 import java.util.regex.Pattern
 
 class TagEditorFlowTest {
-    @get:Rule val compose = createAndroidComposeRule<MainActivity>()
+    private val compose = createAndroidComposeRule<MainActivity>()
+    // The flow navigates the real app's default tab bar (Library) and Songs list; earlier tests in
+    // the same process may persist other tabs or browse filters (#722).
+    @get:Rule val rules: RuleChain = RuleChain.outerRule(BrowsePreferenceIsolation(
+        listOf("interface", "browse-style", "library-query", "library-filters"))).around(compose)
     @Test fun editThroughPickerVerifiesFileAndRefreshesLibrary() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext

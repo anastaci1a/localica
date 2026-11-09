@@ -6,20 +6,27 @@ import org.junit.rules.TestRule
 import org.junit.runner.Description
 import org.junit.runners.model.Statement
 
-/** Default catalog styling for a fixture, with exact restoration after its inner Compose rule disposes. */
-internal class BrowsePreferenceIsolation : TestRule {
+/**
+ * Default preferences for a fixture, with exact restoration after its inner Compose rule disposes.
+ * Device tests share one app process and data directory per shard, so a fixture that persists
+ * preferences (for example a one-tab bar) must not leak them into later real-app tests (#722).
+ */
+internal class BrowsePreferenceIsolation(
+    private val names: List<String> = listOf("browse-style", "library-query")
+) : TestRule {
     override fun apply(base: Statement, description: Description): Statement = object : Statement() {
         override fun evaluate() {
             val context = InstrumentationRegistry.getInstrumentation().targetContext
-            val stores = listOf("browse-style", "library-query").map { context.getSharedPreferences(it, Context.MODE_PRIVATE) }
+            val stores = names.map { context.getSharedPreferences(it, Context.MODE_PRIVATE) }
             val saved = stores.map { store -> store.all.mapValues { (_, value) ->
                 if (value is Set<*>) value.toSet() else value
             } }
             try {
-                stores.forEach { check(it.edit().clear().commit()) { "Could not initialize browse preferences" } }
+                stores.zip(names).forEach { (store, name) -> check(store.edit().clear().commit()) { "Could not initialize $name preferences" } }
                 base.evaluate()
             } finally {
-                stores.zip(saved).forEach { (store, values) ->
+                stores.zip(saved).zip(names).forEach { (pair, name) ->
+                    val (store, values) = pair
                     val edit = store.edit().clear()
                     values.forEach { (key, value) -> when (value) {
                         is String -> edit.putString(key, value)
@@ -28,9 +35,9 @@ internal class BrowsePreferenceIsolation : TestRule {
                         is Long -> edit.putLong(key, value)
                         is Float -> edit.putFloat(key, value)
                         is Set<*> -> edit.putStringSet(key, value.map { it as String }.toSet())
-                        else -> error("Unsupported browse preference type for $key")
+                        else -> error("Unsupported $name preference type for $key")
                     } }
-                    check(edit.commit()) { "Could not restore browse preferences" }
+                    check(edit.commit()) { "Could not restore $name preferences" }
                 }
             }
         }

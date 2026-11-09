@@ -105,7 +105,7 @@ Timed lyrics interpolate Media3's latency-aware position between samples, freezi
 
 | Value | Rule |
 | --- | --- |
-| Song added date | First successful indexing; retained on rescan. Existing migrated songs use migration date. Removing and reindexing starts a new date. |
+| Song added date | First successful indexing; retained on rescan. Existing migrated songs use migration date. Removing and reindexing starts a new date. A [library data](library-data.md) import can replace it; rescans keep the imported date. |
 | Collection dates | Albums/Artists/Album Artists/Folders use earliest added and latest known modification among current distinct songs. |
 | Playlist dates | Creation/import date; modification changes on rename, cover or membership/order edits, not metadata refresh or no-ops. Migrated playlists initially use creation for both. |
 | Qualified play | Actual listening for 30 seconds or half the duration, whichever is shorter, once per traversal. Exclude paused time and seek jumps. |
