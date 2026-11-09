@@ -3,6 +3,7 @@ package io.github.anastaci1a.localica.icons
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Canvas
 import androidx.compose.ui.graphics.vector.ImageVector
 import io.github.anastaci1a.localica.ui.AppIcon
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -186,6 +187,7 @@ object IconPacks {
         val vectors: Map<String, ImageVector>, val files: Map<String, ByteArray>)
 
     private fun parse(input: InputStream): Parsed {
+        val decoder = IconVectorDecoder()
         var manifest: IconPackInfo? = null
         val masks = linkedMapOf<String, Bitmap>()
         val vectors = linkedMapOf<String, ImageVector>()
@@ -203,7 +205,7 @@ object IconPacks {
                 val id = IconPackNames.iconId(entry.name) ?: continue
                 if (AppIcon.byId(id) == null) { unknown += id; continue }
                 if (entry.name.endsWith(".svg", ignoreCase = true)) {
-                    val vector = runCatching { SvgIconParser.parse(bytes).toImageVector() }.getOrElse {
+                    val vector = runCatching { decoder.decode(bytes) }.getOrElse {
                         rejected += entry.name to ("Invalid SVG: " + (it.message ?: "malformed vector").take(300))
                         null
                     }
@@ -259,11 +261,12 @@ object IconPacks {
     private fun readDirectory(directory: File): Triple<Map<String, Bitmap>, IconPackInfo, Map<String, ImageVector>>? {
         val manifest = File(directory, IconPackNames.MANIFEST).takeIf { it.isFile } ?: return null
         val info = manifest(manifest.readBytes())
+        val decoder = IconVectorDecoder()
         val masks = linkedMapOf<String, Bitmap>()
         val vectors = linkedMapOf<String, ImageVector>()
         (AppIcon.ids + AppIcon.legacyIds.keys).forEach { id ->
             val vector = File(directory, "icons/${id}.svg").takeIf { it.isFile && it.length() <= SvgIconParser.MAX_BYTES }
-                ?.let { runCatching { SvgIconParser.parse(it.readBytes()).toImageVector() }.getOrNull() }
+                ?.let { runCatching { decoder.decode(it.readBytes()) }.getOrNull() }
             if (vector != null) vectors[id] = vector
             else File(directory, "icons/${id}.png").takeIf { it.isFile }?.let { BitmapFactory.decodeFile(it.path) }
                 ?.let { masks[id] = displayMask(it) }
@@ -292,9 +295,21 @@ object IconPacks {
     // Keep library memory proportional to icon display size, not the author's source resolution.
     // The original accepted pixels remain on disk; only this private decoded instance is recycled.
     private fun displayMask(bitmap: Bitmap): Bitmap {
-        if (bitmap.width <= IconPackNames.TEMPLATE_SIZE) return bitmap
-        return Bitmap.createScaledBitmap(bitmap, IconPackNames.TEMPLATE_SIZE, IconPackNames.TEMPLATE_SIZE, true)
-            .also { bitmap.recycle() }
+        val mask = if (bitmap.width <= IconPackNames.TEMPLATE_SIZE) bitmap else
+            Bitmap.createScaledBitmap(bitmap, IconPackNames.TEMPLATE_SIZE, IconPackNames.TEMPLATE_SIZE, true)
+                .also { bitmap.recycle() }
+        val alpha = IntArray(mask.width * mask.height)
+        mask.getPixels(alpha, 0, mask.width, 0, 0, mask.width, mask.height)
+        for (i in alpha.indices) alpha[i] = alpha[i] ushr 24
+        val metrics = alphaInkMetrics(alpha, mask.width, mask.height) ?: return mask
+        // Truncate toward zero: preserve pixels exactly and stay within the measured edge clearance.
+        val move = opticalShift(metrics, mask.height.toFloat()).toInt()
+        if (move == 0) return mask
+        return Bitmap.createBitmap(mask.width, mask.height, Bitmap.Config.ARGB_8888).apply {
+            density = mask.density
+            Canvas(this).drawBitmap(mask, 0f, move.toFloat(), null)
+            mask.recycle()
+        }
     }
 
     /** The stored icon for [id] as decoded alpha, for tests. */
