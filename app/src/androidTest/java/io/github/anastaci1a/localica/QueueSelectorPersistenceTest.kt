@@ -183,10 +183,20 @@ private class QueueSelectorCallerFixture(private val compose: androidx.compose.u
             assertTrue("Must exercise the actual admitted native caller\n$log", admitted)
             if ((glyph || longName) && !interrupted) repeat(4) { sample("expanded-rest") }
             if (longName) {
+                for (i in 0 until 90) {
+                    if (anchor.contact.state.momentum.settled && anchor.contact.expansion.value == 1f) break
+                    sample("expanded-rest")
+                }
+                assertTrue("Marquee comparison starts at the actual resting body", anchor.contact.state.momentum.settled)
+                assertEquals(1f, anchor.contact.expansion.value, 0f)
+                sample("expanded-rest")
+                val restingShape = anchor.contact.body.value
                 val restingFrame = frame - 1
                 val region = currentBodyRect(anchor, window?.takeIf { it.decorView.isAttachedToWindow })
                 compose.mainClock.advanceTimeBy(2500)
                 sample("marquee-rest")
+                assertEquals("Body deformation cannot supply the marquee witness", restingShape, anchor.contact.body.value)
+                assertEquals(region, currentBodyRect(anchor, window?.takeIf { it.decorView.isAttachedToWindow }))
                 val before = requireNotNull(BitmapFactory.decodeFile(File(output,
                     restingFrame.toString().padStart(3, '0') + "-expanded-rest.png").absolutePath))
                 val after = requireNotNull(BitmapFactory.decodeFile(File(output,
