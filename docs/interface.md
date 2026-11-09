@@ -616,6 +616,8 @@ Keep the parent’s mode tabs and actions fixed when they fit. Playback semantic
 
 Default full-background cover: scale uniformly to screen width without side cropping, retain its vertical center, keep roughly the upper two thirds clear. Feather the lower third into broad curved color regions preserving left/right cover colors, extending above/below with gentle control shading. Avoid a straight fade to one average color.
 
+A solid frame or border sets the continuation's tone beyond that edge: the frame's color right outside the artwork, easing toward interior colors further out, never a thin seam. Borderless covers keep their continuation unchanged. Frames are detected when it is prepared, never per frame.
+
 Alternative: floating cover over an artwork-colored matte/acrylic gradient with subtle non-tiled texture.
 
 During expansion and contraction, foreground artwork draws above overlapping title and artist text. At rest, artwork stays below them. Preserve feathering, text trajectories and gesture targets. Keep the active artwork blend through player movement. With lyrics closed, header glass samples the artwork as well as its color continuation.
