@@ -8,6 +8,12 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.background
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.testTag
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.boundsInRoot
@@ -42,9 +48,12 @@ class AutoScrollDrawnPlacementTest {
     private val arguments get() = InstrumentationRegistry.getArguments()
     private val fullHost get() = arguments.getString("fullHost") == "1"
     private val albums = 300
+    private var fixtureSnapshot: LibrarySnapshot? = null
+    @Volatile private var lastRecorded: Map<Any, Rect> = emptyMap()
     private val originalTabs = context.getSharedPreferences("interface", 0).getString("tabs", null)
     private var scenario: ActivityScenario<ComponentActivity>? = null
     private var activity: ComponentActivity? = null
+    private val drawObservers = mutableListOf<Pair<View, android.view.ViewTreeObserver.OnPreDrawListener>>()
 
     private val tracks by lazy {
         covers.mkdirs()
@@ -64,6 +73,7 @@ class AutoScrollDrawnPlacementTest {
     }
 
     @After fun cleanup() {
+        if (activity != null) main { drawObservers.forEach { (view, observer) -> view.viewTreeObserver.removeOnPreDrawListener(observer) }; drawObservers.clear() }
         scenario?.close()
         files.forEach { it.delete() }
         context.getSharedPreferences("browse-style", 0).edit().clear().commit()
@@ -108,6 +118,7 @@ class AutoScrollDrawnPlacementTest {
         if (fullHost) context.getSharedPreferences("interface", 0).edit().putString("tabs", route.tab.name).commit()
         ArtworkColors.publish(tracks.associate { it.uri to (0xFF000000.toInt() or (it.uri.hashCode() and 0xFFFFFF)) })
         val library = LibraryUiState(LibrarySnapshot(folders = listOf(FolderSelection("fixture", "Fixture")), tracks = tracks), loading = false)
+        fixtureSnapshot = library.snapshot
         val host = Host(route)
         scenario = ActivityScenario.launch(ComponentActivity::class.java)
         requireNotNull(scenario).onActivity { activity = it }
@@ -173,6 +184,7 @@ class AutoScrollDrawnPlacementTest {
     }
 
     private fun drawnBounds(label: String): List<String> {
+        if (arguments.getString("record") == "1") lastRecorded.forEach { (key, rect) -> android.util.Log.i("AutoScroll635Record", "$label $key recorded=$rect") }
         dumpBounds(label)
         dumpOverlay(label)
         val actual = cells()
@@ -187,7 +199,10 @@ class AutoScrollDrawnPlacementTest {
             // The fixture covers are opaque uniform colors. Ignore decode/reveal frames;
             // those have no stable color edge to measure yet.
             val palette = intArrayOf(0xFFCC3322.toInt(), 0xFF2255AA.toInt(), 0xFF33AA55.toInt(), 0xFFDDAA22.toInt(), 0xFF884499.toInt())
-            if (color !in palette) return@forEach
+            if (color !in palette) {
+                if (arguments.getString("strict") == "1") problems += "$label $key expected visible cover is not fully drawn"
+                return@forEach
+            }
             measured++
             var top = y
             var bottom = y + 1
@@ -210,6 +225,8 @@ class AutoScrollDrawnPlacementTest {
             image.compress(Bitmap.CompressFormat.PNG, 100, it)
         }
         android.util.Log.i("AutoScroll635", "$label measured=$measured visible=${actual.size}")
+        if (arguments.getString("strict") == "1" && measured != actual.size)
+            problems += "$label measured $measured of "+actual.size+" expected visible artwork"
         if (measured == 0) problems += "$label no fully loaded fixture artwork measured"
         image.recycle()
         return problems
@@ -292,16 +309,83 @@ class AutoScrollDrawnPlacementTest {
         }
     }
 
+    private fun nativeFrame() {
+        val done = java.util.concurrent.CountDownLatch(1)
+        main { a -> android.view.Choreographer.getInstance().postFrameCallback {
+            // Posted work runs after this frame's traversal and draw, without forcing one.
+            a.window.decorView.post { done.countDown() }
+        } }
+        check(done.await(10, java.util.concurrent.TimeUnit.SECONDS)) { "No native frame" }
+    }
+
+    private fun awaitNextIdleFrame(host: Host) {
+        val until = SystemClock.uptimeMillis() + 20_000
+        while (true) {
+            nativeFrame()
+            var idle = false
+            main { a -> idle = Recomposer.runningRecomposers.value.all { !it.hasPendingWork } &&
+                !a.window.decorView.isLayoutRequested && ArtworkCache.foregroundDecodes.value == 0 }
+            val expected = BrowseQueries.evaluate(requireNotNull(fixtureSnapshot), emptyList(), host.route).items.associateBy { it.key }
+            val visible = cells()
+            val loaded = visible.isNotEmpty() && visible.keys.all { key ->
+                expected[key]?.let { ArtworkCache.peek(it.coverUris)?.bitmap != null } == true
+            }
+            if (idle && loaded) {
+                // Assert the first completed native frame after composition/layout/decode idle.
+                nativeFrame()
+                android.util.Log.i("AutoScroll635Idle", "idle visible=" + visible.size + " everyCoverCached=" + loaded)
+                return
+            }
+            check(SystemClock.uptimeMillis() < until) { "Native composition/layout/artwork did not become idle; covers=" + loaded }
+        }
+    }
+
+    private fun observeViewportDraw(drawNode: DrawModifierNode, after: () -> Unit) {
+        main { a ->
+            val f = drawNode.javaClass.declaredFields.single { it.name == "onDraw" }
+            f.isAccessible = true
+            var wrapped: Any? = null
+            val observer = android.view.ViewTreeObserver.OnPreDrawListener {
+                val current = f.get(drawNode)
+                if (current !== wrapped) {
+                    @Suppress("UNCHECKED_CAST")
+                    val original = current as (androidx.compose.ui.graphics.drawscope.ContentDrawScope) -> Unit
+                    val watched: (androidx.compose.ui.graphics.drawscope.ContentDrawScope) -> Unit = { scope ->
+                        original(scope)
+                        after()
+                    }
+                    wrapped = watched
+                    f.set(drawNode, watched)
+                }
+                true
+            }
+            val view = a.window.decorView
+            view.viewTreeObserver.addOnPreDrawListener(observer)
+            drawObservers += view to observer
+        }
+    }
+
+    private fun watchViewportRecording() {
+        val (motion, drawNode) = overlay()
+        observeViewportDraw(drawNode) {
+            val viewport = motion.viewportCoordinates
+            lastRecorded = if (viewport?.isAttached != true) emptyMap() else motion.artwork.mapNotNull { (key, part) ->
+                part.coordinates?.takeIf { it.isAttached }?.let { key to viewport.localBoundingBoxOf(it, false) }
+            }.toMap()
+        }
+    }
+
     private fun loop(route: BrowseRoute, trigger: (Host) -> Unit) {
         val host = host(route)
         val problems = mutableListOf<String>()
         repeat((arguments.getString("rounds") ?: "8").toInt()) { i ->
             scrollDeep(200 + i * 7)
             Thread.sleep(1200)
+            if (arguments.getString("record") == "1") watchViewportRecording()
             ArtworkCache.invalidate()
             if (fullHost) nodes { all -> all.first { it.tag() == "tab-option-0" }.config[SemanticsActions.OnClick].action!!.invoke() }
             else trigger(host)
-            Thread.sleep(3000)
+            if (arguments.getString("strict") == "1") awaitNextIdleFrame(host) else Thread.sleep(3000)
             problems += check("iteration $i", host).also { it.forEach { p -> android.util.Log.i("RealProbe635", p) } }
             Thread.sleep(800)
         }
@@ -314,24 +398,27 @@ class AutoScrollDrawnPlacementTest {
         scrollDeep(100)
         Thread.sleep(5000)
         val drawNode = overlay().second
+        val mainDraw = requireNotNull(field(drawNode, "onDraw"))
         val draws = java.util.concurrent.atomic.AtomicInteger()
-        main {
-            val f = drawNode.javaClass.declaredFields.single { it.name == "onDraw" }
-            f.isAccessible = true
-            @Suppress("UNCHECKED_CAST")
-            val original = f.get(drawNode) as (androidx.compose.ui.graphics.drawscope.ContentDrawScope) -> Unit
-            val counted: (androidx.compose.ui.graphics.drawscope.ContentDrawScope) -> Unit = { scope ->
-                draws.incrementAndGet()
-                original(scope)
-            }
-            f.set(drawNode, counted)
-            drawNode.invalidateDraw()
-        }
+        // Recomposition replaces draw lambdas. Re-wrap the latest lambda before each native draw.
+        observeViewportDraw(drawNode) { draws.incrementAndGet() }
+        main { drawNode.invalidateDraw() }
         Thread.sleep(500)
         val idleStart = draws.get()
         Thread.sleep(1000)
         android.util.Log.i("AutoScroll635Counts", "idleDraws=" + (draws.get() - idleStart))
-        val scroll = nodes { all -> all.first { it.tag() == "browser-list" }.config[SemanticsActions.ScrollBy].action!! }
+        val draw = mainDraw
+        // The wrapper captures the original lambda, which owns main's LazyGridState.
+        fun gridIn(lambda: Any): androidx.compose.foundation.lazy.grid.LazyGridState? {
+            lambda.javaClass.declaredFields.forEach { f ->
+                f.isAccessible = true
+                val value = f.get(lambda)
+                if (value is androidx.compose.foundation.lazy.grid.LazyGridState) return value
+                if (value is kotlin.jvm.functions.Function1<*, *> && value !== lambda) gridIn(value)?.let { return it }
+            }
+            return null
+        }
+        val grid = requireNotNull(gridIn(draw)) { "Main viewport's grid not found" }
         var last = draws.get()
         var scrollFrames = 0
         var recordedFrames = 0
@@ -349,7 +436,7 @@ class AutoScrollDrawnPlacementTest {
                     }
                     last = now
                     if (step++ < 90) {
-                        scroll(0f, 3f)
+                        check(grid.dispatchRawDelta(3f) == 3f) { "Steady scroll must consume exactly 3px" }
                         choreographer.postFrameCallback(this)
                     } else done.countDown()
                 }
@@ -358,6 +445,52 @@ class AutoScrollDrawnPlacementTest {
         check(done.await(30, java.util.concurrent.TimeUnit.SECONDS))
         android.util.Log.i("AutoScroll635Counts", "scrollFrames=" + scrollFrames + " recordedFrames=" + recordedFrames + " totalDraws=" + draws.get())
         assertTrue("Every steady scroll frame must already record the main viewport", recordedFrames >= scrollFrames - 2)
+    }
+
+    /** One placement-only contraction after scroll stops must publish one new recording. */
+    @Test fun postScrollContractionRecordsExactlyOnce() {
+        val motion = BrowsePinchMotion()
+        val grid = androidx.compose.foundation.lazy.grid.LazyGridState()
+        val gap = mutableIntStateOf(40)
+        scenario = ActivityScenario.launch(ComponentActivity::class.java)
+        requireNotNull(scenario).onActivity { activity = it }
+        main { a -> a.setContent { LocalicaTheme {
+            Box(Modifier.fillMaxSize().pinchRetainedOverlay(motion, grid, (0 until 30).associate { it.toString() to it })) {
+                androidx.compose.foundation.lazy.grid.LazyVerticalGrid(
+                    columns = androidx.compose.foundation.lazy.grid.GridCells.Fixed(1), state = grid,
+                    modifier = Modifier.fillMaxSize().testTag("browser-list")) {
+                    items(30, key = { it.toString() }) { index ->
+                        Box(Modifier.height(200.dp)) {
+                            Box(Modifier.offset { androidx.compose.ui.unit.IntOffset(0, gap.intValue) }
+                                .size(80.dp).retainPinchArtwork(index.toString(), motion)
+                                .background(androidx.compose.ui.graphics.Color.Red))
+                        }
+                    }
+                }
+            }
+        } } }
+        repeat(10) { nativeFrame() }
+        main { grid.dispatchRawDelta(100f) }
+        repeat(5) { nativeFrame() }
+        val drawNode = overlay().second
+        val draws = java.util.concurrent.atomic.AtomicInteger()
+        observeViewportDraw(drawNode) { draws.incrementAndGet() }
+        main { drawNode.invalidateDraw() }
+        repeat(3) { nativeFrame() }
+        val idleStart = draws.get()
+        repeat(20) { nativeFrame() }
+        val idleDraws = draws.get() - idleStart
+        val before = draws.get()
+        main { gap.intValue = 0 }
+        repeat(5) { nativeFrame() }
+        val contractionDraws = draws.get() - before
+        val after = draws.get()
+        repeat(20) { nativeFrame() }
+        val laterDraws = draws.get() - after
+        android.util.Log.i("AutoScroll635Counts", "postScroll idleDraws=" + idleDraws +
+            " contractionDraws=" + contractionDraws + " laterIdleDraws=" + laterDraws)
+        assertTrue("No idle recordings", idleDraws == 0 && laterDraws == 0)
+        assertTrue("A single contraction must record exactly once", contractionDraws == 1)
     }
 
     @Test fun albumsTopRequest() = loop(BrowseRoute(MainTab.Albums)) { h -> main { h.topRequest++ } }
