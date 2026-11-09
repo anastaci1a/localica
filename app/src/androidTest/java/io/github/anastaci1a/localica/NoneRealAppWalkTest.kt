@@ -1,0 +1,88 @@
+package io.github.anastaci1a.localica
+
+import android.content.Intent
+import android.net.Uri
+import android.os.SystemClock
+import androidx.room.Room
+import androidx.test.core.app.ActivityScenario
+import androidx.test.platform.app.InstrumentationRegistry
+import androidx.test.uiautomator.By
+import androidx.test.uiautomator.UiDevice
+import androidx.test.uiautomator.Until
+import io.github.anastaci1a.localica.library.*
+import io.github.anastaci1a.localica.navigation.*
+import io.github.anastaci1a.localica.playback.PlaybackConnection
+import kotlinx.coroutines.runBlocking
+import org.junit.Assert.*
+import org.junit.Test
+import java.io.File
+
+/** MainActivity, real browser recordings, native windows and playback under renderer None (#691). */
+class NoneRealAppWalkTest {
+    @Test fun librarySongsAlbumPlayerAndPopupsStayAlive() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val context = instrumentation.targetContext
+        val device = UiDevice.getInstance(instrumentation)
+        val preferences = InterfacePreferences(context)
+        val original = preferences.read()
+        val database = Room.databaseBuilder(context, LibraryDatabase::class.java, "library.db")
+            .addMigrations(*LibraryDatabase.MIGRATIONS).enableMultiInstanceInvalidation().build()
+        val store = RoomLibraryStore(database.libraryDao())
+        val root = "none-walk-691"
+        val file = File(context.cacheDir, "none-walk-691.mp3")
+        instrumentation.context.assets.open("queue-tone.mp3").use { input -> file.outputStream().use(input::copyTo) }
+        val track = Track(Uri.fromFile(file).toString(), "None walk song", album = "None walk album",
+            artist = "Localica", fileName = file.name, relativePath = file.name, id = root)
+        var playback: PlaybackConnection? = null
+        fun visible(selector: androidx.test.uiautomator.BySelector): androidx.test.uiautomator.UiObject2 =
+            requireNotNull(device.wait(Until.findObject(selector), 15000)) { "Missing $selector" }
+        fun checkpoint(name: String) {
+            SystemClock.sleep(700)
+            assertNotNull("Activity disappeared at $name", device.findObject(By.pkg(context.packageName)))
+            assertNull("Crash dialog at $name", device.findObject(By.textContains("keeps stopping")))
+            val base = InstrumentationRegistry.getArguments().getString("additionalTestOutputDir")?.let(::File)
+                ?: context.getExternalFilesDir(null)
+            val dir = File(base, "none-real-app-walk").apply { mkdirs() }
+            assertTrue(device.takeScreenshot(File(dir, "$name.png")))
+            device.dumpWindowHierarchy(File(dir, "$name.xml"))
+        }
+        try {
+            runBlocking { store.replaceRoot(ScanResult(FolderSelection(root, "None walk"), listOf(track), 0)) }
+            preferences.write(InterfaceSettings(tabs = listOf(MainTab.Home, MainTab.Library, MainTab.Songs, MainTab.Albums),
+                expandOnPlay = true, glass = GlassAppearance(renderer = GlassRendererMode.None)))
+            ActivityScenario.launch<MainActivity>(Intent(context, MainActivity::class.java)).use {
+                visible(By.desc("Library")).click()
+                visible(By.text("Songs"))
+                checkpoint("library")
+                visible(By.text("Songs")).click()
+                visible(By.text("None walk song"))
+                checkpoint("songs")
+                visible(By.desc("Albums")).click()
+                visible(By.text("None walk album")).click()
+                visible(By.text("None walk song"))
+                checkpoint("album")
+                visible(By.desc("Album actions")).click()
+                visible(By.text("Select all songs"))
+                checkpoint("album-popup")
+                device.pressBack()
+                instrumentation.runOnMainSync { playback = PlaybackConnection(context) }
+                val connection = requireNotNull(playback)
+                await(15000) { connection.state.value.connected && !connection.queues.state.value.loading }
+                instrumentation.runOnMainSync { connection.playFromList(listOf(track), track.id) }
+                visible(By.desc("Collapse player"))
+                checkpoint("player")
+                visible(By.desc("More")).click()
+                checkpoint("player-popup")
+                device.pressBack()
+                visible(By.desc("Collapse player")).click()
+                checkpoint("returned")
+            }
+        } finally {
+            playback?.let { connection -> instrumentation.runOnMainSync { connection.clear(); connection.close() } }
+            preferences.write(original)
+            runBlocking { store.removeRoot(root) }
+            database.close()
+            file.delete()
+        }
+    }
+}

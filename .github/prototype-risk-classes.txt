@@ -433,3 +433,5 @@ io.github.anastaci1a.localica.SublistLoadingPlaceholderCaptureTest
 io.github.anastaci1a.localica.LoadingSweepContrastTest
 io.github.anastaci1a.localica.NoneExactReductionTest
 io.github.anastaci1a.localica.NoneAtlasTest
+
+io.github.anastaci1a.localica.NoneRealAppWalkTest
