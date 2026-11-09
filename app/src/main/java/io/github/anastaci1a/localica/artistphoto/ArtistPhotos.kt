@@ -139,6 +139,7 @@ class ArtistPhotos internal constructor(private val consent: NetworkConsent, pri
                 }
                 rememberReady(request.artistKey, photo)
                 refreshReady()
+                photo
             } }
             if (superseded) return@fetch
             if (refreshed != null) emit(ArtistPhotoState(request.latestAlbumArt, refreshed))
