@@ -27,6 +27,65 @@ import java.io.File
 class FlatNoneMaterialTest {
     @get:Rule val compose = localicaComposeRule()
 
+    @Test fun flatAndNormalControlsHaveIdenticalPressDragAndReleaseGeometry() {
+        val normal = GlassRendererRuntime(GlassRendererMode.Normal)
+        val flat = GlassRendererRuntime(GlassRendererMode.FlatNone)
+        val geometry = mutableMapOf<String, LensGeometry>()
+        var normalValue by mutableFloatStateOf(.5f)
+        var flatValue by mutableFloatStateOf(.5f)
+        var normalChecked by mutableStateOf(false)
+        var flatChecked by mutableStateOf(false)
+        lateinit var source: FrostedBackdrop
+        compose.setContent { CompositionLocalProvider(LocalGlassRendererRuntime provides normal, LocalDensity provides Density(1f)) {
+            LocalicaTheme {
+                source = rememberFrostedBackdrop(Unit, dark = false)
+                BackdropLease(source)
+                Box(Modifier.size(300.dp, 240.dp)) {
+                    Canvas(Modifier.fillMaxSize().recordFrostedBackdrop(source)) { drawRect(Color(0xFFE0E0E0)) }
+                    Column {
+                        CompositionLocalProvider(LocalFrostedBackdrop provides source) {
+                            CompositionLocalProvider(LocalControlGeometryDraw provides { geometry["normal-slider"] = it }) {
+                                InterfaceSlider(normalValue, { normalValue = it }, Modifier.width(280.dp).testTag("normal-slider"))
+                            }
+                            CompositionLocalProvider(LocalControlGeometryDraw provides { geometry["normal-switch"] = it }) {
+                                Box(Modifier.size(60.dp, 48.dp).testTag("normal-switch")) { InterfaceSwitch(normalChecked) { normalChecked = it } }
+                            }
+                        }
+                        CompositionLocalProvider(LocalGlassRendererRuntime provides flat, LocalFrostedBackdrop provides null) {
+                            CompositionLocalProvider(LocalControlGeometryDraw provides { geometry["flat-slider"] = it }) {
+                                InterfaceSlider(flatValue, { flatValue = it }, Modifier.width(280.dp).testTag("flat-slider"))
+                            }
+                            CompositionLocalProvider(LocalControlGeometryDraw provides { geometry["flat-switch"] = it }) {
+                                Box(Modifier.size(60.dp, 48.dp).testTag("flat-switch")) { InterfaceSwitch(flatChecked) { flatChecked = it } }
+                            }
+                        }
+                    }
+                }
+            }
+        } }
+        compose.waitUntil(15_000) { source.recorded && (Build.VERSION.SDK_INT >= 33 || source.snapshot != null) }
+        compose.waitForIdle()
+        compose.mainClock.autoAdvance = false
+        fun equal(kind: String, phase: String) = compose.runOnIdle {
+            val expected = requireNotNull(geometry["normal-$kind"])
+            val actual = requireNotNull(geometry["flat-$kind"])
+            assertEquals("$kind $phase bounds", expected.bounds, actual.bounds)
+            assertEquals("$kind $phase radius", expected.corner, actual.corner, 0f)
+        }
+        try {
+            for (kind in listOf("slider", "switch")) {
+                equal(kind, "rest")
+                for (prefix in listOf("normal", "flat")) compose.onNodeWithTag("$prefix-$kind").performTouchInput { down(center) }
+                repeat(12) { compose.mainClock.advanceTimeByFrame(); equal(kind, "press frame $it") }
+                compose.runOnIdle { assertTrue("Flat $kind must expand on contact", requireNotNull(geometry["flat-$kind"]).bounds.height > 28f) }
+                for (prefix in listOf("normal", "flat")) compose.onNodeWithTag("$prefix-$kind").performTouchInput { moveTo(Offset(width * .8f, centerY)) }
+                repeat(8) { compose.mainClock.advanceTimeByFrame(); equal(kind, "drag frame $it") }
+                for (prefix in listOf("normal", "flat")) compose.onNodeWithTag("$prefix-$kind").performTouchInput { up() }
+                repeat(40) { compose.mainClock.advanceTimeByFrame(); equal(kind, "release frame $it") }
+            }
+        } finally { compose.mainClock.autoAdvance = true }
+    }
+
     @Test fun disablingTheWindowAtlasKeepsUnsavedContentMounted() {
         val runtime = GlassRendererRuntime(GlassRendererMode.Normal)
         var mounts = 0

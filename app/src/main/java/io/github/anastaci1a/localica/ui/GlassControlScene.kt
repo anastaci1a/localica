@@ -14,6 +14,7 @@ import kotlin.math.ceil
 
 /** Optional instrumentation; no snapshot writes or work when no observer is installed. */
 internal val LocalControlLensDraw = staticCompositionLocalOf<(() -> Unit)?> { null }
+internal val LocalControlGeometryDraw = staticCompositionLocalOf<((LensGeometry) -> Unit)?> { null }
 
 /** Draw the track once. Only the lens replaces pixels with the sampled track/backdrop.
  * A settled white thumb has no recording, backdrop subscription or optical renderer. */
@@ -26,11 +27,13 @@ internal fun GlassControlScene(modifier: Modifier, horizontalPadding: Dp = 20.dp
     scene: DrawScope.() -> Unit) {
     val flat = flatGlass()
     val flatColor = flatGlassColor()
-    if (requestedGlassNone()) {
+    val geometryObserver = if (io.github.anastaci1a.localica.BuildConfig.DEBUG) LocalControlGeometryDraw.current else null
+    if (flat || requestedGlassNone()) {
         // No recording, source subscription, lens, reduction or exclusive lease in None.
         Canvas(modifier) {
             scene()
             val shape = geometry()
+            geometryObserver?.invoke(shape)
             drawRoundRect(if (flat) flatColor else Color.White, shape.bounds.topLeft, shape.bounds.size, CornerRadius(shape.corner))
         }
         return
@@ -57,6 +60,7 @@ internal fun GlassControlScene(modifier: Modifier, horizontalPadding: Dp = 20.dp
     val opticalWork = LocalGlassOpticalWork.current
     Canvas(modifier.backdropLocation(location)) {
         val shape = geometry()
+            geometryObserver?.invoke(shape)
         if (!optical) {
             scene()
             drawRoundRect(face(), shape.bounds.topLeft, shape.bounds.size, CornerRadius(shape.corner))

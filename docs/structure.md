@@ -290,7 +290,7 @@ Controls and panels use one [lens model](interface.md#materials-and-controls), i
 
 When Normal is requested, active sliders and switches render one procedural scene, unchanged outside the lens, with refraction or fallback average colour inside. Resting white thumbs release sampling leases and bypass optics. Active controls capture only the thumb neighborhood and replace pixels only within its silhouette. Track, touch mapping and expanded wall contact share geometry.
 
-When Single-Tone Blur or None is requested, slider and switch knobs remain 28 dp circles (white in Single-Tone Blur; opaque theme fill in None) during contact, travel and cancellation. They draw without source leases, lens captures or reductions. Only their private elastic bodies restart across requested-mode changes; gesture and position owners remain mounted.
+None uses Normal control geometry and motion with opaque theme fills. When Single-Tone Blur is requested, slider and switch knobs remain white 28 dp circles during contact, travel and cancellation. They draw without source leases, lens captures or reductions. Only their private elastic bodies restart across requested-mode changes; gesture and position owners remain mounted.
 
 In Normal mode on Android 13+, controls entirely over explicitly recorded panel material use an 8×8 local GPU average, then the shared tint/contrast mapping and outline. Morphs retain that averaged home source while admitting the destination. Never infer eligibility from color similarity or average a foreground-containing recording.
 
