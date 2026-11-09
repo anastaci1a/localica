@@ -5,46 +5,83 @@ import java.text.Normalizer
 import java.util.Locale
 
 /** The remote snapshot is never a replacement for local listening events. */
-data class LastFmTrack(val artist: String, val title: String, val plays: Long, val album: String? = null, val mbid: String? = null) {
+data class LastFmTrack(val artist: String, val title: String, val plays: Long, val album: String? = null, val mbid: String? = null, val durationMs: Long? = null) {
     val key: String get() = listOf(normalize(artist), normalize(title), normalize(album), normalize(mbid))
         .joinToString("") { "${it.length}:$it" }
 }
-data class LastFmSnapshot(val username: String, val syncedAt: Long, val tracks: List<LastFmTrack>)
+data class LastFmSnapshot(val username: String, val syncedAt: Long, val tracks: List<LastFmTrack>,
+    val localBaseline: Map<String, Long>? = null, val refreshBoundarySeconds: Long? = null)
 data class SavedLastFm(val username: String = "", val useCounts: Boolean = false,
-    val snapshot: LastFmSnapshot? = null, val mappings: Map<String, String> = emptyMap(), val attemptedAt: Long? = null)
+    val snapshot: LastFmSnapshot? = null, val mappings: Map<String, String> = emptyMap(), val attemptedAt: Long? = null, val active: Boolean = true,
+    val keepSyncingInBackground: Boolean = true, val activeAttempt: String? = null)
 data class LastFmState(val saved: SavedLastFm = SavedLastFm(), val loading: Boolean = true,
-    val syncing: Boolean = false, val problem: String? = null)
-data class LastFmReview(val remote: LastFmTrack, val candidates: List<Track>)
-data class LastFmMatches(val counts: Map<String, Long>, val review: List<LastFmReview>)
+    val syncing: Boolean = false, val problem: String? = null, val progress: LastFmProgress? = null)
+enum class LastFmMatchTier { CLEAR, PROBABLE, UNCERTAIN }
+data class LastFmReview(val remote: LastFmTrack, val candidates: List<Track>,
+    val reason: String = "Several plausible local recordings", val tier: LastFmMatchTier = LastFmMatchTier.UNCERTAIN)
+data class LastFmResolution(val remote: LastFmTrack, val tracks: List<Track>, val tier: LastFmMatchTier,
+    val reason: String, val score: Int, val manual: Boolean = false)
+data class LastFmMatches(val counts: Map<String, Long>, val review: List<LastFmReview>,
+    val notInLibrary: Int = 0, val editions: List<LastFmReview> = emptyList(), val matched: Int = 0, val dismissed: Int = 0,
+    val resolutions: List<LastFmResolution> = emptyList(), val unmatched: List<LastFmTrack> = emptyList(), val recordingGroups: Map<String, String> = emptyMap(), val sourceSnapshot: LastFmSnapshot? = null) {
+    val judgments: List<LastFmResolution> get() = resolutions.filter { it.tier == LastFmMatchTier.PROBABLE }
+    val clearCount: Int get() = resolutions.count { it.tier == LastFmMatchTier.CLEAR }
+}
 
 internal fun normalize(value: String?): String = Normalizer.normalize(value.orEmpty(), Normalizer.Form.NFKC)
     .trim().replace(Regex("\\s+"), " ").lowercase(Locale.ROOT)
 
-/** Conservative whole-credit matching; editions with identical artist/title stay ambiguous. */
-object LastFmMatcher {
-    fun match(snapshot: LastFmSnapshot?, tracks: List<Track>, mappings: Map<String, String> = emptyMap()): LastFmMatches {
-        if (snapshot == null) return LastFmMatches(emptyMap(), emptyList())
-        val unique = tracks.distinctBy { it.id }
-        val byId = unique.associateBy { it.id }
-        val byName = unique.groupBy { normalize(it.artist?.takeIf(String::isNotBlank) ?: it.albumArtist) to normalize(it.title) }
-        val byMbid = unique.filter { !it.musicBrainzId.isNullOrBlank() }.groupBy { normalize(it.musicBrainzId) }
-        val counts = mutableMapOf<String, Long>(); val review = mutableListOf<LastFmReview>()
-        for (remote in snapshot.tracks) {
-            var candidates = if (!remote.mbid.isNullOrBlank() && byMbid.containsKey(normalize(remote.mbid)))
-                byMbid.getValue(normalize(remote.mbid)) else byName[normalize(remote.artist) to normalize(remote.title)].orEmpty()
-            if (!remote.mbid.isNullOrBlank()) candidates = candidates.filter {
-                it.musicBrainzId.isNullOrBlank() || normalize(it.musicBrainzId) == normalize(remote.mbid) }
-            if (candidates.size > 1 && !remote.album.isNullOrBlank()) {
-                val sameAlbum = candidates.filter { normalize(it.album) == normalize(remote.album) }
-                if (sameAlbum.isNotEmpty()) candidates = sameAlbum
-            }
-            val chosen = mappings[remote.key]?.let(byId::get) ?: candidates.singleOrNull()
-            if (chosen == null) review += LastFmReview(remote, candidates)
-            else {
-                val previous = counts[chosen.id] ?: 0; val plays = remote.plays.coerceAtLeast(0)
-                counts[chosen.id] = if (previous > Long.MAX_VALUE - plays) Long.MAX_VALUE else previous + plays
-            }
+/** Matching normalization never changes persisted remote keys. Musical version labels remain meaningful. */
+internal object LastFmNames {
+    private val marks = Regex("\\p{M}+")
+    private val punctuation = Regex("[^\\p{L}\\p{N}]+")
+    private val spaces = Regex("\\s+")
+    private val feature = Regex("(?i)\\b(?:feat\\.?|ft\\.?|featuring)\\s+")
+    private val edition = "(?:(?:\\d{4}\\s+)?(?:re-?master(?:ed)?)(?:\\s+\\d{4})?|(?:super\\s+)?deluxe(?:\\s+edition)?|expanded(?:\\s+edition)?|special\\s+edition|anniversary(?:\\s+edition)?|\\d+(?:st|nd|rd|th)\\s+anniversary(?:\\s+edition)?)"
+    private val editionSuffix = Regex("(?i)(?:\\s*[-–—]\\s*|\\s*[\\[(])$edition[\\])]?$|\\s+$edition$")
+    private val description = "(?:official(?:\\s+music)?\\s+(?:audio|video)|lyrics?(?:\\s+video)?|(?:drake\\s+)?diss(?:\\s+track)?|hd|hq|4k|explicit(?:\\s+version)?|re-?upload(?:ed)?|visuali[sz]er)"
+    private val bracket = Regex("[\\[(]([^\\])]+)[\\])]")
+    private val descriptor = Regex("(?i)$description")
+    private val descriptiveSuffix = Regex("(?i)\\s*[-–—]\\s*$description$|\\s+(?:official(?:\\s+music)?\\s+(?:audio|video)|lyrics?(?:\\s+video)?|hd|hq|4k)$")
+    private val fileExtension = Regex("(?i)\\.(?:mp3|m4a|flac|wav|ogg|opus|aac)$")
+    private val trackNumber = Regex("^\\s*\\d{1,3}[. _-]+(?=\\p{L})")
+    private val collaboration = Regex("(?i)\\s+(?:and|x)\\s+|\\s*&\\s*")
+    data class Name(val artist: String, val title: String, val featured: String)
+    fun text(value: String?): String = Normalizer.normalize(value.orEmpty(), Normalizer.Form.NFKD)
+        .replace(marks, "").lowercase(Locale.ROOT).replace(Regex("['’'.]"), "")
+        .replace("&", " and ").replace(punctuation, " ").trim().replace(spaces, " ")
+    private fun credit(value: String) = value.split(collaboration).map(::text).filter(String::isNotBlank).sorted().joinToString(" & ")
+    fun album(value: String?): String = text(stripEdition(value.orEmpty()))
+    private fun stripEdition(value: String): String {
+        var result = value.trim()
+        while (true) {
+            val next = result.replace(editionSuffix, "").trim()
+            if (next == result) return result
+            result = next
         }
-        return LastFmMatches(counts, review)
     }
+    private fun descriptions(value: String): String {
+        var result = value.replace(bracket) { if (descriptor.matches(it.groupValues[1].trim())) "" else it.value }.trim()
+        while (true) {
+            val next = result.replace(descriptiveSuffix, "").trim()
+            if (next == result || next.isBlank()) return result
+            result = next
+        }
+    }
+    fun name(artist: String?, title: String): Name {
+        val artists = artist.orEmpty().split(feature, limit = 2)
+        val rawTitle = stripEdition(descriptions(title.replace(fileExtension, "").replace(trackNumber, "")))
+        val titles = rawTitle.split(feature, limit = 2)
+        val guests = listOfNotNull(artists.getOrNull(1), titles.getOrNull(1))
+            .map { it.trim().trimEnd(')', ']') }.filter(String::isNotBlank)
+        val mainTitle = titles.first().trim().trimEnd('(', '[').trim()
+        return Name(credit(artists.first()), text(stripEdition(mainTitle)), guests.map(::credit).distinct().sorted().joinToString(" & "))
+    }
+}
+
+object LastFmMatcher {
+    const val NONE = ""
+    const val REVIEW = ":review:"
+    fun match(snapshot: LastFmSnapshot?, tracks: List<Track>, mappings: Map<String, String> = emptyMap()): LastFmMatches =
+        if (snapshot == null) LastFmMatches(emptyMap(), emptyList()) else LastFmMatchingEngine(tracks).match(snapshot, mappings)
 }

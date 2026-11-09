@@ -46,12 +46,12 @@ class LastFmSettingsTest {
             compose.onNode(hasSetTextAction() and hasAnyAncestor(hasTestTag("lastfm-username")), useUnmergedTree = true).performTextInput("fixture-user")
             compose.onNodeWithTag("lastfm-sync").performScrollTo().performClick()
             compose.waitUntil(5000) { controller.matches.value.counts["song"] == 42L }
-            compose.onNodeWithTag("lastfm-review-summary").performScrollTo().assertTextEquals("1 matched · 2 to review")
+            compose.onNodeWithTag("lastfm-review-summary").performScrollTo().assertTextEquals("1 matched · 1 to review")
             compose.onNode(isToggleable() and hasText("Use Last.fm counts")).performScrollTo().performClick()
             compose.waitUntil(5000) { controller.state.value.saved.useCounts }
             assertEquals(42L, runBlocking { controller.applyTo(flowOf(local)).first().tracks["song"] })
             compose.onNodeWithText("Use A · a.mp3").performScrollTo().performClick()
-            compose.waitUntil(5000) { controller.matches.value.review.size == 1 }
+            compose.waitUntil(5000) { controller.matches.value.review.isEmpty() }
             assertEquals("a", runBlocking { store.read().mappings.values.single() })
             compose.onNode(isToggleable() and hasText("Use Last.fm counts")).performScrollTo().performClick()
             compose.waitUntil(5000) { !controller.state.value.saved.useCounts }
@@ -59,6 +59,15 @@ class LastFmSettingsTest {
             assertEquals(7L, local.tracks["song"])
             assertEquals(42L, runBlocking { store.read().snapshot!!.tracks.first().plays })
             compose.onNodeWithTag("lastfm-disconnect").performScrollTo().performClick()
+            compose.waitUntil(5000) { controller.state.value.saved.username.isEmpty() && !controller.state.value.saved.active }
+            assertNotNull(runBlocking { store.read().snapshot })
+            assertTrue(runBlocking { store.read().mappings.isNotEmpty() })
+            compose.onNodeWithTag("lastfm-delete").performScrollTo().performClick()
+            compose.onNodeWithText("Cancel").performClick()
+            compose.waitUntil(5000) { compose.onAllNodesWithText("Delete synced data").fetchSemanticsNodes().isEmpty() }
+            assertNotNull(runBlocking { store.read().snapshot })
+            compose.onNodeWithTag("lastfm-delete").performScrollTo().performClick()
+            compose.onNodeWithText("Delete synced data").performClick()
             compose.waitUntil(5000) { controller.state.value.saved.snapshot == null }
             val persisted = runBlocking { FileLastFmStore(file).read() }
             assertNull(persisted.snapshot); assertTrue(persisted.mappings.isEmpty()); assertFalse(persisted.useCounts)

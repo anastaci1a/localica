@@ -213,7 +213,7 @@ The [appearance settings](#appearance-and-settings) own thumb finish and expansi
 
 ### Last.fm settings
 
-The Last.fm settings page uses shared text fields, buttons and switches. It shows username, explicit Sync now, last successful sync, source selection, errors and unresolved matches. Candidate buttons resolve ambiguous recordings; Disconnect clears the external snapshot. See the [statistics contract](product.md#optional-lastfm-statistics) for privacy, fallback and retention rules.
+The Last.fm settings page uses shared text fields, buttons and switches. It shows username, explicit Sync now, last successful sync, source selection, errors and unresolved matches. Candidate buttons resolve ambiguous recordings. Disconnect retains the archive; deleting synced data requires a separate confirmation. See the [statistics contract](product.md#optional-lastfm-statistics) for privacy, fallback and retention rules.
 
 ## Navigation and Back
 

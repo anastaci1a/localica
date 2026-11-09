@@ -115,7 +115,7 @@ Timed lyrics interpolate Media3's latency-aware position between samples, freezi
 
 ## Online features and artist photos
 
-Online features is one app-level consent switch in Settings → Last.fm. It defaults off. Consent covers artist photos and manual Last.fm sync. Turning it off prevents new network requests; cached photos and saved counts remain available offline.
+Online features is one app-level consent switch in Settings → Last.fm. It defaults off. Consent covers artist photos and manual Last.fm sync. Turning it off prevents new network requests and restores local play counts. Cached photos, the Last.fm archive and match choices are retained.
 
 Artist photo lookup sends artist and release names to Deezer, then MusicBrainz, Wikidata and Wikimedia Commons when needed. It never uses Last.fm images. Automatic matching requires a normalized artist name and a release title shared with the local library. Missing matches retain the caller's latest album artwork.
 
@@ -127,12 +127,16 @@ Photos refresh after 30 days. Failed attempts wait 24 hours before retrying. A 6
 
 Settings → Last.fm accepts a username and explicitly starts a read-only sync. No password, account login or OAuth is used. Last.fm requests use its HTTPS API. Requests fetch listening statistics; they never upload local history or audio. Sync is manual, with no automatic launch request.
 
-A complete paginated snapshot replaces the previous snapshot only after every page succeeds. Requests are paced, transient failures retry with backoff, and complete sync attempts are limited to once a minute. Failed same-account syncs preserve the last complete offline snapshot. Changing username clears the previous account's snapshot and turns external counts off.
+A refresh publishes one complete snapshot only after every request succeeds. Existing accounts use recent scrobbles and authoritative per-song user counts; large change sets fall back to full paging. Full rescan is also available explicitly. Requests are paced with retry backoff and a one-minute attempt limit. Failure preserves the archive; another account cannot use its counts.
 
-Local qualified events and Last.fm counts remain separate. Use Last.fm counts is off by default. When enabled, positive Last.fm totals feed per-song play-based sorting and all-time rankings; songs without positive remote totals use local counts. Recent time ranges continue using local events. Turning the setting off restores local counts without a sync.
+Local qualified events remain separate. Use Last.fm counts defaults off. When enabled, the archive supplies per-song sorting and all-time rankings, including authoritative zeroes. Songs without a remote match and recent time ranges use local counts. Playlist origin counts always remain local.
 
-Matching normalizes artist and title, then uses album and recording MusicBrainz IDs when available. Ambiguous editions remain unresolved until the user chooses a local candidate. Unmatched entries remain visible for review and are reconsidered as the library changes. Resetting match choices removes only manual mappings.
+Qualified local plays after a successful sync temporarily add to the archived base. Each recording's addition appears on its matching edition copies. The next successful refresh replaces the base and clears temporary additions; failure preserves both. Sync never changes local play history. Legacy archives adopt the current local counter boundary once, without a network request.
 
-Disconnect cancels pending sync, deletes the external snapshot and mappings, and turns external counts off. It preserves local history, playlists and audio tags. Playlist origin counts remain local because Last.fm cannot identify a local playlist traversal.
+Matching combines artist, album, ordered title tokens, available duration and recording MusicBrainz IDs. It recognizes artist/title credits inside uploader titles and removes descriptive upload decorations. Conflicting IDs, musical versions and substantial duration differences prevent automatic text matches. Copies of the same recording across editions show that version's plays; aggregate totals count each remote recording once.
+
+Clear matches resolve silently. Probable matches expose their tier and reason for judgment-call review. Uncertain candidates need a decision, ordered by plays. Entries without plausible candidates stay outside the review count and are reconsidered when the library changes. Manual choices survive refreshes; resetting them leaves the archive intact.
+
+Turning Last.fm or Online features off cancels syncing and stops using external counts while retaining the archive and choices. Re-enabling restores them without a request. Disconnect forgets the active connection and keeps its archive. Only confirmed Delete synced Last.fm data removes the archive and choices. Local history, playlists and audio tags are never deleted by these actions.
 
 Builds without an application API key disable syncing and external counts with an explanatory settings message. Build configuration is documented in [Build](build.md#lastfm-build-key).
