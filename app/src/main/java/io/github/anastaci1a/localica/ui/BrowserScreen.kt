@@ -1060,7 +1060,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
             val lookahead = this@LookaheadScope
             val gridItemContent: @Composable androidx.compose.foundation.lazy.grid.LazyGridItemScope.(BrowserItem?) -> Unit = remember(
                 itemIndices, skeletonReveal, loadingReveal, route, playingEntryId, session, artDetail,
-                orderMotion, pinchMotion, reorder, reducedMotion, entrySweep, gridState, pinchIndices,
+                orderMotion, pinchMotion, reorder, reducedMotion, gridState, pinchIndices,
                 mountedActions, density, obscuredInset, displayedStyle, actionPainter, queryPending, enabled,
                 playlists, playlistController, queues, pins, onPin, currentCollectionLookup, cellGeometry, editableOrder,
                 searchSlotLayoutObserver, searchSlotLayoutOwner, showFilters, showSearchPill, pillSlotHeight,
@@ -1202,7 +1202,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
             } }
             if (screenWork != null) {
                 val inputs = arrayOf<Any?>(itemIndices, skeletonReveal, loadingReveal, route, playingEntryId, session, artDetail,
-                orderMotion, pinchMotion, reorder, reducedMotion, entrySweep, gridState, pinchIndices,
+                orderMotion, pinchMotion, reorder, reducedMotion, gridState, pinchIndices,
                 mountedActions, density, obscuredInset, displayedStyle, actionPainter, queryPending, enabled,
                 playlists, playlistController, queues, pins, onPin, currentCollectionLookup, cellGeometry, editableOrder,
                 searchSlotLayoutObserver, searchSlotLayoutOwner, showFilters, showSearchPill, pillSlotHeight,
@@ -1211,7 +1211,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                 val previous = remember { arrayOfNulls<Array<Any?>>(1) }
                 SideEffect {
                     previous[0]?.let { old ->
-                        val names = arrayOf("itemIndices", "skeletonReveal", "loadingReveal", "route", "playingEntryId", "session", "artDetail", "orderMotion", "pinchMotion", "reorder", "reducedMotion", "entrySweep", "gridState", "pinchIndices", "mountedActions", "density", "obscuredInset", "displayedStyle", "actionPainter", "queryPending", "enabled", "playlists", "playlistController", "queues", "pins", "onPin", "currentCollectionLookup", "cellGeometry", "editableOrder", "searchSlotLayoutObserver", "searchSlotLayoutOwner", "showFilters", "showSearchPill", "pillSlotHeight", "onSearchCommit", "onOpen", "onPlay", "result", "popupDismiss", "inheritedInformation", "artistOnlyLoading", "mutablePositions", "endpointMeasurer", "lookahead")
+                        val names = arrayOf("itemIndices", "skeletonReveal", "loadingReveal", "route", "playingEntryId", "session", "artDetail", "orderMotion", "pinchMotion", "reorder", "reducedMotion", "gridState", "pinchIndices", "mountedActions", "density", "obscuredInset", "displayedStyle", "actionPainter", "queryPending", "enabled", "playlists", "playlistController", "queues", "pins", "onPin", "currentCollectionLookup", "cellGeometry", "editableOrder", "searchSlotLayoutObserver", "searchSlotLayoutOwner", "showFilters", "showSearchPill", "pillSlotHeight", "onSearchCommit", "onOpen", "onPlay", "result", "popupDismiss", "inheritedInformation", "artistOnlyLoading", "mutablePositions", "endpointMeasurer", "lookahead")
                         inputs.forEachIndexed { index, value -> if (old[index] != value) screenWork("row-key:" + names[index], route.key) }
                     }
                     previous[0] = inputs
