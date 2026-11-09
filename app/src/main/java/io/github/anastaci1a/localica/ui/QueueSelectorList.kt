@@ -52,12 +52,13 @@ internal fun QueueSelectorList(queues: List<ListeningQueue>, browsedId: String?,
     onOffset: (String, Int) -> Unit, onMove: (String, String?, (Boolean) -> Unit) -> Unit) {
     val panelReady = LocalGlassPanelReady.current
     val playingIndex = queues.indexOfFirst { it.id == playingId }.coerceAtLeast(0)
-    val grid = rememberLazyGridState(initialFirstVisibleItemIndex = playingIndex)
+    val initialIndex = queues.indexOfFirst { it.id == browsedId }.takeIf { it >= 0 } ?: playingIndex
+    val grid = rememberLazyGridState(initialFirstVisibleItemIndex = initialIndex)
     val probe = remember { QueueSelectionProbe() }
     val observer = LocalQueueSelectionDrawObserver.current
     val observe by rememberUpdatedState(observer)
     val selectionView = androidx.compose.ui.platform.LocalView.current
-    LaunchedEffect(enabled) { if (enabled) grid.requestScrollToItem(playingIndex) }
+    LaunchedEffect(enabled) { if (enabled) grid.requestScrollToItem(initialIndex) }
     val scope = rememberCoroutineScope()
     val presentation by rememberUpdatedState(QueueDragPresentation(browsedId, playingId, isPlaying,
         queues.mapIndexed { index, queue -> queue.id to index + 1 }.toMap()))
