@@ -108,7 +108,7 @@ internal fun ScannerActions(state: LibraryUiState, onFullScan: () -> Unit, onQui
     val enabled = !state.scanning && !state.loading && !state.updatingFolders && state.snapshot.folders.isNotEmpty()
     SettingsLink("Full scan", enabled = enabled, onClick = onFullScan)
     SettingsLink("Quick Scan", enabled = enabled, onClick = onQuickScan)
-    Text("Quick Scan adds new songs. Full scan also refreshes tags and removes missing files. Your audio files stay untouched.",
+    SettingsDescription("Quick Scan adds new songs. Full scan also refreshes tags and removes missing files. Your audio files stay untouched.",
         style = MaterialTheme.typography.bodySmall)
 }
 
@@ -117,13 +117,13 @@ internal fun MetadataReadFailures(state: LibraryUiState, modifier: Modifier = Mo
     val scroll = androidx.compose.foundation.lazy.rememberLazyListState()
     LazyColumn(modifier.fillMaxWidth().modalScroll(scroll), state = scroll,
         contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        item { Text("These files remain in the library using available metadata or filenames. A successful full scan clears their errors.") }
-        if (state.snapshot.metadataFailures.isEmpty()) item { Text("No metadata read failures.") }
+        item { SettingsDescription("These files remain in the library using available metadata or filenames. A successful full scan clears their errors.") }
+        if (state.snapshot.metadataFailures.isEmpty()) item { SettingsDescription("No metadata read failures.") }
         items(state.snapshot.metadataFailures, key = { it.folderUri + "\n" + it.trackId }) { failure ->
             Surface(shape = Corners.card, color = MaterialTheme.colorScheme.surfaceContainerLow) {
                 Column(Modifier.fillMaxWidth().padding(16.dp)) {
                     Text(failure.path, style = MaterialTheme.typography.titleSmall)
-                    Text(state.snapshot.folders.firstOrNull { it.uri == failure.folderUri }?.name.orEmpty(), style = MaterialTheme.typography.bodySmall)
+                    SettingsDescription(state.snapshot.folders.firstOrNull { it.uri == failure.folderUri }?.name.orEmpty(), style = MaterialTheme.typography.bodySmall)
                 }
             }
         }

@@ -66,14 +66,14 @@ internal fun LibraryDataSettings(library: LibraryRepository) {
     SettingsLink("Import library data", "Apply dates added from a library data file", enabled = !busy, anchor = importOrigin) {
         importer.launch(arrayOf("application/json", "application/gzip", "application/x-gzip", "application/octet-stream", "text/plain"))
     }
-    Text("Tools outside Localica can edit an exported file. Import shows what will change before applying it. Later scans keep imported dates.",
+    SettingsDescription("Tools outside Localica can edit an exported file. Import shows what will change before applying it. Later scans keep imported dates.",
         style = MaterialTheme.typography.bodySmall)
     if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
     preview?.let { (document, plan) -> CompositionLocalProvider(LocalGlassOrigin provides importOrigin) {
         val changes = plan.changes
         GlassAlertDialog(onDismissRequest = { preview = null }, title = { Text(if (changes > 0) "Import library data?" else "Nothing to import") },
             text = { SettingsStack(gap = Space.Compact) {
-                LibraryDataText.preview(plan).forEach { Text(it) }
+                LibraryDataText.preview(plan).forEach { SettingsDescription(it) }
             } },
             confirmButton = { if (changes > 0) ActionTextButton(onClick = {
                 preview = null
@@ -88,7 +88,7 @@ internal fun LibraryDataSettings(library: LibraryRepository) {
             dismissButton = if (changes > 0) ({ ActionTextButton(onClick = { preview = null }) { Text("Cancel") } }) else null)
     } }
     message?.let { (title, text) -> CompositionLocalProvider(LocalGlassOrigin provides importOrigin) {
-        GlassAlertDialog(onDismissRequest = { message = null }, title = { Text(title) }, text = { Text(text) },
+        GlassAlertDialog(onDismissRequest = { message = null }, title = { SettingsDescription(title) }, text = { SettingsDescription(text) },
             confirmButton = { ActionTextButton(onClick = { message = null }) { Text("Close") } })
     } }
 }

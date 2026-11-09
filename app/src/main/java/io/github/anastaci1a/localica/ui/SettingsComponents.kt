@@ -42,10 +42,7 @@ internal fun <T : Any> SettingsNavigationPage(target: T, title: (T) -> String, o
                     Text(title(shown), Modifier.weight(1f), style = MaterialTheme.typography.titleLarge)
                     ActionIcon(AppIcon.ActionClose, "Close settings", onClick = onClose)
                 }
-                // #655: flat rows on settings pages line up with the text inside glass links.
-                CompositionLocalProvider(LocalSettingsRowMetrics provides SettingsRowMetrics(inset = SettingsRowInset)) {
-                    Column(Modifier.weight(1f)) { content(shown) }
-                }
+                Column(Modifier.weight(1f)) { content(shown) }
             }
         }
         }
@@ -66,10 +63,8 @@ internal fun SettingsLink(markerColor: Color?, title: String, summary: String? =
     val colors = ListItemDefaults.colors(containerColor = androidx.compose.ui.graphics.Color.Transparent)
     val headlineStyle = MaterialTheme.typography.bodyLarge
     val summaryStyle = MaterialTheme.typography.bodyMedium
-    // Captured here so the retained modal face keeps this page's icon slot.
-    val metrics = LocalSettingsRowMetrics.current
     @Composable fun Foreground(modifier: Modifier = Modifier) {
-        SettingsLinkFace(title, summary, icon, modifier.settingsLinkMarker(markerColor), headlineStyle, summaryStyle, colors, metrics)
+        SettingsLinkFace(title, summary, icon, modifier.settingsLinkMarker(markerColor), headlineStyle, summaryStyle, colors)
     }
     SideEffect { if (anchor != null) anchor.face = { Foreground() } }
     val opacity by animateControlStateFloat(if (enabled) 1f else .45f, enabled, "Settings link availability")
@@ -79,10 +74,18 @@ internal fun SettingsLink(markerColor: Color?, title: String, summary: String? =
     }
 } }
 
+/** Page descriptions keep their historical page-edge position, with caller typography and semantics. */
+@Composable
+internal fun SettingsDescription(text: String, modifier: Modifier = Modifier,
+    color: androidx.compose.ui.graphics.Color = androidx.compose.ui.graphics.Color.Unspecified,
+    style: androidx.compose.ui.text.TextStyle = LocalTextStyle.current) {
+    Text(text, modifier, color = color, style = style)
+}
+
 @Composable
 internal fun SettingsHeading(title: String) {
     Text(title, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary,
-        modifier = Modifier.fillMaxWidth().padding(start = LocalSettingsRowMetrics.current.textStart, top = 16.dp, bottom = 4.dp)
+        modifier = Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 4.dp)
             .settingsRowPart(SettingsRowPart.Heading))
 }
 

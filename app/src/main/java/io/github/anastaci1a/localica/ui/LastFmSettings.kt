@@ -46,9 +46,9 @@ internal fun LastFmSettings(controller: LastFmController) {
             LiquidGlassSurface(Modifier.fillMaxWidth().testTag("lastfm-dashboard-card"), cornerRadius = settingsReviewRadius(), pressFeedback = false) {
                 SettingsStack {
                     LastFmDashboardHeader(progress, state.syncing) {
-                        Text(progress.countSummary(context.resources),
+                        SettingsDescription(progress.countSummary(context.resources),
                             Modifier.testTag(if (state.syncing) "lastfm-progress" else "lastfm-archive-summary"), style = MaterialTheme.typography.bodySmall)
-                        Text(if (lastSync == null) "Last sync: never" else "Last sync: $lastSync",
+                        SettingsDescription(if (lastSync == null) "Last sync: never" else "Last sync: $lastSync",
                             Modifier.testTag("lastfm-dashboard-last-sync"), style = MaterialTheme.typography.bodySmall)
                     }
                     SettingsStack(inset = Space.Comfortable) { GlassActionRow {
@@ -71,17 +71,15 @@ internal fun LastFmSettings(controller: LastFmController) {
     SettingsEntry("Data") {
         GlassChoices(listOf("Overview", "Matches", "Data"), tab, Modifier.testTag("lastfm-tabs"), horizontal = true) { tab = it }
     }
-    if (!controller.enabled) Text("Last.fm is disabled in this build: no bundled API key.")
-    if (!onlineAllowed) Text("Online features are off. Enable them to sync.")
-    if (!active) Text("Last.fm is off. The saved archive and match choices are kept on this device.")
-    state.problem?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.testTag("lastfm-problem")) }
+    if (!controller.enabled) SettingsDescription("Last.fm is disabled in this build: no bundled API key.")
+    if (!onlineAllowed) SettingsDescription("Online features are off. Enable them to sync.")
+    if (!active) SettingsDescription("Last.fm is off. The saved archive and match choices are kept on this device.")
+    state.problem?.let { SettingsDescription(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.testTag("lastfm-problem")) }
     when (tab) {
         0 -> {
             if (saved.snapshot != null) {
                 SettingsHeading("Matching")
-                SettingsTextLine(LocalSettingsRowMetrics.current.textStart) { modifier ->
-                    Text("${matches.matched} matched · ${matches.review.size} to review", modifier.testTag("lastfm-review-summary"))
-                }
+                SettingsDescription("${matches.matched} matched · ${matches.review.size} to review", Modifier.testTag("lastfm-review-summary"))
                 val segments = listOf(
                     LastFmMatchSegment(LastFmGroup.MATCHED.name, "Matched", matches.clearCount, Color(0xFF71C9A2)),
                     LastFmMatchSegment(LastFmGroup.JUDGMENTS.name, "Judgment calls", matches.judgments.size, Color(0xFFE6BC64)),
@@ -109,24 +107,24 @@ internal fun LastFmSettings(controller: LastFmController) {
             SettingsHeading("Account and data")
             LastFmConnection(controller, state, onlineAllowed, active, username, { username = it }, canSync)
             BooleanPreference("Keep syncing in the background", saved.keepSyncingInBackground, controller::keepSyncingInBackground)
-            Text("A sync you start can finish after you leave Localica. Its notification shows progress and lets you stop it.", style = MaterialTheme.typography.bodySmall)
+            SettingsDescription("A sync you start can finish after you leave Localica. Its notification shows progress and lets you stop it.", style = MaterialTheme.typography.bodySmall)
             LastFmNotificationPreference()
             SettingsEntry("Use Last.fm counts") {
                 if (controller.enabled && onlineAllowed && active && saved.snapshot != null) BooleanPreference("Use Last.fm counts", saved.useCounts, controller::useCounts)
-                else Text("Use Last.fm counts: off")
+                else SettingsDescription("Use Last.fm counts: off")
             }
-            Text("Local plays add temporarily to the archived counts. A refresh replaces that base and clears the additions. Local listening history is kept. Recent ranges use local history.", style = MaterialTheme.typography.bodyMedium)
+            SettingsDescription("Local plays add temporarily to the archived counts. A refresh replaces that base and clears the additions. Local listening history is kept. Recent ranges use local history.", style = MaterialTheme.typography.bodyMedium)
             SettingsEntry("Full rescan") { GlassActionButton(AppIcon.ActionRescan, "Full rescan", enabled = canSync) { controller.sync(username, fullRescan = true) } }
             SettingsEntry("Disconnect Last.fm") { GlassActionButton(AppIcon.ActionClose, "Disconnect Last.fm", enabled = saved.username.isNotBlank(),
                 modifier = Modifier.testTag("lastfm-disconnect"), onClick = controller::disconnect) }
-            Text("Turning Last.fm off or disconnecting keeps the archive and match choices on this device.", style = MaterialTheme.typography.bodySmall)
+            SettingsDescription("Turning Last.fm off or disconnecting keeps the archive and match choices on this device.", style = MaterialTheme.typography.bodySmall)
             SettingsEntry("Delete synced Last.fm data") { GlassActionButton(AppIcon.ActionTrash, "Delete synced Last.fm data",
                 enabled = saved.snapshot != null || saved.mappings.isNotEmpty(), modifier = Modifier.testTag("lastfm-delete")) { deleting = true } }
             SettingsEntry("Reset Last.fm match choices") { GlassActionButton(AppIcon.ActionChevronLeft, "Reset Last.fm match choices", enabled = saved.mappings.isNotEmpty(), onClick = controller::resetMappings) }
         }
     }
     if (deleting) GlassAlertDialog(onDismissRequest = { deleting = false }, title = { Text("Delete synced Last.fm data?") },
-        text = { Text("This deletes only the Last.fm archive, match choices and judgment calls. Your local listening history is kept.") },
+        text = { SettingsDescription("This deletes only the Last.fm archive, match choices and judgment calls. Your local listening history is kept.") },
         confirmButton = { GlassActionButton(AppIcon.ActionTrash, "Delete synced data") { controller.deleteSyncedData(); deleting = false } },
         dismissButton = { GlassActionButton(AppIcon.ActionClose, "Cancel") { deleting = false } })
 }
@@ -136,14 +134,14 @@ private fun LastFmConnection(controller: LastFmController, state: LastFmState, o
     username: String, onUsername: (String) -> Unit, canSync: Boolean) {
     val context = LocalContext.current
     BooleanPreference("Last.fm", active, controller::setActive)
-    Text("Read-only sync sends your username to Last.fm to fetch play counts. It never uploads listening history or audio.", style = MaterialTheme.typography.bodyMedium)
+    SettingsDescription("Read-only sync sends your username to Last.fm to fetch play counts. It never uploads listening history or audio.", style = MaterialTheme.typography.bodyMedium)
     SettingsEntry("Last.fm username") { GlassTextField(username, onUsername, label = { Text("Last.fm username") }, singleLine = true,
         enabled = controller.enabled && onlineAllowed && active && !state.loading && !state.syncing,
         modifier = Modifier.fillMaxWidth().testTag("lastfm-username")) }
     SettingsEntry("Sync now") { GlassActionButton(AppIcon.ActionRefresh, if (state.syncing) "Syncing…" else if (state.saved.snapshot == null) "Sync now" else "Quick refresh",
         enabled = canSync, modifier = Modifier.testTag("lastfm-sync")) { controller.sync(username) } }
-    Text("Wait a minute between syncs. Quick refresh fetches recent changes; Full rescan fetches the complete account.", style = MaterialTheme.typography.bodySmall)
-    SettingsEntry("Last sync") { Text(state.saved.snapshot?.let { "Last sync: ${lastFmSyncTime(context, it.syncedAt)} · ${it.username}" }
+    SettingsDescription("Wait a minute between syncs. Quick refresh fetches recent changes; Full rescan fetches the complete account.", style = MaterialTheme.typography.bodySmall)
+    SettingsEntry("Last sync") { SettingsDescription(state.saved.snapshot?.let { "Last sync: ${lastFmSyncTime(context, it.syncedAt)} · ${it.username}" }
         ?: "Last sync: never", Modifier.testTag("lastfm-last-sync")) }
 }
 

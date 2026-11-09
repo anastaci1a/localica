@@ -61,7 +61,7 @@ internal fun IconPackSettings(onView: (String?) -> Unit) {
             busy = false
         }
     }
-    Text(if (active == null) "Using the built-in icons" else "Using “${library.firstOrNull { it.id == active }?.report?.info?.name.orEmpty()}”",
+    SettingsDescription(if (active == null) "Using the built-in icons" else "Using “${library.firstOrNull { it.id == active }?.report?.info?.name.orEmpty()}”",
         modifier = Modifier.testTag("icon-pack-status"))
     SettingsEntry("Active icon pack") { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
     IconPackRow(null, active == null, !busy, { IconPacks.reset(context) }, { onView(null) })
@@ -73,13 +73,13 @@ internal fun IconPackSettings(onView: (String?) -> Unit) {
     SettingsEntry("Export built-in icons as a template") { ActionTextButton(enabled = !busy, onClick = { exporter.launch("localica-icon-template.zip") }) { Text("Export built-in icons as a template") } }
     updating?.let { prepared ->
         GlassAlertDialog({ updating = null }, title = { Text("Update ${prepared.report.info.name}?") },
-            text = { Text("Version ${prepared.report.info.version} is already in your library. Replace its icons with this import?") },
+            text = { SettingsDescription("Version ${prepared.report.info.version} is already in your library. Replace its icons with this import?") },
             confirmButton = { ActionTextButton({ updating = null; install(prepared) }) { Text("Update") } },
             dismissButton = { ActionTextButton({ updating = null }) { Text("Cancel") } })
     }
     deleting?.let { pack ->
         GlassAlertDialog({ deleting = null }, title = { Text("Delete ${pack.report.info.name}?") },
-            text = { Text("Remove this pack from your library? If it is active, Localica will use the built-in icons.") },
+            text = { SettingsDescription("Remove this pack from your library? If it is active, Localica will use the built-in icons.") },
             confirmButton = { ActionTextButton({
                 deleting = null
                 scope.launch {
@@ -90,7 +90,7 @@ internal fun IconPackSettings(onView: (String?) -> Unit) {
             }) { Text("Delete") } }, dismissButton = { ActionTextButton({ deleting = null }) { Text("Cancel") } })
     }
     message?.let { text ->
-        GlassAlertDialog({ message = null }, title = { Text("Icon packs") }, text = { Text(text) },
+        GlassAlertDialog({ message = null }, title = { SettingsDescription("Icon packs") }, text = { SettingsDescription(text) },
             confirmButton = { ActionTextButton({ message = null }) { Text("Close") } })
     }
 }
@@ -118,10 +118,10 @@ private fun IconPackRow(pack: StoredIconPack?, selected: Boolean, enabled: Boole
 internal fun IconPackViewer(id: String?) {
     val library by IconPacks.library.collectAsState()
     val pack = library.firstOrNull { it.id == id }
-    if (id != null && pack == null) { Text("This pack is no longer in your library."); return }
-    Text(pack?.report?.info?.let { listOfNotNull(it.name, "Version ${it.version}", it.author).joinToString(" · ") } ?: "Built-in icons")
-    pack?.let { Text("Imported ${DateFormat.getDateTimeInstance().format(Date(it.importedAt))}", style = MaterialTheme.typography.bodySmall) }
-    Text("Pack icon · Built-in icon", style = MaterialTheme.typography.bodySmall)
+    if (id != null && pack == null) { SettingsDescription("This pack is no longer in your library."); return }
+    SettingsDescription(pack?.report?.info?.let { listOfNotNull(it.name, "Version ${it.version}", it.author).joinToString(" · ") } ?: "Built-in icons")
+    pack?.let { SettingsDescription("Imported ${DateFormat.getDateTimeInstance().format(Date(it.importedAt))}", style = MaterialTheme.typography.bodySmall) }
+    SettingsDescription("Pack icon · Built-in icon", style = MaterialTheme.typography.bodySmall)
     AppIcon.entries.groupBy { it.id.substringBefore('.') }.forEach { (area, icons) ->
         SettingsHeading(when (area) { "tab" -> "Tabs"; "transport" -> "Transport"; "menu" -> "Song menu"; "settings" -> "Settings"; else -> "Actions" })
         icons.forEach { icon ->
@@ -133,13 +133,13 @@ internal fun IconPackViewer(id: String?) {
                 Icon(packIconPainter(icon, null), "Built-in: ${icon.id}", Modifier.size(24.dp))
                 Column(Modifier.weight(1f)) {
                     Text(icon.id)
-                    Text(if (vector != null) "Reassigned · Vector" else if (mask != null) "Reassigned" else if (pack == null) "Built-in" else "Built-in (fallback)", style = MaterialTheme.typography.bodySmall)
+                    SettingsDescription(if (vector != null) "Reassigned · Vector" else if (mask != null) "Reassigned" else if (pack == null) "Built-in" else "Built-in (fallback)", style = MaterialTheme.typography.bodySmall)
                 }
             }
         }
     }
     pack?.report?.let { report ->
-        if (report.unknown.isNotEmpty()) { SettingsHeading("Unknown ids"); report.unknown.forEach { Text(it) } }
-        if (report.rejected.isNotEmpty()) { SettingsHeading("Rejected entries"); report.rejected.forEach { Text("${it.first}: ${it.second}") } }
+        if (report.unknown.isNotEmpty()) { SettingsHeading("Unknown ids"); report.unknown.forEach { SettingsDescription(it) } }
+        if (report.rejected.isNotEmpty()) { SettingsHeading("Rejected entries"); report.rejected.forEach { SettingsDescription("${it.first}: ${it.second}") } }
     }
 }

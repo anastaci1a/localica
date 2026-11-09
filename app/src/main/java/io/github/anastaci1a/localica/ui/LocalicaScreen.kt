@@ -482,7 +482,7 @@ fun LocalicaScreen(
             QueueSettingsControls(queues.settings, section) { queueController?.settings(it) }
         }, aboutContent = {
             Text("Localica", style = MaterialTheme.typography.headlineSmall)
-            Text("Offline music, organized your way.")
+            SettingsDescription("Offline music, organized your way.")
             DiagnosticsExportAction()
             LibraryLicenses()
         }, lastFmContent = {
@@ -541,7 +541,7 @@ internal fun LibraryNotice(state: LibraryUiState) {
         null -> if (state.unavailableFolders.isNotEmpty()) R.string.access_lost else null
     }
     message?.let {
-        Text(stringResource(it), color = if (state.problem != null) MaterialTheme.colorScheme.error
+        SettingsDescription(stringResource(it), color = if (state.problem != null) MaterialTheme.colorScheme.error
             else MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
     }
 }

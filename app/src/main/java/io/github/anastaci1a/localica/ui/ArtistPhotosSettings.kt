@@ -30,13 +30,13 @@ internal fun ArtistPhotosSettings(photos: ArtistPhotos, consent: NetworkConsent,
     SettingsEntry("Photo sources") {
         Text("Deezer → Wikimedia → album art", style = MaterialTheme.typography.titleMedium)
     }
-    Text("Photos are matched by artist name and releases in your library. Album art appears immediately while a photo loads. Photos refresh after 30 days and stay cached for offline use.")
+    SettingsDescription("Photos are matched by artist name and releases in your library. Album art appears immediately while a photo loads. Photos refresh after 30 days and stay cached for offline use.")
     SettingsEntry("Photo cache size") {
-        Text("Photo cache size: ${String.format(Locale.ROOT, "%.1f", bytes / (1024.0 * 1024.0))} MiB / ${budget / (1024 * 1024)} MiB")
+        SettingsDescription("Photo cache size: ${String.format(Locale.ROOT, "%.1f", bytes / (1024.0 * 1024.0))} MiB / ${budget / (1024 * 1024)} MiB")
     }
     ChoicePreference("Photo cache budget", budget, listOf(128L, 512L, 1024L, 2048L).map { it * 1024 * 1024 },
         label = { "${it / (1024 * 1024)} MiB" }, popup = true) { selected -> scope.launch { photos.setCacheBudget(selected) } }
-    Text("Chosen photos: ${String.format(Locale.ROOT, "%.1f", chosenBytes / (1024.0 * 1024.0))} MiB, kept separately. Automatic photos use least-recently-displayed eviction. Visible photos are protected.")
+    SettingsDescription("Chosen photos: ${String.format(Locale.ROOT, "%.1f", chosenBytes / (1024.0 * 1024.0))} MiB, kept separately. Automatic photos use least-recently-displayed eviction. Visible photos are protected.")
     fun run(refresh: Boolean) {
         scope.launch {
             busy = true; status = null
@@ -62,15 +62,15 @@ internal fun ArtistPhotosSettings(photos: ArtistPhotos, consent: NetworkConsent,
     SettingsEntry("Refresh all photos") {
         ActionButton(onClick = { run(true) }, enabled = allowed && !busy) { Text("Refresh all photos") }
     }
-    if (!allowed) Text("Enable Online features to fetch photos. Artist images use album art while it is off.")
-    if (busy) Text("Updating artist photos…")
+    if (!allowed) SettingsDescription("Enable Online features to fetch photos. Artist images use album art while it is off.")
+    if (busy) SettingsDescription("Updating artist photos…")
     progress?.let { current ->
-        if (current.pending > 0) Text("${current.pending} artists waiting${current.artist?.let { " · Fetching $it" }.orEmpty()}")
+        if (current.pending > 0) SettingsDescription("${current.pending} artists waiting${current.artist?.let { " · Fetching $it" }.orEmpty()}")
         if (current.failed.isNotEmpty()) {
-            Text("${current.failed.size} artists couldn't be fetched.")
+            SettingsDescription("${current.failed.size} artists couldn't be fetched.")
             ActionTextButton({ scope.launch { work?.retry() } }, enabled = allowed) { Text("Retry") }
         }
     }
-    status?.let { Text(it) }
-    Text("Choose a different photo or clear a wrong match from an artist’s ⋯ menu. Clearing a match keeps album art until you choose a photo again.")
+    status?.let { SettingsDescription(it) }
+    SettingsDescription("Choose a different photo or clear a wrong match from an artist’s ⋯ menu. Clearing a match keeps album art until you choose a photo again.")
 }

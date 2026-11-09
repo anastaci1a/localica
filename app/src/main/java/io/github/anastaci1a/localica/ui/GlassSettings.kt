@@ -78,7 +78,7 @@ internal fun GlassSettingsControls(value: GlassAppearance, section: String = "Gl
 
 @Composable
 private fun GlassAppearanceSettings(value: GlassAppearance, onChange: (GlassAppearance) -> Unit) {
-    Text("Tune floating glass and the navigation selector.")
+    SettingsDescription("Tune floating glass and the navigation selector.")
     var previewLightInk by remember { mutableStateOf(false) }
     CompositionLocalProvider(LocalGlassAppearance provides value) {
         Box(Modifier.fillMaxWidth().height(180.dp), contentAlignment = Alignment.Center) {
@@ -92,7 +92,7 @@ private fun GlassAppearanceSettings(value: GlassAppearance, onChange: (GlassAppe
                     drawRect(palette[(x / 2 + y) % palette.size], Offset(x * cell, y * cell), Size(cell, cell))
                 }
             }
-            if (LocalSettingsEnabled.current) GlassPreview(source) else Text("Glass preview disabled")
+            if (LocalSettingsEnabled.current) GlassPreview(source) else SettingsDescription("Glass preview disabled")
         }
     }
     if (LocalSettingsEnabled.current) GlassChoices(listOf("Dark icons", "White icons"), if (previewLightInk) 1 else 0, horizontal = true) { previewLightInk = it == 1 }
@@ -109,7 +109,7 @@ private fun GlassAppearanceSettings(value: GlassAppearance, onChange: (GlassAppe
 @Composable
 private fun GlassAdvancedSettings(value: GlassAppearance, onChange: (GlassAppearance) -> Unit) {
     SettingsHeading("Adaptive contrast")
-    Text("Compress background brightness away from the page’s icon color.", style = MaterialTheme.typography.bodySmall)
+    SettingsDescription("Compress background brightness away from the page’s icon color.", style = MaterialTheme.typography.bodySmall)
     GlassSlider("Brightness trim", value.contrast, "Off", "50%", maximum = .5f) { onChange(value.copy(contrast = it)) }
     SliderPreference("Brightness weighting · ${"%.2f".format(java.util.Locale.ROOT, value.contrastWeight)}", value.contrastWeight,
         { onChange(value.copy(contrastWeight = contrastWeightFromSlider(it))) },
@@ -119,14 +119,14 @@ private fun GlassAdvancedSettings(value: GlassAppearance, onChange: (GlassAppear
         description = "Higher weighting focuses the trim on the brightest highlights or deepest shadows. " +
             "At high weighting the trim eases off where needed, so brighter areas never end up darker than dimmer ones.")
     SettingsHeading("Shape and motion")
-    Text("Hold the preview to flatten it; release to let it rebound.", style = MaterialTheme.typography.bodySmall)
+    SettingsDescription("Hold the preview to flatten it; release to let it rebound.", style = MaterialTheme.typography.bodySmall)
     SliderPreference("Shape damping · ${value.shapeDamping.roundToInt()}", value.shapeDamping, { onChange(value.copy(shapeDamping = it)) },
         Modifier.semantics { contentDescription = "Shape damping" }, valueRange = 2f..40f,
         description = "Lower is squishier; higher settles sooner.")
     SliderPreference("Resting depth · ${"%.2f".format(java.util.Locale.ROOT, value.depth)}", value.depth, { onChange(value.copy(depth = it)) },
         Modifier.semantics { contentDescription = "Resting depth" }, valueRange = .6f..2f)
     SettingsHeading("Sliders and switches")
-    Text("White at rest; clear glass while held.", style = MaterialTheme.typography.bodySmall)
+    SettingsDescription("White at rest; clear glass while held.", style = MaterialTheme.typography.bodySmall)
     SliderPreference("Control expansion · ${"%.2f".format(java.util.Locale.ROOT, value.controlExpansion)}×", value.controlExpansion,
         { onChange(value.copy(controlExpansion = it)) }, Modifier.semantics { contentDescription = "Control expansion" },
         valueRange = 1f..2f, steps = 19, low = "1×", high = "2×")
@@ -158,7 +158,7 @@ internal fun GlassRendererPreference(value: GlassRendererMode, onChange: (GlassR
     val explanation = if (value == GlassRendererMode.Normal && android.os.Build.VERSION.SDK_INT < 33)
         "Normal uses solid average colour on this Android version. Refraction requires Android 13 or later."
     else "Using "+value.label+" on this device."
-    Text(explanation, style = MaterialTheme.typography.bodySmall)
+    SettingsDescription(explanation, style = MaterialTheme.typography.bodySmall)
 }
 
 @Composable
@@ -197,7 +197,7 @@ private fun GlassPreview(source: FrostedBackdrop) {
         GlassMorphPopup(expanded, anchor, { expanded = false }, GlassPlacement.Center) {
             Column(Modifier.fillMaxWidth().padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 Text("Glass preview", style = MaterialTheme.typography.titleLarge)
-                Text("The same surface expands into this panel. Your glass and motion settings apply here too.")
+                SettingsDescription("The same surface expands into this panel. Your glass and motion settings apply here too.")
                 ActionTextButton({ expanded = false }, Modifier.align(Alignment.End)) { Text("Collapse preview") }
             }
         }

@@ -54,7 +54,7 @@ internal fun TagRecoverySettings(controller: TagEditingController) {
         ActionTextButton(onClick = { confirming = true }) { Text("Recover tag edit: ${state.recovery}") }
     }
     if (confirming) GlassAlertDialog(onDismissRequest = { confirming = false }, title = { Text(if (state.recoveryProblem == null) "Restore original file?" else "Retry tag recovery?") },
-        text = { Text(state.recoveryProblem ?: "This replaces ${state.recovery} with the copy saved before its interrupted edit.") },
+        text = { SettingsDescription(state.recoveryProblem ?: "This replaces ${state.recovery} with the copy saved before its interrupted edit.") },
         confirmButton = { ActionTextButton(onClick = { confirming = false; controller.recover() }) { Text(if (state.recoveryProblem == null) "Restore original" else "Retry recovery") } },
         dismissButton = { ActionTextButton(onClick = { confirming = false }) { Text("Cancel") } })
 }

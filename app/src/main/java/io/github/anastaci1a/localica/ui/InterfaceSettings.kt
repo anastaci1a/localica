@@ -16,7 +16,7 @@ import io.github.anastaci1a.localica.navigation.*
 internal fun InterfaceSettingsControls(value: InterfaceSettings, section: String = "Navigation", onChange: (InterfaceSettings) -> Unit) {
     when (section) {
         "Appearance" -> {
-            Text("Adjust secondary text and inactive icons throughout the app.")
+            SettingsDescription("Adjust secondary text and inactive icons throughout the app.")
             SliderPreference("Interface gray · ${kotlin.math.round(value.grayTone * 100).toInt()}%", value.grayTone,
                 { onChange(value.copy(grayTone = it)) }, Modifier.semantics { contentDescription = "Gray tone" }, low = "Darker", high = "Lighter")
             Row(Modifier.fillMaxWidth().height(64.dp), horizontalArrangement = Arrangement.SpaceEvenly,
@@ -34,7 +34,7 @@ internal fun InterfaceSettingsControls(value: InterfaceSettings, section: String
             BooleanPreference("Reduce motion", value.reducedMotion) { onChange(value.copy(reducedMotion = it)) }
             BooleanPreference("Faster animations", value.fasterMotion) { onChange(value.copy(fasterMotion = it)) }
             ChoicePreference("Long scroll animation", value.longScroll, LongScrollStyle.entries, { it.label }) { onChange(value.copy(longScroll = it)) }
-            Text("How Return to top and return-to-current cross a long distance. Fly-through rushes past the list cheaply; Jump, then glide lands near the target and glides in; Fade dims the list while it jumps. Reduce motion jumps straight there.", style = MaterialTheme.typography.bodySmall)
+            SettingsDescription("How Return to top and return-to-current cross a long distance. Fly-through rushes past the list cheaply; Jump, then glide lands near the target and glides in; Fade dims the list while it jumps. Reduce motion jumps straight there.", style = MaterialTheme.typography.bodySmall)
         }
         "Player" -> {
             SettingsHeading("Player behavior")
@@ -49,7 +49,7 @@ internal fun InterfaceSettingsControls(value: InterfaceSettings, section: String
             SettingsHeading("Artwork")
             ChoicePreference("Player artwork", value.artworkLayout, ArtworkLayout.entries, { it.label }) { onChange(value.copy(artworkLayout = it)) }
             ChoicePreference("Song-change transition", value.artworkTransition, ArtworkTransition.entries, { it.label }) { onChange(value.copy(artworkTransition = it)) }
-            Text("For Previous/Next buttons and automatic song changes. Swipes use the carousel.", style = MaterialTheme.typography.bodySmall)
+            SettingsDescription("For Previous/Next buttons and automatic song changes. Swipes use the carousel.", style = MaterialTheme.typography.bodySmall)
             BooleanPreference("Swipe artwork to change songs", value.artworkSwipe) { onChange(value.copy(artworkSwipe = it)) }
             ArtworkActionPreference("Artwork tap", value.artworkTap) { onChange(value.copy(artworkTap = it)) }
             ArtworkActionPreference("Artwork hold", value.artworkHold) { onChange(value.copy(artworkHold = it)) }
