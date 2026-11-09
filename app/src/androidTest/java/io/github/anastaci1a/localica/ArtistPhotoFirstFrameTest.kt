@@ -41,8 +41,15 @@ class ArtistPhotoFirstFrameTest {
     @Test fun subview() = checkContext("subview")
     @Test fun searchResults() = checkContext("search")
     @Test fun collectionHeader() = checkContext("header")
+    @Test fun coldList() = checkContext("list", cold = true)
+    @Test fun coldGallery() = checkContext("gallery", cold = true)
+    @Test fun coldCarousel() = checkContext("carousel", cold = true)
+    @Test fun coldSubview() = checkContext("subview", cold = true)
+    @Test fun coldSearchResults() = checkContext("search", cold = true)
+    @Test fun coldCollectionHeader() = checkContext("header", cold = true)
+    @Test fun unknownIndexNeverPresentsAlbumArt() = checkContext("header", cold = true, unknown = true)
 
-    private fun checkContext(surface: String) {
+    private fun checkContext(surface: String, cold: Boolean = false, unknown: Boolean = false) {
         val root = File(context.cacheDir, "artist-first-frame-${UUID.randomUUID()}")
         val consent = object : NetworkConsent {
             override val allowed = MutableStateFlow(true)
@@ -92,17 +99,20 @@ class ArtistPhotoFirstFrameTest {
             } }
             compose.waitForIdle()
             compose.mainClock.autoAdvance = false
-            for (type in listOf(MediaKind.Artist, MediaKind.AlbumArtist)) {
+            for (type in if (unknown) listOf(MediaKind.Artist) else listOf(MediaKind.Artist, MediaKind.AlbumArtist)) {
                 val items = refs(type).sortedBy { it.title }
                 val cached = items.first { it.title == "Cached Artist" }
                 val bytes = ByteArrayOutputStream().also { bitmap(android.graphics.Color.RED).compress(Bitmap.CompressFormat.PNG, 100, it) }.toByteArray()
                 runBlocking(Dispatchers.IO) {
                     disk.savePhoto("${type}:${cached.ref.id}", RemoteArtist(ArtistPhotoChoice(ArtistPhotoProvider.DEEZER, "8"), cached.title, listOf("Fixture Album")), bytes, System.currentTimeMillis())
                     val request = requireNotNull(artistPhotoRequest(cached.ref, cached.title, cached.songs.map { it.track }, cached.coverUris.first()))
-                    val photo = requireNotNull(photos.ready(request).photo)
                     // Warm through the same disk/pixel APIs as a previous visit, never a UI override.
-                    ArtistPhotoPixels.read(photo, thumbnail = true)
-                    ArtistPhotoPixels.read(photo)
+                    if (!cold) {
+                        val photo = requireNotNull(photos.ready(request).photo)
+                        ArtistPhotoPixels.read(photo, thumbnail = true)
+                        ArtistPhotoPixels.read(photo)
+                    }
+                    if (!unknown) photos.loadIndex()
                 }
                 val tab = if (type == MediaKind.Artist) MainTab.Artists else MainTab.AlbumArtists
                 val nextRoute = when (surface) {
@@ -131,14 +141,23 @@ class ArtistPhotoFirstFrameTest {
                 val firstFrame = compose.mainClock.currentTime
                 items.forEach { item ->
                     val image = compose.onNodeWithTag(tag(item), useUnmergedTree = true).captureNativeFrame()
-                    File(output, "$surface-$type-${item.title.substringBefore(' ')}-first.png").outputStream().use {
+                    File(output, "$surface-$type-${if (cold) "cold" else "warm"}-$unknown-${item.title.substringBefore(' ')}-first.png").outputStream().use {
                         image.asAndroidBitmap().compress(Bitmap.CompressFormat.PNG, 100, it)
                     }
                     val map = image.toPixelMap()
                     val color = map[map.width / 2, if (surface == "carousel") map.width / 2 else map.height / 2]
                     assertEquals("Capture must not advance the Compose frame", firstFrame, compose.mainClock.currentTime)
-                    if (item == cached) assertTrue("$surface/$type cached photo must be red on FIRST frame: $color", color.red > .95f && color.blue < .05f)
-                    else assertTrue("$surface/$type no photo must retain blue album art: $color", color.blue > .95f && color.red < .05f)
+                    if (item == cached && cold) {
+                        assertFalse("$surface/$type cold photo must not flash album art: $color", color.blue > .5f && color.red < .1f)
+                        assertFalse("$surface/$type cold fixture must exercise the initial placeholder: $color", color.red > .95f && color.blue < .05f)
+                    } else if (item == cached) assertTrue("$surface/$type cached photo must be red on FIRST frame: $color", color.red > .95f && color.blue < .05f)
+                    else if (!unknown) assertTrue("$surface/$type no photo must retain blue album art: $color", color.blue > .95f && color.red < .05f)
+                    else assertFalse("Unknown index must not present album art: $color", color.blue > .5f && color.red < .1f)
+                }
+                if (cold) compose.waitUntil(15000) {
+                    compose.mainClock.advanceTimeByFrame()
+                    val image = compose.onNodeWithTag(tag(cached), useUnmergedTree = true).captureNativeFrame().toPixelMap()
+                    image[image.width / 2, if (surface == "carousel") image.width / 2 else image.height / 2].red > .95f
                 }
                 compose.runOnUiThread { show = false }
                 compose.mainClock.advanceTimeByFrame()

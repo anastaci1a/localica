@@ -33,6 +33,7 @@ class LocalicaApplication : Application() {
             for (name in STARTUP_PREFERENCES) runCatching { getSharedPreferences(name, MODE_PRIVATE).contains("") }
         }
         startup.launch {
+            runCatching { artistPhotos.loadIndex() }
             onlineMetadataConsent.load()
             artistPhotoWork.bind(startup)
         }
