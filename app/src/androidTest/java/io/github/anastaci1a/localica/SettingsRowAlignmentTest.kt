@@ -86,7 +86,8 @@ class SettingsRowAlignmentTest {
         if (requireRows) assertTrue("$label exposes no shared settings rows", starts.isNotEmpty())
         val origin = compose.onNodeWithTag("settings-page-origin", useUnmergedTree = true).fetchSemanticsNode().positionInRoot.x
         val pageEdge = origin + with(density) { 24.dp.roundToPx() }
-        val cards = compose.onAllNodes(SemanticsMatcher.expectValue(SettingsRowPartKey, SettingsRowPart.Row) and hasClickAction(),
+        val cards = compose.onAllNodes(SemanticsMatcher.expectValue(SettingsRowPartKey, SettingsRowPart.Row) and
+            SemanticsMatcher.expectValue(androidx.compose.ui.semantics.SemanticsProperties.Role, androidx.compose.ui.semantics.Role.Button),
             useUnmergedTree = true).fetchSemanticsNodes().map { Rect(it.positionInRoot, it.size.toSize()) }
         parts.filter { it.first == SettingsRowPart.Text || it.first == SettingsRowPart.Heading }.forEach { (part, bounds) ->
             val row = rows.filter { it.contains(bounds.center) }.minByOrNull { it.height }
