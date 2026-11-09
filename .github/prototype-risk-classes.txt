@@ -436,3 +436,4 @@ io.github.anastaci1a.localica.NoneAtlasTest
 
 io.github.anastaci1a.localica.NoneRealAppWalkTest
 io.github.anastaci1a.localica.PlayerCoverEqualityTest
+io.github.anastaci1a.localica.NoneAtlasRasterExtentTest

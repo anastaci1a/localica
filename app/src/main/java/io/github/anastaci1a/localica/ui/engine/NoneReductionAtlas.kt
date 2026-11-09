@@ -131,6 +131,8 @@ internal class NoneReductionAtlas(private val graphics: GraphicsContext, colorSh
     /** Test witness for hosted cells; rejected small/overflow members never acquire an extent here. */
     val hostedExtents get() = members.filter { it.placed }.map { it.extent }
     val hostedRegions get() = members.filter { it.placed }.map { it.region }
+    /** Recorded physical raster extent; free historical cells do not require pixels. */
+    val rasterSize get() = level0.size
 
     private fun layer() = graphics.createGraphicsLayer().apply {
         compositingStrategy = CompositingStrategy.Offscreen
@@ -218,7 +220,8 @@ internal class NoneReductionAtlas(private val graphics: GraphicsContext, colorSh
         passes++
         val placed = members.filter { it.placed && it.record != null }
         val used = (placed.maxOfOrNull { it.index } ?: -1) + 1
-        val height = maxOf(cellsHeight, 256 * ((used + Columns - 1) / Columns)).coerceAtLeast(256)
+        val liveHeight = placed.maxOfOrNull { it.cell.y + it.extent.height } ?: 0
+        val height = maxOf(liveHeight, 256 * ((used + Columns - 1) / Columns)).coerceAtLeast(256)
         level0.renderEffect = null
         level0.record(recordDensity, recordDirection, IntSize(Width, height)) {
             for (entry in placed) {
