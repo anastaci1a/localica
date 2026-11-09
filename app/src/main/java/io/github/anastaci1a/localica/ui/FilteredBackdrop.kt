@@ -66,6 +66,7 @@ private fun OpticalBackdrop(modifier: Modifier, source: FrostedBackdrop, locatio
     homeBounds: (() -> androidx.compose.ui.geometry.Rect)? = null,
     homeFootprint: (() -> HomeBackdropFootprint?)? = null,
     forceAverage: Boolean, effect: (Size, Float, Float) -> RenderEffect?) {
+    val boundedAverage = forceAverage && requestedGlassNone()
     val opticalWork = LocalGlassOpticalWork.current
     val samplingObserver by rememberUpdatedState(LocalHomeBackdropSamplingObserver.current)
     val drawObserver = LocalBackdropSamplingObserver.current
@@ -152,7 +153,7 @@ private fun OpticalBackdrop(modifier: Modifier, source: FrostedBackdrop, locatio
                 val region = Rect(Offset.Zero, footprint)
                     .intersect(sampledSceneBounds(backing, registration, toLocal) ?: return)
                 if (region.isEmpty || !region.width.isFinite() || !region.height.isFinite()) return
-                val result = with(reduction) { recordFullBounds(region.size) {
+                val result = with(reduction) { recordFullBounds(region.size, sampleSide = if (boundedAverage) 8 else null) {
                     translate(-region.left, -region.top) {
                         drawSampledScene(backing, registration, toLocal)
                     }
