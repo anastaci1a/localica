@@ -75,7 +75,8 @@ class LocalicaApplication : Application() {
     val lastfm by lazy {
         io.github.anastaci1a.localica.lastfm.LastFmController(
             io.github.anastaci1a.localica.lastfm.FileLastFmStore(java.io.File(filesDir, "lastfm-snapshot.json")),
-            io.github.anastaci1a.localica.lastfm.LastFmSync(io.github.anastaci1a.localica.lastfm.HttpLastFmApi(BuildConfig.LASTFM_API_KEY, onlineMetadataConsent)),
+            io.github.anastaci1a.localica.lastfm.LastFmSync(io.github.anastaci1a.localica.lastfm.HttpLastFmApi(BuildConfig.LASTFM_API_KEY, onlineMetadataConsent),
+                io.github.anastaci1a.localica.lastfm.FileLastFmHistoryStore(java.io.File(filesDir, "lastfm-history-staging"))),
             library.snapshots, BuildConfig.LASTFM_API_KEY.isNotBlank(), onlineMetadataConsent,
             localStatistics = statistics.counts, background = io.github.anastaci1a.localica.lastfm.LastFmWork(this))
     }

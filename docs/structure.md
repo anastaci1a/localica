@@ -82,6 +82,8 @@ A provider interface keeps local and external counts separate. Typed settings se
 
 The Last.fm provider stores its snapshot, account selection, mappings and local counter baseline in a dedicated atomic file. Completed refreshes replace the remote base and local baseline together. Temporary qualified-play additions are derived from local counters; the provider never writes to local history.
 
+Album-aware history uses a separate durable staging directory. Immutable page files precede an atomic cursor update; uncommitted pages cannot contribute counts. Resume verifies the preceding page against the fixed request range. The cursor retains the original local counter baseline. Publication precedes staging cleanup, and explicit deletion invalidates stale cursors. Unique foreground WorkManager work owns continuation and retry.
+
 Appears On and Similar Artists currently return empty through an enrichment interface.
 
 ### Settings/selection

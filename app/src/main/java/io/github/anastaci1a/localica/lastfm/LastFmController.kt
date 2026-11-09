@@ -101,7 +101,7 @@ class LastFmController(private val store: LastFmStore, private val syncer: LastF
     }.flowOn(Dispatchers.Default).distinctUntilChanged()
 
     private suspend fun save(value: SavedLastFm) = withContext(NonCancellable) {
-        store.write(value); mutable.value = mutable.value.copy(saved = value, problem = null)
+        store.write(value); mutable.value = mutable.value.copy(saved = value, problem = null, retryable = false)
     }
     private fun edit(change: (SavedLastFm) -> SavedLastFm) {
         edits.trySend { writes.withLock {
@@ -145,14 +145,17 @@ class LastFmController(private val store: LastFmStore, private val syncer: LastF
         requestedActive.value = false
         changeArchive { it.copy(username = "", active = false, activeAttempt = null) }
     }
-    fun deleteSyncedData() = changeArchive { it.copy(snapshot = null, mappings = emptyMap(), useCounts = false, activeAttempt = null) }
-    private fun changeArchive(change: (SavedLastFm) -> SavedLastFm) {
+    fun deleteSyncedData() = changeArchive(clearHistory = true) { it.copy(snapshot = null, mappings = emptyMap(), useCounts = false, activeAttempt = null) }
+    private fun changeArchive(clearHistory: Boolean = false, change: (SavedLastFm) -> SavedLastFm) {
         cancelSync()
         edits.trySend {
             background?.cancelAndAwait()
             writes.withLock {
                 generation++
-                try { save(change(state.value.saved)); mutable.value = state.value.copy(syncing = false, progress = null) }
+                try {
+                    if (clearHistory) syncer.discardHistory()
+                    save(change(state.value.saved)); mutable.value = state.value.copy(syncing = false, progress = null)
+                }
                 catch (_: Exception) { mutable.value = state.value.copy(syncing = false, progress = null, problem = "Could not save Last.fm data. Try again.") }
             }
         }
@@ -179,9 +182,24 @@ class LastFmController(private val store: LastFmStore, private val syncer: LastF
         val incoming = tracks.groupBy(::identity)
         return choices.toMutableMap().apply {
             incoming.forEach { (name, rows) ->
-                val before = previous[name]?.singleOrNull()
-                if (before != null && rows.size == 1 && !containsKey(rows.single().key)) {
-                    choices[before.key]?.let { put(rows.single().key, it) }
+                val beforeRows = previous[name].orEmpty()
+                rows.forEach { row ->
+                    val exact = beforeRows.filter { normalize(it.album) == normalize(row.album) }
+                        .mapNotNull { choices[it.key] }.distinct().singleOrNull()
+                    if (exact != null && !containsKey(row.key)) put(row.key, exact)
+                }
+                val before = beforeRows.singleOrNull()
+                val choice = before?.let { choices[it.key] }
+                if (choice != null) {
+                    val targets = when {
+                        old?.historyComplete != true && choice in setOf(LastFmMatcher.REVIEW, LastFmMatcher.NONE) -> rows
+                        rows.size == 1 -> rows
+                        else -> {
+                            val selectedAlbum = catalog.value.tracksById[choice]?.album?.takeIf(String::isNotBlank)
+                            rows.filter { selectedAlbum != null && normalize(it.album) == normalize(selectedAlbum) }.takeIf { it.size == 1 }.orEmpty()
+                        }
+                    }
+                    targets.forEach { if (!containsKey(it.key)) put(it.key, choice) }
                 }
             }
         }
@@ -206,25 +224,29 @@ class LastFmController(private val store: LastFmStore, private val syncer: LastF
             }
             progress(LastFmProgress())
             val previous = state.value.saved.snapshot?.takeIf { it.username.equals(user, true) }
-            val tracks = syncer.refresh(user, previous, fullRescan, startedAt / 1000, onProgress = { update ->
+            val before = localStatistics.first().tracks.toMap()
+            val fetched = syncer.archive(user, previous, fullRescan, startedAt / 1000, before, progress = { update ->
                 currentCoroutineContext().ensureActive()
                 writes.withLock { if (generation == token) mutable.value = state.value.copy(progress = update) }
                 progress(update)
             }) { networkConsent.allowed.value && state.value.saved.active && generation == token }
-            val baseline = localStatistics.first().tracks.toMap()
+            val tracks = fetched.tracks
+            val baseline = if (fetched.historyComplete) fetched.localBaseline else localStatistics.first().tracks.toMap()
             currentCoroutineContext().ensureActive()
             writes.withLock {
                 currentCoroutineContext().ensureActive()
                 if (generation != token || !networkConsent.allowed.value || !featureActive()) return false
                 val saved = state.value.saved
                 val choices = carryChoices(saved.snapshot, tracks, saved.mappings)
-                save(saved.copy(snapshot = LastFmSnapshot(user, now(), tracks, baseline, startedAt / 1000), mappings = choices, activeAttempt = null))
+                save(saved.copy(snapshot = LastFmSnapshot(user, now(), tracks, baseline, fetched.through, fetched.historyComplete), mappings = choices, activeAttempt = null))
             }
+            runCatching { syncer.acknowledgeHistory(fetched.stagingId) }
             return true
         } catch (cancelled: CancellationException) { throw cancelled }
         catch (failure: Exception) {
             writes.withLock { if (token == -1L || generation == token) mutable.value = state.value.copy(problem =
-                (failure as? LastFmFailure)?.message ?: "Sync failed. Your previous Last.fm archive is kept.") }
+                (failure as? LastFmFailure)?.message ?: "Sync failed. Your previous Last.fm archive is kept.",
+                retryable = (failure as? LastFmFailure)?.retryable == true) }
             return false
         } finally {
             withContext(NonCancellable) { writes.withLock { if (generation == token) mutable.value = state.value.copy(syncing = false, progress = null) } }

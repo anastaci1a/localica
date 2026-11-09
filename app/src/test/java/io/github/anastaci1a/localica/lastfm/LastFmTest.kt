@@ -60,8 +60,8 @@ class LastFmTest {
             LastFmTrack("Dream Theater", "Old title", 42, mbid = mbid),
             LastFmTrack("Missing", "Absent", 3)))
         val matched = LastFmMatcher.match(snapshot, listOf(studio, live, strong))
-        assertEquals(mapOf("live" to 12L, "strong" to 42L), matched.counts)
-        assertEquals(1, matched.review.size); assertEquals(1, matched.notInLibrary); assertEquals(2, matched.review.first().candidates.size)
+        assertEquals(mapOf("studio" to 5L, "live" to 12L, "strong" to 42L), matched.counts)
+        assertTrue(matched.review.isEmpty()); assertEquals(1, matched.notInLibrary); assertEquals(3, matched.clearCount)
         val chosen = LastFmMatcher.match(snapshot, listOf(studio, live, strong), mapOf(snapshot.tracks.first().key to "studio"))
         assertEquals(5L, chosen.counts["studio"])
         assertTrue(LastFmMatcher.match(LastFmSnapshot("u", 1, listOf(LastFmTrack("Dream Theater", "Learning to Live", 5, mbid = "other"))),

@@ -37,7 +37,7 @@ class LastFmWork(private val app: LocalicaApplication) : LastFmBackground {
             OneTimeWorkRequestBuilder<LastFmWorker>()
                 .setInputData(workDataOf(USERNAME to username, FULL_RESCAN to fullRescan))
                 .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
-                .setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST).build()).result.awaitResult()
+                .build()).result.awaitResult()
     }
     override suspend fun cancelAndAwait() { WorkManager.getInstance(app).cancelUniqueWork(NAME).result.awaitResult() }
     override fun cancel() { WorkManager.getInstance(app).cancelUniqueWork(NAME) }
@@ -86,7 +86,7 @@ class LastFmWorker internal constructor(context: Context, parameters: WorkerPara
                 setProgress(workDataOf("page" to progress.page, "totalPages" to progress.totalPages, "songs" to progress.songs,
                     "artists" to progress.artists, "albums" to progress.albums, "percent" to progress.percent))
                 setForeground(foreground(progress))
-            }) Result.success() else Result.failure()
+            }) Result.success() else if (controller.state.value.retryable) Result.retry() else Result.failure()
         } catch (cancelled: CancellationException) { throw cancelled }
         catch (_: Exception) { Result.failure(workDataOf("problem" to "Background sync could not finish. Your previous snapshot is kept.")) }
     }

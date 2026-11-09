@@ -14,17 +14,21 @@ data class LastFmRecentTrack(val artist: String, val title: String, val timestam
 data class LastFmRecentPage(val number: Int, val totalPages: Int, val tracks: List<LastFmRecentTrack>)
 fun interface LastFmApi {
     suspend fun page(username: String, number: Int): LastFmPage
+    fun supportsHistoryArchive(): Boolean = false
     fun supportsQuickRefresh(): Boolean = false
     suspend fun recent(username: String, number: Int, from: Long, through: Long): LastFmRecentPage = throw LastFmFailure("Use a full rescan in this build.")
     suspend fun info(username: String, track: LastFmTrack): LastFmTrack = throw LastFmFailure("Use a full rescan in this build.")
 }
 
-/** Three fixed read-only HTTPS methods. Transport URLs, keys and raw API messages never reach diagnostics/UI. */
+/** Fixed read-only HTTPS methods. Transport URLs, keys and raw API messages never reach diagnostics/UI. */
 class HttpLastFmApi(private val key: String, private val consent: NetworkConsent,
     private val connectionFactory: (URL) -> HttpURLConnection = { it.openConnection() as HttpURLConnection }) : LastFmApi {
     override fun supportsQuickRefresh() = true
-    override suspend fun page(username: String, number: Int) = LastFmResponses.parse(request(linkedMapOf(
-        "method" to "user.getTopTracks", "period" to "overall", "limit" to "200", "page" to number.toString(), "user" to username)))
+    override fun supportsHistoryArchive() = true
+    override suspend fun page(username: String, number: Int): LastFmPage {
+        if (!consent.allowed.value) throw LastFmFailure("Online features are off. Enable them before syncing.")
+        throw LastFmFailure("This client requires the album-aware history sync.")
+    }
     override suspend fun recent(username: String, number: Int, from: Long, through: Long) = LastFmResponses.recent(request(linkedMapOf(
         "method" to "user.getRecentTracks", "limit" to "200", "page" to number.toString(), "user" to username,
         "from" to from.toString(), "to" to through.toString())))
@@ -144,6 +148,21 @@ object LastFmResponses {
 
 /** One pacer covers every page, info request, retry and fallback in a manual sync. */
 class LastFmSync(private val api: LastFmApi, private val pause: suspend (Long) -> Unit = { delay(it) }) {
+    private var historyStore: LastFmHistoryStore = MemoryLastFmHistoryStore()
+    constructor(api: LastFmApi, historyStore: LastFmHistoryStore, pause: suspend (Long) -> Unit = { delay(it) }) : this(api, pause) {
+        this.historyStore = historyStore
+    }
+    internal suspend fun archive(username: String, previous: LastFmSnapshot?, fullRescan: Boolean, through: Long,
+        baseline: Map<String, Long>, progress: suspend (LastFmProgress) -> Unit, mayRequest: () -> Boolean): LastFmFetchedArchive {
+        if (!api.supportsHistoryArchive()) return LastFmFetchedArchive(refresh(username, previous, fullRescan, through, progress, mayRequest),
+            through, baseline, false)
+        val pacer = Pacer(mayRequest)
+        return LastFmHistorySync(historyStore).fetch(username, previous, fullRescan, through, baseline, progress) { number, from, to ->
+            pacer.call { api.recent(username, number, from, to) }
+        }
+    }
+    internal suspend fun acknowledgeHistory(id: String?) { if (id != null) historyStore.clear(id) }
+    internal suspend fun discardHistory() = historyStore.clear()
     private class FullRescanNeeded : Exception()
     private inner class Pacer(private val mayRequest: () -> Boolean) {
         var requests = 0

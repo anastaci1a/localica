@@ -10,12 +10,12 @@ data class LastFmTrack(val artist: String, val title: String, val plays: Long, v
         .joinToString("") { "${it.length}:$it" }
 }
 data class LastFmSnapshot(val username: String, val syncedAt: Long, val tracks: List<LastFmTrack>,
-    val localBaseline: Map<String, Long>? = null, val refreshBoundarySeconds: Long? = null)
+    val localBaseline: Map<String, Long>? = null, val refreshBoundarySeconds: Long? = null, val historyComplete: Boolean = false)
 data class SavedLastFm(val username: String = "", val useCounts: Boolean = false,
     val snapshot: LastFmSnapshot? = null, val mappings: Map<String, String> = emptyMap(), val attemptedAt: Long? = null, val active: Boolean = true,
     val keepSyncingInBackground: Boolean = true, val activeAttempt: String? = null)
 data class LastFmState(val saved: SavedLastFm = SavedLastFm(), val loading: Boolean = true,
-    val syncing: Boolean = false, val problem: String? = null, val progress: LastFmProgress? = null)
+    val syncing: Boolean = false, val problem: String? = null, val progress: LastFmProgress? = null, val retryable: Boolean = false)
 enum class LastFmMatchTier { CLEAR, PROBABLE, UNCERTAIN }
 data class LastFmReview(val remote: LastFmTrack, val candidates: List<Track>,
     val reason: String = "Several plausible local recordings", val tier: LastFmMatchTier = LastFmMatchTier.UNCERTAIN)
