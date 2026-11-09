@@ -56,9 +56,9 @@ class CollectionLoadingRevealTest {
         val base = when (kind) {
             null -> BrowseRoute(MainTab.Songs)
             MediaKind.Playlist -> BrowseRoute(MainTab.Playlists, MediaRef(kind, playlists.single().id), "Playlist")
-            MediaKind.Folder -> BrowseRoute(MainTab.Folders, MediaRef(kind, "root725"), "Music")
             else -> {
                 val (tab, view) = when (kind) {
+                    MediaKind.Folder -> MainTab.Folders to SongListView.Folders
                     MediaKind.Album -> MainTab.Albums to SongListView.Albums
                     MediaKind.Artist -> MainTab.Artists to SongListView.Artists
                     MediaKind.AlbumArtist -> MainTab.AlbumArtists to SongListView.AlbumArtists
@@ -152,7 +152,7 @@ class CollectionLoadingRevealTest {
         frame("publication")
         compose.onNodeWithTag("browse-loading").assertDoesNotExist()
         val visible = items.filter { compose.onAllNodesWithTag("browse-text-${it.key}", true).fetchSemanticsNodes()
-            .any { node -> node.boundsInRoot.height > 0 && node.boundsInRoot.top < compose.onRoot().fetchSemanticsNode().boundsInRoot.bottom } }
+            .any { node -> node.boundsInRoot.height > 0 && node.boundsInRoot.top >= 0 && node.boundsInRoot.bottom < compose.onRoot().fetchSemanticsNode().boundsInRoot.bottom - 1f } }
         assertTrue("Rows below the actual header must be visible for $name", visible.size >= 2)
         val delays = mutableMapOf<String, Float>()
         if (!reduced) {

@@ -317,7 +317,7 @@ With no filter selected, Library combines collections: default Albums, Album Art
 
 Labels use **Album Artist / Album Artists**.
 
-Initial browsing waits for every catalog source used by the current view, never for artwork bytes. Fill the viewport with geometry-matched neutral artwork/title/information skeletons using one shimmer phase. Omit unsupported artwork/information slots.
+Initial Library, collection and search browsing waits for every catalog source used by the current view, never for artwork bytes. Fill the viewport with geometry-matched neutral artwork/title/information skeletons using one shimmer phase. Omit unsupported artwork/information slots.
 
 On Artist/Album Artist/Album/Playlist artwork pages, loading artwork and text skeletons use the page ink at 4% opacity. This is Library's neutral shade, so they keep its contrast and sweep over any artwork background. Queue and in-collection search loading material uses 50% opacity.
 
@@ -373,7 +373,9 @@ Scoped search focuses its field as soon as layout is ready and expands while mov
 
 Do not borrow a cached hidden keyboard height. Keep the field at the top without scaling. Actual dismissal by empty Back or outside tap begins one direct return to the home pill while the keyboard hides independently. Nonempty Back first ends editing. The retained panel centers and adds 20% height within safe margins.
 
-Child menus freeze the parent’s position until return. Actual dismissal clears the scoped session. Temporary covering/result navigation preserves it. Scoped results omit subtitles. Initial search results and filter changes reveal visible rows sequentially. Typing edits one draft. Its editor session survives completed-query-to-draft transitions while result/history state remains route-owned.
+Child menus freeze the parent’s position until return. Actual dismissal clears the scoped session. Temporary covering/result navigation preserves it. Scoped results omit subtitles. Initial search results and filter changes use the shared catalog skeleton and radial reveal.
+
+Typing edits one draft. Its editor session survives completed-query-to-draft transitions while result/history state remains route-owned.
 
 Back or actual dismissal retires the editor and its callbacks. IME submission or opening a result commits the draft. Each completed search retains query, scope, filters, sort, results position and identity. After editing ends, Back retraces searches without reopening the keyboard. Opening results/player preserves the source and popup positions.
 
@@ -413,7 +415,7 @@ Choose black or white foregrounds from the artwork brightness. Sort and visibili
 
 Back and collection overflow are glass controls. The top color fade depends on scrolling past the artwork and is absent at the top.
 
-Detail entry immediately uses the cached cover and its colors, title and artist. Crossfade the higher-resolution artwork/color continuation together. Newly loaded tracks reveal in a bounded sequential fade sweep, disabled by reduced motion.
+The collection background immediately uses the cached cover and its colors. The detail header enters with the completed catalog. Crossfade the higher-resolution artwork/color continuation together. Tracks use the shared radial loading reveal, disabled by reduced motion.
 
 Album details default to Tracklist presentation and ascending disc/track order, with Sort/View and pinch alternatives. Their bottom-right overflow shares playlist collection actions, excluding playlist-only edits. Album headers show the album/artist and a large Play control using the configured song-tap behavior. Smallest/Small/Tracklist album rows use muted track numbers instead of covers.
 
