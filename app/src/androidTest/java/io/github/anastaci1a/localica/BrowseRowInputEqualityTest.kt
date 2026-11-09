@@ -60,9 +60,9 @@ class BrowseRowInputEqualityTest {
                             LocalGlassAppearance provides GlassAppearance(renderer=GlassRendererMode.None)) {
                             key(reference,epoch) {
                                 if(reference) ReferenceBrowserScreenP1(library,playlists,route,{},{},{},{_,_,_->},null,null,true,false,
-                                    pins=pins,playingTrackId=playing,reducedMotion=true,queryDispatcher=kotlinx.coroutines.Dispatchers.Unconfined)
+                                    pins=pins,playingEntryId=playing,reducedMotion=true,queryDispatcher=kotlinx.coroutines.Dispatchers.Unconfined)
                                 else BrowserScreen(library,playlists,route,{},{},{},{_,_,_->},null,null,true,false,
-                                    pins=pins,playingTrackId=playing,reducedMotion=true,queryDispatcher=kotlinx.coroutines.Dispatchers.Unconfined)
+                                    pins=pins,playingEntryId=playing,reducedMotion=true,queryDispatcher=kotlinx.coroutines.Dispatchers.Unconfined)
                             }
                         }
                     }
