@@ -20,7 +20,8 @@ internal fun LastFmReviewList(matches: LastFmMatches, group: LastFmGroup, librar
     var page by rememberSaveable(group, query) { mutableIntStateOf(0) }
     var skipped by rememberSaveable { mutableStateOf(emptyList<String>()) }
     val prepared by rememberAsyncValue(matches, group, query, skipped, mappings) {
-        matches.rows(group, mappings).filter { it.contains(query) }.sortedBy { it.remote.key in skipped }
+        val rows = matches.rows(group, mappings).let { rows -> if (query.isBlank()) rows else rows.filter { it.contains(query) } }
+        if (skipped.isEmpty()) rows else skipped.toHashSet().let { deferred -> rows.sortedBy { it.remote.key in deferred } }
     }
     var hasLoaded by remember { mutableStateOf(false) }
     if (prepared != null) hasLoaded = true
@@ -30,7 +31,7 @@ internal fun LastFmReviewList(matches: LastFmMatches, group: LastFmGroup, librar
     GlassTextField(query, { query = it }, label = { Text("Search ${group.label.lowercase()}") },
         modifier = Modifier.fillMaxWidth().testTag("lastfm-list-search"), singleLine = true)
     }
-    AsyncSection(prepared) { rows ->
+    AsyncSection(prepared, rowCount = minOf(20, prepared?.size ?: 0)) { rows ->
     val currentPage = page.coerceAtMost((rows.size - 1).coerceAtLeast(0) / 20)
     if (rows.isEmpty()) Text(if (query.isBlank()) "No songs in this group." else "No matching songs.")
     rows.subList(currentPage * 20, minOf(rows.size, (currentPage + 1) * 20)).forEachIndexed { index, row -> key(row.remote.key) {

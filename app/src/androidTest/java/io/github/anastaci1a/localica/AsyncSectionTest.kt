@@ -1,8 +1,16 @@
 package io.github.anastaci1a.localica
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.Column
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
+import androidx.compose.ui.graphics.toPixelMap
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
@@ -45,7 +53,7 @@ class AsyncSectionTest {
         compose.mainClock.autoAdvance = false
         compose.setContent { LocalicaTheme {
             CompositionLocalProvider(LocalReducedMotion provides reduced) {
-                Column { AsyncSection(value) { result ->
+                Column { AsyncSection(value, rowCount = 2) { result ->
                     AsyncSectionRow(0) { Text(result) }
                     AsyncSectionRow(1) { Text("second") }
                 } }
@@ -78,8 +86,40 @@ class AsyncSectionTest {
                 }, confirmButton = { Text("Close") })
             }
         } }
-        val before = compose.onNodeWithTag("popup-value").getUnclippedBoundsInRoot().height
+        val before = compose.onNodeWithTag("popup-value").getUnclippedBoundsInRoot()
         compose.runOnIdle { value = "75,000" }
-        assertEquals(before, compose.onNodeWithTag("popup-value").getUnclippedBoundsInRoot().height)
+        val after = compose.onNodeWithTag("popup-value").getUnclippedBoundsInRoot()
+        assertEquals(before.bottom - before.top, after.bottom - after.top)
     }
+    @Test fun settledTextMatchesOriginalPixelsAtNarrowWidthAndLargeFont() {
+        val values = listOf(Long.MAX_VALUE.toString(), "15000 songs · 3908 artists · 10000 known albums")
+        var index by mutableIntStateOf(0)
+        var shared by mutableStateOf(false)
+        var pending by mutableStateOf(false)
+        compose.setContent { LocalicaTheme {
+            val density = LocalDensity.current
+            CompositionLocalProvider(LocalDensity provides Density(density.density, 2.5f)) {
+                Box(Modifier.width(132.dp).background(MaterialTheme.colorScheme.background).testTag("text-face")) {
+                    val style = if (index == 0) MaterialTheme.typography.titleLarge else MaterialTheme.typography.bodySmall
+                    if (shared) AsyncValueText(if (pending) null else values[index], values[index], style = style)
+                    else Text(values[index], style = style)
+                }
+            }
+        } }
+        values.indices.forEach { sample ->
+            compose.runOnIdle { index = sample; shared = false; pending = false }
+            val before = compose.onNodeWithTag("text-face").captureToImage()
+            val beforeBounds = compose.onNodeWithTag("text-face").getUnclippedBoundsInRoot()
+            assertTrue("The fixture must wrap", beforeBounds.bottom - beforeBounds.top > 40.dp)
+            compose.runOnIdle { shared = true }
+            val after = compose.onNodeWithTag("text-face").captureToImage()
+            assertEquals(before.width, after.width); assertEquals(before.height, after.height)
+            val a = before.toPixelMap(); val b = after.toPixelMap()
+            for (y in 0 until before.height) for (x in 0 until before.width) assertEquals("sample=$sample pixel=$x,$y", a[x, y], b[x, y])
+            compose.runOnIdle { pending = true }
+            assertEquals(beforeBounds, compose.onNodeWithTag("text-face").getUnclippedBoundsInRoot())
+            compose.onAllNodesWithText(values[sample]).assertCountEquals(0)
+        }
+    }
+
 }

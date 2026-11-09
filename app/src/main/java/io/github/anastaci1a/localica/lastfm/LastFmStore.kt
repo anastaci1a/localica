@@ -2,6 +2,7 @@ package io.github.anastaci1a.localica.lastfm
 
 import android.util.AtomicFile
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
@@ -20,6 +21,7 @@ class FileLastFmStore(file: File) : LastFmStore {
     private val summary = AtomicFile(File(file.parentFile, "${file.nameWithoutExtension}-summary.json"))
     override suspend fun readSummary(): LastFmSettingsSummary? = withContext(Dispatchers.IO) {
         try { summary.openRead().bufferedReader().use { LastFmSummaryCodec.decode(it.readText()) } }
+        catch (cancelled: CancellationException) { throw cancelled }
         catch (_: Exception) { null } // A missing or obsolete cache never damages the archive.
     }
     override suspend fun writeSummary(value: LastFmSettingsSummary?) = withContext(Dispatchers.IO) {

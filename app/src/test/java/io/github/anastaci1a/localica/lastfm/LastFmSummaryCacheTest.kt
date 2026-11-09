@@ -20,7 +20,7 @@ class LastFmSummaryCacheTest {
         assertEquals(knownAlbums, LastFmSummaryCodec.decode(LastFmSummaryCodec.encode(knownAlbums)))
         assertTrue(runCatching { LastFmSummaryCodec.decode(LastFmSummaryCodec.encode(cached).replace("\"version\":1", "\"version\":2")) }.isFailure)
     }
-    @Test fun cachedOverviewPublishesBeforeArchiveReadAndRefreshNeverChangesArchiveOrChoices() = runBlocking {
+    @Test fun cachedOverviewPublishesBeforeArchiveReadAndRefreshNeverChangesArchiveOrChoices() = runBlocking<Unit> {
         val archiveRead = CompletableDeferred<Unit>()
         val archive = SavedLastFm("user", snapshot = LastFmSnapshot("user", 20,
             listOf(LastFmTrack("Artist", "Song", 7, "Album")), localBaseline = emptyMap()), mappings = mapOf("kept" to "choice"))

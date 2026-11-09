@@ -55,8 +55,8 @@ class LastFmPreparationThreadTest {
             runBlocking { withTimeout(30000) { controller.state.first { !it.loading } } }
             compose.setContent { LocalicaTheme {
                 Trace.beginSection("LastFm.firstComposition")
-                try { Column(Modifier.controlVerticalScroll(rememberScrollState())) { LastFmSettings(controller) } }
-                finally { Trace.endSection() }
+                Column(Modifier.controlVerticalScroll(rememberScrollState())) { LastFmSettings(controller) }
+                Trace.endSection()
             } }
             compose.onNodeWithTag("lastfm-tabs").assertExists()
             record("open", remote.mainReads.get())
@@ -69,9 +69,10 @@ class LastFmPreparationThreadTest {
         val matches = LastFmMatches(emptyMap(), reviews)
         compose.setContent { LocalicaTheme {
             Trace.beginSection("LastFm.matches.firstComposition")
-            try { Column(Modifier.controlVerticalScroll(rememberScrollState())) {
+            Column(Modifier.controlVerticalScroll(rememberScrollState())) {
                 LastFmReviewList(matches, LastFmGroup.REVIEW, emptyList(), { _, _ -> true }, {})
-            } } finally { Trace.endSection() }
+            }
+            Trace.endSection()
         } }
         compose.waitUntil(30000) { compose.onAllNodesWithTag("lastfm-list-search").fetchSemanticsNodes().isNotEmpty() }
         record("matches", reviews.mainReads.get())

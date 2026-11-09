@@ -30,6 +30,8 @@ internal fun LastFmSettings(controller: LastFmController) {
     val canSync = controller.enabled && onlineAllowed && active && username.isNotBlank() && !state.loading && !state.syncing
     val summary by controller.summary.collectAsState()
     val stats = summary?.stats
+    val statsPending = stats == null && (state.loading || saved.snapshot != null)
+    val absentStat = if (statsPending) null else "—"
     val counts = summary?.counts ?: LastFmDashboardCounts.from(matches)
     val countsReady = summary?.counts != null || matches.sourceSnapshot != null
     val progress = state.progress ?: LastFmProgress(songs = stats?.songs ?: 0, artists = stats?.artists ?: 0,
@@ -49,7 +51,7 @@ internal fun LastFmSettings(controller: LastFmController) {
             LiquidGlassSurface(Modifier.fillMaxWidth().testTag("lastfm-dashboard-card"), cornerRadius = settingsReviewRadius(), pressFeedback = false) {
                 SettingsStack {
                     LastFmDashboardHeader(progress, state.syncing) {
-                        AsyncValueText(if (summary == null && state.loading) null else progress.countSummary(context.resources), "88888 songs · 8888 artists · 8888 albums",
+                        AsyncValueText(if (statsPending && !state.syncing) null else progress.countSummary(context.resources), "88888 songs · 8888 artists · 8888 albums",
                             Modifier.testTag(if (state.syncing) "lastfm-progress" else "lastfm-archive-summary"), style = MaterialTheme.typography.bodySmall)
                         Text(if (lastSync == null) "Last sync: never" else "Last sync: $lastSync",
                             Modifier.testTag("lastfm-dashboard-last-sync"), style = MaterialTheme.typography.bodySmall)
@@ -65,9 +67,11 @@ internal fun LastFmSettings(controller: LastFmController) {
                 }
             }
             LiquidGlassSurface(Modifier.fillMaxWidth().testTag("lastfm-stats-card"), cornerRadius = settingsReviewRadius(), pressFeedback = false) {
-                val share = if (stats == null || !countsReady) null else if (stats.entries == 0) "—" else "${100L * counts.matched / stats.entries}%"
-                LastFmStatsGrid(listOf("Scrobbles" to stats?.scrobbles?.toString(), "Songs" to stats?.songs?.toString(),
-                    "Artists" to stats?.artists?.toString(), "Albums" to (stats?.takeIf { it.entriesWithAlbums > 0 }?.albums?.toString() ?: "—"), "Matched share" to share))
+                val share = if (stats == null) absentStat else if (!countsReady) null
+                    else if (stats.entries == 0) "—" else "${100L * counts.matched / stats.entries}%"
+                LastFmStatsGrid(listOf("Scrobbles" to (stats?.scrobbles?.toString() ?: absentStat), "Songs" to (stats?.songs?.toString() ?: absentStat),
+                    "Artists" to (stats?.artists?.toString() ?: absentStat),
+                    "Albums" to (if (statsPending) null else stats?.takeIf { it.entriesWithAlbums > 0 }?.albums?.toString() ?: "—"), "Matched share" to share))
             }
         }
     }

@@ -11,6 +11,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.platform.testTag
 import io.github.anastaci1a.localica.BuildConfig
 import io.github.anastaci1a.localica.ui.spec.*
@@ -30,11 +31,11 @@ internal fun <T : Any> rememberAsyncValue(vararg inputs: Any?, compute: () -> T)
     val result = remember(*keys) { mutableStateOf<T?>(null) }
     LaunchedEffect(result) {
         result.value = withContext(Dispatchers.Default) {
-            Trace.beginSection("Localica.AsyncSection.prepare")
+            if (BuildConfig.DEBUG) Trace.beginSection("Localica.AsyncSection.prepare")
             try {
                 if (BuildConfig.DEBUG) StrictMode.noteSlowCall("Async section preparation must stay off main")
                 compute()
-            } finally { Trace.endSection() }
+            } finally { if (BuildConfig.DEBUG) Trace.endSection() }
         }
     }
     return result
@@ -42,7 +43,7 @@ internal fun <T : Any> rememberAsyncValue(vararg inputs: Any?, compute: () -> T)
 
 /** One clock controls spinner exit and row reveal in settings, lists and popups. */
 @Composable
-internal fun <T : Any> AsyncSection(value: T?, modifier: Modifier = Modifier, content: @Composable (T) -> Unit) {
+internal fun <T : Any> AsyncSection(value: T?, modifier: Modifier = Modifier, rowCount: Int = 0, content: @Composable (T) -> Unit) {
     val reduced = LocalReducedMotion.current
     val spec = LocalUiSpec.current.spec
     val fade = (spec.motion.getValue(MotionProfile.ControlOff) as MotionProfileSpec).durationMs
@@ -63,11 +64,13 @@ internal fun <T : Any> AsyncSection(value: T?, modifier: Modifier = Modifier, co
         }
     } else {
         val clock = remember { Animatable(0f) }
-        LaunchedEffect(clock, reduced) {
-            if (reduced) clock.snapTo(Float.MAX_VALUE)
-            else clock.animateTo(2000f, tween(2000, easing = LinearEasing))
+        val duration = (BrowseLoadingMotion.delayMillis(0f, (rowCount - 1).coerceAtLeast(0) *
+            spec.control.getValue(ControlSize.PreferenceRow).value) + BrowseLoadingMotion.FadeMillis).toInt()
+        LaunchedEffect(clock, reduced, rowCount) {
+            if (reduced || rowCount == 0) clock.snapTo(Float.MAX_VALUE)
+            else clock.animateTo(duration.toFloat(), tween(duration, easing = LinearEasing))
         }
-        CompositionLocalProvider(LocalAsyncSectionClock provides clock) { content(value) }
+        CompositionLocalProvider(LocalAsyncSectionClock provides clock.takeIf { rowCount > 0 }) { content(value) }
     }
 }
 
@@ -80,19 +83,23 @@ internal fun AsyncSectionRow(index: Int, content: @Composable () -> Unit) {
     val rowHeight = LocalUiSpec.current.spec.control.getValue(ControlSize.PreferenceRow).value
     val reduced = LocalReducedMotion.current
     val delay = BrowseLoadingMotion.delayMillis(0f, index * rowHeight)
-    Column(Modifier.graphicsLayer {
-        alpha = if (reduced || clock == null) 1f else BrowseLoadingMotion.fade(clock.value, delay)
-    }, verticalArrangement = Arrangement.spacedBy(LocalUiSpec.current.spec.space.getValue(Space.Base))) { content() }
+    val opacity = remember(clock, delay, reduced) { derivedStateOf {
+        if (reduced || clock == null) 1f else BrowseLoadingMotion.fade(clock.value, delay)
+    } }
+    Column(Modifier.graphicsLayer { alpha = opacity.value }, verticalArrangement = Arrangement.spacedBy(LocalUiSpec.current.spec.space.getValue(Space.Base))) { content() }
 }
 
 /** The final text line and loading material reserve the same height in every host. */
 @Composable
 internal fun AsyncValueText(value: String?, placeholder: String, modifier: Modifier = Modifier,
-    style: androidx.compose.ui.text.TextStyle = androidx.compose.material3.MaterialTheme.typography.bodyMedium) {
+    style: androidx.compose.ui.text.TextStyle = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
+    maxLines: Int = Int.MAX_VALUE, minLines: Int = 1, softWrap: Boolean = true,
+    overflow: androidx.compose.ui.text.style.TextOverflow = androidx.compose.ui.text.style.TextOverflow.Clip) {
     val corner = LocalUiSpec.current.px(Space.Tight)
     Box(modifier) {
-        androidx.compose.material3.Text(value ?: placeholder, Modifier.graphicsLayer { alpha = if (value == null) 0f else 1f },
-            style = style, maxLines = 1)
-        if (value == null) BrowseLoadingShape(Modifier.matchParentSize(), { corner })
+        val textSemantics = if (value == null) Modifier.clearAndSetSemantics { } else Modifier
+        androidx.compose.material3.Text(value ?: placeholder, textSemantics.graphicsLayer { alpha = if (value == null) 0f else 1f },
+            style = style, maxLines = maxLines, minLines = minLines, softWrap = softWrap, overflow = overflow)
+        if (value == null) BrowseLoadingShape(Modifier.matchParentSize().testTag("async-value-placeholder"), { corner })
     }
 }

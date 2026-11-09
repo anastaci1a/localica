@@ -21,14 +21,17 @@ internal fun LastFmMatches.rows(group: LastFmGroup, mappings: Map<String, String
         reason = if (group == LastFmGroup.ABSENT && chosen == LastFmMatcher.NONE) "Marked not in your library by you" else row.reason)
 }.sortedByDescending { it.remote.plays }
 
-internal fun LastFmMatchRow.contains(query: String): Boolean = LastFmNames.text(query).split(' ').all { token ->
-    token in LastFmNames.text(listOf(remote.artist, remote.title, remote.album, reason).joinToString(" ") + " " +
+internal fun LastFmMatchRow.contains(query: String): Boolean {
+    val tokens = LastFmNames.text(query).split(' ').filter(String::isNotBlank)
+    if (tokens.isEmpty()) return true
+    val text = LastFmNames.text(listOf(remote.artist, remote.title, remote.album, reason).joinToString(" ") + " " +
         candidates.joinToString(" ") { "${it.title} ${it.artist.orEmpty()} ${it.album.orEmpty()} ${it.fileName}" })
+    return tokens.all { it in text }
 }
 internal fun libraryMatches(tracks: List<Track>, query: String): List<Track> {
     val tokens = LastFmNames.text(query).split(' ').filter(String::isNotBlank)
-    return tracks.filter { track ->
+    return (if (tokens.isEmpty()) tracks else tracks.filter { track ->
         val text = LastFmNames.text("${track.title} ${track.artist.orEmpty()} ${track.album.orEmpty()} ${track.fileName}")
         tokens.all { it in text }
-    }.sortedWith(compareBy<Track> { it.title.lowercase() }.thenBy { it.album }.thenBy { it.id })
+    }).sortedWith(compareBy<Track> { it.title.lowercase() }.thenBy { it.album }.thenBy { it.id })
 }
