@@ -75,12 +75,12 @@ class FlatNoneMaterialTest {
         try {
             for (kind in listOf("slider", "switch")) {
                 equal(kind, "rest")
-                for (prefix in listOf("normal", "flat")) compose.onNodeWithTag("$prefix-$kind").performTouchInput { down(center) }
+                for ((pointer, prefix) in listOf("normal", "flat").withIndex()) compose.onNodeWithTag("$prefix-$kind").performTouchInput { down(pointer, center) }
                 repeat(12) { compose.mainClock.advanceTimeByFrame(); equal(kind, "press frame $it") }
                 compose.runOnIdle { assertTrue("Flat $kind must expand on contact", requireNotNull(geometry["flat-$kind"]).bounds.height > 28f) }
-                for (prefix in listOf("normal", "flat")) compose.onNodeWithTag("$prefix-$kind").performTouchInput { moveTo(Offset(width * .8f, centerY)) }
+                for ((pointer, prefix) in listOf("normal", "flat").withIndex()) compose.onNodeWithTag("$prefix-$kind").performTouchInput { moveTo(pointer, Offset(width * .8f, centerY)) }
                 repeat(8) { compose.mainClock.advanceTimeByFrame(); equal(kind, "drag frame $it") }
-                for (prefix in listOf("normal", "flat")) compose.onNodeWithTag("$prefix-$kind").performTouchInput { up() }
+                for ((pointer, prefix) in listOf("normal", "flat").withIndex()) compose.onNodeWithTag("$prefix-$kind").performTouchInput { up(pointer) }
                 repeat(40) { compose.mainClock.advanceTimeByFrame(); equal(kind, "release frame $it") }
             }
         } finally { compose.mainClock.autoAdvance = true }
