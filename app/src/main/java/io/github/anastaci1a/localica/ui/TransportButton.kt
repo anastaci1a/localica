@@ -38,7 +38,8 @@ internal fun TransportButton(glyph: TransportGlyph, playing: Boolean, label: Str
     val context = LocalContext.current
     // Planned once per published pack; the cache answers by identity on every later composition.
     val morph = if (custom && glyph == TransportGlyph.PlayPause) (PackPlayPauseMorphs.plan(images, builtin = { icon ->
-        SvgIconParser.parse(builtinSvg(context, icon)).toImageVector()
+        io.github.anastaci1a.localica.icons.BuiltinIcons.vector(
+            SvgIconParser.parse(builtinSvg(context, icon)).toImageVector(shiftY = 0f), icon)
     }) as? PackPlayPausePlan.Morph)?.morph else null
     val painter = appIconPainter(icon)
     val pausePainter = if (glyph == TransportGlyph.PlayPause) appIconPainter(AppIcon.TransportPause) else painter

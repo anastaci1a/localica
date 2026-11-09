@@ -49,7 +49,7 @@ internal fun ImageVector.opticallyCentred(): ImageVector {
 internal fun ImageVector.opticalShiftY(): Float = inkMetrics()?.let { opticalShift(it, viewportHeight) } ?: 0f
 
 /** Copies the vector tree under one extra group translated by [dy] viewport units. */
-private fun ImageVector.translatedY(dy: Float): ImageVector {
+internal fun ImageVector.translatedY(dy: Float): ImageVector {
     val builder = ImageVector.Builder(name, defaultWidth, defaultHeight, viewportWidth, viewportHeight,
         tintColor, tintBlendMode, autoMirror)
     builder.addGroup(name = "optical-centre", translationY = dy)

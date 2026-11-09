@@ -8,6 +8,7 @@ import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.PathParser
 import androidx.compose.ui.unit.dp
+import java.util.concurrent.ConcurrentHashMap
 
 /** Imported paths use the same Compose vector tree and painter as resource vectors, optically centred (#724). */
 internal fun SvgIcon.toImageVector(): ImageVector {
@@ -16,7 +17,7 @@ internal fun SvgIcon.toImageVector(): ImageVector {
     return if (shift == 0f) drawn else toImageVector(shift)
 }
 
-private fun SvgIcon.toImageVector(shiftY: Float): ImageVector {
+internal fun SvgIcon.toImageVector(shiftY: Float): ImageVector {
     val builder = ImageVector.Builder(defaultWidth = 24.dp, defaultHeight = 24.dp,
         viewportWidth = 24f, viewportHeight = 24f)
     val scale = 24f / maxOf(viewBox[2], viewBox[3])
@@ -52,4 +53,10 @@ private fun SvgIcon.toImageVector(shiftY: Float): ImageVector {
     append(children)
     builder.clearGroup()
     return builder.build()
+}
+
+/** One import/load owns this cache. SVG geometry has no resource, theme or density dependencies. */
+internal class IconVectorDecoder {
+    private val vectors = ConcurrentHashMap<SvgIcon, ImageVector>()
+    fun decode(bytes: ByteArray): ImageVector = vectors.computeIfAbsent(SvgIconParser.parse(bytes)) { it.toImageVector() }
 }

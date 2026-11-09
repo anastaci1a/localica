@@ -16,6 +16,7 @@ import org.junit.Test
 import org.w3c.dom.Element
 import java.io.File
 import java.util.zip.ZipFile
+import java.security.MessageDigest
 import javax.xml.parsers.DocumentBuilderFactory
 import kotlin.math.abs
 
@@ -117,14 +118,14 @@ class OpticalCentringPacksTest {
 
     private class Row(val id: String, val before: InkMetrics, val shift: Float)
 
-    /** Before metrics are the processed glyph moved back by its applied shift; all values in dp of the 24 dp icon. */
+    /** Measure the original geometry directly: resampling a translated vector introduces grid-phase error. */
     private fun measure(id: String, svg: ByteArray): Row {
         val icon = SvgIconParser.parse(svg)
         require(icon.viewBox == listOf(0f, 0f, 24f, 24f)) { "$id: tables assume a 24-unit viewBox" }
         val processed = icon.toImageVector()
         val shift = (processed.root.single() as VectorGroup).translationY
-        val after = requireNotNull(processed.inkMetrics()) { "$id has no ink" }
-        return Row(id, InkMetrics(after.top - shift, after.bottom - shift, after.centroidY - shift), shift)
+        val before = requireNotNull(icon.toImageVector(shiftY = 0f).inkMetrics()) { "$id has no ink" }
+        return Row(id, before, shift)
     }
 
     private fun table(title: String, rows: List<Row>): String = buildString {
@@ -158,10 +159,50 @@ class OpticalCentringPacksTest {
         assertEquals(2.895f, save.before.centroidY - 12f, .06f)
         assertTrue("Save rises by about half its offset from its box centre", save.shift < -1f)
         rows.forEach { r ->
-            assertEquals(r.id, if (abs(r.before.inkOffsetY) * OPTICAL_CENTRING < OPTICAL_DEADBAND * 24f) 0f else -OPTICAL_CENTRING * r.before.inkOffsetY,
+            assertEquals(r.id, if (abs(r.before.inkOffsetY) * OPTICAL_CENTRING < OPTICAL_DEADBAND * 24f) 0f else (-OPTICAL_CENTRING * r.before.inkOffsetY).coerceIn(-r.before.top.coerceAtLeast(0f), (24f - r.before.bottom).coerceAtLeast(0f)),
                 r.shift, .01f)
         }
         report("builtin-offsets.md", table("Built-in pack optical centring", rows))
+        report("builtin-offsets.tsv", rows.joinToString("\n") { "${it.id}\t${it.shift}" } + "\n")
+        report("BuiltinIconOffsets.kt", buildString {
+            appendLine("package io.github.anastaci1a.localica.icons")
+            appendLine()
+            appendLine("/** Generated from built-in vector resources by OpticalCentringPacksTest; runtime never measures these glyphs. */")
+            appendLine("internal object BuiltinIconOffsets {")
+            appendLine("    const val SOURCE_SHA256 = \"" + builtinSourceHash() + "\"")
+            appendLine("    val vertical: Map<String, Float> = mapOf(")
+            rows.forEach { appendLine("        \"${it.id}\" to "+it.shift+"f,") }
+            appendLine("    )")
+            appendLine("}")
+        })
+    }
+
+    private val sourceRoot = resources.parentFile.parentFile
+    private val ruleFiles = listOf("OpticalCentring.kt", "VectorGeometry.kt", "SvgIconVector.kt")
+
+    private fun builtinSourceHash(): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        fun input(name: String, bytes: ByteArray) {
+            digest.update((name + '\u0000').toByteArray()); digest.update(bytes); digest.update(0.toByte())
+        }
+        for ((id, drawable) in drawableNames) input("$id:drawable/$drawable.xml", File(resources, "$drawable.xml").readBytes())
+        for (name in ruleFiles) input(name, File(sourceRoot, "java/io/github/anastaci1a/localica/icons/$name").readBytes())
+        return digest.digest().joinToString("") { "%02x".format(it) }
+    }
+
+    @Test fun generatedBuiltinOffsetsMatchEveryResourceExactly() {
+        assertTrue("The static table must contain corrections", BuiltinIconOffsets.vertical.values.any { it != 0f })
+        assertEquals("Every registry id must be explicit, including zero offsets", drawableNames.keys, BuiltinIconOffsets.vertical.keys)
+        val variants = resources.parentFile.listFiles().orEmpty().filter { it.isDirectory && it.name.startsWith("drawable") }
+            .flatMap { dir -> dir.listFiles().orEmpty().filter { it.nameWithoutExtension in drawableNames.values }
+                .map { "${dir.name}/${it.name}" } }.toSet()
+        assertEquals("Qualified built-in variants require an explicit optical table selection policy",
+            drawableNames.values.map { "drawable/$it.xml" }.toSet(), variants)
+        for ((id, drawable) in drawableNames) {
+            val measured = measure(id, builtinSvg(File(resources, "$drawable.xml")).toByteArray()).shift
+            assertEquals("$id static optical offset drifted", measured, BuiltinIconOffsets.vertical.getValue(id), 0f)
+        }
+        assertEquals("Mapping, XML inventory or optical rule input drifted", BuiltinIconOffsets.SOURCE_SHA256, builtinSourceHash())
     }
 
     /** Local only: LOCALICA_PRIVATE_PACK names a pack ZIP outside the repository; its table stays with it. */
@@ -172,7 +213,7 @@ class OpticalCentringPacksTest {
             zip.entries().toList().filter { it.name.startsWith("icons/") && it.name.endsWith(".svg") }.sortedBy { it.name }
                 .map { measure(it.name.removePrefix("icons/").removeSuffix(".svg"), zip.getInputStream(it).readBytes()) }
         }
-        rows.forEach { r -> assertEquals(r.id, if (abs(r.before.inkOffsetY) * OPTICAL_CENTRING < OPTICAL_DEADBAND * 24f) 0f else -OPTICAL_CENTRING * r.before.inkOffsetY, r.shift, .01f) }
+        rows.forEach { r -> assertEquals(r.id, if (abs(r.before.inkOffsetY) * OPTICAL_CENTRING < OPTICAL_DEADBAND * 24f) 0f else (-OPTICAL_CENTRING * r.before.inkOffsetY).coerceIn(-r.before.top.coerceAtLeast(0f), (24f - r.before.bottom).coerceAtLeast(0f)), r.shift, .01f) }
         report("private-offsets-${File(path).nameWithoutExtension}.md", table("Pack optical centring: ${File(path).name}", rows))
     }
 }

@@ -14,7 +14,8 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
-import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.vectorResource
+import io.github.anastaci1a.localica.icons.BuiltinIcons
 import androidx.compose.ui.unit.IntSize
 import io.github.anastaci1a.localica.R
 import io.github.anastaci1a.localica.icons.IconPacks
@@ -113,8 +114,10 @@ internal fun appIconPainter(icon: AppIcon): Painter {
 @Composable
 internal fun packIconPainter(icon: AppIcon, mask: Bitmap?, vector: ImageVector? = null): Painter {
     if (vector != null) return rememberVectorPainter(vector)
-    val builtin = painterResource(icon.builtin)
-    return if (mask == null) builtin else remember(mask) { MaskPainter(mask) }
+    if (mask != null) return remember(mask) { MaskPainter(mask) }
+    val source = ImageVector.vectorResource(icon.builtin)
+    val builtin = remember(source, icon) { BuiltinIcons.vector(source, icon) }
+    return rememberVectorPainter(builtin)
 }
 
 /** Pack images are alpha masks: the caller's tint decides the colour, and the size follows the host Icon. */
