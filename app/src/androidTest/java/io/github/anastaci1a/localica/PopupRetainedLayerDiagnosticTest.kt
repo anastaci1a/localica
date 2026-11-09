@@ -3,6 +3,7 @@ package io.github.anastaci1a.localica
 import android.view.View
 import androidx.compose.ui.graphics.asAndroidBitmap
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.android.asCoroutineDispatcher
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -97,12 +98,21 @@ class PopupRetainedLayerDiagnosticTest {
                 val flights = (parentHome?.flights.orEmpty() + dialogs?.entries.orEmpty().flatMap { it.popupHome?.flights.orEmpty() }).distinct()
                 val flight = flights.firstOrNull { it.prepared && it.layer?.isReleased == false }
                 val layer = flight?.layer
-                if (flight == null || layer == null) { layerFinished = true }
-                else captureScope.launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) {
+                if (flight == null || layer == null) {
+                    android.util.Log.i("PopupLayerDiagnostic", "No eligible layer at stage=$stage")
+                    layerFinished = true
+                }
+                // The Compose clock remains frozen. Resume native readback on the
+                // main Handler independently of the composition's frame dispatcher.
+                else captureScope.launch(context = android.os.Handler(android.os.Looper.getMainLooper())
+                    .asCoroutineDispatcher().immediate, start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) {
                     val beforeRevision = flight.revision
                     val beforeState = nativeState()
                     try {
-                        val image = RetainedLayerReadback().capture(layer, graphicsContext, density, direction)
+                        android.util.Log.i("PopupLayerDiagnostic", "Readback requested stage=$stage revision=$beforeRevision ns=${android.os.SystemClock.elapsedRealtimeNanos()}")
+                        val image = RetainedLayerReadback { readStage ->
+                            android.util.Log.i("PopupLayerDiagnostic", "Readback $readStage stage=$stage ns=${android.os.SystemClock.elapsedRealtimeNanos()}")
+                        }.capture(layer, graphicsContext, density, direction)
                         val bitmap = image.asAndroidBitmap().copy(android.graphics.Bitmap.Config.ARGB_8888, false)
                         try {
                             var nontransparent = 0; var red = 0; var maxAlpha = 0
