@@ -8,12 +8,25 @@ import androidx.activity.compose.LocalActivityResultRegistryOwner
 import androidx.activity.result.ActivityResultRegistry
 import androidx.activity.result.ActivityResultRegistryOwner
 import androidx.activity.result.contract.ActivityResultContract
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ProvideTextStyle
+import androidx.compose.material3.Text
 import androidx.compose.runtime.*
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.*
 import androidx.core.app.ActivityOptionsCompat
@@ -25,6 +38,8 @@ import io.github.anastaci1a.localica.localicaComposeRule as createComposeRule
 import io.github.anastaci1a.localica.navigation.*
 import io.github.anastaci1a.localica.playlist.PlaylistState
 import io.github.anastaci1a.localica.ui.*
+import io.github.anastaci1a.localica.ui.layout.SettingsStack
+import io.github.anastaci1a.localica.ui.spec.Space
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -77,6 +92,33 @@ class LibraryDataExchangeTest {
         assertEquals(imported["exchange:two"], after["exchange:two"])
         assertTrue(after.getValue("exchange:three")!! >= scanned.values.max())
         assertEquals(0, repository.previewLibraryData(LibraryDataCodec.decode(edited.toString())).changes)
+    }
+
+    @Test fun importPreviewStockLayoutMatchesOriginalPixels() {
+        val plan = LibraryImportPlan(4, mapOf(LibraryDataMatchStage.Id to 3), 1, 0, 0,
+            listOf(LibraryDataFieldSummary(LibraryDataField.AddedAt, 4, 3, 3, 1, 0, 0)),
+            mapOf("one" to 1L, "two" to 2L, "three" to 3L))
+        var stock by mutableStateOf(false)
+        var width by mutableStateOf(300)
+        var fontScale by mutableStateOf(1f)
+        compose.setContent { LocalicaTheme {
+            val density = LocalDensity.current.density
+            CompositionLocalProvider(LocalDensity provides Density(density, fontScale)) {
+                Box(Modifier.width(width.dp).height(600.dp).background(Color.White).testTag("library-import-layout-witness")) {
+                    ProvideTextStyle(MaterialTheme.typography.bodyMedium.copy(color = Color.Black)) {
+                        if (stock) SettingsStack(gap = Space.Compact) { LibraryDataText.preview(plan).forEach { Text(it) } }
+                        else Column(verticalArrangement = Arrangement.spacedBy(8.dp)) { LibraryDataText.preview(plan).forEach { Text(it) } }
+                    }
+                }
+            }
+        } }
+        for ((w, scale) in listOf(300 to 1f, 360 to 1.3f)) {
+            compose.runOnIdle { width = w; fontScale = scale; stock = false }
+            val original = compose.onNodeWithTag("library-import-layout-witness").captureToImage().asAndroidBitmap()
+            compose.runOnIdle { stock = true }
+            val adopted = compose.onNodeWithTag("library-import-layout-witness").captureToImage().asAndroidBitmap()
+            assertTrue("Import preview pixels changed at width=$w fontScale=$scale", original.sameAs(adopted))
+        }
     }
 
     @Test fun settingsRowsExportAndImportThroughPickerResultsAndSortByDateAddedShowsImportedDates() {

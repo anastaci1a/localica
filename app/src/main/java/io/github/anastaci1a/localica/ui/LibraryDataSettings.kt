@@ -2,8 +2,6 @@ package io.github.anastaci1a.localica.ui
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -11,9 +9,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.BuildConfig
 import io.github.anastaci1a.localica.library.*
+import io.github.anastaci1a.localica.ui.layout.SettingsStack
+import io.github.anastaci1a.localica.ui.spec.Space
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -73,7 +72,7 @@ internal fun LibraryDataSettings(library: LibraryRepository) {
     preview?.let { (document, plan) -> CompositionLocalProvider(LocalGlassOrigin provides importOrigin) {
         val changes = plan.changes
         GlassAlertDialog(onDismissRequest = { preview = null }, title = { Text(if (changes > 0) "Import library data?" else "Nothing to import") },
-            text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            text = { SettingsStack(gap = Space.Compact) {
                 LibraryDataText.preview(plan).forEach { Text(it) }
             } },
             confirmButton = { if (changes > 0) ActionTextButton(onClick = {
