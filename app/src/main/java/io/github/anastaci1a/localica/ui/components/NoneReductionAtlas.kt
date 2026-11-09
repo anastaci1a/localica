@@ -41,8 +41,5 @@ internal class NoneReductionAtlas(private val lease: NoneReductionAtlasLease) {
     return remember(lease) { lease?.let(::NoneReductionAtlas) }
 }
 
-@Composable internal fun NoneReductionAtlasHost(colorShader: String, content: @Composable () -> Unit) {
-    if (io.github.anastaci1a.localica.ui.flatGlass()) {
-        androidx.compose.runtime.CompositionLocalProvider(LocalNoneReductionAtlas provides null, content = content)
-    } else OwnerHost(colorShader, content)
-}
+@Composable internal fun NoneReductionAtlasHost(colorShader: String, content: @Composable () -> Unit) =
+    OwnerHost(colorShader, enabled = !io.github.anastaci1a.localica.ui.flatGlass(), content = content)

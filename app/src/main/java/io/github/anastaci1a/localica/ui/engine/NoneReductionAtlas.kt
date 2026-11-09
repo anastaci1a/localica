@@ -33,11 +33,10 @@ internal val LocalNoneReductionAtlas = staticCompositionLocalOf<NoneReductionAtl
 /** Provide independent None reductions for the source layers in this window (#691). Below Android 13
  * materials keep their own software average, so the content is composed unchanged. */
 @Composable
-internal fun NoneReductionAtlasHost(colorShader: String, content: @Composable () -> Unit) {
-    if (Build.VERSION.SDK_INT < 33) { content(); return }
+internal fun NoneReductionAtlasHost(colorShader: String, enabled: Boolean = true, content: @Composable () -> Unit) {
     val graphics = LocalGraphicsContext.current
-    val atlas = remember(graphics, colorShader) { NoneReductionAtlases(graphics, colorShader) }
-    DisposableEffect(atlas) { onDispose { atlas.release() } }
+    val atlas = if (enabled && Build.VERSION.SDK_INT >= 33) remember(graphics, colorShader) { NoneReductionAtlases(graphics, colorShader) } else null
+    DisposableEffect(atlas) { onDispose { atlas?.release() } }
     CompositionLocalProvider(LocalNoneReductionAtlas provides atlas, content = content)
 }
 
