@@ -25,6 +25,10 @@ This optimized build is not debuggable and is minified with R8. It updates the e
 
 - https://github.com/anastaci1a/localica/issues/691 - Plan A ships white, non-expanding None controls. Performance work remains open.
 
+## Tests
+
+- Limit native IME animation trace tests to API 30+, where their completion callback is supported. API 26 typing coverage remains enabled.
+
 ## Known issues
 
 - Artwork restoration diagnostics remain under investigation: https://github.com/anastaci1a/localica/issues/530.
