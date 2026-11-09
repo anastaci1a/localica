@@ -65,7 +65,7 @@ class PlayerLayoutTest {
         compose.setContent { LocalicaTheme { BoxWithConstraints(Modifier.fillMaxSize()) {
             PlayerSurface(playback, true, {}, settings, remember { Animatable(1f) }, {}, {}, {}, {}, {}, {},
                 lyricsOpen = lyrics, onLyrics = { lyrics = it }, track = track,
-                onSettings = { settings = it }) { Text("Extra player action") }
+                onSettings = { settings = it }) { ink -> DrawInkText("Extra player action", ink) }
         } } }
         var lyricBounds: androidx.compose.ui.geometry.Rect? = null
         var transportBounds: androidx.compose.ui.geometry.Rect? = null

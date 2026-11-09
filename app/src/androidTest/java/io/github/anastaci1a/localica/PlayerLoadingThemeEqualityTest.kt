@@ -30,7 +30,10 @@ class PlayerLoadingThemeEqualityTest {
     @Test fun firstColdFrameHasOriginalBaseAndRejectsR3() = compare(false)
     @Test fun firstTintedFrameAndRetainedReversalsMatchOriginal() = compare(true)
 
-    private fun compare(known: Boolean) {
+    @Test fun appliedProducerColdFramesMatchOriginal() = compare(false, true)
+    @Test fun appliedProducerTintedReversalsMatchOriginal() = compare(true, true)
+
+    private fun compare(known: Boolean, producers: Boolean = false) {
         ArtworkColors.publish(if (known) mapOf(uri to 0xFF2A6FB0.toInt()) else emptyMap())
         var mix by mutableFloatStateOf(1f)
         var override by mutableStateOf<Color?>(null)
@@ -51,7 +54,9 @@ class PlayerLoadingThemeEqualityTest {
                     surfaceContainer = lerp(Color(0xFFEEECE7), NeutralPalette.middle, mix),
                     onSurface = lerp(Color.Black, Color.White, mix))
                 val theme = remember { PlayerDrawTheme(applied) }
-                theme.present(applied)
+                if (producers) theme.present(PlayerThemePresentation(base, mix, lerp(Color.Black, Color.White, mix),
+                    Color.White, mix, NeutralPalette.bottom, NeutralPalette.middle, NeutralPalette.top))
+                else theme.present(applied)
                 CompositionLocalProvider(LocalLoadingMaterialColor provides override,
                     LocalLoadingShimmer provides shimmer, LocalReducedMotion provides false) {
                     Box {

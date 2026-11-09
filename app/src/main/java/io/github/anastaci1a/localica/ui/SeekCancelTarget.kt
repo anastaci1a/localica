@@ -91,7 +91,6 @@ internal class SeekCancelTargetMotion(private val visible: State<Boolean>, priva
 @Composable
 internal fun SeekCancelTarget(state: SeekCancelTargetState, hovered: Boolean, bottomInset: Dp,
     reducedMotion: Boolean, action: String = "seek", tag: String = "cancel-seek") {
-    val playerTheme = LocalPlayerDrawTheme.current
     val density = LocalDensity.current
     val reduced = rememberEffectiveReducedMotion(reducedMotion || LocalReducedMotion.current)
     val speed = LocalMotionSpeed.current
@@ -120,7 +119,7 @@ internal fun SeekCancelTarget(state: SeekCancelTargetState, hovered: Boolean, bo
         if (motion.alpha > 0f) {
             @Composable fun Target() { DragCancelTarget(hovered || state.cancelled, action,
                 Modifier.glassShadowOffset { state.placement }.glassShadowOpacity { motion.alpha }.testTag(tag)) }
-            if (playerTheme == null) Target() else PlayerMaterialTheme(playerTheme) { Target() }
+            Target()
         }
     }
 }

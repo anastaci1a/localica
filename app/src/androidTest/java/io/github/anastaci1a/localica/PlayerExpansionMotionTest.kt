@@ -78,7 +78,7 @@ class PlayerExpansionMotionTest {
                 scope = rememberCoroutineScope()
                 PlayerSurface(state.copy(trackId = track.id, trackUri = track.uri), expanded, { expanded = it },
                     InterfaceSettings(artworkLayout = layout, reducedMotion = reducedMotion), progress, {}, {}, {}, {}, {}, {},
-                    lyricsOpen = true, track = track, visual = visual) { Text("Album-only action") }
+                    lyricsOpen = true, track = track, visual = visual) { ink -> DrawInkText("Album-only action", ink) }
             } } } }
             try {
                 for (artworkLayout in ArtworkLayout.entries) {
@@ -554,9 +554,7 @@ class PlayerExpansionMotionTest {
         lateinit var scope: CoroutineScope
         compose.setContent { LocalicaTheme { BoxWithConstraints(Modifier.fillMaxSize()) {
             scope = rememberCoroutineScope()
-            PlayerSurface(state, false, {}, InterfaceSettings(), progress, {}, {}, {}, {}, {}, {}, visual = visual) {
-                Text("Album-only action")
-            }
+            PlayerSurface(state, false, {}, InterfaceSettings(), progress, {}, {}, {}, {}, {}, {}, visual = visual) { ink -> DrawInkText("Album-only action", ink) }
         } } }
         val tags = listOf("player-title", "player-seek-row", "player-actions-row")
         fun tops() = tags.map { compose.onNodeWithTag(it, useUnmergedTree = true).fetchSemanticsNode().boundsInRoot.top } +
@@ -590,7 +588,7 @@ class PlayerExpansionMotionTest {
             scope = rememberCoroutineScope()
             pixelsPerDp = androidx.compose.ui.platform.LocalDensity.current.density
             PlayerSurface(state, false, {}, InterfaceSettings(), progress, {}, {}, {}, {}, {}, {},
-                lyricsOpen = lyricsMode, visual = visual) { Text("Album-only action") }
+                lyricsOpen = lyricsMode, visual = visual) { ink -> DrawInkText("Album-only action", ink) }
         } } }
         fun snap(p: Float) {
             compose.runOnIdle {

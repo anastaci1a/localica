@@ -81,7 +81,10 @@ internal fun PlayerActionGlyph(action: PlayerAction, description: String?,
 internal fun PlayerActionStrip(value: PlayerActionSettings, label: (PlayerAction) -> String,
     onAction: (PlayerAction) -> Unit, onCustomize: () -> Unit, shuffle: Boolean = false, repeat: QueueRepeat = QueueRepeat.Off,
     lyricsOpen: Boolean = false, pinned: Boolean = false, count: String = "0 / 0", onRepeatOptions: (() -> Unit)? = null,
-    advancedRepeat: AdvancedRepeat? = null) {
+    advancedRepeat: AdvancedRepeat? = null, ink: androidx.compose.ui.graphics.ColorProducer? = null) {
+    val theme = LocalPlayerDrawTheme.current
+    val fallback = if (ink == null && theme == null) LocalContentColor.current else androidx.compose.ui.graphics.Color.Unspecified
+    val foreground = ink ?: theme?.foreground ?: androidx.compose.ui.graphics.ColorProducer { fallback }
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val columnWidth = if (value.centered) (maxWidth / value.columns.size).coerceAtLeast(48.dp) else if (value.small) 48.dp else 64.dp
         Row(Modifier.fillMaxWidth().nestedScroll(HorizontalGestureOwner).controlHorizontalScroll(rememberScrollState()).testTag("player-action-slots")) {
@@ -109,13 +112,11 @@ internal fun PlayerActionStrip(value: PlayerActionSettings, label: (PlayerAction
                             onLongClick = if (action == PlayerAction.Repeat && onRepeatOptions != null) onRepeatOptions else onCustomize),
                         contentAlignment = Alignment.Center) {
                         if (action != null) {
-                            val drawTheme = LocalPlayerDrawTheme.current
-                            val fallback = if (drawTheme == null) LocalContentColor.current else androidx.compose.ui.graphics.Color.Unspecified
-                            val ink = androidx.compose.ui.graphics.ColorProducer {
-                                val color = drawTheme?.foreground?.invoke() ?: fallback
+                            val slotInk = androidx.compose.ui.graphics.ColorProducer {
+                                val color = foreground()
                                 color.copy(alpha = color.alpha * opacity)
                             }
-                            PlayerActionGlyph(action, label(action), repeat, count, advancedRepeat, ink)
+                            PlayerActionGlyph(action, label(action), repeat, count, advancedRepeat, slotInk)
                         }
                     }
                 }

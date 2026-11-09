@@ -443,3 +443,4 @@ io.github.anastaci1a.localica.PlayerLoadingThemeEqualityTest
 io.github.anastaci1a.localica.PlayerThemeFrameEqualityTest
 
 io.github.anastaci1a.localica.ControlLayoutReaderEqualityTest
+io.github.anastaci1a.localica.PlayerThemePresentationEqualityTest

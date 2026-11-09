@@ -94,10 +94,9 @@ internal fun PlayerArtworkFrame(visual: PlayerVisual, modifier: Modifier, shape:
         if (visual.artwork != null) Image(visual.artwork, stringResource(R.string.album_artwork), Modifier.fillMaxSize(), contentScale = contentScale)
         else if (visual.loading) {
             val theme = LocalPlayerDrawTheme.current
-            val placeholder = @Composable {
-                ArtworkPlaceholder(true, Modifier.matchParentSize(), showIcon = false, tintUris = listOfNotNull(visual.loadingUri))
-            }
-            if (theme == null) placeholder() else PlayerMaterialTheme(theme, placeholder)
+            ArtworkPlaceholder(true, Modifier.matchParentSize(), showIcon = false,
+                tintUris = listOfNotNull(visual.loadingUri), baseInk = theme?.container, foregroundInk = theme?.foreground, surfaceInk = theme?.surface)
+
         }
         else androidx.compose.material3.Icon(appIconPainter(AppIcon.TabSongs), "No artwork",
             Modifier.align(androidx.compose.ui.Alignment.Center).fillMaxSize(.3f), tint = androidx.compose.ui.graphics.Color.White.copy(alpha = .4f))

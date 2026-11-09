@@ -424,7 +424,7 @@ fun LocalicaScreen(
             { settings = it; preferences.write(it) }, actionRows = if (playerActions.twoRows) 2 else 1, queueProgress = queueProgress, frostedBackdrop = playerBackdrop, glassBackdrop = browseBackdrop, visual = playerVisual,
             onSeekRequest = onSeekRequest, sampleState = playerSample, backgroundPolarity = playerBackgroundPolarity, artworkVisit = journey?.current?.token, previousArtwork = previousArtwork, nextArtwork = nextArtwork,
             providedPopupHome = playerPopupHome, openingPopupHome = browsePopupHome,
-            bottomChrome = bottomChrome, miniForeground = miniInk, onArtworkVisit = queueController?.let { controller -> { token, complete -> controller.swipeTo(token, complete) } }) {
+            bottomChrome = bottomChrome, miniForeground = miniInk, onArtworkVisit = queueController?.let { controller -> { token, complete -> controller.swipeTo(token, complete) } }) { actionInk ->
             val editTags = presentedTagEdit()
             val actionAppearance = currentGlassDialogAppearance()
             PlayerActionStrip(playerActions, { action -> when (action) {
@@ -436,7 +436,7 @@ fun LocalicaScreen(
                 else -> action.label
             } }, { playerDialogAppearance = actionAppearance; playerAction(it, editTags) }, { customizeAppearance = actionAppearance; customizeActions = true }, shuffle = queues.settings.shuffle, repeat = queues.settings.repeat,
                 lyricsOpen = lyricsOpen, pinned = currentTrack?.let { MediaRef(MediaKind.Song, it.id) in pins } == true,
-                onRepeatOptions = { playerDialogAppearance = actionAppearance; repeatOptions = true }, advancedRepeat = queues.settings.advancedRepeat,
+                onRepeatOptions = { playerDialogAppearance = actionAppearance; repeatOptions = true }, advancedRepeat = queues.settings.advancedRepeat, ink = actionInk,
                 count = "${(queues.library.active?.entries?.indexOfFirst { it.id == queues.library.active?.currentEntryId } ?: -1) + 1} / ${queues.library.active?.entries?.size ?: 0}")
         }
         if (hasPlayer && playerVisible) CompositionLocalProvider(LocalFrostedBackdrop provides playerBackdrop) {

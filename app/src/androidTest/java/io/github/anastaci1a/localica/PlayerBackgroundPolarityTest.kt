@@ -67,9 +67,7 @@ class PlayerBackgroundPolarityTest {
                         .height(minOf(if (tall) 900.dp else 560.dp, available - topInset - bottomInset))) {
                         PlayerSurface(PlaybackState(connected = true, title = "Region", artist = "Artwork", durationMs = 120000),
                             true, {}, settings, remember { Animatable(1f) }, {}, {}, {}, {}, {}, {},
-                            visual = visual, artworkVisit = visit, backgroundPolarity = owner, lyricsOpen = lyrics) {
-                            Text("Controls", Modifier.testTag("control-ink"))
-                        }
+                            visual = visual, artworkVisit = visit, backgroundPolarity = owner, lyricsOpen = lyrics) { ink -> DrawInkText("Controls", ink, Modifier.testTag("control-ink")) }
                         // Compare otherwise identical backing-only probes, using the real
                         // PlayerBackdrop's descriptor rather than reconstructing its tone from
                         // the ink request. The old policy directed tone from the target palette.

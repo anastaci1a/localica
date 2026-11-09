@@ -80,10 +80,10 @@ class QueueSongTransitionTest {
                     SideEffect { backdropMix = backdrop.lightMix }
                     PlayerSurface(PlaybackState(connected = true, title = "Now and then", artist = "Artist", durationMs = 120000),
                         true, {}, settings, remember { Animatable(1f) }, {}, {}, {}, {}, {}, {},
-                        visual = visual, backgroundPolarity = owner, queueProgress = queue) {
-                        val tint = MaterialTheme.colorScheme.surface.convert(ColorSpaces.Oklab).red
+                        visual = visual, backgroundPolarity = owner, queueProgress = queue) { ink ->
+                        val tint = requireNotNull(LocalPlayerDrawTheme.current).surface().convert(ColorSpaces.Oklab).red
                         SideEffect { surfaceTint = tint }
-                        Text("Controls")
+                        DrawInkText("Controls", ink)
                     }
                     if (queueShown) GlassPanelTheme(mix) {
                         QueueSurface(queue, settings, {}, playerProgress = { 1f }) {

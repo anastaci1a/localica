@@ -70,9 +70,7 @@ class PlayerLyricsThemeEaseTest {
                     BoxWithConstraints(Modifier.width(300.dp).height(minOf(560.dp, maxHeight))) {
                         PlayerSurface(PlaybackState(connected = true, title = "Region", artist = "Artwork", durationMs = 120000),
                             expanded, { expanded = it }, settings, remember { Animatable(if (expanded) 1f else 0f) }, {}, {}, {}, {}, {}, {},
-                            visual = visual, backgroundPolarity = owner, lyricsOpen = lyrics) {
-                            Text("Controls", Modifier.testTag("control-ink"))
-                        }
+                            visual = visual, backgroundPolarity = owner, lyricsOpen = lyrics) { ink -> DrawInkText("Controls", ink, Modifier.testTag("control-ink")) }
                     }
                 }
             }

@@ -57,7 +57,7 @@ class PlayerDeferredFrameEqualityTest {
                         if (reference) ReferencePlayerSurface(state, false, {}, settings, phase, {}, {}, {}, {}, {}, {},
                             lyricsOpen = lyrics, visual = visual) { Text("Album actions") }
                         else PlayerSurface(state, false, {}, settings, phase, {}, {}, {}, {}, {}, {},
-                            lyricsOpen = lyrics, visual = visual) { Text("Album actions") }
+                            lyricsOpen = lyrics, visual = visual) { ink -> DrawInkText("Album actions", ink) }
                     }
                 }
             }

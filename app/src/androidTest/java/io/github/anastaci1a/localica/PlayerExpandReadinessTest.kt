@@ -74,7 +74,7 @@ class PlayerExpandReadinessTest {
                     progress = animated
                     PlayerSurface(PlaybackState(connected = true, title = "Now and then", artist = "Artist", durationMs = 120000),
                         expanded, { expanded = it }, settings, animated, {}, {}, {}, {}, {}, {},
-                        visual = visual, backgroundPolarity = polarity) { Text("Actions") }
+                        visual = visual, backgroundPolarity = polarity) { ink -> DrawInkText("Actions", ink) }
                     // Independent compositor-frame receipt; never a predicate on the pixels under test.
                     Canvas(Modifier.align(Alignment.TopStart).size(8.dp)) { drawRect(Color(markerCode(captureStage) / 255f, 1f, 0f)) }
                 }

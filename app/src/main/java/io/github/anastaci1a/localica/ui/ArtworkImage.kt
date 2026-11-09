@@ -118,12 +118,17 @@ private fun ArtworkResolutionBlend(artwork: ImageBitmap, modifier: Modifier,
  * and the pre-catalog viewport omit it and keep the neutral base. */
 @Composable
 internal fun ArtworkPlaceholder(loading: Boolean, modifier: Modifier = Modifier, showIcon: Boolean = true,
-    tintUris: List<String>? = null) {
+    tintUris: List<String>? = null, baseInk: ColorProducer? = null, foregroundInk: ColorProducer? = null,
+    surfaceInk: ColorProducer? = null) {
     val loadingOpacity = LocalLoadingMaterialOpacity.current.coerceIn(0f, 1f)
     // The loading material never reaches the final missing-art fallback (#705).
-    val base = (if (loading) LocalLoadingMaterialColor.current else null) ?: MaterialTheme.colorScheme.surfaceContainer
-    val highlight = MaterialTheme.colorScheme.onSurface.copy(alpha = .065f)
-    val dark = MaterialTheme.colorScheme.surface.luminance() < .5f
+    val override = if (loading) LocalLoadingMaterialColor.current else null
+    val fallbackBase = if (baseInk == null) MaterialTheme.colorScheme.surfaceContainer else Color.Unspecified
+    val fallbackInk = if (foregroundInk == null) MaterialTheme.colorScheme.onSurface else Color.Unspecified
+    val fallbackSurface = if (surfaceInk == null) MaterialTheme.colorScheme.surface else Color.Unspecified
+    val dark by remember(surfaceInk, fallbackSurface) { derivedStateOf {
+        (surfaceInk?.invoke() ?: fallbackSurface).luminance() < .5f
+    } }
     val reducedMotion = LocalReducedMotion.current
     val sharedActivity = LocalLoadingShimmerActivity.current
     if (loading && !reducedMotion && sharedActivity != null) DisposableEffect(sharedActivity) {
@@ -168,12 +173,14 @@ internal fun ArtworkPlaceholder(loading: Boolean, modifier: Modifier = Modifier,
         androidx.compose.foundation.layout.Spacer(Modifier.matchParentSize()
             .then(if (tintUris != null) Modifier.onPlaced { placed[0] = it } else Modifier)
             .drawWithCache {
+            val highlight = (foregroundInk?.invoke() ?: fallbackInk).copy(alpha = .065f)
             val sweep = Brush.linearGradient(listOf(Color.Transparent, highlight, Color.Transparent),
                 start = Offset(-size.width * .6f, 0f), end = Offset(size.width * .6f, size.height))
             val wash = if (tint == null) null else Brush.linearGradient(listOf(Color.Transparent, TintedHighlight, Color.Transparent),
                 start = Offset(-size.width * .6f, 0f), end = Offset(size.width * .6f, size.height))
             onDrawBehind {
                 val phase = if (tint == null) 0f else tintPhase.value
+                val base = override ?: baseInk?.invoke() ?: fallbackBase
                 drawRect(if (tint == null || phase <= 0f) base else lerp(base, tint, phase))
                 progress?.let {
                     val x = size.width * it.value

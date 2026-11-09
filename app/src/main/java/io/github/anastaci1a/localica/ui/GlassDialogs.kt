@@ -23,8 +23,8 @@ internal val LocalGlassDialogAppearance = compositionLocalOf<GlassDialogAppearan
 @Composable
 internal fun currentGlassDialogAppearance(): GlassDialogAppearance {
     val theme = LocalPlayerDrawTheme.current
-    val fallback = rememberUpdatedState(LocalContentColor.current)
-    val ink = remember(theme) { derivedStateOf { theme?.colors?.onSurface ?: fallback.value } }
+    val fallback = rememberUpdatedState(if (theme == null) LocalContentColor.current else androidx.compose.ui.graphics.Color.Unspecified)
+    val ink = remember(theme) { derivedStateOf { theme?.foreground?.invoke() ?: fallback.value } }
     val backdrop = rememberUpdatedState(LocalModalBackdrop.current ?: LocalFrostedBackdrop.current)
     val home = LocalGlassPopupHome.current
     return remember(home) { GlassDialogAppearance(ink, backdrop, home) }
@@ -95,7 +95,7 @@ internal fun GlassDialog(onDismiss: () -> Unit, placement: GlassPlacement = Glas
     // Dialog declarations may live outside the artwork theme containing their trigger.
     // Detached callbacks carry their launching scope; ordinary unanchored windows
     // follow current ambient ink, not a remembered anchor seed.
-    val ink = trigger?.ink?.takeIf { it.isSpecified } ?: appearance?.ink ?: LocalContentColor.current
+    val ink = trigger?.ink?.takeIf { it.isSpecified } ?: appearance?.ink ?: LocalPlayerDrawTheme.current?.foreground?.invoke() ?: LocalContentColor.current
     val dark = ink.luminance() > .5f
     val resolvedContent: @Composable () -> Unit = {
         CompositionLocalProvider(LocalGlassDialogAppearance provides null, content = content)

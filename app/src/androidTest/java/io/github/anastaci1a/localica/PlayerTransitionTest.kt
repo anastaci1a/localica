@@ -166,7 +166,7 @@ class PlayerTransitionTest {
         lateinit var scope: CoroutineScope
         compose.setContent { LocalicaTheme { BoxWithConstraints(Modifier.fillMaxSize().background(behind)) {
             scope = rememberCoroutineScope()
-            PlayerSurface(state, false, {}, InterfaceSettings(), progress, {}, {}, {}, {}, {}, {}, visual = PlayerVisual()) { Text("Custom action") }
+            PlayerSurface(state, false, {}, InterfaceSettings(), progress, {}, {}, {}, {}, {}, {}, visual = PlayerVisual()) { ink -> DrawInkText("Custom action", ink) }
         } } }
         compose.runOnIdle { scope.launch { progress.snapTo(.55f) } }
         compose.onNodeWithContentDescription("Previous").assertIsDisplayed()

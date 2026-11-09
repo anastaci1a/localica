@@ -5,24 +5,48 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.*
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorProducer
+import androidx.compose.ui.graphics.lerp
 
-/** One retained owner. Ordinary labels and controls observe these fields in draw.
- * Dialogs and legacy glass controls opt into the live Material scheme separately. */
+/** Values accepted by composition. Events never sample a later, unapplied animation value. */
+internal data class PlayerThemePresentation(val base: ColorScheme, val lightMix: Float,
+    val foreground: Color, val playerInk: Color, val progress: Float,
+    val bottom: Color, val middle: Color, val top: Color) {
+    fun surface() = lerp(base.surface, bottom, progress)
+    fun container() = lerp(base.surfaceContainer, middle, progress)
+    fun colors() = glassPanelColors(base, lightMix).copy(onSurface = foreground,
+        onSurfaceVariant = foreground.copy(alpha = .72f), primary = lerp(base.primary, playerInk, progress),
+        surface = surface(), surfaceContainer = container(),
+        surfaceContainerHigh = lerp(base.surfaceContainerHigh, middle, progress),
+        surfaceContainerHighest = lerp(base.surfaceContainerHighest, top, progress))
+}
+
+/** Continuous presentation is read in draw or on an event; Material observes only discrete inputs. */
 @Stable
 internal class PlayerDrawTheme(initial: ColorScheme) {
-    var colors by mutableStateOf(initial)
+    private var explicit by mutableStateOf(initial)
+    private var applied by mutableStateOf<PlayerThemePresentation?>(null)
+    var materialColors by mutableStateOf(initial)
         private set
-    val foreground = ColorProducer { colors.onSurface }
-    val secondary = ColorProducer { colors.onSurfaceVariant }
-    fun present(value: ColorScheme) { colors = value }
+    val colors: ColorScheme get() = applied?.colors() ?: explicit
+    val foreground = ColorProducer { applied?.foreground ?: explicit.onSurface }
+    val secondary = ColorProducer { applied?.foreground?.copy(alpha = .72f) ?: explicit.onSurfaceVariant }
+    val surface = ColorProducer { applied?.surface() ?: explicit.surface }
+    val container = ColorProducer { applied?.container() ?: explicit.surfaceContainer }
+    val error = ColorProducer { applied?.let { glassPanelColor(it.base, it.lightMix) { c -> c.error } } ?: explicit.error }
+    val onError = ColorProducer { applied?.let { glassPanelColor(it.base, it.lightMix) { c -> c.onError } } ?: explicit.onError }
+    /** Explicit scheme adapter, including independently mounted loading fixtures. */
+    fun present(value: ColorScheme) { applied = null; explicit = value; materialColors = value }
+    fun present(value: PlayerThemePresentation) { applied = value }
+    fun presentMaterial(value: ColorScheme) { materialColors = value }
 }
 internal val LocalPlayerDrawTheme = staticCompositionLocalOf<PlayerDrawTheme?> { null }
 
-/** Small legacy islands retain the exact current Material appearance. */
 @Composable
 internal fun PlayerMaterialTheme(theme: PlayerDrawTheme, content: @Composable () -> Unit) {
-    val colors = theme.colors
+    val colors = theme.materialColors
     MaterialTheme(colorScheme = colors) {
-        CompositionLocalProvider(androidx.compose.material3.LocalContentColor provides colors.onSurface, content = content)
+        CompositionLocalProvider(androidx.compose.material3.LocalContentColor provides colors.onSurface,
+            androidx.compose.material3.LocalTextStyle provides androidx.compose.material3.LocalTextStyle.current.copy(color = Color.Unspecified),
+            content = content)
     }
 }

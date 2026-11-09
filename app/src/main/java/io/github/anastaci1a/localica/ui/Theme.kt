@@ -74,6 +74,24 @@ private fun lerpScheme(a: androidx.compose.material3.ColorScheme, b: androidx.co
         outline = mix(a.outline, b.outline), outlineVariant = mix(a.outlineVariant, b.outlineVariant), surfaceTint = mix(a.surfaceTint, b.surfaceTint))
 }
 
+internal fun glassPanelColors(ambient: androidx.compose.material3.ColorScheme, lightMix: Float): androidx.compose.material3.ColorScheme {
+    val light = ambient.takeIf { it.onSurface.red < .5f } ?: LightColors
+    return when {
+        lightMix >= 1f -> GlassDarkColors
+        lightMix <= 0f -> light
+        else -> lerpScheme(light, GlassDarkColors, lightMix)
+    }
+}
+
+internal fun glassPanelColor(ambient: androidx.compose.material3.ColorScheme, lightMix: Float, field: (androidx.compose.material3.ColorScheme) -> Color): Color {
+    val light = ambient.takeIf { it.onSurface.red < .5f } ?: LightColors
+    return when {
+        lightMix >= 1f -> field(GlassDarkColors)
+        lightMix <= 0f -> field(light)
+        else -> androidx.compose.ui.graphics.lerp(field(light), field(GlassDarkColors), lightMix)
+    }
+}
+
 /** Popup controls and explicit secondary labels must agree with the material's ink. */
 @Composable
 internal fun GlassPanelTheme(dark: Boolean, content: @Composable () -> Unit) = GlassPanelTheme(if (dark) 1f else 0f, content)
@@ -83,12 +101,7 @@ internal fun GlassPanelTheme(dark: Boolean, content: @Composable () -> Unit) = G
 @Composable
 internal fun GlassPanelTheme(lightMix: Float, content: @Composable () -> Unit) {
     val ambient = MaterialTheme.colorScheme
-    val light = ambient.takeIf { it.onSurface.red < .5f } ?: LightColors
-    val colors = when {
-        lightMix >= 1f -> GlassDarkColors
-        lightMix <= 0f -> light
-        else -> lerpScheme(light, GlassDarkColors, lightMix)
-    }
+    val colors = glassPanelColors(ambient, lightMix)
     MaterialTheme(colorScheme = colors) {
         androidx.compose.runtime.CompositionLocalProvider(
             LocalPlayerDrawTheme provides null,

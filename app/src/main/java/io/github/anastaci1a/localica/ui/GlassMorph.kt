@@ -620,7 +620,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
     // metadata must not override an explicit trigger. Detached menus instead
     // follow current ambient ink, rather than their anchor's remembered seed.
     val panelInk = anchor.ink.takeIf { anchor.bounds != Rect.Zero && it != Color.Unspecified }
-        ?: LocalPlayerDrawTheme.current?.colors?.onSurface ?: LocalContentColor.current
+        ?: LocalPlayerDrawTheme.current?.foreground?.invoke() ?: LocalContentColor.current
     val panelDark = darkOverride ?: if (panelInk != Color.Unspecified) panelInk.luminance() > .5f else source?.dark == true
     val parentPanels = LocalChildPanels.current
     val childPanels = remember { mutableIntStateOf(0) }

@@ -47,6 +47,7 @@ class PlayerThemeFrameEqualityTest {
         val state = PlaybackState(connected = true, title = "Same frame", artist = "Artist", album = "Album", durationMs = 120000)
         val phase = Animatable(1f)
         var reference by mutableStateOf(true)
+        var epoch by mutableIntStateOf(0)
         lateinit var scope: CoroutineScope
         val work = mutableListOf<String>()
         compose.mainClock.autoAdvance = false
@@ -56,11 +57,11 @@ class PlayerThemeFrameEqualityTest {
                 LocalLoadingShimmer provides shimmer, LocalLoadingMaterialColor provides material) {
                 scope = rememberCoroutineScope()
                 BoxWithConstraints(Modifier.fillMaxSize().background(Color(0xFFE1E2E3)).testTag("frame-root")) {
-                    key(reference) {
+                    key(reference, epoch) {
                         if (reference) ReferencePlayerSurface(state, false, {}, settings, phase, {}, {}, {}, {}, {}, {},
                             lyricsOpen = lyrics, visual = visual) { Text("Album actions") }
                         else PlayerSurface(state, false, {}, settings, phase, {}, {}, {}, {}, {}, {},
-                            lyricsOpen = lyrics, visual = visual) { Text("Album actions") }
+                            lyricsOpen = lyrics, visual = visual) { ink -> DrawInkText("Album actions", ink) }
                     }
                 }
             }
@@ -71,7 +72,7 @@ class PlayerThemeFrameEqualityTest {
             Step(.8f, true), Step(.3f, true), Step(.7f), Step(1f), Step(.2f), Step(1f, true))
         data class Frame(val pixels: IntArray, val width: Int, val height: Int, val bounds: Map<String, List<androidx.compose.ui.geometry.Rect>>)
         fun captureArm(old: Boolean): List<Frame> {
-            compose.runOnIdle { scope.launch(start = CoroutineStart.UNDISPATCHED) { phase.stop(); phase.snapTo(1f) }; visual = PlayerVisual(loading = true); material = null; reference = old }
+            compose.runOnIdle { scope.launch(start = CoroutineStart.UNDISPATCHED) { phase.stop(); phase.snapTo(1f) }; visual = PlayerVisual(loading = true); material = null; reference = old; epoch++ }
             return samples.map { p ->
                 compose.runOnIdle { scope.launch(start = CoroutineStart.UNDISPATCHED) { phase.stop(); phase.snapTo(p.p) }; visual = if (p.loaded) ready else PlayerVisual(loading = true); material = p.tint }
                 compose.mainClock.advanceTimeByFrame(); compose.waitForIdle()

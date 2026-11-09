@@ -56,7 +56,7 @@ class PlayerLyricsMaterialEaseTest {
                     BoxWithConstraints(Modifier.width(300.dp).height(minOf(560.dp, maxHeight))) {
                         PlayerSurface(PlaybackState(connected = true, title = "Region", artist = "Artwork", durationMs = 120000),
                             true, {}, settings, remember { Animatable(1f) }, {}, {}, {}, {}, {}, {},
-                            visual = visual, backgroundPolarity = owner, lyricsOpen = lyrics) { Text("Controls") }
+                            visual = visual, backgroundPolarity = owner, lyricsOpen = lyrics) { ink -> DrawInkText("Controls", ink) }
                     }
                 }
             }
