@@ -4,6 +4,8 @@ import android.graphics.Bitmap
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.test.*
 import androidx.compose.ui.unit.dp
@@ -91,14 +93,16 @@ class CollectionLoadingRevealTest {
         var mounted by mutableStateOf(true)
         var currentRoute by mutableStateOf(route)
         val queries = HeldQueries()
+        val fixtureDensity = context.resources.displayMetrics.density * .9f
         var ready by mutableStateOf(false)
         BrowsePreferences(context).write(route, BrowseStyle(listSize = ListSize.Compact, extraInfo = ExtraInfo.None,
             quickSearch = false), false)
         ArtworkColors.publish(tracks.associate { it.uri to ArtworkColors.MISSING })
         compose.setContent { LocalicaTheme {
-            CompositionLocalProvider(LocalBrowsePresentationCache provides cache) {
+            CompositionLocalProvider(LocalBrowsePresentationCache provides cache,
+                LocalDensity provides Density(fixtureDensity, context.resources.configuration.fontScale)) {
             if (mounted) {
-            // A fixed narrow viewport leaves several songs visible below the real collection header.
+            // The same 200 dp viewport at 90% device density leaves two songs below the real artist carousel.
             Box(Modifier.width(200.dp).fillMaxHeight()) {
                 BrowserScreen(LibraryUiState(snapshot, loading = !ready), PlaylistState(playlists, loading = !ready), currentRoute,
                     {}, {}, {}, { _, _, _ -> }, null, null, true, false,
@@ -108,7 +112,7 @@ class CollectionLoadingRevealTest {
             }
         } }
         compose.mainClock.autoAdvance = false
-        val log = StringBuilder("variant=$name api=${android.os.Build.VERSION.SDK_INT} density=${context.resources.displayMetrics.density}\n")
+        val log = StringBuilder("variant=$name api=${android.os.Build.VERSION.SDK_INT} density=$fixtureDensity densityScale=0.9\n")
         val samples = mutableMapOf<String, MutableList<Pair<Long, Bitmap>>>()
         var publishedAt = 0L
         fun frame(stage: String) {
@@ -161,8 +165,8 @@ class CollectionLoadingRevealTest {
             assertTrue("Top-left reveal uses laid-out row order", positions.zipWithNext().all { (a, b) -> b.top > a.top })
             val viewport = compose.onNodeWithTag("browser-list").fetchSemanticsNode().boundsInRoot
             visible.zip(positions).forEach { (item, bounds) ->
-                delays[item.key] = hypot((bounds.left - viewport.left) / context.resources.displayMetrics.density,
-                    (bounds.top - viewport.top) / context.resources.displayMetrics.density) / 1.8f
+                delays[item.key] = hypot((bounds.left - viewport.left) / fixtureDensity,
+                    (bounds.top - viewport.top) / fixtureDensity) / 1.8f
             }
             log.append("published=$published rows=${visible.map { it.key }} positions=$positions\n")
         } else visible.forEach { compose.onNodeWithTag("browse-loading-title-${it.key}", true).assertDoesNotExist() }
