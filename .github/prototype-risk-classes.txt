@@ -414,3 +414,4 @@ io.github.anastaci1a.localica.SettingsRootSearchTest
 io.github.anastaci1a.localica.NoneControlPolicyTest
 io.github.anastaci1a.localica.NoneRequestedPolicyTest
 io.github.anastaci1a.localica.NoneReductionWitnessTest
+io.github.anastaci1a.localica.NestedGlassRegistrationTest
