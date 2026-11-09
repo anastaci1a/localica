@@ -53,7 +53,7 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
     private var commandAfterActivation: QueuedCommand? = null
     // Only the actor defers writes: bounded cursor batches or eligible transport during an activation wait.
     private var deferCursorPersistence = false
-    private class Checkpoint(var library: QueueLibrary, val receipt: CompletableDeferred<Unit>? = null)
+    private class Checkpoint(var library: QueueLibrary, val receipt: CompletableDeferred<QueueLibrary>? = null)
     private val checkpointLock = Any()
     // At most one unsent-to-disk cursor snapshot is retained, even during a stalled write.
     private var pendingCursorCheckpoint: Checkpoint? = null
@@ -207,7 +207,7 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
                             withContext(Dispatchers.IO) { dao.save(persistedLibrary, target) }
                             persistedLibrary = target
                         }
-                        receipt?.complete(Unit)
+                        receipt?.complete(target)
                     } catch (cancelled: CancellationException) {
                         receipt?.cancel(cancelled)
                         throw cancelled
@@ -345,23 +345,35 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         perform(tracks, selectedIndex, state.value.settings.tapFor(view), batch = false, sourceName = sourceName, playlistOrigins = playlistOrigins)
     }
     /** Explicit selection actions bypass all tap preferences and preserve displayed occurrence order. */
-    fun act(tracks: List<Track>, action: SongTap, playlistOrigins: List<String?> = emptyList(), complete: (Boolean) -> Unit = {}) = submit(reject = { complete(false) }) {
-        try {
-            val done = perform(tracks, 0, action, batch = true, playlistOrigins = playlistOrigins)
-            if (done) complete(true) else if (state.value.pending != null) pendingComplete = complete else complete(false)
-        } catch (failure: Exception) { complete(false); throw failure }
+    fun act(tracks: List<Track>, action: SongTap, playlistOrigins: List<String?> = emptyList(), complete: (Boolean) -> Unit = {}) {
+        var completed = false
+        val finish: (Boolean) -> Unit = { success ->
+            if (!completed) { completed = true; completeToastEdit(complete, success) }
+        }
+        submit(reject = { finish(false) }) {
+            val done = try {
+                perform(tracks, 0, action, batch = true, playlistOrigins = playlistOrigins,
+                    onCommitted = { finish(true) })
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (failure: Exception) { finish(false); throw failure }
+            if (done) finish(true)
+            else if (state.value.pending != null) pendingComplete = finish
+            else finish(false)
+        }
     }
 
-    fun appendTo(id: String, rows: List<io.github.anastaci1a.localica.library.SongRow>, complete: (Boolean) -> Unit = {}) = submit(reject = { complete(false) }) {
-        try {
+    fun appendTo(id: String, rows: List<io.github.anastaci1a.localica.library.SongRow>, complete: (Boolean) -> Unit = {}) = submit(reject = { completeToastEdit(complete, false) }) {
+        val committed = try {
             capture()
-            val target = state.value.library.queues.firstOrNull { it.id == id }
-            if (target == null) { complete(false); return@submit }
-            val next = QueueEdits.insert(target, rows.map { it.track }, SongTap.Append, rows.map { it.sourcePlaylistId })
-            save(state.value.library.update(next))
-            if (state.value.library.active?.id == id) activate(null)
-            complete(true)
-        } catch (failure: Exception) { complete(false); throw failure }
+            val before = state.value.library.queues.firstOrNull { it.id == id }
+            if (before == null) { completeToastEdit(complete, false); return@submit }
+            save(state.value.library.update(QueueEdits.insert(before, rows.map { it.track }, SongTap.Append, rows.map { it.sourcePlaylistId })))
+            before to state.value.library.queues.first { it.id == id }
+        } catch (cancelled: CancellationException) { throw cancelled }
+        catch (failure: Exception) { completeToastEdit(complete, false); throw failure }
+        songToast(committed.first, committed.second, SongTap.Append)
+        completeToastEdit(complete, true)
+        if (state.value.library.activeId == id) synchronizeCommittedSongs()
     }
 
     /** Randomize the saved visible order without enabling traversal shuffle. */
@@ -371,9 +383,10 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
             playlistOrigins = order.map { playlistOrigins.getOrNull(it) })
     }
 
-    private suspend fun perform(tracks: List<Track>, selectedIndex: Int, action: SongTap, batch: Boolean, sourceName: String = "Selected songs", playlistOrigins: List<String?> = emptyList()): Boolean {
+    private suspend fun perform(tracks: List<Track>, selectedIndex: Int, action: SongTap, batch: Boolean, sourceName: String = "Selected songs", playlistOrigins: List<String?> = emptyList(),
+        onCommitted: (() -> Unit)? = null): Boolean {
         val selected = tracks.getOrNull(selectedIndex) ?: return false
-        pendingComplete?.invoke(false); pendingComplete = null
+        finishPendingToastEdit(false)
         if (state.value.pending != null) mutable.update { it.copy(pending = null) }
         capture()
         val current = state.value.library.active
@@ -383,7 +396,8 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
             if (!QueueEdits.canCreate(state.value.library, state.value.settings.maximum, emptySet())) {
                 mutable.update { it.copy(pending = PendingQueue(tracks.toList(), selectedIndex, QueueEdits.oldestInactive(it.library), expand, sourceName, playlistOrigins, action.takeIf { it == SongTap.Append || it == SongTap.PlayNext })) }
                 return false
-            } else create(tracks, selectedIndex, emptySet(), expand, sourceName, playlistOrigins)
+            } else create(tracks, selectedIndex, emptySet(), expand, sourceName, playlistOrigins,
+                action.takeIf { it == SongTap.Append || it == SongTap.PlayNext })
         } else {
             var inserted = QueueEdits.insert(current, if (batch) tracks else listOf(selected), action, if (batch) playlistOrigins else listOf(playlistOrigins.getOrNull(selectedIndex)))
             if (action == SongTap.PlayNow) inserted = inserted.copy(journey = journey(current).select(
@@ -399,29 +413,65 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
             }
             val next = state.value.library.update(inserted)
             if (action == SongTap.PlayNow) saveStartingPlayback(next) { activate(true, seek = true, refreshLocations = false) }
-            else { save(next); activate(null) }
+            else {
+                save(next)
+                if (action == SongTap.Append || action == SongTap.PlayNext) {
+                    songToast(current, requireNotNull(state.value.library.active), action)
+                    onCommitted?.invoke()
+                    synchronizeCommittedSongs()
+                } else activate(null)
+            }
             if (action == SongTap.PlayNow) requestPlayer()
         }
         return true
+    }
+
+    /** Post-commit delivery and completion are non-suspending and isolated from mutation success. */
+    private fun completeToastEdit(complete: (Boolean) -> Unit, success: Boolean) {
+        try { complete(success) }
+        catch (_: Exception) { android.util.Log.w("QueueCompletion", "Queue edit completion callback failed") }
+    }
+    private fun finishPendingToastEdit(success: Boolean) {
+        val complete = pendingComplete
+        pendingComplete = null
+        complete?.let { completeToastEdit(it, success) }
+    }
+    private fun deliverCommittedToast(saved: QueueLibrary, onCommitted: ((QueueLibrary) -> Unit)?) {
+        try { onCommitted?.invoke(saved) }
+        catch (_: Exception) { android.util.Log.w("ToastAdmission", "Committed queue outcome delivery failed") }
+    }
+    private fun songToast(before: ListeningQueue?, after: ListeningQueue, action: SongTap) {
+        try {
+            toasts?.let { queue ->
+                io.github.anastaci1a.localica.toast.SongToastOutcomes.queue(before, after, action == SongTap.PlayNext)
+                    ?.let { queue.committedOutcomes.report(it) }
+            }
+        } catch (_: Exception) { android.util.Log.w("ToastAdmission", "Committed queue outcome construction failed") }
+    }
+
+    private suspend fun synchronizeCommittedSongs() {
+        try { activate(null) }
+        catch (cancelled: CancellationException) { throw cancelled }
+        catch (_: Exception) { reportProblem("Songs were saved, but playback could not refresh. Retry playback.") }
     }
 
     fun confirmCreation(removals: Set<String>) = submit {
         val pending = state.value.pending ?: return@submit
         capture()
         if (reuse(pending.tracks, pending.selectedIndex, pending.expandPlayer, pending.sourceName, pending.playlistOrigins)) {
-            pendingComplete?.invoke(true); pendingComplete = null
+            finishPendingToastEdit(true)
             return@submit
         }
         if (!QueueEdits.canCreate(state.value.library, state.value.settings.maximum, removals)) {
             reportProblem("Select enough inactive queues to make room. The current queue is protected.")
             return@submit
         }
-        create(pending.tracks, pending.selectedIndex, removals, pending.expandPlayer, pending.sourceName, pending.playlistOrigins)
-        pendingComplete?.invoke(true); pendingComplete = null
+        create(pending.tracks, pending.selectedIndex, removals, pending.expandPlayer, pending.sourceName, pending.playlistOrigins, pending.toastAction)
+        finishPendingToastEdit(true)
     }
     fun cancelCreation() = submit {
         mutable.update { it.copy(pending = null, problem = problemAfterSuccess(it)) }
-        pendingComplete?.invoke(false); pendingComplete = null
+        finishPendingToastEdit(false)
     }
     private suspend fun reuse(tracks: List<Track>, selectedIndex: Int, expandPlayer: Boolean,
         sourceName: String, playlistOrigins: List<String?>): Boolean {
@@ -430,7 +480,7 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         mutable.update { it.copy(pending = null) }
         return true
     }
-    private suspend fun create(tracks: List<Track>, selectedIndex: Int, removals: Set<String>, expandPlayer: Boolean, sourceName: String, playlistOrigins: List<String?>) {
+    private suspend fun create(tracks: List<Track>, selectedIndex: Int, removals: Set<String>, expandPlayer: Boolean, sourceName: String, playlistOrigins: List<String?>, toastAction: SongTap? = null) {
         // A library-sized tap mints one random occurrence ID per song (SecureRandom); keep that
         // pure construction off Main. Queue state is read only after it returns.
         val created = withContext(Dispatchers.Default) { QueueEdits.create(tracks, selectedIndex, sourceName, playlistOrigins) }
@@ -438,7 +488,17 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
         val next = QueueLibrary(state.value.library.queues.filterNot { it.id in removals } + queue, queue.id)
         // These tracks came from the visible list. Start the decoder before serializing a
         // potentially large queue, and avoid re-reading the entire library on every song tap.
-        saveStartingPlayback(next) { activate(play = true, refreshLocations = false) }
+        var committed = false
+        try {
+            saveStartingPlayback(next, onCommitted = { saved ->
+                committed = true
+                toastAction?.let { action -> saved.queues.firstOrNull { it.id == queue.id }?.let { songToast(null, it, action) } }
+            }) { activate(play = true, refreshLocations = false) }
+        } catch (cancelled: CancellationException) { throw cancelled }
+        catch (failure: Exception) {
+            if (!committed || toastAction == null) throw failure
+            reportProblem("Songs were saved, but playback could not refresh. Retry playback.")
+        }
         mutable.update { it.copy(pending = null, browsedId = queue.id) }
         if (expandPlayer) requestPlayer()
     }
@@ -1143,16 +1203,20 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
     }
     private suspend fun persist(next: QueueLibrary, serviceTransport: Boolean = false) {
         if (deferCursorPersistence) return
-        val receipt = CompletableDeferred<Unit>()
+        persistCheckpoint(next, serviceTransport)
+    }
+    /** An awaited checkpoint returns its immutable target, never the writer's later global state. */
+    private suspend fun persistCheckpoint(next: QueueLibrary, serviceTransport: Boolean = false): QueueLibrary {
+        check(!deferCursorPersistence) { "A deferred cursor update has no durable receipt" }
+        val receipt = CompletableDeferred<QueueLibrary>()
         synchronized(checkpointLock) {
-            // Never replace a cursor snapshot across an awaited structural barrier.
             pendingCursorCheckpoint = null
             checkpoints.trySend(Checkpoint(next, receipt)).getOrThrow()
         }
-        if (serviceTransport) awaitPlaybackCheckpoint(receipt) else receipt.await()
+        return if (serviceTransport) awaitPlaybackCheckpoint(receipt) else receipt.await()
     }
     /** Keep the structural receipt while servicing only the contiguous eligible transport prefix. */
-    private suspend fun awaitPlaybackCheckpoint(receipt: Deferred<Unit>) {
+    private suspend fun awaitPlaybackCheckpoint(receipt: Deferred<QueueLibrary>): QueueLibrary {
         val attached = player
         val queueId = state.value.library.activeId
         val expectedGeneration = generation
@@ -1189,19 +1253,22 @@ class QueueController(private val dao: QueueDao, private val preferences: QueueP
                 }
             }
         }
-        receipt.await()
+        return receipt.await()
     }
-    private suspend fun saveStartingPlayback(next: QueueLibrary, start: suspend () -> Unit) {
-        savePreparedPlayback(PreparedPlayback(state.value, reconcile(next)), start)
+    private suspend fun saveStartingPlayback(next: QueueLibrary, onCommitted: ((QueueLibrary) -> Unit)? = null, start: suspend () -> Unit) {
+        savePreparedPlayback(PreparedPlayback(state.value, reconcile(next)), onCommitted, start)
     }
-    private suspend fun savePreparedPlayback(prepared: PreparedPlayback, start: suspend () -> Unit) {
+    private suspend fun savePreparedPlayback(prepared: PreparedPlayback, onCommitted: ((QueueLibrary) -> Unit)? = null, start: suspend () -> Unit) {
         check(state.value.library === prepared.source.library && state.value.settings === prepared.source.settings) {
             "Playback preparation no longer matches the queue state"
         }
         mutable.update { it.copy(library = prepared.library, problem = problemAfterSuccess(it, prepared.library)) }
         // Audio starts before persistence; failed writes remain retryable from the durable snapshot.
         var activated = false
-        try { start(); activated = true } finally { persist(state.value.library, serviceTransport = activated) }
+        try { start(); activated = true } finally {
+            val saved = persistCheckpoint(state.value.library, serviceTransport = activated)
+            deliverCommittedToast(saved, onCommitted)
+        }
     }
     private fun syncTimeline(seek: Boolean = false) {
         val attached = player ?: return

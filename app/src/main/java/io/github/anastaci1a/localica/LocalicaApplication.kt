@@ -17,7 +17,9 @@ import io.github.anastaci1a.localica.library.RoomLibraryStore
 import io.github.anastaci1a.localica.library.TreeScanner
 
 class LocalicaApplication : Application() {
-    val toasts = io.github.anastaci1a.localica.toast.ToastQueue()
+    val toasts = io.github.anastaci1a.localica.toast.ToastQueue(onUndeliveredCommittedToast = { receipt ->
+        android.util.Log.w("ToastAdmission", "Committed outcome admission ${receipt.admission}: ${receipt.content.tap}; ${receipt.problem.orEmpty()}")
+    })
     private companion object {
         val STARTUP_PREFERENCES = listOf("interface", "queue-settings", "scanner", "scan-progress", "browse-style",
             "library-query", "library-filters", "pins", "player-actions", "tag-jobs", "cover-images", "listening-identity")

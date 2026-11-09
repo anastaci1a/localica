@@ -26,36 +26,52 @@ class PlaylistController(private val dao: PlaylistDao,
                 for (edit in commands) edit.complete(false)
                 return@launch
             }
-            for (edit in commands) try {
-                val before = state.value.playlists
-                val after = withContext(Dispatchers.Default) { edit.change(before) }
-                withContext(Dispatchers.IO) { dao.save(before, after) }
-                mutable.value = PlaylistState(after, loading = false)
-                // Only unreferenced copies owned by this app are disposable, and only
-                // after the database has committed the replacement/deletion.
-                coverDirectory?.let { directory -> withContext(Dispatchers.IO) {
-                    val retained = after.mapNotNull { it.coverUri }.toSet()
-                    before.mapNotNull { it.coverUri }.distinct().filterNot { it in retained }.forEach { uri ->
-                        runCatching {
-                            val parsed = android.net.Uri.parse(uri)
-                            if (parsed.scheme == "file") parsed.path?.let { path ->
-                                val file = java.io.File(path).canonicalFile
-                                if (file.parentFile == directory.canonicalFile) file.delete()
+            for (edit in commands) {
+                val committed = try {
+                    val before = state.value.playlists
+                    val after = withContext(Dispatchers.Default) { edit.change(before) }
+                    withContext(Dispatchers.IO) { dao.save(before, after) }
+                    mutable.value = PlaylistState(after, loading = false)
+                    before to after
+                } catch (cancelled: CancellationException) { throw cancelled }
+                catch (invalid: IllegalArgumentException) {
+                    mutable.update { it.copy(problem = invalid.message ?: "This playlist change is invalid.") }
+                    completeEdit(edit, false)
+                    continue
+                } catch (_: Exception) {
+                    mutable.update { it.copy(problem = "Couldn’t save this playlist change. Try again.") }
+                    completeEdit(edit, false)
+                    continue
+                }
+                val (before, after) = committed
+                try {
+                    toasts?.let { queue ->
+                        io.github.anastaci1a.localica.toast.SongToastOutcomes.lists(before, after).forEach { queue.committedOutcomes.report(it) }
+                    }
+                } catch (_: Exception) { android.util.Log.w("ToastAdmission", "Committed playlist outcome delivery failed") }
+                completeEdit(edit, true)
+                // Owned cover cleanup follows the commit and cannot change the edit's result.
+                try {
+                    coverDirectory?.let { directory -> withContext(Dispatchers.IO) {
+                        val retained = after.mapNotNull { it.coverUri }.toSet()
+                        before.mapNotNull { it.coverUri }.distinct().filterNot { it in retained }.forEach { uri ->
+                            runCatching {
+                                val parsed = android.net.Uri.parse(uri)
+                                if (parsed.scheme == "file") parsed.path?.let { path ->
+                                    val file = java.io.File(path).canonicalFile
+                                    if (file.parentFile == directory.canonicalFile) file.delete()
+                                }
                             }
                         }
-                    }
-                } }
-                edit.complete(true)
-            } catch (cancelled: CancellationException) { throw cancelled }
-            catch (invalid: IllegalArgumentException) {
-                mutable.update { it.copy(problem = invalid.message ?: "This playlist change is invalid.") }
-                edit.complete(false)
-            }
-            catch (_: Exception) {
-                mutable.update { it.copy(problem = "Couldn’t save this playlist change. Try again.") }
-                edit.complete(false)
+                    } }
+                } catch (cancelled: CancellationException) { throw cancelled }
+                catch (_: Exception) { android.util.Log.w("PlaylistCleanup", "Committed playlist cover cleanup failed") }
             }
         }
+    }
+    private fun completeEdit(edit: Edit, success: Boolean) {
+        try { edit.complete(success) }
+        catch (_: Exception) { android.util.Log.w("PlaylistCompletion", "Playlist edit completion callback failed") }
     }
     private fun submit(complete: (Boolean) -> Unit, change: suspend (List<ManualPlaylist>) -> List<ManualPlaylist>) {
         if (commands.trySend(Edit(change, complete)).isFailure) complete(false)
