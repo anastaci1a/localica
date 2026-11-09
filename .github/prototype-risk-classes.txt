@@ -411,3 +411,9 @@ io.github.anastaci1a.localica.QueueRemoveFaceTest
 io.github.anastaci1a.localica.IconPackAliasTest
 io.github.anastaci1a.localica.IconRegistryVisualTest
 io.github.anastaci1a.localica.SettingsRootSearchTest
+io.github.anastaci1a.localica.LastFmChoiceDialogTest
+io.github.anastaci1a.localica.LastFmDashboardTest
+io.github.anastaci1a.localica.LastFmWorkerTest
+io.github.anastaci1a.localica.LastFmMatchingBarTest
+io.github.anastaci1a.localica.LastFmGroupListTest
+io.github.anastaci1a.localica.LastFmSharedControlsTest

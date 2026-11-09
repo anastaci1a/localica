@@ -123,7 +123,21 @@ class LastFmController(private val store: LastFmStore, private val syncer: LastF
         edit { it.copy(active = value, username = if (value && it.username.isBlank()) it.snapshot?.username.orEmpty() else it.username) }
     }
     fun map(remoteKey: String, trackId: String) = edit { it.copy(mappings = it.mappings + (remoteKey to trackId)) }
+    /** A review popup stays open until its serialized choice has reached durable storage. */
+    suspend fun mapAndAwait(remoteKey: String, trackId: String): Boolean {
+        ready.await()
+        val result = CompletableDeferred<Boolean>()
+        edits.send { writes.withLock {
+            try { save(state.value.saved.copy(mappings = state.value.saved.mappings + (remoteKey to trackId))); result.complete(true) }
+            catch (_: Exception) {
+                mutable.value = state.value.copy(problem = "Could not save Last.fm match. Try again.")
+                result.complete(false)
+            }
+        } }
+        return result.await()
+    }
     fun undoJudgment(remoteKey: String) = map(remoteKey, LastFmMatcher.REVIEW)
+    fun resetMapping(remoteKey: String) = edit { it.copy(mappings = it.mappings - remoteKey) }
     fun resetMappings() = edit { it.copy(mappings = emptyMap()) }
     fun keepSyncingInBackground(value: Boolean) = edit { it.copy(keepSyncingInBackground = value) }
     fun cancelSync() { syncJob?.cancel(); workerJob?.cancel(); background?.cancel() }

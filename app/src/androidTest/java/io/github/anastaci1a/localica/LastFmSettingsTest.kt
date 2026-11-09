@@ -25,6 +25,47 @@ class LastFmSettingsTest {
     @get:Rule val rules: RuleChain = RuleChain.outerRule(FreshSystemIme()).around(compose)
     private val song = Track("song", "Song", "Artist", "Album", 1000, "song.mp3", "song.mp3")
 
+    @Test fun rootSearchReachesReviewBeforeTheFirstSync() = searchReview("Review matches", false)
+
+    @Test fun rootSearchReachesTheMatchGroupWithAnArchive() = searchReview("Match group", true)
+
+    private fun searchReview(query: String, hasArchive: Boolean) {
+        val remote = LastFmTrack("Artist", "Ambiguous", 9)
+        val saved = SavedLastFm("fixture-user", snapshot = if (hasArchive)
+            LastFmSnapshot("fixture-user", 100_000, listOf(remote), localBaseline = emptyMap()) else null)
+        val store = object : LastFmStore {
+            override suspend fun read() = saved
+            override suspend fun write(value: SavedLastFm) = error("Search must not change saved data")
+        }
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        val library = LibrarySnapshot(tracks = listOf(song.copy(title = "Ambiguous", album = "A"),
+            song.copy(id = "other", title = "Ambiguous", album = "B")))
+        val controller = LastFmController(store, LastFmSync(LastFmApi { _, _ -> error("Search must not sync") }, {}),
+            flowOf(library), true, consent(), scope)
+        try {
+            compose.setContent { LocalicaTheme {
+                FolderSettings(LibraryUiState(library, loading = false), {}, {}, {},
+                    initialCategory = if (hasArchive) "Last.fm" else null, lastFmContent = { LastFmSettings(controller) })
+            } }
+            compose.waitUntil(5000) { !controller.state.value.loading &&
+                (!hasArchive || controller.matches.value.review.size == 1) }
+            if (hasArchive) {
+                compose.onNodeWithText("Data").performScrollTo().performClick()
+                compose.onNodeWithContentDescription("Back from settings").performClick()
+                compose.onNodeWithContentDescription("Back from settings").performClick()
+            }
+            compose.onNodeWithContentDescription("Search settings input").performTextReplacement(query)
+            compose.onNodeWithTag("search-result:$query").performClick()
+            val highlighted = if (hasArchive) "Listening statistics" else "Review matches"
+            compose.onNodeWithTag("setting-highlight:$highlighted", useUnmergedTree = true).assertExists()
+            compose.onNodeWithText("Review matches").performScrollTo().performClick()
+            compose.onNodeWithTag("setting:Match group").performScrollTo().assertIsDisplayed()
+            compose.onNodeWithTag("lastfm-list-search").assertExists()
+            if (hasArchive) compose.onNodeWithText("Artist — Ambiguous").performScrollTo().assertIsDisplayed()
+            else compose.onNodeWithText("No songs in this group.").performScrollTo().assertIsDisplayed()
+        } finally { scope.cancel() }
+    }
+
     @Test fun settingsSyncReviewProviderSwitchAndDisconnectKeepLocalCountsUntouched() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val file = File(context.cacheDir, "lastfm-settings-${java.util.UUID.randomUUID()}.json")
@@ -47,12 +88,19 @@ class LastFmSettingsTest {
             compose.onNodeWithTag("lastfm-sync").performScrollTo().performClick()
             compose.waitUntil(5000) { controller.matches.value.counts["song"] == 42L }
             compose.onNodeWithTag("lastfm-review-summary").performScrollTo().assertTextEquals("1 matched · 1 to review")
+            compose.onNodeWithText("Data", useUnmergedTree = true).performScrollTo().performClick()
             compose.onNode(isToggleable() and hasText("Use Last.fm counts")).performScrollTo().performClick()
             compose.waitUntil(5000) { controller.state.value.saved.useCounts }
             assertEquals(42L, runBlocking { controller.applyTo(flowOf(local)).first().tracks["song"] })
-            compose.onNodeWithText("Use A · a.mp3").performScrollTo().performClick()
+            compose.onNodeWithText("Matches", useUnmergedTree = true).performScrollTo().performClick()
+            compose.onNodeWithText("Artist — Ambiguous").performScrollTo().performClick()
+            compose.onNodeWithTag("lastfm-match-field").performClick()
+            compose.onNodeWithText("Ambiguous · Artist · A").performScrollTo().performClick()
+            compose.onNodeWithText("Select").performClick()
+            compose.onNodeWithContentDescription("Use selection").performClick()
             compose.waitUntil(5000) { controller.matches.value.review.isEmpty() }
             assertEquals("a", runBlocking { store.read().mappings.values.single() })
+            compose.onNodeWithText("Data").performScrollTo().performClick()
             compose.onNode(isToggleable() and hasText("Use Last.fm counts")).performScrollTo().performClick()
             compose.waitUntil(5000) { !controller.state.value.saved.useCounts }
             assertEquals(local, runBlocking { controller.applyTo(flowOf(local)).first() })

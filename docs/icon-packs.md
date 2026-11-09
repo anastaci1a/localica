@@ -81,6 +81,9 @@ Limits keep import and drawing bounded: 256 KB per SVG, 256 paths, 1,024 element
 | `menu.suggest_less` | Suggest less (reserved) |
 | `action.edit` | Edit |
 | `action.close` | Close and clear |
+| `action.check` | Confirm a selection |
+| `action.refresh` | Sync now and quick refresh |
+| `action.rescan` | Full rescan |
 | `action.chevron_left` | Back |
 | `action.chevron_right` | Right chevron |
 | `action.chevron_up` | Up chevron |

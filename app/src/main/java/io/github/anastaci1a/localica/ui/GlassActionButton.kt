@@ -28,24 +28,32 @@ import androidx.compose.ui.unit.dp
 
 @Composable
 internal fun GlassActionButton(icon: AppIcon, label: String, modifier: Modifier = Modifier, enabled: Boolean = true, onClick: () -> Unit) {
+    GlassActionButton(false, icon, label, modifier, enabled, onClick)
+}
+
+/** Required first flag keeps the original action-button ABI and all trailing callbacks unchanged. */
+@Composable
+internal fun GlassActionButton(iconOnly: Boolean, icon: AppIcon, label: String, modifier: Modifier = Modifier,
+    enabled: Boolean = true, onClick: () -> Unit) {
     val opacity by animateControlStateFloat(if (enabled) 1f else .38f, enabled, "Glass action availability")
     androidx.compose.runtime.CompositionLocalProvider(LocalGlassContactName provides label) {
     LiquidGlassSurface(modifier.glassShadowOpacity { opacity }.heightIn(min = CompactControlSize).ownButtonDrag(enabled)
         .clickable(enabled = enabled, role = Role.Button, interactionSource = null, indication = null, onClick = controlActivation(enabled, onClick)), pressFeedback = enabled) {
-        GlassActionButtonFace(icon, label)
+        GlassActionButtonFace(iconOnly, icon, label)
     }
     }
 }
 
 @Composable
 internal fun GlassActionButtonFace(icon: AppIcon, label: String, modifier: Modifier = Modifier) {
-    Row(modifier.padding(horizontal = 18.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        Icon(appIconPainter(icon), null, Modifier.size(24.dp))
-        // Scrolling action strips measure with infinite width. Bound both the
-        // live and measurement paragraphs to the same natural text width.
-        Text(label, Modifier.width(IntrinsicSize.Max), style = MaterialTheme.typography.labelLarge)
-    }
+    GlassActionButtonFace(false, icon, label, modifier)
+}
+
+@Composable
+internal fun GlassActionButtonFace(iconOnly: Boolean, icon: AppIcon, label: String, modifier: Modifier = Modifier) {
+    io.github.anastaci1a.localica.ui.layout.ActionButtonFaceSlot(modifier, iconOnly,
+        icon = { Icon(appIconPainter(icon), if (iconOnly) label else null, it) },
+        label = { Text(label, it, style = MaterialTheme.typography.labelLarge) })
 }
 
 /** Keep each action's natural text width and logical order. Explicit overflow
