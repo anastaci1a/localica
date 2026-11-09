@@ -3,6 +3,7 @@ package io.github.anastaci1a.localica
 import android.content.ContextWrapper
 import androidx.media3.common.ForwardingPlayer
 import androidx.media3.common.MediaItem
+import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.room.Room
 import androidx.test.platform.app.InstrumentationRegistry
@@ -135,6 +136,14 @@ class ToastQueueControllerTest {
                 val attached = CompletableDeferred<Boolean>()
                 fixture.main { queues.attach(player); queues.browse("active") { attached.complete(it) } }
                 assertTrue(withTimeout(10_000) { attached.await() })
+                // Decoder events arrive after attach. Await readiness, then drain serialized
+                // cursor work so the browse assertions observe a stable playback baseline.
+                withTimeout(10_000) {
+                    while (!fixture.main { player.playbackState == Player.STATE_READY && !player.isLoading }) delay(10)
+                }
+                val ready = CompletableDeferred<Boolean>()
+                fixture.main { queues.browse("active") { ready.complete(it) } }
+                assertTrue(withTimeout(10_000) { ready.await() })
             }
             action(fixture)
         } finally {
