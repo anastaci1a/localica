@@ -49,6 +49,54 @@ class CompositorRegistryTest {
         observer.stop(); observer.clear()
     }
 
+    @Test fun returnedFieldRequiresItsOwnPostTransferSubmissionWithoutWritingSnapshotStateInDraw() = EngineHarness(spec=geometry).use { h ->
+        val home=plane(h); val native=plane(h); val node=SurfaceNode(h.clock,"returned-field",shape(h),shown,home)
+        node.attachSource(home)
+        node.transfer(native,profile); native.acknowledge(); h.advance(2.0)
+        node.transfer(home,profile)
+        home.receipt(); home.admit(); h.advance(2.0)
+        assertTrue(node.owns(home))
+        val request=node.requestOwnedField(home)
+        assertFalse("Logical admission and the earlier host receipt cannot acknowledge an owned field",request.submitted)
+        assertNull(node.fieldSubmission(native))
+        val draw=androidx.compose.runtime.snapshots.Snapshot.takeMutableSnapshot()
+        val submit=try { draw.enter { requireNotNull(node.fieldSubmission(home)) }.also {
+            assertFalse("Drawing only captures the request; its callback publishes outside draw",draw.hasPendingChanges())
+        } } finally { draw.dispose() }
+        assertFalse(request.submitted)
+        submit(); assertTrue(request.submitted); assertTrue(node.currentFieldRequest(request))
+        node.dispose()
+    }
+
+    @Test fun oldFieldCallbacksCannotAcknowledgeAReplacementRequestOrSourceAttachment() = EngineHarness(spec=geometry).use { h ->
+        val home=plane(h); val replacement=plane(h); val node=SurfaceNode(h.clock,"field-remount",shape(h),shown,home)
+        val generation=node.attachSource(home); val release=node.retainWindow()
+        val first=node.requestOwnedField(home); val oldSubmit=requireNotNull(node.fieldSubmission(home))
+        val second=node.requestOwnedField(home)
+        oldSubmit(); assertFalse(first.submitted); assertFalse(second.submitted)
+        assertFalse(node.currentFieldRequest(first)); assertTrue(node.currentFieldRequest(second))
+        val staleSourceSubmit=requireNotNull(node.fieldSubmission(home))
+        node.releaseSource(generation); node.attachSource(replacement)
+        staleSourceSubmit(); assertFalse(second.submitted); assertFalse(node.currentFieldRequest(second))
+        val current=node.requestOwnedField(replacement)
+        requireNotNull(node.fieldSubmission(replacement))(); assertTrue(current.submitted)
+        release(); node.dispose()
+    }
+
+    @Test fun reopeningRevokesTheClosingFieldCallbackEvenBeforeAnotherWindowTransfer() = EngineHarness(spec=geometry).use { h ->
+        val home=plane(h); val node=SurfaceNode(h.clock,"field-reversal",shape(h),shown,home)
+        node.attachSource(home)
+        val popup=PopupWindowMotion(h.clock,geometry.expansion,"field-reversal",false,false)
+        popup.show(true); popup.place(Rect(0f,0f,200f,64f),Rect(20f,30f,400f,600f),1f)
+        node.follow(popup.expansion,Curve.constant(1f),requireNotNull(popup.bounds))
+        popup.expansion.acknowledgeNativeGate(popup.expansion.nativeGeneration); h.advance(2.0)
+        popup.show(false); h.advance(2.0)
+        val request=node.requestOwnedField(home); val submit=requireNotNull(node.fieldSubmission(home))
+        popup.show(true)
+        submit(); assertFalse(request.submitted); assertFalse(node.currentFieldRequest(request))
+        node.dispose(); popup.dispose()
+    }
+
     @Test fun oneKeyOneNodeOnePlaneBinding() = EngineHarness(spec=geometry).use { h ->
         val a=plane(h); val b=plane(h); val s=shape(h)
         val node=SurfaceNode(h.clock,"pill",s,shown,a)

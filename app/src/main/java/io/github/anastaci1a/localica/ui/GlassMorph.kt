@@ -461,7 +461,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                         node.transferWindow(home)
                         home.view?.invalidate()
                         snapshotFlow { !anchor.triggerMounted || node.ownsWindow(home) || node.returnPlane()!==home }.first { it }
-                        if (node.ownsWindow(home)) break
+                        if (node.ownsWindow(home) && node.awaitWindowField(home)) break
                     }
                     originAdmitted = false
                     sharedContent?.releaseNative()
