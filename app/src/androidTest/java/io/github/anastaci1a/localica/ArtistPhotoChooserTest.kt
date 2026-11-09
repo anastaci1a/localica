@@ -8,6 +8,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.platform.ViewRootForTest
 import androidx.compose.ui.test.*
 import androidx.compose.ui.unit.dp
 import androidx.test.platform.app.InstrumentationRegistry
@@ -100,8 +101,15 @@ class ArtistPhotoChooserTest {
             val choice = ArtistPhotoChoice(ArtistPhotoProvider.DEEZER, "9")
             val preview = "artist-photo-preview:$choice"
             try {
-                compose.waitUntil(10000) { compose.onAllNodesWithTag(preview, useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty() &&
-                    android.graphics.Color.red(pixel(preview)) > 240 }
+                compose.waitUntil(10000) {
+                    val nodes = compose.onAllNodesWithTag(preview, useUnmergedTree = true).fetchSemanticsNodes()
+                    if (nodes.isEmpty()) false else {
+                        val pixels = capturePopupPixels(compose, compose.onNodeWithTag(preview, useUnmergedTree = true)) {
+                            (nodes.single().root as ViewRootForTest).view
+                        }
+                        pixels[pixels.width / 2, pixels.height / 2].red > 240f / 255f
+                    }
+                }
             } catch (failure: Throwable) {
                 compose.onNodeWithTag(preview, useUnmergedTree = true).printToLog("ArtistPhotoPreview")
                 throw failure
