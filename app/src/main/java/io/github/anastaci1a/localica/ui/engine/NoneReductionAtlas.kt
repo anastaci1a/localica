@@ -61,6 +61,26 @@ internal class NoneReductionAtlases(private val graphics: GraphicsContext, priva
     fun release() { sources.values.forEach { it.release() }; sources.clear(); leases.clear() }
 }
 
+/** Acquire during apply, not while composing a replacement which can precede the old owner's
+ * disposal. RememberObserver also avoids allocating an owner for an abandoned composition. */
+@RequiresApi(33)
+internal class NoneReductionAtlasLease(private val registry: NoneReductionAtlases,
+    private val source: GraphicsLayer) : RememberObserver {
+    lateinit var atlas: NoneReductionAtlas
+        private set
+    private var retained = false
+    override fun onRemembered() {
+        check(!retained)
+        atlas = registry.forSource(source)
+        registry.retain(source)
+        retained = true
+    }
+    override fun onForgotten() {
+        if (retained) { registry.forget(source); retained = false }
+    }
+    override fun onAbandoned() = Unit
+}
+
 /** One reduction per source layer per frame instead of one chain for each consumer.
  *
  * Every member owns a cell of its power-of-two extent (exactly the extent its own `recordFullBounds`
@@ -295,6 +315,7 @@ internal class NoneReductionAtlas(private val graphics: GraphicsContext, colorSh
     }
 
     fun release() {
+        members.toList().forEach(::remove)
         listOf(level0, level1, level2, slotLevel, output).forEach(graphics::releaseGraphicsLayer)
         members.clear(); cells.clear(); rows.clear(); cellsHeight = 0
     }
