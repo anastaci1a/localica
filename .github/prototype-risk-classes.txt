@@ -440,3 +440,4 @@ io.github.anastaci1a.localica.NoneExactReductionTest
 io.github.anastaci1a.localica.NoneAtlasTest
 
 io.github.anastaci1a.localica.NoneRealAppWalkTest
+io.github.anastaci1a.localica.LyricsReturnBoundsTest
