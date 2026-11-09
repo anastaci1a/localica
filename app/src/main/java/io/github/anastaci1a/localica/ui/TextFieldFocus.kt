@@ -145,6 +145,7 @@ private class TextEditingFocusState {
     val focused = state.focused
     val view = androidx.compose.ui.platform.LocalView.current
     val imeSession = remember(view) { TextEditingImeSession() }
+    SideEffect { android.util.Log.i("IME699Restarts", "observer id=${System.identityHashCode(imeSession)} nanos=${System.nanoTime()}") }
     val keyboardVisible = WindowInsets.isImeVisible
     val density = androidx.compose.ui.platform.LocalDensity.current
     val keyboardHeight = WindowInsets.ime.getBottom(density)

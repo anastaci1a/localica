@@ -27,6 +27,7 @@ import io.github.anastaci1a.localica.R
     keyboardActions: KeyboardActions = KeyboardActions.Default,
     colors: TextFieldColors = TextFieldDefaults.colors()) {
     val focus = remember { FocusRequester() }
+    SideEffect { android.util.Log.i("IME699Restarts", "field id=${System.identityHashCode(focus)} nanos=${System.nanoTime()}") }
     val keyboard = LocalSoftwareKeyboardController.current
     val visible by animateFloatAsState(if (value.isEmpty()) 0f else 1f,
         tween(if (LocalReducedMotion.current) 0 else 140), label = "Clear input")
