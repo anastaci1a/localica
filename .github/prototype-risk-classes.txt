@@ -461,3 +461,11 @@ io.github.anastaci1a.localica.PopupImeGeometryTest
 io.github.anastaci1a.localica.TagBatchControllerTest
 io.github.anastaci1a.localica.TagBatchTransactionTest
 io.github.anastaci1a.localica.TagSaveProgressPopupTest
+
+io.github.anastaci1a.localica.FlatNoneRendererPopupTest
+
+io.github.anastaci1a.localica.FlatNoneHoverDragTest
+
+io.github.anastaci1a.localica.BoundaryAdoptionPixelReferenceTest
+
+io.github.anastaci1a.localica.UiPerformanceTest
