@@ -340,6 +340,7 @@ io.github.anastaci1a.localica.SubviewFlingPinchTimelineTest
 io.github.anastaci1a.localica.SubviewPinchRecoveryTest
 io.github.anastaci1a.localica.SwitchTapOpticsTest
 io.github.anastaci1a.localica.TabPagerTest
+io.github.anastaci1a.localica.TabPopupLifetimeTest
 io.github.anastaci1a.localica.TabResetTest
 io.github.anastaci1a.localica.TagEditorChromeLayoutTest
 io.github.anastaci1a.localica.TagEditorFlowTest
