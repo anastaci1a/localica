@@ -140,7 +140,7 @@ class QueueTraversalTest {
     @Test fun concurrentFirstWindowOperationsInstallSchemaOnceWithoutDeadlock() {
         val installations = java.util.concurrent.atomic.AtomicInteger()
         val room = Room.inMemoryDatabaseBuilder(context, QueueDatabase::class.java)
-            .setQueryCallback({ sql, _ ->
+            .setQueryCallback(androidx.room.RoomDatabase.QueryCallback { sql, _ ->
                 if (sql.startsWith("CREATE TABLE IF NOT EXISTS queue_sequence_state")) installations.incrementAndGet()
             }, java.util.concurrent.Executor { it.run() }).build()
         try {
