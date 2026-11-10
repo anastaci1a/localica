@@ -47,9 +47,11 @@ class PopupRetainedTriggerRetirementTest {
         val triggerDraws = AtomicInteger()
         compose.setContent { LocalicaTheme {
             CompositionLocalProvider(LocalReducedMotion provides reduced, LocalMotionSpeed provides speed) {
+                val backdrop = rememberFrostedBackdrop(Unit, dark = false, lightMix = 0f)
+                CompositionLocalProvider(LocalFrostedBackdrop provides backdrop, LocalModalBackdrop provides backdrop) {
                 pager = rememberPagerState { 2 }
                 scope = rememberCoroutineScope()
-                Box(Modifier.fillMaxSize().safeDrawingPadding().background(Color.White)) {
+                Box(Modifier.fillMaxSize().safeDrawingPadding().recordFrostedBackdrop(backdrop).background(Color.White)) {
                     // LocalicaScreen's fully open player retains browse composition but omits its draw.
                     Column(Modifier.fillMaxSize().drawWithContent {
                         if (!hasPlayer || !playerFullyOpen) drawContent()
@@ -57,9 +59,10 @@ class PopupRetainedTriggerRetirementTest {
                         TabPager(pager, { listOf(MainTab.Library, MainTab.Albums) }, Modifier.fillMaxSize()) { page ->
                             if (page == 0) {
                                 anchor = rememberGlassAnchor()
-                                Box(Modifier.padding(32.dp).size(64.dp).glassAnchor(anchor)
-                                    .drawWithContent { triggerDraws.incrementAndGet(); drawContent() }
-                                    .background(Color.Blue))
+                                Box(Modifier.padding(32.dp)
+                                    .drawWithContent { triggerDraws.incrementAndGet(); drawContent() }) {
+                                    ActionIcon(AppIcon.ActionEllipsis, "Retained popup trigger", anchor = anchor) { open = true }
+                                }
                                 GlassMorphPopup(open, anchor, { open = false }, GlassPlacement.Center) {
                                     popupView = LocalView.current
                                     Box(Modifier.fillMaxWidth().height(180.dp)) { Text("Retained trigger popup") }
@@ -68,6 +71,7 @@ class PopupRetainedTriggerRetirementTest {
                         }
                     }
                     if (playerFullyOpen) Box(Modifier.fillMaxSize().background(Color.Red))
+                }
                 }
             }
         } }
@@ -78,6 +82,7 @@ class PopupRetainedTriggerRetirementTest {
                 assertTrue("A real native host was admitted", anchor.modalPresent)
                 assertTrue("The trigger surrendered its visible surface", anchor.hidden)
                 assertTrue("The composed origin remains mounted", anchor.triggerMounted)
+                assertNotNull("A production glass control supplies the leased source node", anchor.surfaceNode)
                 assertTrue(requireNotNull(popupView).isAttachedToWindow)
             }
         }
