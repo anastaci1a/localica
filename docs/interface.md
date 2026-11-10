@@ -70,6 +70,8 @@ Keep the shell and fixed title/footer outside the body mask. Oversized chrome ma
 
 ### Motion and access
 
+Settings search highlights use the shared Engine clock. Enabling Reduce motion during a highlight clears the pulse immediately. Disabling it does not replay that pulse; selecting a row again can start a new highlight.
+
 Gestures track slow drags, reversals and interruptions, settling by distance/velocity. Controls show contact immediately but defer movement ownership under one rule for every control, the Queue drawer and the player.
 
 | Contact | Owner |

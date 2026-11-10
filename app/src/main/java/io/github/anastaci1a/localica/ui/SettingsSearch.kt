@@ -1,25 +1,17 @@
 package io.github.anastaci1a.localica.ui
 
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.tween
-import androidx.compose.foundation.focusable
-import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.ScrollState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.layout.positionInWindow
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.SemanticsPropertyKey
 import androidx.compose.ui.semantics.stateDescription
-import kotlinx.coroutines.delay
+import io.github.anastaci1a.localica.ui.components.settingsSearchEntryModifier
+import io.github.anastaci1a.localica.ui.layout.SettingsEntryHost
+import io.github.anastaci1a.localica.ui.layout.SettingsHighlightMarker
 
 internal val SettingsHighlightAlpha = SemanticsPropertyKey<Float>("SettingsHighlightAlpha")
 
@@ -38,32 +30,16 @@ internal fun SettingsEntry(label: String, content: @Composable () -> Unit) {
     val focus = LocalSettingsSearchFocus.current
     val spec = focus?.let { SettingsCatalog.entry(it.page, label) }
     if (focus == null || spec == null || LocalSettingEntry.current) { content(); return }
-    val requester = remember { FocusRequester() }
-    val view = LocalView.current
-    val reduced = LocalReducedMotion.current
-    val tint = MaterialTheme.colorScheme.primary
-    val alpha = remember { Animatable(0f) }
     val highlighted = focus.highlighted == spec.id
-    LaunchedEffect(highlighted) {
-        if (highlighted) {
-            requester.requestFocus()
-            view.announceForAccessibility("${spec.title}, ${focus.page}")
-            if (reduced) alpha.snapTo(.18f) else alpha.animateTo(.18f, tween(150))
-            delay(if (reduced) 1200 else 450)
-            if (reduced) alpha.snapTo(0f) else alpha.animateTo(0f, tween(600))
-        } else alpha.snapTo(0f)
-    }
-    DisposableEffect(focus, spec.id) { onDispose { focus.anchors.remove(spec.id) } }
-    Box(Modifier.fillMaxWidth().testTag("setting:${spec.id}")
-        .onGloballyPositioned { focus.anchors[spec.id] = it.positionInWindow().y + focus.scroll.value }
-        .focusRequester(requester).focusable()
-        .semantics { this[SettingsHighlightAlpha] = alpha.value }
-        .drawWithContent {
-            drawContent()
-            if (alpha.value > 0f) drawRect(tint.copy(alpha = alpha.value))
-        }) {
+    val entry = Modifier.settingsSearchEntryModifier(
+        owner = focus, id = spec.id, title = spec.title, page = focus.page,
+        highlighted = highlighted, reduced = LocalReducedMotion.current, alphaKey = SettingsHighlightAlpha,
+        onAnchor = { focus.anchors[spec.id] = it + focus.scroll.value },
+        onRetire = { focus.anchors.remove(spec.id) },
+    )
+    SettingsEntryHost(entry) {
         CompositionLocalProvider(LocalSettingEntry provides true) { content() }
-        if (highlighted) Box(Modifier.matchParentSize().testTag("setting-highlight:${spec.id}"))
+        if (highlighted) SettingsHighlightMarker(Modifier.testTag("setting-highlight:${spec.id}"))
     }
 }
 
