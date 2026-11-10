@@ -298,7 +298,8 @@ class QueueSequenceTest {
     }
 
     @Test fun durableSelectionsRejectStaleHandlesAndMissingOccurrencesBeforeWriting() = database { sequence, sql ->
-        sequence.append("q", List(600) { QueueEntry(id = "entry:$it", track = song(it % 7)) })
+        List(600) { QueueEntry(id = "entry:$it", track = song(it % 7)) }.chunked(QueueSequence.PageSize)
+            .forEach { sequence.append("q", it) }
         val selection = QueueSelection(sequence)
         val first = selection.create("q")
         val updated = selection.set(first, setOf("entry:599"), true)
