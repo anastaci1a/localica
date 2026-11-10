@@ -44,36 +44,45 @@ class QueueOrderBlobProbeTest {
                 val bytes = db.query("SELECT length(CAST(orderState AS BLOB)) FROM queues WHERE id = 'probe'").use {
                     it.moveToFirst(); it.getLong(0)
                 }
-                val runtime = Runtime.getRuntime()
-                val beforeNative = Debug.getNativeHeapAllocatedSize()
-                val beforeManaged = runtime.totalMemory() - runtime.freeMemory()
-                val peakNative = AtomicLong(beforeNative)
-                val peakManaged = AtomicLong(beforeManaged)
-                val sampling = AtomicBoolean(true)
-                val sampler = Thread({
-                    while (sampling.get()) {
-                        peakNative.accumulateAndGet(Debug.getNativeHeapAllocatedSize(), ::maxOf)
-                        peakManaged.accumulateAndGet(runtime.totalMemory() - runtime.freeMemory(), ::maxOf)
-                        Thread.sleep(1)
-                    }
-                }, "queue-order-peak")
-                val started = SystemClock.elapsedRealtimeNanos()
-                sampler.start()
-                var consumed = 0L
-                try {
-                    LegacyQueueOrderStream(db, "probe").use { input ->
-                        val buffer = ByteArray(16384)
-                        while (true) {
-                            val read = input.read(buffer)
-                            if (read < 0) break
-                            consumed += read
+                val chunks = if (count == 1_000_000) listOf(16384, 1048576, 262144, 16384) else listOf(16384)
+                for ((window, chunkBytes) in chunks.withIndex()) {
+                    db.execSQL("PRAGMA shrink_memory")
+                    System.gc()
+                    System.runFinalization()
+                    System.gc()
+                    Thread.sleep(100)
+                    val gcBefore = Debug.getRuntimeStats()
+                    val runtime = Runtime.getRuntime()
+                    val beforeNative = Debug.getNativeHeapAllocatedSize()
+                    val beforeManaged = runtime.totalMemory() - runtime.freeMemory()
+                    val peakNative = AtomicLong(beforeNative)
+                    val peakManaged = AtomicLong(beforeManaged)
+                    val sampling = AtomicBoolean(true)
+                    val sampler = Thread({
+                        while (sampling.get()) {
+                            peakNative.accumulateAndGet(Debug.getNativeHeapAllocatedSize(), ::maxOf)
+                            peakManaged.accumulateAndGet(runtime.totalMemory() - runtime.freeMemory(), ::maxOf)
+                            Thread.sleep(1)
                         }
-                    }
-                } finally { sampling.set(false); sampler.join() }
-                val elapsed = SystemClock.elapsedRealtimeNanos() - started
-                assertEquals(bytes, consumed)
-                Log.i(Tag, "count=$count bytes=$bytes elapsedNanos=$elapsed nativeBefore=$beforeNative nativePeak=${peakNative.get()} " +
-                    "managedBefore=$beforeManaged managedPeak=${peakManaged.get()} gc=${Debug.getRuntimeStats()}")
+                    }, "queue-order-peak")
+                    val started = SystemClock.elapsedRealtimeNanos()
+                    sampler.start()
+                    var consumed = 0L
+                    try {
+                        LegacyQueueOrderStream(db, "probe", chunkBytes).use { input ->
+                            val buffer = ByteArray(chunkBytes)
+                            while (true) {
+                                val read = input.read(buffer)
+                                if (read < 0) break
+                                consumed += read
+                            }
+                        }
+                    } finally { sampling.set(false); sampler.join() }
+                    val elapsed = SystemClock.elapsedRealtimeNanos() - started
+                    assertEquals(bytes, consumed)
+                    Log.i(Tag, "count=$count bytes=$bytes elapsedNanos=$elapsed chunkBytes=$chunkBytes window=$window nativeBefore=$beforeNative nativePeak=${peakNative.get()} " +
+                        "managedBefore=$beforeManaged managedPeak=${peakManaged.get()} gcBefore=$gcBefore gc=${Debug.getRuntimeStats()}")
+                }
             }
         } finally { room.close(); context.deleteDatabase(name) }
     }

@@ -3,7 +3,8 @@ package io.github.anastaci1a.localica.queue
 /** Legacy scalar reader. Small results bound Kotlin memory; native SQLite input cost needs separate qualification. */
 @androidx.annotation.WorkerThread
 internal class LegacyQueueOrderStream(private val db: androidx.sqlite.db.SupportSQLiteDatabase,
-    private val queueId: String) : java.io.InputStream() {
+    private val queueId: String, private val chunkBytes: Int = 16384) : java.io.InputStream() {
+    init { require(chunkBytes in 1..1048576) }
     private var chunk = ByteArray(0)
     private var index = 0
     private var offset = 1L
@@ -23,8 +24,8 @@ internal class LegacyQueueOrderStream(private val db: androidx.sqlite.db.Support
     }
     private fun refill(): Boolean {
         if (ended) return false
-        chunk = db.query("SELECT substr(CAST(orderState AS BLOB),?,16384) FROM queues WHERE id = ?",
-            arrayOf(offset, queueId)).use { check(it.moveToFirst()); it.getBlob(0) ?: ByteArray(0) }
+        chunk = db.query("SELECT substr(CAST(orderState AS BLOB),?,?) FROM queues WHERE id = ?",
+            arrayOf(offset, chunkBytes, queueId)).use { check(it.moveToFirst()); it.getBlob(0) ?: ByteArray(0) }
         offset += chunk.size
         index = 0
         ended = chunk.isEmpty()

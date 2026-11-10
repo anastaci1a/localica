@@ -42,5 +42,11 @@ for (const count of [13400, 50000, 1000000]) {
   assert(new RegExp(`QueueOrderBlobProbe.*count=${count} bytes=\\d+ elapsedNanos=\\d+.*nativePeak=\\d+.*managedPeak=\\d+.*gc=`).test(log),
     `Missing scale evidence: ${count}`);
 }
+for (const [window, chunkBytes] of [16384, 1048576, 262144, 16384].entries()) {
+  const lines = log.split(/\r?\n/).filter(line => line.includes('QueueOrderBlobProbe') &&
+    line.includes('count=1000000 bytes=') && line.includes('chunkBytes=' + chunkBytes + ' window=' + window + ' '));
+  assert(lines.length === 1 && lines[0].includes('gcBefore=') && lines[0].includes(' gc='),
+    'Missing or repeated million-ID chunk/baseline receipt: window ' + window + ', chunk ' + chunkBytes);
+}
 assert(log.includes('bytecode=') && log.includes('sqlite='), 'Missing actual SQLite identity or bytecode');
 console.log('All 16 native diagnostic methods passed; production restore acceptance remains open.');
