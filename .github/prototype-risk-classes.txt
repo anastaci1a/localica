@@ -495,3 +495,5 @@ io.github.anastaci1a.localica.SelectionInsetScrollTest
 io.github.anastaci1a.localica.SelectionInsetContextsTest
 io.github.anastaci1a.localica.SettingsSearchEntryAdoptionTest
 io.github.anastaci1a.localica.SettingsSearchEntryReductionTest
+io.github.anastaci1a.localica.SearchPendingReturnGeometryTest
+io.github.anastaci1a.localica.PopupParentPendingHandoffTest

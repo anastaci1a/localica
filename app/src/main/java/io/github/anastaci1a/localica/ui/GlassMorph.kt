@@ -342,7 +342,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
     SideEffect { searchMotion.observer = searchObserver }
     var searchTransitioning by remember { mutableStateOf(false) }
     var searchReturning by remember { mutableStateOf(false) }
-    SideEffect { motion.show(visible) }
+    SideEffect { if (visible || childHome.handedOff) motion.show(visible) }
     var searchFlight by remember { mutableStateOf<SearchMorphFlight?>(null) }
     var searchTarget by remember { mutableStateOf(Rect.Zero) }
     var searchFocusRequest by remember { mutableStateOf<Boolean?>(null) }
@@ -418,9 +418,10 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                     progress.value, opening = true)
             } else beginSearchReturn()
         }
+        // Descendant native windows must enter this home before its opacity can move.
+        if (!visible) snapshotFlow { childHome.handedOff }.first { it }
         motion.show(visible)
         snapshotFlow { motion.bounds != null }.first { it }
-        if (!visible) snapshotFlow { childHome.handedOff }.first { it }
         while (true) {
             snapshotFlow { motion.expansion.awaitingNativeGate || motion.expansion.retirementReady }.first { it }
             if (motion.expansion.awaitingNativeGate) {
@@ -935,7 +936,10 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                         sharedContent?.destinationOrigin(envelope.topLeft)
                         val home = if (detached) Rect(envelope.topLeft + Offset(if (page) with(density) { 28.dp.toPx() } else 0f,
                             if (page) 0f else margin * 2), envelope.size) else start().translate(windowOrigin)
-                        if (!holdImeBack && (placement != GlassPlacement.Search || childPanels.intValue == 0 &&
+                        // A return intent can precede the outer visibility commit. Keep
+                        // its captured opening envelope while that commit catches up.
+                        if (!holdImeBack && !(placement == GlassPlacement.Search && visible && searchReturning) &&
+                            (placement != GlassPlacement.Search || childPanels.intValue == 0 &&
                             (imeSettled || imeHeight > 0 && imeTarget > 0 || searchTransitioning))) {
                             motion.place(home, envelope, density.density)
                             if (placement == GlassPlacement.Search) {
