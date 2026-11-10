@@ -113,6 +113,8 @@ class PopupChromeDepthTest {
                 flights(home).single()
             }
             compose.onNodeWithText(destination, substring = false).performClick()
+            val returnStartClockMs = compose.mainClock.currentTime
+            report.put("returnStartClockMs", returnStartClockMs).put("density", host.resources.displayMetrics.density)
             var valid = 0
             var highest = 0f
             var lowest = 1f
@@ -126,6 +128,7 @@ class PopupChromeDepthTest {
                 val before = compose.runOnUiThread { flight.handedOff }
                 val sample = JSONObject().put("frame", frame).put("clockMs", compose.mainClock.currentTime)
                     .put("phase", p).put("projectedBefore", before)
+                    .put("returnClockMs", compose.mainClock.currentTime - returnStartClockMs)
                 samples.put(sample); save()
                 // Update the native flight recording before its Activity projection.
                 val modal = original(window, output, "frame-$frame-popup")
@@ -144,6 +147,10 @@ class PopupChromeDepthTest {
                             nativeAlpha = window.attributes.alpha
                         }
                         sample.put("nativeWindowAlpha", nativeAlpha)
+                            .put("rootOriginOnScreen", JSONArray(rootAt.toList()))
+                            .put("popupOriginOnScreen", JSONArray(modalAt.toList()))
+                            .put("rootDecorSize", JSONArray(listOf(activity.decorView.width, activity.decorView.height)))
+                            .put("popupDecorSize", JSONArray(listOf(window.decorView.width, window.decorView.height)))
                         val counts = JSONArray()
                         regions.forEach { (name, bounds) ->
                             var count = 0; var bad = 0
