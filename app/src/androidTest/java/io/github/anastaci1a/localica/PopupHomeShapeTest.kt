@@ -29,6 +29,9 @@ import kotlin.math.hypot
  */
 class PopupHomeShapeTest {
     @get:Rule val compose = createComposeRule()
+    @get:Rule val method = org.junit.rules.TestName()
+    private val evidence = HomeNativeEvidence { method.methodName }
+    private val admissionEvidence = HomeNativeEvidence { "window-admission-${method.methodName}" }
 
     private enum class Trigger { ListMore, PillMore, Cover }
 
@@ -195,8 +198,7 @@ class PopupHomeShapeTest {
             assertTrue("Plain and quiet buttons share one fading behavior", compose.runOnIdle { anchor.quiet })
             val automation = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().uiAutomation
             fun glass(): Int {
-                val shot = if (trigger == Trigger.PillMore) synchronizedShot(automation)
-                    else requireNotNull(automation.takeScreenshot())
+                val shot = synchronizedShot(automation)
                 try {
                     val b = anchor.presentedBounds
                     if (trigger == Trigger.PillMore) {
@@ -214,7 +216,16 @@ class PopupHomeShapeTest {
                     }
                     val c = Offset(b.left + b.width * .15f, b.center.y) // beside the glyph
                     val centre = android.graphics.Color.red(shot.getPixel(c.x.toInt().coerceIn(0, shot.width - 1), c.y.toInt().coerceIn(0, shot.height - 1)))
-                    return abs(centre - android.graphics.Color.red(shot.getPixel(4, c.y.toInt().coerceIn(0, shot.height - 1))))
+                    val background = android.graphics.Color.red(shot.getPixel(4, c.y.toInt().coerceIn(0, shot.height - 1)))
+                    val contrast = abs(centre - background)
+                    evidence.save(shot, org.json.JSONObject().put("clock", compose.mainClock.currentTime)
+                        .put("trigger", trigger.name).put("sampleX", c.x).put("sampleY", c.y)
+                        .put("centre", centre).put("background", background).put("contrast", contrast)
+                        .put("bounds", anchor.bounds.toString()).put("presentedBounds", b.toString())
+                        .put("hidden", anchor.hidden).put("modal", anchor.modalPresent).put("inModal", anchor.shadowInModal)
+                        .put("restored", anchor.restoredDrawn).put("request", anchor.restoredDrawRequest)
+                        .put("receipt", anchor.restoredDrawReceipt).put("posted", anchor.restoredPresentedReceipt))
+                    return contrast
                 } finally { shot.recycle() }
             }
             compose.mainClock.autoAdvance = false
@@ -278,13 +289,23 @@ class PopupHomeShapeTest {
             }
         }
         var presented: android.graphics.Bitmap? = null
+        var matchedViews = org.json.JSONArray()
+        var matchedBounds = androidx.compose.ui.geometry.Rect.Zero
         compose.waitUntil(5000) {
             val next = requireNotNull(automation.takeScreenshot())
             var matches = true
             compose.runOnUiThread {
+                matchedViews = org.json.JSONArray()
+                matchedBounds = anchor.presentedBounds
                 views.filter { it.isAttachedToWindow }.forEach { view ->
                     val origin = IntArray(2); view.getLocationOnScreen(origin)
                     val c = next.getPixel(origin[0] + requireNotNull(markers[view]).x + 4, origin[1] + 104)
+                    matchedViews.put(org.json.JSONObject()
+                        .put("identity", System.identityHashCode(view)).put("class", view.javaClass.name)
+                        .put("attached", view.isAttachedToWindow).put("focused", view.hasWindowFocus())
+                        .put("originX", origin[0]).put("originY", origin[1])
+                        .put("markerX", origin[0] + requireNotNull(markers[view]).x + 4)
+                        .put("markerY", origin[1] + 104).put("observedColor", c))
                     val green = android.graphics.Color.green(c)
                     matches = matches && green > 80 && kotlin.math.abs(android.graphics.Color.red(c).toFloat() / green - requested * 8 / 255f) < .012f
                 }
@@ -292,6 +313,16 @@ class PopupHomeShapeTest {
             if (matches) presented = next else next.recycle()
             matches
         }
-        return requireNotNull(presented)
+        val bitmap = requireNotNull(presented)
+        try {
+            admissionEvidence.save(bitmap, org.json.JSONObject()
+                .put("clock", compose.mainClock.currentTime).put("requestedStage", requested)
+                .put("admittedViews", matchedViews).put("presentedBounds", matchedBounds.toString())
+                .put("scope", "Accepted native-window bitmap only; CPU bounds do not attest retained-child recording or first presentation"))
+        } catch (failure: Throwable) {
+            bitmap.recycle()
+            throw failure
+        }
+        return bitmap
     }
 }
