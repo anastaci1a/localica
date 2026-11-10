@@ -14,6 +14,7 @@ import androidx.compose.runtime.Recomposer
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -29,6 +30,7 @@ import androidx.compose.ui.semantics.getOrNull
 import androidx.test.core.app.ActivityScenario
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.anastaci1a.localica.browse.BrowsePreferences
+import io.github.anastaci1a.localica.browse.BrowseQueries
 import io.github.anastaci1a.localica.browse.BrowseStyle
 import io.github.anastaci1a.localica.browse.ListSize
 import io.github.anastaci1a.localica.browse.Presentation
@@ -38,6 +40,7 @@ import io.github.anastaci1a.localica.ui.LibraryUiState
 import io.github.anastaci1a.localica.library.Track
 import io.github.anastaci1a.localica.navigation.BrowseRoute
 import io.github.anastaci1a.localica.navigation.MainTab
+import io.github.anastaci1a.localica.navigation.MediaKind
 import io.github.anastaci1a.localica.playlist.PlaylistState
 import io.github.anastaci1a.localica.queue.QueueUiState
 import io.github.anastaci1a.localica.library.ArtworkCache
@@ -73,7 +76,22 @@ class ScrollPlacementFirstFrameTest {
     /** Varied title and artist lengths make recycled cells differ in height and text layout. */
     private fun syntheticTracks(albums: Int): List<Track> {
         covers.mkdirs()
-        return (0 until albums).map { n ->
+        // Two subview fixtures: a 400-song album and an artist with 250 albums.
+        val subviews = (0 until 650).map { n ->
+            val file = File(covers, "placement-635-subview-$n.png").also { files += it }
+            Bitmap.createBitmap(64, 64, Bitmap.Config.ARGB_8888).apply {
+                eraseColor(palette[n % palette.size])
+                file.outputStream().use { compress(Bitmap.CompressFormat.PNG, 100, it) }
+                recycle()
+            }
+            if (n < 400) Track(android.net.Uri.fromFile(file).toString(),
+                if (n % 3 == 0) "Track $n" else "Track $n with a title long enough to wrap", artist = LONG_ARTIST,
+                albumArtist = LONG_ARTIST, album = LONG_ALBUM, trackNumber = n + 1, fileName = "s$n.mp3", relativePath = "s/$n.mp3")
+            else Track(android.net.Uri.fromFile(file).toString(), "Prolific song $n", artist = PROLIFIC_ARTIST,
+                albumArtist = PROLIFIC_ARTIST, album = if (n % 2 == 0) "P$n" else "Prolific album $n with a long wrapping title",
+                fileName = "p$n.mp3", relativePath = "p/$n.mp3")
+        }
+        return subviews + (0 until albums).map { n ->
             val file = File(covers, "placement-635-$n.png").also { files += it }
             Bitmap.createBitmap(64, 64, Bitmap.Config.ARGB_8888).apply {
                 eraseColor(palette[n % palette.size])
@@ -105,7 +123,17 @@ class ScrollPlacementFirstFrameTest {
         ArtworkColors.publish(emptyMap())
     }
 
-    private class Host { var topRequest by mutableIntStateOf(0) }
+    private class Host(route: BrowseRoute) {
+        var topRequest by mutableIntStateOf(0)
+        var route by mutableStateOf(route)
+    }
+    private var snapshot: LibrarySnapshot? = null
+
+    /** The collection route for the first item titled [title] in [tab]. */
+    private fun subview(tab: MainTab, title: String): BrowseRoute {
+        val item = BrowseQueries.evaluate(requireNotNull(snapshot), emptyList(), BrowseRoute(tab)).items.first { it.title == title }
+        return BrowseRoute(tab, collection = item.ref, title = item.title)
+    }
 
     private fun main(block: (ComponentActivity) -> Unit) {
         val task = java.util.concurrent.FutureTask { block(requireNotNull(activity)) }
@@ -122,21 +150,22 @@ class ScrollPlacementFirstFrameTest {
         return roots(a.window.decorView).flatMap { it.semanticsOwner.getAllSemanticsNodes(mergingEnabled = false) }
     }
 
-    private fun host(style: BrowseStyle): Host {
-        val route = BrowseRoute(MainTab.Albums)
-        BrowsePreferences(context).write(route, style, false)
+    private fun host(style: BrowseStyle, tab: MainTab, open: (() -> BrowseRoute)?): Host {
         val tracks = arguments.getString("corpus")?.let { corpusTracks(File(it)) }
             ?: syntheticTracks((arguments.getString("albums") ?: "1500").toInt())
+        snapshot = LibrarySnapshot(folders = listOf(FolderSelection("fixture", "Fixture")), tracks = tracks)
+        val route = open?.invoke() ?: BrowseRoute(tab)
+        BrowsePreferences(context).write(route, style, false)
         ArtworkColors.publish(tracks.associate { it.uri to palette[(it.uri.hashCode() and 0x7fffffff) % palette.size] })
-        val library = LibraryUiState(LibrarySnapshot(folders = listOf(FolderSelection("fixture", "Fixture")), tracks = tracks), loading = false)
-        val host = Host()
+        val library = LibraryUiState(requireNotNull(snapshot), loading = false)
+        val host = Host(route)
         scenario = ActivityScenario.launch(ComponentActivity::class.java)
         requireNotNull(scenario).onActivity { activity = it }
         main { it.setContent { LocalicaTheme {
             // Any scope instance converts coordinates to their lookahead counterparts.
             LookaheadScope { SideEffect { scope = this } }
             Box(Modifier.fillMaxSize()) {
-                BrowserScreen(library, PlaylistState(loading = false), route, { }, {}, {}, { _, _, _ -> },
+                BrowserScreen(library, PlaylistState(loading = false), host.route, { host.route = it }, {}, {}, { _, _, _ -> },
                     null, null, true, false, queueState = QueueUiState(loading = false),
                     scrollToTopRequest = host.topRequest, reducedMotion = false)
             }
@@ -321,8 +350,9 @@ class ScrollPlacementFirstFrameTest {
     }
 
 
-    private fun run(style: BrowseStyle, label: String) {
-        val host = host(style)
+    private fun run(style: BrowseStyle, label: String, tab: MainTab = MainTab.Albums, open: (() -> BrowseRoute)? = null,
+        trigger: (Host) -> Unit = { h -> main { h.topRequest++ } }) {
+        val host = host(style, tab, open)
         var phase = "fling"
         val stop = startSampler { phase }
         try {
@@ -350,9 +380,9 @@ class ScrollPlacementFirstFrameTest {
                 nativeFrame()
             }
             Thread.sleep(1500)
-            // The programmatic return to the top (Library tab re-tap) from deep in the catalog.
-            phase = "autoscroll-top"
-            main { host.topRequest++ }
+            // The context's programmatic scroll (tab re-tap, filter or search change) from deep in the list.
+            phase = "autoscroll-trigger"
+            trigger(host)
             Thread.sleep(3000)
             awaitIdle()
         } finally { stop() }
@@ -366,4 +396,33 @@ class ScrollPlacementFirstFrameTest {
     @Test fun gallery3FlingAndJump() = run(BrowseStyle(presentation = Presentation.Standard, itemsPerRow = 3), "gallery3")
     @Test fun gallery4FlingAndJump() = run(BrowseStyle(presentation = Presentation.Standard, itemsPerRow = 4), "gallery4")
     @Test fun gallery5FlingAndJump() = run(BrowseStyle(presentation = Presentation.Standard, itemsPerRow = 5), "gallery5")
+
+    /** Mixed Library gallery; the trigger is a filter chip toggled on and off (#568). */
+    @Test fun mixedLibraryFilterToggle() = run(BrowseStyle(presentation = Presentation.Standard, itemsPerRow = 4), "mixed-filter",
+        MainTab.Library) { h ->
+        main { h.route = h.route.copy(filter = MediaKind.AlbumArtist) }
+        Thread.sleep(300)
+        main { h.route = h.route.copy(filter = null) }
+    }
+
+    /** Albums list; the trigger is a search query change and its removal. */
+    @Test fun searchChange() = run(BrowseStyle(presentation = Presentation.List, listSize = ListSize.Normal), "search", MainTab.Albums) { h ->
+        main { h.route = h.route.copy(search = true, text = "Album 1") }
+        Thread.sleep(600)
+        main { h.route = h.route.copy(text = "") }
+    }
+
+    /** Album subview: a 400-song track list with wrapping titles. */
+    @Test fun albumSubviewTrackList() = run(BrowseStyle(presentation = Presentation.List, listSize = ListSize.Tracklist), "album-subview",
+        open = { subview(MainTab.Albums, LONG_ALBUM) })
+
+    /** Artist subview: 250 albums in a gallery, on the keyed reorder placement path (animateItem). */
+    @Test fun artistSubviewGallery() = run(BrowseStyle(presentation = Presentation.Standard, itemsPerRow = 3), "artist-subview",
+        open = { subview(MainTab.Artists, PROLIFIC_ARTIST) })
+
+    private companion object {
+        const val LONG_ALBUM = "Long Album"
+        const val LONG_ARTIST = "Long Artist"
+        const val PROLIFIC_ARTIST = "Prolific Artist"
+    }
 }
