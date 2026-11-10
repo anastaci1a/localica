@@ -13,14 +13,11 @@ const errors = [];
 
 function checkTrailers(text, context) {
   for (const line of text.split('\n')) {
-    if (/^\s*(claude-session\s*:|🤖\s*Generated with)/i.test(line)) {
+    if (/^\s*(?:(?:claude|codex)-session\s*:|(?:🤖\uFE0F?\s*)?generated\s+with\b)/i.test(line)) {
       errors.push(`${context}: generated attribution trailer`);
     }
     if (/^\s*co-authored-by\s*:/i.test(line)) {
-      const identity = /^\s*co-authored-by\s*:\s*(.*?)\s*<([^<>]+)>\s*$/i.exec(line);
-      if (!identity || !approvedNames.has(identity[1]) || !approvedEmails.has(identity[2])) {
-        errors.push(`${context}: unapproved coauthor`);
-      }
+      errors.push(`${context}: coauthor attribution trailer`);
     }
   }
 }
@@ -36,7 +33,8 @@ function range(head, base, remote) {
   ensureCommit(head);
   if (base && !zero.test(base)) return git('rev-list', head, `^${ensureCommit(base)}`).trim().split('\n').filter(Boolean);
   if (remote) return git('rev-list', head, '--not', `--remotes=${remote}`).trim().split('\n').filter(Boolean);
-  return git('rev-list', head).trim().split('\n').filter(Boolean);
+  const mainBase = git('merge-base', 'refs/remotes/origin/main', head).trim();
+  return git('rev-list', head, `^${mainBase}`).trim().split('\n').filter(Boolean);
 }
 
 let commits = [];

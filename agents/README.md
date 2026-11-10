@@ -42,6 +42,8 @@ Keep commits coherent and reviewable. Separate unrelated cleanup, implementation
 
 Use the repository-local author identity. Inspect Git state and appropriate verification before committing. Audit staged content for secrets and report material limitations.
 
+Commit checks reject every coauthor trailer and AI session or generated attribution line. Manual dispatches and new refs inspect commits after the merge base with current `main`; updates to existing refs inspect their pushed range. Commits already on `main` are grandfathered as verified by the #789 rewrite.
+
 Push every commit immediately and verify the remote branch tip. Never leave completed work only locally.
 
 Use `umask 0002` when creating workspace contents.
