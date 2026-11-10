@@ -46,17 +46,19 @@ class MediaButtonResumptionTest {
         delay(1_500) // The checkpoint persists asynchronously; the service restores from disk, not from this memory.
         withContext(Dispatchers.Main) { app.queues.playbackRequested(false) }
         context.stopService(Intent(context, PlaybackService::class.java))
-        withTimeout(10_000) { while (app.queues.playbackSample() != null) delay(20) }
+        withTimeout(10_000) { while (sample(app) != null) delay(20) }
         for (action in intArrayOf(KeyEvent.ACTION_DOWN, KeyEvent.ACTION_UP)) {
             context.sendBroadcast(Intent(Intent.ACTION_MEDIA_BUTTON).setComponent(receiver)
                 .putExtra(Intent.EXTRA_KEY_EVENT, KeyEvent(action, KeyEvent.KEYCODE_MEDIA_PLAY)))
         }
-        val start = withTimeout(20_000) { var sample = app.queues.playbackSample(); while (sample == null) { delay(20); sample = app.queues.playbackSample() }; sample }
-        val advanced = withTimeout(20_000) { var latest = app.queues.playbackSample(); while ((latest?.positionMs ?: 0) < start.positionMs + 750) { delay(50); latest = app.queues.playbackSample() }; latest!! }
+        val start = withTimeout(20_000) { var sample = sample(app); while (sample == null) { delay(20); sample = sample(app) }; sample }
+        val advanced = withTimeout(20_000) { var latest = sample(app); while ((latest?.positionMs ?: 0) < start.positionMs + 750) { delay(50); latest = sample(app) }; latest!! }
         assertEquals("The restored queue's visit is the one playing", start.playbackVisit, advanced.playbackVisit)
         withContext(Dispatchers.Main) { app.queues.playbackRequested(false) }
         context.stopService(Intent(context, PlaybackService::class.java))
     }
+
+    private suspend fun sample(app: LocalicaApplication) = withContext(Dispatchers.Main) { app.queues.playbackSample() }
 
     private fun writeWav(file: File) {
         val rate = 8_000
