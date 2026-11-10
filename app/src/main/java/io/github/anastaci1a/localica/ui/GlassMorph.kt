@@ -342,7 +342,7 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
     SideEffect { searchMotion.observer = searchObserver }
     var searchTransitioning by remember { mutableStateOf(false) }
     var searchReturning by remember { mutableStateOf(false) }
-    SideEffect { motion.show(visible) }
+    SideEffect { if (visible || childHome.handedOff) motion.show(visible) }
     var searchFlight by remember { mutableStateOf<SearchMorphFlight?>(null) }
     var searchTarget by remember { mutableStateOf(Rect.Zero) }
     var searchFocusRequest by remember { mutableStateOf<Boolean?>(null) }
@@ -418,9 +418,10 @@ internal fun GlassMorphPopup(visible: Boolean, anchor: GlassAnchor, onDismiss: (
                     progress.value, opening = true)
             } else beginSearchReturn()
         }
+        // Descendant native windows must enter this home before its opacity can move.
+        if (!visible) snapshotFlow { childHome.handedOff }.first { it }
         motion.show(visible)
         snapshotFlow { motion.bounds != null }.first { it }
-        if (!visible) snapshotFlow { childHome.handedOff }.first { it }
         while (true) {
             snapshotFlow { motion.expansion.awaitingNativeGate || motion.expansion.retirementReady }.first { it }
             if (motion.expansion.awaitingNativeGate) {
