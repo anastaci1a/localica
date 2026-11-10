@@ -54,16 +54,28 @@ class ListControlsTest {
             {}, {}, {}, { _, _, _ -> }, null, null, true, false) } } }
         val bar = compose.onNodeWithTag("browse-scrollbar")
         compose.onNodeWithTag("scroll-preview").assertDoesNotExist()
-        bar.performTouchInput { down(Offset(centerX, 30f)); moveTo(Offset(centerX, centerY), delayMillis = 500) }
+        // #704: only a visible thumb takes contact. Show it as a scroll does, then drag from the thumb itself.
+        fun drag() {
+            compose.revealScrollbar("browser-list")
+            val y = compose.thumbGrabY()
+            bar.performTouchInput { down(Offset(centerX, y)); moveTo(Offset(centerX, centerY), delayMillis = 500) }
+            repeat(2) { compose.mainClock.advanceTimeByFrame() }
+        }
+        fun release() {
+            bar.performTouchInput { up() }
+            repeat(2) { compose.mainClock.advanceTimeByFrame() }
+            compose.mainClock.autoAdvance = true
+        }
+        drag()
         compose.onNodeWithTag("scroll-preview").assertIsDisplayed()
         compose.onNodeWithText("Z").assertIsDisplayed()
-        bar.performTouchInput { up() }
+        release()
         compose.onNodeWithTag("scroll-preview").assertDoesNotExist()
         compose.runOnIdle { route = BrowseRoute(MainTab.Songs, querySort = TrackSort.Year) }
-        bar.performTouchInput { down(Offset(centerX, 30f)); moveTo(Offset(centerX, centerY), delayMillis = 500) }
+        drag()
         compose.onNodeWithTag("scroll-preview").assertIsDisplayed()
         compose.onNode(hasText("2001") and hasAnyAncestor(hasTestTag("scroll-preview"))).assertIsDisplayed()
-        bar.performTouchInput { up() }
+        release()
         compose.onNodeWithTag("scroll-preview").assertDoesNotExist()
     }
     @Test fun queueCurrentSongButtonReturnsToTheOccurrenceAndHandlesTheEnd() {

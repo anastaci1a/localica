@@ -17,6 +17,7 @@ import io.github.anastaci1a.localica.library.TrackSort
 import io.github.anastaci1a.localica.navigation.MediaKind
 import io.github.anastaci1a.localica.navigation.MediaRef
 import io.github.anastaci1a.localica.ui.*
+import io.github.anastaci1a.localica.ui.spec.ScrollbarSpec
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import org.junit.Assert.*
@@ -100,36 +101,45 @@ class ScrollbarContinuityTest {
         assertTrue("thumb must respond to 3 px", thumb().top > rest)
     }
 
-    @Test fun heldThumbGrowsUniformlyInwardStaysInTheTrackAndReturns() {
+    // #704: the held thumb grows by a constant width and by a capped share of its resting length.
+    @Test fun heldThumbGrowsBySpecInwardStaysInTheTrackAndReturns() {
         host()
+        compose.revealScrollbar(state)
         val rest = thumb()
-        bar().performTouchInput { down(Offset(centerX, 10f)) }
+        val top = bar().fetchSemanticsNode().boundsInRoot.top
+        bar().performTouchInput { down(Offset(centerX, rest.center.y - top)) }
         compose.mainClock.advanceTimeBy(400); compose.waitForIdle()
         val held = thumb()
-        assertEquals("width x1.5", rest.width * 1.5f, held.width, 1.5f)
-        assertEquals("height x1.5", rest.height * 1.5f, held.height, 1.5f)
+        val extra = ScrollbarSpec.heldExtraLength(rest.height, ScrollbarSpec.heldMaxExtraLength.value * density)
+        assertEquals("width + constant", rest.width + ScrollbarSpec.heldExtraWidth.value * density, held.width, 1.5f)
+        assertEquals("length + capped share", rest.height + extra, held.height, 1.5f)
         assertEquals("anchored to the edge", rest.right, held.right, 1.5f)
         assertTrue(held.top >= bar().fetchSemanticsNode().boundsInRoot.top - 1f)
         bar().performTouchInput { up() }
         compose.mainClock.advanceTimeBy(400); compose.waitForIdle()
         assertEquals(rest.width, thumb().width, 1.5f)
         assertEquals(rest.height, thumb().height, 1.5f)
+        compose.mainClock.autoAdvance = true
     }
 
     @Test fun pressInsideTheEnlargedHitboxButOutsideTheDrawnThumbGrabsIt() {
         host()
+        compose.revealScrollbar(state)
         val drawn = thumb()
         val barBounds = bar().fetchSemanticsNode().boundsInRoot
         assertTrue("hit strip >= 32dp", barBounds.width >= 32f * density - 1f)
         // Left of the 4dp drawn thumb, still inside the 32dp strip.
         val x = drawn.left - barBounds.left - 8f * density
         bar().performTouchInput { down(Offset(x, drawn.center.y - barBounds.top)); moveBy(Offset(0f, 120f * density)) }
+        compose.mainClock.advanceTimeByFrame()
         compose.runOnIdle { assertTrue("grabbed", transit.active) }
         bar().performTouchInput { up() }
+        compose.mainClock.autoAdvance = true
     }
 
     @Test fun dragFollowsTheFingerContinuouslyAcrossPressAndRelease() {
         host()
+        compose.revealScrollbar(state)
         val barBounds = bar().fetchSemanticsNode().boundsInRoot
         val tops = mutableListOf<Float>()
         val grabY = thumb().center.y - barBounds.top

@@ -1367,12 +1367,18 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
                     }
                 }
             } }
-            // The enlarged scrollbar hit strip must start below fixed header controls,
-            // otherwise it wins hit testing over right-edge filter/search taps.
+            // The track runs from the bottom edge of the header controls to the top edge of the lowest
+            // bottom control: shell chrome and the selection pill (obscuredInset, continuous as they move)
+            // and the corner ⋯/plus button. The return arrow does not bound it; the rail pads both ends (#704).
+            val cornerControl = (route.collection?.kind in setOf(MediaKind.Playlist, MediaKind.Album, MediaKind.Artist, MediaKind.AlbumArtist) &&
+                !route.search && (artDetail || playlists.playlists.any { it.id == route.collection?.id })) ||
+                (route.tab in setOf(MainTab.Library, MainTab.Playlists) && route.collection == null && !route.search)
             if (loadedResult != null) BrowseScrollbar(gridState, result.items, displayedStyle.sort,
                 Modifier.align(Alignment.CenterEnd).padding(
-                    top = if (showFilters || (showSearchPill && !artDetail)) pillSlotHeight else 0.dp,
-                    bottom = obscuredInset), onUserScroll = ::userScroll)
+                    top = maxOf(if (showFilters || (showSearchPill && !artDetail)) pillSlotHeight else 0.dp,
+                        if (artDetail) with(density) { (collectionBackBottom - listViewportTop).coerceAtLeast(0f).toDp() } else 0.dp),
+                    bottom = obscuredInset + if (cornerControl) with(density) { actionControlHeight.toDp() } else 0.dp),
+                onUserScroll = ::userScroll)
             if (route.collection?.kind in setOf(MediaKind.Playlist, MediaKind.Album, MediaKind.Artist, MediaKind.AlbumArtist) && !route.search) {
                 val playlist = playlists.playlists.firstOrNull { it.id == route.collection?.id }
                 if (playlist != null || artDetail) Box(Modifier.align(Alignment.BottomEnd).padding(end = 12.dp, bottom = obscuredInset)

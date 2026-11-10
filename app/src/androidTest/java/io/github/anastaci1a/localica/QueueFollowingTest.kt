@@ -635,11 +635,20 @@ class QueueFollowingTest {
     @Test fun draggingTheScrollbarDetachesAndNeverReattachesOnRelease() {
         val fixture = fixture()
         val bar = compose.onNodeWithTag("browse-scrollbar")
+        // #704: an idle scrollbar is faded and has no hit area. Following a playback change moves the list
+        // and shows it without detaching; the held clock keeps it shown for the drag on its thumb.
+        compose.mainClock.autoAdvance = false
+        compose.runOnIdle { fixture.publish(80) }
+        compose.mainClock.advanceTimeBy(500); compose.waitForIdle()
+        val top = bar.fetchSemanticsNode().boundsInRoot.top
+        val grab = compose.onNodeWithTag("browse-scrollbar-thumb").fetchSemanticsNode().boundsInRoot.center.y - top
         bar.performTouchInput {
-            down(Offset(centerX, height * .4f))
-            moveTo(Offset(centerX, height * .7f), delayMillis = 300)
+            down(Offset(centerX, grab))
+            moveTo(Offset(centerX, grab - height * .3f), delayMillis = 300)
             up()
         }
+        compose.mainClock.advanceTimeBy(500)
+        compose.mainClock.autoAdvance = true
         currentReturn.assertIsDisplayed()
         val detached = position()
         compose.runOnIdle { fixture.publish(5) }
