@@ -26,6 +26,9 @@ class SettingsSearchHighlightTest {
             assertEquals(.18f, pulse.value, 0f)
             h.advance(.001)
             assertEquals(.18f, pulse.value, 0f)
+            // Expiry admits the fade; its first shared frame evaluates time zero.
+            h.advance(.016)
+            assertEquals(.18f, pulse.value, 0f)
             h.advance(.3)
             assertEquals(fade.getValueFromNanos(300_000_000), pulse.value, 0f)
             h.advance(.3)
@@ -48,7 +51,7 @@ class SettingsSearchHighlightTest {
         }
     }
     @Test(timeout = 5000) fun globalReductionRetiresEveryPhaseAndNeverResumesStaleWork() {
-        for (seconds in listOf(.064, .32, .8)) EngineHarness().use { h ->
+        for (seconds in listOf(.064, .32, .624, .8)) EngineHarness().use { h ->
             val pulse = SettingsSearchHighlight(h.clock)
             pulse.start(false)
             h.advance(.016)
@@ -70,7 +73,7 @@ class SettingsSearchHighlightTest {
         }
     }
     @Test fun cancellationAndDisposalRemoveAllRegisteredWorkAndObserversCannotDriveIt() {
-        for (seconds in listOf(.064, .32, .8)) EngineHarness().use { h ->
+        for (seconds in listOf(.064, .32, .624, .8)) EngineHarness().use { h ->
             val pulse = SettingsSearchHighlight(h.clock)
             pulse.start(false)
             h.advance(.016)

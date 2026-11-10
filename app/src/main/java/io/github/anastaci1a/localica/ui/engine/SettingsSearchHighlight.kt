@@ -11,7 +11,7 @@ import androidx.compose.runtime.*
  */
 @Stable
 internal class SettingsSearchHighlight(private val clock: UiClock) : State<Float>, ActiveMotion {
-    private enum class Phase { Idle, AwaitOnset, Onset, Hold, Fade }
+    private enum class Phase { Idle, AwaitOnset, Onset, Hold, AwaitFade, Fade }
     private var phase by mutableStateOf(Phase.Idle)
     private var started = clock.stampNow
     private var admittedReduced = false
@@ -30,7 +30,7 @@ internal class SettingsSearchHighlight(private val clock: UiClock) : State<Float
             return when (phase) {
                 Phase.Idle, Phase.AwaitOnset -> 0f
                 Phase.Onset -> onset.getValueFromNanos(elapsed(clock.stamp))
-                Phase.Hold -> .18f
+                Phase.Hold, Phase.AwaitFade -> .18f
                 Phase.Fade -> fade.getValueFromNanos(elapsed(clock.stamp))
             }
         }
@@ -54,7 +54,7 @@ internal class SettingsSearchHighlight(private val clock: UiClock) : State<Float
     }
     override fun endsAt(stamp: FrameStamp): Boolean = when (phase) {
         Phase.Idle -> false
-        Phase.AwaitOnset -> true
+        Phase.AwaitOnset, Phase.AwaitFade -> true
         Phase.Onset -> onset.isFinishedFromNanos(elapsed(stamp))
         Phase.Hold -> elapsed(stamp) >= if (admittedReduced) 1_200_000_000L else 450_000_000L
         Phase.Fade -> fade.isFinishedFromNanos(elapsed(stamp))
@@ -64,7 +64,8 @@ internal class SettingsSearchHighlight(private val clock: UiClock) : State<Float
         phase = when (phase) {
             Phase.AwaitOnset -> Phase.Onset
             Phase.Onset -> Phase.Hold
-            Phase.Hold -> if (admittedReduced) Phase.Idle else Phase.Fade
+            Phase.Hold -> if (admittedReduced) Phase.Idle else Phase.AwaitFade
+            Phase.AwaitFade -> Phase.Fade
             Phase.Fade, Phase.Idle -> Phase.Idle
         }
         started = stamp
