@@ -11,7 +11,7 @@ import io.github.anastaci1a.localica.navigation.*
 import org.junit.Assert.*
 import org.junit.Test
 
-/** #775: activate real accessibility actions through the retained native renderer popup. */
+/** #775: the actual preference must switch through real touch and accessibility routes. */
 class FlatNoneRendererPopupTest {
     @Test fun layerlessParentContributesNoSampledSceneBounds() {
         val structure = mutableListOf<io.github.anastaci1a.localica.ui.SampledSceneDependency>()
@@ -23,7 +23,12 @@ class FlatNoneRendererPopupTest {
     }
 
     @SdkSuppress(minSdkVersion = 33)
-    @Test fun rendererPopupCanLeaveFlatNoneForSingleToneAndNormal() {
+    @Test fun rendererPopupCanLeaveFlatNoneForSingleToneAndNormal() = switchFromPopup(false)
+
+    @SdkSuppress(minSdkVersion = 33)
+    @Test fun rendererPopupAccessibilityCanLeaveFlatNoneForSingleToneAndNormal() = switchFromPopup(true)
+
+    private fun switchFromPopup(accessibility: Boolean) {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
         val device = UiDevice.getInstance(instrumentation)
@@ -45,10 +50,28 @@ class FlatNoneRendererPopupTest {
             throw failure
         }
         fun activate(selector: BySelector) {
-            assertTrue("The real control must accept its framework accessibility action: $selector",
+            if (accessibility) assertTrue("The real control must accept its framework accessibility action: $selector",
                 visible(selector).clickSystemAction())
+            else visible(selector).click()
         }
         try {
+            // An earlier real-app walk can have left an asynchronous clear behind
+            // its deleted cache MP3. Retire only that known test-owned playback;
+            // an unrelated error is a failed fixture precondition, not a missed tap.
+            lateinit var playback: io.github.anastaci1a.localica.playback.PlaybackConnection
+            instrumentation.runOnMainSync { playback = io.github.anastaci1a.localica.playback.PlaybackConnection(context) }
+            try {
+                await(15_000) { playback.state.value.connected && !playback.queues.state.value.loading }
+                val active = playback.queues.state.value.library.active
+                if (active?.entries?.all { it.track.id == "flat-none-walk-740" } == true) {
+                    instrumentation.runOnMainSync { playback.clear() }
+                    await(15_000) {
+                        var nativeEmpty = false
+                        instrumentation.runOnMainSync { nativeEmpty = playback.queues.playbackSample() == null }
+                        playback.queues.state.value.library.activeId == null && nativeEmpty
+                    }
+                } else assertNull("The touch fixture must not start behind an unrelated playback failure", playback.state.value.problem)
+            } finally { instrumentation.runOnMainSync { playback.close() } }
             preferences.write(InterfaceSettings(tabs = listOf(MainTab.Home, MainTab.Library, MainTab.Songs, MainTab.Albums),
                 reducedMotion = true, glass = GlassAppearance(renderer = GlassRendererMode.FlatNone)))
             ActivityScenario.launch<MainActivity>(Intent(context, MainActivity::class.java)).use { scenario ->
