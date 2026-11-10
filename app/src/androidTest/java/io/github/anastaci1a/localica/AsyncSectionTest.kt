@@ -155,11 +155,38 @@ class AsyncSectionTest {
                 SettingsLink("Following row", "Following summary", modifier = Modifier.testTag("following-row")) { }
             }
         } }
+        compose.awaitRetainedShadows("undo-original", "undo-link", "undo-action", "following-row")
         val beforeBounds = listOf("undo-link", "undo-action", "following-row").map { compose.onNodeWithTag(it).getUnclippedBoundsInRoot() }
         val before = compose.onNodeWithTag("undo-face").captureToImage()
         compose.runOnIdle { wrapped = true }
+        compose.awaitRetainedShadows("undo-wrapped", "undo-link", "undo-action", "following-row")
         assertEquals(beforeBounds, listOf("undo-link", "undo-action", "following-row").map { compose.onNodeWithTag(it).getUnclippedBoundsInRoot() })
         val after = compose.onNodeWithTag("undo-face").captureToImage()
+        assertEquals(before.width, after.width); assertEquals(before.height, after.height)
+        val a = before.toPixelMap(); val b = after.toPixelMap()
+        for (y in 0 until before.height) for (x in 0 until before.width) assertEquals("pixel=$x,$y", a[x, y], b[x, y])
+    }
+
+    @Test fun unwrappedRemountControlKeepsEveryPixelAfterTheSameShadowPreparation() {
+        var generation by mutableIntStateOf(0)
+        compose.setContent { LocalicaTheme {
+            Column(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.background).testTag("remount-face"),
+                verticalArrangement = Arrangement.spacedBy(io.github.anastaci1a.localica.ui.spec.StockUiSpec.space.getValue(io.github.anastaci1a.localica.ui.spec.Space.Compact))) {
+                key(generation) {
+                    SettingsLink("Artist — Song", "7 scrobbles · Chosen by you", modifier = Modifier.testTag("remount-link")) { }
+                    GlassActionButton(AppIcon.ActionChevronLeft, "Undo match for Song", modifier = Modifier.testTag("remount-action")) { }
+                    SettingsLink("Following row", "Following summary", modifier = Modifier.testTag("remount-following")) { }
+                }
+            }
+        } }
+        val tags = arrayOf("remount-link", "remount-action", "remount-following")
+        compose.awaitRetainedShadows("remount-original", *tags)
+        val beforeBounds = tags.map { compose.onNodeWithTag(it).getUnclippedBoundsInRoot() }
+        val before = compose.onNodeWithTag("remount-face").captureToImage()
+        compose.runOnIdle { generation++ }
+        compose.awaitRetainedShadows("remount-recreated", *tags)
+        assertEquals(beforeBounds, tags.map { compose.onNodeWithTag(it).getUnclippedBoundsInRoot() })
+        val after = compose.onNodeWithTag("remount-face").captureToImage()
         assertEquals(before.width, after.width); assertEquals(before.height, after.height)
         val a = before.toPixelMap(); val b = after.toPixelMap()
         for (y in 0 until before.height) for (x in 0 until before.width) assertEquals("pixel=$x,$y", a[x, y], b[x, y])
