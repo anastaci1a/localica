@@ -37,6 +37,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.clip
+import io.github.anastaci1a.localica.ui.spec.EmptyInset
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -129,8 +130,8 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
     val ownSelectionPanel = if (LocalSessionSelection.current == null || popupDismiss != null)
         rememberFloatingSelectionPanel(session.panelVisible, reducedMotion) else null
     val selectionPanel = ownSelectionPanel ?: LocalBrowseSelectionPanel.current
-    val obscuredInset = LocalBrowseObscuredInset.current + (ownSelectionPanel?.clearance ?: 0.dp)
-    val selectionBaseInset = obscuredInset - (selectionPanel?.clearance ?: 0.dp)
+    val obscuredInset = LocalBrowseObscuredInset.current + (ownSelectionPanel?.clearance ?: EmptyInset)
+    val selectionBaseInset = obscuredInset - (selectionPanel?.clearance ?: EmptyInset)
     var returnControlHeight by remember { mutableIntStateOf(0) }
     var actionControlHeight by remember { mutableIntStateOf(0) }
     val density = androidx.compose.ui.platform.LocalDensity.current
@@ -1421,7 +1422,7 @@ internal fun BrowserScreen(library: LibraryUiState, playlists: PlaylistState, ro
             }
         }
         ListSearchWindow(localSearchOpen && !playerOpen, searchAnchor, localSearch.route.text.isNotBlank(), ::closeSearch, onBack = ::backSearch) {
-            CompositionLocalProvider(LocalBrowseObscuredInset provides 0.dp, LocalBrowseSelectionPanel provides null) {
+            CompositionLocalProvider(LocalBrowseObscuredInset provides EmptyInset, LocalBrowseSelectionPanel provides null) {
                 val searchRoute = localSearch.route
                 key(searchRoute.key) { searchHolder.SaveableStateProvider(searchRoute.key) {
                     BrowserScreen(library, playlists, searchRoute, { localSearch = localSearch.update(it) }, onOpen, onSettings,
