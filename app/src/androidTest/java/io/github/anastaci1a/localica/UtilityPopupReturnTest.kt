@@ -156,9 +156,12 @@ class UtilityPopupReturnTest {
             report.put("status", "failed").put("failure", failure.toString())
             throw failure
         } finally {
-            output.writeText(report.toString(2))
-            compose.mainClock.autoAdvance = true
-            preferences.write(previous)
+            try {
+                output.writeText(report.toString(2))
+            } finally {
+                try { compose.mainClock.autoAdvance = true }
+                finally { preferences.write(previous) }
+            }
         }
     }
 }
