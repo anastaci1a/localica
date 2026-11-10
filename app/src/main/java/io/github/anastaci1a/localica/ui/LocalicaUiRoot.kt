@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.runtime.*
+import androidx.compose.ui.MotionDurationScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
@@ -36,6 +37,7 @@ internal fun LocalicaUiRoot(state: LocalicaUiRootState = rememberLocalicaUiRoot(
         return
     }
     val settings by state.settings
+    val durationScale = rememberCoroutineScope().coroutineContext[MotionDurationScale]?.scaleFactor ?: 1f
     val density = LocalDensity.current
     val window = state.window
     val navigationInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
@@ -44,8 +46,8 @@ internal fun LocalicaUiRoot(state: LocalicaUiRootState = rememberLocalicaUiRoot(
     val resolvedSpec = remember(settings.glass, settings.reducedMotion, settings.fasterMotion, referenceTravel, window, density) {
         uiSpec(settings, ExpansionGeometryDomain(referenceTravel, maxOf(1f, kotlin.math.hypot(window.width.toFloat(), window.height.toFloat())), 1f / 24), density)
     }
-    val engine = remember(refreshHz, referenceTravel, resolvedSpec) {
-        EngineContext(1f / refreshHz, referenceTravel, resolvedSpec.spec.access)
+    val engine = remember(refreshHz, referenceTravel, resolvedSpec, durationScale) {
+        EngineContext(1f / refreshHz, referenceTravel, resolvedSpec.spec.access, durationScale)
     }
     CompositionLocalProvider(LocalLocalicaUiRoot provides state, LocalEngineContext provides engine,
         LocalUiSpec provides resolvedSpec, content = content)
