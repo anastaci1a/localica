@@ -72,3 +72,36 @@ internal fun AndroidComposeTestRule<*, *>.awaitSystemImeHardKeyboardPolicy(
             "$showWithHardKeyboard (observer state $observed)", timeout)
     }
 }
+
+/**
+ * Owns the native-keyboard policy for a class whose measured subject is the system IME's inset
+ * animation (#786): the soft keyboard is shown beside the emulator's hardware keyboard and the
+ * animator scales are 1, so the platform dispatches [androidx.core.view.WindowInsetsAnimationCompat]
+ * callbacks instead of jumping to the final inset. Earlier classes in a long shard restore these
+ * settings, or leave them, at their own pace; the class must not inherit either state.
+ * Place it before [FreshSystemIme] so the restarted keyboard reads this policy at its first bind.
+ */
+internal class NativeImePolicy : ExternalResource() {
+    private val settings = listOf("secure show_ime_with_hard_keyboard", "global animator_duration_scale",
+        "global transition_animation_scale", "global window_animation_scale")
+    private val original = linkedMapOf<String, String>()
+    private fun shell(command: String) = ParcelFileDescriptor.AutoCloseInputStream(
+        InstrumentationRegistry.getInstrumentation().uiAutomation.executeShellCommand(command))
+        .bufferedReader().use { it.readText().trim() }
+
+    override fun before() {
+        for (setting in settings) {
+            val value = shell("settings get $setting")
+            check(value == "null" || value.toFloatOrNull() != null) { "Unexpected $setting: $value" }
+            original[setting] = value
+            shell("settings put $setting 1")
+            check(shell("settings get $setting").toFloat() == 1f) { "Could not set $setting" }
+        }
+    }
+
+    override fun after() {
+        for ((setting, value) in original.entries.reversed())
+            shell(if (value == "null") "settings delete $setting" else "settings put $setting $value")
+        original.clear()
+    }
+}

@@ -35,6 +35,9 @@ import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
 import org.junit.After
+import org.junit.ClassRule
+import org.junit.rules.RuleChain
+import org.junit.rules.TestRule
 import java.io.File
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
@@ -42,6 +45,10 @@ import io.github.anastaci1a.localica.localicaComposeRule as createComposeRule
 
 /** Diagnostic native callback + submitted-draw trace. Callbacks may affect timing; pair with optical evidence. */
 class PopupImeGeometryTest {
+    companion object {
+        // The system IME is shared device state; own its policy and start from a fresh process (#638, #786).
+        @JvmField @ClassRule val nativeIme: TestRule = RuleChain.outerRule(NativeImePolicy()).around(FreshSystemIme())
+    }
     @get:Rule val compose = createComposeRule()
     private val instrumentation get() = InstrumentationRegistry.getInstrumentation()
     private val controller get() = (instrumentation.targetContext.applicationContext as LocalicaApplication).tagEditing
@@ -148,7 +155,7 @@ class PopupImeGeometryTest {
             slots[slot] = compose.onNodeWithTag("tag-editor-$slot", true).fetchSemanticsNode().layoutInfo.coordinates
         var mixedPublished = false
         val probe = NativeProbe(view, slots, telemetry) { ime ->
-            if (mixedContent && !mixedPublished && ime in 85..599) {
+            if (mixedContent && !mixedPublished && ime > 0) {
                 mixedPublished = true
                 events += "${SystemClock.uptimeMillis()},${System.nanoTime()},mixed-content-published,${System.identityHashCode(window)},$ime,${Thread.currentThread().id}"
                 playlists.value = PlaylistState(listOf(ManualPlaylist(id = "ime-existing", name = "Existing")), loading = false)
