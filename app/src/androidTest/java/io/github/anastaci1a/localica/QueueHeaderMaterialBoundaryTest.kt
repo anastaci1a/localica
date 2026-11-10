@@ -192,7 +192,7 @@ class QueueHeaderMaterialBoundaryTest {
         } }
         compose.runOnIdle {
             assertEquals("Normal request resolves to the platform's actual backend",
-                if (Build.VERSION.SDK_INT >= 33) GlassBackend.Normal else GlassBackend.None,
+                if (Build.VERSION.SDK_INT >= 33) GlassBackend.Normal else GlassBackend.SingleToneBlur,
                 material.rendererGeneration.backend)
             assertTrue("Both renderers keep the foreground sampling lease", requireNotNull(scene).source.consumers > 0)
             android.util.Log.i("QueueHeaderMaterialBoundary", "api=${Build.VERSION.SDK_INT} " +

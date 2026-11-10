@@ -52,6 +52,7 @@ data class LibrarySnapshot(val folders: List<FolderSelection> = emptyList(), val
             }
         }
         if (changed == null && playlistPlays == playlists && trackPlays == counts) return this
+        io.github.anastaci1a.localica.diagnostics.WorkCounters.snapshotCountCopies.incrementAndGet()
         return copy(tracks = changed ?: tracks, playlistPlays = playlists, trackPlays = counts).also {
             it.groupingSource = groupingSource
         }

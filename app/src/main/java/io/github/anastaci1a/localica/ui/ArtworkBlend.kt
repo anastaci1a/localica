@@ -35,7 +35,7 @@ internal fun ArtworkBlend(visual: PlayerVisual, modifier: Modifier, duration: In
     val target = visual.copy(loading = visual.loading && visual.artwork == null)
     var blend by remember { mutableStateOf(ArtworkBlendState(target, occurrence)) }
     val layer = rememberGraphicsLayer()
-    val readback = remember(layer) { RetainedLayerReadback() }
+    val readback = remember(layer) { RetainedLayerReadback(glassWork = false) }
     val graphicsContext = LocalGraphicsContext.current
     val currentDensity by rememberUpdatedState(LocalDensity.current)
     val currentDirection by rememberUpdatedState(LocalLayoutDirection.current)

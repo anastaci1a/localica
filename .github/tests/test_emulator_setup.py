@@ -290,17 +290,26 @@ class WorkflowTests(unittest.TestCase):
         parents = {'compatibility_26': 'build', 'compatibility_36': 'compatibility_26',
                    'focused_36': 'focused_26'}
         for job, parent in parents.items():
-            self.assertEqual(parent, jobs[job]['needs'])
+            self.assertEqual({'identity', parent}, set(jobs[job]['needs']))
             # focused_36 adds the self-hosted owner guard (#592) after the same status condition.
-            self.assertTrue(jobs[job]['if'] == '${{ !cancelled() }}' or jobs[job]['if'].startswith('${{ !cancelled() && ('), jobs[job]['if'])
+            self.assertTrue(jobs[job]['if'].startswith("${{ needs.identity.result == 'success' && ("), jobs[job]['if'])
+            self.assertIn('!cancelled()', jobs[job]['if'])
+        for name in ('build', 'focused_26'):
+            self.assertEqual('identity', jobs[name]['needs'])
         names = set(jobs) - {'evidence'}
-        self.assertEqual({'build', 'focused_26', 'focused_36', 'compatibility_26', 'compatibility_36'}, names)
+        self.assertEqual({'identity', 'build', 'focused_26', 'focused_36', 'compatibility_26', 'compatibility_36'}, names)
 
         def ancestors(name):
             result = set()
-            while name in parents:
-                name = parents[name]
-                result.add(name)
+            pending = [name]
+            while pending:
+                dependencies = jobs[pending.pop()].get('needs', [])
+                if isinstance(dependencies, str):
+                    dependencies = [dependencies]
+                for parent in dependencies:
+                    if parent not in result:
+                        result.add(parent)
+                        pending.append(parent)
             return result
 
         # No three checks can run together, regardless of individual durations.
@@ -324,12 +333,17 @@ class WorkflowTests(unittest.TestCase):
                     self.assertNotIn('sleep 60', script)
                     self.assertLess(script.index('wm density'), script.index('emulator-readiness.py'))
                     self.assertIn('emulator-readiness.py --normalize-navigation', script)
-                    self.assertEqual('./.github/actions/system-image-cache', steps[index - 1]['uses'])
-                    self.assertEqual(step['with']['api-level'], steps[index - 1]['with']['api'])
-                    self.assertEqual('save', steps[index + 1]['with']['mode'])
-                    self.assertEqual('always()', steps[index + 2]['if'])
-                    self.assertEqual('emulator-readiness.json', steps[index + 2]['with']['path'])
-        self.assertEqual(7, count)
+                    restores = [s for s in steps[:index] if s.get('uses') == './.github/actions/system-image-cache'
+                                and s.get('with', {}).get('mode') != 'save']
+                    saves = [s for s in steps[index + 1:] if s.get('uses') == './.github/actions/system-image-cache'
+                             and s.get('with', {}).get('mode') == 'save']
+                    self.assertEqual(1, len(restores))
+                    self.assertEqual(1, len(saves))
+                    self.assertEqual(step['with']['api-level'], restores[0]['with']['api'])
+                    diagnostics = next(s for s in steps[index + 1:]
+                                       if s.get('with', {}).get('path') == 'emulator-readiness.json')
+                    self.assertEqual('always()', diagnostics['if'])
+        self.assertEqual(8, count)
 
     def test_image_cache_uses_exact_key_and_revision_checked_save(self):
         action = yaml.safe_load((ROOT / '.github/actions/system-image-cache/action.yml').read_text())

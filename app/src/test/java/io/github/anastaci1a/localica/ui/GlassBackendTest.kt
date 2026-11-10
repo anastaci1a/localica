@@ -10,14 +10,15 @@ import org.junit.Test
 class GlassBackendTest {
     @Test fun normalUsesPlatformSupportAndNoneIsAlwaysAvailable() {
         for (api in listOf(26, 28, 31, 32, 33, 36)) {
-            val normal = if (api >= 33) GlassBackend.Normal else GlassBackend.None
+            val normal = if (api >= 33) GlassBackend.Normal else GlassBackend.SingleToneBlur
             assertEquals(normal, effectiveGlassBackend(GlassRendererMode.Normal, api))
-            assertEquals(GlassBackend.None, effectiveGlassBackend(GlassRendererMode.None, api))
+            assertEquals(GlassBackend.SingleToneBlur, effectiveGlassBackend(GlassRendererMode.SingleToneBlur, api))
+            assertEquals(GlassBackend.FlatNone, effectiveGlassBackend(GlassRendererMode.FlatNone, api))
         }
     }
 
     @Test fun unsupportedNormalPreferencesResolveToNone() {
-        for (api in 26..32) assertEquals(GlassBackend.None,
+        for (api in 26..32) assertEquals(GlassBackend.SingleToneBlur,
             effectiveGlassBackend(GlassRendererMode.Normal, api))
         assertEquals(GlassBackend.Normal, effectiveGlassBackend(GlassRendererMode.Normal, 33))
         assertEquals(GlassBackend.Normal, effectiveGlassBackend(GlassRendererMode.Normal, 36))

@@ -145,6 +145,8 @@ A refresh publishes one complete snapshot only after every request succeeds. Exi
 
 Local qualified events remain separate. Use Last.fm counts defaults off. When enabled, the archive supplies per-song sorting and all-time rankings, including authoritative zeroes. Songs without a remote match and recent time ranges use local counts. Playlist origin counts always remain local.
 
+Matching the archive against the library is kept across launches and repeated only when the library, archive or match choices change; review lists are rebuilt when something displays them, never while browsing.
+
 Qualified local plays after a successful sync temporarily add to the archived base. Each recording's addition appears on its matching edition copies. The next successful refresh replaces the base and clears temporary additions; failure preserves both. Sync never changes local play history. Legacy archives adopt the current local counter boundary once, without a network request.
 
 Matching combines artist, album, ordered title tokens, available duration and recording MusicBrainz IDs. It recognizes artist/title credits inside uploader titles and removes descriptive upload decorations. Conflicting IDs, musical versions and substantial duration differences prevent automatic text matches. Copies of the same recording across editions show that version's plays; aggregate totals count each remote recording once.

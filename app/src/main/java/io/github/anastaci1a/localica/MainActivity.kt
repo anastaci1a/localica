@@ -44,6 +44,8 @@ class MainActivity : ComponentActivity() {
     }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (BuildConfig.DEBUG) android.os.StrictMode.setThreadPolicy(android.os.StrictMode.ThreadPolicy.Builder()
+            .detectDiskReads().detectDiskWrites().detectCustomSlowCalls().penaltyLog().build())
         enableEdgeToEdge()
         model = ViewModelProvider(this, object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
@@ -85,7 +87,7 @@ class MainActivity : ComponentActivity() {
                         { _, window, _ -> io.github.anastaci1a.localica.diagnostics.FrameStats.attach(window) }
                     else null)) {
             // One shared None reduction for every material in this window (#691).
-            NoneReductionAtlasHost(GlassColorShader) {
+            NoneReductionAtlasHost(GlassColorShader, enabled = !io.github.anastaci1a.localica.ui.flatGlass()) {
             LocalicaTheme {
                 io.github.anastaci1a.localica.ui.TagEditorHost((application as LocalicaApplication).tagEditing) {
                 LocalicaScreen(library, playback, model::play, model.playback::toggle, model.playback::seekTo,

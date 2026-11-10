@@ -82,6 +82,8 @@ A provider interface keeps local and external counts separate. Typed settings se
 
 The Last.fm provider stores its snapshot, account selection, mappings and local counter baseline in a dedicated atomic file. Completed refreshes replace the remote base and local baseline together. Temporary qualified-play additions are derived from local counters; the provider never writes to local history.
 
+Last.fm statistics and match-group projections are prepared off Main. A separate, versioned atomic summary cache supplies the last completed numbers before the archive loads. Cache failure never changes the archive or match choices. Album counts retain their availability separately.
+
 Appears On and Similar Artists currently return empty through an enrichment interface.
 
 ### Settings/selection
@@ -294,39 +296,39 @@ Inline lenses exclude themselves. Modal windows use global coordinates. The navb
 
 Hover selections read live placement and normalize translation before caching outlines/connectivity. Lazy owners provide current native item keys, since attached prefetched coordinates do not prove placement. Unselected hosts do not observe the selection placement clock.
 
-Each merged group draws one shadow and magnified backdrop surface before its uniformly scaled foreground. Normal uses a cropped GPU blur on Android 13+. None uses a solid average. Browser artwork/text passes share the item transform. Pinch snapshots retain hover geometry separately from content and playback frost, preserving one drawing owner for each.
+Each merged group draws one shadow and magnified backdrop surface before its uniformly scaled foreground. Normal uses a cropped GPU blur on Android 13+. Single-Tone Blur uses a solid average. Browser artwork/text passes share the item transform. Pinch snapshots retain hover geometry separately from content and playback frost, preserving one drawing owner for each.
 
 Retain immutable current-song texture at its exact display resolution instead of replaying grain primitives during scrolling. Procedural recordings use stable density and independent draw scopes, never a mutable node scope as its own density.
 
 ### Optics and performance
 
-Controls and panels use one [lens model](interface.md#materials-and-controls), in Normal mode on Android 13+. Share outline geometry across clipping, refraction, illumination and shadow. Page-owned ink polarity requires no GPU readback. Normal and None use the same ordered brightness mapping. Android versions below 13 use average-colour rendering without optical preparation.
+None draws opaque white or dark-grey theme fills without glass layers, sampling, atlas, readback or backdrop recording. Shared shapes, rims, shadows, layout and motion remain. Structural artwork, marquee, projection and motion layers remain part of the flat baseline.
+
+Controls and panels use one [lens model](interface.md#materials-and-controls), in Normal mode on Android 13+. Share outline geometry across clipping, refraction, illumination and shadow. Page-owned ink polarity requires no GPU readback. Normal and Single-Tone Blur use the same ordered brightness mapping. Android versions below 13 use average-colour rendering without optical preparation.
 
 When Normal is requested, active sliders and switches render one procedural scene, unchanged outside the lens, with refraction or fallback average colour inside. Resting white thumbs release sampling leases and bypass optics. Active controls capture only the thumb neighborhood and replace pixels only within its silhouette. Track, touch mapping and expanded wall contact share geometry.
 
-When None is requested, slider and switch knobs remain white 28 dp circles during contact, travel and cancellation. They draw without source leases, lens captures or reductions. Only their private elastic bodies restart across requested-mode changes; gesture and position owners remain mounted.
+None uses Normal control geometry and motion with opaque theme fills. When Single-Tone Blur is requested, slider and switch knobs remain white 28 dp circles during contact, travel and cancellation. They draw without source leases, lens captures or reductions. Only their private elastic bodies restart across requested-mode changes; gesture and position owners remain mounted.
 
 In Normal mode on Android 13+, controls entirely over explicitly recorded panel material use an 8×8 local GPU average, then the shared tint/contrast mapping and outline. Morphs retain that averaged home source while admitting the destination. Never infer eligibility from color similarity or average a foreground-containing recording.
 
-None uniformly averages the backdrop over each surface's own full bounds, including pills and panels. Slider and switch knobs use the separate white resting policy. Refraction and blur do not change that region.
+Single-Tone Blur uniformly averages the backdrop over each surface's own full bounds, including pills and panels. Slider and switch knobs use the separate white resting policy. Refraction and blur do not change that region.
 
 The mean is coverage-weighted over the scene the lens samples: the element's own source, with its parent chain beyond that source's box. Floating controls therefore follow the text and artwork passing behind them. No element chooses a different source or region.
 
-What None samples inside a finished panel material (frosted panels, the Queue drawer, popup bodies) already carries that panel's tint and tone, so None does not apply them again there.
+What Single-Tone Blur samples inside a finished panel material (frosted panels, the Queue drawer, popup bodies) already carries that panel's tint and tone, so Single-Tone Blur does not apply them again there.
 
 The region stops where the recorded scene ends, so material bounds reaching past a screen or window edge never make a fill translucent. Opaque panels also ignore transparent pixels inside their source.
 
-On Android 13+, None maps the exact footprint onto the full power-of-two reduction texture. This avoids transparent padding that amplifies channel rounding differently for different material sizes.
+On Android 13+, Single-Tone Blur maps the exact footprint onto the full power-of-two reduction texture. This avoids transparent padding that amplifies channel rounding differently for different material sizes.
 
-Each reduction step is then one exact block mean of up to 8×8 texels in a single shader pass, drawn unscaled so no texture is sampled below half scale.
+Each reduction step takes one exact block mean of up to 8×8 texels in a shader pass. Unscaled drawing avoids sampling below half scale. The tint/contrast shader averages the last level directly: four GPU passes for a 512 px side instead of twelve, with the same coverage-weighted result.
 
-The tint/contrast shader takes the exact mean of the last level (at most 8×8 texels) directly: four GPU passes for a 512 px side instead of twelve, with the same coverage-weighted result.
-
-None replaces only the optical fill. Floating, panel, lift and selection shadows use the same appearance settings and drawing path in both renderers, so a renderer switch never changes a shadow.
+Single-Tone Blur replaces only the optical fill. Floating, panel, lift and selection shadows use the same appearance settings and drawing path in all renderers, so a renderer switch never changes a shadow.
 
 Below Android 13, material boundaries inside thumbnail cells retain those cells' mean colours. Excluding raster quantization, mean error is bounded by boundary-cell area fraction multiplied by their maximum channel contrast. Shared readback remains 32×32 pixels; no full-resolution CPU capture is required.
 
-Only the nearest parent supplies the region beyond a source's box below Android 13. Until that parent has a snapshot, None averages the available part.
+Only the nearest parent supplies the region beyond a source's box below Android 13. Until that parent has a snapshot, Single-Tone Blur averages the available part.
 
 Floating list controls sample the finished viewport after its fade and scrolling transforms, with the parent backing beneath transparent pixels. Keep those controls outside their own source recording.
 
@@ -350,7 +352,7 @@ Geometry changes invalidate the texture; translation reuses it.
 
 Keep composed backings within their viewport and guard unrecorded/released layers before readback. Floating-glass blur is independent of Queue frost. Graphics remain replaceable and independent of core data/playback.
 
-Navigation selectors retain live padded recordings. The same shared material path supplies Normal optics or None averages.
+Navigation selectors retain live padded recordings. The same shared material path supplies Normal optics or Single-Tone Blur averages.
 
 ## UI migration enforcement
 

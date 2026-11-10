@@ -98,7 +98,7 @@ class LastFmTest {
         val local = ListeningStatistics(mapOf("song" to 7L, "local" to 3L), mapOf("playlist" to 2L))
         try {
             controller.ready(); controller.sync("user"); controller.finished()
-            withTimeout(2000) { controller.matches.first { it.counts["song"] == 42L } }
+            withTimeout(2000) { controller.details.first { it.counts["song"] == 42L } }
             assertEquals(local, controller.applyTo(flowOf(local)).first())
             controller.useCounts(true)
             withTimeout(2000) { controller.state.first { it.saved.useCounts } }

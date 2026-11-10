@@ -52,7 +52,7 @@ class UiPerformanceTest {
         folders = listOf(FolderSelection("fixture", "Fixture")), tracks = tracks), loading = false) }
     private val queue by lazy { ListeningQueue(id = "fixture", name = "Fixture", createdAt = 0,
         entries = tracks.mapIndexed { n, track -> QueueEntry("entry:$n", track) }) }
-    private val glassMode = GlassRendererMode.None
+    private val glassMode = GlassRendererMode.FlatNone
     private var effectiveMode = "unobserved"
     private val events = mutableListOf<JSONObject>()
     private val windows = mutableSetOf<Window>() // main thread only
@@ -60,6 +60,10 @@ class UiPerformanceTest {
     private var activity: ComponentActivity? = null
     private var tone by mutableFloatStateOf(.4f)
     private var lyrics by mutableStateOf(LyricsResult())
+
+    @Test fun performanceRendererUsesExplicitFlatNone() {
+        org.junit.Assert.assertEquals(GlassRendererMode.FlatNone, glassMode)
+    }
 
     @Test fun measurePureUiScenarios() {
         assumeTrue("Pass uiPerformance=true on an owned disposable test device", args.getString("uiPerformance") == "true")
@@ -91,8 +95,8 @@ class UiPerformanceTest {
                         }
                         launch(); prepare(); awaitStableScene(); events.clear()
                         main { activity ->
-                            check(io.github.anastaci1a.localica.navigation.InterfacePreferences(context).read().glass.renderer == GlassRendererMode.None)
-                            check(effectiveMode == "None") { "Effective scene backend: $effectiveMode" }
+                            check(io.github.anastaci1a.localica.navigation.InterfacePreferences(context).read().glass.renderer == GlassRendererMode.FlatNone)
+                            check(effectiveMode == "FlatNone") { "Effective scene backend: $effectiveMode" }
                             if (!protocolLegacy) FrameStats.setScenarioTag(name)
                             FrameStats.start(activity)
                             windows.forEach { FrameStats.attach(it) }
@@ -109,11 +113,11 @@ class UiPerformanceTest {
                         val report = JSONObject(FrameStats.report()).put("scenario", name).put("rep", rep)
                             .put("warmup", warmup && rep == 0).put("protocolLegacy", protocolLegacy).put("seed", seed).put("songs", tracks.size)
                             .put("api", Build.VERSION.SDK_INT).put("glassMode", glassMode.name)
-                            .put("glassFallback", false).put("requestedGlass", "None").put("observedSceneBackend", effectiveMode)
-                            .put("scriptVersion", "stage0-v1").put("actions", org.json.JSONArray(events))
+                            .put("glassFallback", false).put("requestedGlass", "FlatNone").put("observedSceneBackend", effectiveMode)
+                            .put("scriptVersion", "stage0-flat-none-v1").put("actions", org.json.JSONArray(events))
                             .put("artwork", "placeholders; no media I/O")
                             .put("source", args.getString("uiPerformanceSource") ?: "unspecified")
-                        check(report.getString("effectiveGlass") == "None")
+                        check(report.getString("effectiveGlass") == "FlatNone")
                         if (!protocolLegacy) check(report.getString("source") == BuildConfig.SOURCE_SHA && report.getString("buildSource") == BuildConfig.SOURCE_SHA)
                         check(!report.getBoolean("windowLimitReached"))
                         check(!report.getBoolean("timeLimitReached")) { "$name exceeded the capture time limit" }
@@ -308,7 +312,7 @@ class UiPerformanceTest {
                 CompositionLocalProvider(LocalGlassRendererRuntime provides runtime,
                     LocalGlassMorphWorkObserver provides { _, window, _ ->
                         if (window != null) {
-                            check(runtime.requested == GlassRendererMode.None && runtime.generation.backend == GlassBackend.None)
+                            check(runtime.requested == GlassRendererMode.FlatNone && runtime.generation.backend == GlassBackend.FlatNone)
                             windows += window; FrameStats.attach(window)
                         }
                     }, LocalBrowseObscuredInset provides 96.dp) { LocalicaTheme(tone, content) }

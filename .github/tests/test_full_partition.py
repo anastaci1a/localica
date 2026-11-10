@@ -149,6 +149,34 @@ class FullPartitionTest(unittest.TestCase):
             p.write_text(changed)
             with self.assertRaises(ValueError):partition.plan(self.root,['example.RiskTest'],'26','a'*40)
 
+    def test_flat_none_popup_omits_only_two_reviewed_methods_below_33(self):
+        relative = Path('app/src/androidTest/java/io/github/anastaci1a/localica/FlatNoneRendererPopupTest.kt')
+        path = self.root/relative
+        path.parent.mkdir(parents=True)
+        original = (ROOT/relative).read_text()
+        path.write_text(original)
+        older = partition.plan(self.root, ['example.RiskTest'], '26', 'a'*40)
+        newer = partition.plan(self.root, ['example.RiskTest'], '36', 'a'*40)
+        prefix = 'io.github.anastaci1a.localica.FlatNoneRendererPopupTest#'
+        gated = {prefix+'rendererPopupCanLeaveFlatNoneForSingleToneAndNormal',
+                 prefix+'rendererPopupAccessibilityCanLeaveFlatNoneForSingleToneAndNormal'}
+        self.assertEqual(gated, {row['id'] for row in older['sdk_omissions']})
+        self.assertTrue(all(row['reason'] == 'Reviewed minSdkVersion=33 annotation'
+                            for row in older['sdk_omissions']))
+        self.assertTrue(gated.isdisjoint(older['expected']))
+        self.assertTrue(gated.issubset(newer['expected']))
+        self.assertEqual([], newer['sdk_omissions'])
+        self.assertIn(prefix+'layerlessParentContributesNoSampledSceneBounds', older['expected'])
+        for changed in (original.replace('minSdkVersion = 33', 'minSdkVersion = 32'),
+                        original.replace('fun rendererPopupCanLeave', 'fun renamedRendererPopupCanLeave'),
+                        original.replace('@Test fun layerlessParent',
+                                         '@SdkSuppress(minSdkVersion = 33) @Test fun layerlessParent'),
+                        original.replace('import androidx.test.filters.SdkSuppress',
+                                         'import example.SdkSuppress')):
+            path.write_text(changed)
+            with self.assertRaises(ValueError):
+                partition.plan(self.root, ['example.RiskTest'], '26', 'a'*40)
+
     def test_reviewed_legacy_capture_is_omitted_only_above_32(self):
         folder = self.root/'app/src/androidTest/java/io/github/anastaci1a/localica'
         folder.mkdir(parents=True)

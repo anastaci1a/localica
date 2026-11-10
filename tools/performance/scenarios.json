@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "scriptVersion": "stage0-v1",
+  "scriptVersion": "stage0-flat-none-v1",
   "seed": 600,
   "tracks": 2000,
   "artwork": "placeholders; no media I/O",

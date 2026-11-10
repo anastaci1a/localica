@@ -44,7 +44,7 @@ class ArtistPhotoWork(private val app: LocalicaApplication) {
         if (!app.onlineMetadataConsent.allowed.value) return@withContext
         if (!refresh && !app.artistPhotos.needsFetch(request)) return@withContext
         val added = lock.withLock {
-            if (!refresh && jobs.all().any { it.request.artistKey == request.artistKey && it.state == "pending" }) false
+            if (!refresh && jobs.find(request.artistKey)?.state == "pending") false
             else { jobs.enqueue(request, refresh); publish(); true }
         }
         if (added) schedule()
@@ -79,7 +79,7 @@ class ArtistPhotoWork(private val app: LocalicaApplication) {
         val started = android.os.SystemClock.elapsedRealtime()
         while (app.onlineMetadataConsent.allowed.value) {
             val job = lock.withLock {
-                jobs.all().firstOrNull { it.state == "pending" }?.also { publish(it.request.name) }
+                jobs.firstPending()?.also { publish(it.request.name) }
             } ?: break
             if (android.os.SystemClock.elapsedRealtime() - started > 8 * 60_000) return@withContext false
             progress(status.value.pending, job.request.name)

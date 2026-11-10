@@ -35,8 +35,8 @@ class SelfHostedPrototypeContract(unittest.TestCase):
         self.assertEqual({'workflow_dispatch', 'workflow_call'}, set(self.workflow['on']))
 
     def test_only_focused_jobs_can_reach_the_self_hosted_runner_and_only_for_owner_dispatch(self):
-        self.assertEqual('${{ inputs.runner != \'self-hosted\' || ' + GUARD + ' }}', self.jobs['focused_26']['if'])
-        self.assertEqual('${{ !cancelled() && (inputs.runner != \'self-hosted\' || ' + GUARD + ') }}',
+        self.assertEqual('${{ needs.identity.result == \'success\' && (inputs.runner != \'self-hosted\' || ' + GUARD + ') }}', self.jobs['focused_26']['if'])
+        self.assertEqual('${{ needs.identity.result == \'success\' && (!cancelled() && (inputs.runner != \'self-hosted\' || ' + GUARD + ')) }}',
                          self.jobs['focused_36']['if'])
         for name, job in self.jobs.items():
             with self.subTest(job=name):
@@ -78,7 +78,9 @@ class SelfHostedPrototypeContract(unittest.TestCase):
                 self.assertEqual('x86_64', inputs['arch'])
                 self.assertEqual(inputs['emulator-options'], env['EMULATOR_OPTIONS'])
                 self.assertEqual(str(inputs['disable-animations']).lower(), env['EMULATOR_DISABLE_ANIMATIONS'])
-                self.assertEqual(inputs['script'], env['EMULATOR_SCRIPT'])
+                hosted_script = inputs['script'].replace('python3 .github/prototype-health.py',
+                                                        'bash .github/run-prototype-tests.sh')
+                self.assertEqual(hosted_script, env['EMULATOR_SCRIPT'])
                 self.assertIn('bash .github/run-prototype-tests.sh', env['EMULATOR_SCRIPT'])
                 # The self-hosted step runs before the hosted SDK/emulator steps, after compilation.
                 names = [s.get('name', s.get('uses', '')) for s in steps]

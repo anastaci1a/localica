@@ -18,9 +18,9 @@ export function validate(runs, source, expected = scenarioIds) {
         assert(selected.length === 4 && [0,1,2,3].every(i => selected.filter(r=>r.rep===i).length===1), `Missing/duplicate repetition ${name}`);
         for (const r of selected) {
             assert(r.warmup === (r.rep===0) && r.source === source && r.buildSource === source && r.api === api, 'Source, API or warmup mismatch');
-            assert(r.requestedGlass === 'None' && r.glassMode === 'None' && r.effectiveGlass === 'None' && r.observedSceneBackend === 'None' && r.glassFallback === false, 'Requested/effective None mismatch');
+            assert(r.requestedGlass === 'FlatNone' && r.glassMode === 'FlatNone' && r.effectiveGlass === 'FlatNone' && r.observedSceneBackend === 'FlatNone' && r.glassFallback === false, 'Requested/effective FlatNone mismatch');
             assert(r.protocolLegacy===false, 'Pre-tag recorder comparison cannot become the authoritative baseline');
-            assert(r.seed===600 && r.songs===2000 && r.scriptVersion==='stage0-v1' && r.scenarioTag===name, 'Fixture/script/tag mismatch');
+            assert(r.seed===600 && r.songs===2000 && r.scriptVersion==='stage0-flat-none-v1' && r.scenarioTag===name, 'Fixture/script/tag mismatch');
             assert(r.schema===2 && typeof r.captureId==='string' && r.captureId.length>0, 'Capture identity/schema');
             assert(!r.recording && !r.windowLimitReached && !r.timeLimitReached && r.windows?.length, 'Incomplete capture');
             assert(new Set(r.windows.map(w=>w.window)).size===r.windows.length, 'Duplicate window');

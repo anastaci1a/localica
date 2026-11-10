@@ -132,7 +132,7 @@ internal class PinchPublicationExpired : IllegalStateException("Pinch capture ex
  * may queue, rerecord or release its source while that completion is still outstanding. */
 internal class PinchReadback(private val now: () -> Long = { android.os.SystemClock.uptimeMillis() }) {
     private val completion = ReadbackCompletion()
-    private val retained = RetainedLayerReadback()
+    private val retained = RetainedLayerReadback(glassWork = false)
     var occupied = false
         private set
 

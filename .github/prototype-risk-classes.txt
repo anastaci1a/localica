@@ -480,6 +480,11 @@ io.github.anastaci1a.localica.LyricsReturnBoundsTest
 
 io.github.anastaci1a.localica.IconOpticalCentringTest
 
+io.github.anastaci1a.localica.FlatNoneRealAppTest
+io.github.anastaci1a.localica.FlatNoneMaterialTest
+io.github.anastaci1a.localica.LegacyNonePixelReferenceTest
+io.github.anastaci1a.localica.LegacyNoneControlledPixelReferenceTest
+io.github.anastaci1a.localica.ShadowSchedulingOracleTest
 io.github.anastaci1a.localica.GlassMorphZeroConstraintsTest
 io.github.anastaci1a.localica.PopupViewportSlotTest
 io.github.anastaci1a.localica.PopupEditorFocusOwnershipTest
@@ -487,6 +492,14 @@ io.github.anastaci1a.localica.PopupImeGeometryTest
 io.github.anastaci1a.localica.TagBatchControllerTest
 io.github.anastaci1a.localica.TagBatchTransactionTest
 io.github.anastaci1a.localica.TagSaveProgressPopupTest
+
+io.github.anastaci1a.localica.FlatNoneRendererPopupTest
+
+io.github.anastaci1a.localica.FlatNoneHoverDragTest
+
+io.github.anastaci1a.localica.BoundaryAdoptionPixelReferenceTest
+
+io.github.anastaci1a.localica.UiPerformanceTest
 io.github.anastaci1a.localica.QueueLibraryHeapTest
 io.github.anastaci1a.localica.QueueRestoreEquivalenceTest
 # Mounted collection-header density regression (#600).
@@ -497,3 +510,8 @@ io.github.anastaci1a.localica.SettingsSearchEntryAdoptionTest
 io.github.anastaci1a.localica.SettingsSearchEntryReductionTest
 io.github.anastaci1a.localica.SearchPendingReturnGeometryTest
 io.github.anastaci1a.localica.PopupParentPendingHandoffTest
+io.github.anastaci1a.localica.AsyncSectionTest
+io.github.anastaci1a.localica.LastFmCachedOpenTest
+io.github.anastaci1a.localica.LastFmPreparationThreadTest
+io.github.anastaci1a.localica.LastFmScrollStressTest
+io.github.anastaci1a.localica.LastFmArchivePullTest

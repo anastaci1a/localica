@@ -12,6 +12,7 @@ name: Dependency cache
       - 'app/build.gradle.kts'
       - 'gradle/**'
       - '.github/workflows/dependency-cache.yml'
+      - '.github/warm-device-dependencies.gradle'
 permissions:
   contents: read
 concurrency:
@@ -65,7 +66,7 @@ jobs:
       - name: Record restored dependency files
         run: bash .github/dependency-cache-audit.sh snapshot
       - name: Resolve the test-apks task set
-        run: bash .github/gradle-transient-retry.sh ./gradlew assembleDebug assembleDebugAndroidTest --no-daemon --max-workers=4 -Dorg.gradle.jvmargs='-Xmx6g -Dfile.encoding=UTF-8'
+        run: bash .github/gradle-transient-retry.sh ./gradlew assembleDebug assembleDebugAndroidTest :app:warmDeviceDependencies -I .github/warm-device-dependencies.gradle --no-daemon --max-workers=4 -Dorg.gradle.jvmargs='-Xmx6g -Dfile.encoding=UTF-8'
       - name: Record downloaded dependency files
         if: ${{ !cancelled() }}
         run: bash .github/dependency-cache-audit.sh report

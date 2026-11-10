@@ -41,5 +41,5 @@ internal class NoneReductionAtlas(private val lease: NoneReductionAtlasLease) {
     return remember(lease) { lease?.let(::NoneReductionAtlas) }
 }
 
-@Composable internal fun NoneReductionAtlasHost(colorShader: String, content: @Composable () -> Unit) =
-    OwnerHost(colorShader, content)
+@Composable internal fun NoneReductionAtlasHost(colorShader: String, enabled: Boolean = true, content: @Composable () -> Unit) =
+    OwnerHost(colorShader, enabled = enabled, content = content)

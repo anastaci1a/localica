@@ -12,7 +12,7 @@ if(process.argv[2]==='write') {
         'tools/performance/run-ui-benchmarks.sh','tools/performance/frametimeline.pbtxt',
         'tools/performance/none-contract.mjs','tools/performance/freeze-scenarios.mjs','tools/performance/summarize-ui.mjs'];
     const sourceFiles=Object.fromEntries(files.map(p=>[p,digest(fs.readFileSync(root+p))]));
-    const manifest={schemaVersion:1,scriptVersion:'stage0-v1',seed:600,tracks:2000,artwork:'placeholders; no media I/O',
+    const manifest={schemaVersion:1,scriptVersion:'stage0-flat-none-v1',seed:600,tracks:2000,artwork:'placeholders; no media I/O',
         glassRequested:'None',glassEffective:'None',warmups:1,measuredRuns:3,
         viewports:{26:{width:1080,height:1920,dpi:420},36:{width:720,height:1280,dpi:280}},sourceFiles,
         actionHashDefinition:'SHA256(full UiPerformanceTest source hash + NUL + selected scenario ID); any harness change invalidates all scenarios',

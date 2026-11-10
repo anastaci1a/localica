@@ -148,20 +148,20 @@ A healthy idle app records nothing. Debuggable builds also mirror each line to l
 
 Glass always follows the scrolling content. The retired scroll-freeze preference is removed during migration.
 
-**Interface → Glass** keeps Renderer on its root. Glass appearance, Glass advanced and Navigation selector are internal submenus. With Renderer set to None, glass options and submenus remain visible and disabled. Saved values are preserved.
+**Interface → Glass** keeps Renderer on its root. Glass appearance, Glass advanced and Navigation selector are internal submenus. With Renderer set to None or Single-Tone Blur, glass options and submenus remain visible and disabled. Saved values are preserved.
 
 Glass appearance includes a draggable preview that compresses at its edges and morphs between a pill and dialog. The submenus retain these persistent controls:
 
 | Control | Range / treatment |
 | --- | --- |
-| Glass renderer | Normal (default) or None. None uses solid live average colour without refraction or blur. Normal uses the same fallback below Android 13. Surface changes blend; requested None switches slider/switch knobs to their resting finish. Old Automatic, Modern and Legacy settings migrate to Normal. |
+| Glass renderer | Normal (unchanged default), Single-Tone Blur (testing), or None (opaque theme fills with no glass work). Legacy None migrates to Single-Tone Blur with identical pixels. Automatic, Modern and Legacy migrate to Normal. Normal retains its average fallback below Android 13. |
 | Blur / white tint | Clear through frosted; defaults use light scattering/tint. |
 | Shape damping / resting depth | Damping 2–40 (default 8); depth 0.6–2 (default 1.35). Footprint and lensing share the same response. |
 | Shadow strength / spread | Off through visible; tight through broad; default very subtle and broad. |
 | Lift shadow strength | 50–150% of Glass shadow strength in plain 5% steps (default 100%), for the lift shadow under selected and floating items. Its spread is exactly Glass shadow spread. |
 | Adaptive contrast | [Adaptive contrast rules](#adaptive-contrast). |
 | Navigation selector | Adjustable glass has independent blur/tint; Clear overlay has 0–50% darkening (default off) and optional icon/text refraction (default off). Classic gray pill has adjustable opacity (default 10%) and no glass deformation. |
-| Sliders and switches | Normal: white resting thumbs morph into clear glass on contact; expansion 1–2× (default 1.75×). None: white resting size throughout contact, with no expansion. |
+| Sliders and switches | Normal: white resting thumbs morph into clear glass on contact; expansion 1–2× (default 1.75×). None follows Normal geometry with opaque theme fills. Single-Tone Blur keeps white resting size without expansion. |
 
 #### Adaptive contrast
 
@@ -213,13 +213,15 @@ Switch rows expose one accessible Boolean control. A drag previews the destinati
 
 Track and thumb share one coordinate model for fill, travel and boundary contact. Render identity outside the active lens and refraction inside it. Foreground labels remain sharp.
 
-The [appearance settings](#appearance-and-settings) own thumb finish and expansion. None knobs retain a 28 dp circle in both themes throughout press, drag, release and cancellation. Value and state travel retain normal input behavior.
+The [appearance settings](#appearance-and-settings) own thumb finish and expansion. Single-Tone Blur knobs retain a 28 dp circle in both themes throughout press, drag, release and cancellation. Value and state travel retain normal input behavior.
 
 The [motion rules](#motion-and-access) own pickup, haptics and reduced motion. Playback retains its separate [scrub cancellation](#player-and-queue-drawer).
 
 ### Last.fm settings
 
 Settings → Online features → Last.fm starts with a sync ring, percent and live song, artist and album counts. Its archive card shows scrobbles, songs, artists, albums and matched share. Overview, Matches and Data use shared glass tabs.
+
+The overview opens with cached statistics and refreshes them in the background. Uncached numbers use shared text placeholders with the final line height. Heavy sections use the shared centered spinner, quick exit fade and staggered row reveal. Reduced motion presents their final state immediately.
 
 Overview’s Review matches link opens Matches before the first sync and remains reachable through settings search.
 

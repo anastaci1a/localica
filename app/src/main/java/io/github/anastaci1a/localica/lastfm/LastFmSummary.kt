@@ -20,3 +20,15 @@ internal fun LastFmSnapshot.accountStats(): LastFmAccountStats {
         tracks.filter { !it.album.isNullOrBlank() }.map { LastFmNames.name(it.artist, "").artist to LastFmNames.album(it.album) }.distinct().size,
         tracks.count { !it.album.isNullOrBlank() })
 }
+
+/** Persisted last-completed matching summary; refreshed independently of opening settings. */
+data class LastFmDashboardCounts(val matched: Int, val clear: Int, val judgments: Int, val review: Int,
+    val absent: Int, val editions: Int) {
+    companion object {
+        fun from(matches: LastFmMatches) = LastFmDashboardCounts(matches.buckets.matched, matches.buckets.clear,
+            matches.buckets.judgments, matches.buckets.review, matches.buckets.absent, matches.buckets.editions)
+    }
+}
+
+data class LastFmSettingsSummary(val username: String, val syncedAt: Long, val stats: LastFmAccountStats,
+    val counts: LastFmDashboardCounts? = null)

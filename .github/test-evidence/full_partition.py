@@ -94,6 +94,10 @@ def expected_for(root, api):
             ('rasterlessBackingRecordInvalidatesItsDependentRecording', 32, 'maxSdkVersion'),
             ('queuedFinalRecordingSurvivesASuspendedThumbnailCaptureAndThenSettles', 32, 'maxSdkVersion'),
         ],
+        'FlatNoneRendererPopupTest': [
+            ('rendererPopupCanLeaveFlatNoneForSingleToneAndNormal', 33),
+            ('rendererPopupAccessibilityCanLeaveFlatNoneForSingleToneAndNormal', 33),
+        ],
         'ScopedSearchOpticsTest': [
             ('searchLensRedrawsWhenItsListBackdropArrivesLater', 33),
         ],
@@ -155,6 +159,11 @@ def expected_for(root, api):
             if cls == 'NoneAtlasTest':
                 imported = 'import androidx.test.filters.SdkSuppress\n'
                 require(text.count(imported) == 1, 'Changed None atlas SDK import')
+                text = text.replace(imported, '').replace(
+                    '@SdkSuppress(', '@androidx.test.filters.SdkSuppress(')
+            if cls == 'FlatNoneRendererPopupTest':
+                imported = 'import androidx.test.filters.SdkSuppress\n'
+                require(text.count(imported) == 1, 'Changed flat None popup SDK import')
                 text = text.replace(imported, '').replace(
                     '@SdkSuppress(', '@androidx.test.filters.SdkSuppress(')
             require(text.count('SdkSuppress') == len(reviewed), 'Additional SDK exclusions require review')

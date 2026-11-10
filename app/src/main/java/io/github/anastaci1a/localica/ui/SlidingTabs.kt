@@ -122,7 +122,7 @@ internal fun SlidingTabs(tabs: List<MainTab>, active: MainTab, pagePosition: () 
         if (!dragging && requested != null && abs(page - requested!!) < .001f) requested = null
     }
     val composite = rememberFrostedBackdrop(appearance, dark = source?.dark == true)
-    val refractForeground = appearance.tabStyle == TabLensStyle.Overlay && appearance.overlayForeground
+    val refractForeground = !flatGlass() && appearance.tabStyle == TabLensStyle.Overlay && appearance.overlayForeground
     val average = glassAverageProgress()
     val recordForeground = refractForeground
     val decorated = rememberFrostedBackdrop(appearance, enabled = recordForeground, dark = false)

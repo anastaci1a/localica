@@ -163,6 +163,7 @@ object BrowseQueries {
 
     private fun evaluateCatalog(snapshot: LibrarySnapshot, playlists: List<ManualPlaylist>, route: BrowseRoute,
         query: LibraryQuery, queues: List<ListeningQueue>, allCollections: Set<MediaKind>, sorts: BrowseSortSnapshot, checkActive: () -> Unit): BrowseResult {
+        io.github.anastaci1a.localica.diagnostics.WorkCounters.catalogBuilds.incrementAndGet()
         val effective = query.copy(text = route.text)
         val collection = route.collection.takeUnless { route.globalSearch }
         val currentTracks by lazy { snapshot.tracksById }
@@ -256,9 +257,9 @@ internal fun BrowserItem.information(style: BrowseStyle, inherited: Map<MediaKin
         ExtraInfo.Count -> songCountLabel(songs.size)
         ExtraInfo.Duration -> duration()?.let { "${it / 60000}:${(it / 1000 % 60).toString().padStart(2, '0')}${if (songs.any { row -> row.track.durationMs == null }) " (partial)" else ""}" }
         ExtraInfo.Year -> songs.mapNotNull { it.track.year }.minOrNull()?.toString()
-        ExtraInfo.MostPlayed -> "$playCount ${if (playCount == 1L) "play" else "plays"}"
-        ExtraInfo.LongestListened -> listeningTimeLabel(longestListenedMs()) +
-            if (songs.any { row -> row.track.playCount > 0 && row.track.durationMs == null }) " (partial)" else ""
+        ExtraInfo.MostPlayed -> playInformation("$playCount ${if (playCount == 1L) "play" else "plays"}")
+        ExtraInfo.LongestListened -> playInformation(listeningTimeLabel(longestListenedMs()) +
+            if (songs.any { row -> row.track.playCount > 0 && row.track.durationMs == null }) " (partial)" else "")
         ExtraInfo.Added -> addedAt?.let { java.text.DateFormat.getDateInstance().format(java.util.Date(it)) }
         ExtraInfo.Modified -> modifiedAt?.let { java.text.DateFormat.getDateInstance().format(java.util.Date(it)) }
         ExtraInfo.Artist, ExtraInfo.AlbumArtist, ExtraInfo.Composer, ExtraInfo.Genre -> metadataText(TrackSort.valueOf(info.name))
@@ -266,7 +267,12 @@ internal fun BrowserItem.information(style: BrowseStyle, inherited: Map<MediaKin
     }
 }
 
-internal fun songCountLabel(count: Int) = "$count ${if (count == 1) "song" else "songs"}"
+private fun playInformation(text: String): String {
+    io.github.anastaci1a.localica.diagnostics.WorkCounters.playInformationRows.incrementAndGet()
+    return text
+}
+
+internal fun songCountLabel(count: Int) ="$count ${if (count == 1) "song" else "songs"}"
 
 /** Listening totals grow past an hour, so hours join the shared m:ss clock style. */
 internal fun listeningTimeLabel(ms: Long): String {

@@ -9,6 +9,7 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -76,11 +77,11 @@ private fun List<Offset>.surfaceDrawScalars(): List<Float>? =
     takeIf { all { it.x.isFinite() && it.y.isFinite() } }?.flatMap { listOf(it.x, it.y) }
 private fun androidx.compose.ui.geometry.Rect.surfaceDrawScalars(): List<Float> = listOf(left, top, right, bottom)
 private fun FrostedBackdrop?.surfaceDrawSource(location: BackdropLocation, extent: Size): GlassSurfaceSourceDraw? {
-    val source = this ?: return null
+    val source = this?.takeIf { it.hasGlassLayer } ?: return null
     val registration = source.location.registrationTo(location)
     return GlassSurfaceSourceDraw(System.identityHashCode(source), surfaceDrawIdentity(source.parent),
         System.identityHashCode(source.layer), surfaceDrawIdentity(source.parent?.layer),
-        source.recorded, source.layer.isReleased, source.parent?.recorded, source.parent?.layer?.isReleased,
+        source.recorded, !source.hasGlassLayer || source.layer.isReleased, source.parent?.recorded, source.parent?.let { !it.hasGlassLayer || it.layer.isReleased },
         source.materialOnly, source.dark, source.size.width, source.size.height,
         source.layer.size.width, source.layer.size.height, source.revision, source.readbackRequest,
         source.snapshotReadbackRequest, source.snapshotDraws?.request, source.snapshotDraws?.composite,
@@ -208,12 +209,14 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
     presentation: (() -> GlassSurfacePresentation)? = null,
     content: (@Composable BoxScope.() -> Unit)? = null) {
     val renderer = currentGlassRendererGeneration()
+    val flat = renderer.backend == GlassBackend.FlatNone
+    val flatColor = flatGlassColor()
     val drawObserver = LocalGlassSurfaceDrawObserver.current
     // Do not create diagnostic state, closures, geometry or modifiers for ordinary/null callers.
     val observedShadowGroup = if (drawObserver == null) null else LocalSurfaceShadows.current
     val observedShadowAppearance = if (drawObserver == null) null else LocalGlassAppearance.current
     val visible = LocalGlassVisible.current
-    if (visible && renderer.backend == GlassBackend.None) {
+    if (visible && renderer.backend == GlassBackend.SingleToneBlur) {
         BackdropLease(source)
         BackdropLease(homeSource?.takeUnless { it === source })
     }
@@ -230,7 +233,7 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
     val tone = GlassTone.mixed(appearance.contrast, appearance.contrastWeight, lightMix)
     val coatingLightMix = panelDark?.let { if (it) 1f else 0f } ?: lightMix
     val coatingDark = coatingLightMix >= .5f
-    val ink = inkOverride ?: lerp(Color(0xFF202124), Color.White, lightMix)
+    val ink = if (flat) MaterialTheme.colorScheme.onSurface else inkOverride ?: lerp(Color(0xFF202124), Color.White, lightMix)
     val anchor = modifier.glassSurfaceAnchor()
     val contact = rememberGlassContact(anchor?.contact ?: sharedContact)
     val contactShape = contactPresentation ?: { contact.body.value }
@@ -264,7 +267,7 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
         val blurRadius = with(density) { 22.dp.toPx() }
         val blur = blurRadius * (appearance.blur + (1f - appearance.blur) * frost)
         val padding = with(density) { 32.dp.toPx() }
-        if (visible && source != null && Build.VERSION.SDK_INT >= 33) {
+        if (!flat && visible && source != null && Build.VERSION.SDK_INT >= 33) {
             // Crossing into panel scattering must not swap backing resolution in
             // one frame. Clear glass stays sharp; visible blur gradually permits
             // the cheaper half-resolution recording during the same morph.
@@ -300,7 +303,7 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
             }
         }
 
-        if (visible && source != null && Build.VERSION.SDK_INT < 33) {
+        if (!flat && visible && source != null && Build.VERSION.SDK_INT < 33) {
             AverageBackdrop(Modifier.matchParentSize(), source, location,
                 MaterialAverageStyle(appearance.whiteTint * (1f - panel), tone), homeSource, homeWeight, homeBounds, homeFootprint,
                 styleReader = presentation?.let { read -> { MaterialAverageStyle(appearance.whiteTint * (1f - read().panel.coerceIn(0f, 1f)), tone) } })
@@ -311,8 +314,8 @@ internal fun LiquidGlassSurface(modifier: Modifier = Modifier,
             val panel = frame?.panel?.coerceIn(0f, 1f) ?: panel
             val frost = frame?.frost?.coerceIn(0f, 1f) ?: frost
             val refraction = frame?.refraction ?: refraction
-            drawRect(tone.color(tint))
-            if (panel > 0f && renderer.backend != GlassBackend.None) drawFrostCoating(coatingLightMix, Color.Transparent, panel)
+            drawRect(if (flat) flatColor else tone.color(tint))
+            if (panel > 0f && renderer.backend == GlassBackend.Normal) drawFrostCoating(coatingLightMix, Color.Transparent, panel)
             val outline = silhouette?.frame(size)
             val splitRim = outline?.description?.rimSplit ?: 0f
             val bounds = androidx.compose.ui.geometry.Rect(Offset.Zero, size)

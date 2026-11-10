@@ -26,7 +26,7 @@ class NoneRequestedPolicyTest {
         compose.setContent {
             CompositionLocalProvider(LocalGlassRendererRuntime provides runtime,
                 LocalGlassAppearance provides GlassAppearance(renderer = appearance)) {
-                val selected = requestedGlassNone()
+                val selected = requestedSingleToneBlur()
                 SideEffect { actual = selected }
             }
         }
@@ -35,12 +35,12 @@ class NoneRequestedPolicyTest {
             compose.runOnIdle { assertEquals("runtime=${holder?.requested} appearance=$local", expected, actual) }
         }
         check(null, GlassRendererMode.Normal, false)
-        check(null, GlassRendererMode.None, true)
-        check(GlassRendererRuntime(GlassRendererMode.Normal, 26), GlassRendererMode.None, false)
-        check(GlassRendererRuntime(GlassRendererMode.None, 26), GlassRendererMode.Normal, true)
+        check(null, GlassRendererMode.SingleToneBlur, true)
+        check(GlassRendererRuntime(GlassRendererMode.Normal, 26), GlassRendererMode.SingleToneBlur, false)
+        check(GlassRendererRuntime(GlassRendererMode.SingleToneBlur, 26), GlassRendererMode.Normal, true)
         val holder = GlassRendererRuntime(GlassRendererMode.Normal)
-        check(holder, GlassRendererMode.None, false)
-        compose.runOnIdle { holder.request(GlassRendererMode.None) }
+        check(holder, GlassRendererMode.SingleToneBlur, false)
+        compose.runOnIdle { holder.request(GlassRendererMode.SingleToneBlur) }
         compose.runOnIdle { assertTrue(actual) }
         compose.runOnIdle { holder.request(GlassRendererMode.Normal) }
         compose.runOnIdle { assertFalse(actual) }
@@ -69,7 +69,7 @@ class NoneRequestedPolicyTest {
             slider.performTouchInput { down(center); moveTo(Offset(width * .6f, centerY)) }
             compose.mainClock.advanceTimeBy(400)
             for (fraction in listOf(.9f, .1f, .85f)) {
-                compose.runOnIdle { runtime.request(GlassRendererMode.None) }
+                compose.runOnIdle { runtime.request(GlassRendererMode.SingleToneBlur) }
                 compose.mainClock.advanceTimeByFrame()
                 slider.performTouchInput { moveTo(Offset(width * fraction, centerY), delayMillis = 32) }
                 compose.mainClock.advanceTimeBy(1000)

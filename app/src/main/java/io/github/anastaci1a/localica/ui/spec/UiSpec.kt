@@ -20,7 +20,7 @@ enum class MotionProfile { Control, ControlOff, Selection, Hover, Reveal, Resolu
 enum class SpringProfile { GlassMorph, Page, GlassMode, Strain }
 enum class MaterialRole { Glass, Panel, Selection, DragPane, Page, Scrim }
 enum class MotionAccess { Standard, Faster, Reduced }
-enum class GlassMode { Normal, None }
+enum class GlassMode { Normal, SingleToneBlur, FlatNone }
 @Immutable data class EasingSpec(val x1: Float, val y1: Float, val x2: Float, val y2: Float) { val maxSlope: Float by lazy { slopeBound(this) } }
 @Immutable sealed interface MotionSpec
 @Immutable data class MotionProfileSpec(val durationMs: Int, val easing: EasingSpec) : MotionSpec
@@ -66,7 +66,8 @@ val StockUiSpec: UiSpec = UiSpec(dimensions(Space.entries,listOf(1f,4f,8f,12f,16
 fun uiSpec(settings: InterfaceSettings, overrides: UiSpecData? = null, geometry: ExpansionGeometryDomain? = null): SpecResult {
     val o=overrides?:UiSpecData(); val b=StockUiSpec; val g=settings.glass.normalized(); val errors=mutableListOf<String>()
     fun valid(ok: Boolean, key: String) { if(!ok) errors+=key }; fun bounded(v: Float,lo: Float,hi: Float)=v.isFinite() && v in lo..hi
-    val space=frozen(b.space,o.space); val radius=frozen(b.radius,o.radius); val control=frozen(b.control,o.control); val material=frozen(MaterialRole.entries.associateWith { MaterialTokens(g.blur,g.whiteTint,g.shadowStrength,g.shadowSpread,g.contrast,g.liftShadowStrength,g.shapeDamping,g.depth,if(g.renderer.name=="None") GlassMode.None else GlassMode.Normal) },o.material)
+    val rendererMode = GlassMode.valueOf(g.renderer.name)
+    val space=frozen(b.space,o.space); val radius=frozen(b.radius,o.radius); val control=frozen(b.control,o.control); val material=frozen(MaterialRole.entries.associateWith { MaterialTokens(g.blur,g.whiteTint,g.shadowStrength,g.shadowSpread,g.contrast,g.liftShadowStrength,g.shapeDamping,g.depth,rendererMode) },o.material)
     val clearance=frozen(b.clearance+mapOf(Clearance.ShadowInset to (6+28*material.getValue(MaterialRole.Glass).shadowSpread).dp),o.clearance); val motion=frozen(b.motion,o.motion); val spring=frozen(b.spring+mapOf(SpringProfile.Strain to b.spring.getValue(SpringProfile.Strain).copy(dampingRatio=g.shapeDamping/(2*sqrt(380f)))),o.spring); val expansion=o.expansion?:b.expansion
     valid(space.values.all { bounded(it.value,0f,Float.MAX_VALUE) } && Space.entries.zipWithNext().all { (a,b)->space.getValue(a)<space.getValue(b) },"space"); valid(Radius.Pill !in radius && radius.values.all { bounded(it.value,0f,Float.MAX_VALUE) },"radius"); valid(control.values.all { it.value.isFinite() && it.value>0 },"control"); valid(clearance.values.all { bounded(it.value,0f,Float.MAX_VALUE) },"clearance")
     fun ease(e: EasingSpec)=bounded(e.x1,0f,1f) && bounded(e.x2,0f,1f) && e.y1.isFinite() && e.y2.isFinite() && e.maxSlope.isFinite()

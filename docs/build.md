@@ -137,7 +137,7 @@ The decision manifest records the exact SHA, APK identity, selected coverage and
 
 Prototypes use the same [evidence tooling](#evidence-tooling-prerequisites), six-packet limit and outcome rules described above: final XML owns test results, monitoring degradation blocks a green result, and test failure retains its exit status.
 
-No automatic replay or replacement full-suite run is started. Hosted transport evidence must identify the tested publisher revision. Offline contract success alone does not prove live delivery. New manual workflows require registration or an explicitly coordinated branch smoke before use.
+No automatic replay or replacement full-suite run is started. Hosted transport evidence must identify the tested publisher revision. Offline contract success alone does not prove live delivery. Use `prototype.yml` for one-off and diagnostic runs; follow the [workflow file policy](../AGENTS.md#workflow-files).
 
 ### UI frame measurements
 
@@ -151,7 +151,7 @@ tools/performance/run-ui-benchmarks.sh emulator-5554 /path/to/evidence FULL_SOUR
 
 Run API 26 and 36 separately. The script records one warmup and three repetitions, ranks scenarios by p99, and captures separate atrace passes for the three slowest scenarios. Traced passes do not replace baseline samples.
 
-The suite selects None when available. Older sources use Modern with blur disabled; API 26 resolves that request to Legacy. These provisional results retain renderer settings and cannot establish glass-free performance.
+The suite selects the explicit Flat None renderer and records `stage0-flat-none-v1`. Its receipts reject Single-Tone Blur and the historical `stage0-v1` protocol. Earlier None captures retain their original source and renderer identities; they cannot establish a Flat None baseline. No earlier timing result transfers across this renderer change.
 
 Frame duration percentiles use nearest rank. Jank means duration exceeds the sampled display refresh period. Missed vsyncs are duration-based estimates. Deadline misses are reported separately on API 31+. Listener drops, overflow and incomplete native delivery remain explicit.
 
@@ -215,7 +215,13 @@ Emulator archives and system images are saved only from `main`. A branch-scoped 
 
 Hosted compile jobs restore shared Gradle dependency entries instead of downloading: `localica-static-checks` (unit tests, lint, debug and release builds) and `localica-test-apks` (app and instrumentation APKs, also the compatibility builds). Only runs on `main` save them: the [dependency cache workflow](../.github/workflows/dependency-cache.yml) writes both on dispatch or when dependency files change; the Android workflow refreshes them each train.
 
-Each compile job records `dependency-downloads=N` in its runner identity file and annotates the run when `N > 0`. Gradle itself never retries a failed download, so compile steps run through `gradle-transient-retry.sh`: at most three attempts, only after an HTTP 5xx, timeout or reset on a download. Failing tests, compilation errors and lint findings are never retried.
+Each compile job records `dependency-downloads=N` in its runner identity file and annotates the run when `N > 0`. Gradle itself never retries a failed download, so compile steps run through `gradle-transient-retry.sh`: at most three attempts, only after an HTTP 5xx, timeout, reset or unreachable network on a download. Failing tests, compilation errors and lint findings are never retried.
+
+Focused prototype builds also warm UTP host-plugin configurations before boot. APK assembly alone leaves those dependencies unresolved. Focused instrumentation uses offline dependency resolution. Exhausted network retries retain attempt logs and infrastructure receipts; the delivery manifest distinguishes infrastructure failures from unclassified failures. Neither permits delivery.
+
+Hosted prototype API 36 jobs sample the selected emulator's PID, process start identity, boot ID, adb state and host memory. Recovery requires a healthy original guest followed by two terminal process-and-transport loss samples. Recovered or replaced guests cannot authorize another run.
+
+One fresh boot requires empty UTP failure XML and complete observer evidence without product assertions or crashes. Only the recognized UTP device-loss stderr is accepted. Interrupted outputs remain archived. Missing or malformed evidence blocks recovery. Recovered infrastructure attempts remain visible in the delivery manifest.
 
 On disposable GitHub-hosted API 26 emulators, the native runner temporarily disables preinstalled Google Search before instrumentation. Its unrelated JobScheduler crash can obstruct Localica. Cleanup restores its prior enabled state after verifying device and package ownership. Google Search data is preserved. Physical devices are untouched. Localica crashes and all assertions remain fatal.
 
@@ -256,6 +262,8 @@ Main pushes reuse retained exact-tree evidence when available; otherwise they ru
 ### Step 4
 
 Verify published assets, close resolved issues/remove workflow labels, and replace completed roadmap outcomes with the next checkpoint. Release assets are `localica-vX.Y.Z-pre-release.apk` and its `.sha256`, named by the release job.
+
+After publication, delete the released integration branch once its commits are in main. Preserve integration branches for unreleased trains.
 
 ## Previews
 

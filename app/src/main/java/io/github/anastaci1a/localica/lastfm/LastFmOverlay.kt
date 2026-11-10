@@ -5,6 +5,7 @@ data class LastFmOverlay(val counts: Map<String, Long>, val additions: Long, val
 
 internal fun LastFmMatches.withLocalOverlay(snapshot: LastFmSnapshot?, local: Map<String, Long>): LastFmOverlay {
     val baseline = snapshot?.localBaseline ?: return LastFmOverlay(counts, 0, snapshot)
+    io.github.anastaci1a.localica.diagnostics.WorkCounters.lastFmOverlays.incrementAndGet()
     val groups = counts.keys.groupBy { recordingGroups[it] ?: it }
     val deltas = groups.mapValues { (_, ids) -> ids.fold(0L) { total, id ->
         val current = local[id]?.coerceAtLeast(0) ?: 0
