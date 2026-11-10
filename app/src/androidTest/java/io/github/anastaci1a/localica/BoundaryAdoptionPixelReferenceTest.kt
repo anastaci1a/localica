@@ -22,6 +22,7 @@ import androidx.compose.ui.unit.dp
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.anastaci1a.localica.navigation.*
 import io.github.anastaci1a.localica.ui.*
+import io.github.anastaci1a.localica.ui.engine.RetainedGlassShadow
 import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.*

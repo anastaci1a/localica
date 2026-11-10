@@ -8,7 +8,7 @@ import androidx.compose.runtime.tooling.LocalInspectionTables
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.test.junit4.ComposeContentTestRule
-import io.github.anastaci1a.localica.ui.RetainedGlassShadow
+import io.github.anastaci1a.localica.ui.engine.RetainedGlassShadow
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.cancel
 

@@ -4,8 +4,8 @@
   "seed": 600,
   "tracks": 2000,
   "artwork": "placeholders; no media I/O",
-  "glassRequested": "None",
-  "glassEffective": "None",
+  "glassRequested": "FlatNone",
+  "glassEffective": "FlatNone",
   "warmups": 1,
   "measuredRuns": 3,
   "viewports": {
@@ -21,20 +21,20 @@
     }
   },
   "sourceFiles": {
-    "app/src/androidTest/java/io/github/anastaci1a/localica/UiPerformanceTest.kt": "1a7acd0332766ba06187b4fb68df5728b01ae147a22ab60ea2c543b5c9141895",
-    "app/src/main/java/io/github/anastaci1a/localica/browse/BrowsePreferences.kt": "185d574d6fa5941d8e5c025fb559d0166ec5829f80870ed3dc626e8f2c76f7d0",
+    "app/src/androidTest/java/io/github/anastaci1a/localica/UiPerformanceTest.kt": "34e744d5dca63164580920fd90c17bd819d2b536297226114c9736ae289af020",
+    "app/src/main/java/io/github/anastaci1a/localica/browse/BrowsePreferences.kt": "7aa811ad4347ad608bc68249cad3d271b914206a2fa722188b0bed35559389b6",
     "app/src/main/java/io/github/anastaci1a/localica/diagnostics/FrameStats.kt": "2506e575ee72e927b302878e050e2eeaa39ea498f190bb4ca6472db312e536d3",
     "tools/performance/run-ui-benchmarks.sh": "beb0181f04a208a1dd41686158038f919af6ce111960dc8418fb94462ebb28f7",
     "tools/performance/frametimeline.pbtxt": "8b1c9f8fa9500cd54d4bc48519ca90bb1877220abda989d9102c73d15a8226ec",
-    "tools/performance/none-contract.mjs": "cd2e56c8045e810b94e1c039945735f9b6adef1d285ca83b7072beda1bddec01",
-    "tools/performance/freeze-scenarios.mjs": "4424d64986580a04e50c56602b00ec124633d09e675bc660cde28e66378eee38",
+    "tools/performance/none-contract.mjs": "e56babb96064fb7da6b55e70d4148cdb02e7f02ec8925fffa08fcdf58cdf9766",
+    "tools/performance/freeze-scenarios.mjs": "70984d910f53aee14c5caa5ee6174f52c801d8718d65e651dab97ddd121600f4",
     "tools/performance/summarize-ui.mjs": "92e219262da23ba61b75d2be6a8fd70fd7c57db55c61cfec3b9bfb7b7fb8daea"
   },
   "actionHashDefinition": "SHA256(full UiPerformanceTest source hash + NUL + selected scenario ID); any harness change invalidates all scenarios",
   "scenarios": [
     {
       "id": "list-smallest",
-      "actionScriptSha256": "fee478f8819a0bd442c9a179ffaa9ce462807d0f7c03e661b03dcb9edfadb48e",
+      "actionScriptSha256": "d14016869770ffa4a7a110f51039f6e8351358eea46395ed584db1b182921a1f",
       "expectedWindows": [
         "activity"
       ],
@@ -42,7 +42,7 @@
     },
     {
       "id": "list-small",
-      "actionScriptSha256": "0fbd8b0c884c89666dcaacaa7f596ec868509bccfd8634d617425a5918d8efd8",
+      "actionScriptSha256": "3bb62484c1e3f9c79b2de8506a577d5830e514992beb16a63559b70f61e25e84",
       "expectedWindows": [
         "activity"
       ],
@@ -50,7 +50,7 @@
     },
     {
       "id": "list-tracklist",
-      "actionScriptSha256": "f606d48567fb60ae29bed9854ae9fdac50f2028966c134b20c754786f107c422",
+      "actionScriptSha256": "6163efa2ed1828a7fd24be63c6bf4c9a91b48c003412385cce6eab4618db5d58",
       "expectedWindows": [
         "activity"
       ],
@@ -58,7 +58,7 @@
     },
     {
       "id": "list-compact",
-      "actionScriptSha256": "02fd7330b00e6c593e8f29ec748db3d472a5aeafa13f6b70df2fac08471ac796",
+      "actionScriptSha256": "14f2195b412b1292f32de67950c8e45d2fd98c60785574e0e3f786155ca1a0f7",
       "expectedWindows": [
         "activity"
       ],
@@ -66,7 +66,7 @@
     },
     {
       "id": "list-normal",
-      "actionScriptSha256": "ce21301231f8aa72530466216859fffbc63b465bb9f887d202ede08261a7db9a",
+      "actionScriptSha256": "9211cd8e88990dfa28c7047574439faf5e99897bccbeebe93d07d0b0f9b54780",
       "expectedWindows": [
         "activity"
       ],
@@ -74,7 +74,7 @@
     },
     {
       "id": "list-large",
-      "actionScriptSha256": "360bf2f74acbf247e220802e896558551df56486fd8f58a431027c8ace09faf3",
+      "actionScriptSha256": "040448f7f61e72b64a127d80e767c7d3e52567908f64f72b94a4ed444ec17f76",
       "expectedWindows": [
         "activity"
       ],
@@ -82,7 +82,7 @@
     },
     {
       "id": "gallery-1",
-      "actionScriptSha256": "c7be21743cfaa561a7516bd91aeb3a3d769e4f7becb1a9215322f8f0f9f79425",
+      "actionScriptSha256": "933473a2a62d13b6f4d5cb0238e824caee864f68f48cba9e79c309202f7d6870",
       "expectedWindows": [
         "activity"
       ],
@@ -90,7 +90,7 @@
     },
     {
       "id": "gallery-2",
-      "actionScriptSha256": "b22eede4b61820fb0b4a05cd6e4410e1a4c46f569daecc36cba61ab551dfd313",
+      "actionScriptSha256": "6746ebe5a3bb4a91077558010f05da6689b5f76612aae8938c80238dee71e97f",
       "expectedWindows": [
         "activity"
       ],
@@ -98,7 +98,7 @@
     },
     {
       "id": "gallery-3",
-      "actionScriptSha256": "a66154299c7304314cb074c19cb7cc5dbe970798616d0fbd35a2c70febf6a039",
+      "actionScriptSha256": "a1b38de06e64df3c9818effd51be3ba2a55564ca622d351a35a18bcc742cdd6c",
       "expectedWindows": [
         "activity"
       ],
@@ -106,7 +106,7 @@
     },
     {
       "id": "gallery-4",
-      "actionScriptSha256": "cb3f220d5d4ffb31921516ef5dd2d73b6641fc535f588ca6ff96f5121912f0b5",
+      "actionScriptSha256": "92f9f5362d5a7e811ab671f40d8ca00296b3f447629d5bec795da5d7ca301409",
       "expectedWindows": [
         "activity"
       ],
@@ -114,7 +114,7 @@
     },
     {
       "id": "gallery-5",
-      "actionScriptSha256": "6a76489facaac4fc3675aa66d6bbe961de5ac9128168da7b2a44e61d7407675f",
+      "actionScriptSha256": "9911fda7a8d6eeed530866f87438110323a03ae170596a96de9f4cdf78fe140b",
       "expectedWindows": [
         "activity"
       ],
@@ -122,7 +122,7 @@
     },
     {
       "id": "subview-scroll",
-      "actionScriptSha256": "68c8f3d2ccebd89ee8965462577870f095e98cbc1725f1a38cc9ded2b477ed8e",
+      "actionScriptSha256": "2b8b8b1512976c26560d24f0f4f17ffb289935d7a3e81a99a5b701d9e1c62507",
       "expectedWindows": [
         "activity"
       ],
@@ -130,7 +130,7 @@
     },
     {
       "id": "carousel",
-      "actionScriptSha256": "a5a5bd4f695647235e0a9a704e532f9bfc829c536067110a15eb55b203d8ecf3",
+      "actionScriptSha256": "4916c2628e6346ef8ce8191e8d59ae79c79e149120062be0aa971dfc20d0d003",
       "expectedWindows": [
         "activity"
       ],
@@ -138,7 +138,7 @@
     },
     {
       "id": "artist-album-carousel",
-      "actionScriptSha256": "bc85719c622a1071ec22594b3668f75970956825655d8addf531111b00381457",
+      "actionScriptSha256": "7089db66fb88371ba1832021bc0b00882a4dedc18428ec7e551f8293ac254935",
       "expectedWindows": [
         "activity"
       ],
@@ -146,7 +146,7 @@
     },
     {
       "id": "queue-drawer",
-      "actionScriptSha256": "4848084f2d9665b47d977d1fee677a8dc4bd4b234551d05653ecbdb5f19975e4",
+      "actionScriptSha256": "f3ae60a9952582a14ef8c8411ace7a1fa692bf70a4f7df7ee5cbd48e72820fb3",
       "expectedWindows": [
         "activity"
       ],
@@ -154,7 +154,7 @@
     },
     {
       "id": "player-expand-collapse",
-      "actionScriptSha256": "1e75568cf45f08084684ed7bbff14f0c6b36bdce733d0bad7b9fd1728ecc835b",
+      "actionScriptSha256": "238f15c3264e5310fe889be314746f85d56486aa3dad9b56011ec51fca43c1bb",
       "expectedWindows": [
         "activity"
       ],
@@ -162,7 +162,7 @@
     },
     {
       "id": "popup-open-close",
-      "actionScriptSha256": "b9f825ff89420c8e8a7080e323dd18a7c56540ca82b732326579e20dcfebfae1",
+      "actionScriptSha256": "c716e718bb58c19698a402693d56f2f721910e6d24309c3d95fdcbc78d696617",
       "expectedWindows": [
         "activity",
         "modal"
@@ -171,7 +171,7 @@
     },
     {
       "id": "lyrics-open-close",
-      "actionScriptSha256": "2b8e426fa5491de80336882442e8574bf92ec337a6ea694cde613ad711e62597",
+      "actionScriptSha256": "0ee82a03d2b720f26465353152a65931aa7a282e0396b261173b3e9c1ce00eac",
       "expectedWindows": [
         "activity"
       ],
@@ -179,7 +179,7 @@
     },
     {
       "id": "lyrics-content-theme",
-      "actionScriptSha256": "80f708b8e588d81ca48af15ecdb0f9198f1ead966957ce0799f792db8091b56c",
+      "actionScriptSha256": "d6032c1bbf2835f7cfb25db9427972b3bc47928410dc3b5d6c8e43969e886c96",
       "expectedWindows": [
         "activity"
       ],
@@ -187,7 +187,7 @@
     },
     {
       "id": "search-typing",
-      "actionScriptSha256": "3ab416665511c56674e9e95192ebf5b07db3881cd0252838f85ba78414549be6",
+      "actionScriptSha256": "0a012c96f82db1c90eb2a371fdad8512bc0fc4709847ff5d752f8a6f635a7a40",
       "expectedWindows": [
         "activity"
       ],
@@ -195,7 +195,7 @@
     },
     {
       "id": "pinch-sizes",
-      "actionScriptSha256": "668bdf27d2e099ebd827ac7da01a00f188859866c33f4b0f90f927528ad5a6e9",
+      "actionScriptSha256": "148182d26f8995b54bf7859b03933009c0c1de8b92dc35bdac93c78195b187f3",
       "expectedWindows": [
         "activity"
       ],
@@ -203,7 +203,7 @@
     },
     {
       "id": "multi-select-drag",
-      "actionScriptSha256": "f64a686ca2717460e76adfa21b4b9d55a694cf3de341e5761835a665ff969bf3",
+      "actionScriptSha256": "d91ceeaa998b52fd3bf12df02abf9a8a2151492cd5e621f3c0a788647c91ac13",
       "expectedWindows": [
         "activity"
       ],
@@ -211,7 +211,7 @@
     },
     {
       "id": "interrupted-player-drag",
-      "actionScriptSha256": "0e731e07f25f016deef9228701b191c151def9b388d82aca98821aba1148fb8a",
+      "actionScriptSha256": "d0e55e3e7230561cddd32142c714ba8ee47c4bcf6015a53a45d60fe7c893e5e6",
       "expectedWindows": [
         "activity"
       ],
@@ -219,7 +219,7 @@
     },
     {
       "id": "back-during-popup-retract",
-      "actionScriptSha256": "c4cea0f58f6c83dfc371cb6938b83fe767b1d3a36f5ca7dea0c8e77f9b8bc2e5",
+      "actionScriptSha256": "09220f932e8e99291153cb9fc186f431dd80376c8a56024c150d60c713b74ed7",
       "expectedWindows": [
         "activity",
         "modal"
@@ -228,7 +228,7 @@
     },
     {
       "id": "queue-pull-during-player-collapse",
-      "actionScriptSha256": "4f2222edd50484e1f388dad68319ddba3fb1b234abdb885df57938888a99d3f3",
+      "actionScriptSha256": "67a83f46e09f903fd8c4fd34c61ec5f12f0ff6d21036f5d474e1bbf1bbafc3ae",
       "expectedWindows": [
         "activity"
       ],
@@ -236,7 +236,7 @@
     },
     {
       "id": "drag-start-end-in-list",
-      "actionScriptSha256": "c8c231f023eae56a1146cbf1b6f61eafd6d486a0de68012a9af80feadc7a4d1c",
+      "actionScriptSha256": "8f817046b1a8a219dfa87fd496cf48c38f61615138e2ac25fb88f8cf85120b33",
       "expectedWindows": [
         "activity"
       ],

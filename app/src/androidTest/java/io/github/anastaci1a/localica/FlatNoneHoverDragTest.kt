@@ -15,6 +15,7 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import io.github.anastaci1a.localica.navigation.*
 import io.github.anastaci1a.localica.ui.*
+import io.github.anastaci1a.localica.ui.engine.RetainedGlassShadow
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test

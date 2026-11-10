@@ -10,7 +10,7 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.unit.dp
-import io.github.anastaci1a.localica.ui.RetainedGlassShadow
+import io.github.anastaci1a.localica.ui.engine.RetainedGlassShadow
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test

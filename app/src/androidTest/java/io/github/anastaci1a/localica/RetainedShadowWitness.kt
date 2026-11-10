@@ -4,7 +4,7 @@ import androidx.compose.runtime.State
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.ComposeTestRule
 import androidx.test.platform.app.InstrumentationRegistry
-import io.github.anastaci1a.localica.ui.RetainedGlassShadow
+import io.github.anastaci1a.localica.ui.engine.RetainedGlassShadow
 import java.io.File
 import java.lang.reflect.Modifier as JavaModifier
 import kotlinx.coroutines.Job
