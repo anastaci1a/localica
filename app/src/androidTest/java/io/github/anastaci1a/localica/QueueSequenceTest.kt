@@ -334,4 +334,46 @@ class QueueSequenceTest {
         }
     }
 
+    @Test fun sparseSelectionPagesSeekExceptionsAndExcludedRunsAndReleaseAbandonedRows() = database { sequence, sql ->
+        List(1001) { QueueEntry(id = "entry:$it", track = song(it % 7)) }.chunked(QueueSequence.PageSize)
+            .forEach { sequence.append("q", it) }
+        val selection = QueueSelection(sequence)
+        val sparse = selection.set(selection.create("q"), setOf("entry:1000"), true)
+        assertEquals(listOf("entry:1000"), selection.page(sparse, 0, 2).entries.map { it.entry.id })
+        var complement = selection.create("q", true)
+        (0 until 1000).map { "entry:$it" }.chunked(QueueSequence.PageSize).forEach {
+            complement = selection.set(complement, it.toSet(), false)
+        }
+        fun ranges() = sql.query("SELECT rangeStart,rangeEnd FROM queue_sequence_selection_ranges WHERE selectionId = ? ORDER BY rangeStart",
+            arrayOf(complement.id)).use { rows -> buildList { while (rows.moveToNext()) add(rows.getInt(0) to rows.getInt(1)) } }
+        assertEquals(listOf(0 to 999), ranges())
+        assertEquals(listOf("entry:1000"), selection.page(complement, 0, 2).entries.map { it.entry.id })
+        complement = selection.set(complement, setOf("entry:500"), true)
+        assertEquals(listOf(0 to 499, 501 to 999), ranges())
+        assertEquals(listOf("entry:500", "entry:1000"), selection.page(complement, 0, 2).entries.map { it.entry.id })
+        complement = selection.set(complement, setOf("entry:500"), false)
+        assertEquals(listOf(0 to 999), ranges())
+        val queries = listOf(
+            "SELECT position,entryId FROM queue_sequence_selection_exceptions WHERE selectionId = 'x' AND position >= 0 AND position < 1001 ORDER BY position LIMIT 2" to "index_queue_sequence_selection_position",
+            "SELECT rangeEnd FROM queue_sequence_selection_ranges WHERE selectionId = 'x' AND rangeStart <= 500 ORDER BY rangeStart DESC LIMIT 1" to "sqlite_autoindex_queue_sequence_selection_ranges",
+            "SELECT rangeStart FROM queue_sequence_selection_ranges WHERE selectionId = 'x' AND rangeEnd = 499" to "index_queue_sequence_selection_range_end")
+        queries.forEach { (query, index) ->
+            val plan = sql.query("EXPLAIN QUERY PLAN $query").use { rows ->
+                buildList { while (rows.moveToNext()) add(rows.getString(3)) }.joinToString("\n")
+            }
+            assertTrue(plan, plan.contains(index))
+            assertFalse(plan, plan.contains("TEMP B-TREE"))
+        }
+        sequence.reverse("q")
+        selection.sweepStale()
+        for (table in listOf("queue_sequence_selections", "queue_sequence_selection_exceptions", "queue_sequence_selection_ranges")) {
+            sql.query("SELECT COUNT(*) FROM $table").use { assertTrue(it.moveToFirst()); assertEquals(0, it.getInt(0)) }
+        }
+        selection.set(selection.create("q", true), setOf("entry:500"), false)
+        selection.reset()
+        sql.query("SELECT COUNT(*) FROM queue_sequence_selection_ranges").use {
+            assertTrue(it.moveToFirst()); assertEquals(0, it.getInt(0))
+        }
+    }
+
 }

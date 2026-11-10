@@ -264,7 +264,7 @@ internal class QueueSequence(internal val db: SupportSQLiteDatabase) {
             arrayOf(reserve, offset, queueId, reserve))
     }
 
-    private fun changed(queueId: String) {
+    internal fun changed(queueId: String) {
         db.execSQL("UPDATE queue_sequence_state SET revision = revision + 1 WHERE queueId = ?", arrayOf(queueId))
     }
 
