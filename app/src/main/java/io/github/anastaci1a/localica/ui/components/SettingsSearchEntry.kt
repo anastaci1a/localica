@@ -20,7 +20,7 @@ import io.github.anastaci1a.localica.ui.engine.rememberSettingsSearchHighlight
 
 /** Owns entry focus, anchor lifetime and the overlay sampled after opaque row content. */
 @Composable
-internal fun settingsSearchEntryModifier(
+internal fun Modifier.settingsSearchEntryModifier(
     owner: Any,
     id: String,
     title: String,
@@ -40,7 +40,7 @@ internal fun settingsSearchEntryModifier(
         view.announceForAccessibility("$title, $page")
     }
     DisposableEffect(owner, id) { onDispose { onRetire() } }
-    return Modifier.testTag("setting:$id")
+    return this.testTag("setting:$id")
         .onGloballyPositioned { currentAnchor.value(it.positionInWindow().y) }
         .focusRequester(requester).focusable()
         .semantics { this[alphaKey] = alpha.value }

@@ -31,7 +31,7 @@ internal fun SettingsEntry(label: String, content: @Composable () -> Unit) {
     val spec = focus?.let { SettingsCatalog.entry(it.page, label) }
     if (focus == null || spec == null || LocalSettingEntry.current) { content(); return }
     val highlighted = focus.highlighted == spec.id
-    val entry = settingsSearchEntryModifier(
+    val entry = Modifier.settingsSearchEntryModifier(
         owner = focus, id = spec.id, title = spec.title, page = focus.page,
         highlighted = highlighted, reduced = LocalReducedMotion.current, alphaKey = SettingsHighlightAlpha,
         onAnchor = { focus.anchors[spec.id] = it + focus.scroll.value },
