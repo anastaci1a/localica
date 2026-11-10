@@ -615,9 +615,9 @@ internal fun BoxWithConstraintsScope.PlayerSurface(state: PlaybackState, expande
                     cancelTarget = { scrubCancel.bounds },
                     onDrag = { active, hovered -> scrubCancel.update(active, hovered); scrubOverCancel = active && hovered })
             }
-            if (rowMotion.actionsAlpha > 0f) Box(Modifier.offset(x = contentInset, y = actionsY)
+            io.github.anastaci1a.localica.ui.layout.PlayerActionRow(rowMotion.actionsAlpha, modifier = { Modifier.offset(x = contentInset, y = actionsY)
                 .width(contentWidth).height(48.dp * actionRows).testTag("player-actions-row").onGloballyPositioned { polarity.measure("actions", it) }.graphicsLayer { alpha = rowMotion.actionsAlpha }
-                .then(if (lyricsOpen) Modifier.clearAndSetSemantics {} else Modifier)) { actions() }
+                .then(if (lyricsOpen) Modifier.clearAndSetSemantics {} else Modifier) }) { actions() }
             Row(Modifier.offset(x = (surfaceWidth - 148.dp) * (1 - transportMotion) + ((windowWidth - transportWidth) / 2) * transportMotion,
                 y = transportY).testTag("player-transport-row").onGloballyPositioned { polarity.measure("transport", it) },
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy((transportWidth - 160.dp) / 2 * transportMotion)) {
