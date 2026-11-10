@@ -302,7 +302,8 @@ fun LocalicaScreen(
         SongDragScene(dragHost, Modifier.fillMaxSize()) {
         CompositionLocalProvider(LocalGlassPopupHome provides browsePopupHome) {
         Box(Modifier.fillMaxSize().glassPopupHome(browsePopupHome)) {
-        Column(Modifier.fillMaxSize().glassPopupProjection(utilityPopupHome, browseBackdrop)
+        Column(Modifier.fillMaxSize()
+            .glassPopupProjection(utilityPopupHome, browseBackdrop)
             // The opaque full player covers this entire scene. Keep its composition,
             // scroll state and cached recording, but do not submit hidden pixels.
             .drawWithContent { if (!hasPlayer || progress.value < 1f) drawContent() }
