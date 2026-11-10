@@ -91,9 +91,9 @@ private fun ListScrollbar(state: Any, contentKey: Any, scrollable: () -> Boolean
     }
     // Read in the layout, draw and semantics phases, so scrolling never recomposes the scrollbar.
     fun fraction() = model.observe(frame())
-    ScrollbarSlots(state, model, drag, movement, ::fraction,
+    ScrollbarSlots(state, model, movement, ::fraction,
         { track, minimum -> model.thumbSize(track, minimum, track * ScrollbarSpec.maximumTrackShare) },
-        scrolling, { dragging }, { dragging = it }, { wake() }, ::request,
+        scrolling, { dragging }, { dragging = it }, { drag.fraction }, drag::begin, { drag.move(it); wake() }, ::request,
         { previewFor(movement().first) }, LocalMotionSpeed.current, LocalReducedMotion.current,
         modifier)
 }

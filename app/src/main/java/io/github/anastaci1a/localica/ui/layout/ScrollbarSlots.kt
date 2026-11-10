@@ -16,7 +16,6 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.unit.Constraints
-import io.github.anastaci1a.localica.ui.ScrollbarDrag
 import io.github.anastaci1a.localica.ui.components.ScrollbarTapSharing
 import io.github.anastaci1a.localica.ui.components.scrollbarInput
 import io.github.anastaci1a.localica.ui.engine.rememberScrollbarMotion
@@ -27,12 +26,14 @@ import kotlin.math.roundToInt
 /** The measured rail owns thumb travel, its input geometry and the adjacent preview slot.
  * Its model supplies only normalized position and resting length for the measured track. The track
  * is the rail's height less standard padding at both ends; hosts bound the rail by their controls.
- * The held thumb's width, length and colour are one function of the grip progress (#704).
+ * The held thumb's width, length and colour are one function of the grip progress (#704). Drags report
+ * thumb-fraction deltas ([dragBy]); the caller turns them into list movement.
  */
 @Composable
-internal fun ScrollbarSlots(state: Any, key: Any, drag: ScrollbarDrag, movement: () -> Pair<Int, Int>,
+internal fun ScrollbarSlots(state: Any, key: Any, movement: () -> Pair<Int, Int>,
     fraction: () -> Float, thumbSize: (Float, Float) -> Float, scrolling: () -> Boolean,
-    dragging: () -> Boolean, onDragging: (Boolean) -> Unit, dragged: () -> Unit,
+    dragging: () -> Boolean, onDragging: (Boolean) -> Unit, dragFraction: () -> Float,
+    dragFrom: (Float) -> Unit, dragBy: (Float) -> Unit,
     request: (Float) -> Boolean, previewFor: () -> String?,
     speed: Float, reduced: Boolean, modifier: Modifier) {
     val density = LocalDensity.current
@@ -57,7 +58,7 @@ internal fun ScrollbarSlots(state: Any, key: Any, drag: ScrollbarDrag, movement:
         val radius = with(density) { ScrollbarSpec.thumbRadius.toPx() }
         fun restingThumb(): Float { fraction(); return thumbSize(track, minThumb) }
         fun thumb(): Float { val r = restingThumb(); return r + ScrollbarSpec.heldExtraLength(r, lengthCap) * motion.grip() }
-        fun displayed() = if (dragging()) drag.fraction else (fraction() + motion.releaseOffset()).coerceIn(0f, 1f)
+        fun displayed() = if (dragging()) dragFraction() else (fraction() + motion.releaseOffset()).coerceIn(0f, 1f)
         fun position() = displayed().coerceIn(0f, 1f) * (track - thumb()).coerceAtLeast(0f)
         // The visible thumb, at least the minimum touch length about its centre. Hidden: no target.
         fun hit(y: Float): Boolean {
@@ -68,18 +69,17 @@ internal fun ScrollbarSlots(state: Any, key: Any, drag: ScrollbarDrag, movement:
             return y >= centre - reach && y <= centre + reach
         }
         fun begin() {
-            drag.begin(displayed())
+            dragFrom(displayed())
             onDragging(true)
         }
         fun move(dy: Float) {
             activity++
-            drag.move(dy / (track - thumb()).coerceAtLeast(1f))
-            dragged()
+            dragBy(dy / (track - thumb()).coerceAtLeast(1f))
         }
         fun endDrag() {
             if (!dragging()) return
             onDragging(false)
-            motion.release(drag.fraction - fraction())
+            motion.release(dragFraction() - fraction())
         }
         // The pointer coroutine outlives compositions; the track moves with the host bounds (#704), so it reads
         // the current geometry rather than the first composition's.

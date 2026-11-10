@@ -493,3 +493,5 @@ io.github.anastaci1a.localica.QueueRestoreEquivalenceTest
 io.github.anastaci1a.localica.CollectionHeaderDensityContractTest
 io.github.anastaci1a.localica.SelectionInsetScrollTest
 io.github.anastaci1a.localica.SelectionInsetContextsTest
+# Scrollbar behaviour on the shared owner: lockstep, visibility, fades, hit area, relative drag, bounds (#704).
+io.github.anastaci1a.localica.ScrollbarBehaviourTest
